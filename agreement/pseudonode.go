@@ -387,7 +387,7 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 	asyncVerifyingVotes := len(unverifiedVotes)
 	for i, uv := range unverifiedVotes {
 		msg := message{Tag: protocol.AgreementVoteTag, UnauthenticatedVote: uv}
-		err := verifier.verifyVote(context.TODO(), t.node.ledger, uv, i, msg, results)
+		err := verifier.verifyVote(context.TODO(), t.node.ledger, uv, uint64(i), msg, results)
 		if err != nil {
 			orderedResults[i].err = err
 			t.node.log.Infof("pseudonode.makeVotes: failed to enqueue vote verification for (%d, %d): %v", t.round, t.period, err)
@@ -515,7 +515,7 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 	asyncVerifyingVotes := len(votes)
 	for i, uv := range votes {
 		msg := message{Tag: protocol.AgreementVoteTag, UnauthenticatedVote: uv}
-		err := verifier.verifyVote(context.TODO(), t.node.ledger, uv, i, msg, results)
+		err := verifier.verifyVote(context.TODO(), t.node.ledger, uv, uint64(i), msg, results)
 		if err != nil {
 			cryptoOutputs[i].err = err
 			t.node.log.Infof("pseudonode.makeProposals: failed to enqueue vote verification for (%d, %d): %v", t.round, t.period, err)

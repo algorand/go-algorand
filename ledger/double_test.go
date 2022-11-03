@@ -14,15 +14,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal_test
+package ledger
 
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
-	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -43,8 +43,8 @@ import (
 type DoubleLedger struct {
 	t *testing.T
 
-	generator *ledger.Ledger
-	validator *ledger.Ledger
+	generator *Ledger
+	validator *Ledger
 
 	eval *internal.BlockEvaluator
 }
@@ -56,8 +56,8 @@ func (dl DoubleLedger) Close() {
 
 // NewDoubleLedger creates a new DoubleLedger with the supplied balances and consensus version.
 func NewDoubleLedger(t *testing.T, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion) DoubleLedger {
-	g := newTestLedgerWithConsensusVersion(t, balances, cv)
-	v := newTestLedgerFull(t, balances, cv, g.GenesisHash())
+	g := newSimpleLedgerWithConsensusVersion(t, balances, cv)
+	v := newSimpleLedgerFull(t, balances, cv, g.GenesisHash())
 	return DoubleLedger{t, g, v, nil}
 }
 
@@ -124,9 +124,31 @@ func (dl *DoubleLedger) fullBlock(txs ...*txntest.Txn) *ledgercore.ValidatedBloc
 
 func (dl *DoubleLedger) endBlock() *ledgercore.ValidatedBlock {
 	vb := endBlock(dl.t, dl.generator, dl.eval)
-	checkBlock(dl.t, dl.validator, vb)
+	if dl.validator != nil { // Allows setting to nil while debugging, to simplify
+		checkBlock(dl.t, dl.validator, vb)
+	}
 	dl.eval = nil // Ensure it's not used again
 	return vb
+}
+
+func (dl *DoubleLedger) fundedApp(sender basics.Address, amount uint64, source string) basics.AppIndex {
+	createapp := txntest.Txn{
+		Type:            "appl",
+		Sender:          sender,
+		ApprovalProgram: source,
+	}
+	vb := dl.fullBlock(&createapp)
+	appIndex := vb.Block().Payset[0].ApplyData.ApplicationID
+
+	fund := txntest.Txn{
+		Type:     "pay",
+		Sender:   sender,
+		Receiver: appIndex.Address(),
+		Amount:   amount,
+	}
+
+	dl.txn(&fund)
+	return appIndex
 }
 
 func (dl *DoubleLedger) reloadLedgers() {
@@ -134,7 +156,7 @@ func (dl *DoubleLedger) reloadLedgers() {
 	require.NoError(dl.t, dl.validator.ReloadLedger())
 }
 
-func checkBlock(t *testing.T, checkLedger *ledger.Ledger, vb *ledgercore.ValidatedBlock) {
+func checkBlock(t *testing.T, checkLedger *Ledger, vb *ledgercore.ValidatedBlock) {
 	bl := vb.Block()
 	msg := bl.MarshalMsg(nil)
 	var reconstituted bookkeeping.Block
@@ -160,9 +182,9 @@ func checkBlock(t *testing.T, checkLedger *ledger.Ledger, vb *ledgercore.Validat
 		err := check.TransactionGroup(group)
 		require.NoError(t, err, "%+v", reconstituted.Payset)
 	}
-	check.SetGenerate(true)
+	check.SetGenerateForTesting(true)
 	cb := endBlock(t, checkLedger, check)
-	check.SetGenerate(false)
+	check.SetGenerateForTesting(false)
 	require.Equal(t, vb.Block(), cb.Block())
 
 	// vb.Delta() need not actually be Equal, in the sense of require.Equal
@@ -179,7 +201,7 @@ func checkBlock(t *testing.T, checkLedger *ledger.Ledger, vb *ledgercore.Validat
 	// require.Equal(t, vb.Delta().Accts, cb.Delta().Accts)
 }
 
-func nextCheckBlock(t testing.TB, ledger *ledger.Ledger, rs bookkeeping.RewardsState) *internal.BlockEvaluator {
+func nextCheckBlock(t testing.TB, ledger *Ledger, rs bookkeeping.RewardsState) *internal.BlockEvaluator {
 	rnd := ledger.Latest()
 	hdr, err := ledger.BlockHdr(rnd)
 	require.NoError(t, err)
