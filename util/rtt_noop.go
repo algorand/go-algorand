@@ -21,6 +21,6 @@ package util
 
 import "net"
 
-func getConnRTT(conn *net.TCPConn) (*RTTInfo, error) {
+func getConnRTT(conn net.Conn) (*RTTInfo, error) {
 	return nil, ErrRTTUnsupported
 }
