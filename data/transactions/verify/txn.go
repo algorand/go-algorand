@@ -743,9 +743,9 @@ func (sv *StreamVerifier) addVerificationTaskToThePool(uelts []UnverifiedElement
 		if err == nil { // success, all signatures verified
 			for i := range bl.txnGroups {
 				sv.sendResult(bl.txnGroups[i], bl.elementContext[i], nil)
-		    }
-		    sv.cache.AddPayset(bl.txnGroups, bl.groupCtxs)
-		    return nil
+			}
+			sv.cache.AddPayset(bl.txnGroups, bl.groupCtxs)
+			return struct{}{}
 		}
 
 		verifiedTxnGroups := make([][]transactions.SignedTxn, 0, len(bl.txnGroups))
