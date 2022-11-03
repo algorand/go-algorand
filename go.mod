@@ -34,7 +34,7 @@ require (
 	github.com/spf13/cobra v0.0.3
 	github.com/stretchr/testify v1.7.1
 	golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064
-	golang.org/x/sys v0.0.0-20220319134239-a9b59b0215f8
+	golang.org/x/sys v0.1.0
 	golang.org/x/text v0.3.7
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
 )

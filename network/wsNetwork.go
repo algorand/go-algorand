@@ -1830,6 +1830,11 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 			connDetail.Address = peer.OriginAddress()
 			connectionDetails.IncomingPeers = append(connectionDetails.IncomingPeers, connDetail)
 		}
+		rttInfo, err := util.GetConnRTT(peer.conn.UnderlyingConn())
+		if err == nil {
+			connDetail.RTT = rttInfo.RTT
+			connDetail.RTTVar = rttInfo.RTTVar
+		}
 	}
 
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
