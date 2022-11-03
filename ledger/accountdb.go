@@ -1236,6 +1236,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
 			"CREATE TABLE IF NOT EXISTS catchpointkvstore (key blob primary key, value blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointstateproofverification (targetstateproofround INTEGER PRIMARY KEY NOT NULL, verificationdata BLOB NOT NULL)",
+
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
 			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
 		)
