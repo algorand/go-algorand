@@ -23,6 +23,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -371,6 +372,14 @@ const (
 	catchpointStateCatchupHashRound   = catchpointState("catchpointCatchupHashRound")
 	catchpointStateCatchpointLookback = catchpointState("catchpointLookback")
 )
+
+// MaxEncodedBaseAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the base account data serialized.
+// this number is verified by the TestEncodedBaseAccountDataSize function.
+const MaxEncodedBaseAccountDataSize = 350
+
+// MaxEncodedBaseResourceDataSize is a rough estimate for the worst-case scenario we're going to have of the base resource data serialized.
+// this number is verified by the TestEncodedBaseResourceSize function.
+const MaxEncodedBaseResourceDataSize = 20000
 
 // normalizedAccountBalance is a staging area for a catchpoint file account information before it's being added to the catchpoint staging tables.
 type normalizedAccountBalance struct {
@@ -2250,12 +2259,23 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 			return fmt.Errorf("latest block header %d cannot be retrieved : %w", dbRound, err)
 		}
 
-		maxTxnLife := basics.Round(config.Consensus[latestHdr.CurrentProtocol].MaxTxnLife)
-		deeperBlockHistory := basics.Round(config.Consensus[latestHdr.CurrentProtocol].DeeperBlockHeaderHistory)
-		firstRound := (latestBlockRound + 1).SubSaturate(maxTxnLife + deeperBlockHistory)
+		proto := config.Consensus[latestHdr.CurrentProtocol]
+		maxTxnLife := basics.Round(proto.MaxTxnLife)
+		deeperBlockHistory := basics.Round(proto.DeeperBlockHeaderHistory)
+		// firstRound is either maxTxnLife + deeperBlockHistory back from the latest for regular init
+		// or maxTxnLife + deeperBlockHistory + CatchpointLookback back for catchpoint apply.
+		// Try to check the earliest available and start from there.
+		firstRound := (latestBlockRound + 1).SubSaturate(maxTxnLife + deeperBlockHistory + basics.Round(proto.CatchpointLookback))
 		// we don't need to have the txtail for round 0.
 		if firstRound == basics.Round(0) {
 			firstRound++
+		}
+		if _, err := blockGet(blockTx, firstRound); err != nil {
+			// looks like not catchpoint but a regular migration, start from maxTxnLife + deeperBlockHistory back
+			firstRound = (latestBlockRound + 1).SubSaturate(maxTxnLife + deeperBlockHistory)
+			if firstRound == basics.Round(0) {
+				firstRound++
+			}
 		}
 		tailRounds := make([][]byte, 0, maxTxnLife)
 		for rnd := firstRound; rnd <= dbRound; rnd++ {
@@ -4403,18 +4423,16 @@ type orderedAccountsIter struct {
 	pendingBaseRow     pendingBaseRow
 	pendingResourceRow pendingResourceRow
 	accountCount       int
-	resourceCount      int
 	insertStmt         *sql.Stmt
 }
 
 // makeOrderedAccountsIter creates an ordered account iterator. Note that due to implementation reasons,
 // only a single iterator can be active at a time.
-func makeOrderedAccountsIter(tx *sql.Tx, accountCount int, resourceCount int) *orderedAccountsIter {
+func makeOrderedAccountsIter(tx *sql.Tx, accountCount int) *orderedAccountsIter {
 	return &orderedAccountsIter{
-		tx:            tx,
-		accountCount:  accountCount,
-		resourceCount: resourceCount,
-		step:          oaiStepStartup,
+		tx:           tx,
+		accountCount: accountCount,
+		step:         oaiStepStartup,
 	}
 }
 
@@ -4812,7 +4830,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		count, iterator.pendingBaseRow, iterator.pendingResourceRow, err = processAllBaseAccountRecords(
 			iterator.accountBaseRows, iterator.resourcesRows,
 			baseCb, resCb,
-			iterator.pendingBaseRow, iterator.pendingResourceRow, iterator.accountCount, iterator.resourceCount,
+			iterator.pendingBaseRow, iterator.pendingResourceRow, iterator.accountCount, math.MaxInt,
 		)
 		if err != nil {
 			iterator.Close(ctx)

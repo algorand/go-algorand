@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"reflect"
@@ -4588,4 +4589,151 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 			require.True(t, ba.StateProofID.IsEmpty())
 		}
 	}
+}
+
+func randomBaseAccountData() baseAccountData {
+	vd := baseVotingData{
+		VoteFirstValid:  basics.Round(crypto.RandUint64()),
+		VoteLastValid:   basics.Round(crypto.RandUint64()),
+		VoteKeyDilution: crypto.RandUint64(),
+	}
+	crypto.RandBytes(vd.VoteID[:])
+	crypto.RandBytes(vd.StateProofID[:])
+	crypto.RandBytes(vd.SelectionID[:])
+
+	baseAD := baseAccountData{
+		Status:                     basics.Online,
+		MicroAlgos:                 basics.MicroAlgos{Raw: crypto.RandUint64()},
+		RewardsBase:                crypto.RandUint64(),
+		RewardedMicroAlgos:         basics.MicroAlgos{Raw: crypto.RandUint64()},
+		AuthAddr:                   ledgertesting.RandomAddress(),
+		TotalAppSchemaNumUint:      crypto.RandUint64(),
+		TotalAppSchemaNumByteSlice: crypto.RandUint64(),
+		TotalExtraAppPages:         uint32(crypto.RandUint63() % uint64(math.MaxUint32)),
+		TotalAssetParams:           crypto.RandUint64(),
+		TotalAssets:                crypto.RandUint64(),
+		TotalAppParams:             crypto.RandUint64(),
+		TotalAppLocalStates:        crypto.RandUint64(),
+		baseVotingData:             vd,
+		UpdateRound:                crypto.RandUint64(),
+	}
+
+	return baseAD
+}
+
+func TestEncodedBaseAccountDataSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	baseAD := randomBaseAccountData()
+	encoded := baseAD.MarshalMsg(nil)
+	require.GreaterOrEqual(t, MaxEncodedBaseAccountDataSize, len(encoded))
+}
+
+func makeString(len int) string {
+	s := ""
+	for i := 0; i < len; i++ {
+		s += string(byte(i))
+	}
+	return s
+}
+
+func randomAssetResourceData() resourcesData {
+	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	// resourcesData is suiteable for keeping asset params, holding, app params, app local state
+	// but only asset + holding or app + local state can appear there
+	rdAsset := resourcesData{
+		Total:         crypto.RandUint64(),
+		Decimals:      uint32(crypto.RandUint63() % uint64(math.MaxUint32)),
+		DefaultFrozen: true,
+		// MetadataHash
+		UnitName:  makeString(currentConsensusParams.MaxAssetUnitNameBytes),
+		AssetName: makeString(currentConsensusParams.MaxAssetNameBytes),
+		URL:       makeString(currentConsensusParams.MaxAssetURLBytes),
+		Manager:   ledgertesting.RandomAddress(),
+		Reserve:   ledgertesting.RandomAddress(),
+		Freeze:    ledgertesting.RandomAddress(),
+		Clawback:  ledgertesting.RandomAddress(),
+
+		Amount: crypto.RandUint64(),
+		Frozen: true,
+	}
+	crypto.RandBytes(rdAsset.MetadataHash[:])
+
+	return rdAsset
+}
+
+func randomAppResourceData() resourcesData {
+	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	rdApp := resourcesData{
+
+		SchemaNumUint:      crypto.RandUint64(),
+		SchemaNumByteSlice: crypto.RandUint64(),
+		// KeyValue
+
+		// ApprovalProgram
+		// ClearStateProgram
+		// GlobalState
+		LocalStateSchemaNumUint:       crypto.RandUint64(),
+		LocalStateSchemaNumByteSlice:  crypto.RandUint64(),
+		GlobalStateSchemaNumUint:      crypto.RandUint64(),
+		GlobalStateSchemaNumByteSlice: crypto.RandUint64(),
+		ExtraProgramPages:             uint32(crypto.RandUint63() % uint64(math.MaxUint32)),
+
+		ResourceFlags: 255,
+		UpdateRound:   crypto.RandUint64(),
+	}
+
+	// MaxAvailableAppProgramLen is conbined size of approval and clear state since it is bound by proto.MaxAppTotalProgramLen
+	rdApp.ApprovalProgram = make([]byte, config.MaxAvailableAppProgramLen/2)
+	crypto.RandBytes(rdApp.ApprovalProgram)
+	rdApp.ClearStateProgram = make([]byte, config.MaxAvailableAppProgramLen/2)
+	crypto.RandBytes(rdApp.ClearStateProgram)
+
+	maxGlobalState := make(basics.TealKeyValue, currentConsensusParams.MaxGlobalSchemaEntries)
+	for globalKey := uint64(0); globalKey < currentConsensusParams.MaxGlobalSchemaEntries; globalKey++ {
+		prefix := fmt.Sprintf("%d|", globalKey)
+		padding := makeString(currentConsensusParams.MaxAppKeyLen - len(prefix))
+		maxKey := prefix + padding
+		maxValue := basics.TealValue{
+			Type:  basics.TealBytesType,
+			Bytes: makeString(currentConsensusParams.MaxAppSumKeyValueLens - len(maxKey)),
+		}
+		maxGlobalState[maxKey] = maxValue
+	}
+
+	maxLocalState := make(basics.TealKeyValue, currentConsensusParams.MaxLocalSchemaEntries)
+	for localKey := uint64(0); localKey < currentConsensusParams.MaxLocalSchemaEntries; localKey++ {
+		prefix := fmt.Sprintf("%d|", localKey)
+		padding := makeString(currentConsensusParams.MaxAppKeyLen - len(prefix))
+		maxKey := prefix + padding
+		maxValue := basics.TealValue{
+			Type:  basics.TealBytesType,
+			Bytes: makeString(currentConsensusParams.MaxAppSumKeyValueLens - len(maxKey)),
+		}
+		maxLocalState[maxKey] = maxValue
+	}
+
+	rdApp.GlobalState = maxGlobalState
+	rdApp.KeyValue = maxLocalState
+
+	return rdApp
+}
+
+func TestEncodedBaseResourceSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// resourcesData is suiteable for keeping asset params, holding, app params, app local state
+	// but only asset + holding or app + local state can appear there
+	rdAsset := randomAssetResourceData()
+	rdApp := randomAppResourceData()
+
+	encodedAsset := rdAsset.MarshalMsg(nil)
+	encodedApp := rdApp.MarshalMsg(nil)
+
+	require.Less(t, len(encodedAsset), len(encodedApp))
+	require.GreaterOrEqual(t, MaxEncodedBaseResourceDataSize, len(encodedApp))
 }

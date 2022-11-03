@@ -1228,19 +1228,27 @@ func initConsensusProtocols() {
 	v33.ApprovedUpgrades[protocol.ConsensusV35] = 10000
 	v34.ApprovedUpgrades[protocol.ConsensusV35] = 10000
 
-	// ConsensusFuture is used to test features that are implemented
-	// but not yet released in a production protocol version.
-	vFuture := v35
-	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-
-	vFuture.LogicSigVersion = 8 // When moving this to a release, put a new higher LogicSigVersion here
+	v36 := v35
+	v36.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// Boxes (unlimited global storage)
-	vFuture.MaxBoxSize = 32768
-	vFuture.BoxFlatMinBalance = 2500
-	vFuture.BoxByteMinBalance = 400
-	vFuture.MaxAppBoxReferences = 8
-	vFuture.BytesPerBoxReference = 1024
+	v36.LogicSigVersion = 8
+	v36.MaxBoxSize = 32768
+	v36.BoxFlatMinBalance = 2500
+	v36.BoxByteMinBalance = 400
+	v36.MaxAppBoxReferences = 8
+	v36.BytesPerBoxReference = 1024
+
+	Consensus[protocol.ConsensusV36] = v36
+
+	v35.ApprovedUpgrades[protocol.ConsensusV36] = 140000
+
+	// ConsensusFuture is used to test features that are implemented
+	// but not yet released in a production protocol version.
+	vFuture := v36
+	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	vFuture.LogicSigVersion = 9 // When moving this to a release, put a new higher LogicSigVersion here
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
@@ -1268,6 +1276,12 @@ func initConsensusProtocols() {
 	vAlpha4.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusVAlpha4] = vAlpha4
 	vAlpha3.ApprovedUpgrades[protocol.ConsensusVAlpha4] = 10000
+
+	// vAlpha5 uses the same parameters as v36
+	vAlpha5 := v36
+	vAlpha5.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	Consensus[protocol.ConsensusVAlpha5] = vAlpha5
+	vAlpha4.ApprovedUpgrades[protocol.ConsensusVAlpha5] = 10000
 }
 
 // Global defines global Algorand protocol parameters which should not be overridden.
