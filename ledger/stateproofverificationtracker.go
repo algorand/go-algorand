@@ -88,6 +88,8 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 	spt.trackedCommitData = make([]verificationCommitData, 0, initialDataArraySize)
 	spt.trackedDeleteData = make([]verificationDeleteData, 0, initialDataArraySize)
 
+	// todo load latest from the DB.
+
 	return nil
 }
 
@@ -149,7 +151,6 @@ func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *s
 	}
 
 	return err
-
 }
 
 func (spt *stateProofVerificationTracker) postCommit(_ context.Context, dcc *deferredCommitContext) {
@@ -222,11 +223,11 @@ func (spt *stateProofVerificationTracker) committedRoundToLatestCommitDataIndex(
 	latestCommittedDataIndex := -1
 
 	for index, data := range spt.trackedCommitData {
-		if data.confirmedRound <= committedRound {
-			latestCommittedDataIndex = index
-		} else {
+		if data.confirmedRound > committedRound {
 			break
 		}
+
+		latestCommittedDataIndex = index
 	}
 
 	return latestCommittedDataIndex
@@ -236,11 +237,11 @@ func (spt *stateProofVerificationTracker) committedRoundToLatestDeleteDataIndex(
 	latestCommittedDataIndex := -1
 
 	for index, data := range spt.trackedDeleteData {
-		if data.confirmedRound <= committedRound {
-			latestCommittedDataIndex = index
-		} else {
+		if data.confirmedRound > committedRound {
 			break
 		}
+
+		latestCommittedDataIndex = index
 	}
 
 	return latestCommittedDataIndex
