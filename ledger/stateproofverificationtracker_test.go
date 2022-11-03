@@ -32,6 +32,7 @@ import (
 
 const defaultStateProofInterval = uint64(256)
 const defaultFirstStateProofDataRound = basics.Round(defaultStateProofInterval * 2)
+const defaultFirstStateProofDataInterval = basics.Round(2)
 const unusedByStateProofTracker = basics.Round(0)
 
 type StateProofTrackingLocation uint64
@@ -230,7 +231,7 @@ func TestStateProofVerificationTracker_CommitFUllDbFlush(t *testing.T) {
 
 	mockCommit(t, spt, ml, 0, lastBlock.block.Round())
 
-	spt.lastSeenStateProofVerificationData = ledgercore.StateProofVerificationData{}
+	spt.lastLookedUpVerificationData = ledgercore.StateProofVerificationData{}
 	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, expectedDataNum, defaultStateProofInterval, false, trackerMemory)
 	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, expectedDataNum, defaultStateProofInterval, true, trackerDB)
 }
@@ -444,6 +445,7 @@ func TestStateProofVerificationTracker_LookupVerificationData(t *testing.T) {
 
 	// This error shouldn't happen in normal flow - we force it to happen for the test.
 	spt.trackedCommitData[0].verificationData.TargetStateProofRound = 0
+	spt.lastLookedUpVerificationData = ledgercore.StateProofVerificationData{}
 	_, err = spt.LookupVerificationData(memoryDataRound)
 	a.ErrorIs(err, errStateProofVerificationDataNotFound)
 	a.ErrorContains(err, "memory lookup failed")
@@ -465,7 +467,7 @@ func TestStateProofVerificationTracker_PanicInvalidBlockInsertion(t *testing.T) 
 	a.Panics(func() { spt.insertCommitData(&pastBlock.block) })
 }
 
-func TestStateProofVerificationTracker_loadsLastSeenVerificationDataFromDB(t *testing.T) {
+func TestStateProofVerificationTracker_loadTrackerAndverifyInmemoryVerificationData(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -473,28 +475,31 @@ func TestStateProofVerificationTracker_loadsLastSeenVerificationDataFromDB(t *te
 	defer mockLedger.Close()
 	defer spt.close()
 
-	a.Empty(spt.lastSeenStateProofVerificationData)
+	a.Empty(spt.lastLookedUpVerificationData)
 
 	dataToAdd := uint64(10)
 	_ = feedBlocksUpToRound(spt, genesisBlock(), basics.Round(dataToAdd*defaultStateProofInterval),
 		defaultStateProofInterval, true)
 
-	expectedDataInDbNum := uint64(2)
+	firstStuckStateProofVerificationData := spt.trackedCommitData[0].verificationData
 
+	expectedDataInDbNum := dataToAdd
 	mockCommit(t, spt, mockLedger, 0, basics.Round(defaultStateProofInterval*expectedDataInDbNum))
+	verifyStateProofVerificationTracking(
+		t,
+		spt,
+		defaultFirstStateProofDataRound,
+		expectedDataInDbNum,
+		defaultStateProofInterval,
+		true,
+		trackerDB,
+	)
 
-	lastItemInDb := basics.Round(defaultStateProofInterval + (expectedDataInDbNum)*defaultStateProofInterval)
-
-	memoryData, err := spt.lookupDataInDB(lastItemInDb)
-	a.NoError(err)
-
-	a.NoError(spt.loadFromDisk(mockLedger, lastItemInDb))
-	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, expectedDataInDbNum, defaultStateProofInterval, true, trackerDB)
-
-	a.Equal(spt.lastSeenStateProofVerificationData, *memoryData)
+	a.NoError(spt.loadFromDisk(mockLedger, unusedByStateProofTracker))
+	a.Equal(spt.lastLookedUpVerificationData, firstStuckStateProofVerificationData)
 }
 
-func TestStateProofVerificationTracker_lastSeenVerificationDataMatchesLatestTracked(t *testing.T) {
+func TestStateProofVerificationTracker_lastLookupDataUpdatedAfterLookup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -502,40 +507,19 @@ func TestStateProofVerificationTracker_lastSeenVerificationDataMatchesLatestTrac
 	defer mockLedger.Close()
 	defer spt.close()
 
-	a.Empty(spt.lastSeenStateProofVerificationData)
+	a.Empty(spt.lastLookedUpVerificationData)
 
-	dataToAdd := uint64(10)
-	_ = feedBlocksUpToRound(spt, genesisBlock(), basics.Round(dataToAdd*defaultStateProofInterval),
+	NumberOfVerificationDataToAdd := uint64(10)
+	_ = feedBlocksUpToRound(spt, genesisBlock(), basics.Round(NumberOfVerificationDataToAdd*defaultStateProofInterval),
 		defaultStateProofInterval, true)
 
-	expected := spt.trackedCommitData[len(spt.trackedCommitData)-1]
-	spt.trackedCommitData = nil
+	a.Empty(spt.lastLookedUpVerificationData)
 
-	lastItemInMemory := basics.Round(defaultStateProofInterval + (dataToAdd)*defaultStateProofInterval)
-	actual, err := spt.lookupDataInTrackedMemory(lastItemInMemory)
-	a.NoError(err)
+	expectedDataInDbNum := NumberOfVerificationDataToAdd
+	for i := uint64(defaultFirstStateProofDataInterval); i < expectedDataInDbNum; i++ {
+		vf, err := spt.LookupVerificationData(basics.Round(defaultStateProofInterval * i))
+		a.NoError(err)
 
-	a.Equal(*actual, expected.verificationData)
-}
-
-func TestStateProofVerificationTracker_lastSeenMatchesLookupVerificationData(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	mockLedger, spt := initializeLedgerSpt(t)
-	defer mockLedger.Close()
-	defer spt.close()
-
-	a.Empty(spt.lastSeenStateProofVerificationData)
-
-	dataToAdd := uint64(10)
-	_ = feedBlocksUpToRound(spt, genesisBlock(), basics.Round(dataToAdd*defaultStateProofInterval),
-		defaultStateProofInterval, true)
-
-	expected := spt.lastSeenStateProofVerificationData
-
-	latestVerficiationDataInTracker := basics.Round(defaultStateProofInterval + (dataToAdd)*defaultStateProofInterval)
-	actual, err := spt.LookupVerificationData(latestVerficiationDataInTracker)
-	a.NoError(err)
-	a.Equal(*actual, expected)
+		a.Equal(*vf, spt.lastLookedUpVerificationData)
+	}
 }

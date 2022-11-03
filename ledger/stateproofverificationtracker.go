@@ -67,8 +67,8 @@ type stateProofVerificationTracker struct {
 	// log copied from ledger
 	log logging.Logger
 
-	// latestStateProof stores the last state proof verification data seen by the tracker.
-	lastSeenStateProofVerificationData ledgercore.StateProofVerificationData
+	// lastLookedUpVerificationData should store the last verification data that was looked up.
+	lastLookedUpVerificationData ledgercore.StateProofVerificationData
 }
 
 func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
@@ -84,9 +84,9 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 	spt.stateProofVerificationMu.Lock()
 	defer spt.stateProofVerificationMu.Unlock()
 
-	latestStateProofVerificationData, err := getLatestVerificationData(l.trackerDB().Rdb.Handle)
+	pendingStateProofVerificationData, err := fetchEarliestVerificationData(l.trackerDB().Rdb.Handle)
 	if err == nil {
-		spt.lastSeenStateProofVerificationData = latestStateProofVerificationData
+		spt.lastLookedUpVerificationData = pendingStateProofVerificationData
 	}
 
 	const initialDataArraySize = 10
@@ -105,18 +105,11 @@ func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, delta 
 
 	if blk.Round()%currentStateProofInterval == 0 {
 		spt.insertCommitData(&blk)
-		spt.cacheVerificationData(&blk)
 	}
 
 	if delta.StateProofNext != 0 {
 		spt.insertDeleteData(&blk, &delta)
 	}
-}
-
-func (spt *stateProofVerificationTracker) cacheVerificationData(blk *bookkeeping.Block) {
-	spt.stateProofVerificationMu.Lock()
-	spt.lastSeenStateProofVerificationData = getVerificationData(blk)
-	spt.stateProofVerificationMu.Unlock()
 }
 
 func (spt *stateProofVerificationTracker) committedUpTo(round basics.Round) (minRound, lookback basics.Round) {
@@ -179,6 +172,19 @@ func (spt *stateProofVerificationTracker) close() {
 }
 
 func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	verificationData, err := spt.lookUpVerificationData(stateProofLastAttestedRound)
+	if err != nil {
+		return nil, err
+	}
+
+	spt.stateProofVerificationMu.Lock()
+	spt.lastLookedUpVerificationData = *verificationData
+	spt.stateProofVerificationMu.Unlock()
+
+	return verificationData, nil
+}
+
+func (spt *stateProofVerificationTracker) lookUpVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
 	spt.stateProofVerificationMu.RLock()
 	defer spt.stateProofVerificationMu.RUnlock()
 
@@ -199,8 +205,8 @@ func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastA
 }
 
 func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
-	if spt.lastSeenStateProofVerificationData.TargetStateProofRound == stateProofLastAttestedRound {
-		return &spt.lastSeenStateProofVerificationData, nil
+	if spt.lastLookedUpVerificationData.TargetStateProofRound == stateProofLastAttestedRound {
+		return &spt.lastLookedUpVerificationData, nil
 	}
 
 	for _, commitData := range spt.trackedCommitData {
