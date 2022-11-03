@@ -335,7 +335,7 @@ type accountInformationParams struct {
 
 // TransactionsByAddr returns all transactions for a PK [addr] in the [first,
 // last] rounds range.
-// Deprecated: This function is only used in internal tests (stateproofs_test.go, restClient_test.go)
+// Deprecated: This function is only used in internal tests (restClient_test.go)
 func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64) (response v1.TransactionList, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions", addr), transactionsByAddrParams{first, last, max})
 	return
