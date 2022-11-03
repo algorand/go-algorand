@@ -68,7 +68,7 @@ type stateProofVerificationTracker struct {
 	log logging.Logger
 
 	// latestStateProof stores the last state proof verification data seen by the tracker.
-	latestStateProofVerificationData ledgercore.StateProofVerificationData
+	lastSeenStateProofVerificationData ledgercore.StateProofVerificationData
 }
 
 func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
@@ -84,11 +84,14 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 	spt.stateProofVerificationMu.Lock()
 	defer spt.stateProofVerificationMu.Unlock()
 
+	latestStateProofVerificationData, err := getLatestVerificationData(l.trackerDB().Rdb.Handle)
+	if err == nil {
+		spt.lastSeenStateProofVerificationData = latestStateProofVerificationData
+	}
+
 	const initialDataArraySize = 10
 	spt.trackedCommitData = make([]verificationCommitData, 0, initialDataArraySize)
 	spt.trackedDeleteData = make([]verificationDeleteData, 0, initialDataArraySize)
-
-	// todo load latest from the DB.
 
 	return nil
 }
@@ -112,7 +115,7 @@ func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, delta 
 
 func (spt *stateProofVerificationTracker) cacheVerificationData(blk *bookkeeping.Block) {
 	spt.stateProofVerificationMu.Lock()
-	spt.latestStateProofVerificationData = getVerificationData(blk)
+	spt.lastSeenStateProofVerificationData = getVerificationData(blk)
 	spt.stateProofVerificationMu.Unlock()
 }
 
@@ -195,8 +198,8 @@ func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastA
 }
 
 func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
-	if spt.latestStateProofVerificationData.TargetStateProofRound == stateProofLastAttestedRound {
-		return &spt.latestStateProofVerificationData, nil
+	if spt.lastSeenStateProofVerificationData.TargetStateProofRound == stateProofLastAttestedRound {
+		return &spt.lastSeenStateProofVerificationData, nil
 	}
 
 	for _, commitData := range spt.trackedCommitData {
