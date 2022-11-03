@@ -17,6 +17,7 @@
 package internal
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -108,6 +109,10 @@ func (ml *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error
 
 func (ml *mockLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
 	return ml.blockHdrCached(rnd)
+}
+
+func (ml *mockLedger) StateProofVerificationData(_ basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	return nil, fmt.Errorf("mockLedger does not implement StateProofVerificationData")
 }
 
 func checkCowByUpdate(t *testing.T, cow *roundCowState, delta ledgercore.AccountDeltas) {
