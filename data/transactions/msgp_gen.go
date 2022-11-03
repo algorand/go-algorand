@@ -4564,7 +4564,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0007Len := uint32(46)
-	var zb0007Mask uint64 /* 55 bits */
+	var zb0007Mask uint64 /* 56 bits */
 	if (*z).AssetTransferTxnFields.AssetAmount == 0 {
 		zb0007Len--
 		zb0007Mask |= 0x200
@@ -4643,111 +4643,111 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte) {
 	}
 	if (*z).AssetConfigTxnFields.ConfigAsset.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x10000000
+		zb0007Mask |= 0x20000000
 	}
 	if (*z).PaymentTxnFields.CloseRemainderTo.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x20000000
+		zb0007Mask |= 0x40000000
 	}
 	if (*z).AssetFreezeTxnFields.FreezeAccount.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x40000000
+		zb0007Mask |= 0x80000000
 	}
 	if (*z).AssetFreezeTxnFields.FreezeAsset.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x80000000
+		zb0007Mask |= 0x100000000
 	}
 	if (*z).Header.Fee.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x100000000
+		zb0007Mask |= 0x200000000
 	}
 	if (*z).Header.FirstValid.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x200000000
+		zb0007Mask |= 0x400000000
 	}
 	if (*z).Header.GenesisID == "" {
 		zb0007Len--
-		zb0007Mask |= 0x400000000
+		zb0007Mask |= 0x800000000
 	}
 	if (*z).Header.GenesisHash.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x800000000
+		zb0007Mask |= 0x1000000000
 	}
 	if (*z).Header.Group.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x1000000000
+		zb0007Mask |= 0x2000000000
 	}
 	if (*z).Header.LastValid.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x2000000000
+		zb0007Mask |= 0x4000000000
 	}
 	if (*z).Header.Lease == ([32]byte{}) {
 		zb0007Len--
-		zb0007Mask |= 0x4000000000
+		zb0007Mask |= 0x8000000000
 	}
 	if (*z).KeyregTxnFields.Nonparticipation == false {
 		zb0007Len--
-		zb0007Mask |= 0x8000000000
+		zb0007Mask |= 0x10000000000
 	}
 	if len((*z).Header.Note) == 0 {
 		zb0007Len--
-		zb0007Mask |= 0x10000000000
+		zb0007Mask |= 0x20000000000
 	}
 	if (*z).PaymentTxnFields.Receiver.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x20000000000
+		zb0007Mask |= 0x40000000000
 	}
 	if (*z).Header.RekeyTo.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x40000000000
+		zb0007Mask |= 0x80000000000
 	}
 	if (*z).KeyregTxnFields.SelectionPK.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x80000000000
+		zb0007Mask |= 0x100000000000
 	}
 	if (*z).Header.Sender.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x100000000000
+		zb0007Mask |= 0x200000000000
 	}
 	if (*z).StateProofTxnFields.StateProof.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x200000000000
+		zb0007Mask |= 0x400000000000
 	}
 	if (*z).StateProofTxnFields.Message.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x400000000000
+		zb0007Mask |= 0x800000000000
 	}
 	if (*z).KeyregTxnFields.StateProofPK.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x800000000000
+		zb0007Mask |= 0x1000000000000
 	}
 	if (*z).StateProofTxnFields.StateProofType.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x1000000000000
+		zb0007Mask |= 0x2000000000000
 	}
 	if (*z).Type.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x2000000000000
+		zb0007Mask |= 0x4000000000000
 	}
 	if (*z).KeyregTxnFields.VoteFirst.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x4000000000000
+		zb0007Mask |= 0x8000000000000
 	}
 	if (*z).KeyregTxnFields.VoteKeyDilution == 0 {
 		zb0007Len--
-		zb0007Mask |= 0x8000000000000
+		zb0007Mask |= 0x10000000000000
 	}
 	if (*z).KeyregTxnFields.VotePK.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x10000000000000
+		zb0007Mask |= 0x20000000000000
 	}
 	if (*z).KeyregTxnFields.VoteLast.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x20000000000000
+		zb0007Mask |= 0x40000000000000
 	}
 	if (*z).AssetTransferTxnFields.XferAsset.MsgIsZero() {
 		zb0007Len--
-		zb0007Mask |= 0x40000000000000
+		zb0007Mask |= 0x80000000000000
 	}
 	// variable map header, size zb0007Len
 	o = msgp.AppendMapHeader(o, zb0007Len)
@@ -4904,137 +4904,137 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte) {
 			o = append(o, 0xa4, 0x61, 0x73, 0x6e, 0x64)
 			o = (*z).AssetTransferTxnFields.AssetSender.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x10000000) == 0 { // if not empty
+		if (zb0007Mask & 0x20000000) == 0 { // if not empty
 			// string "caid"
 			o = append(o, 0xa4, 0x63, 0x61, 0x69, 0x64)
 			o = (*z).AssetConfigTxnFields.ConfigAsset.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x20000000) == 0 { // if not empty
+		if (zb0007Mask & 0x40000000) == 0 { // if not empty
 			// string "close"
 			o = append(o, 0xa5, 0x63, 0x6c, 0x6f, 0x73, 0x65)
 			o = (*z).PaymentTxnFields.CloseRemainderTo.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x40000000) == 0 { // if not empty
+		if (zb0007Mask & 0x80000000) == 0 { // if not empty
 			// string "fadd"
 			o = append(o, 0xa4, 0x66, 0x61, 0x64, 0x64)
 			o = (*z).AssetFreezeTxnFields.FreezeAccount.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x80000000) == 0 { // if not empty
+		if (zb0007Mask & 0x100000000) == 0 { // if not empty
 			// string "faid"
 			o = append(o, 0xa4, 0x66, 0x61, 0x69, 0x64)
 			o = (*z).AssetFreezeTxnFields.FreezeAsset.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x100000000) == 0 { // if not empty
+		if (zb0007Mask & 0x200000000) == 0 { // if not empty
 			// string "fee"
 			o = append(o, 0xa3, 0x66, 0x65, 0x65)
 			o = (*z).Header.Fee.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x200000000) == 0 { // if not empty
+		if (zb0007Mask & 0x400000000) == 0 { // if not empty
 			// string "fv"
 			o = append(o, 0xa2, 0x66, 0x76)
 			o = (*z).Header.FirstValid.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x400000000) == 0 { // if not empty
+		if (zb0007Mask & 0x800000000) == 0 { // if not empty
 			// string "gen"
 			o = append(o, 0xa3, 0x67, 0x65, 0x6e)
 			o = msgp.AppendString(o, (*z).Header.GenesisID)
 		}
-		if (zb0007Mask & 0x800000000) == 0 { // if not empty
+		if (zb0007Mask & 0x1000000000) == 0 { // if not empty
 			// string "gh"
 			o = append(o, 0xa2, 0x67, 0x68)
 			o = (*z).Header.GenesisHash.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x1000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x2000000000) == 0 { // if not empty
 			// string "grp"
 			o = append(o, 0xa3, 0x67, 0x72, 0x70)
 			o = (*z).Header.Group.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x2000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x4000000000) == 0 { // if not empty
 			// string "lv"
 			o = append(o, 0xa2, 0x6c, 0x76)
 			o = (*z).Header.LastValid.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x4000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x8000000000) == 0 { // if not empty
 			// string "lx"
 			o = append(o, 0xa2, 0x6c, 0x78)
 			o = msgp.AppendBytes(o, ((*z).Header.Lease)[:])
 		}
-		if (zb0007Mask & 0x8000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x10000000000) == 0 { // if not empty
 			// string "nonpart"
 			o = append(o, 0xa7, 0x6e, 0x6f, 0x6e, 0x70, 0x61, 0x72, 0x74)
 			o = msgp.AppendBool(o, (*z).KeyregTxnFields.Nonparticipation)
 		}
-		if (zb0007Mask & 0x10000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x20000000000) == 0 { // if not empty
 			// string "note"
 			o = append(o, 0xa4, 0x6e, 0x6f, 0x74, 0x65)
 			o = msgp.AppendBytes(o, (*z).Header.Note)
 		}
-		if (zb0007Mask & 0x20000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x40000000000) == 0 { // if not empty
 			// string "rcv"
 			o = append(o, 0xa3, 0x72, 0x63, 0x76)
 			o = (*z).PaymentTxnFields.Receiver.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x40000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x80000000000) == 0 { // if not empty
 			// string "rekey"
 			o = append(o, 0xa5, 0x72, 0x65, 0x6b, 0x65, 0x79)
 			o = (*z).Header.RekeyTo.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x80000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x100000000000) == 0 { // if not empty
 			// string "selkey"
 			o = append(o, 0xa6, 0x73, 0x65, 0x6c, 0x6b, 0x65, 0x79)
 			o = (*z).KeyregTxnFields.SelectionPK.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x100000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x200000000000) == 0 { // if not empty
 			// string "snd"
 			o = append(o, 0xa3, 0x73, 0x6e, 0x64)
 			o = (*z).Header.Sender.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x200000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x400000000000) == 0 { // if not empty
 			// string "sp"
 			o = append(o, 0xa2, 0x73, 0x70)
 			o = (*z).StateProofTxnFields.StateProof.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x400000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x800000000000) == 0 { // if not empty
 			// string "spmsg"
 			o = append(o, 0xa5, 0x73, 0x70, 0x6d, 0x73, 0x67)
 			o = (*z).StateProofTxnFields.Message.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x800000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x1000000000000) == 0 { // if not empty
 			// string "sprfkey"
 			o = append(o, 0xa7, 0x73, 0x70, 0x72, 0x66, 0x6b, 0x65, 0x79)
 			o = (*z).KeyregTxnFields.StateProofPK.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x1000000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x2000000000000) == 0 { // if not empty
 			// string "sptype"
 			o = append(o, 0xa6, 0x73, 0x70, 0x74, 0x79, 0x70, 0x65)
 			o = (*z).StateProofTxnFields.StateProofType.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x2000000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x4000000000000) == 0 { // if not empty
 			// string "type"
 			o = append(o, 0xa4, 0x74, 0x79, 0x70, 0x65)
 			o = (*z).Type.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x4000000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x8000000000000) == 0 { // if not empty
 			// string "votefst"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x66, 0x73, 0x74)
 			o = (*z).KeyregTxnFields.VoteFirst.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x8000000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x10000000000000) == 0 { // if not empty
 			// string "votekd"
 			o = append(o, 0xa6, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x64)
 			o = msgp.AppendUint64(o, (*z).KeyregTxnFields.VoteKeyDilution)
 		}
-		if (zb0007Mask & 0x10000000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x20000000000000) == 0 { // if not empty
 			// string "votekey"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x65, 0x79)
 			o = (*z).KeyregTxnFields.VotePK.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x20000000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x40000000000000) == 0 { // if not empty
 			// string "votelst"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6c, 0x73, 0x74)
 			o = (*z).KeyregTxnFields.VoteLast.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x40000000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x80000000000000) == 0 { // if not empty
 			// string "xaid"
 			o = append(o, 0xa4, 0x78, 0x61, 0x69, 0x64)
 			o = (*z).AssetTransferTxnFields.XferAsset.MarshalMsg(o)
