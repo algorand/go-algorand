@@ -208,7 +208,6 @@ func (cw *catchpointWriter) WriteStateProofVerificationData() (crypto.Digest, er
 		return crypto.Digest{}, err
 	}
 
-	// TODO: This actually causes double usage of protocol.encode - above and in crypto.HashObj
 	dataHash := crypto.HashObj(wrappedData)
 
 	return dataHash, nil
