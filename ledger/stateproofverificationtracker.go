@@ -66,6 +66,9 @@ type stateProofVerificationTracker struct {
 
 	// log copied from ledger
 	log logging.Logger
+
+	// latestStateProof stores the last state proof verification data seen by the tracker.
+	latestStateProofVerificationData ledgercore.StateProofVerificationData
 }
 
 func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
@@ -97,11 +100,18 @@ func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, delta 
 
 	if blk.Round()%currentStateProofInterval == 0 {
 		spt.insertCommitData(&blk)
+		spt.cacheVerificationData(&blk)
 	}
 
 	if delta.StateProofNext != 0 {
 		spt.insertDeleteData(&blk, &delta)
 	}
+}
+
+func (spt *stateProofVerificationTracker) cacheVerificationData(blk *bookkeeping.Block) {
+	spt.stateProofVerificationMu.Lock()
+	spt.latestStateProofVerificationData = getVerificationData(blk)
+	spt.stateProofVerificationMu.Unlock()
 }
 
 func (spt *stateProofVerificationTracker) committedUpTo(round basics.Round) (minRound, lookback basics.Round) {
@@ -184,6 +194,10 @@ func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastA
 }
 
 func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	if spt.latestStateProofVerificationData.TargetStateProofRound == stateProofLastAttestedRound {
+		return &spt.latestStateProofVerificationData, nil
+	}
+
 	for _, commitData := range spt.trackedCommitData {
 		if commitData.verificationData.TargetStateProofRound == stateProofLastAttestedRound {
 			verificationDataCopy := commitData.verificationData
@@ -232,6 +246,14 @@ func (spt *stateProofVerificationTracker) committedRoundToLatestDeleteDataIndex(
 	return latestCommittedDataIndex
 }
 
+func getVerificationData(blk *bookkeeping.Block) ledgercore.StateProofVerificationData {
+	return ledgercore.StateProofVerificationData{
+		VotersCommitment:      blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+		OnlineTotalWeight:     blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+		TargetStateProofRound: blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval),
+	}
+}
+
 func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Block) {
 	spt.stateProofVerificationMu.Lock()
 	defer spt.stateProofVerificationMu.Unlock()
@@ -244,15 +266,9 @@ func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Bloc
 		}
 	}
 
-	verificationData := ledgercore.StateProofVerificationData{
-		VotersCommitment:      blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
-		OnlineTotalWeight:     blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
-		TargetStateProofRound: blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval),
-	}
-
 	commitData := verificationCommitData{
 		confirmedRound:   blk.Round(),
-		verificationData: verificationData,
+		verificationData: getVerificationData(blk),
 	}
 
 	spt.trackedCommitData = append(spt.trackedCommitData, commitData)
