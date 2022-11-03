@@ -1,6 +1,5 @@
 {
   "VersionModifier": ".0",
-  "NetworkName": "testnet",
   "FirstPartKeyRound": 0,
   "LastPartKeyRound": 3000000,
   "ConsensusProtocol": "https://github.com/algorand/spec/tree/a26ed78ed8f834e2b9ccb6eb7d3ee9f629a6e622",

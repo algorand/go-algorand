@@ -204,6 +204,9 @@ func TestGenesisJsonCreation(t *testing.T) {
 
 		require.NotZero(t, g.Timestamp)
 		g.Timestamp = 0
+
+		require.NotEmpty(t, g.Network)
+		g.Network = ""
 	}
 
 	saveGeneratedGenesisJSON := func(filename, artifactName string) {
