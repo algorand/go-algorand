@@ -492,7 +492,7 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 	// transaction to get the size post signing and encoding.
 	// Then, we multiply it by the suggested fee per byte.
 	if fee == 0 {
-		tx.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, (*tx).EstimateEncodedSize())
+		tx.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, tx.EstimateEncodedSize())
 		if tx.Fee.Raw < cparams.MinTxnFee {
 			tx.Fee.Raw = cparams.MinTxnFee
 		}

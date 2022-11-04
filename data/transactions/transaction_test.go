@@ -1280,7 +1280,7 @@ func (s *stateproofTxnTestCase) runIsWellFormedForTestCase() error {
 	curProto.StateProofInterval = s.StateProofInterval
 
 	// edit txn params. wanted
-	return Transaction{
+	txn := Transaction{
 		Type: protocol.StateProofTx,
 		Header: Header{
 			Sender:      s.sender,
@@ -1295,7 +1295,8 @@ func (s *stateproofTxnTestCase) runIsWellFormedForTestCase() error {
 			RekeyTo:     s.rekeyValue,
 		},
 		StateProofTxnFields: StateProofTxnFields{},
-	}.WellFormed(SpecialAddresses{}, curProto)
+	}
+	return txn.WellFormed(SpecialAddresses{}, curProto)
 }
 
 func TestWellFormedStateProofTxn(t *testing.T) {

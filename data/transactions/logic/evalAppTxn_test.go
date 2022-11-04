@@ -1486,9 +1486,9 @@ func TestTxIDAndGroupIDCalculation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	withoutGroupID := func(txn transactions.Transaction) transactions.Transaction {
+	withoutGroupID := func(txn transactions.Transaction) *transactions.Transaction {
 		txn.Group = crypto.Digest{}
-		return txn
+		return &txn
 	}
 
 	type actualInfo struct {

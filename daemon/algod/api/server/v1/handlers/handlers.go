@@ -100,12 +100,12 @@ func txEncode(tx *transactions.Transaction, ad transactions.ApplyData) (v1.Trans
 	}
 
 	res.Type = string(tx.Type)
-	res.TxID = (*tx).ID().String()
-	res.From = (*tx).Src().String()
-	res.Fee = (*tx).TxFee().Raw
+	res.TxID = tx.ID().String()
+	res.From = tx.Src().String()
+	res.Fee = tx.TxFee().Raw
 	res.FirstRound = uint64((*tx).First())
 	res.LastRound = uint64((*tx).Last())
-	res.Note = (*tx).Aux()
+	res.Note = tx.Aux()
 	res.FromRewards = ad.SenderRewards.Raw
 	res.GenesisID = tx.GenesisID
 	res.GenesisHash = tx.GenesisHash[:]
@@ -124,7 +124,7 @@ func txEncode(tx *transactions.Transaction, ad transactions.ApplyData) (v1.Trans
 func paymentTxEncode(tx *transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
 	payment := v1.PaymentTransactionType{
 		To:           tx.Receiver.String(),
-		Amount:       (*tx).TxAmount().Raw,
+		Amount:       tx.TxAmount().Raw,
 		ToRewards:    ad.ReceiverRewards.Raw,
 		CloseRewards: ad.CloseRewards.Raw,
 	}

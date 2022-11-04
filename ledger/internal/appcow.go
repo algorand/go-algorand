@@ -531,7 +531,7 @@ func (cb *roundCowState) buildEvalDelta(aidx basics.AppIndex, txn *transactions.
 				if cb.compatibilityMode {
 					addrOffset = sdelta.accountIdx
 				} else {
-					addrOffset, err = (*txn).IndexByAddress(addr, txn.Sender)
+					addrOffset, err = txn.IndexByAddress(addr, txn.Sender)
 					if err != nil {
 						return transactions.EvalDelta{}, err
 					}

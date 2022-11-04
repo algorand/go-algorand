@@ -2522,9 +2522,9 @@ func (cx *EvalContext) getTxIDNotUnified(txn *transactions.Transaction, groupInd
 	if !ok {
 		if cx.caller != nil {
 			innerOffset := len(cx.caller.txn.EvalDelta.InnerTxns)
-			txid = (*txn).InnerID(cx.caller.txn.ID(), innerOffset+groupIndex)
+			txid = txn.InnerID(cx.caller.txn.ID(), innerOffset+groupIndex)
 		} else {
-			txid = (*txn).ID()
+			txid = txn.ID()
 		}
 		cx.EvalParams.txidCache[groupIndex] = txid
 	}
@@ -2536,7 +2536,7 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, in
 	// inner indicates that groupIndex is an index into the most recent inner txn group
 
 	if cx.EvalParams == nil { // Special case, called through TxnFieldToTealValue. No EvalParams, no caching.
-		return (*txn).ID()
+		return txn.ID()
 	}
 
 	if !cx.Proto.UnifyInnerTxIDs {
@@ -2557,7 +2557,7 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, in
 			lastGroupLen := len(cx.getLastInnerGroup())
 			// innerIndex is the referenced inner txn's index in cx.txn.EvalDelta.InnerTxns
 			innerIndex := len(cx.txn.EvalDelta.InnerTxns) - lastGroupLen + groupIndex
-			txid = (*txn).InnerID(myTxid, innerIndex)
+			txid = txn.InnerID(myTxid, innerIndex)
 			cx.EvalParams.innerTxidCache[groupIndex] = txid
 		}
 
@@ -2575,10 +2575,10 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, in
 			// We're referencing a peer txn, not my inner, but I am an inner
 			parentTxid := cx.caller.currentTxID()
 			innerIndex := len(cx.caller.txn.EvalDelta.InnerTxns) + groupIndex
-			txid = (*txn).InnerID(parentTxid, innerIndex)
+			txid = txn.InnerID(parentTxid, innerIndex)
 		} else {
 			// We're referencing a peer txn and I am not an inner
-			txid = (*txn).ID()
+			txid = txn.ID()
 		}
 		cx.EvalParams.txidCache[groupIndex] = txid
 	}

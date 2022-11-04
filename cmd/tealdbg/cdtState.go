@@ -824,13 +824,13 @@ func makeTxnImpl(txn *transactions.Transaction, groupIndex int, inner bool, prev
 		var length int
 		switch logic.TxnField(fieldIdx) {
 		case logic.Accounts:
-			length = len((*txn).Accounts) + 1
+			length = len(txn.Accounts) + 1
 		case logic.ApplicationArgs:
-			length = len((*txn).ApplicationArgs)
+			length = len(txn.ApplicationArgs)
 		case logic.Assets:
-			length = len((*txn).ForeignAssets)
+			length = len(txn.ForeignAssets)
 		case logic.Applications:
-			length = len((*txn).ForeignApps) + 1
+			length = len(txn.ForeignApps) + 1
 		}
 		field := makeArray(logic.TxnFieldNames[fieldIdx], length, fieldID)
 		if preview {
