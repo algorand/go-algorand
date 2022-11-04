@@ -3761,7 +3761,8 @@
         },
         "summary": "Get a RoundDeltas object for a given round",
         "tags": [
-          "private"
+          "private",
+          "data"
         ]
       }
     },
@@ -3876,7 +3877,8 @@
         },
         "summary": "Removes minimum sync round restriction from the ledger.",
         "tags": [
-          "private"
+          "private",
+          "data"
         ]
       },
       "get": {
@@ -3949,7 +3951,8 @@
         },
         "summary": "Returns the minimum sync round the ledger is keeping in cache.",
         "tags": [
-          "private"
+          "private",
+          "data"
         ]
       }
     },
@@ -4020,7 +4023,8 @@
         },
         "summary": "Given a round, tells the ledger to keep that round in its cache.",
         "tags": [
-          "private"
+          "private",
+          "data"
         ]
       }
     },

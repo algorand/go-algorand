@@ -1371,7 +1371,8 @@
       "get": {
         "description": "Get round deltas for a round.",
         "tags": [
-          "private"
+          "private",
+          "data"
         ],
         "produces": [
           "application/json"
@@ -1860,7 +1861,8 @@
       "delete": {
         "description": "Unset the ledger sync round.",
         "tags": [
-          "private"
+          "private",
+          "data"
         ],
         "schemes": [
           "http"
@@ -1903,7 +1905,8 @@
       "get": {
         "description": "Gets the minimum sync round for the ledger.",
         "tags": [
-          "private"
+          "private",
+          "data"
         ],
         "schemes": [
           "http"
@@ -1948,7 +1951,8 @@
       "post": {
         "description": "Sets the minimum sync round on the ledger.",
         "tags": [
-          "private"
+          "private",
+          "data"
         ],
         "schemes": [
           "http"

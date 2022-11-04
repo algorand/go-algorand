@@ -984,7 +984,7 @@ func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
 	if !set {
 		return notFound(ctx, fmt.Errorf("sync round is not set"), errFailedRetrievingSyncRound, v2.Log)
 	}
-	return ctx.JSON(http.StatusOK, generated.GetSyncRoundResponse{Round: rnd})
+	return ctx.JSON(http.StatusOK, model.GetSyncRoundResponse{Round: rnd})
 }
 
 // GetRoundDeltas returns the deltas for a given round.
@@ -1000,10 +1000,10 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 		return internalError(ctx, err, errFailedRetrievingKvDeltas, v2.Log)
 	}
 
-	var accts []generated.AccountBalanceRecord
-	var apps []generated.AppResourceRecord
-	var assets []generated.AssetResourceRecord
-	var keyValues []generated.KvDelta
+	var accts []model.AccountBalanceRecord
+	var apps []model.AppResourceRecord
+	var assets []model.AssetResourceRecord
+	var keyValues []model.KvDelta
 
 	consensusParams, err := v2.Node.LedgerForAPI().ConsensusParams(basics.Round(round))
 	if err != nil {
@@ -1016,7 +1016,7 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 
 	for key, kvDelta := range kvds {
 		var keyBytes = []byte(key)
-		keyValues = append(keyValues, generated.KvDelta{
+		keyValues = append(keyValues, model.KvDelta{
 			Key:       &keyBytes,
 			PrevValue: &kvDelta.OldData,
 			Value:     &kvDelta.Data,
@@ -1024,9 +1024,9 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 	}
 
 	for _, record := range ads.GetAllAccounts() {
-		var apiParticipation *generated.AccountParticipation
+		var apiParticipation *model.AccountParticipation
 		if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
-			apiParticipation = &generated.AccountParticipation{
+			apiParticipation = &model.AccountParticipation{
 				VoteParticipationKey:      record.VoteID[:],
 				SelectionParticipationKey: record.SelectionID[:],
 				VoteFirstValid:            uint64(record.VoteFirstValid),
@@ -1045,8 +1045,8 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 		if overflowed {
 			return internalError(ctx, errors.New("overflow on pending reward calculation"), errInternalFailure, v2.Log)
 		}
-		accts = append(accts, generated.AccountBalanceRecord{
-			AccountData: generated.Account{
+		accts = append(accts, model.AccountBalanceRecord{
+			AccountData: model.Account{
 				SigType:                     nil,
 				Round:                       round,
 				Address:                     record.Addr.String(),
@@ -1062,7 +1062,7 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 				TotalAssetsOptedIn:          record.TotalAssets,
 				AuthAddr:                    addrOrNil(record.AuthAddr),
 				TotalAppsOptedIn:            record.TotalAppLocalStates,
-				AppsTotalSchema: &generated.ApplicationStateSchema{
+				AppsTotalSchema: &model.ApplicationStateSchema{
 					NumByteSlice: record.TotalAppSchema.NumByteSlice,
 					NumUint:      record.TotalAppSchema.NumUint,
 				},
@@ -1074,38 +1074,38 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 	}
 
 	for _, app := range ads.GetAllAppResources() {
-		var appLocalState *generated.ApplicationLocalState = nil
+		var appLocalState *model.ApplicationLocalState = nil
 		if app.State.LocalState != nil {
 			localState := convertTKVToGenerated(&app.State.LocalState.KeyValue)
-			appLocalState = &generated.ApplicationLocalState{
+			appLocalState = &model.ApplicationLocalState{
 				Id:       uint64(app.Aidx),
 				KeyValue: localState,
-				Schema: generated.ApplicationStateSchema{
+				Schema: model.ApplicationStateSchema{
 					NumByteSlice: app.State.LocalState.Schema.NumByteSlice,
 					NumUint:      app.State.LocalState.Schema.NumUint,
 				},
 			}
 		}
-		var appParams *generated.ApplicationParams = nil
+		var appParams *model.ApplicationParams = nil
 		if app.Params.Params != nil {
 			globalState := convertTKVToGenerated(&app.Params.Params.GlobalState)
-			appParams = &generated.ApplicationParams{
+			appParams = &model.ApplicationParams{
 				ApprovalProgram:   app.Params.Params.ApprovalProgram,
 				ClearStateProgram: app.Params.Params.ClearStateProgram,
 				Creator:           app.Addr.String(),
 				ExtraProgramPages: numOrNil(uint64(app.Params.Params.ExtraProgramPages)),
 				GlobalState:       globalState,
-				GlobalStateSchema: &generated.ApplicationStateSchema{
+				GlobalStateSchema: &model.ApplicationStateSchema{
 					NumByteSlice: app.Params.Params.GlobalStateSchema.NumByteSlice,
 					NumUint:      app.Params.Params.GlobalStateSchema.NumUint,
 				},
-				LocalStateSchema: &generated.ApplicationStateSchema{
+				LocalStateSchema: &model.ApplicationStateSchema{
 					NumByteSlice: app.Params.Params.LocalStateSchema.NumByteSlice,
 					NumUint:      app.Params.Params.LocalStateSchema.NumUint,
 				},
 			}
 		}
-		apps = append(apps, generated.AppResourceRecord{
+		apps = append(apps, model.AppResourceRecord{
 			Address:              app.Addr.String(),
 			AppIndex:             uint64(app.Aidx),
 			AppParamsDeleted:     app.Params.Deleted,
@@ -1116,17 +1116,17 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 	}
 
 	for _, asset := range ads.GetAllAssetResources() {
-		var assetHolding *generated.AssetHolding = nil
+		var assetHolding *model.AssetHolding = nil
 		if asset.Holding.Holding != nil {
-			assetHolding = &generated.AssetHolding{
+			assetHolding = &model.AssetHolding{
 				Amount:   asset.Holding.Holding.Amount,
-				AssetId:  uint64(asset.Aidx),
+				AssetID:  uint64(asset.Aidx),
 				IsFrozen: asset.Holding.Holding.Frozen,
 			}
 		}
-		var assetParams *generated.AssetParams = nil
+		var assetParams *model.AssetParams = nil
 		if asset.Params.Params != nil {
-			assetParams = &generated.AssetParams{
+			assetParams = &model.AssetParams{
 				Clawback:      strOrNil(asset.Params.Params.Clawback.String()),
 				Creator:       asset.Addr.String(),
 				Decimals:      uint64(asset.Params.Params.Decimals),
@@ -1144,7 +1144,7 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 				UrlB64:        byteOrNil([]byte(base64.StdEncoding.EncodeToString([]byte(asset.Params.Params.URL)))),
 			}
 		}
-		assets = append(assets, generated.AssetResourceRecord{
+		assets = append(assets, model.AssetResourceRecord{
 			Address:             asset.Addr.String(),
 			AssetIndex:          uint64(asset.Aidx),
 			AssetHoldingDeleted: asset.Holding.Deleted,
@@ -1154,7 +1154,7 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 		})
 	}
 
-	response := generated.RoundDeltas{
+	response := model.RoundDeltas{
 		Accounts: &accts,
 		Apps:     &apps,
 		Assets:   &assets,

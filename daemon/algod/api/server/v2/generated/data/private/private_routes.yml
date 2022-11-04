@@ -1,4 +1,4 @@
-package: data
+package: private
 generate:
   echo-server: true
   embedded-spec: true
@@ -15,4 +15,4 @@ output-options:
 additional-imports:
   - alias: "."
     package: "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
-output: ./server/v2/generated/data/routes.go
+output: ./server/v2/generated/data/private/routes.go
