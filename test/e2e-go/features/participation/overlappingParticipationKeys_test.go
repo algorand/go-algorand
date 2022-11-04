@@ -181,7 +181,7 @@ func addParticipationKey(a *require.Assertions, fixture *fixtures.RestClientFixt
 
 	signedTxn := regTransactions[int(startRound-2)]
 	a.NotEmpty(signedTxn.Sig)
-	_, err := fixture.GetAlgodClientForController(nc).SendRawTransaction(signedTxn)
+	_, err := fixture.GetAlgodClientForController(nc).SendRawTransactionV2(signedTxn)
 	a.NoError(err)
 	return signedTxn.Txn.KeyregTxnFields.VotePK, err
 }

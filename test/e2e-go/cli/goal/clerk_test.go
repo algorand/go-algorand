@@ -71,7 +71,7 @@ func TestClerkSendNoteEncoding(t *testing.T) {
 			tx1, err := fixture.WaitForConfirmedTxn(status.LastRound+i, account, txID)
 			if err == nil {
 				foundTx1 = true
-				a.Equal(noteText, string(tx1.Note))
+				a.Equal(noteText, string(tx1.Txn.Txn.Note))
 			}
 		}
 		if !foundTx2 {
@@ -80,7 +80,7 @@ func TestClerkSendNoteEncoding(t *testing.T) {
 				foundTx2 = true
 				// If the note matches our original text, then goal is still expecting strings encoded
 				// with StdEncoding.EncodeToString() when using --noteb64 parameter
-				a.Equal(originalNoteb64Text, string(tx2.Note), "goal should decode noteb64 with base64.StdEncoding")
+				a.Equal(originalNoteb64Text, string(tx2.Txn.Txn.Note), "goal should decode noteb64 with base64.StdEncoding")
 			}
 		}
 	}

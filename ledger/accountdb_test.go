@@ -4591,10 +4591,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 	}
 }
 
-func TestEncodedBaseAccountDataSize(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
+func randomBaseAccountData() baseAccountData {
 	vd := baseVotingData{
 		VoteFirstValid:  basics.Round(crypto.RandUint64()),
 		VoteLastValid:   basics.Round(crypto.RandUint64()),
@@ -4621,14 +4618,27 @@ func TestEncodedBaseAccountDataSize(t *testing.T) {
 		UpdateRound:                crypto.RandUint64(),
 	}
 
+	return baseAD
+}
+
+func TestEncodedBaseAccountDataSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	baseAD := randomBaseAccountData()
 	encoded := baseAD.MarshalMsg(nil)
 	require.GreaterOrEqual(t, MaxEncodedBaseAccountDataSize, len(encoded))
 }
 
-func TestEncodedBaseResourceSize(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
+func makeString(len int) string {
+	s := ""
+	for i := 0; i < len; i++ {
+		s += string(byte(i))
+	}
+	return s
+}
 
+func randomAssetResourceData() resourcesData {
 	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	// resourcesData is suiteable for keeping asset params, holding, app params, app local state
@@ -4650,6 +4660,12 @@ func TestEncodedBaseResourceSize(t *testing.T) {
 		Frozen: true,
 	}
 	crypto.RandBytes(rdAsset.MetadataHash[:])
+
+	return rdAsset
+}
+
+func randomAppResourceData() resourcesData {
+	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	rdApp := resourcesData{
 
@@ -4702,6 +4718,18 @@ func TestEncodedBaseResourceSize(t *testing.T) {
 
 	rdApp.GlobalState = maxGlobalState
 	rdApp.KeyValue = maxLocalState
+
+	return rdApp
+}
+
+func TestEncodedBaseResourceSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// resourcesData is suiteable for keeping asset params, holding, app params, app local state
+	// but only asset + holding or app + local state can appear there
+	rdAsset := randomAssetResourceData()
+	rdApp := randomAppResourceData()
 
 	encodedAsset := rdAsset.MarshalMsg(nil)
 	encodedApp := rdApp.MarshalMsg(nil)

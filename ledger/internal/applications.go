@@ -197,12 +197,12 @@ func (cb *roundCowBase) kvGet(key string) ([]byte, bool, error) {
 }
 
 func (cs *roundCowState) kvPut(key string, value []byte) error {
-	cs.mods.KvMods[key] = ledgercore.KvValueDelta{Data: value}
+	cs.mods.AddKvMod(key, ledgercore.KvValueDelta{Data: value})
 	return nil
 }
 
 func (cs *roundCowState) kvDel(key string) error {
-	cs.mods.KvMods[key] = ledgercore.KvValueDelta{Data: nil}
+	cs.mods.AddKvMod(key, ledgercore.KvValueDelta{Data: nil})
 	return nil
 }
 
