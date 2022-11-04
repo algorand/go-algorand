@@ -229,7 +229,7 @@ jobs:
       - generic_test:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test
-          short_test_flag: << parameters.short>>
+          short_test_flag: << parameters.short >>
       - upload_coverage
 
   test_nightly:
@@ -264,7 +264,7 @@ jobs:
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_integration
-          short_test_flag: << parameters.short>>
+          short_test_flag: << parameters.short >>
 
   integration_nightly:
     parameters:
