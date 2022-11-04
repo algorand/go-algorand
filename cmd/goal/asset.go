@@ -798,7 +798,7 @@ var infoAssetCmd = &cobra.Command{
 		var res generated.AssetHolding
 		if reserve.Assets != nil {
 			for _, reserveAsset := range *reserve.Assets {
-				if assetID == reserveAsset.AssetId {
+				if assetID == reserveAsset.AssetID {
 					res = reserveAsset
 					break
 				}
