@@ -1803,7 +1803,7 @@ func TestDryrunEarlyExit(t *testing.T) {
 	t.Parallel()
 
 	var dr DryrunRequest
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 
 	ops, err := logic.AssembleString("#pragma version 5 \n int 1")
 	require.NoError(t, err)
@@ -1815,13 +1815,13 @@ func TestDryrunEarlyExit(t *testing.T) {
 			Type:          protocol.ApplicationCallTx,
 		}.SignedTxn(),
 	}
-	dr.Apps = []generated.Application{{
+	dr.Apps = []model.Application{{
 		Id: 1,
-		Params: generated.ApplicationParams{
+		Params: model.ApplicationParams{
 			ApprovalProgram: ops.Program,
 		},
 	}}
-	dr.Accounts = []generated.Account{{
+	dr.Accounts = []model.Account{{
 		Status:  "Online",
 		Address: basics.Address{}.String(),
 	}}
