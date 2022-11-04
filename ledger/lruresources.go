@@ -48,6 +48,9 @@ type lruResources struct {
 
 	// pendingWritesWarnThreshold is the threshold beyond we would write a warning for exceeding the number of pendingResources entries
 	pendingWritesWarnThreshold int
+
+	pendingNotFound chan accountCreatable
+	notFound        map[accountCreatable]struct{}
 }
 
 // init initializes the lruResources for use.
@@ -56,6 +59,8 @@ func (m *lruResources) init(log logging.Logger, pendingWrites int, pendingWrites
 	m.resourcesList = newPersistedResourcesList().allocateFreeNodes(pendingWrites)
 	m.resources = make(map[accountCreatable]*persistedResourcesDataListNode, pendingWrites)
 	m.pendingResources = make(chan cachedResourceData, pendingWrites)
+	m.notFound = make(map[accountCreatable]struct{}, pendingWrites)
+	m.pendingNotFound = make(chan accountCreatable, pendingWrites)
 	m.log = log
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
 }
@@ -67,6 +72,13 @@ func (m *lruResources) read(addr basics.Address, aidx basics.CreatableIndex) (da
 		return el.Value.persistedResourcesData, true
 	}
 	return persistedResourcesData{}, false
+}
+
+// readNotFound returns whether we have attempted to read this address but it did not exist in the db.
+// thread locking semantics : read lock
+func (m *lruResources) readNotFound(addr basics.Address, idx basics.CreatableIndex) bool {
+	_, ok := m.notFound[accountCreatable{address: addr, index: idx}]
+	return ok
 }
 
 // read the persistedResourcesData object that the lruResources has for the given address.
@@ -87,12 +99,25 @@ func (m *lruResources) flushPendingWrites() {
 	if pendingEntriesCount >= m.pendingWritesWarnThreshold {
 		m.log.Warnf("lruResources: number of entries in pendingResources(%d) exceed the warning threshold of %d", pendingEntriesCount, m.pendingWritesWarnThreshold)
 	}
+
+outer:
 	for ; pendingEntriesCount > 0; pendingEntriesCount-- {
 		select {
 		case pendingResourceData := <-m.pendingResources:
 			m.write(pendingResourceData.persistedResourcesData, pendingResourceData.address)
 		default:
-			return
+			break outer
+		}
+	}
+
+	pendingEntriesCount = len(m.pendingNotFound)
+outer2:
+	for ; pendingEntriesCount > 0; pendingEntriesCount-- {
+		select {
+		case key := <-m.pendingNotFound:
+			m.notFound[key] = struct{}{}
+		default:
+			break outer2
 		}
 	}
 }
@@ -103,6 +128,16 @@ func (m *lruResources) flushPendingWrites() {
 func (m *lruResources) writePending(acct persistedResourcesData, addr basics.Address) {
 	select {
 	case m.pendingResources <- cachedResourceData{persistedResourcesData: acct, address: addr}:
+	default:
+	}
+}
+
+// writeNotFoundPending tags an address as not existing in the db.
+// the function doesn't block, and in case of a buffer overflow the entry would not be added.
+// thread locking semantics : no lock is required.
+func (m *lruResources) writeNotFoundPending(addr basics.Address, idx basics.CreatableIndex) {
+	select {
+	case m.pendingNotFound <- accountCreatable{address: addr, index: idx}:
 	default:
 	}
 }
@@ -139,5 +174,8 @@ func (m *lruResources) prune(newSize int) (removed int) {
 		m.resourcesList.remove(back)
 		removed++
 	}
+
+	// clear the notFound list
+	m.notFound = make(map[accountCreatable]struct{}, len(m.notFound))
 	return
 }
