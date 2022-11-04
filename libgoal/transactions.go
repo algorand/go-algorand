@@ -717,24 +717,14 @@ func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newMana
 		params = asset.Params
 	} else {
 		// Fetch the current state, to fill in as a template
-		current, err := c.AccountInformationV2(creator, true)
+		current, err := c.AccountAssetInformation(creator, index)
 		if err != nil {
 			return tx, err
 		}
 
 		// Search for the asset index in the CreatedAssets array
-		assetFound := false
-		if current.CreatedAssets != nil {
-			for _, asset := range *current.CreatedAssets {
-				if index == asset.Index {
-					params = asset.Params
-					assetFound = true
-					break
-				}
-			}
-			if !assetFound {
-				return tx, fmt.Errorf("asset ID %d not found in account %s", index, creator)
-			}
+		if current.CreatedAsset != nil {
+			params = *current.CreatedAsset
 		} else {
 			return tx, fmt.Errorf("asset ID %d not found in account %s", index, creator)
 		}
