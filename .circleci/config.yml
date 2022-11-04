@@ -89,7 +89,7 @@ workflows:
           matrix: &matrix-default
             parameters:
               platform: ["amd64", "arm64"]
-              short: << pipeline.parameters.short_test_override >>
+              short: [<< pipeline.parameters.short_test_override >>]
           filters: &filters-default
             branches:
               ignore:
@@ -255,6 +255,9 @@ jobs:
     parameters:
       platform:
         type: string
+      short:
+        type: string
+        default: "-short"
     executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 16
@@ -289,6 +292,8 @@ jobs:
     parameters:
       platform:
         type: string
+      short:
+        type: string
     executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 10
@@ -299,7 +304,7 @@ jobs:
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_e2e_expect
-          short_test_flag: "-short"
+          short_test_flag: "<< parameters.short >>"
 
   e2e_expect_nightly:
     parameters:
@@ -323,6 +328,8 @@ jobs:
     parameters:
       platform:
         type: string
+      short:
+        type: string
     executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
     environment:
@@ -332,7 +339,7 @@ jobs:
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_e2e_subs
-          short_test_flag: "-short"
+          short_test_flag: << parameters.short >>
 
   e2e_subs_nightly:
     parameters:
