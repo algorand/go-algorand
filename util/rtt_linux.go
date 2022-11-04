@@ -34,10 +34,11 @@ func getConnRTT(raw syscall.RawConn) (*RTTInfo, error) {
 	if getSockoptErr != nil {
 		return nil, getSockoptErr
 	}
-	var ret RTTInfo
-	if info != nil {
-		ret.RTT = info.Rtt
-		ret.RTTVar = info.Rttvar
+	if info == nil {
+		return nil, ErrNoTCPInfo
 	}
-	return &ret, nil
+	return &RTTInfo{
+		RTT:    info.Rtt,
+		RTTVar: info.Rttvar,
+	}, nil
 }

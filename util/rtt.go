@@ -33,6 +33,8 @@ var (
 	ErrNotSyscallConn = errors.New("conn doesn't satisfy syscall.Conn")
 	// ErrRTTUnsupported is reported if TCP information is not available for this platform.
 	ErrRTTUnsupported = errors.New("GetConnRTT not supported on this platform")
+	// ErrNoTCPInfo is reported if getsockopt returned nil TCP info for some reason.
+	ErrNoTCPInfo = errors.New("getsockopt returned null TCP info")
 )
 
 // GetConnRTT returns RTT statistics for a TCP connection collected by the
