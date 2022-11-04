@@ -737,3 +737,8 @@ func (ad *AccountDeltas) GetAllAppResources() []AppResourceRecord {
 func (ad *AccountDeltas) GetAllAssetResources() []AssetResourceRecord {
 	return ad.AssetResources
 }
+
+// GetAllAccounts returns all account NewBalanceRecords
+func (ad *AccountDeltas) GetAllAccounts() []BalanceRecord {
+	return ad.Accts
+}

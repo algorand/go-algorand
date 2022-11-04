@@ -30,7 +30,10 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/algorand/go-codec/codec"
+
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/catchup"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
@@ -47,7 +50,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/stateproof"
-	"github.com/algorand/go-codec/codec"
 )
 
 // max compiled teal program is currently 8k
@@ -84,6 +86,8 @@ type LedgerForAPI interface {
 	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
 	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
+	GetAccountDeltasForRound(rnd basics.Round) (ledgercore.AccountDeltas, error)
+	GetKvDeltasForRound(rnd basics.Round) (map[string]ledgercore.KvValueDelta, error)
 }
 
 // NodeInterface represents node fns used by the handlers.
@@ -104,6 +108,9 @@ type NodeInterface interface {
 	GetParticipationKey(account.ParticipationID) (account.ParticipationRecord, error)
 	RemoveParticipationKey(account.ParticipationID) error
 	AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error
+	SetSyncRound(rnd uint64) error
+	GetSyncRound() (bool, uint64, error)
+	UnsetSyncRound() error
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {
@@ -939,6 +946,221 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 
 	doDryrunRequest(&dr, &response)
 	response.ProtocolVersion = string(protocolVersion)
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// UnsetSyncRound removes the sync round restriction from the ledger.
+// (DELETE /v2/ledger/sync)
+func (v2 *Handlers) UnsetSyncRound(ctx echo.Context) error {
+	err := v2.Node.UnsetSyncRound()
+	if err != nil {
+		return internalError(ctx, err, errFailedSettingSyncRound, v2.Log)
+	}
+	return ctx.NoContent(http.StatusOK)
+}
+
+// SetSyncRound sets the sync round on the ledger.
+// (POST /v2/ledger/sync/{round})
+func (v2 *Handlers) SetSyncRound(ctx echo.Context, round uint64) error {
+	err := v2.Node.SetSyncRound(round)
+	if err != nil {
+		switch err {
+		case catchup.ErrSyncRoundInvalid:
+			return badRequest(ctx, err, errFailedSettingSyncRound, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedSettingSyncRound, v2.Log)
+		}
+	}
+	return ctx.NoContent(http.StatusOK)
+}
+
+// GetSyncRound gets the sync round from the ledger.
+// (GET /v2/ledger/sync)
+func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
+	set, rnd, err := v2.Node.GetSyncRound()
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingSyncRound, v2.Log)
+	}
+	if !set {
+		return notFound(ctx, fmt.Errorf("sync round is not set"), errFailedRetrievingSyncRound, v2.Log)
+	}
+	return ctx.JSON(http.StatusOK, generated.GetSyncRoundResponse{Round: rnd})
+}
+
+// GetRoundDeltas returns the deltas for a given round.
+// This should be a combination of AccountDeltas, KVStore Deltas, etc.
+// (GET /v2/deltas/{round})
+func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
+	ads, err := v2.Node.LedgerForAPI().GetAccountDeltasForRound(basics.Round(round))
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingAccountDeltas, v2.Log)
+	}
+	kvds, err := v2.Node.LedgerForAPI().GetKvDeltasForRound(basics.Round(round))
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingKvDeltas, v2.Log)
+	}
+
+	var accts []generated.AccountBalanceRecord
+	var apps []generated.AppResourceRecord
+	var assets []generated.AssetResourceRecord
+	var keyValues []generated.KvDelta
+
+	consensusParams, err := v2.Node.LedgerForAPI().ConsensusParams(basics.Round(round))
+	if err != nil {
+		return internalError(ctx, fmt.Errorf("unable to retrieve consensus params for round %d", round), errInternalFailure, v2.Log)
+	}
+	hdr, err := v2.Node.LedgerForAPI().BlockHdr(basics.Round(round))
+	if err != nil {
+		return internalError(ctx, fmt.Errorf("unable to retrieve block header for round %d", round), errInternalFailure, v2.Log)
+	}
+
+	for key, kvDelta := range kvds {
+		var keyBytes = []byte(key)
+		keyValues = append(keyValues, generated.KvDelta{
+			Key:       &keyBytes,
+			PrevValue: &kvDelta.OldData,
+			Value:     &kvDelta.Data,
+		})
+	}
+
+	for _, record := range ads.GetAllAccounts() {
+		var apiParticipation *generated.AccountParticipation
+		if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
+			apiParticipation = &generated.AccountParticipation{
+				VoteParticipationKey:      record.VoteID[:],
+				SelectionParticipationKey: record.SelectionID[:],
+				VoteFirstValid:            uint64(record.VoteFirstValid),
+				VoteLastValid:             uint64(record.VoteLastValid),
+				VoteKeyDilution:           uint64(record.VoteKeyDilution),
+			}
+			if !record.StateProofID.IsEmpty() {
+				tmp := record.StateProofID[:]
+				apiParticipation.StateProofKey = &tmp
+			}
+		}
+		var ot basics.OverflowTracker
+		pendingRewards := basics.PendingRewards(&ot, consensusParams, record.MicroAlgos, record.RewardsBase, hdr.RewardsLevel)
+
+		amountWithoutPendingRewards, overflowed := basics.OSubA(record.MicroAlgos, pendingRewards)
+		if overflowed {
+			return internalError(ctx, errors.New("overflow on pending reward calculation"), errInternalFailure, v2.Log)
+		}
+		accts = append(accts, generated.AccountBalanceRecord{
+			AccountData: generated.Account{
+				SigType:                     nil,
+				Round:                       round,
+				Address:                     record.Addr.String(),
+				Amount:                      record.MicroAlgos.Raw,
+				PendingRewards:              pendingRewards.Raw,
+				AmountWithoutPendingRewards: amountWithoutPendingRewards.Raw,
+				Rewards:                     record.RewardedMicroAlgos.Raw,
+				Status:                      record.Status.String(),
+				RewardBase:                  &record.RewardsBase,
+				Participation:               apiParticipation,
+				TotalCreatedAssets:          record.TotalAssetParams,
+				TotalCreatedApps:            record.TotalAppParams,
+				TotalAssetsOptedIn:          record.TotalAssets,
+				AuthAddr:                    addrOrNil(record.AuthAddr),
+				TotalAppsOptedIn:            record.TotalAppLocalStates,
+				AppsTotalSchema: &generated.ApplicationStateSchema{
+					NumByteSlice: record.TotalAppSchema.NumByteSlice,
+					NumUint:      record.TotalAppSchema.NumUint,
+				},
+				AppsTotalExtraPages: numOrNil(uint64(record.TotalExtraAppPages)),
+				MinBalance:          record.MinBalance(&consensusParams).Raw,
+			},
+			Address: record.Addr.String(),
+		})
+	}
+
+	for _, app := range ads.GetAllAppResources() {
+		var appLocalState *generated.ApplicationLocalState = nil
+		if app.State.LocalState != nil {
+			localState := convertTKVToGenerated(&app.State.LocalState.KeyValue)
+			appLocalState = &generated.ApplicationLocalState{
+				Id:       uint64(app.Aidx),
+				KeyValue: localState,
+				Schema: generated.ApplicationStateSchema{
+					NumByteSlice: app.State.LocalState.Schema.NumByteSlice,
+					NumUint:      app.State.LocalState.Schema.NumUint,
+				},
+			}
+		}
+		var appParams *generated.ApplicationParams = nil
+		if app.Params.Params != nil {
+			globalState := convertTKVToGenerated(&app.Params.Params.GlobalState)
+			appParams = &generated.ApplicationParams{
+				ApprovalProgram:   app.Params.Params.ApprovalProgram,
+				ClearStateProgram: app.Params.Params.ClearStateProgram,
+				Creator:           app.Addr.String(),
+				ExtraProgramPages: numOrNil(uint64(app.Params.Params.ExtraProgramPages)),
+				GlobalState:       globalState,
+				GlobalStateSchema: &generated.ApplicationStateSchema{
+					NumByteSlice: app.Params.Params.GlobalStateSchema.NumByteSlice,
+					NumUint:      app.Params.Params.GlobalStateSchema.NumUint,
+				},
+				LocalStateSchema: &generated.ApplicationStateSchema{
+					NumByteSlice: app.Params.Params.LocalStateSchema.NumByteSlice,
+					NumUint:      app.Params.Params.LocalStateSchema.NumUint,
+				},
+			}
+		}
+		apps = append(apps, generated.AppResourceRecord{
+			Address:              app.Addr.String(),
+			AppIndex:             uint64(app.Aidx),
+			AppParamsDeleted:     app.Params.Deleted,
+			AppParams:            appParams,
+			AppLocalStateDeleted: app.State.Deleted,
+			AppLocalState:        appLocalState,
+		})
+	}
+
+	for _, asset := range ads.GetAllAssetResources() {
+		var assetHolding *generated.AssetHolding = nil
+		if asset.Holding.Holding != nil {
+			assetHolding = &generated.AssetHolding{
+				Amount:   asset.Holding.Holding.Amount,
+				AssetId:  uint64(asset.Aidx),
+				IsFrozen: asset.Holding.Holding.Frozen,
+			}
+		}
+		var assetParams *generated.AssetParams = nil
+		if asset.Params.Params != nil {
+			assetParams = &generated.AssetParams{
+				Clawback:      strOrNil(asset.Params.Params.Clawback.String()),
+				Creator:       asset.Addr.String(),
+				Decimals:      uint64(asset.Params.Params.Decimals),
+				DefaultFrozen: &asset.Params.Params.DefaultFrozen,
+				Freeze:        strOrNil(asset.Params.Params.Freeze.String()),
+				Manager:       strOrNil(asset.Params.Params.Manager.String()),
+				MetadataHash:  byteOrNil(asset.Params.Params.MetadataHash[:]),
+				Name:          strOrNil(asset.Params.Params.AssetName),
+				NameB64:       byteOrNil([]byte(base64.StdEncoding.EncodeToString([]byte(asset.Params.Params.AssetName)))),
+				Reserve:       strOrNil(asset.Params.Params.Reserve.String()),
+				Total:         asset.Params.Params.Total,
+				UnitName:      strOrNil(asset.Params.Params.UnitName),
+				UnitNameB64:   byteOrNil([]byte(base64.StdEncoding.EncodeToString([]byte(asset.Params.Params.UnitName)))),
+				Url:           strOrNil(asset.Params.Params.URL),
+				UrlB64:        byteOrNil([]byte(base64.StdEncoding.EncodeToString([]byte(asset.Params.Params.URL)))),
+			}
+		}
+		assets = append(assets, generated.AssetResourceRecord{
+			Address:             asset.Addr.String(),
+			AssetIndex:          uint64(asset.Aidx),
+			AssetHoldingDeleted: asset.Holding.Deleted,
+			AssetHolding:        assetHolding,
+			AssetParams:         assetParams,
+			AssetParamsDeleted:  asset.Params.Deleted,
+		})
+	}
+
+	response := generated.RoundDeltas{
+		Accounts: &accts,
+		Apps:     &apps,
+		Assets:   &assets,
+		KvDeltas: &keyValues,
+	}
+
 	return ctx.JSON(http.StatusOK, response)
 }
 

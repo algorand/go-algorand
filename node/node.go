@@ -1378,3 +1378,18 @@ func (node *AlgorandFullNode) IsParticipating() bool {
 	round := node.ledger.Latest() + 1
 	return node.accountManager.HasLiveKeys(round, round+10)
 }
+
+// SetSyncRound sets the minimum sync round on the catchup service
+func (node *AlgorandFullNode) SetSyncRound(rnd uint64) error {
+	return node.catchupService.SetSyncRound(rnd)
+}
+
+// GetSyncRound retrieves a boolean representing whether the sync round has been set, the sync round, and any error
+func (node *AlgorandFullNode) GetSyncRound() (bool, uint64, error) {
+	return node.catchupService.GetSyncRound()
+}
+
+// UnsetSyncRound removes the sync round constraint on the ledger
+func (node *AlgorandFullNode) UnsetSyncRound() error {
+	return node.catchupService.UnsetSyncRound()
+}

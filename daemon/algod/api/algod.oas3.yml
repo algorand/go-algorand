@@ -497,6 +497,25 @@
         },
         "description": "DryrunResponse contains per-txn debug information from a dryrun."
       },
+      "GetSyncRoundResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "round": {
+                  "description": "The minimum sync round for the ledger.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "round"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Response containing the ledger's minimum sync round"
+      },
       "LightBlockHeaderProofResponse": {
         "content": {
           "application/json": {
@@ -679,6 +698,16 @@
           }
         },
         "description": "Transaction ID of the submission."
+      },
+      "RoundDeltasResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RoundDeltas"
+            }
+          }
+        },
+        "description": "Contains the deltas for a given round."
       },
       "StateProofResponse": {
         "content": {
@@ -959,6 +988,23 @@
         ],
         "type": "object"
       },
+      "AccountBalanceRecord": {
+        "description": "Account and its address",
+        "properties": {
+          "account-data": {
+            "$ref": "#/components/schemas/Account"
+          },
+          "address": {
+            "description": "Address of the updated account.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account-data",
+          "address"
+        ],
+        "type": "object"
+      },
       "AccountParticipation": {
         "description": "AccountParticipation describes the parameters used by this account in consensus protocol.",
         "properties": {
@@ -1015,6 +1061,41 @@
         "required": [
           "address",
           "delta"
+        ],
+        "type": "object"
+      },
+      "AppResourceRecord": {
+        "description": "Represents AppParams and AppLocalStateDelta in deltas",
+        "properties": {
+          "address": {
+            "description": "App account address",
+            "type": "string"
+          },
+          "app-index": {
+            "description": "App index",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          },
+          "app-local-state": {
+            "$ref": "#/components/schemas/ApplicationLocalState"
+          },
+          "app-local-state-deleted": {
+            "description": "Whether the app local state was deleted",
+            "type": "boolean"
+          },
+          "app-params": {
+            "$ref": "#/components/schemas/ApplicationParams"
+          },
+          "app-params-deleted": {
+            "description": "Whether the app params were deleted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "address",
+          "app-index",
+          "app-local-state-deleted",
+          "app-params-deleted"
         ],
         "type": "object"
       },
@@ -1237,6 +1318,41 @@
           "creator",
           "decimals",
           "total"
+        ],
+        "type": "object"
+      },
+      "AssetResourceRecord": {
+        "description": "Represents AssetParams and AssetHolding in deltas",
+        "properties": {
+          "address": {
+            "description": "Account address of the asset",
+            "type": "string"
+          },
+          "asset-holding": {
+            "$ref": "#/components/schemas/AssetHolding"
+          },
+          "asset-holding-deleted": {
+            "description": "Whether the asset holding was deleted",
+            "type": "boolean"
+          },
+          "asset-index": {
+            "description": "Index of the asset",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          },
+          "asset-params": {
+            "$ref": "#/components/schemas/AssetParams"
+          },
+          "asset-params-deleted": {
+            "description": "Whether the asset params were deleted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "address",
+          "asset-holding-deleted",
+          "asset-index",
+          "asset-params-deleted"
         ],
         "type": "object"
       },
@@ -1559,6 +1675,30 @@
         ],
         "type": "object"
       },
+      "KvDelta": {
+        "description": "A single Delta containing the key, the previous value and the current value for a single round.",
+        "properties": {
+          "key": {
+            "description": "",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "prev-value": {
+            "description": "The previous value of the KV store entry.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "value": {
+            "description": "The new value of the KV store entry.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "LightBlockHeaderProof": {
         "description": "Proof of membership and position of a light block header.",
         "properties": {
@@ -1705,6 +1845,40 @@
           "pool-error",
           "txn"
         ],
+        "type": "object"
+      },
+      "RoundDeltas": {
+        "description": "Contains updates from a given round.",
+        "properties": {
+          "accounts": {
+            "description": "Array of Account updates for the round",
+            "items": {
+              "$ref": "#/components/schemas/AccountBalanceRecord"
+            },
+            "type": "array"
+          },
+          "apps": {
+            "description": "Array of App updates for the round.",
+            "items": {
+              "$ref": "#/components/schemas/AppResourceRecord"
+            },
+            "type": "array"
+          },
+          "assets": {
+            "description": "Array of Asset updates for the round.",
+            "items": {
+              "$ref": "#/components/schemas/AssetResourceRecord"
+            },
+            "type": "array"
+          },
+          "kv-deltas": {
+            "description": "Array of KV Deltas for the round.",
+            "items": {
+              "$ref": "#/components/schemas/KvDelta"
+            },
+            "type": "array"
+          }
+        },
         "type": "object"
       },
       "StateDelta": {
@@ -3503,6 +3677,94 @@
         ]
       }
     },
+    "/v2/deltas/{round}": {
+      "get": {
+        "description": "Get round deltas for a round.",
+        "operationId": "GetRoundDeltas",
+        "parameters": [
+          {
+            "description": "The round for which the deltas are desired.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoundDeltas"
+                }
+              }
+            },
+            "description": "Contains the deltas for a given round."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Could not find a delta that covers a given round"
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "timed out on request"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get a RoundDeltas object for a given round",
+        "tags": [
+          "private"
+        ]
+      }
+    },
     "/v2/ledger/supply": {
       "get": {
         "operationId": "GetSupply",
@@ -3556,6 +3818,209 @@
         "tags": [
           "public",
           "nonparticipating"
+        ]
+      }
+    },
+    "/v2/ledger/sync": {
+      "delete": {
+        "description": "Unset the ledger sync round.",
+        "operationId": "UnsetSyncRound",
+        "responses": {
+          "200": {
+            "content": {}
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sync round not set."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Removes minimum sync round restriction from the ledger.",
+        "tags": [
+          "private"
+        ]
+      },
+      "get": {
+        "description": "Gets the minimum sync round for the ledger.",
+        "operationId": "GetSyncRound",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "round": {
+                      "description": "The minimum sync round for the ledger.",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "round"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Response containing the ledger's minimum sync round"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sync round not set."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Returns the minimum sync round the ledger is keeping in cache.",
+        "tags": [
+          "private"
+        ]
+      }
+    },
+    "/v2/ledger/sync/{round}": {
+      "post": {
+        "description": "Sets the minimum sync round on the ledger.",
+        "operationId": "SetSyncRound",
+        "parameters": [
+          {
+            "description": "The round for which the deltas are desired.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {}
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Can not set sync round to an earlier round than the current round."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Given a round, tells the ledger to keep that round in its cache.",
+        "tags": [
+          "private"
         ]
       }
     },
