@@ -2603,7 +2603,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		}
 	}
 	err = nil
-	txn := stxn.SignedTxn.Txn
+	txn := &stxn.SignedTxn.Txn
 	switch fs.field {
 	case Sender:
 		sv.Bytes = txn.Sender[:]
@@ -2665,7 +2665,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	case GroupIndex:
 		sv.Uint = uint64(groupIndex)
 	case TxID:
-		txid := cx.getTxID(&txn, groupIndex, inner)
+		txid := cx.getTxID(txn, groupIndex, inner)
 		sv.Bytes = txid[:]
 	case Lease:
 		sv.Bytes = txn.Lease[:]

@@ -712,10 +712,6 @@ func (tx Transaction) EstimateEncodedSize() int {
 	return stx.GetEncodedLength()
 }
 
-func (tx *Transaction) TryThis() int {
-	return 5
-}
-
 // TxnContext describes the context in which a transaction can appear
 // (pretty much, a block, but we don't have the definition of a block
 // here, since that would be a circular dependency).  This is used to
