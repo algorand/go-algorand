@@ -19,6 +19,7 @@ package util
 import (
 	"errors"
 	"net"
+	"syscall"
 )
 
 // RTTInfo provides smoothed RTT and RTT variance from socket-level TCP information.
@@ -38,5 +39,14 @@ var (
 // underlying network implementation, using a system call on Linux and Mac
 // and returning an error for unsupported platforms.
 func GetConnRTT(conn net.Conn) (*RTTInfo, error) {
-	return getConnRTT(conn)
+	sysconn, ok := conn.(syscall.Conn)
+	if !ok {
+		return nil, ErrNotSyscallConn
+	}
+	raw, err := sysconn.SyscallConn()
+	if err != nil {
+		return nil, err
+	}
+
+	return getConnRTT(raw)
 }

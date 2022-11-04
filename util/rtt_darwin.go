@@ -17,25 +17,15 @@
 package util
 
 import (
-	"net"
 	"syscall"
 
 	"golang.org/x/sys/unix"
 )
 
-func getConnRTT(conn net.Conn) (*RTTInfo, error) {
-	sysconn, ok := conn.(syscall.Conn)
-	if !ok {
-		return nil, ErrNotSyscallConn
-	}
-	raw, err := sysconn.SyscallConn()
-	if err != nil {
-		return nil, err
-	}
-
+func getConnRTT(raw syscall.RawConn) (*RTTInfo, error) {
 	var info *unix.TCPConnectionInfo
 	var getSockoptErr error
-	err = raw.Control(func(fd uintptr) {
+	err := raw.Control(func(fd uintptr) {
 		info, getSockoptErr = unix.GetsockoptTCPConnectionInfo(int(fd), unix.IPPROTO_TCP, unix.TCP_CONNECTION_INFO)
 	})
 	if err != nil {

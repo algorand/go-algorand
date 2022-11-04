@@ -19,8 +19,8 @@
 
 package util
 
-import "net"
+import "syscall"
 
-func getConnRTT(conn net.Conn) (*RTTInfo, error) {
+func getConnRTT(conn syscall.RawConn) (*RTTInfo, error) {
 	return nil, ErrRTTUnsupported
 }
