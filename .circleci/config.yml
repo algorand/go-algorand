@@ -221,6 +221,7 @@ jobs:
         type: string
       short:
         type: string
+        default: "-short"
     executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 32
