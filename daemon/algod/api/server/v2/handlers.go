@@ -970,7 +970,9 @@ func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
-type preEncodedTxInfo struct {
+// PreEncodedTxInfo represents the PendingTransaction response before it is
+// encoded to a format.
+type PreEncodedTxInfo struct {
 	AssetIndex         *uint64                        `codec:"asset-index,omitempty"`
 	AssetClosingAmount *uint64                        `codec:"asset-closing-amount,omitempty"`
 	ApplicationIndex   *uint64                        `codec:"application-index,omitempty"`
@@ -984,7 +986,7 @@ type preEncodedTxInfo struct {
 	SenderRewards      *uint64                        `codec:"sender-rewards,omitempty"`
 	Txn                transactions.SignedTxn         `codec:"txn"`
 	Logs               *[][]byte                      `codec:"logs,omitempty"`
-	Inners             *[]preEncodedTxInfo            `codec:"inner-txns,omitempty"`
+	Inners             *[]PreEncodedTxInfo            `codec:"inner-txns,omitempty"`
 }
 
 // PendingTransactionInformation returns a transaction with the specified txID
@@ -1016,7 +1018,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 	}
 
 	// Encoding wasn't working well without embedding "real" objects.
-	response := preEncodedTxInfo{
+	response := PreEncodedTxInfo{
 		Txn: txn.Txn,
 	}
 

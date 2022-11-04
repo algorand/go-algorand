@@ -2390,7 +2390,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-migrate-shrink-deltas")
 	proto := config.Consensus[protocol.ConsensusV31]
-	proto.RewardsRateRefreshInterval = 500
+	proto.RewardsRateRefreshInterval = 200
 	config.Consensus[testProtocolVersion] = proto
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -2452,7 +2452,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	l.trackers.acctsOnline = nil
 	l.acctsOnline = onlineAccounts{}
 
-	maxBlocks := 2000
+	maxBlocks := 1000
 	accounts := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts))
 	keys := make(map[basics.Address]*crypto.SignatureSecrets, len(initKeys))
 	// regular addresses: all init accounts minus pools

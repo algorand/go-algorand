@@ -479,7 +479,7 @@ func (f *LibGoalFixture) CurrentConsensusParams() (consensus config.ConsensusPar
 
 // ConsensusParams returns the consensus parameters for the protocol from the specified round
 func (f *LibGoalFixture) ConsensusParams(round uint64) (consensus config.ConsensusParams, err error) {
-	block, err := f.LibGoalClient.Block(round)
+	block, err := f.LibGoalClient.BookkeepingBlock(round)
 	if err != nil {
 		return
 	}
