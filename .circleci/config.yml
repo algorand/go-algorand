@@ -22,6 +22,9 @@ parameters:
   valid_nightly_branch:
     type: string
     default: /hotfix\/.*/
+  short_test_override:
+    type: string
+    default: "-short"
 
 executors:
   amd64_medium:
@@ -223,7 +226,7 @@ jobs:
       - generic_test:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test
-          short_test_flag: "-short"
+          short_test_flag: << pipeline.parameters.short_test_override >>
       - upload_coverage
 
   test_nightly:
@@ -258,7 +261,7 @@ jobs:
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_integration
-          short_test_flag: "-short"
+          short_test_flag: << pipeline.parameters.short_test_override >>
 
   integration_nightly:
     parameters:
