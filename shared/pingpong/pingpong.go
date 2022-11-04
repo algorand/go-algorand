@@ -32,7 +32,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -42,8 +42,8 @@ import (
 
 // CreatablesInfo has information about created assets, apps and opting in
 type CreatablesInfo struct {
-	AssetParams map[uint64]v1.AssetParams
-	AppParams   map[uint64]v1.AppParams
+	AssetParams map[uint64]generated.AssetParams
+	AppParams   map[uint64]generated.ApplicationParams
 	OptIns      map[uint64][]string
 }
 
@@ -278,7 +278,7 @@ func (pps *WorkerState) scheduleAction() bool {
 		pps.refreshPos = 0
 	}
 	addr := pps.refreshAddrs[pps.refreshPos]
-	ai, err := pps.client.AccountInformation(addr)
+	ai, err := pps.client.AccountInformationV2(addr, true)
 	if err == nil {
 		ppa := pps.accounts[addr]
 
@@ -453,19 +453,19 @@ func (pps *WorkerState) sendPaymentFromSourceAccount(client *libgoal.Client, to 
 }
 
 // waitPendingTransactions waits until all the pending transactions coming from the given
-// accounts map have been cleared out of the transaction pool. A prerequesite for this is that
+// accounts map have been cleared out of the transaction pool. A prerequisite for this is that
 // there is no other source who might be generating transactions that would come from these account
 // addresses.
 func waitPendingTransactions(accounts []string, client *libgoal.Client) error {
 	for _, from := range accounts {
 	repeat:
-		pendingTxns, err := client.GetPendingTransactionsByAddress(from, 0)
+		pendingTxns, err := client.GetParsedPendingTransactionsByAddress(from, 0)
 		if err != nil {
 			fmt.Printf("failed to check pending transaction pool status : %v\n", err)
 			return err
 		}
-		for _, txn := range pendingTxns.TruncatedTxns.Transactions {
-			if txn.From != from {
+		for _, txn := range pendingTxns.TopTransactions {
+			if txn.Txn.Sender.String() != from {
 				// we found a transaction where the receiver was the given account. We don't
 				// care about these.
 				continue

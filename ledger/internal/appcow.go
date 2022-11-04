@@ -243,11 +243,11 @@ func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, 
 	lsd.maxCounts = &space
 
 	if global {
-		cb.mods.Creatables[basics.CreatableIndex(aidx)] = ledgercore.ModifiedCreatable{
+		cb.mods.AddCreatable(basics.CreatableIndex(aidx), ledgercore.ModifiedCreatable{
 			Ctype:   basics.AppCreatable,
 			Creator: addr,
 			Created: true,
-		}
+		})
 	}
 	return nil
 }
@@ -275,11 +275,11 @@ func (cb *roundCowState) DeallocateApp(addr basics.Address, aidx basics.AppIndex
 	lsd.kvCow = make(stateDelta)
 
 	if global {
-		cb.mods.Creatables[basics.CreatableIndex(aidx)] = ledgercore.ModifiedCreatable{
+		cb.mods.AddCreatable(basics.CreatableIndex(aidx), ledgercore.ModifiedCreatable{
 			Ctype:   basics.AppCreatable,
 			Creator: addr,
 			Created: false,
-		}
+		})
 	}
 	return nil
 }

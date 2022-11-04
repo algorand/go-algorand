@@ -96,6 +96,35 @@ func TestAccountDeltas(t *testing.T) {
 	a.Equal(sample1, data)
 }
 
+func TestMakeStateDeltaMaps(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	sd := MakeStateDelta(nil, 0, 23000, basics.Round(2))
+	require.Nil(t, sd.Txleases)
+	require.Nil(t, sd.Creatables)
+	require.Nil(t, sd.KvMods)
+
+	sd.AddTxLease(Txlease{}, basics.Round(10))
+	require.Len(t, sd.Txleases, 1)
+	sd.AddCreatable(basics.CreatableIndex(5), ModifiedCreatable{})
+	require.Len(t, sd.Creatables, 1)
+	sd.AddKvMod("key", KvValueDelta{Data: []byte("value")})
+	require.Len(t, sd.KvMods, 1)
+
+	txLeaseMap := make(map[Txlease]basics.Round)
+	txLeaseMap[Txlease{}] = basics.Round(10)
+	require.Equal(t, sd.Txleases, txLeaseMap)
+
+	creatableMap := make(map[basics.CreatableIndex]ModifiedCreatable)
+	creatableMap[basics.CreatableIndex(5)] = ModifiedCreatable{}
+	require.Equal(t, sd.Creatables, creatableMap)
+
+	kvModMap := make(map[string]KvValueDelta)
+	kvModMap["key"] = KvValueDelta{Data: []byte("value")}
+	require.Equal(t, sd.KvMods, kvModMap)
+
+}
+
 func BenchmarkMakeStateDelta(b *testing.B) {
 	hint := 23000
 	b.ReportAllocs()

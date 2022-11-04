@@ -94,14 +94,15 @@ func TestTxnMerkleProof(t *testing.T) {
 	txidSHA256 := tx.IDSha256() // only used for verification
 	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
 	a.NoError(err)
+	a.NotNil(confirmedTx.ConfirmedRound)
 
-	blk, err := client.BookkeepingBlock(confirmedTx.ConfirmedRound)
+	blk, err := client.BookkeepingBlock(*confirmedTx.ConfirmedRound)
 	a.NoError(err)
 
-	proofresp, proof, err := fixture.TransactionProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha512_256)
+	proofresp, proof, err := fixture.TransactionProof(txid.String(), *confirmedTx.ConfirmedRound, crypto.Sha512_256)
 	a.NoError(err)
 
-	proofrespSHA256, proofSHA256, err := fixture.TransactionProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha256)
+	proofrespSHA256, proofSHA256, err := fixture.TransactionProof(txid.String(), *confirmedTx.ConfirmedRound, crypto.Sha256)
 	a.NoError(err)
 
 	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
@@ -176,8 +177,9 @@ func TestTxnMerkleProofSHA256(t *testing.T) {
 	txid := tx.ID()
 	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
 	a.NoError(err)
+	a.NotNil(confirmedTx.ConfirmedRound)
 
-	blk, err := client.BookkeepingBlock(confirmedTx.ConfirmedRound)
+	blk, err := client.BookkeepingBlock(*confirmedTx.ConfirmedRound)
 	a.NoError(err)
 	proto := config.Consensus[blk.CurrentProtocol]
 	a.False(proto.EnableSHA256TxnCommitmentHeader)
