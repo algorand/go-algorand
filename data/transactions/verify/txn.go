@@ -45,6 +45,10 @@ var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_l
 // ErrInvalidSignature is the error returned to report that at least one signature is invalid
 var ErrInvalidSignature = errors.New("At least one signature didn't pass verification")
 
+var signedTxnHasNoSig = errors.New("signedtxn has no sig")
+var signedTxnMaxOneSig = errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
+var shuttingDownError = errors.New("not verified, verifier is shutting down")
+
 // The PaysetGroups is taking large set of transaction groups and attempt to verify their validity using multiple go-routines.
 // When doing so, it attempts to break these into smaller "worksets" where each workset takes about 2ms of execution time in order
 // to avoid context switching overhead while providing good validation cancelation responsiveness. Each one of these worksets is
@@ -205,10 +209,10 @@ func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 			return nil
 		}
 
-		return errors.New("signedtxn has no sig")
+		return signedTxnHasNoSig
 	}
 	if numSigs > 1 {
-		return errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
+		return signedTxnMaxOneSig
 	}
 
 	if hasSig {
@@ -587,7 +591,7 @@ func (sv *StreamVerifier) Start() {
 func (sv *StreamVerifier) cleanup(pending []UnverifiedElement) {
 	// report an error for the unchecked txns
 	for _, uel := range pending {
-		sv.sendResult(uel.TxnGroup, uel.BacklogMessage, errors.New("not verified, verifier is shutting down"))
+		sv.sendResult(uel.TxnGroup, uel.BacklogMessage, shuttingDownError)
 	}
 }
 
@@ -769,7 +773,7 @@ func (sv *StreamVerifier) addVerificationTaskToThePool(uelts []UnverifiedElement
 				verifiedTxnGroups = append(verifiedTxnGroups, bl.txnGroups[txgIdx])
 				verifiedGroupCtxs = append(verifiedGroupCtxs, bl.groupCtxs[txgIdx])
 			} else {
-				result = ErrInvalidSignature
+				result = err
 			}
 			sv.sendResult(bl.txnGroups[txgIdx], bl.elementBacklogMessage[txgIdx], result)
 		}
@@ -823,10 +827,10 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (batchSigs uint6
 		if stx.Txn.Sender == transactions.StateProofSender && stx.Txn.Type == protocol.StateProofTx {
 			return 0, nil
 		}
-		return 0, errors.New("signedtxn has no sig")
+		return 0, signedTxnHasNoSig
 	}
 	if numSigs != 1 {
-		return 0, errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
+		return 0, signedTxnMaxOneSig
 	}
 	if hasSig {
 		return 1, nil
