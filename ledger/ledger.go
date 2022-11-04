@@ -812,6 +812,11 @@ func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnB
 		})
 }
 
+// FlushCaches flushes any pending data in caches so that it is fully available during future lookups.
+func (l *Ledger) FlushCaches() {
+	l.accts.flushCaches()
+}
+
 // Validate uses the ledger to validate block blk as a candidate next block.
 // It returns an error if blk is not the expected next block, or if blk is
 // not a valid block (e.g., it has duplicate transactions, overspends some
