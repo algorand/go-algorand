@@ -17,10 +17,13 @@
 package pingpong
 
 import (
+	"bufio"
+	"compress/gzip"
 	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"os"
@@ -155,8 +158,10 @@ type WorkerState struct {
 
 	client *libgoal.Client
 
-	sentTxid chan txidSendTime
-	blocks   chan *bookkeeping.Block
+	// TotalLatencyOut stuff
+	sentTxid      chan txidSendTime
+	latencyBlocks chan bookkeeping.Block
+	latencyOuts   []io.Writer // latencyOuts is a chain of *os.File, gzip, etc. Write to last element. .Close() last to first.
 }
 
 // returns the number of boxes per app
@@ -572,9 +577,8 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac *libgoal.Client) {
 	//			error = fundAccounts()
 	//  }
 
-	if pps.cfg.TotalLatency {
-		pps.sentTxid = make(chan txidSendTime, 20)
-		go pps.txidLatency()
+	if pps.cfg.TotalLatencyOut != "" {
+		pps.startTxLatency(ctx, ac)
 	}
 	pps.nextSendTime = time.Now()
 	ac.SetSuggestedParamsCacheAge(200 * time.Millisecond)
@@ -1316,11 +1320,157 @@ func signTxn(signer *pingPongAccount, txn transactions.Transaction, cfg PpConfig
 	return
 }
 
+func (pps *WorkerState) startTxLatency(ctx context.Context, ac *libgoal.Client) {
+	fout, err := os.Create(pps.cfg.TotalLatencyOut)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: %v", pps.cfg.TotalLatencyOut, err)
+		return
+	}
+	pps.latencyOuts = append(pps.latencyOuts, fout)
+	if strings.HasSuffix(pps.cfg.TotalLatencyOut, ".gz") {
+		gzout := gzip.NewWriter(fout)
+		pps.latencyOuts = append(pps.latencyOuts, gzout)
+	} else {
+		bw := bufio.NewWriter(fout)
+		pps.latencyOuts = append(pps.latencyOuts, bw)
+	}
+	pps.sentTxid = make(chan txidSendTime, 20)
+	pps.latencyBlocks = make(chan bookkeeping.Block, 1)
+	go pps.txidLatency(ctx)
+	go pps.txidLatencyBlockWaiter(ctx, ac)
+}
+
+type txidSendTimeIndexed struct {
+	txidSendTime
+	index int
+}
+
+const txidLatencySampleSize = 10000
+
 // thread which handles measuring total send-to-commit latency
-func (pps *WorkerState) txidLatency() {
+func (pps *WorkerState) txidLatency(ctx context.Context) {
+	done := ctx.Done()
+	byTxid := make(map[string]txidSendTimeIndexed, txidLatencySampleSize)
+	txidList := make([]string, 0, txidLatencySampleSize)
+	out := pps.latencyOuts[len(pps.latencyOuts)-1]
 	for {
 		select {
 		case st := <-pps.sentTxid:
+			if len(txidList) < txidLatencySampleSize {
+				index := len(txidList)
+				txidList = append(txidList, st.txid)
+				byTxid[st.txid] = txidSendTimeIndexed{
+					st,
+					index,
+				}
+			} else {
+				// random replacement
+				evict := rand.Intn(len(txidList))
+				delete(byTxid, txidList[evict])
+				txidList[evict] = st.txid
+				byTxid[st.txid] = txidSendTimeIndexed{
+					st,
+					evict,
+				}
+			}
+		case bl := <-pps.latencyBlocks:
+			now := time.Now()
+			txns, err := bl.DecodePaysetFlat()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "block[%d] payset err %v", bl.Round(), err)
+				return
+			}
+			for _, stxn := range txns {
+				txid := stxn.ID().String()
+				st, ok := byTxid[txid]
+				if ok {
+					dt := now.Sub(st.when)
+					fmt.Fprintf(out, "%d\n", dt.Nanoseconds())
+				}
+			}
+		case <-done:
+			return
 		}
+	}
+}
+
+type flusher interface {
+	Flush() error
+}
+
+func (pps *WorkerState) txidLatencyDone() {
+	for i := len(pps.latencyOuts); i >= 0; i-- {
+		xo := pps.latencyOuts[i]
+		if fl, ok := xo.(flusher); ok {
+			err := fl.Flush()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%s: v", pps.cfg.TotalLatencyOut, err)
+			}
+		}
+		if cl, ok := xo.(io.Closer); ok {
+			err := cl.Close()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%s: v", pps.cfg.TotalLatencyOut, err)
+			}
+		}
+	}
+}
+
+func (pps *WorkerState) txidLatencyBlockWaiter(ctx context.Context, ac *libgoal.Client) {
+	done := ctx.Done()
+restart:
+	// I wish Go had macros
+	select {
+	case <-done:
+		close(pps.latencyBlocks)
+		return
+	default:
+	}
+	st, err := ac.Status()
+	if err != nil {
+		select {
+		case <-done:
+			close(pps.latencyBlocks)
+			return
+		default:
+		}
+		fmt.Fprintf(os.Stderr, "block waiter st : %v", err)
+		time.Sleep(5 * time.Second)
+		goto restart
+	}
+	nextRound := st.LastRound + 1
+	for {
+		select {
+		case <-done:
+			close(pps.latencyBlocks)
+			return
+		default:
+		}
+		st, err = ac.WaitForRound(nextRound)
+		if err != nil {
+			select {
+			case <-done:
+				close(pps.latencyBlocks)
+				return
+			default:
+			}
+			fmt.Fprintf(os.Stderr, "block waiter w: %v", err)
+			time.Sleep(5 * time.Second)
+			goto restart
+		}
+		bb, err := ac.BookkeepingBlock(nextRound)
+		if err != nil {
+			select {
+			case <-done:
+				close(pps.latencyBlocks)
+				return
+			default:
+			}
+			fmt.Fprintf(os.Stderr, "block waiter bb: %v", err)
+			time.Sleep(5 * time.Second)
+			goto restart
+		}
+		pps.latencyBlocks <- bb
+		nextRound = st.LastRound + 1
 	}
 }
