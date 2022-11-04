@@ -524,23 +524,23 @@ var pendingTxnsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, _ []string) {
 		onDataDirs(func(dataDir string) {
 			client := ensureAlgodClient(dataDir)
-			statusTxnPool, err := client.GetPendingTransactions(maxPendingTransactions)
+			statusTxnPool, err := client.GetParsedPendingTransactions(maxPendingTransactions)
 			if err != nil {
 				reportErrorf(errorNodeStatus, err)
 			}
 
-			pendingTxns := statusTxnPool.TruncatedTxns
+			pendingTxns := statusTxnPool.TopTransactions
 
 			// do this inline for now, break it out when we need to reuse a Txn->String function
-			reportInfof(infoNodePendingTxnsDescription, maxPendingTransactions, statusTxnPool.TotalTxns)
-			if pendingTxns.Transactions == nil || len(pendingTxns.Transactions) == 0 {
+			reportInfof(infoNodePendingTxnsDescription, maxPendingTransactions, statusTxnPool.TotalTransactions)
+			if len(statusTxnPool.TopTransactions) == 0 {
 				reportInfof(infoNodeNoPendingTxnsDescription)
 			} else {
-				for _, pendingTxn := range pendingTxns.Transactions {
+				for _, pendingTxn := range pendingTxns {
 					pendingTxnStr, err := json.MarshalIndent(pendingTxn, "", "    ")
 					if err != nil {
 						// json parsing of the txn failed, so let's just skip printing it
-						fmt.Printf("Unparseable Transaction %s\n", pendingTxn.TxID)
+						fmt.Printf("Unparseable Transaction %s\n", pendingTxn.Txn.ID().String())
 						continue
 					}
 					fmt.Printf("%s\n", string(pendingTxnStr))

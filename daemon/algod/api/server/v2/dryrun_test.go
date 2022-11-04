@@ -388,7 +388,7 @@ func checkAppCallResponse(t *testing.T, response *model.DryrunResponse, msg stri
 			if response.Txns[idx].AppCallMessages != nil {
 				messages := *response.Txns[idx].AppCallMessages
 				assert.GreaterOrEqual(t, len(messages), 1)
-				assert.Equal(t, msg, messages[len(messages)-1])
+				assert.Contains(t, messages[len(messages)-1], msg)
 			}
 		}
 	}
@@ -1092,8 +1092,8 @@ int 1`)
 	require.NoError(t, err)
 	approval := ops.Program
 	ops, err = logic.AssembleString("int 1")
-	clst := ops.Program
 	require.NoError(t, err)
+	clst := ops.Program
 	var appIdx basics.AppIndex = 1
 	creator := randomAddress()
 	sender := randomAddress()
@@ -1424,8 +1424,8 @@ int 1`
 	approval := ops.Program
 
 	ops, err = logic.AssembleString("int 1")
-	clst := ops.Program
 	require.NoError(t, err)
+	clst := ops.Program
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
 	a.NoError(err)
@@ -1483,8 +1483,8 @@ int 0
 	require.NoError(t, err)
 	approval := ops.Program
 	ops, err = logic.AssembleString("int 1")
-	clst := ops.Program
 	require.NoError(t, err)
+	clst := ops.Program
 	var appIdx basics.AppIndex = 1
 	creator := randomAddress()
 	rewardBase := uint64(10000000)
@@ -1551,8 +1551,8 @@ int 1
 	require.NoError(t, err)
 
 	ops, err := logic.AssembleString("int 1")
-	clst := ops.Program
 	require.NoError(t, err)
+	clst := ops.Program
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
 	a.NoError(err)
@@ -1628,8 +1628,8 @@ int 1`)
 	require.NoError(t, err)
 
 	ops, err := logic.AssembleString("int 1")
-	clst := ops.Program
 	require.NoError(t, err)
+	clst := ops.Program
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
 	a.NoError(err)
@@ -1732,7 +1732,7 @@ func TestDryrunCheckEvalDeltasReturned(t *testing.T) {
 
 	// Test that a PASS and REJECT dryrun both return the dryrun evaldelta.
 	for i := range []int{0, 1} {
-		ops, _ := logic.AssembleString(fmt.Sprintf(`
+		ops, err := logic.AssembleString(fmt.Sprintf(`
 #pragma version 6
 txna ApplicationArgs 0
 txna ApplicationArgs 1
@@ -1742,6 +1742,7 @@ txna ApplicationArgs 0
 int %d
 app_local_put
 int %d`, expectedUint, i))
+		require.NoError(t, err)
 		dr.ProtocolVersion = string(dryrunProtoVersion)
 
 		dr.Txns = []transactions.SignedTxn{
@@ -1793,5 +1794,41 @@ int %d`, expectedUint, i))
 			logResponse(t, &response)
 		}
 	}
+}
 
+// TestDryrunEarlyExit is a regression test. Ensures that we no longer exit so
+// early in eval() that problems are caused by the debugState being nil.
+func TestDryrunEarlyExit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var dr DryrunRequest
+	var response generated.DryrunResponse
+
+	ops, err := logic.AssembleString("#pragma version 5 \n int 1")
+	require.NoError(t, err)
+	dr.ProtocolVersion = string(dryrunProtoVersion)
+
+	dr.Txns = []transactions.SignedTxn{
+		txntest.Txn{
+			ApplicationID: 1,
+			Type:          protocol.ApplicationCallTx,
+		}.SignedTxn(),
+	}
+	dr.Apps = []generated.Application{{
+		Id: 1,
+		Params: generated.ApplicationParams{
+			ApprovalProgram: ops.Program,
+		},
+	}}
+	dr.Accounts = []generated.Account{{
+		Status:  "Online",
+		Address: basics.Address{}.String(),
+	}}
+	doDryrunRequest(&dr, &response)
+	checkAppCallPass(t, &response)
+
+	ops.Program[0] = 100 // version too high
+	doDryrunRequest(&dr, &response)
+	checkAppCallResponse(t, &response, "program version 100 greater than max")
 }

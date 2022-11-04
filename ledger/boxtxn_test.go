@@ -125,7 +125,7 @@ var passThruSource = main(`
   itxn_submit
 `)
 
-const boxVersion = 35
+const boxVersion = 36
 
 func boxFee(p config.ConsensusParams, nameAndValueSize uint64) uint64 {
 	return p.BoxFlatMinBalance + p.BoxByteMinBalance*(nameAndValueSize)

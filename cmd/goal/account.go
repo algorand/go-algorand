@@ -591,7 +591,7 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 			_, units = unicodePrintable(*createdAsset.Params.UnitName)
 		}
 
-		total := assetDecimalsFmt(createdAsset.Params.Total, uint32(createdAsset.Params.Decimals))
+		total := assetDecimalsFmt(createdAsset.Params.Total, createdAsset.Params.Decimals)
 
 		url := ""
 		if createdAsset.Params.Url != nil {
@@ -618,7 +618,7 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 			fmt.Fprintf(report, "\tID %d, error\n", assetHolding.AssetID)
 		}
 
-		amount := assetDecimalsFmt(assetHolding.Amount, uint32(assetParams.Params.Decimals))
+		amount := assetDecimalsFmt(assetHolding.Amount, assetParams.Params.Decimals)
 
 		assetName := "<unnamed>"
 		if assetParams.Params.Name != nil {
@@ -1137,15 +1137,15 @@ var listParticipationKeysCmd = &cobra.Command{
 		fmt.Printf(rowFormat, "Registered", "Account", "ParticipationID", "Last Used", "First round", "Last round")
 		for _, part := range parts {
 			onlineInfoStr := "unknown"
-			onlineAccountInfo, err := client.AccountInformation(part.Address)
+			onlineAccountInfo, err := client.AccountInformationV2(part.Address, false)
 			if err == nil {
 				votingBytes := part.Key.VoteParticipationKey
 				vrfBytes := part.Key.SelectionParticipationKey
 				if onlineAccountInfo.Participation != nil &&
-					(string(onlineAccountInfo.Participation.ParticipationPK) == string(votingBytes[:])) &&
-					(string(onlineAccountInfo.Participation.VRFPK) == string(vrfBytes[:])) &&
-					(onlineAccountInfo.Participation.VoteFirst == part.Key.VoteFirstValid) &&
-					(onlineAccountInfo.Participation.VoteLast == part.Key.VoteLastValid) &&
+					(string(onlineAccountInfo.Participation.VoteParticipationKey) == string(votingBytes[:])) &&
+					(string(onlineAccountInfo.Participation.SelectionParticipationKey) == string(vrfBytes[:])) &&
+					(onlineAccountInfo.Participation.VoteFirstValid == part.Key.VoteFirstValid) &&
+					(onlineAccountInfo.Participation.VoteLastValid == part.Key.VoteLastValid) &&
 					(onlineAccountInfo.Participation.VoteKeyDilution == part.Key.VoteKeyDilution) {
 					onlineInfoStr = "yes"
 				} else {

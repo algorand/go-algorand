@@ -217,7 +217,6 @@ func getCodecHandle(formatPtr *model.Format) (codec.Handle, string, error) {
 	case model.Msgpack:
 		fallthrough
 	case "msgp":
-		// Can this actually ever happen?
 		return protocol.CodecHandle, "application/msgpack", nil
 	default:
 		return nil, "", fmt.Errorf("invalid format: %s", format)
@@ -308,20 +307,20 @@ func convertLogs(txn node.TxnWithStatus) *[][]byte {
 	return logItems
 }
 
-func convertInners(txn *node.TxnWithStatus) *[]preEncodedTxInfo {
-	inner := make([]preEncodedTxInfo, len(txn.ApplyData.EvalDelta.InnerTxns))
+func convertInners(txn *node.TxnWithStatus) *[]PreEncodedTxInfo {
+	inner := make([]PreEncodedTxInfo, len(txn.ApplyData.EvalDelta.InnerTxns))
 	for i, itxn := range txn.ApplyData.EvalDelta.InnerTxns {
 		inner[i] = convertInnerTxn(&itxn)
 	}
 	return &inner
 }
 
-func convertInnerTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
+func convertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	// This copies from handlers.PendingTransactionInformation, with
 	// simplifications because we have a SignedTxnWithAD rather than
 	// TxnWithStatus, and we know this txn has committed.
 
-	response := preEncodedTxInfo{Txn: txn.SignedTxn}
+	response := PreEncodedTxInfo{Txn: txn.SignedTxn}
 
 	response.ClosingAmount = &txn.ApplyData.ClosingAmount.Raw
 	response.AssetClosingAmount = &txn.ApplyData.AssetClosingAmount
