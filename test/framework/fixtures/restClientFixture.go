@@ -23,7 +23,6 @@ import (
 	"unicode"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 
 	"github.com/stretchr/testify/require"
@@ -279,15 +278,8 @@ func (f *RestClientFixture) WaitForAllTxnsToConfirm(roundTimeout uint64, txidsAn
 		_, err := f.WaitForConfirmedTxn(roundTimeout, addr, txid)
 		if err != nil {
 			f.t.Logf("txn failed to confirm: ", addr, txid)
-			response, err := f.AlgodClient.GetRawPendingTransactions(0)
+			pendingTxns, err := f.LibGoalClient.GetParsedPendingTransactions(0)
 			if err == nil {
-				// Parse pending transaction response
-				var pendingTxns struct {
-					TopTransactions   []transactions.SignedTxn
-					TotalTransactions uint64
-				}
-				err = protocol.DecodeReflect(response, &pendingTxns)
-				require.NoError(f.t, err)
 				pendingTxids := make([]string, 0, pendingTxns.TotalTransactions)
 				for _, txn := range pendingTxns.TopTransactions {
 					pendingTxids = append(pendingTxids, txn.Txn.ID().String())
