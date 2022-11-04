@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -153,7 +154,7 @@ func waitForRoundOne(t *testing.T, testClient libgoal.Client) {
 
 var errWaitForTransactionTimeout = errors.New("wait for transaction timed out")
 
-func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, txID string, timeout time.Duration) (tx model.PreEncodedTxInfo, err error) {
+func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, txID string, timeout time.Duration) (tx v2.PreEncodedTxInfo, err error) {
 	a := require.New(fixtures.SynchronizedTest(t))
 	rnd, err := testClient.Status()
 	a.NoError(err)
