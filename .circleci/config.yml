@@ -108,8 +108,6 @@ workflows:
           name: << matrix.platform >>_integration
           matrix:
             <<: *matrix-default
-            parameters:
-              short: << pipeline.parameters.short_test_override >>
           filters:
             <<: *filters-default
 
