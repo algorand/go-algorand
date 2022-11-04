@@ -89,6 +89,7 @@ workflows:
           matrix: &matrix-default
             parameters:
               platform: ["amd64", "arm64"]
+              short: << pipeline.parameters.short_test_override >>
           filters: &filters-default
             branches:
               ignore:
@@ -105,8 +106,9 @@ workflows:
 
       - integration:
           name: << matrix.platform >>_integration
-          matrix:
-            <<: *matrix-default
+          matrix: &matrix-default
+            parameters:
+              short: << pipeline.parameters.short_test_override >>
           filters:
             <<: *filters-default
 
@@ -218,6 +220,8 @@ jobs:
     parameters:
       platform:
         type: string
+      short:
+        type: string
     executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 32
@@ -226,7 +230,7 @@ jobs:
       - generic_test:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test
-          short_test_flag: << pipeline.parameters.short_test_override >>
+          short_test_flag: << parameters.short>>
       - upload_coverage
 
   test_nightly:
@@ -261,7 +265,7 @@ jobs:
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_integration
-          short_test_flag: << pipeline.parameters.short_test_override >>
+          short_test_flag: << parameters.short>>
 
   integration_nightly:
     parameters:
