@@ -458,20 +458,20 @@ func (w *worksetBuilder) completed() bool {
 }
 
 // UnverifiedElement is the element passed to the Stream verifier
-// Context is a reference associated with the txn group which is passed
+// BacklogMessage is a reference to the backlog message, which needs to be passed
 // with the result
 type UnverifiedElement struct {
-	TxnGroup []transactions.SignedTxn
-	Context  interface{}
+	TxnGroup       []transactions.SignedTxn
+	BacklogMessage interface{}
 }
 
 // VerificationResult is the result of the txn group verification
-// Context is a reference associated with the txn group which was
+// BacklogMessage is the reference associated with the txn group which was
 // initially passed to the stream verifier
 type VerificationResult struct {
-	TxnGroup []transactions.SignedTxn
-	Context  interface{}
-	Err      error
+	TxnGroup       []transactions.SignedTxn
+	BacklogMessage interface{}
+	Err            error
 }
 
 // StreamVerifier verifies txn groups received through the stxnChan channel, and returns the
@@ -520,24 +520,24 @@ func (nbw *NewBlockWatcher) getBlockHeader() (bh *bookkeeping.BlockHeader) {
 }
 
 type batchLoad struct {
-	txnGroups      [][]transactions.SignedTxn
-	groupCtxs      []*GroupContext
-	elementContext []interface{}
-	messagesForTxn []int
+	txnGroups             [][]transactions.SignedTxn
+	groupCtxs             []*GroupContext
+	elementBacklogMessage []interface{}
+	messagesForTxn        []int
 }
 
 func makeBatchLoad() (bl batchLoad) {
 	bl.txnGroups = make([][]transactions.SignedTxn, 0)
 	bl.groupCtxs = make([]*GroupContext, 0)
-	bl.elementContext = make([]interface{}, 0)
+	bl.elementBacklogMessage = make([]interface{}, 0)
 	bl.messagesForTxn = make([]int, 0)
 	return bl
 }
 
-func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext, eltctx interface{}, numBatchableSigs int) {
+func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext, backlogMsg interface{}, numBatchableSigs int) {
 	bl.txnGroups = append(bl.txnGroups, txngrp)
 	bl.groupCtxs = append(bl.groupCtxs, gctx)
-	bl.elementContext = append(bl.elementContext, eltctx)
+	bl.elementBacklogMessage = append(bl.elementBacklogMessage, backlogMsg)
 	bl.messagesForTxn = append(bl.messagesForTxn, numBatchableSigs)
 
 }
@@ -587,7 +587,7 @@ func (sv *StreamVerifier) Start() {
 func (sv *StreamVerifier) cleanup(pending []UnverifiedElement) {
 	// report an error for the unchecked txns
 	for _, uel := range pending {
-		sv.sendResult(uel.TxnGroup, uel.Context, errors.New("not verified, verifier is shutting down"))
+		sv.sendResult(uel.TxnGroup, uel.BacklogMessage, errors.New("not verified, verifier is shutting down"))
 	}
 }
 
@@ -604,7 +604,7 @@ func (sv *StreamVerifier) batchingLoop() {
 			numberOfBatchableSigsInGroup, err := getNumberOfBatchableSigsInGroup(stx.TxnGroup)
 			if err != nil {
 				// wrong number of signatures
-				sv.sendResult(stx.TxnGroup, stx.Context, err)
+				sv.sendResult(stx.TxnGroup, stx.BacklogMessage, err)
 				continue
 			}
 
@@ -685,11 +685,11 @@ func (sv *StreamVerifier) batchingLoop() {
 	}
 }
 
-func (sv *StreamVerifier) sendResult(veTxnGroup []transactions.SignedTxn, veContext interface{}, err error) {
+func (sv *StreamVerifier) sendResult(veTxnGroup []transactions.SignedTxn, veBacklogMessage interface{}, err error) {
 	vr := VerificationResult{
-		TxnGroup: veTxnGroup,
-		Context:  veContext,
-		Err:      err,
+		TxnGroup:       veTxnGroup,
+		BacklogMessage: veBacklogMessage,
+		Err:            err,
 	}
 	// send the txn result out the pipe
 	// this should never block. the receiver end of this channel will drop transactions if the
@@ -731,18 +731,18 @@ func (sv *StreamVerifier) addVerificationTaskToThePool(uelts []UnverifiedElement
 			groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, blockHeader, sv.ledger, batchVerifier)
 			if err != nil {
 				// verification failed, no need to add the sig to the batch, report the error
-				sv.sendResult(ue.TxnGroup, ue.Context, err)
+				sv.sendResult(ue.TxnGroup, ue.BacklogMessage, err)
 				continue
 			}
 			totalBatchCount := batchVerifier.GetNumberOfEnqueuedSignatures()
-			bl.addLoad(ue.TxnGroup, groupCtx, ue.Context, totalBatchCount)
+			bl.addLoad(ue.TxnGroup, groupCtx, ue.BacklogMessage, totalBatchCount)
 		}
 
 		failed, err := batchVerifier.VerifyWithFeedback()
 		// this error can only be crypto.ErrBatchHasFailedSigs
 		if err == nil { // success, all signatures verified
 			for i := range bl.txnGroups {
-				sv.sendResult(bl.txnGroups[i], bl.elementContext[i], nil)
+				sv.sendResult(bl.txnGroups[i], bl.elementBacklogMessage[i], nil)
 			}
 			sv.cache.AddPayset(bl.txnGroups, bl.groupCtxs)
 			return struct{}{}
@@ -771,7 +771,7 @@ func (sv *StreamVerifier) addVerificationTaskToThePool(uelts []UnverifiedElement
 			} else {
 				result = ErrInvalidSignature
 			}
-			sv.sendResult(bl.txnGroups[txgIdx], bl.elementContext[txgIdx], result)
+			sv.sendResult(bl.txnGroups[txgIdx], bl.elementBacklogMessage[txgIdx], result)
 		}
 		// loading them all at once by locking the cache once
 		sv.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)

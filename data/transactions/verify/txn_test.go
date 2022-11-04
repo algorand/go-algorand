@@ -924,7 +924,7 @@ func streamVerifier(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint6
 			case <-ctx.Done():
 				break
 			default:
-				stxnChan <- UnverifiedElement{TxnGroup: tg, Context: nil}
+				stxnChan <- UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}
 			}
 		}
 	}()

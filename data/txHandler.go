@@ -121,7 +121,7 @@ func (handler *TxHandler) processTxnStreamVerifiedResults() {
 	for {
 		select {
 		case result := <-handler.streamReturnChan:
-			txBLMsg := result.Context.(*txBacklogMsg)
+			txBLMsg := result.BacklogMessage.(*txBacklogMsg)
 			txBLMsg.verificationErr = result.Err
 			select {
 			case handler.postVerificationQueue <- txBLMsg:
@@ -191,7 +191,7 @@ func (handler *TxHandler) backlogWorker() {
 			if handler.checkAlreadyCommitted(wi) {
 				continue
 			}
-			handler.streamVerifierChan <- verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, Context: wi}
+			handler.streamVerifierChan <- verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}
 
 		case wi, ok := <-handler.postVerificationQueue:
 			if !ok {

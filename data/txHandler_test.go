@@ -356,7 +356,7 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 					// this is not expected during the test
 					continue
 				}
-				handler.streamVerifierChan <- verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, Context: wi}
+				handler.streamVerifierChan <- verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}
 			case wi, ok := <-handler.postVerificationQueue:
 				if !ok {
 					return
@@ -594,7 +594,7 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 	tt = time.Now()
 	for _, stxngrp := range signedTransactionGroups {
 		blm := txBacklogMsg{rawmsg: nil, unverifiedTxGroup: stxngrp}
-		handler.streamVerifierChan <- verify.UnverifiedElement{TxnGroup: stxngrp, Context: &blm}
+		handler.streamVerifierChan <- verify.UnverifiedElement{TxnGroup: stxngrp, BacklogMessage: &blm}
 	}
 	wg.Wait()
 	handler.Stop() // cancel the handler ctx
