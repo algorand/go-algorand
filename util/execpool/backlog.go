@@ -43,6 +43,7 @@ type backlogItemTask struct {
 type BacklogPool interface {
 	ExecutionPool
 	EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg interface{}, out chan interface{}) error
+	BufferLength() (length, capacity int)
 }
 
 // MakeBacklog creates a backlog
@@ -92,6 +93,11 @@ func (b *backlog) Enqueue(enqueueCtx context.Context, t ExecFunc, arg interface{
 	case <-b.ctx.Done():
 		return b.ctx.Err()
 	}
+}
+
+// BufferLength returns the length and the capacity of the buffer
+func (b *backlog) BufferLength() (length, capacity int) {
+	return len(b.buffer), cap(b.buffer)
 }
 
 // Enqueue enqueues a single task into the backlog

@@ -498,20 +498,32 @@ func makeSignedTxnGroups(N, numUsers, maxGroupSize int, invalidProb float32, add
 	return
 }
 
-// BenchmarkHandler sends singed transactions the the verifier
+// BenchmarkHandleTxns sends singed transactions the the verifier
 func BenchmarkHandleTxns(b *testing.B) {
-	b.N = b.N * proto.MaxTxGroupSize / 2
-	runHandlerBenchmark(1, b)
+	maxGroupSize := 1
+	tpss := []int{600000, 60000, 6000, 600}
+	for _, tps := range tpss {
+		b.Run(fmt.Sprintf("tps: %d", tps), func(b *testing.B) {
+			rateAdjuster := time.Second / time.Duration(tps)
+			runHandlerBenchmark(rateAdjuster, maxGroupSize, tps, b)
+		})
+	}
 }
-
-// BenchmarkHandler sends singed transaction groups to the verifier
+// BenchmarkHandleTransactionGroups sends singed transaction groups to the verifier
 func BenchmarkHandleTxnGroups(b *testing.B) {
-	runHandlerBenchmark(proto.MaxTxGroupSize, b)
+	maxGroupSize := proto.MaxTxGroupSize / 2
+	tpss := []int{600000, 60000, 6000, 600}
+	for _, tps := range tpss {
+		b.Run(fmt.Sprintf("tps: %d", tps), func(b *testing.B) {
+			rateAdjuster := time.Second / time.Duration(tps)
+			runHandlerBenchmark(rateAdjuster, maxGroupSize, tps, b)
+		})
+	}
 }
 
 // runHandlerBenchmark has a similar workflow to incomingTxHandlerProcessing,
 // but bypasses the backlog, and sends the transactions directly to the verifier
-func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
+func runHandlerBenchmark(rateAdjuster time.Duration, maxGroupSize, tps int, b *testing.B) {
 	const numUsers = 100
 	log := logging.TestingLog(b)
 	log.SetLevel(logging.Warn)
@@ -567,9 +579,10 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 		invalidCounter := 0
 		defer func() {
 			if txnCounter > 0 {
-				b.Logf("TPS: %d\n", uint64(txnCounter)*1000000000/uint64(time.Since(tt)))
-				b.Logf("Time/txn: %d(microsec)\n", uint64((time.Since(tt)/time.Microsecond))/txnCounter)
-				b.Logf("processed total: [%d groups (%d invalid)] [%d txns]\n", groupCounter, invalidCounter, txnCounter)
+				b.Logf("Input TPS: %d (delay %f microsec)", tps, float64(rateAdjuster)/float64(time.Microsecond))
+				b.Logf("Verified TPS: %d", uint64(txnCounter)*1000000000/uint64(time.Since(tt)))
+				b.Logf("Time/txn: %d(microsec)", uint64((time.Since(tt)/time.Microsecond))/txnCounter)
+				b.Logf("processed total: [%d groups (%d invalid)] [%d txns]", groupCounter, invalidCounter, txnCounter)
 			}
 		}()
 		for wi := range outChan {
@@ -595,6 +608,7 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 	for _, stxngrp := range signedTransactionGroups {
 		blm := txBacklogMsg{rawmsg: nil, unverifiedTxGroup: stxngrp}
 		handler.streamVerifierChan <- verify.UnverifiedElement{TxnGroup: stxngrp, BacklogMessage: &blm}
+		time.Sleep(rateAdjuster)
 	}
 	wg.Wait()
 	handler.Stop() // cancel the handler ctx

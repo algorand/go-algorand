@@ -56,6 +56,22 @@ var shuttingDownError = errors.New("not verified, verifier is shutting down")
 // show that these are realistic numbers )
 const txnPerWorksetThreshold = 64
 
+// batchSizeBlockLimit is the limit when the batch exceeds, will be added to the exec pool, even if the pool is saturated
+// and the batch verifier will block until the exec pool accepts the batch
+const batchSizeBlockLimit = 512
+
+// waitForNextTxnDuration is the time to wait before sending the batch to the exec pool
+// If the incoming txn rate is low, a txn in the batch may  wait no less than
+// waitForNextTxnDuration before it is set for verification.
+// This can introduce a latency to the propagation of a transaction in the network,
+// since every relay will go through this wait time before broadcasting the txn.
+// However, when the incoming txn rate is high, the batch will fill up quickly and will send
+// for signature evaluation before waitForNextTxnDuration.
+const waitForNextTxnDuration = 5 * time.Millisecond
+
+// waitForFirstTxnDuration is the time to wait for the first transaction in the batch
+var waitForFirstTxnDuration = 2000 * time.Millisecond
+
 // When the PaysetGroups is generating worksets, it enqueues up to concurrentWorksets entries to the execution pool. This serves several
 // purposes :
 // - if the verification task need to be aborted, there are only concurrentWorksets entries that are currently redundant on the execution pool queue.
@@ -481,7 +497,6 @@ type VerificationResult struct {
 // StreamVerifier verifies txn groups received through the stxnChan channel, and returns the
 // results through the resultChan
 type StreamVerifier struct {
-	seatReturnChan   chan interface{}
 	resultChan       chan<- VerificationResult
 	stxnChan         <-chan UnverifiedElement
 	verificationPool execpool.BacklogPool
@@ -546,27 +561,13 @@ func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext
 
 }
 
-// waitForNextTxnDuration is the time to wait before sending the batch for evaluation.
-// this does not mean that every batch will wait this long. when the load level is high,
-// the batch will fill up quickly and will be sent for evaluation before this timeout
-const waitForNextTxnDuration = 20 * time.Millisecond
-
-// waitForFirstTxnDuration is the time to wait for the first transaction in the batch
-var waitForFirstTxnDuration = 2000 * time.Millisecond
-
 // MakeStreamVerifier creates a new stream verifier and returns the chans used to send txn groups
 // to it and obtain the txn signature verification result from
 func MakeStreamVerifier(ctx context.Context, stxnChan <-chan UnverifiedElement, resultChan chan<- VerificationResult,
 	ledger logic.LedgerForSignature, nbw *NewBlockWatcher, verificationPool execpool.BacklogPool,
 	cache VerifiedTransactionCache) (sv *StreamVerifier) {
 
-	// limit the number of tasks queued to the execution pool
-	// the purpose of this parameter is to create bigger batches
-	// instead of having many smaller batching waiting in the execution pool
-	numberOfExecPoolSeats := verificationPool.GetParallelism() * 2
-
 	sv = &StreamVerifier{
-		seatReturnChan:   make(chan interface{}, numberOfExecPoolSeats),
 		resultChan:       resultChan,
 		stxnChan:         stxnChan,
 		verificationPool: verificationPool,
@@ -574,9 +575,6 @@ func MakeStreamVerifier(ctx context.Context, stxnChan <-chan UnverifiedElement, 
 		cache:            cache,
 		nbw:              nbw,
 		ledger:           ledger,
-	}
-	for x := 0; x < numberOfExecPoolSeats; x++ {
-		sv.seatReturnChan <- struct{}{}
 	}
 	return sv
 }
@@ -614,8 +612,7 @@ func (sv *StreamVerifier) batchingLoop() {
 
 			// if no batchable signatures here, send this as a task of its own
 			if numberOfBatchableSigsInGroup == 0 {
-				// no point in blocking and waiting for a seat here, let it wait in the exec pool
-				err := sv.addVerificationTaskToThePool([]UnverifiedElement{stx}, false)
+				err := sv.addVerificationTaskToThePoolNow([]UnverifiedElement{stx})
 				if err != nil {
 					sv.cleanup(uelts)
 					return
@@ -629,18 +626,18 @@ func (sv *StreamVerifier) batchingLoop() {
 			if numberOfSigsInCurrent > txnPerWorksetThreshold {
 				// enough transaction in the batch to efficiently verify
 
-				if numberOfSigsInCurrent > 4*txnPerWorksetThreshold {
+				if numberOfSigsInCurrent > batchSizeBlockLimit {
 					// do not consider adding more txns to this batch.
 					// bypass the seat count and block if the exec pool is busy
 					// this is to prevent creation of very large batches
-					err := sv.addVerificationTaskToThePool(uelts, false)
+					err := sv.addVerificationTaskToThePoolNow(uelts)
 					if err != nil {
 						sv.cleanup(uelts)
 						return
 					}
 					added = true
 				} else {
-					added, err = sv.processBatch(uelts)
+					added, err = sv.canAddVerificationTaskToThePool(uelts)
 					if err != nil {
 						sv.cleanup(uelts)
 						return
@@ -652,7 +649,7 @@ func (sv *StreamVerifier) batchingLoop() {
 					// starting a new batch. Can wait long, since nothing is blocked
 					timer.Reset(waitForFirstTxnDuration)
 				} else {
-					// was not added because no-available-seats. wait for some more txns
+					// was not added because of the exec pool buffer lenght
 					timer.Reset(waitForNextTxnDuration)
 				}
 			} else {
@@ -668,7 +665,7 @@ func (sv *StreamVerifier) batchingLoop() {
 				timer.Reset(waitForFirstTxnDuration)
 				continue
 			}
-			added, err := sv.processBatch(uelts)
+			added, err := sv.canAddVerificationTaskToThePool(uelts)
 			if err != nil {
 				sv.cleanup(uelts)
 				return
@@ -679,7 +676,7 @@ func (sv *StreamVerifier) batchingLoop() {
 				// starting a new batch. Can wait long, since nothing is blocked
 				timer.Reset(waitForFirstTxnDuration)
 			} else {
-				// was not added because no-available-seats. wait for some more txns
+				// was not added because of the exec pool buffer lenght. wait for some more txns
 				timer.Reset(waitForNextTxnDuration)
 			}
 		case <-sv.ctx.Done():
@@ -701,28 +698,27 @@ func (sv *StreamVerifier) sendResult(veTxnGroup []transactions.SignedTxn, veBack
 	sv.resultChan <- vr
 }
 
-func (sv *StreamVerifier) processBatch(uelts []UnverifiedElement) (added bool, err error) {
-	// if cannot find a seat, can go back and collect
-	// more signatures instead of waiting here
-	// more signatures to the batch do not harm performance (see crypto.BenchmarkBatchVerifierBig)
-	select {
-	case <-sv.seatReturnChan:
-		err := sv.addVerificationTaskToThePool(uelts, true)
-		if err != nil {
-			// An error is returned when the context of the pool expires
-			return false, err
-		}
-		return true, nil
-	default:
-		// if no free seats, wait some more for more txns
+func (sv *StreamVerifier) canAddVerificationTaskToThePool(uelts []UnverifiedElement) (added bool, err error) {
+	// if the exec pool buffer is (half) full, can go back and collect
+	// more signatures instead of waiting in the exec pool buffer
+	// more signatures to the batch do not harm performance but introduce latency when delayed (see crypto.BenchmarkBatchVerifierBig)
+
+	// if buffer is half full
+	if l, c := sv.verificationPool.BufferLength(); l > c/2 {
 		return false, nil
 	}
+	err = sv.addVerificationTaskToThePoolNow(uelts)
+	if err != nil {
+		// An error is returned when the context of the pool expires
+		return false, err
+	}
+	return true, nil
 }
 
-func (sv *StreamVerifier) addVerificationTaskToThePool(uelts []UnverifiedElement, returnSeat bool) error {
+func (sv *StreamVerifier) addVerificationTaskToThePoolNow(uelts []UnverifiedElement) error {
 	function := func(arg interface{}) interface{} {
 		if sv.ctx.Err() != nil {
-			return struct{}{}
+			return nil
 		}
 
 		uelts := arg.([]UnverifiedElement)
@@ -749,7 +745,7 @@ func (sv *StreamVerifier) addVerificationTaskToThePool(uelts []UnverifiedElement
 				sv.sendResult(bl.txnGroups[i], bl.elementBacklogMessage[i], nil)
 			}
 			sv.cache.AddPayset(bl.txnGroups, bl.groupCtxs)
-			return struct{}{}
+			return nil
 		}
 
 		verifiedTxnGroups := make([][]transactions.SignedTxn, 0, len(bl.txnGroups))
@@ -779,16 +775,11 @@ func (sv *StreamVerifier) addVerificationTaskToThePool(uelts []UnverifiedElement
 		}
 		// loading them all at once by locking the cache once
 		sv.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
-		return struct{}{}
+		return nil
 	}
 
-	// if the task has an allocated seat, should release it
-	var retChan chan interface{}
-	if returnSeat {
-		retChan = sv.seatReturnChan
-	}
 	// EnqueueBacklog returns an error when the context is canceled
-	err := sv.verificationPool.EnqueueBacklog(sv.ctx, function, uelts, retChan)
+	err := sv.verificationPool.EnqueueBacklog(sv.ctx, function, uelts, nil)
 	return err
 }
 
