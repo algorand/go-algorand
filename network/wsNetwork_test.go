@@ -2678,22 +2678,47 @@ func TestPreparePeerData(t *testing.T) {
 func TestWebsocketNetworkTelemetryRTT(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	// start two networks and send 2 messages from A to B
+	closed := false
 	netA, netB, counter, closeFunc := setupWebsocketNetworkAB(t, 2)
-	defer closeFunc()
+	defer func() {
+		if !closed {
+			closeFunc()
+		}
+	}()
 	counterDone := counter.done
 	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"), false, nil)
 	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"), false, nil)
-
-	detailsA := netA.getPeerConnectionTelemetryDetails(time.Now())
-	detailsB := netB.getPeerConnectionTelemetryDetails(time.Now())
-	require.Len(t, detailsA.IncomingPeers, 1)
-	assert.NotZero(t, detailsA.IncomingPeers[0].RTT)
-	require.Len(t, detailsB.OutgoingPeers, 1)
-	assert.NotZero(t, detailsB.OutgoingPeers[0].RTT)
 
 	select {
 	case <-counterDone:
 	case <-time.After(2 * time.Second):
 		t.Errorf("timeout, count=%d, wanted 2", counter.count)
 	}
+
+	// get RTT from both ends and assert nonzero
+	var peersA, peersB []*wsPeer
+	peersA, _ = netA.peerSnapshot(peersA)
+	detailsA := netA.getPeerConnectionTelemetryDetails(time.Now(), peersA)
+	peersB, _ = netB.peerSnapshot(peersB)
+	detailsB := netB.getPeerConnectionTelemetryDetails(time.Now(), peersB)
+	require.Len(t, detailsA.IncomingPeers, 1)
+	assert.NotZero(t, detailsA.IncomingPeers[0].RTT)
+	require.Len(t, detailsB.OutgoingPeers, 1)
+	assert.NotZero(t, detailsB.OutgoingPeers[0].RTT)
+
+	// close connections
+	closeFunc()
+	closed = true
+	// open more FDs by starting 2 more networks
+	_, _, _, closeFunc2 := setupWebsocketNetworkAB(t, 2)
+	defer closeFunc2()
+	//  use stale peers snapshot from closed networks to get telemetry
+	// *net.OpError "use of closed network connection" err results in 0 rtt values
+	detailsA = netA.getPeerConnectionTelemetryDetails(time.Now(), peersA)
+	detailsB = netB.getPeerConnectionTelemetryDetails(time.Now(), peersB)
+	require.Len(t, detailsA.IncomingPeers, 1)
+	assert.Zero(t, detailsA.IncomingPeers[0].RTT)
+	require.Len(t, detailsB.OutgoingPeers, 1)
+	assert.Zero(t, detailsB.OutgoingPeers[0].RTT)
 }

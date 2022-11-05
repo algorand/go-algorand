@@ -1812,13 +1812,13 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 	}
 	wn.lastPeerConnectionsSent = now
 
-	connectionDetails := wn.getPeerConnectionTelemetryDetails(now)
+	var peers []*wsPeer
+	peers, _ = wn.peerSnapshot(peers)
+	connectionDetails := wn.getPeerConnectionTelemetryDetails(now, peers)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
 }
 
-func (wn *WebsocketNetwork) getPeerConnectionTelemetryDetails(now time.Time) telemetryspec.PeersConnectionDetails {
-	var peers []*wsPeer
-	peers, _ = wn.peerSnapshot(peers)
+func (wn *WebsocketNetwork) getPeerConnectionTelemetryDetails(now time.Time, peers []*wsPeer) telemetryspec.PeersConnectionDetails {
 	var connectionDetails telemetryspec.PeersConnectionDetails
 	for _, peer := range peers {
 		connDetail := telemetryspec.PeerConnectionDetails{
