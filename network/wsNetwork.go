@@ -1805,6 +1805,9 @@ func (wn *WebsocketNetwork) OnNetworkAdvance() {
 // to the telemetry server. Internally, it's using a timer to ensure that it would only
 // send the information once every hour ( configurable via PeerConnectionsUpdateInterval )
 func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
+	if !wn.log.GetTelemetryEnabled() {
+		return
+	}
 	now := time.Now()
 	if wn.lastPeerConnectionsSent.Add(time.Duration(wn.config.PeerConnectionsUpdateInterval)*time.Second).After(now) || wn.config.PeerConnectionsUpdateInterval <= 0 {
 		// it's not yet time to send the update.
