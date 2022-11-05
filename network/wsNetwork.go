@@ -1811,6 +1811,12 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 		return
 	}
 	wn.lastPeerConnectionsSent = now
+
+	connectionDetails := wn.getPeerConnectionTelemetryDetails(now)
+	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
+}
+
+func (wn *WebsocketNetwork) getPeerConnectionTelemetryDetails(now time.Time) telemetryspec.PeersConnectionDetails {
 	var peers []*wsPeer
 	peers, _ = wn.peerSnapshot(peers)
 	var connectionDetails telemetryspec.PeersConnectionDetails
@@ -1821,6 +1827,19 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 			InstanceName:         peer.InstanceName,
 			DuplicateFilterCount: peer.duplicateFilterCount,
 		}
+		// unwrap websocket.Conn, requestTrackedConnection, rejectingLimitListenerConn
+		var uconn net.Conn = peer.conn.UnderlyingConn()
+		for {
+			wconn, ok := uconn.(wrappedConn)
+			if !ok {
+				break
+			}
+			uconn = wconn.UnderlyingConn()
+		}
+		if rttInfo, err := util.GetConnRTT(uconn); err == nil {
+			connDetail.RTT = int64(rttInfo.RTT)
+			connDetail.RTTVar = int64(rttInfo.RTTVar)
+		}
 		if peer.outgoing {
 			connDetail.Address = justHost(peer.conn.RemoteAddr().String())
 			connDetail.Endpoint = peer.GetAddress()
@@ -1830,14 +1849,8 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 			connDetail.Address = peer.OriginAddress()
 			connectionDetails.IncomingPeers = append(connectionDetails.IncomingPeers, connDetail)
 		}
-		rttInfo, err := util.GetConnRTT(peer.conn.UnderlyingConn())
-		if err == nil {
-			connDetail.RTT = int64(rttInfo.RTT)
-			connDetail.RTTVar = int64(rttInfo.RTTVar)
-		}
 	}
-
-	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
+	return connectionDetails
 }
 
 // prioWeightRefreshTime controls how often we refresh the weights
