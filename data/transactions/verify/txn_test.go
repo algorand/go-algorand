@@ -19,6 +19,7 @@ package verify
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -863,7 +864,8 @@ func BenchmarkTxn(b *testing.B) {
 	b.StopTimer()
 }
 
-func streamVerifier(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64]struct{}, t *testing.T) (sv *StreamVerifier) {
+func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64]struct{},
+	expectedError error, t *testing.T) (sv *StreamVerifier) {
 
 	numOfTxnGroups := len(txnGroups)
 	execPool := execpool.MakePool(t)
@@ -884,57 +886,67 @@ func streamVerifier(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint6
 
 	wg := sync.WaitGroup{}
 
+	errChan := make(chan error)
 	var badSigResultCounter int
 	var goodSigResultCounter int
-	errChan := make(chan error)
+
 	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer close(errChan)
-		// process the results
-		for x := 0; x < numOfTxnGroups; x++ {
-			select {
-			case result := <-resultChan:
-				u, _ := binary.Uvarint(result.TxnGroup[0].Txn.Note)
-				if _, has := badTxnGroups[u]; has {
-					badSigResultCounter++
-					if result.Err == nil {
-						err := fmt.Errorf("%dth (%d)transaction varified with a bad sig", x, u)
-						errChan <- err
-					}
-				} else {
-					goodSigResultCounter++
-					if result.Err != nil {
-						err := fmt.Errorf("%dth (%d) transaction failed to varify with good sigs", x, u)
-						errChan <- err
-					}
-				}
-			case <-ctx.Done():
-				break
-			}
-		}
-	}()
+	go processResults(errChan, resultChan, numOfTxnGroups, badTxnGroups, ctx, &badSigResultCounter, &goodSigResultCounter, &wg)
 
 	wg.Add(1)
 	// send txn groups to be verified
 	go func() {
 		defer wg.Done()
 		for _, tg := range txnGroups {
-			select {
-			case <-ctx.Done():
-				break
-			default:
-				stxnChan <- UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}
-			}
+			stxnChan <- UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}
 		}
 	}()
 
 	for err := range errChan {
-		require.NoError(t, err)
+		require.ErrorContains(t, err, expectedError.Error())
 	}
 
 	wg.Wait()
 
+	verifyResults(txnGroups, badTxnGroups, cache, badSigResultCounter, goodSigResultCounter, t)
+	return sv
+}
+
+func processResults(errChan chan<- error, resultChan <-chan VerificationResult, numOfTxnGroups int,
+	badTxnGroups map[uint64]struct{}, ctx context.Context,
+	badSigResultCounter, goodSigResultCounter *int, wg *sync.WaitGroup) {
+	defer wg.Done()
+	defer close(errChan)
+	// process the results
+	for x := 0; x < numOfTxnGroups; x++ {
+		select {
+		case <-ctx.Done():
+		case result := <-resultChan:
+			u, _ := binary.Uvarint(result.TxnGroup[0].Txn.Note)
+			if _, has := badTxnGroups[u]; has {
+				(*badSigResultCounter)++
+				// we expected an error, but it is not the general crypto error
+				if result.Err != crypto.ErrBatchHasFailedSigs {
+					errChan <- result.Err
+				}
+				if result.Err == nil {
+					err := fmt.Errorf("%dth (%d)transaction varified with a bad sig", x, u)
+					errChan <- err
+					return
+				}
+			} else {
+				(*goodSigResultCounter)++
+				if result.Err != nil {
+					errChan <- result.Err
+				}
+			}
+		}
+	}
+}
+
+func verifyResults(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64]struct{},
+	cache VerifiedTransactionCache,
+	badSigResultCounter, goodSigResultCounter int, t *testing.T) {
 	// check if all txns have been checked.
 	require.Equal(t, len(txnGroups), badSigResultCounter+goodSigResultCounter)
 	require.Equal(t, len(badTxnGroups), badSigResultCounter)
@@ -951,7 +963,6 @@ func streamVerifier(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint6
 		}
 	}
 	require.Empty(t, badTxnGroups, "unverifiedGroups should have all the transactions with invalid sigs")
-	return sv
 }
 
 // TestStreamVerifier tests the basic functionality
@@ -973,7 +984,7 @@ func TestStreamVerifier(t *testing.T) {
 			badTxnGroups[u] = struct{}{}
 		}
 	}
-	streamVerifier(txnGroups, badTxnGroups, t)
+	streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
 }
 
 // TestStreamVerifierCases tests various valid and invalid transaction signature cases
@@ -982,7 +993,6 @@ func TestStreamVerifierCases(t *testing.T) {
 
 	numOfTxns := 10
 	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
-
 	txnGroups := generateTransactionGroups(1, signedTxn, secrets, addrs)
 	badTxnGroups := make(map[uint64]struct{})
 
@@ -992,7 +1002,12 @@ func TestStreamVerifierCases(t *testing.T) {
 	txnGroups[mod][0].Sig = crypto.Signature{}
 	u, _ := binary.Uvarint(txnGroups[mod][0].Txn.Note)
 	badTxnGroups[u] = struct{}{}
+	streamVerifierTestCore(txnGroups, badTxnGroups, signedTxnHasNoSig, t)
 	mod++
+
+	_, signedTxn, secrets, addrs = generateTestObjects(numOfTxns, 20, 50)
+	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
+	badTxnGroups = make(map[uint64]struct{})
 
 	// invalid stateproof txn
 	txnGroups[mod][0].Sig = crypto.Signature{}
@@ -1000,7 +1015,13 @@ func TestStreamVerifierCases(t *testing.T) {
 	txnGroups[mod][0].Txn.Header.Sender = transactions.StateProofSender
 	u, _ = binary.Uvarint(txnGroups[mod][0].Txn.Note)
 	badTxnGroups[u] = struct{}{}
+	errFeeMustBeZeroInStateproofTxn := errors.New("fee must be zero in state-proof transaction")
+	streamVerifierTestCore(txnGroups, badTxnGroups, errFeeMustBeZeroInStateproofTxn, t)
 	mod++
+
+	_, signedTxn, secrets, addrs = generateTestObjects(numOfTxns, 20, 50)
+	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
+	badTxnGroups = make(map[uint64]struct{})
 
 	// acceptable stateproof txn
 	txnGroups[mod][0].Sig = crypto.Signature{}
@@ -1009,12 +1030,18 @@ func TestStreamVerifierCases(t *testing.T) {
 	txnGroups[mod][0].Txn.Header.Fee = basics.MicroAlgos{Raw: 0}
 	txnGroups[mod][0].Txn.Header.Sender = transactions.StateProofSender
 	txnGroups[mod][0].Txn.PaymentTxnFields = transactions.PaymentTxnFields{}
+	streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
 	mod++
 
 	// multisig
 	_, mSigTxn, _, _ := generateMultiSigTxn(1, 6, 50, t)
 	txnGroups[mod] = mSigTxn
+	streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
 	mod++
+
+	_, signedTxn, secrets, addrs = generateTestObjects(numOfTxns, 20, 50)
+	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
+	badTxnGroups = make(map[uint64]struct{})
 
 	// logicsig
 	// add a simple logic that verifies this condition:
@@ -1031,6 +1058,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[mod][0].Lsig.Logic = op.Program
 	program := logic.Program(op.Program)
 	txnGroups[mod][0].Lsig.Sig = secrets[s].Sign(program)
+	streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
 	mod++
 
 	// bad lgicsig
@@ -1043,14 +1071,18 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[mod][0].Lsig.Sig = secrets[s].Sign(program)
 	u, _ = binary.Uvarint(txnGroups[mod][0].Txn.Note)
 	badTxnGroups[u] = struct{}{}
+	streamVerifierTestCore(txnGroups, badTxnGroups, errors.New("rejected by logic"), t)
 	mod++
+
+	_, signedTxn, secrets, addrs = generateTestObjects(numOfTxns, 20, 50)
+	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
+	badTxnGroups = make(map[uint64]struct{})
 
 	// txn with sig and msig
 	txnGroups[mod][0].Msig = mSigTxn[0].Msig
 	u, _ = binary.Uvarint(txnGroups[mod][0].Txn.Note)
 	badTxnGroups[u] = struct{}{}
-
-	streamVerifier(txnGroups, badTxnGroups, t)
+	streamVerifierTestCore(txnGroups, badTxnGroups, signedTxnMaxOneSig, t)
 }
 
 // TestStreamVerifierIdel starts the verifer and sends nothing, to trigger the timer, then sends a txn
@@ -1076,8 +1108,76 @@ func TestStreamVerifierIdel(t *testing.T) {
 	defer func() {
 		waitForFirstTxnDuration = origValue
 	}()
-	// set this value too small to hit the timeout first
+	// set this value too small to hit the timeout first, then make sure can
+	// resume and process the incoming transactions
 	waitForFirstTxnDuration = 1 * time.Microsecond
-	sv := streamVerifier(txnGroups, badTxnGroups, t)
+	sv := streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
+	sv.activeLoopWg.Wait()
+}
+
+// TestStreamVerifierCancel
+func TestStreamVerifierCancel(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	numOfTxns := 1000
+	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
+
+	badTxnGroups := make(map[uint64]struct{})
+
+	for tgi := range txnGroups {
+		if rand.Float32() > 0.5 {
+			// make a bad sig
+			t := rand.Intn(len(txnGroups[tgi]))
+			txnGroups[tgi][t].Sig[0] = txnGroups[tgi][t].Sig[0] + 1
+			u, _ := binary.Uvarint(txnGroups[tgi][0].Txn.Note)
+			badTxnGroups[u] = struct{}{}
+		}
+	}
+
+	// prepare the stream verifier
+	numOfTxnGroups := len(txnGroups)
+	execPool := execpool.MakePool(t)
+	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
+	verificationPool.Shutdown()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cache := MakeVerifiedTransactionCache(50000)
+
+	blkHdr := createDummyBlockHeader()
+	nbw := MakeNewBlockWatcher(blkHdr)
+	stxnChan := make(chan UnverifiedElement)
+	resultChan := make(chan VerificationResult)
+	sv := MakeStreamVerifier(ctx, stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache)
+	sv.Start()
+
+	errChan := make(chan error)
+
+	var badSigResultCounter int
+	var goodSigResultCounter int
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go processResults(errChan, resultChan, numOfTxnGroups, badTxnGroups, ctx, &badSigResultCounter, &goodSigResultCounter, &wg)
+
+	wg.Add(1)
+	// send txn groups to be verified
+	go func() {
+		defer wg.Done()
+		for _, tg := range txnGroups {
+			select {
+			case <-ctx.Done():
+				break
+			case stxnChan <- UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}:
+			}
+		}
+	}()
+	errored := false
+	for err := range errChan {
+		require.ErrorIs(t, err, shuttingDownError)
+		cancel()
+		errored = true
+	}
+	require.True(t, errored)
 	sv.activeLoopWg.Wait()
 }

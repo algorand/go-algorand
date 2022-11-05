@@ -588,8 +588,18 @@ func (sv *StreamVerifier) Start() {
 
 func (sv *StreamVerifier) cleanup(pending []UnverifiedElement) {
 	// report an error for the unchecked txns
+	// drop the messages without reporting if the receiver does not consume
 	for _, uel := range pending {
-		sv.sendResult(uel.TxnGroup, uel.BacklogMessage, shuttingDownError)
+		vr := VerificationResult{
+			TxnGroup:       uel.TxnGroup,
+			BacklogMessage: uel.BacklogMessage,
+			Err:            shuttingDownError,
+		}
+		select {
+		case sv.resultChan <- vr:
+		default:
+			return
+		}
 	}
 }
 
@@ -693,8 +703,8 @@ func (sv *StreamVerifier) sendResult(veTxnGroup []transactions.SignedTxn, veBack
 		Err:            err,
 	}
 	// send the txn result out the pipe
-	// this should never block. the receiver end of this channel will drop transactions if the
-	// postVerificationQueue is blocked
+	// this is expected not to block. the receiver end of this channel will drop transactions if the
+	// postVerificationQueue is blocked, and report it
 	sv.resultChan <- vr
 }
 
