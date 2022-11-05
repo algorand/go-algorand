@@ -1837,8 +1837,8 @@ func (wn *WebsocketNetwork) getPeerConnectionTelemetryDetails(now time.Time) tel
 			uconn = wconn.UnderlyingConn()
 		}
 		if rttInfo, err := util.GetConnRTT(uconn); err == nil {
-			connDetail.RTT = int64(rttInfo.RTT)
-			connDetail.RTTVar = int64(rttInfo.RTTVar)
+			connDetail.RTT = rttInfo.RTT
+			connDetail.RTTVar = rttInfo.RTTVar
 		}
 		if peer.outgoing {
 			connDetail.Address = justHost(peer.conn.RemoteAddr().String())
