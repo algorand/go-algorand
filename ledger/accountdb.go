@@ -5425,6 +5425,8 @@ func stateProofVerificationTable(ctx context.Context, tx *sql.Tx, tableName stri
 			return err
 		}
 
+		defer rows.Close()
+
 		// Clear `res` in case this function is repeated.
 		result = result[:0]
 		for rows.Next() {
