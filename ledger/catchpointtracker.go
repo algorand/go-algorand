@@ -1082,6 +1082,13 @@ func (ct *catchpointTracker) IsWritingCatchpointDataFile() bool {
 }
 
 // Generates a (first stage) catchpoint data file.
+// The file is built in the following order:
+// - Catchpoint file header (named content.msgpack). The header is generated and appended to the file at the end of the
+// 	 second stage of catchpoint generation.
+// - State proof verification data chunk (named stateProofVerificationData.msgpack).
+// - Balance and KV chunk (named balances.x.msgpack).
+// 	 ...
+// - Balance and KV chunk (named balances.x.msgpack).
 func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, updatingBalancesDuration time.Duration) (
 	uint64 /*totalAccounts*/, uint64 /*totalChunks*/, uint64 /*biggestChunkLen*/, crypto.Digest /*stateProofVerificationDataHash*/, error) {
 	ct.log.Debugf("catchpointTracker.generateCatchpointData() writing catchpoint accounts for round %d", accountsRound)
