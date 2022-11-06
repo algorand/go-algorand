@@ -191,7 +191,7 @@ func (cw *catchpointWriter) WriteStateProofVerificationData() (crypto.Digest, er
 	}
 
 	wrappedData := catchpointStateProofVerificationData{Data: rawData}
-	encodedData := protocol.Encode(&wrappedData)
+	dataHash, encodedData := crypto.EncodeAndHash(wrappedData)
 
 	err = cw.tar.WriteHeader(&tar.Header{
 		Name: "stateProofVerificationData.msgpack",
@@ -207,8 +207,6 @@ func (cw *catchpointWriter) WriteStateProofVerificationData() (crypto.Digest, er
 	if err != nil {
 		return crypto.Digest{}, err
 	}
-
-	dataHash := crypto.HashObj(wrappedData)
 
 	return dataHash, nil
 }
