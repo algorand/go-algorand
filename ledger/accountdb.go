@@ -1118,12 +1118,8 @@ func writeCatchpointStateProofVerificationData(ctx context.Context, tx *sql.Tx, 
 
 	defer insertStmt.Close()
 
-	f := func() error {
-		_, err = insertStmt.ExecContext(ctx, verificationData.TargetStateProofRound, protocol.Encode(verificationData))
-		return err
-	}
-
-	return nil
+	_, err = insertStmt.ExecContext(ctx, verificationData.TargetStateProofRound, protocol.Encode(verificationData))
+	return err
 }
 
 // createCatchpointStagingHashesIndex creates an index on catchpointpendinghashes to allow faster scanning according to the hash order
