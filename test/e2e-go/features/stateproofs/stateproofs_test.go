@@ -382,7 +382,7 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 }
 
 func getDefaultStateProofConsensusParams() config.ConsensusParams {
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams := config.Consensus[protocol.ConsensusFuture]
 	consensusParams.StateProofInterval = 16
 	consensusParams.StateProofTopVoters = 1024
 	consensusParams.StateProofVotersLookback = 2

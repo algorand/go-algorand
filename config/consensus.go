@@ -483,6 +483,10 @@ type ConsensusParams struct {
 	// the rewardsLevel, but the rewardsLevel has no meaning because the account
 	// has fewer than RewardUnit algos.
 	UnfundedSenders bool
+
+	// StateProofUseTrackerVerification specifies whether the node will use data from state proof verification tracker
+	// in order to verify state proofs.
+	StateProofUseTrackerVerification bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1249,6 +1253,8 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 9 // When moving this to a release, put a new higher LogicSigVersion here
+
+	vFuture.StateProofUseTrackerVerification = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

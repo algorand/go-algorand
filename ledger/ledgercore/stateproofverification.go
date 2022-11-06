@@ -19,6 +19,7 @@ package ledgercore
 import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // StateProofVerificationData represents the data provided by the ledger to verify a state proof transaction.
@@ -33,4 +34,7 @@ type StateProofVerificationData struct {
 
 	// OnlineTotalWeight is the total amount of stake attesting to the next state proof.
 	OnlineTotalWeight basics.MicroAlgos `codec:"pw"`
+
+	// Version is the protocol version that would be used to verify the state proof
+	Version protocol.ConsensusVersion `codec:"v"`
 }
