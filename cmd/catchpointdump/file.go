@@ -404,6 +404,7 @@ func printStateProofVerificationData(databaseName string, outFile *os.File) erro
 	if err != nil || dbAccessor.Handle == nil {
 		return err
 	}
+	defer dbAccessor.Close()
 
 	var stateProofVerificationData []ledgercore.StateProofVerificationData
 	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
