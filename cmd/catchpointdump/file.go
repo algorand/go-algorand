@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -415,6 +416,10 @@ func printStateProofVerificationData(databaseName string, outFile *os.File) erro
 	if err != nil {
 		return err
 	}
+
+	sort.Slice(stateProofVerificationData, func(i, j int) bool {
+		return stateProofVerificationData[i].TargetStateProofRound < stateProofVerificationData[j].TargetStateProofRound
+	})
 
 	var printedLines []string
 	for _, data := range stateProofVerificationData {
