@@ -1123,11 +1123,6 @@ func writeCatchpointStateProofVerificationData(ctx context.Context, tx *sql.Tx, 
 		return err
 	}
 
-	err = db.Retry(f)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
