@@ -317,7 +317,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingStateProofVerificationData
 
 	wdb := c.ledger.trackerDB().Wdb
 
-	// 6 months of stuck state proofs should lead to about 1.2 MB of data, so we avoid redundant timers
+	// 6 months of stuck state proofs should lead to about 1.5 MB of data, so we avoid redundant timers
 	// and progress reports.
 
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
