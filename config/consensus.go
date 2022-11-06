@@ -484,7 +484,8 @@ type ConsensusParams struct {
 	// has fewer than RewardUnit algos.
 	UnfundedSenders bool
 
-	// StateProofUseTrackerVerification specifies whether the node will use the state proof verification tracker.
+	// StateProofUseTrackerVerification specifies whether the node will use data from state proof verification tracker
+	// in order to verify state proofs.
 	StateProofUseTrackerVerification bool
 }
 
