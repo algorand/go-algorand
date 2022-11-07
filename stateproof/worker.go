@@ -42,6 +42,11 @@ type builder struct {
 	Message   stateproofmsg.Message   `codec:"msg"`
 }
 
+// This is a soft limit on how many builders should be kept in memory, the rest shall be fetched from DB.
+// At most times only 1 should builder should be stored (both in memory and on disk), as this feature
+// is mostly used for recoverability purposes - in case the StateProof chain is stalled.
+const numBuildersInMemory = 10
+
 // Worker builds state proofs, by broadcasting
 // signatures using this node's participation keys, by collecting
 // signatures sent by others, and by sending out the resulting

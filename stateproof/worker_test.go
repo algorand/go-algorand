@@ -818,7 +818,7 @@ func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	const expectedStateProofs = 8
+	const expectedStateProofs = 8 // should be less than numBuildersInMemory for this test
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
@@ -849,9 +849,10 @@ func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
 	a.NoError(err)
 	a.Equal(expectedStateProofs, countDB)
 
+	threshold := onlineBuildersThreshold(proto, basics.Round(512)) // 512 since no StateProofs are confirmed yet (512 is the first, commitment at 256)
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		roundSigs, err = getPendingSigs(tx)
+		roundSigs, err = getPendingSigs(tx, threshold, basics.Round(512+proto.StateProofInterval*expectedStateProofs), false)
 		return
 	})
 
@@ -870,7 +871,7 @@ func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
 	a.Equal(3, countDB)
 
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		roundSigs, err = getPendingSigs(tx)
+		roundSigs, err = getPendingSigs(tx, threshold, basics.Round(512+proto.StateProofInterval*expectedStateProofs), false)
 		return
 	})
 
@@ -922,9 +923,10 @@ func TestWorkerBuildersRecoveryIsNotLimited(t *testing.T) {
 	a.NoError(err)
 	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(countDB))
 
+	threshold := onlineBuildersThreshold(proto, basics.Round(512)) // first StateProof round (no stateproof txns should be confirmed yet)
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		roundSigs, err = getPendingSigs(tx)
+		roundSigs, err = getPendingSigs(tx, threshold, s.latest, false)
 		return
 	})
 	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(len(roundSigs)))
@@ -950,7 +952,7 @@ func TestWorkerBuildersRecoveryIsNotLimited(t *testing.T) {
 
 	roundSigs = make(map[basics.Round][]pendingSig)
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		roundSigs, err = getPendingSigs(tx)
+		roundSigs, err = getPendingSigs(tx, threshold, s.latest, false)
 		return
 	})
 	a.Equal(proto.StateProofMaxRecoveryIntervals+2, uint64(len(roundSigs)))
@@ -1098,7 +1100,7 @@ func sendReceiveCountMessages(t *testing.T, tns *testWorkerStubs, signatureBcast
 
 	// Broadcast the messages
 	for brnd := 257; brnd < 257+int(proto.StateProofInterval)*periods; brnd++ {
-		spw.broadcastSigs(basics.Round(brnd), proto)
+		spw.broadcastSigs(basics.Round(brnd), basics.Round(512), proto)
 	}
 
 	close(tns.sigmsg)
@@ -1158,7 +1160,8 @@ func TestForwardNotFromThisNodeSecondHalf(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	for brnd := 0; brnd < int(proto.StateProofInterval*10); brnd++ {
-		spw.broadcastSigs(basics.Round(brnd), proto)
+		stateProofNextRound := basics.Round(brnd).RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))
+		spw.broadcastSigs(basics.Round(brnd), stateProofNextRound, proto)
 		select {
 		case <-tns.sigmsg:
 			// The message is broadcast in the second half of the period
@@ -1177,7 +1180,8 @@ func TestForwardNotFromThisNodeFirstHalf(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	for brnd := 0; brnd < int(proto.StateProofInterval*10); brnd++ {
-		spw.broadcastSigs(basics.Round(brnd), proto)
+		stateProofNextRound := basics.Round(brnd).RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))
+		spw.broadcastSigs(basics.Round(brnd), stateProofNextRound, proto)
 		select {
 		case bMsg := <-tns.sigmsg:
 			sfa := sigFromAddr{}

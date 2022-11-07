@@ -114,8 +114,15 @@ func deletePendingSigsBeforeRound(tx *sql.Tx, rnd basics.Round) error {
 	return err
 }
 
-func getPendingSigs(tx *sql.Tx) (map[basics.Round][]pendingSig, error) {
-	rows, err := tx.Query("SELECT sprnd, signer, sig, from_this_node FROM sigs")
+// Returns pending sigs up to the threshold round.
+// The highest round sigs (which might be higher than the threshold) is also included.
+func getPendingSigs(tx *sql.Tx, threshold basics.Round, maxRound basics.Round, onlyFromThisNode bool) (map[basics.Round][]pendingSig, error) {
+	query := "SELECT sprnd, signer, sig, from_this_node FROM sigs WHERE (sprnd<=? OR sprnd=?)"
+	if onlyFromThisNode {
+		query += " AND from_this_node=1"
+	}
+
+	rows, err := tx.Query(query, threshold, maxRound)
 	if err != nil {
 		return nil, err
 	}
@@ -135,17 +142,6 @@ func getPendingSigsForRound(tx *sql.Tx, rnd basics.Round) ([]pendingSig, error) 
 		return nil, err
 	}
 	return tmpmap[rnd], nil
-
-}
-
-func getPendingSigsFromThisNode(tx *sql.Tx) (map[basics.Round][]pendingSig, error) {
-	rows, err := tx.Query("SELECT sprnd, signer, sig, from_this_node FROM sigs WHERE from_this_node=1")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	return rowsToPendingSigs(rows)
 }
 
 func isPendingSigExist(tx *sql.Tx, rnd basics.Round, account Address) (bool, error) {
