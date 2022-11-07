@@ -23,7 +23,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"math"
 	"math/rand"
 	"os"
@@ -32,6 +31,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/daemon/algod/api/client"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 
@@ -209,56 +210,6 @@ func TestClientCanGetStatusAfterBlock(t *testing.T) {
 	statusResponse, err = testClient.WaitForRound(statusResponse.LastRound + 1)
 	a.NoError(err)
 	a.NotEmpty(statusResponse)
-}
-
-// Deprecated: This test uses a v1 API feature that is no longer supported by v2.
-func TestTransactionsByAddr(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
-	a := require.New(fixtures.SynchronizedTest(t))
-	var localFixture fixtures.RestClientFixture
-	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
-	defer localFixture.Shutdown()
-
-	testClient := localFixture.LibGoalClient
-	waitForRoundOne(t, testClient)
-	wh, err := testClient.GetUnencryptedWalletHandle()
-	a.NoError(err)
-	addresses, err := testClient.ListAddresses(wh)
-	a.NoError(err)
-	_, someAddress := getMaxBalAddr(t, testClient, addresses)
-	if someAddress == "" {
-		t.Error("no addr with funds")
-	}
-	toAddress := getDestAddr(t, testClient, addresses, someAddress, wh)
-	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, nil, "", 0, 0)
-	a.NoError(err)
-	txID := tx.ID()
-	rnd, err := testClient.Status()
-	a.NoError(err)
-	t.Logf("rnd[%d] created txn %s", rnd.LastRound, txID)
-	_, err = waitForTransaction(t, testClient, someAddress, txID.String(), 30*time.Second)
-	a.NoError(err)
-
-	// what is my round?
-	rnd, err = testClient.Status()
-	a.NoError(err)
-	t.Logf("rnd %d", rnd.LastRound)
-
-	// Now let's get the transaction
-
-	restClient, err := localFixture.NC.AlgodClient()
-	a.NoError(err)
-	res, err := restClient.TransactionsByAddr(toAddress, 0, rnd.LastRound, 100)
-	a.NoError(err)
-	a.Equal(1, len(res.Transactions))
-
-	for _, tx := range res.Transactions {
-		a.Equal(tx.From, someAddress)
-		a.Equal(tx.Payment.Amount, uint64(100000))
-		a.Equal(tx.Fee, uint64(10000))
-	}
 }
 
 func TestClientCanGetVersion(t *testing.T) {

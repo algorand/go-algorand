@@ -34,7 +34,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -358,14 +357,6 @@ type accountInformationParams struct {
 	Exclude string `url:"exclude"`
 }
 
-// TransactionsByAddr returns all transactions for a PK [addr] in the [first,
-// last] rounds range.
-// Deprecated: This function is only used in internal tests (restClient_test.go)
-func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64) (response v1.TransactionList, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions", addr), transactionsByAddrParams{first, last, max})
-	return
-}
-
 // PendingTransactionsByAddrV2 returns all the pending transactions for an addr.
 func (client RestClient) PendingTransactionsByAddrV2(addr string, max uint64) (response generatedV2.PendingTransactionsResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
@@ -503,20 +494,6 @@ func (client RestClient) SuggestedParamsV2() (response generatedV2.TransactionPa
 func (client RestClient) SendRawTransactionV2(txn transactions.SignedTxn) (response generatedV2.PostTransactionsResponse, err error) {
 	err = client.post(&response, "/v2/transactions", protocol.Encode(&txn))
 	return
-}
-
-// SendRawTransactionGroup gets a SignedTxn group and broadcasts it to the network
-// Deprecated
-func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTxn) error {
-	// response is not terribly useful: it's the txid of the first transaction,
-	// which can be computed by the client anyway..
-	var enc []byte
-	for _, tx := range txgroup {
-		enc = append(enc, protocol.Encode(&tx)...)
-	}
-
-	var response v1.TransactionID
-	return client.post(&response, "/v1/transactions", enc)
 }
 
 // SendRawTransactionGroupV2 gets a SignedTxn group and broadcasts it to the network
