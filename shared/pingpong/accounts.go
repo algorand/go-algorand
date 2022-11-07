@@ -258,7 +258,7 @@ func (pps *WorkerState) integrateAccountInfo(addr string, ppa *pingPongAccount, 
 	// assets held
 	if ai.Assets != nil {
 		for _, holding := range *ai.Assets {
-			assetID := holding.AssetId
+			assetID := holding.AssetID
 			pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
 			if ppa.holdings == nil {
 				ppa.holdings = make(map[uint64]uint64)
@@ -439,7 +439,7 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 			}
 			if ai.Assets != nil {
 				for _, holding := range *ai.Assets {
-					assetID := holding.AssetId
+					assetID := holding.AssetID
 					pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
 					if acct.holdings == nil {
 						acct.holdings = make(map[uint64]uint64)

@@ -840,10 +840,10 @@ func TestAssetSend(t *testing.T) {
 	a.NotNil(info.Assets)
 	a.Equal(len(*info.Assets), 2)
 	for _, asset := range *info.Assets {
-		if asset.AssetId == frozenIdx {
+		if asset.AssetID == frozenIdx {
 			a.Equal(asset.Amount, uint64(0))
 			a.Equal(asset.IsFrozen, true)
-		} else if asset.AssetId == nonFrozenIdx {
+		} else if asset.AssetID == nonFrozenIdx {
 			a.Equal(asset.Amount, uint64(10))
 			a.Equal(asset.IsFrozen, false)
 		}
@@ -919,9 +919,9 @@ func TestAssetSend(t *testing.T) {
 	a.NotNil(info.Assets)
 	a.Equal(len(*info.Assets), 2)
 	for _, asset := range *info.Assets {
-		if asset.AssetId == frozenIdx {
+		if asset.AssetID == frozenIdx {
 			a.Equal(asset.Amount, uint64(95))
-		} else if asset.AssetId == nonFrozenIdx {
+		} else if asset.AssetID == nonFrozenIdx {
 			a.Equal(asset.Amount, uint64(95))
 		}
 	}
@@ -931,9 +931,9 @@ func TestAssetSend(t *testing.T) {
 	a.NotNil(info.Assets)
 	a.Equal(len(*info.Assets), 2)
 	for _, asset := range *info.Assets {
-		if asset.AssetId == frozenIdx {
+		if asset.AssetID == frozenIdx {
 			a.Equal(asset.Amount, uint64(5))
-		} else if asset.AssetId == nonFrozenIdx {
+		} else if asset.AssetID == nonFrozenIdx {
 			a.Equal(asset.Amount, uint64(5))
 		}
 	}
