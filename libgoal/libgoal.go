@@ -714,16 +714,6 @@ func (c *Client) AccountData(account string) (accountData basics.AccountData, er
 	return
 }
 
-// AssetInformation takes an asset's index and returns its information
-// Deprecated: Use AssetInformationV2
-func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.AssetInformation(index)
-	}
-	return
-}
-
 // AssetInformationV2 takes an asset's index and returns its information
 func (c *Client) AssetInformationV2(index uint64) (resp generatedV2.Asset, err error) {
 	algod, err := c.ensureAlgodClient()
@@ -782,16 +772,6 @@ func (c *Client) GetApplicationBoxByName(index uint64, name string) (resp genera
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.GetApplicationBoxByName(index, name)
-	}
-	return
-}
-
-// TransactionInformation takes an address and associated txid and return its information
-// Deprecated: Use PendingTransactionInformationV2
-func (c *Client) TransactionInformation(addr, txid string) (resp v1.Transaction, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.TransactionInformation(addr, txid)
 	}
 	return
 }

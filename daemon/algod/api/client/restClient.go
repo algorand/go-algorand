@@ -367,13 +367,6 @@ func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64
 	return
 }
 
-// PendingTransactionsByAddr returns all the pending transactions for a PK [addr].
-// Deprecated: Use v2 API
-func (client RestClient) PendingTransactionsByAddr(addr string, max uint64) (response v1.PendingTransactions, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
-	return
-}
-
 // PendingTransactionsByAddrV2 returns all the pending transactions for an addr.
 func (client RestClient) PendingTransactionsByAddrV2(addr string, max uint64) (response generatedV2.PendingTransactionsResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
@@ -385,20 +378,6 @@ func (client RestClient) RawPendingTransactionsByAddrV2(addr string, max uint64)
 	var blob Blob
 	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/transactions/pending", addr), pendingTransactionsParams{max, "msgpack"})
 	response = blob
-	return
-}
-
-// AssetInformation gets the AssetInformationResponse associated with the passed asset index
-// Deprecated: Use v2 API
-func (client RestClient) AssetInformation(index uint64) (response v1.AssetParams, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/asset/%d", index), nil)
-	return
-}
-
-// Assets gets up to max assets with maximum asset index assetIdx
-// Deprecated: Use v2 API
-func (client RestClient) Assets(assetIdx, max uint64) (response v1.AssetList, err error) {
-	err = client.get(&response, "/v1/assets", assetsParams{assetIdx, max})
 	return
 }
 
@@ -460,14 +439,6 @@ func (client RestClient) RawAccountInformationV2(address string) (response []byt
 	var blob Blob
 	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s", address), rawFormat{Format: "msgpack"})
 	response = blob
-	return
-}
-
-// TransactionInformation gets information about a specific transaction involving a specific account
-// Deprecated
-func (client RestClient) TransactionInformation(accountAddress, transactionID string) (response v1.Transaction, err error) {
-	transactionID = stripTransaction(transactionID)
-	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transaction/%s", accountAddress, transactionID), nil)
 	return
 }
 

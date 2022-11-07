@@ -548,9 +548,10 @@ int 1
 	resp, err := client.GetPendingTransactions(2)
 	a.NoError(err)
 	a.Equal(uint64(0), resp.TotalTransactions)
-	txinfo, err := client.TransactionInformation(signedTxn.Txn.Sender.String(), txid)
+	txinfo, err := client.PendingTransactionInformationV2(txid)
 	a.NoError(err)
-	a.True(txinfo.ConfirmedRound != 0)
+	a.NotNil(txinfo.ConfirmedRound)
+	a.NotZero(*txInfo.ConfirmedRound)
 
 	// check creator's balance record for the app entry and the state changes
 	ad, err = client.AccountData(creator)
