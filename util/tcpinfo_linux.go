@@ -50,7 +50,7 @@ func getConnTCPInfo(raw syscall.RawConn) (*TCPInfo, error) {
 		SndCwnd:    info.snd_cwnd, // Send congestion window
 		RcvWnd:     info.snd_wnd,  // "tp->snd_wnd, the receive window that the receiver has advertised to the sender."
 		Rate:       info.delivery_rate,
-		AppLimited: bool(info.app_limited >> 7), // get first bit
+		AppLimited: bool((info.app_limited >> 7) != 0), // get first bit
 	}, nil
 }
 
