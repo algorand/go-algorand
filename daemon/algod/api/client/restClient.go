@@ -415,13 +415,6 @@ func (client RestClient) ApplicationInformation(index uint64) (response generate
 	return
 }
 
-// AccountInformation also gets the AccountInformationResponse associated with the passed address
-// Deprecated: Use v2 API
-func (client RestClient) AccountInformation(address string) (response v1.Account, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/account/%s", address), nil)
-	return
-}
-
 type applicationBoxesParams struct {
 	Max uint64 `url:"max,omitempty"`
 }

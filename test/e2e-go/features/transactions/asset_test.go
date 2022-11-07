@@ -473,12 +473,6 @@ func TestAssetInformation(t *testing.T) {
 	a.NoError(err)
 
 	// There should be no assets to start with
-	// Note: This test uses a deprecated v1 API. The v2 API test is below.
-	info, err := client.AccountInformation(account0)
-	a.NoError(err)
-	a.Equal(len(info.AssetParams), 0)
-
-	// There should be no assets to start with
 	info2, err := client.AccountInformationV2(account0, true)
 	a.NoError(err)
 	a.NotNil(info2.CreatedAssets)
@@ -498,16 +492,6 @@ func TestAssetInformation(t *testing.T) {
 	a.True(confirmed, "creating assets")
 
 	// Check that AssetInformation returns the correct AssetParams
-	// Note: This test uses a deprecated v1 API. The v2 API test is below.
-	info, err = client.AccountInformation(account0)
-	a.NoError(err)
-	for idx, cp := range info.AssetParams {
-		assetInfo, err := client.AssetInformation(idx)
-		a.NoError(err)
-		a.Equal(cp, assetInfo)
-	}
-
-	// Check that AssetInformationV2 returns the correct AssetParams
 	info2, err = client.AccountInformationV2(account0, true)
 	a.NoError(err)
 	a.NotNil(info2.CreatedAssets)
@@ -519,7 +503,8 @@ func TestAssetInformation(t *testing.T) {
 
 	// Destroy assets
 	txids = make(map[string]string)
-	for idx := range info.AssetParams {
+	for _, asset := range *info2.CreatedAssets {
+		idx := asset.Index
 		tx, err := client.MakeUnsignedAssetDestroyTx(idx)
 		txid, err := helperFillSignBroadcast(client, wh, manager, tx, err)
 		a.NoError(err)
