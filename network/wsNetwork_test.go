@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -2675,7 +2676,7 @@ func TestPreparePeerData(t *testing.T) {
 	}
 }
 
-func TestWebsocketNetworkTelemetryRTT(t *testing.T) {
+func TestWebsocketNetworkTelemetryTCP(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// start two networks and send 2 messages from A to B
@@ -2703,9 +2704,16 @@ func TestWebsocketNetworkTelemetryRTT(t *testing.T) {
 	peersB, _ = netB.peerSnapshot(peersB)
 	detailsB := netB.getPeerConnectionTelemetryDetails(time.Now(), peersB)
 	require.Len(t, detailsA.IncomingPeers, 1)
-	assert.NotZero(t, detailsA.IncomingPeers[0].RTT)
+	assert.NotZero(t, detailsA.IncomingPeers[0].TCP.RTT)
 	require.Len(t, detailsB.OutgoingPeers, 1)
-	assert.NotZero(t, detailsB.OutgoingPeers[0].RTT)
+	assert.NotZero(t, detailsB.OutgoingPeers[0].TCP.RTT)
+
+	pcdA, err := json.Marshal(detailsA)
+	assert.NoError(t, err)
+	pcdB, err := json.Marshal(detailsB)
+	assert.NoError(t, err)
+	t.Log("detailsA", string(pcdA))
+	t.Log("detailsB", string(pcdB))
 
 	// close connections
 	closeFunc()
@@ -2718,7 +2726,14 @@ func TestWebsocketNetworkTelemetryRTT(t *testing.T) {
 	detailsA = netA.getPeerConnectionTelemetryDetails(time.Now(), peersA)
 	detailsB = netB.getPeerConnectionTelemetryDetails(time.Now(), peersB)
 	require.Len(t, detailsA.IncomingPeers, 1)
-	assert.Zero(t, detailsA.IncomingPeers[0].RTT)
+	assert.Zero(t, detailsA.IncomingPeers[0].TCP.RTT)
 	require.Len(t, detailsB.OutgoingPeers, 1)
-	assert.Zero(t, detailsB.OutgoingPeers[0].RTT)
+	assert.Zero(t, detailsB.OutgoingPeers[0].TCP.RTT)
+
+	pcdA, err := json.Marshal(detailsA)
+	assert.NoError(t, err)
+	pcdB, err := json.Marshal(detailsB)
+	assert.NoError(t, err)
+	t.Log("closed detailsA", string(pcdA))
+	t.Log("closed detailsB", string(pcdB))
 }
