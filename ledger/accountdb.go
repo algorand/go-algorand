@@ -5351,12 +5351,8 @@ func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []ve
 
 	for _, commitData := range data {
 		verificationData := commitData.verificationData
-		f := func() error {
-			_, err = insertStmt.ExecContext(ctx, verificationData.TargetStateProofRound, protocol.Encode(&verificationData))
-			return err
-		}
+		_, err = insertStmt.ExecContext(ctx, verificationData.TargetStateProofRound, protocol.Encode(&verificationData))
 
-		err = db.Retry(f)
 		if err != nil {
 			return err
 		}
@@ -5366,11 +5362,8 @@ func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []ve
 }
 
 func deleteOldStateProofVerificationData(ctx context.Context, tx *sql.Tx, earliestTrackStateProofRound basics.Round) error {
-	f := func() error {
-		_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE targetstateproofround < ?", earliestTrackStateProofRound)
-		return err
-	}
-	return db.Retry(f)
+	_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE targetstateproofround < ?", earliestTrackStateProofRound)
+	return err
 }
 
 func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificationDbQueries, error) {
