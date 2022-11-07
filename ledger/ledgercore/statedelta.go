@@ -85,6 +85,8 @@ type KvValueDelta struct {
 }
 
 // StateDelta describes the delta between a given round to the previous round
+// If adding a new field not explicitly allocated by PopulateStateDelta, make sure to reset
+// it in .ReuseStateDelta to avoid dirty memory errors.
 type StateDelta struct {
 	// modified new accounts
 	Accts AccountDeltas
@@ -191,19 +193,26 @@ type AccountDeltas struct {
 	assetResourcesCache map[AccountAsset]int
 }
 
-// MakeStateDelta creates a new instance of StateDelta.
+// MakeStateDelta creates a new instance of StateDelta
 // hint is amount of transactions for evaluation, 2 * hint is for sender and receiver balance records.
 // This does not play well for AssetConfig and ApplicationCall transactions on scale
-func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, stateProofNext basics.Round) StateDelta {
-	return StateDelta{
-		Accts: MakeAccountDeltas(hint),
-		Txids: make(map[transactions.Txid]IncludedTransactions, hint),
-		// asset or application creation are considered as rare events so do not pre-allocate space for them
-		Hdr:                      hdr,
-		StateProofNext:           stateProofNext,
-		PrevTimestamp:            prevTimestamp,
-		initialTransactionsCount: hint,
-	}
+func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, stateProofNext basics.Round) (sd StateDelta) {
+	sd = StateDelta{}
+	sd.PopulateStateDelta(hdr, prevTimestamp, hint, stateProofNext)
+	return
+}
+
+// PopulateStateDelta populates an existing StateDelta struct.
+// Used as a helper for MakeStateDelta as well as for re-using already allocated structs from sync.Pool
+// Make sure to .Reset the struct before re-use
+func (sd *StateDelta) PopulateStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, stateProofNext basics.Round) {
+	sd.Accts = MakeAccountDeltas(hint)
+	sd.Txids = make(map[transactions.Txid]IncludedTransactions, hint)
+	// asset or application creation are considered as rare events so do not pre-allocate space for them
+	sd.Hdr = hdr
+	sd.StateProofNext = stateProofNext
+	sd.PrevTimestamp = prevTimestamp
+	sd.initialTransactionsCount = hint
 }
 
 // MakeAccountDeltas creates account delta
@@ -212,6 +221,16 @@ func MakeAccountDeltas(hint int) AccountDeltas {
 		Accts:      make([]BalanceRecord, 0, hint*2),
 		acctsCache: make(map[basics.Address]int, hint*2),
 	}
+}
+
+// ReuseStateDelta resets fields that aren't directly set by PopulateStateDelta
+func (sd *StateDelta) ReuseStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, stateProofNext basics.Round) {
+	sd.PopulateStateDelta(hdr, prevTimestamp, hint, stateProofNext)
+	// Reset values that aren't explicitly set by PopulateStateDelta
+	sd.Txleases = nil
+	sd.Creatables = nil
+	sd.KvMods = nil
+	sd.Totals = AccountTotals{}
 }
 
 // GetData lookups AccountData by address

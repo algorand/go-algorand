@@ -19,6 +19,7 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -91,6 +92,12 @@ type roundCowState struct {
 	// prevTotals contains the accounts totals for the previous round. It's being used to calculate the totals for the new round
 	// so that we could perform the validation test on these to ensure the block evaluator generate a valid changeset.
 	prevTotals ledgercore.AccountTotals
+}
+
+var childPool = sync.Pool{
+	New: func() interface{} {
+		return &roundCowState{}
+	},
 }
 
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto config.ConsensusParams, prevTimestamp int64, prevTotals ledgercore.AccountTotals, hint int) *roundCowState {
@@ -262,19 +269,34 @@ func (cb *roundCowState) SetStateProofNextRound(rnd basics.Round) {
 }
 
 func (cb *roundCowState) child(hint int) *roundCowState {
-	ch := roundCowState{
-		lookupParent: cb,
-		commitParent: cb,
-		proto:        cb.proto,
-		mods:         ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.StateProofNext),
-		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
+	ch := childPool.Get().(*roundCowState)
+	ch.lookupParent = cb
+	ch.commitParent = cb
+	ch.proto = cb.proto
+	ch.txnCount = uint64(0)
+	ch.prevTotals = ledgercore.AccountTotals{}
+	ch.mods.ReuseStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.StateProofNext)
+
+	if ch.sdeltas == nil {
+		ch.sdeltas = make(map[basics.Address]map[storagePtr]*storageDelta)
+	} else {
+		// reset sdeltas
+		for addr, sMap := range ch.sdeltas {
+			for ptr := range sMap {
+				delete(sMap, ptr)
+			}
+			delete(ch.sdeltas, addr)
+		}
 	}
 
 	if cb.compatibilityMode {
 		ch.compatibilityMode = cb.compatibilityMode
 		ch.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
+	} else {
+		ch.compatibilityMode = false
+		ch.compatibilityGetKeyCache = nil
 	}
-	return &ch
+	return ch
 }
 
 func (cb *roundCowState) commitToParent() {

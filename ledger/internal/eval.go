@@ -934,6 +934,8 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	var groupTxBytes int
 
 	cow := eval.state.child(len(txgroup))
+	defer childPool.Put(cow)
+
 	evalParams := logic.NewEvalParams(txgroup, &eval.proto, &eval.specials)
 
 	// Evaluate each transaction in the group
