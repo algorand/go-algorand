@@ -24,7 +24,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -166,11 +165,11 @@ func (c *Client) BroadcastTransaction(stx transactions.SignedTxn) (txid string, 
 	if err != nil {
 		return
 	}
-	resp, err := algod.SendRawTransaction(stx)
+	resp, err := algod.SendRawTransactionV2(stx)
 	if err != nil {
 		return
 	}
-	return resp.TxID, nil
+	return resp.TxId, nil
 }
 
 // BroadcastTransactionGroup broadcasts a signed transaction group to the network using algod
@@ -179,7 +178,7 @@ func (c *Client) BroadcastTransactionGroup(txgroup []transactions.SignedTxn) err
 	if err != nil {
 		return err
 	}
-	return algod.SendRawTransactionGroup(txgroup)
+	return algod.SendRawTransactionGroupV2(txgroup)
 }
 
 // SignAndBroadcastTransaction signs the unsigned transaction with keys from the default wallet, and broadcasts it
@@ -274,7 +273,7 @@ func (c *Client) MakeRegistrationTransactionWithGenesisID(part account.Participa
 		basics.Round(txnLastValid),
 		leaseBytes, includeStateProofKeys)
 
-	goOnlineTx.Header.GenesisID = params.GenesisID
+	goOnlineTx.Header.GenesisID = params.GenesisId
 
 	// Check if the protocol supports genesis hash
 	if config.Consensus[protocol.ConsensusFuture].SupportGenesisHash {
@@ -707,42 +706,32 @@ func (c *Client) MakeUnsignedAssetDestroyTx(index uint64) (transactions.Transact
 func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newManager *string, newReserve *string, newFreeze *string, newClawback *string) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
-	var ok bool
 
-	// If the creator was passed in blank, look up asset info by index
-	var params v1.AssetParams
-	if creator == "" {
-		params, err = c.AssetInformation(index)
-		if err != nil {
-			return tx, err
-		}
-	} else {
-		// Fetch the current state, to fill in as a template
-		current, err := c.AccountInformation(creator)
-		if err != nil {
-			return tx, err
-		}
+	asset, err := c.AssetInformationV2(index)
+	if err != nil {
+		return tx, err
+	}
+	params := asset.Params
 
-		params, ok = current.AssetParams[index]
-		if !ok {
-			return tx, fmt.Errorf("asset ID %d not found in account %s", index, creator)
-		}
+	// If creator was passed in, check that the asset params match.
+	if creator != "" && creator != params.Creator {
+		return tx, fmt.Errorf("creator %s does not match asset ID %d", creator, index)
 	}
 
 	if newManager == nil {
-		newManager = &params.ManagerAddr
+		newManager = params.Manager
 	}
 
 	if newReserve == nil {
-		newReserve = &params.ReserveAddr
+		newReserve = params.Reserve
 	}
 
 	if newFreeze == nil {
-		newFreeze = &params.FreezeAddr
+		newFreeze = params.Freeze
 	}
 
 	if newClawback == nil {
-		newClawback = &params.ClawbackAddr
+		newClawback = params.Clawback
 	}
 
 	tx.Type = protocol.AssetConfigTx

@@ -85,7 +85,7 @@ func broadcastTransactions(queueWg *sync.WaitGroup, fixture *fixtures.RestClient
 		if stxn == nil {
 			break
 		}
-		_, err := fixture.AlgodClient.SendRawTransaction(*stxn)
+		_, err := fixture.AlgodClient.SendRawTransactionV2(*stxn)
 		if err != nil {
 			handleError(err, "Error broadcastTransactions", errChan)
 		}
@@ -101,7 +101,7 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, fixture *fixtures.RestC
 		}
 		var err error
 
-		err = fixture.AlgodClient.SendRawTransactionGroup(stxns)
+		err = fixture.AlgodClient.SendRawTransactionGroupV2(stxns)
 		if err != nil {
 			handleError(err, "Error broadcastTransactionGroups", errChan)
 		}
@@ -239,7 +239,7 @@ func test5MAssets(t *testing.T, scenario int) {
 	// get the wallet account
 	wAcct := accountList[0].Address
 
-	suggestedParams, err := fixture.AlgodClient.SuggestedParams()
+	suggestedParams, err := fixture.AlgodClient.SuggestedParamsV2()
 	require.NoError(t, err)
 	var genesisHash crypto.Digest
 	copy(genesisHash[:], suggestedParams.GenesisHash)
@@ -249,6 +249,7 @@ func test5MAssets(t *testing.T, scenario int) {
 	ba := generateKeys(1)
 	baseAcct := ba[0]
 	sender, err := basics.UnmarshalChecksumAddress(wAcct)
+	require.NoError(t, err)
 	satxn := sendAlgoTransaction(t, 0, sender, baseAcct.pk, 1000000000000000, 1, genesisHash)
 	err = signAndBroadcastTransaction(0, &satxn, fixture.LibGoalClient, &fixture)
 	require.NoError(t, err)
@@ -542,7 +543,7 @@ func scenarioA(
 				ownAllAccount.pk,
 				tLife,
 				genesisHash,
-				basics.AssetIndex(asset.AssetId),
+				basics.AssetIndex(asset.AssetID),
 				ownAllAccount.pk,
 				uint64(0))
 
@@ -581,7 +582,7 @@ func scenarioA(
 				nacc.pk,
 				tLife,
 				genesisHash,
-				basics.AssetIndex(asset.AssetId),
+				basics.AssetIndex(asset.AssetID),
 				ownAllAccount.pk,
 				asset.Amount)
 			counter, txnGroup = queueTransaction(nacc.sk, assSend, txnChan, txnGrpChan, counter, txnGroup)
@@ -612,7 +613,7 @@ func scenarioA(
 			default:
 			}
 
-			assHold, err := fixture.AlgodClient.AccountAssetInformation(ownAllAccount.pk.String(), asset.AssetId)
+			assHold, err := fixture.AlgodClient.AccountAssetInformation(ownAllAccount.pk.String(), asset.AssetID)
 			require.NoError(t, err)
 
 			tAssetAmt += assHold.AssetHolding.Amount
@@ -1050,7 +1051,7 @@ func signAndBroadcastTransaction(
 		return err
 	}
 
-	_, err = fixture.AlgodClient.SendRawTransaction(stxn)
+	_, err = fixture.AlgodClient.SendRawTransactionV2(stxn)
 	if err != nil {
 		return err
 	}

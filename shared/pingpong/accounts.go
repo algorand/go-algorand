@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/passphrase"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -163,10 +163,10 @@ func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
 		pps.cinfo.OptIns = make(map[uint64][]string, pps.cfg.NumAsset+pps.cfg.NumApp)
 	}
 	if pps.cinfo.AssetParams == nil {
-		pps.cinfo.AssetParams = make(map[uint64]v1.AssetParams, pps.cfg.NumAsset)
+		pps.cinfo.AssetParams = make(map[uint64]generated.AssetParams, pps.cfg.NumAsset)
 	}
 	if pps.cinfo.AppParams == nil {
-		pps.cinfo.AppParams = make(map[uint64]v1.AppParams, pps.cfg.NumApp)
+		pps.cinfo.AppParams = make(map[uint64]generated.ApplicationParams, pps.cfg.NumApp)
 	}
 
 	sources := make([]<-chan *crypto.SignatureSecrets, 0, 2)
@@ -197,9 +197,7 @@ func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
 				srcAcctPresent = true
 			}
 
-			// TODO: switch to v2 API
-			//ai, err := ac.AccountInformationV2(addr, false)
-			ai, err := ac.AccountInformation(addr)
+			ai, err := ac.AccountInformationV2(addr, true)
 			if err != nil {
 				return err
 			}
@@ -247,36 +245,48 @@ func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
 	return
 }
 
-func (pps *WorkerState) integrateAccountInfo(addr string, ppa *pingPongAccount, ai v1.Account) {
+func (pps *WorkerState) integrateAccountInfo(addr string, ppa *pingPongAccount, ai generated.Account) {
 	ppa.balance = ai.Amount
 	// assets this account has created
-	for assetID, ap := range ai.AssetParams {
-		pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
-		pps.cinfo.AssetParams[assetID] = ap
+	if ai.CreatedAssets != nil {
+		for _, ap := range *ai.CreatedAssets {
+			assetID := ap.Index
+			pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
+			pps.cinfo.AssetParams[assetID] = ap.Params
+		}
 	}
 	// assets held
-	for assetID, holding := range ai.Assets {
-		pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
-		if ppa.holdings == nil {
-			ppa.holdings = make(map[uint64]uint64)
+	if ai.Assets != nil {
+		for _, holding := range *ai.Assets {
+			assetID := holding.AssetID
+			pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
+			if ppa.holdings == nil {
+				ppa.holdings = make(map[uint64]uint64)
+			}
+			ppa.holdings[assetID] = holding.Amount
 		}
-		ppa.holdings[assetID] = holding.Amount
 	}
 	// apps created by this account
-	for appID, ap := range ai.AppParams {
-		pps.cinfo.OptIns[appID] = uniqueAppend(pps.cinfo.OptIns[appID], addr)
-		pps.cinfo.AppParams[appID] = ap
+	if ai.CreatedApps != nil {
+		for _, ap := range *ai.CreatedApps {
+			appID := ap.Id
+			pps.cinfo.OptIns[appID] = uniqueAppend(pps.cinfo.OptIns[appID], addr)
+			pps.cinfo.AppParams[appID] = ap.Params
+		}
 	}
 	// apps opted into
-	for appID := range ai.AppLocalStates {
-		pps.cinfo.OptIns[appID] = uniqueAppend(pps.cinfo.OptIns[appID], addr)
+	if ai.AppsLocalState != nil {
+		for _, localState := range *ai.AppsLocalState {
+			appID := localState.Id
+			pps.cinfo.OptIns[appID] = uniqueAppend(pps.cinfo.OptIns[appID], addr)
+		}
 	}
 }
 
 type assetopti struct {
 	assetID uint64
-	params  v1.AssetParams // TODO: switch to v2 API
-	optins  []string       // addr strings
+	params  generated.AssetParams
+	optins  []string // addr strings
 }
 
 type assetSet []assetopti
@@ -301,7 +311,7 @@ func (as *assetSet) Swap(a, b int) {
 
 func (pps *WorkerState) prepareAssets(client *libgoal.Client) (err error) {
 	if pps.cinfo.AssetParams == nil {
-		pps.cinfo.AssetParams = make(map[uint64]v1.AssetParams)
+		pps.cinfo.AssetParams = make(map[uint64]generated.AssetParams)
 	}
 	if pps.cinfo.OptIns == nil {
 		pps.cinfo.OptIns = make(map[uint64][]string)
@@ -326,7 +336,7 @@ func (pps *WorkerState) prepareAssets(client *libgoal.Client) (err error) {
 	sort.Sort(&ta)
 	if len(assets) > int(pps.cfg.NumAsset) {
 		assets = assets[:pps.cfg.NumAsset]
-		nap := make(map[uint64]v1.AssetParams, pps.cfg.NumAsset)
+		nap := make(map[uint64]generated.AssetParams, pps.cfg.NumAsset)
 		for _, asset := range assets {
 			nap[asset.assetID] = asset.params
 		}
@@ -407,30 +417,35 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 		newAssetAddrs[addr] = acct
 	}
 	// wait for new assets to be created, fetch account data for them
-	newAssets := make(map[uint64]v1.AssetParams, assetsNeeded)
+	newAssets := make(map[uint64]generated.AssetParams, assetsNeeded)
 	timeout := time.Now().Add(10 * time.Second)
 	for len(newAssets) < assetsNeeded {
 		for addr, acct := range newAssetAddrs {
-			// TODO: switch to v2 API
-			ai, err := client.AccountInformation(addr)
+			ai, err := client.AccountInformationV2(addr, true)
 			if err != nil {
 				fmt.Printf("Warning: cannot lookup source account after assets creation")
 				time.Sleep(1 * time.Second)
 				continue
 			}
-			for assetID, ap := range ai.AssetParams {
-				pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
-				_, has := pps.cinfo.AssetParams[assetID]
-				if !has {
-					newAssets[assetID] = ap
+			if ai.CreatedAssets != nil {
+				for _, ap := range *ai.CreatedAssets {
+					assetID := ap.Index
+					pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
+					_, has := pps.cinfo.AssetParams[assetID]
+					if !has {
+						newAssets[assetID] = ap.Params
+					}
 				}
 			}
-			for assetID, holding := range ai.Assets {
-				pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
-				if acct.holdings == nil {
-					acct.holdings = make(map[uint64]uint64)
+			if ai.Assets != nil {
+				for _, holding := range *ai.Assets {
+					assetID := holding.AssetID
+					pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
+					if acct.holdings == nil {
+						acct.holdings = make(map[uint64]uint64)
+					}
+					acct.holdings[assetID] = holding.Amount
 				}
-				acct.holdings[assetID] = holding.Amount
 			}
 		}
 		if time.Now().After(timeout) {
@@ -737,7 +752,7 @@ func getProto(client *libgoal.Client) (config.ConsensusParams, error) {
 // ensure that cfg.NumPartAccounts have cfg.NumAppOptIn opted in selecting from cfg.NumApp
 func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 	if pps.cinfo.AppParams == nil {
-		pps.cinfo.AppParams = make(map[uint64]v1.AppParams)
+		pps.cinfo.AppParams = make(map[uint64]generated.ApplicationParams)
 	}
 
 	if pps.cinfo.OptIns == nil {
@@ -792,27 +807,28 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 
 	// update pps.cinfo.AppParams to ensure newly created apps are present
 	for _, addr := range newAppAddrs {
-		var ai v1.Account
+		var ai generated.Account
 		for {
-			ai, err = client.AccountInformation(addr)
+			ai, err = client.AccountInformationV2(addr, true)
 			if err != nil {
 				fmt.Printf("Warning, cannot lookup source account")
 				return
 			}
-			if len(ai.AppParams) >= appsPerAddr[addr] {
+			if ai.CreatedApps != nil && len(*ai.CreatedApps) >= appsPerAddr[addr] {
 				break
 			}
 			waitForNextRoundOrSleep(client, 500*time.Millisecond)
 			// TODO : if we fail here for too long, we should re-create new accounts, etc.
 		}
-		ai, err = client.AccountInformation(addr)
+		ai, err = client.AccountInformationV2(addr, true)
 		if err != nil {
 			return
 		}
 
-		for appID, ap := range ai.AppParams {
+		for _, ap := range *ai.CreatedApps {
+			appID := ap.Id
 			pps.cinfo.OptIns[appID] = uniqueAppend(pps.cinfo.OptIns[appID], addr)
-			pps.cinfo.AppParams[appID] = ap
+			pps.cinfo.AppParams[appID] = ap.Params
 		}
 	}
 
