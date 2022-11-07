@@ -152,7 +152,7 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 
 	blk, err := sClient.BookkeepingBlock(latestRound)
 	a.NoError(err)
-	a.Equal(blk.CurrentProtocol, protocolCheck)
+	a.Equal(string(blk.CurrentProtocol), protocolCheck)
 
 	sendMoneyTxn := fixture.SendMoneyAndWait(latestRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
 
