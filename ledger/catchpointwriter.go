@@ -26,7 +26,7 @@ import (
 	"path/filepath"
 
 	"github.com/algorand/msgp/msgp"
-	
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
