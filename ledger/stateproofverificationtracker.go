@@ -117,25 +117,25 @@ func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitConte
 	defer spt.stateProofVerificationMu.RUnlock()
 
 	lastDataToCommitIndex := spt.committedRoundToLatestCommitDataIndex(dcc.newBase)
-	dcc.stateProofVerificationCommitData = make([]verificationCommitData, lastDataToCommitIndex+1)
-	copy(dcc.stateProofVerificationCommitData, spt.trackedCommitData[:lastDataToCommitIndex+1])
+	dcc.spvCommitData = make([]verificationCommitData, lastDataToCommitIndex+1)
+	copy(dcc.spvCommitData, spt.trackedCommitData[:lastDataToCommitIndex+1])
 
-	dcc.stateProofVerificationLatestDeleteDataIndex = spt.committedRoundToLatestDeleteDataIndex(dcc.newBase)
-	if dcc.stateProofVerificationLatestDeleteDataIndex > -1 {
-		dcc.stateProofVerificationEarliestTrackStateProofRound = spt.trackedDeleteData[dcc.stateProofVerificationLatestDeleteDataIndex].stateProofNextRound
+	dcc.spvLatestDeleteDataIndex = spt.committedRoundToLatestDeleteDataIndex(dcc.newBase)
+	if dcc.spvLatestDeleteDataIndex > -1 {
+		dcc.spvEarliestTrackStateProofRound = spt.trackedDeleteData[dcc.spvLatestDeleteDataIndex].stateProofNextRound
 	}
 
 	return nil
 }
 
 func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
-	err = insertStateProofVerificationData(ctx, tx, dcc.stateProofVerificationCommitData)
+	err = insertStateProofVerificationData(ctx, tx, dcc.spvCommitData)
 	if err != nil {
 		return err
 	}
 
-	if dcc.stateProofVerificationLatestDeleteDataIndex > -1 {
-		err = deleteOldStateProofVerificationData(ctx, tx, dcc.stateProofVerificationEarliestTrackStateProofRound)
+	if dcc.spvLatestDeleteDataIndex > -1 {
+		err = deleteOldStateProofVerificationData(ctx, tx, dcc.spvEarliestTrackStateProofRound)
 	}
 
 	return err
@@ -146,8 +146,8 @@ func (spt *stateProofVerificationTracker) postCommit(_ context.Context, dcc *def
 	spt.stateProofVerificationMu.Lock()
 	defer spt.stateProofVerificationMu.Unlock()
 
-	spt.trackedCommitData = spt.trackedCommitData[len(dcc.stateProofVerificationCommitData):]
-	spt.trackedDeleteData = spt.trackedDeleteData[dcc.stateProofVerificationLatestDeleteDataIndex+1:]
+	spt.trackedCommitData = spt.trackedCommitData[len(dcc.spvCommitData):]
+	spt.trackedDeleteData = spt.trackedDeleteData[dcc.spvLatestDeleteDataIndex+1:]
 }
 
 func (spt *stateProofVerificationTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
