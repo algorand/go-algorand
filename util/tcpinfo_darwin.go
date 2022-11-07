@@ -22,11 +22,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func getConnRTT(raw syscall.RawConn) (*RTTInfo, error) {
-	var info *unix.TCPInfo
+func getConnTCPInfo(raw syscall.RawConn) (*TCPInfo, error) {
+	var info *unix.TCPConnectionInfo
 	var getSockoptErr error
 	err := raw.Control(func(fd uintptr) {
-		info, getSockoptErr = unix.GetsockoptTCPInfo(int(fd), unix.IPPROTO_TCP, unix.TCP_INFO)
+		info, getSockoptErr = unix.GetsockoptTCPConnectionInfo(int(fd), unix.IPPROTO_TCP, unix.TCP_CONNECTION_INFO)
 	})
 	if err != nil {
 		return nil, err
@@ -35,10 +35,15 @@ func getConnRTT(raw syscall.RawConn) (*RTTInfo, error) {
 		return nil, getSockoptErr
 	}
 	if info == nil {
-		return nil, ErrNoTCPInfo
+		return nil, ErrTCPInfoNull
 	}
-	return &RTTInfo{
-		RTT:    info.Rtt,
-		RTTVar: info.Rttvar,
+	return &TCPInfo{
+		RTT:     info.Srtt,
+		RTTVar:  info.Rttvar,
+		SndMSS:  info.Maxseg, // MSS is the same for snd/rcv according bsd/netinet/tcp_usrreq.c
+		RcvMSS:  info.Maxseg,
+		SndCwnd: info.Snd_cwnd, // Send congestion window
+		SndWnd:  info.Snd_wnd,  // Advertised send window
+		RcvWnd:  info.Rcv_wnd,  // Advertised recv window
 	}, nil
 }

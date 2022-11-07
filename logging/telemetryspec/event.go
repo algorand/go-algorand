@@ -18,6 +18,8 @@ package telemetryspec
 
 import (
 	"time"
+
+	"github.com/algorand/go-algorand/util"
 )
 
 // Telemetry Events
@@ -302,9 +304,8 @@ type PeerConnectionDetails struct {
 	MessageDelay int64 `json:",omitempty"`
 	// DuplicateFilterCount is the number of times this peer has sent us a message hash to filter that it had already sent before.
 	DuplicateFilterCount uint64
-	// RTT and RTTVar are latency observations from TCP.
-	RTT    uint32 `json:",omitempty"`
-	RTTVar uint32 `json:",omitempty"`
+	// TCPInfo provides connection measurements from TCP.
+	TCP util.TCPInfo `json:",omitempty"`
 }
 
 // CatchpointGenerationEvent event

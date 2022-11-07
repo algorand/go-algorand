@@ -14,31 +14,13 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
+//go:build !linux && !darwin
+// +build !linux,!darwin
+
 package util
 
-import (
-	"syscall"
+import "syscall"
 
-	"golang.org/x/sys/unix"
-)
-
-func getConnRTT(raw syscall.RawConn) (*RTTInfo, error) {
-	var info *unix.TCPConnectionInfo
-	var getSockoptErr error
-	err := raw.Control(func(fd uintptr) {
-		info, getSockoptErr = unix.GetsockoptTCPConnectionInfo(int(fd), unix.IPPROTO_TCP, unix.TCP_CONNECTION_INFO)
-	})
-	if err != nil {
-		return nil, err
-	}
-	if getSockoptErr != nil {
-		return nil, getSockoptErr
-	}
-	if info == nil {
-		return nil, ErrNoTCPInfo
-	}
-	return &RTTInfo{
-		RTT:    info.Srtt,
-		RTTVar: info.Rttvar,
-	}, nil
+func getConnTCPInfo(conn syscall.RawConn) (*RTTInfo, error) {
+	return nil, ErrTCPInfoUnsupported
 }
