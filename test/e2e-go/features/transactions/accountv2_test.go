@@ -205,7 +205,7 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(1), value.Uint)
 
-	txInfo, err := fixture.LibGoalClient.PendingTransactionInformationV2(txid)
+	txInfo, err := fixture.LibGoalClient.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(txInfo.ConfirmedRound)
 	a.NotZero(*txInfo.ConfirmedRound)
@@ -233,7 +233,7 @@ int 1
 	resp, err := client.GetPendingTransactions(2)
 	a.NoError(err)
 	a.Equal(uint64(0), resp.TotalTransactions)
-	txinfo, err := client.PendingTransactionInformationV2(txid)
+	txinfo, err := client.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(txinfo.ConfirmedRound)
 	a.True(*txinfo.ConfirmedRound != 0)
@@ -278,7 +278,7 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(1), value.Uint)
 
-	txInfo, err = fixture.LibGoalClient.PendingTransactionInformationV2(txid)
+	txInfo, err = fixture.LibGoalClient.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(txInfo.ConfirmedRound)
 	a.NotZero(*txInfo.ConfirmedRound)
@@ -328,7 +328,7 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(3), value.Uint)
 
-	txInfo, err = fixture.LibGoalClient.PendingTransactionInformationV2(txid)
+	txInfo, err = fixture.LibGoalClient.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(txInfo.ConfirmedRound)
 	a.NotZero(*txInfo.ConfirmedRound)
@@ -510,7 +510,7 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(1), value.Uint)
 
-	txInfo, err := fixture.LibGoalClient.PendingTransactionInformationV2(txid)
+	txInfo, err := fixture.LibGoalClient.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(txInfo.ConfirmedRound)
 	a.NotZero(*txInfo.ConfirmedRound)
@@ -548,7 +548,7 @@ int 1
 	resp, err := client.GetPendingTransactions(2)
 	a.NoError(err)
 	a.Equal(uint64(0), resp.TotalTransactions)
-	txinfo, err := client.PendingTransactionInformationV2(txid)
+	txinfo, err := client.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(txinfo.ConfirmedRound)
 	a.NotZero(*txInfo.ConfirmedRound)
@@ -593,7 +593,7 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(1), value.Uint)
 
-	txInfo, err = fixture.LibGoalClient.PendingTransactionInformationV2(txid)
+	txInfo, err = fixture.LibGoalClient.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(txInfo.ConfirmedRound)
 	a.NotZero(*txInfo.ConfirmedRound)
@@ -644,7 +644,7 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(3), value.Uint)
 
-	txInfo, err = fixture.LibGoalClient.PendingTransactionInformationV2(txid)
+	txInfo, err = fixture.LibGoalClient.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(txInfo.ConfirmedRound)
 	a.NotZero(*txInfo.ConfirmedRound)

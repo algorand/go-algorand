@@ -165,7 +165,7 @@ func (c *Client) BroadcastTransaction(stx transactions.SignedTxn) (txid string, 
 	if err != nil {
 		return
 	}
-	resp, err := algod.SendRawTransactionV2(stx)
+	resp, err := algod.SendRawTransaction(stx)
 	if err != nil {
 		return
 	}
@@ -178,7 +178,7 @@ func (c *Client) BroadcastTransactionGroup(txgroup []transactions.SignedTxn) err
 	if err != nil {
 		return err
 	}
-	return algod.SendRawTransactionGroupV2(txgroup)
+	return algod.SendRawTransactionGroup(txgroup)
 }
 
 // SignAndBroadcastTransaction signs the unsigned transaction with keys from the default wallet, and broadcasts it
@@ -710,14 +710,14 @@ func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newMana
 	// If the creator was passed in blank, look up asset info by index
 	var params generated.AssetParams
 	if creator == "" {
-		asset, err := c.AssetInformationV2(index)
+		asset, err := c.AssetInformation(index)
 		if err != nil {
 			return tx, err
 		}
 		params = asset.Params
 	} else {
 		// Fetch the current state, to fill in as a template
-		current, err := c.AccountInformationV2(creator, true)
+		current, err := c.AccountInformation(creator, true)
 		if err != nil {
 			return tx, err
 		}

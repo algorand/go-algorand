@@ -480,7 +480,7 @@ var listCmd = &cobra.Command{
 
 		// For each address, request information about it from algod
 		for _, addr := range addrs {
-			response, _ := client.AccountInformationV2(addr.Addr, true)
+			response, _ := client.AccountInformation(addr.Addr, true)
 			// it's okay to proceed without algod info
 
 			// Display this information to the user
@@ -516,7 +516,7 @@ var infoCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformationV2(accountAddress, true)
+		response, err := client.AccountInformation(accountAddress, true)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -604,7 +604,7 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 			fmt.Fprintf(report, "\tID %d\n", assetHolding.AssetId)
 			continue
 		}
-		assetParams, err := client.AssetInformationV2(assetHolding.AssetId)
+		assetParams, err := client.AssetInformation(assetHolding.AssetId)
 		if err != nil {
 			hasError = true
 			fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", assetHolding.AssetId, address, err)
@@ -706,7 +706,7 @@ var balanceCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformationV2(accountAddress, false)
+		response, err := client.AccountInformation(accountAddress, false)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -751,7 +751,7 @@ var rewardsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformationV2(accountAddress, false)
+		response, err := client.AccountInformation(accountAddress, false)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -1126,7 +1126,7 @@ var listParticipationKeysCmd = &cobra.Command{
 		fmt.Printf(rowFormat, "Registered", "Account", "ParticipationID", "Last Used", "First round", "Last round")
 		for _, part := range parts {
 			onlineInfoStr := "unknown"
-			onlineAccountInfo, err := client.AccountInformationV2(part.Address, false)
+			onlineAccountInfo, err := client.AccountInformation(part.Address, false)
 			if err == nil {
 				votingBytes := part.Key.VoteParticipationKey
 				vrfBytes := part.Key.SelectionParticipationKey

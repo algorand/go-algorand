@@ -461,7 +461,7 @@ func TestAccountBalance(t *testing.T) {
 	_, err = waitForTransaction(t, testClient, someAddress, tx.ID().String(), 30*time.Second)
 	a.NoError(err)
 
-	account, err := testClient.AccountInformationV2(toAddress, false)
+	account, err := testClient.AccountInformation(toAddress, false)
 	a.NoError(err)
 	a.Equal(account.AmountWithoutPendingRewards, uint64(100000))
 	a.Truef(account.Amount >= 100000, "account must have received money, and account information endpoint must print it")
@@ -528,7 +528,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 	_, err = waitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
 	a.NoError(err)
 
-	account, err := testClient.AccountInformationV2(someAddress, false)
+	account, err := testClient.AccountInformation(someAddress, false)
 	a.NoError(err)
 	a.Equal(randomVotePKStr, string(account.Participation.VoteParticipationKey), "API must print correct root voting key")
 	a.Equal(randomSelPKStr, string(account.Participation.SelectionParticipationKey), "API must print correct vrf key")
@@ -952,7 +952,7 @@ return
 	a.NoError(err)
 
 	// get app ID
-	submittedAppCreateTxn, err := testClient.PendingTransactionInformationV2(appCreateTxID)
+	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
 	a.NoError(err)
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
@@ -976,7 +976,7 @@ return
 	a.NoError(err)
 
 	// verify pending txn info of outer txn
-	submittedAppCallTxn, err := testClient.PendingTransactionInformationV2(appCallTxnTxID)
+	submittedAppCallTxn, err := testClient.PendingTransactionInformation(appCallTxnTxID)
 	a.NoError(err)
 	a.Nil(submittedAppCallTxn.ApplicationIndex)
 	a.Nil(submittedAppCallTxn.AssetIndex)
@@ -990,7 +990,7 @@ return
 	createdAssetID := *innerTxn.AssetIndex
 	a.Greater(createdAssetID, uint64(0))
 
-	createdAssetInfo, err := testClient.AssetInformationV2(createdAssetID)
+	createdAssetInfo, err := testClient.AssetInformation(createdAssetID)
 	a.NoError(err)
 	a.Equal(createdAssetID, createdAssetInfo.Index)
 	a.Equal(createdAppID.Address().String(), createdAssetInfo.Params.Creator)
@@ -1071,7 +1071,7 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	_, err = waitForTransaction(t, testClient, someAddress, txID, 120*time.Second)
 	a.NoError(err)
 
-	account, err := testClient.AccountInformationV2(someAddress, false)
+	account, err := testClient.AccountInformation(someAddress, false)
 	a.NoError(err)
 	a.NotNil(account.Participation.StateProofKey)
 
@@ -1168,7 +1168,7 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 	_, err = waitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
 	a.NoError(err)
 
-	account, err := testClient.AccountInformationV2(someAddress, false)
+	account, err := testClient.AccountInformation(someAddress, false)
 	a.NoError(err)
 	a.Nil(account.Participation.StateProofKey)
 }
@@ -1258,7 +1258,7 @@ end:
 	a.NoError(err)
 
 	// get app ID
-	submittedAppCreateTxn, err := testClient.PendingTransactionInformationV2(appCreateTxID)
+	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
 	a.NoError(err)
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)

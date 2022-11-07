@@ -357,22 +357,22 @@ type accountInformationParams struct {
 	Exclude string `url:"exclude"`
 }
 
-// PendingTransactionsByAddrV2 returns all the pending transactions for an addr.
-func (client RestClient) PendingTransactionsByAddrV2(addr string, max uint64) (response generatedV2.PendingTransactionsResponse, err error) {
+// PendingTransactionsByAddr returns all the pending transactions for an addr.
+func (client RestClient) PendingTransactionsByAddr(addr string, max uint64) (response generatedV2.PendingTransactionsResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
 	return
 }
 
-// RawPendingTransactionsByAddrV2 returns all the pending transactions for an addr in raw msgpack format.
-func (client RestClient) RawPendingTransactionsByAddrV2(addr string, max uint64) (response []byte, err error) {
+// RawPendingTransactionsByAddr returns all the pending transactions for an addr in raw msgpack format.
+func (client RestClient) RawPendingTransactionsByAddr(addr string, max uint64) (response []byte, err error) {
 	var blob Blob
 	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/transactions/pending", addr), pendingTransactionsParams{max, "msgpack"})
 	response = blob
 	return
 }
 
-// AssetInformationV2 gets the AssetInformationResponse associated with the passed asset index
-func (client RestClient) AssetInformationV2(index uint64) (response generatedV2.Asset, err error) {
+// AssetInformation gets the AssetInformationResponse associated with the passed asset index
+func (client RestClient) AssetInformation(index uint64) (response generatedV2.Asset, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/assets/%d", index), nil)
 	return
 }
@@ -404,8 +404,8 @@ func (client RestClient) GetApplicationBoxByName(appID uint64, name string) (res
 	return
 }
 
-// AccountInformationV2 gets the AccountData associated with the passed address
-func (client RestClient) AccountInformationV2(address string, includeCreatables bool) (response generatedV2.Account, err error) {
+// AccountInformation gets the AccountData associated with the passed address
+func (client RestClient) AccountInformation(address string, includeCreatables bool) (response generatedV2.Account, err error) {
 	var infoParams accountInformationParams
 	if includeCreatables {
 		infoParams = accountInformationParams{Exclude: "none", Format: "json"}
@@ -424,15 +424,15 @@ func (blob *Blob) SetBytes(b []byte) {
 	*blob = b
 }
 
-// RawAccountInformationV2 gets the raw AccountData associated with the passed address
-func (client RestClient) RawAccountInformationV2(address string) (response []byte, err error) {
+// RawAccountInformation gets the raw AccountData associated with the passed address
+func (client RestClient) RawAccountInformation(address string) (response []byte, err error) {
 	var blob Blob
 	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s", address), rawFormat{Format: "msgpack"})
 	response = blob
 	return
 }
 
-// PendingTransactionInformationV2 gets information about a recently issued
+// PendingTransactionInformation gets information about a recently issued
 // transaction.  There are several cases when this might succeed:
 //
 // - transaction committed (CommittedRound > 0)
@@ -441,14 +441,14 @@ func (client RestClient) RawAccountInformationV2(address string) (response []byt
 //
 // Or the transaction may have happened sufficiently long ago that the
 // node no longer remembers it, and this will return an error.
-func (client RestClient) PendingTransactionInformationV2(transactionID string) (response generatedV2.PendingTransactionResponse, err error) {
+func (client RestClient) PendingTransactionInformation(transactionID string) (response generatedV2.PendingTransactionResponse, err error) {
 	transactionID = stripTransaction(transactionID)
 	err = client.get(&response, fmt.Sprintf("/v2/transactions/pending/%s", transactionID), nil)
 	return
 }
 
-// RawPendingTransactionInformationV2 gets information about a recently issued transaction in msgpack encoded bytes.
-func (client RestClient) RawPendingTransactionInformationV2(transactionID string) (response []byte, err error) {
+// RawPendingTransactionInformation gets information about a recently issued transaction in msgpack encoded bytes.
+func (client RestClient) RawPendingTransactionInformation(transactionID string) (response []byte, err error) {
 	transactionID = stripTransaction(transactionID)
 	var blob Blob
 	err = client.getRaw(&blob, fmt.Sprintf("/v2/transactions/pending/%s", transactionID), rawFormat{Format: "msgpack"})
@@ -484,20 +484,20 @@ func (client RestClient) RawAccountAssetInformation(accountAddress string, asset
 	return
 }
 
-// SuggestedParamsV2 gets the suggested transaction parameters
-func (client RestClient) SuggestedParamsV2() (response generatedV2.TransactionParametersResponse, err error) {
+// SuggestedParams gets the suggested transaction parameters
+func (client RestClient) SuggestedParams() (response generatedV2.TransactionParametersResponse, err error) {
 	err = client.get(&response, "/v2/transactions/params", nil)
 	return
 }
 
-// SendRawTransactionV2 gets a SignedTxn and broadcasts it to the network
-func (client RestClient) SendRawTransactionV2(txn transactions.SignedTxn) (response generatedV2.PostTransactionsResponse, err error) {
+// SendRawTransaction gets a SignedTxn and broadcasts it to the network
+func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response generatedV2.PostTransactionsResponse, err error) {
 	err = client.post(&response, "/v2/transactions", protocol.Encode(&txn))
 	return
 }
 
-// SendRawTransactionGroupV2 gets a SignedTxn group and broadcasts it to the network
-func (client RestClient) SendRawTransactionGroupV2(txgroup []transactions.SignedTxn) error {
+// SendRawTransactionGroup gets a SignedTxn group and broadcasts it to the network
+func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTxn) error {
 	// response is not terribly useful: it's the txid of the first transaction,
 	// which can be computed by the client anyway..
 	var enc []byte
