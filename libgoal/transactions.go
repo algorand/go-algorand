@@ -707,27 +707,15 @@ func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newMana
 	var tx transactions.Transaction
 	var err error
 
-	// If the creator was passed in blank, look up asset info by index
-	var params generated.AssetParams
-	if creator == "" {
-		asset, err := c.AssetInformationV2(index)
-		if err != nil {
-			return tx, err
-		}
-		params = asset.Params
-	} else {
-		// Fetch the current state, to fill in as a template
-		current, err := c.AccountAssetInformation(creator, index)
-		if err != nil {
-			return tx, err
-		}
+	asset, err := c.AssetInformationV2(index)
+	if err != nil {
+		return tx, err
+	}
+	params := asset.Params
 
-		// Search for the asset index in the CreatedAssets array
-		if current.CreatedAsset != nil {
-			params = *current.CreatedAsset
-		} else {
-			return tx, fmt.Errorf("asset ID %d not found in account %s", index, creator)
-		}
+	// If creator was passed in, check that the asset params match.
+	if creator != "" && creator != params.Creator {
+		return tx, fmt.Errorf("creator %s does not match asset ID %d", creator, index)
 	}
 
 	if newManager == nil {
