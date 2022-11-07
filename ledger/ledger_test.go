@@ -3205,7 +3205,6 @@ func TestCatchpointStateProofVerificationTracker(t *testing.T) {
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
-	defer l.Close()
 
 	firstStateProofDataConfirmedRound := proto.StateProofInterval
 	firstStateProofDataTargetRound := firstStateProofDataConfirmedRound + proto.StateProofInterval
@@ -3228,6 +3227,7 @@ func TestCatchpointStateProofVerificationTracker(t *testing.T) {
 	l.Close()
 
 	l, err = OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	defer l.Close()
 	require.NoError(t, err)
 
 	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
