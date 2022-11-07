@@ -35,7 +35,7 @@ func getConnTCPInfo(raw syscall.RawConn) (*TCPInfo, error) {
 		return nil, getSockoptErr
 	}
 	if info == nil {
-		return nil, ErrTCPInfoNull
+		return nil, ErrNoTCPInfo
 	}
 	return &TCPInfo{
 		RTT:     info.Srtt,

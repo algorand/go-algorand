@@ -18,6 +18,7 @@ package util
 
 import (
 	"syscall"
+	"unsafe"
 
 	"golang.org/x/sys/unix"
 )
@@ -28,7 +29,7 @@ func getConnTCPInfo(raw syscall.RawConn) (*TCPInfo, error) {
 
 	var errno syscall.Errno
 	err := raw.Control(func(fd uintptr) {
-		_, _, errno = unix.Syscall6(unix.SYS_GETSOCKETOPT, fd, unix.IPPROTO_TCP, unix.TCP_INFO,
+		_, _, errno = unix.Syscall6(unix.SYS_GETSOCKOPT, fd, unix.IPPROTO_TCP, unix.TCP_INFO,
 			uintptr(unsafe.Pointer(&info)), uintptr(unsafe.Pointer(&size)), 0)
 	})
 	if err != nil {
@@ -37,8 +38,8 @@ func getConnTCPInfo(raw syscall.RawConn) (*TCPInfo, error) {
 	if errno != 0 {
 		return nil, errno
 	}
-	if info == nil {
-		return nil, ErrTCPInfoNull
+	if info == linuxTCPInfo{} {
+		return nil, ErrNoTCPInfo
 	}
 	return &TCPInfo{
 		RTT:        info.rtt,
@@ -49,7 +50,7 @@ func getConnTCPInfo(raw syscall.RawConn) (*TCPInfo, error) {
 		SndCwnd:    info.snd_cwnd, // Send congestion window
 		RcvWnd:     info.snd_wnd,  // "tp->snd_wnd, the receive window that the receiver has advertised to the sender."
 		Rate:       info.delivery_rate,
-		AppLimited: info.app_limited >> 7, // get first bit
+		AppLimited: bool(info.app_limited >> 7), // get first bit
 	}, nil
 }
 

@@ -48,8 +48,8 @@ var (
 	ErrNotSyscallConn = errors.New("conn doesn't satisfy syscall.Conn")
 	// ErrTCPInfoUnsupported is reported if TCP information is not available for this platform.
 	ErrTCPInfoUnsupported = errors.New("GetConnRTT not supported on this platform")
-	// ErrTCPInfoNull is reported if getsockopt returned nil TCP info for some reason.
-	ErrTCPInfoNull = errors.New("getsockopt returned null TCP info")
+	// ErrNoTCPInfo is reported if getsockopt returned no TCP info for some reason.
+	ErrNoTCPInfo = errors.New("getsockopt returned no TCP info")
 )
 
 // GetConnTCPInfo returns statistics for a TCP connection collected by the
