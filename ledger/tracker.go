@@ -271,12 +271,14 @@ type deferredCommitContext struct {
 	stats       telemetryspec.AccountsUpdateMetrics
 	updateStats bool
 
-	// state proof verification deletion information
-	spvLatestDeleteDataIndex        int
-	spvEarliestTrackStateProofRound basics.Round
+	stateProofVerification struct {
+		// state proof verification deletion information
+		LatestDeleteDataIndex        int
+		EarliestTrackStateProofRound basics.Round
 
-	// state proof verification commit information
-	spvCommitData []verificationCommitData
+		// state proof verification commit information
+		CommitData []verificationCommitData
+	}
 }
 
 var errMissingAccountUpdateTracker = errors.New("initializeTrackerCaches : called without a valid accounts update tracker")
