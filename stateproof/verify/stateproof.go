@@ -147,11 +147,11 @@ func ValidateStateProof(verificationData *ledgercore.StateProofVerificationData,
 		return fmt.Errorf("rounds = %d: %w", proto.StateProofInterval, errStateProofNotEnabled)
 	}
 
-	if verificationData.TargetStateProofRound%basics.Round(proto.StateProofInterval) != 0 {
-		return fmt.Errorf("state proof at %d for non-multiple of %d: %w", verificationData.TargetStateProofRound, proto.StateProofInterval, errNotAtRightMultiple)
+	if verificationData.LastAttestedRound%basics.Round(proto.StateProofInterval) != 0 {
+		return fmt.Errorf("state proof at %d for non-multiple of %d: %w", verificationData.LastAttestedRound, proto.StateProofInterval, errNotAtRightMultiple)
 	}
 
-	acceptableWeight := calculateAcceptableStateProofWeight(verificationData.OnlineTotalWeight, &proto, verificationData.TargetStateProofRound, atRound, logging.Base())
+	acceptableWeight := calculateAcceptableStateProofWeight(verificationData.OnlineTotalWeight, &proto, verificationData.LastAttestedRound, atRound, logging.Base())
 	if stateProof.SignedWeight < acceptableWeight {
 		return fmt.Errorf("insufficient weight at round %d: %d < %d: %w",
 			atRound, stateProof.SignedWeight, acceptableWeight, errInsufficientWeight)
@@ -160,7 +160,7 @@ func ValidateStateProof(verificationData *ledgercore.StateProofVerificationData,
 	provenWeight, overflowed := basics.Muldiv(verificationData.OnlineTotalWeight.ToUint64(), uint64(proto.StateProofWeightThreshold), 1<<32)
 	if overflowed {
 		return fmt.Errorf("overflow computing provenWeight[%d]: %d * %d / (1<<32)",
-			verificationData.TargetStateProofRound, verificationData.OnlineTotalWeight.ToUint64(), proto.StateProofWeightThreshold)
+			verificationData.LastAttestedRound, verificationData.OnlineTotalWeight.ToUint64(), proto.StateProofWeightThreshold)
 
 	}
 
@@ -171,7 +171,7 @@ func ValidateStateProof(verificationData *ledgercore.StateProofVerificationData,
 		return err
 	}
 
-	err = verifier.Verify(uint64(verificationData.TargetStateProofRound), msg.Hash(), stateProof)
+	err = verifier.Verify(uint64(verificationData.LastAttestedRound), msg.Hash(), stateProof)
 	if err != nil {
 		return fmt.Errorf("%v: %w", err, errStateProofCrypto)
 	}

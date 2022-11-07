@@ -376,10 +376,10 @@ func TestCowStateProof(t *testing.T) {
 	stateProofTx.Message.LastAttestedRound = 512
 	stateProofTx.StateProof.SignedWeight = 100
 	ml.stateProofVerification[basics.Round(stateProofTx.Message.LastAttestedRound)] = &ledgercore.StateProofVerificationData{
-		TargetStateProofRound: basics.Round(stateProofTx.Message.LastAttestedRound),
-		VotersCommitment:      []byte{0x1}[:],
-		OnlineTotalWeight:     basics.MicroAlgos{Raw: 5},
-		Version:               protocol.ConsensusFuture,
+		LastAttestedRound: basics.Round(stateProofTx.Message.LastAttestedRound),
+		VotersCommitment:  []byte{0x1}[:],
+		OnlineTotalWeight: basics.MicroAlgos{Raw: 5},
+		Version:           protocol.ConsensusFuture,
 	}
 
 	// if atRound header is missing the apply should fail

@@ -86,10 +86,10 @@ func gatherVerificationDataUsingBlockHeaders(sp StateProofsApplier, lastRoundInI
 	}
 
 	verificationData := ledgercore.StateProofVerificationData{
-		TargetStateProofRound: lastRoundInInterval,
-		VotersCommitment:      votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
-		OnlineTotalWeight:     votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
-		Version:               votersHdr.CurrentProtocol,
+		LastAttestedRound: lastRoundInInterval,
+		VotersCommitment:  votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+		OnlineTotalWeight: votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+		Version:           votersHdr.CurrentProtocol,
 	}
 	return &verificationData, nil
 }

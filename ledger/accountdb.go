@@ -5331,7 +5331,7 @@ func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []ve
 	for _, commitData := range data {
 		verificationData := commitData.verificationData
 		f := func() error {
-			_, err = insertStmt.ExecContext(ctx, verificationData.TargetStateProofRound, protocol.Encode(&verificationData))
+			_, err = insertStmt.ExecContext(ctx, verificationData.LastAttestedRound, protocol.Encode(&verificationData))
 			return err
 		}
 

@@ -26,8 +26,8 @@ import (
 type StateProofVerificationData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// TargetStateProofRound is the last attested round of the state proof verified using this data.
-	TargetStateProofRound basics.Round `codec:"spround"`
+	// LastAttestedRound is the last attested round of the state proof verified using this data.
+	LastAttestedRound basics.Round `codec:"spround"`
 
 	// VotersCommitment is the vector commitment root of the top N accounts to sign the next state proof.
 	VotersCommitment crypto.GenericDigest `codec:"vc"`

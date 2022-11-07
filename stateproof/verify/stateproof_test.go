@@ -36,10 +36,10 @@ func invokeValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader,
 	atRound basics.Round,
 	msg *stateproofmsg.Message) error {
 	verificationData := ledgercore.StateProofVerificationData{
-		TargetStateProofRound: latestRoundInIntervalHdr.Round,
-		VotersCommitment:      votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
-		OnlineTotalWeight:     votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
-		Version:               votersHdr.CurrentProtocol,
+		LastAttestedRound: latestRoundInIntervalHdr.Round,
+		VotersCommitment:  votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+		OnlineTotalWeight: votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+		Version:           votersHdr.CurrentProtocol,
 	}
 	return ValidateStateProof(&verificationData, stateProof, atRound, msg)
 }

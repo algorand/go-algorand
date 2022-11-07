@@ -168,24 +168,24 @@ func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastA
 	spt.mu.RLock()
 	defer spt.mu.RUnlock()
 
-	if len(spt.trackedCommitData) > 0 && stateProofLastAttestedRound >= spt.trackedCommitData[0].verificationData.TargetStateProofRound &&
-		stateProofLastAttestedRound <= spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound {
+	if len(spt.trackedCommitData) > 0 && stateProofLastAttestedRound >= spt.trackedCommitData[0].verificationData.LastAttestedRound &&
+		stateProofLastAttestedRound <= spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.LastAttestedRound {
 		return spt.lookupDataInTrackedMemory(stateProofLastAttestedRound)
 	}
 
-	if len(spt.trackedCommitData) == 0 || stateProofLastAttestedRound < spt.trackedCommitData[0].verificationData.TargetStateProofRound {
+	if len(spt.trackedCommitData) == 0 || stateProofLastAttestedRound < spt.trackedCommitData[0].verificationData.LastAttestedRound {
 		return spt.lookupDataInDB(stateProofLastAttestedRound)
 	}
 
 	return &ledgercore.StateProofVerificationData{}, fmt.Errorf("requested data for round %d, greater than maximum data round %d: %w",
 		stateProofLastAttestedRound,
-		spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound,
+		spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.LastAttestedRound,
 		errStateProofVerificationDataNotFound)
 }
 
 func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
 	for _, commitData := range spt.trackedCommitData {
-		if commitData.verificationData.TargetStateProofRound == stateProofLastAttestedRound {
+		if commitData.verificationData.LastAttestedRound == stateProofLastAttestedRound {
 			verificationDataCopy := commitData.verificationData
 			return &verificationDataCopy, nil
 		}
@@ -245,10 +245,10 @@ func (spt *stateProofVerificationTracker) appendCommitData(blk *bookkeeping.Bloc
 	}
 
 	verificationData := ledgercore.StateProofVerificationData{
-		VotersCommitment:      blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
-		OnlineTotalWeight:     blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
-		TargetStateProofRound: blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval),
-		Version:               blk.CurrentProtocol,
+		VotersCommitment:  blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+		OnlineTotalWeight: blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+		LastAttestedRound: blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval),
+		Version:           blk.CurrentProtocol,
 	}
 
 	commitData := verificationCommitData{

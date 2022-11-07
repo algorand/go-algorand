@@ -433,16 +433,16 @@ func TestStateProofVerificationTracker_LookupVerificationData(t *testing.T) {
 	dbDataRound := basics.Round(defaultStateProofInterval + expectedDataInDbNum*defaultStateProofInterval)
 	dbData, err := spt.LookupVerificationData(dbDataRound)
 	a.NoError(err)
-	a.Equal(dbDataRound, dbData.TargetStateProofRound)
+	a.Equal(dbDataRound, dbData.LastAttestedRound)
 
 	memoryDataRound := basics.Round(defaultStateProofInterval + (expectedDataInDbNum+1)*defaultStateProofInterval)
 
 	memoryData, err := spt.LookupVerificationData(memoryDataRound)
 	a.NoError(err)
-	a.Equal(memoryDataRound, memoryData.TargetStateProofRound)
+	a.Equal(memoryDataRound, memoryData.LastAttestedRound)
 
 	// This error shouldn't happen in normal flow - we force it to happen for the test.
-	spt.trackedCommitData[0].verificationData.TargetStateProofRound = 0
+	spt.trackedCommitData[0].verificationData.LastAttestedRound = 0
 	_, err = spt.LookupVerificationData(memoryDataRound)
 	a.ErrorIs(err, errStateProofVerificationDataNotFound)
 	a.ErrorContains(err, "memory lookup failed")
