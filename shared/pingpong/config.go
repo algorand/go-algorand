@@ -36,6 +36,7 @@ type PpConfig struct {
 	RandomizeFee    bool
 	RandomizeAmt    bool
 	RandomizeDst    bool
+	MaxRandomDst    uint64
 	MaxFee          uint64
 	MinFee          uint64
 	MaxAmt          uint64
@@ -99,6 +100,7 @@ var DefaultConfig = PpConfig{
 	RandomizeFee:    false,
 	RandomizeAmt:    false,
 	RandomizeDst:    false,
+	MaxRandomDst:    200000,
 	MaxFee:          10000,
 	MinFee:          1000,
 	MaxAmt:          1000,
