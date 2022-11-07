@@ -34,7 +34,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	modelV2 "github.com/algorand/go-algorand/daemon/algod/api/spec/v2"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
@@ -772,17 +771,6 @@ func (c *Client) GetApplicationBoxByName(index uint64, name string) (resp genera
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.GetApplicationBoxByName(index, name)
-	}
-	return
-}
-
-// PendingTransactionInformation returns information about a recently issued
-// transaction based on its txid.
-// Deprecated: Use PendingTransactionInformationV2
-func (c *Client) PendingTransactionInformation(txid string) (resp v1.Transaction, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.PendingTransactionInformation(txid)
 	}
 	return
 }

@@ -48,7 +48,6 @@ const (
 
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
-	"/v1/transactions":  true, // Deprecated path
 	"/v2/transactions":  true,
 	"/v2/teal/dryrun":   true,
 	"/v2/teal/compile":  true,
@@ -442,7 +441,7 @@ func (client RestClient) RawAccountInformationV2(address string) (response []byt
 	return
 }
 
-// PendingTransactionInformation gets information about a recently issued
+// PendingTransactionInformationV2 gets information about a recently issued
 // transaction.  There are several cases when this might succeed:
 //
 // - transaction committed (CommittedRound > 0)
@@ -451,15 +450,6 @@ func (client RestClient) RawAccountInformationV2(address string) (response []byt
 //
 // Or the transaction may have happened sufficiently long ago that the
 // node no longer remembers it, and this will return an error.
-// Deprecated
-func (client RestClient) PendingTransactionInformation(transactionID string) (response v1.Transaction, err error) {
-	transactionID = stripTransaction(transactionID)
-	err = client.get(&response, fmt.Sprintf("/v1/transactions/pending/%s", transactionID), nil)
-	return
-}
-
-// PendingTransactionInformationV2 gets information about a recently issued transaction.
-// See PendingTransactionInformation for more details.
 func (client RestClient) PendingTransactionInformationV2(transactionID string) (response generatedV2.PendingTransactionResponse, err error) {
 	transactionID = stripTransaction(transactionID)
 	err = client.get(&response, fmt.Sprintf("/v2/transactions/pending/%s", transactionID), nil)
@@ -503,30 +493,9 @@ func (client RestClient) RawAccountAssetInformation(accountAddress string, asset
 	return
 }
 
-// SuggestedFee gets the recommended transaction fee from the node
-// Deprecated
-func (client RestClient) SuggestedFee() (response v1.TransactionFee, err error) {
-	err = client.get(&response, "/v1/transactions/fee", nil)
-	return
-}
-
-// SuggestedParams gets the suggested transaction parameters
-// Deprecated
-func (client RestClient) SuggestedParams() (response v1.TransactionParams, err error) {
-	err = client.get(&response, "/v1/transactions/params", nil)
-	return
-}
-
 // SuggestedParamsV2 gets the suggested transaction parameters
 func (client RestClient) SuggestedParamsV2() (response generatedV2.TransactionParametersResponse, err error) {
 	err = client.get(&response, "/v2/transactions/params", nil)
-	return
-}
-
-// SendRawTransaction gets a SignedTxn and broadcasts it to the network
-// Deprecated
-func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response v1.TransactionID, err error) {
-	err = client.post(&response, "/v1/transactions", protocol.Encode(&txn))
 	return
 }
 
