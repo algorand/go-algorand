@@ -38,7 +38,7 @@ func getConnTCPInfo(raw syscall.RawConn) (*TCPInfo, error) {
 	if errno != 0 {
 		return nil, errno
 	}
-	if info == linuxTCPInfo{} {
+	if info == (linuxTCPInfo{}) {
 		return nil, ErrNoTCPInfo
 	}
 	return &TCPInfo{
