@@ -5402,7 +5402,7 @@ func (qs *stateProofVerificationDbQueries) lookupData(stateProofLastAttestedRoun
 func stateProofVerificationTable(ctx context.Context, tx *sql.Tx, tableName string) ([]ledgercore.StateProofVerificationData, error) {
 	var result []ledgercore.StateProofVerificationData
 	queryFunc := func() error {
-		selectQuery := fmt.Sprintf("SELECT verificationdata FROM %s", tableName)
+		selectQuery := fmt.Sprintf("SELECT verificationdata FROM %s ORDER BY targetstateproofround", tableName)
 		rows, err := tx.QueryContext(ctx, selectQuery)
 
 		if err != nil {
