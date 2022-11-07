@@ -50,7 +50,7 @@ type verificationCommitData struct {
 type stateProofVerificationTracker struct {
 	// dbQueries are the pre-generated queries used to query the database, if needed,
 	// to lookup state proof verification data.
-	dbQueries stateProofVerificationDbQueries
+	dbQueries *stateProofVerificationDbQueries
 
 	// trackedCommitData represents the part of the tracked verification data currently in memory. Each element in this
 	// array contains both the data required to verify a single state proof and data to decide whether it's possible to
@@ -74,7 +74,7 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 		return err
 	}
 
-	spt.dbQueries = *preparedDbQueries
+	spt.dbQueries = preparedDbQueries
 
 	spt.log = l.trackerLog()
 
