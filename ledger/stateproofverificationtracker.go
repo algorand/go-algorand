@@ -61,8 +61,8 @@ type stateProofVerificationTracker struct {
 	// database.
 	trackedDeleteData []verificationDeleteData
 
-	// stateProofVerificationMu protects trackedCommitData and trackedDeleteData.
-	stateProofVerificationMu deadlock.RWMutex
+	// mu protects trackedCommitData and trackedDeleteData.
+	mu deadlock.RWMutex
 
 	// log copied from ledger
 	log logging.Logger
@@ -78,8 +78,8 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 
 	spt.log = l.trackerLog()
 
-	spt.stateProofVerificationMu.Lock()
-	defer spt.stateProofVerificationMu.Unlock()
+	spt.mu.Lock()
+	defer spt.mu.Unlock()
 
 	const initialDataArraySize = 10
 	spt.trackedCommitData = make([]verificationCommitData, 0, initialDataArraySize)
@@ -113,8 +113,8 @@ func (spt *stateProofVerificationTracker) produceCommittingTask(_ basics.Round, 
 }
 
 func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitContext) error {
-	spt.stateProofVerificationMu.RLock()
-	defer spt.stateProofVerificationMu.RUnlock()
+	spt.mu.RLock()
+	defer spt.mu.RUnlock()
 
 	lastDataToCommitIndex := spt.committedRoundToLatestCommitDataIndex(dcc.newBase)
 	dcc.spvCommitData = make([]verificationCommitData, lastDataToCommitIndex+1)
@@ -143,8 +143,8 @@ func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *s
 }
 
 func (spt *stateProofVerificationTracker) postCommit(_ context.Context, dcc *deferredCommitContext) {
-	spt.stateProofVerificationMu.Lock()
-	defer spt.stateProofVerificationMu.Unlock()
+	spt.mu.Lock()
+	defer spt.mu.Unlock()
 
 	spt.trackedCommitData = spt.trackedCommitData[len(dcc.spvCommitData):]
 	spt.trackedDeleteData = spt.trackedDeleteData[dcc.spvLatestDeleteDataIndex+1:]
@@ -165,8 +165,8 @@ func (spt *stateProofVerificationTracker) close() {
 }
 
 func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
-	spt.stateProofVerificationMu.RLock()
-	defer spt.stateProofVerificationMu.RUnlock()
+	spt.mu.RLock()
+	defer spt.mu.RUnlock()
 
 	if len(spt.trackedCommitData) > 0 && stateProofLastAttestedRound >= spt.trackedCommitData[0].verificationData.TargetStateProofRound &&
 		stateProofLastAttestedRound <= spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound {
@@ -233,8 +233,8 @@ func (spt *stateProofVerificationTracker) committedRoundToLatestDeleteDataIndex(
 }
 
 func (spt *stateProofVerificationTracker) appendCommitData(blk *bookkeeping.Block) {
-	spt.stateProofVerificationMu.Lock()
-	defer spt.stateProofVerificationMu.Unlock()
+	spt.mu.Lock()
+	defer spt.mu.Unlock()
 
 	if len(spt.trackedCommitData) > 0 {
 		lastCommitConfirmedRound := spt.trackedCommitData[len(spt.trackedCommitData)-1].confirmedRound
@@ -260,8 +260,8 @@ func (spt *stateProofVerificationTracker) appendCommitData(blk *bookkeeping.Bloc
 }
 
 func (spt *stateProofVerificationTracker) appendDeleteData(blk *bookkeeping.Block, delta *ledgercore.StateDelta) {
-	spt.stateProofVerificationMu.Lock()
-	defer spt.stateProofVerificationMu.Unlock()
+	spt.mu.Lock()
+	defer spt.mu.Unlock()
 
 	if len(spt.trackedDeleteData) > 0 {
 		lastDeleteConfirmedRound := spt.trackedDeleteData[len(spt.trackedDeleteData)-1].confirmedRound
