@@ -96,11 +96,11 @@ func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, delta 
 	}
 
 	if blk.Round()%currentStateProofInterval == 0 {
-		spt.insertCommitData(&blk)
+		spt.appendCommitData(&blk)
 	}
 
 	if delta.StateProofNext != 0 {
-		spt.insertDeleteData(&blk, &delta)
+		spt.appendDeleteData(&blk, &delta)
 	}
 }
 
@@ -232,14 +232,14 @@ func (spt *stateProofVerificationTracker) committedRoundToLatestDeleteDataIndex(
 	return latestCommittedDataIndex
 }
 
-func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Block) {
+func (spt *stateProofVerificationTracker) appendCommitData(blk *bookkeeping.Block) {
 	spt.stateProofVerificationMu.Lock()
 	defer spt.stateProofVerificationMu.Unlock()
 
 	if len(spt.trackedCommitData) > 0 {
 		lastCommitConfirmedRound := spt.trackedCommitData[len(spt.trackedCommitData)-1].confirmedRound
 		if blk.Round() <= lastCommitConfirmedRound {
-			spt.log.Panicf("state proof verification: attempted to insert commit data confirmed earlier than latest"+
+			spt.log.Panicf("state proof verification: attempted to append commit data confirmed earlier than latest"+
 				"commit data, round: %d, last confirmed commit data round: %d", blk.Round(), lastCommitConfirmedRound)
 		}
 	}
@@ -259,14 +259,14 @@ func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Bloc
 	spt.trackedCommitData = append(spt.trackedCommitData, commitData)
 }
 
-func (spt *stateProofVerificationTracker) insertDeleteData(blk *bookkeeping.Block, delta *ledgercore.StateDelta) {
+func (spt *stateProofVerificationTracker) appendDeleteData(blk *bookkeeping.Block, delta *ledgercore.StateDelta) {
 	spt.stateProofVerificationMu.Lock()
 	defer spt.stateProofVerificationMu.Unlock()
 
 	if len(spt.trackedDeleteData) > 0 {
 		lastDeleteConfirmedRound := spt.trackedDeleteData[len(spt.trackedDeleteData)-1].confirmedRound
 		if blk.Round() <= lastDeleteConfirmedRound {
-			spt.log.Panicf("state proof verification: attempted to insert delete data confirmed earlier than latest"+
+			spt.log.Panicf("state proof verification: attempted to append delete data confirmed earlier than latest"+
 				"delete data, round: %d, last confirmed delete data round: %d", blk.Round(), lastDeleteConfirmedRound)
 		}
 	}

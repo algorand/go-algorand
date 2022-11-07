@@ -461,5 +461,5 @@ func TestStateProofVerificationTracker_PanicInvalidBlockInsertion(t *testing.T) 
 		defaultStateProofInterval, true)
 
 	pastBlock := randomBlock(0)
-	a.Panics(func() { spt.insertCommitData(&pastBlock.block) })
+	a.Panics(func() { spt.appendCommitData(&pastBlock.block) })
 }
