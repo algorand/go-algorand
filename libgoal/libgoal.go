@@ -867,7 +867,7 @@ func (c *Client) EncodedBlockCert(round uint64) (blockCert rpcs.EncodedBlockCert
 		var resp []byte
 		resp, err = algod.RawBlock(round)
 		if err == nil {
-			err = protocol.DecodeReflect(resp, &blockCert)
+			err = protocol.Decode(resp, &blockCert)
 			if err != nil {
 				return
 			}

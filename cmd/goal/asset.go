@@ -22,7 +22,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 )
@@ -790,27 +789,18 @@ var infoAssetCmd = &cobra.Command{
 			asset.Params.Reserve = &asset.Params.Creator
 		}
 
-		reserve, err := client.AccountInformationV2(*asset.Params.Reserve, true)
+		reserve, err := client.AccountAssetInformation(*asset.Params.Reserve, assetID)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 
-		var res model.AssetHolding
-		if reserve.Assets != nil {
-			for _, reserveAsset := range *reserve.Assets {
-				if assetID == reserveAsset.AssetID {
-					res = reserveAsset
-					break
-				}
-			}
-		} else {
-			reportErrorf(errorRequestFail, "cannot find asset ID in account")
-		}
+		res := reserve.AssetHolding
 
 		fmt.Printf("Asset ID:         %d\n", assetID)
 		fmt.Printf("Creator:          %s\n", asset.Params.Creator)
-		reportInfof("Asset name:       %s\n", derefString(asset.Params.Name))
-		reportInfof("Unit name:        %s\n", derefString(asset.Params.UnitName))
+		reportInfof("Asset name:       %s", derefString(asset.Params.Name))
+		reportInfof("Unit name:        %s", derefString(asset.Params.UnitName))
+		reportInfof("URL:              %s", derefString(asset.Params.Url))
 		fmt.Printf("Maximum issue:    %s %s\n", assetDecimalsFmt(asset.Params.Total, asset.Params.Decimals), derefString(asset.Params.UnitName))
 		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(res.Amount, asset.Params.Decimals), derefString(asset.Params.UnitName))
 		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(asset.Params.Total-res.Amount, asset.Params.Decimals), derefString(asset.Params.UnitName))

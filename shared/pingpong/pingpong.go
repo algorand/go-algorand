@@ -130,9 +130,10 @@ func (ppa *pingPongAccount) String() string {
 
 // WorkerState object holds a running pingpong worker
 type WorkerState struct {
-	cfg      PpConfig
-	accounts map[string]*pingPongAccount
-	cinfo    CreatablesInfo
+	cfg            PpConfig
+	accounts       map[string]*pingPongAccount
+	randomAccounts []string
+	cinfo          CreatablesInfo
 
 	nftStartTime       int64
 	localNftIndex      uint64
@@ -633,7 +634,11 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac *libgoal.Client) {
 
 // NewPingpong creates a new pingpong WorkerState
 func NewPingpong(cfg PpConfig) *WorkerState {
-	return &WorkerState{cfg: cfg, nftHolders: make(map[string]int)}
+	return &WorkerState{
+		cfg:            cfg,
+		nftHolders:     make(map[string]int),
+		randomAccounts: make([]string, 0, cfg.MaxRandomDst),
+	}
 }
 
 func (pps *WorkerState) randAssetID() (aidx uint64) {
@@ -703,17 +708,27 @@ func (pps *WorkerState) sendFromTo(
 		fee := pps.fee()
 
 		to := toList[i]
-		if pps.cfg.RandomizeDst {
-			var addr basics.Address
-			crypto.RandBytes(addr[:])
-			to = addr.String()
-		} else if len(belowMinBalanceAccounts) > 0 && (crypto.RandUint64()%100 < 50) {
+		if len(belowMinBalanceAccounts) > 0 && (crypto.RandUint64()%100 < 50) {
 			// make 50% of the calls attempt to refund low-balanced accounts.
 			// ( if there is any )
 			// pick the first low balance account
 			for acct := range belowMinBalanceAccounts {
 				to = acct
 				break
+			}
+		} else if pps.cfg.RandomizeDst {
+			// check if we need to create a new random account, or use an existing one
+			if uint64(len(pps.randomAccounts)) >= pps.cfg.MaxRandomDst {
+				// use pre-created random account
+				i := rand.Int63n(int64(len(pps.randomAccounts)))
+				to = pps.randomAccounts[i]
+			} else {
+				// create new random account
+				var addr basics.Address
+				crypto.RandBytes(addr[:])
+				to = addr.String()
+				// push new account
+				pps.randomAccounts = append(pps.randomAccounts, to)
 			}
 		}
 
@@ -970,7 +985,11 @@ type paymentUpdate struct {
 
 func (au *paymentUpdate) apply(pps *WorkerState) {
 	pps.accounts[au.from].balance -= (au.fee + au.amt)
-	pps.accounts[au.to].balance += au.amt
+	// update account balance
+	to := pps.accounts[au.to]
+	if to != nil {
+		to.balance += au.amt
+	}
 }
 
 // return true with probability 1/i
