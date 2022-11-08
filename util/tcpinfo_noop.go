@@ -21,6 +21,6 @@ package util
 
 import "syscall"
 
-func getConnTCPInfo(conn syscall.RawConn) (*RTTInfo, error) {
+func getConnTCPInfo(conn syscall.RawConn) (*TCPInfo, error) {
 	return nil, ErrTCPInfoUnsupported
 }
