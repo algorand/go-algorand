@@ -18,7 +18,6 @@ package verify
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -31,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/mockdebugger"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -370,50 +370,6 @@ func TestDecodeNil(t *testing.T) {
 	}
 }
 
-type testDbgHook struct {
-	log []string
-}
-
-func (d *testDbgHook) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
-	d.log = append(d.log, "beforeTxn")
-	return nil
-}
-
-func (d *testDbgHook) BeforeLogicEval(cx *logic.EvalContext) error {
-	d.log = append(d.log, fmt.Sprintf("beforeLogicEval %s", cx.RunMode()))
-	return nil
-}
-
-func (d *testDbgHook) BeforeTealOp(cx *logic.EvalContext) error {
-	d.log = append(d.log, "beforeTealOp")
-	return nil
-}
-
-func (d *testDbgHook) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
-	d.log = append(d.log, "beforeInnerTxnGroup")
-	return nil
-}
-
-func (d *testDbgHook) AfterInnerTxnGroup(ep *logic.EvalParams) error {
-	d.log = append(d.log, "afterInnerTxnGroup")
-	return nil
-}
-
-func (d *testDbgHook) AfterTealOp(cx *logic.EvalContext, evalError error) error {
-	d.log = append(d.log, "afterTealOp")
-	return nil
-}
-
-func (d *testDbgHook) AfterLogicEval(cx *logic.EvalContext, evalError error) error {
-	d.log = append(d.log, fmt.Sprintf("afterLogicEval %s", cx.RunMode()))
-	return nil
-}
-
-func (d *testDbgHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
-	d.log = append(d.log, "afterTxn")
-	return nil
-}
-
 func TestTxnGroupWithDebugger(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -489,22 +445,22 @@ func TestTxnGroupWithDebugger(t *testing.T) {
 		lsigAppCall,
 	}
 
-	testDbg := &testDbgHook{}
+	mockDbg := &mockdebugger.Debugger{}
 
-	groupCtx, err := TxnGroupWithDebugger(txgroup, blockHeader, nil, logic.NoHeaderLedger{}, testDbg)
+	groupCtx, err := TxnGroupWithDebugger(txgroup, blockHeader, nil, logic.NoHeaderLedger{}, mockDbg)
 	require.NoError(t, err)
-	require.Equal(t, testDbg, groupCtx.verifierDebugger)
+	require.Equal(t, mockDbg, groupCtx.verifierDebugger)
 
-	expectedLog := []string{
-		"beforeLogicEval Signature",   // first txn start
-		"beforeTealOp", "afterTealOp", // first txn LogicSig: 1 op
-		"afterLogicEval Signature", // first txn end
+	expectedEvents := []mockdebugger.Event{
+		mockdebugger.BeforeLogicEval(logic.ModeSig),             // first txn start
+		mockdebugger.BeforeTealOp(), mockdebugger.AfterTealOp(), // first txn LogicSig: 1 op
+		mockdebugger.AfterLogicEval(logic.ModeSig), // first txn end
 		// nothing for second txn (not signed with a LogicSig)
-		"beforeLogicEval Signature",                                                                 // third txn start
-		"beforeTealOp", "afterTealOp", "beforeTealOp", "afterTealOp", "beforeTealOp", "afterTealOp", // third txn LogicSig: 3 ops
-		"afterLogicEval Signature", //third txn end
+		mockdebugger.BeforeLogicEval(logic.ModeSig),                                                                                                                               // third txn start
+		mockdebugger.BeforeTealOp(), mockdebugger.AfterTealOp(), mockdebugger.BeforeTealOp(), mockdebugger.AfterTealOp(), mockdebugger.BeforeTealOp(), mockdebugger.AfterTealOp(), // third txn LogicSig: 3 ops
+		mockdebugger.AfterLogicEval(logic.ModeSig), // third txn end
 	}
-	require.Equal(t, expectedLog, testDbg.log)
+	require.Equal(t, expectedEvents, mockDbg.Events)
 }
 
 func TestPaysetGroups(t *testing.T) {

@@ -16,6 +16,8 @@
 
 package logic
 
+import "github.com/algorand/go-algorand/data/transactions"
+
 // DebuggerHook functions are called by eval function during TEAL program execution, if a debugger
 // is provided.
 //
@@ -91,7 +93,7 @@ type DebuggerHook interface {
 
 	// AfterTxn is called after a transaction has been executed.
 	// groupIndex refers to the index of the transaction in the transaction group that was just executed.
-	AfterTxn(ep *EvalParams, groupIndex int) error
+	AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) error
 
 	// BeforeLogicEval is called before an app or LogicSig is evaluated.
 	BeforeLogicEval(cx *EvalContext) error
@@ -123,7 +125,7 @@ func (null NullDebuggerHook) BeforeTxn(ep *EvalParams, groupIndex int) error {
 }
 
 // AfterTxn does nothing
-func (null NullDebuggerHook) AfterTxn(ep *EvalParams, groupIndex int) error {
+func (null NullDebuggerHook) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) error {
 	return nil
 }
 
