@@ -230,7 +230,6 @@ func (c *catchpointCatchupAccessorImpl) SetLabel(ctx context.Context, label stri
 	if err != nil {
 		return fmt.Errorf("unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupLabel, err)
 	}
-	fmt.Printf("SET LABEL TO %s\n", label)
 	return
 }
 
