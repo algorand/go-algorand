@@ -2730,9 +2730,9 @@ func TestWebsocketNetworkTelemetryTCP(t *testing.T) {
 	require.Len(t, detailsB.OutgoingPeers, 1)
 	assert.Zero(t, detailsB.OutgoingPeers[0].TCP.RTT)
 
-	pcdA, err := json.Marshal(detailsA)
+	pcdA, err = json.Marshal(detailsA)
 	assert.NoError(t, err)
-	pcdB, err := json.Marshal(detailsB)
+	pcdB, err = json.Marshal(detailsB)
 	assert.NoError(t, err)
 	t.Log("closed detailsA", string(pcdA))
 	t.Log("closed detailsB", string(pcdB))
