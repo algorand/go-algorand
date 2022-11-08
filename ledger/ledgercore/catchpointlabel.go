@@ -34,45 +34,89 @@ var base32Encoder = base32.StdEncoding.WithPadding(base32.NoPadding)
 // ErrCatchpointParsingFailed is used when we attempt to parse and catchpoint label and failing doing so.
 var ErrCatchpointParsingFailed = errors.New("catchpoint parsing failed")
 
-// CatchpointLabel represent a single catchpoint label. It will "assemble" a label based on the components
-type CatchpointLabel struct {
-	ledgerRound                    basics.Round
-	ledgerRoundBlockHash           crypto.Digest
-	balancesMerkleRoot             crypto.Digest
-	stateProofVerificationDataHash crypto.Digest
-	totals                         AccountTotals
+// CatchpointLabelMaker represents an interface for creating a label maker. Labels can be "assembled" based on its components.
+type CatchpointLabelMaker interface {
+	toBuffer() []byte
+	getRound() basics.Round
+	logStr() string
 }
 
-// MakeCatchpointLabel creates a catchpoint label given the catchpoint label parameters.
-func MakeCatchpointLabel(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest, balancesMerkleRoot crypto.Digest,
-	stateProofVerificationDataHash crypto.Digest, totals AccountTotals) CatchpointLabel {
-	return CatchpointLabel{
-		ledgerRound:                    ledgerRound,
-		ledgerRoundBlockHash:           ledgerRoundBlockHash,
-		balancesMerkleRoot:             balancesMerkleRoot,
-		stateProofVerificationDataHash: stateProofVerificationDataHash,
-		totals:                         totals,
+// CatchpointLabelMakerV6 represent a single catchpoint label maker, matching catchpoints of version V6 and below.
+type CatchpointLabelMakerV6 struct {
+	ledgerRound          basics.Round
+	ledgerRoundBlockHash crypto.Digest
+	balancesMerkleRoot   crypto.Digest
+	totals               AccountTotals
+}
+
+// MakeCatchpointLabelMakerV6 creates a V6 catchpoint label given the catchpoint label parameters.
+func MakeCatchpointLabelMakerV6(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest,
+	balancesMerkleRoot crypto.Digest, totals AccountTotals) CatchpointLabelMakerV6 {
+	return CatchpointLabelMakerV6{
+		ledgerRound:          ledgerRound,
+		ledgerRoundBlockHash: ledgerRoundBlockHash,
+		balancesMerkleRoot:   balancesMerkleRoot,
+		totals:               totals,
 	}
 }
 
-// String return the user-facing representation of this catchpoint label. ( i.e. the "label" )
-func (l CatchpointLabel) String() string {
-	hash := l.Hash()
-	encodedHash := base32Encoder.EncodeToString(hash[:])
-	out := fmt.Sprintf("%d#%s", l.ledgerRound, encodedHash)
-	logging.Base().Infof("Creating a catchpoint label %s for round=%d, block digest=%s, accounts digest=%s", out, l.ledgerRound, l.ledgerRoundBlockHash, l.balancesMerkleRoot)
-	return out
-}
-
-// Hash return the hash portion of this catchpoint label
-func (l CatchpointLabel) Hash() crypto.Digest {
+func (l CatchpointLabelMakerV6) toBuffer() []byte {
 	encodedTotals := protocol.EncodeReflect(&l.totals)
 	buffer := make([]byte, 3*crypto.DigestSize+len(encodedTotals))
 	copy(buffer[:], l.ledgerRoundBlockHash[:])
 	copy(buffer[crypto.DigestSize:], l.balancesMerkleRoot[:])
-	copy(buffer[crypto.DigestSize*2:], l.stateProofVerificationDataHash[:])
-	copy(buffer[crypto.DigestSize*3:], encodedTotals)
-	return crypto.Hash(buffer[:crypto.DigestSize*3+len(encodedTotals)])
+	copy(buffer[crypto.DigestSize*2:], encodedTotals)
+
+	return buffer
+}
+
+func (l CatchpointLabelMakerV6) getRound() basics.Round {
+	return l.ledgerRound
+}
+
+func (l CatchpointLabelMakerV6) logStr() string {
+	return fmt.Sprintf("round=%d, block digest=%s, accounts digest=%s", l.ledgerRound, l.ledgerRoundBlockHash, l.balancesMerkleRoot)
+}
+
+// CatchpointLabelMakerV7 represent a single catchpoint maker, matching catchpoints of version V7 and above.
+type CatchpointLabelMakerV7 struct {
+	v6Label                        CatchpointLabelMakerV6
+	stateProofVerificationDataHash crypto.Digest
+}
+
+// MakeCatchpointLabelMakerV7 creates a V7 catchpoint label given the catchpoint label parameters.
+func MakeCatchpointLabelMakerV7(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest,
+	balancesMerkleRoot crypto.Digest, totals AccountTotals, stateProofVerificationDataHash crypto.Digest) CatchpointLabelMakerV7 {
+	return CatchpointLabelMakerV7{
+		v6Label:                        MakeCatchpointLabelMakerV6(ledgerRound, ledgerRoundBlockHash, balancesMerkleRoot, totals),
+		stateProofVerificationDataHash: stateProofVerificationDataHash,
+	}
+}
+
+func (l CatchpointLabelMakerV7) toBuffer() []byte {
+	v6Buffer := l.v6Label.toBuffer()
+
+	buffer := make([]byte, crypto.DigestSize)
+	copy(buffer[:], l.stateProofVerificationDataHash[:])
+
+	return append(v6Buffer, buffer...)
+}
+
+func (l CatchpointLabelMakerV7) getRound() basics.Round {
+	return l.v6Label.getRound()
+}
+
+func (l CatchpointLabelMakerV7) logStr() string {
+	return fmt.Sprintf("%s state proof verification data digest=%s", l.v6Label.logStr(), l.stateProofVerificationDataHash)
+}
+
+// MakeLabel returns the user-facing representation of this catchpoint label. ( i.e. the "label" )
+func MakeLabel(l CatchpointLabelMaker) string {
+	hash := crypto.Hash(l.toBuffer())
+	encodedHash := base32Encoder.EncodeToString(hash[:])
+	out := fmt.Sprintf("%d#%s", l.getRound(), encodedHash)
+	logging.Base().Infof("Creating a catchpoint label %s for %s", out, l.logStr())
+	return out
 }
 
 // ParseCatchpointLabel parse the given label and breaks it into the round and hash components. In case of a parsing failure,

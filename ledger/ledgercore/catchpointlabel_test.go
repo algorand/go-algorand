@@ -51,9 +51,10 @@ func TestUniqueCatchpointLabel(t *testing.T) {
 			for _, balancesMerkleRoot := range balancesMerkleRoots {
 				for _, stateProofVerificationDataHash := range stateProofVerificationDataHashes {
 					for _, total := range totals {
-						label := MakeCatchpointLabel(r, ledgerRoundHash, balancesMerkleRoot, stateProofVerificationDataHash, total)
-						require.False(t, uniqueSet[label.String()])
-						uniqueSet[label.String()] = true
+						labelMaker := MakeCatchpointLabelMakerV7(r, ledgerRoundHash, balancesMerkleRoot, total, stateProofVerificationDataHash)
+						labelString := MakeLabel(labelMaker)
+						require.False(t, uniqueSet[labelString])
+						uniqueSet[labelString] = true
 					}
 				}
 			}
@@ -84,8 +85,9 @@ func TestCatchpointLabelParsing(t *testing.T) {
 			for _, balancesMerkleRoot := range balancesMerkleRoots {
 				for _, stateProofVerificationDataHash := range stateProofVerificationDataHashes {
 					for _, total := range totals {
-						label := MakeCatchpointLabel(r, ledgerRoundHash, balancesMerkleRoot, stateProofVerificationDataHash, total)
-						parsedRound, parsedHash, err := ParseCatchpointLabel(label.String())
+						labelMaker := MakeCatchpointLabelMakerV7(r, ledgerRoundHash, balancesMerkleRoot, total, stateProofVerificationDataHash)
+						labelString := MakeLabel(labelMaker)
+						parsedRound, parsedHash, err := ParseCatchpointLabel(labelString)
 						require.Equal(t, r, parsedRound)
 						require.NotEqual(t, crypto.Digest{}, parsedHash)
 						require.NoError(t, err)
