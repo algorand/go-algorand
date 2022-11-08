@@ -52,6 +52,12 @@ type CatchpointCatchupAccessor interface {
 	// SetLabel set the catchpoint catchup label
 	SetLabel(ctx context.Context, label string) (err error)
 
+	// GetVersion returns the current catchpoint version
+	GetVersion(ctx context.Context) (version uint64, err error)
+
+	// SetVersion set the catchpoint version
+	SetVersion(ctx context.Context, version uint64) (err error)
+
 	// ResetStagingBalances resets the current staging balances, preparing for a new set of balances to be added
 	ResetStagingBalances(ctx context.Context, newCatchup bool) (err error)
 
@@ -231,6 +237,25 @@ func (c *catchpointCatchupAccessorImpl) SetLabel(ctx context.Context, label stri
 	return
 }
 
+// GetVersion returns the current catchpoint version
+func (c *catchpointCatchupAccessorImpl) GetVersion(ctx context.Context) (version uint64, err error) {
+	version, err = readCatchpointStateUint64(ctx, c.ledger.trackerDB().Rdb.Handle, catchpointStateCatchupVersion)
+	if err != nil {
+		return version, fmt.Errorf("unable to read catchpoint catchup state '%s': %v", catchpointStateCatchupVersion, err)
+	}
+
+	return
+}
+
+// SetVersion sets the catchpoint version
+func (c *catchpointCatchupAccessorImpl) SetVersion(ctx context.Context, version uint64) (err error) {
+	err = writeCatchpointStateUint64(ctx, c.ledger.trackerDB().Wdb.Handle, catchpointStateCatchupVersion, version)
+	if err != nil {
+		return fmt.Errorf("unable to write catchpoint version '%s': %v", catchpointStateCatchupLabel, err)
+	}
+	return
+}
+
 // ResetStagingBalances resets the current staging balances, preparing for a new set of balances to be added
 func (c *catchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context, newCatchup bool) (err error) {
 	wdb := c.ledger.trackerDB().Wdb
@@ -346,6 +371,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	switch fileHeader.Version {
 	case CatchpointFileVersionV5:
 	case CatchpointFileVersionV6:
+	case CatchpointFileVersionV7:
 	default:
 		return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to process catchpoint - version %d is not supported", fileHeader.Version)
 	}
@@ -357,11 +383,16 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	start := time.Now()
 	ledgerProcessstagingcontentCount.Inc(nil)
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		err = c.SetVersion(ctx, fileHeader.Version)
+		if err != nil {
+			return err
+		}
+
 		err = writeCatchpointStateUint64(ctx, tx, catchpointStateCatchupBlockRound, uint64(fileHeader.BlocksRound))
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupBlockRound, err)
 		}
-		if fileHeader.Version == CatchpointFileVersionV6 {
+		if fileHeader.Version == CatchpointFileVersionV6 || fileHeader.Version == CatchpointFileVersionV7 {
 			err = writeCatchpointStateUint64(ctx, tx, catchpointStateCatchupHashRound, uint64(fileHeader.BlocksRound))
 			if err != nil {
 				return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupHashRound, err)
@@ -414,6 +445,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		expectingMoreEntries = make([]bool, len(balances.Balances))
 
 	case CatchpointFileVersionV6:
+	case CatchpointFileVersionV7:
 		var chunk catchpointFileChunkV6
 		err = protocol.Decode(bytes, &chunk)
 		if err != nil {
@@ -811,10 +843,11 @@ func (c *catchpointCatchupAccessorImpl) GetCatchupBlockRound(ctx context.Context
 func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, blk *bookkeeping.Block) (err error) {
 	rdb := c.ledger.trackerDB().Rdb
 	var balancesHash crypto.Digest
-	var stateProofVerificationDataHash crypto.Digest
+	var rawStateProofVerificationData []ledgercore.StateProofVerificationData
 	var blockRound basics.Round
 	var totals ledgercore.AccountTotals
 	var catchpointLabel string
+	var version uint64
 
 	catchpointLabel, err = readCatchpointStateString(ctx, rdb.Handle, catchpointStateCatchupLabel)
 	if err != nil {
@@ -830,7 +863,13 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 
 	start := time.Now()
 	ledgerVerifycatchpointCount.Inc(nil)
+
 	err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		version, err = c.GetVersion(ctx)
+		if err != nil {
+			return fmt.Errorf("unable to retrieve catchpoint version: %v", err)
+		}
+
 		// create the merkle trie for the balances
 		mc, err0 := MakeMerkleCommitter(tx, true)
 		if err0 != nil {
@@ -852,13 +891,10 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 			return fmt.Errorf("unable to get accounts totals: %v", err)
 		}
 
-		rawStateVerificationProofData, err := CatchpointStateProofVerification(ctx, tx)
+		rawStateProofVerificationData, err = CatchpointStateProofVerification(ctx, tx)
 		if err != nil {
 			return fmt.Errorf("unable to get state proof verification data: %v", err)
 		}
-
-		wrappedData := catchpointStateProofVerificationData{Data: rawStateVerificationProofData}
-		stateProofVerificationDataHash = crypto.HashObj(wrappedData)
 
 		return
 	})
@@ -870,10 +906,19 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 		return fmt.Errorf("block round in block header doesn't match block round in catchpoint")
 	}
 
-	catchpointLabelMaker := ledgercore.MakeCatchpointLabel(blockRound, blk.Digest(), balancesHash, stateProofVerificationDataHash, totals)
+	wrappedData := catchpointStateProofVerificationData{Data: rawStateProofVerificationData}
+	stateProofVerificationDataHash := crypto.HashObj(wrappedData)
 
-	if catchpointLabel != catchpointLabelMaker.String() {
-		return fmt.Errorf("catchpoint hash mismatch; expected %s, calculated %s", catchpointLabel, catchpointLabelMaker.String())
+	var catchpointLabelMaker ledgercore.CatchpointLabelMaker
+	if version <= CatchpointFileVersionV6 {
+		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerV6(blockRound, blk.Digest(), balancesHash, totals)
+	} else {
+		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerV7(blockRound, blk.Digest(), balancesHash, totals, stateProofVerificationDataHash)
+	}
+	generatedLabel := ledgercore.MakeLabel(catchpointLabelMaker)
+
+	if catchpointLabel != generatedLabel {
+		return fmt.Errorf("catchpoint hash mismatch; expected %s, calculated %s", catchpointLabel, generatedLabel)
 	}
 	return nil
 }

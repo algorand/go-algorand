@@ -381,6 +381,8 @@ const (
 	// we set it to zero in order to reset the merkle trie. This would force the merkle trie to be re-build on startup ( if needed ).
 	catchpointStateCatchupHashRound   = catchpointState("catchpointCatchupHashRound")
 	catchpointStateCatchpointLookback = catchpointState("catchpointLookback")
+	// catchpointStateCatchupVersion is the catchpoint version which the currently catchpoint catchup process is trying to catchup to.
+	catchpointStateCatchupVersion = catchpointState("catchpointCatchupLabel")
 )
 
 // MaxEncodedBaseAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the base account data serialized.
