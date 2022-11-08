@@ -253,7 +253,7 @@ return`
 	var rowid int64
 	var dbRound basics.Round
 	var buf []byte
-	err = l.accts.accountsq.lookupStmt.QueryRow(creator[:]).Scan(&rowid, &dbRound, &buf)
+	err = l.accts.accountsq.lookupAccountStmt.QueryRow(creator[:]).Scan(&rowid, &dbRound, &buf)
 	a.NoError(err)
 	a.Equal(basics.Round(4), dbRound)
 	a.Equal(expectedCreatorBase, buf)
@@ -262,7 +262,7 @@ return`
 	a.Equal(basics.Round(4), dbRound)
 	a.Equal(expectedCreatorResource, buf)
 
-	err = l.accts.accountsq.lookupStmt.QueryRow(userOptin[:]).Scan(&rowid, &dbRound, &buf)
+	err = l.accts.accountsq.lookupAccountStmt.QueryRow(userOptin[:]).Scan(&rowid, &dbRound, &buf)
 	a.NoError(err)
 	a.Equal(basics.Round(4), dbRound)
 	a.Equal(expectedUserOptInBase, buf)
@@ -282,7 +282,7 @@ return`
 	a.NoError(err)
 	a.Nil(ad.AppLocalStates[appIdx].KeyValue)
 
-	err = l.accts.accountsq.lookupStmt.QueryRow(userLocal[:]).Scan(&rowid, &dbRound, &buf)
+	err = l.accts.accountsq.lookupAccountStmt.QueryRow(userLocal[:]).Scan(&rowid, &dbRound, &buf)
 	a.NoError(err)
 	a.Equal(basics.Round(4), dbRound)
 	a.Equal(expectedUserLocalBase, buf)

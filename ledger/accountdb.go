@@ -48,7 +48,7 @@ import (
 // the state of a single account.
 type accountsDbQueries struct {
 	listCreatablesStmt     *sql.Stmt
-	lookupStmt             *sql.Stmt
+	lookupAccountStmt      *sql.Stmt
 	lookupResourcesStmt    *sql.Stmt
 	lookupAllResourcesStmt *sql.Stmt
 	lookupKvPairStmt       *sql.Stmt
@@ -2611,7 +2611,7 @@ func accountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
-	qs.lookupStmt, err = q.Prepare("SELECT accountbase.rowid, acctrounds.rnd, accountbase.data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
+	qs.lookupAccountStmt, err = q.Prepare("SELECT accountbase.rowid, acctrounds.rnd, accountbase.data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
@@ -2912,7 +2912,7 @@ func (qs *accountsDbQueries) lookup(addr basics.Address) (data persistedAccountD
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
-		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &data.round, &buf)
+		err := qs.lookupAccountStmt.QueryRow(addr[:]).Scan(&rowid, &data.round, &buf)
 		if err == nil {
 			data.addr = addr
 			if len(buf) > 0 && rowid.Valid {
@@ -3128,7 +3128,7 @@ func deleteCatchpointStateImpl(ctx context.Context, e db.Executable, stateName c
 func (qs *accountsDbQueries) close() {
 	preparedQueries := []**sql.Stmt{
 		&qs.listCreatablesStmt,
-		&qs.lookupStmt,
+		&qs.lookupAccountStmt,
 		&qs.lookupResourcesStmt,
 		&qs.lookupAllResourcesStmt,
 		&qs.lookupKvPairStmt,
