@@ -550,7 +550,7 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 		heldAssets = make([]generatedV2.AssetHolding, len(*account.Assets))
 		copy(heldAssets, *account.Assets)
 		sort.Slice(heldAssets, func(i, j int) bool {
-			return heldAssets[i].AssetId < heldAssets[j].AssetId
+			return heldAssets[i].AssetID < heldAssets[j].AssetID
 		})
 	}
 
@@ -608,14 +608,14 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 	}
 	for _, assetHolding := range heldAssets {
 		if onlyShowAssetIds {
-			fmt.Fprintf(report, "\tID %d\n", assetHolding.AssetId)
+			fmt.Fprintf(report, "\tID %d\n", assetHolding.AssetID)
 			continue
 		}
-		assetParams, err := client.AssetInformationV2(assetHolding.AssetId)
+		assetParams, err := client.AssetInformationV2(assetHolding.AssetID)
 		if err != nil {
 			hasError = true
-			fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", assetHolding.AssetId, address, err)
-			fmt.Fprintf(report, "\tID %d, error\n", assetHolding.AssetId)
+			fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", assetHolding.AssetID, address, err)
+			fmt.Fprintf(report, "\tID %d, error\n", assetHolding.AssetID)
 		}
 
 		amount := assetDecimalsFmt(assetHolding.Amount, assetParams.Params.Decimals)
@@ -635,7 +635,7 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 			frozen = " (frozen)"
 		}
 
-		fmt.Fprintf(report, "\tID %d, %s, balance %s %s%s\n", assetHolding.AssetId, assetName, amount, unitName, frozen)
+		fmt.Fprintf(report, "\tID %d, %s, balance %s %s%s\n", assetHolding.AssetID, assetName, amount, unitName, frozen)
 	}
 
 	fmt.Fprintln(report, "Created Apps:")

@@ -543,7 +543,7 @@ func scenarioA(
 				ownAllAccount.pk,
 				tLife,
 				genesisHash,
-				basics.AssetIndex(asset.AssetId),
+				basics.AssetIndex(asset.AssetID),
 				ownAllAccount.pk,
 				uint64(0))
 
@@ -582,7 +582,7 @@ func scenarioA(
 				nacc.pk,
 				tLife,
 				genesisHash,
-				basics.AssetIndex(asset.AssetId),
+				basics.AssetIndex(asset.AssetID),
 				ownAllAccount.pk,
 				asset.Amount)
 			counter, txnGroup = queueTransaction(nacc.sk, assSend, txnChan, txnGrpChan, counter, txnGroup)
@@ -613,7 +613,7 @@ func scenarioA(
 			default:
 			}
 
-			assHold, err := fixture.AlgodClient.AccountAssetInformation(ownAllAccount.pk.String(), asset.AssetId)
+			assHold, err := fixture.AlgodClient.AccountAssetInformation(ownAllAccount.pk.String(), asset.AssetID)
 			require.NoError(t, err)
 
 			tAssetAmt += assHold.AssetHolding.Amount
