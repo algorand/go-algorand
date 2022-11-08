@@ -442,7 +442,7 @@ func TestStateProofVerificationTracker_LookupVerificationData(t *testing.T) {
 	a.Equal(memoryDataRound, memoryData.LastAttestedRound)
 
 	// This error shouldn't happen in normal flow - we force it to happen for the test.
-	spt.trackedCommitData[0].verificationData.LastAttestedRound = 0
+	spt.trackedCommitData[0].verificationContext.LastAttestedRound = 0
 	_, err = spt.LookupVerificationData(memoryDataRound)
 	a.ErrorIs(err, errStateProofVerificationDataNotFound)
 	a.ErrorContains(err, "memory lookup failed")
