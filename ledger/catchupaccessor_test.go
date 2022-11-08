@@ -100,7 +100,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 
 	accountsCount := uint64(b.N)
 	fileHeader := CatchpointFileHeader{
-		Version:           CatchpointFileVersionV6,
+		Version:           CatchpointFileVersionV7,
 		BalancesRound:     basics.Round(0),
 		BlocksRound:       basics.Round(0),
 		Totals:            ledgercore.AccountTotals{},
@@ -165,7 +165,7 @@ func initializeTestCatchupAccessor(t *testing.T, l *Ledger, accountsCount uint64
 
 	// We do this to initialize the accounttotals table. Needed to be able to use CompleteCatchup.
 	fileHeader := CatchpointFileHeader{
-		Version:           CatchpointFileVersionV6,
+		Version:           CatchpointFileVersionV7,
 		BalancesRound:     basics.Round(0),
 		BlocksRound:       basics.Round(0),
 		Totals:            ledgercore.AccountTotals{},
@@ -333,7 +333,7 @@ func TestBuildMerkleTrie(t *testing.T) {
 	// content.msgpack from this:
 	accountsCount := uint64(len(initKeys))
 	fileHeader := CatchpointFileHeader{
-		Version:           CatchpointFileVersionV6,
+		Version:           CatchpointFileVersionV7,
 		BalancesRound:     basics.Round(0),
 		BlocksRound:       basics.Round(0),
 		Totals:            ledgercore.AccountTotals{},
@@ -492,7 +492,7 @@ func TestCatchupAccessorResourceCountMismatch(t *testing.T) {
 
 	// content.msgpack from this:
 	fileHeader := CatchpointFileHeader{
-		Version:           CatchpointFileVersionV6,
+		Version:           CatchpointFileVersionV7,
 		BalancesRound:     basics.Round(0),
 		BlocksRound:       basics.Round(0),
 		Totals:            ledgercore.AccountTotals{},
@@ -602,7 +602,7 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 		TotalAccounts: numAccounts,
 		TotalChunks:   2,
 		SeenHeader:    true,
-		Version:       CatchpointFileVersionV6,
+		Version:       CatchpointFileVersionV7,
 	}
 
 	// create some walking gentlemen
