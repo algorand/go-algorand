@@ -205,7 +205,7 @@ type Local struct {
 	CatchupParallelBlocks uint64 `version[3]:"50" version[5]:"16"`
 
 	// Generate AssembleBlockMetrics telemetry event
-	EnableAssembleStats bool `version[0]:""`
+	EnableAssembleStats bool `version[0]:"" version[25]:"true"`
 
 	// Generate ProcessBlockMetrics telemetry event
 	EnableProcessBlockStats bool `version[0]:""`

@@ -54,7 +54,7 @@ var defaultLocal = Local{
 	EnableAccountUpdatesStats:                  false,
 	EnableAgreementReporting:                   false,
 	EnableAgreementTimeMetrics:                 false,
-	EnableAssembleStats:                        false,
+	EnableAssembleStats:                        true,
 	EnableBlockService:                         false,
 	EnableBlockServiceFallbackToArchiver:       true,
 	EnableCatchupFromArchiveServers:            false,
