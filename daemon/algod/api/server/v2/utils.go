@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 
@@ -208,7 +209,7 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 func getCodecHandle(formatPtr *model.Format) (codec.Handle, string, error) {
 	format := model.Json
 	if formatPtr != nil {
-		format = model.PendingTransactionInformationParamsFormat(*formatPtr)
+		format = model.PendingTransactionInformationParamsFormat(strings.ToLower(string(*formatPtr)))
 	}
 
 	switch format {

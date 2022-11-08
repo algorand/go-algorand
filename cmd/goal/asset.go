@@ -793,7 +793,6 @@ var infoAssetCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
-
 		res := reserve.AssetHolding
 
 		fmt.Printf("Asset ID:         %d\n", assetID)
