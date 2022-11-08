@@ -62,7 +62,7 @@ func MakeCatchpointLabelMakerV6(ledgerRound basics.Round, ledgerRoundBlockHash c
 
 func (l CatchpointLabelMakerV6) toBuffer() []byte {
 	encodedTotals := protocol.EncodeReflect(&l.totals)
-	buffer := make([]byte, 3*crypto.DigestSize+len(encodedTotals))
+	buffer := make([]byte, 2*crypto.DigestSize+len(encodedTotals))
 	copy(buffer[:], l.ledgerRoundBlockHash[:])
 	copy(buffer[crypto.DigestSize:], l.balancesMerkleRoot[:])
 	copy(buffer[crypto.DigestSize*2:], encodedTotals)
