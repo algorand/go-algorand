@@ -890,7 +890,7 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 	if version <= CatchpointFileVersionV6 {
 		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerV6(blockRound, blk.Digest(), balancesHash, totals)
 	} else {
-		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerV7(blockRound, blk.Digest(), balancesHash, totals, stateProofVerificationDataHash)
+		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerCurrent(blockRound, blk.Digest(), balancesHash, totals, stateProofVerificationDataHash)
 	}
 	generatedLabel := ledgercore.MakeLabel(catchpointLabelMaker)
 

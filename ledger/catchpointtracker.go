@@ -724,7 +724,7 @@ func repackCatchpoint(ctx context.Context, header CatchpointFileHeader, biggestC
 // the unfinished catchpoint record.
 func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound basics.Round, round basics.Round, dataInfo catchpointFirstStageInfo, blockHash crypto.Digest) error {
 	startTime := time.Now()
-	labelMaker := ledgercore.MakeCatchpointLabelMakerV7(round, blockHash, dataInfo.TrieBalancesHash, dataInfo.Totals, dataInfo.StateProofVerificationHash)
+	labelMaker := ledgercore.MakeCatchpointLabelMakerCurrent(round, blockHash, dataInfo.TrieBalancesHash, dataInfo.Totals, dataInfo.StateProofVerificationHash)
 	label := ledgercore.MakeLabel(labelMaker)
 
 	ct.log.Infof(

@@ -78,22 +78,22 @@ func (l CatchpointLabelMakerV6) logStr() string {
 	return fmt.Sprintf("round=%d, block digest=%s, accounts digest=%s", l.ledgerRound, l.ledgerRoundBlockHash, l.balancesMerkleRoot)
 }
 
-// CatchpointLabelMakerV7 represent a single catchpoint maker, matching catchpoints of version V7 and above.
-type CatchpointLabelMakerV7 struct {
+// CatchpointLabelMakerCurrent represent a single catchpoint maker, matching catchpoints of version V7 and above.
+type CatchpointLabelMakerCurrent struct {
 	v6Label                        CatchpointLabelMakerV6
 	stateProofVerificationDataHash crypto.Digest
 }
 
-// MakeCatchpointLabelMakerV7 creates a V7 catchpoint label given the catchpoint label parameters.
-func MakeCatchpointLabelMakerV7(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest,
-	balancesMerkleRoot crypto.Digest, totals AccountTotals, stateProofVerificationDataHash crypto.Digest) CatchpointLabelMakerV7 {
-	return CatchpointLabelMakerV7{
+// MakeCatchpointLabelMakerCurrent creates a catchpoint label given the catchpoint label parameters.
+func MakeCatchpointLabelMakerCurrent(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest,
+	balancesMerkleRoot crypto.Digest, totals AccountTotals, stateProofVerificationDataHash crypto.Digest) CatchpointLabelMakerCurrent {
+	return CatchpointLabelMakerCurrent{
 		v6Label:                        MakeCatchpointLabelMakerV6(ledgerRound, ledgerRoundBlockHash, balancesMerkleRoot, totals),
 		stateProofVerificationDataHash: stateProofVerificationDataHash,
 	}
 }
 
-func (l CatchpointLabelMakerV7) toBuffer() []byte {
+func (l CatchpointLabelMakerCurrent) toBuffer() []byte {
 	v6Buffer := l.v6Label.toBuffer()
 
 	buffer := make([]byte, crypto.DigestSize)
@@ -102,11 +102,11 @@ func (l CatchpointLabelMakerV7) toBuffer() []byte {
 	return append(v6Buffer, buffer...)
 }
 
-func (l CatchpointLabelMakerV7) getRound() basics.Round {
+func (l CatchpointLabelMakerCurrent) getRound() basics.Round {
 	return l.v6Label.getRound()
 }
 
-func (l CatchpointLabelMakerV7) logStr() string {
+func (l CatchpointLabelMakerCurrent) logStr() string {
 	return fmt.Sprintf("%s state proof verification data digest=%s", l.v6Label.logStr(), l.stateProofVerificationDataHash)
 }
 
