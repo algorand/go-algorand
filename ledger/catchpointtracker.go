@@ -68,10 +68,13 @@ const (
 
 	// CatchpointFileVersionV5 is the catchpoint file version that was used when the database schema was V0-V5.
 	CatchpointFileVersionV5 = uint64(0200)
-	// CatchpointFileVersionV6 is the catchpoint file version that is matching database schema V6.
+	// CatchpointFileVersionV6 is the catchpoint file version that is matching database schema V6-V8.
 	// This version introduced accounts and resources separation. The first catchpoint
 	// round of this version is >= `reenableCatchpointsRound`.
 	CatchpointFileVersionV6 = uint64(0201)
+	// CatchpointFileVersionV7 is the catchpoint file version that is matching database schema V9.
+	// This version introduced state proof verification data and versioning for CatchpointLabel.
+	CatchpointFileVersionV7 = uint64(0202)
 )
 
 // TrieMemoryConfig is the memory configuration setup used for the merkle trie.
@@ -721,8 +724,8 @@ func repackCatchpoint(ctx context.Context, header CatchpointFileHeader, biggestC
 // the unfinished catchpoint record.
 func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound basics.Round, round basics.Round, dataInfo catchpointFirstStageInfo, blockHash crypto.Digest) error {
 	startTime := time.Now()
-	label := ledgercore.MakeCatchpointLabel(
-		round, blockHash, dataInfo.TrieBalancesHash, dataInfo.StateProofVerificationHash, dataInfo.Totals).String()
+	labelMaker := ledgercore.MakeCatchpointLabelMakerV7(round, blockHash, dataInfo.TrieBalancesHash, dataInfo.Totals, dataInfo.StateProofVerificationHash)
+	label := ledgercore.MakeLabel(labelMaker)
 
 	ct.log.Infof(
 		"creating catchpoint round: %d accountsRound: %d label: %s",
@@ -757,7 +760,7 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 
 	// Make a catchpoint file.
 	header := CatchpointFileHeader{
-		Version:           CatchpointFileVersionV6,
+		Version:           CatchpointFileVersionV7,
 		BalancesRound:     accountsRound,
 		BlocksRound:       round,
 		Totals:            dataInfo.Totals,
