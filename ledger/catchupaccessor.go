@@ -52,12 +52,6 @@ type CatchpointCatchupAccessor interface {
 	// SetLabel set the catchpoint catchup label
 	SetLabel(ctx context.Context, label string) (err error)
 
-	// GetVersion returns the current catchpoint version
-	GetVersion(ctx context.Context) (version uint64, err error)
-
-	// SetVersion set the catchpoint version
-	SetVersion(ctx context.Context, version uint64) (err error)
-
 	// ResetStagingBalances resets the current staging balances, preparing for a new set of balances to be added
 	ResetStagingBalances(ctx context.Context, newCatchup bool) (err error)
 
@@ -228,31 +222,15 @@ func (c *catchpointCatchupAccessorImpl) SetLabel(ctx context.Context, label stri
 	// verify it's parsable :
 	_, _, err = ledgercore.ParseCatchpointLabel(label)
 	if err != nil {
+		fmt.Printf("PADDD\n")
 		return
 	}
+
 	err = writeCatchpointStateString(ctx, c.ledger.trackerDB().Wdb.Handle, catchpointStateCatchupLabel, label)
 	if err != nil {
 		return fmt.Errorf("unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupLabel, err)
 	}
-	return
-}
-
-// GetVersion returns the current catchpoint version
-func (c *catchpointCatchupAccessorImpl) GetVersion(ctx context.Context) (version uint64, err error) {
-	version, err = readCatchpointStateUint64(ctx, c.ledger.trackerDB().Rdb.Handle, catchpointStateCatchupVersion)
-	if err != nil {
-		return version, fmt.Errorf("unable to read catchpoint catchup state '%s': %v", catchpointStateCatchupVersion, err)
-	}
-
-	return
-}
-
-// SetVersion sets the catchpoint version
-func (c *catchpointCatchupAccessorImpl) SetVersion(ctx context.Context, version uint64) (err error) {
-	err = writeCatchpointStateUint64(ctx, c.ledger.trackerDB().Wdb.Handle, catchpointStateCatchupVersion, version)
-	if err != nil {
-		return fmt.Errorf("unable to write catchpoint version '%s': %v", catchpointStateCatchupLabel, err)
-	}
+	fmt.Printf("SET LABEL TO %s\n", label)
 	return
 }
 
@@ -382,12 +360,12 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	wdb := c.ledger.trackerDB().Wdb
 	start := time.Now()
 	ledgerProcessstagingcontentCount.Inc(nil)
-	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		err = c.SetVersion(ctx, fileHeader.Version)
-		if err != nil {
-			return err
-		}
+	err = writeCatchpointStateUint64(ctx, wdb.Handle, catchpointStateCatchupVersion, fileHeader.Version)
+	if err != nil {
+		return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupVersion, err)
+	}
 
+	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		err = writeCatchpointStateUint64(ctx, tx, catchpointStateCatchupBlockRound, uint64(fileHeader.BlocksRound))
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupBlockRound, err)
@@ -409,6 +387,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 		progress.Version = fileHeader.Version
 		c.ledger.setSynchronousMode(ctx, c.ledger.accountsRebuildSynchronousMode)
 	}
+
 	return err
 }
 
@@ -854,6 +833,11 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 		return fmt.Errorf("unable to read catchpoint catchup state '%s': %v", catchpointStateCatchupLabel, err)
 	}
 
+	version, err = readCatchpointStateUint64(ctx, rdb.Handle, catchpointStateCatchupVersion)
+	if err != nil {
+		return fmt.Errorf("unable to retrieve catchpoint version: %v", err)
+	}
+
 	var iRound uint64
 	iRound, err = readCatchpointStateUint64(ctx, rdb.Handle, catchpointStateCatchupBlockRound)
 	if err != nil {
@@ -865,11 +849,6 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 	ledgerVerifycatchpointCount.Inc(nil)
 
 	err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		version, err = c.GetVersion(ctx)
-		if err != nil {
-			return fmt.Errorf("unable to retrieve catchpoint version: %v", err)
-		}
-
 		// create the merkle trie for the balances
 		mc, err0 := MakeMerkleCommitter(tx, true)
 		if err0 != nil {
