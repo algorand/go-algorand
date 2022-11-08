@@ -196,7 +196,7 @@ func BenchmarkUnmarshalOnlineRoundParamsData(b *testing.B) {
 
 func TestMarshalUnmarshalSPVerificationContext(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := SPVerificationContext{}
+	v := StateProofVerificationContext{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -216,11 +216,11 @@ func TestMarshalUnmarshalSPVerificationContext(t *testing.T) {
 }
 
 func TestRandomizedEncodingSPVerificationContext(t *testing.T) {
-	protocol.RunEncodingTest(t, &SPVerificationContext{})
+	protocol.RunEncodingTest(t, &StateProofVerificationContext{})
 }
 
 func BenchmarkMarshalMsgSPVerificationContext(b *testing.B) {
-	v := SPVerificationContext{}
+	v := StateProofVerificationContext{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -229,7 +229,7 @@ func BenchmarkMarshalMsgSPVerificationContext(b *testing.B) {
 }
 
 func BenchmarkAppendMsgSPVerificationContext(b *testing.B) {
-	v := SPVerificationContext{}
+	v := StateProofVerificationContext{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -241,7 +241,7 @@ func BenchmarkAppendMsgSPVerificationContext(b *testing.B) {
 }
 
 func BenchmarkUnmarshalSPVerificationContext(b *testing.B) {
-	v := SPVerificationContext{}
+	v := StateProofVerificationContext{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

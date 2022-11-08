@@ -107,8 +107,8 @@ func (ml *emptyLedger) GetStateProofNextRound() basics.Round {
 	return basics.Round(0)
 }
 
-func (ml *emptyLedger) StateProofVerificationData(_ basics.Round) (*ledgercore.SPVerificationContext, error) {
-	return nil, fmt.Errorf("emptyLedger does not implement SPVerificationContext")
+func (ml *emptyLedger) StateProofVerificationData(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("emptyLedger does not implement StateProofVerificationContext")
 }
 
 type modsData struct {

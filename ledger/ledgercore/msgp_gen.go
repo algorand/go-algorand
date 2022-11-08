@@ -31,7 +31,7 @@ import (
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
 //
-// SPVerificationContext
+// StateProofVerificationContext
 //           |-----> (*) MarshalMsg
 //           |-----> (*) CanMarshalMsg
 //           |-----> (*) UnmarshalMsg
@@ -947,7 +947,7 @@ func (z *OnlineRoundParamsData) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *SPVerificationContext) MarshalMsg(b []byte) (o []byte) {
+func (z *StateProofVerificationContext) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(4)
@@ -995,13 +995,13 @@ func (z *SPVerificationContext) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *SPVerificationContext) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*SPVerificationContext)
+func (_ *StateProofVerificationContext) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofVerificationContext)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *SPVerificationContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *StateProofVerificationContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -1058,7 +1058,7 @@ func (z *SPVerificationContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		if zb0002 {
-			(*z) = SPVerificationContext{}
+			(*z) = StateProofVerificationContext{}
 		}
 		for zb0001 > 0 {
 			zb0001--
@@ -1105,18 +1105,18 @@ func (z *SPVerificationContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *SPVerificationContext) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*SPVerificationContext)
+func (_ *StateProofVerificationContext) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofVerificationContext)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *SPVerificationContext) Msgsize() (s int) {
+func (z *StateProofVerificationContext) Msgsize() (s int) {
 	s = 1 + 8 + (*z).LastAttestedRound.Msgsize() + 3 + (*z).VotersCommitment.Msgsize() + 3 + (*z).OnlineTotalWeight.Msgsize() + 2 + (*z).Version.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *SPVerificationContext) MsgIsZero() bool {
+func (z *StateProofVerificationContext) MsgIsZero() bool {
 	return ((*z).LastAttestedRound.MsgIsZero()) && ((*z).VotersCommitment.MsgIsZero()) && ((*z).OnlineTotalWeight.MsgIsZero()) && ((*z).Version.MsgIsZero())
 }

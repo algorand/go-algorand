@@ -42,7 +42,7 @@ type verificationDeleteData struct {
 
 type verificationCommitData struct {
 	confirmedRound   basics.Round
-	verificationData ledgercore.SPVerificationContext
+	verificationData ledgercore.StateProofVerificationContext
 }
 
 // stateProofVerificationTracker is in charge of tracking data required to verify state proofs until such a time
@@ -165,7 +165,7 @@ func (spt *stateProofVerificationTracker) close() {
 	}
 }
 
-func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.SPVerificationContext, error) {
+func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	spt.mu.RLock()
 	defer spt.mu.RUnlock()
 
@@ -178,13 +178,13 @@ func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastA
 		return spt.lookupDataInDB(stateProofLastAttestedRound)
 	}
 
-	return &ledgercore.SPVerificationContext{}, fmt.Errorf("requested data for round %d, greater than maximum data round %d: %w",
+	return &ledgercore.StateProofVerificationContext{}, fmt.Errorf("requested data for round %d, greater than maximum data round %d: %w",
 		stateProofLastAttestedRound,
 		spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.LastAttestedRound,
 		errStateProofVerificationDataNotFound)
 }
 
-func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.SPVerificationContext, error) {
+func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	for _, commitData := range spt.trackedCommitData {
 		if commitData.verificationData.LastAttestedRound == stateProofLastAttestedRound {
 			verificationDataCopy := commitData.verificationData
@@ -192,11 +192,11 @@ func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLa
 		}
 	}
 
-	return &ledgercore.SPVerificationContext{}, fmt.Errorf("%w for round %d: memory lookup failed",
+	return &ledgercore.StateProofVerificationContext{}, fmt.Errorf("%w for round %d: memory lookup failed",
 		errStateProofVerificationDataNotFound, stateProofLastAttestedRound)
 }
 
-func (spt *stateProofVerificationTracker) lookupDataInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.SPVerificationContext, error) {
+func (spt *stateProofVerificationTracker) lookupDataInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	verificationData, err := spt.dbQueries.lookupData(stateProofLastAttestedRound)
 	if err != nil {
 		err = fmt.Errorf("%w for round %d: %s", errStateProofVerificationDataNotFound, stateProofLastAttestedRound, err)
@@ -245,7 +245,7 @@ func (spt *stateProofVerificationTracker) appendCommitData(blk *bookkeeping.Bloc
 		}
 	}
 
-	verificationData := ledgercore.SPVerificationContext{
+	verificationData := ledgercore.StateProofVerificationContext{
 		VotersCommitment:  blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
 		OnlineTotalWeight: blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
 		LastAttestedRound: blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval),

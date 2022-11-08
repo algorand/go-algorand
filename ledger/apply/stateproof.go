@@ -53,7 +53,7 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 		return err
 	}
 
-	var verificationData *ledgercore.SPVerificationContext
+	var verificationData *ledgercore.StateProofVerificationContext
 	if config.Consensus[atRoundHdr.CurrentProtocol].StateProofUseTrackerVerification {
 		verificationData, err = sp.StateProofVerificationData(lastRoundInInterval)
 	} else {
@@ -73,7 +73,7 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 	return nil
 }
 
-func gatherVerificationDataUsingBlockHeaders(sp StateProofsApplier, lastRoundInInterval basics.Round) (*ledgercore.SPVerificationContext, error) {
+func gatherVerificationDataUsingBlockHeaders(sp StateProofsApplier, lastRoundInInterval basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	lastRoundHdr, err := sp.BlockHdr(lastRoundInInterval)
 	if err != nil {
 		return nil, err
@@ -85,7 +85,7 @@ func gatherVerificationDataUsingBlockHeaders(sp StateProofsApplier, lastRoundInI
 		return nil, err
 	}
 
-	verificationData := ledgercore.SPVerificationContext{
+	verificationData := ledgercore.StateProofVerificationContext{
 		LastAttestedRound: lastRoundInInterval,
 		VotersCommitment:  votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
 		OnlineTotalWeight: votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
