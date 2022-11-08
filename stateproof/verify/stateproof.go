@@ -140,7 +140,7 @@ func GetProvenWeight(votersHdr *bookkeeping.BlockHeader, latestRoundInProofHdr *
 }
 
 // ValidateStateProof checks that a state proof is valid.
-func ValidateStateProof(verificationData *ledgercore.StateProofVerificationData, stateProof *stateproof.StateProof, atRound basics.Round, msg *stateproofmsg.Message) error {
+func ValidateStateProof(verificationData *ledgercore.SPVerificationContext, stateProof *stateproof.StateProof, atRound basics.Round, msg *stateproofmsg.Message) error {
 	proto := config.Consensus[verificationData.Version]
 
 	if proto.StateProofInterval == 0 {

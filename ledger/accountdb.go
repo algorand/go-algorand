@@ -5364,8 +5364,8 @@ func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificatio
 	return qs, nil
 }
 
-func (qs *stateProofVerificationDbQueries) lookupData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
-	data := ledgercore.StateProofVerificationData{}
+func (qs *stateProofVerificationDbQueries) lookupData(stateProofLastAttestedRound basics.Round) (*ledgercore.SPVerificationContext, error) {
+	data := ledgercore.SPVerificationContext{}
 	queryFunc := func() error {
 		row := qs.lookupStateProofVerificationData.QueryRow(stateProofLastAttestedRound)
 		var buf []byte

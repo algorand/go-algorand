@@ -47,7 +47,7 @@ type LedgerForCowBase interface {
 	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
 	LookupKv(basics.Round, string) ([]byte, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
-	StateProofVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error)
+	StateProofVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.SPVerificationContext, error)
 }
 
 // ErrRoundZero is self-explanatory
@@ -338,7 +338,7 @@ func (x *roundCowBase) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 	return x.l.BlockHdr(r)
 }
 
-func (x *roundCowBase) StateProofVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+func (x *roundCowBase) StateProofVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.SPVerificationContext, error) {
 	return x.l.StateProofVerificationData(stateProofLastAttestedRound)
 }
 

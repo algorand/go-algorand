@@ -36,7 +36,7 @@ type mockLedger struct {
 	balanceMap             map[basics.Address]basics.AccountData
 	blocks                 map[basics.Round]bookkeeping.BlockHeader
 	blockErr               map[basics.Round]error
-	stateProofVerification map[basics.Round]*ledgercore.StateProofVerificationData
+	stateProofVerification map[basics.Round]*ledgercore.SPVerificationContext
 }
 
 func (ml *mockLedger) lookup(addr basics.Address) (ledgercore.AccountData, error) {
@@ -112,7 +112,7 @@ func (ml *mockLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader,
 	return ml.blockHdrCached(rnd)
 }
 
-func (ml *mockLedger) StateProofVerificationData(rnd basics.Round) (*ledgercore.StateProofVerificationData, error) {
+func (ml *mockLedger) StateProofVerificationData(rnd basics.Round) (*ledgercore.SPVerificationContext, error) {
 	element, exists := ml.stateProofVerification[rnd]
 	if !exists {
 		return nil, fmt.Errorf("requested state proof verification data not found")

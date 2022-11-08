@@ -831,7 +831,7 @@ func (aul *accountUpdatesLedgerEvaluator) VotersForStateProof(rnd basics.Round) 
 	return aul.ao.voters.getVoters(rnd)
 }
 
-func (aul *accountUpdatesLedgerEvaluator) StateProofVerificationData(_ basics.Round) (*ledgercore.StateProofVerificationData, error) {
+func (aul *accountUpdatesLedgerEvaluator) StateProofVerificationData(_ basics.Round) (*ledgercore.SPVerificationContext, error) {
 	// this function should not be used by accountUpdatesLedgerEvaluator
 	return nil, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to get stateProofVerification data during accountUpdates initialization ")
 }

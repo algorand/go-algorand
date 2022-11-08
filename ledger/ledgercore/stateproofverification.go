@@ -22,8 +22,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// StateProofVerificationData represents the data provided by the ledger to verify a state proof transaction.
-type StateProofVerificationData struct {
+// SPVerificationContext represents the context provided by the ledger to verify a state proof transaction.
+type SPVerificationContext struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// LastAttestedRound is the last attested round of the state proof verified using this data.
