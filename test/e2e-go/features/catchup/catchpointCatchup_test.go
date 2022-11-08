@@ -409,17 +409,15 @@ func TestNodeServicesRestart(t *testing.T) {
 		t.Skip()
 	}
 	a := require.New(fixtures.SynchronizedTest(t))
-	log := logging.TestingLog(t)
-
 	// Overview of this test:
 	// Start a two-node network (primary has 100%, secondary has 0%)
 	// Wait until a catchpoint is created
 	// Let the primary node catchup from the catchpoint
 	// Send a transaction from the second node
-	// The transaction will not be confirmed because the primary node with most of the stake, will never receive it
+	// The transaction will not be confirmed because, the primary node with most of the stake, will never receive it
 
 	consensus := make(config.ConsensusProtocols)
-	const consensusCatchpointCatchupTestProtocol = protocol.ConsensusVersion("catchpointtestingprotocol") //protocol.ConsensusCurrentVersion
+	const consensusCatchpointCatchupTestProtocol = protocol.ConsensusVersion("catchpointtestingprotocol")
 	catchpointCatchupProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
 	catchpointCatchupProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
@@ -441,9 +439,6 @@ func TestNodeServicesRestart(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
-
-	errorsCollector := nodeExitErrorCollector{t: fixtures.SynchronizedTest(t)}
-	defer errorsCollector.Print()
 
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
 
@@ -471,57 +466,39 @@ func TestNodeServicesRestart(t *testing.T) {
 
 	fixture.Start()
 
-	// Let the network make some progress
-	currentRound := uint64(1)
-	// fast catchup downloads some blocks back from catchpoint round - CatchpointLookback
-	expectedBlocksToDownload := catchpointCatchupProtocol.MaxTxnLife + catchpointCatchupProtocol.DeeperBlockHeaderHistory
-	const restrictedBlockRound = 2 // block number that is rejected to be downloaded to ensure fast catchup and not regular catchup is running
-	// calculate the target round: this is the next round after catchpoint
-	// that is greater than expectedBlocksToDownload before the restrictedBlock block number
-	minRound := restrictedBlockRound + catchpointCatchupProtocol.CatchpointLookback
-	targetCatchpointRound := (basics.Round(expectedBlocksToDownload+minRound)/catchpointInterval + 1) * catchpointInterval
-	targetRound := uint64(targetCatchpointRound) + 1
-	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
-	log.Infof("Building ledger history..")
-	for {
-		err = fixture.ClientWaitForRound(primaryNodeRestClient, currentRound, 45*time.Second)
-		a.NoError(err)
-		if targetRound <= currentRound {
-			break
-		}
-		currentRound++
-	}
-	log.Infof("done building!\n")
-	// wait until node is caught up.
-	secondNodeRestClient := fixture.GetAlgodClientForController(secondNode)
+	// fund the poor node's account
+	client1 := fixture.GetLibGoalClientFromNodeController(primaryNode)
+	client2 := fixture.GetLibGoalClientFromNodeController(secondNode)
+	wallet1, err := client1.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	wallet2, err := client2.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addrs1, err := client1.ListAddresses(wallet1)
+	a.NoError(err)
+	addrs2, err := client2.ListAddresses(wallet2)
+	a.NoError(err)
 
-	currentRound = uint64(1)
-	secondNodeTargetRound := uint64(1)
-	log.Infof("Second node catching up to round 1")
-	for {
-		err = fixture.ClientWaitForRound(secondNodeRestClient, currentRound, 10*time.Second)
-		a.NoError(err)
-		if secondNodeTargetRound <= currentRound {
-			break
-		}
-		currentRound++
-
-	}
-	log.Infof(" - done catching up!\n")
+	// fund the poor account
+	tx, err := client1.SendPaymentFromUnencryptedWallet(addrs1[0], addrs2[0], 1000, 1000000, nil)
+	a.NoError(err)
+	status, err := client1.Status()
+	a.NoError(err)
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, addrs1[0], tx.ID().String())
+	a.NoError(err)
+	targetCatchpointRound := status.LastRound
 
 	// ensure the catchpoint is created for targetCatchpointRound
-	var status generatedV2.NodeStatusResponse
 	timer := time.NewTimer(10 * time.Second)
 outer:
 	for {
-		status, err = primaryNodeRestClient.Status()
+		status, err = client1.Status()
 		a.NoError(err)
 
 		var round basics.Round
 		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
 			round, _, err = ledgercore.ParseCatchpointLabel(*status.LastCatchpoint)
 			a.NoError(err)
-			if round >= targetCatchpointRound {
+			if uint64(round) >= targetCatchpointRound {
 				break
 			}
 		}
@@ -534,26 +511,8 @@ outer:
 		}
 	}
 
-	// fund the poor node's account
-	client1 := fixture.GetLibGoalClientFromNodeController(primaryNode)
-	client2 := fixture.GetLibGoalClientFromNodeController(secondNode)
-	wallet1, err := client1.GetUnencryptedWalletHandle()
-	a.NoError(err)
-	wallet2, err := client2.GetUnencryptedWalletHandle()
-	a.NoError(err)
-	addrs1, err := client1.ListAddresses(wallet1)
-	a.NoError(err)
-	addrs2, err := client2.ListAddresses(wallet2)
-	a.NoError(err)
-	// fund the poor account
-	tx, err := client1.SendPaymentFromUnencryptedWallet(addrs1[0], addrs2[0], 1000, 1000000, nil)
-	a.NoError(err)
-	status, err = client1.Status()
-	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, addrs1[0], tx.ID().String())
-	a.NoError(err)
-
-	_, err = primaryNodeRestClient.Catchup(*status.LastCatchpoint)
+	// let the primary node catchup
+	err = client1.Catchup(*status.LastCatchpoint)
 	a.NoError(err)
 
 	// let the 2nd client send a transaction
