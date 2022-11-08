@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
@@ -177,6 +178,15 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 
 	// at this point, we've verified the transaction, so we can safely treat the transaction as a verified transaction.
 	verifiedTxGroup := wi.unverifiedTxGroup
+
+	var txidlist strings.Builder
+	for i, stxn := range verifiedTxGroup {
+		if i != 0 {
+			txidlist.WriteRune(' ')
+		}
+		txidlist.WriteString(stxn.ID().String())
+	}
+	logging.Base().Infof("TX txid-in %s", txidlist.String())
 
 	// save the transaction, if it has high enough fee and not already in the cache
 	err := handler.txPool.Remember(verifiedTxGroup)
