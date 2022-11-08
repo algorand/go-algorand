@@ -190,3 +190,21 @@ func TestCowBalance(t *testing.T) {
 	c1.commitToParent()
 	checkCowByUpdate(t, c0, updates2)
 }
+
+func BenchmarkCowChild(b *testing.B) {
+	b.ReportAllocs()
+	cow := makeRoundCowState(nil, bookkeeping.BlockHeader{}, config.ConsensusParams{}, 10000, ledgercore.AccountTotals{}, 300)
+	for i := 0; i < b.N; i++ {
+		cow.child(300)
+		cow.recycle()
+	}
+}
+
+// Ensure that we aren't doing allocs when calling cow.child
+// large enough b.N forces allocsPerOp to round to zero
+func TestCowChildRecycle(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	child := testing.Benchmark(BenchmarkCowChild)
+	require.Zero(t, child.AllocsPerOp())
+}

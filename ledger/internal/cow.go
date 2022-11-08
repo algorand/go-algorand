@@ -67,6 +67,7 @@ type roundCowParent interface {
 	kvGet(key string) ([]byte, bool, error)
 }
 
+// When adding new fields make sure to clear them in the roundCowState.recycle() as well to avoid dirty state
 type roundCowState struct {
 	lookupParent roundCowParent
 	commitParent *roundCowState
@@ -273,28 +274,17 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 	ch.lookupParent = cb
 	ch.commitParent = cb
 	ch.proto = cb.proto
-	ch.txnCount = uint64(0)
-	ch.prevTotals = ledgercore.AccountTotals{}
-	ch.mods.ReuseStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.StateProofNext)
+	ch.mods.PopulateStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.StateProofNext)
 
 	if ch.sdeltas == nil {
 		ch.sdeltas = make(map[basics.Address]map[storagePtr]*storageDelta)
-	} else {
-		// reset sdeltas
-		for addr, sMap := range ch.sdeltas {
-			for ptr := range sMap {
-				delete(sMap, ptr)
-			}
-			delete(ch.sdeltas, addr)
-		}
 	}
 
 	if cb.compatibilityMode {
 		ch.compatibilityMode = cb.compatibilityMode
-		ch.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
-	} else {
-		ch.compatibilityMode = false
-		ch.compatibilityGetKeyCache = nil
+		if ch.compatibilityGetKeyCache == nil {
+			ch.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
+		}
 	}
 	return ch
 }
@@ -337,6 +327,25 @@ func (cb *roundCowState) commitToParent() {
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {
 	return cb.mods.Accts.ModifiedAccounts()
+}
+
+// recycle resets the roundcowstate and returns it to the sync.Pool
+func (cb *roundCowState) recycle() {
+	cb.lookupParent = nil
+	cb.commitParent = nil
+	cb.proto = config.ConsensusParams{}
+	cb.mods.Reset()
+	cb.txnCount = 0
+	for addr := range cb.sdeltas {
+		delete(cb.sdeltas, addr)
+	}
+	cb.compatibilityMode = false
+	for addr := range cb.compatibilityGetKeyCache {
+		delete(cb.compatibilityGetKeyCache, addr)
+	}
+	cb.prevTotals = ledgercore.AccountTotals{}
+
+	childPool.Put(cb)
 }
 
 // errUnsupportedChildCowTotalCalculation is returned by CalculateTotals when called by a child roundCowState instance
