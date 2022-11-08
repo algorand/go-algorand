@@ -222,7 +222,6 @@ func (c *catchpointCatchupAccessorImpl) SetLabel(ctx context.Context, label stri
 	// verify it's parsable :
 	_, _, err = ledgercore.ParseCatchpointLabel(label)
 	if err != nil {
-		fmt.Printf("PADDD\n")
 		return
 	}
 
