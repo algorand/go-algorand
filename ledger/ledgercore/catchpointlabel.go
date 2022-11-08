@@ -51,8 +51,8 @@ type CatchpointLabelMakerV6 struct {
 
 // MakeCatchpointLabelMakerV6 creates a V6 catchpoint label given the catchpoint label parameters.
 func MakeCatchpointLabelMakerV6(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest,
-	balancesMerkleRoot crypto.Digest, totals AccountTotals) CatchpointLabelMakerV6 {
-	return CatchpointLabelMakerV6{
+	balancesMerkleRoot crypto.Digest, totals AccountTotals) *CatchpointLabelMakerV6 {
+	return &CatchpointLabelMakerV6{
 		ledgerRound:          ledgerRound,
 		ledgerRoundBlockHash: ledgerRoundBlockHash,
 		balancesMerkleRoot:   balancesMerkleRoot,
@@ -60,7 +60,7 @@ func MakeCatchpointLabelMakerV6(ledgerRound basics.Round, ledgerRoundBlockHash c
 	}
 }
 
-func (l CatchpointLabelMakerV6) toBuffer() []byte {
+func (l *CatchpointLabelMakerV6) toBuffer() []byte {
 	encodedTotals := protocol.EncodeReflect(&l.totals)
 	buffer := make([]byte, 2*crypto.DigestSize+len(encodedTotals))
 	copy(buffer[:], l.ledgerRoundBlockHash[:])
@@ -70,11 +70,11 @@ func (l CatchpointLabelMakerV6) toBuffer() []byte {
 	return buffer
 }
 
-func (l CatchpointLabelMakerV6) getRound() basics.Round {
+func (l *CatchpointLabelMakerV6) getRound() basics.Round {
 	return l.ledgerRound
 }
 
-func (l CatchpointLabelMakerV6) logStr() string {
+func (l *CatchpointLabelMakerV6) logStr() string {
 	return fmt.Sprintf("round=%d, block digest=%s, accounts digest=%s", l.ledgerRound, l.ledgerRoundBlockHash, l.balancesMerkleRoot)
 }
 
@@ -86,14 +86,14 @@ type CatchpointLabelMakerCurrent struct {
 
 // MakeCatchpointLabelMakerCurrent creates a catchpoint label given the catchpoint label parameters.
 func MakeCatchpointLabelMakerCurrent(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest,
-	balancesMerkleRoot crypto.Digest, totals AccountTotals, stateProofVerificationDataHash crypto.Digest) CatchpointLabelMakerCurrent {
-	return CatchpointLabelMakerCurrent{
-		v6Label:                        MakeCatchpointLabelMakerV6(ledgerRound, ledgerRoundBlockHash, balancesMerkleRoot, totals),
+	balancesMerkleRoot crypto.Digest, totals AccountTotals, stateProofVerificationDataHash crypto.Digest) *CatchpointLabelMakerCurrent {
+	return &CatchpointLabelMakerCurrent{
+		v6Label:                        *MakeCatchpointLabelMakerV6(ledgerRound, ledgerRoundBlockHash, balancesMerkleRoot, totals),
 		stateProofVerificationDataHash: stateProofVerificationDataHash,
 	}
 }
 
-func (l CatchpointLabelMakerCurrent) toBuffer() []byte {
+func (l *CatchpointLabelMakerCurrent) toBuffer() []byte {
 	v6Buffer := l.v6Label.toBuffer()
 
 	buffer := make([]byte, crypto.DigestSize)
@@ -102,11 +102,11 @@ func (l CatchpointLabelMakerCurrent) toBuffer() []byte {
 	return append(v6Buffer, buffer...)
 }
 
-func (l CatchpointLabelMakerCurrent) getRound() basics.Round {
+func (l *CatchpointLabelMakerCurrent) getRound() basics.Round {
 	return l.v6Label.getRound()
 }
 
-func (l CatchpointLabelMakerCurrent) logStr() string {
+func (l *CatchpointLabelMakerCurrent) logStr() string {
 	return fmt.Sprintf("%s state proof verification data digest=%s", l.v6Label.logStr(), l.stateProofVerificationDataHash)
 }
 
