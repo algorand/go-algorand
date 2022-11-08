@@ -213,8 +213,8 @@ func (l indexerLedgerConnector) VotersForStateProof(_ basics.Round) (*ledgercore
 	return nil, errors.New("VotersForStateProof() not implemented")
 }
 
-// StateProofVerificationData is part of LedgerForEvaluator interface.
-func (l indexerLedgerConnector) StateProofVerificationData(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+// StateProofVerificationContext is part of LedgerForEvaluator interface.
+func (l indexerLedgerConnector) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	// This function is not used by evaluator.
 	return nil, errors.New("StateProofVerificationContext() not implemented")
 }

@@ -140,38 +140,38 @@ func GetProvenWeight(votersHdr *bookkeeping.BlockHeader, latestRoundInProofHdr *
 }
 
 // ValidateStateProof checks that a state proof is valid.
-func ValidateStateProof(verificationData *ledgercore.StateProofVerificationContext, stateProof *stateproof.StateProof, atRound basics.Round, msg *stateproofmsg.Message) error {
-	proto := config.Consensus[verificationData.Version]
+func ValidateStateProof(verificationContext *ledgercore.StateProofVerificationContext, stateProof *stateproof.StateProof, atRound basics.Round, msg *stateproofmsg.Message) error {
+	proto := config.Consensus[verificationContext.Version]
 
 	if proto.StateProofInterval == 0 {
 		return fmt.Errorf("rounds = %d: %w", proto.StateProofInterval, errStateProofNotEnabled)
 	}
 
-	if verificationData.LastAttestedRound%basics.Round(proto.StateProofInterval) != 0 {
-		return fmt.Errorf("state proof at %d for non-multiple of %d: %w", verificationData.LastAttestedRound, proto.StateProofInterval, errNotAtRightMultiple)
+	if verificationContext.LastAttestedRound%basics.Round(proto.StateProofInterval) != 0 {
+		return fmt.Errorf("state proof at %d for non-multiple of %d: %w", verificationContext.LastAttestedRound, proto.StateProofInterval, errNotAtRightMultiple)
 	}
 
-	acceptableWeight := calculateAcceptableStateProofWeight(verificationData.OnlineTotalWeight, &proto, verificationData.LastAttestedRound, atRound, logging.Base())
+	acceptableWeight := calculateAcceptableStateProofWeight(verificationContext.OnlineTotalWeight, &proto, verificationContext.LastAttestedRound, atRound, logging.Base())
 	if stateProof.SignedWeight < acceptableWeight {
 		return fmt.Errorf("insufficient weight at round %d: %d < %d: %w",
 			atRound, stateProof.SignedWeight, acceptableWeight, errInsufficientWeight)
 	}
 
-	provenWeight, overflowed := basics.Muldiv(verificationData.OnlineTotalWeight.ToUint64(), uint64(proto.StateProofWeightThreshold), 1<<32)
+	provenWeight, overflowed := basics.Muldiv(verificationContext.OnlineTotalWeight.ToUint64(), uint64(proto.StateProofWeightThreshold), 1<<32)
 	if overflowed {
 		return fmt.Errorf("overflow computing provenWeight[%d]: %d * %d / (1<<32)",
-			verificationData.LastAttestedRound, verificationData.OnlineTotalWeight.ToUint64(), proto.StateProofWeightThreshold)
+			verificationContext.LastAttestedRound, verificationContext.OnlineTotalWeight.ToUint64(), proto.StateProofWeightThreshold)
 
 	}
 
-	verifier, err := stateproof.MkVerifier(verificationData.VotersCommitment,
+	verifier, err := stateproof.MkVerifier(verificationContext.VotersCommitment,
 		provenWeight,
-		config.Consensus[verificationData.Version].StateProofStrengthTarget)
+		config.Consensus[verificationContext.Version].StateProofStrengthTarget)
 	if err != nil {
 		return err
 	}
 
-	err = verifier.Verify(uint64(verificationData.LastAttestedRound), msg.Hash(), stateProof)
+	err = verifier.Verify(uint64(verificationContext.LastAttestedRound), msg.Hash(), stateProof)
 	if err != nil {
 		return fmt.Errorf("%v: %w", err, errStateProofCrypto)
 	}

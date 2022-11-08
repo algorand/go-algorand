@@ -719,7 +719,7 @@ func (ledger *evalTestLedger) Latest() basics.Round {
 	return basics.Round(len(ledger.blocks)).SubSaturate(1)
 }
 
-func (ledger *evalTestLedger) StateProofVerificationData(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+func (ledger *evalTestLedger) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	return nil, fmt.Errorf("evalTestLedger does not implement StateProofVerificationContext")
 }
 
@@ -898,7 +898,7 @@ func (l *testCowBaseLedger) LookupKv(rnd basics.Round, key string) ([]byte, erro
 	return nil, errors.New("not implemented")
 }
 
-func (l *testCowBaseLedger) StateProofVerificationData(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+func (l *testCowBaseLedger) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	return nil, fmt.Errorf("testCowBaseLedger does not implement StateProofVerificationContext")
 }
 

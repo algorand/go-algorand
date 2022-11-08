@@ -112,7 +112,7 @@ func (ml *mockLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader,
 	return ml.blockHdrCached(rnd)
 }
 
-func (ml *mockLedger) StateProofVerificationData(rnd basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+func (ml *mockLedger) StateProofVerificationContext(rnd basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	element, exists := ml.stateProofVerification[rnd]
 	if !exists {
 		return nil, fmt.Errorf("requested state proof verification data not found")

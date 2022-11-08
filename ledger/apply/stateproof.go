@@ -53,27 +53,27 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 		return err
 	}
 
-	var verificationData *ledgercore.StateProofVerificationContext
+	var verificationContext *ledgercore.StateProofVerificationContext
 	if config.Consensus[atRoundHdr.CurrentProtocol].StateProofUseTrackerVerification {
-		verificationData, err = sp.StateProofVerificationData(lastRoundInInterval)
+		verificationContext, err = sp.StateProofVerificationContext(lastRoundInInterval)
 	} else {
-		verificationData, err = gatherVerificationDataUsingBlockHeaders(sp, lastRoundInInterval)
+		verificationContext, err = gatherVerificationContextUsingBlockHeaders(sp, lastRoundInInterval)
 	}
 	if err != nil {
 		return err
 	}
 
 	if validate {
-		if err = verify.ValidateStateProof(verificationData, &tx.StateProof, atRound, &tx.Message); err != nil {
+		if err = verify.ValidateStateProof(verificationContext, &tx.StateProof, atRound, &tx.Message); err != nil {
 			return err
 		}
 	}
 
-	sp.SetStateProofNextRound(lastRoundInInterval + basics.Round(config.Consensus[verificationData.Version].StateProofInterval))
+	sp.SetStateProofNextRound(lastRoundInInterval + basics.Round(config.Consensus[verificationContext.Version].StateProofInterval))
 	return nil
 }
 
-func gatherVerificationDataUsingBlockHeaders(sp StateProofsApplier, lastRoundInInterval basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+func gatherVerificationContextUsingBlockHeaders(sp StateProofsApplier, lastRoundInInterval basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	lastRoundHdr, err := sp.BlockHdr(lastRoundInInterval)
 	if err != nil {
 		return nil, err
@@ -85,11 +85,11 @@ func gatherVerificationDataUsingBlockHeaders(sp StateProofsApplier, lastRoundInI
 		return nil, err
 	}
 
-	verificationData := ledgercore.StateProofVerificationContext{
+	verificationContext := ledgercore.StateProofVerificationContext{
 		LastAttestedRound: lastRoundInInterval,
 		VotersCommitment:  votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
 		OnlineTotalWeight: votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
 		Version:           votersHdr.CurrentProtocol,
 	}
-	return &verificationData, nil
+	return &verificationContext, nil
 }

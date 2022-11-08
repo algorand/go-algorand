@@ -285,7 +285,7 @@ func (l *localLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, err
 	return bookkeeping.BlockHeader{}, nil
 }
 
-func (l *localLedger) StateProofVerificationData(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+func (l *localLedger) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	return nil, fmt.Errorf("localLedger: StateProofVerificationContext is not implemented")
 }
 

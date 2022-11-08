@@ -63,7 +63,7 @@ type onlineAccountsDbQueries struct {
 }
 
 type stateProofVerificationDbQueries struct {
-	lookupStateProofVerificationData *sql.Stmt
+	lookupStateProofVerificationContext *sql.Stmt
 }
 
 var accountsSchema = []string{
@@ -180,7 +180,7 @@ const createUnfinishedCatchpointsTable = `
 const createStateProofVerificationTableQuery = `
 	CREATE TABLE IF NOT EXISTS stateproofverification (
 	targetstateproofround integer primary key NOT NULL,
-	verificationdata blob NOT NULL)`
+	verificationcontext blob NOT NULL)`
 
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
@@ -5315,12 +5315,12 @@ func deleteUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basi
 	return db.Retry(f)
 }
 
-func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []verificationCommitData) error {
-	if len(data) == 0 {
+func insertStateProofVerificationContext(ctx context.Context, tx *sql.Tx, contexts []verificationCommitContext) error {
+	if len(contexts) == 0 {
 		return nil
 	}
 
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO stateproofverification(targetstateproofround, verificationdata) VALUES(?, ?)")
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO stateproofverification(targetstateproofround, verificationcontext) VALUES(?, ?)")
 
 	if err != nil {
 		return err
@@ -5328,10 +5328,10 @@ func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []ve
 
 	defer insertStmt.Close()
 
-	for _, commitData := range data {
-		verificationData := commitData.verificationContext
+	for _, commitContext := range contexts {
+		verificationcontext := commitContext.verificationContext
 		f := func() error {
-			_, err = insertStmt.ExecContext(ctx, verificationData.LastAttestedRound, protocol.Encode(&verificationData))
+			_, err = insertStmt.ExecContext(ctx, verificationcontext.LastAttestedRound, protocol.Encode(&verificationcontext))
 			return err
 		}
 
@@ -5344,7 +5344,7 @@ func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []ve
 	return nil
 }
 
-func deleteOldStateProofVerificationData(ctx context.Context, tx *sql.Tx, earliestTrackStateProofRound basics.Round) error {
+func deleteOldStateProofVerificationContext(ctx context.Context, tx *sql.Tx, earliestTrackStateProofRound basics.Round) error {
 	f := func() error {
 		_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE targetstateproofround < ?", earliestTrackStateProofRound)
 		return err
@@ -5356,7 +5356,7 @@ func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificatio
 	var err error
 	qs := &stateProofVerificationDbQueries{}
 
-	qs.lookupStateProofVerificationData, err = r.Prepare("SELECT verificationdata FROM stateproofverification WHERE targetstateproofround=?")
+	qs.lookupStateProofVerificationContext, err = r.Prepare("SELECT verificationcontext FROM stateproofverification WHERE targetstateproofround=?")
 	if err != nil {
 		return nil, err
 	}
@@ -5364,16 +5364,16 @@ func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificatio
 	return qs, nil
 }
 
-func (qs *stateProofVerificationDbQueries) lookupData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	data := ledgercore.StateProofVerificationContext{}
+func (qs *stateProofVerificationDbQueries) lookupContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	verificationContext := ledgercore.StateProofVerificationContext{}
 	queryFunc := func() error {
-		row := qs.lookupStateProofVerificationData.QueryRow(stateProofLastAttestedRound)
+		row := qs.lookupStateProofVerificationContext.QueryRow(stateProofLastAttestedRound)
 		var buf []byte
 		err := row.Scan(&buf)
 		if err != nil {
 			return err
 		}
-		err = protocol.Decode(buf, &data)
+		err = protocol.Decode(buf, &verificationContext)
 		if err != nil {
 			return err
 		}
@@ -5381,5 +5381,5 @@ func (qs *stateProofVerificationDbQueries) lookupData(stateProofLastAttestedRoun
 	}
 
 	err := db.Retry(queryFunc)
-	return &data, err
+	return &verificationContext, err
 }
