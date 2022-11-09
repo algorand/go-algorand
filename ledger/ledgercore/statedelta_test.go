@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -122,6 +123,45 @@ func TestMakeStateDeltaMaps(t *testing.T) {
 	kvModMap := make(map[string]KvValueDelta)
 	kvModMap["key"] = KvValueDelta{Data: []byte("value")}
 	require.Equal(t, sd.KvMods, kvModMap)
+
+}
+
+func TestStateDeltaReset(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	sd := MakeStateDelta(&bookkeeping.BlockHeader{}, 123, 456, basics.Round(789))
+	sd.Reset()
+
+	// StateDeltas simple fields
+	require.Zero(t, sd.Hdr)
+	require.Zero(t, sd.StateProofNext)
+	require.Zero(t, sd.PrevTimestamp)
+	require.Zero(t, sd.Totals)
+	require.Zero(t, sd.initialTransactionsCount)
+
+	// required allocated maps
+	require.NotZero(t, sd.Txids)
+	require.Empty(t, sd.Txids)
+
+	// optional allocated maps
+	require.Empty(t, sd.Txleases)
+	require.Empty(t, sd.KvMods)
+	require.Empty(t, sd.Creatables)
+
+	// check AccountDeltas
+	require.NotZero(t, sd.Accts)
+
+	// required AccountDeltas fields
+	require.NotZero(t, sd.Accts.Accts)
+	require.Empty(t, sd.Accts.Accts)
+	require.NotZero(t, sd.Accts.acctsCache)
+	require.Empty(t, sd.Accts.acctsCache)
+
+	// optional AccountDeltas fields
+	require.Empty(t, sd.Accts.AppResources)
+	require.Empty(t, sd.Accts.AssetResources)
+	require.Empty(t, sd.Accts.assetResourcesCache)
+	require.Empty(t, sd.Accts.appResourcesCache)
 
 }
 

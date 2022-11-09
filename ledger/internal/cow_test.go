@@ -208,6 +208,7 @@ func TestCowChildReset(t *testing.T) {
 	cow := makeRoundCowState(nil, bookkeeping.BlockHeader{}, config.ConsensusParams{}, 10000, ledgercore.AccountTotals{}, 300)
 	calf := cow.child(100)
 	require.NotEmpty(t, calf)
+	calf.compatibilityMode = true
 	calf.reset()
 	// simple fields
 	require.Zero(t, calf.commitParent)
@@ -220,6 +221,7 @@ func TestCowChildReset(t *testing.T) {
 	require.NotZero(t, calf.sdeltas)
 	require.Empty(t, calf.sdeltas)
 
+	require.NotZero(t, calf.mods)
 	// check StateDeltas
 	// StateDeltas simple fields
 	require.Zero(t, calf.mods.Hdr)
