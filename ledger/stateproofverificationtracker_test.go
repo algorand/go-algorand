@@ -380,8 +380,8 @@ func TestStateProofVerificationTracker_StateProofIntervalChange(t *testing.T) {
 
 	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofContextRound, oldIntervalContext, defaultStateProofInterval,
 		true, any)
-	firstNewIntervalStateProofRound := lastOldIntervalBlock.block.Round() + basics.Round(defaultStateProofInterval)
-	verifyStateProofVerificationTracking(t, spt, firstNewIntervalStateProofRound, newIntervalContext,
+	firstNewIntervalLastAttestedRound := lastOldIntervalBlock.block.Round() + basics.Round(defaultStateProofInterval)
+	verifyStateProofVerificationTracking(t, spt, firstNewIntervalLastAttestedRound, newIntervalContext,
 		newStateProofInterval, true, any)
 
 	newIntervalRemovedStateProofs := newIntervalContext - (newIntervalContext / 2)
@@ -395,13 +395,13 @@ func TestStateProofVerificationTracker_StateProofIntervalChange(t *testing.T) {
 
 	mockCommit(t, spt, ml, 0, lastBlock.block.Round())
 
-	firstRemainingStateProofRound := firstNewIntervalStateProofRound +
+	firstRemainingLastAttestedRound := firstNewIntervalLastAttestedRound +
 		basics.Round(newIntervalRemovedStateProofs*newStateProofInterval)
 	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofContextRound, oldIntervalContext, defaultStateProofInterval,
 		false, any)
-	verifyStateProofVerificationTracking(t, spt, firstNewIntervalStateProofRound,
+	verifyStateProofVerificationTracking(t, spt, firstNewIntervalLastAttestedRound,
 		newIntervalRemovedStateProofs, newStateProofInterval, false, any)
-	verifyStateProofVerificationTracking(t, spt, firstRemainingStateProofRound, newIntervalContext-newIntervalRemovedStateProofs,
+	verifyStateProofVerificationTracking(t, spt, firstRemainingLastAttestedRound, newIntervalContext-newIntervalRemovedStateProofs,
 		newStateProofInterval, true, any)
 }
 
@@ -425,8 +425,8 @@ func TestStateProofVerificationTracker_LookupVerificationContext(t *testing.T) {
 	a.ErrorIs(err, errStateProofVerificationContextNotFound)
 	a.ErrorContains(err, "no rows")
 
-	lastStateProofRound := basics.Round(defaultStateProofInterval + contextToAdd*defaultStateProofInterval)
-	_, err = spt.LookupVerificationContext(lastStateProofRound + basics.Round(defaultStateProofInterval))
+	finalLastAttestedRound := basics.Round(defaultStateProofInterval + contextToAdd*defaultStateProofInterval)
+	_, err = spt.LookupVerificationContext(finalLastAttestedRound + basics.Round(defaultStateProofInterval))
 	a.ErrorIs(err, errStateProofVerificationContextNotFound)
 	a.ErrorContains(err, "greater than maximum")
 
