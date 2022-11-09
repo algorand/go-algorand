@@ -179,7 +179,7 @@ const createUnfinishedCatchpointsTable = `
 
 const createStateProofVerificationTableQuery = `
 	CREATE TABLE IF NOT EXISTS stateproofverification (
-	targetstateproofround integer primary key NOT NULL,
+	lastattestedround integer primary key NOT NULL,
 	verificationcontext blob NOT NULL)`
 
 var accountsResetExprs = []string{
@@ -5320,7 +5320,7 @@ func insertStateProofVerificationContext(ctx context.Context, tx *sql.Tx, contex
 		return nil
 	}
 
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO stateproofverification(targetstateproofround, verificationcontext) VALUES(?, ?)")
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO stateproofverification(lastattestedround, verificationcontext) VALUES(?, ?)")
 
 	if err != nil {
 		return err
@@ -5344,9 +5344,9 @@ func insertStateProofVerificationContext(ctx context.Context, tx *sql.Tx, contex
 	return nil
 }
 
-func deleteOldStateProofVerificationContext(ctx context.Context, tx *sql.Tx, earliestTrackStateProofRound basics.Round) error {
+func deleteOldStateProofVerificationContext(ctx context.Context, tx *sql.Tx, earliestTrackLastAttestedRound basics.Round) error {
 	f := func() error {
-		_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE targetstateproofround < ?", earliestTrackStateProofRound)
+		_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE lastattestedround < ?", earliestTrackLastAttestedRound)
 		return err
 	}
 	return db.Retry(f)
@@ -5356,7 +5356,7 @@ func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificatio
 	var err error
 	qs := &stateProofVerificationDbQueries{}
 
-	qs.lookupStateProofVerificationContext, err = r.Prepare("SELECT verificationcontext FROM stateproofverification WHERE targetstateproofround=?")
+	qs.lookupStateProofVerificationContext, err = r.Prepare("SELECT verificationcontext FROM stateproofverification WHERE lastattestedround=?")
 	if err != nil {
 		return nil, err
 	}

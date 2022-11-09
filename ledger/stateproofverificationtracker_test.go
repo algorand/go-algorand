@@ -152,17 +152,17 @@ func verifyStateProofVerificationTracking(t *testing.T, spt *stateProofVerificat
 	startRound basics.Round, contextAmount uint64, stateProofInterval uint64, contextPresenceExpected bool, trackingLocation StateProofTrackingLocation) {
 	a := require.New(t)
 
-	finalTargetStateProofRound := startRound + basics.Round((contextAmount-1)*stateProofInterval)
+	finalLastAttestedRound := startRound + basics.Round((contextAmount-1)*stateProofInterval)
 
-	for targetStateProofRound := startRound; targetStateProofRound <= finalTargetStateProofRound; targetStateProofRound += basics.Round(stateProofInterval) {
+	for lastAttestedRound := startRound; lastAttestedRound <= finalLastAttestedRound; lastAttestedRound += basics.Round(stateProofInterval) {
 		var err error
 		switch trackingLocation {
 		case any:
-			_, err = spt.LookupVerificationContext(targetStateProofRound)
+			_, err = spt.LookupVerificationContext(lastAttestedRound)
 		case trackerDB:
-			_, err = spt.lookupContextInDB(targetStateProofRound)
+			_, err = spt.lookupContextInDB(lastAttestedRound)
 		case trackerMemory:
-			_, err = spt.lookupContextInTrackedMemory(targetStateProofRound)
+			_, err = spt.lookupContextInTrackedMemory(lastAttestedRound)
 		}
 
 		if contextPresenceExpected {
@@ -210,10 +210,10 @@ func TestStateProofVerificationTracker_StateProofsNotStuck(t *testing.T) {
 	expectedRemainingContextNum := expectedContextNum - 1
 	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofContextRound, expectedRemainingContextNum, defaultStateProofInterval, false, any)
 
-	lastStateProofTargetRound := defaultFirstStateProofContextRound + basics.Round(expectedRemainingContextNum*defaultStateProofInterval)
+	finalLastAttestedRound := defaultFirstStateProofContextRound + basics.Round(expectedRemainingContextNum*defaultStateProofInterval)
 	// The last verification context should still be tracked since the round with the state proof transaction it is used
 	// to verify has not yet been committed.
-	verifyStateProofVerificationTracking(t, spt, lastStateProofTargetRound, 1, defaultStateProofInterval, true, any)
+	verifyStateProofVerificationTracking(t, spt, finalLastAttestedRound, 1, defaultStateProofInterval, true, any)
 }
 
 func TestStateProofVerificationTracker_CommitFUllDbFlush(t *testing.T) {
@@ -296,10 +296,10 @@ func TestStateProofVerificationTracker_CommitFullDbPruning(t *testing.T) {
 
 	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofContextRound, maxStateProofsToGenerate, defaultStateProofInterval, false, any)
 
-	lastStateProofTargetRound := defaultFirstStateProofContextRound + basics.Round(maxStateProofsToGenerate*defaultStateProofInterval)
+	finalLastAttestedRound := defaultFirstStateProofContextRound + basics.Round(maxStateProofsToGenerate*defaultStateProofInterval)
 	// The last verification context should still be tracked since the round with the state proof transaction it is used
 	// to verify has not yet been committed.
-	verifyStateProofVerificationTracking(t, spt, lastStateProofTargetRound, 1, defaultStateProofInterval, true, any)
+	verifyStateProofVerificationTracking(t, spt, finalLastAttestedRound, 1, defaultStateProofInterval, true, any)
 }
 
 func TestStateProofVerificationTracker_CommitPartialDbPruning(t *testing.T) {

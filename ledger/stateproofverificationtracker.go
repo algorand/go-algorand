@@ -122,7 +122,7 @@ func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitConte
 
 	dcc.spVerification.LatestUsedDeleteContextIndex = spt.committedRoundToLatestDeleteContextIndex(dcc.newBase)
 	if dcc.spVerification.LatestUsedDeleteContextIndex >= 0 {
-		dcc.spVerification.EarliestTrackStateProofRound = spt.trackedDeleteContext[dcc.spVerification.LatestUsedDeleteContextIndex].stateProofNextRound
+		dcc.spVerification.EarliestTrackLastAttestedRound = spt.trackedDeleteContext[dcc.spVerification.LatestUsedDeleteContextIndex].stateProofNextRound
 	}
 
 	return nil
@@ -135,7 +135,7 @@ func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *s
 	}
 
 	if dcc.spVerification.LatestUsedDeleteContextIndex >= 0 {
-		err = deleteOldStateProofVerificationContext(ctx, tx, dcc.spVerification.EarliestTrackStateProofRound)
+		err = deleteOldStateProofVerificationContext(ctx, tx, dcc.spVerification.EarliestTrackLastAttestedRound)
 	}
 
 	return err

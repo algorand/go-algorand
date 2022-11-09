@@ -273,8 +273,8 @@ type deferredCommitContext struct {
 
 	spVerification struct {
 		// state proof verification deletion information
-		LatestUsedDeleteContextIndex int
-		EarliestTrackStateProofRound basics.Round
+		LatestUsedDeleteContextIndex   int
+		EarliestTrackLastAttestedRound basics.Round
 
 		// state proof verification commit information
 		CommitContext []verificationCommitContext

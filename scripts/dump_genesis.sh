@@ -77,7 +77,7 @@ for LEDGER in $LEDGERS; do
         SORT=round
         ;;
       stateproofverification)
-        SORT=targetstateproofround
+        SORT=lastattestedround
         ;;
       kvstore)
         SORT=key
