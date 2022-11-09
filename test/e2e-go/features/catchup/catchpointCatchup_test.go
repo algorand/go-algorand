@@ -116,8 +116,8 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
 	catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
 
-	if runtime.GOARCH == "amd64" {
-		// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
+	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+		// amd64 and arm64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
 		catchpointCatchupProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
 		catchpointCatchupProtocol.AgreementFilterTimeout = 1 * time.Second
 	}
@@ -313,8 +313,8 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 			catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
 			catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
 
-			if runtime.GOARCH == "amd64" {
-				// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
+			if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+				// amd64 and arm64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
 				catchpointCatchupProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
 				catchpointCatchupProtocol.AgreementFilterTimeout = 1 * time.Second
 			}
