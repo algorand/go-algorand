@@ -30,7 +30,7 @@ const (
 	MsgOfInterestTag     Tag = "MI"
 	MsgDigestSkipTag     Tag = "MS"
 	NetPrioResponseTag   Tag = "NP"
-	NetIDVerificationTag Tag = "IV"
+	NetIDVerificationTag Tag = "Ni"
 	PingTag              Tag = "pi"
 	PingReplyTag         Tag = "pj"
 	ProposalPayloadTag   Tag = "PP"
