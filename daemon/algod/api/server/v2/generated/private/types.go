@@ -19,6 +19,12 @@ const (
 	AccountSigTypeSig  AccountSigType = "sig"
 )
 
+// Defines values for ModifiedCreatableCreatableType.
+const (
+	ModifiedCreatableCreatableTypeApp   ModifiedCreatableCreatableType = "app"
+	ModifiedCreatableCreatableTypeAsset ModifiedCreatableCreatableType = "asset"
+)
+
 // Defines values for AddressRole.
 const (
 	FreezeTarget AddressRole = "freeze-target"
@@ -168,6 +174,18 @@ type AccountBalanceRecord struct {
 	Address string `json:"address"`
 }
 
+// AccountDeltas Exposes deltas for account based resources in a single round
+type AccountDeltas struct {
+	// Accounts Array of Account updates for the round
+	Accounts *[]AccountBalanceRecord `json:"accounts,omitempty"`
+
+	// Apps Array of App updates for the round.
+	Apps *[]AppResourceRecord `json:"apps,omitempty"`
+
+	// Assets Array of Asset updates for the round.
+	Assets *[]AssetResourceRecord `json:"assets,omitempty"`
+}
+
 // AccountParticipation AccountParticipation describes the parameters used by this account in consensus protocol.
 type AccountParticipation struct {
 	// SelectionParticipationKey \[sel\] Selection public key (if any) currently registered for this round.
@@ -195,6 +213,21 @@ type AccountStateDelta struct {
 
 	// Delta Application state delta.
 	Delta StateDelta `json:"delta"`
+}
+
+// AccountTotals Total Algos in the system grouped by account status
+type AccountTotals struct {
+	// NotParticipating Amount of stake in non-participating accounts
+	NotParticipating *uint64 `json:"not-participating,omitempty"`
+
+	// Offline Amount of stake in offline accounts
+	Offline *uint64 `json:"offline,omitempty"`
+
+	// Online Amount of stake in online accounts
+	Online *uint64 `json:"online,omitempty"`
+
+	// RewardsLevel Total number of algos received per reward unit since genesis
+	RewardsLevel *uint64 `json:"rewards-level,omitempty"`
 }
 
 // AppResourceRecord Represents AppParams and AppLocalStateDelta in deltas
@@ -503,6 +536,9 @@ type EvalDeltaKeyValue struct {
 	Value EvalDelta `json:"value"`
 }
 
+// IncludedTransaction defines model for IncludedTransaction.
+type IncludedTransaction = map[string]interface{}
+
 // KvDelta A single Delta containing the key, the previous value and the current value for a single round.
 type KvDelta struct {
 	Key *[]byte `json:"key,omitempty"`
@@ -525,6 +561,24 @@ type LightBlockHeaderProof struct {
 	// Treedepth Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
 	Treedepth uint64 `json:"treedepth"`
 }
+
+// ModifiedCreatable Creatable which was created or deleted during the round.
+type ModifiedCreatable struct {
+	// CreatableType Type of creatable
+	CreatableType *ModifiedCreatableCreatableType `json:"creatable-type,omitempty"`
+
+	// Created Created during this round if true, deleted if false
+	Created *bool `json:"created,omitempty"`
+
+	// Creator Address of the creator of the Creatable.
+	Creator *string `json:"creator,omitempty"`
+
+	// Index Index of the Creatable
+	Index *uint64 `json:"index,omitempty"`
+}
+
+// ModifiedCreatableCreatableType Type of creatable
+type ModifiedCreatableCreatableType string
 
 // ParticipationKey Represents a participation key used by the node.
 type ParticipationKey struct {
@@ -598,19 +652,35 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
-// RoundDeltas Contains updates from a given round.
-type RoundDeltas struct {
-	// Accounts Array of Account updates for the round
-	Accounts *[]AccountBalanceRecord `json:"accounts,omitempty"`
+// RoundStateDelta Contains updates from a given round.
+type RoundStateDelta struct {
+	// Accts Exposes deltas for account based resources in a single round
+	Accts *AccountDeltas `json:"accts,omitempty"`
 
-	// Apps Array of App updates for the round.
-	Apps *[]AppResourceRecord `json:"apps,omitempty"`
+	// Creatables List of modified Creatables for the given round.
+	Creatables *[]ModifiedCreatable `json:"creatables,omitempty"`
 
-	// Assets Array of Asset updates for the round.
-	Assets *[]AssetResourceRecord `json:"assets,omitempty"`
+	// Hdr New block header
+	Hdr *map[string]interface{} `json:"hdr,omitempty"`
 
-	// KvDeltas Array of KV Deltas for the round.
-	KvDeltas *[]KvDelta `json:"kv-deltas,omitempty"`
+	// InitialTxnsCount Initial txn count hint--useful for allocation.
+	InitialTxnsCount *uint64 `json:"initial-txns-count,omitempty"`
+
+	// KvMods Array of KV Deltas for the round.
+	KvMods *[]KvDelta `json:"kv-mods,omitempty"`
+
+	// PrevTimestamp Previous block timestamp
+	PrevTimestamp *uint64 `json:"prev-timestamp,omitempty"`
+
+	// StateProofNext Next round for which we expect a state proof
+	StateProofNext *uint64 `json:"state-proof-next,omitempty"`
+
+	// Totals Total Algos in the system grouped by account status
+	Totals *AccountTotals `json:"totals,omitempty"`
+
+	// TxIds List of included transactions for a given round.
+	TxIds    *[]IncludedTransaction `json:"tx-ids,omitempty"`
+	TxLeases *[]TxLease             `json:"tx-leases,omitempty"`
 }
 
 // StateDelta Application state delta.
@@ -664,6 +734,18 @@ type TealValue struct {
 
 	// Uint \[ui\] uint value.
 	Uint uint64 `json:"uint"`
+}
+
+// TxLease defines model for TxLease.
+type TxLease struct {
+	// Expiration Round that the lease expires
+	Expiration *uint64 `json:"expiration,omitempty"`
+
+	// Lease Lease data
+	Lease *[]byte `json:"lease,omitempty"`
+
+	// Sender Address of the lease sender
+	Sender *string `json:"sender,omitempty"`
 }
 
 // Version algod version information.
@@ -930,8 +1012,8 @@ type PostTransactionsResponse struct {
 	TxId string `json:"txId"`
 }
 
-// RoundDeltasResponse Contains updates from a given round.
-type RoundDeltasResponse = RoundDeltas
+// RoundStateDeltaResponse Contains updates from a given round.
+type RoundStateDeltaResponse = RoundStateDelta
 
 // StateProofResponse Represents a state proof and its corresponding message
 type StateProofResponse = StateProof
