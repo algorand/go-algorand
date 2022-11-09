@@ -116,11 +116,11 @@ func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitConte
 	spt.mu.RLock()
 	defer spt.mu.RUnlock()
 
-	lastContextToCommitIndex := spt.committedRoundToLatestCommitContextIndex(dcc.newBase)
+	lastContextToCommitIndex := spt.roundToLatestCommitContextIndex(dcc.newBase)
 	dcc.spVerification.CommitContext = make([]verificationCommitContext, lastContextToCommitIndex+1)
 	copy(dcc.spVerification.CommitContext, spt.trackedCommitContext[:lastContextToCommitIndex+1])
 
-	dcc.spVerification.LatestUsedDeleteContextIndex = spt.committedRoundToLatestDeleteContextIndex(dcc.newBase)
+	dcc.spVerification.LatestUsedDeleteContextIndex = spt.roundToLatestDeleteContextIndex(dcc.newBase)
 	if dcc.spVerification.LatestUsedDeleteContextIndex >= 0 {
 		dcc.spVerification.EarliestTrackLastAttestedRound = spt.trackedDeleteContext[dcc.spVerification.LatestUsedDeleteContextIndex].stateProofNextRound
 	}
@@ -205,7 +205,7 @@ func (spt *stateProofVerificationTracker) lookupContextInDB(stateProofLastAttest
 	return verificationContext, err
 }
 
-func (spt *stateProofVerificationTracker) committedRoundToLatestCommitContextIndex(committedRound basics.Round) int {
+func (spt *stateProofVerificationTracker) roundToLatestCommitContextIndex(committedRound basics.Round) int {
 	latestCommittedContextIndex := -1
 
 	for index, ctx := range spt.trackedCommitContext {
@@ -219,7 +219,7 @@ func (spt *stateProofVerificationTracker) committedRoundToLatestCommitContextInd
 	return latestCommittedContextIndex
 }
 
-func (spt *stateProofVerificationTracker) committedRoundToLatestDeleteContextIndex(committedRound basics.Round) int {
+func (spt *stateProofVerificationTracker) roundToLatestDeleteContextIndex(committedRound basics.Round) int {
 	latestCommittedContextIndex := -1
 
 	for index, ctx := range spt.trackedDeleteContext {
