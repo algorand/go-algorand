@@ -86,7 +86,7 @@ func runBuildNetwork() (err error) {
 		}
 		defer f.Close() // error handling omitted for example
 		if err := pprof.StartCPUProfile(f); err != nil {
-			log.Fatal("%s: could not start CPU profile, %v", cpuprofilePath, err)
+			log.Fatalf("%s: could not start CPU profile, %v", cpuprofilePath, err)
 		}
 		defer pprof.StopCPUProfile()
 	}
