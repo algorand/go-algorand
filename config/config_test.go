@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/protocol"
@@ -301,7 +302,7 @@ func TestConfigMigrateFromDisk(t *testing.T) {
 		a.NoError(err)
 		modified, err := migrate(c)
 		a.NoError(err)
-		a.Equal(defaultLocal, modified)
+		a.Equal(defaultLocal, modified, "config-v%d.json", configVersion)
 	}
 
 	cNext := Local{Version: getLatestConfigVersion() + 1}
@@ -485,7 +486,7 @@ func TestLocalStructTags(t *testing.T) {
 	localType := reflect.TypeOf(Local{})
 
 	versionField, ok := localType.FieldByName("Version")
-	require.True(t, true, ok)
+	require.True(t, ok)
 	ver := 0
 	versionTags := []string{}
 	for {
@@ -502,7 +503,7 @@ func TestLocalStructTags(t *testing.T) {
 		if field.Tag == "" {
 			require.Failf(t, "Field is missing versioning information", "Field Name: %s", field.Name)
 		}
-		// the field named "Version" is tested separatly in TestLocalVersionField, so we'll be skipping
+		// the field named "Version" is tested separately in TestLocalVersionField, so we'll be skipping
 		// it on this test.
 		if field.Name == "Version" {
 			continue
@@ -550,4 +551,32 @@ func TestLocalVersionField(t *testing.T) {
 	}
 	expectedTag = expectedTag[:len(expectedTag)-1]
 	require.Equal(t, expectedTag, string(field.Tag))
+}
+
+func TestGetNonDefaultConfigValues(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+
+	// set 4 non-default values
+	cfg.AgreementIncomingBundlesQueueLength = 2
+	cfg.AgreementIncomingProposalsQueueLength = 200
+	cfg.TxPoolSize = 30
+	cfg.Archival = true
+
+	// ask for 2 of them
+	ndmap := GetNonDefaultConfigValues(cfg, []string{"AgreementIncomingBundlesQueueLength", "TxPoolSize"})
+
+	// assert correct
+	expected := map[string]interface{}{
+		"AgreementIncomingBundlesQueueLength": uint64(2),
+		"TxPoolSize":                          int(30),
+	}
+	assert.Equal(t, expected, ndmap)
+
+	// ask for field that doesn't exist: should skip
+	assert.Equal(t, expected, GetNonDefaultConfigValues(cfg, []string{"Blah", "AgreementIncomingBundlesQueueLength", "TxPoolSize"}))
+
+	// check unmodified defaults
+	assert.Empty(t, GetNonDefaultConfigValues(GetDefaultLocal(), []string{"AgreementIncomingBundlesQueueLength", "TxPoolSize"}))
 }

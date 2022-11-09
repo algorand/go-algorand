@@ -41,14 +41,14 @@ func AccountDataToAccount(
 		// longer fetch the creator
 		holding := generated.AssetHolding{
 			Amount:   holding.Amount,
-			AssetId:  uint64(curid),
+			AssetID:  uint64(curid),
 			IsFrozen: holding.Frozen,
 		}
 
 		assets = append(assets, holding)
 	}
 	sort.Slice(assets, func(i, j int) bool {
-		return assets[i].AssetId < assets[j].AssetId
+		return assets[i].AssetID < assets[j].AssetID
 	})
 
 	createdAssets := make([]generated.Asset, 0, len(record.AssetParams))
@@ -136,6 +136,8 @@ func AccountDataToAccount(
 		TotalAppsOptedIn:            uint64(len(appsLocalState)),
 		AppsTotalSchema:             &totalAppSchema,
 		AppsTotalExtraPages:         numOrNil(totalExtraPages),
+		TotalBoxes:                  numOrNil(record.TotalBoxes),
+		TotalBoxBytes:               numOrNil(record.TotalBoxBytes),
 		MinBalance:                  minBalance.Raw,
 	}, nil
 }
@@ -279,7 +281,7 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 	if a.Assets != nil && len(*a.Assets) > 0 {
 		assets = make(map[basics.AssetIndex]basics.AssetHolding, len(*a.Assets))
 		for _, h := range *a.Assets {
-			assets[basics.AssetIndex(h.AssetId)] = basics.AssetHolding{
+			assets[basics.AssetIndex(h.AssetID)] = basics.AssetHolding{
 				Amount: h.Amount,
 				Frozen: h.IsFrozen,
 			}
@@ -330,6 +332,16 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 		totalExtraPages = uint32(*a.AppsTotalExtraPages)
 	}
 
+	var totalBoxes uint64
+	if a.TotalBoxes != nil {
+		totalBoxes = *a.TotalBoxes
+	}
+
+	var totalBoxBytes uint64
+	if a.TotalBoxBytes != nil {
+		totalBoxBytes = *a.TotalBoxBytes
+	}
+
 	status, err := basics.UnmarshalStatus(a.Status)
 	if err != nil {
 		return basics.AccountData{}, err
@@ -350,6 +362,8 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 		AppParams:          appParams,
 		TotalAppSchema:     totalSchema,
 		TotalExtraAppPages: totalExtraPages,
+		TotalBoxes:         totalBoxes,
+		TotalBoxBytes:      totalBoxBytes,
 	}
 
 	if a.AuthAddr != nil {

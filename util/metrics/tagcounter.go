@@ -104,16 +104,13 @@ func (tc *TagCounter) Add(tag string, val uint64) {
 			var st []uint64
 			if len(tc.storage) > 0 {
 				st = tc.storage[len(tc.storage)-1]
-				//fmt.Printf("new tag %v, old block\n", tag)
 			}
 			if tc.storagePos > (len(st) - 1) {
-				//fmt.Printf("new tag %v, new block\n", tag)
 				st = make([]uint64, 16)
 				tc.storagePos = 0
 				tc.storage = append(tc.storage, st)
 			}
 			newtags[tag] = &(st[tc.storagePos])
-			//fmt.Printf("tag %v = %p\n", tag, newtags[tag])
 			tc.storagePos++
 			tc.tags = newtags
 			tc.tagptr.Store(newtags)
@@ -155,7 +152,8 @@ func (tc *TagCounter) WriteMetric(buf *strings.Builder, parentLabels string) {
 			buf.WriteRune('}')
 		}
 		buf.WriteRune(' ')
-		buf.WriteString(strconv.FormatUint(*tagcount, 10))
+		count := atomic.LoadUint64(tagcount)
+		buf.WriteString(strconv.FormatUint(count, 10))
 		buf.WriteRune('\n')
 	}
 }
@@ -179,6 +177,7 @@ func (tc *TagCounter) AddMetric(values map[string]float64) {
 		} else {
 			name = tc.Name + "_" + tag
 		}
-		values[sanitizeTelemetryName(name)] = float64(*tagcount)
+		count := atomic.LoadUint64(tagcount)
+		values[sanitizeTelemetryName(name)] = float64(count)
 	}
 }

@@ -18,6 +18,7 @@ package test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,6 +26,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -109,7 +111,7 @@ func TestAccountInformation(t *testing.T) {
 func getBlockTest(t *testing.T, blockNum uint64, format string, expectedCode int) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
-	err := handler.GetBlock(c, blockNum, generatedV2.GetBlockParams{Format: &format})
+	err := handler.GetBlock(c, blockNum, generatedV2.GetBlockParams{Format: (*generatedV2.GetBlockParamsFormat)(&format)})
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
 }
@@ -206,6 +208,74 @@ func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.Response
 	return handler, c, rec, stx, releasefunc
 }
 
+func TestGetBlockHash(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	err := handler.GetBlockHash(c, 0)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+
+	c, rec = newReq(t)
+	err = handler.GetBlockHash(c, 1)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+}
+
+func TestGetBlockGetBlockHash(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+	insertRounds(a, handler, 2)
+
+	type blockResponse struct {
+		Block bookkeeping.Block `codec:"block"`
+	}
+
+	var block1, block2 blockResponse
+	var block1Hash generatedV2.BlockHashResponse
+	format := "json"
+
+	// Get block 1
+	err := handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: (*generatedV2.GetBlockParamsFormat)(&format)})
+	a.NoError(err)
+	a.Equal(200, rec.Code)
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &block1)
+	a.NoError(err)
+
+	// Get block 2
+	c, rec = newReq(t)
+	err = handler.GetBlock(c, 2, generatedV2.GetBlockParams{Format: (*generatedV2.GetBlockParamsFormat)(&format)})
+	a.NoError(err)
+	a.Equal(200, rec.Code)
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &block2)
+	a.NoError(err)
+
+	// Get block 1 hash
+	c, rec = newReq(t)
+	err = handler.GetBlockHash(c, 1)
+	a.NoError(err)
+	a.Equal(200, rec.Code)
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &block1Hash)
+	a.NoError(err)
+
+	// Validate that the block returned from GetBlock(1) has the same hash that is returned via GetBlockHash(1)
+	a.Equal(crypto.HashObj(block1.Block.BlockHeader).String(), block1Hash.BlockHash)
+
+	// Validate that the block returned from GetBlock(2) has the same prev-hash that is returned via GetBlockHash(1)
+	hash := block2.Block.Branch.String()
+	a.Equal(fmt.Sprintf("blk-%s", block1Hash.BlockHash), hash)
+
+	// Sanity check that the hashes are not equal (i.e. they are not the default values)
+	a.NotEqual(block1.Block.Branch, block2.Block.Branch)
+}
+
 func TestGetBlockJsonEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -215,7 +285,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 
 	// fetch the block and ensure it can be properly decoded with the standard JSON decoder
 	format := "json"
-	err := handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: &format})
+	err := handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: (*generatedV2.GetBlockParamsFormat)(&format)})
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
 	body := rec.Body.Bytes()
@@ -301,7 +371,7 @@ func pendingTransactionInformationTest(t *testing.T, txidToUse int, format strin
 	if txidToUse >= 0 {
 		txid = stxns[txidToUse].ID().String()
 	}
-	params := generatedV2.PendingTransactionInformationParams{Format: &format}
+	params := generatedV2.PendingTransactionInformationParams{Format: (*generatedV2.PendingTransactionInformationParamsFormat)(&format)}
 	err := handler.PendingTransactionInformation(c, txid, params)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
@@ -320,7 +390,7 @@ func TestPendingTransactionInformation(t *testing.T) {
 func getPendingTransactionsTest(t *testing.T, format string, max uint64, expectedCode int) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
-	params := generatedV2.GetPendingTransactionsParams{Format: &format, Max: &max}
+	params := generatedV2.GetPendingTransactionsParams{Format: (*generatedV2.GetPendingTransactionsParamsFormat)(&format), Max: &max}
 	err := handler.GetPendingTransactions(c, params)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
@@ -403,7 +473,7 @@ func pendingTransactionsByAddressTest(t *testing.T, rootkeyToUse int, format str
 	if rootkeyToUse >= 0 {
 		address = rootkeys[rootkeyToUse].Address().String()
 	}
-	params := generatedV2.GetPendingTransactionsByAddressParams{Format: &format}
+	params := generatedV2.GetPendingTransactionsByAddressParams{Format: (*generatedV2.GetPendingTransactionsByAddressParamsFormat)(&format)}
 	err := handler.GetPendingTransactionsByAddress(c, address, params)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
@@ -941,13 +1011,13 @@ func TestGetProofDefault(t *testing.T) {
 	var resp generatedV2.TransactionProofResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	a.NoError(err)
-	a.Equal("sha512_256", resp.Hashtype)
+	a.Equal(generated.TransactionProofResponseHashtypeSha512256, resp.Hashtype)
 
 	l := handler.Node.LedgerForAPI()
 	blkHdr, err := l.BlockHdr(1)
 	a.NoError(err)
 
-	singleLeafProof, err := merklearray.ProofDataToSingleLeafProof(resp.Hashtype, resp.Treedepth, resp.Proof)
+	singleLeafProof, err := merklearray.ProofDataToSingleLeafProof(string(resp.Hashtype), resp.Treedepth, resp.Proof)
 	a.NoError(err)
 
 	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
@@ -1136,25 +1206,100 @@ func TestStateproofTransactionForRound(t *testing.T) {
 		var blk bookkeeping.Block
 		blk.BlockHeader = bookkeeping.BlockHeader{
 			Round: basics.Round(i),
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: protocol.ConsensusCurrentVersion,
+			},
 		}
 		blk = addStateProofIfNeeded(blk)
 		ledger.blocks = append(ledger.blocks, blk)
 	}
 
-	txn, err := v2.GetStateProofTransactionForRound(&ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000)
+	ctx, cncl := context.WithTimeout(context.Background(), time.Minute*2)
+	defer cncl()
+	txn, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, nil)
 	a.NoError(err)
 	a.Equal(2*stateProofIntervalForHandlerTests+1, txn.Message.FirstAttestedRound)
 	a.Equal(3*stateProofIntervalForHandlerTests, txn.Message.LastAttestedRound)
 	a.Equal([]byte{0x0, 0x1, 0x2}, txn.Message.BlockHeadersCommitment)
 
-	txn, err = v2.GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalForHandlerTests), 1000)
+	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(2*stateProofIntervalForHandlerTests), 1000, nil)
 	a.NoError(err)
 	a.Equal(stateProofIntervalForHandlerTests+1, txn.Message.FirstAttestedRound)
 	a.Equal(2*stateProofIntervalForHandlerTests, txn.Message.LastAttestedRound)
 
-	txn, err = v2.GetStateProofTransactionForRound(&ledger, 999, 1000)
+	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, 999, 1000, nil)
 	a.ErrorIs(err, v2.ErrNoStateProofForRound)
 
-	txn, err = v2.GetStateProofTransactionForRound(&ledger, basics.Round(2*stateProofIntervalForHandlerTests), basics.Round(2*stateProofIntervalForHandlerTests))
+	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(2*stateProofIntervalForHandlerTests), basics.Round(2*stateProofIntervalForHandlerTests), nil)
 	a.ErrorIs(err, v2.ErrNoStateProofForRound)
+}
+
+func TestStateproofTransactionForRoundWithoutStateproofs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	ledger := mockLedger{blocks: make([]bookkeeping.Block, 0, 1000)}
+	for i := 0; i <= 1000; i++ {
+		var blk bookkeeping.Block
+		blk.BlockHeader = bookkeeping.BlockHeader{
+			Round: basics.Round(i),
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: protocol.ConsensusV30, // should have StateProofInterval == 0 .
+			},
+		}
+		blk = addStateProofIfNeeded(blk)
+		ledger.blocks = append(ledger.blocks, blk)
+	}
+	ctx, cncl := context.WithTimeout(context.Background(), time.Minute)
+	defer cncl()
+	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, nil)
+	a.ErrorIs(err, v2.ErrNoStateProofForRound)
+}
+
+func TestStateproofTransactionForRoundTimeouts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	ledger := mockLedger{blocks: make([]bookkeeping.Block, 0, 1000)}
+	for i := 0; i <= 1000; i++ {
+		var blk bookkeeping.Block
+		blk.BlockHeader = bookkeeping.BlockHeader{
+			Round: basics.Round(i),
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: protocol.ConsensusCurrentVersion, // should have StateProofInterval != 0 .
+			},
+		}
+		blk = addStateProofIfNeeded(blk)
+		ledger.blocks = append(ledger.blocks, blk)
+	}
+
+	ctx, cncl := context.WithTimeout(context.Background(), time.Nanosecond)
+	defer cncl()
+	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, nil)
+	a.ErrorIs(err, v2.ErrTimeout)
+}
+
+func TestStateproofTransactionForRoundShutsDown(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	ledger := mockLedger{blocks: make([]bookkeeping.Block, 0, 1000)}
+	for i := 0; i <= 1000; i++ {
+		var blk bookkeeping.Block
+		blk.BlockHeader = bookkeeping.BlockHeader{
+			Round: basics.Round(i),
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: protocol.ConsensusCurrentVersion, // should have StateProofInterval != 0 .
+			},
+		}
+		blk = addStateProofIfNeeded(blk)
+		ledger.blocks = append(ledger.blocks, blk)
+	}
+
+	stoppedChan := make(chan struct{})
+	close(stoppedChan)
+	ctx, cncl := context.WithTimeout(context.Background(), time.Minute)
+	defer cncl()
+	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, stoppedChan)
+	a.ErrorIs(err, v2.ErrShutdown)
 }

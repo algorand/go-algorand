@@ -900,7 +900,7 @@ func TestVoteAggregatorOldVote(t *testing.T) {
 	results := make(chan asyncVerifyVoteResponse, len(uvs))
 
 	for i, uv := range uvs {
-		avv.verifyVote(context.Background(), ledger, uv, i, message{}, results)
+		avv.verifyVote(context.Background(), ledger, uv, uint64(i), message{}, results)
 		result := <-results
 		require.True(t, result.cancelled)
 	}

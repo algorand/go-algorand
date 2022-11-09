@@ -54,7 +54,7 @@ const _eventType_name = "nonevotePresentpayloadPresentbundlePresentvoteVerifiedp
 var _eventType_index = [...]uint16{0, 4, 15, 29, 42, 54, 69, 83, 100, 107, 118, 131, 144, 157, 176, 192, 204, 217, 231, 246, 261, 277, 293, 308, 322, 334, 342, 351, 362, 372, 389, 405, 431, 450, 471, 485, 501, 510, 523, 540}
 
 func (i eventType) String() string {
-	if i < 0 || i >= eventType(len(_eventType_index)-1) {
+	if i >= eventType(len(_eventType_index)-1) {
 		return "eventType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
 	return _eventType_name[_eventType_index[i]:_eventType_index[i+1]]

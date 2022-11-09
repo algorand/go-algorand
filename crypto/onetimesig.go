@@ -319,12 +319,12 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 		Batch:    id.Batch,
 	}
 
-	return batchVerificationImpl(
+	allValid, _ := batchVerificationImpl(
 		[][]byte{HashRep(batchID), HashRep(offsetID), HashRep(message)},
 		[]PublicKey{PublicKey(v), PublicKey(batchID.SubKeyPK), PublicKey(offsetID.SubKeyPK)},
 		[]Signature{Signature(sig.PK2Sig), Signature(sig.PK1Sig), Signature(sig.Sig)},
 	)
-
+	return allValid
 }
 
 // DeleteBeforeFineGrained deletes ephemeral keys before (but not including) the given id.

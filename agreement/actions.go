@@ -26,8 +26,7 @@ import (
 )
 
 //go:generate stringer -type=actionType
-//msgp:ignore actionType
-type actionType int
+type actionType uint8
 
 const (
 	noop actionType = iota
@@ -103,7 +102,7 @@ type networkAction struct {
 
 	UnauthenticatedVotes []unauthenticatedVote
 
-	Err serializableError
+	Err *serializableError
 }
 
 func (a networkAction) t() actionType {
@@ -181,7 +180,7 @@ type cryptoAction struct {
 	Period    period
 	Step      step
 	Pinned    bool
-	TaskIndex int
+	TaskIndex uint64
 }
 
 func (a cryptoAction) t() actionType {
@@ -236,6 +235,7 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 			Hash:         a.Certificate.Proposal.BlockDigest.String(),
 			Round:        uint64(a.Certificate.Round),
 			ValidatedAt:  a.Payload.validatedAt,
+			ReceivedAt:   a.Payload.receivedAt,
 			PreValidated: true,
 			PropBufLen:   uint64(len(s.demux.rawProposals)),
 			VoteBufLen:   uint64(len(s.demux.rawVotes)),
@@ -250,6 +250,7 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 			Hash:         a.Certificate.Proposal.BlockDigest.String(),
 			Round:        uint64(a.Certificate.Round),
 			ValidatedAt:  a.Payload.validatedAt,
+			ReceivedAt:   a.Payload.receivedAt,
 			PreValidated: false,
 			PropBufLen:   uint64(len(s.demux.rawProposals)),
 			VoteBufLen:   uint64(len(s.demux.rawVotes)),
@@ -386,7 +387,7 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 		case nil:
 			// no error.
 			persistCompleteEvents := s.persistState(persistStateDone)
-			// we want to place there two one after the other. That way, the second would not get executed up until the first one is complete.
+			// we want to place these two one after the other. That way, the second would not get executed up until the first one is complete.
 			s.demux.prioritize(persistCompleteEvents)
 			s.demux.prioritize(voteEvents)
 		default:
@@ -401,12 +402,12 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 	}
 }
 
-func ignoreAction(e messageEvent, err serializableError) action {
-	return networkAction{T: ignore, Err: err, h: e.Input.MessageHandle}
+func ignoreAction(e messageEvent, err *serializableError) action {
+	return networkAction{T: ignore, Err: err, h: e.Input.messageHandle}
 }
 
-func disconnectAction(e messageEvent, err serializableError) action {
-	return networkAction{T: disconnect, Err: err, h: e.Input.MessageHandle}
+func disconnectAction(e messageEvent, err *serializableError) action {
+	return networkAction{T: disconnect, Err: err, h: e.Input.messageHandle}
 }
 
 func broadcastAction(tag protocol.Tag, o interface{}) action {
@@ -425,7 +426,7 @@ func broadcastAction(tag protocol.Tag, o interface{}) action {
 }
 
 func relayAction(e messageEvent, tag protocol.Tag, o interface{}) action {
-	a := networkAction{T: relay, h: e.Input.MessageHandle, Tag: tag}
+	a := networkAction{T: relay, h: e.Input.messageHandle, Tag: tag}
 	// TODO would be good to have compiler check this (and related) type switch
 	// by specializing one method per type
 	switch tag {
@@ -439,7 +440,7 @@ func relayAction(e messageEvent, tag protocol.Tag, o interface{}) action {
 	return a
 }
 
-func verifyVoteAction(e messageEvent, r round, p period, taskIndex int) action {
+func verifyVoteAction(e messageEvent, r round, p period, taskIndex uint64) action {
 	return cryptoAction{T: verifyVote, M: e.Input, Round: r, Period: p, TaskIndex: taskIndex}
 }
 
@@ -477,7 +478,7 @@ type checkpointAction struct {
 	Round  round
 	Period period
 	Step   step
-	Err    serializableError
+	Err    *serializableError
 	done   chan error // an output channel to let the pseudonode that we're done processing. We don't want to serialize that, since it's not needed in recovery/autopsy
 }
 

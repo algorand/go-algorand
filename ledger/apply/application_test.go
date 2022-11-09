@@ -746,7 +746,7 @@ func TestAppCallOptIn(t *testing.T) {
 	prevMaxAppsOptedIn := config.Consensus[protocol.ConsensusV24].MaxAppsOptedIn
 	for _, testProtoVer := range optInCountTest {
 		cparams, ok := config.Consensus[testProtoVer]
-		a.True(ok)
+		a.True(ok, testProtoVer)
 		if cparams.MaxAppsOptedIn > 0 {
 			a.LessOrEqual(prevMaxAppsOptedIn, cparams.MaxAppsOptedIn)
 		}

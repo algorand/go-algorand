@@ -118,7 +118,7 @@ func getAccountInformation(
 	log logging.Logger) (info generated.Account, err error) {
 
 	for x := 0; x < 5; x++ { // retry only 5 times
-		info, err = fixture.AlgodClient.AccountInformationV2(address, true)
+		info, err = fixture.AlgodClient.AccountInformation(address, true)
 		if err != nil {
 			return
 		}
@@ -249,6 +249,7 @@ func test5MAssets(t *testing.T, scenario int) {
 	ba := generateKeys(1)
 	baseAcct := ba[0]
 	sender, err := basics.UnmarshalChecksumAddress(wAcct)
+	require.NoError(t, err)
 	satxn := sendAlgoTransaction(t, 0, sender, baseAcct.pk, 1000000000000000, 1, genesisHash)
 	err = signAndBroadcastTransaction(0, &satxn, fixture.LibGoalClient, &fixture)
 	require.NoError(t, err)
@@ -542,7 +543,7 @@ func scenarioA(
 				ownAllAccount.pk,
 				tLife,
 				genesisHash,
-				basics.AssetIndex(asset.AssetId),
+				basics.AssetIndex(asset.AssetID),
 				ownAllAccount.pk,
 				uint64(0))
 
@@ -581,7 +582,7 @@ func scenarioA(
 				nacc.pk,
 				tLife,
 				genesisHash,
-				basics.AssetIndex(asset.AssetId),
+				basics.AssetIndex(asset.AssetID),
 				ownAllAccount.pk,
 				asset.Amount)
 			counter, txnGroup = queueTransaction(nacc.sk, assSend, txnChan, txnGrpChan, counter, txnGroup)
@@ -612,7 +613,7 @@ func scenarioA(
 			default:
 			}
 
-			assHold, err := fixture.AlgodClient.AccountAssetInformation(ownAllAccount.pk.String(), asset.AssetId)
+			assHold, err := fixture.AlgodClient.AccountAssetInformation(ownAllAccount.pk.String(), asset.AssetID)
 			require.NoError(t, err)
 
 			tAssetAmt += assHold.AssetHolding.Amount
@@ -673,7 +674,7 @@ func scenarioB(
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture, log)
 	require.NoError(t, err)
 
-	info, err := fixture.AlgodClient.AccountInformationV2(baseAcct.pk.String(), false)
+	info, err := fixture.AlgodClient.AccountInformation(baseAcct.pk.String(), false)
 	require.NoError(t, err)
 	require.Equal(t, numberOfAssets, info.TotalAssetsOptedIn)
 	require.Equal(t, numberOfAssets, info.TotalCreatedAssets)
@@ -1155,7 +1156,7 @@ int 1
 
 	// create the app
 	appTx, err = client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, 0)
+		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, nil, 0)
 	require.NoError(t, err)
 
 	note := make([]byte, 8)
@@ -1182,7 +1183,7 @@ func makeOptInAppTransaction(
 	tLife uint64,
 	genesisHash crypto.Digest) (appTx transactions.Transaction) {
 
-	appTx, err := client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil)
+	appTx, err := client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	appTx.Header = transactions.Header{
@@ -1288,7 +1289,7 @@ func callAppTransaction(
 	tLife uint64,
 	genesisHash crypto.Digest) (appTx transactions.Transaction) {
 
-	appTx, err := client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil)
+	appTx, err := client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	appTx.Header = transactions.Header{

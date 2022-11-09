@@ -21,6 +21,7 @@ var (
 	errAssetDoesNotExist                       = "asset does not exist"
 	errAccountAppDoesNotExist                  = "account application info not found"
 	errAccountAssetDoesNotExist                = "account asset info not found"
+	errBoxDoesNotExist                         = "box not found"
 	errFailedLookingUpLedger                   = "failed to retrieve information from the ledger"
 	errFailedLookingUpTransactionPool          = "failed to retrieve information from the transaction pool"
 	errFailedRetrievingNodeStatus              = "failed retrieving node status"

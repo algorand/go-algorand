@@ -14,15 +14,32 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal
+package main
 
-// Export for testing only.  See
-// https://medium.com/@robiplus/golang-trick-export-for-test-aa16cbd7b8cd for a
-// nice explanation. tl;dr: Since some of our testing is in logic_test package,
-// we export some extra things to make testing easier there. But we do it in a
-// _test.go file, so they are only exported during testing.
+import (
+	"encoding/binary"
+	"flag"
+	"fmt"
+	"os"
 
-// In order to generate a block
-func (eval *BlockEvaluator) SetGenerate(g bool) {
-	eval.generate = g
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
+)
+
+var numAccounts = flag.Uint64("numaccounts", 0, "Use this many accounts")
+var offset = flag.Uint64("offset", 0, "Start at this offset")
+
+func main() {
+	flag.Parse()
+	if *numAccounts == 0 {
+		flag.Usage()
+		os.Exit(1)
+	}
+	for i := uint64(0); i < *numAccounts; i++ {
+		acct := i + *offset
+		var seed crypto.Seed
+		binary.LittleEndian.PutUint64(seed[:], uint64(acct))
+		secrets := crypto.GenerateSignatureSecrets(seed)
+		fmt.Println(i, acct, basics.Address(secrets.SignatureVerifier).String())
+	}
 }

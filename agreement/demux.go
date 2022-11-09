@@ -140,11 +140,11 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 				var msg message
 				switch tag {
 				case protocol.AgreementVoteTag:
-					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedVote: o.(unauthenticatedVote)}
+					msg = message{messageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedVote: o.(unauthenticatedVote)}
 				case protocol.VoteBundleTag:
-					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedBundle: o.(unauthenticatedBundle)}
+					msg = message{messageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedBundle: o.(unauthenticatedBundle)}
 				case protocol.ProposalPayloadTag:
-					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: o.(compoundMessage)}
+					msg = message{messageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: o.(compoundMessage)}
 				default:
 					err := fmt.Errorf("bad message tag: %v", tag)
 					d.UpdateEventsQueue(fmt.Sprintf("Tokenizing-%s", tag), 0)
@@ -167,7 +167,7 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 }
 
 // verifyVote enqueues a vote message to be verified.
-func (d *demux) verifyVote(ctx context.Context, m message, taskIndex int, r round, p period) {
+func (d *demux) verifyVote(ctx context.Context, m message, taskIndex uint64, r round, p period) {
 	d.UpdateEventsQueue(eventQueueCryptoVerifierVote, 1)
 	d.monitor.inc(cryptoVerifierCoserviceType)
 	d.crypto.VerifyVote(ctx, cryptoVoteRequest{message: m, TaskIndex: taskIndex, Round: r, Period: p})
@@ -198,8 +198,11 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		proto, err := d.ledger.ConsensusVersion(ParamsRound(e.ConsensusRound()))
 		e = e.AttachConsensusVersion(ConsensusVersionView{Err: makeSerErr(err), Version: proto})
 
-		if e.t() == payloadVerified {
+		switch e.t() {
+		case payloadVerified:
 			e = e.(messageEvent).AttachValidatedAt(s.Clock.Since())
+		case payloadPresent:
+			e = e.(messageEvent).AttachReceivedAt(s.Clock.Since())
 		}
 	}()
 
@@ -364,7 +367,7 @@ func setupCompoundMessage(l LedgerReader, m message) (res externalEvent) {
 		return
 	}
 
-	tailmsg := message{MessageHandle: m.MessageHandle, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: compound.Proposal}
+	tailmsg := message{messageHandle: m.messageHandle, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: compound.Proposal}
 	synthetic := messageEvent{T: payloadPresent, Input: tailmsg}
 	proto, err := l.ConsensusVersion(ParamsRound(synthetic.ConsensusRound()))
 	synthetic = synthetic.AttachConsensusVersion(ConsensusVersionView{Err: makeSerErr(err), Version: proto}).(messageEvent)

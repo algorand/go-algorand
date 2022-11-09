@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"strings"
 	"unicode"
 	"unicode/utf8"
 
@@ -47,6 +46,10 @@ func badRequest(ctx echo.Context, internal error, external string, log logging.L
 
 func serviceUnavailable(ctx echo.Context, internal error, external string, log logging.Logger) error {
 	return returnError(ctx, http.StatusServiceUnavailable, internal, external, log)
+}
+
+func timeout(ctx echo.Context, internal error, external string, log logging.Logger) error {
+	return returnError(ctx, http.StatusRequestTimeout, internal, external, log)
 }
 
 func internalError(ctx echo.Context, internal error, external string, log logging.Logger) error {
@@ -84,6 +87,13 @@ func byteOrNil(data []byte) *[]byte {
 		return nil
 	}
 	return &data
+}
+
+func nilToZero(numPtr *uint64) uint64 {
+	if numPtr == nil {
+		return 0
+	}
+	return *numPtr
 }
 
 func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (cidx *uint64) {
@@ -195,16 +205,16 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 }
 
 // getCodecHandle converts a format string into the encoder + content type
-func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
-	format := "json"
+func getCodecHandle(formatPtr *generated.Format) (codec.Handle, string, error) {
+	format := generated.Json
 	if formatPtr != nil {
-		format = strings.ToLower(*formatPtr)
+		format = generated.PendingTransactionInformationParamsFormat(*formatPtr)
 	}
 
 	switch format {
-	case "json":
+	case generated.Json:
 		return protocol.JSONStrictHandle, "application/json", nil
-	case "msgpack":
+	case generated.Msgpack:
 		fallthrough
 	case "msgp":
 		return protocol.CodecHandle, "application/msgpack", nil
@@ -297,20 +307,20 @@ func convertLogs(txn node.TxnWithStatus) *[][]byte {
 	return logItems
 }
 
-func convertInners(txn *node.TxnWithStatus) *[]preEncodedTxInfo {
-	inner := make([]preEncodedTxInfo, len(txn.ApplyData.EvalDelta.InnerTxns))
+func convertInners(txn *node.TxnWithStatus) *[]PreEncodedTxInfo {
+	inner := make([]PreEncodedTxInfo, len(txn.ApplyData.EvalDelta.InnerTxns))
 	for i, itxn := range txn.ApplyData.EvalDelta.InnerTxns {
 		inner[i] = convertInnerTxn(&itxn)
 	}
 	return &inner
 }
 
-func convertInnerTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
+func convertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	// This copies from handlers.PendingTransactionInformation, with
 	// simplifications because we have a SignedTxnWithAD rather than
 	// TxnWithStatus, and we know this txn has committed.
 
-	response := preEncodedTxInfo{Txn: txn.SignedTxn}
+	response := PreEncodedTxInfo{Txn: txn.SignedTxn}
 
 	response.ClosingAmount = &txn.ApplyData.ClosingAmount.Raw
 	response.AssetClosingAmount = &txn.ApplyData.AssetClosingAmount

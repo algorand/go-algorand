@@ -18,7 +18,15 @@ package agreement
 
 import (
 	"fmt"
+
+	"github.com/algorand/go-algorand/util/metrics"
 )
+
+var proposalAlreadyFilledCounter = metrics.MakeCounter(
+	metrics.MetricName{Name: "algod_agreement_proposal_already_filled", Description: "Number of times a duplicate proposal payload was received before validation"})
+
+var proposalAlreadyAssembledCounter = metrics.MakeCounter(
+	metrics.MetricName{Name: "algod_agreement_proposal_already_assembled", Description: "Number of times a duplicate proposal payload was received after validation"})
 
 // An blockAssembler contains the proposal data associated with some
 // proposal-value.
@@ -29,6 +37,7 @@ import (
 // Once a proposal is successfully validated, it is stored by the
 // blockAssembler.
 type blockAssembler struct {
+	_struct struct{} `codec:","`
 	// Pipeline contains a proposal which has not yet been validated.  The
 	// proposal might be inside the cryptoVerifier, or it might be a
 	// pipelined proposal from the next round.
@@ -45,17 +54,19 @@ type blockAssembler struct {
 	// for a given proposal-value.  When a proposal payload is relayed by
 	// the state machine, a matching can be concatenated with the vote to
 	// ensure that peers do not drop the proposal payload.
-	Authenticators []vote
+	Authenticators []vote `codec:"Authenticators,allocbound=-"`
 }
 
 // pipeline adds the given unvalidated proposal to the blockAssembler, returning
 // an error if the pipelining operation is redundant.
 func (a blockAssembler) pipeline(p unauthenticatedProposal) (blockAssembler, error) {
 	if a.Assembled {
+		proposalAlreadyAssembledCounter.Inc(nil)
 		return a, fmt.Errorf("blockAssembler.pipeline: already assembled")
 	}
 
 	if a.Filled {
+		proposalAlreadyFilledCounter.Inc(nil)
 		return a, fmt.Errorf("blockAssembler.pipeline: already filled")
 	}
 
@@ -110,11 +121,12 @@ func (a blockAssembler) trim(p period) blockAssembler {
 // It returns the following type(s) of event: none, voteFiltered,
 // proposal{Accepted,Committable}, and payload{Pipelined,Rejected}.
 type proposalStore struct {
+	_struct struct{} `codec:","`
 	// Relevant contains a current collection of important proposal-values
 	// in the round. Relevant is indexed by period, and the proposalValue is
 	// the last one reported by the corresponding proposalMachinePeriod.
 	// Each corresponding proposal is tracked in Assemblers.
-	Relevant map[period]proposalValue
+	Relevant map[period]proposalValue `codec:"Relevant,allocbound=-"`
 	// Pinned contains the extra proposal-value, not tracked in Relevant,
 	// for which a certificate may have formed (i.e., vbar in the spec).
 	// The proposal corresponding to Pinned is tracked in Assemblers.
@@ -122,7 +134,7 @@ type proposalStore struct {
 
 	// Assemblers contains the set of proposal-values currently tracked and
 	// held by the proposalStore.
-	Assemblers map[proposalValue]blockAssembler
+	Assemblers map[proposalValue]blockAssembler `codec:"Assemblers,allocbound=-"`
 }
 
 func (store *proposalStore) T() stateMachineTag {
