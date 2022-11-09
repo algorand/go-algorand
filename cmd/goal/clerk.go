@@ -164,7 +164,7 @@ func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound
 
 	for {
 		// Check if we know about the transaction yet
-		txn, err = client.PendingTransactionInformationV2(txid)
+		txn, err = client.PendingTransactionInformation(txid)
 		if err != nil {
 			return generatedV2.PendingTransactionResponse{}, fmt.Errorf(errorRequestFail, err)
 		}
@@ -601,7 +601,7 @@ var rawsendCmd = &cobra.Command{
 		for txid, txidStr := range pendingTxns {
 			for {
 				// Check if we know about the transaction yet
-				txn, err := client.PendingTransactionInformationV2(txidStr)
+				txn, err := client.PendingTransactionInformation(txidStr)
 				if err != nil {
 					txnErrors[txid] = err.Error()
 					reportWarnf(errorRequestFail, err)

@@ -85,7 +85,7 @@ func broadcastTransactions(queueWg *sync.WaitGroup, fixture *fixtures.RestClient
 		if stxn == nil {
 			break
 		}
-		_, err := fixture.AlgodClient.SendRawTransactionV2(*stxn)
+		_, err := fixture.AlgodClient.SendRawTransaction(*stxn)
 		if err != nil {
 			handleError(err, "Error broadcastTransactions", errChan)
 		}
@@ -101,7 +101,7 @@ func broadcastTransactionGroups(queueWg *sync.WaitGroup, fixture *fixtures.RestC
 		}
 		var err error
 
-		err = fixture.AlgodClient.SendRawTransactionGroupV2(stxns)
+		err = fixture.AlgodClient.SendRawTransactionGroup(stxns)
 		if err != nil {
 			handleError(err, "Error broadcastTransactionGroups", errChan)
 		}
@@ -118,7 +118,7 @@ func getAccountInformation(
 	log logging.Logger) (info generated.Account, err error) {
 
 	for x := 0; x < 5; x++ { // retry only 5 times
-		info, err = fixture.AlgodClient.AccountInformationV2(address, true)
+		info, err = fixture.AlgodClient.AccountInformation(address, true)
 		if err != nil {
 			return
 		}
@@ -239,7 +239,7 @@ func test5MAssets(t *testing.T, scenario int) {
 	// get the wallet account
 	wAcct := accountList[0].Address
 
-	suggestedParams, err := fixture.AlgodClient.SuggestedParamsV2()
+	suggestedParams, err := fixture.AlgodClient.SuggestedParams()
 	require.NoError(t, err)
 	var genesisHash crypto.Digest
 	copy(genesisHash[:], suggestedParams.GenesisHash)
@@ -674,7 +674,7 @@ func scenarioB(
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture, log)
 	require.NoError(t, err)
 
-	info, err := fixture.AlgodClient.AccountInformationV2(baseAcct.pk.String(), false)
+	info, err := fixture.AlgodClient.AccountInformation(baseAcct.pk.String(), false)
 	require.NoError(t, err)
 	require.Equal(t, numberOfAssets, info.TotalAssetsOptedIn)
 	require.Equal(t, numberOfAssets, info.TotalCreatedAssets)
@@ -1051,7 +1051,7 @@ func signAndBroadcastTransaction(
 		return err
 	}
 
-	_, err = fixture.AlgodClient.SendRawTransactionV2(stxn)
+	_, err = fixture.AlgodClient.SendRawTransaction(stxn)
 	if err != nil {
 		return err
 	}
