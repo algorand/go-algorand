@@ -96,10 +96,7 @@ func MakeCatchpointLabelMakerCurrent(ledgerRound basics.Round, ledgerRoundBlockH
 func (l *CatchpointLabelMakerCurrent) toBuffer() []byte {
 	v6Buffer := l.v6Label.toBuffer()
 
-	buffer := make([]byte, crypto.DigestSize)
-	copy(buffer[:], l.stateProofVerificationDataHash[:])
-
-	return append(v6Buffer, buffer...)
+	return append(v6Buffer, l.stateProofVerificationDataHash[:]...)
 }
 
 func (l *CatchpointLabelMakerCurrent) getRound() basics.Round {
