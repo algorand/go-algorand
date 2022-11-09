@@ -200,11 +200,50 @@ func BenchmarkCowChild(b *testing.B) {
 	}
 }
 
-// Ensure that we aren't doing allocs when calling cow.child
-// large enough b.N forces allocsPerOp to round to zero
-func TestCowChildRecycle(t *testing.T) {
+// Ideally we'd be able to randomize the roundCowState but can't do it via reflection
+// since it' can't set unexported fields. This test just makes sure that all of the existing
+// fields are correctly reset but won't be able to catch any new fields added.
+func TestCowChildReset(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	cow := makeRoundCowState(nil, bookkeeping.BlockHeader{}, config.ConsensusParams{}, 10000, ledgercore.AccountTotals{}, 300)
+	calf := cow.child(100)
+	require.NotEmpty(t, calf)
+	calf.reset()
+	// simple fields
+	require.Zero(t, calf.commitParent)
+	require.Zero(t, calf.proto)
+	require.Zero(t, calf.txnCount)
+	require.Zero(t, calf.compatibilityMode)
+	require.Zero(t, calf.prevTotals)
 
-	child := testing.Benchmark(BenchmarkCowChild)
-	require.Zero(t, child.AllocsPerOp())
+	// alloced map
+	require.NotZero(t, calf.sdeltas)
+	require.Empty(t, calf.sdeltas)
+
+	// check StateDeltas
+	// StateDeltas simple fields
+	require.Zero(t, calf.mods.Hdr)
+	require.Zero(t, calf.mods.StateProofNext)
+	require.Zero(t, calf.mods.PrevTimestamp)
+	require.Zero(t, calf.mods.Totals)
+
+	// required allocated maps
+	require.NotZero(t, calf.mods.Txids)
+	require.Empty(t, calf.mods.Txids)
+
+	// optional allocated maps
+	require.Empty(t, calf.mods.Txleases)
+	require.Empty(t, calf.mods.KvMods)
+	require.Empty(t, calf.mods.Creatables)
+
+	// check AccountDeltas
+	require.NotZero(t, calf.mods.Accts)
+
+	// required AccountDeltas fields
+	require.NotZero(t, calf.mods.Accts.Accts)
+	require.Empty(t, calf.mods.Accts.Accts)
+
+	// optional AccountDeltas fields
+	require.Empty(t, calf.mods.Accts.AppResources)
+	require.Empty(t, calf.mods.Accts.AssetResources)
 }

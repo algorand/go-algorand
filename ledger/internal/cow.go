@@ -329,8 +329,8 @@ func (cb *roundCowState) modifiedAccounts() []basics.Address {
 	return cb.mods.Accts.ModifiedAccounts()
 }
 
-// recycle resets the roundcowstate and returns it to the sync.Pool
-func (cb *roundCowState) recycle() {
+// reset resets the roundcowstate
+func (cb *roundCowState) reset() {
 	cb.lookupParent = nil
 	cb.commitParent = nil
 	cb.proto = config.ConsensusParams{}
@@ -344,7 +344,11 @@ func (cb *roundCowState) recycle() {
 		delete(cb.compatibilityGetKeyCache, addr)
 	}
 	cb.prevTotals = ledgercore.AccountTotals{}
+}
 
+// recycle resets the roundcowstate and returns it to the sync.Pool
+func (cb *roundCowState) recycle() {
+	cb.reset()
 	childPool.Put(cb)
 }
 
