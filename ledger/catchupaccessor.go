@@ -328,7 +328,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingStateProofVerificationData
 				return err
 			}
 		}
-		return
+		return nil
 	})
 
 	return err
