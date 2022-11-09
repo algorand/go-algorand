@@ -240,11 +240,11 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 
 	fmt.Printf("Block size statistics:\n")
 	for round := status.LastRound + 1; ; round++ {
-		blk, err := c.Block(round)
+		blk, err := c.BookkeepingBlock(round)
 		if err != nil {
 			break
 		}
 
-		fmt.Printf("  %d: %d txns\n", round, len(blk.Transactions.Transactions))
+		fmt.Printf("  %d: %d txns\n", round, len(blk.Payset))
 	}
 }

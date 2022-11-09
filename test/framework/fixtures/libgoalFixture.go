@@ -479,7 +479,7 @@ func (f *LibGoalFixture) CurrentConsensusParams() (consensus config.ConsensusPar
 
 // ConsensusParams returns the consensus parameters for the protocol from the specified round
 func (f *LibGoalFixture) ConsensusParams(round uint64) (consensus config.ConsensusParams, err error) {
-	block, err := f.LibGoalClient.Block(round)
+	block, err := f.LibGoalClient.BookkeepingBlock(round)
 	if err != nil {
 		return
 	}
@@ -532,7 +532,7 @@ func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType cr
 		return generatedV2.TransactionProofResponse{}, merklearray.SingleLeafProof{}, err
 	}
 
-	proof, err := merklearray.ProofDataToSingleLeafProof(proofResp.Hashtype, proofResp.Treedepth, proofResp.Proof)
+	proof, err := merklearray.ProofDataToSingleLeafProof(string(proofResp.Hashtype), proofResp.Treedepth, proofResp.Proof)
 	if err != nil {
 		return generatedV2.TransactionProofResponse{}, merklearray.SingleLeafProof{}, err
 	}

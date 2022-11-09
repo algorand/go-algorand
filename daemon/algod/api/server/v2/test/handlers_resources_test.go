@@ -252,7 +252,7 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 	handlers, addr, acctData := setupTestForLargeResources(t, acctSize, maxResults, accountMaker)
 	params := generatedV2.AccountInformationParams{}
 	if exclude != "" {
-		params.Exclude = &exclude
+		params.Exclude = (*generatedV2.AccountInformationParamsExclude)(&exclude)
 	}
 	ctx, rec := newReq(t)
 	err := handlers.AccountInformation(ctx, addr.String(), params)
@@ -318,7 +318,7 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 		assert.Nil(t, ret.CreatedAsset)
 		assert.Equal(t, ret.AssetHolding, &generatedV2.AssetHolding{
 			Amount:   acctData.Assets[aidx].Amount,
-			AssetId:  uint64(aidx),
+			AssetID:  uint64(aidx),
 			IsFrozen: acctData.Assets[aidx].Frozen,
 		})
 	}

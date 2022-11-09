@@ -48,13 +48,14 @@ func TestDevMode(t *testing.T) {
 	key := crypto.GenerateSignatureSecrets(crypto.Seed{})
 	receiver := basics.Address(key.SignatureVerifier)
 	txn := fixture.SendMoneyAndWait(0, 100000, 1000, sender.Address, receiver.String(), "")
-	firstRound := txn.ConfirmedRound + 1
+	require.NotNil(t, txn.ConfirmedRound)
+	firstRound := *txn.ConfirmedRound + 1
 	start := time.Now()
 
 	// 2 transactions should be sent within one normal confirmation time.
 	for i := uint64(0); i < 2; i++ {
 		txn = fixture.SendMoneyAndWait(firstRound+i, 100000, 1000, sender.Address, receiver.String(), "")
-		require.Equal(t, firstRound+i, txn.FirstRound)
+		require.Equal(t, firstRound+i, txn.Txn.Txn.FirstValid)
 	}
 	require.True(t, time.Since(start) < 8*time.Second, "Transactions should be quickly confirmed faster than usual.")
 
