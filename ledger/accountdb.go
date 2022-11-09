@@ -5200,7 +5200,7 @@ type catchpointFirstStageInfo struct {
 	// BiggestChunkLen is the size in the bytes of the largest chunk, used when re-packing.
 	BiggestChunkLen uint64 `codec:"biggestChunk"`
 	// StateProofVerificationHash is the hash of the state proof verification data contained in the catchpoint data file.
-	StateProofVerificationHash crypto.Digest `codec:"stateProofVerificationHash"`
+	StateProofVerificationHash crypto.Digest `codec:"spVerificationHash"`
 }
 
 func insertOrReplaceCatchpointFirstStageInfo(ctx context.Context, e db.Executable, round basics.Round, info *catchpointFirstStageInfo) error {
