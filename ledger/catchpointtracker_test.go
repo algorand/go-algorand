@@ -39,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -357,7 +358,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 			var updates compactAccountDeltas
 			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 				addr := ledgertesting.RandomAddress()
-				acctData := baseAccountData{}
+				acctData := store.BaseAccountData{}
 				acctData.MicroAlgos.Raw = 1
 				updates.upsert(addr, accountDelta{newAcct: acctData})
 				i++
@@ -1391,7 +1392,7 @@ func TestHashContract(t *testing.T) {
 	accounts := []testCase{
 		accountCase(
 			func() []byte {
-				b := baseAccountData{
+				b := store.BaseAccountData{
 					UpdateRound: 1024,
 				}
 				return accountHashBuilderV6(a, &b, protocol.Encode(&b))
@@ -1400,7 +1401,7 @@ func TestHashContract(t *testing.T) {
 		),
 		accountCase(
 			func() []byte {
-				b := baseAccountData{
+				b := store.BaseAccountData{
 					RewardsBase: 10000,
 				}
 				return accountHashBuilderV6(a, &b, protocol.Encode(&b))
@@ -1412,7 +1413,7 @@ func TestHashContract(t *testing.T) {
 	resourceAssets := []testCase{
 		resourceAssetCase(
 			func() []byte {
-				r := resourcesData{
+				r := store.ResourcesData{
 					Amount:    1000,
 					Decimals:  3,
 					AssetName: "test",
@@ -1430,7 +1431,7 @@ func TestHashContract(t *testing.T) {
 	resourceApps := []testCase{
 		resourceAppCase(
 			func() []byte {
-				r := resourcesData{
+				r := store.ResourcesData{
 					ApprovalProgram:          []byte{1, 3, 10, 15},
 					ClearStateProgram:        []byte{15, 10, 3, 1},
 					LocalStateSchemaNumUint:  2,

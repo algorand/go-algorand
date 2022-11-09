@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -250,48 +251,45 @@ return`
 	commitRound(1, 3, l)
 
 	// dump accounts
-	var rowid int64
-	var dbRound basics.Round
-	var buf []byte
-	err = l.accts.accountsq.lookupAccountStmt.QueryRow(creator[:]).Scan(&rowid, &dbRound, &buf)
+	entryAcc, err := l.accts.accountsq.Lookup(creator)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedCreatorBase, buf)
-	err = l.accts.accountsq.lookupResourcesStmt.QueryRow(creator[:], basics.CreatableIndex(appIdx)).Scan(&rowid, &dbRound, &buf)
+	a.Equal(basics.Round(4), entryAcc.Round)
+	a.Equal(expectedCreatorBase, protocol.Encode(&entryAcc.AccountData))
+	entryRes, err := l.accts.accountsq.LookupResources(creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedCreatorResource, buf)
+	a.Equal(basics.Round(4), entryRes.Round)
+	a.Equal(expectedCreatorResource, protocol.Encode(&entryRes.Data))
 
-	err = l.accts.accountsq.lookupAccountStmt.QueryRow(userOptin[:]).Scan(&rowid, &dbRound, &buf)
+	entryAcc, err = l.accts.accountsq.Lookup(userOptin)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedUserOptInBase, buf)
-	err = l.accts.accountsq.lookupResourcesStmt.QueryRow(userOptin[:], basics.CreatableIndex(appIdx)).Scan(&rowid, &dbRound, &buf)
+	a.Equal(basics.Round(4), entryAcc.Round)
+	a.Equal(expectedUserOptInBase, protocol.Encode(&entryAcc.AccountData))
+	entryRes, err = l.accts.accountsq.LookupResources(userOptin, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedUserOptInResource, buf)
+	a.Equal(basics.Round(4), entryRes.Round)
+	a.Equal(expectedUserOptInResource, protocol.Encode(&entryRes.Data))
 
-	pad, err := l.accts.accountsq.lookup(userOptin)
+	pad, err := l.accts.accountsq.Lookup(userOptin)
 	a.NoError(err)
 	a.NotEmpty(pad)
-	prd, err := l.accts.accountsq.lookupResources(userOptin, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	prd, err := l.accts.accountsq.LookupResources(userOptin, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Nil(prd.data.GetAppLocalState().KeyValue)
+	a.Nil(prd.Data.GetAppLocalState().KeyValue)
 	ad, rnd, _, err := l.LookupLatest(userOptin)
-	a.Equal(dbRound, rnd)
+	a.Equal(basics.Round(4), rnd)
 	a.NoError(err)
 	a.Nil(ad.AppLocalStates[appIdx].KeyValue)
 
-	err = l.accts.accountsq.lookupAccountStmt.QueryRow(userLocal[:]).Scan(&rowid, &dbRound, &buf)
+	entryAcc, err = l.accts.accountsq.Lookup(userLocal)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedUserLocalBase, buf)
-	err = l.accts.accountsq.lookupResourcesStmt.QueryRow(userLocal[:], basics.CreatableIndex(appIdx)).Scan(&rowid, &dbRound, &buf)
+	a.Equal(basics.Round(4), entryAcc.Round)
+	a.Equal(expectedUserLocalBase, protocol.Encode(&entryAcc.AccountData))
+	entryRes, err = l.accts.accountsq.LookupResources(userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedUserLocalResource, buf)
+	a.Equal(basics.Round(4), entryRes.Round)
+	a.Equal(expectedUserLocalResource, protocol.Encode(&entryRes.Data))
 
-	ar, err := l.LookupApplication(dbRound, userLocal, appIdx)
+	ar, err := l.LookupApplication(basics.Round(4), userLocal, appIdx)
 	a.NoError(err)
 	a.Equal("local", ar.AppLocalState.KeyValue["lk"].Bytes)
 
@@ -753,15 +751,15 @@ return`
 	a.NoError(err)
 	a.Empty(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas)
 
-	pad, err := l.accts.accountsq.lookup(userLocal)
+	pad, err := l.accts.accountsq.Lookup(userLocal)
 	a.NoError(err)
-	a.Equal(baseAccountData{}, pad.accountData)
-	a.Zero(pad.rowid)
-	prd, err := l.accts.accountsq.lookupResources(userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	a.Equal(store.BaseAccountData{}, pad.AccountData)
+	a.Zero(pad.Rowid)
+	prd, err := l.accts.accountsq.LookupResources(userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Zero(prd.addrid)
-	emptyResourceData := makeResourcesData(0)
-	a.Equal(emptyResourceData, prd.data)
+	a.Zero(prd.Addrid)
+	emptyResourceData := store.MakeResourcesData(0)
+	a.Equal(emptyResourceData, prd.Data)
 }
 
 func TestAppEmptyAccountsGlobal(t *testing.T) {
@@ -889,15 +887,15 @@ return`
 	a.Contains(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta, "gk")
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta["gk"].Bytes, "global")
 
-	pad, err := l.accts.accountsq.lookup(creator)
+	pad, err := l.accts.accountsq.Lookup(creator)
 	a.NoError(err)
-	a.Empty(pad.accountData)
-	a.Zero(pad.rowid)
-	prd, err := l.accts.accountsq.lookupResources(creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	a.Empty(pad.AccountData)
+	a.Zero(pad.Rowid)
+	prd, err := l.accts.accountsq.LookupResources(creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Zero(prd.addrid)
-	emptyResourceData := makeResourcesData(0)
-	a.Equal(emptyResourceData, prd.data)
+	a.Zero(prd.Addrid)
+	emptyResourceData := store.MakeResourcesData(0)
+	a.Equal(emptyResourceData, prd.Data)
 }
 
 func TestAppAccountDeltaIndicesCompatibility1(t *testing.T) {

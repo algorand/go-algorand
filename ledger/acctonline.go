@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -51,9 +52,10 @@ type modifiedOnlineAccount struct {
 }
 
 // cachedOnlineAccount is a light-weight version of persistedOnlineAccountData suitable for in-memory caching
+//
 //msgp:ignore cachedOnlineAccount
 type cachedOnlineAccount struct {
-	baseOnlineAccountData
+	store.BaseOnlineAccountData
 	updRound basics.Round
 }
 
@@ -63,7 +65,7 @@ type onlineAccounts struct {
 	dbs db.Pair
 
 	// Prepared SQL statements for fast accounts DB lookups.
-	accountsq *onlineAccountsDbQueries
+	accountsq store.OnlineAccountsReader
 
 	// cachedDBRoundOnline is always exactly tracker DB round (and therefore, onlineAccountsRound()),
 	// cached to use in lookup functions
@@ -172,7 +174,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
-	ao.accountsq, err = onlineAccountsInitDbQueries(ao.dbs.Rdb.Handle)
+	ao.accountsq, err = store.OnlineAccountsInitDbQueries(ao.dbs.Rdb.Handle)
 	if err != nil {
 		return
 	}
@@ -193,7 +195,7 @@ func (ao *onlineAccounts) latest() basics.Round {
 // close closes the accountUpdates, waiting for all the child go-routine to complete
 func (ao *onlineAccounts) close() {
 	if ao.accountsq != nil {
-		ao.accountsq.close()
+		ao.accountsq.Close()
 		ao.accountsq = nil
 	}
 
@@ -463,10 +465,10 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	for _, persistedAcct := range dcc.updatedPersistedOnlineAccounts {
 		ao.baseOnlineAccounts.write(persistedAcct)
 		ao.onlineAccountsCache.writeFrontIfExist(
-			persistedAcct.addr,
+			persistedAcct.Addr,
 			cachedOnlineAccount{
-				baseOnlineAccountData: persistedAcct.accountData,
-				updRound:              persistedAcct.updRound,
+				BaseOnlineAccountData: persistedAcct.AccountData,
+				updRound:              persistedAcct.UpdRound,
 			})
 	}
 
@@ -526,7 +528,7 @@ func (ao *onlineAccounts) onlineTotalsEx(rnd basics.Round) (basics.MicroAlgos, e
 		ao.log.Errorf("onlineTotalsImpl error: %v", err)
 	}
 
-	totalsOnline, err = ao.accountsq.lookupOnlineTotalsHistory(rnd)
+	totalsOnline, err = ao.accountsq.LookupOnlineTotalsHistory(rnd)
 	return totalsOnline, err
 }
 
@@ -615,7 +617,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	var paramsOffset uint64
 	var rewardsProto config.ConsensusParams
 	var rewardsLevel uint64
-	var persistedData persistedOnlineAccountData
+	var persistedData store.PersistedOnlineAccountData
 
 	// the loop serves retrying logic if the database advanced while
 	// the function was analyzing deltas or caches.
@@ -678,8 +680,8 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		// As an optimization, we avoid creating
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
-		persistedData, err = ao.accountsq.lookupOnline(addr, rnd)
-		if err != nil || persistedData.rowid == 0 {
+		persistedData, err = ao.accountsq.LookupOnline(addr, rnd)
+		if err != nil || persistedData.Rowid == 0 {
 			// no such online account, return empty
 			return ledgercore.OnlineAccountData{}, err
 		}
@@ -694,7 +696,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		//     * if commitRound deletes some history after, the cache has additional entries and updRound comparison gets a right value
 		//   2. after commitRound but before postCommit => OK, read full history, ignore the update from postCommit in writeFront's updRound comparison
 		//   3. after postCommit => OK, postCommit does not add new entry with writeFrontIfExist, but here all the full history is loaded
-		persistedDataHistory, validThrough, err := ao.accountsq.lookupOnlineHistory(addr)
+		persistedDataHistory, validThrough, err := ao.accountsq.LookupOnlineHistory(addr)
 		if err != nil || len(persistedDataHistory) == 0 {
 			return ledgercore.OnlineAccountData{}, err
 		}
@@ -715,21 +717,21 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			} else {
 				for _, data := range persistedDataHistory {
 					written := ao.onlineAccountsCache.writeFront(
-						data.addr,
+						data.Addr,
 						cachedOnlineAccount{
-							baseOnlineAccountData: data.accountData,
-							updRound:              data.updRound,
+							BaseOnlineAccountData: data.AccountData,
+							updRound:              data.UpdRound,
 						})
 					if !written {
 						ao.accountsMu.Unlock()
-						err = fmt.Errorf("failed to write history of acct %s for round %d into online accounts cache", data.addr.String(), data.updRound)
+						err = fmt.Errorf("failed to write history of acct %s for round %d into online accounts cache", data.Addr.String(), data.UpdRound)
 						return ledgercore.OnlineAccountData{}, err
 					}
 				}
 				ao.log.Info("inserted new item to onlineAccountsCache")
 			}
 			ao.accountsMu.Unlock()
-			return persistedData.accountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
+			return persistedData.AccountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
 		}
 		// case 3.3: retry (for loop iterates and queries again)
 		ao.accountsMu.Unlock()

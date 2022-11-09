@@ -43,6 +43,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -111,7 +112,7 @@ type catchpointTracker struct {
 	enableGeneratingCatchpointFiles bool
 
 	// Prepared SQL statements for fast accounts DB lookups.
-	accountsq *accountsDbQueries
+	accountsq store.AccountsReader
 
 	// log copied from ledger
 	log logging.Logger
@@ -345,7 +346,7 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Rou
 		return err
 	}
 
-	ct.accountsq, err = accountsInitDbQueries(ct.dbs.Rdb.Handle)
+	ct.accountsq, err = store.AccountsInitDbQueries(ct.dbs.Rdb.Handle)
 	if err != nil {
 		return
 	}
@@ -940,8 +941,8 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 
 	for i := 0; i < accountsDeltas.len(); i++ {
 		delta := accountsDeltas.getByIdx(i)
-		if !delta.oldAcct.accountData.IsEmpty() {
-			deleteHash := accountHashBuilderV6(delta.address, &delta.oldAcct.accountData, protocol.Encode(&delta.oldAcct.accountData))
+		if !delta.oldAcct.AccountData.IsEmpty() {
+			deleteHash := accountHashBuilderV6(delta.address, &delta.oldAcct.AccountData, protocol.Encode(&delta.oldAcct.AccountData))
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), delta.address, err)
@@ -970,8 +971,8 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 	for i := 0; i < resourcesDeltas.len(); i++ {
 		resDelta := resourcesDeltas.getByIdx(i)
 		addr := resDelta.address
-		if !resDelta.oldResource.data.IsEmpty() {
-			deleteHash, err := resourcesHashBuilderV6(&resDelta.oldResource.data, addr, resDelta.oldResource.aidx, resDelta.oldResource.data.UpdateRound, protocol.Encode(&resDelta.oldResource.data))
+		if !resDelta.oldResource.Data.IsEmpty() {
+			deleteHash, err := resourcesHashBuilderV6(&resDelta.oldResource.Data, addr, resDelta.oldResource.Aidx, resDelta.oldResource.Data.UpdateRound, protocol.Encode(&resDelta.oldResource.Data))
 			if err != nil {
 				return err
 			}
@@ -987,7 +988,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		}
 
 		if !resDelta.newResource.IsEmpty() {
-			addHash, err := resourcesHashBuilderV6(&resDelta.newResource, addr, resDelta.oldResource.aidx, resDelta.newResource.UpdateRound, protocol.Encode(&resDelta.newResource))
+			addHash, err := resourcesHashBuilderV6(&resDelta.newResource, addr, resDelta.oldResource.Aidx, resDelta.newResource.UpdateRound, protocol.Encode(&resDelta.newResource))
 			if err != nil {
 				return err
 			}
@@ -1426,7 +1427,7 @@ func finishV6(v6hash []byte, prehash []byte) []byte {
 }
 
 // accountHashBuilderV6 calculates the hash key used for the trie by combining the account address and the account data
-func accountHashBuilderV6(addr basics.Address, accountData *baseAccountData, encodedAccountData []byte) []byte {
+func accountHashBuilderV6(addr basics.Address, accountData *store.BaseAccountData, encodedAccountData []byte) []byte {
 	hashIntPrefix := accountData.UpdateRound
 	if hashIntPrefix == 0 {
 		hashIntPrefix = accountData.RewardsBase
@@ -1446,6 +1447,7 @@ func accountHashBuilderV6(addr basics.Address, accountData *baseAccountData, enc
 // trie. Each merkle trie hash includes the hashKind byte at a known-offset.
 // By encoding hashKind at a known-offset, it's possible for hash readers to
 // disambiguate the hashed resource.
+//
 //go:generate stringer -type=hashKind
 type hashKind byte
 
@@ -1462,7 +1464,7 @@ const (
 // encoded.
 const hashKindEncodingIndex = 4
 
-func rdGetCreatableHashKind(rd *resourcesData, a basics.Address, ci basics.CreatableIndex) (hashKind, error) {
+func rdGetCreatableHashKind(rd *store.ResourcesData, a basics.Address, ci basics.CreatableIndex) (hashKind, error) {
 	if rd.IsAsset() {
 		return assetHK, nil
 	} else if rd.IsApp() {
@@ -1472,7 +1474,7 @@ func rdGetCreatableHashKind(rd *resourcesData, a basics.Address, ci basics.Creat
 }
 
 // resourcesHashBuilderV6 calculates the hash key used for the trie by combining the creatable's resource data and its index
-func resourcesHashBuilderV6(rd *resourcesData, addr basics.Address, cidx basics.CreatableIndex, updateRound uint64, encodedResourceData []byte) ([]byte, error) {
+func resourcesHashBuilderV6(rd *store.ResourcesData, addr basics.Address, cidx basics.CreatableIndex, updateRound uint64, encodedResourceData []byte) ([]byte, error) {
 	hk, err := rdGetCreatableHashKind(rd, addr, cidx)
 	if err != nil {
 		return nil, err
