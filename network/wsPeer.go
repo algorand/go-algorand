@@ -51,7 +51,7 @@ const msgsInReadBufferPerPeer = 10
 
 var tagStringList []string
 
-// allowCustomTags is set by tests to allow non-protocol-defined message tags.
+// allowCustomTags is set by tests to allow non-protocol-defined message tags. It is false in non-test code.
 var allowCustomTags bool
 
 func init() {
@@ -99,6 +99,7 @@ var duplicateNetworkMessageReceivedBytesTotal = metrics.MakeCounter(metrics.Dupl
 var duplicateNetworkFilterReceivedTotal = metrics.MakeCounter(metrics.DuplicateNetworkFilterReceivedTotal)
 var outgoingNetworkMessageFilteredOutTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutTotal)
 var outgoingNetworkMessageFilteredOutBytesTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutBytesTotal)
+var outOfProtocolTagMessagesTotal = metrics.MakeCounter(metrics.OutOfProtocolTagMessagesTotal)
 
 // defaultSendMessageTags is the default list of messages which a peer would
 // allow to be sent without receiving any explicit request.
@@ -188,6 +189,10 @@ type wsPeer struct {
 	// this needs to be 64-bit aligned for use with atomic.AddUint64 on 32-bit platforms.
 	duplicateFilterCount uint64
 
+	// outOfProtocolCount counts how many messages were received with unrecognized message tags.
+	// this needs to be 64-bit aligned fo ruse with atomic.AddUint64 on 32-bit platforms.
+	outOfProtocolCount uint64
+
 	wsPeerCore
 
 	// conn will be *websocket.Conn (except in testing)
@@ -208,7 +213,6 @@ type wsPeer struct {
 
 	TelemetryGUID string
 	InstanceName  string
-	OutOfProtocol bool
 
 	incomingMsgFilter *messageFilter
 	outgoingMsgFilter *messageFilter
@@ -529,18 +533,11 @@ func (wp *wsPeer) readLoop() {
 			wp.handleFilterMessage(msg)
 			continue
 		// the remaining valid tags: no special handling here
-		case protocol.AgreementVoteTag:
-		case protocol.NetPrioResponseTag:
-		case protocol.PingTag:
-		case protocol.PingReplyTag:
-		case protocol.ProposalPayloadTag:
-		case protocol.StateProofSigTag:
-		case protocol.TxnTag:
-		case protocol.UniCatchupReqTag:
-		case protocol.UniEnsBlockReqTag:
-		case protocol.VoteBundleTag:
+		case protocol.AgreementVoteTag, protocol.NetPrioResponseTag, protocol.PingTag, protocol.PingReplyTag, protocol.ProposalPayloadTag,
+			protocol.StateProofSigTag, protocol.TxnTag, protocol.UniCatchupReqTag, protocol.UniEnsBlockReqTag, protocol.VoteBundleTag:
 		default: // unrecognized tag
-			wp.OutOfProtocol = true
+			outOfProtocolTagMessagesTotal.Inc(nil)
+			atomic.AddUint64(&wp.outOfProtocolCount, 1)
 			if !allowCustomTags {
 				continue // drop message, skip adding it to queue
 			}
@@ -550,8 +547,10 @@ func (wp *wsPeer) readLoop() {
 				//wp.net.log.Debugf("dropped incoming duplicate %s(%d)", msg.Tag, len(msg.Data))
 				duplicateNetworkMessageReceivedTotal.Inc(nil)
 				duplicateNetworkMessageReceivedBytesTotal.AddUint64(uint64(len(msg.Data)+len(msg.Tag)), nil)
-				// drop message, skip adding it to queue
-				continue
+				if !allowCustomTags {
+					// drop message, skip adding it to queue
+					continue
+				}
 			}
 		}
 		//wp.net.log.Debugf("got msg %d bytes from %s", len(msg.Data), wp.conn.RemoteAddr().String())

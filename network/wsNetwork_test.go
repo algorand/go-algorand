@@ -53,6 +53,7 @@ import (
 const sendBufferLength = 1000
 
 func init() {
+	// this allows test code to use out-of-protocol message tags and have them go through
 	allowCustomTags = true
 }
 

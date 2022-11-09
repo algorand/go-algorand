@@ -302,8 +302,8 @@ type PeerConnectionDetails struct {
 	MessageDelay int64 `json:",omitempty"`
 	// DuplicateFilterCount is the number of times this peer has sent us a message hash to filter that it had already sent before.
 	DuplicateFilterCount uint64
-	// OutOfProtocol tells us if a node is sending messages outside the network protocol.
-	OutOfProtocol bool
+	// OutOfProtocol counts the number of non-protocol message tags received.
+	OutOfProtocol uint64
 }
 
 // CatchpointGenerationEvent event
