@@ -435,7 +435,7 @@ func (qs *accountsDbQueries) LookupAllResources(addr basics.Address) (data []Per
 // LookupAccount looks up for a the account data given it's address. It returns the persistedAccountData, which includes the current database round and the matching
 // account data, if such was found. If no matching account data could be found for the given address, an empty account data would
 // be retrieved.
-func (qs *accountsDbQueries) Lookup(addr basics.Address) (data PersistedAccountData, err error) {
+func (qs *accountsDbQueries) LookupAccount(addr basics.Address) (data PersistedAccountData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64

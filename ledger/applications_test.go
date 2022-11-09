@@ -251,7 +251,7 @@ return`
 	commitRound(1, 3, l)
 
 	// dump accounts
-	entryAcc, err := l.accts.accountsq.Lookup(creator)
+	entryAcc, err := l.accts.accountsq.LookupAccount(creator)
 	a.NoError(err)
 	a.Equal(basics.Round(4), entryAcc.Round)
 	a.Equal(expectedCreatorBase, protocol.Encode(&entryAcc.AccountData))
@@ -260,7 +260,7 @@ return`
 	a.Equal(basics.Round(4), entryRes.Round)
 	a.Equal(expectedCreatorResource, protocol.Encode(&entryRes.Data))
 
-	entryAcc, err = l.accts.accountsq.Lookup(userOptin)
+	entryAcc, err = l.accts.accountsq.LookupAccount(userOptin)
 	a.NoError(err)
 	a.Equal(basics.Round(4), entryAcc.Round)
 	a.Equal(expectedUserOptInBase, protocol.Encode(&entryAcc.AccountData))
@@ -269,7 +269,7 @@ return`
 	a.Equal(basics.Round(4), entryRes.Round)
 	a.Equal(expectedUserOptInResource, protocol.Encode(&entryRes.Data))
 
-	pad, err := l.accts.accountsq.Lookup(userOptin)
+	pad, err := l.accts.accountsq.LookupAccount(userOptin)
 	a.NoError(err)
 	a.NotEmpty(pad)
 	prd, err := l.accts.accountsq.LookupResources(userOptin, basics.CreatableIndex(appIdx), basics.AppCreatable)
@@ -280,7 +280,7 @@ return`
 	a.NoError(err)
 	a.Nil(ad.AppLocalStates[appIdx].KeyValue)
 
-	entryAcc, err = l.accts.accountsq.Lookup(userLocal)
+	entryAcc, err = l.accts.accountsq.LookupAccount(userLocal)
 	a.NoError(err)
 	a.Equal(basics.Round(4), entryAcc.Round)
 	a.Equal(expectedUserLocalBase, protocol.Encode(&entryAcc.AccountData))
@@ -751,7 +751,7 @@ return`
 	a.NoError(err)
 	a.Empty(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas)
 
-	pad, err := l.accts.accountsq.Lookup(userLocal)
+	pad, err := l.accts.accountsq.LookupAccount(userLocal)
 	a.NoError(err)
 	a.Equal(store.BaseAccountData{}, pad.AccountData)
 	a.Zero(pad.Rowid)
@@ -887,7 +887,7 @@ return`
 	a.Contains(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta, "gk")
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta["gk"].Bytes, "global")
 
-	pad, err := l.accts.accountsq.Lookup(creator)
+	pad, err := l.accts.accountsq.LookupAccount(creator)
 	a.NoError(err)
 	a.Empty(pad.AccountData)
 	a.Zero(pad.Rowid)

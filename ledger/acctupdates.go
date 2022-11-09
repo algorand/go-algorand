@@ -1226,7 +1226,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
 		if !foundAccount {
-			persistedData, err = au.accountsq.Lookup(addr)
+			persistedData, err = au.accountsq.LookupAccount(addr)
 			if err != nil {
 				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 			}
@@ -1464,7 +1464,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		// present in the on-disk DB.  As an optimization, we avoid creating
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
-		persistedData, err = au.accountsq.Lookup(addr)
+		persistedData, err = au.accountsq.LookupAccount(addr)
 		if err != nil {
 			return ledgercore.AccountData{}, basics.Round(0), "", 0, err
 		}

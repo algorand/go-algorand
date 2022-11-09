@@ -27,7 +27,7 @@ type AccountsWriter interface {
 type AccountsReader interface {
 	ListCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, dbRound basics.Round, err error)
 
-	Lookup(addr basics.Address) (data PersistedAccountData, err error)
+	LookupAccount(addr basics.Address) (data PersistedAccountData, err error)
 
 	LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data PersistedResourcesData, err error)
 	LookupAllResources(addr basics.Address) (data []PersistedResourcesData, rnd basics.Round, err error)

@@ -129,7 +129,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 
 	for addr, data := range accts {
 		expected := ledgercore.ToAccountData(data)
-		pad, err := aq.Lookup(addr)
+		pad, err := aq.LookupAccount(addr)
 		require.NoError(t, err)
 		d := pad.AccountData.GetLedgerCoreAccountData()
 		require.Equal(t, expected, d)
@@ -158,7 +158,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.Equal(t, totalOnline+totalOffline, totals.Participating().Raw)
 	require.Equal(t, totalOnline+totalOffline+totalNotPart, totals.All().Raw)
 
-	d, err := aq.Lookup(ledgertesting.RandomAddress())
+	d, err := aq.LookupAccount(ledgertesting.RandomAddress())
 	require.NoError(t, err)
 	require.Equal(t, rnd, d.Round)
 	require.Equal(t, d.AccountData, store.BaseAccountData{})
@@ -766,7 +766,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 	// only measure the actual fetch time
 	b.ResetTimer()
 	for _, addr := range addrs {
-		_, err = qs.Lookup(addr)
+		_, err = qs.LookupAccount(addr)
 		require.NoError(b, err)
 	}
 }
