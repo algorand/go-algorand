@@ -220,8 +220,6 @@ func (spt *stateProofVerificationTracker) lookUpVerificationData(stateProofLastA
 		errStateProofVerificationDataNotFound)
 }
 
-// Isn't thread safe, should be called with stateProofVerificationMu held.
-// Goes through any tracked data that wasn't yet dumped to the DB and tries to find the requested data.
 func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
 	for _, commitData := range spt.trackedCommitData {
 		if commitData.verificationData.TargetStateProofRound == stateProofLastAttestedRound {
