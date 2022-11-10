@@ -32,6 +32,7 @@ import (
 
 const defaultStateProofInterval = uint64(256)
 const defaultFirstStateProofContextRound = basics.Round(defaultStateProofInterval * 2)
+const defaultFirstStateProofContextInterval = basics.Round(2)
 const unusedByStateProofTracker = basics.Round(0)
 
 type StateProofTrackingLocation uint64
@@ -230,6 +231,7 @@ func TestStateProofVerificationTracker_CommitFUllDbFlush(t *testing.T) {
 
 	mockCommit(t, spt, ml, 0, lastBlock.block.Round())
 
+	spt.lastLookedUpVerificationContext = ledgercore.StateProofVerificationContext{}
 	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofContextRound, expectedContextNum, defaultStateProofInterval, false, trackerMemory)
 	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofContextRound, expectedContextNum, defaultStateProofInterval, true, trackerDB)
 }
@@ -443,6 +445,7 @@ func TestStateProofVerificationTracker_LookupVerificationContext(t *testing.T) {
 
 	// This error shouldn't happen in normal flow - we force it to happen for the test.
 	spt.trackedCommitContext[0].verificationContext.LastAttestedRound = 0
+	spt.lastLookedUpVerificationContext = ledgercore.StateProofVerificationContext{}
 	_, err = spt.LookupVerificationContext(memoryContextRound)
 	a.ErrorIs(err, errStateProofVerificationContextNotFound)
 	a.ErrorContains(err, "memory lookup failed")
@@ -462,4 +465,29 @@ func TestStateProofVerificationTracker_PanicInvalidBlockInsertion(t *testing.T) 
 
 	pastBlock := randomBlock(0)
 	a.Panics(func() { spt.appendCommitContext(&pastBlock.block) })
+}
+
+func TestStateProofVerificationTracker_lastLookupContextUpdatedAfterLookup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	mockLedger, spt := initializeLedgerSpt(t)
+	defer mockLedger.Close()
+	defer spt.close()
+
+	a.Empty(spt.lastLookedUpVerificationContext)
+
+	NumberOfVerificationContextToAdd := uint64(10)
+	_ = feedBlocksUpToRound(spt, genesisBlock(), basics.Round(NumberOfVerificationContextToAdd*defaultStateProofInterval),
+		defaultStateProofInterval, true)
+
+	a.Empty(spt.lastLookedUpVerificationContext)
+
+	expectedContextInDbNum := NumberOfVerificationContextToAdd
+	for i := uint64(defaultFirstStateProofContextInterval); i < expectedContextInDbNum; i++ {
+		vf, err := spt.LookupVerificationContext(basics.Round(defaultStateProofInterval * i))
+		a.NoError(err)
+
+		a.Equal(*vf, spt.lastLookedUpVerificationContext)
+	}
 }
