@@ -47,7 +47,7 @@ type mockLedger struct {
 	blocks   []bookkeeping.Block
 }
 
-func (l *mockLedger) GetAccountDeltasForRound(rnd basics.Round) (ledgercore.AccountDeltas, error) {
+func (l *mockLedger) GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta, error) {
 	panic("implement me")
 }
 

@@ -987,10 +987,10 @@ func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, generated.GetSyncRoundResponse{Round: rnd})
 }
 
-// GetRoundDeltas returns the deltas for a given round.
-// This should be a combination of AccountDeltas, KVStore Deltas, etc.
+// GetRoundStateDelta returns the deltas for a given round.
+// This should be a ledgercore.StateDelta object.
 // (GET /v2/deltas/{round})
-func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
+func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 	sDelta, err := v2.Node.LedgerForAPI().GetStateDeltaForRound(basics.Round(round))
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingStateDelta, v2.Log)

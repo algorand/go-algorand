@@ -130,7 +130,7 @@ func TestGetBlock(t *testing.T) {
 	getBlockTest(t, 0, "bad format", 400)
 }
 
-func TestGetRoundDeltas(t *testing.T) {
+func TestGetRoundStateDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	a := require.New(t)
@@ -139,13 +139,13 @@ func TestGetRoundDeltas(t *testing.T) {
 	defer releasefunc()
 	insertRounds(a, handler, 3)
 
-	err := handler.GetRoundDeltas(c, 2)
+	err := handler.GetRoundStateDelta(c, 2)
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
 
-	actualResponse := generatedV2.RoundDeltas{}
+	actualResponse := generatedV2.RoundStateDelta{}
 	expectedResponse := poolDeltaResponseGolden
-	(*expectedResponse.Accounts)[0].AccountData.Round = 2
+	(*expectedResponse.Accts.Accounts)[0].AccountData.Round = 2
 	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResponse)
 	require.NoError(t, err)
 	require.Equal(t, poolDeltaResponseGolden, actualResponse)

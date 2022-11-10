@@ -79,27 +79,27 @@ var poolAddrResponseGolden = generatedV2.AccountResponse{
 	MinBalance:                  100000,
 }
 var txnPoolGolden = make([]transactions.SignedTxn, 2)
-var poolDeltaResponseGolden = generatedV2.RoundDeltas{
-	Accounts: &[]generatedV2.AccountBalanceRecord{
-		{
-			AccountData: generatedV2.Account{
-				Address:                     poolAddr.String(),
-				Amount:                      50000000000,
-				AmountWithoutPendingRewards: 50000000000,
-				MinBalance:                  100000,
-				CreatedApps:                 nil,
-				AppsTotalSchema:             &appsTotalSchema,
-				AppsLocalState:              nil,
-				Status:                      "Not Participating",
-				RewardBase:                  &poolAddrRewardBaseGolden,
-				CreatedAssets:               nil,
-				Assets:                      nil,
+var poolDeltaResponseGolden = generatedV2.RoundStateDelta{
+	Accts: &generatedV2.AccountDeltas{
+		Accounts: &[]generatedV2.AccountBalanceRecord{
+			{
+				AccountData: generatedV2.Account{
+					Address:                     poolAddr.String(),
+					Amount:                      50000000000,
+					AmountWithoutPendingRewards: 50000000000,
+					MinBalance:                  100000,
+					CreatedApps:                 nil,
+					AppsTotalSchema:             &appsTotalSchema,
+					AppsLocalState:              nil,
+					Status:                      "Not Participating",
+					RewardBase:                  &poolAddrRewardBaseGolden,
+					CreatedAssets:               nil,
+					Assets:                      nil,
+				},
+				Address: poolAddr.String(),
 			},
-			Address: poolAddr.String(),
 		},
 	},
-	Apps:   nil,
-	Assets: nil,
 }
 
 // ordinarily mockNode would live in `components/mocks`
