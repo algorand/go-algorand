@@ -197,7 +197,7 @@ func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
 				srcAcctPresent = true
 			}
 
-			ai, err := ac.AccountInformationV2(addr, true)
+			ai, err := ac.AccountInformation(addr, true)
 			if err != nil {
 				return err
 			}
@@ -258,7 +258,7 @@ func (pps *WorkerState) integrateAccountInfo(addr string, ppa *pingPongAccount, 
 	// assets held
 	if ai.Assets != nil {
 		for _, holding := range *ai.Assets {
-			assetID := holding.AssetId
+			assetID := holding.AssetID
 			pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
 			if ppa.holdings == nil {
 				ppa.holdings = make(map[uint64]uint64)
@@ -421,7 +421,7 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 	timeout := time.Now().Add(10 * time.Second)
 	for len(newAssets) < assetsNeeded {
 		for addr, acct := range newAssetAddrs {
-			ai, err := client.AccountInformationV2(addr, true)
+			ai, err := client.AccountInformation(addr, true)
 			if err != nil {
 				fmt.Printf("Warning: cannot lookup source account after assets creation")
 				time.Sleep(1 * time.Second)
@@ -439,7 +439,7 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 			}
 			if ai.Assets != nil {
 				for _, holding := range *ai.Assets {
-					assetID := holding.AssetId
+					assetID := holding.AssetID
 					pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
 					if acct.holdings == nil {
 						acct.holdings = make(map[uint64]uint64)
@@ -809,7 +809,7 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 	for _, addr := range newAppAddrs {
 		var ai generated.Account
 		for {
-			ai, err = client.AccountInformationV2(addr, true)
+			ai, err = client.AccountInformation(addr, true)
 			if err != nil {
 				fmt.Printf("Warning, cannot lookup source account")
 				return
@@ -820,7 +820,7 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 			waitForNextRoundOrSleep(client, 500*time.Millisecond)
 			// TODO : if we fail here for too long, we should re-create new accounts, etc.
 		}
-		ai, err = client.AccountInformationV2(addr, true)
+		ai, err = client.AccountInformation(addr, true)
 		if err != nil {
 			return
 		}

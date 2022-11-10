@@ -22,7 +22,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 )
@@ -176,7 +175,7 @@ func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 			"creator account is unknown.")
 	}
 
-	response, err := client.AccountInformationV2(creator, true)
+	response, err := client.AccountInformation(creator, true)
 	if err != nil {
 		reportErrorf(errorRequestFail, err)
 	}
@@ -779,7 +778,7 @@ var infoAssetCmd = &cobra.Command{
 
 		lookupAssetID(cmd, creator, client)
 
-		asset, err := client.AssetInformationV2(assetID)
+		asset, err := client.AssetInformation(assetID)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -790,22 +789,11 @@ var infoAssetCmd = &cobra.Command{
 			asset.Params.Reserve = &asset.Params.Creator
 		}
 
-		reserve, err := client.AccountInformationV2(*asset.Params.Reserve, true)
+		reserve, err := client.AccountAssetInformation(*asset.Params.Reserve, assetID)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
-
-		var res generated.AssetHolding
-		if reserve.Assets != nil {
-			for _, reserveAsset := range *reserve.Assets {
-				if assetID == reserveAsset.AssetId {
-					res = reserveAsset
-					break
-				}
-			}
-		} else {
-			reportErrorf(errorRequestFail, "cannot find asset ID in account")
-		}
+		res := reserve.AssetHolding
 
 		fmt.Printf("Asset ID:         %d\n", assetID)
 		fmt.Printf("Creator:          %s\n", asset.Params.Creator)
