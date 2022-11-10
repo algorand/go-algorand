@@ -87,8 +87,7 @@ type LedgerForAPI interface {
 	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
 	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
-	GetAccountDeltasForRound(rnd basics.Round) (ledgercore.AccountDeltas, error)
-	GetKvDeltasForRound(rnd basics.Round) (map[string]ledgercore.KvValueDelta, error)
+	GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta, error)
 }
 
 // NodeInterface represents node fns used by the handlers.
@@ -992,19 +991,18 @@ func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
 // This should be a combination of AccountDeltas, KVStore Deltas, etc.
 // (GET /v2/deltas/{round})
 func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
-	ads, err := v2.Node.LedgerForAPI().GetAccountDeltasForRound(basics.Round(round))
+	sDelta, err := v2.Node.LedgerForAPI().GetStateDeltaForRound(basics.Round(round))
 	if err != nil {
-		return internalError(ctx, err, errFailedRetrievingAccountDeltas, v2.Log)
-	}
-	kvds, err := v2.Node.LedgerForAPI().GetKvDeltasForRound(basics.Round(round))
-	if err != nil {
-		return internalError(ctx, err, errFailedRetrievingKvDeltas, v2.Log)
+		return internalError(ctx, err, errFailedRetrievingStateDelta, v2.Log)
 	}
 
 	var accts []generated.AccountBalanceRecord
 	var apps []generated.AppResourceRecord
 	var assets []generated.AssetResourceRecord
 	var keyValues []generated.KvDelta
+	var modifiedCreatables []generated.ModifiedCreatable
+	var txLeases []generated.TxLease
+	var inclTxns []generated.IncludedTransaction
 
 	consensusParams, err := v2.Node.LedgerForAPI().ConsensusParams(basics.Round(round))
 	if err != nil {
@@ -1015,7 +1013,7 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 		return internalError(ctx, fmt.Errorf("unable to retrieve block header for round %d", round), errInternalFailure, v2.Log)
 	}
 
-	for key, kvDelta := range kvds {
+	for key, kvDelta := range sDelta.KvMods {
 		var keyBytes = []byte(key)
 		keyValues = append(keyValues, generated.KvDelta{
 			Key:       &keyBytes,
@@ -1024,7 +1022,7 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 		})
 	}
 
-	for _, record := range ads.GetAllAccounts() {
+	for _, record := range sDelta.Accts.GetAllAccounts() {
 		var apiParticipation *generated.AccountParticipation
 		if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
 			apiParticipation = &generated.AccountParticipation{
@@ -1074,7 +1072,7 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 		})
 	}
 
-	for _, app := range ads.GetAllAppResources() {
+	for _, app := range sDelta.Accts.GetAllAppResources() {
 		var appLocalState *generated.ApplicationLocalState = nil
 		if app.State.LocalState != nil {
 			localState := convertTKVToGenerated(&app.State.LocalState.KeyValue)
@@ -1116,12 +1114,12 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 		})
 	}
 
-	for _, asset := range ads.GetAllAssetResources() {
+	for _, asset := range sDelta.Accts.GetAllAssetResources() {
 		var assetHolding *generated.AssetHolding = nil
 		if asset.Holding.Holding != nil {
 			assetHolding = &generated.AssetHolding{
 				Amount:   asset.Holding.Holding.Amount,
-				AssetId:  uint64(asset.Aidx),
+				AssetID:  uint64(asset.Aidx),
 				IsFrozen: asset.Holding.Holding.Frozen,
 			}
 		}
@@ -1155,11 +1153,58 @@ func (v2 *Handlers) GetRoundDeltas(ctx echo.Context, round uint64) error {
 		})
 	}
 
-	response := generated.RoundDeltas{
-		Accounts: &accts,
-		Apps:     &apps,
-		Assets:   &assets,
-		KvDeltas: &keyValues,
+	for createIdx, mod := range sDelta.Creatables {
+		var creatableType generated.ModifiedCreatableCreatableType
+		switch mod.Ctype {
+		case basics.AppCreatable:
+			creatableType = generated.ModifiedCreatableCreatableTypeApp
+		case basics.AssetCreatable:
+			creatableType = generated.ModifiedCreatableCreatableTypeAsset
+		default:
+			return internalError(ctx, fmt.Errorf("unable to determine type of creatable for modified creatable with index %d", createIdx), errInternalFailure, v2.Log)
+		}
+		modifiedCreatables = append(modifiedCreatables, generated.ModifiedCreatable{
+			CreatableType: &creatableType,
+			Created:       &mod.Created,
+			Creator:       strOrNil(mod.Creator.String()),
+			Index:         numOrNil(uint64(createIdx)),
+		})
+	}
+
+	for lease, expRnd := range sDelta.Txleases {
+		txLeases = append(txLeases, generated.TxLease{
+			Expiration: numOrNil(uint64(expRnd)),
+			Lease:      byteOrNil(lease.Lease[:]),
+			Sender:     strOrNil(lease.Sender.String()),
+		})
+	}
+
+	for txid, inclTxn := range sDelta.Txids {
+		inclTxns = append(inclTxns, generated.IncludedTransaction{
+			Intra:     numOrNil(inclTxn.Intra),
+			LastValid: numOrNil(uint64(inclTxn.LastValid)),
+			TxId:      strOrNil(txid.String()),
+		})
+	}
+
+	response := generated.RoundStateDeltaResponse{
+		Accts: &generated.AccountDeltas{
+			Accounts: &accts,
+			Apps:     &apps,
+			Assets:   &assets,
+		},
+		Creatables:     &modifiedCreatables,
+		KvMods:         &keyValues,
+		PrevTimestamp:  numOrNil(uint64(sDelta.PrevTimestamp)),
+		StateProofNext: numOrNil(uint64(sDelta.StateProofNext)),
+		Totals: &generated.AccountTotals{
+			NotParticipating: numOrNil(sDelta.Totals.NotParticipating.Money.Raw),
+			Offline:          numOrNil(sDelta.Totals.Offline.Money.Raw),
+			Online:           numOrNil(sDelta.Totals.Online.Money.Raw),
+			RewardsLevel:     numOrNil(sDelta.Totals.RewardsLevel),
+		},
+		TxIds:    &inclTxns,
+		TxLeases: &txLeases,
 	}
 
 	return ctx.JSON(http.StatusOK, response)

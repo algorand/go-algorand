@@ -2366,21 +2366,12 @@
             "$ref": "#/definitions/ModifiedCreatable"
           }
         },
-        "hdr": {
-          "description": "New block header",
-          "type": "object",
-          "x-algorand-format": "BlockHeader"
-        },
         "state-proof-next": {
           "description": "Next round for which we expect a state proof",
           "type": "integer"
         },
         "prev-timestamp": {
           "description": "Previous block timestamp",
-          "type": "integer"
-        },
-        "initial-txns-count": {
-          "description": "Initial txn count hint--useful for allocation.",
           "type": "integer"
         },
         "totals": {
@@ -2487,7 +2478,18 @@
       "description": "",
       "type": "object",
       "properties": {
-
+        "txId": {
+          "description": "ID of the transaction.",
+          "type": "string"
+        },
+        "lastValid": {
+          "description": "Last valid round of the included transaction.",
+          "type": "integer"
+        },
+        "intra": {
+          "description": "Intra round index of the transaction in the block.",
+          "type": "integer"
+        }
       }
     },
     "AccountBalanceRecord": {

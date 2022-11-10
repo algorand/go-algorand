@@ -537,7 +537,16 @@ type EvalDeltaKeyValue struct {
 }
 
 // IncludedTransaction defines model for IncludedTransaction.
-type IncludedTransaction = map[string]interface{}
+type IncludedTransaction struct {
+	// Intra Intra round index of the transaction in the block.
+	Intra *uint64 `json:"intra,omitempty"`
+
+	// LastValid Last valid round of the included transaction.
+	LastValid *uint64 `json:"lastValid,omitempty"`
+
+	// TxId ID of the transaction.
+	TxId *string `json:"txId,omitempty"`
+}
 
 // KvDelta A single Delta containing the key, the previous value and the current value for a single round.
 type KvDelta struct {
@@ -659,12 +668,6 @@ type RoundStateDelta struct {
 
 	// Creatables List of modified Creatables for the given round.
 	Creatables *[]ModifiedCreatable `json:"creatables,omitempty"`
-
-	// Hdr New block header
-	Hdr *map[string]interface{} `json:"hdr,omitempty"`
-
-	// InitialTxnsCount Initial txn count hint--useful for allocation.
-	InitialTxnsCount *uint64 `json:"initial-txns-count,omitempty"`
 
 	// KvMods Array of KV Deltas for the round.
 	KvMods *[]KvDelta `json:"kv-mods,omitempty"`

@@ -443,18 +443,11 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 	return l.accts.GetCreatorForRound(l.blockQ.latest(), cidx, ctype)
 }
 
-// GetAccountDeltasForRound retrieves the AccountDeltas object from the accountUpdates cache
-func (l *Ledger) GetAccountDeltasForRound(rnd basics.Round) (ledgercore.AccountDeltas, error) {
+// GetStateDeltaForRound retrieves a ledgercore.StateDelta from the accountUpdates cache for the requested rnd
+func (l *Ledger) GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.lookupAccountDeltas(rnd)
-}
-
-// GetKvDeltasForRound retrieves all KvValueDeltas from the accountUpdates cache for the requested rnd
-func (l *Ledger) GetKvDeltasForRound(rnd basics.Round) (map[string]ledgercore.KvValueDelta, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.accts.lookupKvDeltas(rnd)
+	return l.accts.lookupStateDelta(rnd)
 }
 
 // VotersForStateProof returns the top online accounts at round rnd.

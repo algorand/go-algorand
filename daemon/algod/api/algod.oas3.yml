@@ -1726,6 +1726,20 @@
       },
       "IncludedTransaction": {
         "description": "",
+        "properties": {
+          "intra": {
+            "description": "Intra round index of the transaction in the block.",
+            "type": "integer"
+          },
+          "lastValid": {
+            "description": "Last valid round of the included transaction.",
+            "type": "integer"
+          },
+          "txId": {
+            "description": "ID of the transaction.",
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "KvDelta": {
@@ -1938,16 +1952,6 @@
               "$ref": "#/components/schemas/ModifiedCreatable"
             },
             "type": "array"
-          },
-          "hdr": {
-            "description": "New block header",
-            "properties": {},
-            "type": "object",
-            "x-algorand-format": "BlockHeader"
-          },
-          "initial-txns-count": {
-            "description": "Initial txn count hint--useful for allocation.",
-            "type": "integer"
           },
           "kv-mods": {
             "description": "Array of KV Deltas for the round.",
