@@ -17,6 +17,7 @@
 package ledgercore
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -163,6 +164,52 @@ func TestStateDeltaReset(t *testing.T) {
 	require.Empty(t, sd.Accts.assetResourcesCache)
 	require.Empty(t, sd.Accts.appResourcesCache)
 
+}
+
+func TestStateDeltaReflect(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	stateDeltaFieldNames := map[string]struct{}{
+		"Accts":                    {},
+		"KvMods":                   {},
+		"Txids":                    {},
+		"Txleases":                 {},
+		"Creatables":               {},
+		"Hdr":                      {},
+		"StateProofNext":           {},
+		"PrevTimestamp":            {},
+		"initialTransactionsCount": {},
+		"Totals":                   {},
+	}
+
+	sd := StateDelta{}
+	v := reflect.ValueOf(sd)
+	st := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		reflectedStateDeltaName := st.Field(i).Name
+		require.Containsf(t, stateDeltaFieldNames, reflectedStateDeltaName, "new field:\"%v\" added to StateDelta, please update StateDelta.Reset() to handle it before fixing the test", reflectedStateDeltaName)
+	}
+}
+
+func TestAccountDeltaReflect(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	AccountDeltaFieldNames := map[string]struct{}{
+		"Accts":               {},
+		"acctsCache":          {},
+		"AppResources":        {},
+		"appResourcesCache":   {},
+		"AssetResources":      {},
+		"assetResourcesCache": {},
+	}
+
+	sd := AccountDeltas{}
+	v := reflect.ValueOf(sd)
+	st := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		reflectedAccountDeltaName := st.Field(i).Name
+		require.Containsf(t, AccountDeltaFieldNames, reflectedAccountDeltaName, "new field:\"%v\" added to AccountDeltas, please update AccountDeltas.reset() to handle it before fixing the test", reflectedAccountDeltaName)
+	}
 }
 
 func BenchmarkMakeStateDelta(b *testing.B) {

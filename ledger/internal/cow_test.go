@@ -17,6 +17,7 @@
 package internal
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -220,32 +221,28 @@ func TestCowChildReset(t *testing.T) {
 	// alloced map
 	require.NotZero(t, calf.sdeltas)
 	require.Empty(t, calf.sdeltas)
+}
 
-	require.NotZero(t, calf.mods)
-	// check StateDeltas
-	// StateDeltas simple fields
-	require.Zero(t, calf.mods.Hdr)
-	require.Zero(t, calf.mods.StateProofNext)
-	require.Zero(t, calf.mods.PrevTimestamp)
-	require.Zero(t, calf.mods.Totals)
+func TestCowChildReflect(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
-	// required allocated maps
-	require.NotZero(t, calf.mods.Txids)
-	require.Empty(t, calf.mods.Txids)
+	cowFieldNames := map[string]struct{}{
+		"lookupParent":             {},
+		"commitParent":             {},
+		"proto":                    {},
+		"mods":                     {},
+		"txnCount":                 {},
+		"sdeltas":                  {},
+		"compatibilityMode":        {},
+		"compatibilityGetKeyCache": {},
+		"prevTotals":               {},
+	}
 
-	// optional allocated maps
-	require.Empty(t, calf.mods.Txleases)
-	require.Empty(t, calf.mods.KvMods)
-	require.Empty(t, calf.mods.Creatables)
-
-	// check AccountDeltas
-	require.NotZero(t, calf.mods.Accts)
-
-	// required AccountDeltas fields
-	require.NotZero(t, calf.mods.Accts.Accts)
-	require.Empty(t, calf.mods.Accts.Accts)
-
-	// optional AccountDeltas fields
-	require.Empty(t, calf.mods.Accts.AppResources)
-	require.Empty(t, calf.mods.Accts.AssetResources)
+	cow := roundCowState{}
+	v := reflect.ValueOf(cow)
+	st := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		reflectedCowName := st.Field(i).Name
+		require.Containsf(t, cowFieldNames, reflectedCowName, "new field:\"%v\" added to roundCowState, please update roundCowState.reset() to handle it before fixing the test", reflectedCowName)
+	}
 }
