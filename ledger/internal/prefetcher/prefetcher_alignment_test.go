@@ -102,6 +102,11 @@ func (l *prefetcherAlignmentTestLedger) BlockHdrCached(round basics.Round) (book
 func (l *prefetcherAlignmentTestLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	return nil
 }
+
+func (l *prefetcherAlignmentTestLedger) StateProofVerificationData(_ basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	return nil, fmt.Errorf("prefetcherAlignmentTestLedger does not implement StateProofVerificationData")
+}
+
 func (l *prefetcherAlignmentTestLedger) LookupWithoutRewards(_ basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	l.mu.Lock()
 	if l.requestedBalances == nil {

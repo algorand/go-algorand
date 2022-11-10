@@ -262,6 +262,7 @@ func getVerificationData(blk *bookkeeping.Block) ledgercore.StateProofVerificati
 		VotersCommitment:      blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
 		OnlineTotalWeight:     blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
 		TargetStateProofRound: blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval),
+		Version:               blk.CurrentProtocol,
 	}
 }
 

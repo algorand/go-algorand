@@ -17,6 +17,7 @@
 package internal
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -32,9 +33,10 @@ import (
 )
 
 type mockLedger struct {
-	balanceMap map[basics.Address]basics.AccountData
-	blocks     map[basics.Round]bookkeeping.BlockHeader
-	blockErr   map[basics.Round]error
+	balanceMap             map[basics.Address]basics.AccountData
+	blocks                 map[basics.Round]bookkeeping.BlockHeader
+	blockErr               map[basics.Round]error
+	stateProofVerification map[basics.Round]*ledgercore.StateProofVerificationData
 }
 
 func (ml *mockLedger) lookup(addr basics.Address) (ledgercore.AccountData, error) {
@@ -108,6 +110,14 @@ func (ml *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error
 
 func (ml *mockLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
 	return ml.blockHdrCached(rnd)
+}
+
+func (ml *mockLedger) StateProofVerificationData(rnd basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	element, exists := ml.stateProofVerification[rnd]
+	if !exists {
+		return nil, fmt.Errorf("requested state proof verification data not found")
+	}
+	return element, nil
 }
 
 func checkCowByUpdate(t *testing.T, cow *roundCowState, delta ledgercore.AccountDeltas) {

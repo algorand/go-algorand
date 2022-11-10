@@ -1653,18 +1653,16 @@ func TestListAssetsAndApplications(t *testing.T) {
 	require.Equal(t, appCount, len(results))
 }
 
-// TestLedgerKeepsOldBlocksForStateProof test that if stateproof chain is delayed for X intervals,  the ledger will not
-// remove old blocks from the database. When verifying old stateproof transaction, nodes must have the header of the corresponding
-// voters round, if this won't be available the verification would fail.
-// the voter tracker should prevent the remove needed blocks from the database.
-func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
+// TestLedgerVerifiesOldStateProofs test that if stateproof chain is delayed for X intervals (pass StateProofMaxRecoveryIntervals),
+// The ledger will still be able to verify the state proof - i.e the ledger has the necessary data to verify it.
+func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// since the first state proof is expected to happen on stateproofInterval*2 we would start give-up on state proofs we would
 	// give up on old state proofs only after stateproofInterval*3
-	maxBlocks := int((config.Consensus[protocol.ConsensusCurrentVersion].StateProofMaxRecoveryIntervals + 2) * config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval)
+	maxBlocks := int((config.Consensus[protocol.ConsensusFuture].StateProofMaxRecoveryIntervals + 2) * config.Consensus[protocol.ConsensusFuture].StateProofInterval)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10000000000)
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 10000000000)
 
 	// place real values on the participation period, so we would create a commitment with some stake.
 	accountsWithValid := make(map[basics.Address]basics.AccountData)
@@ -1727,13 +1725,19 @@ func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 	}
 
 	l.WaitForCommit(l.Latest())
-	// at the point the ledger would remove the voters round for the database.
-	// that will cause the stateproof transaction verification to fail because there are
-	// missing blocks
+	// at this point the ledger would remove the voters block header. However, since
+	// the ledger uses the stateproof verification tracker the state proof be validated (or at least fail on the crypto part)
+
 	blk = createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
-	_, err = l.Validate(context.Background(), blk, backlogPool)
+
+	votersRound := basics.Round(proto.StateProofInterval)
+	_, err = l.BlockHdr(votersRound)
+	require.Error(t, err)
 	expectedErr := &ledgercore.ErrNoEntry{}
 	require.True(t, errors.As(err, expectedErr), fmt.Sprintf("got error %s", err))
+
+	_, err = l.Validate(context.Background(), blk, backlogPool)
+	require.ErrorContains(t, err, "state proof crypto error")
 }
 
 func createBlkWithStateproof(t *testing.T, maxBlocks int, proto config.ConsensusParams, genesisInitState ledgercore.InitState, l *Ledger, accounts map[basics.Address]basics.AccountData) bookkeeping.Block {

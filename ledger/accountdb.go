@@ -5364,7 +5364,7 @@ func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificatio
 	return qs, nil
 }
 
-func fetchEarliestVerificationData(handle *sql.DB) (ledgercore.StateProofVerificationData, error) {
+func fetchEarliestVerificationData(handle db.Queryable) (ledgercore.StateProofVerificationData, error) {
 	row := handle.QueryRow("SELECT verificationdata FROM stateproofverification ORDER BY targetstateproofround ASC LIMIT 1")
 
 	var buffer []byte
