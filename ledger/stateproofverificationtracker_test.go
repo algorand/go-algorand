@@ -467,7 +467,7 @@ func TestStateProofVerificationTracker_PanicInvalidBlockInsertion(t *testing.T) 
 	a.Panics(func() { spt.insertCommitData(&pastBlock.block) })
 }
 
-func TestStateProofVerificationTracker_loadTrackerAndverifyInmemoryVerificationData(t *testing.T) {
+func TestStateProofVerificationTracker_loadTrackerAndVerifyInmemoryVerificationData(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 

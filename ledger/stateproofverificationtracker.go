@@ -204,9 +204,11 @@ func (spt *stateProofVerificationTracker) lookUpVerificationData(stateProofLastA
 		errStateProofVerificationDataNotFound)
 }
 
+// isn't thread safe. should be called with stateProofVerificationMu held.
 func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
 	if spt.lastLookedUpVerificationData.TargetStateProofRound == stateProofLastAttestedRound {
-		return &spt.lastLookedUpVerificationData, nil
+		cpy := spt.lastLookedUpVerificationData
+		return &cpy, nil
 	}
 
 	for _, commitData := range spt.trackedCommitData {
