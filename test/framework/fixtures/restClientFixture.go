@@ -216,7 +216,7 @@ func (f *RestClientFixture) getNodeWalletsSortedByBalance(client libgoal.Client)
 		return nil, fmt.Errorf("unable to list wallet addresses : %v", err)
 	}
 	for _, addr := range addresses {
-		info, err := client.AccountInformationV2(addr, true)
+		info, err := client.AccountInformation(addr, true)
 		f.failOnError(err, "failed to get account info: %v")
 		accounts = append(accounts, info)
 	}
@@ -247,7 +247,7 @@ func (f *RestClientFixture) WaitForConfirmedTxn(roundTimeout uint64, accountAddr
 
 		// Check if we know about the transaction yet
 		var resp []byte
-		resp, err = client.RawPendingTransactionInformationV2(txid)
+		resp, err = client.RawPendingTransactionInformation(txid)
 		if err == nil {
 			err = protocol.DecodeReflect(resp, &txn)
 			require.NoError(f.t, err)
@@ -311,7 +311,7 @@ func (f *RestClientFixture) WaitForAccountFunded(roundTimeout uint64, accountAdd
 		curRound := curStatus.LastRound
 
 		// Check if we know about the transaction yet
-		acct, acctErr := client.AccountInformationV2(accountAddress, false)
+		acct, acctErr := client.AccountInformation(accountAddress, false)
 		require.NoError(f.t, acctErr, "fixture should be able to get account info")
 		if acct.Amount > 0 {
 			return nil
