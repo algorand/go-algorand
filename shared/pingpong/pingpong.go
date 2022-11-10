@@ -279,7 +279,7 @@ func (pps *WorkerState) scheduleAction() bool {
 		pps.refreshPos = 0
 	}
 	addr := pps.refreshAddrs[pps.refreshPos]
-	ai, err := pps.client.AccountInformationV2(addr, true)
+	ai, err := pps.client.AccountInformation(addr, true)
 	if err == nil {
 		ppa := pps.accounts[addr]
 

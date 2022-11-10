@@ -1223,7 +1223,7 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 
 			accountSnapshotAtRound[rnd] = make([]generatedV2.Account, pNodes, pNodes)
 			for i := 0; i < pNodes; i++ {
-				accountSnapshotAtRound[rnd][i], err = libgoalClient.AccountInformationV2(accountsAddresses[i], false)
+				accountSnapshotAtRound[rnd][i], err = libgoalClient.AccountInformation(accountsAddresses[i], false)
 				r.NoError(err)
 				r.NotEqual(accountSnapshotAtRound[rnd][i].Amount, uint64(0))
 				r.Equal(rnd, accountSnapshotAtRound[rnd][i].Round, "could not capture the account at the target round. The machine might be too slow for this test")
