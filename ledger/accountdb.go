@@ -5364,22 +5364,6 @@ func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificatio
 	return qs, nil
 }
 
-func fetchEarliestVerificationData(handle db.Queryable) (ledgercore.StateProofVerificationData, error) {
-	row := handle.QueryRow("SELECT verificationdata FROM stateproofverification ORDER BY targetstateproofround ASC LIMIT 1")
-
-	var buffer []byte
-	if err := row.Scan(&buffer); err != nil {
-		return ledgercore.StateProofVerificationData{}, err
-	}
-
-	var res ledgercore.StateProofVerificationData
-	if err := protocol.Decode(buffer, &res); err != nil {
-		return ledgercore.StateProofVerificationData{}, err
-	}
-
-	return res, nil
-}
-
 func (qs *stateProofVerificationDbQueries) lookupData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
 	data := ledgercore.StateProofVerificationData{}
 	queryFunc := func() error {

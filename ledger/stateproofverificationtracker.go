@@ -84,10 +84,7 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 	spt.stateProofVerificationMu.Lock()
 	defer spt.stateProofVerificationMu.Unlock()
 
-	pendingStateProofVerificationData, err := fetchEarliestVerificationData(l.trackerDB().Rdb.Handle)
-	if err == nil {
-		spt.lastLookedUpVerificationData = pendingStateProofVerificationData
-	}
+	spt.lastLookedUpVerificationData = ledgercore.StateProofVerificationData{}
 
 	const initialDataArraySize = 10
 	spt.trackedCommitData = make([]verificationCommitData, 0, initialDataArraySize)
@@ -172,6 +169,10 @@ func (spt *stateProofVerificationTracker) close() {
 }
 
 func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+	if lstlookup := spt.retrieveFromCache(stateProofLastAttestedRound); lstlookup != nil {
+		return lstlookup, nil
+	}
+
 	verificationData, err := spt.lookUpVerificationData(stateProofLastAttestedRound)
 	if err != nil {
 		return nil, err
@@ -182,6 +183,21 @@ func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastA
 	spt.stateProofVerificationMu.Unlock()
 
 	return verificationData, nil
+}
+
+func (spt *stateProofVerificationTracker) retrieveFromCache(
+	stateProofLastAttestedRound basics.Round) *ledgercore.StateProofVerificationData {
+	spt.stateProofVerificationMu.RLock()
+	defer spt.stateProofVerificationMu.RUnlock()
+
+	if spt.lastLookedUpVerificationData.TargetStateProofRound == stateProofLastAttestedRound &&
+		!spt.lastLookedUpVerificationData.MsgIsZero() {
+		cpy := spt.lastLookedUpVerificationData
+
+		return &cpy
+	}
+
+	return nil
 }
 
 func (spt *stateProofVerificationTracker) lookUpVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
@@ -204,13 +220,9 @@ func (spt *stateProofVerificationTracker) lookUpVerificationData(stateProofLastA
 		errStateProofVerificationDataNotFound)
 }
 
-// isn't thread safe. should be called with stateProofVerificationMu held.
+// Isn't thread safe, should be called with stateProofVerificationMu held.
+// Goes through any tracked data that wasn't yet dumped to the DB and tries to find the requested data.
 func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
-	if spt.lastLookedUpVerificationData.TargetStateProofRound == stateProofLastAttestedRound {
-		cpy := spt.lastLookedUpVerificationData
-		return &cpy, nil
-	}
-
 	for _, commitData := range spt.trackedCommitData {
 		if commitData.verificationData.TargetStateProofRound == stateProofLastAttestedRound {
 			verificationDataCopy := commitData.verificationData

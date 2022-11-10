@@ -467,38 +467,6 @@ func TestStateProofVerificationTracker_PanicInvalidBlockInsertion(t *testing.T) 
 	a.Panics(func() { spt.insertCommitData(&pastBlock.block) })
 }
 
-func TestStateProofVerificationTracker_loadTrackerAndVerifyInmemoryVerificationData(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	mockLedger, spt := initializeLedgerSpt(t)
-	defer mockLedger.Close()
-	defer spt.close()
-
-	a.Empty(spt.lastLookedUpVerificationData)
-
-	dataToAdd := uint64(10)
-	_ = feedBlocksUpToRound(spt, genesisBlock(), basics.Round(dataToAdd*defaultStateProofInterval),
-		defaultStateProofInterval, true)
-
-	firstStuckStateProofVerificationData := spt.trackedCommitData[0].verificationData
-
-	expectedDataInDbNum := dataToAdd
-	mockCommit(t, spt, mockLedger, 0, basics.Round(defaultStateProofInterval*expectedDataInDbNum))
-	verifyStateProofVerificationTracking(
-		t,
-		spt,
-		defaultFirstStateProofDataRound,
-		expectedDataInDbNum,
-		defaultStateProofInterval,
-		true,
-		trackerDB,
-	)
-
-	a.NoError(spt.loadFromDisk(mockLedger, unusedByStateProofTracker))
-	a.Equal(spt.lastLookedUpVerificationData, firstStuckStateProofVerificationData)
-}
-
 func TestStateProofVerificationTracker_lastLookupDataUpdatedAfterLookup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
