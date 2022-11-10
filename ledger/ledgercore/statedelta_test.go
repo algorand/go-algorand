@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -130,7 +131,21 @@ func TestMakeStateDeltaMaps(t *testing.T) {
 func TestStateDeltaReset(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	txid := transactions.Transaction{}.ID()
 	sd := MakeStateDelta(&bookkeeping.BlockHeader{}, 123, 456, basics.Round(789))
+	// populate StateDelta maps with some data
+	sd.Txids[txid] = IncludedTransactions{LastValid: basics.Round(30)}
+	sd.AddTxLease(Txlease{}, basics.Round(10))
+	sd.AddCreatable(basics.CreatableIndex(5), ModifiedCreatable{})
+	sd.AddKvMod("key", KvValueDelta{Data: []byte("value")})
+
+	// populate AccountDelta maps with some data
+	sd.Accts.acctsCache[randomAddress()] = 1
+	sd.Accts.appResourcesCache = make(map[AccountApp]int)
+	sd.Accts.appResourcesCache[AccountApp{Address: randomAddress()}] = 2
+	sd.Accts.assetResourcesCache = make(map[AccountAsset]int)
+	sd.Accts.assetResourcesCache[AccountAsset{Address: randomAddress()}] = 3
+
 	sd.Reset()
 
 	// StateDeltas simple fields
