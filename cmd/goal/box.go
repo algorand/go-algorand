@@ -65,7 +65,7 @@ var appBoxInfoCmd = &cobra.Command{
 		// Get box info
 		box, err := client.GetApplicationBoxByName(appIdx, boxName)
 		if err != nil {
-			if strings.Contains(err.Error(), `{"message":"box not found"}`) {
+			if strings.Contains(err.Error(), "box not found") {
 				reportErrorf("No box found for appid %d with name %s", appIdx, boxName)
 			}
 			reportErrorf(errorRequestFail, err)
