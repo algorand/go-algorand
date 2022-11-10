@@ -32,6 +32,7 @@ import (
 
 const defaultStateProofInterval = uint64(256)
 const defaultFirstStateProofDataRound = basics.Round(defaultStateProofInterval * 2)
+const defaultFirstStateProofDataInterval = basics.Round(2)
 const unusedByStateProofTracker = basics.Round(0)
 
 type StateProofTrackingLocation uint64
@@ -230,6 +231,7 @@ func TestStateProofVerificationTracker_CommitFUllDbFlush(t *testing.T) {
 
 	mockCommit(t, spt, ml, 0, lastBlock.block.Round())
 
+	spt.lastLookedUpVerificationData = ledgercore.StateProofVerificationData{}
 	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, expectedDataNum, defaultStateProofInterval, false, trackerMemory)
 	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofDataRound, expectedDataNum, defaultStateProofInterval, true, trackerDB)
 }
@@ -443,6 +445,7 @@ func TestStateProofVerificationTracker_LookupVerificationData(t *testing.T) {
 
 	// This error shouldn't happen in normal flow - we force it to happen for the test.
 	spt.trackedCommitData[0].verificationData.TargetStateProofRound = 0
+	spt.lastLookedUpVerificationData = ledgercore.StateProofVerificationData{}
 	_, err = spt.LookupVerificationData(memoryDataRound)
 	a.ErrorIs(err, errStateProofVerificationDataNotFound)
 	a.ErrorContains(err, "memory lookup failed")
@@ -462,4 +465,29 @@ func TestStateProofVerificationTracker_PanicInvalidBlockInsertion(t *testing.T) 
 
 	pastBlock := randomBlock(0)
 	a.Panics(func() { spt.insertCommitData(&pastBlock.block) })
+}
+
+func TestStateProofVerificationTracker_lastLookupDataUpdatedAfterLookup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	mockLedger, spt := initializeLedgerSpt(t)
+	defer mockLedger.Close()
+	defer spt.close()
+
+	a.Empty(spt.lastLookedUpVerificationData)
+
+	NumberOfVerificationDataToAdd := uint64(10)
+	_ = feedBlocksUpToRound(spt, genesisBlock(), basics.Round(NumberOfVerificationDataToAdd*defaultStateProofInterval),
+		defaultStateProofInterval, true)
+
+	a.Empty(spt.lastLookedUpVerificationData)
+
+	expectedDataInDbNum := NumberOfVerificationDataToAdd
+	for i := uint64(defaultFirstStateProofDataInterval); i < expectedDataInDbNum; i++ {
+		vf, err := spt.LookupVerificationData(basics.Round(defaultStateProofInterval * i))
+		a.NoError(err)
+
+		a.Equal(*vf, spt.lastLookedUpVerificationData)
+	}
 }
