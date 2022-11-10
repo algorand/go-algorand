@@ -887,10 +887,11 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 	stateProofVerificationDataHash := crypto.HashObj(wrappedData)
 
 	var catchpointLabelMaker ledgercore.CatchpointLabelMaker
+	blockDigest := blk.Digest()
 	if version <= CatchpointFileVersionV6 {
-		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerV6(blockRound, blk.Digest(), balancesHash, totals)
+		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerV6(blockRound, &blockDigest, &balancesHash, totals)
 	} else {
-		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerCurrent(blockRound, blk.Digest(), balancesHash, totals, stateProofVerificationDataHash)
+		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerCurrent(blockRound, &blockDigest, &balancesHash, totals, &stateProofVerificationDataHash)
 	}
 	generatedLabel := ledgercore.MakeLabel(catchpointLabelMaker)
 

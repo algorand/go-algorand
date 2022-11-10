@@ -50,12 +50,12 @@ type CatchpointLabelMakerV6 struct {
 }
 
 // MakeCatchpointLabelMakerV6 creates a V6 catchpoint label given the catchpoint label parameters.
-func MakeCatchpointLabelMakerV6(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest,
-	balancesMerkleRoot crypto.Digest, totals AccountTotals) *CatchpointLabelMakerV6 {
+func MakeCatchpointLabelMakerV6(ledgerRound basics.Round, ledgerRoundBlockHash *crypto.Digest,
+	balancesMerkleRoot *crypto.Digest, totals AccountTotals) *CatchpointLabelMakerV6 {
 	return &CatchpointLabelMakerV6{
 		ledgerRound:          ledgerRound,
-		ledgerRoundBlockHash: ledgerRoundBlockHash,
-		balancesMerkleRoot:   balancesMerkleRoot,
+		ledgerRoundBlockHash: *ledgerRoundBlockHash,
+		balancesMerkleRoot:   *balancesMerkleRoot,
 		totals:               totals,
 	}
 }
@@ -85,11 +85,11 @@ type CatchpointLabelMakerCurrent struct {
 }
 
 // MakeCatchpointLabelMakerCurrent creates a catchpoint label given the catchpoint label parameters.
-func MakeCatchpointLabelMakerCurrent(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest,
-	balancesMerkleRoot crypto.Digest, totals AccountTotals, stateProofVerificationDataHash crypto.Digest) *CatchpointLabelMakerCurrent {
+func MakeCatchpointLabelMakerCurrent(ledgerRound basics.Round, ledgerRoundBlockHash *crypto.Digest,
+	balancesMerkleRoot *crypto.Digest, totals AccountTotals, stateProofVerificationDataHash *crypto.Digest) *CatchpointLabelMakerCurrent {
 	return &CatchpointLabelMakerCurrent{
 		v6Label:                        *MakeCatchpointLabelMakerV6(ledgerRound, ledgerRoundBlockHash, balancesMerkleRoot, totals),
-		stateProofVerificationDataHash: stateProofVerificationDataHash,
+		stateProofVerificationDataHash: *stateProofVerificationDataHash,
 	}
 }
 
