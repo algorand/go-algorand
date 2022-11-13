@@ -254,7 +254,6 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			return network.Ignore, err
 		}
 
-		proto := config.Consensus[latestHdr.CurrentProtocol]
 		stateProofNextRound := latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 
 		if sfa.Round < stateProofNextRound {
@@ -263,12 +262,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			return network.Ignore, nil
 		}
 
-		if sfa.Round > onlineBuildersThreshold(proto, stateProofNextRound) && sfa.Round != latestHdr.Round.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval)) {
-			// Ignore signatures not under threshold round or equal to the latest StateProof round
-			// (this signature filtering is only relevant when the StateProof chain is stalled and many signatures may be spammed)
-			return network.Ignore, nil
-		}
-
+		proto := config.Consensus[latestHdr.CurrentProtocol]
 		// proto.StateProofInterval is not expected to be 0 after passing StateProofNextRound
 		// checking anyway, otherwise will panic
 		if proto.StateProofInterval == 0 {
@@ -286,6 +280,12 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			// avoiding an inspection in DB in case we haven't reached the round.
 			// Avoiding disconnecting the peer, since it might've been sent to this node while it recovers.
 			return network.Ignore, fmt.Errorf("handleSig: latest round is smaller than given round %d", sfa.Round)
+		}
+
+		if sfa.Round > onlineBuildersThreshold(&proto, stateProofNextRound) && sfa.Round != latestHdr.Round.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval)) {
+			// Ignore signatures not under threshold round or equal to the latest StateProof round
+			// (this signature filtering is only relevant when the StateProof chain is stalled and many signatures may be spammed)
+			return network.Ignore, nil
 		}
 
 		builderForRound, err = spw.loadOrCreateBuilderWithSignatures(sfa.Round)
@@ -372,8 +372,7 @@ func (spw *Worker) builder(latest basics.Round) {
 		proto := config.Consensus[hdr.CurrentProtocol]
 		stateProofNextRound := hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 
-		spw.deleteStaleStateProofBuildData(proto, stateProofNextRound)
-		spw.trimBuildersCache(proto, stateProofNextRound)
+		spw.deleteStaleStateProofBuildData(&proto, stateProofNextRound)
 
 		// Broadcast signatures based on the previous block(s) that
 		// were agreed upon.  This ensures that, if we send a signature
@@ -383,7 +382,6 @@ func (spw *Worker) builder(latest basics.Round) {
 		for r := latest; r < newLatest; r++ {
 			// Wait for the signer to catch up; mostly relevant in tests.
 			spw.waitForSignature(r)
-
 			spw.broadcastSigs(r, stateProofNextRound, proto)
 		}
 		latest = newLatest
@@ -413,7 +411,7 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, stateProofNextRound basics.R
 	defer spw.mu.Unlock()
 
 	latestStateProofRound := brnd.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))
-	threshold := onlineBuildersThreshold(proto, stateProofNextRound)
+	threshold := onlineBuildersThreshold(&proto, stateProofNextRound)
 	var roundSigs map[basics.Round][]pendingSig
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		if brnd%basics.Round(proto.StateProofInterval) < basics.Round(proto.StateProofInterval/2) {
@@ -457,7 +455,7 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, stateProofNextRound basics.R
 	}
 }
 
-func (spw *Worker) deleteStaleStateProofBuildData(proto config.ConsensusParams, stateProofNextRound basics.Round) {
+func (spw *Worker) deleteStaleStateProofBuildData(proto *config.ConsensusParams, stateProofNextRound basics.Round) {
 	if proto.StateProofInterval == 0 || stateProofNextRound == 0 {
 		return
 	}
@@ -466,6 +464,7 @@ func (spw *Worker) deleteStaleStateProofBuildData(proto config.ConsensusParams, 
 		return
 	}
 
+	spw.trimBuildersCache(proto, stateProofNextRound)
 	spw.deleteStaleSigs(stateProofNextRound)
 	spw.deleteStaleKeys(stateProofNextRound)
 	spw.deleteStaleBuilders(stateProofNextRound)
@@ -498,15 +497,6 @@ func (spw *Worker) deleteStaleKeys(retainRound basics.Round) {
 }
 
 func (spw *Worker) deleteStaleBuilders(retainRound basics.Round) {
-	spw.mu.Lock()
-	defer spw.mu.Unlock()
-
-	for rnd := range spw.builders {
-		if rnd < retainRound {
-			delete(spw.builders, rnd)
-		}
-	}
-
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return deleteBuilders(tx, retainRound)
 	})
@@ -518,14 +508,17 @@ func (spw *Worker) deleteStaleBuilders(retainRound basics.Round) {
 // Returns the highest round for which the builder should be stored in memory (cache).
 // This is mostly relevant in case the StateProof chain is stalled.
 // The threshold is also used to limit the StateProof signatures broadcasted over the network.
-func onlineBuildersThreshold(proto config.ConsensusParams, stateProofNextRound basics.Round) basics.Round {
+func onlineBuildersThreshold(proto *config.ConsensusParams, stateProofNextRound basics.Round) basics.Round {
 	spNextRnd := stateProofNextRound
 	threshold := spNextRnd + basics.Round(numBuildersInMemory*proto.StateProofInterval)
 
 	return threshold
 }
 
-func (spw *Worker) trimBuildersCache(proto config.ConsensusParams, stateProofNextRound basics.Round) {
+func (spw *Worker) trimBuildersCache(proto *config.ConsensusParams, stateProofNextRound basics.Round) {
+	spw.mu.Lock()
+	defer spw.mu.Unlock()
+
 	var maxBuilderRound basics.Round
 	for rnd := range spw.builders {
 		if rnd > maxBuilderRound {
@@ -534,9 +527,13 @@ func (spw *Worker) trimBuildersCache(proto config.ConsensusParams, stateProofNex
 	}
 
 	threshold := onlineBuildersThreshold(proto, stateProofNextRound)
-
+	/*
+		For example, builders currently stored in memory are for these rounds:
+		[..., StateProofNextRound-256, StateProofNextRound, StateProofNextRound+256, ..., Threshold, ..., MaxBuilderRound]
+		[StateProofNextRound, ..., Threshold, MaxBuilderRound] <- Only builders that should be stored in memory after trim
+	*/
 	for rnd := range spw.builders {
-		if rnd > threshold && rnd < maxBuilderRound {
+		if rnd < stateProofNextRound || (threshold < rnd && rnd < maxBuilderRound) {
 			delete(spw.builders, rnd)
 		}
 	}
