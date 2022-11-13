@@ -239,6 +239,12 @@ func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 			minRound = r
 		}
 	}
+
+	builderMinRound := vt.getMinRound()
+	if builderMinRound < minRound {
+		return builderMinRound
+	}
+
 	return minRound
 }
 
