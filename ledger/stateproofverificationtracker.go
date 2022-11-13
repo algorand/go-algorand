@@ -125,9 +125,9 @@ func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitConte
 	dcc.spVerification.CommitContext = make([]verificationCommitContext, lastContextToCommitIndex+1)
 	copy(dcc.spVerification.CommitContext, spt.trackedCommitContext[:lastContextToCommitIndex+1])
 
-	dcc.spVerification.LatestUsedDeleteContextIndex = spt.roundToLatestDeleteContextIndex(dcc.newBase)
-	if dcc.spVerification.LatestUsedDeleteContextIndex >= 0 {
-		dcc.spVerification.EarliestTrackLastAttestedRound = spt.trackedDeleteContext[dcc.spVerification.LatestUsedDeleteContextIndex].stateProofNextRound
+	dcc.spVerification.LastDeleteIndex = spt.roundToLatestDeleteContextIndex(dcc.newBase)
+	if dcc.spVerification.LastDeleteIndex >= 0 {
+		dcc.spVerification.EarliestLastAttestedRound = spt.trackedDeleteContext[dcc.spVerification.LastDeleteIndex].stateProofNextRound
 	}
 
 	return nil
@@ -139,8 +139,8 @@ func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *s
 		return err
 	}
 
-	if dcc.spVerification.LatestUsedDeleteContextIndex >= 0 {
-		err = deleteOldStateProofVerificationContext(ctx, tx, dcc.spVerification.EarliestTrackLastAttestedRound)
+	if dcc.spVerification.LastDeleteIndex >= 0 {
+		err = deleteOldStateProofVerificationContext(ctx, tx, dcc.spVerification.EarliestLastAttestedRound)
 	}
 
 	return err
@@ -151,7 +151,7 @@ func (spt *stateProofVerificationTracker) postCommit(_ context.Context, dcc *def
 	defer spt.mu.Unlock()
 
 	spt.trackedCommitContext = spt.trackedCommitContext[len(dcc.spVerification.CommitContext):]
-	spt.trackedDeleteContext = spt.trackedDeleteContext[dcc.spVerification.LatestUsedDeleteContextIndex+1:]
+	spt.trackedDeleteContext = spt.trackedDeleteContext[dcc.spVerification.LastDeleteIndex+1:]
 }
 
 func (spt *stateProofVerificationTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
