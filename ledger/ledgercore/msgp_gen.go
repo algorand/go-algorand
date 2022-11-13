@@ -31,13 +31,13 @@ import (
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
 //
-// StateProofVerificationData
-//              |-----> (*) MarshalMsg
-//              |-----> (*) CanMarshalMsg
-//              |-----> (*) UnmarshalMsg
-//              |-----> (*) CanUnmarshalMsg
-//              |-----> (*) Msgsize
-//              |-----> (*) MsgIsZero
+// StateProofVerificationContext
+//               |-----> (*) MarshalMsg
+//               |-----> (*) CanMarshalMsg
+//               |-----> (*) UnmarshalMsg
+//               |-----> (*) CanUnmarshalMsg
+//               |-----> (*) Msgsize
+//               |-----> (*) MsgIsZero
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -947,7 +947,7 @@ func (z *OnlineRoundParamsData) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *StateProofVerificationData) MarshalMsg(b []byte) (o []byte) {
+func (z *StateProofVerificationContext) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(4)
@@ -956,7 +956,7 @@ func (z *StateProofVerificationData) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).TargetStateProofRound.MsgIsZero() {
+	if (*z).LastAttestedRound.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -979,7 +979,7 @@ func (z *StateProofVerificationData) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "spround"
 			o = append(o, 0xa7, 0x73, 0x70, 0x72, 0x6f, 0x75, 0x6e, 0x64)
-			o = (*z).TargetStateProofRound.MarshalMsg(o)
+			o = (*z).LastAttestedRound.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "v"
@@ -995,13 +995,13 @@ func (z *StateProofVerificationData) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *StateProofVerificationData) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*StateProofVerificationData)
+func (_ *StateProofVerificationContext) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofVerificationContext)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *StateProofVerificationData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *StateProofVerificationContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -1015,9 +1015,9 @@ func (z *StateProofVerificationData) UnmarshalMsg(bts []byte) (o []byte, err err
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).TargetStateProofRound.UnmarshalMsg(bts)
+			bts, err = (*z).LastAttestedRound.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TargetStateProofRound")
+				err = msgp.WrapError(err, "struct-from-array", "LastAttestedRound")
 				return
 			}
 		}
@@ -1058,7 +1058,7 @@ func (z *StateProofVerificationData) UnmarshalMsg(bts []byte) (o []byte, err err
 			return
 		}
 		if zb0002 {
-			(*z) = StateProofVerificationData{}
+			(*z) = StateProofVerificationContext{}
 		}
 		for zb0001 > 0 {
 			zb0001--
@@ -1069,9 +1069,9 @@ func (z *StateProofVerificationData) UnmarshalMsg(bts []byte) (o []byte, err err
 			}
 			switch string(field) {
 			case "spround":
-				bts, err = (*z).TargetStateProofRound.UnmarshalMsg(bts)
+				bts, err = (*z).LastAttestedRound.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "TargetStateProofRound")
+					err = msgp.WrapError(err, "LastAttestedRound")
 					return
 				}
 			case "vc":
@@ -1105,18 +1105,18 @@ func (z *StateProofVerificationData) UnmarshalMsg(bts []byte) (o []byte, err err
 	return
 }
 
-func (_ *StateProofVerificationData) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*StateProofVerificationData)
+func (_ *StateProofVerificationContext) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofVerificationContext)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *StateProofVerificationData) Msgsize() (s int) {
-	s = 1 + 8 + (*z).TargetStateProofRound.Msgsize() + 3 + (*z).VotersCommitment.Msgsize() + 3 + (*z).OnlineTotalWeight.Msgsize() + 2 + (*z).Version.Msgsize()
+func (z *StateProofVerificationContext) Msgsize() (s int) {
+	s = 1 + 8 + (*z).LastAttestedRound.Msgsize() + 3 + (*z).VotersCommitment.Msgsize() + 3 + (*z).OnlineTotalWeight.Msgsize() + 2 + (*z).Version.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *StateProofVerificationData) MsgIsZero() bool {
-	return ((*z).TargetStateProofRound.MsgIsZero()) && ((*z).VotersCommitment.MsgIsZero()) && ((*z).OnlineTotalWeight.MsgIsZero()) && ((*z).Version.MsgIsZero())
+func (z *StateProofVerificationContext) MsgIsZero() bool {
+	return ((*z).LastAttestedRound.MsgIsZero()) && ((*z).VotersCommitment.MsgIsZero()) && ((*z).OnlineTotalWeight.MsgIsZero()) && ((*z).Version.MsgIsZero())
 }

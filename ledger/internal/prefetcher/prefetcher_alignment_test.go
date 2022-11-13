@@ -103,8 +103,8 @@ func (l *prefetcherAlignmentTestLedger) CheckDup(config.ConsensusParams, basics.
 	return nil
 }
 
-func (l *prefetcherAlignmentTestLedger) StateProofVerificationData(_ basics.Round) (*ledgercore.StateProofVerificationData, error) {
-	return nil, fmt.Errorf("prefetcherAlignmentTestLedger does not implement StateProofVerificationData")
+func (l *prefetcherAlignmentTestLedger) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("prefetcherAlignmentTestLedger does not implement StateProofVerificationContext")
 }
 
 func (l *prefetcherAlignmentTestLedger) LookupWithoutRewards(_ basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {

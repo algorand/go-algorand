@@ -831,9 +831,9 @@ func (aul *accountUpdatesLedgerEvaluator) VotersForStateProof(rnd basics.Round) 
 	return aul.ao.voters.getVoters(rnd)
 }
 
-func (aul *accountUpdatesLedgerEvaluator) StateProofVerificationData(_ basics.Round) (*ledgercore.StateProofVerificationData, error) {
+func (aul *accountUpdatesLedgerEvaluator) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	// this function should not be used by accountUpdatesLedgerEvaluator
-	return nil, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to get stateProofVerification data during accountUpdates initialization ")
+	return nil, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to get spVerification data during accountUpdates initialization ")
 }
 
 // BlockHdr returns the header of the given round. When the evaluator is running, it's only referring to the previous header, which is what we

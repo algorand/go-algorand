@@ -32,43 +32,43 @@ import (
 )
 
 var (
-	errStateProofVerificationDataNotFound = errors.New("requested state proof verification data not found")
+	errStateProofVerificationContextNotFound = errors.New("requested state proof verification context not found")
 )
 
-type verificationDeleteData struct {
+type verificationDeleteContext struct {
 	confirmedRound      basics.Round
 	stateProofNextRound basics.Round
 }
 
-type verificationCommitData struct {
-	confirmedRound   basics.Round
-	verificationData ledgercore.StateProofVerificationData
+type verificationCommitContext struct {
+	confirmedRound      basics.Round
+	verificationContext ledgercore.StateProofVerificationContext
 }
 
-// stateProofVerificationTracker is in charge of tracking data required to verify state proofs until such a time
-// as the data is no longer needed.
+// stateProofVerificationTracker is in charge of tracking context required to verify state proofs until such a time
+// as the context is no longer needed.
 type stateProofVerificationTracker struct {
 	// dbQueries are the pre-generated queries used to query the database, if needed,
-	// to lookup state proof verification data.
-	dbQueries stateProofVerificationDbQueries
+	// to lookup state proof verification context.
+	dbQueries *stateProofVerificationDbQueries
 
-	// trackedCommitData represents the part of the tracked verification data currently in memory. Each element in this
-	// array contains both the data required to verify a single state proof and data to decide whether it's possible to
-	// commit the verification data to the database.
-	trackedCommitData []verificationCommitData
+	// trackedCommitContext represents the part of the tracked verification context currently in memory. Each element in this
+	// array contains both the context required to verify a single state proof and context to decide whether it's possible to
+	// commit the verification context to the database.
+	trackedCommitContext []verificationCommitContext
 
-	// trackedDeleteData represents the data required to delete committed state proof verification data from the
+	// trackedDeleteContext represents the context required to delete committed state proof verification context from the
 	// database.
-	trackedDeleteData []verificationDeleteData
+	trackedDeleteContext []verificationDeleteContext
 
-	// stateProofVerificationMu protects trackedCommitData and trackedDeleteData.
-	stateProofVerificationMu deadlock.RWMutex
+	// mu protects trackedCommitContext and trackedDeleteContext.
+	mu deadlock.RWMutex
 
 	// log copied from ledger
 	log logging.Logger
 
-	// lastLookedUpVerificationData should store the last verification data that was looked up.
-	lastLookedUpVerificationData ledgercore.StateProofVerificationData
+	// lastLookedUpVerificationContext should store the last verification context that was looked up.
+	lastLookedUpVerificationContext ledgercore.StateProofVerificationContext
 }
 
 func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
@@ -77,18 +77,18 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 		return err
 	}
 
-	spt.dbQueries = *preparedDbQueries
+	spt.dbQueries = preparedDbQueries
 
 	spt.log = l.trackerLog()
 
-	spt.stateProofVerificationMu.Lock()
-	defer spt.stateProofVerificationMu.Unlock()
+	spt.mu.Lock()
+	defer spt.mu.Unlock()
 
-	spt.lastLookedUpVerificationData = ledgercore.StateProofVerificationData{}
+	spt.lastLookedUpVerificationContext = ledgercore.StateProofVerificationContext{}
 
-	const initialDataArraySize = 10
-	spt.trackedCommitData = make([]verificationCommitData, 0, initialDataArraySize)
-	spt.trackedDeleteData = make([]verificationDeleteData, 0, initialDataArraySize)
+	const initialContextArraySize = 10
+	spt.trackedCommitContext = make([]verificationCommitContext, 0, initialContextArraySize)
+	spt.trackedDeleteContext = make([]verificationDeleteContext, 0, initialContextArraySize)
 
 	return nil
 }
@@ -101,11 +101,11 @@ func (spt *stateProofVerificationTracker) newBlock(blk bookkeeping.Block, delta 
 	}
 
 	if blk.Round()%currentStateProofInterval == 0 {
-		spt.insertCommitData(&blk)
+		spt.appendCommitContext(&blk)
 	}
 
 	if delta.StateProofNext != 0 {
-		spt.insertDeleteData(&blk, &delta)
+		spt.appendDeleteContext(&blk, &delta)
 	}
 }
 
@@ -118,40 +118,40 @@ func (spt *stateProofVerificationTracker) produceCommittingTask(_ basics.Round, 
 }
 
 func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitContext) error {
-	spt.stateProofVerificationMu.RLock()
-	defer spt.stateProofVerificationMu.RUnlock()
+	spt.mu.RLock()
+	defer spt.mu.RUnlock()
 
-	lastDataToCommitIndex := spt.committedRoundToLatestCommitDataIndex(dcc.newBase)
-	dcc.stateProofVerificationCommitData = make([]verificationCommitData, lastDataToCommitIndex+1)
-	copy(dcc.stateProofVerificationCommitData, spt.trackedCommitData[:lastDataToCommitIndex+1])
+	lastContextToCommitIndex := spt.roundToLatestCommitContextIndex(dcc.newBase)
+	dcc.spVerification.CommitContext = make([]verificationCommitContext, lastContextToCommitIndex+1)
+	copy(dcc.spVerification.CommitContext, spt.trackedCommitContext[:lastContextToCommitIndex+1])
 
-	dcc.stateProofVerificationLatestDeleteDataIndex = spt.committedRoundToLatestDeleteDataIndex(dcc.newBase)
-	if dcc.stateProofVerificationLatestDeleteDataIndex > -1 {
-		dcc.stateProofVerificationEarliestTrackStateProofRound = spt.trackedDeleteData[dcc.stateProofVerificationLatestDeleteDataIndex].stateProofNextRound
+	dcc.spVerification.LastDeleteIndex = spt.roundToLatestDeleteContextIndex(dcc.newBase)
+	if dcc.spVerification.LastDeleteIndex >= 0 {
+		dcc.spVerification.EarliestLastAttestedRound = spt.trackedDeleteContext[dcc.spVerification.LastDeleteIndex].stateProofNextRound
 	}
 
 	return nil
 }
 
 func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
-	err = insertStateProofVerificationData(ctx, tx, dcc.stateProofVerificationCommitData)
+	err = insertStateProofVerificationContext(ctx, tx, dcc.spVerification.CommitContext)
 	if err != nil {
 		return err
 	}
 
-	if dcc.stateProofVerificationLatestDeleteDataIndex > -1 {
-		err = deleteOldStateProofVerificationData(ctx, tx, dcc.stateProofVerificationEarliestTrackStateProofRound)
+	if dcc.spVerification.LastDeleteIndex >= 0 {
+		err = deleteOldStateProofVerificationContext(ctx, tx, dcc.spVerification.EarliestLastAttestedRound)
 	}
 
 	return err
 }
 
 func (spt *stateProofVerificationTracker) postCommit(_ context.Context, dcc *deferredCommitContext) {
-	spt.stateProofVerificationMu.Lock()
-	defer spt.stateProofVerificationMu.Unlock()
+	spt.mu.Lock()
+	defer spt.mu.Unlock()
 
-	spt.trackedCommitData = spt.trackedCommitData[len(dcc.stateProofVerificationCommitData):]
-	spt.trackedDeleteData = spt.trackedDeleteData[dcc.stateProofVerificationLatestDeleteDataIndex+1:]
+	spt.trackedCommitContext = spt.trackedCommitContext[len(dcc.spVerification.CommitContext):]
+	spt.trackedDeleteContext = spt.trackedDeleteContext[dcc.spVerification.LastDeleteIndex+1:]
 }
 
 func (spt *stateProofVerificationTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
@@ -163,36 +163,37 @@ func (spt *stateProofVerificationTracker) handleUnorderedCommit(*deferredCommitC
 }
 
 func (spt *stateProofVerificationTracker) close() {
-	if spt.dbQueries.lookupStateProofVerificationData != nil {
-		spt.dbQueries.lookupStateProofVerificationData.Close()
+	if spt.dbQueries != nil {
+		spt.dbQueries.lookupStateProofVerificationContext.Close()
+		spt.dbQueries = nil
 	}
 }
 
-func (spt *stateProofVerificationTracker) LookupVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+func (spt *stateProofVerificationTracker) LookupVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	if lstlookup := spt.retrieveFromCache(stateProofLastAttestedRound); lstlookup != nil {
 		return lstlookup, nil
 	}
 
-	verificationData, err := spt.lookUpVerificationData(stateProofLastAttestedRound)
+	verificationContext, err := spt.lookUpVerificationContext(stateProofLastAttestedRound)
 	if err != nil {
 		return nil, err
 	}
 
-	spt.stateProofVerificationMu.Lock()
-	spt.lastLookedUpVerificationData = *verificationData
-	spt.stateProofVerificationMu.Unlock()
+	spt.mu.Lock()
+	spt.lastLookedUpVerificationContext = *verificationContext
+	spt.mu.Unlock()
 
-	return verificationData, nil
+	return verificationContext, nil
 }
 
 func (spt *stateProofVerificationTracker) retrieveFromCache(
-	stateProofLastAttestedRound basics.Round) *ledgercore.StateProofVerificationData {
-	spt.stateProofVerificationMu.RLock()
-	defer spt.stateProofVerificationMu.RUnlock()
+	stateProofLastAttestedRound basics.Round) *ledgercore.StateProofVerificationContext {
+	spt.mu.RLock()
+	defer spt.mu.RUnlock()
 
-	if spt.lastLookedUpVerificationData.TargetStateProofRound == stateProofLastAttestedRound &&
-		!spt.lastLookedUpVerificationData.MsgIsZero() {
-		cpy := spt.lastLookedUpVerificationData
+	if spt.lastLookedUpVerificationContext.LastAttestedRound == stateProofLastAttestedRound &&
+		!spt.lastLookedUpVerificationContext.MsgIsZero() {
+		cpy := spt.lastLookedUpVerificationContext
 
 		return &cpy
 	}
@@ -200,120 +201,120 @@ func (spt *stateProofVerificationTracker) retrieveFromCache(
 	return nil
 }
 
-func (spt *stateProofVerificationTracker) lookUpVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
-	spt.stateProofVerificationMu.RLock()
-	defer spt.stateProofVerificationMu.RUnlock()
+func (spt *stateProofVerificationTracker) lookUpVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	spt.mu.RLock()
+	defer spt.mu.RUnlock()
 
-	if len(spt.trackedCommitData) > 0 &&
-		stateProofLastAttestedRound >= spt.trackedCommitData[0].verificationData.TargetStateProofRound &&
-		stateProofLastAttestedRound <= spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound {
-		return spt.lookupDataInTrackedMemory(stateProofLastAttestedRound)
+	if len(spt.trackedCommitContext) > 0 &&
+		stateProofLastAttestedRound >= spt.trackedCommitContext[0].verificationContext.LastAttestedRound &&
+		stateProofLastAttestedRound <= spt.trackedCommitContext[len(spt.trackedCommitContext)-1].verificationContext.LastAttestedRound {
+		return spt.lookupContextInTrackedMemory(stateProofLastAttestedRound)
 	}
 
-	if len(spt.trackedCommitData) == 0 || stateProofLastAttestedRound < spt.trackedCommitData[0].verificationData.TargetStateProofRound {
-		return spt.lookupDataInDB(stateProofLastAttestedRound)
+	if len(spt.trackedCommitContext) == 0 || stateProofLastAttestedRound < spt.trackedCommitContext[0].verificationContext.LastAttestedRound {
+		return spt.lookupContextInDB(stateProofLastAttestedRound)
 	}
 
-	return &ledgercore.StateProofVerificationData{}, fmt.Errorf("requested data for round %d, greater than maximum data round %d: %w",
+	return &ledgercore.StateProofVerificationContext{}, fmt.Errorf("requested context for round %d, greater than maximum context round %d: %w",
 		stateProofLastAttestedRound,
-		spt.trackedCommitData[len(spt.trackedCommitData)-1].verificationData.TargetStateProofRound,
-		errStateProofVerificationDataNotFound)
+		spt.trackedCommitContext[len(spt.trackedCommitContext)-1].verificationContext.LastAttestedRound,
+		errStateProofVerificationContextNotFound)
 }
 
-func (spt *stateProofVerificationTracker) lookupDataInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
-	for _, commitData := range spt.trackedCommitData {
-		if commitData.verificationData.TargetStateProofRound == stateProofLastAttestedRound {
-			verificationDataCopy := commitData.verificationData
-			return &verificationDataCopy, nil
+func (spt *stateProofVerificationTracker) lookupContextInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	for _, commitContext := range spt.trackedCommitContext {
+		if commitContext.verificationContext.LastAttestedRound == stateProofLastAttestedRound {
+			verificationContextCopy := commitContext.verificationContext
+			return &verificationContextCopy, nil
 		}
 	}
 
-	return &ledgercore.StateProofVerificationData{}, fmt.Errorf("%w for round %d: memory lookup failed",
-		errStateProofVerificationDataNotFound, stateProofLastAttestedRound)
+	return &ledgercore.StateProofVerificationContext{}, fmt.Errorf("%w for round %d: memory lookup failed",
+		errStateProofVerificationContextNotFound, stateProofLastAttestedRound)
 }
 
-func (spt *stateProofVerificationTracker) lookupDataInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
-	verificationData, err := spt.dbQueries.lookupData(stateProofLastAttestedRound)
+func (spt *stateProofVerificationTracker) lookupContextInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	verificationContext, err := spt.dbQueries.lookupContext(stateProofLastAttestedRound)
 	if err != nil {
-		err = fmt.Errorf("%w for round %d: %s", errStateProofVerificationDataNotFound, stateProofLastAttestedRound, err)
+		err = fmt.Errorf("%w for round %d: %s", errStateProofVerificationContextNotFound, stateProofLastAttestedRound, err)
 	}
 
-	return verificationData, err
+	return verificationContext, err
 }
 
-func (spt *stateProofVerificationTracker) committedRoundToLatestCommitDataIndex(committedRound basics.Round) int {
-	latestCommittedDataIndex := -1
+func (spt *stateProofVerificationTracker) roundToLatestCommitContextIndex(committedRound basics.Round) int {
+	latestCommittedContextIndex := -1
 
-	for index, data := range spt.trackedCommitData {
-		if data.confirmedRound > committedRound {
+	for index, ctx := range spt.trackedCommitContext {
+		if ctx.confirmedRound > committedRound {
 			break
 		}
 
-		latestCommittedDataIndex = index
+		latestCommittedContextIndex = index
 	}
 
-	return latestCommittedDataIndex
+	return latestCommittedContextIndex
 }
 
-func (spt *stateProofVerificationTracker) committedRoundToLatestDeleteDataIndex(committedRound basics.Round) int {
-	latestCommittedDataIndex := -1
+func (spt *stateProofVerificationTracker) roundToLatestDeleteContextIndex(committedRound basics.Round) int {
+	latestCommittedContextIndex := -1
 
-	for index, data := range spt.trackedDeleteData {
-		if data.confirmedRound > committedRound {
+	for index, ctx := range spt.trackedDeleteContext {
+		if ctx.confirmedRound > committedRound {
 			break
 		}
 
-		latestCommittedDataIndex = index
+		latestCommittedContextIndex = index
 	}
 
-	return latestCommittedDataIndex
+	return latestCommittedContextIndex
 }
 
-func getVerificationData(blk *bookkeeping.Block) ledgercore.StateProofVerificationData {
-	return ledgercore.StateProofVerificationData{
-		VotersCommitment:      blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
-		OnlineTotalWeight:     blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
-		TargetStateProofRound: blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval),
-		Version:               blk.CurrentProtocol,
+func getVerificationContext(blk *bookkeeping.Block) ledgercore.StateProofVerificationContext {
+	return ledgercore.StateProofVerificationContext{
+		VotersCommitment:  blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+		OnlineTotalWeight: blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+		LastAttestedRound: blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval),
+		Version:           blk.CurrentProtocol,
 	}
 }
 
-func (spt *stateProofVerificationTracker) insertCommitData(blk *bookkeeping.Block) {
-	spt.stateProofVerificationMu.Lock()
-	defer spt.stateProofVerificationMu.Unlock()
+func (spt *stateProofVerificationTracker) appendCommitContext(blk *bookkeeping.Block) {
+	spt.mu.Lock()
+	defer spt.mu.Unlock()
 
-	if len(spt.trackedCommitData) > 0 {
-		lastCommitConfirmedRound := spt.trackedCommitData[len(spt.trackedCommitData)-1].confirmedRound
+	if len(spt.trackedCommitContext) > 0 {
+		lastCommitConfirmedRound := spt.trackedCommitContext[len(spt.trackedCommitContext)-1].confirmedRound
 		if blk.Round() <= lastCommitConfirmedRound {
-			spt.log.Panicf("state proof verification: attempted to insert commit data confirmed earlier than latest"+
-				"commit data, round: %d, last confirmed commit data round: %d", blk.Round(), lastCommitConfirmedRound)
+			spt.log.Panicf("state proof verification: attempted to append commit context confirmed earlier than latest"+
+				"commit context, round: %d, last confirmed commit context round: %d", blk.Round(), lastCommitConfirmedRound)
 		}
 	}
 
-	commitData := verificationCommitData{
-		confirmedRound:   blk.Round(),
-		verificationData: getVerificationData(blk),
+	commitContext := verificationCommitContext{
+		confirmedRound:      blk.Round(),
+		verificationContext: getVerificationContext(blk),
 	}
 
-	spt.trackedCommitData = append(spt.trackedCommitData, commitData)
+	spt.trackedCommitContext = append(spt.trackedCommitContext, commitContext)
 }
 
-func (spt *stateProofVerificationTracker) insertDeleteData(blk *bookkeeping.Block, delta *ledgercore.StateDelta) {
-	spt.stateProofVerificationMu.Lock()
-	defer spt.stateProofVerificationMu.Unlock()
+func (spt *stateProofVerificationTracker) appendDeleteContext(blk *bookkeeping.Block, delta *ledgercore.StateDelta) {
+	spt.mu.Lock()
+	defer spt.mu.Unlock()
 
-	if len(spt.trackedDeleteData) > 0 {
-		lastDeleteConfirmedRound := spt.trackedDeleteData[len(spt.trackedDeleteData)-1].confirmedRound
+	if len(spt.trackedDeleteContext) > 0 {
+		lastDeleteConfirmedRound := spt.trackedDeleteContext[len(spt.trackedDeleteContext)-1].confirmedRound
 		if blk.Round() <= lastDeleteConfirmedRound {
-			spt.log.Panicf("state proof verification: attempted to insert delete data confirmed earlier than latest"+
-				"delete data, round: %d, last confirmed delete data round: %d", blk.Round(), lastDeleteConfirmedRound)
+			spt.log.Panicf("state proof verification: attempted to append delete context confirmed earlier than latest"+
+				"delete context, round: %d, last confirmed delete context round: %d", blk.Round(), lastDeleteConfirmedRound)
 		}
 	}
 
-	deletionData := verificationDeleteData{
+	deletionContext := verificationDeleteContext{
 		confirmedRound:      blk.Round(),
 		stateProofNextRound: delta.StateProofNext,
 	}
 
-	spt.trackedDeleteData = append(spt.trackedDeleteData, deletionData)
+	spt.trackedDeleteContext = append(spt.trackedDeleteContext, deletionContext)
 }

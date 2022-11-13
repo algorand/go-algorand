@@ -327,7 +327,7 @@ func TestCowStateProof(t *testing.T) {
 	c0 := makeRoundCowState(
 		&ml, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusFuture],
 		0, ledgercore.AccountTotals{}, 0)
-	ml.stateProofVerification = make(map[basics.Round]*ledgercore.StateProofVerificationData)
+	ml.stateProofVerification = make(map[basics.Round]*ledgercore.StateProofVerificationContext)
 
 	spType = protocol.StateProofType(1234) // bad stateproof type
 	stateProofTx := transactions.StateProofTxnFields{
@@ -375,11 +375,11 @@ func TestCowStateProof(t *testing.T) {
 	blockErr[256] = noBlockErr
 	stateProofTx.Message.LastAttestedRound = 512
 	stateProofTx.StateProof.SignedWeight = 100
-	ml.stateProofVerification[basics.Round(stateProofTx.Message.LastAttestedRound)] = &ledgercore.StateProofVerificationData{
-		TargetStateProofRound: basics.Round(stateProofTx.Message.LastAttestedRound),
-		VotersCommitment:      []byte{0x1}[:],
-		OnlineTotalWeight:     basics.MicroAlgos{Raw: 5},
-		Version:               protocol.ConsensusFuture,
+	ml.stateProofVerification[basics.Round(stateProofTx.Message.LastAttestedRound)] = &ledgercore.StateProofVerificationContext{
+		LastAttestedRound: basics.Round(stateProofTx.Message.LastAttestedRound),
+		VotersCommitment:  []byte{0x1}[:],
+		OnlineTotalWeight: basics.MicroAlgos{Raw: 5},
+		Version:           protocol.ConsensusFuture,
 	}
 
 	// if atRound header is missing the apply should fail
@@ -719,8 +719,8 @@ func (ledger *evalTestLedger) Latest() basics.Round {
 	return basics.Round(len(ledger.blocks)).SubSaturate(1)
 }
 
-func (ledger *evalTestLedger) StateProofVerificationData(_ basics.Round) (*ledgercore.StateProofVerificationData, error) {
-	return nil, fmt.Errorf("evalTestLedger does not implement StateProofVerificationData")
+func (ledger *evalTestLedger) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("evalTestLedger does not implement StateProofVerificationContext")
 }
 
 // AddValidatedBlock adds a new block to the ledger, after the block has
@@ -898,8 +898,8 @@ func (l *testCowBaseLedger) LookupKv(rnd basics.Round, key string) ([]byte, erro
 	return nil, errors.New("not implemented")
 }
 
-func (l *testCowBaseLedger) StateProofVerificationData(_ basics.Round) (*ledgercore.StateProofVerificationData, error) {
-	return nil, fmt.Errorf("testCowBaseLedger does not implement StateProofVerificationData")
+func (l *testCowBaseLedger) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("testCowBaseLedger does not implement StateProofVerificationContext")
 }
 
 func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
