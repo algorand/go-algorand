@@ -18,14 +18,16 @@ package ledger
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/stateproof"
 	"sync"
 
+	"github.com/algorand/go-deadlock"
+	
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/stateproof"
 )
 
 // The votersTracker maintains the vector commitment for the most recent
@@ -76,6 +78,11 @@ type votersTracker struct {
 	// loadWaitGroup syncronizing the completion of the loadTree call so that we can
 	// shutdown the tracker without leaving any running go-routines.
 	loadWaitGroup sync.WaitGroup
+
+	minRound basics.Round
+
+	// mu protects minRound.
+	mu deadlock.RWMutex
 }
 
 // votersRoundForStateProofRound computes the round number whose voting participants
@@ -113,6 +120,9 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.Onl
 		return fmt.Errorf("votersTracker: underflow: %d - %d - %d = %d",
 			hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto.StateProofInterval, proto.StateProofVotersLookback, startR)
 	}
+
+	// TODO: Here?
+	vt.setMinRound(startR)
 
 	// we recreate the trees for old rounds. we stop at latestDbRound (where latestDbRound <= latestRoundInLedger) since
 	// future blocks would be given as part of the replay
@@ -230,6 +240,20 @@ func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 		}
 	}
 	return minRound
+}
+
+func (vt *votersTracker) getMinRound() basics.Round {
+	vt.mu.RLock()
+	defer vt.mu.RUnlock()
+
+	return vt.minRound
+}
+
+func (vt *votersTracker) setMinRound(newMinRound basics.Round) {
+	vt.mu.Lock()
+	defer vt.mu.Unlock()
+
+	vt.minRound = newMinRound
 }
 
 // getVoters() returns the top online participants from round r.
