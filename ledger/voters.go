@@ -115,11 +115,10 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.Onl
 		return nil
 	}
 
-	// TODO: Change
 	// We start with next nextStateProofRound's voters round since we can know with certainty that earlier state proofs
-	// will not be built. If it's very far in the future it will cause us to keep everything we can in the block queue,
-	// until immediately be modified by the builder goroutine on
-	// builder lookup.
+	// will not be built. If it's very far in the past it will cause us to keep everything we can in the block queue,
+	// until such a time as builders are retrieved from the DB or build to advance it. Either way, we do our best effort
+	// to ensure that builders have everything they need to build.
 	vt.advanceVotersMinRound(votersRoundForStateProofRound(nextStateProofRound, &proto))
 
 	startR := stateproof.GetOldestExpectedStateProof(&hdr)
