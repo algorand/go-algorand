@@ -5,9 +5,11 @@ generate:
 output-options:
   include-tags:
   - participating
+  - public
   exclude-tags:
   - private
   - common
+  - nonparticipating
   type-mappings:
     integer: uint64
   skip-prune: true
