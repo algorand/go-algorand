@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -53,6 +54,7 @@ var transactionMessagesTxnSigBadFormed = metrics.MakeCounter(metrics.Transaction
 var transactionMessagesTxnMsigBadFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnMsigBadFormed)
 var transactionMessagesTxnLogicSig = metrics.MakeCounter(metrics.TransactionMessagesTxnLogicSig)
 var transactionMessagesTxnSigVerificationFailed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigVerificationFailed)
+var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionMessagesBacklogSize)
 
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
@@ -109,8 +111,9 @@ func (handler *TxHandler) Start() {
 	handler.net.RegisterHandlers([]network.TaggedMessageHandler{
 		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
 	})
-	handler.backlogWg.Add(1)
+	handler.backlogWg.Add(2)
 	go handler.backlogWorker()
+	go handler.backlogGaugeThread()
 }
 
 // Stop suspends the processing of incoming messages at the transaction handler
@@ -125,6 +128,20 @@ func reencode(stxns []transactions.SignedTxn) []byte {
 		result = append(result, protocol.Encode(&stxn))
 	}
 	return bytes.Join(result, nil)
+}
+
+func (handler *TxHandler) backlogGaugeThread() {
+	defer handler.backlogWg.Done()
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			transactionMessagesBacklogSizeGauge.Set(float64(len(handler.backlogQueue)))
+		case <-handler.ctx.Done():
+			return
+		}
+	}
 }
 
 // backlogWorker is the worker go routine that process the incoming messages from the postVerificationQueue and backlogQueue channels

@@ -105,4 +105,6 @@ var (
 	TransactionMessagesTxnLogicSig = MetricName{Name: "algod_transaction_messages_logic_sig_failed", Description: "Number of transaction messages with invalid logic sig"}
 	// TransactionMessagesTxnSigVerificationFailed "Number of transaction messages with signature verification failed"
 	TransactionMessagesTxnSigVerificationFailed = MetricName{Name: "algod_transaction_messages_sig_verify_failed", Description: "Number of transaction messages with signature verification failed"}
+	// TransactionMessagesBacklogSize "Number of transaction messages in the TX handler backlog queue"
+	TransactionMessagesBacklogSize = MetricName{Name: "algod_transaction_messages_backlog_size", Description: "Number of transaction messages in the TX handler backlog queue"}
 )
