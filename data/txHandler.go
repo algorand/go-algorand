@@ -19,6 +19,7 @@ package data
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -45,6 +46,13 @@ var txBacklogSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnByt
 var transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessagesHandled)
 var transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
 var transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
+var transactionMessagesDupPreBacklog = metrics.MakeCounter(metrics.TransactionMessagesDupPreBacklog)
+var transactionMessagesTxGroupInvalidFee = metrics.MakeCounter(metrics.TransactionMessagesTxGroupInvalidFee)
+var transactionMessagesTxnBadFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnBadFormed)
+var transactionMessagesTxnSigBadFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigBadFormed)
+var transactionMessagesTxnMsigBadFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnMsigBadFormed)
+var transactionMessagesTxnLogicSig = metrics.MakeCounter(metrics.TransactionMessagesTxnLogicSig)
+var transactionMessagesTxnSigVerificationFailed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigVerificationFailed)
 
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
@@ -132,7 +140,7 @@ func (handler *TxHandler) backlogWorker() {
 			if !ok {
 				return
 			}
-			handler.postprocessCheckedTxn(wi)
+			handler.postProcessCheckedTxn(wi)
 
 			// restart the loop so that we could empty out the post verification queue.
 			continue
@@ -146,6 +154,7 @@ func (handler *TxHandler) backlogWorker() {
 				return
 			}
 			if handler.checkAlreadyCommitted(wi) {
+				transactionMessagesDupPreBacklog.Inc(nil)
 				continue
 			}
 
@@ -156,7 +165,7 @@ func (handler *TxHandler) backlogWorker() {
 			if !ok {
 				return
 			}
-			handler.postprocessCheckedTxn(wi)
+			handler.postProcessCheckedTxn(wi)
 
 		case <-handler.ctx.Done():
 			return
@@ -164,9 +173,47 @@ func (handler *TxHandler) backlogWorker() {
 	}
 }
 
-func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
+func (handler *TxHandler) postProcessReportErrors(err error) {
+	var feeError *verify.ErrTxGroupInvalidFee
+	if errors.As(err, &feeError) {
+		transactionMessagesTxGroupInvalidFee.Inc(nil)
+		return
+	}
+
+	var badFormed *verify.ErrTxnBadFormed
+	if errors.As(err, &badFormed) {
+		transactionMessagesTxnBadFormed.Inc(nil)
+		return
+	}
+
+	var sigBadFormed *verify.ErrTxnSigBadFormed
+	if errors.As(err, &sigBadFormed) {
+		transactionMessagesTxnSigBadFormed.Inc(nil)
+		return
+	}
+
+	var msigBadFormed *verify.ErrTxnMsigBadFormed
+	if errors.As(err, &msigBadFormed) {
+		transactionMessagesTxnMsigBadFormed.Inc(nil)
+		return
+	}
+
+	var logicSig *verify.ErrTxnLogicSig
+	if errors.As(err, &logicSig) {
+		transactionMessagesTxnLogicSig.Inc(nil)
+		return
+	}
+
+	if errors.Is(err, crypto.ErrBatchVerificationFailed) {
+		transactionMessagesTxnSigVerificationFailed.Inc(nil)
+		return
+	}
+}
+
+func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 	if wi.verificationErr != nil {
 		// disconnect from peer.
+		handler.postProcessReportErrors(wi.verificationErr)
 		logging.Base().Warnf("Received a malformed tx group %v: %v", wi.unverifiedTxGroup, wi.verificationErr)
 		handler.net.Disconnect(wi.rawmsg.Sender)
 		return
@@ -203,7 +250,7 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 	latest := handler.ledger.Latest()
 	latestHdr, err := handler.ledger.BlockHdr(latest)
 	if err != nil {
-		tx.verificationErr = fmt.Errorf("Could not get header for previous block %d: %w", latest, err)
+		tx.verificationErr = fmt.Errorf("could not get header for previous block %d: %w", latest, err)
 		logging.Base().Warnf("Could not get header for previous block %d: %v", latest, err)
 	} else {
 		// we can't use PaysetGroups here since it's using a execpool like this go-routine and we don't want to deadlock.

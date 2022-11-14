@@ -1440,11 +1440,13 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
 
 // preparePeerData prepares batches of data for sending.
 // It performs optional zstd compression for proposal massages
-func (wn *WebsocketNetwork) preparePeerData(request broadcastRequest, prio bool, peers []*wsPeer) ([][]byte, [][]byte, []crypto.Digest) {
+func (wn *WebsocketNetwork) preparePeerData(request broadcastRequest, prio bool, peers []*wsPeer) ([][]byte, [][]byte, []crypto.Digest, map[protocol.Tag]struct{}) {
 	// determine if there is a payload proposal and peers supporting compressed payloads
 	wantCompression := false
+	var messageTags map[protocol.Tag]struct{}
 	if prio {
 		wantCompression = checkCanCompress(request, peers)
+		messageTags = make(map[protocol.Tag]struct{}, 1)
 	}
 
 	digests := make([]crypto.Digest, len(request.data))
@@ -1463,8 +1465,11 @@ func (wn *WebsocketNetwork) preparePeerData(request broadcastRequest, prio bool,
 			digests[i] = crypto.Hash(mbytes)
 		}
 
-		if prio && request.tags[i] == protocol.ProposalPayloadTag {
-			networkPrioPPNonCompressedSize.AddUint64(uint64(len(d)), nil)
+		if prio {
+			if request.tags[i] == protocol.ProposalPayloadTag {
+				networkPrioPPNonCompressedSize.AddUint64(uint64(len(d)), nil)
+			}
+			messageTags[request.tags[i]] = struct{}{}
 		}
 
 		if wantCompression {
@@ -1482,7 +1487,7 @@ func (wn *WebsocketNetwork) preparePeerData(request broadcastRequest, prio bool,
 			}
 		}
 	}
-	return data, dataCompressed, digests
+	return data, dataCompressed, digests, messageTags
 }
 
 // prio is set if the broadcast is a high-priority broadcast.
@@ -1499,7 +1504,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 	}
 
 	start := time.Now()
-	data, dataWithCompression, digests := wn.preparePeerData(request, prio, peers)
+	data, dataWithCompression, digests, seenPrioTags := wn.preparePeerData(request, prio, peers)
 
 	// first send to all the easy outbound peers who don't block, get them started.
 	sentMessageCount := 0
@@ -1515,12 +1520,16 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 			// if this peer supports compressed proposals and compressed data batch is filled out, use it
 			ok = peer.writeNonBlockMsgs(request.ctx, dataWithCompression, prio, digests, request.enqueueTime)
 			if prio {
-				networkPrioBatchesPPWithCompression.Inc(nil)
+				if _, ok := seenPrioTags[protocol.ProposalPayloadTag]; ok {
+					networkPrioBatchesPPWithCompression.Inc(nil)
+				}
 			}
 		} else {
 			ok = peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
 			if prio {
-				networkPrioBatchesPPWithoutCompression.Inc(nil)
+				if _, ok := seenPrioTags[protocol.ProposalPayloadTag]; ok {
+					networkPrioBatchesPPWithoutCompression.Inc(nil)
+				}
 			}
 		}
 		if ok {

@@ -91,4 +91,18 @@ var (
 	TransactionMessagesDroppedFromBacklog = MetricName{Name: "algod_transaction_messages_dropped_backlog", Description: "Number of transaction messages dropped from backlog"}
 	// TransactionMessagesDroppedFromPool "Number of transaction messages dropped from pool"
 	TransactionMessagesDroppedFromPool = MetricName{Name: "algod_transaction_messages_dropped_pool", Description: "Number of transaction messages dropped from pool"}
+	// TransactionMessagesDupPreBacklog "Number of duplicate transaction messages before placing into a backlog"
+	TransactionMessagesDupPreBacklog = MetricName{Name: "algod_transaction_messages_dup_prebacklog", Description: "Number of duplicate transaction messages before placing into a backlog"}
+	// TransactionMessagesTxGroupInvalidFee "Number of transaction messages with invalid txgroup fee"
+	TransactionMessagesTxGroupInvalidFee = MetricName{Name: "algod_transaction_messages_txgroup_invalid_fee", Description: "Number of transaction messages with invalid txgroup fee"}
+	// TransactionMessagesTxnBadFormed "Number of transaction messages not well formed"
+	TransactionMessagesTxnBadFormed = MetricName{Name: "algod_transaction_messages_txn_bad_formed", Description: "Number of transaction messages not well formed"}
+	// TransactionMessagesTxnSigBadFormed "Number of transaction messages with bad formed signature"
+	TransactionMessagesTxnSigBadFormed = MetricName{Name: "algod_transaction_messages_sig_bad_formed", Description: "Number of transaction messages with bad formed signature"}
+	// TransactionMessagesTxnMsigBadFormed "Number of transaction messages with bad formed multisig"
+	TransactionMessagesTxnMsigBadFormed = MetricName{Name: "algod_transaction_messages_msig_bad_formed", Description: "Number of transaction messages with bad formed multisig"}
+	// TransactionMessagesTxnLogicSig "Number of transaction messages with invalid logic sig"
+	TransactionMessagesTxnLogicSig = MetricName{Name: "algod_transaction_messages_logic_sig_failed", Description: "Number of transaction messages with invalid logic sig"}
+	// TransactionMessagesTxnSigVerificationFailed "Number of transaction messages with signature verification failed"
+	TransactionMessagesTxnSigVerificationFailed = MetricName{Name: "algod_transaction_messages_sig_verify_failed", Description: "Number of transaction messages with signature verification failed"}
 )

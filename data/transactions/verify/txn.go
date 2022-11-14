@@ -69,6 +69,46 @@ type GroupContext struct {
 	ledger           logic.LedgerForSignature
 }
 
+type ErrTxGroupInvalidFee struct {
+	err error
+}
+
+func (e *ErrTxGroupInvalidFee) Error() string {
+	return e.err.Error()
+}
+
+type ErrTxnBadFormed struct {
+	err error
+}
+
+func (e *ErrTxnBadFormed) Error() string {
+	return e.err.Error()
+}
+
+type ErrTxnSigBadFormed struct {
+	err error
+}
+
+func (e *ErrTxnSigBadFormed) Error() string {
+	return e.err.Error()
+}
+
+type ErrTxnMsigBadFormed struct {
+	err error
+}
+
+func (e *ErrTxnMsigBadFormed) Error() string {
+	return e.err.Error()
+}
+
+type ErrTxnLogicSig struct {
+	err error
+}
+
+func (e *ErrTxnLogicSig) Error() string {
+	return e.err.Error()
+}
+
 // PrepareGroupContext prepares a verification group parameter object for a given transaction
 // group.
 func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, ledger logic.LedgerForSignature) (*GroupContext, error) {
@@ -108,7 +148,7 @@ func txnBatchPrep(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext,
 	}
 
 	if err := s.Txn.WellFormed(groupCtx.specAddrs, groupCtx.consensusParams); err != nil {
-		return err
+		return &ErrTxnBadFormed{err: err}
 	}
 
 	return stxnCoreChecks(s, txnIdx, groupCtx, verifier)
@@ -147,7 +187,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.Blo
 		err = txnBatchPrep(&stxn, i, groupCtx, verifier)
 		if err != nil {
 			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
-			return
+			return nil, err
 		}
 		if stxn.Txn.Type != protocol.StateProofTx {
 			minFeeCount++
@@ -156,19 +196,22 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.Blo
 	}
 	feeNeeded, overflow := basics.OMul(groupCtx.consensusParams.MinTxnFee, minFeeCount)
 	if overflow {
-		err = fmt.Errorf("txgroup fee requirement overflow")
-		return
+		err = &ErrTxGroupInvalidFee{err: fmt.Errorf("txgroup fee requirement overflow")}
+		return nil, err
 	}
 	// feesPaid may have saturated. That's ok. Since we know
 	// feeNeeded did not overflow, simple comparison tells us
 	// feesPaid was enough.
 	if feesPaid < feeNeeded {
-		err = fmt.Errorf("txgroup had %d in fees, which is less than the minimum %d * %d",
-			feesPaid, minFeeCount, groupCtx.consensusParams.MinTxnFee)
-		return
+		err = &ErrTxGroupInvalidFee{
+			err: fmt.Errorf(
+				"txgroup had %d in fees, which is less than the minimum %d * %d",
+				feesPaid, minFeeCount, groupCtx.consensusParams.MinTxnFee),
+		}
+		return nil, err
 	}
 
-	return
+	return groupCtx, nil
 }
 
 func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
@@ -197,10 +240,10 @@ func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 			return nil
 		}
 
-		return errors.New("signedtxn has no sig")
+		return &ErrTxnSigBadFormed{err: errors.New("signedtxn has no sig")}
 	}
 	if numSigs > 1 {
-		return errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
+		return &ErrTxnSigBadFormed{err: errors.New("signedtxn should only have one of Sig or Msig or LogicSig")}
 	}
 
 	if hasSig {
@@ -209,12 +252,15 @@ func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 	}
 	if hasMsig {
 		if err := crypto.MultisigBatchPrep(s.Txn, crypto.Digest(s.Authorizer()), s.Msig, batchVerifier); err != nil {
-			return fmt.Errorf("multisig validation failed: %w", err)
+			return &ErrTxnMsigBadFormed{err: fmt.Errorf("multisig validation failed: %w", err)}
 		}
 		return nil
 	}
 	if hasLogicSig {
-		return logicSigVerify(s, txnIdx, groupCtx)
+		if err := logicSigVerify(s, txnIdx, groupCtx); err != nil {
+			return &ErrTxnLogicSig{err: err}
+		}
+		return nil
 	}
 	return errors.New("has one mystery sig. WAT?")
 }
@@ -254,7 +300,7 @@ func logicSigSanityCheckBatchPrep(txn *transactions.SignedTxn, groupIndex int, g
 	}
 
 	if groupIndex < 0 {
-		return errors.New("Negative groupIndex")
+		return errors.New("negative groupIndex")
 	}
 	txngroup := transactions.WrapSignedTxnsWithAD(groupCtx.signedGroupTxns)
 	ep := logic.EvalParams{
@@ -310,7 +356,7 @@ func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *Group
 	}
 
 	if groupIndex < 0 {
-		return errors.New("Negative groupIndex")
+		return errors.New("negative groupIndex")
 	}
 	ep := logic.EvalParams{
 		Proto:         &groupCtx.consensusParams,
