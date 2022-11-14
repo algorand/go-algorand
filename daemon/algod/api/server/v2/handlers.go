@@ -109,7 +109,7 @@ type NodeInterface interface {
 	RemoveParticipationKey(account.ParticipationID) error
 	AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error
 	SetSyncRound(rnd uint64) error
-	GetSyncRound() (bool, uint64, error)
+	GetSyncRound() (uint64, error)
 	UnsetSyncRound() error
 }
 
@@ -977,11 +977,11 @@ func (v2 *Handlers) SetSyncRound(ctx echo.Context, round uint64) error {
 // GetSyncRound gets the sync round from the ledger.
 // (GET /v2/ledger/sync)
 func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
-	set, rnd, err := v2.Node.GetSyncRound()
+	rnd, err := v2.Node.GetSyncRound()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingSyncRound, v2.Log)
 	}
-	if !set {
+	if rnd == 0 {
 		return notFound(ctx, fmt.Errorf("sync round is not set"), errFailedRetrievingSyncRound, v2.Log)
 	}
 	return ctx.JSON(http.StatusOK, generated.GetSyncRoundResponse{Round: rnd})

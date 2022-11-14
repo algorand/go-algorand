@@ -1384,8 +1384,8 @@ func (node *AlgorandFullNode) SetSyncRound(rnd uint64) error {
 	return node.catchupService.SetSyncRound(rnd)
 }
 
-// GetSyncRound retrieves a boolean representing whether the sync round has been set, the sync round, and any error
-func (node *AlgorandFullNode) GetSyncRound() (bool, uint64, error) {
+// GetSyncRound retrieves the sync round, and any error
+func (node *AlgorandFullNode) GetSyncRound() (uint64, error) {
 	return node.catchupService.GetSyncRound()
 }
 
