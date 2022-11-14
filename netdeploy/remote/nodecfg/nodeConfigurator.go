@@ -87,7 +87,7 @@ func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error)
 
 	for _, nodeDir := range nodeDirs {
 		nodeDir.delaySave = true
-		err = nodeDir.configure(nc.dnsName)
+		err = nodeDir.configure()
 		if err != nil {
 			break
 		}
@@ -96,7 +96,7 @@ func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error)
 		nodeDir.saveConfig()
 	}
 
-	if err == nil {
+	if err == nil && nc.dnsName != "" {
 		fmt.Fprint(os.Stdout, "... registering DNS / SRV records\n")
 		err = nc.registerDNSRecords()
 	}

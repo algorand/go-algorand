@@ -52,7 +52,7 @@ type nodeDir struct {
 //		* EnableBlockStats
 //		* DashboardEndpoint
 //		* DeadlockOverride
-func (nd *nodeDir) configure(dnsName string) (err error) {
+func (nd *nodeDir) configure() (err error) {
 	fmt.Fprintf(os.Stdout, "Configuring Node %s\n", nd.Name)
 	if err = nd.configureRelay(nd.IsRelay()); err != nil {
 		fmt.Fprintf(os.Stdout, "Error during configureRelay: %s\n", err)
