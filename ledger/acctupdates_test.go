@@ -2885,12 +2885,11 @@ func TestAcctUpdatesLookupResources(t *testing.T) {
 
 func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	initialBlocksCount := 1
 	accts := setupAccts(1)
 
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupAccountDeltas")
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupStateDelta")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = 2
 	protoParams.SeedLookback = 1
