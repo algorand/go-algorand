@@ -454,20 +454,11 @@ func (l *Ledger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRou
 	return l.acctsOnline.voters.getVoters(rnd)
 }
 
-// TODO: fill
-// SetMinRound
-func (l *Ledger) SetMinRound(rnd basics.Round) {
+// AdvanceVotersMinRound advances the minimum round to be saved by the voters tracker.
+func (l *Ledger) AdvanceVotersMinRound(rnd basics.Round) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	l.acctsOnline.voters.setMinRound(rnd)
-}
-
-// TODO: fill
-// GetMinRound
-func (l *Ledger) GetMinRound() basics.Round {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.acctsOnline.voters.getMinRound()
+	l.acctsOnline.voters.advanceVotersMinRound(rnd)
 }
 
 // StateProofVerificationContext returns the data required to verify the state proof whose last attested round is

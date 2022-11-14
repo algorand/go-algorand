@@ -21,7 +21,7 @@ import (
 	"sync"
 
 	"github.com/algorand/go-deadlock"
-	
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -79,9 +79,10 @@ type votersTracker struct {
 	// shutdown the tracker without leaving any running go-routines.
 	loadWaitGroup sync.WaitGroup
 
-	minRound basics.Round
+	// votersMinRound is the earliest round needed by the builder goroutine to continue building state proofs.
+	votersMinRound basics.Round
 
-	// mu protects minRound.
+	// mu protects votersMinRound.
 	mu deadlock.RWMutex
 }
 
@@ -105,12 +106,21 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.Onl
 	if err != nil {
 		return err
 	}
-	proto := config.Consensus[hdr.CurrentProtocol]
 
-	if proto.StateProofInterval == 0 || hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound == 0 {
+	proto := config.Consensus[hdr.CurrentProtocol]
+	nextStateProofRound := hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+
+	if proto.StateProofInterval == 0 || nextStateProofRound == 0 {
 		// Disabled, nothing to load.
 		return nil
 	}
+
+	// TODO: Change
+	// We start with next nextStateProofRound's voters round since we can know with certainty that earlier state proofs
+	// will not be built. If it's very far in the future it will cause us to keep everything we can in the block queue,
+	// until immediately be modified by the builder goroutine on
+	// builder lookup.
+	vt.advanceVotersMinRound(votersRoundForStateProofRound(nextStateProofRound, &proto))
 
 	startR := stateproof.GetOldestExpectedStateProof(&hdr)
 	startR = votersRoundForStateProofRound(startR, &proto)
@@ -120,9 +130,6 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.Onl
 		return fmt.Errorf("votersTracker: underflow: %d - %d - %d = %d",
 			hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, proto.StateProofInterval, proto.StateProofVotersLookback, startR)
 	}
-
-	// TODO: Here?
-	vt.setMinRound(startR)
 
 	// we recreate the trees for old rounds. we stop at latestDbRound (where latestDbRound <= latestRoundInLedger) since
 	// future blocks would be given as part of the replay
@@ -183,7 +190,7 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 		return
 	}
 
-	vt.removeOldVoters(hdr)
+	vt.removeOldVoters()
 
 	// This might be a block where we snapshot the online participants,
 	// to eventually construct a vector commitment in a later
@@ -206,22 +213,13 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 // voters would be removed if one of the two condition is met
 // 1 - Voters are for a round which was already been confirmed by stateproof
 // 2 - Voters are for a round which is older than the allowed recovery interval.
-// notice that if state proof chain is delayed, votersForRoundCache will not be larger than
-// StateProofMaxRecoveryIntervals + 1
-// ( In order to be able to build and verify X stateproofs back we need X + 1 voters data )
 //
 // It is possible to optimize this function and not to travers votersForRoundCache on every round.
 // Since the map is small (Usually  0 - 2 elements and up to StateProofMaxRecoveryIntervals) we decided to keep the code simple
 // and check for deletion in every round.
-func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
-	lowestStateProofRound := stateproof.GetOldestExpectedStateProof(&hdr)
-
-	for r, tr := range vt.votersForRoundCache {
-		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
-		stateProofRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
-
-		// we remove voters that are no longer needed (i.e StateProofNextRound is larger ) or older than the recover period
-		if stateProofRound < lowestStateProofRound {
+func (vt *votersTracker) removeOldVoters() {
+	for r, _ := range vt.votersForRoundCache {
+		if r < vt.getVotersMinRound() {
 			delete(vt.votersForRoundCache, r)
 		}
 	}
@@ -240,26 +238,23 @@ func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 		}
 	}
 
-	builderMinRound := vt.getMinRound()
-	if builderMinRound < minRound {
-		return builderMinRound
-	}
-
 	return minRound
 }
 
-func (vt *votersTracker) getMinRound() basics.Round {
+func (vt *votersTracker) getVotersMinRound() basics.Round {
 	vt.mu.RLock()
 	defer vt.mu.RUnlock()
 
-	return vt.minRound
+	return vt.votersMinRound
 }
 
-func (vt *votersTracker) setMinRound(newMinRound basics.Round) {
+func (vt *votersTracker) advanceVotersMinRound(newMinRound basics.Round) {
 	vt.mu.Lock()
 	defer vt.mu.Unlock()
 
-	vt.minRound = newMinRound
+	if vt.votersMinRound < newMinRound {
+		vt.votersMinRound = newMinRound
+	}
 }
 
 // getVoters() returns the top online participants from round r.
