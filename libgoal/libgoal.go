@@ -1021,6 +1021,15 @@ func (c *Client) VerifyParticipationKey(timeout time.Duration, participationID s
 	}
 }
 
+func (c *Client) RemoveParticipationKey(participationID string) (resp generated.ParticipationKeyResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return
+	}
+
+	return algod.RemoveParticipationKeyByID(participationID)
+}
+
 // AddParticipationKey takes a participation key file and sends it to the node.
 // The key will be loaded into the system when the function returns successfully.
 func (c *Client) AddParticipationKey(keyfile string) (resp model.PostParticipationResponse, err error) {

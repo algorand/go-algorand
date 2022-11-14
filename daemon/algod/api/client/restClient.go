@@ -220,7 +220,13 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 
 	if decodeJSON {
 		dec := json.NewDecoder(resp.Body)
-		return dec.Decode(&response)
+		decodeErr := dec.Decode(&response)
+		switch decodeErr {
+		case io.EOF:
+			return nil
+		default:
+			return decodeErr
+		}
 	}
 
 	// Response must implement RawResponse
@@ -241,6 +247,11 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 // get performs a GET request to the specific path against the server
 func (client RestClient) get(response interface{}, path string, request interface{}) error {
 	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, true /* decodeJSON */)
+}
+
+// delete performs a DELETE request to the specific path against the server
+func (client RestClient) delete(response interface{}, path string, request interface{}) error {
+	return client.submitForm(response, path, request, "DELETE", false /* encodeJSON */, true /* decodeJSON */)
 }
 
 // getRaw behaves identically to get but doesn't json decode the response, and
@@ -650,4 +661,10 @@ func (client RestClient) GetParticipationKeys() (response model.ParticipationKey
 func (client RestClient) GetParticipationKeyByID(participationID string) (response model.ParticipationKeyResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/participation/%s", participationID), nil)
 	return
+}
+
+func (client RestClient) RemoveParticipationKeyByID(participationID string) (response generatedV2.ParticipationKeyResponse, err error) {
+	err = client.delete(&response, fmt.Sprintf("/v2/participation/%s", participationID), nil)
+	return
+
 }
