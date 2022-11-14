@@ -23,7 +23,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"math"
 	"math/rand"
 	"os"
@@ -38,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
@@ -208,56 +208,6 @@ func TestClientCanGetStatusAfterBlock(t *testing.T) {
 	statusResponse, err = testClient.WaitForRound(statusResponse.LastRound + 1)
 	a.NoError(err)
 	a.NotEmpty(statusResponse)
-}
-
-// Deprecated: This test uses a v1 API feature that is no longer supported by v2.
-func TestTransactionsByAddr(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
-	a := require.New(fixtures.SynchronizedTest(t))
-	var localFixture fixtures.RestClientFixture
-	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
-	defer localFixture.Shutdown()
-
-	testClient := localFixture.LibGoalClient
-	waitForRoundOne(t, testClient)
-	wh, err := testClient.GetUnencryptedWalletHandle()
-	a.NoError(err)
-	addresses, err := testClient.ListAddresses(wh)
-	a.NoError(err)
-	_, someAddress := getMaxBalAddr(t, testClient, addresses)
-	if someAddress == "" {
-		t.Error("no addr with funds")
-	}
-	toAddress := getDestAddr(t, testClient, addresses, someAddress, wh)
-	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, nil, "", 0, 0)
-	a.NoError(err)
-	txID := tx.ID()
-	rnd, err := testClient.Status()
-	a.NoError(err)
-	t.Logf("rnd[%d] created txn %s", rnd.LastRound, txID)
-	_, err = waitForTransaction(t, testClient, someAddress, txID.String(), 30*time.Second)
-	a.NoError(err)
-
-	// what is my round?
-	rnd, err = testClient.Status()
-	a.NoError(err)
-	t.Logf("rnd %d", rnd.LastRound)
-
-	// Now let's get the transaction
-
-	restClient, err := localFixture.NC.AlgodClient()
-	a.NoError(err)
-	res, err := restClient.TransactionsByAddr(toAddress, 0, rnd.LastRound, 100)
-	a.NoError(err)
-	a.Equal(1, len(res.Transactions))
-
-	for _, tx := range res.Transactions {
-		a.Equal(tx.From, someAddress)
-		a.Equal(tx.Payment.Amount, uint64(100000))
-		a.Equal(tx.Fee, uint64(10000))
-	}
 }
 
 func TestClientCanGetVersion(t *testing.T) {
@@ -509,7 +459,7 @@ func TestAccountBalance(t *testing.T) {
 	_, err = waitForTransaction(t, testClient, someAddress, tx.ID().String(), 30*time.Second)
 	a.NoError(err)
 
-	account, err := testClient.AccountInformationV2(toAddress, false)
+	account, err := testClient.AccountInformation(toAddress, false)
 	a.NoError(err)
 	a.Equal(account.AmountWithoutPendingRewards, uint64(100000))
 	a.Truef(account.Amount >= 100000, "account must have received money, and account information endpoint must print it")
@@ -576,7 +526,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 	_, err = waitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
 	a.NoError(err)
 
-	account, err := testClient.AccountInformationV2(someAddress, false)
+	account, err := testClient.AccountInformation(someAddress, false)
 	a.NoError(err)
 	a.Equal(randomVotePKStr, string(account.Participation.VoteParticipationKey), "API must print correct root voting key")
 	a.Equal(randomSelPKStr, string(account.Participation.SelectionParticipationKey), "API must print correct vrf key")
@@ -1000,7 +950,7 @@ return
 	a.NoError(err)
 
 	// get app ID
-	submittedAppCreateTxn, err := testClient.PendingTransactionInformationV2(appCreateTxID)
+	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
 	a.NoError(err)
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
@@ -1024,7 +974,7 @@ return
 	a.NoError(err)
 
 	// verify pending txn info of outer txn
-	submittedAppCallTxn, err := testClient.PendingTransactionInformationV2(appCallTxnTxID)
+	submittedAppCallTxn, err := testClient.PendingTransactionInformation(appCallTxnTxID)
 	a.NoError(err)
 	a.Nil(submittedAppCallTxn.ApplicationIndex)
 	a.Nil(submittedAppCallTxn.AssetIndex)
@@ -1038,7 +988,7 @@ return
 	createdAssetID := *innerTxn.AssetIndex
 	a.Greater(createdAssetID, uint64(0))
 
-	createdAssetInfo, err := testClient.AssetInformationV2(createdAssetID)
+	createdAssetInfo, err := testClient.AssetInformation(createdAssetID)
 	a.NoError(err)
 	a.Equal(createdAssetID, createdAssetInfo.Index)
 	a.Equal(createdAppID.Address().String(), createdAssetInfo.Params.Creator)
@@ -1119,7 +1069,7 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	_, err = waitForTransaction(t, testClient, someAddress, txID, 120*time.Second)
 	a.NoError(err)
 
-	account, err := testClient.AccountInformationV2(someAddress, false)
+	account, err := testClient.AccountInformation(someAddress, false)
 	a.NoError(err)
 	a.NotNil(account.Participation.StateProofKey)
 
@@ -1216,7 +1166,7 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 	_, err = waitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
 	a.NoError(err)
 
-	account, err := testClient.AccountInformationV2(someAddress, false)
+	account, err := testClient.AccountInformation(someAddress, false)
 	a.NoError(err)
 	a.Nil(account.Participation.StateProofKey)
 }
@@ -1306,7 +1256,7 @@ end:
 	a.NoError(err)
 
 	// get app ID
-	submittedAppCreateTxn, err := testClient.PendingTransactionInformationV2(appCreateTxID)
+	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
 	a.NoError(err)
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)

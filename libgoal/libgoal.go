@@ -33,7 +33,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	modelV2 "github.com/algorand/go-algorand/daemon/algod/api/spec/v2"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
@@ -492,7 +491,7 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 		return transactions.Transaction{}, err
 	}
 
-	_, err = algod.SendRawTransactionV2(stx)
+	_, err = algod.SendRawTransaction(stx)
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -648,20 +647,10 @@ func (c *Client) Status() (resp model.NodeStatusResponse, err error) {
 }
 
 // AccountInformation takes an address and returns its information
-// Deprecated
-func (c *Client) AccountInformation(account string) (resp v1.Account, err error) {
+func (c *Client) AccountInformation(account string, includeCreatables bool) (resp model.Account, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.AccountInformation(account)
-	}
-	return
-}
-
-// AccountInformationV2 takes an address and returns its information
-func (c *Client) AccountInformationV2(account string, includeCreatables bool) (resp model.Account, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.AccountInformationV2(account, includeCreatables)
+		resp, err = algod.AccountInformation(account, includeCreatables)
 	}
 	return
 }
@@ -715,7 +704,7 @@ func (c *Client) AccountData(account string) (accountData basics.AccountData, er
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte
-		resp, err = algod.RawAccountInformationV2(account)
+		resp, err = algod.RawAccountInformation(account)
 		if err == nil {
 			err = protocol.Decode(resp, &accountData)
 		}
@@ -724,22 +713,12 @@ func (c *Client) AccountData(account string) (accountData basics.AccountData, er
 }
 
 // AssetInformation takes an asset's index and returns its information
-// Deprecated: Use AssetInformationV2
-func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.AssetInformation(index)
-	}
-	return
-}
-
-// AssetInformationV2 takes an asset's index and returns its information
-func (c *Client) AssetInformationV2(index uint64) (resp model.Asset, err error) {
+func (c *Client) AssetInformation(index uint64) (resp model.Asset, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
 		return
 	}
-	resp, err = algod.AssetInformationV2(index)
+	resp, err = algod.AssetInformation(index)
 	if err != nil {
 		return model.Asset{}, err
 	}
@@ -795,33 +774,12 @@ func (c *Client) GetApplicationBoxByName(index uint64, name string) (resp model.
 	return
 }
 
-// TransactionInformation takes an address and associated txid and return its information
-// Deprecated: Use PendingTransactionInformationV2
-func (c *Client) TransactionInformation(addr, txid string) (resp v1.Transaction, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.TransactionInformation(addr, txid)
-	}
-	return
-}
-
 // PendingTransactionInformation returns information about a recently issued
 // transaction based on its txid.
-// Deprecated: Use PendingTransactionInformationV2
-func (c *Client) PendingTransactionInformation(txid string) (resp v1.Transaction, err error) {
+func (c *Client) PendingTransactionInformation(txid string) (resp model.PendingTransactionResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.PendingTransactionInformation(txid)
-	}
-	return
-}
-
-// PendingTransactionInformationV2 returns information about a recently issued
-// transaction based on its txid.
-func (c *Client) PendingTransactionInformationV2(txid string) (resp model.PendingTransactionResponse, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.PendingTransactionInformationV2(txid)
 	}
 	return
 }
@@ -831,7 +789,7 @@ func (c *Client) ParsedPendingTransaction(txid string) (txn v2.PreEncodedTxInfo,
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte
-		resp, err = algod.RawPendingTransactionInformationV2(txid)
+		resp, err = algod.RawPendingTransactionInformation(txid)
 		if err == nil {
 			err = protocol.DecodeReflect(resp, &txn)
 			if err != nil {
@@ -905,7 +863,7 @@ func (c *Client) WaitForRound(round uint64) (resp model.NodeStatusResponse, err 
 
 // GetBalance takes an address and returns its total balance; if the address doesn't exist, it returns 0.
 func (c *Client) GetBalance(address string) (uint64, error) {
-	resp, err := c.AccountInformationV2(address, false)
+	resp, err := c.AccountInformation(address, false)
 	if err != nil {
 		return 0, err
 	}
@@ -947,7 +905,7 @@ func (c Client) CurrentRound() (lastRound uint64, err error) {
 func (c *Client) SuggestedFee() (fee uint64, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		params, err := algod.SuggestedParamsV2()
+		params, err := algod.SuggestedParams()
 		if err == nil {
 			fee = params.Fee
 		}
@@ -959,7 +917,7 @@ func (c *Client) SuggestedFee() (fee uint64, err error) {
 func (c *Client) SuggestedParams() (params model.TransactionParametersResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		params, err = algod.SuggestedParamsV2()
+		params, err = algod.SuggestedParams()
 	}
 	return
 }
@@ -996,7 +954,7 @@ func (c *Client) GetPendingTransactions(maxTxns uint64) (resp model.PendingTrans
 func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (resp model.PendingTransactionsResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.PendingTransactionsByAddrV2(addr, maxTxns)
+		resp, err = algod.PendingTransactionsByAddr(addr, maxTxns)
 	}
 	return
 }
@@ -1028,7 +986,7 @@ func (c *Client) GetParsedPendingTransactionsByAddress(addr string, maxTxns uint
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte
-		resp, err = algod.RawPendingTransactionsByAddrV2(addr, maxTxns)
+		resp, err = algod.RawPendingTransactionsByAddr(addr, maxTxns)
 		if err == nil {
 			err = protocol.DecodeReflect(resp, &txns)
 			if err != nil {
@@ -1268,7 +1226,7 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 
 			for _, acc := range accounts {
 				var info model.Account
-				if info, err = client.AccountInformationV2(acc.String(), true); err != nil {
+				if info, err = client.AccountInformation(acc.String(), true); err != nil {
 					// ignore error - accounts might have app addresses that were not funded
 					continue
 				}

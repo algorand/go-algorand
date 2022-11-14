@@ -199,7 +199,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, newAccount, onlineTxID)
 	nodeStatus, _ = client.Status()
 	onlineRound := nodeStatus.LastRound
-	newAccountStatus, err := client.AccountInformationV2(newAccount, false)
+	newAccountStatus, err := client.AccountInformation(newAccount, false)
 	a.NoError(err, "client should be able to get information about new account")
 	a.Equal(basics.Online.String(), newAccountStatus.Status, "new account should be online")
 
@@ -314,7 +314,7 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, newAccount, onlineTxID)
 	nodeStatus, _ = client.Status()
 
-	accountStatus, err := client.AccountInformationV2(newAccount, false)
+	accountStatus, err := client.AccountInformation(newAccount, false)
 	a.NoError(err, "client should be able to get information about new account")
 	a.Equal(basics.Online.String(), accountStatus.Status, "new account should be online")
 }
