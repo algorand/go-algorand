@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -195,7 +195,7 @@ func (c *Client) SignAndBroadcastTransaction(walletHandle, pw []byte, utx transa
 
 // generateRegistrationTransaction returns a transaction object for registering a Participation with its parent this is
 // similar to account.Participation.GenerateRegistrationTransaction.
-func generateRegistrationTransaction(part generated.ParticipationKey, fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte) (transactions.Transaction, error) {
+func generateRegistrationTransaction(part model.ParticipationKey, fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte) (transactions.Transaction, error) {
 	addr, err := basics.UnmarshalChecksumAddress(part.Address)
 	if err != nil {
 		return transactions.Transaction{}, err
