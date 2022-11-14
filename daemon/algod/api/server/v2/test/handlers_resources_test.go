@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -42,6 +42,7 @@ import (
 
 type mockLedger struct {
 	accounts map[basics.Address]basics.AccountData
+	kvstore  map[string][]byte
 	latest   basics.Round
 	blocks   []bookkeeping.Block
 }
@@ -59,6 +60,17 @@ func (l *mockLedger) LookupLatest(addr basics.Address) (basics.AccountData, basi
 		return basics.AccountData{}, l.latest, basics.MicroAlgos{Raw: 0}, nil
 	}
 	return ad, l.latest, basics.MicroAlgos{Raw: 0}, nil
+}
+
+func (l *mockLedger) LookupKv(round basics.Round, key string) ([]byte, error) {
+	if value, ok := l.kvstore[key]; ok {
+		return value, nil
+	}
+	return nil, fmt.Errorf("Key %v does not exist", key)
+}
+
+func (l *mockLedger) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error) {
+	panic("not implemented")
 }
 
 func (l *mockLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
@@ -230,9 +242,9 @@ func newReq(t *testing.T) (ctx echo.Context, rec *httptest.ResponseRecorder) {
 
 func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) basics.AccountData, acctSize, maxResults int, exclude string, expectedCode int) {
 	handlers, addr, acctData := setupTestForLargeResources(t, acctSize, maxResults, accountMaker)
-	params := generatedV2.AccountInformationParams{}
+	params := model.AccountInformationParams{}
 	if exclude != "" {
-		params.Exclude = &exclude
+		params.Exclude = (*model.AccountInformationParamsExclude)(&exclude)
 	}
 	ctx, rec := newReq(t)
 	err := handlers.AccountInformation(ctx, addr.String(), params)
@@ -289,26 +301,26 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 	for i := 0; i < ret.TotalAssets; i++ {
 		ctx, rec = newReq(t)
 		aidx := basics.AssetIndex(i * 4)
-		err = handlers.AccountAssetInformation(ctx, addr.String(), uint64(aidx), generatedV2.AccountAssetInformationParams{})
+		err = handlers.AccountAssetInformation(ctx, addr.String(), uint64(aidx), model.AccountAssetInformationParams{})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
-		var ret generatedV2.AccountAssetResponse
+		var ret model.AccountAssetResponse
 		err = json.Unmarshal(rec.Body.Bytes(), &ret)
 		require.NoError(t, err)
 		assert.Nil(t, ret.CreatedAsset)
-		assert.Equal(t, ret.AssetHolding, &generatedV2.AssetHolding{
+		assert.Equal(t, ret.AssetHolding, &model.AssetHolding{
 			Amount:   acctData.Assets[aidx].Amount,
-			AssetId:  uint64(aidx),
+			AssetID:  uint64(aidx),
 			IsFrozen: acctData.Assets[aidx].Frozen,
 		})
 	}
 	for i := 0; i < ret.TotalCreatedAssets; i++ {
 		ctx, rec = newReq(t)
 		aidx := basics.AssetIndex(i*4 + 1)
-		err = handlers.AccountAssetInformation(ctx, addr.String(), uint64(aidx), generatedV2.AccountAssetInformationParams{})
+		err = handlers.AccountAssetInformation(ctx, addr.String(), uint64(aidx), model.AccountAssetInformationParams{})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
-		var ret generatedV2.AccountAssetResponse
+		var ret model.AccountAssetResponse
 		err = json.Unmarshal(rec.Body.Bytes(), &ret)
 		require.NoError(t, err)
 		assert.Nil(t, ret.AssetHolding)
@@ -319,10 +331,10 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 	for i := 0; i < ret.TotalApps; i++ {
 		ctx, rec = newReq(t)
 		aidx := basics.AppIndex(i*4 + 2)
-		err = handlers.AccountApplicationInformation(ctx, addr.String(), uint64(aidx), generatedV2.AccountApplicationInformationParams{})
+		err = handlers.AccountApplicationInformation(ctx, addr.String(), uint64(aidx), model.AccountApplicationInformationParams{})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
-		var ret generatedV2.AccountApplicationResponse
+		var ret model.AccountApplicationResponse
 		err = json.Unmarshal(rec.Body.Bytes(), &ret)
 		require.NoError(t, err)
 		assert.Nil(t, ret.CreatedApp)
@@ -335,10 +347,10 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 	for i := 0; i < ret.TotalCreatedApps; i++ {
 		ctx, rec = newReq(t)
 		aidx := basics.AppIndex(i*4 + 3)
-		err = handlers.AccountApplicationInformation(ctx, addr.String(), uint64(aidx), generatedV2.AccountApplicationInformationParams{})
+		err = handlers.AccountApplicationInformation(ctx, addr.String(), uint64(aidx), model.AccountApplicationInformationParams{})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
-		var ret generatedV2.AccountApplicationResponse
+		var ret model.AccountApplicationResponse
 		err = json.Unmarshal(rec.Body.Bytes(), &ret)
 		require.NoError(t, err)
 		assert.Nil(t, ret.AppLocalState)

@@ -191,7 +191,7 @@ class summary:
     def blockinfo(self, curtime):
         return self.biByTime.get(curtime)
 
-    def byMsg(self):
+    def byMsg(self, html=False):
         txPSums = {}
         rxPSums = {}
         secondsSum = 0
@@ -209,10 +209,14 @@ class summary:
             dictMax(rxMax, ns.rxPLists)
             dictMin(txMin, ns.txPLists)
             dictMin(rxMin, ns.rxPLists)
-        lines = [
-            '{} nodes: {}'.format(len(nicks), nicks),
-            '\ttx B/s\trx B/s',
-        ]
+        nodesummary = '{} nodes: {}'.format(len(nicks), nicks)
+        lines = []
+        if html:
+            lines.append('<div>{}</div>'.format(nodesummary))
+            lines.append('<table><tr><th></th><th>tx B/s</th><th>rx B/s</th></tr>')
+        else:
+            lines.append(nodesummary)
+            lines.append('\ttx B/s\trx B/s')
         for msg, txB in txPSums.items():
             if msg not in rxPSums:
                 rxPSums[msg] = 0
@@ -220,7 +224,12 @@ class summary:
             txBps = txPSums.get(msg,0)/secondsSum
             if (txBps < 0.5) and (rxBps < 0.5):
                 continue
-            lines.append('{}\t{:.0f}\t{:.0f}'.format(msg, txBps, rxBps))
+            if html:
+                lines.append('<tr><td>{}</td><td>{:.0f}</td><td>{:.0f}</td></tr>'.format(msg, txBps, rxBps))
+            else:
+                lines.append('{}\t{:.0f}\t{:.0f}'.format(msg, txBps, rxBps))
+        if html:
+            lines.append('</table>')
         return '\n'.join(lines)
 
     def txPool(self):
@@ -242,6 +251,12 @@ class summary:
         )
 
     def __str__(self):
+        return self.str(html=False)
+
+    def html(self):
+        return self.str(html=True)
+
+    def str(self, html=False):
         if not self.sumsCount:
             tps, txbps, rxbps = math.nan, math.nan, math.nan
             blockTimes = math.nan
@@ -256,9 +271,17 @@ class summary:
             labelspace = self.label + " "
         if self.verifyMillis:
             verifyMillis = labelspace + 'verify ms ({:.0f}/{:.0f}/{:.0f})\n'.format(min(self.verifyMillis), meanOrZero(self.verifyMillis), max(self.verifyMillis))
+            if html:
+                verifyMillis = '<div>' + verifyMillis + '</div>'
         else:
             verifyMillis = ''
-        return '{byMsg}\n{verifyMillis}{labelspace}{txPool}\n{labelspace}summary: {TPS:0.2f} TPS, {bt:1.2f}s/block, tx {txBps}B/s, rx {rxBps}B/s'.format(labelspace=labelspace, byMsg=self.byMsg(), txPool=self.txPool(), TPS=tps, txBps=hunum(txbps), rxBps=hunum(rxbps), bt=blockTimes, verifyMillis=verifyMillis)
+        if html:
+            fmt = '{byMsg}\n{verifyMillis}<div>{labelspace}{txPool}</div>\n<div>{labelspace}summary: {TPS:0.2f} TPS, {bt:1.2f}s/block, tx {txBps}B/s, rx {rxBps}B/s</div>'
+            if self.label:
+                fmt = '<div class="lh">' + self.label + '</div>' + fmt
+        else:
+            fmt = '{byMsg}\n{verifyMillis}{labelspace}{txPool}\n{labelspace}summary: {TPS:0.2f} TPS, {bt:1.2f}s/block, tx {txBps}B/s, rx {rxBps}B/s'
+        return fmt.format(labelspace=labelspace, byMsg=self.byMsg(html), txPool=self.txPool(), TPS=tps, txBps=hunum(txbps), rxBps=hunum(rxbps), bt=blockTimes, verifyMillis=verifyMillis)
 
     def plot_pool(self, outpath):
         from matplotlib import pyplot as plt
@@ -330,6 +353,7 @@ def main():
     ap.add_argument('--mintps', default=None, type=float, help="records below min TPS don't add into summary")
     ap.add_argument('--deltas', default=None, help='path to write csv deltas')
     ap.add_argument('--report', default=None, help='path to write csv report')
+    ap.add_argument('--html-summary', default=None, help='path to write html summary')
     ap.add_argument('--nick-re', action='append', default=[], help='regexp to filter node names, may be repeated')
     ap.add_argument('--nick-lre', action='append', default=[], help='label:regexp to filter node names, may be repeated')
     ap.add_argument('--pool-plot-root', help='write to foo.svg and .png')
@@ -396,6 +420,9 @@ def main():
     if args.pool_plot_root:
         grsum.plot_pool(args.pool_plot_root)
 
+    htmlout = None
+    if args.html_summary:
+        htmlout = open(args.html_summary, 'wt')
     # maybe subprocess for stats across named groups
     if args.nick_re:
         # use each --nick-re=foo as a group
@@ -404,6 +431,8 @@ def main():
             process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args, grsum)
             print(rsum)
             print('\n')
+            if htmlout:
+                htmlout.write(rsum.html())
         return 0
     if args.nick_lre:
         for lnre in args.nick_lre:
@@ -412,10 +441,14 @@ def main():
             process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args, grsum)
             print(rsum)
             print('\n')
+            if htmlout:
+                htmlout.write(rsum.html())
         return 0
 
     # no filters, print global result
     print(grsum)
+    if htmlout:
+        htmlout.write(grsum.html())
     return 0
 
 def perProtocol(prefix, lists, sums, deltas, dt):
@@ -515,6 +548,8 @@ class nodestats:
                     self.biByTime[curtime] = bi
             if bi is None:
                 bi = bisource.get(curtime)
+            if bi is None:
+                logger.warning('%s no blockinfo', path)
             self.txPool.append(cur.get('algod_tx_pool_count{}'))
             #logger.debug('%s: %r', path, cur)
             verifyGood = cur.get('algod_agreement_proposal_verify_good{}')

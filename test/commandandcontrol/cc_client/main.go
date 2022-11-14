@@ -129,7 +129,7 @@ func main() {
 func closeServiceConnection(serverWs *websocket.Conn) {
 	err := serverWs.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	if err != nil {
-		log.Errorf("write close:", err)
+		log.Error("write close:", err)
 		return
 	}
 }

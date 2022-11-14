@@ -21,55 +21,25 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-type logicLedger struct {
-	cow cowForLogicLedger
-}
+/* This file adds functions to roundCowState that make it more palatable for use
+   outside of the ledger package. The LedgerForLogic interface expects them. */
 
-type cowForLogicLedger interface {
-	Get(addr basics.Address, withPendingRewards bool) (ledgercore.AccountData, error)
-	GetAppParams(addr basics.Address, aidx basics.AppIndex) (basics.AppParams, bool, error)
-	GetAssetParams(addr basics.Address, aidx basics.AssetIndex) (basics.AssetParams, bool, error)
-	GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error)
-	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
-	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
-	BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (transactions.EvalDelta, error)
-
-	SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error
-	DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error
-
-	round() basics.Round
-	prevTimestamp() int64
-	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
-	txnCounter() uint64
-	incTxnCount()
-
-	// The method should use the txtail to ensure MaxTxnLife+1 headers back are available
-	blockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error)
-}
-
-func newLogicLedger(cow cowForLogicLedger) *logicLedger {
-	return &logicLedger{
-		cow: cow,
-	}
-}
-
-func (al *logicLedger) AccountData(addr basics.Address) (ledgercore.AccountData, error) {
-	record, err := al.cow.Get(addr, true)
+func (cs *roundCowState) AccountData(addr basics.Address) (ledgercore.AccountData, error) {
+	record, err := cs.Get(addr, true)
 	if err != nil {
 		return ledgercore.AccountData{}, err
 	}
 	return record, nil
 }
 
-func (al *logicLedger) Authorizer(addr basics.Address) (basics.Address, error) {
-	record, err := al.cow.Get(addr, false) // pending rewards unneeded
+func (cs *roundCowState) Authorizer(addr basics.Address) (basics.Address, error) {
+	record, err := cs.Get(addr, false) // pending rewards unneeded
 	if err != nil {
 		return basics.Address{}, err
 	}
@@ -79,25 +49,24 @@ func (al *logicLedger) Authorizer(addr basics.Address) (basics.Address, error) {
 	return addr, nil
 }
 
-func (al *logicLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {
+func (cs *roundCowState) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {
 	// Fetch the requested balance record
-	holding, ok, err := al.cow.GetAssetHolding(addr, assetIdx)
+	holding, ok, err := cs.GetAssetHolding(addr, assetIdx)
 	if err != nil {
 		return basics.AssetHolding{}, err
 	}
 
 	// Ensure we have the requested holding
 	if !ok {
-		err = fmt.Errorf("account %s has not opted in to asset %d", addr.String(), assetIdx)
-		return basics.AssetHolding{}, err
+		return basics.AssetHolding{}, fmt.Errorf("account %s has not opted in to asset %d", addr, assetIdx)
 	}
 
 	return holding, nil
 }
 
-func (al *logicLedger) AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams, basics.Address, error) {
+func (cs *roundCowState) AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams, basics.Address, error) {
 	// Find asset creator
-	creator, ok, err := al.cow.GetCreator(basics.CreatableIndex(assetIdx), basics.AssetCreatable)
+	creator, ok, err := cs.GetCreator(basics.CreatableIndex(assetIdx), basics.AssetCreatable)
 	if err != nil {
 		return basics.AssetParams{}, creator, err
 	}
@@ -108,23 +77,22 @@ func (al *logicLedger) AssetParams(assetIdx basics.AssetIndex) (basics.AssetPara
 	}
 
 	// Fetch the requested balance record
-	params, ok, err := al.cow.GetAssetParams(creator, assetIdx)
+	params, ok, err := cs.GetAssetParams(creator, assetIdx)
 	if err != nil {
 		return basics.AssetParams{}, creator, err
 	}
 
 	// Ensure account created the requested asset
 	if !ok {
-		err = fmt.Errorf("account %s has not created asset %d", creator, assetIdx)
-		return basics.AssetParams{}, creator, err
+		return basics.AssetParams{}, creator, fmt.Errorf("account %s has not created asset %d", creator, assetIdx)
 	}
 
 	return params, creator, nil
 }
 
-func (al *logicLedger) AppParams(appIdx basics.AppIndex) (basics.AppParams, basics.Address, error) {
+func (cs *roundCowState) AppParams(appIdx basics.AppIndex) (basics.AppParams, basics.Address, error) {
 	// Find app creator
-	creator, ok, err := al.cow.GetCreator(basics.CreatableIndex(appIdx), basics.AppCreatable)
+	creator, ok, err := cs.GetCreator(basics.CreatableIndex(appIdx), basics.AppCreatable)
 	if err != nil {
 		return basics.AppParams{}, creator, err
 	}
@@ -135,51 +103,42 @@ func (al *logicLedger) AppParams(appIdx basics.AppIndex) (basics.AppParams, basi
 	}
 
 	// Fetch the requested balance record
-	params, ok, err := al.cow.GetAppParams(creator, appIdx)
+	params, ok, err := cs.GetAppParams(creator, appIdx)
 	if err != nil {
 		return basics.AppParams{}, creator, err
 	}
 
 	// Ensure account created the requested app
 	if !ok {
-		err = fmt.Errorf("account %s has not created app %d", creator, appIdx)
-		return basics.AppParams{}, creator, err
+		return basics.AppParams{}, creator, fmt.Errorf("account %s has not created app %d", creator, appIdx)
 	}
 
 	return params, creator, nil
 }
 
-func (al *logicLedger) Round() basics.Round {
-	return al.cow.round()
+func (cs *roundCowState) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
+	return cs.allocated(addr, appIdx, false)
 }
 
-func (al *logicLedger) LatestTimestamp() int64 {
-	return al.cow.prevTimestamp()
+func (cs *roundCowState) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (basics.TealValue, bool, error) {
+	return cs.getKey(addr, appIdx, false, key, accountIdx)
 }
 
-func (al *logicLedger) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
-	return al.cow.blockHdrCached(round)
+func (cs *roundCowState) SetLocal(addr basics.Address, appIdx basics.AppIndex, key string, value basics.TealValue, accountIdx uint64) error {
+	return cs.setKey(addr, appIdx, false, key, value, accountIdx)
 }
 
-func (al *logicLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
-	return al.cow.allocated(addr, appIdx, false)
+func (cs *roundCowState) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return cs.blockHdrCached(round)
 }
 
-func (al *logicLedger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (basics.TealValue, bool, error) {
-	return al.cow.GetKey(addr, appIdx, false, key, accountIdx)
+func (cs *roundCowState) DelLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) error {
+	return cs.delKey(addr, appIdx, false, key, accountIdx)
 }
 
-func (al *logicLedger) SetLocal(addr basics.Address, appIdx basics.AppIndex, key string, value basics.TealValue, accountIdx uint64) error {
-	return al.cow.SetKey(addr, appIdx, false, key, value, accountIdx)
-}
-
-func (al *logicLedger) DelLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) error {
-	return al.cow.DelKey(addr, appIdx, false, key, accountIdx)
-}
-
-func (al *logicLedger) fetchAppCreator(appIdx basics.AppIndex) (basics.Address, error) {
+func (cs *roundCowState) fetchAppCreator(appIdx basics.AppIndex) (basics.Address, error) {
 	// Fetch the application creator
-	addr, ok, err := al.cow.GetCreator(basics.CreatableIndex(appIdx), basics.AppCreatable)
+	addr, ok, err := cs.GetCreator(basics.CreatableIndex(appIdx), basics.AppCreatable)
 
 	if err != nil {
 		return basics.Address{}, err
@@ -190,52 +149,158 @@ func (al *logicLedger) fetchAppCreator(appIdx basics.AppIndex) (basics.Address, 
 	return addr, nil
 }
 
-func (al *logicLedger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
-	addr, err := al.fetchAppCreator(appIdx)
+func (cs *roundCowState) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
+	creator, err := cs.fetchAppCreator(appIdx)
 	if err != nil {
 		return basics.TealValue{}, false, err
 	}
-	return al.cow.GetKey(addr, appIdx, true, key, 0)
+	return cs.getKey(creator, appIdx, true, key, 0)
 }
 
-func (al *logicLedger) SetGlobal(appIdx basics.AppIndex, key string, value basics.TealValue) error {
-	creator, err := al.fetchAppCreator(appIdx)
+func (cs *roundCowState) SetGlobal(appIdx basics.AppIndex, key string, value basics.TealValue) error {
+	creator, err := cs.fetchAppCreator(appIdx)
 	if err != nil {
 		return err
 	}
-	return al.cow.SetKey(creator, appIdx, true, key, value, 0)
+	return cs.setKey(creator, appIdx, true, key, value, 0)
 }
 
-func (al *logicLedger) DelGlobal(appIdx basics.AppIndex, key string) error {
-	creator, err := al.fetchAppCreator(appIdx)
+func (cs *roundCowState) DelGlobal(appIdx basics.AppIndex, key string) error {
+	creator, err := cs.fetchAppCreator(appIdx)
 	if err != nil {
 		return err
 	}
-	return al.cow.DelKey(creator, appIdx, true, key, 0)
+	return cs.delKey(creator, appIdx, true, key, 0)
 }
 
-func (al *logicLedger) balances() (apply.Balances, error) {
-	balances, ok := al.cow.(apply.Balances)
+func (cs *roundCowState) kvGet(key string) ([]byte, bool, error) {
+	value, ok := cs.mods.KvMods[key]
 	if !ok {
-		return nil, fmt.Errorf("cannot get a Balances object from %v", al)
+		return cs.lookupParent.kvGet(key)
 	}
-	return balances, nil
+	// If value is nil, it's a marker for a local deletion
+	return value.Data, value.Data != nil, nil
 }
 
-func (al *logicLedger) Perform(gi int, ep *logic.EvalParams) error {
-	txn := &ep.TxnGroup[gi]
-	balances, err := al.balances()
+func (cb *roundCowBase) kvGet(key string) ([]byte, bool, error) {
+	value, ok := cb.kvStore[key]
+	if !ok {
+		v, err := cb.l.LookupKv(cb.rnd, key)
+		if err != nil {
+			return nil, false, err
+		}
+		value = v
+		cb.kvStore[key] = value
+	}
+	// If value is nil, it caches a lookup that returned nothing.
+	return value, value != nil, nil
+}
+
+func (cs *roundCowState) kvPut(key string, value []byte) error {
+	cs.mods.AddKvMod(key, ledgercore.KvValueDelta{Data: value})
+	return nil
+}
+
+func (cs *roundCowState) kvDel(key string) error {
+	cs.mods.AddKvMod(key, ledgercore.KvValueDelta{Data: nil})
+	return nil
+}
+
+func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, value []byte, appAddr basics.Address) error {
+	// Use same limit on key length as for global/local storage
+	if len(key) > cs.proto.MaxAppKeyLen {
+		return fmt.Errorf("name too long: length was %d, maximum is %d", len(key), cs.proto.MaxAppKeyLen)
+	}
+	// This rule is NOT like global/local storage, but seems like it will limit
+	// confusion, since these are standalone entities.
+	if len(key) == 0 {
+		return fmt.Errorf("box names may not be zero length")
+	}
+
+	size := uint64(len(value))
+	if size > cs.proto.MaxBoxSize {
+		return fmt.Errorf("box size too large: %d, maximum is %d", size, cs.proto.MaxBoxSize)
+	}
+
+	fullKey := logic.MakeBoxKey(appIdx, key)
+	_, exists, err := cs.kvGet(fullKey)
 	if err != nil {
 		return err
 	}
+	if exists {
+		return fmt.Errorf("attempt to recreate %s", key)
+	}
+
+	record, err := cs.Get(appAddr, false)
+	if err != nil {
+		return err
+	}
+	record.TotalBoxes = basics.AddSaturate(record.TotalBoxes, 1)
+	record.TotalBoxBytes = basics.AddSaturate(record.TotalBoxBytes, uint64(len(key))+size)
+	err = cs.Put(appAddr, record)
+	if err != nil {
+		return err
+	}
+
+	return cs.kvPut(fullKey, value)
+}
+
+func (cs *roundCowState) GetBox(appIdx basics.AppIndex, key string) ([]byte, bool, error) {
+	fullKey := logic.MakeBoxKey(appIdx, key)
+	return cs.kvGet(fullKey)
+}
+
+func (cs *roundCowState) SetBox(appIdx basics.AppIndex, key string, value []byte) error {
+	fullKey := logic.MakeBoxKey(appIdx, key)
+	old, ok, err := cs.kvGet(fullKey)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("box %s does not exist for %d", key, appIdx)
+	}
+	if len(old) != len(value) {
+		return fmt.Errorf("box %s is wrong size old:%d != new:%d",
+			key, len(old), len(value))
+	}
+	return cs.kvPut(fullKey, value)
+}
+
+func (cs *roundCowState) DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) (bool, error) {
+	fullKey := logic.MakeBoxKey(appIdx, key)
+
+	value, ok, err := cs.kvGet(fullKey)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return false, nil
+	}
+
+	record, err := cs.Get(appAddr, false)
+	if err != nil {
+		return false, err
+	}
+	record.TotalBoxes = basics.SubSaturate(record.TotalBoxes, 1)
+	record.TotalBoxBytes = basics.SubSaturate(record.TotalBoxBytes, uint64(len(key)+len(value)))
+	err = cs.Put(appAddr, record)
+	if err != nil {
+		return false, err
+	}
+
+	return true, cs.kvDel(fullKey)
+}
+
+func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) error {
+	txn := &ep.TxnGroup[gi]
 
 	// move fee to pool
-	err = balances.Move(txn.Txn.Sender, ep.Specials.FeeSink, txn.Txn.Fee, &txn.ApplyData.SenderRewards, nil)
+	err := cs.Move(txn.Txn.Sender, ep.Specials.FeeSink, txn.Txn.Fee, &txn.ApplyData.SenderRewards, nil)
 	if err != nil {
 		return err
 	}
 
-	err = apply.Rekey(balances, &txn.Txn)
+	err = apply.Rekey(cs, &txn.Txn)
 	if err != nil {
 		return err
 	}
@@ -249,29 +314,29 @@ func (al *logicLedger) Perform(gi int, ep *logic.EvalParams) error {
 	// ahead of processing, we'd have to do ours *after* so that we'd
 	// use the next id.  So either way, this would seem backwards at
 	// first glance.
-	al.cow.incTxnCount()
+	cs.incTxnCount()
 
 	switch txn.Txn.Type {
 	case protocol.PaymentTx:
-		err = apply.Payment(txn.Txn.PaymentTxnFields, txn.Txn.Header, balances, *ep.Specials, &txn.ApplyData)
+		err = apply.Payment(txn.Txn.PaymentTxnFields, txn.Txn.Header, cs, *ep.Specials, &txn.ApplyData)
 
 	case protocol.KeyRegistrationTx:
-		err = apply.Keyreg(txn.Txn.KeyregTxnFields, txn.Txn.Header, balances, *ep.Specials, &txn.ApplyData,
-			al.Round())
+		err = apply.Keyreg(txn.Txn.KeyregTxnFields, txn.Txn.Header, cs, *ep.Specials, &txn.ApplyData,
+			cs.Round())
 
 	case protocol.AssetConfigTx:
-		err = apply.AssetConfig(txn.Txn.AssetConfigTxnFields, txn.Txn.Header, balances, *ep.Specials, &txn.ApplyData,
-			al.cow.txnCounter())
+		err = apply.AssetConfig(txn.Txn.AssetConfigTxnFields, txn.Txn.Header, cs, *ep.Specials, &txn.ApplyData,
+			cs.Counter())
 
 	case protocol.AssetTransferTx:
-		err = apply.AssetTransfer(txn.Txn.AssetTransferTxnFields, txn.Txn.Header, balances, *ep.Specials, &txn.ApplyData)
+		err = apply.AssetTransfer(txn.Txn.AssetTransferTxnFields, txn.Txn.Header, cs, *ep.Specials, &txn.ApplyData)
 
 	case protocol.AssetFreezeTx:
-		err = apply.AssetFreeze(txn.Txn.AssetFreezeTxnFields, txn.Txn.Header, balances, *ep.Specials, &txn.ApplyData)
+		err = apply.AssetFreeze(txn.Txn.AssetFreezeTxnFields, txn.Txn.Header, cs, *ep.Specials, &txn.ApplyData)
 
 	case protocol.ApplicationCallTx:
-		err = apply.ApplicationCall(txn.Txn.ApplicationCallTxnFields, txn.Txn.Header, balances, &txn.ApplyData,
-			gi, ep, al.cow.txnCounter())
+		err = apply.ApplicationCall(txn.Txn.ApplicationCallTxnFields, txn.Txn.Header, cs, &txn.ApplyData,
+			gi, ep, cs.Counter())
 
 	default:
 		err = fmt.Errorf("%s tx in AVM", txn.Txn.Type)
@@ -287,9 +352,4 @@ func (al *logicLedger) Perform(gi int, ep *logic.EvalParams) error {
 	// modifiedAccounts().
 
 	return nil
-
-}
-
-func (al *logicLedger) Counter() uint64 {
-	return al.cow.txnCounter()
 }

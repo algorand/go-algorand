@@ -149,7 +149,7 @@ int 1
 
 	// create the app
 	tx, err := client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, 0)
+		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(creator, 0, 0, fee, tx)
 	a.NoError(err)
@@ -204,7 +204,7 @@ int 1
 	client.WaitForRound(round + 2)
 	pendingTx, err := client.GetPendingTransactions(1)
 	a.NoError(err)
-	a.Equal(uint64(0), pendingTx.TotalTxns)
+	a.Equal(uint64(0), pendingTx.TotalTransactions)
 
 	// check creator's balance record for the app entry and the state changes
 	ad, err = client.AccountData(creator)
@@ -236,7 +236,7 @@ int 1
 	a.Equal(uint64(1), value.Uint)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)
@@ -395,7 +395,7 @@ int 1
 
 	// create the app
 	tx, err := client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, 0)
+		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(creator, round, round+primaryNodeUnupgradedProtocol.DefaultUpgradeWaitRounds, fee, tx)
 	a.NoError(err)
@@ -420,12 +420,12 @@ int 1
 		t.Skip("Test platform is too slow for this test")
 	}
 
-	a.Equal(uint64(1), pendingTx.TotalTxns)
+	a.Equal(uint64(1), pendingTx.TotalTransactions)
 
 	// check that the secondary node doesn't have that transaction in it's transaction pool.
 	pendingTx, err = secondary.GetPendingTransactions(1)
 	a.NoError(err)
-	a.Equal(uint64(0), pendingTx.TotalTxns)
+	a.Equal(uint64(0), pendingTx.TotalTransactions)
 
 	curStatus, err := client.Status()
 	a.NoError(err)
@@ -459,7 +459,7 @@ int 1
 	client.WaitForRound(round + 2)
 	pendingTx, err = client.GetPendingTransactions(1)
 	a.NoError(err)
-	a.Equal(uint64(0), pendingTx.TotalTxns)
+	a.Equal(uint64(0), pendingTx.TotalTransactions)
 
 	// check creator's balance record for the app entry and the state changes
 	ad, err = client.AccountData(creator)
@@ -491,7 +491,7 @@ int 1
 	a.Equal(uint64(1), value.Uint)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)
