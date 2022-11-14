@@ -233,7 +233,7 @@ func TestSyncRound(t *testing.T) {
 	// wait until the catchup is done. Since we've might have missed the sleep window, we need to wait
 	// until the synchronization is complete.
 	waitStart := time.Now()
-	for time.Now().Sub(waitStart) < 2*s.deadlineTimeout {
+	for time.Since(waitStart) < 2*s.deadlineTimeout {
 		if remote.LastRound() == local.LastRound() {
 			break
 		}
