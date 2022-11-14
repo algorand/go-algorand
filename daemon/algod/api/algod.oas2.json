@@ -2383,6 +2383,12 @@
     "AccountTotals": {
       "description": "Total Algos in the system grouped by account status",
       "type": "object",
+      "required": [
+        "online",
+        "offline",
+        "not-participating",
+        "rewards-level"
+      ],
       "properties": {
         "online": {
           "description": "Amount of stake in online accounts",
@@ -2432,6 +2438,11 @@
     "TxLease": {
       "description": "",
       "type": "object",
+      "required": [
+        "sender",
+        "lease",
+        "expiration"
+      ],
       "properties": {
         "sender": {
           "description": "Address of the lease sender",
@@ -2451,6 +2462,12 @@
     "ModifiedCreatable": {
       "description": "Creatable which was created or deleted during the round.",
       "type": "object",
+      "required": [
+        "index",
+        "creatable-type",
+        "created",
+        "creator"
+      ],
       "properties": {
         "index": {
           "description": "Index of the Creatable",
@@ -2475,8 +2492,13 @@
       }
     },
     "IncludedTransaction": {
-      "description": "",
+      "description": "Location information for a transaction included in a block",
       "type": "object",
+      "required": [
+        "txId",
+        "lastValid",
+        "intra"
+      ],
       "properties": {
         "txId": {
           "description": "ID of the transaction.",

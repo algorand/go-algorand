@@ -148,7 +148,12 @@ func TestGetRoundStateDelta(t *testing.T) {
 	(*expectedResponse.Accts.Accounts)[0].AccountData.Round = 2
 	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResponse)
 	require.NoError(t, err)
-	require.Equal(t, poolDeltaResponseGolden, actualResponse)
+	require.Equal(t, poolDeltaResponseGolden.Accts, actualResponse.Accts)
+	require.Equal(t, poolDeltaResponseGolden.KvMods, actualResponse.KvMods)
+	require.Equal(t, poolDeltaResponseGolden.Creatables, actualResponse.Creatables)
+	require.Equal(t, poolDeltaResponseGolden.TxLeases, actualResponse.TxLeases)
+	require.Equal(t, poolDeltaResponseGolden.TxIds, actualResponse.TxIds)
+	require.Equal(t, poolDeltaResponseGolden.Totals, actualResponse.Totals)
 }
 
 func TestSyncRound(t *testing.T) {

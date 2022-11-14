@@ -100,6 +100,19 @@ var poolDeltaResponseGolden = generatedV2.RoundStateDelta{
 			},
 		},
 	},
+	TxIds: &[]generatedV2.IncludedTransaction{
+		{
+			Intra:     0,
+			LastValid: 0,
+			TxId:      "Z7ATVET4TI3UG32H2PYJQPREPYOQHAH376E25M3KB57OEW66YMPA",
+		},
+	},
+	Totals: &generatedV2.AccountTotals{
+		NotParticipating: 100000000000,
+		Offline:          0,
+		Online:           658511,
+		RewardsLevel:     0,
+	},
 }
 
 // ordinarily mockNode would live in `components/mocks`

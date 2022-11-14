@@ -1111,6 +1111,12 @@
             "type": "integer"
           }
         },
+        "required": [
+          "not-participating",
+          "offline",
+          "online",
+          "rewards-level"
+        ],
         "type": "object"
       },
       "AppResourceRecord": {
@@ -1725,7 +1731,7 @@
         "type": "object"
       },
       "IncludedTransaction": {
-        "description": "",
+        "description": "Location information for a transaction included in a block",
         "properties": {
           "intra": {
             "description": "Intra round index of the transaction in the block.",
@@ -1740,6 +1746,11 @@
             "type": "string"
           }
         },
+        "required": [
+          "intra",
+          "lastValid",
+          "txId"
+        ],
         "type": "object"
       },
       "KvDelta": {
@@ -1815,6 +1826,12 @@
             "type": "integer"
           }
         },
+        "required": [
+          "creatable-type",
+          "created",
+          "creator",
+          "index"
+        ],
         "type": "object"
       },
       "ParticipationKey": {
@@ -2119,6 +2136,11 @@
             "type": "string"
           }
         },
+        "required": [
+          "expiration",
+          "lease",
+          "sender"
+        ],
         "type": "object"
       },
       "Version": {

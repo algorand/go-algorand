@@ -280,16 +280,16 @@ type AccountStateDelta struct {
 // AccountTotals Total Algos in the system grouped by account status
 type AccountTotals struct {
 	// NotParticipating Amount of stake in non-participating accounts
-	NotParticipating *uint64 `json:"not-participating,omitempty"`
+	NotParticipating uint64 `json:"not-participating"`
 
 	// Offline Amount of stake in offline accounts
-	Offline *uint64 `json:"offline,omitempty"`
+	Offline uint64 `json:"offline"`
 
 	// Online Amount of stake in online accounts
-	Online *uint64 `json:"online,omitempty"`
+	Online uint64 `json:"online"`
 
 	// RewardsLevel Total number of algos received per reward unit since genesis
-	RewardsLevel *uint64 `json:"rewards-level,omitempty"`
+	RewardsLevel uint64 `json:"rewards-level"`
 }
 
 // AppResourceRecord Represents AppParams and AppLocalStateDelta in deltas
@@ -598,16 +598,16 @@ type EvalDeltaKeyValue struct {
 	Value EvalDelta `json:"value"`
 }
 
-// IncludedTransaction defines model for IncludedTransaction.
+// IncludedTransaction Location information for a transaction included in a block
 type IncludedTransaction struct {
 	// Intra Intra round index of the transaction in the block.
-	Intra *uint64 `json:"intra,omitempty"`
+	Intra uint64 `json:"intra"`
 
 	// LastValid Last valid round of the included transaction.
-	LastValid *uint64 `json:"lastValid,omitempty"`
+	LastValid uint64 `json:"lastValid"`
 
 	// TxId ID of the transaction.
-	TxId *string `json:"txId,omitempty"`
+	TxId string `json:"txId"`
 }
 
 // KvDelta A single Delta containing the key, the previous value and the current value for a single round.
@@ -636,16 +636,16 @@ type LightBlockHeaderProof struct {
 // ModifiedCreatable Creatable which was created or deleted during the round.
 type ModifiedCreatable struct {
 	// CreatableType Type of creatable
-	CreatableType *ModifiedCreatableCreatableType `json:"creatable-type,omitempty"`
+	CreatableType ModifiedCreatableCreatableType `json:"creatable-type"`
 
 	// Created Created during this round if true, deleted if false
-	Created *bool `json:"created,omitempty"`
+	Created bool `json:"created"`
 
 	// Creator Address of the creator of the Creatable.
-	Creator *string `json:"creator,omitempty"`
+	Creator string `json:"creator"`
 
 	// Index Index of the Creatable
-	Index *uint64 `json:"index,omitempty"`
+	Index uint64 `json:"index"`
 }
 
 // ModifiedCreatableCreatableType Type of creatable
@@ -804,13 +804,13 @@ type TealValue struct {
 // TxLease defines model for TxLease.
 type TxLease struct {
 	// Expiration Round that the lease expires
-	Expiration *uint64 `json:"expiration,omitempty"`
+	Expiration uint64 `json:"expiration"`
 
 	// Lease Lease data
-	Lease *[]byte `json:"lease,omitempty"`
+	Lease []byte `json:"lease"`
 
 	// Sender Address of the lease sender
-	Sender *string `json:"sender,omitempty"`
+	Sender string `json:"sender"`
 }
 
 // Version algod version information.

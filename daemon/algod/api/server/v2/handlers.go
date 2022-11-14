@@ -1164,26 +1164,26 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 			return internalError(ctx, fmt.Errorf("unable to determine type of creatable for modified creatable with index %d", createIdx), errInternalFailure, v2.Log)
 		}
 		modifiedCreatables = append(modifiedCreatables, generated.ModifiedCreatable{
-			CreatableType: &creatableType,
-			Created:       &mod.Created,
-			Creator:       strOrNil(mod.Creator.String()),
-			Index:         numOrNil(uint64(createIdx)),
+			CreatableType: creatableType,
+			Created:       mod.Created,
+			Creator:       mod.Creator.String(),
+			Index:         uint64(createIdx),
 		})
 	}
 
 	for lease, expRnd := range sDelta.Txleases {
 		txLeases = append(txLeases, generated.TxLease{
-			Expiration: numOrNil(uint64(expRnd)),
-			Lease:      byteOrNil(lease.Lease[:]),
-			Sender:     strOrNil(lease.Sender.String()),
+			Expiration: uint64(expRnd),
+			Lease:      lease.Lease[:],
+			Sender:     lease.Sender.String(),
 		})
 	}
 
 	for txid, inclTxn := range sDelta.Txids {
 		inclTxns = append(inclTxns, generated.IncludedTransaction{
-			Intra:     numOrNil(inclTxn.Intra),
-			LastValid: numOrNil(uint64(inclTxn.LastValid)),
-			TxId:      strOrNil(txid.String()),
+			Intra:     inclTxn.Intra,
+			LastValid: uint64(inclTxn.LastValid),
+			TxId:      txid.String(),
 		})
 	}
 
@@ -1198,10 +1198,10 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 		PrevTimestamp:  numOrNil(uint64(sDelta.PrevTimestamp)),
 		StateProofNext: numOrNil(uint64(sDelta.StateProofNext)),
 		Totals: &generated.AccountTotals{
-			NotParticipating: numOrNil(sDelta.Totals.NotParticipating.Money.Raw),
-			Offline:          numOrNil(sDelta.Totals.Offline.Money.Raw),
-			Online:           numOrNil(sDelta.Totals.Online.Money.Raw),
-			RewardsLevel:     numOrNil(sDelta.Totals.RewardsLevel),
+			NotParticipating: sDelta.Totals.NotParticipating.Money.Raw,
+			Offline:          sDelta.Totals.Offline.Money.Raw,
+			Online:           sDelta.Totals.Online.Money.Raw,
+			RewardsLevel:     sDelta.Totals.RewardsLevel,
 		},
 		TxIds:    &inclTxns,
 		TxLeases: &txLeases,

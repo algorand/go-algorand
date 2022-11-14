@@ -1148,8 +1148,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		resourceCount = 0
 
 		rewardsProto = config.Consensus[au.versions[offset]]
-		_, totals, _ := au.latestTotalsImpl()
-		rewardsLevel = totals.RewardsLevel
+		rewardsLevel = au.roundTotals[offset].RewardsLevel
 
 		// we're testing the withRewards here and setting the defer function only once, and only if withRewards is true.
 		// we want to make this defer only after setting the above rewardsProto/rewardsLevel.
@@ -1421,8 +1420,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		}
 
 		rewardsVersion = au.versions[offset]
-		_, totals, _ := au.latestTotalsImpl()
-		rewardsLevel = totals.RewardsLevel
+		rewardsLevel = au.roundTotals[offset].RewardsLevel
 
 		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
 		macct, indeltas := au.accounts[addr]
@@ -1848,6 +1846,7 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	au.deltas = au.deltas[offset:]
 	au.deltasAccum = au.deltasAccum[offset:]
 	au.versions = au.versions[offset:]
+	au.roundTotals = au.roundTotals[offset:]
 	au.cachedDBRound = newBase
 
 	au.accountsMu.Unlock()
