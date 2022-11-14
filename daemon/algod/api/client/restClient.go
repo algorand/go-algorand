@@ -663,7 +663,8 @@ func (client RestClient) GetParticipationKeyByID(participationID string) (respon
 	return
 }
 
-func (client RestClient) RemoveParticipationKeyByID(participationID string) (response generatedV2.ParticipationKeyResponse, err error) {
+// RemoveParticipationKeyByID removes a particiption key by its ID
+func (client RestClient) RemoveParticipationKeyByID(participationID string) (response model.ParticipationKeyResponse, err error) {
 	err = client.delete(&response, fmt.Sprintf("/v2/participation/%s", participationID), nil)
 	return
 

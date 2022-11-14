@@ -1021,7 +1021,8 @@ func (c *Client) VerifyParticipationKey(timeout time.Duration, participationID s
 	}
 }
 
-func (c *Client) RemoveParticipationKey(participationID string) (resp generated.ParticipationKeyResponse, err error) {
+// RemoveParticipationKey removes a participation key by its id
+func (c *Client) RemoveParticipationKey(participationID string) (resp model.ParticipationKeyResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
 		return
