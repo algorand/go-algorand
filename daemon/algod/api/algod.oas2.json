@@ -1976,7 +1976,8 @@
       },
       "delete": {
         "tags": [
-          "private"
+          "private",
+          "nonparticipating"
         ],
         "description": "Given a catchpoint, it aborts catching up to this catchpoint",
         "produces": [

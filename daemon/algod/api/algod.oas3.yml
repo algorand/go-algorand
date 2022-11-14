@@ -3401,7 +3401,8 @@
         },
         "summary": "Aborts a catchpoint catchup.",
         "tags": [
-          "private"
+          "private",
+          "nonparticipating"
         ]
       },
       "post": {
