@@ -18,6 +18,7 @@ package data
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -567,4 +568,11 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 	close(handler.postVerificationQueue)
 	close(handler.backlogQueue)
 	wg.Wait()
+}
+
+func BenchmarkPostProcessError(b *testing.B) {
+	var txh TxHandler
+
+	err := errors.New("couldn't find latest resources")
+	txh.postProcessReportErrors(err)
 }

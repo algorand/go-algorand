@@ -2726,7 +2726,7 @@ func TestPreparePeerData(t *testing.T) {
 	require.Equal(t, len(data), len(digests))
 	require.Equal(t, len(comp), len(digests))
 	require.NotEmpty(t, seenPrioTags)
-	require.Len(t, seenPrioTags, 1)
+	require.Len(t, seenPrioTags, 2)
 	require.Contains(t, seenPrioTags, protocol.ProposalPayloadTag)
 
 	for i := range data {

@@ -47,11 +47,11 @@ var txBacklogSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnByt
 var transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessagesHandled)
 var transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
 var transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
-var transactionMessagesDupPreBacklog = metrics.MakeCounter(metrics.TransactionMessagesDupPreBacklog)
+var transactionMessagesAlreadyCommitted = metrics.MakeCounter(metrics.TransactionMessagesAlreadyCommitted)
 var transactionMessagesTxGroupInvalidFee = metrics.MakeCounter(metrics.TransactionMessagesTxGroupInvalidFee)
-var transactionMessagesTxnBadFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnBadFormed)
-var transactionMessagesTxnSigBadFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigBadFormed)
-var transactionMessagesTxnMsigBadFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnMsigBadFormed)
+var transactionMessagesTxnNotWellFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnNotWellFormed)
+var transactionMessagesTxnSigNotWellFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigNotWellFormed)
+var transactionMessagesTxnMsigNotWellFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnMsigNotWellFormed)
 var transactionMessagesTxnLogicSig = metrics.MakeCounter(metrics.TransactionMessagesTxnLogicSig)
 var transactionMessagesTxnSigVerificationFailed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigVerificationFailed)
 var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionMessagesBacklogSize)
@@ -171,7 +171,7 @@ func (handler *TxHandler) backlogWorker() {
 				return
 			}
 			if handler.checkAlreadyCommitted(wi) {
-				transactionMessagesDupPreBacklog.Inc(nil)
+				transactionMessagesAlreadyCommitted.Inc(nil)
 				continue
 			}
 
@@ -191,39 +191,29 @@ func (handler *TxHandler) backlogWorker() {
 }
 
 func (handler *TxHandler) postProcessReportErrors(err error) {
-	var feeError *verify.ErrTxGroupInvalidFee
-	if errors.As(err, &feeError) {
-		transactionMessagesTxGroupInvalidFee.Inc(nil)
-		return
-	}
-
-	var badFormed *verify.ErrTxnBadFormed
-	if errors.As(err, &badFormed) {
-		transactionMessagesTxnBadFormed.Inc(nil)
-		return
-	}
-
-	var sigBadFormed *verify.ErrTxnSigBadFormed
-	if errors.As(err, &sigBadFormed) {
-		transactionMessagesTxnSigBadFormed.Inc(nil)
-		return
-	}
-
-	var msigBadFormed *verify.ErrTxnMsigBadFormed
-	if errors.As(err, &msigBadFormed) {
-		transactionMessagesTxnMsigBadFormed.Inc(nil)
-		return
-	}
-
-	var logicSig *verify.ErrTxnLogicSig
-	if errors.As(err, &logicSig) {
-		transactionMessagesTxnLogicSig.Inc(nil)
-		return
-	}
-
 	if errors.Is(err, crypto.ErrBatchVerificationFailed) {
 		transactionMessagesTxnSigVerificationFailed.Inc(nil)
 		return
+	}
+
+	var txGroupErr *verify.ErrTxGroupError
+	if errors.As(err, &txGroupErr) {
+		txGroupErr = err.(*verify.ErrTxGroupError)
+		switch txGroupErr.Reason() {
+		case verify.TxGroupErrorReasonNotWellFormed:
+			transactionMessagesTxnNotWellFormed.Inc(nil)
+		case verify.TxGroupErrorReasonInvalidFee:
+			transactionMessagesTxGroupInvalidFee.Inc(nil)
+		case verify.TxGroupErrorReasonHasNoSig:
+			fallthrough
+		case verify.TxGroupErrorReasonSigNotWellFormed:
+			transactionMessagesTxnSigNotWellFormed.Inc(nil)
+		case verify.TxGroupErrorReasonMsigNotWellFormed:
+			transactionMessagesTxnMsigNotWellFormed.Inc(nil)
+		case verify.TxGroupErrorReasonLogicSigFailed:
+			transactionMessagesTxnLogicSig.Inc(nil)
+		default:
+		}
 	}
 }
 

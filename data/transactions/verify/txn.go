@@ -69,44 +69,52 @@ type GroupContext struct {
 	ledger           logic.LedgerForSignature
 }
 
-type ErrTxGroupInvalidFee struct {
-	err error
+var errTxGroupInvalidFee = errors.New("txgroup fee requirement overflow")
+var errTxnSigHasNoSig = errors.New("signedtxn has no sig")
+var errTxnSigNotWellFormed = errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
+var errRekeyingNotSupported = errors.New("nonempty AuthAddr but rekeying is not supported")
+var errUnknownSignature = errors.New("has one mystery sig. WAT?")
+
+// TxGroupErrorReason is reason code for ErrTxGroupError
+type TxGroupErrorReason int
+
+const (
+	// TxGroupErrorReasonGeneric is a generic (not tracked) reason code
+	TxGroupErrorReasonGeneric TxGroupErrorReason = iota
+	// TxGroupErrorReasonNotWellFormed is txn.WellFormed failure
+	TxGroupErrorReasonNotWellFormed
+	// TxGroupErrorReasonInvalidFee is invalid fee pooling in transaction group
+	TxGroupErrorReasonInvalidFee
+	// TxGroupErrorReasonHasNoSig is for transaction without any signature
+	TxGroupErrorReasonHasNoSig
+	// TxGroupErrorReasonSigNotWellFormed defines signature format errors
+	TxGroupErrorReasonSigNotWellFormed
+	// TxGroupErrorReasonMsigNotWellFormed defines multisig format errors
+	TxGroupErrorReasonMsigNotWellFormed
+	// TxGroupErrorReasonLogicSigFailed defines logic sig validation errors
+	TxGroupErrorReasonLogicSigFailed
+)
+
+// ErrTxGroupError is an error from txn pre-validation (well form-ness, signature format, etc).
+// It can be unwrapped into underlying error, as well as has a specific failure reason code.
+type ErrTxGroupError struct {
+	err    error
+	reason TxGroupErrorReason
 }
 
-func (e *ErrTxGroupInvalidFee) Error() string {
+// Error returns an error message from the underlying error
+func (e *ErrTxGroupError) Error() string {
 	return e.err.Error()
 }
 
-type ErrTxnBadFormed struct {
-	err error
+// Unwrap returns an underlying error
+func (e *ErrTxGroupError) Unwrap() error {
+	return e.err
 }
 
-func (e *ErrTxnBadFormed) Error() string {
-	return e.err.Error()
-}
-
-type ErrTxnSigBadFormed struct {
-	err error
-}
-
-func (e *ErrTxnSigBadFormed) Error() string {
-	return e.err.Error()
-}
-
-type ErrTxnMsigBadFormed struct {
-	err error
-}
-
-func (e *ErrTxnMsigBadFormed) Error() string {
-	return e.err.Error()
-}
-
-type ErrTxnLogicSig struct {
-	err error
-}
-
-func (e *ErrTxnLogicSig) Error() string {
-	return e.err.Error()
+// Reason returns a reason code
+func (e *ErrTxGroupError) Reason() TxGroupErrorReason {
+	return e.reason
 }
 
 // PrepareGroupContext prepares a verification group parameter object for a given transaction
@@ -141,14 +149,14 @@ func (g *GroupContext) Equal(other *GroupContext) bool {
 
 // txnBatchPrep verifies a SignedTxn having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
-// it is the caller responsibility to call batchVerifier.Verify()
-func txnBatchPrep(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, verifier *crypto.BatchVerifier) error {
+// It is the caller responsibility to call batchVerifier.Verify().
+func txnBatchPrep(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, verifier *crypto.BatchVerifier) *ErrTxGroupError {
 	if !groupCtx.consensusParams.SupportRekeying && (s.AuthAddr != basics.Address{}) {
-		return errors.New("nonempty AuthAddr but rekeying is not supported")
+		return &ErrTxGroupError{err: errRekeyingNotSupported, reason: TxGroupErrorReasonGeneric}
 	}
 
 	if err := s.Txn.WellFormed(groupCtx.specAddrs, groupCtx.consensusParams); err != nil {
-		return &ErrTxnBadFormed{err: err}
+		return &ErrTxGroupError{err: err, reason: TxGroupErrorReasonNotWellFormed}
 	}
 
 	return stxnCoreChecks(s, txnIdx, groupCtx, verifier)
@@ -184,9 +192,13 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.Blo
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
 	for i, stxn := range stxs {
-		err = txnBatchPrep(&stxn, i, groupCtx, verifier)
-		if err != nil {
-			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
+		prepErr := txnBatchPrep(&stxn, i, groupCtx, verifier)
+		if prepErr != nil {
+			// re-wrap the error, take underlying one and copy the reason code
+			err = &ErrTxGroupError{
+				err:    fmt.Errorf("transaction %+v invalid : %w", stxn, prepErr.err),
+				reason: prepErr.reason,
+			}
 			return nil, err
 		}
 		if stxn.Txn.Type != protocol.StateProofTx {
@@ -196,17 +208,18 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.Blo
 	}
 	feeNeeded, overflow := basics.OMul(groupCtx.consensusParams.MinTxnFee, minFeeCount)
 	if overflow {
-		err = &ErrTxGroupInvalidFee{err: fmt.Errorf("txgroup fee requirement overflow")}
+		err = &ErrTxGroupError{err: errTxGroupInvalidFee, reason: TxGroupErrorReasonInvalidFee}
 		return nil, err
 	}
 	// feesPaid may have saturated. That's ok. Since we know
 	// feeNeeded did not overflow, simple comparison tells us
 	// feesPaid was enough.
 	if feesPaid < feeNeeded {
-		err = &ErrTxGroupInvalidFee{
+		err = &ErrTxGroupError{
 			err: fmt.Errorf(
 				"txgroup had %d in fees, which is less than the minimum %d * %d",
 				feesPaid, minFeeCount, groupCtx.consensusParams.MinTxnFee),
+			reason: TxGroupErrorReasonInvalidFee,
 		}
 		return nil, err
 	}
@@ -214,7 +227,8 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.Blo
 	return groupCtx, nil
 }
 
-func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
+// stxnCoreChecks runs signatures validity checks and enqueues signature into batchVerifier for verification.
+func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) *ErrTxGroupError {
 	numSigs := 0
 	hasSig := false
 	hasMsig := false
@@ -239,11 +253,10 @@ func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		if s.Txn.Sender == transactions.StateProofSender && s.Txn.Type == protocol.StateProofTx {
 			return nil
 		}
-
-		return &ErrTxnSigBadFormed{err: errors.New("signedtxn has no sig")}
+		return &ErrTxGroupError{err: errTxnSigHasNoSig, reason: TxGroupErrorReasonHasNoSig}
 	}
 	if numSigs > 1 {
-		return &ErrTxnSigBadFormed{err: errors.New("signedtxn should only have one of Sig or Msig or LogicSig")}
+		return &ErrTxGroupError{err: errTxnSigNotWellFormed, reason: TxGroupErrorReasonSigNotWellFormed}
 	}
 
 	if hasSig {
@@ -252,17 +265,17 @@ func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 	}
 	if hasMsig {
 		if err := crypto.MultisigBatchPrep(s.Txn, crypto.Digest(s.Authorizer()), s.Msig, batchVerifier); err != nil {
-			return &ErrTxnMsigBadFormed{err: fmt.Errorf("multisig validation failed: %w", err)}
+			return &ErrTxGroupError{err: fmt.Errorf("multisig validation failed: %w", err), reason: TxGroupErrorReasonMsigNotWellFormed}
 		}
 		return nil
 	}
 	if hasLogicSig {
 		if err := logicSigVerify(s, txnIdx, groupCtx); err != nil {
-			return &ErrTxnLogicSig{err: err}
+			return &ErrTxGroupError{err: err, reason: TxGroupErrorReasonLogicSigFailed}
 		}
 		return nil
 	}
-	return errors.New("has one mystery sig. WAT?")
+	return &ErrTxGroupError{err: errUnknownSignature, reason: TxGroupErrorReasonGeneric}
 }
 
 // LogicSigSanityCheck checks that the signature is valid and that the program is basically well formed.
