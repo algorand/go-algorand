@@ -67,7 +67,7 @@ executors:
 slack-fail-stop-step: &slack-fail-post-step
   post-steps:
     - slack/notify:
-        branch_pattern: "master,rel/beta,rel/nightly,rel/stable"
+        branch_pattern: "master,rel/beta,rel/nightly,rel/stable,notify_on_failure_test"
         event: fail
         template: basic_fail_1
 

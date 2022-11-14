@@ -165,7 +165,7 @@ func opBoxReplace(cx *EvalContext) error {
 	prev := last - 1          // start
 	pprev := prev - 1         // name
 
-	replacement := cx.stack[last].Bytes
+	replacement := cx.stack[last].Byte
 	start := cx.stack[prev].Uint
 	name := string(cx.stack[pprev].Bytes)
 
