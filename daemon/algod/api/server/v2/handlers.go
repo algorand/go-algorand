@@ -983,7 +983,7 @@ func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
 	if rnd == 0 {
 		return notFound(ctx, fmt.Errorf("sync round is not set"), errFailedRetrievingSyncRound, v2.Log)
 	}
-	return ctx.JSON(http.StatusOK, generated.GetSyncRoundResponse{Round: rnd})
+	return ctx.JSON(http.StatusOK, model.GetSyncRoundResponse{Round: rnd})
 }
 
 // GetRoundStateDelta returns the deltas for a given round.
@@ -995,13 +995,13 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 		return internalError(ctx, err, errFailedRetrievingStateDelta, v2.Log)
 	}
 
-	var accts []generated.AccountBalanceRecord
-	var apps []generated.AppResourceRecord
-	var assets []generated.AssetResourceRecord
-	var keyValues []generated.KvDelta
-	var modifiedCreatables []generated.ModifiedCreatable
-	var txLeases []generated.TxLease
-	var inclTxns []generated.IncludedTransaction
+	var accts []model.AccountBalanceRecord
+	var apps []model.AppResourceRecord
+	var assets []model.AssetResourceRecord
+	var keyValues []model.KvDelta
+	var modifiedCreatables []model.ModifiedCreatable
+	var txLeases []model.TxLease
+	var inclTxns []model.IncludedTransaction
 
 	consensusParams, err := v2.Node.LedgerForAPI().ConsensusParams(basics.Round(round))
 	if err != nil {
@@ -1014,7 +1014,7 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 
 	for key, kvDelta := range sDelta.KvMods {
 		var keyBytes = []byte(key)
-		keyValues = append(keyValues, generated.KvDelta{
+		keyValues = append(keyValues, model.KvDelta{
 			Key:       &keyBytes,
 			PrevValue: &kvDelta.OldData,
 			Value:     &kvDelta.Data,
@@ -1022,9 +1022,9 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 	}
 
 	for _, record := range sDelta.Accts.GetAllAccounts() {
-		var apiParticipation *generated.AccountParticipation
+		var apiParticipation *model.AccountParticipation
 		if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
-			apiParticipation = &generated.AccountParticipation{
+			apiParticipation = &model.AccountParticipation{
 				VoteParticipationKey:      record.VoteID[:],
 				SelectionParticipationKey: record.SelectionID[:],
 				VoteFirstValid:            uint64(record.VoteFirstValid),
@@ -1043,8 +1043,8 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 		if overflowed {
 			return internalError(ctx, errors.New("overflow on pending reward calculation"), errInternalFailure, v2.Log)
 		}
-		accts = append(accts, generated.AccountBalanceRecord{
-			AccountData: generated.Account{
+		accts = append(accts, model.AccountBalanceRecord{
+			AccountData: model.Account{
 				SigType:                     nil,
 				Round:                       round,
 				Address:                     record.Addr.String(),
@@ -1060,7 +1060,7 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 				TotalAssetsOptedIn:          record.TotalAssets,
 				AuthAddr:                    addrOrNil(record.AuthAddr),
 				TotalAppsOptedIn:            record.TotalAppLocalStates,
-				AppsTotalSchema: &generated.ApplicationStateSchema{
+				AppsTotalSchema: &model.ApplicationStateSchema{
 					NumByteSlice: record.TotalAppSchema.NumByteSlice,
 					NumUint:      record.TotalAppSchema.NumUint,
 				},
@@ -1072,38 +1072,38 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 	}
 
 	for _, app := range sDelta.Accts.GetAllAppResources() {
-		var appLocalState *generated.ApplicationLocalState = nil
+		var appLocalState *model.ApplicationLocalState = nil
 		if app.State.LocalState != nil {
 			localState := convertTKVToGenerated(&app.State.LocalState.KeyValue)
-			appLocalState = &generated.ApplicationLocalState{
+			appLocalState = &model.ApplicationLocalState{
 				Id:       uint64(app.Aidx),
 				KeyValue: localState,
-				Schema: generated.ApplicationStateSchema{
+				Schema: model.ApplicationStateSchema{
 					NumByteSlice: app.State.LocalState.Schema.NumByteSlice,
 					NumUint:      app.State.LocalState.Schema.NumUint,
 				},
 			}
 		}
-		var appParams *generated.ApplicationParams = nil
+		var appParams *model.ApplicationParams = nil
 		if app.Params.Params != nil {
 			globalState := convertTKVToGenerated(&app.Params.Params.GlobalState)
-			appParams = &generated.ApplicationParams{
+			appParams = &model.ApplicationParams{
 				ApprovalProgram:   app.Params.Params.ApprovalProgram,
 				ClearStateProgram: app.Params.Params.ClearStateProgram,
 				Creator:           app.Addr.String(),
 				ExtraProgramPages: numOrNil(uint64(app.Params.Params.ExtraProgramPages)),
 				GlobalState:       globalState,
-				GlobalStateSchema: &generated.ApplicationStateSchema{
+				GlobalStateSchema: &model.ApplicationStateSchema{
 					NumByteSlice: app.Params.Params.GlobalStateSchema.NumByteSlice,
 					NumUint:      app.Params.Params.GlobalStateSchema.NumUint,
 				},
-				LocalStateSchema: &generated.ApplicationStateSchema{
+				LocalStateSchema: &model.ApplicationStateSchema{
 					NumByteSlice: app.Params.Params.LocalStateSchema.NumByteSlice,
 					NumUint:      app.Params.Params.LocalStateSchema.NumUint,
 				},
 			}
 		}
-		apps = append(apps, generated.AppResourceRecord{
+		apps = append(apps, model.AppResourceRecord{
 			Address:              app.Addr.String(),
 			AppIndex:             uint64(app.Aidx),
 			AppParamsDeleted:     app.Params.Deleted,
@@ -1114,17 +1114,17 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 	}
 
 	for _, asset := range sDelta.Accts.GetAllAssetResources() {
-		var assetHolding *generated.AssetHolding = nil
+		var assetHolding *model.AssetHolding = nil
 		if asset.Holding.Holding != nil {
-			assetHolding = &generated.AssetHolding{
+			assetHolding = &model.AssetHolding{
 				Amount:   asset.Holding.Holding.Amount,
 				AssetID:  uint64(asset.Aidx),
 				IsFrozen: asset.Holding.Holding.Frozen,
 			}
 		}
-		var assetParams *generated.AssetParams = nil
+		var assetParams *model.AssetParams = nil
 		if asset.Params.Params != nil {
-			assetParams = &generated.AssetParams{
+			assetParams = &model.AssetParams{
 				Clawback:      strOrNil(asset.Params.Params.Clawback.String()),
 				Creator:       asset.Addr.String(),
 				Decimals:      uint64(asset.Params.Params.Decimals),
@@ -1142,7 +1142,7 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 				UrlB64:        byteOrNil([]byte(base64.StdEncoding.EncodeToString([]byte(asset.Params.Params.URL)))),
 			}
 		}
-		assets = append(assets, generated.AssetResourceRecord{
+		assets = append(assets, model.AssetResourceRecord{
 			Address:             asset.Addr.String(),
 			AssetIndex:          uint64(asset.Aidx),
 			AssetHoldingDeleted: asset.Holding.Deleted,
@@ -1153,16 +1153,16 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 	}
 
 	for createIdx, mod := range sDelta.Creatables {
-		var creatableType generated.ModifiedCreatableCreatableType
+		var creatableType model.ModifiedCreatableCreatableType
 		switch mod.Ctype {
 		case basics.AppCreatable:
-			creatableType = generated.ModifiedCreatableCreatableTypeApp
+			creatableType = model.ModifiedCreatableCreatableTypeApp
 		case basics.AssetCreatable:
-			creatableType = generated.ModifiedCreatableCreatableTypeAsset
+			creatableType = model.ModifiedCreatableCreatableTypeAsset
 		default:
 			return internalError(ctx, fmt.Errorf("unable to determine type of creatable for modified creatable with index %d", createIdx), errInternalFailure, v2.Log)
 		}
-		modifiedCreatables = append(modifiedCreatables, generated.ModifiedCreatable{
+		modifiedCreatables = append(modifiedCreatables, model.ModifiedCreatable{
 			CreatableType: creatableType,
 			Created:       mod.Created,
 			Creator:       mod.Creator.String(),
@@ -1171,7 +1171,7 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 	}
 
 	for lease, expRnd := range sDelta.Txleases {
-		txLeases = append(txLeases, generated.TxLease{
+		txLeases = append(txLeases, model.TxLease{
 			Expiration: uint64(expRnd),
 			Lease:      lease.Lease[:],
 			Sender:     lease.Sender.String(),
@@ -1179,15 +1179,15 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 	}
 
 	for txid, inclTxn := range sDelta.Txids {
-		inclTxns = append(inclTxns, generated.IncludedTransaction{
+		inclTxns = append(inclTxns, model.IncludedTransaction{
 			Intra:     inclTxn.Intra,
 			LastValid: uint64(inclTxn.LastValid),
 			TxId:      txid.String(),
 		})
 	}
 
-	response := generated.RoundStateDeltaResponse{
-		Accts: &generated.AccountDeltas{
+	response := model.RoundStateDeltaResponse{
+		Accts: &model.AccountDeltas{
 			Accounts: &accts,
 			Apps:     &apps,
 			Assets:   &assets,
@@ -1196,7 +1196,7 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 		KvMods:         &keyValues,
 		PrevTimestamp:  numOrNil(uint64(sDelta.PrevTimestamp)),
 		StateProofNext: numOrNil(uint64(sDelta.StateProofNext)),
-		Totals: &generated.AccountTotals{
+		Totals: &model.AccountTotals{
 			NotParticipating: sDelta.Totals.NotParticipating.Money.Raw,
 			Offline:          sDelta.Totals.Offline.Money.Raw,
 			Online:           sDelta.Totals.Online.Money.Raw,

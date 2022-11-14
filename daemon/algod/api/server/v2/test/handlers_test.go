@@ -142,7 +142,7 @@ func TestGetRoundStateDelta(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
 
-	actualResponse := generatedV2.RoundStateDelta{}
+	actualResponse := model.RoundStateDelta{}
 	expectedResponse := poolDeltaResponseGolden
 	(*expectedResponse.Accts.Accounts)[0].AccountData.Round = 2
 	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResponse)
