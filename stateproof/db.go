@@ -185,6 +185,7 @@ func rowsToPendingSigs(rows *sql.Rows) (map[basics.Round][]pendingSig, error) {
 
 //#region Builders Operations
 func persistBuilder(tx *sql.Tx, rnd basics.Round, b *builder) error {
+	fmt.Println("persistBuilder! round:", rnd)
 	_, err := tx.Exec(insertBuilderForRound, rnd, protocol.Encode(b))
 	return err
 }
@@ -214,6 +215,7 @@ func getBuilder(tx *sql.Tx, rnd basics.Round) (builder, error) {
 
 // deleteBuilders deletes all builders before (but not including) the given rnd
 func deleteBuilders(tx *sql.Tx, rnd basics.Round) error {
+	fmt.Println("deleteBuilders! round:", rnd)
 	_, err := tx.Exec(deleteBuilderForRound, rnd)
 	return err
 }

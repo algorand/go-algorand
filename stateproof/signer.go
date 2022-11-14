@@ -160,7 +160,7 @@ func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
 			spw.log.Warnf("spw.signBlock(%d): handleSig: %v", hdr.Round, err)
 			continue
 		}
-
+		println("Signed on round:", sfa.Round)
 		spw.log.Infof("spw.signBlock(%d): sp message was signed with address %v", hdr.Round, sfa.SignerAddress)
 	}
 }

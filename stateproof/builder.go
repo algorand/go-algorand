@@ -350,6 +350,7 @@ func (spw *Worker) builder(latest basics.Round) {
 	// if a state proof has been committed, so that we can stop trying
 	// to build it.
 	for {
+		fmt.Println("try building stateproofs! current round:", latest)
 		spw.tryBroadcast()
 
 		nextrnd := latest + 1
@@ -372,6 +373,7 @@ func (spw *Worker) builder(latest basics.Round) {
 		proto := config.Consensus[hdr.CurrentProtocol]
 		stateProofNextRound := hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 
+		fmt.Println("processing", nextrnd)
 		spw.deleteStaleStateProofBuildData(&proto, stateProofNextRound)
 
 		// Broadcast signatures based on the previous block(s) that
@@ -446,6 +448,7 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, stateProofNextRound basics.R
 				Round:         rnd,
 				Sig:           sig.sig,
 			}
+			fmt.Println("broadcasting signatures! round:", rnd, "stateproofnextround:", stateProofNextRound, "sig:", sig.sig.Signature)
 			err = spw.net.Broadcast(context.Background(), protocol.StateProofSigTag,
 				protocol.Encode(&sfa), false, nil)
 			if err != nil {
@@ -459,12 +462,12 @@ func (spw *Worker) deleteStaleStateProofBuildData(proto *config.ConsensusParams,
 	if proto.StateProofInterval == 0 || stateProofNextRound == 0 {
 		return
 	}
+	spw.trimBuildersCache(proto, stateProofNextRound)
 
 	if spw.LastCleanupRound == stateProofNextRound {
 		return
 	}
 
-	spw.trimBuildersCache(proto, stateProofNextRound)
 	spw.deleteStaleSigs(stateProofNextRound)
 	spw.deleteStaleKeys(stateProofNextRound)
 	spw.deleteStaleBuilders(stateProofNextRound)
@@ -510,11 +513,13 @@ func (spw *Worker) deleteStaleBuilders(retainRound basics.Round) {
 // The threshold is also used to limit the StateProof signatures broadcasted over the network.
 func onlineBuildersThreshold(proto *config.ConsensusParams, stateProofNextRound basics.Round) basics.Round {
 	spNextRnd := stateProofNextRound
-	threshold := spNextRnd + basics.Round(numBuildersInMemory*proto.StateProofInterval)
+	// (builderCacheLength - 2) since the first builder (spNextRnd) is already included as well as the
+	threshold := spNextRnd + basics.Round((buildersCacheLength-2)*proto.StateProofInterval)
 
 	return threshold
 }
 
+// Reduces the number of builders stored in memory to X earliest as well as 1 latest, to an overall amound of X+1 builders
 func (spw *Worker) trimBuildersCache(proto *config.ConsensusParams, stateProofNextRound basics.Round) {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()

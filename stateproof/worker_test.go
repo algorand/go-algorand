@@ -273,11 +273,12 @@ func (s *testWorkerStubs) RegisterHandlers([]network.TaggedMessageHandler) {
 }
 
 func (s *testWorkerStubs) advanceRoundsWithoutStateProof(delta uint64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	for r := uint64(0); r < delta; r++ {
+		time.Sleep(time.Millisecond * 1)
+		s.mu.Lock()
 		s.addBlock(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+		s.mu.Unlock()
 	}
 }
 
@@ -842,14 +843,24 @@ func TestWorkerRemoveBuildersAndSignatures(t *testing.T) {
 		a.Equal(tx.Txn.Type, protocol.StateProofTx)
 	}
 
+	// since this test involves go routine, we would like to make sure that when
+	// we sample the builder it already processed our current round.
+	// in order to that, we wait for singer and the builder to wait.
+	// then we push one more round so the builder could process it (since the builder might skip rounds)
 	err := waitForBuilderAndSignerToWaitOnRound(s)
 	a.NoError(err)
-	a.Equal(expectedStateProofs, len(w.builders))
+	s.mu.Lock()
+	s.addBlock(basics.Round(proto.StateProofInterval * 2))
+	s.mu.Unlock()
+	err = waitForBuilderAndSignerToWaitOnRound(s)
+	a.NoError(err)
+
+	a.Equal(buildersCacheLength, len(w.builders))
 	countDB, err := countBuildersInDB(w.db)
 	a.NoError(err)
 	a.Equal(expectedStateProofs, countDB)
 
-	threshold := onlineBuildersThreshold(proto, basics.Round(512)) // 512 since no StateProofs are confirmed yet (512 is the first, commitment at 256)
+	threshold := onlineBuildersThreshold(&proto, basics.Round(512)) // 512 since no StateProofs are confirmed yet (512 is the first, commitment at 256)
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		roundSigs, err = getPendingSigs(tx, threshold, basics.Round(512+proto.StateProofInterval*expectedStateProofs), false)
@@ -918,12 +929,12 @@ func TestWorkerBuildersRecoveryIsNotLimited(t *testing.T) {
 	a.NoError(err)
 
 	// should not give up on rounds
-	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(len(w.builders)))
+	a.Equal(buildersCacheLength, len(w.builders))
 	countDB, err := countBuildersInDB(w.db)
 	a.NoError(err)
 	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(countDB))
 
-	threshold := onlineBuildersThreshold(proto, basics.Round(512)) // first StateProof round (no stateproof txns should be confirmed yet)
+	threshold := onlineBuildersThreshold(&proto, basics.Round(512)) // first StateProof round (no stateproof txns should be confirmed yet)
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		roundSigs, err = getPendingSigs(tx, threshold, s.latest, false)
@@ -945,7 +956,7 @@ func TestWorkerBuildersRecoveryIsNotLimited(t *testing.T) {
 
 	// Although the max recovery has passed the worker will not delete
 	// builder and signatures
-	a.Equal(proto.StateProofMaxRecoveryIntervals+2, uint64(len(w.builders)))
+	a.Equal(buildersCacheLength, uint64(len(w.builders)))
 	countDB, err = countBuildersInDB(w.db)
 	a.NoError(err)
 	a.Equal(proto.StateProofMaxRecoveryIntervals+2, uint64(countDB))
@@ -959,7 +970,7 @@ func TestWorkerBuildersRecoveryIsNotLimited(t *testing.T) {
 }
 
 func waitForBuilderAndSignerToWaitOnRound(s *testWorkerStubs) error {
-	const maxRetries = 10000
+	const maxRetries = 1000000
 	i := 0
 	for {
 		s.mu.Lock()
@@ -1618,7 +1629,11 @@ func compareBuilders(a *require.Assertions, expectedStateproofs int, w *Worker, 
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	// In memory
-	a.Equal(expectedStateproofs, len(w.builders))
+	if expectedStateproofs > buildersCacheLength {
+		a.Equal(buildersCacheLength, len(w.builders))
+	} else {
+		a.Equal(expectedStateproofs, len(w.builders))
+	}
 	// In disk
 	r := basics.Round(firstExpectedStateproof)
 	for i := 0; i < expectedStateproofs; i++ {

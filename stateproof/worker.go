@@ -45,7 +45,8 @@ type builder struct {
 // This is a soft limit on how many builders should be kept in memory, the rest shall be fetched from DB.
 // At most times only 1 should builder should be stored (both in memory and on disk), as this feature
 // is mostly used for recoverability purposes - in case the StateProof chain is stalled.
-const numBuildersInMemory = 15
+// The builders cache is composed of the X earliest builders as well as the latest builder, for a total of X+1 (in case of stalled chain).
+const buildersCacheLength = 5 // must be at least 2 to function properly (earliest stateproof + latest stateproof)
 
 // Worker builds state proofs, by broadcasting
 // signatures using this node's participation keys, by collecting
