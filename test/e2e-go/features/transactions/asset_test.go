@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
@@ -37,7 +37,7 @@ import (
 
 type assetIDParams struct {
 	idx    uint64
-	params generated.AssetParams
+	params model.AssetParams
 }
 
 func helperFillSignBroadcast(client libgoal.Client, wh []byte, sender string, tx transactions.Transaction, err error) (string, error) {
@@ -976,7 +976,7 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	a.NoError(err)
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 1)
-	var asset generated.AssetParams
+	var asset model.AssetParams
 	var assetIndex uint64
 	for _, cp := range *info.CreatedAssets {
 		asset = cp.Params
@@ -1077,7 +1077,7 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	a.NoError(err)
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 1)
-	var asset generated.AssetParams
+	var asset model.AssetParams
 	var assetIndex uint64
 	for _, cp := range *info.CreatedAssets {
 		asset = cp.Params
@@ -1224,7 +1224,7 @@ func submitAndWaitForTransaction(sender string, tx transactions.Transaction, mes
 	asser.True(confirmed, message)
 }
 
-func verifyAssetParameters(asset generated.AssetParams,
+func verifyAssetParameters(asset model.AssetParams,
 	unitName, assetName, manager, reserve, freeze, clawback string,
 	metadataHash []byte, assetURL string, asser *require.Assertions) {
 
