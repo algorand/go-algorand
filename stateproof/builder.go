@@ -338,9 +338,6 @@ func (spw *Worker) sigExistsInDB(round basics.Round, account basics.Address) (bo
 }
 
 func (spw *Worker) builder(latest basics.Round) {
-	// TODO: Refactor variables a bit
-	spw.ledger.SetMinRound(latest + 1)
-
 	// We clock the building of state proofs based on new
 	// blocks.  This is because the acceptable state proof
 	// size grows over time, so that we aim to construct an extremely
@@ -385,9 +382,6 @@ func (spw *Worker) builder(latest basics.Round) {
 		}
 
 		latest = newLatest
-
-		// At this point, both signer and builder have finished with all rounds until latest, inclusive.
-		spw.ledger.SetMinRound(latest)
 	}
 }
 
