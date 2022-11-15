@@ -385,7 +385,6 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 					break
 				}
 				currentRound++
-
 			}
 			log.Infof("done building!\n")
 
@@ -401,7 +400,7 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 	}
 }
 
-func TestNodeServicesRestart(t *testing.T) {
+func TestNodeTxSyncRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -410,63 +409,71 @@ func TestNodeServicesRestart(t *testing.T) {
 	}
 	a := require.New(fixtures.SynchronizedTest(t))
 	// Overview of this test:
-	// Start a two-node network (primary has 100%, secondary has 0%)
+	// Start a two-node and one relay network
 	// Wait until a catchpoint is created
-	// Let the primary node catchup from the catchpoint
+	// Let the primary node have the majority of the stake
+	// Stop the primary node to miss the next transaction
 	// Send a transaction from the second node
-	// The transaction will not be confirmed because, the primary node with most of the stake, will never receive it
+	// Start the primary node, and immediately after start the catchup
+	// The transaction will be confirmed only when the TxSync of the pools passes the transaction to the primary node
 
 	consensus := make(config.ConsensusProtocols)
-	const consensusCatchpointCatchupTestProtocol = protocol.ConsensusVersion("catchpointtestingprotocol")
-	catchpointCatchupProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoVersion := protocol.ConsensusCurrentVersion
+	catchpointCatchupProtocol := config.Consensus[protoVersion]
 	catchpointCatchupProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
 	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
 	catchpointCatchupProtocol.SeedLookback = 2
 	catchpointCatchupProtocol.SeedRefreshInterval = 2
 	catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 8
-	catchpointCatchupProtocol.MaxTxnLife = 13
+	//	catchpointCatchupProtocol.MaxTxnLife = 13
 	catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
 	catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
-
-	if runtime.GOARCH == "amd64" {
+	catchpointCatchupProtocol.StateProofInterval = 0
+	if runtime.GOARCH != "arm" && runtime.GOARCH != "arm64" {
 		// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
 		catchpointCatchupProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
 		catchpointCatchupProtocol.AgreementFilterTimeout = 1 * time.Second
 	}
 
-	consensus[consensusCatchpointCatchupTestProtocol] = catchpointCatchupProtocol
+	consensus[protoVersion] = catchpointCatchupProtocol
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
 
-	fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes50EachWithRelay.json"))
 
 	// Get primary node
-	primaryNode, err := fixture.GetNodeController("Primary")
+	primaryNode, err := fixture.GetNodeController("Node1")
 	a.NoError(err)
 	// Get secondary node
-	secondNode, err := fixture.GetNodeController("Node")
+	secondNode, err := fixture.GetNodeController("Node2")
+	a.NoError(err)
+	// Get the relay
+	relayNode, err := fixture.GetNodeController("Relay")
 	a.NoError(err)
 
 	// prepare it's configuration file to set it to generate a catchpoint every 4 rounds.
 	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
 	a.NoError(err)
-	const catchpointInterval = 4
+	const catchpointInterval = 16
 	cfg.CatchpointInterval = catchpointInterval
+	cfg.CatchpointTracking = 2
 	cfg.MaxAcctLookback = 2
-	cfg.SaveToDisk(primaryNode.GetDataDir())
 	cfg.Archival = false
-	cfg.CatchpointInterval = 0
-	cfg.NetAddress = ""
-	cfg.EnableLedgerService = false
-	cfg.EnableBlockService = false
-	cfg.BaseLoggerDebugLevel = uint32(logging.Debug)
+
+	cfg.TxSyncIntervalSeconds = 2
+
+	cfg.SaveToDisk(primaryNode.GetDataDir())
 	cfg.SaveToDisk(secondNode.GetDataDir())
+
+	cfg, err = config.LoadConfigFromDisk(relayNode.GetDataDir())
+	a.NoError(err)
+	cfg.TxSyncIntervalSeconds = 2
+	cfg.SaveToDisk(relayNode.GetDataDir())
 
 	fixture.Start()
 
-	// fund the poor node's account
 	client1 := fixture.GetLibGoalClientFromNodeController(primaryNode)
 	client2 := fixture.GetLibGoalClientFromNodeController(secondNode)
 	wallet1, err := client1.GetUnencryptedWalletHandle()
@@ -478,8 +485,8 @@ func TestNodeServicesRestart(t *testing.T) {
 	addrs2, err := client2.ListAddresses(wallet2)
 	a.NoError(err)
 
-	// fund the poor account
-	tx, err := client1.SendPaymentFromUnencryptedWallet(addrs1[0], addrs2[0], 1000, 1000000, nil)
+	// let the second node have insufficient stake for proposing a block
+	tx, err := client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 4999999999000000, nil)
 	a.NoError(err)
 	status, err := client1.Status()
 	a.NoError(err)
@@ -488,7 +495,7 @@ func TestNodeServicesRestart(t *testing.T) {
 	targetCatchpointRound := status.LastRound
 
 	// ensure the catchpoint is created for targetCatchpointRound
-	timer := time.NewTimer(10 * time.Second)
+	timer := time.NewTimer(100 * time.Second)
 outer:
 	for {
 		status, err = client1.Status()
@@ -511,15 +518,48 @@ outer:
 		}
 	}
 
+	// stop the primary node
+	client1.FullStop()
+
+	// let the 2nd client send a transaction
+	tx, err = client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 50000, nil)
+	a.NoError(err)
+	// let the 2nd client send a transaction
+	/*///////
+	wh, err := client2.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	tx, err = client2.SendPaymentFromWallet(wh, nil, addrs2[0],
+		addrs1[0], 1000, 50000, []byte{}, "",
+		basics.Round(status.LastRound),
+		basics.Round(status.LastRound+1000))
+	a.NoError(err)
+	/*/ //////
+
+	// now that it missed the transaction, start it, and let it catchup
+	_, err = fixture.StartNode(primaryNode.GetDataDir())
+	a.NoError(err)
 	// let the primary node catchup
 	err = client1.Catchup(*status.LastCatchpoint)
 	a.NoError(err)
 
-	// let the 2nd client send a transaction
-	tx, err = client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 0, nil)
-	a.NoError(err)
+	// Wait for the catchup
+	for t := 0; t < 10; t++ {
+		status1, err := client1.Status()
+		a.NoError(err)
+
+		status2, err := client2.Status()
+		a.NoError(err)
+
+		if status1.LastRound+1 >= status2.LastRound {
+			// if the primary node is within 1 round of the secondary node, then it has
+			// caught up
+			break
+		}
+		time.Sleep(catchpointCatchupProtocol.AgreementFilterTimeout)
+	}
+
 	status, err = client2.Status()
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+10, addrs2[0], tx.ID().String())
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+500, addrs2[0], tx.ID().String())
 	a.NoError(err)
 }
