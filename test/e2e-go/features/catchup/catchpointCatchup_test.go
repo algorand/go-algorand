@@ -426,21 +426,18 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	catchpointCatchupProtocol.SeedLookback = 2
 	catchpointCatchupProtocol.SeedRefreshInterval = 2
 	catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 8
-	//	catchpointCatchupProtocol.MaxTxnLife = 13
 	catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
 	catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
 	catchpointCatchupProtocol.StateProofInterval = 0
-	if runtime.GOARCH != "arm" && runtime.GOARCH != "arm64" {
-		// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
+	if runtime.GOOS == "darwin" || runtime.GOARCH == "amd64" {
+		// amd64/macos platforms are generally quite capable, so accelerate the round times to make the test run faster.
 		catchpointCatchupProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
 		catchpointCatchupProtocol.AgreementFilterTimeout = 1 * time.Second
 	}
-
 	consensus[protoVersion] = catchpointCatchupProtocol
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
-
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes50EachWithRelay.json"))
 
 	// Get primary node
@@ -462,6 +459,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	cfg.MaxAcctLookback = 2
 	cfg.Archival = false
 
+	// Shorten the txn sync interval so the test can run faster
 	cfg.TxSyncIntervalSeconds = 2
 
 	cfg.SaveToDisk(primaryNode.GetDataDir())
@@ -524,29 +522,22 @@ outer:
 	// let the 2nd client send a transaction
 	tx, err = client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 50000, nil)
 	a.NoError(err)
-	// let the 2nd client send a transaction
-	/*///////
-	wh, err := client2.GetUnencryptedWalletHandle()
-	a.NoError(err)
-	tx, err = client2.SendPaymentFromWallet(wh, nil, addrs2[0],
-		addrs1[0], 1000, 50000, []byte{}, "",
-		basics.Round(status.LastRound),
-		basics.Round(status.LastRound+1000))
-	a.NoError(err)
-	/*/ //////
 
-	// now that it missed the transaction, start it, and let it catchup
+	// now that the primary missed the transaction, start it, and let it catchup
 	_, err = fixture.StartNode(primaryNode.GetDataDir())
 	a.NoError(err)
 	// let the primary node catchup
 	err = client1.Catchup(*status.LastCatchpoint)
 	a.NoError(err)
 
+	// the transaction should not be confirmed yet
+	_, err = fixture.WaitForConfirmedTxn(0, addrs2[0], tx.ID().String())
+	a.Error(err)
+
 	// Wait for the catchup
 	for t := 0; t < 10; t++ {
 		status1, err := client1.Status()
 		a.NoError(err)
-
 		status2, err := client2.Status()
 		a.NoError(err)
 
