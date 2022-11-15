@@ -452,24 +452,9 @@ int 1
 	a.NoError(err)
 
 	// Try polling 10 rounds to ensure txn is committed.
-	isCommitted := false
-	for i := 0; i < 10; i++ {
-		round, err = client.CurrentRound()
-		a.NoError(err)
-		_, err = client.WaitForRound(round + 1)
-		a.NoError(err)
-		// Ensure the txn committed
-		resp, err := client.GetParsedPendingTransactions(2)
-		a.NoError(err)
-		if resp.TotalTransactions == 1 {
-			pendingTxn := resp.TopTransactions[0]
-			a.Equal(pendingTxn.Txn.ID().String(), txid)
-			continue
-		}
-		a.Equal(uint64(0), resp.TotalTransactions)
-		isCommitted = true
-		break
-	}
+	round, err = client.CurrentRound()
+	a.NoError(err)
+	isCommitted := fixture.WaitForTxnConfirmation(round+10, creator, txid)
 	a.True(isCommitted)
 
 	// check creator's balance record for the app entry and the state changes
