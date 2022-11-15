@@ -111,7 +111,7 @@ func TestAccountInformation(t *testing.T) {
 func getBlockTest(t *testing.T, blockNum uint64, format string, expectedCode int) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
-	err := handler.GetBlock(c, blockNum, generatedV2.GetBlockParams{Format: &format})
+	err := handler.GetBlock(c, blockNum, generatedV2.GetBlockParams{Format: (*generatedV2.GetBlockParamsFormat)(&format)})
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
 }
@@ -243,7 +243,7 @@ func TestGetBlockGetBlockHash(t *testing.T) {
 	format := "json"
 
 	// Get block 1
-	err := handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: &format})
+	err := handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: (*generatedV2.GetBlockParamsFormat)(&format)})
 	a.NoError(err)
 	a.Equal(200, rec.Code)
 	err = protocol.DecodeJSON(rec.Body.Bytes(), &block1)
@@ -251,7 +251,7 @@ func TestGetBlockGetBlockHash(t *testing.T) {
 
 	// Get block 2
 	c, rec = newReq(t)
-	err = handler.GetBlock(c, 2, generatedV2.GetBlockParams{Format: &format})
+	err = handler.GetBlock(c, 2, generatedV2.GetBlockParams{Format: (*generatedV2.GetBlockParamsFormat)(&format)})
 	a.NoError(err)
 	a.Equal(200, rec.Code)
 	err = protocol.DecodeJSON(rec.Body.Bytes(), &block2)
@@ -285,7 +285,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 
 	// fetch the block and ensure it can be properly decoded with the standard JSON decoder
 	format := "json"
-	err := handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: &format})
+	err := handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: (*generatedV2.GetBlockParamsFormat)(&format)})
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
 	body := rec.Body.Bytes()
@@ -371,7 +371,7 @@ func pendingTransactionInformationTest(t *testing.T, txidToUse int, format strin
 	if txidToUse >= 0 {
 		txid = stxns[txidToUse].ID().String()
 	}
-	params := generatedV2.PendingTransactionInformationParams{Format: &format}
+	params := generatedV2.PendingTransactionInformationParams{Format: (*generatedV2.PendingTransactionInformationParamsFormat)(&format)}
 	err := handler.PendingTransactionInformation(c, txid, params)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
@@ -390,7 +390,7 @@ func TestPendingTransactionInformation(t *testing.T) {
 func getPendingTransactionsTest(t *testing.T, format string, max uint64, expectedCode int) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
-	params := generatedV2.GetPendingTransactionsParams{Format: &format, Max: &max}
+	params := generatedV2.GetPendingTransactionsParams{Format: (*generatedV2.GetPendingTransactionsParamsFormat)(&format), Max: &max}
 	err := handler.GetPendingTransactions(c, params)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
@@ -473,7 +473,7 @@ func pendingTransactionsByAddressTest(t *testing.T, rootkeyToUse int, format str
 	if rootkeyToUse >= 0 {
 		address = rootkeys[rootkeyToUse].Address().String()
 	}
-	params := generatedV2.GetPendingTransactionsByAddressParams{Format: &format}
+	params := generatedV2.GetPendingTransactionsByAddressParams{Format: (*generatedV2.GetPendingTransactionsByAddressParamsFormat)(&format)}
 	err := handler.GetPendingTransactionsByAddress(c, address, params)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
@@ -1011,13 +1011,13 @@ func TestGetProofDefault(t *testing.T) {
 	var resp generatedV2.TransactionProofResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	a.NoError(err)
-	a.Equal("sha512_256", resp.Hashtype)
+	a.Equal(generated.TransactionProofResponseHashtypeSha512256, resp.Hashtype)
 
 	l := handler.Node.LedgerForAPI()
 	blkHdr, err := l.BlockHdr(1)
 	a.NoError(err)
 
-	singleLeafProof, err := merklearray.ProofDataToSingleLeafProof(resp.Hashtype, resp.Treedepth, resp.Proof)
+	singleLeafProof, err := merklearray.ProofDataToSingleLeafProof(string(resp.Hashtype), resp.Treedepth, resp.Proof)
 	a.NoError(err)
 
 	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}

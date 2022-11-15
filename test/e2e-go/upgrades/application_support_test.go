@@ -204,7 +204,7 @@ int 1
 	client.WaitForRound(round + 2)
 	pendingTx, err := client.GetPendingTransactions(1)
 	a.NoError(err)
-	a.Equal(uint64(0), pendingTx.TotalTxns)
+	a.Equal(uint64(0), pendingTx.TotalTransactions)
 
 	// check creator's balance record for the app entry and the state changes
 	ad, err = client.AccountData(creator)
@@ -420,12 +420,12 @@ int 1
 		t.Skip("Test platform is too slow for this test")
 	}
 
-	a.Equal(uint64(1), pendingTx.TotalTxns)
+	a.Equal(uint64(1), pendingTx.TotalTransactions)
 
 	// check that the secondary node doesn't have that transaction in it's transaction pool.
 	pendingTx, err = secondary.GetPendingTransactions(1)
 	a.NoError(err)
-	a.Equal(uint64(0), pendingTx.TotalTxns)
+	a.Equal(uint64(0), pendingTx.TotalTransactions)
 
 	curStatus, err := client.Status()
 	a.NoError(err)
@@ -459,7 +459,7 @@ int 1
 	client.WaitForRound(round + 2)
 	pendingTx, err = client.GetPendingTransactions(1)
 	a.NoError(err)
-	a.Equal(uint64(0), pendingTx.TotalTxns)
+	a.Equal(uint64(0), pendingTx.TotalTransactions)
 
 	// check creator's balance record for the app entry and the state changes
 	ad, err = client.AccountData(creator)
