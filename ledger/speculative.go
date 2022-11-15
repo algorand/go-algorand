@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -249,4 +250,15 @@ func (v *validatedBlockAsLFE) StartEvaluator(hdr bookkeeping.BlockHeader, payset
 			Validate:            true,
 			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
 		})
+}
+
+// FlushCaches is part of ledger/internal.LedgerForEvaluator interface
+func (v *validatedBlockAsLFE) FlushCaches() {
+}
+
+var ErrNotImplemented = errors.New("Not implemented")
+
+// LookupKv is part of ledger/internal.LedgerForEvaluator interface
+func (v *validatedBlockAsLFE) LookupKv(basics.Round, string) ([]byte, error) {
+	return nil, ErrNotImplemented
 }
