@@ -443,7 +443,7 @@ func (w *testStagingWriter) writeKVs(ctx context.Context, kvrs []encodedKVRecord
 	return nil
 }
 
-func (w *testStagingWriter) writeHashes(ctx context.Context, balances []normalizedAccountBalance) error {
+func (w *testStagingWriter) writeHashes(ctx context.Context, balances []normalizedAccountBalance, kvrs []encodedKVRecordV6) error {
 	for _, bal := range balances {
 		for _, hash := range bal.accountHashes {
 			var key [4 + crypto.DigestSize]byte
@@ -451,6 +451,13 @@ func (w *testStagingWriter) writeHashes(ctx context.Context, balances []normaliz
 			copy(key[:], hash)
 			w.hashes[key] = w.hashes[key] + 1
 		}
+	}
+	for _, kv := range kvrs {
+		var key [4 + crypto.DigestSize]byte
+		hash := kvHashBuilderV6(string(kv.Key), kv.Value)
+		require.Len(w.t, hash, 4+crypto.DigestSize)
+		copy(key[:], hash)
+		w.hashes[key] = w.hashes[key] + 1
 	}
 	return nil
 }

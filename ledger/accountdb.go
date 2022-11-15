@@ -1072,7 +1072,7 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 }
 
 // writeCatchpointStagingHashes inserts all the account hashes in the provided array into the catchpoint pending hashes table catchpointpendinghashes.
-func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
+func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance, kvrs []encodedKVRecordV6) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointpendinghashes(data) VALUES(?)")
 	if err != nil {
 		return err
@@ -1093,6 +1093,23 @@ func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normal
 				return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
 			}
 		}
+	}
+
+	for _, kv := range kvrs {
+		hash := kvHashBuilderV6(string(kv.Key), kv.Value)
+		result, err := insertStmt.ExecContext(ctx, hash[:])
+		if err != nil {
+			return err
+		}
+
+		aff, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if aff != 1 {
+			return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+		}
+
 	}
 	return nil
 }

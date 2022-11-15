@@ -94,7 +94,7 @@ type CatchpointCatchupAccessor interface {
 type stagingWriter interface {
 	writeBalances(context.Context, []normalizedAccountBalance) error
 	writeCreatables(context.Context, []normalizedAccountBalance) error
-	writeHashes(context.Context, []normalizedAccountBalance) error
+	writeHashes(context.Context, []normalizedAccountBalance, []encodedKVRecordV6) error
 	writeKVs(context.Context, []encodedKVRecordV6) error
 	isShared() bool
 }
@@ -121,9 +121,9 @@ func (w *stagingWriterImpl) writeCreatables(ctx context.Context, balances []norm
 	})
 }
 
-func (w *stagingWriterImpl) writeHashes(ctx context.Context, balances []normalizedAccountBalance) error {
+func (w *stagingWriterImpl) writeHashes(ctx context.Context, balances []normalizedAccountBalance, kvrs []encodedKVRecordV6) error {
 	return w.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err := writeCatchpointStagingHashes(ctx, tx, balances)
+		err := writeCatchpointStagingHashes(ctx, tx, balances, kvrs)
 		return err
 	})
 }
@@ -528,7 +528,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	go func() {
 		defer wg.Done()
 		start := time.Now()
-		errHashes = c.stagingWriter.writeHashes(ctx, normalizedAccountBalances)
+		errHashes = c.stagingWriter.writeHashes(ctx, normalizedAccountBalances, chunkKVs)
 		durHashes = time.Since(start)
 	}()
 
