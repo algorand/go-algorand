@@ -32,7 +32,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -42,8 +42,8 @@ import (
 
 // CreatablesInfo has information about created assets, apps and opting in
 type CreatablesInfo struct {
-	AssetParams map[uint64]generated.AssetParams
-	AppParams   map[uint64]generated.ApplicationParams
+	AssetParams map[uint64]model.AssetParams
+	AppParams   map[uint64]model.ApplicationParams
 	OptIns      map[uint64][]string
 }
 
