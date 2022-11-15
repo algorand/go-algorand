@@ -120,7 +120,6 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 		expiredTxCount:       make(map[basics.Round]int),
 		ledger:               ledger,
 		statusCache:          makeStatusCache(cfg.TxPoolSize),
-		logProcessBlockStats: cfg.EnableProcessBlockStats,
 		logAssembleStats:     cfg.EnableAssembleStats,
 		expFeeFactor:         cfg.TxPoolExponentialIncreaseFactor,
 		txPoolMaxSize:        cfg.TxPoolSize,
@@ -498,22 +497,10 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
 func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
-	var stats telemetryspec.ProcessBlockMetrics
 	var knownCommitted uint
 	var unknownCommitted uint
 
 	committedTxids := delta.Txids
-	if pool.logProcessBlockStats {
-		pool.pendingMu.RLock()
-		for txid := range committedTxids {
-			if _, ok := pool.pendingTxids[txid]; ok {
-				knownCommitted++
-			} else {
-				unknownCommitted++
-			}
-		}
-		pool.pendingMu.RUnlock()
-	}
 
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
@@ -545,7 +532,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 		// Recompute the pool by starting from the new latest block.
 		// This has the side-effect of discarding transactions that
 		// have been committed (or that are otherwise no longer valid).
-		stats = pool.recomputeBlockEvaluator(committedTxids, knownCommitted)
+		pool.recomputeBlockEvaluator(committedTxids, knownCommitted)
 	}
 
 	stats.KnownCommittedCount = knownCommitted
@@ -655,7 +642,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator). Expects that the pool.mu mutex would be already taken.
-func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint) (stats telemetryspec.ProcessBlockMetrics) {
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
@@ -741,17 +728,13 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			switch err.(type) {
 			case *ledgercore.TransactionInLedgerError:
 				asmStats.CommittedCount++
-				stats.RemovedInvalidCount++
 			case transactions.TxnDeadError:
 				asmStats.InvalidCount++
-				stats.ExpiredCount++
 			case transactions.MinFeeError, *ledgercore.LeaseInLedgerError:
 				asmStats.InvalidCount++
-				stats.RemovedInvalidCount++
 				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
 			default:
 				asmStats.InvalidCount++
-				stats.RemovedInvalidCount++
 				pool.log.Warnf("Cannot re-add pending transaction to pool: %v", err)
 			}
 		}

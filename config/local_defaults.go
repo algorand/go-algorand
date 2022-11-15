@@ -65,7 +65,6 @@ var defaultLocal = Local{
 	EnableMetricReporting:                      false,
 	EnableOutgoingNetworkMessageFiltering:      true,
 	EnablePingHandler:                          true,
-	EnableProcessBlockStats:                    false,
 	EnableProfiler:                             false,
 	EnableRequestLogger:                        false,
 	EnableRuntimeMetrics:                       false,

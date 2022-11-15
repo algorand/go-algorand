@@ -128,24 +128,6 @@ func (m AssembleBlockStats) String() string {
 }
 
 //-------------------------------------------------------
-// ProcessBlock
-
-const processBlockMetricsIdentifier Metric = "ProcessBlock"
-
-// ProcessBlockMetrics is the set of metrics captured when we process OnNewBlock
-type ProcessBlockMetrics struct {
-	KnownCommittedCount   uint
-	UnknownCommittedCount uint
-	ExpiredCount          uint
-	RemovedInvalidCount   uint
-}
-
-// Identifier implements the required MetricDetails interface, retrieving the Identifier for this set of metrics.
-func (m ProcessBlockMetrics) Identifier() Metric {
-	return processBlockMetricsIdentifier
-}
-
-//-------------------------------------------------------
 // RoundTiming
 
 const roundTimingMetricsIdentifier Metric = "RoundTiming"
