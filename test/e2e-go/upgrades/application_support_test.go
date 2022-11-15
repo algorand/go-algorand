@@ -450,7 +450,10 @@ int 1
 	a.NoError(err)
 	txid, err := client.BroadcastTransaction(signedTxn)
 	a.NoError(err)
-	for {
+
+	// Try polling 10 rounds to ensure txn is committed.
+	isCommitted := false
+	for i := 0; i < 10; i++ {
 		round, err = client.CurrentRound()
 		a.NoError(err)
 		_, err = client.WaitForRound(round + 1)
@@ -464,8 +467,10 @@ int 1
 			continue
 		}
 		a.Equal(uint64(0), resp.TotalTransactions)
+		isCommitted = true
 		break
 	}
+	a.True(isCommitted)
 
 	// check creator's balance record for the app entry and the state changes
 	ad, err = client.AccountData(creator)
