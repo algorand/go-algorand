@@ -124,8 +124,8 @@ func (handler *TxHandler) Stop() {
 
 func reencode(stxns []transactions.SignedTxn) []byte {
 	var result [][]byte
-	for _, stxn := range stxns {
-		result = append(result, protocol.Encode(&stxn))
+	for i := range stxns {
+		result = append(result, protocol.Encode(&stxns[i]))
 	}
 	return bytes.Join(result, nil)
 }
@@ -198,8 +198,8 @@ func (handler *TxHandler) postProcessReportErrors(err error) {
 
 	var txGroupErr *verify.ErrTxGroupError
 	if errors.As(err, &txGroupErr) {
-		txGroupErr = err.(*verify.ErrTxGroupError)
-		switch txGroupErr.Reason() {
+		// txGroupErr = err.(*verify.ErrTxGroupError)
+		switch txGroupErr.Reason {
 		case verify.TxGroupErrorReasonNotWellFormed:
 			transactionMessagesTxnNotWellFormed.Inc(nil)
 		case verify.TxGroupErrorReasonInvalidFee:
