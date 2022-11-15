@@ -94,6 +94,11 @@ type proposal struct {
 	// validated (and thus was ready to be delivered to the state
 	// machine), relative to the zero of that round.
 	validatedAt time.Duration
+
+	// receivedAt indicates the time at which this proposal was
+	// delivered to the agreement package (as a messageEvent),
+	// relative to the zero of that round.
+	receivedAt time.Duration
 }
 
 func makeProposal(ve ValidatedBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {

@@ -893,7 +893,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			case transactions.TxnDeadError:
 				asmStats.InvalidCount++
 				stats.ExpiredCount++
-			case transactions.MinFeeError:
+			case transactions.MinFeeError, *ledgercore.LeaseInLedgerError:
 				asmStats.InvalidCount++
 				stats.RemovedInvalidCount++
 				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)

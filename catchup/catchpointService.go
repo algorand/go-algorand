@@ -41,7 +41,7 @@ const (
 	noPeersAvailableSleepInterval = 50 * time.Millisecond
 )
 
-// CatchpointCatchupNodeServices defines the extenal node support needed
+// CatchpointCatchupNodeServices defines the external node support needed
 // for the catchpoint service to switch the node between "regular" operational mode and catchup mode.
 type CatchpointCatchupNodeServices interface {
 	SetCatchpointCatchupMode(bool) (newContextCh <-chan context.Context)
@@ -65,10 +65,10 @@ type CatchpointCatchupStats struct {
 type CatchpointCatchupService struct {
 	// stats is the statistics object, updated async while downloading the ledger
 	stats CatchpointCatchupStats
-	// statsMu syncronizes access to stats, as we could attempt to update it while querying for it's current state
+	// statsMu synchronizes access to stats, as we could attempt to update it while querying for it's current state
 	statsMu deadlock.Mutex
 	node    CatchpointCatchupNodeServices
-	// ctx is the node cancelation context, used when the node is being stopped.
+	// ctx is the node cancellation context, used when the node is being stopped.
 	ctx           context.Context
 	cancelCtxFunc context.CancelFunc
 	// running is a waitgroup counting the running goroutine(1), and allow us to exit cleanly.
@@ -79,17 +79,17 @@ type CatchpointCatchupService struct {
 	stage ledger.CatchpointCatchupState
 	// log is the logger object
 	log logging.Logger
-	// newService indicates whether this service was created after the node was running ( i.e. true ) or the node just started to find that it was previously perfoming catchup
+	// newService indicates whether this service was created after the node was running ( i.e. true ) or the node just started to find that it was previously performing catchup
 	newService bool
-	// net is the underlaying network module
+	// net is the underlying network module
 	net network.GossipNode
 	// ledger points to the ledger object
-	ledger *ledger.Ledger
+	ledger ledger.CatchupAccessorClientLedger
 	// lastBlockHeader is the latest block we have before going into catchpoint catchup mode. We use it to serve the node status requests instead of going to the ledger.
 	lastBlockHeader bookkeeping.BlockHeader
 	// config is a copy of the node configuration
 	config config.Local
-	// abortCtx used as a syncronized flag to let us know when the user asked us to abort the catchpoint catchup process. note that it's not being used when we decided to abort
+	// abortCtx used as a synchronized flag to let us know when the user asked us to abort the catchpoint catchup process. note that it's not being used when we decided to abort
 	// the catchup due to an internal issue ( such as exceeding number of retries )
 	abortCtx     context.Context
 	abortCtxFunc context.CancelFunc
@@ -98,19 +98,20 @@ type CatchpointCatchupService struct {
 }
 
 // MakeResumedCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
-func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger, cfg config.Local) (service *CatchpointCatchupService, err error) {
+func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, accessor ledger.CatchpointCatchupAccessor, cfg config.Local) (service *CatchpointCatchupService, err error) {
 	service = &CatchpointCatchupService{
 		stats: CatchpointCatchupStats{
 			StartTime: time.Now(),
 		},
 		node:           node,
-		ledgerAccessor: ledger.MakeCatchpointCatchupAccessor(l, log),
+		ledgerAccessor: accessor,
 		log:            log,
 		newService:     false,
 		net:            net,
-		ledger:         l,
+		ledger:         accessor.Ledger(),
 		config:         cfg,
 	}
+	l := accessor.Ledger()
 	service.lastBlockHeader, err = l.BlockHdr(l.Latest())
 	if err != nil {
 		return nil, err
@@ -124,7 +125,7 @@ func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCat
 }
 
 // MakeNewCatchpointCatchupService creates a new catchpoint catchup service for a node that is not in catchpoint catchup mode
-func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger, cfg config.Local) (service *CatchpointCatchupService, err error) {
+func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, accessor ledger.CatchpointCatchupAccessor, cfg config.Local) (service *CatchpointCatchupService, err error) {
 	if catchpoint == "" {
 		return nil, fmt.Errorf("MakeNewCatchpointCatchupService: catchpoint is invalid")
 	}
@@ -134,14 +135,15 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 			StartTime:       time.Now(),
 		},
 		node:           node,
-		ledgerAccessor: ledger.MakeCatchpointCatchupAccessor(l, log),
+		ledgerAccessor: accessor,
 		stage:          ledger.CatchpointCatchupStateInactive,
 		log:            log,
 		newService:     true,
 		net:            net,
-		ledger:         l,
+		ledger:         accessor.Ledger(),
 		config:         cfg,
 	}
+	l := accessor.Ledger()
 	service.lastBlockHeader, err = l.BlockHdr(l.Latest())
 	if err != nil {
 		return nil, err
@@ -162,7 +164,7 @@ func (cs *CatchpointCatchupService) Start(ctx context.Context) {
 func (cs *CatchpointCatchupService) Abort() {
 	// In order to abort the catchpoint catchup process, we need to first set the flag of abortCtxFunc, and follow that by canceling the main context.
 	// The order of these calls is crucial : The various stages are blocked on the main context. When that one expires, it uses the abort context to determine
-	// if the cancelation meaning that we want to shut down the process, or aborting the catchpoint catchup completly.
+	// if the cancellation meaning that we want to shut down the process, or aborting the catchpoint catchup completely.
 	cs.abortCtxFunc()
 	cs.cancelCtxFunc()
 }
@@ -200,8 +202,8 @@ func (cs *CatchpointCatchupService) run() {
 			err = cs.processStageInactive()
 		case ledger.CatchpointCatchupStateLedgerDownload:
 			err = cs.processStageLedgerDownload()
-		case ledger.CatchpointCatchupStateLastestBlockDownload:
-			err = cs.processStageLastestBlockDownload()
+		case ledger.CatchpointCatchupStateLatestBlockDownload:
+			err = cs.processStageLatestBlockDownload()
 		case ledger.CatchpointCatchupStateBlocksDownload:
 			err = cs.processStageBlocksDownload()
 		case ledger.CatchpointCatchupStateSwitch:
@@ -258,7 +260,7 @@ func (cs *CatchpointCatchupService) processStageInactive() (err error) {
 		return cs.abort(fmt.Errorf("processStageInactive failed to update stage : %v", err))
 	}
 	if cs.newService {
-		// we need to let the node know that it should shut down all the unneed services to avoid clashes.
+		// we need to let the node know that it should shut down all the unneeded services to avoid clashes.
 		cs.updateNodeCatchupMode(true)
 	}
 	return nil
@@ -272,7 +274,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	round, _, err0 := ledgercore.ParseCatchpointLabel(label)
 
 	if err0 != nil {
-		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to patse label : %v", err0))
+		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to parse label : %v", err0))
 	}
 
 	// download balances file.
@@ -326,9 +328,9 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 		cs.log.Warnf("unable to download ledger : %v", err)
 	}
 
-	err = cs.updateStage(ledger.CatchpointCatchupStateLastestBlockDownload)
+	err = cs.updateStage(ledger.CatchpointCatchupStateLatestBlockDownload)
 	if err != nil {
-		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to update stage to CatchpointCatchupStateLastestBlockDownload : %v", err))
+		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to update stage to CatchpointCatchupStateLatestBlockDownload : %v", err))
 	}
 	return nil
 }
@@ -342,11 +344,11 @@ func (cs *CatchpointCatchupService) updateVerifiedAccounts(addedTrieHashes uint6
 	}
 }
 
-// processStageLastestBlockDownload is the third catchpoint catchup stage. It downloads the latest block and verify that against the previously downloaded ledger.
-func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err error) {
+// processStageLatestBlockDownload is the third catchpoint catchup stage. It downloads the latest block and verify that against the previously downloaded ledger.
+func (cs *CatchpointCatchupService) processStageLatestBlockDownload() (err error) {
 	blockRound, err := cs.ledgerAccessor.GetCatchupBlockRound(cs.ctx)
 	if err != nil {
-		return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed to retrieve catchup block round : %v", err))
+		return cs.abort(fmt.Errorf("processStageLatestBlockDownload failed to retrieve catchup block round : %v", err))
 	}
 
 	attemptsCount := 0
@@ -375,7 +377,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 
 		// check block protocol version support.
 		if protoParams, ok = config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
-			cs.log.Warnf("processStageLastestBlockDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol)
+			cs.log.Warnf("processStageLatestBlockDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol)
 
 			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 				// try again.
@@ -383,24 +385,24 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 				cs.blocksDownloadPeerSelector.rankPeer(psp, peerRankInvalidDownload)
 				continue
 			}
-			return cs.abort(fmt.Errorf("processStageLastestBlockDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol))
+			return cs.abort(fmt.Errorf("processStageLatestBlockDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol))
 		}
 
-		// We need to compare explicitly the genesis hash since we're not doing any block validation. This would ensure the genesis.json file matches the block that we've receieved.
+		// We need to compare explicitly the genesis hash since we're not doing any block validation. This would ensure the genesis.json file matches the block that we've received.
 		if protoParams.SupportGenesisHash && blk.GenesisHash() != cs.ledger.GenesisHash() {
-			cs.log.Warnf("processStageLastestBlockDownload: genesis hash mismatches : genesis hash on genesis.json file is %v while genesis hash of downloaded block is %v", cs.ledger.GenesisHash(), blk.GenesisHash())
+			cs.log.Warnf("processStageLatestBlockDownload: genesis hash mismatches : genesis hash on genesis.json file is %v while genesis hash of downloaded block is %v", cs.ledger.GenesisHash(), blk.GenesisHash())
 			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 				// try again.
 				blk = nil
 				cs.blocksDownloadPeerSelector.rankPeer(psp, peerRankInvalidDownload)
 				continue
 			}
-			return cs.abort(fmt.Errorf("processStageLastestBlockDownload: genesis hash mismatches : genesis hash on genesis.json file is %v while genesis hash of downloaded block is %v", cs.ledger.GenesisHash(), blk.GenesisHash()))
+			return cs.abort(fmt.Errorf("processStageLatestBlockDownload: genesis hash mismatches : genesis hash on genesis.json file is %v while genesis hash of downloaded block is %v", cs.ledger.GenesisHash(), blk.GenesisHash()))
 		}
 
 		// check to see that the block header and the block payset aligns
 		if !blk.ContentsMatchHeader() {
-			cs.log.Warnf("processStageLastestBlockDownload: downloaded block content does not match downloaded block header")
+			cs.log.Warnf("processStageLatestBlockDownload: downloaded block content does not match downloaded block header")
 
 			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 				// try again.
@@ -408,7 +410,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 				cs.blocksDownloadPeerSelector.rankPeer(psp, peerRankInvalidDownload)
 				continue
 			}
-			return cs.abort(fmt.Errorf("processStageLastestBlockDownload: downloaded block content does not match downloaded block header"))
+			return cs.abort(fmt.Errorf("processStageLatestBlockDownload: downloaded block content does not match downloaded block header"))
 		}
 
 		// verify that the catchpoint is valid.
@@ -420,15 +422,18 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 				// try again.
 				blk = nil
-				cs.log.Infof("processStageLastestBlockDownload: block %d verification against catchpoint failed, another attempt will be made; err = %v", blockRound, err)
+				cs.log.Infof("processStageLatestBlockDownload: block %d verification against catchpoint failed, another attempt will be made; err = %v", blockRound, err)
 				cs.blocksDownloadPeerSelector.rankPeer(psp, peerRankInvalidDownload)
 				continue
 			}
-			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed when calling VerifyCatchpoint : %v", err))
+			return cs.abort(fmt.Errorf("processStageLatestBlockDownload failed when calling VerifyCatchpoint : %v", err))
 		}
-		// give a rank to the download, as the download was successful.
-		peerRank := cs.blocksDownloadPeerSelector.peerDownloadDurationToRank(psp, blockDownloadDuration)
-		cs.blocksDownloadPeerSelector.rankPeer(psp, peerRank)
+		if psp != nil {
+			// give a rank to the download, as the download was successful.
+			// if the block might have been retrieved from the local ledger, nothing to rank
+			peerRank := cs.blocksDownloadPeerSelector.peerDownloadDurationToRank(psp, blockDownloadDuration)
+			cs.blocksDownloadPeerSelector.rankPeer(psp, peerRank)
+		}
 
 		err = cs.ledgerAccessor.StoreBalancesRound(cs.ctx, blk)
 		if err != nil {
@@ -437,7 +442,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 				blk = nil
 				continue
 			}
-			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed when calling StoreBalancesRound : %v", err))
+			return cs.abort(fmt.Errorf("processStageLatestBlockDownload failed when calling StoreBalancesRound : %v", err))
 		}
 
 		err = cs.ledgerAccessor.StoreFirstBlock(cs.ctx, blk)
@@ -447,7 +452,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 				blk = nil
 				continue
 			}
-			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed when calling StoreFirstBlock : %v", err))
+			return cs.abort(fmt.Errorf("processStageLatestBlockDownload failed when calling StoreFirstBlock : %v", err))
 		}
 
 		err = cs.updateStage(ledger.CatchpointCatchupStateBlocksDownload)
@@ -457,7 +462,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 				blk = nil
 				continue
 			}
-			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed to update stage : %v", err))
+			return cs.abort(fmt.Errorf("processStageLatestBlockDownload failed to update stage : %v", err))
 		}
 
 		// great ! everything is ready for next stage.
@@ -466,7 +471,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 	return nil
 }
 
-// lookbackForStateproofsSupport calculates the lookback (from topblock round) needed to be downloaded
+// lookbackForStateproofsSupport calculates the lookback (from topBlock round) needed to be downloaded
 // in order to support state proofs verification.
 func lookbackForStateproofsSupport(topBlock *bookkeeping.Block) uint64 {
 	proto := config.Consensus[topBlock.CurrentProtocol]
@@ -764,10 +769,10 @@ func (cs *CatchpointCatchupService) GetStatistics() (out CatchpointCatchupStats)
 }
 
 // updateBlockRetrievalStatistics updates the blocks retrieval statistics by applying the provided deltas
-func (cs *CatchpointCatchupService) updateBlockRetrievalStatistics(aquiredBlocksDelta, verifiedBlocksDelta int64) {
+func (cs *CatchpointCatchupService) updateBlockRetrievalStatistics(acquiredBlocksDelta, verifiedBlocksDelta int64) {
 	cs.statsMu.Lock()
 	defer cs.statsMu.Unlock()
-	cs.stats.AcquiredBlocks = uint64(int64(cs.stats.AcquiredBlocks) + aquiredBlocksDelta)
+	cs.stats.AcquiredBlocks = uint64(int64(cs.stats.AcquiredBlocks) + acquiredBlocksDelta)
 	cs.stats.VerifiedBlocks = uint64(int64(cs.stats.VerifiedBlocks) + verifiedBlocksDelta)
 }
 

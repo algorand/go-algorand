@@ -25,6 +25,7 @@ import (
 // A proposalSeeker finds the vote with the lowest credential until freeze() is
 // called.
 type proposalSeeker struct {
+	_struct struct{} `codec:","`
 	// Lowest contains the vote with the lowest credential seen so far.
 	Lowest vote
 	// Filled is set if any vote has been seen.
@@ -66,10 +67,11 @@ func (s proposalSeeker) freeze() proposalSeeker {
 // It returns the following type(s) of event: voteFiltered, proposalAccepted, readStaging,
 // and proposalFrozen.
 type proposalTracker struct {
+	_struct struct{} `codec:","`
 	// Duplicate holds the set of senders which has been seen by the
 	// proposalTracker.  A duplicate proposal-vote or an equivocating
 	// proposal-vote is dropped by a proposalTracker.
-	Duplicate map[basics.Address]bool
+	Duplicate map[basics.Address]bool `codec:"Duplicate,allocbound=-"`
 	// Freezer holds a proposalSeeker, which seeks the proposal-vote with
 	// the lowest credential seen by the proposalTracker.
 	Freezer proposalSeeker

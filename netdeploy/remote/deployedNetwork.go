@@ -1047,7 +1047,7 @@ func extractPublicPort(address string) (port int, err error) {
 func computeRootStorage(nodeCount, relayCount int) int {
 	// For now, we'll just use root storage -- assume short-lived instances
 	// 10 per node should be good for a week (add relayCount * 0 so param is used)
-	minGB := 10 + nodeCount*10 + (relayCount * 50)
+	minGB := 20 + (nodeCount * 10) + (relayCount * 50)
 	return minGB
 }
 
