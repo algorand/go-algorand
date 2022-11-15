@@ -34,7 +34,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	modelV2 "github.com/algorand/go-algorand/daemon/algod/api/spec/v2"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
@@ -61,7 +60,7 @@ type Client struct {
 	cacheDir     string
 	consensus    config.ConsensusProtocols
 
-	suggestedParamsCache  v1.TransactionParams
+	suggestedParamsCache  generatedV2.TransactionParametersResponse
 	suggestedParamsExpire time.Time
 	suggestedParamsMaxAge time.Duration
 }
@@ -617,7 +616,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 		tx.PaymentTxnFields.CloseRemainderTo = closeToAddr
 	}
 
-	tx.Header.GenesisID = params.GenesisID
+	tx.Header.GenesisID = params.GenesisId
 
 	// Check if the protocol supports genesis hash
 	if cp.SupportGenesisHash {
@@ -649,19 +648,10 @@ func (c *Client) Status() (resp generatedV2.NodeStatusResponse, err error) {
 }
 
 // AccountInformation takes an address and returns its information
-func (c *Client) AccountInformation(account string) (resp v1.Account, err error) {
+func (c *Client) AccountInformation(account string, includeCreatables bool) (resp generatedV2.Account, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.AccountInformation(account)
-	}
-	return
-}
-
-// AccountInformationV2 takes an address and returns its information
-func (c *Client) AccountInformationV2(account string, includeCreatables bool) (resp generatedV2.Account, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.AccountInformationV2(account, includeCreatables)
+		resp, err = algod.AccountInformation(account, includeCreatables)
 	}
 	return
 }
@@ -715,7 +705,7 @@ func (c *Client) AccountData(account string) (accountData basics.AccountData, er
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte
-		resp, err = algod.RawAccountInformationV2(account)
+		resp, err = algod.RawAccountInformation(account)
 		if err == nil {
 			err = protocol.Decode(resp, &accountData)
 		}
@@ -724,21 +714,12 @@ func (c *Client) AccountData(account string) (accountData basics.AccountData, er
 }
 
 // AssetInformation takes an asset's index and returns its information
-func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.AssetInformation(index)
-	}
-	return
-}
-
-// AssetInformationV2 takes an asset's index and returns its information
-func (c *Client) AssetInformationV2(index uint64) (resp generatedV2.Asset, err error) {
+func (c *Client) AssetInformation(index uint64) (resp generatedV2.Asset, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
 		return
 	}
-	resp, err = algod.AssetInformationV2(index)
+	resp, err = algod.AssetInformation(index)
 	if err != nil {
 		return generatedV2.Asset{}, err
 	}
@@ -794,18 +775,9 @@ func (c *Client) GetApplicationBoxByName(index uint64, name string) (resp genera
 	return
 }
 
-// TransactionInformation takes an address and associated txid and return its information
-func (c *Client) TransactionInformation(addr, txid string) (resp v1.Transaction, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.TransactionInformation(addr, txid)
-	}
-	return
-}
-
 // PendingTransactionInformation returns information about a recently issued
 // transaction based on its txid.
-func (c *Client) PendingTransactionInformation(txid string) (resp v1.Transaction, err error) {
+func (c *Client) PendingTransactionInformation(txid string) (resp generatedV2.PendingTransactionResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.PendingTransactionInformation(txid)
@@ -813,18 +785,24 @@ func (c *Client) PendingTransactionInformation(txid string) (resp v1.Transaction
 	return
 }
 
-// PendingTransactionInformationV2 returns information about a recently issued
-// transaction based on its txid.
-func (c *Client) PendingTransactionInformationV2(txid string) (resp generatedV2.PendingTransactionResponse, err error) {
+// ParsedPendingTransaction takes a txid and returns the parsed PendingTransaction response.
+func (c *Client) ParsedPendingTransaction(txid string) (txn v2.PreEncodedTxInfo, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.PendingTransactionInformationV2(txid)
+		var resp []byte
+		resp, err = algod.RawPendingTransactionInformation(txid)
+		if err == nil {
+			err = protocol.DecodeReflect(resp, &txn)
+			if err != nil {
+				return
+			}
+		}
 	}
 	return
 }
 
 // Block takes a round and returns its block
-func (c *Client) Block(round uint64) (resp v1.Block, err error) {
+func (c *Client) Block(round uint64) (resp generatedV2.BlockResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Block(round)
@@ -833,7 +811,7 @@ func (c *Client) Block(round uint64) (resp v1.Block, err error) {
 }
 
 // RawBlock takes a round and returns its block
-func (c *Client) RawBlock(round uint64) (resp v1.RawBlock, err error) {
+func (c *Client) RawBlock(round uint64) (resp []byte, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.RawBlock(round)
@@ -841,20 +819,27 @@ func (c *Client) RawBlock(round uint64) (resp v1.RawBlock, err error) {
 	return
 }
 
-// BookkeepingBlock takes a round and returns its block
-func (c *Client) BookkeepingBlock(round uint64) (block bookkeeping.Block, err error) {
+// EncodedBlockCert takes a round and returns its parsed block and certificate
+func (c *Client) EncodedBlockCert(round uint64) (blockCert rpcs.EncodedBlockCert, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte
 		resp, err = algod.RawBlock(round)
 		if err == nil {
-			var b rpcs.EncodedBlockCert
-			err = protocol.DecodeReflect(resp, &b)
+			err = protocol.Decode(resp, &blockCert)
 			if err != nil {
 				return
 			}
-			block = b.Block
 		}
+	}
+	return
+}
+
+// BookkeepingBlock takes a round and returns its block
+func (c *Client) BookkeepingBlock(round uint64) (block bookkeeping.Block, err error) {
+	blockCert, err := c.EncodedBlockCert(round)
+	if err == nil {
+		return blockCert.Block, nil
 	}
 	return
 }
@@ -879,7 +864,7 @@ func (c *Client) WaitForRound(round uint64) (resp generatedV2.NodeStatusResponse
 
 // GetBalance takes an address and returns its total balance; if the address doesn't exist, it returns 0.
 func (c *Client) GetBalance(address string) (uint64, error) {
-	resp, err := c.AccountInformation(address)
+	resp, err := c.AccountInformation(address, false)
 	if err != nil {
 		return 0, err
 	}
@@ -896,7 +881,7 @@ func (c Client) AlgodVersions() (resp common.Version, err error) {
 }
 
 // LedgerSupply returns the total number of algos in the system
-func (c Client) LedgerSupply() (resp v1.Supply, err error) {
+func (c Client) LedgerSupply() (resp generatedV2.SupplyResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.LedgerSupply()
@@ -921,16 +906,16 @@ func (c Client) CurrentRound() (lastRound uint64, err error) {
 func (c *Client) SuggestedFee() (fee uint64, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err := algod.SuggestedFee()
+		params, err := algod.SuggestedParams()
 		if err == nil {
-			fee = resp.Fee
+			fee = params.Fee
 		}
 	}
 	return
 }
 
 // SuggestedParams returns the suggested parameters for a new transaction
-func (c *Client) SuggestedParams() (params v1.TransactionParams, err error) {
+func (c *Client) SuggestedParams() (params generatedV2.TransactionParametersResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		params, err = algod.SuggestedParams()
@@ -943,7 +928,7 @@ func (c *Client) SetSuggestedParamsCacheAge(maxAge time.Duration) {
 	c.suggestedParamsMaxAge = maxAge
 }
 
-func (c *Client) cachedSuggestedParams() (params v1.TransactionParams, err error) {
+func (c *Client) cachedSuggestedParams() (params generatedV2.TransactionParametersResponse, err error) {
 	if c.suggestedParamsMaxAge == 0 || time.Now().After(c.suggestedParamsExpire) {
 		params, err = c.SuggestedParams()
 		if err == nil && c.suggestedParamsMaxAge != 0 {
@@ -957,7 +942,7 @@ func (c *Client) cachedSuggestedParams() (params v1.TransactionParams, err error
 
 // GetPendingTransactions gets a snapshot of current pending transactions on the node.
 // If maxTxns = 0, fetches as many transactions as possible.
-func (c *Client) GetPendingTransactions(maxTxns uint64) (resp v1.PendingTransactions, err error) {
+func (c *Client) GetPendingTransactions(maxTxns uint64) (resp generatedV2.PendingTransactionsResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.GetPendingTransactions(maxTxns)
@@ -967,10 +952,48 @@ func (c *Client) GetPendingTransactions(maxTxns uint64) (resp v1.PendingTransact
 
 // GetPendingTransactionsByAddress gets a snapshot of current pending transactions on the node for the given address.
 // If maxTxns = 0, fetches as many transactions as possible.
-func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (resp v1.PendingTransactions, err error) {
+func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (resp generatedV2.PendingTransactionsResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.PendingTransactionsByAddr(addr, maxTxns)
+	}
+	return
+}
+
+// PendingTransactions represents a parsed PendingTransactionsResponse struct.
+type PendingTransactions struct {
+	TopTransactions   []transactions.SignedTxn `json:"top-transactions"`
+	TotalTransactions uint64                   `json:"total-transactions"`
+}
+
+// GetParsedPendingTransactions returns the parsed response with pending transactions.
+func (c *Client) GetParsedPendingTransactions(maxTxns uint64) (txns PendingTransactions, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		var resp []byte
+		resp, err = algod.GetRawPendingTransactions(maxTxns)
+		if err == nil {
+			err = protocol.DecodeReflect(resp, &txns)
+			if err != nil {
+				return
+			}
+		}
+	}
+	return
+}
+
+// GetParsedPendingTransactionsByAddress returns the parsed response with pending transactions by address.
+func (c *Client) GetParsedPendingTransactionsByAddress(addr string, maxTxns uint64) (txns PendingTransactions, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		var resp []byte
+		resp, err = algod.RawPendingTransactionsByAddr(addr, maxTxns)
+		if err == nil {
+			err = protocol.DecodeReflect(resp, &txns)
+			if err != nil {
+				return
+			}
+		}
 	}
 	return
 }
@@ -1053,7 +1076,7 @@ func (c *Client) ExportKey(walletHandle []byte, password, account string) (resp 
 
 // ConsensusParams returns the consensus parameters for the protocol active at the specified round
 func (c *Client) ConsensusParams(round uint64) (consensus config.ConsensusParams, err error) {
-	block, err := c.Block(round)
+	block, err := c.BookkeepingBlock(round)
 	if err != nil {
 		return
 	}
@@ -1204,7 +1227,7 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 
 			for _, acc := range accounts {
 				var info generatedV2.Account
-				if info, err = client.AccountInformationV2(acc.String(), true); err != nil {
+				if info, err = client.AccountInformation(acc.String(), true); err != nil {
 					// ignore error - accounts might have app addresses that were not funded
 					continue
 				}
@@ -1215,11 +1238,11 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 			if dr.Round, err = client.CurrentRound(); err != nil {
 				return
 			}
-			var b v1.Block
-			if b, err = client.Block(dr.Round); err != nil {
+			var b bookkeeping.Block
+			if b, err = client.BookkeepingBlock(dr.Round); err != nil {
 				return
 			}
-			dr.LatestTimestamp = uint64(b.Timestamp)
+			dr.LatestTimestamp = uint64(b.BlockHeader.TimeStamp)
 		}
 	}
 	return

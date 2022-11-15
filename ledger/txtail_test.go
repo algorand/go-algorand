@@ -279,7 +279,7 @@ func TestTxTailDeltaTracking(t *testing.T) {
 					LastValid: basics.Round(i + 50),
 					Intra:     0,
 				}
-				deltas.Txleases[ledgercore.Txlease{Sender: blk.Payset[0].Txn.Sender, Lease: blk.Payset[0].Txn.Lease}] = basics.Round(i + 50)
+				deltas.AddTxLease(ledgercore.Txlease{Sender: blk.Payset[0].Txn.Sender, Lease: blk.Payset[0].Txn.Lease}, basics.Round(i+50))
 
 				txtail.newBlock(blk, deltas)
 				txtail.committedUpTo(basics.Round(i))
