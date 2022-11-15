@@ -43,11 +43,6 @@ func (spw *Worker) loadOrCreateBuilderWithSignatures(rnd basics.Round) (builder,
 		return builder{}, err
 	}
 
-	// At this point, both signer and builder have finished with all rounds until the builder's voter headers round, inclusive.
-	// We haven't finished with rnd yet though, as the next builder's lookback round (next builder's rnd - interval - lookback)
-	// will be smaller than rnd.
-	spw.ledger.AdvanceVotersMinRound(b.VotersHdr.Round + 1)
-
 	if err := spw.loadSignaturesIntoBuilder(&b); err != nil {
 		return builder{}, err
 	}

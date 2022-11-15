@@ -51,6 +51,12 @@ func (spw *Worker) signer(latest basics.Round) {
 			}
 			spw.signStateProof(hdr)
 			spw.invokeBuilder(nextRnd)
+
+			// At this point, both signer and builder have finished with all rounds until the builder's voter headers round, inclusive.
+			// We haven't finished with nextRnd yet though, as the next builder's lookback round (next builder's rnd - interval - lookback)
+			// will be smaller than nextRnd.
+			spw.ledger.AdvanceVotersMinRound(nextRnd.SubSaturate(basics.Round(config.Consensus[hdr.CurrentProtocol].StateProofInterval)) + 1)
+
 			nextRnd++
 
 		case <-spw.ctx.Done():
