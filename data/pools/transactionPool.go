@@ -694,6 +694,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	pool.assemblyMu.Unlock()
 
 	next := bookkeeping.MakeBlock(prev)
+	proto := config.Consensus[next.CurrentProtocol]
 	pool.numPendingWholeBlocks = 0
 	hint := pendingCount - int(knownCommitted)
 	if hint < 0 || int(knownCommitted) < 0 {
@@ -743,6 +744,10 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 				asmStats.CommittedCount++
 				stats.RemovedInvalidCount++
 			case transactions.TxnDeadError:
+				te := err.(transactions.TxnDeadError)
+				if proto.MaxTxnLife == uint64(te.LastValid-te.FirstValid) {
+					asmStats.ExpiredMaxLifeCount++
+				}
 				asmStats.ExpiredCount++
 				stats.ExpiredCount++
 			case *ledgercore.LeaseInLedgerError:

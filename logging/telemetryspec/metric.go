@@ -46,6 +46,7 @@ type AssembleBlockStats struct {
 	InvalidCount              int // number of transaction groups that are included in a block
 	MinFeeErrorCount          int // number of transactions excluded because the fee is too low
 	ExpiredCount              int // number of transactions removed because of expiration
+	ExpiredMaxLifeCount       int // number of expired transactions with LastValid set to MaxTxnLife
 	LeaseErrorCount           int // number of transactions removed because it has an already used lease
 	MinFee                    uint64
 	MaxFee                    uint64
@@ -105,7 +106,8 @@ func (m AssembleBlockStats) String() string {
 	b.WriteString(fmt.Sprintf("InvalidCount:%d, ", m.InvalidCount))
 	b.WriteString(fmt.Sprintf("MinFeeErrorCount:%d, ", m.MinFeeErrorCount))
 	b.WriteString(fmt.Sprintf("ExpiredCount:%d, ", m.ExpiredCount))
-	b.WriteString(fmt.Sprintf("LeaseErrorCount:%d, ", m.ExpiredCount))
+	b.WriteString(fmt.Sprintf("ExpiredMaxLifeCount:%d, ", m.ExpiredMaxLifeCount))
+	b.WriteString(fmt.Sprintf("LeaseErrorCount:%d, ", m.LeaseErrorCount))
 	b.WriteString(fmt.Sprintf("MinFee:%d, ", m.MinFee))
 	b.WriteString(fmt.Sprintf("MaxFee:%d, ", m.MaxFee))
 	b.WriteString(fmt.Sprintf("AverageFee:%d, ", m.AverageFee))
