@@ -56,6 +56,9 @@ var transactionMessagesTxnLogicSig = metrics.MakeCounter(metrics.TransactionMess
 var transactionMessagesTxnSigVerificationFailed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigVerificationFailed)
 var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionMessagesBacklogSize)
 
+var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGroupTxSyncRemember)
+var transactionGroupTxSyncAlreadyCommitted = metrics.MakeCounter(metrics.TransactionGroupTxSyncAlreadyCommitted)
+
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
 	rawmsg            *network.IncomingMessage // the raw message from the network
@@ -343,6 +346,7 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 		unverifiedTxGroup: unverifiedTxGroup,
 	}
 	if handler.checkAlreadyCommitted(tx) {
+		transactionGroupTxSyncAlreadyCommitted.Inc(nil)
 		return network.OutgoingMessage{}, true
 	}
 
@@ -372,6 +376,8 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 		logging.Base().Debugf("could not remember tx: %v", err)
 		return network.OutgoingMessage{}, true
 	}
+
+	transactionGroupTxSyncRemember.Inc(nil)
 
 	// if we remembered without any error ( i.e. txpool wasn't full ), then we should pin these transactions.
 	err = handler.ledger.VerifiedTransactionCache().Pin(verifiedTxGroup)
