@@ -739,13 +739,12 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 				pool.statusCache.put(tx, err.Error())
 			}
 
-			switch err.(type) {
+			switch err := err.(type) {
 			case *ledgercore.TransactionInLedgerError:
 				asmStats.CommittedCount++
 				stats.RemovedInvalidCount++
 			case transactions.TxnDeadError:
-				te := err.(transactions.TxnDeadError)
-				if proto.MaxTxnLife == uint64(te.LastValid-te.FirstValid) {
+				if proto.MaxTxnLife == uint64(err.LastValid-err.FirstValid) {
 					asmStats.ExpiredMaxLifeCount++
 				}
 				asmStats.ExpiredCount++
