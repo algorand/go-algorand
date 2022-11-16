@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2022 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package v2
 
 import (
@@ -62,11 +78,11 @@ func (v2 *DataHandlers) SetSyncRound(ctx echo.Context, round uint64) error {
 // GetSyncRound gets the sync round from the ledger.
 // (GET /v2/ledger/sync)
 func (v2 *DataHandlers) GetSyncRound(ctx echo.Context) error {
-	set, rnd, err := v2.Node.GetSyncRound()
+	rnd, err := v2.Node.GetSyncRound()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingSyncRound, v2.Log)
 	}
-	if !set {
+	if rnd == 0 {
 		return notFound(ctx, fmt.Errorf("sync round is not set"), errFailedRetrievingSyncRound, v2.Log)
 	}
 	return ctx.JSON(http.StatusOK, model.GetSyncRoundResponse{Round: rnd})

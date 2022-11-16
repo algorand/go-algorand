@@ -118,6 +118,13 @@ func MakeData(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	// to catchup via network sync after the configured timeout.
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, make(chan catchup.PendingUnmatchedCertificate), node.lowPriorityCryptoVerificationPool)
 
+	// Set sync round in the catchup service to ledger.NextRound() so data falls out of the cache(s) until we let it
+	err = node.catchupService.SetSyncRound(uint64(node.ledger.NextRound()))
+	if err != nil {
+		log.Errorf("Unable to set sync round on catchup service %v", err)
+		return nil, err
+	}
+
 	registry, err := ensureParticipationDB(genesisDir, node.log)
 	if err != nil {
 		log.Errorf("unable to initialize the participation registry database: %v", err)
@@ -163,9 +170,6 @@ func (node *AlgorandDataNode) Start() {
 			node.config.NetAddress, _ = node.net.Address()
 		}
 	}
-
-	// Set sync round in the catchup service to ledger.NextRound() so data falls out of the cache(s) until we let it
-	node.catchupService.SetSyncRound(uint64(node.ledger.NextRound()))
 
 	if node.catchpointCatchupService != nil {
 		startNetwork()
