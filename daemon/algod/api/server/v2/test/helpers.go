@@ -143,9 +143,9 @@ func (m *mockNode) UnsetSyncRound() error {
 	return args.Error(0)
 }
 
-func (m *mockNode) GetSyncRound() (bool, uint64, error) {
+func (m *mockNode) GetSyncRound() (uint64, error) {
 	args := m.Called()
-	return args.Bool(0), uint64(args.Int(1)), args.Error(2)
+	return uint64(args.Int(1)), args.Error(2)
 }
 
 func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error {
