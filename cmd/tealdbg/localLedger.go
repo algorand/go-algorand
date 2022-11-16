@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -42,7 +42,7 @@ type AccountIndexerResponse struct {
 	//
 	// Definition:
 	// data/basics/userBalance.go : AccountData
-	Account generated.Account `json:"account"`
+	Account model.Account `json:"account"`
 
 	// Round at which the results were computed.
 	CurrentRound uint64 `json:"current-round"`
@@ -52,7 +52,7 @@ type AccountIndexerResponse struct {
 type ApplicationIndexerResponse struct {
 
 	// Application index and its parameters
-	Application generated.Application `json:"application,omitempty"`
+	Application model.Application `json:"application,omitempty"`
 
 	// Round at which the results were computed.
 	CurrentRound uint64 `json:"current-round"`

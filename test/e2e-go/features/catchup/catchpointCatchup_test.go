@@ -30,7 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -234,7 +234,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	log.Infof(" - done catching up!\n")
 
 	// ensure the catchpoint is created for targetCatchpointRound
-	var status generatedV2.NodeStatusResponse
+	var status model.NodeStatusResponse
 	timer := time.NewTimer(10 * time.Second)
 outer:
 	for {
