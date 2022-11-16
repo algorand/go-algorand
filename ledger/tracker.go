@@ -397,6 +397,18 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	if dcc != nil && !flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval)) && !dcc.catchpointFirstStage && !dcc.catchpointSecondStage && dcc.pendingDeltas < pendingDeltasFlushThreshold {
 		dcc = nil
 	}
+
+	// hack starts here
+	if dcc != nil {
+		if dcc.oldBase >= stopRound {
+			dcc = nil // clear out commit tak
+		} else if dcc.newBase > stopRound {
+			dcc.newBase = stopRound
+			dcc.offset -= uint64(dcc.newBase - stopRound)
+		}
+	}
+	// hack ends here
+
 	tr.mu.RUnlock()
 
 	if dcc != nil {
@@ -458,6 +470,8 @@ func (tr *trackerRegistry) commitSyncer(deferredCommits chan *deferredCommitCont
 		}
 	}
 }
+
+var stopRound basics.Round = 21969680
 
 // commitRound commits the given deferredCommitContext via the trackers.
 func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {

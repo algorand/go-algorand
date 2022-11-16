@@ -4720,6 +4720,7 @@ func LoadAllFullAccounts(
 		var data baseAccountData
 		err = protocol.Decode(buf, &data)
 		if err != nil {
+			fmt.Printf("\n\ngot protocol.Decode err in LoadAllFullAccounts %v\n\n", err)
 			return
 		}
 

@@ -833,7 +833,7 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 	catchpointLabelMaker := ledgercore.MakeCatchpointLabel(blockRound, blk.Digest(), balancesHash, totals)
 
 	if catchpointLabel != catchpointLabelMaker.String() {
-		return fmt.Errorf("catchpoint hash mismatch; expected %s, calculated %s", catchpointLabel, catchpointLabelMaker.String())
+		return fmt.Errorf("catchpoint hash mismatch; expected %s, calculated %s with balancesHash %s", catchpointLabel, catchpointLabelMaker.String(), balancesHash)
 	}
 	return nil
 }

@@ -1011,6 +1011,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 	}
 
 	for key, mv := range kvDeltas {
+		ct.log.Infof("kvDeltas oldBase %d newBase %d key %s data %s oldData %s ndeltas %d", oldBase, newBase, key, mv.data, mv.oldData, mv.ndeltas)
 		if mv.oldData == nil && mv.data == nil { // Came and went within the delta span
 			continue
 		}
@@ -1019,12 +1020,13 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 				continue // changed back within the delta span
 			}
 			deleteHash := kvHashBuilderV6(key, mv.oldData)
+			ct.log.Infof("Deleting kv hash %s oldBase %d newBase %d for key %s oldData %s", hex.EncodeToString(deleteHash), oldBase, newBase, key, mv.oldData)
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
-				return fmt.Errorf("failed to delete kv hash '%s' from merkle trie for key %v: %w", hex.EncodeToString(deleteHash), key, err)
+				return fmt.Errorf("failed to delete kv hash '%s' oldBase %d newBase %d from merkle trie for key %v: %w", hex.EncodeToString(deleteHash), oldBase, newBase, key, err)
 			}
 			if !deleted {
-				ct.log.Warnf("failed to delete kv hash '%s' from merkle trie for key %v", hex.EncodeToString(deleteHash), key)
+				ct.log.Warnf("failed to delete kv hash '%s' oldBase %d newBase %d from merkle trie for key %v", hex.EncodeToString(deleteHash), oldBase, newBase, key)
 			} else {
 				accumulatedChanges++
 			}
@@ -1032,12 +1034,13 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 
 		if mv.data != nil {
 			addHash := kvHashBuilderV6(key, mv.data)
+			ct.log.Infof("Adding kv hash %s oldBase %d newBase %d for key %s data %s", hex.EncodeToString(addHash), oldBase, newBase, key, mv.data)
 			added, err = ct.balancesTrie.Add(addHash)
 			if err != nil {
-				return fmt.Errorf("attempted to add duplicate kv hash '%s' from merkle trie for key %v: %w", hex.EncodeToString(addHash), key, err)
+				return fmt.Errorf("attempted to add duplicate kv hash '%s' oldBase %d newBase %d from merkle trie for key %v: %w", hex.EncodeToString(addHash), oldBase, newBase, key, err)
 			}
 			if !added {
-				ct.log.Warnf("attempted to add duplicate kv hash '%s' from merkle trie for key %v", hex.EncodeToString(addHash), key)
+				ct.log.Warnf("attempted to add duplicate kv hash '%s' oldBase %d newBase %d rom merkle trie for key %v", hex.EncodeToString(addHash), oldBase, newBase, key)
 			} else {
 				accumulatedChanges++
 			}
