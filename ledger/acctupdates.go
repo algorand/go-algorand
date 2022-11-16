@@ -1846,9 +1846,10 @@ func compactKvDeltas(kvDeltas []map[string]ledgercore.KvValueDelta) map[string]m
 		return nil
 	}
 	outKvDeltas := make(map[string]modifiedKvValue)
-	for _, roundKv := range kvDeltas {
+	for i, roundKv := range kvDeltas {
 		for key, current := range roundKv {
 			prev, ok := outKvDeltas[key]
+			logging.Base().Infof("compactKvDeltas i %d saw key %v current %+v prev %+v ok %v", i, key, current, prev, ok)
 			if !ok { // Record only the first OldData
 				prev.oldData = current.OldData
 			}

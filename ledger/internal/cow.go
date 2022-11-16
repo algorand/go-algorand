@@ -24,7 +24,9 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -131,7 +133,9 @@ func (cb *roundCowState) deltas() ledgercore.StateDelta {
 
 	// Populate old values by looking through parent
 	for key, value := range cb.mods.KvMods {
+		ai, rest, _ := logic.SplitBoxKey(key)
 		old, _, err := cb.lookupParent.kvGet(key) // Because of how boxes are prefetched, value will be cached
+		logging.Base().Infof("rcs.deltas() looked up oldData %v oldisnil %v for key %s ai %v rest %v value %v", old, old == nil, key, ai, rest, value)
 		if err != nil {
 			panic(fmt.Errorf("Error looking up %v : %w", key, err))
 		}
