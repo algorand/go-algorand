@@ -116,7 +116,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto conf
 }
 
 func (cb *roundCowState) deltas() ledgercore.StateDelta {
-	if len(cb.sdeltas) == 0 {
+	if len(cb.sdeltas) == 0 && len(cb.mods.KvMods) == 0 {
 		return cb.mods
 	}
 
