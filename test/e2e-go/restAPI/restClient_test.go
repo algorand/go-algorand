@@ -32,16 +32,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/client"
-
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -1333,7 +1331,7 @@ end:
 		e := err.(client.HTTPError)
 		a.Equal(400, e.StatusCode)
 
-		var er *generated.ErrorResponse
+		var er *model.ErrorResponse
 		err = protocol.DecodeJSON([]byte(e.ErrorString), &er)
 		a.NoError(err)
 		a.Equal("Result limit exceeded", er.Message)
@@ -1401,7 +1399,7 @@ end:
 			createdBoxCount -= uint64(len(boxNames))
 		}
 
-		var resp generated.BoxesResponse
+		var resp model.BoxesResponse
 		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
 		a.NoError(err)
 
