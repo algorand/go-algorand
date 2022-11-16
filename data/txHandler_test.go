@@ -202,6 +202,7 @@ func TestTxHandlerProcessIncomingTxn(t *testing.T) {
 	const numTxns = 11
 	handler := TxHandler{
 		backlogQueue: make(chan *txBacklogMsg, 1),
+		txidCache:    makeTxidCacheSyncMap(txBacklogSize),
 	}
 	stxns, blob := makeRandomTransactions(numTxns)
 	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
@@ -213,6 +214,51 @@ func TestTxHandlerProcessIncomingTxn(t *testing.T) {
 	for i := 0; i < numTxns; i++ {
 		require.Equal(t, stxns[i], msg.unverifiedTxGroup[i])
 	}
+}
+
+func BenchmarkTxHandlerProcessIncomingTxn(b *testing.B) {
+	const numTxnsPerGroup = 16
+	handler := TxHandler{
+		backlogQueue: make(chan *txBacklogMsg, 1),
+		txidCache:    makeTxidCacheSyncMap(txBacklogSize),
+	}
+
+	// b.Log("b.N = ", b.N)
+
+	// prepare tx groups
+	blobs := make([][]byte, b.N)
+	stxns := make([][]transactions.SignedTxn, b.N)
+	for i := 0; i < b.N; i++ {
+		stxns[i], blobs[i] = makeRandomTransactions(numTxnsPerGroup)
+	}
+
+	ctx, cancelFun := context.WithCancel(context.Background())
+
+	// start consumer
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(ctx context.Context, n int) {
+		defer wg.Done()
+	outer:
+		for i := 0; i < n; i++ {
+			select {
+			case <-ctx.Done():
+				break outer
+			default:
+			}
+			msg := <-handler.backlogQueue
+			require.Equal(b, numTxnsPerGroup, len(msg.unverifiedTxGroup))
+		}
+	}(ctx, b.N)
+
+	// submit tx groups
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		action := handler.processIncomingTxn(network.IncomingMessage{Data: blobs[i]})
+		require.Equal(b, network.OutgoingMessage{Action: network.Ignore}, action)
+	}
+	cancelFun()
+	wg.Wait()
 }
 
 const benchTxnNum = 25_000
@@ -482,7 +528,7 @@ func BenchmarkHandleTxns(b *testing.B) {
 	runHandlerBenchmark(1, b)
 }
 
-// BenchmarkHandler sends singed transaction groups to the verifier
+// BenchmarkHandler sends signed transaction groups to the verifier
 func BenchmarkHandleTxnGroups(b *testing.B) {
 	runHandlerBenchmark(proto.MaxTxGroupSize, b)
 }

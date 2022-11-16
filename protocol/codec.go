@@ -275,6 +275,11 @@ func (d *MsgpDecoderBytes) Decode(objptr msgp.Unmarshaler) error {
 	return nil
 }
 
+// Consumed returns number of bytes consumed so far.
+func (d *MsgpDecoderBytes) Consumed() int {
+	return d.pos
+}
+
 // encodingPool holds temporary byte slice buffers used for encoding messages.
 var encodingPool = sync.Pool{
 	New: func() interface{} {

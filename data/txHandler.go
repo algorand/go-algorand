@@ -80,6 +80,7 @@ type TxHandler struct {
 	postVerificationQueue chan *txBacklogMsg
 	backlogWg             sync.WaitGroup
 	net                   network.GossipNode
+	txidCache             *txidCacheSyncMap
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
 }
@@ -106,6 +107,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
+		txidCache:             makeTxidCacheSyncMap(txBacklogSize),
 	}
 	return handler
 }
@@ -284,16 +286,27 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 }
 
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
+	// attempt to preallocate buffer on stack:
+	// hardcode maxTxGroupSize constant and use backing arrays,
+	// or fallback to heap allocation it MaxTxGroupSize is greater than our constant
+	const maxTxGroupSize = 16 // no ledger lookup and allocate the backing array on stack
+	var decTxGroupElemBackingArray [maxTxGroupSize]int
+	var decTxGroupElemOffsets []int // offsets of txn ends
+	var unverifiedTxGroupBackingArray [maxTxGroupSize]transactions.SignedTxn
+	var unverifiedTxGroup []transactions.SignedTxn
+
+	if maxTxGroupSize < config.MaxTxGroupSize {
+		logging.Base().Warnf("MaxTxGroupSize is greater than 16. Please update the constant")
+		decTxGroupElemOffsets = make([]int, config.MaxTxGroupSize)
+		unverifiedTxGroup = make([]transactions.SignedTxn, config.MaxTxGroupSize)
+	} else {
+		decTxGroupElemOffsets = decTxGroupElemBackingArray[:]
+		unverifiedTxGroup = unverifiedTxGroupBackingArray[:]
+	}
+
 	dec := protocol.NewMsgpDecoderBytes(rawmsg.Data)
 	ntx := 0
-	unverifiedTxGroup := make([]transactions.SignedTxn, 1)
 	for {
-		if len(unverifiedTxGroup) == ntx {
-			n := make([]transactions.SignedTxn, len(unverifiedTxGroup)*2)
-			copy(n, unverifiedTxGroup)
-			unverifiedTxGroup = n
-		}
-
 		err := dec.Decode(&unverifiedTxGroup[ntx])
 		if err == io.EOF {
 			break
@@ -302,12 +315,39 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 			logging.Base().Warnf("Received a non-decodable txn: %v", err)
 			return network.OutgoingMessage{Action: network.Disconnect}
 		}
+		decTxGroupElemOffsets[ntx] = dec.Consumed()
 		ntx++
+		if ntx >= config.MaxTxGroupSize {
+			// max group size reached, exit
+			// TODO: add metric after #4786 merged
+			break
+		}
 	}
 	if ntx == 0 {
 		logging.Base().Warnf("Received empty tx group")
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
+
+	// calculate hashes and check duplicates.
+	allTxSeen := true
+	start := 0
+	for i := 0; i < ntx; i++ {
+		end := decTxGroupElemOffsets[i]
+		rawtxn := rawmsg.Data[start:end]
+		start = end
+
+		d := crypto.Hash(rawtxn)
+		if !handler.txidCache.checkAndPut(&d) {
+			allTxSeen = false
+		}
+	}
+	if allTxSeen {
+		// duplicate, return
+		// TODO: metric after #4786 merged
+		// TODO: count duplicates per peer and drop?
+		return network.OutgoingMessage{Action: network.Ignore}
+	}
+
 	unverifiedTxGroup = unverifiedTxGroup[:ntx]
 
 	select {
