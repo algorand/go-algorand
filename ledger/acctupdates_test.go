@@ -1499,7 +1499,10 @@ func TestKVCache(t *testing.T) {
 		if i < kvCnt/kvsPerBlock {
 			for j := 0; j < kvsPerBlock; j++ {
 				name := fmt.Sprintf("%d", curKV)
-				kvMods[name] = ledgercore.KvValueDelta{Data: nil}
+				// needs an old data, it seems like a create-then-delete which
+				// is optimized away.  if oldData = "" there is the best chance
+				// of a bug, so we use that
+				kvMods[name] = ledgercore.KvValueDelta{Data: nil, OldData: []byte("")}
 				curKV++
 			}
 		}
