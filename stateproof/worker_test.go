@@ -277,9 +277,6 @@ func (s *testWorkerStubs) advanceRoundsWithoutStateProof(delta uint64) {
 		s.mu.Lock()
 		s.addBlock(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 		s.mu.Unlock()
-		//if r > 1000 && r%256 == 0 {
-		//	waitForBuilderAndSignerToWaitOnRound(s)
-		//}
 	}
 }
 
@@ -1575,13 +1572,10 @@ func TestBuildersPersistenceAfterRestart(t *testing.T) {
 		s.advanceRoundsWithoutStateProof(proto.StateProofInterval)
 		err := waitForBuilderAndSignerToWaitOnRound(s)
 		a.NoError(err)
-		println("iter:", iter)
 	}
 
-	println("HERE1!")
 	w.trimBuildersCache(&proto, basics.Round(proto.StateProofInterval*2))
 	compareBuilders(a, expectedStateProofs, w, firstExpectedStateproof, proto)
-	println("HERE2!")
 
 	w.Shutdown()
 	// we make sure that the worker will not be able to create a builder by disabling the mock ledger
@@ -1644,11 +1638,6 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 func compareBuilders(a *require.Assertions, expectedStateproofs int, w *Worker, firstExpectedStateproof int, proto config.ConsensusParams) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	// In memory
-	println("BUILDERS!")
-	for r, _ := range w.builders {
-		println("builder for round:", r)
-	}
 
 	if expectedStateproofs > buildersCacheLength {
 		a.Equal(buildersCacheLength, len(w.builders))

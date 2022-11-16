@@ -364,7 +364,6 @@ func (spw *Worker) builder(latest basics.Round) {
 	// if a state proof has been committed, so that we can stop trying
 	// to build it.
 	for {
-		fmt.Println("try building stateproofs! current round:", latest)
 		spw.tryBroadcast()
 
 		nextrnd := latest + 1
@@ -387,7 +386,6 @@ func (spw *Worker) builder(latest basics.Round) {
 		proto := config.Consensus[hdr.CurrentProtocol]
 		stateProofNextRound := hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 
-		fmt.Println("processing", nextrnd)
 		spw.deleteBuildData(&proto, stateProofNextRound)
 
 		// Broadcast signatures based on the previous block(s) that
@@ -462,7 +460,6 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, stateProofNextRound basics.R
 				Round:         rnd,
 				Sig:           sig.sig,
 			}
-			fmt.Println("broadcasting signatures! round:", rnd, "stateproofnextround:", stateProofNextRound, "sig:", sig.sig.Signature)
 			err = spw.net.Broadcast(context.Background(), protocol.StateProofSigTag,
 				protocol.Encode(&sfa), false, nil)
 			if err != nil {

@@ -138,8 +138,5 @@ func (round Round) RoundUpToMultipleOf(n Round) Round {
 
 // RoundDownToMultipleOf rounds down round to a multiple of n.
 func (round Round) RoundDownToMultipleOf(n Round) Round {
-	if n == 0 {
-		return 0
-	}
 	return (round / n) * n
 }
