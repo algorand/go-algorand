@@ -59,7 +59,7 @@ type CatchpointCatchupAccessor interface {
 	ProcessStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error)
 
 	// BuildMerkleTrie inserts the account hashes into the merkle trie
-	BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64)) (err error)
+	BuildMerkleTrie(ctx context.Context, progressUpdates func([][]byte)) (err error)
 
 	// GetCatchupBlockRound returns the latest block round matching the current catchpoint
 	GetCatchupBlockRound(ctx context.Context) (round basics.Round, err error)
@@ -275,11 +275,12 @@ type CatchpointCatchupAccessorProgress struct {
 	TotalAccounts      uint64
 	ProcessedAccounts  uint64
 	ProcessedBytes     uint64
+	TotalKVs           uint64
+	ProcessedKVs       uint64
 	TotalChunks        uint64
 	SeenHeader         bool
 	Version            uint64
 	TotalAccountHashes uint64
-	TotalKVHashes      uint64
 
 	// Having the cachedTrie here would help to accelerate the catchup process since the trie maintain an internal cache of nodes.
 	// While rebuilding the trie, we don't want to force and reload (some) of these nodes into the cache for each catchpoint file chunk.
@@ -345,6 +346,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	if err == nil {
 		progress.SeenHeader = true
 		progress.TotalAccounts = fileHeader.TotalAccounts
+		progress.TotalKVs = fileHeader.TotalKVs
 
 		progress.TotalChunks = fileHeader.TotalChunks
 		progress.Version = fileHeader.Version
@@ -546,7 +548,6 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 
 		start := time.Now()
 		errKVs = c.stagingWriter.writeKVs(ctx, chunkKVs)
-		progress.TotalKVHashes += uint64(len(chunkKVs))
 		durKVs = time.Since(start)
 	}()
 
@@ -572,6 +573,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 
 	ledgerProcessstagingbalancesMicros.AddMicrosecondsSince(start, nil)
 	progress.ProcessedBytes += uint64(len(bytes))
+	progress.ProcessedKVs += uint64(len(chunkKVs))
 	for _, acctBal := range normalizedAccountBalances {
 		progress.TotalAccountHashes += uint64(len(acctBal.accountHashes))
 		if !acctBal.partialBalance {
@@ -592,7 +594,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 }
 
 // BuildMerkleTrie would process the catchpointpendinghashes and insert all the items in it into the merkle trie
-func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64)) (err error) {
+func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, progressUpdates func([][]byte)) (err error) {
 	wdb := c.ledger.trackerDB().Wdb
 	rdb := c.ledger.trackerDB().Rdb
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -652,11 +654,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		var trie *merkletrie.Trie
 		uncommitedHashesCount := 0
 		keepWriting := true
-		hashesWritten := uint64(0)
 		var mc *MerkleCommitter
-		if progressUpdates != nil {
-			progressUpdates(hashesWritten)
-		}
 
 		err := wdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
 			// create the merkle trie for the balances
@@ -693,18 +691,22 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 					return
 				}
 				trie.SetCommitter(mc)
-				for _, accountHash := range hashesToWrite {
+				for _, hash := range hashesToWrite {
 					var added bool
-					added, err = trie.Add(accountHash)
+					added, err = trie.Add(hash)
 					if !added {
-						return fmt.Errorf("CatchpointCatchupAccessorImpl::BuildMerkleTrie: The provided catchpoint file contained the same account more than once. hash '%s'", hex.EncodeToString(accountHash))
+						return fmt.Errorf("CatchpointCatchupAccessorImpl::BuildMerkleTrie: The provided catchpoint file contained the same account more than once. hash '%s'", hex.EncodeToString(hash))
 					}
 					if err != nil {
 						return
 					}
+
 				}
 				uncommitedHashesCount += len(hashesToWrite)
-				hashesWritten += uint64(len(hashesToWrite))
+				if progressUpdates != nil {
+					progressUpdates(hashesToWrite)
+				}
+
 				return nil
 			})
 			if err != nil {
@@ -731,9 +733,6 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 					keepWriting = false
 					continue
 				}
-			}
-			if progressUpdates != nil {
-				progressUpdates(hashesWritten)
 			}
 		}
 		if err != nil {

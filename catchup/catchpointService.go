@@ -53,6 +53,9 @@ type CatchpointCatchupStats struct {
 	TotalAccounts      uint64
 	ProcessedAccounts  uint64
 	VerifiedAccounts   uint64
+	TotalKVs           uint64
+	ProcessedKVs       uint64
+	VerifiedKVs        uint64
 	TotalBlocks        uint64
 	AcquiredBlocks     uint64
 	VerifiedBlocks     uint64
@@ -304,7 +307,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 		if err == nil {
 			cs.log.Infof("ledger downloaded in %d seconds", time.Since(start)/time.Second)
 			start = time.Now()
-			err = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedAccounts)
+			err = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedCounts)
 			if err == nil {
 				cs.log.Infof("built merkle trie in %d seconds", time.Since(start)/time.Second)
 				break
@@ -336,12 +339,27 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	return nil
 }
 
-// updateVerifiedAccounts update the user's statistics for the given verified accounts
-func (cs *CatchpointCatchupService) updateVerifiedAccounts(addedTrieHashes uint64) {
+// updateVerifiedCounts update the user's statistics for the given verified hashes
+func (cs *CatchpointCatchupService) updateVerifiedCounts(hashes [][]byte) {
 	cs.statsMu.Lock()
 	defer cs.statsMu.Unlock()
+
+	addedTrieAccountHashes := uint64(0)
+	addedTrieKVHashes := uint64(0)
+	for _, hash := range hashes {
+		if (hash[4] == 3) { // KV
+			addedTrieKVHashes++
+		} else {
+			addedTrieAccountHashes++
+		}
+	}
+
 	if cs.stats.TotalAccountHashes > 0 {
-		cs.stats.VerifiedAccounts = cs.stats.TotalAccounts * addedTrieHashes / cs.stats.TotalAccountHashes
+		cs.stats.VerifiedAccounts = cs.stats.TotalAccounts * addedTrieAccountHashes / cs.stats.TotalAccountHashes
+	}
+
+	if cs.stats.TotalKVs > 0 { // TODO Is TotalKVHashes needed?
+		cs.stats.VerifiedKVs = addedTrieKVHashes
 	}
 }
 
@@ -757,8 +775,9 @@ func (cs *CatchpointCatchupService) updateLedgerFetcherProgress(fetcherStats *le
 	defer cs.statsMu.Unlock()
 	cs.stats.TotalAccounts = fetcherStats.TotalAccounts
 	cs.stats.ProcessedAccounts = fetcherStats.ProcessedAccounts
+	cs.stats.TotalKVs = fetcherStats.TotalKVs
+	cs.stats.ProcessedKVs = fetcherStats.ProcessedKVs
 	cs.stats.ProcessedBytes = fetcherStats.ProcessedBytes
-	cs.stats.TotalKVHashes = fetcherStats.TotalKVHashes
 	cs.stats.TotalAccountHashes = fetcherStats.TotalAccountHashes
 }
 
