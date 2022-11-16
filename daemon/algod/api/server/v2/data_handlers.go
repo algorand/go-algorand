@@ -41,6 +41,7 @@ type DataHandlers struct {
 
 // Register implements route registration for the HandlerInterface
 func (v2 *DataHandlers) Register(e *echo.Echo, publicAuth echo.MiddlewareFunc, privateAuth echo.MiddlewareFunc) {
+	v2.NonParticipatingHandlers.Register(e, publicAuth, privateAuth)
 	dprivate.RegisterHandlers(e, v2, privateAuth)
 	registerCommon(e, v2.Node)
 }

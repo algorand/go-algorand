@@ -245,6 +245,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 			NonParticipatingHandlers: v2.NonParticipatingHandlers{
 				Log:      s.log,
 				Shutdown: s.stopping,
+				Node:     node,
 			},
 			Node: node,
 		}

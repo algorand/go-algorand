@@ -48,6 +48,7 @@ type ParticipatingHandlers struct {
 
 // Register implements route registration for the HandlerInterface
 func (v2 *ParticipatingHandlers) Register(e *echo.Echo, publicAuth echo.MiddlewareFunc, privateAuth echo.MiddlewareFunc) {
+	v2.NonParticipatingHandlers.Register(e, publicAuth, privateAuth)
 	ppublic.RegisterHandlers(e, v2, publicAuth)
 	pprivate.RegisterHandlers(e, v2, privateAuth)
 	ctx := lib.ReqContext{
