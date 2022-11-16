@@ -127,7 +127,7 @@ var fileCmd = &cobra.Command{
 				defer outFile.Close()
 			}
 
-			err = printStateProofVerificationData("./ledger.tracker.sqlite", outFile)
+			err = printStateProofVerificationContext("./ledger.tracker.sqlite", outFile)
 			if err != nil {
 				reportErrorf("Unable to print state proof verification database : %v", err)
 			}
@@ -432,7 +432,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 	})
 }
 
-func printStateProofVerificationData(databaseName string, outFile *os.File) error {
+func printStateProofVerificationContext(databaseName string, outFile *os.File) error {
 	fileWriter := bufio.NewWriterSize(outFile, 1024*1024)
 	defer fileWriter.Flush()
 
@@ -442,9 +442,9 @@ func printStateProofVerificationData(databaseName string, outFile *os.File) erro
 	}
 	defer dbAccessor.Close()
 
-	var stateProofVerificationData []ledgercore.StateProofVerificationData
+	var stateProofVerificationContext []ledgercore.StateProofVerificationContext
 	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		stateProofVerificationData, err = ledger.CatchpointStateProofVerification(ctx, tx)
+		stateProofVerificationContext, err = ledger.CatchpointStateProofVerification(ctx, tx)
 		return err
 	})
 
@@ -453,12 +453,12 @@ func printStateProofVerificationData(databaseName string, outFile *os.File) erro
 	}
 
 	var printedLines []string
-	for _, data := range stateProofVerificationData {
-		jsonData, err := json.Marshal(data)
+	for _, ctx := range stateProofVerificationContext {
+		jsonData, err := json.Marshal(ctx)
 		if err != nil {
 			return err
 		}
-		printedLines = append(printedLines, fmt.Sprintf("%d : %s", data.TargetStateProofRound, string(jsonData)))
+		printedLines = append(printedLines, fmt.Sprintf("%d : %s", ctx.LastAttestedRound, string(jsonData)))
 	}
 	_, err = fmt.Fprintf(fileWriter, "State Proof Verification Data:\n"+strings.Join(printedLines, "\n")+"\n")
 	return err

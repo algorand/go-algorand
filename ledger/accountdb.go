@@ -1109,9 +1109,9 @@ func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normal
 	return nil
 }
 
-// writeCatchpointStateProofverificationContext inserts all the state proof verification data in the provided array into
+// writeCatchpointStateProofVerificationContext inserts all the state proof verification data in the provided array into
 // the catchpointstateproofverification table.
-func writeCatchpointStateProofverificationContext(ctx context.Context, tx *sql.Tx, verificationContext *ledgercore.StateProofVerificationContext) error {
+func writeCatchpointStateProofVerificationContext(ctx context.Context, tx *sql.Tx, verificationContext *ledgercore.StateProofVerificationContext) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointstateproofverification(lastattestedround, verificationContext) VALUES(?, ?)")
 
 	if err != nil {

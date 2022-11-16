@@ -293,12 +293,12 @@ type CatchpointCatchupAccessorProgress struct {
 
 // ProcessStagingBalances deserialize the given bytes as a temporary staging balances
 func (c *catchpointCatchupAccessorImpl) ProcessStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error) {
-	// content.msgpack comes first, followed by stateProofVerificationData.msgpack and then by balances.x.msgpack.
+	// content.msgpack comes first, followed by stateProofVerificationContext.msgpack and then by balances.x.msgpack.
 	if sectionName == "content.msgpack" {
 		return c.processStagingContent(ctx, bytes, progress)
 	}
-	if sectionName == "stateProofVerificationData.msgpack" {
-		return c.processStagingStateProofVerificationData(ctx, bytes, progress)
+	if sectionName == "stateProofVerificationContext.msgpack" {
+		return c.processStagingStateProofVerificationContext(ctx, bytes, progress)
 	}
 	if strings.HasPrefix(sectionName, "balances.") && strings.HasSuffix(sectionName, ".msgpack") {
 		return c.processStagingBalances(ctx, bytes, progress)
@@ -308,9 +308,9 @@ func (c *catchpointCatchupAccessorImpl) ProcessStagingBalances(ctx context.Conte
 	return nil
 }
 
-// processStagingStateProofVerificationData deserialize the given bytes as a temporary staging state proof verification data
-func (c *catchpointCatchupAccessorImpl) processStagingStateProofVerificationData(_ context.Context, bytes []byte, _ *CatchpointCatchupAccessorProgress) (err error) {
-	var decodedData catchpointStateProofVerificationData
+// processStagingStateProofVerificationContext deserialize the given bytes as a temporary staging state proof verification data
+func (c *catchpointCatchupAccessorImpl) processStagingStateProofVerificationContext(_ context.Context, bytes []byte, _ *CatchpointCatchupAccessorProgress) (err error) {
+	var decodedData catchpointStateProofVerificationContext
 	err = protocol.Decode(bytes, &decodedData)
 	if err != nil {
 		return err
@@ -323,7 +323,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingStateProofVerificationData
 
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		for _, data := range decodedData.Data {
-			err = writeCatchpointStateProofVerificationData(ctx, tx, &data)
+			err = writeCatchpointStateProofVerificationContext(ctx, tx, &data)
 			if err != nil {
 				return err
 			}
@@ -820,7 +820,7 @@ func (c *catchpointCatchupAccessorImpl) GetCatchupBlockRound(ctx context.Context
 func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, blk *bookkeeping.Block) (err error) {
 	rdb := c.ledger.trackerDB().Rdb
 	var balancesHash crypto.Digest
-	var rawStateProofVerificationData []ledgercore.StateProofVerificationData
+	var rawStateProofVerificationContext []ledgercore.StateProofVerificationContext
 	var blockRound basics.Round
 	var totals ledgercore.AccountTotals
 	var catchpointLabel string
@@ -868,7 +868,7 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 			return fmt.Errorf("unable to get accounts totals: %v", err)
 		}
 
-		rawStateProofVerificationData, err = CatchpointStateProofVerification(ctx, tx)
+		rawStateProofVerificationContext, err = CatchpointStateProofVerification(ctx, tx)
 		if err != nil {
 			return fmt.Errorf("unable to get state proof verification data: %v", err)
 		}
@@ -883,15 +883,15 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 		return fmt.Errorf("block round in block header doesn't match block round in catchpoint")
 	}
 
-	wrappedData := catchpointStateProofVerificationData{Data: rawStateProofVerificationData}
-	stateProofVerificationDataHash := crypto.HashObj(wrappedData)
+	wrappedContext := catchpointStateProofVerificationContext{Data: rawStateProofVerificationContext}
+	stateProofVerificationContextHash := crypto.HashObj(wrappedContext)
 
 	var catchpointLabelMaker ledgercore.CatchpointLabelMaker
 	blockDigest := blk.Digest()
 	if version <= CatchpointFileVersionV6 {
 		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerV6(blockRound, &blockDigest, &balancesHash, totals)
 	} else {
-		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerCurrent(blockRound, &blockDigest, &balancesHash, totals, &stateProofVerificationDataHash)
+		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerCurrent(blockRound, &blockDigest, &balancesHash, totals, &stateProofVerificationContextHash)
 	}
 	generatedLabel := ledgercore.MakeLabel(catchpointLabelMaker)
 

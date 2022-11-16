@@ -180,7 +180,7 @@ func initializeTestCatchupAccessor(t *testing.T, l *Ledger, accountsCount uint64
 	return catchpointAccessor, progress
 }
 
-func verifyStateProofVerificationCatchupAccessor(t *testing.T, targetData []ledgercore.StateProofVerificationData) {
+func verifyStateProofVerificationCatchupAccessor(t *testing.T, targetData []ledgercore.StateProofVerificationContext) {
 	// setup boilerplate
 	log := logging.TestingLog(t)
 	dbBaseFileName := t.Name()
@@ -197,29 +197,29 @@ func verifyStateProofVerificationCatchupAccessor(t *testing.T, targetData []ledg
 
 	require.NoError(t, err)
 
-	wrappedData := catchpointStateProofVerificationData{
+	wrappedData := catchpointStateProofVerificationContext{
 		Data: targetData,
 	}
 	blob := protocol.Encode(&wrappedData)
 
 	ctx := context.Background()
-	err = catchpointAccessor.ProcessStagingBalances(ctx, "stateProofVerificationData.msgpack", blob, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "stateProofVerificationContext.msgpack", blob, &progress)
 	require.NoError(t, err)
 
 	err = catchpointAccessor.CompleteCatchup(ctx)
 	require.NoError(t, err)
 
-	var trackedStateProofVerificationData []ledgercore.StateProofVerificationData
+	var trackedStateProofVerificationContext []ledgercore.StateProofVerificationContext
 	err = l.trackerDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		dbData, err := StateProofVerification(ctx, tx)
-		trackedStateProofVerificationData = dbData
+		trackedStateProofVerificationContext = dbData
 		return err
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, len(targetData), len(trackedStateProofVerificationData))
+	require.Equal(t, len(targetData), len(trackedStateProofVerificationContext))
 	for index, data := range targetData {
-		require.Equal(t, data, trackedStateProofVerificationData[index])
+		require.Equal(t, data, trackedStateProofVerificationContext[index])
 	}
 	require.NoError(t, err)
 }
@@ -371,22 +371,22 @@ func TestBuildMerkleTrie(t *testing.T) {
 	require.Equal(t, basics.Round(0), blockRound)
 }
 
-func TestCatchupAccessorStateProofVerificationData(t *testing.T) {
+func TestCatchupAccessorStateProofVerificationContext(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	verificationData := ledgercore.StateProofVerificationData{
-		TargetStateProofRound: 120,
-		VotersCommitment:      nil,
-		OnlineTotalWeight:     basics.MicroAlgos{Raw: 100},
+	verificationContext := ledgercore.StateProofVerificationContext{
+		LastAttestedRound: 120,
+		VotersCommitment:  nil,
+		OnlineTotalWeight: basics.MicroAlgos{Raw: 100},
 	}
 
-	verifyStateProofVerificationCatchupAccessor(t, []ledgercore.StateProofVerificationData{verificationData})
+	verifyStateProofVerificationCatchupAccessor(t, []ledgercore.StateProofVerificationContext{verificationContext})
 }
 
-func TestCatchupAccessorEmptyStateProofVerificationData(t *testing.T) {
+func TestCatchupAccessorEmptyStateProofVerificationContext(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	verifyStateProofVerificationCatchupAccessor(t, []ledgercore.StateProofVerificationData{})
+	verifyStateProofVerificationCatchupAccessor(t, []ledgercore.StateProofVerificationContext{})
 }
 
 // blockdb.go code

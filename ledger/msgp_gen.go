@@ -86,13 +86,13 @@ import (
 //        |-----> Msgsize
 //        |-----> MsgIsZero
 //
-// catchpointStateProofVerificationData
-//                   |-----> (*) MarshalMsg
-//                   |-----> (*) CanMarshalMsg
-//                   |-----> (*) UnmarshalMsg
-//                   |-----> (*) CanUnmarshalMsg
-//                   |-----> (*) Msgsize
-//                   |-----> (*) MsgIsZero
+// catchpointStateProofVerificationContext
+//                    |-----> (*) MarshalMsg
+//                    |-----> (*) CanMarshalMsg
+//                    |-----> (*) UnmarshalMsg
+//                    |-----> (*) CanUnmarshalMsg
+//                    |-----> (*) Msgsize
+//                    |-----> (*) MsgIsZero
 //
 // encodedBalanceRecordV5
 //            |-----> (*) MarshalMsg
@@ -2558,7 +2558,7 @@ func (z catchpointState) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *catchpointStateProofVerificationData) MarshalMsg(b []byte) (o []byte) {
+func (z *catchpointStateProofVerificationContext) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0002Len := uint32(1)
@@ -2586,13 +2586,13 @@ func (z *catchpointStateProofVerificationData) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *catchpointStateProofVerificationData) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*catchpointStateProofVerificationData)
+func (_ *catchpointStateProofVerificationContext) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*catchpointStateProofVerificationContext)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *catchpointStateProofVerificationData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *catchpointStateProofVerificationContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -2613,8 +2613,8 @@ func (z *catchpointStateProofVerificationData) UnmarshalMsg(bts []byte) (o []byt
 				err = msgp.WrapError(err, "struct-from-array", "Data")
 				return
 			}
-			if zb0004 > StateProofVerificationDataPerCatchpointFile {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(StateProofVerificationDataPerCatchpointFile))
+			if zb0004 > StateProofVerificationContextPerCatchpointFile {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(StateProofVerificationContextPerCatchpointFile))
 				err = msgp.WrapError(err, "struct-from-array", "Data")
 				return
 			}
@@ -2623,7 +2623,7 @@ func (z *catchpointStateProofVerificationData) UnmarshalMsg(bts []byte) (o []byt
 			} else if (*z).Data != nil && cap((*z).Data) >= zb0004 {
 				(*z).Data = ((*z).Data)[:zb0004]
 			} else {
-				(*z).Data = make([]ledgercore.StateProofVerificationData, zb0004)
+				(*z).Data = make([]ledgercore.StateProofVerificationContext, zb0004)
 			}
 			for zb0001 := range (*z).Data {
 				bts, err = (*z).Data[zb0001].UnmarshalMsg(bts)
@@ -2646,7 +2646,7 @@ func (z *catchpointStateProofVerificationData) UnmarshalMsg(bts []byte) (o []byt
 			return
 		}
 		if zb0003 {
-			(*z) = catchpointStateProofVerificationData{}
+			(*z) = catchpointStateProofVerificationContext{}
 		}
 		for zb0002 > 0 {
 			zb0002--
@@ -2664,8 +2664,8 @@ func (z *catchpointStateProofVerificationData) UnmarshalMsg(bts []byte) (o []byt
 					err = msgp.WrapError(err, "Data")
 					return
 				}
-				if zb0006 > StateProofVerificationDataPerCatchpointFile {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(StateProofVerificationDataPerCatchpointFile))
+				if zb0006 > StateProofVerificationContextPerCatchpointFile {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(StateProofVerificationContextPerCatchpointFile))
 					err = msgp.WrapError(err, "Data")
 					return
 				}
@@ -2674,7 +2674,7 @@ func (z *catchpointStateProofVerificationData) UnmarshalMsg(bts []byte) (o []byt
 				} else if (*z).Data != nil && cap((*z).Data) >= zb0006 {
 					(*z).Data = ((*z).Data)[:zb0006]
 				} else {
-					(*z).Data = make([]ledgercore.StateProofVerificationData, zb0006)
+					(*z).Data = make([]ledgercore.StateProofVerificationContext, zb0006)
 				}
 				for zb0001 := range (*z).Data {
 					bts, err = (*z).Data[zb0001].UnmarshalMsg(bts)
@@ -2696,13 +2696,13 @@ func (z *catchpointStateProofVerificationData) UnmarshalMsg(bts []byte) (o []byt
 	return
 }
 
-func (_ *catchpointStateProofVerificationData) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*catchpointStateProofVerificationData)
+func (_ *catchpointStateProofVerificationContext) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*catchpointStateProofVerificationContext)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *catchpointStateProofVerificationData) Msgsize() (s int) {
+func (z *catchpointStateProofVerificationContext) Msgsize() (s int) {
 	s = 1 + 4 + msgp.ArrayHeaderSize
 	for zb0001 := range (*z).Data {
 		s += (*z).Data[zb0001].Msgsize()
@@ -2711,7 +2711,7 @@ func (z *catchpointStateProofVerificationData) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *catchpointStateProofVerificationData) MsgIsZero() bool {
+func (z *catchpointStateProofVerificationContext) MsgIsZero() bool {
 	return (len((*z).Data) == 0)
 }
 

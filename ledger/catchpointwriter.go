@@ -48,10 +48,10 @@ const (
 	// It is safe to remove after April, 2023 since we are only supporting catchpoint that are 6 months old.
 	resourcesPerCatchpointFileChunkBackwardCompatible = 300_000
 
-	// StateProofVerificationDataPerCatchpointFile defines the maximum number of state proof verification data stored
+	// StateProofVerificationContextPerCatchpointFile defines the maximum number of state proof verification data stored
 	// in the catchpoint file.
 	// (2 years * 31536000 seconds per year) / (256 rounds per state proof verification data * 3.6 seconds per round) ~= 70000
-	StateProofVerificationDataPerCatchpointFile = 70000
+	StateProofVerificationContextPerCatchpointFile = 70000
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
@@ -135,13 +135,13 @@ func (chunk catchpointFileChunkV6) empty() bool {
 	return len(chunk.Balances) == 0 && len(chunk.KVs) == 0
 }
 
-type catchpointStateProofVerificationData struct {
-	_struct struct{}                                `codec:",omitempty,omitemptyarray"`
-	Data    []ledgercore.StateProofVerificationData `codec:"spd,allocbound=StateProofVerificationDataPerCatchpointFile"`
+type catchpointStateProofVerificationContext struct {
+	_struct struct{}                                   `codec:",omitempty,omitemptyarray"`
+	Data    []ledgercore.StateProofVerificationContext `codec:"spd,allocbound=StateProofVerificationContextPerCatchpointFile"`
 }
 
-func (data catchpointStateProofVerificationData) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.StateProofVerificationData, protocol.Encode(&data)
+func (data catchpointStateProofVerificationContext) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.StateProofVerificationContext, protocol.Encode(&data)
 }
 
 func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxResourcesPerChunk int) (*catchpointWriter, error) {
@@ -185,17 +185,17 @@ func (cw *catchpointWriter) Abort() error {
 	return os.Remove(cw.filePath)
 }
 
-func (cw *catchpointWriter) WriteStateProofVerificationData() (crypto.Digest, error) {
+func (cw *catchpointWriter) WriteStateProofVerificationContext() (crypto.Digest, error) {
 	rawData, err := StateProofVerification(cw.ctx, cw.tx)
 	if err != nil {
 		return crypto.Digest{}, err
 	}
 
-	wrappedData := catchpointStateProofVerificationData{Data: rawData}
+	wrappedData := catchpointStateProofVerificationContext{Data: rawData}
 	dataHash, encodedData := crypto.EncodeAndHash(wrappedData)
 
 	err = cw.tar.WriteHeader(&tar.Header{
-		Name: "stateProofVerificationData.msgpack",
+		Name: "stateProofVerificationContext.msgpack",
 		Mode: 0600,
 		Size: int64(len(encodedData)),
 	})

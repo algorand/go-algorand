@@ -32,12 +32,12 @@ func TestUniqueCatchpointLabel(t *testing.T) {
 	uniqueSet := make(map[string]bool)
 
 	ledgerRoundBlockHashes := []crypto.Digest{}
-	stateProofVerificationDataHashes := []crypto.Digest{}
+	stateProofVerificationContextHashes := []crypto.Digest{}
 	balancesMerkleRoots := []crypto.Digest{}
 	totals := []AccountTotals{}
 	for i := 0; i < 10; i++ {
 		ledgerRoundBlockHashes = append(ledgerRoundBlockHashes, crypto.Hash([]byte{byte(i)}))
-		stateProofVerificationDataHashes = append(stateProofVerificationDataHashes, crypto.Hash([]byte{byte(i), byte(1)}))
+		stateProofVerificationContextHashes = append(stateProofVerificationContextHashes, crypto.Hash([]byte{byte(i), byte(1)}))
 		balancesMerkleRoots = append(balancesMerkleRoots, crypto.Hash([]byte{byte(i), byte(i), byte(1)}))
 		totals = append(totals,
 			AccountTotals{
@@ -49,9 +49,9 @@ func TestUniqueCatchpointLabel(t *testing.T) {
 	for r := basics.Round(0); r <= basics.Round(100); r += basics.Round(7) {
 		for _, ledgerRoundHash := range ledgerRoundBlockHashes {
 			for _, balancesMerkleRoot := range balancesMerkleRoots {
-				for _, stateProofVerificationDataHash := range stateProofVerificationDataHashes {
+				for _, stateProofVerificationContextHash := range stateProofVerificationContextHashes {
 					for _, total := range totals {
-						labelMaker := MakeCatchpointLabelMakerCurrent(r, &ledgerRoundHash, &balancesMerkleRoot, total, &stateProofVerificationDataHash)
+						labelMaker := MakeCatchpointLabelMakerCurrent(r, &ledgerRoundHash, &balancesMerkleRoot, total, &stateProofVerificationContextHash)
 						labelString := MakeLabel(labelMaker)
 						require.False(t, uniqueSet[labelString])
 						uniqueSet[labelString] = true
@@ -66,12 +66,12 @@ func TestCatchpointLabelParsing(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	ledgerRoundBlockHashes := []crypto.Digest{}
-	stateProofVerificationDataHashes := []crypto.Digest{}
+	stateProofVerificationContextHashes := []crypto.Digest{}
 	balancesMerkleRoots := []crypto.Digest{}
 	totals := []AccountTotals{}
 	for i := 0; i < 10; i++ {
 		ledgerRoundBlockHashes = append(ledgerRoundBlockHashes, crypto.Hash([]byte{byte(i)}))
-		stateProofVerificationDataHashes = append(stateProofVerificationDataHashes, crypto.Hash([]byte{byte(i), byte(1)}))
+		stateProofVerificationContextHashes = append(stateProofVerificationContextHashes, crypto.Hash([]byte{byte(i), byte(1)}))
 		balancesMerkleRoots = append(balancesMerkleRoots, crypto.Hash([]byte{byte(i), byte(i), byte(1)}))
 		totals = append(totals,
 			AccountTotals{
@@ -83,9 +83,9 @@ func TestCatchpointLabelParsing(t *testing.T) {
 	for r := basics.Round(0); r <= basics.Round(100); r += basics.Round(7) {
 		for _, ledgerRoundHash := range ledgerRoundBlockHashes {
 			for _, balancesMerkleRoot := range balancesMerkleRoots {
-				for _, stateProofVerificationDataHash := range stateProofVerificationDataHashes {
+				for _, stateProofVerificationContextHash := range stateProofVerificationContextHashes {
 					for _, total := range totals {
-						labelMaker := MakeCatchpointLabelMakerCurrent(r, &ledgerRoundHash, &balancesMerkleRoot, total, &stateProofVerificationDataHash)
+						labelMaker := MakeCatchpointLabelMakerCurrent(r, &ledgerRoundHash, &balancesMerkleRoot, total, &stateProofVerificationContextHash)
 						labelString := MakeLabel(labelMaker)
 						parsedRound, parsedHash, err := ParseCatchpointLabel(labelString)
 						require.Equal(t, r, parsedRound)

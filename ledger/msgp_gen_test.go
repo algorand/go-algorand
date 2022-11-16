@@ -434,9 +434,9 @@ func BenchmarkUnmarshalcatchpointFirstStageInfo(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalcatchpointStateProofVerificationData(t *testing.T) {
+func TestMarshalUnmarshalcatchpointStateProofVerificationContext(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := catchpointStateProofVerificationData{}
+	v := catchpointStateProofVerificationContext{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -455,12 +455,12 @@ func TestMarshalUnmarshalcatchpointStateProofVerificationData(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingcatchpointStateProofVerificationData(t *testing.T) {
-	protocol.RunEncodingTest(t, &catchpointStateProofVerificationData{})
+func TestRandomizedEncodingcatchpointStateProofVerificationContext(t *testing.T) {
+	protocol.RunEncodingTest(t, &catchpointStateProofVerificationContext{})
 }
 
-func BenchmarkMarshalMsgcatchpointStateProofVerificationData(b *testing.B) {
-	v := catchpointStateProofVerificationData{}
+func BenchmarkMarshalMsgcatchpointStateProofVerificationContext(b *testing.B) {
+	v := catchpointStateProofVerificationContext{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -468,8 +468,8 @@ func BenchmarkMarshalMsgcatchpointStateProofVerificationData(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgcatchpointStateProofVerificationData(b *testing.B) {
-	v := catchpointStateProofVerificationData{}
+func BenchmarkAppendMsgcatchpointStateProofVerificationContext(b *testing.B) {
+	v := catchpointStateProofVerificationContext{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -480,8 +480,8 @@ func BenchmarkAppendMsgcatchpointStateProofVerificationData(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalcatchpointStateProofVerificationData(b *testing.B) {
-	v := catchpointStateProofVerificationData{}
+func BenchmarkUnmarshalcatchpointStateProofVerificationContext(b *testing.B) {
+	v := catchpointStateProofVerificationContext{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

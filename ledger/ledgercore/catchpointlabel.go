@@ -80,23 +80,23 @@ func (l *CatchpointLabelMakerV6) logStr() string {
 
 // CatchpointLabelMakerCurrent represent a single catchpoint maker, matching catchpoints of version V7 and above.
 type CatchpointLabelMakerCurrent struct {
-	v6Label                        CatchpointLabelMakerV6
-	stateProofVerificationDataHash crypto.Digest
+	v6Label                           CatchpointLabelMakerV6
+	stateProofVerificationContextHash crypto.Digest
 }
 
 // MakeCatchpointLabelMakerCurrent creates a catchpoint label given the catchpoint label parameters.
 func MakeCatchpointLabelMakerCurrent(ledgerRound basics.Round, ledgerRoundBlockHash *crypto.Digest,
-	balancesMerkleRoot *crypto.Digest, totals AccountTotals, stateProofVerificationDataHash *crypto.Digest) *CatchpointLabelMakerCurrent {
+	balancesMerkleRoot *crypto.Digest, totals AccountTotals, stateProofVerificationContextHash *crypto.Digest) *CatchpointLabelMakerCurrent {
 	return &CatchpointLabelMakerCurrent{
-		v6Label:                        *MakeCatchpointLabelMakerV6(ledgerRound, ledgerRoundBlockHash, balancesMerkleRoot, totals),
-		stateProofVerificationDataHash: *stateProofVerificationDataHash,
+		v6Label:                           *MakeCatchpointLabelMakerV6(ledgerRound, ledgerRoundBlockHash, balancesMerkleRoot, totals),
+		stateProofVerificationContextHash: *stateProofVerificationContextHash,
 	}
 }
 
 func (l *CatchpointLabelMakerCurrent) toBuffer() []byte {
 	v6Buffer := l.v6Label.toBuffer()
 
-	return append(v6Buffer, l.stateProofVerificationDataHash[:]...)
+	return append(v6Buffer, l.stateProofVerificationContextHash[:]...)
 }
 
 func (l *CatchpointLabelMakerCurrent) getRound() basics.Round {
@@ -104,7 +104,7 @@ func (l *CatchpointLabelMakerCurrent) getRound() basics.Round {
 }
 
 func (l *CatchpointLabelMakerCurrent) logStr() string {
-	return fmt.Sprintf("%s state proof verification data digest=%s", l.v6Label.logStr(), l.stateProofVerificationDataHash)
+	return fmt.Sprintf("%s state proof verification data digest=%s", l.v6Label.logStr(), l.stateProofVerificationContextHash)
 }
 
 // MakeLabel returns the user-facing representation of this catchpoint label. ( i.e. the "label" )

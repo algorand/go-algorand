@@ -217,7 +217,7 @@ func readCatchpointFile(t *testing.T, catchpointPath string) []decodedCatchpoint
 	return readCatchpointContent(t, tarReader)
 }
 
-func verifyStateProofVerificationDataWrite(t *testing.T, data []ledgercore.StateProofVerificationContext) {
+func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.StateProofVerificationContext) {
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBasicCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -258,7 +258,7 @@ func verifyStateProofVerificationDataWrite(t *testing.T, data []ledgercore.State
 		if err != nil {
 			return err
 		}
-		_, err = writer.WriteStateProofVerificationData()
+		_, err = writer.WriteStateProofVerificationContext()
 		if err != nil {
 			return err
 		}
@@ -273,13 +273,13 @@ func verifyStateProofVerificationDataWrite(t *testing.T, data []ledgercore.State
 	})
 
 	catchpointData := readCatchpointDataFile(t, fileName)
-	require.Equal(t, "stateProofVerificationData.msgpack", catchpointData[0].headerName)
-	var wrappedData catchpointStateProofVerificationData
+	require.Equal(t, "stateProofVerificationContext.msgpack", catchpointData[0].headerName)
+	var wrappedData catchpointStateProofVerificationContext
 	err = protocol.Decode(catchpointData[0].data, &wrappedData)
 	require.NoError(t, err)
 
-	for index, verificationData := range wrappedData.Data {
-		require.Equal(t, data[index], verificationData)
+	for index, verificationContext := range wrappedData.Data {
+		require.Equal(t, data[index], verificationContext)
 	}
 }
 
@@ -382,7 +382,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		_, err = writer.WriteStateProofVerificationData()
+		_, err = writer.WriteStateProofVerificationContext()
 		if err != nil {
 			return err
 		}
@@ -420,7 +420,7 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 		if err != nil {
 			return err
 		}
-		_, err = writer.WriteStateProofVerificationData()
+		_, err = writer.WriteStateProofVerificationContext()
 		if err != nil {
 			return err
 		}
@@ -466,24 +466,24 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 	return catchpointFileHeader
 }
 
-func TestStateProofVerificationDataWrite(t *testing.T) {
+func TestStateProofVerificationContextWrite(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	//t.Parallel() verifyStateProofVerificationDataWrite changes consensus
+	//t.Parallel() verifyStateProofVerificationContextWrite changes consensus
 
-	verificationData := ledgercore.StateProofVerificationContext{
+	verificationContext := ledgercore.StateProofVerificationContext{
 		LastAttestedRound: 120,
 		VotersCommitment:  nil,
 		OnlineTotalWeight: basics.MicroAlgos{Raw: 100},
 	}
 
-	verifyStateProofVerificationDataWrite(t, []ledgercore.StateProofVerificationContext{verificationData})
+	verifyStateProofVerificationContextWrite(t, []ledgercore.StateProofVerificationContext{verificationContext})
 }
 
-func TestEmptyStateProofVerificationDataWrite(t *testing.T) {
+func TestEmptyStateProofVerificationContextWrite(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	//t.Parallel() verifyStateProofVerificationDataWrite changes consensus
+	//t.Parallel() verifyStateProofVerificationContextWrite changes consensus
 
-	verifyStateProofVerificationDataWrite(t, []ledgercore.StateProofVerificationContext{})
+	verifyStateProofVerificationContextWrite(t, []ledgercore.StateProofVerificationContext{})
 }
 
 func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {

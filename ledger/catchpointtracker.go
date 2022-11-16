@@ -1088,12 +1088,12 @@ func (ct *catchpointTracker) IsWritingCatchpointDataFile() bool {
 // The file is built in the following order:
 // - Catchpoint file header (named content.msgpack). The header is generated and appended to the file at the end of the
 // 	 second stage of catchpoint generation.
-// - State proof verification data chunk (named stateProofVerificationData.msgpack).
+// - State proof verification data chunk (named stateProofVerificationContext.msgpack).
 // - Balance and KV chunk (named balances.x.msgpack).
 // 	 ...
 // - Balance and KV chunk (named balances.x.msgpack).
 func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, updatingBalancesDuration time.Duration) (
-	uint64 /*totalAccounts*/, uint64 /*totalChunks*/, uint64 /*biggestChunkLen*/, crypto.Digest /*stateProofVerificationDataHash*/, error) {
+	uint64 /*totalAccounts*/, uint64 /*totalChunks*/, uint64 /*biggestChunkLen*/, crypto.Digest /*stateProofVerificationContextHash*/, error) {
 	ct.log.Debugf("catchpointTracker.generateCatchpointData() writing catchpoint accounts for round %d", accountsRound)
 
 	startTime := time.Now()
@@ -1117,7 +1117,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	}
 
 	var catchpointWriter *catchpointWriter
-	var stateProofVerificationDataHash crypto.Digest
+	var stateProofVerificationContextHash crypto.Digest
 
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
@@ -1127,7 +1127,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 			return
 		}
 
-		stateProofVerificationDataHash, err = catchpointWriter.WriteStateProofVerificationData()
+		stateProofVerificationContextHash, err = catchpointWriter.WriteStateProofVerificationContext()
 		if err != nil {
 			return
 		}
@@ -1198,7 +1198,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 		With("catchpointLabel", catchpointGenerationStats.CatchpointLabel).
 		Infof("Catchpoint data file was generated")
 
-	return catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, stateProofVerificationDataHash, nil
+	return catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, stateProofVerificationContextHash, nil
 }
 
 func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.Tx, accountsRound basics.Round,
