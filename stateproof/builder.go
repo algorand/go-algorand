@@ -192,6 +192,9 @@ func (spw *Worker) getAllOnlineBuilderRounds() ([]basics.Round, error) {
 		return nil, err
 	}
 	proto := config.Consensus[latestHdr.CurrentProtocol]
+	if proto.StateProofInterval == 0 { // StateProofs are not enabled yet
+		return nil, err
+	}
 
 	latestStateProofRound := latest.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))
 	threshold := onlineBuildersThreshold(&proto, latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
