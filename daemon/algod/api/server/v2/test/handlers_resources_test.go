@@ -23,8 +23,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
@@ -35,9 +40,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/labstack/echo/v4"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type mockLedger struct {
@@ -45,6 +47,14 @@ type mockLedger struct {
 	kvstore  map[string][]byte
 	latest   basics.Round
 	blocks   []bookkeeping.Block
+}
+
+func (l *mockLedger) GenesisHash() crypto.Digest {
+	panic("implement me")
+}
+
+func (l *mockLedger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
+	panic("implement me")
 }
 
 func (l *mockLedger) GetAccountDeltasForRound(rnd basics.Round) (ledgercore.AccountDeltas, error) {
@@ -219,7 +229,7 @@ func randomAccountWithAppParams(N int) basics.AccountData {
 	return a
 }
 
-func setupTestForLargeResources(t *testing.T, acctSize, maxResults int, accountMaker func(int) basics.AccountData) (handlers v2.Handlers, fakeAddr basics.Address, acctData basics.AccountData) {
+func setupTestForLargeResources(t *testing.T, acctSize, maxResults int, accountMaker func(int) basics.AccountData) (handlers v2.ParticipatingHandlers, fakeAddr basics.Address, acctData basics.AccountData) {
 	ml := mockLedger{
 		accounts: make(map[basics.Address]basics.AccountData),
 		latest:   basics.Round(10),
@@ -232,10 +242,13 @@ func setupTestForLargeResources(t *testing.T, acctSize, maxResults int, accountM
 	mockNode := makeMockNode(&ml, t.Name(), nil)
 	mockNode.config.MaxAPIResourcesPerAccount = uint64(maxResults)
 	dummyShutdownChan := make(chan struct{})
-	handlers = v2.Handlers{
-		Node:     mockNode,
-		Log:      logging.Base(),
-		Shutdown: dummyShutdownChan,
+	handlers = v2.ParticipatingHandlers{
+		Node: mockNode,
+		NonParticipatingHandlers: v2.NonParticipatingHandlers{
+			Log:      logging.Base(),
+			Shutdown: dummyShutdownChan,
+			Node:     mockNode,
+		},
 	}
 	return
 }

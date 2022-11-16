@@ -53,7 +53,6 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/timers"
-	"github.com/algorand/go-deadlock"
 )
 
 const (
@@ -99,51 +98,17 @@ func (status StatusReport) TimeSinceLastRound() time.Duration {
 
 // AlgorandFullNode specifies and implements a full Algorand node.
 type AlgorandFullNode struct {
-	mu        deadlock.Mutex
-	ctx       context.Context
-	cancelCtx context.CancelFunc
-	config    config.Local
-
-	ledger *data.Ledger
-	net    network.GossipNode
-
-	transactionPool *pools.TransactionPool
-	txHandler       *data.TxHandler
-	accountManager  *data.AccountManager
-
-	agreementService         *agreement.Service
-	catchupService           *catchup.Service
-	catchpointCatchupService *catchup.CatchpointCatchupService
-	blockService             *rpcs.BlockService
-	ledgerService            *rpcs.LedgerService
-	txPoolSyncerService      *rpcs.TxSyncer
+	AlgorandNonParticipatingNode
+	transactionPool     *pools.TransactionPool
+	txHandler           *data.TxHandler
+	agreementService    *agreement.Service
+	txPoolSyncerService *rpcs.TxSyncer
 
 	indexer *indexer.Indexer
 
-	rootDir     string
-	genesisID   string
-	genesisHash crypto.Digest
-	devMode     bool // is this node operates in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
-
-	log logging.Logger
-
-	// syncStatusMu used for locking lastRoundTimestamp and hasSyncedSinceStartup
-	// syncStatusMu added so OnNewBlock wouldn't be blocked by oldKeyDeletionThread during catchup
-	syncStatusMu          deadlock.Mutex
-	lastRoundTimestamp    time.Time
-	hasSyncedSinceStartup bool
-
-	cryptoPool                         execpool.ExecutionPool
-	lowPriorityCryptoVerificationPool  execpool.BacklogPool
-	highPriorityCryptoVerificationPool execpool.BacklogPool
-	catchupBlockAuth                   blockAuthenticatorImpl
-
 	oldKeyDeletionNotify        chan struct{}
 	monitoringRoutinesWaitGroup sync.WaitGroup
-
-	tracer messagetracer.MessageTracer
-
-	stateProofWorker *stateproof.Worker
+	stateProofWorker            *stateproof.Worker
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -449,8 +414,8 @@ func (node *AlgorandFullNode) getExistingPartHandle(filename string) (db.Accesso
 	return db.Accessor{}, err
 }
 
-// Ledger exposes the node's ledger handle to the algod API code
-func (node *AlgorandFullNode) Ledger() *data.Ledger {
+// LedgerForAPI exposes the node's ledger handle to the algod API code
+func (node *AlgorandFullNode) LedgerForAPI() ledger.LedgerForAPI {
 	return node.ledger
 }
 
@@ -531,58 +496,6 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 	}
 	node.log.Infof("Sent signed tx group with IDs %v", txids)
 	return nil
-}
-
-// ListTxns returns SignedTxns associated with a specific account in a range of Rounds (inclusive).
-// TxnWithStatus returns the round in which a particular transaction appeared,
-// since that information is not part of the SignedTxn itself.
-func (node *AlgorandFullNode) ListTxns(addr basics.Address, minRound basics.Round, maxRound basics.Round) ([]TxnWithStatus, error) {
-	result := make([]TxnWithStatus, 0)
-	for r := minRound; r <= maxRound; r++ {
-		h, err := node.ledger.AddressTxns(addr, r)
-		if err != nil {
-			return nil, err
-		}
-		for _, tx := range h {
-			result = append(result, TxnWithStatus{
-				Txn:            tx.SignedTxn,
-				ConfirmedRound: r,
-				ApplyData:      tx.ApplyData,
-			})
-		}
-	}
-	return result, nil
-}
-
-// GetTransaction looks for the required txID within with a specific account within a range of rounds (inclusive) and
-// returns the SignedTxn and true iff it finds the transaction.
-func (node *AlgorandFullNode) GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (TxnWithStatus, bool) {
-	// start with the most recent round, and work backwards:
-	// this will abort early if it hits pruned rounds
-	if maxRound < minRound {
-		return TxnWithStatus{}, false
-	}
-	r := maxRound
-	for {
-		h, err := node.ledger.AddressTxns(addr, r)
-		if err != nil {
-			return TxnWithStatus{}, false
-		}
-		for _, tx := range h {
-			if tx.ID() == txID {
-				return TxnWithStatus{
-					Txn:            tx.SignedTxn,
-					ConfirmedRound: r,
-					ApplyData:      tx.ApplyData,
-				}, true
-			}
-		}
-		if r == minRound {
-			break
-		}
-		r--
-	}
-	return TxnWithStatus{}, false
 }
 
 // GetPendingTransaction looks for the required txID in the recent ledger
@@ -704,14 +617,6 @@ func (node *AlgorandFullNode) GenesisID() string {
 	defer node.mu.Unlock()
 
 	return node.genesisID
-}
-
-// GenesisHash returns the hash of the genesis configuration.
-func (node *AlgorandFullNode) GenesisHash() crypto.Digest {
-	node.mu.Lock()
-	defer node.mu.Unlock()
-
-	return node.genesisHash
 }
 
 // PoolStats returns a PoolStatus structure reporting stats about the transaction pool
@@ -1001,11 +906,6 @@ func (node *AlgorandFullNode) txPoolGaugeThread(done <-chan struct{}) {
 	}
 }
 
-// IsArchival returns true the node is an archival node, false otherwise
-func (node *AlgorandFullNode) IsArchival() bool {
-	return node.config.Archival
-}
-
 // OnNewBlock implements the BlockListener interface so we're notified after each block is written to the ledger
 func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	if node.ledger.Latest() > block.Round() {
@@ -1079,28 +979,6 @@ func (node *AlgorandFullNode) oldKeyDeletionThread(done <-chan struct{}) {
 // Uint64 implements the randomness by calling the crypto library.
 func (node *AlgorandFullNode) Uint64() uint64 {
 	return crypto.RandUint64()
-}
-
-// Indexer returns a pointer to nodes indexer
-func (node *AlgorandFullNode) Indexer() (*indexer.Indexer, error) {
-	if node.indexer != nil && node.config.IsIndexerActive {
-		return node.indexer, nil
-	}
-	return nil, fmt.Errorf("indexer is not active")
-}
-
-// GetTransactionByID gets transaction by ID
-// this function is intended to be called externally via the REST api interface.
-func (node *AlgorandFullNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (TxnWithStatus, error) {
-	stx, _, err := node.ledger.LookupTxid(txid, rnd)
-	if err != nil {
-		return TxnWithStatus{}, err
-	}
-	return TxnWithStatus{
-		Txn:            stx.SignedTxn,
-		ConfirmedRound: rnd,
-		ApplyData:      stx.ApplyData,
-	}, nil
 }
 
 // StartCatchup starts the catchpoint mode and attempt to get to the provided catchpoint
@@ -1377,19 +1255,4 @@ func (node *AlgorandFullNode) Record(account basics.Address, round basics.Round,
 func (node *AlgorandFullNode) IsParticipating() bool {
 	round := node.ledger.Latest() + 1
 	return node.accountManager.HasLiveKeys(round, round+10)
-}
-
-// SetSyncRound sets the minimum sync round on the catchup service
-func (node *AlgorandFullNode) SetSyncRound(rnd uint64) error {
-	return node.catchupService.SetSyncRound(rnd)
-}
-
-// GetSyncRound retrieves a boolean representing whether the sync round has been set, the sync round, and any error
-func (node *AlgorandFullNode) GetSyncRound() (bool, uint64, error) {
-	return node.catchupService.GetSyncRound()
-}
-
-// UnsetSyncRound removes the sync round constraint on the ledger
-func (node *AlgorandFullNode) UnsetSyncRound() error {
-	return node.catchupService.UnsetSyncRound()
 }

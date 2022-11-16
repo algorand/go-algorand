@@ -5278,7 +5278,7 @@
         "summary": "Get parameters for constructing a new transaction",
         "tags": [
           "public",
-          "nonparticipating"
+          "participating"
         ]
       }
     },

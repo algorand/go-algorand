@@ -96,6 +96,31 @@ type Ledger struct {
 	dbPathPrefix string
 }
 
+// LedgerForAPI describes the Ledger methods used by the v2 API.
+//nolint:revive // Ignore repetitive naming for legacy purposes
+type LedgerForAPI interface {
+	LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error)
+	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
+	LookupKv(round basics.Round, key string) ([]byte, error)
+	LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error)
+	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
+	Latest() basics.Round
+	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
+	LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error)
+	BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error)
+	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
+	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
+	Wait(r basics.Round) chan struct{}
+	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
+	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
+	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
+	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
+	GetAccountDeltasForRound(rnd basics.Round) (ledgercore.AccountDeltas, error)
+	GetKvDeltasForRound(rnd basics.Round) (map[string]ledgercore.KvValueDelta, error)
+	ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error)
+	GenesisHash() crypto.Digest
+}
+
 // OpenLedger creates a Ledger object, using SQLite database filenames
 // based on dbPathPrefix (in-memory if dbMem is true). genesisInitState.Blocks and
 // genesisInitState.Accounts specify the initial blocks and accounts to use if the

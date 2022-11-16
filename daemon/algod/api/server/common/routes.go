@@ -21,34 +21,34 @@ import (
 )
 
 // Routes are routes that are common for all versions
-var Routes = lib.Routes{
-	lib.Route{
+var Routes = lib.CommonRoutes{
+	lib.CommonRoute{
 		Method:      "OPTIONS",
 		HandlerFunc: optionsHandler,
 	},
 
-	lib.Route{
+	lib.CommonRoute{
 		Name:        "versions",
 		Method:      "GET",
 		Path:        "/versions",
 		HandlerFunc: VersionsHandler,
 	},
 
-	lib.Route{
+	lib.CommonRoute{
 		Name:        "healthcheck",
 		Method:      "GET",
 		Path:        "/health",
 		HandlerFunc: HealthCheck,
 	},
 
-	lib.Route{
+	lib.CommonRoute{
 		Name:        "swagger.json",
 		Method:      "GET",
 		Path:        "/swagger.json",
 		HandlerFunc: SwaggerJSON,
 	},
 
-	lib.Route{
+	lib.CommonRoute{
 		Name:        "genesis",
 		Method:      "GET",
 		Path:        "/genesis",

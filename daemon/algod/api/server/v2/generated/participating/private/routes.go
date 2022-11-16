@@ -13,10 +13,12 @@ import (
 	"path"
 	"strings"
 
-	. "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
-	"github.com/algorand/oapi-codegen/pkg/runtime"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/labstack/echo/v4"
+
+	"github.com/algorand/oapi-codegen/pkg/runtime"
+
+	. "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 )
 
 // ServerInterface represents all server handlers.

@@ -49,6 +49,7 @@ import (
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -59,17 +60,20 @@ import (
 
 const stateProofIntervalForHandlerTests = uint64(256)
 
-func setupTestForMethodGet(t *testing.T) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
+func setupTestForMethodGet(t *testing.T) (v2.ParticipatingHandlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, rootkeys, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	dummyShutdownChan := make(chan struct{})
-	handler := v2.Handlers{
-		Node:     mockNode,
-		Log:      logging.Base(),
-		Shutdown: dummyShutdownChan,
+	handler := v2.ParticipatingHandlers{
+		Node: mockNode,
+		NonParticipatingHandlers: v2.NonParticipatingHandlers{
+			Log:      logging.Base(),
+			Shutdown: dummyShutdownChan,
+			Node:     mockNode,
+		},
 	}
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -134,15 +138,30 @@ func TestGetRoundDeltas(t *testing.T) {
 	t.Parallel()
 	a := require.New(t)
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
+	mockLedger, _, _, _, releasefunc := testingenv(t, 1, 1, true)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
+	dummyShutdownChan := make(chan struct{})
+	handler := v2.DataHandlers{
+		Node: mockNode,
+		NonParticipatingHandlers: v2.NonParticipatingHandlers{
+			Log:      logging.Base(),
+			Shutdown: dummyShutdownChan,
+			Node:     mockNode,
+		},
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
 	defer releasefunc()
-	insertRounds(a, handler, 3)
+	insertRounds(a, handler.Node.LedgerForAPI(), 3)
 
 	err := handler.GetRoundDeltas(c, 2)
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
 
-	actualResponse := generatedV2.RoundDeltas{}
+	actualResponse := model.RoundDeltas{}
 	expectedResponse := poolDeltaResponseGolden
 	(*expectedResponse.Accounts)[0].AccountData.Round = 2
 	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResponse)
@@ -160,10 +179,13 @@ func TestSyncRound(t *testing.T) {
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	dummyShutdownChan := make(chan struct{})
-	handler := v2.Handlers{
-		Node:     mockNode,
-		Log:      logging.Base(),
-		Shutdown: dummyShutdownChan,
+	handler := v2.DataHandlers{
+		Node: mockNode,
+		NonParticipatingHandlers: v2.NonParticipatingHandlers{
+			Log:      logging.Base(),
+			Shutdown: dummyShutdownChan,
+			Node:     mockNode,
+		},
 	}
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -223,7 +245,7 @@ func TestSyncRound(t *testing.T) {
 	mock.AssertExpectationsForObjects(t, mockNode)
 }
 
-func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, transactions.SignedTxn, func()) {
+func addBlockHelper(t *testing.T) (v2.ParticipatingHandlers, echo.Context, *httptest.ResponseRecorder, transactions.SignedTxn, func()) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 
 	l := handler.Node.LedgerForAPI()
@@ -328,7 +350,7 @@ func TestGetBlockGetBlockHash(t *testing.T) {
 
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
-	insertRounds(a, handler, 2)
+	insertRounds(a, handler.Node.LedgerForAPI(), 2)
 
 	type blockResponse struct {
 		Block bookkeeping.Block `codec:"block"`
@@ -593,10 +615,13 @@ func postTransactionTest(t *testing.T, txnToUse, expectedCode int) {
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
-	handler := v2.Handlers{
-		Node:     mockNode,
-		Log:      logging.Base(),
-		Shutdown: dummyShutdownChan,
+	handler := v2.ParticipatingHandlers{
+		Node: mockNode,
+		NonParticipatingHandlers: v2.NonParticipatingHandlers{
+			Log:      logging.Base(),
+			Shutdown: dummyShutdownChan,
+			Node:     mockNode,
+		},
 	}
 	e := echo.New()
 	var body io.Reader
@@ -629,7 +654,7 @@ func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expected
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nodeError)
-	handler := v2.Handlers{
+	handler := v2.NonParticipatingHandlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
 		Shutdown: dummyShutdownChan,
@@ -670,7 +695,7 @@ func abortCatchupTest(t *testing.T, catchpoint string, expectedCode int) {
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
-	handler := v2.Handlers{
+	handler := v2.NonParticipatingHandlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
 		Shutdown: dummyShutdownChan,
@@ -706,7 +731,7 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int,
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
-	handler := v2.Handlers{
+	handler := v2.NonParticipatingHandlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
 		Shutdown: dummyShutdownChan,
@@ -777,7 +802,7 @@ func tealDisassembleTest(t *testing.T, program []byte, expectedCode int,
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
-	handler := v2.Handlers{
+	handler := v2.NonParticipatingHandlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
 		Shutdown: dummyShutdownChan,
@@ -840,7 +865,7 @@ func tealDryrunTest(
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
-	handler := v2.Handlers{
+	handler := v2.NonParticipatingHandlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
 		Shutdown: dummyShutdownChan,
@@ -958,10 +983,13 @@ func TestAppendParticipationKeys(t *testing.T) {
 	mockLedger, _, _, _, releasefunc := testingenv(t, 1, 1, true)
 	defer releasefunc()
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
-	handler := v2.Handlers{
-		Node:     mockNode,
-		Log:      logging.Base(),
-		Shutdown: make(chan struct{}),
+	handler := v2.ParticipatingHandlers{
+		Node: mockNode,
+		NonParticipatingHandlers: v2.NonParticipatingHandlers{
+			Log:      logging.Base(),
+			Shutdown: make(chan struct{}),
+			Node:     mockNode,
+		},
 	}
 
 	id := account.ParticipationID{}
@@ -1042,10 +1070,13 @@ func TestAppendParticipationKeys(t *testing.T) {
 		// Create mock node with an error.
 		expectedErr := errors.New("expected error")
 		mockNode := makeMockNode(mockLedger, t.Name(), expectedErr)
-		handler := v2.Handlers{
-			Node:     mockNode,
-			Log:      logging.Base(),
-			Shutdown: make(chan struct{}),
+		handler := v2.ParticipatingHandlers{
+			Node: mockNode,
+			NonParticipatingHandlers: v2.NonParticipatingHandlers{
+				Log:      logging.Base(),
+				Shutdown: make(chan struct{}),
+				Node:     mockNode,
+			},
 		}
 
 		keys := make(account.StateProofKeys, 2)
@@ -1126,7 +1157,7 @@ func TestGetProofDefault(t *testing.T) {
 	a.NoError(err)
 }
 
-func newEmptyBlock(a *require.Assertions, lastBlock bookkeeping.Block, genBlk bookkeeping.Block, l v2.LedgerForAPI) bookkeeping.Block {
+func newEmptyBlock(a *require.Assertions, lastBlock bookkeeping.Block, genBlk bookkeeping.Block, l ledger.LedgerForAPI) bookkeeping.Block {
 	totalsRound, totals, err := l.LatestTotals()
 	a.NoError(err)
 	a.Equal(l.Latest(), totalsRound)
@@ -1187,18 +1218,16 @@ func addStateProofIfNeeded(blk bookkeeping.Block) bookkeeping.Block {
 	return blk
 }
 
-func insertRounds(a *require.Assertions, h v2.Handlers, numRounds int) {
-	ledger := h.Node.LedgerForAPI()
-
-	genBlk, err := ledger.Block(0)
+func insertRounds(a *require.Assertions, l ledger.LedgerForAPI, numRounds int) {
+	genBlk, err := l.Block(0)
 	a.NoError(err)
 
 	lastBlk := genBlk
 	for i := 0; i < numRounds; i++ {
-		blk := newEmptyBlock(a, lastBlk, genBlk, ledger)
+		blk := newEmptyBlock(a, lastBlk, genBlk, l)
 		blk = addStateProofIfNeeded(blk)
 		blk.BlockHeader.CurrentProtocol = protocol.ConsensusCurrentVersion
-		a.NoError(ledger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
+		a.NoError(l.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
 		lastBlk = blk
 	}
 }
@@ -1210,7 +1239,7 @@ func TestStateProofNotFound(t *testing.T) {
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	insertRounds(a, handler, 700)
+	insertRounds(a, handler.Node.LedgerForAPI(), 700)
 
 	a.NoError(handler.GetStateProof(ctx, 650))
 	a.Equal(404, responseRecorder.Code)
@@ -1234,7 +1263,7 @@ func TestStateProof200(t *testing.T) {
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	insertRounds(a, handler, 1000)
+	insertRounds(a, handler.Node.LedgerForAPI(), 1000)
 
 	a.NoError(handler.GetStateProof(ctx, stateProofIntervalForHandlerTests+1))
 	a.Equal(200, responseRecorder.Code)
@@ -1263,7 +1292,7 @@ func TestHeaderProofStateProofNotFound(t *testing.T) {
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	insertRounds(a, handler, 700)
+	insertRounds(a, handler.Node.LedgerForAPI(), 700)
 
 	a.NoError(handler.GetLightBlockHeaderProof(ctx, 650))
 	a.Equal(404, responseRecorder.Code)
@@ -1276,7 +1305,7 @@ func TestGetBlockProof200(t *testing.T) {
 	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 
-	insertRounds(a, handler, 1000)
+	insertRounds(a, handler.Node.LedgerForAPI(), 1000)
 
 	a.NoError(handler.GetLightBlockHeaderProof(ctx, stateProofIntervalForHandlerTests*2+2))
 	a.Equal(200, responseRecorder.Code)

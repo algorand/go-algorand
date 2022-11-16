@@ -35,17 +35,17 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
-	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 )
 
-func getNodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
+func getNodeStatus(node node.BaseNodeInterface) (res v1.NodeStatus, err error) {
 	stat, err := node.Status()
 	if err != nil {
 		return v1.NodeStatus{}, err
@@ -395,7 +395,7 @@ func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, pay
 // computeAssetIndexFromTxn returns the created asset index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) uint64 {
+func computeAssetIndexFromTxn(tx node.TxnWithStatus, l ledger.LedgerForAPI) uint64 {
 	// Must have ledger
 	if l == nil {
 		return 0
@@ -439,7 +439,7 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) uint64 {
 // computeAppIndexFromTxn returns the created app index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) uint64 {
+func computeAppIndexFromTxn(tx node.TxnWithStatus, l ledger.LedgerForAPI) uint64 {
 	// Must have ledger
 	if l == nil {
 		return 0
@@ -604,7 +604,7 @@ func WaitForBlock(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 
-	ledger := ctx.Node.Ledger()
+	ledger := ctx.Node.LedgerForAPI()
 	latestBlkHdr, err := ledger.BlockHdr(ledger.Latest())
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
@@ -781,7 +781,7 @@ func AccountInformation(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 
-	ledger := ctx.Node.Ledger()
+	ledger := ctx.Node.LedgerForAPI()
 	record, lastRound, amountWithoutPendingRewards, err := ledger.LookupLatest(basics.Address(addr))
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
@@ -927,7 +927,7 @@ func TransactionInformation(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 
-	ledger := ctx.Node.Ledger()
+	ledger := ctx.Node.LedgerForAPI()
 	latestRound := ledger.Latest()
 	stat, err := ctx.Node.Status()
 	if err != nil {
@@ -1030,7 +1030,7 @@ func PendingTransactionInformation(ctx lib.ReqContext, context echo.Context) {
 	}
 
 	if txn, ok := ctx.Node.GetPendingTransaction(txID); ok {
-		ledger := ctx.Node.Ledger()
+		ledger := ctx.Node.LedgerForAPI()
 		responseTxs, err := txWithStatusEncode(txn)
 		if err != nil {
 			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedToParseTransaction, ctx.Log)
@@ -1296,7 +1296,7 @@ func AssetInformation(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 
-	ledger := ctx.Node.Ledger()
+	ledger := ctx.Node.LedgerForAPI()
 	aidx := basics.AssetIndex(queryIndex)
 	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(aidx), basics.AssetCreatable)
 	if err != nil || !ok {
@@ -1395,7 +1395,7 @@ func Assets(ctx lib.ReqContext, context echo.Context) {
 	}
 
 	// Query asset range from the database
-	ledger := ctx.Node.Ledger()
+	ledger := ctx.Node.LedgerForAPI()
 	alocs, err := ledger.ListAssets(basics.AssetIndex(assetIdx), uint64(max))
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingAsset, ctx.Log)
@@ -1564,7 +1564,7 @@ func GetBlock(ctx lib.ReqContext, context echo.Context) {
 			return
 		}
 		if rawint != 0 {
-			blockbytes, err := rpcs.RawBlockBytes(ctx.Node.Ledger(), basics.Round(queryRound))
+			blockbytes, err := rpcs.RawBlockBytes(ctx.Node.LedgerForAPI(), basics.Round(queryRound))
 			if err != nil {
 				lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 				return
@@ -1582,7 +1582,7 @@ func GetBlock(ctx lib.ReqContext, context echo.Context) {
 	}
 
 	// decoded json-reencoded default:
-	ledger := ctx.Node.Ledger()
+	ledger := ctx.Node.LedgerForAPI()
 	b, c, err := ledger.BlockCert(basics.Round(queryRound))
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
@@ -1621,7 +1621,7 @@ func GetSupply(ctx lib.ReqContext, context echo.Context) {
 
 	w := context.Response().Writer
 
-	latest, totals, err := ctx.Node.Ledger().LatestTotals()
+	latest, totals, err := ctx.Node.LedgerForAPI().LatestTotals()
 	if err != nil {
 		err = fmt.Errorf("GetSupply(): round %d failed: %v", latest, err)
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errInternalFailure, ctx.Log)

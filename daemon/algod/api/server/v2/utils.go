@@ -23,12 +23,16 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/algorand/go-codec/codec"
 	"github.com/labstack/echo/v4"
 
+	"github.com/algorand/go-codec/codec"
+
+	"github.com/algorand/go-algorand/daemon/algod/api/server/common"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -119,7 +123,7 @@ func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, pay
 // computeAssetIndexFromTxn returns the created asset index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAssetIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
+func computeAssetIndexFromTxn(tx node.TxnWithStatus, l ledger.LedgerForAPI) *uint64 {
 	// Must have ledger
 	if l == nil {
 		return nil
@@ -163,7 +167,7 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 // computeAppIndexFromTxn returns the created app index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
+func computeAppIndexFromTxn(tx node.TxnWithStatus, l ledger.LedgerForAPI) *uint64 {
 	// Must have ledger
 	if l == nil {
 		return nil
@@ -355,4 +359,35 @@ func printableUTF8OrEmpty(in string) string {
 		}
 	}
 	return in
+}
+
+func registerCommon(router *echo.Echo, node node.BaseNodeInterface) {
+	for _, route := range common.Routes {
+		r := router.Add(route.Method, route.Path, wrapNode(node, route.HandlerFunc))
+		r.Name = route.Name
+	}
+}
+
+// registerHandler registers a set of Routes to the given router.
+func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx lib.ReqContext, m ...echo.MiddlewareFunc) {
+	for _, route := range routes {
+		r := router.Add(route.Method, prefix+route.Path, wrapCtx(ctx, route.HandlerFunc), m...)
+		r.Name = route.Name
+	}
+}
+
+// wrapCtx passes a common context to each request without a global variable.
+func wrapCtx(ctx lib.ReqContext, handler func(lib.ReqContext, echo.Context)) echo.HandlerFunc {
+	return func(context echo.Context) error {
+		handler(ctx, context)
+		return nil
+	}
+}
+
+// wrapNode passes a node to each request without a global variable.
+func wrapNode(node node.BaseNodeInterface, handler func(node.BaseNodeInterface, echo.Context)) echo.HandlerFunc {
+	return func(context echo.Context) error {
+		handler(node, context)
+		return nil
+	}
 }

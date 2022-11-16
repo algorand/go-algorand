@@ -17,6 +17,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -460,6 +461,23 @@ type Local struct {
 	// MaxAPIBoxPerApplication defines the maximum total number of boxes per application that will be returned
 	// in GetApplicationBoxes REST API responses.
 	MaxAPIBoxPerApplication uint64 `version[25]:"100000"`
+
+	// NodeType defines the set of services and APIs that will be functional after starting the node
+	NodeType string `version[25]:"participating"`
+}
+
+// GetNodeType returns the `protocol.NodeType` set in the config and errors if the input doesn't match a known type.
+func (cfg Local) GetNodeType() (protocol.NodeType, error) {
+	switch strings.ToLower(strings.TrimSpace(cfg.NodeType)) {
+	case "nonparticipating":
+		return protocol.NonParticipatingNode, nil
+	case "participating":
+		return protocol.ParticipatingNode, nil
+	case "data":
+		return protocol.DataNode, nil
+	default:
+		return 0, fmt.Errorf("unknown node type provided in config: %v", cfg.NodeType)
+	}
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

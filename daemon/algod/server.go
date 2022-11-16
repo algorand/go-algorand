@@ -31,17 +31,21 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/labstack/echo/v4"
+
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	apiServer "github.com/algorand/go-algorand/daemon/algod/api/server"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/network/limitlistener"
 	"github.com/algorand/go-algorand/node"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/tokens"
@@ -57,10 +61,11 @@ type Server struct {
 	netFile              string
 	netListenFile        string
 	log                  logging.Logger
-	node                 *node.AlgorandFullNode
+	node                 node.BaseNodeInterface
 	metricCollector      *metrics.MetricService
 	metricServiceStarted bool
 	stopping             chan struct{}
+	router               *echo.Echo
 }
 
 // Initialize creates a Node instance with applicable network services
@@ -171,13 +176,83 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 			NodeExporterPath:          cfg.NodeExporterPath,
 		})
 
-	s.node, err = node.MakeFull(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
-	if os.IsNotExist(err) {
-		return fmt.Errorf("node has not been installed: %s", err)
-	}
+	apiToken, err := tokens.GetAndValidateAPIToken(s.RootPath, tokens.AlgodTokenFilename)
 	if err != nil {
-		return fmt.Errorf("couldn't initialize the node: %s", err)
+		fmt.Printf("APIToken error: %v\n", err)
+		os.Exit(1)
 	}
+
+	adminAPIToken, err := tokens.GetAndValidateAPIToken(s.RootPath, tokens.AlgodAdminTokenFilename)
+	if err != nil {
+		fmt.Printf("APIToken error: %v\n", err)
+		os.Exit(1)
+	}
+
+	nodeType, err := cfg.GetNodeType()
+	if err != nil {
+		fmt.Printf("NodeType error: %v\n", err)
+		os.Exit(1)
+	}
+
+	var v2Handler v2.HandlerInterface
+	s.stopping = make(chan struct{})
+
+	switch nodeType {
+	case protocol.NonParticipatingNode:
+		node, err := node.MakeNonParticipating(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
+		if os.IsNotExist(err) {
+			return fmt.Errorf("node has not been installed: %s", err)
+		}
+		if err != nil {
+			return fmt.Errorf("couldn't initialize the node: %s", err)
+		}
+		s.node = node
+		v2Handler = &v2.NonParticipatingHandlers{
+			Log:      s.log,
+			Shutdown: s.stopping,
+			Node:     node,
+		}
+	case protocol.DataNode:
+		node, err := node.MakeData(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
+		if os.IsNotExist(err) {
+			return fmt.Errorf("node has not been installed: %s", err)
+		}
+		if err != nil {
+			return fmt.Errorf("couldn't initialize the node: %s", err)
+		}
+		s.node = node
+		v2Handler = &v2.DataHandlers{
+			NonParticipatingHandlers: v2.NonParticipatingHandlers{
+				Log:      s.log,
+				Shutdown: s.stopping,
+				Node:     node,
+			},
+			Node: node,
+		}
+	default:
+		if nodeType != protocol.ParticipatingNode {
+			s.log.Warnf("Unknown protocol type provided %v. Defaulting to ParticipatingNode.", nodeType)
+		}
+		node, err := node.MakeFull(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
+		if os.IsNotExist(err) {
+			return fmt.Errorf("node has not been installed: %s", err)
+		}
+		if err != nil {
+			return fmt.Errorf("couldn't initialize the node: %s", err)
+		}
+		s.node = node
+		v2Handler = &v2.ParticipatingHandlers{
+			NonParticipatingHandlers: v2.NonParticipatingHandlers{
+				Log:      s.log,
+				Shutdown: s.stopping,
+			},
+			Node: node,
+		}
+	}
+
+	s.router = apiServer.NewRouter(
+		s.log, v2Handler, apiToken, adminAPIToken,
+		cfg.RestConnectionsSoftLimit)
 
 	return nil
 }
@@ -220,20 +295,6 @@ func (s *Server) Start() {
 		s.metricServiceStarted = true
 	}
 
-	apiToken, err := tokens.GetAndValidateAPIToken(s.RootPath, tokens.AlgodTokenFilename)
-	if err != nil {
-		fmt.Printf("APIToken error: %v\n", err)
-		os.Exit(1)
-	}
-
-	adminAPIToken, err := tokens.GetAndValidateAPIToken(s.RootPath, tokens.AlgodAdminTokenFilename)
-	if err != nil {
-		fmt.Printf("APIToken error: %v\n", err)
-		os.Exit(1)
-	}
-
-	s.stopping = make(chan struct{})
-
 	addr := cfg.EndpointAddress
 	if addr == "" {
 		addr = ":http"
@@ -247,16 +308,13 @@ func (s *Server) Start() {
 	listener = limitlistener.RejectingLimitListener(
 		listener, cfg.RestConnectionsHardLimit, s.log)
 
+	s.router.Listener = listener
 	addr = listener.Addr().String()
 	server = http.Server{
 		Addr:         addr,
 		ReadTimeout:  time.Duration(cfg.RestReadTimeoutSeconds) * time.Second,
 		WriteTimeout: time.Duration(cfg.RestWriteTimeoutSeconds) * time.Second,
 	}
-
-	e := apiServer.NewRouter(
-		s.log, s.node, s.stopping, apiToken, adminAPIToken, listener,
-		cfg.RestConnectionsSoftLimit)
 
 	// Set up files for our PID and our listening address
 	// before beginning to listen to prevent 'goal node start'
@@ -286,7 +344,7 @@ func (s *Server) Start() {
 
 	errChan := make(chan error, 1)
 	go func() {
-		err := e.StartServer(&server)
+		err := s.router.StartServer(&server)
 		errChan <- err
 	}()
 

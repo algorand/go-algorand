@@ -23,11 +23,12 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
+	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // Metrics returns data collected by util/metrics
-func Metrics(ctx lib.ReqContext, context echo.Context) {
+func Metrics(_ node.BaseNodeInterface, context echo.Context) {
 	// swagger:operation GET /metrics Metrics
 	//---
 	//     Summary: Return metrics about algod functioning.
@@ -51,7 +52,7 @@ func Metrics(ctx lib.ReqContext, context echo.Context) {
 
 func init() {
 	Routes = append(Routes,
-		lib.Route{
+		lib.CommonRoute{
 			Name:        "metrics",
 			Method:      "GET",
 			Path:        "/metrics",

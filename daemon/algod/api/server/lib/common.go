@@ -34,6 +34,14 @@ var GenesisJSONText string
 // HandlerFunc defines a wrapper for http.HandlerFunc that includes a context
 type HandlerFunc func(ReqContext, echo.Context)
 
+// CommonRoute describes a route common to all node interfaces
+type CommonRoute struct {
+	Name        string
+	Method      string
+	Path        string
+	HandlerFunc func(node.BaseNodeInterface, echo.Context)
+}
+
 // Route type description
 type Route struct {
 	Name        string
@@ -45,10 +53,13 @@ type Route struct {
 // Routes contains all routes
 type Routes []Route
 
+// CommonRoutes contains all common routes
+type CommonRoutes []CommonRoute
+
 // ReqContext is passed to each of the handlers below via wrapCtx, allowing
 // handlers to interact with the node
 type ReqContext struct {
-	Node     *node.AlgorandFullNode
+	Node     node.ParticipatingNodeInterface
 	Log      logging.Logger
 	Context  echo.Context
 	Shutdown <-chan struct{}

@@ -82,9 +82,8 @@ type Service struct {
 	deadlineTimeout     time.Duration
 	blockValidationPool execpool.BacklogPool
 	// SyncRound, provided externally, which the ledger must keep in cache
-	syncRoundMu  deadlock.RWMutex
-	syncRoundSet bool
-	syncRound    uint64
+	syncRoundMu deadlock.RWMutex
+	syncRound   uint64
 
 	// suspendForCatchpointWriting defines whether we've ran into a state where the ledger is currently busy writing the
 	// catchpoint file. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
@@ -162,7 +161,6 @@ func (s *Service) SetSyncRound(rnd uint64) error {
 	}
 	s.syncRoundMu.Lock()
 	defer s.syncRoundMu.Unlock()
-	s.syncRoundSet = true
 	s.syncRound = rnd
 	return nil
 }
@@ -171,15 +169,15 @@ func (s *Service) SetSyncRound(rnd uint64) error {
 func (s *Service) UnsetSyncRound() error {
 	s.syncRoundMu.Lock()
 	defer s.syncRoundMu.Unlock()
-	s.syncRoundSet = false
+	s.syncRound = 0
 	return nil
 }
 
 // GetSyncRound returns whether a round has been previously set, the minimum sync round, and an error
-func (s *Service) GetSyncRound() (bool, uint64, error) {
+func (s *Service) GetSyncRound() (uint64, error) {
 	s.syncRoundMu.RLock()
 	defer s.syncRoundMu.RUnlock()
-	return s.syncRoundSet, s.syncRound, nil
+	return s.syncRound, nil
 }
 
 // SynchronizingTime returns the time we've been performing a catchup operation (0 if not currently catching up)
@@ -238,7 +236,7 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 //  - If the retrieval of the previous block was unsuccessful
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
 	// If sync-ing this round would break our cache invariant, don't fetch it
-	if set, syncRound, err := s.GetSyncRound(); err == nil && set && r >= basics.Round(syncRound+s.cfg.MaxAcctLookback) {
+	if syncRound, err := s.GetSyncRound(); err == nil && syncRound > 0 && r >= basics.Round(syncRound+s.cfg.MaxAcctLookback) {
 		return false
 	}
 	i := 0

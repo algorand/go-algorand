@@ -27,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
@@ -35,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
@@ -79,10 +79,10 @@ var poolAddrResponseGolden = model.AccountResponse{
 	MinBalance:                  100000,
 }
 var txnPoolGolden = make([]transactions.SignedTxn, 2)
-var poolDeltaResponseGolden = generatedV2.RoundDeltas{
-	Accounts: &[]generatedV2.AccountBalanceRecord{
+var poolDeltaResponseGolden = model.RoundDeltas{
+	Accounts: &[]model.AccountBalanceRecord{
 		{
-			AccountData: generatedV2.Account{
+			AccountData: model.Account{
 				Address:                     poolAddr.String(),
 				Amount:                      50000000000,
 				AmountWithoutPendingRewards: 50000000000,
@@ -107,7 +107,7 @@ var poolDeltaResponseGolden = generatedV2.RoundDeltas{
 // package `data` and package `node`, which themselves import `mocks`
 type mockNode struct {
 	mock.Mock
-	ledger    v2.LedgerForAPI
+	ledger    ledger.LedgerForAPI
 	genesisID string
 	config    config.Local
 	err       error
@@ -153,7 +153,7 @@ func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys acco
 	return m.err
 }
 
-func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error) *mockNode {
+func makeMockNode(ledger ledger.LedgerForAPI, genesisID string, nodeError error) *mockNode {
 	return &mockNode{
 		ledger:    ledger,
 		genesisID: genesisID,
@@ -163,7 +163,7 @@ func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error) *mo
 	}
 }
 
-func (m *mockNode) LedgerForAPI() v2.LedgerForAPI {
+func (m *mockNode) LedgerForAPI() ledger.LedgerForAPI {
 	return m.ledger
 }
 
@@ -176,7 +176,7 @@ func (m *mockNode) GenesisID() string {
 }
 
 func (m *mockNode) GenesisHash() crypto.Digest {
-	return m.ledger.(*data.Ledger).GenesisHash()
+	return m.ledger.GenesisHash()
 }
 
 func (m *mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {

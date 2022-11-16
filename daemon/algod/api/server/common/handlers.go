@@ -26,10 +26,11 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
+	"github.com/algorand/go-algorand/node"
 )
 
 // GenesisJSON is an httpHandler for route GET /genesis
-func GenesisJSON(ctx lib.ReqContext, context echo.Context) {
+func GenesisJSON(_ node.BaseNodeInterface, context echo.Context) {
 	// swagger:operation GET /genesis GenesisJSON
 	//---
 	//     Summary: Gets the genesis information
@@ -50,7 +51,7 @@ func GenesisJSON(ctx lib.ReqContext, context echo.Context) {
 }
 
 // SwaggerJSON is an httpHandler for route GET /swagger.json
-func SwaggerJSON(ctx lib.ReqContext, context echo.Context) {
+func SwaggerJSON(_ node.BaseNodeInterface, context echo.Context) {
 	// swagger:operation GET /swagger.json SwaggerJSON
 	//---
 	//     Summary: Gets the current swagger spec.
@@ -71,7 +72,7 @@ func SwaggerJSON(ctx lib.ReqContext, context echo.Context) {
 }
 
 // HealthCheck is an httpHandler for route GET /health
-func HealthCheck(ctx lib.ReqContext, context echo.Context) {
+func HealthCheck(_ node.BaseNodeInterface, context echo.Context) {
 	// swagger:operation GET /health HealthCheck
 	//---
 	//     Summary: Returns OK if healthy.
@@ -90,7 +91,7 @@ func HealthCheck(ctx lib.ReqContext, context echo.Context) {
 }
 
 // VersionsHandler is an httpHandler for route GET /versions
-func VersionsHandler(ctx lib.ReqContext, context echo.Context) {
+func VersionsHandler(node node.BaseNodeInterface, context echo.Context) {
 	// swagger:route GET /versions GetVersion
 	//
 	// Retrieves the current version
@@ -105,7 +106,7 @@ func VersionsHandler(ctx lib.ReqContext, context echo.Context) {
 
 	w := context.Response().Writer
 
-	gh := ctx.Node.GenesisHash()
+	gh := node.GenesisHash()
 	currentVersion := config.GetCurrentVersion()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -113,7 +114,7 @@ func VersionsHandler(ctx lib.ReqContext, context echo.Context) {
 	response := VersionsResponse{
 		Body: common.Version{
 			Versions:    []string{"v1", "v2"},
-			GenesisID:   ctx.Node.GenesisID(),
+			GenesisID:   node.GenesisID(),
 			GenesisHash: gh[:],
 			Build: common.BuildVersion{
 				Major:       currentVersion.Major,
@@ -131,6 +132,6 @@ func VersionsHandler(ctx lib.ReqContext, context echo.Context) {
 }
 
 // CORS
-func optionsHandler(ctx lib.ReqContext, context echo.Context) {
+func optionsHandler(_ node.BaseNodeInterface, context echo.Context) {
 	context.Response().Writer.WriteHeader(http.StatusOK)
 }
