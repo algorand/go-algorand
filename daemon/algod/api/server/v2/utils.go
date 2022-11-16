@@ -369,8 +369,9 @@ func registerCommon(router *echo.Echo, node node.BaseNodeInterface) {
 	}
 }
 
-// registerHandler registers a set of Routes to the given router.
-func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx lib.ReqContext, m ...echo.MiddlewareFunc) {
+// RegisterHandlers registers a set of Routes to the given router.
+// Currently only exported because it's used in tests
+func RegisterHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx lib.ReqContext, m ...echo.MiddlewareFunc) {
 	for _, route := range routes {
 		r := router.Add(route.Method, prefix+route.Path, wrapCtx(ctx, route.HandlerFunc), m...)
 		r.Name = route.Name

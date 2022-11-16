@@ -56,7 +56,7 @@ func (v2 *ParticipatingHandlers) Register(e *echo.Echo, publicAuth echo.Middlewa
 		Log:      v2.Log,
 		Shutdown: v2.Shutdown,
 	}
-	registerHandlers(e, routes.APIV1Tag, routes.V1Routes, ctx, publicAuth)
+	RegisterHandlers(e, routes.APIV1Tag, routes.V1Routes, ctx, publicAuth)
 	registerCommon(e, v2.Node)
 }
 

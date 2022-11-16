@@ -16,6 +16,7 @@
 package server
 
 import (
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"net/http"
 	"testing"
 
@@ -50,7 +51,7 @@ func (s *TestSuite) SetupSuite() {
 		})
 	}
 	// Registering v1 routes
-	registerHandlers(s.e, apiV1Tag, v1RoutesCopy, lib.ReqContext{})
+	v2.RegisterHandlers(s.e, routes.APIV1Tag, v1RoutesCopy, lib.ReqContext{})
 }
 func (s *TestSuite) SetupTest() {
 	s.calls = 0
