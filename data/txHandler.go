@@ -66,6 +66,7 @@ type TxHandler struct {
 	net                   network.GossipNode
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
+	erl                   network.ElasticRateLimiter
 }
 
 // MakeTxHandler makes a new handler for transaction messages
@@ -90,6 +91,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
+		erl:                   *network.NewElasticRateLimiter(10000, 100),
 	}
 
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
@@ -224,6 +226,28 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	dec := protocol.NewMsgpDecoderBytes(rawmsg.Data)
 	ntx := 0
 	unverifiedTxGroup := make([]transactions.SignedTxn, 1)
+
+	// if the ElasticRateLimiter doesn't have a reservation for this Peer, attempt to make one
+	if !handler.erl.ContainsReservationFor(rawmsg.Sender) {
+		err := handler.erl.ReserveCapacity(rawmsg.Sender)
+		if err != nil {
+			logging.Base().Warnf("Peer could not be given reservedCapacity. Peer will end up using sharedCapacity: %v", err)
+		} else {
+			// unregistration of capacity to happen when the peer is closed
+			rawmsg.Sender.(network.PeerCloseRegistrar).OnClose(func() {
+				handler.erl.UnreserveCapacity(rawmsg.Sender)
+			},
+			)
+		}
+	}
+	// attempt to consume capacity from the ElasticRateLimiter
+	reservedCapacity, err := handler.erl.ConsumeCapacity(rawmsg.Sender)
+	if err != nil {
+		logging.Base().Warnf("Peer is rate limited: %v", err)
+		return network.OutgoingMessage{Action: network.Ignore}
+	}
+	defer handler.erl.ReturnCapacity(rawmsg.Sender, reservedCapacity)
+
 	for {
 		if len(unverifiedTxGroup) == ntx {
 			n := make([]transactions.SignedTxn, len(unverifiedTxGroup)*2)
