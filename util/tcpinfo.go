@@ -56,6 +56,9 @@ var (
 // underlying network implementation, using a system call on Linux and Mac
 // and returning an error for unsupported platforms.
 func GetConnTCPInfo(conn net.Conn) (*TCPInfo, error) {
+	if conn == nil {
+		return nil, ErrNotSyscallConn
+	}
 	sysconn, ok := conn.(syscall.Conn)
 	if sysconn == nil || !ok {
 		return nil, ErrNotSyscallConn
