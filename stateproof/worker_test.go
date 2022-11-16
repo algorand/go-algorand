@@ -1596,6 +1596,7 @@ func TestBuildersPersistenceAfterRestart(t *testing.T) {
 }
 
 func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
+	t.Skip()
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
