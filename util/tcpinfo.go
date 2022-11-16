@@ -57,7 +57,7 @@ var (
 // and returning an error for unsupported platforms.
 func GetConnTCPInfo(conn net.Conn) (*TCPInfo, error) {
 	sysconn, ok := conn.(syscall.Conn)
-	if !ok {
+	if sysconn == nil || !ok {
 		return nil, ErrNotSyscallConn
 	}
 	raw, err := sysconn.SyscallConn()

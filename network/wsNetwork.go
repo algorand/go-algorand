@@ -1832,7 +1832,7 @@ func (wn *WebsocketNetwork) getPeerConnectionTelemetryDetails(now time.Time, pee
 		}
 		// unwrap websocket.Conn, requestTrackedConnection, rejectingLimitListenerConn
 		var uconn net.Conn = peer.conn.UnderlyingConn()
-		for {
+		for i := 0; i < 10; i++ {
 			wconn, ok := uconn.(wrappedConn)
 			if !ok {
 				break
