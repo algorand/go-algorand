@@ -220,9 +220,9 @@ func deleteBuilders(tx *sql.Tx, rnd basics.Round) error {
 	return err
 }
 
-func getSignatureRounds(tx *sql.Tx) ([]basics.Round, error) {
+func getSignatureRounds(tx *sql.Tx, threshold basics.Round, maxRound basics.Round) ([]basics.Round, error) {
 	var rnds []basics.Round
-	rows, err := tx.Query("SELECT DISTINCT sprnd FROM sigs")
+	rows, err := tx.Query("SELECT DISTINCT sprnd FROM sigs WHERE (sprnd<=? OR sprnd=?)", threshold, maxRound)
 	if err != nil {
 		return nil, err
 	}

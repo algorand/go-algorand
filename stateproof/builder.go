@@ -162,7 +162,7 @@ func (spw *Worker) initBuilders() {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
-	rnds, err := spw.getAllRounds()
+	rnds, err := spw.getAllOnlineBuilderRounds()
 	if err != nil {
 		spw.log.Errorf("initBuilders: failed to load rounds: %v", err)
 		return
@@ -183,15 +183,26 @@ func (spw *Worker) initBuilders() {
 	}
 }
 
-func (spw *Worker) getAllRounds() ([]basics.Round, error) {
+func (spw *Worker) getAllOnlineBuilderRounds() ([]basics.Round, error) {
 	// Some state proof databases might only contain a signature table. For that reason, when trying to create builders for possible state proof
 	// rounds we search the signature table and not the builder table
+	latest := spw.ledger.Latest()
+	latestHdr, err := spw.ledger.BlockHdr(latest)
+	if err != nil {
+		return nil, err
+	}
+	proto := config.Consensus[latestHdr.CurrentProtocol]
+
+	latestStateProofRound := latest.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))
+	threshold := onlineBuildersThreshold(&proto, latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+
 	var rnds []basics.Round
-	err := spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
 		var err error
-		rnds, err = getSignatureRounds(tx)
+		rnds, err = getSignatureRounds(tx, latestStateProofRound, threshold)
 		return err
 	})
+
 	return rnds, err
 }
 
@@ -374,7 +385,7 @@ func (spw *Worker) builder(latest basics.Round) {
 		stateProofNextRound := hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 
 		fmt.Println("processing", nextrnd)
-		spw.deleteStaleStateProofBuildData(&proto, stateProofNextRound)
+		spw.deleteBuildData(&proto, stateProofNextRound)
 
 		// Broadcast signatures based on the previous block(s) that
 		// were agreed upon.  This ensures that, if we send a signature
@@ -391,7 +402,7 @@ func (spw *Worker) builder(latest basics.Round) {
 }
 
 // broadcastSigs periodically broadcasts pending signatures for rounds
-// that have not been able to form a state proof.
+// that have not been able to form a state proof, with correlation to builderCacheLength.
 //
 // Signature re-broadcasting happens in periods of proto.StateProofInterval
 // rounds.
@@ -458,16 +469,19 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, stateProofNextRound basics.R
 	}
 }
 
-func (spw *Worker) deleteStaleStateProofBuildData(proto *config.ConsensusParams, stateProofNextRound basics.Round) {
+func (spw *Worker) deleteBuildData(proto *config.ConsensusParams, stateProofNextRound basics.Round) {
 	if proto.StateProofInterval == 0 || stateProofNextRound == 0 {
 		return
 	}
+
+	// Delete from memory (already stored on disk)
 	spw.trimBuildersCache(proto, stateProofNextRound)
 
 	if spw.LastCleanupRound == stateProofNextRound {
 		return
 	}
 
+	// Delete from disk (database)
 	spw.deleteStaleSigs(stateProofNextRound)
 	spw.deleteStaleKeys(stateProofNextRound)
 	spw.deleteStaleBuilders(stateProofNextRound)
@@ -508,18 +522,21 @@ func (spw *Worker) deleteStaleBuilders(retainRound basics.Round) {
 	}
 }
 
-// Returns the highest round for which the builder should be stored in memory (cache).
+// onlineBuildersThreshold returns the highest round for which the builder should be stored in memory (cache).
 // This is mostly relevant in case the StateProof chain is stalled.
 // The threshold is also used to limit the StateProof signatures broadcasted over the network.
 func onlineBuildersThreshold(proto *config.ConsensusParams, stateProofNextRound basics.Round) basics.Round {
-	spNextRnd := stateProofNextRound
-	// (builderCacheLength - 2) since the first builder (spNextRnd) is already included as well as the
-	threshold := spNextRnd + basics.Round((buildersCacheLength-2)*proto.StateProofInterval)
-
+	/*
+		builderCacheLength - 2:
+			let buildersCacheLength <- 5, StateProofNextRound <- 1024, LatestRound <- 4096
+			threshold = StateProofNextRound + 3 * StateProofInterval (for a total of 4 early StateProofs)
+			the 5th builder in the cache is reserved for the LatestRound stateproof.
+	*/
+	threshold := stateProofNextRound + basics.Round((buildersCacheLength-2)*proto.StateProofInterval)
 	return threshold
 }
 
-// Reduces the number of builders stored in memory to X earliest as well as 1 latest, to an overall amound of X+1 builders
+// trimBuildersCache reduces the number of builders stored in memory to X earliest as well as 1 latest, to an overall amount of X+1 builders
 func (spw *Worker) trimBuildersCache(proto *config.ConsensusParams, stateProofNextRound basics.Round) {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
