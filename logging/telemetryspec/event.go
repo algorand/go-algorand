@@ -321,6 +321,8 @@ type CatchpointGenerationEventDetails struct {
 	BalancesWriteTime uint64
 	// AccountsCount is the number of accounts that were written into the generated catchpoint file
 	AccountsCount uint64
+	// KVsCount is the number of accounts that were written into the generated catchpoint file
+	KVsCount uint64
 	// FileSize is the size of the catchpoint file, in bytes.
 	FileSize uint64
 	// CatchpointLabel is the catchpoint label for which the catchpoint file was generated.

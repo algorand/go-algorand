@@ -56,6 +56,7 @@ type catchpointWriter struct {
 	tx                   *sql.Tx
 	filePath             string
 	totalAccounts        uint64
+	totalKVs             uint64
 	file                 *os.File
 	tar                  *tar.Writer
 	compressor           io.WriteCloser
@@ -134,6 +135,11 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxR
 		return nil, err
 	}
 
+	totalKVs, err := totalKVs(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+
 	err = os.MkdirAll(filepath.Dir(filePath), 0700)
 	if err != nil {
 		return nil, err
@@ -153,6 +159,7 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxR
 		tx:                   tx,
 		filePath:             filePath,
 		totalAccounts:        totalAccounts,
+		totalKVs:             totalKVs,
 		file:                 file,
 		compressor:           compressor,
 		tar:                  tar,

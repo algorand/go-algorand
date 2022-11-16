@@ -4119,6 +4119,16 @@ func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
 	return
 }
 
+func totalKVs(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
+	err = tx.QueryRowContext(ctx, "SELECT count(1) FROM kvstore").Scan(&total)
+	if err == sql.ErrNoRows {
+		total = 0
+		err = nil
+		return
+	}
+	return
+}
+
 // reencodeAccounts reads all the accounts in the accountbase table, decode and reencode the account data.
 // if the account data is found to have a different encoding, it would update the encoded account on disk.
 // on return, it returns the number of modified accounts as well as an error ( if we had any )
@@ -5158,6 +5168,11 @@ type catchpointFirstStageInfo struct {
 	// Total number of accounts in the catchpoint data file. Only set when catchpoint
 	// data files are generated.
 	TotalAccounts uint64 `codec:"accountsCount"`
+
+	// Total number of accounts in the catchpoint data file. Only set when catchpoint
+	// data files are generated.
+	TotalKVs uint64 `codec:"kvsCount"`
+
 	// Total number of chunks in the catchpoint data file. Only set when catchpoint
 	// data files are generated.
 	TotalChunks uint64 `codec:"chunksCount"`

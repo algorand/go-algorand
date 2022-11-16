@@ -58,6 +58,7 @@ type CatchpointCatchupStats struct {
 	VerifiedBlocks     uint64
 	ProcessedBytes     uint64
 	TotalAccountHashes uint64
+	TotalKVHashes      uint64
 	StartTime          time.Time
 }
 
@@ -757,6 +758,7 @@ func (cs *CatchpointCatchupService) updateLedgerFetcherProgress(fetcherStats *le
 	cs.stats.TotalAccounts = fetcherStats.TotalAccounts
 	cs.stats.ProcessedAccounts = fetcherStats.ProcessedAccounts
 	cs.stats.ProcessedBytes = fetcherStats.ProcessedBytes
+	cs.stats.TotalKVHashes = fetcherStats.TotalKVHashes
 	cs.stats.TotalAccountHashes = fetcherStats.TotalAccountHashes
 }
 

@@ -279,6 +279,7 @@ type CatchpointCatchupAccessorProgress struct {
 	SeenHeader         bool
 	Version            uint64
 	TotalAccountHashes uint64
+	TotalKVHashes      uint64
 
 	// Having the cachedTrie here would help to accelerate the catchup process since the trie maintain an internal cache of nodes.
 	// While rebuilding the trie, we don't want to force and reload (some) of these nodes into the cache for each catchpoint file chunk.
@@ -344,6 +345,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	if err == nil {
 		progress.SeenHeader = true
 		progress.TotalAccounts = fileHeader.TotalAccounts
+
 		progress.TotalChunks = fileHeader.TotalChunks
 		progress.Version = fileHeader.Version
 		c.ledger.setSynchronousMode(ctx, c.ledger.accountsRebuildSynchronousMode)
@@ -544,6 +546,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 
 		start := time.Now()
 		errKVs = c.stagingWriter.writeKVs(ctx, chunkKVs)
+		progress.TotalKVHashes += uint64(len(chunkKVs))
 		durKVs = time.Since(start)
 	}()
 
