@@ -90,15 +90,18 @@ type StateDelta struct {
 	Accts AccountDeltas
 
 	// modified kv pairs (nil == delete)
+	// not preallocated use .AddKvMod to insert instead of direct assignment
 	KvMods map[string]KvValueDelta
 
 	// new Txids for the txtail and TxnCounter, mapped to txn.LastValid
 	Txids map[transactions.Txid]IncludedTransactions
 
 	// new txleases for the txtail mapped to expiration
+	// not pre-allocated so use .AddTxLease to insert instead of direct assignment
 	Txleases map[Txlease]basics.Round
 
 	// new creatables creator lookup table
+	// not pre-allocated so use .AddCreatable to insert instead of direct assignment
 	Creatables map[basics.CreatableIndex]ModifiedCreatable
 
 	// new block header; read-only
@@ -180,9 +183,11 @@ type AccountDeltas struct {
 	// AppResources deltas. If app params or local state is deleted, there is a nil value in AppResources.Params or AppResources.State and Deleted flag set
 	AppResources []AppResourceRecord
 	// caches for {addr, app id} to app params delta resolution
+	// not preallocated - use UpsertAppResource instead of inserting directly
 	appResourcesCache map[AccountApp]int
 
-	AssetResources      []AssetResourceRecord
+	AssetResources []AssetResourceRecord
+	// not preallocated - use UpsertAssertResource instead of inserting directly
 	assetResourcesCache map[AccountAsset]int
 }
 
@@ -191,12 +196,9 @@ type AccountDeltas struct {
 // This does not play well for AssetConfig and ApplicationCall transactions on scale
 func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, stateProofNext basics.Round) StateDelta {
 	return StateDelta{
-		Accts:    MakeAccountDeltas(hint),
-		KvMods:   make(map[string]KvValueDelta),
-		Txids:    make(map[transactions.Txid]IncludedTransactions, hint),
-		Txleases: make(map[Txlease]basics.Round),
+		Accts: MakeAccountDeltas(hint),
+		Txids: make(map[transactions.Txid]IncludedTransactions, hint),
 		// asset or application creation are considered as rare events so do not pre-allocate space for them
-		Creatables:               make(map[basics.CreatableIndex]ModifiedCreatable),
 		Hdr:                      hdr,
 		StateProofNext:           stateProofNext,
 		PrevTimestamp:            prevTimestamp,
@@ -209,9 +211,6 @@ func MakeAccountDeltas(hint int) AccountDeltas {
 	return AccountDeltas{
 		Accts:      make([]BalanceRecord, 0, hint*2),
 		acctsCache: make(map[basics.Address]int, hint*2),
-
-		appResourcesCache:   make(map[AccountApp]int),
-		assetResourcesCache: make(map[AccountAsset]int),
 	}
 }
 
@@ -401,6 +400,30 @@ func (ad *AccountDeltas) UpsertAssetResource(addr basics.Address, aidx basics.As
 		ad.assetResourcesCache = make(map[AccountAsset]int)
 	}
 	ad.assetResourcesCache[key] = last
+}
+
+// AddTxLease adds a new TxLease to the StateDelta
+func (sd *StateDelta) AddTxLease(txLease Txlease, expired basics.Round) {
+	if sd.Txleases == nil {
+		sd.Txleases = make(map[Txlease]basics.Round)
+	}
+	sd.Txleases[txLease] = expired
+}
+
+// AddCreatable adds a new Creatable to the StateDelta
+func (sd *StateDelta) AddCreatable(idx basics.CreatableIndex, creatable ModifiedCreatable) {
+	if sd.Creatables == nil {
+		sd.Creatables = make(map[basics.CreatableIndex]ModifiedCreatable)
+	}
+	sd.Creatables[idx] = creatable
+}
+
+// AddKvMod adds a new KvMod to the StateDelta
+func (sd *StateDelta) AddKvMod(key string, delta KvValueDelta) {
+	if sd.KvMods == nil {
+		sd.KvMods = make(map[string]KvValueDelta)
+	}
+	sd.KvMods[key] = delta
 }
 
 // OptimizeAllocatedMemory by reallocating maps to needed capacity
