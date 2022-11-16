@@ -27,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -163,7 +162,7 @@ func (spw *Worker) initBuilders() {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
-	rnds, err := spw.getAllRounds()
+	rnds, err := spw.getAllOnlineBuilderRounds()
 	if err != nil {
 		spw.log.Errorf("initBuilders: failed to load rounds: %v", err)
 		return
@@ -184,15 +183,29 @@ func (spw *Worker) initBuilders() {
 	}
 }
 
-func (spw *Worker) getAllRounds() ([]basics.Round, error) {
+func (spw *Worker) getAllOnlineBuilderRounds() ([]basics.Round, error) {
 	// Some state proof databases might only contain a signature table. For that reason, when trying to create builders for possible state proof
 	// rounds we search the signature table and not the builder table
+	latest := spw.ledger.Latest()
+	latestHdr, err := spw.ledger.BlockHdr(latest)
+	if err != nil {
+		return nil, err
+	}
+	proto := config.Consensus[latestHdr.CurrentProtocol]
+	if proto.StateProofInterval == 0 { // StateProofs are not enabled yet
+		return nil, err
+	}
+
+	latestStateProofRound := latest.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))
+	threshold := onlineBuildersThreshold(&proto, latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+
 	var rnds []basics.Round
-	err := spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
 		var err error
-		rnds, err = getSignatureRounds(tx)
+		rnds, err = getSignatureRounds(tx, latestStateProofRound, threshold)
 		return err
 	})
+
 	return rnds, err
 }
 
@@ -255,16 +268,15 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			return network.Ignore, err
 		}
 
-		if sfa.Round < latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound {
+		stateProofNextRound := latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+
+		if sfa.Round < stateProofNextRound {
 			// Already have a complete state proof in ledger.
 			// Ignore this sig.
 			return network.Ignore, nil
 		}
 
-		// The sig should be for a round which is a multiple of StateProofInterval
-		// using the latestHdr protocol, since changing StateProofInterval is not supported
 		proto := config.Consensus[latestHdr.CurrentProtocol]
-
 		// proto.StateProofInterval is not expected to be 0 after passing StateProofNextRound
 		// checking anyway, otherwise will panic
 		if proto.StateProofInterval == 0 {
@@ -282,6 +294,12 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			// avoiding an inspection in DB in case we haven't reached the round.
 			// Avoiding disconnecting the peer, since it might've been sent to this node while it recovers.
 			return network.Ignore, fmt.Errorf("handleSig: latest round is smaller than given round %d", sfa.Round)
+		}
+
+		if sfa.Round > onlineBuildersThreshold(&proto, stateProofNextRound) && sfa.Round != latestHdr.Round.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval)) {
+			// Ignore signatures not under threshold round or equal to the latest StateProof round
+			// (this signature filtering is only relevant when the StateProof chain is stalled and many signatures may be spammed)
+			return network.Ignore, nil
 		}
 
 		builderForRound, err = spw.loadOrCreateBuilderWithSignatures(sfa.Round)
@@ -365,27 +383,27 @@ func (spw *Worker) builder(latest basics.Round) {
 			spw.log.Warnf("spw.builder: BlockHdr(%d): %v", nextrnd, err)
 			continue
 		}
+		proto := config.Consensus[hdr.CurrentProtocol]
+		stateProofNextRound := hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 
-		spw.deleteStaleStateProofBuildData(&hdr)
+		spw.deleteBuildData(&proto, stateProofNextRound)
 
 		// Broadcast signatures based on the previous block(s) that
 		// were agreed upon.  This ensures that, if we send a signature
 		// for block R, nodes will have already verified block R, because
 		// block R+1 has been formed.
-		proto := config.Consensus[hdr.CurrentProtocol]
 		newLatest := spw.ledger.Latest()
 		for r := latest; r < newLatest; r++ {
 			// Wait for the signer to catch up; mostly relevant in tests.
 			spw.waitForSignature(r)
-
-			spw.broadcastSigs(r, proto)
+			spw.broadcastSigs(r, stateProofNextRound, proto)
 		}
 		latest = newLatest
 	}
 }
 
 // broadcastSigs periodically broadcasts pending signatures for rounds
-// that have not been able to form a state proof.
+// that have not been able to form a state proof, with correlation to builderCacheLength.
 //
 // Signature re-broadcasting happens in periods of proto.StateProofInterval
 // rounds.
@@ -398,7 +416,7 @@ func (spw *Worker) builder(latest basics.Round) {
 //
 // The broadcast schedule is randomized by the address of the block signer,
 // for load-balancing over time.
-func (spw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams) {
+func (spw *Worker) broadcastSigs(brnd basics.Round, stateProofNextRound basics.Round, proto config.ConsensusParams) {
 	if proto.StateProofInterval == 0 {
 		return
 	}
@@ -406,12 +424,14 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
+	latestStateProofRound := brnd.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))
+	threshold := onlineBuildersThreshold(&proto, stateProofNextRound)
 	var roundSigs map[basics.Round][]pendingSig
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		if brnd%basics.Round(proto.StateProofInterval) < basics.Round(proto.StateProofInterval/2) {
-			roundSigs, err = getPendingSigsFromThisNode(tx)
+			roundSigs, err = getPendingSigs(tx, threshold, latestStateProofRound, true)
 		} else {
-			roundSigs, err = getPendingSigs(tx)
+			roundSigs, err = getPendingSigs(tx, threshold, latestStateProofRound, false)
 		}
 		return
 	})
@@ -449,17 +469,19 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 	}
 }
 
-func (spw *Worker) deleteStaleStateProofBuildData(currentHdr *bookkeeping.BlockHeader) {
-	proto := config.Consensus[currentHdr.CurrentProtocol]
-	stateProofNextRound := currentHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+func (spw *Worker) deleteBuildData(proto *config.ConsensusParams, stateProofNextRound basics.Round) {
 	if proto.StateProofInterval == 0 || stateProofNextRound == 0 {
 		return
 	}
+
+	// Delete from memory (already stored on disk)
+	spw.trimBuildersCache(proto, stateProofNextRound)
 
 	if spw.LastCleanupRound == stateProofNextRound {
 		return
 	}
 
+	// Delete from disk (database)
 	spw.deleteStaleSigs(stateProofNextRound)
 	spw.deleteStaleKeys(stateProofNextRound)
 	spw.deleteStaleBuilders(stateProofNextRound)
@@ -492,20 +514,50 @@ func (spw *Worker) deleteStaleKeys(retainRound basics.Round) {
 }
 
 func (spw *Worker) deleteStaleBuilders(retainRound basics.Round) {
-	spw.mu.Lock()
-	defer spw.mu.Unlock()
-
-	for rnd := range spw.builders {
-		if rnd < retainRound {
-			delete(spw.builders, rnd)
-		}
-	}
-
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return deleteBuilders(tx, retainRound)
 	})
 	if err != nil {
 		spw.log.Warnf("deleteOldBuilders: failed to delete builders from database: %v", err)
+	}
+}
+
+// onlineBuildersThreshold returns the highest round for which the builder should be stored in memory (cache).
+// This is mostly relevant in case the StateProof chain is stalled.
+// The threshold is also used to limit the StateProof signatures broadcasted over the network.
+func onlineBuildersThreshold(proto *config.ConsensusParams, stateProofNextRound basics.Round) basics.Round {
+	/*
+		builderCacheLength - 2:
+			let buildersCacheLength <- 5, StateProofNextRound <- 1024, LatestRound <- 4096
+			threshold = StateProofNextRound + 3 * StateProofInterval (for a total of 4 early StateProofs)
+			the 5th builder in the cache is reserved for the LatestRound stateproof.
+	*/
+	threshold := stateProofNextRound + basics.Round((buildersCacheLength-2)*proto.StateProofInterval)
+	return threshold
+}
+
+// trimBuildersCache reduces the number of builders stored in memory to X earliest as well as 1 latest, to an overall amount of X+1 builders
+func (spw *Worker) trimBuildersCache(proto *config.ConsensusParams, stateProofNextRound basics.Round) {
+	spw.mu.Lock()
+	defer spw.mu.Unlock()
+
+	var maxBuilderRound basics.Round
+	for rnd := range spw.builders {
+		if rnd > maxBuilderRound {
+			maxBuilderRound = rnd
+		}
+	}
+
+	threshold := onlineBuildersThreshold(proto, stateProofNextRound)
+	/*
+		For example, builders currently stored in memory are for these rounds:
+		[..., StateProofNextRound-256, StateProofNextRound, StateProofNextRound+256, ..., Threshold, ..., MaxBuilderRound]
+		[StateProofNextRound, ..., Threshold, MaxBuilderRound] <- Only builders that should be stored in memory after trim
+	*/
+	for rnd := range spw.builders {
+		if rnd < stateProofNextRound || (threshold < rnd && rnd < maxBuilderRound) {
+			delete(spw.builders, rnd)
+		}
 	}
 }
 

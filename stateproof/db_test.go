@@ -130,12 +130,12 @@ func TestPendingSigDB(t *testing.T) {
 		var psigsThis map[basics.Round][]pendingSig
 		err = dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			var err error
-			psigs, err = getPendingSigs(tx)
+			psigs, err = getPendingSigs(tx, basics.Round(100), basics.Round(100), false)
 			if err != nil {
 				return err
 			}
 
-			psigsThis, err = getPendingSigsFromThisNode(tx)
+			psigsThis, err = getPendingSigs(tx, basics.Round(100), basics.Round(100), true)
 			if err != nil {
 				return err
 			}
