@@ -1107,13 +1107,13 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	var catchpointWriter *catchpointWriter
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
-	err := ct.dbs.Rdb.Atomic(func(dbCtx context.Context, tx *sql.Tx) (err error) {
-		catchpointWriter, err = makeCatchpointWriter(ctx, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk)
+	err := ct.dbs.Rdb.AtomicContext(ctx, func(dbCtx context.Context, tx *sql.Tx) (err error) {
+		catchpointWriter, err = makeCatchpointWriter(dbCtx, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk)
 		if err != nil {
 			return
 		}
 		for more {
-			stepCtx, stepCancelFunction := context.WithTimeout(ctx, chunkExecutionDuration)
+			stepCtx, stepCancelFunction := context.WithTimeout(dbCtx, chunkExecutionDuration)
 			writeStepStartTime := time.Now()
 			more, err = catchpointWriter.WriteStep(stepCtx)
 			// accumulate the actual time we've spent writing in this step.
@@ -1135,7 +1135,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 					if chunkExecutionDuration > longChunkExecutionDuration {
 						chunkExecutionDuration = longChunkExecutionDuration
 					}
-				case <-ctx.Done():
+				case <-dbCtx.Done():
 					//retryCatchpointCreation = true
 					err2 := catchpointWriter.Abort()
 					if err2 != nil {

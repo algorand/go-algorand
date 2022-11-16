@@ -4,4 +4,4 @@ Algorand takes the security of the platform and of its users very seriously. We 
 
 If you believe that you have found a security vulnerability you may disclose it here:
 
-https://www.algorand.com/resources/blog/security
+https://immunefi.com/bounty/algorand/

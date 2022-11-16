@@ -173,6 +173,7 @@ func (l *prefetcherAlignmentTestLedger) LatestTotals() (basics.Round, ledgercore
 func (l *prefetcherAlignmentTestLedger) VotersForStateProof(basics.Round) (*ledgercore.VotersForRound, error) {
 	return nil, nil
 }
+func (l *prefetcherAlignmentTestLedger) FlushCaches() {}
 
 func parseLoadedAccountDataEntries(loadedAccountDataEntries []prefetcher.LoadedAccountDataEntry) map[basics.Address]struct{} {
 	if len(loadedAccountDataEntries) == 0 {
