@@ -92,7 +92,7 @@ var (
 	// TransactionMessagesDroppedFromPool "Number of transaction messages dropped from pool"
 	TransactionMessagesDroppedFromPool = MetricName{Name: "algod_transaction_messages_dropped_pool", Description: "Number of transaction messages dropped from pool"}
 	// TransactionMessagesAlreadyCommitted "Number of duplicate or error transaction messages before placing into a backlog"
-	TransactionMessagesAlreadyCommitted = MetricName{Name: "algod_transaction_messages_err_or_committed", Description: "Number of duplicate or error transaction messages after txhandler backlog"}
+	TransactionMessagesAlreadyCommitted = MetricName{Name: "algod_transaction_messages_err_or_committed", Description: "Number of duplicate or error transaction messages after TX handler backlog"}
 	// TransactionMessagesTxGroupInvalidFee "Number of transaction messages with invalid txgroup fee"
 	TransactionMessagesTxGroupInvalidFee = MetricName{Name: "algod_transaction_messages_txgroup_invalid_fee", Description: "Number of transaction messages with invalid txgroup fee"}
 	// TransactionMessagesTxnNotWellFormed "Number of transaction messages not well formed"
@@ -107,6 +107,8 @@ var (
 	TransactionMessagesTxnSigVerificationFailed = MetricName{Name: "algod_transaction_messages_sig_verify_failed", Description: "Number of transaction messages with signature verification failed"}
 	// TransactionMessagesBacklogErr "Number of transaction messages with some validation error"
 	TransactionMessagesBacklogErr = MetricName{Name: "algod_transaction_messages_backlog_err", Description: "Number of transaction messages with some validation error"}
+	// TransactionMessagesRemember "Number of transaction messages remembered in TX handler"
+	TransactionMessagesRemember = MetricName{Name: "algod_transaction_messages_remember", Description: "Number of transaction messages remembered in TX handler"}
 	// TransactionMessagesBacklogSize "Number of transaction messages in the TX handler backlog queue"
 	TransactionMessagesBacklogSize = MetricName{Name: "algod_transaction_messages_backlog_size", Description: "Number of transaction messages in the TX handler backlog queue"}
 

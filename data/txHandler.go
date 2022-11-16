@@ -55,6 +55,7 @@ var transactionMessagesTxnMsigNotWellFormed = metrics.MakeCounter(metrics.Transa
 var transactionMessagesTxnLogicSig = metrics.MakeCounter(metrics.TransactionMessagesTxnLogicSig)
 var transactionMessagesTxnSigVerificationFailed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigVerificationFailed)
 var transactionMessagesBacklogErr = metrics.MakeCounter(metrics.TransactionMessagesBacklogErr)
+var transactionMessagesRemember = metrics.MakeCounter(metrics.TransactionMessagesRemember)
 var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionMessagesBacklogSize)
 
 var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGroupTxSyncRemember)
@@ -244,6 +245,8 @@ func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 		logging.Base().Debugf("could not remember tx: %v", err)
 		return
 	}
+
+	transactionMessagesRemember.Inc(nil)
 
 	// if we remembered without any error ( i.e. txpool wasn't full ), then we should pin these transactions.
 	err = handler.ledger.VerifiedTransactionCache().Pin(verifiedTxGroup)
