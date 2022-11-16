@@ -173,10 +173,10 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 
 	i = 0 // for assert debug messages
 	for txid, account := range txidsToAccountsGoOnline {
-		accountStatus, err := client.AccountInformationV2(account, false)
+		accountStatus, err := client.AccountInformation(account, false)
 		a.NoError(err)
 		_, round := fixture.GetBalanceAndRound(account)
-		curTxStatus, err := client.PendingTransactionInformationV2(txid)
+		curTxStatus, err := client.PendingTransactionInformation(txid)
 		a.NotNil(curTxStatus.ConfirmedRound)
 		a.True(*curTxStatus.ConfirmedRound <= round, "go online transaction confirmed on round %d, current round is %d\n", curTxStatus.ConfirmedRound, round)
 		a.NoError(err, "should be no error when querying account information (query number %v regarding account %v)", i, account)

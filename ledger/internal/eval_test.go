@@ -519,6 +519,8 @@ func (ledger *evalTestLedger) StartEvaluator(hdr bookkeeping.BlockHeader, payset
 		})
 }
 
+func (ledger *evalTestLedger) FlushCaches() {}
+
 // GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
 // look up a creator address, setting ok to false if the query succeeded but no
 // creator was found.

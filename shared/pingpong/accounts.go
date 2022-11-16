@@ -197,7 +197,7 @@ func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
 				srcAcctPresent = true
 			}
 
-			ai, err := ac.AccountInformationV2(addr, true)
+			ai, err := ac.AccountInformation(addr, true)
 			if err != nil {
 				return err
 			}
@@ -421,7 +421,7 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 	timeout := time.Now().Add(10 * time.Second)
 	for len(newAssets) < assetsNeeded {
 		for addr, acct := range newAssetAddrs {
-			ai, err := client.AccountInformationV2(addr, true)
+			ai, err := client.AccountInformation(addr, true)
 			if err != nil {
 				fmt.Printf("Warning: cannot lookup source account after assets creation")
 				time.Sleep(1 * time.Second)
@@ -809,7 +809,7 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 	for _, addr := range newAppAddrs {
 		var ai model.Account
 		for {
-			ai, err = client.AccountInformationV2(addr, true)
+			ai, err = client.AccountInformation(addr, true)
 			if err != nil {
 				fmt.Printf("Warning, cannot lookup source account")
 				return
@@ -820,7 +820,7 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 			waitForNextRoundOrSleep(client, 500*time.Millisecond)
 			// TODO : if we fail here for too long, we should re-create new accounts, etc.
 		}
-		ai, err = client.AccountInformationV2(addr, true)
+		ai, err = client.AccountInformation(addr, true)
 		if err != nil {
 			return
 		}

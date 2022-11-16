@@ -272,7 +272,7 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 		go func(base int) {
 			defer sendWaitGroup.Done()
 			for x := base; x < sendSize; x += nroutines {
-				_, err2 := restClient.SendRawTransactionV2(txns[x])
+				_, err2 := restClient.SendRawTransaction(txns[x])
 				if err2 != nil {
 					if strings.Contains(err2.Error(), "txn dead") || strings.Contains(err2.Error(), "below threshold") {
 						break

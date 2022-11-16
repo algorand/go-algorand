@@ -126,9 +126,9 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 		expectedPongBalance = expectedPongBalance - transactionFee - amountPongSendsPing + amountPingSendsPong
 
 		var pongTxInfo, pingTxInfo model.PendingTransactionResponse
-		pongTxInfo, err = pongClient.PendingTransactionInformationV2(pongTx.ID().String())
+		pongTxInfo, err = pongClient.PendingTransactionInformation(pongTx.ID().String())
 		if err == nil {
-			pingTxInfo, err = pingClient.PendingTransactionInformationV2(pingTx.ID().String())
+			pingTxInfo, err = pingClient.PendingTransactionInformation(pingTx.ID().String())
 		}
 		waitForTransaction = err != nil || (pongTxInfo.ConfirmedRound != nil && *pongTxInfo.ConfirmedRound == 0) || (pingTxInfo.ConfirmedRound != nil && *pingTxInfo.ConfirmedRound == 0)
 		if waitForTransaction {

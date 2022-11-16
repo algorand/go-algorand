@@ -32,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -46,7 +45,6 @@ const (
 
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
-	"/v1/transactions":  true, // Deprecated path
 	"/v2/transactions":  true,
 	"/v2/teal/dryrun":   true,
 	"/v2/teal/compile":  true,
@@ -357,29 +355,14 @@ type accountInformationParams struct {
 	Exclude string `url:"exclude"`
 }
 
-// TransactionsByAddr returns all transactions for a PK [addr] in the [first,
-// last] rounds range.
-// Deprecated: This function is only used in internal tests (restClient_test.go)
-func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64) (response v1.TransactionList, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions", addr), transactionsByAddrParams{first, last, max})
-	return
-}
-
-// PendingTransactionsByAddr returns all the pending transactions for a PK [addr].
-// Deprecated: Use v2 API
-func (client RestClient) PendingTransactionsByAddr(addr string, max uint64) (response v1.PendingTransactions, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
-	return
-}
-
-// PendingTransactionsByAddrV2 returns all the pending transactions for an addr.
-func (client RestClient) PendingTransactionsByAddrV2(addr string, max uint64) (response model.PendingTransactionsResponse, err error) {
+// PendingTransactionsByAddr returns all the pending transactions for an addr.
+func (client RestClient) PendingTransactionsByAddr(addr string, max uint64) (response model.PendingTransactionsResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
 	return
 }
 
-// RawPendingTransactionsByAddrV2 returns all the pending transactions for an addr in raw msgpack format.
-func (client RestClient) RawPendingTransactionsByAddrV2(addr string, max uint64) (response []byte, err error) {
+// RawPendingTransactionsByAddr returns all the pending transactions for an addr in raw msgpack format.
+func (client RestClient) RawPendingTransactionsByAddr(addr string, max uint64) (response []byte, err error) {
 	var blob Blob
 	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/transactions/pending", addr), pendingTransactionsParams{max, "msgpack"})
 	response = blob
@@ -387,21 +370,7 @@ func (client RestClient) RawPendingTransactionsByAddrV2(addr string, max uint64)
 }
 
 // AssetInformation gets the AssetInformationResponse associated with the passed asset index
-// Deprecated: Use v2 API
-func (client RestClient) AssetInformation(index uint64) (response v1.AssetParams, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/asset/%d", index), nil)
-	return
-}
-
-// Assets gets up to max assets with maximum asset index assetIdx
-// Deprecated: Use v2 API
-func (client RestClient) Assets(assetIdx, max uint64) (response v1.AssetList, err error) {
-	err = client.get(&response, "/v1/assets", assetsParams{assetIdx, max})
-	return
-}
-
-// AssetInformationV2 gets the AssetInformationResponse associated with the passed asset index
-func (client RestClient) AssetInformationV2(index uint64) (response model.Asset, err error) {
+func (client RestClient) AssetInformation(index uint64) (response model.Asset, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/assets/%d", index), nil)
 	return
 }
@@ -410,13 +379,6 @@ func (client RestClient) AssetInformationV2(index uint64) (response model.Asset,
 // with the passed application index
 func (client RestClient) ApplicationInformation(index uint64) (response model.Application, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/applications/%d", index), nil)
-	return
-}
-
-// AccountInformation also gets the AccountInformationResponse associated with the passed address
-// Deprecated: Use v2 API
-func (client RestClient) AccountInformation(address string) (response v1.Account, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/account/%s", address), nil)
 	return
 }
 
@@ -440,8 +402,8 @@ func (client RestClient) GetApplicationBoxByName(appID uint64, name string) (res
 	return
 }
 
-// AccountInformationV2 gets the AccountData associated with the passed address
-func (client RestClient) AccountInformationV2(address string, includeCreatables bool) (response model.Account, err error) {
+// AccountInformation gets the AccountData associated with the passed address
+func (client RestClient) AccountInformation(address string, includeCreatables bool) (response model.Account, err error) {
 	var infoParams accountInformationParams
 	if includeCreatables {
 		infoParams = accountInformationParams{Exclude: "none", Format: "json"}
@@ -460,19 +422,11 @@ func (blob *Blob) SetBytes(b []byte) {
 	*blob = b
 }
 
-// RawAccountInformationV2 gets the raw AccountData associated with the passed address
-func (client RestClient) RawAccountInformationV2(address string) (response []byte, err error) {
+// RawAccountInformation gets the raw AccountData associated with the passed address
+func (client RestClient) RawAccountInformation(address string) (response []byte, err error) {
 	var blob Blob
 	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s", address), rawFormat{Format: "msgpack"})
 	response = blob
-	return
-}
-
-// TransactionInformation gets information about a specific transaction involving a specific account
-// Deprecated
-func (client RestClient) TransactionInformation(accountAddress, transactionID string) (response v1.Transaction, err error) {
-	transactionID = stripTransaction(transactionID)
-	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transaction/%s", accountAddress, transactionID), nil)
 	return
 }
 
@@ -485,23 +439,14 @@ func (client RestClient) TransactionInformation(accountAddress, transactionID st
 //
 // Or the transaction may have happened sufficiently long ago that the
 // node no longer remembers it, and this will return an error.
-// Deprecated
-func (client RestClient) PendingTransactionInformation(transactionID string) (response v1.Transaction, err error) {
-	transactionID = stripTransaction(transactionID)
-	err = client.get(&response, fmt.Sprintf("/v1/transactions/pending/%s", transactionID), nil)
-	return
-}
-
-// PendingTransactionInformationV2 gets information about a recently issued transaction.
-// See PendingTransactionInformation for more details.
-func (client RestClient) PendingTransactionInformationV2(transactionID string) (response model.PendingTransactionResponse, err error) {
+func (client RestClient) PendingTransactionInformation(transactionID string) (response model.PendingTransactionResponse, err error) {
 	transactionID = stripTransaction(transactionID)
 	err = client.get(&response, fmt.Sprintf("/v2/transactions/pending/%s", transactionID), nil)
 	return
 }
 
-// RawPendingTransactionInformationV2 gets information about a recently issued transaction in msgpack encoded bytes.
-func (client RestClient) RawPendingTransactionInformationV2(transactionID string) (response []byte, err error) {
+// RawPendingTransactionInformation gets information about a recently issued transaction in msgpack encoded bytes.
+func (client RestClient) RawPendingTransactionInformation(transactionID string) (response []byte, err error) {
 	transactionID = stripTransaction(transactionID)
 	var blob Blob
 	err = client.getRaw(&blob, fmt.Sprintf("/v2/transactions/pending/%s", transactionID), rawFormat{Format: "msgpack"})
@@ -537,55 +482,20 @@ func (client RestClient) RawAccountAssetInformation(accountAddress string, asset
 	return
 }
 
-// SuggestedFee gets the recommended transaction fee from the node
-// Deprecated
-func (client RestClient) SuggestedFee() (response v1.TransactionFee, err error) {
-	err = client.get(&response, "/v1/transactions/fee", nil)
-	return
-}
-
 // SuggestedParams gets the suggested transaction parameters
-// Deprecated
-func (client RestClient) SuggestedParams() (response v1.TransactionParams, err error) {
-	err = client.get(&response, "/v1/transactions/params", nil)
-	return
-}
-
-// SuggestedParamsV2 gets the suggested transaction parameters
-func (client RestClient) SuggestedParamsV2() (response model.TransactionParametersResponse, err error) {
+func (client RestClient) SuggestedParams() (response model.TransactionParametersResponse, err error) {
 	err = client.get(&response, "/v2/transactions/params", nil)
 	return
 }
 
 // SendRawTransaction gets a SignedTxn and broadcasts it to the network
-// Deprecated
-func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response v1.TransactionID, err error) {
-	err = client.post(&response, "/v1/transactions", protocol.Encode(&txn))
-	return
-}
-
-// SendRawTransactionV2 gets a SignedTxn and broadcasts it to the network
-func (client RestClient) SendRawTransactionV2(txn transactions.SignedTxn) (response model.PostTransactionsResponse, err error) {
+func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response model.PostTransactionsResponse, err error) {
 	err = client.post(&response, "/v2/transactions", protocol.Encode(&txn))
 	return
 }
 
 // SendRawTransactionGroup gets a SignedTxn group and broadcasts it to the network
-// Deprecated
 func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTxn) error {
-	// response is not terribly useful: it's the txid of the first transaction,
-	// which can be computed by the client anyway..
-	var enc []byte
-	for _, tx := range txgroup {
-		enc = append(enc, protocol.Encode(&tx)...)
-	}
-
-	var response v1.TransactionID
-	return client.post(&response, "/v1/transactions", enc)
-}
-
-// SendRawTransactionGroupV2 gets a SignedTxn group and broadcasts it to the network
-func (client RestClient) SendRawTransactionGroupV2(txgroup []transactions.SignedTxn) error {
 	// response is not terribly useful: it's the txid of the first transaction,
 	// which can be computed by the client anyway..
 	var enc []byte

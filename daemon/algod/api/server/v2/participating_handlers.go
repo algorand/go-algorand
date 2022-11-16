@@ -271,7 +271,8 @@ func (v2 *ParticipatingHandlers) PendingTransactionInformation(ctx echo.Context,
 
 	// Encoding wasn't working well without embedding "real" objects.
 	response := PreEncodedTxInfo{
-		Txn: txn.Txn,
+		Txn:       txn.Txn,
+		PoolError: txn.PoolError,
 	}
 
 	if txn.ConfirmedRound != 0 {

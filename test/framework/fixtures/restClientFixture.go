@@ -23,7 +23,6 @@ import (
 	"unicode"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 
 	"github.com/stretchr/testify/require"
@@ -217,7 +216,7 @@ func (f *RestClientFixture) getNodeWalletsSortedByBalance(client libgoal.Client)
 		return nil, fmt.Errorf("unable to list wallet addresses : %v", err)
 	}
 	for _, addr := range addresses {
-		info, err := client.AccountInformationV2(addr, true)
+		info, err := client.AccountInformation(addr, true)
 		f.failOnError(err, "failed to get account info: %v")
 		accounts = append(accounts, info)
 	}
@@ -248,7 +247,7 @@ func (f *RestClientFixture) WaitForConfirmedTxn(roundTimeout uint64, accountAddr
 
 		// Check if we know about the transaction yet
 		var resp []byte
-		resp, err = client.RawPendingTransactionInformationV2(txid)
+		resp, err = client.RawPendingTransactionInformation(txid)
 		if err == nil {
 			err = protocol.DecodeReflect(resp, &txn)
 			require.NoError(f.t, err)
@@ -279,15 +278,8 @@ func (f *RestClientFixture) WaitForAllTxnsToConfirm(roundTimeout uint64, txidsAn
 		_, err := f.WaitForConfirmedTxn(roundTimeout, addr, txid)
 		if err != nil {
 			f.t.Logf("txn failed to confirm: ", addr, txid)
-			response, err := f.AlgodClient.GetRawPendingTransactions(0)
+			pendingTxns, err := f.LibGoalClient.GetParsedPendingTransactions(0)
 			if err == nil {
-				// Parse pending transaction response
-				var pendingTxns struct {
-					TopTransactions   []transactions.SignedTxn
-					TotalTransactions uint64
-				}
-				err = protocol.DecodeReflect(response, &pendingTxns)
-				require.NoError(f.t, err)
 				pendingTxids := make([]string, 0, pendingTxns.TotalTransactions)
 				for _, txn := range pendingTxns.TopTransactions {
 					pendingTxids = append(pendingTxids, txn.Txn.ID().String())
@@ -319,7 +311,7 @@ func (f *RestClientFixture) WaitForAccountFunded(roundTimeout uint64, accountAdd
 		curRound := curStatus.LastRound
 
 		// Check if we know about the transaction yet
-		acct, acctErr := client.AccountInformationV2(accountAddress, false)
+		acct, acctErr := client.AccountInformation(accountAddress, false)
 		require.NoError(f.t, acctErr, "fixture should be able to get account info")
 		if acct.Amount > 0 {
 			return nil
