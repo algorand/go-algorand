@@ -54,6 +54,7 @@ var transactionMessagesTxnSigNotWellFormed = metrics.MakeCounter(metrics.Transac
 var transactionMessagesTxnMsigNotWellFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnMsigNotWellFormed)
 var transactionMessagesTxnLogicSig = metrics.MakeCounter(metrics.TransactionMessagesTxnLogicSig)
 var transactionMessagesTxnSigVerificationFailed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigVerificationFailed)
+var transactionMessagesBacklogErr = metrics.MakeCounter(metrics.TransactionMessagesBacklogErr)
 var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionMessagesBacklogSize)
 
 var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGroupTxSyncRemember)
@@ -201,7 +202,6 @@ func (handler *TxHandler) postProcessReportErrors(err error) {
 
 	var txGroupErr *verify.ErrTxGroupError
 	if errors.As(err, &txGroupErr) {
-		// txGroupErr = err.(*verify.ErrTxGroupError)
 		switch txGroupErr.Reason {
 		case verify.TxGroupErrorReasonNotWellFormed:
 			transactionMessagesTxnNotWellFormed.Inc(nil)
@@ -216,7 +216,10 @@ func (handler *TxHandler) postProcessReportErrors(err error) {
 		case verify.TxGroupErrorReasonLogicSigFailed:
 			transactionMessagesTxnLogicSig.Inc(nil)
 		default:
+			transactionMessagesBacklogErr.Inc(nil)
 		}
+	} else {
+		transactionMessagesBacklogErr.Inc(nil)
 	}
 }
 

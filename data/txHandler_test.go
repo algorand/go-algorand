@@ -570,16 +570,17 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 	wg.Wait()
 }
 
-func TestPostProcessError(t *testing.T) {
+func TestTxHandlerPostProcessError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	collect := func() map[string]float64 {
+		// collect all specific error reason metrics except TxGroupErrorReasonNotWellFormed,
+		// it is tested in TestPostProcessErrorWithVerify
 		result := map[string]float64{}
 		transactionMessagesTxnSigVerificationFailed.AddMetric(result)
 		transactionMessagesAlreadyCommitted.AddMetric(result)
 		transactionMessagesTxGroupInvalidFee.AddMetric(result)
-		// exclude TxGroupErrorReasonNotWellFormed, tested in TestPostProcessErrorWithVerify
 		// transactionMessagesTxnNotWellFormed.AddMetric(result)
 		transactionMessagesTxnSigNotWellFormed.AddMetric(result)
 		transactionMessagesTxnMsigNotWellFormed.AddMetric(result)
@@ -592,6 +593,8 @@ func TestPostProcessError(t *testing.T) {
 	txh.postProcessReportErrors(errSome)
 	result := collect()
 	require.Len(t, result, 0)
+	transactionMessagesBacklogErr.AddMetric(result)
+	require.Len(t, result, 1)
 
 	counter := 0
 	for i := verify.TxGroupErrorReasonGeneric; i <= verify.TxGroupErrorReasonLogicSigFailed; i++ {
@@ -624,7 +627,7 @@ func TestPostProcessError(t *testing.T) {
 	require.Len(t, result, expected+1)
 }
 
-func TestPostProcessErrorWithVerify(t *testing.T) {
+func TestTxHandlerPostProcessErrorWithVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
