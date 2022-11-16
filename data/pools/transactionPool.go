@@ -694,7 +694,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	pool.assemblyMu.Unlock()
 
 	next := bookkeeping.MakeBlock(prev)
-	proto := config.Consensus[next.CurrentProtocol]
 	pool.numPendingWholeBlocks = 0
 	hint := pendingCount - int(knownCommitted)
 	if hint < 0 || int(knownCommitted) < 0 {
@@ -738,14 +737,15 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			for _, tx := range txgroup {
 				pool.statusCache.put(tx, err.Error())
 			}
-
-			switch err := err.(type) {
+			// metrics here are duplicated for historic reasons. stats is hardly used and should be removed in favor of asmstats
+			switch terr := err.(type) {
 			case *ledgercore.TransactionInLedgerError:
 				asmStats.CommittedCount++
 				stats.RemovedInvalidCount++
 			case transactions.TxnDeadError:
-				if proto.MaxTxnLife == uint64(err.LastValid-err.FirstValid) {
-					asmStats.ExpiredMaxLifeCount++
+				if int(terr.LastValid-terr.FirstValid) > 20 {
+					// cutoff value  here is picked as a somewhat arbitrary cutoff trying to separate longer lived transactions from very short lived ones
+					asmStats.ExpiredLongLivedCount++
 				}
 				asmStats.ExpiredCount++
 				stats.ExpiredCount++
