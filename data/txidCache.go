@@ -17,6 +17,7 @@
 package data
 
 import (
+	"math"
 	"sync"
 	"sync/atomic"
 
@@ -51,7 +52,7 @@ func (c *txidCache) check(d *crypto.Digest) bool {
 func (c *txidCache) put(d *crypto.Digest) {
 	if len(c.cur) >= c.maxSize {
 		c.prev = c.cur
-		c.cur = c.reset(c.cur)
+		c.cur = map[crypto.Digest]struct{}{}
 	}
 
 	c.cur[*d] = struct{}{}
@@ -67,15 +68,11 @@ func (c *txidCache) checkAndPut(d *crypto.Digest) bool {
 	return false
 }
 
-func (c *txidCache) reset(m map[crypto.Digest]struct{}) map[crypto.Digest]struct{} {
-	if m != nil {
-		for k := range m {
-			delete(m, k)
-		}
-	} else {
-		m = map[crypto.Digest]struct{}{}
-	}
-	return m
+func (c *txidCache) len() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return len(c.cur) + len(c.prev)
 }
 
 type txidCacheSyncMap struct {
@@ -110,7 +107,8 @@ func (c *txidCacheSyncMap) put(d *crypto.Digest) {
 	cur := c.cur.Load().(*sync.Map)
 	if atomic.LoadInt64(&c.size) >= atomic.LoadInt64(&c.maxSize) {
 		c.prev.Store(cur)
-		c.cur.Store(&sync.Map{})
+		cur = &sync.Map{}
+		c.cur.Store(cur)
 		atomic.StoreInt64(&c.size, 0)
 	}
 
@@ -124,4 +122,17 @@ func (c *txidCacheSyncMap) checkAndPut(d *crypto.Digest) bool {
 	}
 	c.put(d)
 	return false
+}
+
+func (c *txidCacheSyncMap) len() int {
+	if atomic.LoadInt64(&c.size) >= math.MaxInt32 || atomic.LoadInt64(&c.maxSize) >= math.MaxInt32 {
+		return math.MaxInt32
+	}
+	prev := c.prev.Load().(*sync.Map)
+	prevSize := 0
+	prev.Range(func(key, value interface{}) bool {
+		prevSize++
+		return true
+	})
+	return int(atomic.LoadInt64(&c.size)) + prevSize
 }
