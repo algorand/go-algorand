@@ -772,7 +772,7 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 	votesToGo := uint64(latestBlkHdr.NextProtocolVoteBefore) - uint64(stat.LastRound)
 	consensus := config.Consensus[protocol.ConsensusCurrentVersion]
 	upgradeVoteRounds := consensus.UpgradeVoteRounds
-	upgradeThreshold := config.Consensus[protocol.ConsensusCurrentVersion].UpgradeThreshold
+	upgradeThreshold := consensus.UpgradeThreshold
 	votes := uint64(upgradeVoteRounds) - votesToGo
 	votesYes := latestBlkHdr.UpgradeState.NextProtocolApprovals
 	votesNo := votes - votesYes
