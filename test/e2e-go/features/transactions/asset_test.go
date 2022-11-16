@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
@@ -37,7 +37,7 @@ import (
 
 type assetIDParams struct {
 	idx    uint64
-	params generated.AssetParams
+	params model.AssetParams
 }
 
 func helperFillSignBroadcast(client libgoal.Client, wh []byte, sender string, tx transactions.Transaction, err error) (string, error) {
@@ -226,7 +226,7 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 
 	// There should be no assets to start with
-	info, err := client.AccountInformationV2(account0, true)
+	info, err := client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 0)
@@ -284,7 +284,7 @@ func TestAssetConfig(t *testing.T) {
 	}
 
 	// Check that assets are visible
-	info, err = client.AccountInformationV2(account0, true)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NotNil(info.Assets)
 	a.Equal(maxAssetsCount, len(*info.CreatedAssets))
@@ -352,7 +352,7 @@ func TestAssetConfig(t *testing.T) {
 	confirmed = fixture.WaitForAllTxnsToConfirm(status.LastRound+20, txids)
 	a.True(confirmed, "changing keys")
 
-	info, err = client.AccountInformationV2(account0, true)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NotNil(info.CreatedAssets)
 	a.Equal(maxAssetsCount, len(*info.CreatedAssets))
@@ -473,13 +473,7 @@ func TestAssetInformation(t *testing.T) {
 	a.NoError(err)
 
 	// There should be no assets to start with
-	// Note: This test uses a deprecated v1 API. The v2 API test is below.
-	info, err := client.AccountInformation(account0)
-	a.NoError(err)
-	a.Equal(len(info.AssetParams), 0)
-
-	// There should be no assets to start with
-	info2, err := client.AccountInformationV2(account0, true)
+	info2, err := client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NotNil(info2.CreatedAssets)
 	a.Equal(len(*info2.CreatedAssets), 0)
@@ -498,28 +492,19 @@ func TestAssetInformation(t *testing.T) {
 	a.True(confirmed, "creating assets")
 
 	// Check that AssetInformation returns the correct AssetParams
-	// Note: This test uses a deprecated v1 API. The v2 API test is below.
-	info, err = client.AccountInformation(account0)
-	a.NoError(err)
-	for idx, cp := range info.AssetParams {
-		assetInfo, err := client.AssetInformation(idx)
-		a.NoError(err)
-		a.Equal(cp, assetInfo)
-	}
-
-	// Check that AssetInformationV2 returns the correct AssetParams
-	info2, err = client.AccountInformationV2(account0, true)
+	info2, err = client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NotNil(info2.CreatedAssets)
 	for _, cp := range *info2.CreatedAssets {
-		asset, err := client.AssetInformationV2(cp.Index)
+		asset, err := client.AssetInformation(cp.Index)
 		a.NoError(err)
 		a.Equal(cp, asset)
 	}
 
 	// Destroy assets
 	txids = make(map[string]string)
-	for idx := range info.AssetParams {
+	for _, asset := range *info2.CreatedAssets {
+		idx := asset.Index
 		tx, err := client.MakeUnsignedAssetDestroyTx(idx)
 		txid, err := helperFillSignBroadcast(client, wh, manager, tx, err)
 		a.NoError(err)
@@ -663,7 +648,7 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	txids = make(map[string]string)
 
 	// asset 1 (create + send) exists and available
-	asset, err := client1.AssetInformationV2(assetID1)
+	asset, err := client1.AssetInformation(assetID1)
 	assetParams := asset.Params
 	a.NoError(err)
 	a.NotNil(assetParams.Name)
@@ -691,7 +676,7 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	a.NoError(err)
 
 	// asset 3 (create + destroy) not available
-	_, err = client1.AssetInformationV2(assetID3)
+	_, err = client1.AssetInformation(assetID3)
 	a.Error(err)
 	// sending it should fail
 	txSend, err = client1.MakeUnsignedAssetSendTx(assetID3, 0, account1, "", "")
@@ -757,7 +742,7 @@ func TestAssetSend(t *testing.T) {
 	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 	a.True(confirmed, "creating assets")
 
-	info, err := client.AccountInformationV2(account0, true)
+	info, err := client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 2)
@@ -850,7 +835,7 @@ func TestAssetSend(t *testing.T) {
 	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 	a.True(confirmed, "creating asset slots")
 
-	info, err = client.AccountInformationV2(extra, true)
+	info, err = client.AccountInformation(extra, true)
 	a.NoError(err)
 	a.NotNil(info.Assets)
 	a.Equal(len(*info.Assets), 2)
@@ -929,7 +914,7 @@ func TestAssetSend(t *testing.T) {
 	a.True(confirmed, "clawback")
 
 	// Check that the asset balances are correct
-	info, err = client.AccountInformationV2(account0, true)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NotNil(info.Assets)
 	a.Equal(len(*info.Assets), 2)
@@ -941,7 +926,7 @@ func TestAssetSend(t *testing.T) {
 		}
 	}
 
-	info, err = client.AccountInformationV2(extra, true)
+	info, err = client.AccountInformation(extra, true)
 	a.NoError(err)
 	a.NotNil(info.Assets)
 	a.Equal(len(*info.Assets), 2)
@@ -978,7 +963,7 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	defer fixture.Shutdown()
 
 	// There should be no assets to start with
-	info, err := client.AccountInformationV2(account0, true)
+	info, err := client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 0)
@@ -987,11 +972,11 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	createAsset("test", account0, manager, reserve, freeze, clawback, client, fixture, a)
 
 	// Check that asset is visible
-	info, err = client.AccountInformationV2(account0, true)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 1)
-	var asset generated.AssetParams
+	var asset model.AssetParams
 	var assetIndex uint64
 	for _, cp := range *info.CreatedAssets {
 		asset = cp.Params
@@ -1011,7 +996,7 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	client = &fixture.LibGoalClient
 
 	// Check again that asset is visible
-	info, err = client.AccountInformationV2(account0, true)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 1)
@@ -1035,7 +1020,7 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	submitAndWaitForTransaction(manager, tx, "destroying assets", client, fixture, a)
 
 	// Check again that asset is destroyed
-	info, err = client.AccountInformationV2(account0, true)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NoError(err)
 	a.NotNil(info.CreatedAssets)
@@ -1079,7 +1064,7 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	defer fixture.Shutdown()
 
 	// There should be no assets to start with
-	info, err := client.AccountInformationV2(account0, true)
+	info, err := client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 0)
@@ -1088,11 +1073,11 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	createAsset("test", account0, manager, reserve, freeze, clawback, client, fixture, a)
 
 	// Check that asset is visible
-	info, err = client.AccountInformationV2(account0, true)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 1)
-	var asset generated.AssetParams
+	var asset model.AssetParams
 	var assetIndex uint64
 	for _, cp := range *info.CreatedAssets {
 		asset = cp.Params
@@ -1114,7 +1099,7 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	a.NoError(err)
 
 	// Check again that asset is visible
-	info, err = client.AccountInformationV2(account0, true)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 1)
@@ -1138,7 +1123,7 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	submitAndWaitForTransaction(manager, tx, "destroying assets", client, fixture, a)
 
 	// Check again that asset is destroyed
-	info, err = client.AccountInformationV2(account0, true)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 0)
@@ -1239,7 +1224,7 @@ func submitAndWaitForTransaction(sender string, tx transactions.Transaction, mes
 	asser.True(confirmed, message)
 }
 
-func verifyAssetParameters(asset generated.AssetParams,
+func verifyAssetParameters(asset model.AssetParams,
 	unitName, assetName, manager, reserve, freeze, clawback string,
 	metadataHash []byte, assetURL string, asser *require.Assertions) {
 

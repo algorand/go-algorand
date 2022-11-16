@@ -175,7 +175,7 @@ func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 			"creator account is unknown.")
 	}
 
-	response, err := client.AccountInformationV2(creator, true)
+	response, err := client.AccountInformation(creator, true)
 	if err != nil {
 		reportErrorf(errorRequestFail, err)
 	}
@@ -778,7 +778,7 @@ var infoAssetCmd = &cobra.Command{
 
 		lookupAssetID(cmd, creator, client)
 
-		asset, err := client.AssetInformationV2(assetID)
+		asset, err := client.AssetInformation(assetID)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
