@@ -27,7 +27,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"testing"
 
@@ -47,15 +46,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/msgp/msgp"
 )
-
-func makeString(len int) string {
-	s := ""
-	for i := 0; i < len; i++ {
-		s += string(byte(i))
-	}
-	return s
-}
 
 type decodedCatchpointChunkData struct {
 	headerName string
@@ -225,7 +217,7 @@ func readCatchpointFile(t *testing.T, catchpointPath string) []decodedCatchpoint
 	return readCatchpointContent(t, tarReader)
 }
 
-func verifyStateProofVerificationDataWrite(t *testing.T, data []ledgercore.StateProofVerificationData) {
+func verifyStateProofVerificationDataWrite(t *testing.T, data []ledgercore.StateProofVerificationContext) {
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBasicCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -249,13 +241,13 @@ func verifyStateProofVerificationDataWrite(t *testing.T, data []ledgercore.State
 	au.close()
 	fileName := filepath.Join(temporaryDirectory, "15.data")
 
-	mockCommitData := make([]verificationCommitData, 0)
+	mockCommitData := make([]verificationCommitContext, 0)
 	for _, element := range data {
-		mockCommitData = append(mockCommitData, verificationCommitData{verificationData: element})
+		mockCommitData = append(mockCommitData, verificationCommitContext{verificationContext: element})
 	}
 
 	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return insertStateProofVerificationData(ctx, tx, mockCommitData)
+		return insertStateProofVerificationContext(ctx, tx, mockCommitData)
 	})
 
 	require.NoError(t, err)
@@ -309,24 +301,52 @@ func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// The next operations are heavy on the memory.
-	// Garbage collection helps prevent thrashing
-	runtime.GC()
+	// check a low number of balances/kvs/resources
+	// otherwise it would take forever to serialize/deserialize
+	const numChunkEntries = BalancesPerCatchpointFileChunk / 50
+	require.Greater(t, numChunkEntries, 1)
 
-	fbc := catchpointFileBalancesChunkV5{}
-	for i := 0; i < 512; i++ {
-		fbc.Balances = append(fbc.Balances, makeTestEncodedBalanceRecordV5(t))
+	const numResources = ResourcesPerCatchpointFileChunk / 10000
+	require.Greater(t, numResources, 1)
+
+	baseAD := randomBaseAccountData()
+	encodedBaseAD := baseAD.MarshalMsg(nil)
+
+	resources := make(map[uint64]msgp.Raw, numResources/10)
+	rdApp := randomAppResourceData()
+	encodedResourceData := rdApp.MarshalMsg(nil)
+	for i := uint64(0); i < numResources; i++ {
+		resources[i] = encodedResourceData
 	}
-	encodedFbc := fbc.MarshalMsg(nil)
+	balance := encodedBalanceRecordV6{
+		Address:     ledgertesting.RandomAddress(),
+		AccountData: encodedBaseAD,
+		Resources:   resources,
+	}
+	balances := make([]encodedBalanceRecordV6, numChunkEntries)
+	kv := encodedKVRecordV6{
+		Key:   make([]byte, encodedKVRecordV6MaxKeyLength),
+		Value: make([]byte, encodedKVRecordV6MaxValueLength),
+	}
+	crypto.RandBytes(kv.Key[:])
+	crypto.RandBytes(kv.Value[:])
+	kvs := make([]encodedKVRecordV6, numChunkEntries)
 
-	var fbc2 catchpointFileBalancesChunkV5
-	_, err := fbc2.UnmarshalMsg(encodedFbc)
+	for i := 0; i < numChunkEntries; i++ {
+		balances[i] = balance
+		kvs[i] = kv
+	}
+
+	chunk1 := catchpointFileChunkV6{}
+	chunk1.Balances = balances
+	chunk1.KVs = kvs
+	encodedChunk := chunk1.MarshalMsg(nil)
+
+	var chunk2 catchpointFileChunkV6
+	_, err := chunk2.UnmarshalMsg(encodedChunk)
 	require.NoError(t, err)
 
-	require.Equal(t, fbc, fbc2)
-	// Garbage collection helps prevent trashing
-	// for next tests
-	runtime.GC()
+	require.Equal(t, chunk1, chunk2)
 }
 
 func TestBasicCatchpointWriter(t *testing.T) {
@@ -450,20 +470,20 @@ func TestStateProofVerificationDataWrite(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	//t.Parallel() verifyStateProofVerificationDataWrite changes consensus
 
-	verificationData := ledgercore.StateProofVerificationData{
-		TargetStateProofRound: 120,
-		VotersCommitment:      nil,
-		OnlineTotalWeight:     basics.MicroAlgos{Raw: 100},
+	verificationData := ledgercore.StateProofVerificationContext{
+		LastAttestedRound: 120,
+		VotersCommitment:  nil,
+		OnlineTotalWeight: basics.MicroAlgos{Raw: 100},
 	}
 
-	verifyStateProofVerificationDataWrite(t, []ledgercore.StateProofVerificationData{verificationData})
+	verifyStateProofVerificationDataWrite(t, []ledgercore.StateProofVerificationContext{verificationData})
 }
 
 func TestEmptyStateProofVerificationDataWrite(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	//t.Parallel() verifyStateProofVerificationDataWrite changes consensus
 
-	verifyStateProofVerificationDataWrite(t, []ledgercore.StateProofVerificationData{})
+	verifyStateProofVerificationDataWrite(t, []ledgercore.StateProofVerificationContext{})
 }
 
 func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
@@ -566,7 +586,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 		delete(config.Consensus, testProtocolVersion)
 	}()
 
-	maxResourcesPerChunk := 5
+	const maxResourcesPerChunk = 5
 
 	accts := ledgertesting.RandomAccounts(5, false)
 	// force each acct to have overflowing number of resources
@@ -605,6 +625,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 		totalResources := 0
 		var expectedTotalResources int
 		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
+		require.NoError(t, err)
 		err = cw.tx.QueryRowContext(cw.ctx, "SELECT count(1) FROM resources").Scan(&expectedTotalResources)
 		if err != nil {
 			return err

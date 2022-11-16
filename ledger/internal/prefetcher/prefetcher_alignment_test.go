@@ -102,6 +102,11 @@ func (l *prefetcherAlignmentTestLedger) BlockHdrCached(round basics.Round) (book
 func (l *prefetcherAlignmentTestLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	return nil
 }
+
+func (l *prefetcherAlignmentTestLedger) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("prefetcherAlignmentTestLedger does not implement StateProofVerificationContext")
+}
+
 func (l *prefetcherAlignmentTestLedger) LookupWithoutRewards(_ basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	l.mu.Lock()
 	if l.requestedBalances == nil {
@@ -173,6 +178,7 @@ func (l *prefetcherAlignmentTestLedger) LatestTotals() (basics.Round, ledgercore
 func (l *prefetcherAlignmentTestLedger) VotersForStateProof(basics.Round) (*ledgercore.VotersForRound, error) {
 	return nil, nil
 }
+func (l *prefetcherAlignmentTestLedger) FlushCaches() {}
 
 func parseLoadedAccountDataEntries(loadedAccountDataEntries []prefetcher.LoadedAccountDataEntry) map[basics.Address]struct{} {
 	if len(loadedAccountDataEntries) == 0 {

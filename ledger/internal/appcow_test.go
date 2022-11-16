@@ -107,6 +107,10 @@ func (ml *emptyLedger) GetStateProofNextRound() basics.Round {
 	return basics.Round(0)
 }
 
+func (ml *emptyLedger) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("emptyLedger does not implement StateProofVerificationContext")
+}
+
 type modsData struct {
 	addr  basics.Address
 	cidx  basics.CreatableIndex
@@ -119,7 +123,7 @@ func getCow(creatables []modsData) *roundCowState {
 		proto: config.Consensus[protocol.ConsensusCurrentVersion],
 	}
 	for _, e := range creatables {
-		cs.mods.Creatables[e.cidx] = ledgercore.ModifiedCreatable{Ctype: e.ctype, Creator: e.addr, Created: true}
+		cs.mods.AddCreatable(e.cidx, ledgercore.ModifiedCreatable{Ctype: e.ctype, Creator: e.addr, Created: true})
 	}
 	return cs
 }

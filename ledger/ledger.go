@@ -454,12 +454,12 @@ func (l *Ledger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRou
 	return l.acctsOnline.voters.getVoters(rnd)
 }
 
-// StateProofVerificationData returns the data required to verify the state proof whose last attested round is
+// StateProofVerificationContext returns the data required to verify the state proof whose last attested round is
 // stateProofLastAttestedRound.
-func (l *Ledger) StateProofVerificationData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
+func (l *Ledger) StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.stateProofVerification.LookupVerificationData(stateProofLastAttestedRound)
+	return l.stateProofVerification.LookupVerificationContext(stateProofLastAttestedRound)
 }
 
 // ListAssets takes a maximum asset index and maximum result length, and
@@ -820,6 +820,11 @@ func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnB
 			Validate:            true,
 			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
 		})
+}
+
+// FlushCaches flushes any pending data in caches so that it is fully available during future lookups.
+func (l *Ledger) FlushCaches() {
+	l.accts.flushCaches()
 }
 
 // Validate uses the ledger to validate block blk as a candidate next block.

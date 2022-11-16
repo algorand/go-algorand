@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -110,7 +110,7 @@ func (l *testlistener) init(block uint64) {
 	atomic.AddUint32(&(l.initCount), 1)
 }
 
-func (l *testlistener) onBlock(block v1.Block) {
+func (l *testlistener) onBlock(rpcs.EncodedBlockCert) {
 	atomic.AddUint32(&(l.blockCount), 1)
 }
 

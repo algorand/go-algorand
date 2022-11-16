@@ -200,7 +200,7 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
 }
 
-func TestCowStateProof(t *testing.T) {
+func TestCowStateProofV34(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var spType protocol.StateProofType
@@ -209,12 +209,14 @@ func TestCowStateProof(t *testing.T) {
 	var validate bool
 	msg := stateproofmsg.Message{}
 
+	const version = protocol.ConsensusV34
+
 	accts0 := ledgertesting.RandomAccounts(20, true)
 	blocks := make(map[basics.Round]bookkeeping.BlockHeader)
 	blockErr := make(map[basics.Round]error)
 	ml := mockLedger{balanceMap: accts0, blocks: blocks, blockErr: blockErr}
 	c0 := makeRoundCowState(
-		&ml, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion],
+		&ml, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusV34],
 		0, ledgercore.AccountTotals{}, 0)
 
 	spType = protocol.StateProofType(1234) // bad stateproof type
@@ -226,20 +228,14 @@ func TestCowStateProof(t *testing.T) {
 	err := apply.StateProof(stateProofTx, atRound, c0, validate)
 	require.ErrorIs(t, err, apply.ErrStateProofTypeNotSupported)
 
-	// no spRnd block
 	stateProofTx.StateProofType = protocol.StateProofBasic
-	noBlockErr := errors.New("no block")
-	blockErr[3] = noBlockErr
-	stateProofTx.Message.LastAttestedRound = 3
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.Contains(t, err.Error(), "no block")
-
 	// stateproof txn doesn't confirm the next state proof round. expected is in the past
 	validate = true
 	stateProofTx.Message.LastAttestedRound = uint64(16)
 	c0.SetStateProofNextRound(8)
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
 	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
+	c0.SetStateProofNextRound(32)
 
 	// stateproof txn doesn't confirm the next state proof round. expected is in the future
 	validate = true
@@ -247,6 +243,25 @@ func TestCowStateProof(t *testing.T) {
 	c0.SetStateProofNextRound(32)
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
 	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
+
+	// no atRound block
+	noBlockErr := errors.New("no block")
+	blockErr[atRound] = noBlockErr
+	stateProofTx.Message.LastAttestedRound = 32
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, noBlockErr)
+	delete(blockErr, atRound)
+
+	atRoundBlock := bookkeeping.BlockHeader{}
+	atRoundBlock.CurrentProtocol = version
+	blocks[atRound] = atRoundBlock
+
+	// no spRnd block
+	noBlockErr = errors.New("no block")
+	blockErr[32] = noBlockErr
+	stateProofTx.Message.LastAttestedRound = 32
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, noBlockErr)
 
 	// no votersRnd block
 	// this is slightly a mess of things that don't quite line up with likely usage
@@ -266,13 +281,116 @@ func TestCowStateProof(t *testing.T) {
 	blockErr[13] = noBlockErr
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
 	require.Contains(t, err.Error(), "no block")
+	delete(blockErr, 13)
 
-	// fall through to no err
-	validate = false
+	// check the happy flow - we should fail only on crypto
+	atRound = 800
+	spHdr = bookkeeping.BlockHeader{}
+	spHdr.CurrentProtocol = version
+	blocks[basics.Round(2*config.Consensus[version].StateProofInterval)] = spHdr
+
+	votersHdr := bookkeeping.BlockHeader{}
+	votersHdr.CurrentProtocol = version
+	stateproofTracking := bookkeeping.StateProofTrackingData{
+		StateProofVotersCommitment:  []byte{0x1}[:],
+		StateProofOnlineTotalWeight: basics.MicroAlgos{Raw: 5},
+	}
+	votersHdr.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+	votersHdr.StateProofTracking[protocol.StateProofBasic] = stateproofTracking
+
+	blocks[basics.Round(config.Consensus[version].StateProofInterval)] = votersHdr
+	atRoundBlock = bookkeeping.BlockHeader{}
+	atRoundBlock.CurrentProtocol = version
+	blocks[atRound] = atRoundBlock
+
+	stateProofTx.Message.LastAttestedRound = 2 * config.Consensus[version].StateProofInterval
+	stateProofTx.StateProof.SignedWeight = 100
+	c0.SetStateProofNextRound(basics.Round(2 * config.Consensus[version].StateProofInterval))
+
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.NoError(t, err)
+	require.Contains(t, err.Error(), "crypto error")
+}
 
-	// 100% coverage
+func TestCowStateProof(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var spType protocol.StateProofType
+	var stateProof stateproof.StateProof
+	atRound := basics.Round(600)
+	var validate bool
+	msg := stateproofmsg.Message{}
+
+	accts0 := ledgertesting.RandomAccounts(20, true)
+	blocks := make(map[basics.Round]bookkeeping.BlockHeader)
+	blockErr := make(map[basics.Round]error)
+	ml := mockLedger{balanceMap: accts0, blocks: blocks, blockErr: blockErr}
+	c0 := makeRoundCowState(
+		&ml, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusFuture],
+		0, ledgercore.AccountTotals{}, 0)
+	ml.stateProofVerification = make(map[basics.Round]*ledgercore.StateProofVerificationContext)
+
+	spType = protocol.StateProofType(1234) // bad stateproof type
+	stateProofTx := transactions.StateProofTxnFields{
+		StateProofType: spType,
+		StateProof:     stateProof,
+		Message:        msg,
+	}
+	err := apply.StateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, apply.ErrStateProofTypeNotSupported)
+
+	stateProofTx.StateProofType = protocol.StateProofBasic
+	// stateproof txn doesn't confirm the next state proof round. expected is in the past
+	validate = true
+	stateProofTx.Message.LastAttestedRound = uint64(16)
+	c0.SetStateProofNextRound(8)
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
+	c0.SetStateProofNextRound(32)
+
+	// stateproof txn doesn't confirm the next state proof round. expected is in the future
+	validate = true
+	stateProofTx.Message.LastAttestedRound = uint64(16)
+	c0.SetStateProofNextRound(32)
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
+
+	atRoundBlock := bookkeeping.BlockHeader{}
+	atRoundBlock.CurrentProtocol = protocol.ConsensusFuture
+	blocks[atRound] = atRoundBlock
+
+	validate = true
+	// no atRound block
+	noBlockErr := errors.New("no block")
+	blockErr[atRound] = noBlockErr
+	stateProofTx.Message.LastAttestedRound = 32
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, noBlockErr)
+	delete(blockErr, atRound)
+
+	noBlockErr = errors.New("no block")
+
+	// removing blocks for the ledger so if apply.stateproof uses the tracker it should pass
+	c0.SetStateProofNextRound(512)
+	blockErr[512] = noBlockErr
+	blockErr[256] = noBlockErr
+	stateProofTx.Message.LastAttestedRound = 512
+	stateProofTx.StateProof.SignedWeight = 100
+	ml.stateProofVerification[basics.Round(stateProofTx.Message.LastAttestedRound)] = &ledgercore.StateProofVerificationContext{
+		LastAttestedRound: basics.Round(stateProofTx.Message.LastAttestedRound),
+		VotersCommitment:  []byte{0x1}[:],
+		OnlineTotalWeight: basics.MicroAlgos{Raw: 5},
+		Version:           protocol.ConsensusFuture,
+	}
+
+	// if atRound header is missing the apply should fail
+	blockErr[atRound] = noBlockErr
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, noBlockErr)
+
+	delete(blockErr, atRound)
+	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "crypto error")
 }
 
 // a couple trivial tests that don't need setup
@@ -519,6 +637,8 @@ func (ledger *evalTestLedger) StartEvaluator(hdr bookkeeping.BlockHeader, payset
 		})
 }
 
+func (ledger *evalTestLedger) FlushCaches() {}
+
 // GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
 // look up a creator address, setting ok to false if the query succeeded but no
 // creator was found.
@@ -599,6 +719,10 @@ func (ledger *evalTestLedger) GenesisProtoVersion() protocol.ConsensusVersion {
 // Latest returns the latest known block round added to the ledger.
 func (ledger *evalTestLedger) Latest() basics.Round {
 	return basics.Round(len(ledger.blocks)).SubSaturate(1)
+}
+
+func (ledger *evalTestLedger) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("evalTestLedger does not implement StateProofVerificationContext")
 }
 
 // AddValidatedBlock adds a new block to the ledger, after the block has
@@ -774,6 +898,10 @@ func (l *testCowBaseLedger) LookupAsset(rnd basics.Round, addr basics.Address, a
 
 func (l *testCowBaseLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	return nil, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("testCowBaseLedger does not implement StateProofVerificationContext")
 }
 
 func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {

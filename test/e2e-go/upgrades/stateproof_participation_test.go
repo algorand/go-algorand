@@ -17,6 +17,11 @@
 package upgrades
 
 import (
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -25,10 +30,6 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
 )
 
 func waitUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClientFixture, nodeClient libgoal.Client) {
@@ -36,19 +37,19 @@ func waitUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClie
 	curRound, err := nodeClient.CurrentRound()
 	a.NoError(err)
 
-	blk, err := nodeClient.Block(curRound)
+	blk, err := nodeClient.BookkeepingBlock(curRound)
 	a.NoError(err)
 	curProtocol := blk.CurrentProtocol
 
 	startTime := time.Now()
 
 	// while consensus version has not upgraded
-	for strings.Compare(curProtocol, string(consensusTestFastUpgrade(protocol.ConsensusV30))) == 0 {
+	for strings.Compare(string(curProtocol), string(consensusTestFastUpgrade(protocol.ConsensusV30))) == 0 {
 		curRound = curRound + 1
 		fixture.WaitForRoundWithTimeout(curRound + 1)
 
 		// TODO: check node status instead of latest block?
-		blk, err := nodeClient.Block(curRound)
+		blk, err := nodeClient.BookkeepingBlock(curRound)
 		a.NoError(err)
 
 		curProtocol = blk.CurrentProtocol

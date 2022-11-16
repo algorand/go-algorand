@@ -328,6 +328,17 @@ func (au *accountUpdates) close() {
 	au.baseKVs.prune(0)
 }
 
+// flushCaches flushes any pending data in caches so that it is fully available during future lookups.
+func (au *accountUpdates) flushCaches() {
+	au.accountsMu.Lock()
+
+	au.baseAccounts.flushPendingWrites()
+	au.baseResources.flushPendingWrites()
+	au.baseKVs.flushPendingWrites()
+
+	au.accountsMu.Unlock()
+}
+
 func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
 	return au.lookupResource(rnd, addr, aidx, ctype, true /* take lock */)
 }
@@ -816,6 +827,8 @@ type accountUpdatesLedgerEvaluator struct {
 	prevHeader bookkeeping.BlockHeader
 }
 
+func (aul *accountUpdatesLedgerEvaluator) FlushCaches() {}
+
 // GenesisHash returns the genesis hash
 func (aul *accountUpdatesLedgerEvaluator) GenesisHash() crypto.Digest {
 	return aul.au.ledger.GenesisHash()
@@ -829,6 +842,11 @@ func (aul *accountUpdatesLedgerEvaluator) GenesisProto() config.ConsensusParams 
 // VotersForStateProof returns the top online accounts at round rnd.
 func (aul *accountUpdatesLedgerEvaluator) VotersForStateProof(rnd basics.Round) (voters *ledgercore.VotersForRound, err error) {
 	return aul.ao.voters.getVoters(rnd)
+}
+
+func (aul *accountUpdatesLedgerEvaluator) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	// this function should not be used by accountUpdatesLedgerEvaluator
+	return nil, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to get spVerification data during accountUpdates initialization ")
 }
 
 // BlockHdr returns the header of the given round. When the evaluator is running, it's only referring to the previous header, which is what we
@@ -1327,6 +1345,12 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 			return macct.AccountResource(), rnd, nil
 		}
 
+		// check baseAccoiunts again to see if it does not exist
+		if au.baseResources.readNotFound(addr, aidx) {
+			// it seems the account doesnt exist
+			return ledgercore.AccountResource{}, rnd, nil
+		}
+
 		if synchronized {
 			au.accountsMu.RUnlock()
 			needUnlock = false
@@ -1346,6 +1370,7 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 				au.baseResources.writePending(persistedData, addr)
 				return persistedData.AccountResource(), rnd, nil
 			}
+			au.baseResources.writeNotFoundPending(addr, aidx)
 			// otherwise return empty
 			return ledgercore.AccountResource{}, rnd, nil
 		}
@@ -1428,6 +1453,12 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			return macct.accountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
 		}
 
+		// check baseAccoiunts again to see if it does not exist
+		if au.baseAccounts.readNotFound(addr) {
+			// it seems the account doesnt exist
+			return ledgercore.AccountData{}, rnd, rewardsVersion, rewardsLevel, nil
+		}
+
 		if synchronized {
 			au.accountsMu.RUnlock()
 			needUnlock = false
@@ -1447,6 +1478,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 				au.baseAccounts.writePending(persistedData)
 				return persistedData.accountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
 			}
+			au.baseAccounts.writeNotFoundPending(addr)
 			// otherwise return empty
 			return ledgercore.AccountData{}, rnd, rewardsVersion, rewardsLevel, nil
 		}

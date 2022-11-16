@@ -62,8 +62,8 @@ type roundCowParent interface {
 	getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
 	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
 	getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
-
 	kvGet(key string) ([]byte, bool, error)
+	StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
 }
 
 type roundCowState struct {
@@ -241,6 +241,10 @@ func (cb *roundCowState) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, erro
 	return cb.lookupParent.BlockHdr(r)
 }
 
+func (cb *roundCowState) StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return cb.lookupParent.StateProofVerificationContext(stateProofLastAttestedRound)
+}
+
 func (cb *roundCowState) blockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {
 	return cb.lookupParent.blockHdrCached(r)
 }
@@ -253,7 +257,7 @@ func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.T
 	cb.mods.Txids[txid] = ledgercore.IncludedTransactions{LastValid: txn.LastValid, Intra: uint64(len(cb.mods.Txids))}
 	cb.incTxnCount()
 	if txn.Lease != [32]byte{} {
-		cb.mods.Txleases[ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
+		cb.mods.AddTxLease(ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}, txn.LastValid)
 	}
 }
 
@@ -287,10 +291,10 @@ func (cb *roundCowState) commitToParent() {
 	cb.commitParent.txnCount += cb.txnCount
 
 	for txl, expires := range cb.mods.Txleases {
-		cb.commitParent.mods.Txleases[txl] = expires
+		cb.commitParent.mods.AddTxLease(txl, expires)
 	}
 	for cidx, delta := range cb.mods.Creatables {
-		cb.commitParent.mods.Creatables[cidx] = delta
+		cb.commitParent.mods.AddCreatable(cidx, delta)
 	}
 	for addr, smod := range cb.sdeltas {
 		for aapp, nsd := range smod {
@@ -309,7 +313,7 @@ func (cb *roundCowState) commitToParent() {
 	cb.commitParent.mods.StateProofNext = cb.mods.StateProofNext
 
 	for key, value := range cb.mods.KvMods {
-		cb.commitParent.mods.KvMods[key] = value
+		cb.commitParent.mods.AddKvMod(key, value)
 	}
 }
 

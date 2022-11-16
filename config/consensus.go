@@ -483,6 +483,10 @@ type ConsensusParams struct {
 	// the rewardsLevel, but the rewardsLevel has no meaning because the account
 	// has fewer than RewardUnit algos.
 	UnfundedSenders bool
+
+	// StateProofUseTrackerVerification specifies whether the node will use data from state proof verification tracker
+	// in order to verify state proofs.
+	StateProofUseTrackerVerification bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1250,6 +1254,8 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 9 // When moving this to a release, put a new higher LogicSigVersion here
 
+	vFuture.StateProofUseTrackerVerification = true
+
 	Consensus[protocol.ConsensusFuture] = vFuture
 
 	// vAlphaX versions are an separate series of consensus parameters and versions for alphanet
@@ -1276,6 +1282,12 @@ func initConsensusProtocols() {
 	vAlpha4.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusVAlpha4] = vAlpha4
 	vAlpha3.ApprovedUpgrades[protocol.ConsensusVAlpha4] = 10000
+
+	// vAlpha5 uses the same parameters as v36
+	vAlpha5 := v36
+	vAlpha5.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	Consensus[protocol.ConsensusVAlpha5] = vAlpha5
+	vAlpha4.ApprovedUpgrades[protocol.ConsensusVAlpha5] = 10000
 }
 
 // Global defines global Algorand protocol parameters which should not be overridden.

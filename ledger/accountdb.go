@@ -63,7 +63,7 @@ type onlineAccountsDbQueries struct {
 }
 
 type stateProofVerificationDbQueries struct {
-	lookupStateProofVerificationData *sql.Stmt
+	lookupStateProofVerificationContext *sql.Stmt
 }
 
 var accountsSchema = []string{
@@ -179,8 +179,8 @@ const createUnfinishedCatchpointsTable = `
 
 const createStateProofVerificationTableQuery = `
 	CREATE TABLE IF NOT EXISTS stateproofverification (
-	targetstateproofround integer primary key NOT NULL,
-	verificationdata blob NOT NULL)`
+	lastattestedround integer primary key NOT NULL,
+	verificationcontext blob NOT NULL)`
 
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
@@ -1109,10 +1109,10 @@ func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normal
 	return nil
 }
 
-// writeCatchpointStateProofVerificationData inserts all the state proof verification data in the provided array into
+// writeCatchpointStateProofverificationContext inserts all the state proof verification data in the provided array into
 // the catchpointstateproofverification table.
-func writeCatchpointStateProofVerificationData(ctx context.Context, tx *sql.Tx, verificationData *ledgercore.StateProofVerificationData) error {
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointstateproofverification(targetstateproofround, verificationdata) VALUES(?, ?)")
+func writeCatchpointStateProofverificationContext(ctx context.Context, tx *sql.Tx, verificationContext *ledgercore.StateProofVerificationContext) error {
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointstateproofverification(lastattestedround, verificationContext) VALUES(?, ?)")
 
 	if err != nil {
 		return err
@@ -1120,7 +1120,7 @@ func writeCatchpointStateProofVerificationData(ctx context.Context, tx *sql.Tx, 
 
 	defer insertStmt.Close()
 
-	_, err = insertStmt.ExecContext(ctx, verificationData.TargetStateProofRound, protocol.Encode(verificationData))
+	_, err = insertStmt.ExecContext(ctx, verificationContext.LastAttestedRound, protocol.Encode(verificationContext))
 	return err
 }
 
@@ -1228,7 +1228,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
 			"CREATE TABLE IF NOT EXISTS catchpointkvstore (key blob primary key, value blob)",
-			"CREATE TABLE IF NOT EXISTS catchpointstateproofverification (targetstateproofround INTEGER PRIMARY KEY NOT NULL, verificationdata BLOB NOT NULL)",
+			"CREATE TABLE IF NOT EXISTS catchpointstateproofverification (lastattestedround INTEGER PRIMARY KEY NOT NULL, verificationContext BLOB NOT NULL)",
 
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
 			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
@@ -5338,12 +5338,12 @@ func deleteUnfinishedCatchpoint(ctx context.Context, e db.Executable, round basi
 	return db.Retry(f)
 }
 
-func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []verificationCommitData) error {
-	if len(data) == 0 {
+func insertStateProofVerificationContext(ctx context.Context, tx *sql.Tx, contexts []verificationCommitContext) error {
+	if len(contexts) == 0 {
 		return nil
 	}
 
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO stateproofverification(targetstateproofround, verificationdata) VALUES(?, ?)")
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO stateproofverification(lastattestedround, verificationcontext) VALUES(?, ?)")
 
 	if err != nil {
 		return err
@@ -5351,9 +5351,9 @@ func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []ve
 
 	defer insertStmt.Close()
 
-	for _, commitData := range data {
-		verificationData := commitData.verificationData
-		_, err = insertStmt.ExecContext(ctx, verificationData.TargetStateProofRound, protocol.Encode(&verificationData))
+	for _, commitContext := range contexts {
+		verificationcontext := commitContext.verificationContext
+		_, err = insertStmt.ExecContext(ctx, verificationcontext.LastAttestedRound, protocol.Encode(&verificationcontext))
 
 		if err != nil {
 			return err
@@ -5363,8 +5363,8 @@ func insertStateProofVerificationData(ctx context.Context, tx *sql.Tx, data []ve
 	return nil
 }
 
-func deleteOldStateProofVerificationData(ctx context.Context, tx *sql.Tx, earliestTrackStateProofRound basics.Round) error {
-	_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE targetstateproofround < ?", earliestTrackStateProofRound)
+func deleteOldStateProofVerificationContext(ctx context.Context, tx *sql.Tx, earliestLastAttestedRound basics.Round) error {
+	_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE lastattestedround < ?", earliestLastAttestedRound)
 	return err
 }
 
@@ -5372,7 +5372,7 @@ func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificatio
 	var err error
 	qs := &stateProofVerificationDbQueries{}
 
-	qs.lookupStateProofVerificationData, err = r.Prepare("SELECT verificationdata FROM stateproofverification WHERE targetstateproofround=?")
+	qs.lookupStateProofVerificationContext, err = r.Prepare("SELECT verificationcontext FROM stateproofverification WHERE lastattestedround=?")
 	if err != nil {
 		return nil, err
 	}
@@ -5380,16 +5380,16 @@ func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificatio
 	return qs, nil
 }
 
-func (qs *stateProofVerificationDbQueries) lookupData(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationData, error) {
-	data := ledgercore.StateProofVerificationData{}
+func (qs *stateProofVerificationDbQueries) lookupContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	verificationContext := ledgercore.StateProofVerificationContext{}
 	queryFunc := func() error {
-		row := qs.lookupStateProofVerificationData.QueryRow(stateProofLastAttestedRound)
+		row := qs.lookupStateProofVerificationContext.QueryRow(stateProofLastAttestedRound)
 		var buf []byte
 		err := row.Scan(&buf)
 		if err != nil {
 			return err
 		}
-		err = protocol.Decode(buf, &data)
+		err = protocol.Decode(buf, &verificationContext)
 		if err != nil {
 			return err
 		}
@@ -5397,14 +5397,14 @@ func (qs *stateProofVerificationDbQueries) lookupData(stateProofLastAttestedRoun
 	}
 
 	err := db.Retry(queryFunc)
-	return &data, err
+	return &verificationContext, err
 }
 
 // stateProofVerificationTable returns all verification data currently committed to the given table.
-func stateProofVerificationTable(ctx context.Context, tx *sql.Tx, tableName string) ([]ledgercore.StateProofVerificationData, error) {
-	var result []ledgercore.StateProofVerificationData
+func stateProofVerificationTable(ctx context.Context, tx *sql.Tx, tableName string) ([]ledgercore.StateProofVerificationContext, error) {
+	var result []ledgercore.StateProofVerificationContext
 	queryFunc := func() error {
-		selectQuery := fmt.Sprintf("SELECT verificationdata FROM %s ORDER BY targetstateproofround", tableName)
+		selectQuery := fmt.Sprintf("SELECT verificationContext FROM %s ORDER BY lastattestedround", tableName)
 		rows, err := tx.QueryContext(ctx, selectQuery)
 
 		if err != nil {
@@ -5422,7 +5422,7 @@ func stateProofVerificationTable(ctx context.Context, tx *sql.Tx, tableName stri
 				return err
 			}
 
-			var record ledgercore.StateProofVerificationData
+			var record ledgercore.StateProofVerificationContext
 			err = protocol.Decode(rawData, &record)
 			if err != nil {
 				return err
@@ -5439,11 +5439,11 @@ func stateProofVerificationTable(ctx context.Context, tx *sql.Tx, tableName stri
 }
 
 // StateProofVerification returns all state proof verification data from the stateProofVerification table.
-func StateProofVerification(ctx context.Context, tx *sql.Tx) ([]ledgercore.StateProofVerificationData, error) {
+func StateProofVerification(ctx context.Context, tx *sql.Tx) ([]ledgercore.StateProofVerificationContext, error) {
 	return stateProofVerificationTable(ctx, tx, "stateProofVerification")
 }
 
 // CatchpointStateProofVerification returns all state proof verification data from the catchpointStateProofVerification table.
-func CatchpointStateProofVerification(ctx context.Context, tx *sql.Tx) ([]ledgercore.StateProofVerificationData, error) {
+func CatchpointStateProofVerification(ctx context.Context, tx *sql.Tx) ([]ledgercore.StateProofVerificationContext, error) {
 	return stateProofVerificationTable(ctx, tx, "catchpointStateProofVerification")
 }
