@@ -572,6 +572,26 @@
                 "time-since-last-round": {
                   "description": "TimeSinceLastRound in nanoseconds",
                   "type": "integer"
+                },
+                "upgrade-approve": {
+                  "description": "Upgrade approve",
+                  "type": "boolean"
+                },
+                "upgrade-delay": {
+                  "description": "Upgrade delay",
+                  "type": "integer"
+                },
+                "upgrade-no": {
+                  "description": "Upgrade no votes",
+                  "type": "integer"
+                },
+                "upgrade-propose": {
+                  "description": "Upgrade propose",
+                  "type": "string"
+                },
+                "upgrade-threshold": {
+                  "description": "Upgrade threshold",
+                  "type": "integer"
                 }
               },
               "required": [
@@ -4148,6 +4168,26 @@
                     "time-since-last-round": {
                       "description": "TimeSinceLastRound in nanoseconds",
                       "type": "integer"
+                    },
+                    "upgrade-approve": {
+                      "description": "Upgrade approve",
+                      "type": "boolean"
+                    },
+                    "upgrade-delay": {
+                      "description": "Upgrade delay",
+                      "type": "integer"
+                    },
+                    "upgrade-no": {
+                      "description": "Upgrade no votes",
+                      "type": "integer"
+                    },
+                    "upgrade-propose": {
+                      "description": "Upgrade propose",
+                      "type": "string"
+                    },
+                    "upgrade-threshold": {
+                      "description": "Upgrade threshold",
+                      "type": "integer"
                     }
                   },
                   "required": [
@@ -4278,6 +4318,26 @@
                     },
                     "time-since-last-round": {
                       "description": "TimeSinceLastRound in nanoseconds",
+                      "type": "integer"
+                    },
+                    "upgrade-approve": {
+                      "description": "Upgrade approve",
+                      "type": "boolean"
+                    },
+                    "upgrade-delay": {
+                      "description": "Upgrade delay",
+                      "type": "integer"
+                    },
+                    "upgrade-no": {
+                      "description": "Upgrade no votes",
+                      "type": "integer"
+                    },
+                    "upgrade-propose": {
+                      "description": "Upgrade propose",
+                      "type": "string"
+                    },
+                    "upgrade-threshold": {
+                      "description": "Upgrade threshold",
                       "type": "integer"
                     }
                   },

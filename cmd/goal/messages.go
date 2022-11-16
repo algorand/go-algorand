@@ -55,13 +55,14 @@ const (
 	errorKMDFailedToStop  = "Failed to stop kmd: %s"
 
 	// Node
-	infoNodeStart                      = "Algorand node successfully started!"
-	infoNodeAlreadyStarted             = "Algorand node was already started!"
-	infoNodeDidNotRestart              = "Algorand node did not restart. The node is still running!"
-	infoTryingToStopNode               = "Trying to stop the node..."
-	infoNodeShuttingDown               = "Algorand node is shutting down..."
-	infoNodeSuccessfullyStopped        = "The node was successfully stopped."
-	infoNodeStatus                     = "Last committed block: %d\nTime since last block: %s\nSync Time: %s\nLast consensus protocol: %s\nNext consensus protocol: %s\nRound for next consensus protocol: %d\nNext consensus protocol supported: %v"
+	infoNodeStart               = "Algorand node successfully started!"
+	infoNodeAlreadyStarted      = "Algorand node was already started!"
+	infoNodeDidNotRestart       = "Algorand node did not restart. The node is still running!"
+	infoTryingToStopNode        = "Trying to stop the node..."
+	infoNodeShuttingDown        = "Algorand node is shutting down..."
+	infoNodeSuccessfullyStopped = "The node was successfully stopped."
+	infoNodeStatus              = "Last committed block: %d\nTime since last block: %s\nSync Time: %s\nLast consensus protocol: %s\nNext consensus protocol: %s\nRound for next consensus protocol: %d\nNext consensus protocol supported: %v\n" +
+		"Upgrade proposal: %s\nUpgrade threshold: %d\nUpgrade approve: %v\nUpgrade delay: %d\nUpgrade no: %d"
 	catchupStoppedOnUnsupported        = "Last supported block (%d) is committed. The next block consensus protocol is not supported. Catchup service is stopped."
 	infoNodeCatchpointCatchupStatus    = "Last committed block: %d\nSync Time: %s\nCatchpoint: %s"
 	infoNodeCatchpointCatchupAccounts  = "Catchpoint total accounts: %d\nCatchpoint accounts processed: %d\nCatchpoint accounts verified: %d"

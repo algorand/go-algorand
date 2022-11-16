@@ -3530,6 +3530,26 @@
           "catchpoint-acquired-blocks": {
             "description": "The number of blocks that have already been obtained by the node as part of the catchup",
             "type": "integer"
+          },
+          "upgrade-propose": {
+            "description": "Upgrade propose",
+            "type": "string"
+          },
+          "upgrade-delay": {
+            "description": "Upgrade delay",
+            "type": "integer"
+          },
+          "upgrade-approve": {
+            "description": "Upgrade approve",
+            "type": "boolean"
+          },
+          "upgrade-threshold": {
+            "description": "Upgrade threshold",
+            "type": "integer"
+          },
+          "upgrade-no": {
+            "description": "Upgrade no votes",
+            "type": "integer"
           }
         }
       }

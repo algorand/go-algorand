@@ -449,7 +449,12 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 			stat.LastVersion,
 			stat.NextVersion,
 			stat.NextVersionRound,
-			stat.NextVersionSupported)
+			stat.NextVersionSupported,
+			stat.UpgradePropose,
+			stat.UpgradeThreshold,
+			stat.UpgradeApprove,
+			stat.UpgradeDelay,
+			stat.UpgradeNo)
 
 		if stat.LastCatchpoint != nil {
 			statusString = statusString + "\n" + fmt.Sprintf(nodeLastCatchpoint, *stat.LastCatchpoint)

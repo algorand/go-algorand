@@ -869,6 +869,21 @@ type NodeStatusResponse struct {
 
 	// TimeSinceLastRound TimeSinceLastRound in nanoseconds
 	TimeSinceLastRound uint64 `json:"time-since-last-round"`
+
+	// UpgradeApprove Upgrade approve
+	UpgradeApprove *bool `json:"upgrade-approve,omitempty"`
+
+	// UpgradeDelay Upgrade delay
+	UpgradeDelay *uint64 `json:"upgrade-delay,omitempty"`
+
+	// UpgradeNo Upgrade no votes
+	UpgradeNo *uint64 `json:"upgrade-no,omitempty"`
+
+	// UpgradePropose Upgrade propose
+	UpgradePropose *string `json:"upgrade-propose,omitempty"`
+
+	// UpgradeThreshold Upgrade threshold
+	UpgradeThreshold *uint64 `json:"upgrade-threshold,omitempty"`
 }
 
 // ParticipationKeyResponse Represents a participation key used by the node.
