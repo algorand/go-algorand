@@ -223,8 +223,6 @@ func BenchmarkTxHandlerProcessIncomingTxn(b *testing.B) {
 		txidCache:    makeTxidCacheSyncMap(txBacklogSize),
 	}
 
-	// b.Log("b.N = ", b.N)
-
 	// prepare tx groups
 	blobs := make([][]byte, b.N)
 	stxns := make([][]transactions.SignedTxn, b.N)
@@ -261,7 +259,126 @@ func BenchmarkTxHandlerProcessIncomingTxn(b *testing.B) {
 	wg.Wait()
 }
 
+// TestTxHandlerProcessIncomingTxnGroupSize ensures the constant value for group size matches reality
+func TestTxHandlerProcessIncomingTxnGroupSize(t *testing.T) {
+	require.GreaterOrEqual(t, maxTxGroupSize, config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize, "Increase maxTxGroupSize value")
+	require.GreaterOrEqual(t, maxTxGroupSize, config.Consensus[protocol.ConsensusFuture].MaxTxGroupSize, "Increase maxTxGroupSize value")
+}
+
+func TestTxHandlerProcessIncomingGroup(t *testing.T) {
+	handler := TxHandler{
+		backlogQueue: make(chan *txBacklogMsg, 20),
+		txidCache:    makeTxidCacheSyncMap(txBacklogSize),
+	}
+
+	stxns1, blob1 := makeRandomTransactions(1)
+	require.Equal(t, 1, len(stxns1))
+	stxns2, blob2 := makeRandomTransactions(maxTxGroupSize)
+	require.Equal(t, maxTxGroupSize, len(stxns2))
+	stxns3, blob3 := makeRandomTransactions(maxTxGroupSize + 1)
+	require.Equal(t, maxTxGroupSize+1, len(stxns3))
+
+	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob1})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob2})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob3})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+
+	require.Equal(t, 3, len(handler.backlogQueue))
+
+	var checks = []struct {
+		stxns      *[]transactions.SignedTxn
+		numDecoded int
+	}{
+		{&stxns1, 1},
+		{&stxns2, maxTxGroupSize},
+		{&stxns3, maxTxGroupSize},
+	}
+	for _, check := range checks {
+		msg := <-handler.backlogQueue
+		require.Equal(t, check.numDecoded, len(msg.unverifiedTxGroup))
+		for i := 0; i < check.numDecoded; i++ {
+			require.Equal(t, (*check.stxns)[i], msg.unverifiedTxGroup[i])
+		}
+	}
+}
+
 const benchTxnNum = 25_000
+
+func TestTxHandlerProcessIncomingCache(t *testing.T) {
+	handler := TxHandler{
+		backlogQueue: make(chan *txBacklogMsg, 20),
+		txidCache:    makeTxidCacheSyncMap(txBacklogSize),
+	}
+
+	var action network.OutgoingMessage
+	var msg *txBacklogMsg
+
+	// double enqueue a single txn message, ensure it discarded
+	stxns1, blob1 := makeRandomTransactions(1)
+	require.Equal(t, 1, len(stxns1))
+
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob1})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob1})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+	msg = <-handler.backlogQueue
+	require.Equal(t, 1, len(msg.unverifiedTxGroup))
+	require.Equal(t, stxns1[0], msg.unverifiedTxGroup[0])
+
+	// double enqueue a two txn message
+	stxns2, blob2 := makeRandomTransactions(2)
+	require.Equal(t, 2, len(stxns2))
+
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob2})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob2})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+	msg = <-handler.backlogQueue
+	require.Equal(t, 2, len(msg.unverifiedTxGroup))
+	require.Equal(t, stxns2[0], msg.unverifiedTxGroup[0])
+	require.Equal(t, stxns2[1], msg.unverifiedTxGroup[1])
+
+	// now combine seen and not seen txns, ensure the group is still enqueued
+	stxns3, _ := makeRandomTransactions(2)
+	require.Equal(t, 2, len(stxns3))
+	stxns3[1] = stxns1[0]
+
+	var blob3 []byte
+	for i := range stxns3 {
+		encoded := protocol.Encode(&stxns3[i])
+		blob3 = append(blob3, encoded...)
+	}
+	require.Greater(t, len(blob3), 0)
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob3})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+	msg = <-handler.backlogQueue
+	require.Equal(t, 2, len(msg.unverifiedTxGroup))
+	require.Equal(t, stxns3[0], msg.unverifiedTxGroup[0])
+	require.Equal(t, stxns3[1], msg.unverifiedTxGroup[1])
+
+	// check a combo from two different seen groups, ensure it dropped
+	stxns4 := make([]transactions.SignedTxn, 2)
+	stxns4[0] = stxns2[0]
+	stxns4[1] = stxns3[0]
+	var blob4 []byte
+	for i := range stxns4 {
+		encoded := protocol.Encode(&stxns4[i])
+		blob4 = append(blob4, encoded...)
+	}
+	require.Greater(t, len(blob4), 0)
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob4})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 0, len(handler.backlogQueue))
+}
 
 func BenchmarkTxHandlerDecoder(b *testing.B) {
 	_, blob := makeRandomTransactions(benchTxnNum)

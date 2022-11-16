@@ -285,40 +285,43 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 	return nil
 }
 
+// attempt to preallocate buffer on stack:
+// hardcode maxTxGroupSize constant in order to get rid ledger lookups and use backing arrays,
+// or fallback to heap allocation it MaxTxGroupSize is greater than our constant
+const maxTxGroupSize = 16
+
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
-	// attempt to preallocate buffer on stack:
-	// hardcode maxTxGroupSize constant and use backing arrays,
-	// or fallback to heap allocation it MaxTxGroupSize is greater than our constant
-	const maxTxGroupSize = 16 // no ledger lookup and allocate the backing array on stack
 	var decTxGroupElemBackingArray [maxTxGroupSize]int
 	var decTxGroupElemOffsets []int // offsets of txn ends
-	var unverifiedTxGroupBackingArray [maxTxGroupSize]transactions.SignedTxn
-	var unverifiedTxGroup []transactions.SignedTxn
 
 	if maxTxGroupSize < config.MaxTxGroupSize {
-		logging.Base().Warnf("MaxTxGroupSize is greater than 16. Please update the constant")
 		decTxGroupElemOffsets = make([]int, config.MaxTxGroupSize)
-		unverifiedTxGroup = make([]transactions.SignedTxn, config.MaxTxGroupSize)
 	} else {
 		decTxGroupElemOffsets = decTxGroupElemBackingArray[:]
-		unverifiedTxGroup = unverifiedTxGroupBackingArray[:]
 	}
 
+	unverifiedTxGroup := make([]transactions.SignedTxn, 1)
 	dec := protocol.NewMsgpDecoderBytes(rawmsg.Data)
 	ntx := 0
 	for {
-		err := dec.Decode(&unverifiedTxGroup[ntx])
-		if err == io.EOF {
-			break
+		if len(unverifiedTxGroup) == ntx {
+			n := make([]transactions.SignedTxn, len(unverifiedTxGroup)*2)
+			copy(n, unverifiedTxGroup)
+			unverifiedTxGroup = n
 		}
+		err := dec.Decode(&unverifiedTxGroup[ntx])
 		if err != nil {
+			if err == io.EOF {
+				break
+			}
 			logging.Base().Warnf("Received a non-decodable txn: %v", err)
 			return network.OutgoingMessage{Action: network.Disconnect}
 		}
 		decTxGroupElemOffsets[ntx] = dec.Consumed()
 		ntx++
 		if ntx >= config.MaxTxGroupSize {
-			// max group size reached, exit
+			// max ever possible group size reached, done reading input.
+			// it is safe to stop earlier because groups of bigger size will be discarded in eval
 			// TODO: add metric after #4786 merged
 			break
 		}
