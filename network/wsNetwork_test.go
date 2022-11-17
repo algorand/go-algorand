@@ -2634,13 +2634,13 @@ func TestPreparePeerData(t *testing.T) {
 
 	peers := []*wsPeer{}
 	wn := WebsocketNetwork{}
-	data, comp, digests, seenPrioTags := wn.preparePeerData(req, false, peers)
+	data, comp, digests, seenPrioPPTag := wn.preparePeerData(req, false, peers)
 	require.NotEmpty(t, data)
 	require.Empty(t, comp)
 	require.NotEmpty(t, digests)
 	require.Equal(t, len(req.data), len(digests))
 	require.Equal(t, len(data), len(digests))
-	require.Empty(t, seenPrioTags)
+	require.False(t, seenPrioPPTag)
 
 	for i := range data {
 		require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
@@ -2654,16 +2654,14 @@ func TestPreparePeerData(t *testing.T) {
 		features: pfCompressedProposal,
 	}
 	peers = []*wsPeer{&peer1, &peer2}
-	data, comp, digests, seenPrioTags = wn.preparePeerData(req, true, peers)
+	data, comp, digests, seenPrioPPTag = wn.preparePeerData(req, true, peers)
 	require.NotEmpty(t, data)
 	require.NotEmpty(t, comp)
 	require.NotEmpty(t, digests)
 	require.Equal(t, len(req.data), len(digests))
 	require.Equal(t, len(data), len(digests))
 	require.Equal(t, len(comp), len(digests))
-	require.NotEmpty(t, seenPrioTags)
-	require.Len(t, seenPrioTags, 2)
-	require.Contains(t, seenPrioTags, protocol.ProposalPayloadTag)
+	require.True(t, seenPrioPPTag)
 
 	for i := range data {
 		require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
