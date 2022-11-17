@@ -18,6 +18,7 @@ package data
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -85,4 +86,71 @@ func TestTxHandlerTxidCache(t *testing.T) {
 
 		})
 	}
+}
+
+type cacheMaker interface {
+	make(size int) txidCacheIf
+}
+
+type txidCacheMaker struct{}
+
+func (m txidCacheMaker) make(size int) txidCacheIf {
+	return makeTxidCache(size)
+}
+
+type txidCacheSyncMapMaker struct{}
+
+func (m txidCacheSyncMapMaker) make(size int) txidCacheIf {
+	return makeTxidCacheSyncMap(size)
+}
+
+func BenchmarkTxidCaches1(b *testing.B) {
+
+	txidCacheMaker := txidCacheMaker{}
+	txidCacheSyncMapMaker := txidCacheSyncMapMaker{}
+	var benchmarks = []struct {
+		maker      cacheMaker
+		numThreads int
+	}{
+		{txidCacheMaker, 1},
+		{txidCacheSyncMapMaker, 1},
+		{txidCacheMaker, 4},
+		{txidCacheSyncMapMaker, 4},
+		{txidCacheMaker, 16},
+		{txidCacheSyncMapMaker, 16},
+		{txidCacheMaker, 128},
+		{txidCacheSyncMapMaker, 128},
+	}
+	for _, bench := range benchmarks {
+		b.Run(fmt.Sprintf("%T/threads=%d", bench.maker, bench.numThreads), func(b *testing.B) {
+			benchmarkTxidCache(b, bench.maker, bench.numThreads)
+		})
+	}
+}
+
+func calcCacheSize(numIter int) int {
+	size := numIter / 3 // in order to exercise map swaps
+	if size == 0 {
+		size++
+	}
+	return size
+}
+
+func benchmarkTxidCache(b *testing.B, m cacheMaker, numThreads int) {
+	c := m.make(calcCacheSize(b.N))
+	numHashes := b.N / numThreads // num hashes per goroutine
+	// b.Logf("inserting %d (%d) values in %d threads into cache of size %d", b.N, numHashes, numThreads, calcCacheSize(b.N))
+	var wg sync.WaitGroup
+	wg.Add(numThreads)
+	for i := 0; i < numThreads; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < numHashes; j++ {
+				var d crypto.Digest
+				crypto.RandBytes(d[:])
+				c.checkAndPut(&d)
+			}
+		}()
+	}
+	wg.Wait()
 }
