@@ -1174,11 +1174,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 		With("catchpointLabel", catchpointGenerationStats.CatchpointLabel).
 		Infof("Catchpoint data file was generated")
 
-	totalKVs = catchpointWriter.totalKVs
-	totalAccounts = catchpointWriter.totalAccounts
-	totalChunks = catchpointWriter.chunkNum
-	biggestChunkLen = catchpointWriter.biggestChunkLen
-	return totalKVs, totalAccounts, totalChunks, biggestChunkLen, nil
+	return catchpointWriter.totalKVs, catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, nil
 }
 
 func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.Tx, accountsRound basics.Round, totalKVs uint64, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64) error {
