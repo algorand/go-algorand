@@ -80,7 +80,9 @@ func (erl ElasticRateLimiter) ConsumeCapacity(c client) (bool, error) {
 		select {
 		// if capacity can be pulled from the reservedCapacity, return true
 		case <-erl.capacityByClient[c]:
-			erl.cm.TrackActivity(c, true, time.Now())
+			if erl.cm != nil {
+				erl.cm.TrackActivity(c, true, time.Now())
+			}
 			return true, nil
 		default:
 		}
@@ -94,7 +96,9 @@ func (erl ElasticRateLimiter) ConsumeCapacity(c client) (bool, error) {
 	// attempt to pull from sharedCapacity
 	select {
 	case <-erl.sharedCapacity:
-		erl.cm.TrackActivity(c, false, time.Now())
+		if erl.cm != nil {
+			erl.cm.TrackActivity(c, false, time.Now())
+		}
 		return false, nil
 	default:
 	}
@@ -198,7 +202,7 @@ type ProportionalOddsCongestionManager struct {
 	activitiesByClient  map[interface{}][]activity
 	targetRate          float64
 	trMaintainerRunning bool
-	trMaintainerMu      sync.Mutex
+	trMaintainerMu      *sync.Mutex
 }
 
 // MaintainTargetServiceRate will, every 10 seconds, prune every known client with tracked activity,
@@ -255,7 +259,6 @@ func (cm ProportionalOddsCongestionManager) prune(c client, cutoff time.Time) in
 		delete(cm.activitiesByClient, c)
 	} else {
 		cm.activitiesByClient[c] = cm.activitiesByClient[c][:i]
-		cm.serviceTally -= i
 	}
 	return i
 }
