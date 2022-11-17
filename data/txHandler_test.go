@@ -18,6 +18,7 @@ package data
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -612,4 +613,87 @@ func runHandlerBenchmark(rateAdjuster time.Duration, maxGroupSize, tps int, b *t
 	}
 	wg.Wait()
 	handler.Stop() // cancel the handler ctx
+}
+
+func TestTxHandlerPostProcessError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	collect := func() map[string]float64 {
+		// collect all specific error reason metrics except TxGroupErrorReasonNotWellFormed,
+		// it is tested in TestPostProcessErrorWithVerify
+		result := map[string]float64{}
+		transactionMessagesTxnSigVerificationFailed.AddMetric(result)
+		transactionMessagesAlreadyCommitted.AddMetric(result)
+		transactionMessagesTxGroupInvalidFee.AddMetric(result)
+		// transactionMessagesTxnNotWellFormed.AddMetric(result)
+		transactionMessagesTxnSigNotWellFormed.AddMetric(result)
+		transactionMessagesTxnMsigNotWellFormed.AddMetric(result)
+		transactionMessagesTxnLogicSig.AddMetric(result)
+		return result
+	}
+	var txh TxHandler
+
+	errSome := errors.New("some error")
+	txh.postProcessReportErrors(errSome)
+	result := collect()
+	require.Len(t, result, 0)
+	transactionMessagesBacklogErr.AddMetric(result)
+	require.Len(t, result, 1)
+
+	counter := 0
+	for i := verify.TxGroupErrorReasonGeneric; i <= verify.TxGroupErrorReasonLogicSigFailed; i++ {
+		if i == verify.TxGroupErrorReasonNotWellFormed {
+			// skip TxGroupErrorReasonNotWellFormed, tested in TestPostProcessErrorWithVerify.
+			// the test uses global metric counters, skipping makes the test deterministic
+			continue
+		}
+
+		errTxGroup := &verify.ErrTxGroupError{Reason: i}
+		txh.postProcessReportErrors(errTxGroup)
+		result = collect()
+		if i == verify.TxGroupErrorReasonSigNotWellFormed {
+			// TxGroupErrorReasonSigNotWellFormed and TxGroupErrorReasonHasNoSig increment the same metric
+			counter--
+			require.Equal(t, result[metrics.TransactionMessagesTxnSigNotWellFormed.Name], float64(2))
+		}
+		require.Len(t, result, counter)
+		counter++
+	}
+
+	// there are one less metrics than number of tracked values,
+	// plus one generic non-tracked value, plus skipped TxGroupErrorReasonNotWellFormed
+	const expected = int(verify.TxGroupErrorReasonNumValues) - 3
+	require.Len(t, result, expected)
+
+	errVerify := crypto.ErrBatchVerificationFailed
+	txh.postProcessReportErrors(errVerify)
+	result = collect()
+	require.Len(t, result, expected+1)
+}
+
+func TestTxHandlerPostProcessErrorWithVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	txn := transactions.Transaction{}
+	stxn := transactions.SignedTxn{Txn: txn}
+
+	hdr := bookkeeping.BlockHeader{
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
+		},
+	}
+	_, err := verify.TxnGroup([]transactions.SignedTxn{stxn}, hdr, nil, nil)
+	var txGroupErr *verify.ErrTxGroupError
+	require.ErrorAs(t, err, &txGroupErr)
+
+	result := map[string]float64{}
+	transactionMessagesTxnNotWellFormed.AddMetric(result)
+	require.Len(t, result, 0)
+
+	var txh TxHandler
+	txh.postProcessReportErrors(err)
+	transactionMessagesTxnNotWellFormed.AddMetric(result)
+	require.Len(t, result, 1)
 }
