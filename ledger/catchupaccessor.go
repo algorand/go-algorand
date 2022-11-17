@@ -59,7 +59,7 @@ type CatchpointCatchupAccessor interface {
 	ProcessStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error)
 
 	// BuildMerkleTrie inserts the account hashes into the merkle trie
-	BuildMerkleTrie(ctx context.Context, progressUpdates func([][]byte)) (err error)
+	BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64, uint64)) (err error)
 
 	// GetCatchupBlockRound returns the latest block round matching the current catchpoint
 	GetCatchupBlockRound(ctx context.Context) (round basics.Round, err error)
@@ -593,8 +593,24 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	return err
 }
 
+// countHashes disambiguates the 2 hash types included in the merkle trie:
+// * accounts + createables (assets + apps)
+// * KVs
+//
+// The function is _not_ a general purpose way to count hashes by hash kind.
+func countHashes(hashes [][]byte) (kvCount, accountCount uint64) {
+	for _, hash := range hashes {
+		if hash[HashKindEncodingIndex] == byte(KV) {
+			kvCount++
+		} else {
+			accountCount++
+		}
+	}
+	return kvCount, accountCount
+}
+
 // BuildMerkleTrie would process the catchpointpendinghashes and insert all the items in it into the merkle trie
-func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, progressUpdates func([][]byte)) (err error) {
+func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64, uint64)) (err error) {
 	wdb := c.ledger.trackerDB().Wdb
 	rdb := c.ledger.trackerDB().Rdb
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -654,6 +670,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		var trie *merkletrie.Trie
 		uncommitedHashesCount := 0
 		keepWriting := true
+		kvHashesWritten, accountHashesWritten := uint64(0), uint64(0)
 		var mc *MerkleCommitter
 
 		err := wdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
@@ -703,9 +720,10 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 
 				}
 				uncommitedHashesCount += len(hashesToWrite)
-				if progressUpdates != nil {
-					progressUpdates(hashesToWrite)
-				}
+
+				kvs, accounts := countHashes(hashesToWrite)
+				kvHashesWritten += kvs
+				accountHashesWritten += accounts
 
 				return nil
 			})
@@ -733,6 +751,10 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 					keepWriting = false
 					continue
 				}
+			}
+
+			if progressUpdates != nil {
+				progressUpdates(kvHashesWritten, accountHashesWritten)
 			}
 		}
 		if err != nil {

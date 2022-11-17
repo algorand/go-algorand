@@ -218,7 +218,7 @@ func TestBuildMerkleTrie(t *testing.T) {
 	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
 
 	progressCallCount := 0
-	progressNop := func([][]byte) {
+	progressNop := func(uint64, uint64) {
 		progressCallCount++
 	}
 
@@ -317,7 +317,7 @@ func TestCatchupAccessorBlockdb(t *testing.T) {
 	ctx := context.Background()
 
 	// actual testing...
-	err = catchpointAccessor.BuildMerkleTrie(ctx, func([][]byte) {})
+	err = catchpointAccessor.BuildMerkleTrie(ctx, func(uint64, uint64) {})
 	require.Error(t, err)
 }
 

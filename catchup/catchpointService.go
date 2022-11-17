@@ -340,26 +340,16 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 }
 
 // updateVerifiedCounts update the user's statistics for the given verified hashes
-func (cs *CatchpointCatchupService) updateVerifiedCounts(hashes [][]byte) {
+func (cs *CatchpointCatchupService) updateVerifiedCounts(kvCount, accountCount uint64) {
 	cs.statsMu.Lock()
 	defer cs.statsMu.Unlock()
 
-	addedTrieAccountHashes := uint64(0) // Accounts include accounts + creatables (assets + apps)
-	addedTrieKVHashes := uint64(0)
-	for _, hash := range hashes {
-		if hash[ledger.HashKindEncodingIndex] == byte(ledger.KV) {
-			addedTrieKVHashes++
-		} else {
-			addedTrieAccountHashes++
-		}
-	}
-
 	if cs.stats.TotalAccountHashes > 0 {
-		cs.stats.VerifiedAccounts = cs.stats.TotalAccounts * addedTrieAccountHashes / cs.stats.TotalAccountHashes
+		cs.stats.VerifiedAccounts = cs.stats.TotalAccounts * accountCount / cs.stats.TotalAccountHashes
 	}
 
-	if cs.stats.TotalKVs > 0 { // TODO Is TotalKVHashes needed?
-		cs.stats.VerifiedKVs = addedTrieKVHashes
+	if cs.stats.TotalKVs > 0 {
+		cs.stats.VerifiedKVs = kvCount
 	}
 }
 
