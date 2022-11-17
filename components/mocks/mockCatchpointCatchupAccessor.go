@@ -58,7 +58,7 @@ func (m *MockCatchpointCatchupAccessor) ProcessStagingBalances(ctx context.Conte
 }
 
 // BuildMerkleTrie inserts the account hashes into the merkle trie
-func (m *MockCatchpointCatchupAccessor) BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64)) (err error) {
+func (m *MockCatchpointCatchupAccessor) BuildMerkleTrie(ctx context.Context, progressUpdates func([][]byte)) (err error) {
 	return nil
 }
 

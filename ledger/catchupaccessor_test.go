@@ -218,7 +218,7 @@ func TestBuildMerkleTrie(t *testing.T) {
 	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
 
 	progressCallCount := 0
-	progressNop := func(uint64) {
+	progressNop := func([][]byte) {
 		progressCallCount++
 	}
 
@@ -234,10 +234,9 @@ func TestBuildMerkleTrie(t *testing.T) {
 	require.NoError(t, err, "ResetStagingBalances")
 	err = catchpointAccessor.BuildMerkleTrie(ctx, progressNop)
 	require.NoError(t, err)
-	require.True(t, progressCallCount > 0)
+	require.False(t, progressCallCount > 0)
 
 	// process some data...
-	progressCallCount = 0
 	err = catchpointAccessor.ResetStagingBalances(ctx, true)
 	require.NoError(t, err, "ResetStagingBalances")
 	// TODO: catchpointAccessor.ProcessStagingBalances() like in ledgerFetcher.downloadLedger(cs.ctx, peer, round) like catchup/catchpointService.go which is the real usage of BuildMerkleTrie()
@@ -316,13 +315,9 @@ func TestCatchupAccessorBlockdb(t *testing.T) {
 	}()
 	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
 	ctx := context.Background()
-	progressCallCount := 0
-	progressNop := func(uint64) {
-		progressCallCount++
-	}
 
 	// actual testing...
-	err = catchpointAccessor.BuildMerkleTrie(ctx, progressNop)
+	err = catchpointAccessor.BuildMerkleTrie(ctx, func([][]byte) {})
 	require.Error(t, err)
 }
 
