@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"os"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"testing"
@@ -44,6 +46,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
+	"github.com/algorand/go-deadlock"
 )
 
 func BenchmarkTxHandlerProcessing(b *testing.B) {
@@ -202,7 +205,7 @@ func TestTxHandlerProcessIncomingTxn(t *testing.T) {
 	const numTxns = 11
 	handler := TxHandler{
 		backlogQueue: make(chan *txBacklogMsg, 1),
-		txidCache:    makeTxidCacheSyncMap(txBacklogSize),
+		txidCache:    makeTxidCache(txBacklogSize),
 	}
 	stxns, blob := makeRandomTransactions(numTxns)
 	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
@@ -216,11 +219,18 @@ func TestTxHandlerProcessIncomingTxn(t *testing.T) {
 	}
 }
 
+// BenchmarkTxHandlerProcessIncomingTxn is single-threaded ProcessIncomingTxn benchmark
 func BenchmarkTxHandlerProcessIncomingTxn(b *testing.B) {
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() {
+		deadlock.Opts.Disable = deadlockDisable
+	}()
+
 	const numTxnsPerGroup = 16
 	handler := TxHandler{
-		backlogQueue: make(chan *txBacklogMsg, 1),
-		txidCache:    makeTxidCacheSyncMap(txBacklogSize),
+		backlogQueue: make(chan *txBacklogMsg, txBacklogSize),
+		txidCache:    makeTxidCache(txBacklogSize),
 	}
 
 	// prepare tx groups
@@ -259,6 +269,91 @@ func BenchmarkTxHandlerProcessIncomingTxn(b *testing.B) {
 	wg.Wait()
 }
 
+// BenchmarkTxHandlerProcessIncomingTxn16 is with 16 goroutines
+func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() {
+		deadlock.Opts.Disable = deadlockDisable
+	}()
+
+	const numTxnsPerGroup = 16
+	handler := TxHandler{
+		backlogQueue: make(chan *txBacklogMsg, txBacklogSize),
+		txidCache:    makeTxidCache(txBacklogSize),
+	}
+
+	// prepare tx groups
+	blobs := make([][]byte, b.N)
+	stxns := make([][]transactions.SignedTxn, b.N)
+	for i := 0; i < b.N; i++ {
+		stxns[i], blobs[i] = makeRandomTransactions(numTxnsPerGroup)
+	}
+
+	// start consumer
+	var wgc sync.WaitGroup
+	wgc.Add(1)
+	go func() {
+		defer wgc.Done()
+		for i := 0; i < b.N; i++ {
+			msg := <-handler.backlogQueue
+			require.Equal(b, numTxnsPerGroup, len(msg.unverifiedTxGroup))
+		}
+	}()
+
+	const ng = 64
+	numHashes := b.N / ng
+	if numHashes == 0 {
+		numHashes = 1
+	}
+
+	// submit tx groups
+	var wgp sync.WaitGroup
+	wgp.Add(ng)
+	b.ResetTimer()
+
+	if b.N == 100000 {
+		profpath := b.Name() + "_cpuprof.pprof"
+		profout, err := os.Create(profpath)
+		if err != nil {
+			b.Fatal(err)
+			return
+		}
+		b.Logf("%s: cpu profile for b.N=%d", profpath, b.N)
+		pprof.StartCPUProfile(profout)
+		defer func() {
+			pprof.StopCPUProfile()
+			profout.Close()
+		}()
+	}
+
+	for g := 0; g < ng; g++ {
+		start := g * numHashes
+		end := (g + 1) * (numHashes)
+		// workaround b.N = 1
+		if start >= b.N {
+			start = 0
+		}
+		if end >= b.N {
+			end = b.N
+		}
+		// handle the remaining blobs
+		if g == ng-1 {
+			end = b.N
+		}
+		b.Logf("%d: %d %d", b.N, start, end)
+		go func(start int, end int) {
+			defer wgp.Done()
+			for i := start; i < end; i++ {
+				action := handler.processIncomingTxn(network.IncomingMessage{Data: blobs[i]})
+				require.Equal(b, network.OutgoingMessage{Action: network.Ignore}, action)
+			}
+		}(start, end)
+	}
+	wgp.Wait()
+	wgc.Wait()
+}
+
 // TestTxHandlerProcessIncomingTxnGroupSize ensures the constant value for group size matches reality
 func TestTxHandlerProcessIncomingTxnGroupSize(t *testing.T) {
 	require.GreaterOrEqual(t, maxTxGroupSize, config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize, "Increase maxTxGroupSize value")
@@ -268,7 +363,7 @@ func TestTxHandlerProcessIncomingTxnGroupSize(t *testing.T) {
 func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 	handler := TxHandler{
 		backlogQueue: make(chan *txBacklogMsg, 20),
-		txidCache:    makeTxidCacheSyncMap(txBacklogSize),
+		txidCache:    makeTxidCache(txBacklogSize),
 	}
 
 	stxns1, blob1 := makeRandomTransactions(1)
@@ -311,7 +406,7 @@ const benchTxnNum = 25_000
 func TestTxHandlerProcessIncomingCache(t *testing.T) {
 	handler := TxHandler{
 		backlogQueue: make(chan *txBacklogMsg, 20),
-		txidCache:    makeTxidCacheSyncMap(txBacklogSize),
+		txidCache:    makeTxidCache(txBacklogSize),
 	}
 
 	var action network.OutgoingMessage

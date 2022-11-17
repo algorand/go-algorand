@@ -80,7 +80,7 @@ type TxHandler struct {
 	postVerificationQueue chan *txBacklogMsg
 	backlogWg             sync.WaitGroup
 	net                   network.GossipNode
-	txidCache             *txidCacheSyncMap
+	txidCache             *txidCache
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
 }
@@ -107,7 +107,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
-		txidCache:             makeTxidCacheSyncMap(txBacklogSize),
+		txidCache:             makeTxidCache(txBacklogSize),
 	}
 	return handler
 }
@@ -338,7 +338,6 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		end := decTxGroupElemOffsets[i]
 		rawtxn := rawmsg.Data[start:end]
 		start = end
-
 		d := crypto.Hash(rawtxn)
 		if !handler.txidCache.checkAndPut(&d) {
 			allTxSeen = false
