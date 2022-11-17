@@ -1467,8 +1467,8 @@ func (wn *WebsocketNetwork) preparePeerData(request broadcastRequest, prio bool,
 		if prio {
 			if request.tags[i] == protocol.ProposalPayloadTag {
 				networkPrioPPNonCompressedSize.AddUint64(uint64(len(d)), nil)
+				containsCompressableData = true
 			}
-			containsCompressableData = true
 		}
 
 		if wantCompression {
