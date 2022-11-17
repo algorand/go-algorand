@@ -965,18 +965,15 @@ func verifyResults(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64
 	require.Empty(t, badTxnGroups, "unverifiedGroups should have all the transactions with invalid sigs")
 }
 
-// TestStreamVerifier tests the basic functionality
-func TestStreamVerifier(t *testing.T) {
-	partitiontest.PartitionTest(t)
+func getSignedTransactions(numOfTxns, maxGrpSize int, badTxnProb Float64) (txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64]struct{}) {
 
-	numOfTxns := 4000
 	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
-	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
+	txnGroups = generateTransactionGroups(maxGrpSize, signedTxn, secrets, addrs)
 
-	badTxnGroups := make(map[uint64]struct{})
+	badTxnGroups = make(map[uint64]struct{})
 
 	for tgi := range txnGroups {
-		if rand.Float32() > 0.7 {
+		if rand.Float32() < badTxnProb {
 			// make a bad sig
 			t := rand.Intn(len(txnGroups[tgi]))
 			txnGroups[tgi][t].Sig[0] = txnGroups[tgi][t].Sig[0] + 1
@@ -984,6 +981,17 @@ func TestStreamVerifier(t *testing.T) {
 			badTxnGroups[u] = struct{}{}
 		}
 	}
+	return
+	
+}
+
+// TestStreamVerifier tests the basic functionality
+func TestStreamVerifier(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	numOfTxns := 4000
+	txnGroup, badTxnGroups := getSignedTransactions(numOfTxn, protoMaxGroupSize, 0.5)
+
 	streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
 }
 
@@ -992,10 +1000,7 @@ func TestStreamVerifierCases(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 10
-	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
-	txnGroups := generateTransactionGroups(1, signedTxn, secrets, addrs)
-	badTxnGroups := make(map[uint64]struct{})
-
+	txnGroup, badTxnGroups := getSignedTransactions(numOfTxn, 1, 0)
 	mod := 1
 
 	// txn with 0 sigs
@@ -1090,20 +1095,8 @@ func TestStreamVerifierIdel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 10
-	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
-	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
+	txnGroup, badTxnGroups := getSignedTransactions(numOfTxn, protoMaxGroupSize, 0.5)
 
-	badTxnGroups := make(map[uint64]struct{})
-
-	for tgi := range txnGroups {
-		if rand.Float32() > 0.5 {
-			// make a bad sig
-			t := rand.Intn(len(txnGroups[tgi]))
-			txnGroups[tgi][t].Sig[0] = txnGroups[tgi][t].Sig[0] + 1
-			u, _ := binary.Uvarint(txnGroups[tgi][0].Txn.Note)
-			badTxnGroups[u] = struct{}{}
-		}
-	}
 	origValue := waitForFirstTxnDuration
 	defer func() {
 		waitForFirstTxnDuration = origValue
@@ -1115,25 +1108,12 @@ func TestStreamVerifierIdel(t *testing.T) {
 	sv.activeLoopWg.Wait()
 }
 
-// TestStreamVerifierCancel
-func TestStreamVerifierCancel(t *testing.T) {
+// TestStreamVerifierPoolShutdown tests what happens when the exec pool shuts down
+func TestStreamVerifierPoolShutdown(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 1000
-	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
-	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
-
-	badTxnGroups := make(map[uint64]struct{})
-
-	for tgi := range txnGroups {
-		if rand.Float32() > 0.5 {
-			// make a bad sig
-			t := rand.Intn(len(txnGroups[tgi]))
-			txnGroups[tgi][t].Sig[0] = txnGroups[tgi][t].Sig[0] + 1
-			u, _ := binary.Uvarint(txnGroups[tgi][0].Txn.Note)
-			badTxnGroups[u] = struct{}{}
-		}
-	}
+	txnGroup, badTxnGroups := getSignedTransactions(numOfTxn, protoMaxGroupSize, 0.5)
 
 	// prepare the stream verifier
 	numOfTxnGroups := len(txnGroups)
@@ -1179,5 +1159,59 @@ func TestStreamVerifierCancel(t *testing.T) {
 		errored = true
 	}
 	require.True(t, errored)
+	sv.activeLoopWg.Wait()
+}
+
+// TestStreamVerifierCtxCancel tests what happens when the context is canceled
+func TestStreamVerifierCtxCancel(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	numOfTxns := 1000
+	txnGroup, badTxnGroups := getSignedTransactions(numOfTxn, protoMaxGroupSize, 0.5)
+
+	// prepare the stream verifier
+	numOfTxnGroups := len(txnGroups)
+	execPool := execpool.MakePool(t)
+	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	cache := MakeVerifiedTransactionCache(50000)
+
+	blkHdr := createDummyBlockHeader()
+	nbw := MakeNewBlockWatcher(blkHdr)
+	stxnChan := make(chan UnverifiedElement)
+	resultChan := make(chan VerificationResult)
+	sv := MakeStreamVerifier(ctx, stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache)
+	sv.Start()
+
+	errChan := make(chan error)
+
+	var badSigResultCounter int
+	var goodSigResultCounter int
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go processResults(errChan, resultChan, numOfTxnGroups, badTxnGroups, ctx2, &badSigResultCounter, &goodSigResultCounter, &wg)
+
+	wg.Add(1)
+	// send txn groups to be verified
+	go func() {
+		defer wg.Done()
+		for _, tg := range txnGroups {
+			select {
+			case <-ctx2.Done():
+				break
+			case stxnChan <- UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}:
+			}
+		}
+	}()
+	for err := range errChan {
+		require.ErrorIs(t, err, shuttingDownError)
+		cancel()
+	}
+	cancel2()
 	sv.activeLoopWg.Wait()
 }
