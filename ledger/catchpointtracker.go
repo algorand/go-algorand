@@ -1008,6 +1008,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 			continue
 		}
 		if mv.oldData != nil {
+			// reminder: check mv.data for nil here, b/c bytes.Equal conflates nil and "".
 			if mv.data != nil && bytes.Equal(mv.oldData, mv.data) {
 				continue // changed back within the delta span
 			}
