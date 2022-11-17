@@ -1161,7 +1161,7 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	require.True(t, errored)
 	sv.activeLoopWg.Wait()
 }
-
+/*
 // TestStreamVerifierCtxCancel tests what happens when the context is canceled
 func TestStreamVerifierCtxCancel(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1215,3 +1215,4 @@ func TestStreamVerifierCtxCancel(t *testing.T) {
 	cancel2()
 	sv.activeLoopWg.Wait()
 }
+*/
