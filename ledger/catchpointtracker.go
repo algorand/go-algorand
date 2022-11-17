@@ -971,15 +971,10 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		resDelta := resourcesDeltas.getByIdx(i)
 		addr := resDelta.address
 		if !resDelta.oldResource.data.IsEmpty() {
-			var ctype basics.CreatableType
-			if resDelta.oldResource.data.IsAsset() {
-				ctype = basics.AssetCreatable
-			} else if resDelta.oldResource.data.IsApp() {
-				ctype = basics.AppCreatable
-			} else {
-				return fmt.Errorf("unknown old creatable for addr %s (%d), aidx %d, data %v", addr.String(), resDelta.oldResource.addrid, resDelta.oldResource.aidx, resDelta.oldResource.data)
+			deleteHash, err := resourcesHashBuilderV6(resDelta.oldResource.data, addr, resDelta.oldResource.aidx, resDelta.oldResource.data.UpdateRound, protocol.Encode(&resDelta.oldResource.data))
+			if err != nil {
+				return err
 			}
-			deleteHash := resourcesHashBuilderV6(addr, resDelta.oldResource.aidx, ctype, uint64(resDelta.oldResource.data.UpdateRound), protocol.Encode(&resDelta.oldResource.data))
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete resource hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
@@ -992,15 +987,10 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		}
 
 		if !resDelta.newResource.IsEmpty() {
-			var ctype basics.CreatableType
-			if resDelta.newResource.IsAsset() {
-				ctype = basics.AssetCreatable
-			} else if resDelta.newResource.IsApp() {
-				ctype = basics.AppCreatable
-			} else {
-				return fmt.Errorf("unknown new creatable for addr %s, aidx %d, data %v", addr.String(), resDelta.oldResource.aidx, resDelta.newResource)
+			addHash, err := resourcesHashBuilderV6(resDelta.newResource, addr, resDelta.oldResource.aidx, resDelta.newResource.UpdateRound, protocol.Encode(&resDelta.newResource))
+			if err != nil {
+				return err
 			}
-			addHash := resourcesHashBuilderV6(addr, resDelta.oldResource.aidx, ctype, uint64(resDelta.newResource.UpdateRound), protocol.Encode(&resDelta.newResource))
 			added, err = ct.balancesTrie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("attempted to add duplicate resource hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
@@ -1418,7 +1408,7 @@ func removeSingleCatchpointFileFromDisk(dbDirectory, fileToDelete string) (err e
 	return nil
 }
 
-func hashBufV6(affinity uint64, kind byte) []byte {
+func hashBufV6(affinity uint64, kind HashKind) []byte {
 	hash := make([]byte, 4+crypto.DigestSize)
 	// write out the lowest 32 bits of the affinity value. This should improve
 	// the caching of the trie by allowing recent updates to be in-cache, and
@@ -1427,7 +1417,7 @@ func hashBufV6(affinity uint64, kind byte) []byte {
 		// the following takes the prefix & 255 -> hash[i]
 		hash[i] = byte(prefix)
 	}
-	hash[4] = kind
+	hash[HashKindEncodingIndex] = byte(kind)
 	return hash
 }
 
@@ -1444,7 +1434,7 @@ func accountHashBuilderV6(addr basics.Address, accountData *baseAccountData, enc
 	if hashIntPrefix == 0 {
 		hashIntPrefix = accountData.RewardsBase
 	}
-	hash := hashBufV6(hashIntPrefix, 0) // 0 indicates an account
+	hash := hashBufV6(hashIntPrefix, Account)
 	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
 	// recent updated to be in-cache, and "older" nodes will be left alone.
 
@@ -1455,21 +1445,51 @@ func accountHashBuilderV6(addr basics.Address, accountData *baseAccountData, enc
 	return finishV6(hash, prehash)
 }
 
-// accountHashBuilderV6 calculates the hash key used for the trie by combining the account address and the account data
-func resourcesHashBuilderV6(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, updateRound uint64, encodedResourceData []byte) []byte {
-	hash := hashBufV6(updateRound, byte(ctype+1)) // one or two ( asset / application ) so we could differentiate the hashes.
+// HashKind enumerates the possible data types hashed into a catchpoint merkle
+// trie.  Each merkle trie hash includes the HashKind byte at a known-offset.
+// By encoding HashKind at a known-offset, it's possible for hash readers to
+// disambiguate the hashed resource.
+//go:generate stringer -type=HashKind
+type HashKind byte
+
+const (
+	Account HashKind = iota
+	Asset
+	App
+	KV
+)
+
+const HashKindEncodingIndex = 4
+
+func creatableHashKindFromResourcesData(rd resourcesData, a basics.Address, ci basics.CreatableIndex) (HashKind, error) {
+	if rd.IsAsset() {
+		return Asset, nil
+	} else if rd.IsApp() {
+		return App, nil
+	}
+	return Account, fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", a.String(), ci, rd)
+}
+
+// resourcesHashBuilderV6 calculates the hash key used for the trie by combining the creatable's resource data and its index
+func resourcesHashBuilderV6(rd resourcesData, addr basics.Address, cidx basics.CreatableIndex, updateRound uint64, encodedResourceData []byte) ([]byte, error) {
+	hk, err := creatableHashKindFromResourcesData(rd, addr, cidx)
+	if err != nil {
+		return nil, err
+	}
+
+	hash := hashBufV6(updateRound, hk)
 
 	prehash := make([]byte, 8+crypto.DigestSize+len(encodedResourceData))
 	copy(prehash[:], addr[:])
 	binary.LittleEndian.PutUint64(prehash[crypto.DigestSize:], uint64(cidx))
 	copy(prehash[crypto.DigestSize+8:], encodedResourceData[:])
 
-	return finishV6(hash, prehash)
+	return finishV6(hash, prehash), nil
 }
 
 // kvHashBuilderV6 calculates the hash key used for the trie by combining the key and value
 func kvHashBuilderV6(key string, value []byte) []byte {
-	hash := hashBufV6(0, 3) // 3 indicates a kv pair
+	hash := hashBufV6(0, KV)
 
 	prehash := make([]byte, len(key)+len(value))
 	copy(prehash[:], key)

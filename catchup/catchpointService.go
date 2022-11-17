@@ -344,10 +344,10 @@ func (cs *CatchpointCatchupService) updateVerifiedCounts(hashes [][]byte) {
 	cs.statsMu.Lock()
 	defer cs.statsMu.Unlock()
 
-	addedTrieAccountHashes := uint64(0)
+	addedTrieAccountHashes := uint64(0) // Accounts include accounts + creatables (assets + apps)
 	addedTrieKVHashes := uint64(0)
 	for _, hash := range hashes {
-		if hash[4] == 3 { // KV
+		if hash[ledger.HashKindEncodingIndex] == byte(ledger.KV) {
 			addedTrieKVHashes++
 		} else {
 			addedTrieAccountHashes++
