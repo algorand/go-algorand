@@ -124,6 +124,11 @@ type wsPeerWebsocketConn interface {
 	CloseWithoutFlush() error
 	SetPingHandler(h func(appData string) error)
 	SetPongHandler(h func(appData string) error)
+	wrappedConn
+}
+
+type wrappedConn interface {
+	UnderlyingConn() net.Conn
 }
 
 type sendMessage struct {
