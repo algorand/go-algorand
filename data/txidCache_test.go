@@ -38,7 +38,6 @@ func TestTxHandlerTxidCache(t *testing.T) {
 	const size = 20
 	impls := []txidCacheIf{
 		makeTxidCache(size),
-		makeTxidCacheSyncMap(size),
 	}
 	for _, cache := range impls {
 		t.Run(fmt.Sprintf("%T", cache), func(t *testing.T) {
@@ -99,12 +98,6 @@ func (m txidCacheMaker) make(size int) txidCacheIf {
 	return makeTxidCache(size)
 }
 
-type txidCacheSyncMapMaker struct{}
-
-func (m txidCacheSyncMapMaker) make(size int) txidCacheIf {
-	return makeTxidCacheSyncMap(size)
-}
-
 func BenchmarkTxidCaches(b *testing.B) {
 	deadlockDisable := deadlock.Opts.Disable
 	deadlock.Opts.Disable = true
@@ -113,19 +106,14 @@ func BenchmarkTxidCaches(b *testing.B) {
 	}()
 
 	txidCacheMaker := txidCacheMaker{}
-	txidCacheSyncMapMaker := txidCacheSyncMapMaker{}
 	var benchmarks = []struct {
 		maker      cacheMaker
 		numThreads int
 	}{
 		{txidCacheMaker, 1},
-		{txidCacheSyncMapMaker, 1},
 		{txidCacheMaker, 4},
-		{txidCacheSyncMapMaker, 4},
 		{txidCacheMaker, 16},
-		{txidCacheSyncMapMaker, 16},
 		{txidCacheMaker, 128},
-		{txidCacheSyncMapMaker, 128},
 	}
 	for _, bench := range benchmarks {
 		b.Run(fmt.Sprintf("%T/threads=%d", bench.maker, bench.numThreads), func(b *testing.B) {

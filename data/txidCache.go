@@ -17,10 +17,6 @@
 package data
 
 import (
-	"math"
-	"sync"
-	"sync/atomic"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-deadlock"
 )
@@ -74,66 +70,4 @@ func (c *txidCache) len() int {
 	defer c.mu.Unlock()
 
 	return len(c.cur) + len(c.prev)
-}
-
-type txidCacheSyncMap struct {
-	// cur and prev are sync.Map
-	cur  atomic.Value
-	prev atomic.Value
-
-	maxSize int64
-	size    int64
-}
-
-func makeTxidCacheSyncMap(size int) *txidCacheSyncMap {
-	c := &txidCacheSyncMap{
-		maxSize: int64(size),
-	}
-	c.cur.Store(&sync.Map{})
-	c.prev.Store(&sync.Map{})
-	return c
-}
-
-func (c *txidCacheSyncMap) check(d *crypto.Digest) bool {
-	cur := c.cur.Load().(*sync.Map)
-	_, found := cur.Load(*d)
-	if !found {
-		prev := c.prev.Load().(*sync.Map)
-		_, found = prev.Load(*d)
-	}
-	return found
-}
-
-func (c *txidCacheSyncMap) put(d *crypto.Digest) {
-	cur := c.cur.Load().(*sync.Map)
-	if atomic.LoadInt64(&c.size) >= atomic.LoadInt64(&c.maxSize) {
-		c.prev.Store(cur)
-		cur = &sync.Map{}
-		c.cur.Store(cur)
-		atomic.StoreInt64(&c.size, 0)
-	}
-
-	cur.Store(*d, struct{}{})
-	atomic.AddInt64(&c.size, 1)
-}
-
-func (c *txidCacheSyncMap) checkAndPut(d *crypto.Digest) bool {
-	if c.check(d) {
-		return true
-	}
-	c.put(d)
-	return false
-}
-
-func (c *txidCacheSyncMap) len() int {
-	if atomic.LoadInt64(&c.size) >= math.MaxInt32 || atomic.LoadInt64(&c.maxSize) >= math.MaxInt32 {
-		return math.MaxInt32
-	}
-	prev := c.prev.Load().(*sync.Map)
-	prevSize := 0
-	prev.Range(func(key, value interface{}) bool {
-		prevSize++
-		return true
-	})
-	return int(atomic.LoadInt64(&c.size)) + prevSize
 }
