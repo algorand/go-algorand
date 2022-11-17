@@ -190,6 +190,9 @@ type wsPeer struct {
 	// this needs to be 64-bit aligned for use with atomic.AddUint64 on 32-bit platforms.
 	duplicateFilterCount uint64
 
+	// These message counters need to be 64-bit aligned as well.
+	txMessageCount, miMessageCount, ppMessageCount, avMessageCount uint64
+
 	wsPeerCore
 
 	// conn will be *websocket.Conn (except in testing)
@@ -496,6 +499,7 @@ func (wp *wsPeer) readLoop() {
 		switch msg.Tag {
 		case protocol.MsgOfInterestTag:
 			// try to decode the message-of-interest
+			atomic.AddUint64(&wp.miMessageCount, 1)
 			if wp.handleMessageOfInterest(msg) {
 				return
 			}
@@ -529,6 +533,12 @@ func (wp *wsPeer) readLoop() {
 			// network maintenance message handled immediately instead of handing off to general handlers
 			wp.handleFilterMessage(msg)
 			continue
+		case protocol.TxnTag:
+			atomic.AddUint64(&wp.txMessageCount, 1)
+		case protocol.AgreementVoteTag:
+			atomic.AddUint64(&wp.avMessageCount, 1)
+		case protocol.ProposalPayloadTag:
+			atomic.AddUint64(&wp.ppMessageCount, 1)
 		}
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {
