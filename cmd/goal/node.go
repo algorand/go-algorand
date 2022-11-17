@@ -440,6 +440,7 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 	lastRoundTime := fmt.Sprintf("%.1fs", time.Duration(stat.TimeSinceLastRound).Seconds())
 	catchupTime := fmt.Sprintf("%.1fs", time.Duration(stat.CatchupTime).Seconds())
 	var statusString string
+
 	if stat.Catchpoint == nil || (*stat.Catchpoint) == "" {
 		statusString = fmt.Sprintf(
 			infoNodeStatus,
@@ -449,12 +450,7 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 			stat.LastVersion,
 			stat.NextVersion,
 			stat.NextVersionRound,
-			stat.NextVersionSupported,
-			stat.UpgradePropose,
-			stat.UpgradeThreshold,
-			stat.UpgradeApprove,
-			stat.UpgradeDelay,
-			stat.UpgradeNo)
+			stat.NextVersionSupported)
 
 		if stat.LastCatchpoint != nil {
 			statusString = statusString + "\n" + fmt.Sprintf(nodeLastCatchpoint, *stat.LastCatchpoint)
@@ -463,6 +459,34 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 		if stat.StoppedAtUnsupportedRound {
 			statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
 		}
+
+		if stat.UpgradePropose != nil {
+			upgradeThreshold := uint64(0)
+			upgradeApprove := false
+			upgradeDelay := uint64(0)
+			upgradeNo := uint64(0)
+			if stat.UpgradeThreshold != nil {
+				upgradeThreshold = *stat.UpgradeThreshold
+			}
+			if stat.UpgradeApprove != nil {
+				upgradeApprove = *stat.UpgradeApprove
+			}
+			if stat.UpgradeDelay != nil {
+				upgradeDelay = *stat.UpgradeDelay
+			}
+			if stat.UpgradeNo != nil {
+				upgradeNo = *stat.UpgradeNo
+			}
+
+			statusString = statusString + "\n" + fmt.Sprintf(
+				infoNodeStatusConsensusUpgrade,
+				*stat.UpgradePropose,
+				upgradeThreshold,
+				upgradeApprove,
+				upgradeDelay,
+				upgradeNo)
+		}
+
 	} else {
 		statusString = fmt.Sprintf(
 			infoNodeCatchpointCatchupStatus,
