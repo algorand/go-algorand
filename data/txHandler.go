@@ -351,6 +351,8 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 		handler.log.Infof("unable to pin transaction: %v", err)
 	}
 
+	// TODO: at this point, we really really have the Txid and we can mark it done from the Advertised pool. We could go ahead and add it to the Txid cache that lives in front of the pool.
+
 	if handler.relayMessages {
 		err = TxnBroadcast(handler.ctx, handler.net, verifiedTxGroup, wi.rawmsg.Sender)
 		if err != nil {
@@ -517,6 +519,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
 	unverifiedTxGroup = unverifiedTxGroup[:ntx]
+	// TODO: at this point there should be a non-serialized in-memory field in each Transaction that is the Txid and we can calculated it once at this time.
 
 	select {
 	case handler.backlogQueue <- &txBacklogMsg{
@@ -527,6 +530,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		for i, stxn := range unverifiedTxGroup {
 			txidList[i] = stxn.ID()
 		}
+		// TODO: this should only mark the request as _probably_ done and re-warm the timeout (like a watchdog timer). Later when the Txid is added to the pool we can call it really-really done.
 		handler.txidRequestDone <- txidList
 	default:
 		// If we failed here we want to increase the
