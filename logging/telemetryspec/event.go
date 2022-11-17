@@ -230,6 +230,8 @@ const DisconnectPeerEvent Event = "DisconnectPeer"
 type DisconnectPeerEventDetails struct {
 	PeerEventDetails
 	Reason string
+	// Received message counters for this peer while it was connected
+	TXCount, MICount, AVCount, PPCount uint64
 }
 
 // ErrorOutputEvent event
@@ -304,6 +306,8 @@ type PeerConnectionDetails struct {
 	MessageDelay int64 `json:",omitempty"`
 	// DuplicateFilterCount is the number of times this peer has sent us a message hash to filter that it had already sent before.
 	DuplicateFilterCount uint64
+	// These message counters count received messages from this peer.
+	TXCount, MICount, AVCount, PPCount uint64
 	// TCPInfo provides connection measurements from TCP.
 	TCP util.TCPInfo `json:",omitempty"`
 }

@@ -1837,7 +1837,11 @@ func (wn *WebsocketNetwork) getPeerConnectionTelemetryDetails(now time.Time, pee
 			ConnectionDuration:   uint(now.Sub(peer.createTime).Seconds()),
 			TelemetryGUID:        peer.TelemetryGUID,
 			InstanceName:         peer.InstanceName,
-			DuplicateFilterCount: peer.duplicateFilterCount,
+			DuplicateFilterCount: atomic.LoadUint64(&peer.duplicateFilterCount),
+			TXCount:              atomic.LoadUint64(&peer.txMessageCount),
+			MICount:              atomic.LoadUint64(&peer.miMessageCount),
+			AVCount:              atomic.LoadUint64(&peer.avMessageCount),
+			PPCount:              atomic.LoadUint64(&peer.ppMessageCount),
 		}
 		// unwrap websocket.Conn, requestTrackedConnection, rejectingLimitListenerConn
 		var uconn net.Conn = peer.conn.UnderlyingConn()
@@ -2323,6 +2327,10 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 		telemetryspec.DisconnectPeerEventDetails{
 			PeerEventDetails: eventDetails,
 			Reason:           string(reason),
+			TXCount:          atomic.LoadUint64(&peer.txMessageCount),
+			MICount:          atomic.LoadUint64(&peer.miMessageCount),
+			AVCount:          atomic.LoadUint64(&peer.avMessageCount),
+			PPCount:          atomic.LoadUint64(&peer.ppMessageCount),
 		})
 
 	peers.Set(float64(wn.NumPeers()))
@@ -2454,6 +2462,7 @@ func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	atomic.AddUint32(&wn.messagesOfInterestGeneration, 1)
 	var peers []*wsPeer
 	peers, _ = wn.peerSnapshot(peers)
+	wn.log.Infof("updateMessagesOfInterestEnc maybe sending messagesOfInterest %v", wn.messagesOfInterest)
 	for _, peer := range peers {
 		wn.maybeSendMessagesOfInterest(peer, wn.messagesOfInterestEnc)
 	}
@@ -2465,9 +2474,11 @@ func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
 		// if we're not a relay, and not participating, we don't need txn pool
 		wantTXGossip := wn.nodeInfo.IsParticipating()
 		if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
+			wn.log.Infof("postMessagesOfInterestThread: enabling TX gossip")
 			wn.RegisterMessageInterest(protocol.TxnTag)
 			atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipYes)
 		} else if !wantTXGossip && (wn.wantTXGossip != wantTXGossipNo) {
+			wn.log.Infof("postMessagesOfInterestThread: disabling TX gossip")
 			wn.DeregisterMessageInterest(protocol.TxnTag)
 			atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipNo)
 		}
