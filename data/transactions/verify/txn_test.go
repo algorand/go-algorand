@@ -891,7 +891,7 @@ func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups m
 	var goodSigResultCounter int
 
 	wg.Add(1)
-	go processResults(errChan, resultChan, numOfTxnGroups, badTxnGroups, ctx, &badSigResultCounter, &goodSigResultCounter, &wg)
+	go processResults(ctx, errChan, resultChan, numOfTxnGroups, badTxnGroups, &badSigResultCounter, &goodSigResultCounter, &wg)
 
 	wg.Add(1)
 	// send txn groups to be verified
@@ -912,8 +912,8 @@ func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups m
 	return sv
 }
 
-func processResults(errChan chan<- error, resultChan <-chan VerificationResult, numOfTxnGroups int,
-	badTxnGroups map[uint64]struct{}, ctx context.Context,
+func processResults(ctx context.Context, errChan chan<- error, resultChan <-chan VerificationResult,
+	numOfTxnGroups int, badTxnGroups map[uint64]struct{},
 	badSigResultCounter, goodSigResultCounter *int, wg *sync.WaitGroup) {
 	defer wg.Done()
 	defer close(errChan)
@@ -1007,7 +1007,7 @@ func TestStreamVerifierCases(t *testing.T) {
 	txnGroups[mod][0].Sig = crypto.Signature{}
 	u, _ := binary.Uvarint(txnGroups[mod][0].Txn.Note)
 	badTxnGroups[u] = struct{}{}
-	streamVerifierTestCore(txnGroups, badTxnGroups, signedTxnHasNoSig, t)
+	streamVerifierTestCore(txnGroups, badTxnGroups, errSignedTxnHasNoSig, t)
 	mod++
 
 	_, signedTxns, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
@@ -1087,7 +1087,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[mod][0].Msig = mSigTxn[0].Msig
 	u, _ = binary.Uvarint(txnGroups[mod][0].Txn.Note)
 	badTxnGroups[u] = struct{}{}
-	streamVerifierTestCore(txnGroups, badTxnGroups, signedTxnMaxOneSig, t)
+	streamVerifierTestCore(txnGroups, badTxnGroups, errSignedTxnMaxOneSig, t)
 }
 
 // TestStreamVerifierIdel starts the verifer and sends nothing, to trigger the timer, then sends a txn
@@ -1138,7 +1138,7 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go processResults(errChan, resultChan, numOfTxnGroups, badTxnGroups, ctx, &badSigResultCounter, &goodSigResultCounter, &wg)
+	go processResults(ctx, errChan, resultChan, numOfTxnGroups, badTxnGroups, &badSigResultCounter, &goodSigResultCounter, &wg)
 
 	wg.Add(1)
 	// send txn groups to be verified
@@ -1154,7 +1154,7 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	}()
 	errored := false
 	for err := range errChan {
-		require.ErrorIs(t, err, shuttingDownError)
+		require.ErrorIs(t, err, errShuttingDownError)
 		cancel()
 		errored = true
 	}
@@ -1195,7 +1195,7 @@ func TestStreamVerifierCtxCancel(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go processResults(errChan, resultChan, numOfTxnGroups, badTxnGroups, ctx2, &badSigResultCounter, &goodSigResultCounter, &wg)
+	go processResults(ctx2, errChan, resultChan, numOfTxnGroups, badTxnGroups, &badSigResultCounter, &goodSigResultCounter, &wg)
 
 	wg.Add(1)
 	// send txn groups to be verified
@@ -1210,7 +1210,7 @@ func TestStreamVerifierCtxCancel(t *testing.T) {
 		}
 	}()
 	for err := range errChan {
-		require.ErrorIs(t, err, shuttingDownError)
+		require.ErrorIs(t, err, errShuttingDownError)
 		cancel()
 	}
 	cancel2()

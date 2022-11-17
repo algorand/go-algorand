@@ -45,9 +45,9 @@ var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_l
 // ErrInvalidSignature is the error returned to report that at least one signature is invalid
 var ErrInvalidSignature = errors.New("At least one signature didn't pass verification")
 
-var signedTxnHasNoSig = errors.New("signedtxn has no sig")
-var signedTxnMaxOneSig = errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
-var shuttingDownError = errors.New("not verified, verifier is shutting down")
+var errSignedTxnHasNoSig = errors.New("signedtxn has no sig")
+var errSignedTxnMaxOneSig = errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
+var errShuttingDownError = errors.New("not verified, verifier is shutting down")
 
 // The PaysetGroups is taking large set of transaction groups and attempt to verify their validity using multiple go-routines.
 // When doing so, it attempts to break these into smaller "worksets" where each workset takes about 2ms of execution time in order
@@ -647,7 +647,7 @@ func (sv *StreamVerifier) cleanup(pending []UnverifiedElement) {
 		vr := VerificationResult{
 			TxnGroup:       uel.TxnGroup,
 			BacklogMessage: uel.BacklogMessage,
-			Err:            shuttingDownError,
+			Err:            errShuttingDownError,
 		}
 		select {
 		case sv.resultChan <- vr:
@@ -713,7 +713,7 @@ func (sv *StreamVerifier) batchingLoop() {
 					// starting a new batch. Can wait long, since nothing is blocked
 					timer.Reset(waitForFirstTxnDuration)
 				} else {
-					// was not added because of the exec pool buffer lenght
+					// was not added because of the exec pool buffer length
 					timer.Reset(waitForNextTxnDuration)
 				}
 			} else {
@@ -740,7 +740,7 @@ func (sv *StreamVerifier) batchingLoop() {
 				// starting a new batch. Can wait long, since nothing is blocked
 				timer.Reset(waitForFirstTxnDuration)
 			} else {
-				// was not added because of the exec pool buffer lenght. wait for some more txns
+				// was not added because of the exec pool buffer length. wait for some more txns
 				timer.Reset(waitForNextTxnDuration)
 			}
 		case <-sv.ctx.Done():
@@ -882,10 +882,10 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (batchSigs uint6
 		if stx.Txn.Sender == transactions.StateProofSender && stx.Txn.Type == protocol.StateProofTx {
 			return 0, nil
 		}
-		return 0, signedTxnHasNoSig
+		return 0, errSignedTxnHasNoSig
 	}
 	if numSigs != 1 {
-		return 0, signedTxnMaxOneSig
+		return 0, errSignedTxnMaxOneSig
 	}
 	if hasSig {
 		return 1, nil
