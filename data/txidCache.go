@@ -22,6 +22,7 @@ import (
 	"sync/atomic"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-deadlock"
 )
 
 type txidCache struct {
@@ -29,7 +30,7 @@ type txidCache struct {
 	prev map[crypto.Digest]struct{}
 
 	maxSize int
-	mu      sync.Mutex
+	mu      deadlock.Mutex
 }
 
 func makeTxidCache(size int) *txidCache {
