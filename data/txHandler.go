@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -66,7 +67,7 @@ type TxHandler struct {
 	net                   network.GossipNode
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
-	erl                   network.ElasticRateLimiter
+	erl                   util.ElasticRateLimiter
 }
 
 // MakeTxHandler makes a new handler for transaction messages
@@ -91,7 +92,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
-		erl:                   *network.NewElasticRateLimiter(10000, 100),
+		erl:                   *util.NewElasticRateLimiter(10000, 100),
 	}
 
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
