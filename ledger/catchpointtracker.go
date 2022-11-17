@@ -1612,14 +1612,10 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 			hash := kvHashBuilderV6(string(k), v)
 			added, err := trie.Add(hash)
 			if err != nil {
-				return fmt.Errorf("initializeHashes was unable to add kv (key=%s) to trie: %v", k, err)
+				return fmt.Errorf("initializeHashes was unable to add kv (key=%s) to trie: %v", hex.EncodeToString(k), err)
 			}
 			if !added {
-				if err != nil {
-					ct.log.Warnf("initializeHashes attempted to add duplicate kv hash '%s' to merkle trie for key %s : %v", hex.EncodeToString(hash), k, err)
-				} else {
-					ct.log.Warnf("initializeHashes attempted to add duplicate kv hash '%s' to merkle trie for key %s", hex.EncodeToString(hash), k)
-				}
+				ct.log.Warnf("initializeHashes attempted to add duplicate kv hash '%s' to merkle trie for key %s", hex.EncodeToString(hash), k)
 			}
 			// We could insert code to report things every 5 seconds, like was done for accounts.
 		}
