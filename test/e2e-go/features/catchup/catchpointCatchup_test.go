@@ -31,7 +31,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -83,10 +83,10 @@ func (ec *nodeExitErrorCollector) Print() {
 }
 
 // awaitCatchpointCreation attempts catchpoint retrieval with retries when the catchpoint is not yet available.
-func awaitCatchpointCreation(client algodclient.RestClient, fixture *fixtures.RestClientFixture, roundWaitCount uint8) (generatedV2.NodeStatusResponse, error) {
+func awaitCatchpointCreation(client algodclient.RestClient, fixture *fixtures.RestClientFixture, roundWaitCount uint8) (model.NodeStatusResponse, error) {
 	s, err := client.Status()
 	if err != nil {
-		return generatedV2.NodeStatusResponse{}, err
+		return model.NodeStatusResponse{}, err
 	}
 
 	if len(*s.LastCatchpoint) > 0 {
@@ -97,13 +97,13 @@ func awaitCatchpointCreation(client algodclient.RestClient, fixture *fixtures.Re
 	if roundWaitCount-1 > 0 {
 		err = fixture.ClientWaitForRound(client, s.LastRound+1, 10*time.Second)
 		if err != nil {
-			return generatedV2.NodeStatusResponse{}, err
+			return model.NodeStatusResponse{}, err
 		}
 
 		return awaitCatchpointCreation(client, fixture, roundWaitCount-1)
 	}
 
-	return generatedV2.NodeStatusResponse{}, fmt.Errorf("No catchpoint exists")
+	return model.NodeStatusResponse{}, fmt.Errorf("No catchpoint exists")
 }
 
 func TestBasicCatchpointCatchup(t *testing.T) {
@@ -255,7 +255,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	log.Infof(" - done catching up!\n")
 
 	// ensure the catchpoint is created for targetCatchpointRound
-	var status generatedV2.NodeStatusResponse
+	var status model.NodeStatusResponse
 	timer := time.NewTimer(10 * time.Second)
 outer:
 	for {
