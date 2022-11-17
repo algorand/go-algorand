@@ -80,7 +80,6 @@ func BenchmarkTxHandlerProcessing(b *testing.B) {
 	l := ledger
 
 	cfg.TxPoolSize = 75000
-	cfg.EnableProcessBlockStats = false
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	txHandler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)

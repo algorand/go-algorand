@@ -498,7 +498,7 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
 func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	var knownCommitted uint
-	var unknownCommitted uint
+	var stats telemetryspec.AssembleBlockMetrics
 
 	committedTxids := delta.Txids
 
@@ -532,23 +532,12 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 		// Recompute the pool by starting from the new latest block.
 		// This has the side-effect of discarding transactions that
 		// have been committed (or that are otherwise no longer valid).
-		pool.recomputeBlockEvaluator(committedTxids, knownCommitted)
+		stats = pool.recomputeBlockEvaluator(committedTxids, knownCommitted)
 	}
-
-	stats.KnownCommittedCount = knownCommitted
-	stats.UnknownCommittedCount = unknownCommitted
 
 	proto := config.Consensus[block.CurrentProtocol]
 	pool.expiredTxCount[block.Round()] = int(stats.ExpiredCount)
 	delete(pool.expiredTxCount, block.Round()-expiredHistory*basics.Round(proto.MaxTxnLife))
-
-	if pool.logProcessBlockStats {
-		var details struct {
-			Round uint64
-		}
-		details.Round = uint64(block.Round())
-		pool.log.Metrics(telemetryspec.Transaction, stats, details)
-	}
 }
 
 // isAssemblyTimedOut determines if we should keep attempting complete the block assembly by adding more transactions to the pending evaluator,
@@ -642,7 +631,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator). Expects that the pool.mu mutex would be already taken.
-func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint) {
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint) (asmStats telemetryspec.AssembleBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
@@ -703,7 +692,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 		return
 	}
 
-	var asmStats telemetryspec.AssembleBlockMetrics
 	asmStats.StartCount = len(txgroups)
 	asmStats.StopReason = telemetryspec.AssembleBlockEmpty
 
@@ -724,14 +712,20 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			for _, tx := range txgroup {
 				pool.statusCache.put(tx, err.Error())
 			}
-
-			switch err.(type) {
+			// metrics here are duplicated for historic reasons. stats is hardly used and should be removed in favor of asmstats
+			switch terr := err.(type) {
 			case *ledgercore.TransactionInLedgerError:
 				asmStats.CommittedCount++
 			case transactions.TxnDeadError:
-				asmStats.InvalidCount++
-			case transactions.MinFeeError, *ledgercore.LeaseInLedgerError:
-				asmStats.InvalidCount++
+				if int(terr.LastValid-terr.FirstValid) > 20 {
+					// cutoff value  here is picked as a somewhat arbitrary cutoff trying to separate longer lived transactions from very short lived ones
+					asmStats.ExpiredLongLivedCount++
+				}
+				asmStats.ExpiredCount++
+			case *ledgercore.LeaseInLedgerError:
+				asmStats.LeaseErrorCount++
+			case transactions.MinFeeError:
+				asmStats.MinFeeErrorCount++
 				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
 			default:
 				asmStats.InvalidCount++
@@ -766,7 +760,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	pool.assemblyMu.Unlock()
 
 	pool.rememberCommit(true)
-	return
+	return asmStats
 }
 
 func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBlock, encodedLen int) telemetryspec.StateProofStats {
