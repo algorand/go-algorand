@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-deadlock"
 )
 
 type txidCacheIf interface {
@@ -104,7 +105,12 @@ func (m txidCacheSyncMapMaker) make(size int) txidCacheIf {
 	return makeTxidCacheSyncMap(size)
 }
 
-func BenchmarkTxidCaches1(b *testing.B) {
+func BenchmarkTxidCaches(b *testing.B) {
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() {
+		deadlock.Opts.Disable = deadlockDisable
+	}()
 
 	txidCacheMaker := txidCacheMaker{}
 	txidCacheSyncMapMaker := txidCacheSyncMapMaker{}
