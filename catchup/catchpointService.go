@@ -347,7 +347,7 @@ func (cs *CatchpointCatchupService) updateVerifiedCounts(hashes [][]byte) {
 	addedTrieAccountHashes := uint64(0)
 	addedTrieKVHashes := uint64(0)
 	for _, hash := range hashes {
-		if (hash[4] == 3) { // KV
+		if hash[4] == 3 { // KV
 			addedTrieKVHashes++
 		} else {
 			addedTrieAccountHashes++
