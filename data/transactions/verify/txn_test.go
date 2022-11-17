@@ -965,7 +965,7 @@ func verifyResults(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64
 	require.Empty(t, badTxnGroups, "unverifiedGroups should have all the transactions with invalid sigs")
 }
 
-func getSignedTransactions(numOfTxns, maxGrpSize int, badTxnProb Float64) (txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64]struct{}) {
+func getSignedTransactions(numOfTxns, maxGrpSize int, badTxnProb float32) (txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64]struct{}) {
 
 	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
 	txnGroups = generateTransactionGroups(maxGrpSize, signedTxn, secrets, addrs)
@@ -990,7 +990,7 @@ func TestStreamVerifier(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 4000
-	txnGroup, badTxnGroups := getSignedTransactions(numOfTxn, protoMaxGroupSize, 0.5)
+	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, protoMaxGroupSize, 0.5)
 
 	streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
 }
@@ -1000,7 +1000,7 @@ func TestStreamVerifierCases(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 10
-	txnGroup, badTxnGroups := getSignedTransactions(numOfTxn, 1, 0)
+	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0)
 	mod := 1
 
 	// txn with 0 sigs
@@ -1010,8 +1010,8 @@ func TestStreamVerifierCases(t *testing.T) {
 	streamVerifierTestCore(txnGroups, badTxnGroups, signedTxnHasNoSig, t)
 	mod++
 
-	_, signedTxn, secrets, addrs = generateTestObjects(numOfTxns, 20, 50)
-	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
+	_, signedTxns, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
+	txnGroups = generateTransactionGroups(1, signedTxns, secrets, addrs)
 	badTxnGroups = make(map[uint64]struct{})
 
 	// invalid stateproof txn
@@ -1024,8 +1024,8 @@ func TestStreamVerifierCases(t *testing.T) {
 	streamVerifierTestCore(txnGroups, badTxnGroups, errFeeMustBeZeroInStateproofTxn, t)
 	mod++
 
-	_, signedTxn, secrets, addrs = generateTestObjects(numOfTxns, 20, 50)
-	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
+	_, signedTxns, secrets, addrs = generateTestObjects(numOfTxns, 20, 50)
+	txnGroups = generateTransactionGroups(1, signedTxns, secrets, addrs)
 	badTxnGroups = make(map[uint64]struct{})
 
 	// acceptable stateproof txn
@@ -1044,7 +1044,7 @@ func TestStreamVerifierCases(t *testing.T) {
 	streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
 	mod++
 
-	_, signedTxn, secrets, addrs = generateTestObjects(numOfTxns, 20, 50)
+	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
 	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
 	badTxnGroups = make(map[uint64]struct{})
 
@@ -1095,7 +1095,7 @@ func TestStreamVerifierIdel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 10
-	txnGroup, badTxnGroups := getSignedTransactions(numOfTxn, protoMaxGroupSize, 0.5)
+	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, protoMaxGroupSize, 0.5)
 
 	origValue := waitForFirstTxnDuration
 	defer func() {
@@ -1113,7 +1113,7 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 1000
-	txnGroup, badTxnGroups := getSignedTransactions(numOfTxn, protoMaxGroupSize, 0.5)
+	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, protoMaxGroupSize, 0.5)
 
 	// prepare the stream verifier
 	numOfTxnGroups := len(txnGroups)
@@ -1167,7 +1167,7 @@ func TestStreamVerifierCtxCancel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 1000
-	txnGroup, badTxnGroups := getSignedTransactions(numOfTxn, protoMaxGroupSize, 0.5)
+	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, protoMaxGroupSize, 0.5)
 
 	// prepare the stream verifier
 	numOfTxnGroups := len(txnGroups)
