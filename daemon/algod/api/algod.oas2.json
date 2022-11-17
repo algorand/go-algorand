@@ -1369,7 +1369,7 @@
     },
     "/v2/deltas/{round}": {
       "get": {
-        "description": "Get round deltas for a round.",
+        "description": "Get deltas for a round.",
         "tags": [
           "private",
           "data"
@@ -1380,8 +1380,8 @@
         "schemes": [
           "http"
         ],
-        "summary": "Get a RoundDeltas object for a given round",
-        "operationId": "GetRoundDeltas",
+        "summary": "Get a RoundStateDelta object for a given round",
+        "operationId": "GetRoundStateDelta",
         "parameters": [
           {
             "type": "integer",
@@ -1394,7 +1394,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/responses/RoundDeltasResponse"
+            "$ref": "#/responses/RoundStateDeltaResponse"
           },
           "401": {
             "description": "Invalid API Token",
@@ -2436,18 +2436,96 @@
         }
       }
     },
-    "RoundDeltas": {
+    "RoundStateDelta": {
       "description": "Contains updates from a given round.",
       "type": "object",
       "required": [
 
       ],
       "properties": {
+        "accts": {
+          "description": "AccountDeltas object for the round",
+          "$ref": "#/definitions/AccountDeltas"
+        },
+        "kv-mods": {
+          "description": "Array of KV Deltas for the round.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/KvDelta"
+          }
+        },
+        "tx-ids": {
+          "description": "List of included transactions for a given round.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/IncludedTransaction"
+          }
+        },
+        "tx-leases": {
+          "description": "",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TxLease"
+          }
+        },
+        "creatables": {
+          "description": "List of modified Creatables for the given round.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ModifiedCreatable"
+          }
+        },
+        "state-proof-next": {
+          "description": "Next round for which we expect a state proof",
+          "type": "integer"
+        },
+        "prev-timestamp": {
+          "description": "Previous block timestamp",
+          "type": "integer"
+        },
+        "totals": {
+          "description": "Account Totals for the given round",
+          "$ref": "#/definitions/AccountTotals"
+        }
+      }
+    },
+    "AccountTotals": {
+      "description": "Total Algos in the system grouped by account status",
+      "type": "object",
+      "required": [
+        "online",
+        "offline",
+        "not-participating",
+        "rewards-level"
+      ],
+      "properties": {
+        "online": {
+          "description": "Amount of stake in online accounts",
+          "type": "integer"
+        },
+        "offline": {
+          "description": "Amount of stake in offline accounts",
+          "type": "integer"
+        },
+        "not-participating": {
+          "description": "Amount of stake in non-participating accounts",
+          "type": "integer"
+        },
+        "rewards-level": {
+          "description": "Total number of algos received per reward unit since genesis",
+          "type": "integer"
+        }
+      }
+    },
+    "AccountDeltas": {
+      "description": "Exposes deltas for account based resources in a single round",
+      "type": "object",
+      "properties": {
         "accounts": {
           "description": "Array of Account updates for the round",
           "type": "array",
           "items": {
-           "$ref": "#/definitions/AccountBalanceRecord"
+            "$ref": "#/definitions/AccountBalanceRecord"
           }
         },
         "apps": {
@@ -2463,13 +2541,85 @@
           "items": {
             "$ref": "#/definitions/AssetResourceRecord"
           }
+        }
+      }
+    },
+    "TxLease": {
+      "description": "",
+      "type": "object",
+      "required": [
+        "sender",
+        "lease",
+        "expiration"
+      ],
+      "properties": {
+        "sender": {
+          "description": "Address of the lease sender",
+          "type": "string"
         },
-        "kv-deltas": {
-          "description": "Array of KV Deltas for the round.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/KvDelta"
-          }
+        "lease": {
+          "description": "Lease data",
+          "type": "string",
+          "format": "byte"
+        },
+        "expiration": {
+          "description": "Round that the lease expires",
+          "type": "integer"
+        }
+      }
+    },
+    "ModifiedCreatable": {
+      "description": "Creatable which was created or deleted during the round.",
+      "type": "object",
+      "required": [
+        "index",
+        "creatable-type",
+        "created",
+        "creator"
+      ],
+      "properties": {
+        "index": {
+          "description": "Index of the Creatable",
+          "type": "integer"
+        },
+        "creatable-type": {
+          "description": "Type of creatable",
+          "type": "string",
+          "enum": [
+            "app",
+            "asset"
+          ]
+        },
+        "created": {
+          "description": "Created during this round if true, deleted if false",
+          "type": "boolean"
+        },
+        "creator": {
+          "description": "Address of the creator of the Creatable.",
+          "type": "string"
+        }
+      }
+    },
+    "IncludedTransaction": {
+      "description": "Location information for a transaction included in a block",
+      "type": "object",
+      "required": [
+        "txId",
+        "lastValid",
+        "intra"
+      ],
+      "properties": {
+        "txId": {
+          "description": "ID of the transaction.",
+          "type": "string"
+        },
+        "lastValid": {
+          "description": "Last valid round of the included transaction.",
+          "type": "integer"
+        },
+        "intra": {
+          "description": "Intra round index of the transaction in the block.",
+          "type": "integer"
         }
       }
     },
@@ -3654,10 +3804,10 @@
         }
       }
     },
-    "RoundDeltasResponse": {
+    "RoundStateDeltaResponse": {
       "description": "Contains the deltas for a given round.",
       "schema": {
-        "$ref": "#/definitions/RoundDeltas"
+        "$ref": "#/definitions/RoundStateDelta"
       }
     },
     "LightBlockHeaderProofResponse": {

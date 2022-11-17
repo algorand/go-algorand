@@ -165,7 +165,7 @@ func (s *Service) SetSyncRound(rnd uint64) error {
 	return nil
 }
 
-// UnsetSyncRound removes any previously set sync round TODO do we need this?
+// UnsetSyncRound removes any previously set sync round
 func (s *Service) UnsetSyncRound() error {
 	s.syncRoundMu.Lock()
 	defer s.syncRoundMu.Unlock()
@@ -173,7 +173,7 @@ func (s *Service) UnsetSyncRound() error {
 	return nil
 }
 
-// GetSyncRound returns whether a round has been previously set, the minimum sync round, and an error
+// GetSyncRound returns the minimum sync round, and an error
 func (s *Service) GetSyncRound() (uint64, error) {
 	s.syncRoundMu.RLock()
 	defer s.syncRoundMu.RUnlock()
@@ -236,7 +236,7 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 //  - If the retrieval of the previous block was unsuccessful
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
 	// If sync-ing this round would break our cache invariant, don't fetch it
-	if syncRound, err := s.GetSyncRound(); err == nil && syncRound > 0 && r >= basics.Round(syncRound+s.cfg.MaxAcctLookback) {
+	if syncRound, err := s.GetSyncRound(); err == nil && syncRound != 0 && r >= basics.Round(syncRound+s.cfg.MaxAcctLookback) {
 		return false
 	}
 	i := 0

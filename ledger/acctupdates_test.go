@@ -273,7 +273,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 
 	for offset := uint64(0); offset < offsetLimit; offset++ {
 		deltas := au.deltas[offset]
-		bals = ledgercore.AccumulateDeltas(bals, deltas)
+		bals = ledgercore.AccumulateDeltas(bals, deltas.Accts)
 	}
 	return
 }
@@ -375,6 +375,10 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 			require.NoError(t, err)
 			require.Equal(t, totals.Raw, totalOnline)
 
+			auTotals, err := au.onlineTotals(rnd)
+			require.NoError(t, err)
+			require.Equal(t, totals.Raw, auTotals.Raw)
+
 			d, validThrough, err := au.LookupWithoutRewards(rnd, ledgertesting.RandomAddress())
 			require.NoError(t, err)
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
@@ -392,7 +396,8 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 	accounts := make(map[basics.Address]modifiedAccount)
 	resources := make(resourcesUpdates)
 
-	for _, rdelta := range au.deltas {
+	for _, sdelta := range au.deltas {
+		rdelta := sdelta.Accts
 		for i := 0; i < rdelta.Len(); i++ {
 			addr, adelta := rdelta.GetByIdx(i)
 			macct := accounts[addr]
@@ -422,7 +427,7 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 	require.Equal(t, au.accounts, accounts)
 	require.Equal(t, au.resources, resources)
 
-	latest := au.deltas[len(au.deltas)-1]
+	latest := au.deltas[len(au.deltas)-1].Accts
 	for i := 0; i < latest.Len(); i++ {
 		addr, acct := latest.GetByIdx(i)
 		d, r, withoutRewards, err := au.lookupLatest(addr)
@@ -2878,17 +2883,23 @@ func TestAcctUpdatesLookupResources(t *testing.T) {
 	require.NotContains(t, data.Assets, aidx2)
 }
 
-func TestAcctUpdatesLookupKvDeltas(t *testing.T) {
+func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	initialBlocksCount := 1
-	accts := make(map[basics.Address]basics.AccountData)
+	accts := setupAccts(1)
 
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupStateDelta")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion,
-		[]map[basics.Address]basics.AccountData{accts},
-	)
+	protoParams.MaxBalLookback = 2
+	protoParams.SeedLookback = 1
+	protoParams.SeedRefreshInterval = 1
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, testProtocolVersion, accts)
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
@@ -2896,7 +2907,21 @@ func TestAcctUpdatesLookupKvDeltas(t *testing.T) {
 	defer au.close()
 
 	knownCreatables := make(map[basics.CreatableIndex]bool)
-	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, protocol.ConsensusCurrentVersion, protoParams, knownCreatables}
+
+	var addr1 basics.Address
+	for addr := range accts[0] {
+		if addr != testSinkAddr && addr != testPoolAddr {
+			addr1 = addr
+			break
+		}
+	}
+
+	aidx1 := basics.AssetIndex(1)
+	aidx2 := basics.AssetIndex(2)
+	aidx3 := basics.AssetIndex(3)
+
+	// Store AccountDeltas for each round
+	updatesI := make(map[basics.Round]ledgercore.AccountDeltas)
 
 	kvCnt := 1000
 	kvsPerBlock := 100
@@ -2910,8 +2935,10 @@ func TestAcctUpdatesLookupKvDeltas(t *testing.T) {
 
 	var roundMods = make(map[basics.Round]map[string]ledgercore.KvValueDelta)
 
-	for i := 0; i < kvCnt/kvsPerBlock; i++ {
+	for i := 1; i < kvCnt/kvsPerBlock; i++ {
+		var updates ledgercore.AccountDeltas
 		currentRound = currentRound + 1
+		// Construct KvMods for round
 		kvMods := make(map[string]ledgercore.KvValueDelta)
 		if i < kvCnt/kvsPerBlock {
 			for j := 0; j < kvsPerBlock; j++ {
@@ -2923,7 +2950,28 @@ func TestAcctUpdatesLookupKvDeltas(t *testing.T) {
 		}
 		roundMods[currentRound] = kvMods
 
-		auNewBlock(t, currentRound, au, accts, opts, kvMods)
+		// Construct acct updates for round
+		if i == 1 {
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
+			updates.UpsertAssetResource(addr1, aidx1, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 100}})
+		}
+		if uint64(i) == protoParams.MaxBalLookback+2 {
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 3}})
+			updates.UpsertAssetResource(addr1, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 200}})
+			updates.UpsertAssetResource(addr1, aidx3, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 300}})
+		}
+		if uint64(i) == protoParams.MaxBalLookback+3 {
+			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 2}})
+			updates.UpsertAssetResource(addr1, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
+		}
+		updatesI[basics.Round(i)] = updates
+		base := accts[i-1]
+		newAccts := applyPartialDeltas(base, updates)
+		accts = append(accts, newAccts)
+
+		// Commit the block
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, currentRound, au, base, opts, kvMods)
 		auCommitSync(t, currentRound, au, ml)
 
 		// ensure rounds
@@ -2936,108 +2984,39 @@ func TestAcctUpdatesLookupKvDeltas(t *testing.T) {
 		}
 
 		for j := uint64(rnd); j > uint64(au.cachedDBRound); j-- {
-			roundDeltas, err := au.lookupKvDeltas(basics.Round(j))
+			// fetch StateDelta
+			actualDelta, err := au.lookupStateDelta(basics.Round(j))
 			require.NoError(t, err)
+			actualAccountDeltas := actualDelta.Accts
+			actualKvDeltas := actualDelta.KvMods
+
+			// Validate AccountUpdates
+			expectedAccountDeltas, has := updatesI[basics.Round(j)]
+			require.True(t, has)
+			// Do basic checking
+			require.Equal(t, expectedAccountDeltas.Len(), actualAccountDeltas.Len())
+			require.Equal(t, len(expectedAccountDeltas.Accts), len(actualAccountDeltas.Accts))
+			for _, acct := range expectedAccountDeltas.Accts {
+				_, has := expectedAccountDeltas.GetBasicsAccountData(acct.Addr)
+				require.True(t, has)
+			}
+			require.Equal(t, len(expectedAccountDeltas.AppResources), len(actualAccountDeltas.AppResources))
+			require.Equal(t, len(expectedAccountDeltas.AssetResources), len(actualAccountDeltas.AssetResources))
+
+			// Validate KvDeltas
 			startKV := (j - 1) * uint64(kvsPerBlock)
-			expectedRoundDeltas, has := roundMods[basics.Round(j)]
+			expectedKvDeltas, has := roundMods[basics.Round(j)]
 			require.True(t, has)
 			for kv := 0; kv < kvsPerBlock; kv++ {
 				name := fmt.Sprintf("%d", startKV+uint64(kv))
-				delta, has := roundDeltas[name]
+				delta, has := actualKvDeltas[name]
 				require.True(t, has)
-				expectedDelta, has := expectedRoundDeltas[name]
+				expectedDelta, has := expectedKvDeltas[name]
 				require.True(t, has)
 				require.Equal(t, expectedDelta.Data, delta.Data)
 				require.Equal(t, expectedDelta.OldData, delta.OldData)
 
 			}
-		}
-	}
-}
-
-func TestAcctUpdatesLookupAccountDeltas(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	accts := setupAccts(1)
-
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupAccountDeltas")
-	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.MaxBalLookback = 2
-	protoParams.SeedLookback = 1
-	protoParams.SeedRefreshInterval = 1
-	config.Consensus[testProtocolVersion] = protoParams
-	defer func() {
-		delete(config.Consensus, testProtocolVersion)
-	}()
-
-	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
-	defer ml.Close()
-
-	conf := config.GetDefaultLocal()
-	au, _ := newAcctUpdates(t, ml, conf)
-	defer au.close()
-
-	var addr1 basics.Address
-	for addr := range accts[0] {
-		if addr != testSinkAddr && addr != testPoolAddr {
-			addr1 = addr
-			break
-		}
-	}
-
-	aidx1 := basics.AssetIndex(1)
-	aidx2 := basics.AssetIndex(2)
-	aidx3 := basics.AssetIndex(3)
-	knownCreatables := make(map[basics.CreatableIndex]bool)
-
-	// Store AccountDeltas for each round
-	updatesI := make(map[basics.Round]ledgercore.AccountDeltas)
-
-	// test requires 5 blocks: 1 with aidx1, protoParams.MaxBalLookback empty blocks to commit the first one
-	// and 1 block with aidx2 and aidx3, and another one with aidx2 deleted
-	for i := basics.Round(1); i <= basics.Round(protoParams.MaxBalLookback+3); i++ {
-		var updates ledgercore.AccountDeltas
-
-		// add data
-		if i == 1 {
-			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
-			updates.UpsertAssetResource(addr1, aidx1, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 100}})
-		}
-		if i == basics.Round(protoParams.MaxBalLookback+2) {
-			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 3}})
-			updates.UpsertAssetResource(addr1, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 200}})
-			updates.UpsertAssetResource(addr1, aidx3, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 300}})
-		}
-		if i == basics.Round(protoParams.MaxBalLookback+3) {
-			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 2}})
-			updates.UpsertAssetResource(addr1, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
-		}
-		updatesI[i] = updates
-
-		base := accts[i-1]
-		newAccts := applyPartialDeltas(base, updates)
-		accts = append(accts, newAccts)
-
-		// prepare block
-		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
-		auNewBlock(t, i, au, base, opts, nil)
-		auCommitSync(t, i, au, ml)
-
-		// Make sure the AccountDeltas can be retrieved and match
-		for j := i; j > 0 && uint64(i-j) > au.acctLookback; j-- {
-			expectedDeltas, has := updatesI[j]
-			require.True(t, has)
-			actualDeltas, err := au.lookupAccountDeltas(j)
-			require.NoError(t, err)
-			// Do basic checking
-			require.Equal(t, expectedDeltas.Len(), actualDeltas.Len())
-			require.Equal(t, len(expectedDeltas.Accts), len(actualDeltas.Accts))
-			for _, acct := range expectedDeltas.Accts {
-				_, has := expectedDeltas.GetBasicsAccountData(acct.Addr)
-				require.True(t, has)
-			}
-			require.Equal(t, len(expectedDeltas.AppResources), len(actualDeltas.AppResources))
-			require.Equal(t, len(expectedDeltas.AssetResources), len(actualDeltas.AssetResources))
 		}
 	}
 }

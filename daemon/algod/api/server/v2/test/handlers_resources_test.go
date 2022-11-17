@@ -57,7 +57,7 @@ func (l *mockLedger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64
 	panic("implement me")
 }
 
-func (l *mockLedger) GetAccountDeltasForRound(rnd basics.Round) (ledgercore.AccountDeltas, error) {
+func (l *mockLedger) GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta, error) {
 	panic("implement me")
 }
 

@@ -80,27 +80,40 @@ var poolAddrResponseGolden = model.AccountResponse{
 	MinBalance:                  100000,
 }
 var txnPoolGolden = make([]transactions.SignedTxn, 2)
-var poolDeltaResponseGolden = model.RoundDeltas{
-	Accounts: &[]model.AccountBalanceRecord{
-		{
-			AccountData: model.Account{
-				Address:                     poolAddr.String(),
-				Amount:                      50000000000,
-				AmountWithoutPendingRewards: 50000000000,
-				MinBalance:                  100000,
-				CreatedApps:                 nil,
-				AppsTotalSchema:             &appsTotalSchema,
-				AppsLocalState:              nil,
-				Status:                      "Not Participating",
-				RewardBase:                  &poolAddrRewardBaseGolden,
-				CreatedAssets:               nil,
-				Assets:                      nil,
+var poolDeltaResponseGolden = model.RoundStateDelta{
+	Accts: &model.AccountDeltas{
+		Accounts: &[]model.AccountBalanceRecord{
+			{
+				AccountData: model.Account{
+					Address:                     poolAddr.String(),
+					Amount:                      50000000000,
+					AmountWithoutPendingRewards: 50000000000,
+					MinBalance:                  100000,
+					CreatedApps:                 nil,
+					AppsTotalSchema:             &appsTotalSchema,
+					AppsLocalState:              nil,
+					Status:                      "Not Participating",
+					RewardBase:                  &poolAddrRewardBaseGolden,
+					CreatedAssets:               nil,
+					Assets:                      nil,
+				},
+				Address: poolAddr.String(),
 			},
-			Address: poolAddr.String(),
 		},
 	},
-	Apps:   nil,
-	Assets: nil,
+	TxIds: &[]model.IncludedTransaction{
+		{
+			Intra:     0,
+			LastValid: 0,
+			TxId:      "Z7ATVET4TI3UG32H2PYJQPREPYOQHAH376E25M3KB57OEW66YMPA",
+		},
+	},
+	Totals: &model.AccountTotals{
+		NotParticipating: 100000000000,
+		Offline:          0,
+		Online:           658511,
+		RewardsLevel:     0,
+	},
 }
 
 // ordinarily mockNode would live in `components/mocks`
