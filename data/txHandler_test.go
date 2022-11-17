@@ -17,6 +17,7 @@
 package data
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -301,6 +302,8 @@ func incomingTxHandlerProcessing(maxGroupSize int, t *testing.T) {
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	// since Start is not called, set the context here
+	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	defer handler.ctxCancel()
 
 	outChan := make(chan *txBacklogMsg, 10)
@@ -522,6 +525,8 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	// since Start is not called, set the context here
+	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	defer handler.ctxCancel()
 
 	// Prepare the transactions
