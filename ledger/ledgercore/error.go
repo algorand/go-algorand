@@ -55,7 +55,7 @@ func MakeLeaseInLedgerError(txid transactions.Txid, lease Txlease) *LeaseInLedge
 func (lile *LeaseInLedgerError) Error() string {
 	// format the lease as address.
 	addr := basics.Address(lile.lease.Lease)
-	return fmt.Sprintf("transaction %v using an overlapping lease %s", lile.txid, addr.String())
+	return fmt.Sprintf("transaction %v using an overlapping lease (%s, %s)", lile.txid, lile.lease.Sender.String(), addr.String())
 }
 
 // BlockInLedgerError is returned when a block cannot be added because it has already been done
