@@ -4814,15 +4814,15 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		}
 
 		resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte, lastResource bool) error {
-			var err error
 			if resData != nil {
 				hash, err := resourcesHashBuilderV6(*resData, addr, cidx, resData.UpdateRound, encodedResourceData)
 				if err != nil {
 					return err
 				}
 				_, err = iterator.insertStmt.ExecContext(ctx, lastAddrID, hash)
+				return err
 			}
-			return err
+			return nil
 		}
 
 		count := 0

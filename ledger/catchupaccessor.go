@@ -695,7 +695,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 					var added bool
 					added, err = trie.Add(hash)
 					if !added {
-						return fmt.Errorf("CatchpointCatchupAccessorImpl::BuildMerkleTrie: The provided catchpoint file contained the same account more than once. hash = '%s' hash kind = %s", hex.EncodeToString(hash), HashKind(hash[HashKindEncodingIndex]))
+						return fmt.Errorf("CatchpointCatchupAccessorImpl::BuildMerkleTrie: The provided catchpoint file contained the same account more than once. hash = '%s' hash kind = %s", hex.EncodeToString(hash), hashKind(hash[HashKindEncodingIndex]))
 					}
 					if err != nil {
 						return

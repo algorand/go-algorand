@@ -1408,7 +1408,7 @@ func removeSingleCatchpointFileFromDisk(dbDirectory, fileToDelete string) (err e
 	return nil
 }
 
-func hashBufV6(affinity uint64, kind HashKind) []byte {
+func hashBufV6(affinity uint64, kind hashKind) []byte {
 	hash := make([]byte, 4+crypto.DigestSize)
 	// write out the lowest 32 bits of the affinity value. This should improve
 	// the caching of the trie by allowing recent updates to be in-cache, and
@@ -1445,23 +1445,27 @@ func accountHashBuilderV6(addr basics.Address, accountData *baseAccountData, enc
 	return finishV6(hash, prehash)
 }
 
-// HashKind enumerates the possible data types hashed into a catchpoint merkle
-// trie.  Each merkle trie hash includes the HashKind byte at a known-offset.
-// By encoding HashKind at a known-offset, it's possible for hash readers to
+// hashKind enumerates the possible data types hashed into a catchpoint merkle
+// trie.  Each merkle trie hash includes the hashKind byte at a known-offset.
+// By encoding hashKind at a known-offset, it's possible for hash readers to
 // disambiguate the hashed resource.
-//go:generate stringer -type=HashKind
-type HashKind byte
+//go:generate stringer -type=hashKind
+type hashKind byte
 
+// Defines known kinds of hashes.  Changing an enum ordinal value is a
+// breaking change.
 const (
-	Account HashKind = iota
+	Account hashKind = iota
 	Asset
 	App
 	KV
 )
 
+// HashKindEncodingIndex defines the []byte offset where the hash kind is
+// encoded.
 const HashKindEncodingIndex = 4
 
-func creatableHashKindFromResourcesData(rd resourcesData, a basics.Address, ci basics.CreatableIndex) (HashKind, error) {
+func creatableHashKindFromResourcesData(rd resourcesData, a basics.Address, ci basics.CreatableIndex) (hashKind, error) {
 	if rd.IsAsset() {
 		return Asset, nil
 	} else if rd.IsApp() {
