@@ -982,7 +982,7 @@ func getSignedTransactions(numOfTxns, maxGrpSize int, badTxnProb float32) (txnGr
 		}
 	}
 	return
-	
+
 }
 
 // TestStreamVerifier tests the basic functionality
@@ -1161,6 +1161,7 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	require.True(t, errored)
 	sv.activeLoopWg.Wait()
 }
+
 /*
 // TestStreamVerifierCtxCancel tests what happens when the context is canceled
 func TestStreamVerifierCtxCancel(t *testing.T) {

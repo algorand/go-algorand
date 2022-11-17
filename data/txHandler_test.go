@@ -510,6 +510,7 @@ func BenchmarkHandleTxns(b *testing.B) {
 		})
 	}
 }
+
 // BenchmarkHandleTransactionGroups sends singed transaction groups to the verifier
 func BenchmarkHandleTxnGroups(b *testing.B) {
 	maxGroupSize := proto.MaxTxGroupSize / 2
