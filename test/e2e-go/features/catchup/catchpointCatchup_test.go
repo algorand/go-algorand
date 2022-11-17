@@ -539,6 +539,6 @@ outer:
 
 	status, err = client2.Status()
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+500, addrs2[0], tx.ID().String())
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+50, addrs2[0], tx.ID().String())
 	a.NoError(err)
 }
