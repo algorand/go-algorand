@@ -2160,7 +2160,11 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "struct-from-array", "LocalDeltas", zb0001)
 					return
 				}
+				if SortUint64([]uint64{prev,zb0001}).Less(0,1) {
+					notCanonical = true // !!! uh oh!!
+				}
 				(*z).LocalDeltas[zb0001] = zb0002
+				prev = zb0001
 			}
 		}
 		if zb0006 > 0 {

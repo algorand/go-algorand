@@ -116,7 +116,7 @@ type (
 
 		// StateProofTracking tracks the status of the state proofs, potentially
 		// for multiple types of ASPs (Algorand's State Proofs).
-		//msgp:sort protocol.StateProofType protocol.SortStateProofType
+		//msgp:sort protocol.StateProofType protocol.SortStateProofType protocol.StateProofTypeLess
 		StateProofTracking map[protocol.StateProofType]StateProofTrackingData `codec:"spt,allocbound=protocol.NumStateProofTypes"`
 
 		// ParticipationUpdates contains the information needed to mark
