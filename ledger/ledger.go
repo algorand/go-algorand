@@ -532,6 +532,23 @@ func (l *Ledger) lookupResource(rnd basics.Round, addr basics.Address, aidx basi
 	return res, nil
 }
 
+// LookupKv loads a KV pair from the accounts update
+func (l *Ledger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	return l.accts.LookupKv(rnd, key)
+}
+
+// LookupKeysByPrefix searches keys with specific prefix, up to `maxKeyNum`
+// if `maxKeyNum` == 0, then it loads all keys with such prefix
+func (l *Ledger) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	return l.accts.LookupKeysByPrefix(round, keyPrefix, maxKeyNum)
+}
+
 // LookupAgreement returns account data used by agreement.
 func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
 	l.trackerMu.RLock()
@@ -793,6 +810,11 @@ func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnB
 			Validate:            true,
 			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
 		})
+}
+
+// FlushCaches flushes any pending data in caches so that it is fully available during future lookups.
+func (l *Ledger) FlushCaches() {
+	l.accts.flushCaches()
 }
 
 // Validate uses the ledger to validate block blk as a candidate next block.

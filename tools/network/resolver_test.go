@@ -32,10 +32,10 @@ func TestResolver(t *testing.T) {
 	// start with a resolver that has no specific DNS address defined.
 	// we want to make sure that it will go to the default DNS server ( 8.8.8.8 )
 	resolver := Resolver{}
-	cname, addrs, err := resolver.LookupSRV(context.Background(), "jabber", "tcp", "gmail.com")
+	cname, addrs, err := resolver.LookupSRV(context.Background(), "telemetry", "tls", "devnet.algodev.network")
 	require.NoError(t, err)
-	require.Equal(t, "_jabber._tcp.gmail.com.", cname)
-	require.True(t, len(addrs) > 3)
+	require.Equal(t, "_telemetry._tls.devnet.algodev.network.", cname)
+	require.True(t, len(addrs) == 1)
 	require.Equal(t, defaultDNSAddress, resolver.EffectiveResolverDNS())
 
 	// specify a specific resolver to work with ( cloudflare DNS server is 1.1.1.1 )
@@ -43,10 +43,10 @@ func TestResolver(t *testing.T) {
 	resolver = Resolver{
 		dnsAddress: *cloudFlareIPAddr,
 	}
-	cname, addrs, err = resolver.LookupSRV(context.Background(), "jabber", "tcp", "gmail.com")
+	cname, addrs, err = resolver.LookupSRV(context.Background(), "telemetry", "tls", "devnet.algodev.network")
 	require.NoError(t, err)
-	require.Equal(t, "_jabber._tcp.gmail.com.", cname)
-	require.True(t, len(addrs) > 3)
+	require.Equal(t, "_telemetry._tls.devnet.algodev.network.", cname)
+	require.True(t, len(addrs) == 1)
 	require.Equal(t, "1.1.1.1", resolver.EffectiveResolverDNS())
 
 	// specify an invalid dns resolver ip address and examine the fail case.
@@ -56,7 +56,7 @@ func TestResolver(t *testing.T) {
 	}
 	timingOutContext, timingOutContextFunc := context.WithTimeout(context.Background(), time.Duration(100)*time.Millisecond)
 	defer timingOutContextFunc()
-	cname, addrs, err = resolver.LookupSRV(timingOutContext, "jabber", "tcp", "gmail.com")
+	cname, addrs, err = resolver.LookupSRV(timingOutContext, "telemetry", "tls", "devnet.algodev.network")
 	require.Error(t, err)
 	require.Equal(t, "", cname)
 	require.True(t, len(addrs) == 0)

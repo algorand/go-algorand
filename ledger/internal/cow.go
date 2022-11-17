@@ -51,7 +51,7 @@ type roundCowParent interface {
 	lookupAssetHolding(addr basics.Address, aidx basics.AssetIndex, cacheOnly bool) (ledgercore.AssetHoldingDelta, bool, error)
 
 	checkDup(basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
-	txnCounter() uint64
+	Counter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	GetStateProofNextRound() basics.Round
 	BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error)
@@ -62,6 +62,8 @@ type roundCowParent interface {
 	getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
 	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
 	getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
+
+	kvGet(key string) ([]byte, bool, error)
 }
 
 type roundCowState struct {
@@ -76,7 +78,7 @@ type roundCowState struct {
 
 	// storage deltas populated as side effects of AppCall transaction
 	// 1. Opt-in/Close actions (see Allocate/Deallocate)
-	// 2. Stateful TEAL evaluation (see SetKey/DelKey)
+	// 2. Stateful TEAL evaluation (see setKey/delKey)
 	// must be incorporated into mods.accts before passing deltas forward
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
 
@@ -105,7 +107,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto conf
 	// local delta has account index as it specified in TEAL either in set/del key or prior get key calls.
 	// The predicate is that complex in order to cover all the block seen on testnet and mainnet.
 	compatibilityMode := (hdr.CurrentProtocol == protocol.ConsensusV24) &&
-		(hdr.NextProtocol != protocol.ConsensusV26 || (hdr.UpgradePropose == "" && hdr.UpgradeApprove == false && hdr.Round < hdr.UpgradeState.NextProtocolVoteBefore))
+		(hdr.NextProtocol != protocol.ConsensusV26 || (hdr.UpgradePropose == "" && !hdr.UpgradeApprove && hdr.Round < hdr.UpgradeState.NextProtocolVoteBefore))
 	if compatibilityMode {
 		cb.compatibilityMode = true
 		cb.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
@@ -126,6 +128,17 @@ func (cb *roundCowState) deltas() ledgercore.StateDelta {
 			}
 		}
 	}
+
+	// Populate old values by looking through parent
+	for key, value := range cb.mods.KvMods {
+		old, _, err := cb.lookupParent.kvGet(key) // Because of how boxes are prefetched, value will be cached
+		if err != nil {
+			panic(fmt.Errorf("Error looking up %v : %w", key, err))
+		}
+		value.OldData = old
+		cb.mods.KvMods[key] = value
+	}
+
 	return cb.mods
 }
 
@@ -133,11 +146,11 @@ func (cb *roundCowState) rewardsLevel() uint64 {
 	return cb.mods.Hdr.RewardsLevel
 }
 
-func (cb *roundCowState) round() basics.Round {
+func (cb *roundCowState) Round() basics.Round {
 	return cb.mods.Hdr.Round
 }
 
-func (cb *roundCowState) prevTimestamp() int64 {
+func (cb *roundCowState) PrevTimestamp() int64 {
 	return cb.mods.PrevTimestamp
 }
 
@@ -213,8 +226,8 @@ func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid trans
 	return cb.lookupParent.checkDup(firstValid, lastValid, txid, txl)
 }
 
-func (cb *roundCowState) txnCounter() uint64 {
-	return cb.lookupParent.txnCounter() + cb.txnCount
+func (cb *roundCowState) Counter() uint64 {
+	return cb.lookupParent.Counter() + cb.txnCount
 }
 
 func (cb *roundCowState) GetStateProofNextRound() basics.Round {
@@ -240,7 +253,7 @@ func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.T
 	cb.mods.Txids[txid] = ledgercore.IncludedTransactions{LastValid: txn.LastValid, Intra: uint64(len(cb.mods.Txids))}
 	cb.incTxnCount()
 	if txn.Lease != [32]byte{} {
-		cb.mods.Txleases[ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
+		cb.mods.AddTxLease(ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}, txn.LastValid)
 	}
 }
 
@@ -274,10 +287,10 @@ func (cb *roundCowState) commitToParent() {
 	cb.commitParent.txnCount += cb.txnCount
 
 	for txl, expires := range cb.mods.Txleases {
-		cb.commitParent.mods.Txleases[txl] = expires
+		cb.commitParent.mods.AddTxLease(txl, expires)
 	}
 	for cidx, delta := range cb.mods.Creatables {
-		cb.commitParent.mods.Creatables[cidx] = delta
+		cb.commitParent.mods.AddCreatable(cidx, delta)
 	}
 	for addr, smod := range cb.sdeltas {
 		for aapp, nsd := range smod {
@@ -294,6 +307,10 @@ func (cb *roundCowState) commitToParent() {
 		}
 	}
 	cb.commitParent.mods.StateProofNext = cb.mods.StateProofNext
+
+	for key, value := range cb.mods.KvMods {
+		cb.commitParent.mods.AddKvMod(key, value)
+	}
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {

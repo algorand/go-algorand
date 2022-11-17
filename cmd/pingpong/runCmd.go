@@ -59,6 +59,20 @@ var teal string
 var groupSize uint32
 var numAsset uint32
 var numApp uint32
+
+/*
+Note on box workloads:
+
+two different box workloads are supported in order to exercise different
+portions of the performance critical codepath while keeping the app programs
+relatively simple. The BoxUpdate workload updates the content of the boxes
+during every app call, to verify that box manipulation is performant. The BoxRead
+workload only reads the box contents, which requires every box read to work its
+way through the in memory state deltas, into the box cache, and potentially all the
+way to the database.
+*/
+var numBoxUpdate uint32
+var numBoxRead uint32
 var numAppOptIn uint32
 var appProgOps uint32
 var appProgHashes uint32
@@ -105,6 +119,8 @@ func init() {
 	runCmd.Flags().Uint32Var(&groupSize, "groupsize", 1, "The number of transactions in each group")
 	runCmd.Flags().Uint32Var(&numAsset, "numasset", 0, "The number of assets each account holds")
 	runCmd.Flags().Uint32Var(&numApp, "numapp", 0, "The total number of apps to create")
+	runCmd.Flags().Uint32Var(&numBoxUpdate, "numboxupdate", 0, "The total number of boxes each app holds, where boxes are updated each app call. Only one of numboxupdate and numboxread can be set")
+	runCmd.Flags().Uint32Var(&numBoxRead, "numboxread", 0, "The total number of boxes each app holds, where boxes are only read each app call. Only one of numboxupdate and numboxread can be set.")
 	runCmd.Flags().Uint32Var(&numAppOptIn, "numappoptin", 0, "The number of apps each account opts in to")
 	runCmd.Flags().Uint32Var(&appProgOps, "appprogops", 0, "The approximate number of TEAL operations to perform in each ApplicationCall transaction")
 	runCmd.Flags().Uint32Var(&appProgHashes, "appproghashes", 0, "The number of hashes to include in the Application")
@@ -358,6 +374,32 @@ var runCmd = &cobra.Command{
 		}
 		if appProgLocalKeys > 0 {
 			cfg.AppLocalKeys = appProgLocalKeys
+		}
+
+		// verify and set numBoxUpdate
+		if numBoxUpdate != 0 && numApp == 0 {
+			reportErrorf("If number of boxes is nonzero than number of apps must also be nonzero")
+		}
+
+		if numBoxUpdate <= 8 {
+			cfg.NumBoxUpdate = numBoxUpdate
+		} else {
+			reportErrorf("Invalid number of boxes: %d, (valid number: 0 - 8)\n", numBoxUpdate)
+		}
+
+		// verify and set numBoxRead
+		if numBoxRead != 0 && numApp == 0 {
+			reportErrorf("If number of boxes is nonzero than number of apps must also be nonzero")
+		}
+
+		if numBoxRead != 0 && numBoxUpdate != 0 {
+			reportErrorf("Only one of numboxread or numboxupdate can be nonzero")
+		}
+
+		if numBoxRead <= 8 {
+			cfg.NumBoxRead = numBoxRead
+		} else {
+			reportErrorf("Invalid number of boxes: %d, (valid number: 0 - 8)\n", numBoxRead)
 		}
 
 		if rekey {
