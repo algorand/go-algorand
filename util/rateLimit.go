@@ -32,8 +32,9 @@ type ElasticRateLimiter struct {
 	sharedCapacity         chan capacity
 	capacityByClient       map[interface{}]chan capacity
 	// CongestionManager and enable flag
-	cm       CongestionManager
-	enableCM bool
+	cm         CongestionManager
+	enableCM   bool
+	cmEnableMu *sync.Mutex
 }
 
 type client interface{}
@@ -55,11 +56,25 @@ func NewElasticRateLimiter(maxCapacity, reservedCapacity int, cm CongestionManag
 }
 
 func (erl ElasticRateLimiter) EnableCongestionControl() {
-	erl.enableCM = true
+	erl.cmEnableMu.Lock()
+	defer erl.cmEnableMu.Unlock()
+	if erl.enableCM != true {
+		erl.enableCM = true
+	}
 }
 
 func (erl ElasticRateLimiter) DisableCongestionControl() {
-	erl.enableCM = false
+	erl.cmEnableMu.Lock()
+	defer erl.cmEnableMu.Unlock()
+	if erl.enableCM != false {
+		erl.enableCM = false
+	}
+}
+
+// AvailableCapacityRatio returns how full the sharedCapacity is relative to maximum
+func (erl ElasticRateLimiter) AvailableCapacityRatio() float64 {
+	maximumSharedCapacity := erl.MaxCapacity - (erl.CapacityPerReservation * len(erl.capacityByClient))
+	return float64(len(erl.sharedCapacity)) / float64(maximumSharedCapacity)
 }
 
 func (erl ElasticRateLimiter) ContainsReservationFor(c client) bool {

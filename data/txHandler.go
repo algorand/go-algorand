@@ -232,7 +232,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	if !handler.erl.ContainsReservationFor(rawmsg.Sender) {
 		err := handler.erl.ReserveCapacity(rawmsg.Sender)
 		if err != nil {
-			logging.Base().Warnf("Peer could not be given reservedCapacity. Peer will end up using sharedCapacity: %v", err)
+			logging.Base().Warnf("Peer could not be given reservedCapacity. Peer may use sharedCapacity: %v", err)
 		} else {
 			// unregistration of capacity to happen when the peer is closed
 			rawmsg.Sender.(network.PeerCloseRegistrar).OnClose(func() {
@@ -245,9 +245,14 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	reservedCapacity, err := handler.erl.ConsumeCapacity(rawmsg.Sender)
 	if err != nil {
 		logging.Base().Warnf("Peer is rate limited: %v", err)
+		handler.erl.EnableCongestionControl()
 		return network.OutgoingMessage{Action: network.Ignore}
 	}
 	defer handler.erl.ReturnCapacity(rawmsg.Sender, reservedCapacity)
+	// if the Rate Limiter has more than 50% of its buffer back, turn congestion control off
+	if handler.erl.AvailableCapacityRatio() > 0.5 {
+		handler.erl.DisableCongestionControl()
+	}
 
 	for {
 		if len(unverifiedTxGroup) == ntx {
