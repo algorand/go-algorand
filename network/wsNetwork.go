@@ -1805,14 +1805,23 @@ func (wn *WebsocketNetwork) OnNetworkAdvance() {
 // to the telemetry server. Internally, it's using a timer to ensure that it would only
 // send the information once every hour ( configurable via PeerConnectionsUpdateInterval )
 func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
+	if !wn.log.GetTelemetryEnabled() {
+		return
+	}
 	now := time.Now()
 	if wn.lastPeerConnectionsSent.Add(time.Duration(wn.config.PeerConnectionsUpdateInterval)*time.Second).After(now) || wn.config.PeerConnectionsUpdateInterval <= 0 {
 		// it's not yet time to send the update.
 		return
 	}
 	wn.lastPeerConnectionsSent = now
+
 	var peers []*wsPeer
 	peers, _ = wn.peerSnapshot(peers)
+	connectionDetails := wn.getPeerConnectionTelemetryDetails(now, peers)
+	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
+}
+
+func (wn *WebsocketNetwork) getPeerConnectionTelemetryDetails(now time.Time, peers []*wsPeer) telemetryspec.PeersConnectionDetails {
 	var connectionDetails telemetryspec.PeersConnectionDetails
 	for _, peer := range peers {
 		connDetail := telemetryspec.PeerConnectionDetails{
@@ -1820,6 +1829,18 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 			TelemetryGUID:        peer.TelemetryGUID,
 			InstanceName:         peer.InstanceName,
 			DuplicateFilterCount: peer.duplicateFilterCount,
+		}
+		// unwrap websocket.Conn, requestTrackedConnection, rejectingLimitListenerConn
+		var uconn net.Conn = peer.conn.UnderlyingConn()
+		for i := 0; i < 10; i++ {
+			wconn, ok := uconn.(wrappedConn)
+			if !ok {
+				break
+			}
+			uconn = wconn.UnderlyingConn()
+		}
+		if tcpInfo, err := util.GetConnTCPInfo(uconn); err == nil && tcpInfo != nil {
+			connDetail.TCP = *tcpInfo
 		}
 		if peer.outgoing {
 			connDetail.Address = justHost(peer.conn.RemoteAddr().String())
@@ -1831,8 +1852,7 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 			connectionDetails.IncomingPeers = append(connectionDetails.IncomingPeers, connDetail)
 		}
 	}
-
-	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
+	return connectionDetails
 }
 
 // prioWeightRefreshTime controls how often we refresh the weights

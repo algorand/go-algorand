@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -268,14 +269,17 @@ func netStop(t testing.TB, wn *WebsocketNetwork, name string) {
 	t.Logf("%s done", name)
 }
 
-// Set up two nodes, test that a.Broadcast is received by B
-func TestWebsocketNetworkBasic(t *testing.T) {
-	partitiontest.PartitionTest(t)
+func setupWebsocketNetworkAB(t *testing.T, countTarget int) (*WebsocketNetwork, *WebsocketNetwork, *messageCounterHandler, func()) {
+	success := false
 
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
 	netA.Start()
-	defer netStop(t, netA, "A")
+	defer func() {
+		if !success {
+			netStop(t, netA, "A")
+		}
+	}()
 	netB := makeTestWebsocketNode(t)
 	netB.config.GossipFanout = 1
 	addrA, postListen := netA.Address()
@@ -283,9 +287,12 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	t.Log(addrA)
 	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
 	netB.Start()
-	defer netStop(t, netB, "B")
-	counter := newMessageCounter(t, 2)
-	counterDone := counter.done
+	defer func() {
+		if !success {
+			netStop(t, netB, "B")
+		}
+	}()
+	counter := newMessageCounter(t, countTarget)
 	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
 
 	readyTimeout := time.NewTimer(2 * time.Second)
@@ -294,6 +301,21 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
+	success = true
+	closeFunc := func() {
+		netStop(t, netB, "B")
+		netStop(t, netB, "A")
+	}
+	return netA, netB, counter, closeFunc
+}
+
+// Set up two nodes, test that a.Broadcast is received by B
+func TestWebsocketNetworkBasic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA, _, counter, closeFunc := setupWebsocketNetworkAB(t, 2)
+	defer closeFunc()
+	counterDone := counter.done
 	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"), false, nil)
 	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"), false, nil)
 
@@ -384,27 +406,9 @@ func TestWebsocketProposalPayloadCompression(t *testing.T) {
 func TestWebsocketNetworkUnicast(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	netA := makeTestWebsocketNode(t)
-	netA.config.GossipFanout = 1
-	netA.Start()
-	defer netStop(t, netA, "A")
-	netB := makeTestWebsocketNode(t)
-	netB.config.GossipFanout = 1
-	addrA, postListen := netA.Address()
-	require.True(t, postListen)
-	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
-	netB.Start()
-	defer netStop(t, netB, "B")
-	counter := newMessageCounter(t, 2)
+	netA, _, counter, closeFunc := setupWebsocketNetworkAB(t, 2)
+	defer closeFunc()
 	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
-
-	readyTimeout := time.NewTimer(2 * time.Second)
-	waitReady(t, netA, readyTimeout.C)
-	t.Log("a ready")
-	waitReady(t, netB, readyTimeout.C)
-	t.Log("b ready")
 
 	require.Equal(t, 1, len(netA.peers))
 	require.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
@@ -425,26 +429,8 @@ func TestWebsocketNetworkUnicast(t *testing.T) {
 func TestWebsocketPeerData(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	netA := makeTestWebsocketNode(t)
-	netA.config.GossipFanout = 1
-	netA.Start()
-	defer netStop(t, netA, "A")
-	netB := makeTestWebsocketNode(t)
-	netB.config.GossipFanout = 1
-	addrA, postListen := netA.Address()
-	require.True(t, postListen)
-	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
-	netB.Start()
-	defer netStop(t, netB, "B")
-	counter := newMessageCounter(t, 2)
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
-
-	readyTimeout := time.NewTimer(2 * time.Second)
-	waitReady(t, netA, readyTimeout.C)
-	t.Log("a ready")
-	waitReady(t, netB, readyTimeout.C)
-	t.Log("b ready")
+	netA, _, _, closeFunc := setupWebsocketNetworkAB(t, 2)
+	defer closeFunc()
 
 	require.Equal(t, 1, len(netA.peers))
 	require.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
@@ -463,27 +449,9 @@ func TestWebsocketPeerData(t *testing.T) {
 func TestWebsocketNetworkArray(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	netA := makeTestWebsocketNode(t)
-	netA.config.GossipFanout = 1
-	netA.Start()
-	defer netStop(t, netA, "A")
-	netB := makeTestWebsocketNode(t)
-	netB.config.GossipFanout = 1
-	addrA, postListen := netA.Address()
-	require.True(t, postListen)
-	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
-	netB.Start()
-	defer netStop(t, netB, "B")
-	counter := newMessageCounter(t, 3)
+	netA, _, counter, closeFunc := setupWebsocketNetworkAB(t, 3)
+	defer closeFunc()
 	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
-
-	readyTimeout := time.NewTimer(2 * time.Second)
-	waitReady(t, netA, readyTimeout.C)
-	t.Log("a ready")
-	waitReady(t, netB, readyTimeout.C)
-	t.Log("b ready")
 
 	tags := []protocol.Tag{protocol.TxnTag, protocol.TxnTag, protocol.TxnTag}
 	data := [][]byte{[]byte("foo"), []byte("bar"), []byte("algo")}
@@ -500,27 +468,9 @@ func TestWebsocketNetworkArray(t *testing.T) {
 func TestWebsocketNetworkCancel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	netA := makeTestWebsocketNode(t)
-	netA.config.GossipFanout = 1
-	netA.Start()
-	defer netStop(t, netA, "A")
-	netB := makeTestWebsocketNode(t)
-	netB.config.GossipFanout = 1
-	addrA, postListen := netA.Address()
-	require.True(t, postListen)
-	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
-	netB.Start()
-	defer netStop(t, netB, "B")
-	counter := newMessageCounter(t, 100)
+	netA, _, counter, closeFunc := setupWebsocketNetworkAB(t, 100)
+	defer closeFunc()
 	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
-
-	readyTimeout := time.NewTimer(2 * time.Second)
-	waitReady(t, netA, readyTimeout.C)
-	t.Log("a ready")
-	waitReady(t, netB, readyTimeout.C)
-	t.Log("b ready")
 
 	tags := make([]protocol.Tag, 100)
 	data := make([][]byte, 100)
@@ -721,29 +671,15 @@ func TestAddrToGossipAddr(t *testing.T) {
 
 type nopConn struct{}
 
-func (nc *nopConn) RemoteAddr() net.Addr {
-	return nil
-}
-func (nc *nopConn) NextReader() (int, io.Reader, error) {
-	return 0, nil, nil
-}
-func (nc *nopConn) WriteMessage(int, []byte) error {
-	return nil
-}
-func (nc *nopConn) WriteControl(int, []byte, time.Time) error {
-	return nil
-}
-func (nc *nopConn) SetReadLimit(limit int64) {
-}
-func (nc *nopConn) CloseWithoutFlush() error {
-	return nil
-}
-func (nc *nopConn) SetPingHandler(h func(appData string) error) {
-
-}
-func (nc *nopConn) SetPongHandler(h func(appData string) error) {
-
-}
+func (nc *nopConn) RemoteAddr() net.Addr                        { return nil }
+func (nc *nopConn) NextReader() (int, io.Reader, error)         { return 0, nil, nil }
+func (nc *nopConn) WriteMessage(int, []byte) error              { return nil }
+func (nc *nopConn) WriteControl(int, []byte, time.Time) error   { return nil }
+func (nc *nopConn) SetReadLimit(limit int64)                    {}
+func (nc *nopConn) CloseWithoutFlush() error                    { return nil }
+func (nc *nopConn) SetPingHandler(h func(appData string) error) {}
+func (nc *nopConn) SetPongHandler(h func(appData string) error) {}
+func (nc *nopConn) UnderlyingConn() net.Conn                    { return nil }
 
 var nopConnSingleton = nopConn{}
 
@@ -2738,4 +2674,66 @@ func TestPreparePeerData(t *testing.T) {
 			require.Equal(t, append([]byte(req.tags[i]), zstdCompressionMagic[:]...), comp[i][:len(req.tags[i])+len(zstdCompressionMagic)])
 		}
 	}
+}
+
+func TestWebsocketNetworkTelemetryTCP(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// start two networks and send 2 messages from A to B
+	closed := false
+	netA, netB, counter, closeFunc := setupWebsocketNetworkAB(t, 2)
+	defer func() {
+		if !closed {
+			closeFunc()
+		}
+	}()
+	counterDone := counter.done
+	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"), false, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"), false, nil)
+
+	select {
+	case <-counterDone:
+	case <-time.After(2 * time.Second):
+		t.Errorf("timeout, count=%d, wanted 2", counter.count)
+	}
+
+	// get RTT from both ends and assert nonzero
+	var peersA, peersB []*wsPeer
+	peersA, _ = netA.peerSnapshot(peersA)
+	detailsA := netA.getPeerConnectionTelemetryDetails(time.Now(), peersA)
+	peersB, _ = netB.peerSnapshot(peersB)
+	detailsB := netB.getPeerConnectionTelemetryDetails(time.Now(), peersB)
+	require.Len(t, detailsA.IncomingPeers, 1)
+	assert.NotZero(t, detailsA.IncomingPeers[0].TCP.RTT)
+	require.Len(t, detailsB.OutgoingPeers, 1)
+	assert.NotZero(t, detailsB.OutgoingPeers[0].TCP.RTT)
+
+	pcdA, err := json.Marshal(detailsA)
+	assert.NoError(t, err)
+	pcdB, err := json.Marshal(detailsB)
+	assert.NoError(t, err)
+	t.Log("detailsA", string(pcdA))
+	t.Log("detailsB", string(pcdB))
+
+	// close connections
+	closeFunc()
+	closed = true
+	// open more FDs by starting 2 more networks
+	_, _, _, closeFunc2 := setupWebsocketNetworkAB(t, 2)
+	defer closeFunc2()
+	//  use stale peers snapshot from closed networks to get telemetry
+	// *net.OpError "use of closed network connection" err results in 0 rtt values
+	detailsA = netA.getPeerConnectionTelemetryDetails(time.Now(), peersA)
+	detailsB = netB.getPeerConnectionTelemetryDetails(time.Now(), peersB)
+	require.Len(t, detailsA.IncomingPeers, 1)
+	assert.Zero(t, detailsA.IncomingPeers[0].TCP.RTT)
+	require.Len(t, detailsB.OutgoingPeers, 1)
+	assert.Zero(t, detailsB.OutgoingPeers[0].TCP.RTT)
+
+	pcdA, err = json.Marshal(detailsA)
+	assert.NoError(t, err)
+	pcdB, err = json.Marshal(detailsB)
+	assert.NoError(t, err)
+	t.Log("closed detailsA", string(pcdA))
+	t.Log("closed detailsB", string(pcdB))
 }
