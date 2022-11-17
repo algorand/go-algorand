@@ -472,7 +472,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 
 	fixture.Start()
 	defer fixture.LibGoalFixture.Shutdown()
-	
+
 	client1 := fixture.GetLibGoalClientFromNodeController(primaryNode)
 	client2 := fixture.GetLibGoalClientFromNodeController(secondNode)
 	wallet1, err := client1.GetUnencryptedWalletHandle()
