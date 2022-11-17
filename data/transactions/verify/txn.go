@@ -181,8 +181,8 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 
 // txnGroupBatchPrep verifies a []SignedTxn having no obviously inconsistent data.
 // it is the caller responsibility to call batchVerifier.Verify()
-func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, ledger logic.LedgerForSignature, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
-	groupCtx, err = PrepareGroupContext(stxs, contextHdr, ledger)
+func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, ledger logic.LedgerForSignature, verifier *crypto.BatchVerifier) (*GroupContext, error) {
+	groupCtx, err := PrepareGroupContext(stxs, contextHdr, ledger)
 	if err != nil {
 		return nil, err
 	}
@@ -192,12 +192,9 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.Blo
 	for i, stxn := range stxs {
 		prepErr := txnBatchPrep(&stxn, i, groupCtx, verifier)
 		if prepErr != nil {
-			// re-wrap the error, take underlying one and copy the reason code
-			err = &ErrTxGroupError{
-				err:    fmt.Errorf("transaction %+v invalid : %w", stxn, prepErr.err),
-				Reason: prepErr.Reason,
-			}
-			return nil, err
+			// re-wrap the error with more details
+			prepErr.err = fmt.Errorf("transaction %+v invalid : %w", stxn, prepErr.err)
+			return nil, prepErr
 		}
 		if stxn.Txn.Type != protocol.StateProofTx {
 			minFeeCount++
