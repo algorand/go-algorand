@@ -1597,12 +1597,11 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 		}
 
 		// Now add the kvstore hashes
-		// CR Question: Does this neeed ordering? I don't see why it would, but
-		// the account iterator is explicitly ordered for some reason.
 		kvs, err := tx.QueryContext(ctx, "SELECT key, value FROM kvstore")
 		if err != nil {
 			return err
 		}
+		defer kvs.Close()
 		for kvs.Next() {
 			var k []byte
 			var v []byte
@@ -1619,7 +1618,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 				if err != nil {
 					ct.log.Warnf("initializeHashes attempted to add duplicate kv hash '%s' to merkle trie for key %s : %v", hex.EncodeToString(hash), k, err)
 				} else {
-					ct.log.Warnf("initializeHashes attempted to add duplicate kv hash '%s' to merkle trie for key %s :  %v", hex.EncodeToString(hash), k, err)
+					ct.log.Warnf("initializeHashes attempted to add duplicate kv hash '%s' to merkle trie for key %s", hex.EncodeToString(hash), k)
 				}
 			}
 			// We could insert code to report things every 5 seconds, like was done for accounts.
