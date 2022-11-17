@@ -33,6 +33,14 @@ import (
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
 //
+// CatchpointState
+//        |-----> MarshalMsg
+//        |-----> CanMarshalMsg
+//        |-----> (*) UnmarshalMsg
+//        |-----> (*) CanUnmarshalMsg
+//        |-----> Msgsize
+//        |-----> MsgIsZero
+//
 // ResourceFlags
 //       |-----> MarshalMsg
 //       |-----> CanMarshalMsg
@@ -1102,6 +1110,52 @@ func (z *BaseVotingData) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *BaseVotingData) MsgIsZero() bool {
 	return ((*z).VoteID.MsgIsZero()) && ((*z).SelectionID.MsgIsZero()) && ((*z).VoteFirstValid.MsgIsZero()) && ((*z).VoteLastValid.MsgIsZero()) && ((*z).VoteKeyDilution == 0) && ((*z).StateProofID.MsgIsZero())
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z CatchpointState) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendString(o, string(z))
+	return
+}
+
+func (_ CatchpointState) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(CatchpointState)
+	if !ok {
+		_, ok = (z).(*CatchpointState)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *CatchpointState) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 string
+		zb0001, bts, err = msgp.ReadStringBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = CatchpointState(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *CatchpointState) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*CatchpointState)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z CatchpointState) Msgsize() (s int) {
+	s = msgp.StringPrefixSize + len(string(z))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z CatchpointState) MsgIsZero() bool {
+	return z == ""
 }
 
 // MarshalMsg implements msgp.Marshaler
