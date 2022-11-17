@@ -796,11 +796,14 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		CatchpointVerifiedAccounts:  &stat.CatchpointCatchupVerifiedAccounts,
 		CatchpointTotalBlocks:       &stat.CatchpointCatchupTotalBlocks,
 		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
-		UpgradeThreshold:            &upgradeThreshold,
-		UpgradePropose:              &upgradePropose,
-		UpgradeApprove:              &latestBlkHdr.UpgradeVote.UpgradeApprove,
-		UpgradeDelay:                &upgradeDelay,
-		UpgradeNo:                   &votesNo,
+	}
+
+	if upgradePropose != "" {
+		response.UpgradePropose = &upgradePropose
+		response.UpgradeThreshold = &upgradeThreshold
+		response.UpgradeApprove = &latestBlkHdr.UpgradeApprove
+		response.UpgradeDelay = &upgradeDelay
+		response.UpgradeNo = &votesNo
 	}
 
 	return ctx.JSON(http.StatusOK, response)
