@@ -205,7 +205,7 @@ func (handler *TxHandler) backlogWorker() {
 			if !ok {
 				return
 			}
-			handler.postprocessCheckedTxn(wi)
+			handler.postProcessCheckedTxn(wi)
 
 			// restart the loop so that we could empty out the post verification queue.
 			continue
@@ -239,7 +239,7 @@ func (handler *TxHandler) backlogWorker() {
 }
 
 func (handler *TxHandler) postProcessReportErrors(err error) {
-	if errors.Is(err, crypto.ErrBatchVerificationFailed) {
+	if errors.Is(err, crypto.ErrBatchHasFailedSigs) {
 		transactionMessagesTxnSigVerificationFailed.Inc(nil)
 		return
 	}

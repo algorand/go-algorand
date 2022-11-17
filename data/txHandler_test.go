@@ -667,7 +667,7 @@ func TestTxHandlerPostProcessError(t *testing.T) {
 	const expected = int(verify.TxGroupErrorReasonNumValues) - 3
 	require.Len(t, result, expected)
 
-	errVerify := crypto.ErrBatchVerificationFailed
+	errVerify := crypto.ErrBatchHasFailedSigs
 	txh.postProcessReportErrors(errVerify)
 	result = collect()
 	require.Len(t, result, expected+1)
@@ -685,7 +685,7 @@ func TestTxHandlerPostProcessErrorWithVerify(t *testing.T) {
 			CurrentProtocol: protocol.ConsensusCurrentVersion,
 		},
 	}
-	_, err := verify.TxnGroup([]transactions.SignedTxn{stxn}, hdr, nil, nil)
+	_, err := verify.TxnGroup([]transactions.SignedTxn{stxn}, &hdr, nil, nil)
 	var txGroupErr *verify.ErrTxGroupError
 	require.ErrorAs(t, err, &txGroupErr)
 
