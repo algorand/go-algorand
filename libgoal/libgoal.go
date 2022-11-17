@@ -26,15 +26,13 @@ import (
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 	"github.com/algorand/go-algorand/rpcs"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	modelV2 "github.com/algorand/go-algorand/daemon/algod/api/spec/v2"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
@@ -61,7 +59,7 @@ type Client struct {
 	cacheDir     string
 	consensus    config.ConsensusProtocols
 
-	suggestedParamsCache  generatedV2.TransactionParametersResponse
+	suggestedParamsCache  model.TransactionParametersResponse
 	suggestedParamsExpire time.Time
 	suggestedParamsMaxAge time.Duration
 }
@@ -493,7 +491,7 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 		return transactions.Transaction{}, err
 	}
 
-	_, err = algod.SendRawTransactionV2(stx)
+	_, err = algod.SendRawTransaction(stx)
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -640,7 +638,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 /* Algod Wrappers */
 
 // Status returns the node status
-func (c *Client) Status() (resp generatedV2.NodeStatusResponse, err error) {
+func (c *Client) Status() (resp model.NodeStatusResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Status()
@@ -649,26 +647,16 @@ func (c *Client) Status() (resp generatedV2.NodeStatusResponse, err error) {
 }
 
 // AccountInformation takes an address and returns its information
-// Deprecated
-func (c *Client) AccountInformation(account string) (resp v1.Account, err error) {
+func (c *Client) AccountInformation(account string, includeCreatables bool) (resp model.Account, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.AccountInformation(account)
-	}
-	return
-}
-
-// AccountInformationV2 takes an address and returns its information
-func (c *Client) AccountInformationV2(account string, includeCreatables bool) (resp generatedV2.Account, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.AccountInformationV2(account, includeCreatables)
+		resp, err = algod.AccountInformation(account, includeCreatables)
 	}
 	return
 }
 
 // AccountApplicationInformation gets account information about a given app.
-func (c *Client) AccountApplicationInformation(accountAddress string, applicationID uint64) (resp generatedV2.AccountApplicationResponse, err error) {
+func (c *Client) AccountApplicationInformation(accountAddress string, applicationID uint64) (resp model.AccountApplicationResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountApplicationInformation(accountAddress, applicationID)
@@ -690,7 +678,7 @@ func (c *Client) RawAccountApplicationInformation(accountAddress string, applica
 }
 
 // AccountAssetInformation gets account information about a given asset.
-func (c *Client) AccountAssetInformation(accountAddress string, assetID uint64) (resp generatedV2.AccountAssetResponse, err error) {
+func (c *Client) AccountAssetInformation(accountAddress string, assetID uint64) (resp model.AccountAssetResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountAssetInformation(accountAddress, assetID)
@@ -716,7 +704,7 @@ func (c *Client) AccountData(account string) (accountData basics.AccountData, er
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte
-		resp, err = algod.RawAccountInformationV2(account)
+		resp, err = algod.RawAccountInformation(account)
 		if err == nil {
 			err = protocol.Decode(resp, &accountData)
 		}
@@ -725,24 +713,14 @@ func (c *Client) AccountData(account string) (accountData basics.AccountData, er
 }
 
 // AssetInformation takes an asset's index and returns its information
-// Deprecated: Use AssetInformationV2
-func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.AssetInformation(index)
-	}
-	return
-}
-
-// AssetInformationV2 takes an asset's index and returns its information
-func (c *Client) AssetInformationV2(index uint64) (resp generatedV2.Asset, err error) {
+func (c *Client) AssetInformation(index uint64) (resp model.Asset, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
 		return
 	}
-	resp, err = algod.AssetInformationV2(index)
+	resp, err = algod.AssetInformation(index)
 	if err != nil {
-		return generatedV2.Asset{}, err
+		return model.Asset{}, err
 	}
 
 	byteLen := func(p *[]byte) int {
@@ -769,7 +747,7 @@ func (c *Client) AssetInformationV2(index uint64) (resp generatedV2.Asset, err e
 }
 
 // ApplicationInformation takes an app's index and returns its information
-func (c *Client) ApplicationInformation(index uint64) (resp generatedV2.Application, err error) {
+func (c *Client) ApplicationInformation(index uint64) (resp model.Application, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.ApplicationInformation(index)
@@ -778,7 +756,7 @@ func (c *Client) ApplicationInformation(index uint64) (resp generatedV2.Applicat
 }
 
 // ApplicationBoxes takes an app's index and returns the names of boxes under it
-func (c *Client) ApplicationBoxes(appID uint64, maxBoxNum uint64) (resp generatedV2.BoxesResponse, err error) {
+func (c *Client) ApplicationBoxes(appID uint64, maxBoxNum uint64) (resp model.BoxesResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.ApplicationBoxes(appID, maxBoxNum)
@@ -788,7 +766,7 @@ func (c *Client) ApplicationBoxes(appID uint64, maxBoxNum uint64) (resp generate
 
 // GetApplicationBoxByName takes an app's index and box name and returns its value.
 // The box name should be of the form `encoding:value`. See logic.AppCallBytes for more information.
-func (c *Client) GetApplicationBoxByName(index uint64, name string) (resp generatedV2.BoxResponse, err error) {
+func (c *Client) GetApplicationBoxByName(index uint64, name string) (resp model.BoxResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.GetApplicationBoxByName(index, name)
@@ -796,33 +774,12 @@ func (c *Client) GetApplicationBoxByName(index uint64, name string) (resp genera
 	return
 }
 
-// TransactionInformation takes an address and associated txid and return its information
-// Deprecated: Use PendingTransactionInformationV2
-func (c *Client) TransactionInformation(addr, txid string) (resp v1.Transaction, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.TransactionInformation(addr, txid)
-	}
-	return
-}
-
 // PendingTransactionInformation returns information about a recently issued
 // transaction based on its txid.
-// Deprecated: Use PendingTransactionInformationV2
-func (c *Client) PendingTransactionInformation(txid string) (resp v1.Transaction, err error) {
+func (c *Client) PendingTransactionInformation(txid string) (resp model.PendingTransactionResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.PendingTransactionInformation(txid)
-	}
-	return
-}
-
-// PendingTransactionInformationV2 returns information about a recently issued
-// transaction based on its txid.
-func (c *Client) PendingTransactionInformationV2(txid string) (resp generatedV2.PendingTransactionResponse, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.PendingTransactionInformationV2(txid)
 	}
 	return
 }
@@ -832,7 +789,7 @@ func (c *Client) ParsedPendingTransaction(txid string) (txn v2.PreEncodedTxInfo,
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte
-		resp, err = algod.RawPendingTransactionInformationV2(txid)
+		resp, err = algod.RawPendingTransactionInformation(txid)
 		if err == nil {
 			err = protocol.DecodeReflect(resp, &txn)
 			if err != nil {
@@ -844,7 +801,7 @@ func (c *Client) ParsedPendingTransaction(txid string) (txn v2.PreEncodedTxInfo,
 }
 
 // Block takes a round and returns its block
-func (c *Client) Block(round uint64) (resp generatedV2.BlockResponse, err error) {
+func (c *Client) Block(round uint64) (resp model.BlockResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Block(round)
@@ -868,7 +825,7 @@ func (c *Client) EncodedBlockCert(round uint64) (blockCert rpcs.EncodedBlockCert
 		var resp []byte
 		resp, err = algod.RawBlock(round)
 		if err == nil {
-			err = protocol.DecodeReflect(resp, &blockCert)
+			err = protocol.Decode(resp, &blockCert)
 			if err != nil {
 				return
 			}
@@ -896,7 +853,7 @@ func (c *Client) HealthCheck() error {
 }
 
 // WaitForRound takes a round, waits until it appears and returns its status. This function blocks.
-func (c *Client) WaitForRound(round uint64) (resp generatedV2.NodeStatusResponse, err error) {
+func (c *Client) WaitForRound(round uint64) (resp model.NodeStatusResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.StatusAfterBlock(round)
@@ -906,7 +863,7 @@ func (c *Client) WaitForRound(round uint64) (resp generatedV2.NodeStatusResponse
 
 // GetBalance takes an address and returns its total balance; if the address doesn't exist, it returns 0.
 func (c *Client) GetBalance(address string) (uint64, error) {
-	resp, err := c.AccountInformationV2(address, false)
+	resp, err := c.AccountInformation(address, false)
 	if err != nil {
 		return 0, err
 	}
@@ -923,7 +880,7 @@ func (c Client) AlgodVersions() (resp common.Version, err error) {
 }
 
 // LedgerSupply returns the total number of algos in the system
-func (c Client) LedgerSupply() (resp generatedV2.SupplyResponse, err error) {
+func (c Client) LedgerSupply() (resp model.SupplyResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.LedgerSupply()
@@ -948,7 +905,7 @@ func (c Client) CurrentRound() (lastRound uint64, err error) {
 func (c *Client) SuggestedFee() (fee uint64, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		params, err := algod.SuggestedParamsV2()
+		params, err := algod.SuggestedParams()
 		if err == nil {
 			fee = params.Fee
 		}
@@ -957,10 +914,10 @@ func (c *Client) SuggestedFee() (fee uint64, err error) {
 }
 
 // SuggestedParams returns the suggested parameters for a new transaction
-func (c *Client) SuggestedParams() (params generatedV2.TransactionParametersResponse, err error) {
+func (c *Client) SuggestedParams() (params model.TransactionParametersResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		params, err = algod.SuggestedParamsV2()
+		params, err = algod.SuggestedParams()
 	}
 	return
 }
@@ -970,7 +927,7 @@ func (c *Client) SetSuggestedParamsCacheAge(maxAge time.Duration) {
 	c.suggestedParamsMaxAge = maxAge
 }
 
-func (c *Client) cachedSuggestedParams() (params generatedV2.TransactionParametersResponse, err error) {
+func (c *Client) cachedSuggestedParams() (params model.TransactionParametersResponse, err error) {
 	if c.suggestedParamsMaxAge == 0 || time.Now().After(c.suggestedParamsExpire) {
 		params, err = c.SuggestedParams()
 		if err == nil && c.suggestedParamsMaxAge != 0 {
@@ -984,7 +941,7 @@ func (c *Client) cachedSuggestedParams() (params generatedV2.TransactionParamete
 
 // GetPendingTransactions gets a snapshot of current pending transactions on the node.
 // If maxTxns = 0, fetches as many transactions as possible.
-func (c *Client) GetPendingTransactions(maxTxns uint64) (resp generatedV2.PendingTransactionsResponse, err error) {
+func (c *Client) GetPendingTransactions(maxTxns uint64) (resp model.PendingTransactionsResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.GetPendingTransactions(maxTxns)
@@ -994,10 +951,10 @@ func (c *Client) GetPendingTransactions(maxTxns uint64) (resp generatedV2.Pendin
 
 // GetPendingTransactionsByAddress gets a snapshot of current pending transactions on the node for the given address.
 // If maxTxns = 0, fetches as many transactions as possible.
-func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (resp generatedV2.PendingTransactionsResponse, err error) {
+func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (resp model.PendingTransactionsResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.PendingTransactionsByAddrV2(addr, maxTxns)
+		resp, err = algod.PendingTransactionsByAddr(addr, maxTxns)
 	}
 	return
 }
@@ -1029,7 +986,7 @@ func (c *Client) GetParsedPendingTransactionsByAddress(addr string, maxTxns uint
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte
-		resp, err = algod.RawPendingTransactionsByAddrV2(addr, maxTxns)
+		resp, err = algod.RawPendingTransactionsByAddr(addr, maxTxns)
 		if err == nil {
 			err = protocol.DecodeReflect(resp, &txns)
 			if err != nil {
@@ -1066,7 +1023,7 @@ func (c *Client) VerifyParticipationKey(timeout time.Duration, participationID s
 
 // AddParticipationKey takes a participation key file and sends it to the node.
 // The key will be loaded into the system when the function returns successfully.
-func (c *Client) AddParticipationKey(keyfile string) (resp generated.PostParticipationResponse, err error) {
+func (c *Client) AddParticipationKey(keyfile string) (resp model.PostParticipationResponse, err error) {
 	data, err := os.ReadFile(keyfile)
 	if err != nil {
 		return
@@ -1081,7 +1038,7 @@ func (c *Client) AddParticipationKey(keyfile string) (resp generated.PostPartici
 }
 
 // GetParticipationKeys gets the currently installed participation keys.
-func (c *Client) GetParticipationKeys() (resp generated.ParticipationKeysResponse, err error) {
+func (c *Client) GetParticipationKeys() (resp model.ParticipationKeysResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.GetParticipationKeys()
@@ -1090,7 +1047,7 @@ func (c *Client) GetParticipationKeys() (resp generated.ParticipationKeysRespons
 }
 
 // GetParticipationKeyByID looks up a specific participation key by its participationID.
-func (c *Client) GetParticipationKeyByID(id string) (resp generated.ParticipationKeyResponse, err error) {
+func (c *Client) GetParticipationKeyByID(id string) (resp model.ParticipationKeyResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.GetParticipationKeyByID(id)
@@ -1173,7 +1130,7 @@ const defaultAppIdx = 1380011588
 func MakeDryrunStateBytes(client Client, txnOrStxn interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string, format string) (result []byte, err error) {
 	switch format {
 	case "json":
-		var gdr generatedV2.DryrunRequest
+		var gdr model.DryrunRequest
 		gdr, err = MakeDryrunStateGenerated(client, txnOrStxn, otherTxns, otherAccts, proto)
 		if err == nil {
 			result = protocol.EncodeJSON(&gdr)
@@ -1200,8 +1157,8 @@ func MakeDryrunState(client Client, txnOrStxn interface{}, otherTxns []transacti
 	return v2.DryrunRequestFromGenerated(&gdr)
 }
 
-// MakeDryrunStateGenerated function creates generatedV2.DryrunRequest data structure
-func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr generatedV2.DryrunRequest, err error) {
+// MakeDryrunStateGenerated function creates model.DryrunRequest data structure
+func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr model.DryrunRequest, err error) {
 	var txns []transactions.SignedTxn
 	if txnOrStxnOrSlice != nil {
 		switch txnType := txnOrStxnOrSlice.(type) {
@@ -1236,16 +1193,16 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 			apps := []basics.AppIndex{tx.ApplicationID}
 			apps = append(apps, tx.ForeignApps...)
 			for _, appIdx := range apps {
-				var appParams generatedV2.ApplicationParams
+				var appParams model.ApplicationParams
 				if appIdx == 0 {
 					// if it is an app create txn then use params from the txn
 					appParams.ApprovalProgram = tx.ApprovalProgram
 					appParams.ClearStateProgram = tx.ClearStateProgram
-					appParams.GlobalStateSchema = &generatedV2.ApplicationStateSchema{
+					appParams.GlobalStateSchema = &model.ApplicationStateSchema{
 						NumUint:      tx.GlobalStateSchema.NumUint,
 						NumByteSlice: tx.GlobalStateSchema.NumByteSlice,
 					}
-					appParams.LocalStateSchema = &generatedV2.ApplicationStateSchema{
+					appParams.LocalStateSchema = &model.ApplicationStateSchema{
 						NumUint:      tx.LocalStateSchema.NumUint,
 						NumByteSlice: tx.LocalStateSchema.NumByteSlice,
 					}
@@ -1254,22 +1211,22 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 					appIdx = defaultAppIdx
 				} else {
 					// otherwise need to fetch app state
-					var app generatedV2.Application
+					var app model.Application
 					if app, err = client.ApplicationInformation(uint64(appIdx)); err != nil {
 						return
 					}
 					appParams = app.Params
 					accounts = append(accounts, appIdx.Address())
 				}
-				dr.Apps = append(dr.Apps, generatedV2.Application{
+				dr.Apps = append(dr.Apps, model.Application{
 					Id:     uint64(appIdx),
 					Params: appParams,
 				})
 			}
 
 			for _, acc := range accounts {
-				var info generatedV2.Account
-				if info, err = client.AccountInformationV2(acc.String(), true); err != nil {
+				var info model.Account
+				if info, err = client.AccountInformation(acc.String(), true); err != nil {
 					// ignore error - accounts might have app addresses that were not funded
 					continue
 				}
@@ -1291,7 +1248,7 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 }
 
 // Dryrun takes an app's index and returns its information
-func (c *Client) Dryrun(data []byte) (resp generatedV2.DryrunResponse, err error) {
+func (c *Client) Dryrun(data []byte) (resp model.DryrunResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		data, err = algod.RawDryrun(data)
@@ -1304,7 +1261,7 @@ func (c *Client) Dryrun(data []byte) (resp generatedV2.DryrunResponse, err error
 }
 
 // TransactionProof returns a Merkle proof for a transaction in a block.
-func (c *Client) TransactionProof(txid string, round uint64, hashType crypto.HashType) (resp generatedV2.TransactionProofResponse, err error) {
+func (c *Client) TransactionProof(txid string, round uint64, hashType crypto.HashType) (resp model.TransactionProofResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.TransactionProof(txid, round, hashType)
@@ -1313,7 +1270,7 @@ func (c *Client) TransactionProof(txid string, round uint64, hashType crypto.Has
 }
 
 // LightBlockHeaderProof returns a Merkle proof for a block.
-func (c *Client) LightBlockHeaderProof(round uint64) (resp generatedV2.LightBlockHeaderProofResponse, err error) {
+func (c *Client) LightBlockHeaderProof(round uint64) (resp model.LightBlockHeaderProofResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.LightBlockHeaderProof(round)

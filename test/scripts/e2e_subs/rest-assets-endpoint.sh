@@ -30,5 +30,5 @@ call_and_verify "Asset parameter parsing error 1." "/v2/assets/-2" 400 "Invalid 
 call_and_verify "Asset parameter parsing error 2." "/v2/assets/not-a-number" 400 "Invalid format for parameter asset-id"
 
 # Good request, but invalid query parameters
-call_and_verify "Asset invalid parameter" "/v2/assets/$ASSET_ID?this-should-fail=200" 400 'parameter detected: this-should-fail'
+call_and_verify "Asset invalid parameter" "/v2/assets/$ASSET_ID?this-should-not-fail=200" 200 '","decimals":19,"default-frozen":false,"freeze":"'
 

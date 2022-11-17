@@ -29,7 +29,7 @@ import (
 
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 
 	"github.com/algorand/go-algorand/libgoal"
@@ -171,7 +171,7 @@ func (f *RestClientFixture) GetFirstAccount() (account string, err error) {
 }
 
 // GetRichestAccount returns the first account when calling GetWalletsSortedByBalance, which should be the richest account
-func (f *RestClientFixture) GetRichestAccount() (richest generatedV2.Account, err error) {
+func (f *RestClientFixture) GetRichestAccount() (richest model.Account, err error) {
 	list, err := f.GetWalletsSortedByBalance()
 	if len(list) > 0 {
 		richest = list[0]
@@ -196,17 +196,17 @@ func (f *RestClientFixture) GetBalanceAndRound(account string) (balance uint64, 
 
 // GetWalletsSortedByBalance returns the Primary node's accounts sorted DESC by balance
 // the richest account will be at accounts[0]
-func (f *RestClientFixture) GetWalletsSortedByBalance() (accounts []generatedV2.Account, err error) {
+func (f *RestClientFixture) GetWalletsSortedByBalance() (accounts []model.Account, err error) {
 	return f.getNodeWalletsSortedByBalance(f.LibGoalClient)
 }
 
 // GetNodeWalletsSortedByBalance returns the specified node's accounts sorted DESC by balance
 // the richest account will be at accounts[0]
-func (f *RestClientFixture) GetNodeWalletsSortedByBalance(nodeDataDir string) (accounts []generatedV2.Account, err error) {
+func (f *RestClientFixture) GetNodeWalletsSortedByBalance(nodeDataDir string) (accounts []model.Account, err error) {
 	return f.getNodeWalletsSortedByBalance(f.GetLibGoalClientFromDataDir(nodeDataDir))
 }
 
-func (f *RestClientFixture) getNodeWalletsSortedByBalance(client libgoal.Client) (accounts []generatedV2.Account, err error) {
+func (f *RestClientFixture) getNodeWalletsSortedByBalance(client libgoal.Client) (accounts []model.Account, err error) {
 	wh, err := client.GetUnencryptedWalletHandle()
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve wallet handle : %v", err)
@@ -216,7 +216,7 @@ func (f *RestClientFixture) getNodeWalletsSortedByBalance(client libgoal.Client)
 		return nil, fmt.Errorf("unable to list wallet addresses : %v", err)
 	}
 	for _, addr := range addresses {
-		info, err := client.AccountInformationV2(addr, true)
+		info, err := client.AccountInformation(addr, true)
 		f.failOnError(err, "failed to get account info: %v")
 		accounts = append(accounts, info)
 	}
@@ -247,7 +247,7 @@ func (f *RestClientFixture) WaitForConfirmedTxn(roundTimeout uint64, accountAddr
 
 		// Check if we know about the transaction yet
 		var resp []byte
-		resp, err = client.RawPendingTransactionInformationV2(txid)
+		resp, err = client.RawPendingTransactionInformation(txid)
 		if err == nil {
 			err = protocol.DecodeReflect(resp, &txn)
 			require.NoError(f.t, err)
@@ -311,7 +311,7 @@ func (f *RestClientFixture) WaitForAccountFunded(roundTimeout uint64, accountAdd
 		curRound := curStatus.LastRound
 
 		// Check if we know about the transaction yet
-		acct, acctErr := client.AccountInformationV2(accountAddress, false)
+		acct, acctErr := client.AccountInformation(accountAddress, false)
 		require.NoError(f.t, acctErr, "fixture should be able to get account info")
 		if acct.Amount > 0 {
 			return nil

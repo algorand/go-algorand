@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -165,7 +165,7 @@ func (c *Client) BroadcastTransaction(stx transactions.SignedTxn) (txid string, 
 	if err != nil {
 		return
 	}
-	resp, err := algod.SendRawTransactionV2(stx)
+	resp, err := algod.SendRawTransaction(stx)
 	if err != nil {
 		return
 	}
@@ -178,7 +178,7 @@ func (c *Client) BroadcastTransactionGroup(txgroup []transactions.SignedTxn) err
 	if err != nil {
 		return err
 	}
-	return algod.SendRawTransactionGroupV2(txgroup)
+	return algod.SendRawTransactionGroup(txgroup)
 }
 
 // SignAndBroadcastTransaction signs the unsigned transaction with keys from the default wallet, and broadcasts it
@@ -195,7 +195,7 @@ func (c *Client) SignAndBroadcastTransaction(walletHandle, pw []byte, utx transa
 
 // generateRegistrationTransaction returns a transaction object for registering a Participation with its parent this is
 // similar to account.Participation.GenerateRegistrationTransaction.
-func generateRegistrationTransaction(part generated.ParticipationKey, fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte) (transactions.Transaction, error) {
+func generateRegistrationTransaction(part model.ParticipationKey, fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte) (transactions.Transaction, error) {
 	addr, err := basics.UnmarshalChecksumAddress(part.Address)
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -707,37 +707,15 @@ func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newMana
 	var tx transactions.Transaction
 	var err error
 
-	// If the creator was passed in blank, look up asset info by index
-	var params generated.AssetParams
-	if creator == "" {
-		asset, err := c.AssetInformationV2(index)
-		if err != nil {
-			return tx, err
-		}
-		params = asset.Params
-	} else {
-		// Fetch the current state, to fill in as a template
-		current, err := c.AccountInformationV2(creator, true)
-		if err != nil {
-			return tx, err
-		}
+	asset, err := c.AssetInformation(index)
+	if err != nil {
+		return tx, err
+	}
+	params := asset.Params
 
-		// Search for the asset index in the CreatedAssets array
-		assetFound := false
-		if current.CreatedAssets != nil {
-			for _, asset := range *current.CreatedAssets {
-				if index == asset.Index {
-					params = asset.Params
-					assetFound = true
-					break
-				}
-			}
-			if !assetFound {
-				return tx, fmt.Errorf("asset ID %d not found in account %s", index, creator)
-			}
-		} else {
-			return tx, fmt.Errorf("asset ID %d not found in account %s", index, creator)
-		}
+	// If creator was passed in, check that the asset params match.
+	if creator != "" && creator != params.Creator {
+		return tx, fmt.Errorf("creator %s does not match asset ID %d", creator, index)
 	}
 
 	if newManager == nil {

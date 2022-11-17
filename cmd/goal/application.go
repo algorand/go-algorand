@@ -1479,7 +1479,7 @@ var methodAppCmd = &cobra.Command{
 				reportErrorf(err.Error())
 			}
 
-			resp, err := client.PendingTransactionInformationV2(txid)
+			resp, err := client.PendingTransactionInformation(txid)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
