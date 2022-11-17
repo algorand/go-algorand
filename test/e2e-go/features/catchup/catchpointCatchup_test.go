@@ -460,18 +460,19 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	cfg.Archival = false
 
 	// Shorten the txn sync interval so the test can run faster
-	cfg.TxSyncIntervalSeconds = 2
+	cfg.TxSyncIntervalSeconds = 4
 
 	cfg.SaveToDisk(primaryNode.GetDataDir())
 	cfg.SaveToDisk(secondNode.GetDataDir())
 
 	cfg, err = config.LoadConfigFromDisk(relayNode.GetDataDir())
 	a.NoError(err)
-	cfg.TxSyncIntervalSeconds = 2
+	cfg.TxSyncIntervalSeconds = 4
 	cfg.SaveToDisk(relayNode.GetDataDir())
 
 	fixture.Start()
-
+	defer fixture.LibGoalFixture.Shutdown()
+	
 	client1 := fixture.GetLibGoalClientFromNodeController(primaryNode)
 	client2 := fixture.GetLibGoalClientFromNodeController(secondNode)
 	wallet1, err := client1.GetUnencryptedWalletHandle()
@@ -551,6 +552,6 @@ outer:
 
 	status, err = client2.Status()
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+500, addrs2[0], tx.ID().String())
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+50, addrs2[0], tx.ID().String())
 	a.NoError(err)
 }
