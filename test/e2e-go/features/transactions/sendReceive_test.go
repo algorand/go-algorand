@@ -23,7 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -126,10 +126,10 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 		expectedPingBalance = expectedPingBalance - transactionFee - amountPingSendsPong + amountPongSendsPing
 		expectedPongBalance = expectedPongBalance - transactionFee - amountPongSendsPing + amountPingSendsPong
 
-		var pongTxInfo, pingTxInfo generatedV2.PendingTransactionResponse
-		pongTxInfo, err = pongClient.PendingTransactionInformationV2(pongTx.ID().String())
+		var pongTxInfo, pingTxInfo model.PendingTransactionResponse
+		pongTxInfo, err = pongClient.PendingTransactionInformation(pongTx.ID().String())
 		if err == nil {
-			pingTxInfo, err = pingClient.PendingTransactionInformationV2(pingTx.ID().String())
+			pingTxInfo, err = pingClient.PendingTransactionInformation(pingTx.ID().String())
 		}
 		waitForTransaction = err != nil || (pongTxInfo.ConfirmedRound != nil && *pongTxInfo.ConfirmedRound == 0) || (pingTxInfo.ConfirmedRound != nil && *pingTxInfo.ConfirmedRound == 0)
 		if waitForTransaction {
