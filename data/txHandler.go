@@ -236,7 +236,9 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		} else {
 			// unregistration of capacity to happen when the peer is closed
 			rawmsg.Sender.(network.PeerCloseRegistrar).OnClose(func() {
-				handler.erl.CloseReservation(rawmsg.Sender)
+				if err := handler.erl.CloseReservation(rawmsg.Sender); err != nil {
+					logging.Base().Warnf("Error Closing Reservation with ElasticRateLimiter: %v, %v", err, rawmsg.Sender)
+				}
 			},
 			)
 		}
@@ -248,7 +250,12 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		handler.erl.EnableCongestionControl()
 		return network.OutgoingMessage{Action: network.Ignore}
 	}
-	defer handler.erl.ReturnCapacity(rawmsg.Sender, reservedCapacity)
+	// if returning the capacity errors, there's not much to do at this point so just log and continue
+	defer func() {
+		if err := handler.erl.ReturnCapacity(rawmsg.Sender, reservedCapacity); err != nil {
+			logging.Base().Warnf("Error returning Capacity to ElasticRateLimiter: %v", err)
+		}
+	}()
 	// if the Rate Limiter has more than 50% of its buffer back, turn congestion control off
 	if handler.erl.AvailableCapacityRatio() > 0.5 {
 		handler.erl.DisableCongestionControl()

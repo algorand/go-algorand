@@ -42,6 +42,7 @@ type ElasticRateLimiter struct {
 type client interface{}
 type capacity struct{}
 
+// NewElasticRateLimiter creates an ElasticRateLimiter and initializes maps
 func NewElasticRateLimiter(maxCapacity, reservedCapacity int, cm CongestionManager) *ElasticRateLimiter {
 	ret := ElasticRateLimiter{
 		MaxCapacity:            maxCapacity,
@@ -59,11 +60,13 @@ func NewElasticRateLimiter(maxCapacity, reservedCapacity int, cm CongestionManag
 	return &ret
 }
 
-func (erl ElasticRateLimiter) EnableCongestionControl() {
+// EnableCongestionControl turns on the flag that the ERL uses to check with its CongestionManager
+func (erl *ElasticRateLimiter) EnableCongestionControl() {
 	erl.enableCM = true
 }
 
-func (erl ElasticRateLimiter) DisableCongestionControl() {
+// DisableCongestionControl turns off the flag that the ERL uses to check with its CongestionManager
+func (erl *ElasticRateLimiter) DisableCongestionControl() {
 	erl.enableCM = false
 }
 
@@ -155,6 +158,7 @@ func (erl ElasticRateLimiter) ReturnCapacity(c client, reserved bool) error {
 	}
 }
 
+// ContainsReservationFor is a lock-safe check for a client having a reservation
 func (erl ElasticRateLimiter) ContainsReservationFor(c client) bool {
 	erl.clientMu.RLock()
 	defer erl.clientMu.RUnlock()
@@ -224,7 +228,7 @@ func (erl ElasticRateLimiter) CloseReservation(c client) error {
 	return nil
 }
 
-// CongestionManagers can be told of client activity
+// CongestionManager can be told of client activity
 // with the intention of being able to decide if a client is unfairly claiming capacity
 type CongestionManager interface {
 	TrackActivity(c client, reserved bool, t time.Time)
@@ -235,6 +239,8 @@ type activity struct {
 	t        time.Time
 	reserved bool
 }
+
+// ProportionalOddsCongestionManager will track Activity and will give probability based responses to ShouldDrop
 type ProportionalOddsCongestionManager struct {
 	window              time.Duration
 	activitiesByClient  map[interface{}][]activity
@@ -272,6 +278,7 @@ func (cm ProportionalOddsCongestionManager) MaintainTargetServiceRate() {
 	}()
 }
 
+// TrackActivity implements the CongestionManager interface by appending activity to the client's activity list
 func (cm ProportionalOddsCongestionManager) TrackActivity(c client, reserved bool, t time.Time) {
 	cm.activitiesByClient[c] = append(cm.activitiesByClient[c], activity{t, reserved})
 	cm.prune(c, time.Now().Add(-1*cm.window))
@@ -301,6 +308,8 @@ func (cm ProportionalOddsCongestionManager) prune(c client, cutoff time.Time) in
 	return i
 }
 
+// ShouldDrop implements the CongestionManager interface by returning a randomized true/false proportional to
+// the given client's activity vs others
 func (cm ProportionalOddsCongestionManager) ShouldDrop(c client) bool {
 	clientServiceRate := cm.prune(c, time.Now().Add(-1*cm.window))
 	// A random float is selected, and the Actions per Second of the given client is
