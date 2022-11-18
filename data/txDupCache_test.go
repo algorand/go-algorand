@@ -27,6 +27,8 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-deadlock"
+
+	"golang.org/x/crypto/blake2b"
 )
 
 type txidCacheIf interface {
@@ -146,35 +148,33 @@ type cacheMaker interface {
 }
 
 type digestCacheMaker struct{}
+type saltedCacheMaker struct{}
 
 func (m digestCacheMaker) make(size int) cachePusher {
 	return &digestCachePusher{c: makeDigestCache(size)}
+}
+func (m saltedCacheMaker) make(size int) cachePusher {
+	return &saltedCachePusher{c: makeSaltedCache(context.Background(), size, 0)}
 }
 
 type digestCachePusher struct {
 	c *digestCache
 }
-
-func (p *digestCachePusher) push() {
-	var d crypto.Digest
-	crypto.RandBytes(d[:])
-	p.c.checkAndPut(&d)
-}
-
-type saltedCacheMaker struct{}
-
-func (m saltedCacheMaker) make(size int) cachePusher {
-	return &saltedCachePusher{c: makeSaltedCache(context.Background(), size, 0)}
-}
-
 type saltedCachePusher struct {
 	c *txSaltedCache
+}
+
+func (p *digestCachePusher) push() {
+	var d [crypto.DigestSize]byte
+	crypto.RandBytes(d[:])
+	h := crypto.Digest(blake2b.Sum256(d[:])) // digestCache does not hashes so calculate hash here
+	p.c.checkAndPut(&h)
 }
 
 func (p *saltedCachePusher) push() {
 	var d [crypto.DigestSize]byte
 	crypto.RandBytes(d[:])
-	p.c.checkAndPut(d[:])
+	p.c.checkAndPut(d[:]) // saltedCache hashes inside
 }
 
 func BenchmarkDigestCaches(b *testing.B) {

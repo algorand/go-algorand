@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-deadlock"
 
-	blake2b "golang.org/x/crypto/blake2b"
+	"golang.org/x/crypto/blake2b"
 )
 
 // digestCache is a rotating cache of size N accepting crypto.Digest as a key
