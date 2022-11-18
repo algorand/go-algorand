@@ -1423,13 +1423,13 @@ func (pps *WorkerState) txidLatencyDone() {
 		if fl, ok := xo.(flusher); ok {
 			err := fl.Flush()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s: v", pps.cfg.TotalLatencyOut, err)
+				fmt.Fprintf(os.Stderr, "%s: %v", pps.cfg.TotalLatencyOut, err)
 			}
 		}
 		if cl, ok := xo.(io.Closer); ok {
 			err := cl.Close()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s: v", pps.cfg.TotalLatencyOut, err)
+				fmt.Fprintf(os.Stderr, "%s: %v", pps.cfg.TotalLatencyOut, err)
 			}
 		}
 	}
