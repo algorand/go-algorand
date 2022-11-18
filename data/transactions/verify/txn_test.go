@@ -1107,7 +1107,7 @@ func TestStreamVerifierIdel(t *testing.T) {
 	sv := streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
 	sv.activeLoopWg.Wait()
 }
-
+/*
 // TestStreamVerifierPoolShutdown tests what happens when the exec pool shuts down
 func TestStreamVerifierPoolShutdown(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1162,7 +1162,7 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	sv.activeLoopWg.Wait()
 }
 
-/*
+
 // TestStreamVerifierCtxCancel tests what happens when the context is canceled
 func TestStreamVerifierCtxCancel(t *testing.T) {
 	partitiontest.PartitionTest(t)

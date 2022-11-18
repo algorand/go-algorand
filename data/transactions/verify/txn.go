@@ -54,7 +54,7 @@ var errShuttingDownError = errors.New("not verified, verifier is shutting down")
 // to avoid context switching overhead while providing good validation cancelation responsiveness. Each one of these worksets is
 // "populated" with roughly txnPerWorksetThreshold transactions. ( note that the real evaluation time is unknown, but benchmarks
 // show that these are realistic numbers )
-const txnPerWorksetThreshold = 64
+const txnPerWorksetThreshold = 32
 
 // batchSizeBlockLimit is the limit when the batch exceeds, will be added to the exec pool, even if the pool is saturated
 // and the batch verifier will block until the exec pool accepts the batch
@@ -663,6 +663,7 @@ func (sv *StreamVerifier) batchingLoop() {
 	var added bool
 	var numberOfSigsInCurrent uint64
 	uelts := make([]UnverifiedElement, 0)
+	defer sv.cleanup(uelts)
 	for {
 		select {
 		case stx := <-sv.stxnChan:
@@ -678,7 +679,6 @@ func (sv *StreamVerifier) batchingLoop() {
 			if numberOfBatchableSigsInGroup == 0 {
 				err := sv.addVerificationTaskToThePoolNow([]UnverifiedElement{stx})
 				if err != nil {
-					sv.cleanup(uelts)
 					return
 				}
 				continue // stx is handled, continue
@@ -696,14 +696,12 @@ func (sv *StreamVerifier) batchingLoop() {
 					// this is to prevent creation of very large batches
 					err := sv.addVerificationTaskToThePoolNow(uelts)
 					if err != nil {
-						sv.cleanup(uelts)
 						return
 					}
 					added = true
 				} else {
 					added, err = sv.canAddVerificationTaskToThePool(uelts)
 					if err != nil {
-						sv.cleanup(uelts)
 						return
 					}
 				}
@@ -731,7 +729,6 @@ func (sv *StreamVerifier) batchingLoop() {
 			}
 			added, err := sv.canAddVerificationTaskToThePool(uelts)
 			if err != nil {
-				sv.cleanup(uelts)
 				return
 			}
 			if added {
@@ -744,7 +741,6 @@ func (sv *StreamVerifier) batchingLoop() {
 				timer.Reset(waitForNextTxnDuration)
 			}
 		case <-sv.ctx.Done():
-			sv.cleanup(uelts)
 			return
 		}
 	}
