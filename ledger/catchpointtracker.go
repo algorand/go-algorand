@@ -971,7 +971,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		resDelta := resourcesDeltas.getByIdx(i)
 		addr := resDelta.address
 		if !resDelta.oldResource.data.IsEmpty() {
-			deleteHash, err := resourcesHashBuilderV6(resDelta.oldResource.data, addr, resDelta.oldResource.aidx, resDelta.oldResource.data.UpdateRound, protocol.Encode(&resDelta.oldResource.data))
+			deleteHash, err := resourcesHashBuilderV6(&resDelta.oldResource.data, addr, resDelta.oldResource.aidx, resDelta.oldResource.data.UpdateRound, protocol.Encode(&resDelta.oldResource.data))
 			if err != nil {
 				return err
 			}
@@ -987,7 +987,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		}
 
 		if !resDelta.newResource.IsEmpty() {
-			addHash, err := resourcesHashBuilderV6(resDelta.newResource, addr, resDelta.oldResource.aidx, resDelta.newResource.UpdateRound, protocol.Encode(&resDelta.newResource))
+			addHash, err := resourcesHashBuilderV6(&resDelta.newResource, addr, resDelta.oldResource.aidx, resDelta.newResource.UpdateRound, protocol.Encode(&resDelta.newResource))
 			if err != nil {
 				return err
 			}
@@ -1462,7 +1462,7 @@ const (
 // encoded.
 const hashKindEncodingIndex = 4
 
-func rdGetCreatableHashKind(rd resourcesData, a basics.Address, ci basics.CreatableIndex) (hashKind, error) {
+func rdGetCreatableHashKind(rd *resourcesData, a basics.Address, ci basics.CreatableIndex) (hashKind, error) {
 	if rd.IsAsset() {
 		return assetHK, nil
 	} else if rd.IsApp() {
@@ -1472,7 +1472,7 @@ func rdGetCreatableHashKind(rd resourcesData, a basics.Address, ci basics.Creata
 }
 
 // resourcesHashBuilderV6 calculates the hash key used for the trie by combining the creatable's resource data and its index
-func resourcesHashBuilderV6(rd resourcesData, addr basics.Address, cidx basics.CreatableIndex, updateRound uint64, encodedResourceData []byte) ([]byte, error) {
+func resourcesHashBuilderV6(rd *resourcesData, addr basics.Address, cidx basics.CreatableIndex, updateRound uint64, encodedResourceData []byte) ([]byte, error) {
 	hk, err := rdGetCreatableHashKind(rd, addr, cidx)
 	if err != nil {
 		return nil, err

@@ -1419,7 +1419,7 @@ func TestHashContract(t *testing.T) {
 					Manager:   a,
 				}
 
-				bytes, err := resourcesHashBuilderV6(r, a, 7, 1024, protocol.Encode(&r))
+				bytes, err := resourcesHashBuilderV6(&r, a, 7, 1024, protocol.Encode(&r))
 				require.NoError(t, err)
 				return bytes
 			},
@@ -1437,7 +1437,7 @@ func TestHashContract(t *testing.T) {
 					GlobalStateSchemaNumUint: 2,
 				}
 
-				bytes, err := resourcesHashBuilderV6(r, a, 7, 1024, protocol.Encode(&r))
+				bytes, err := resourcesHashBuilderV6(&r, a, 7, 1024, protocol.Encode(&r))
 				require.NoError(t, err)
 				return bytes
 			},

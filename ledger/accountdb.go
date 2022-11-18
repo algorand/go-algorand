@@ -478,7 +478,7 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 				if err != nil {
 					return nil, err
 				}
-				normalizedAccountBalances[i].accountHashes[curHashIdx], err = resourcesHashBuilderV6(resData, balance.Address, basics.CreatableIndex(cidx), resData.UpdateRound, res)
+				normalizedAccountBalances[i].accountHashes[curHashIdx], err = resourcesHashBuilderV6(&resData, balance.Address, basics.CreatableIndex(cidx), resData.UpdateRound, res)
 				if err != nil {
 					return nil, err
 				}
@@ -4822,7 +4822,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 
 		resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte, lastResource bool) error {
 			if resData != nil {
-				hash, err := resourcesHashBuilderV6(*resData, addr, cidx, resData.UpdateRound, encodedResourceData)
+				hash, err := resourcesHashBuilderV6(resData, addr, cidx, resData.UpdateRound, encodedResourceData)
 				if err != nil {
 					return err
 				}
