@@ -62,8 +62,6 @@ func MakeData(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	// @EricW it seems like not initializing a prio scheme will not prevent us from using the p2p network in way required for partial nodes
-	// p2pNode.SetPrioScheme(node)
 	node.net = p2pNode
 
 	accountListener := makeTopAccountListener(log)
