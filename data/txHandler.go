@@ -92,7 +92,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
-		erl:                   *util.NewElasticRateLimiter(10000, 100),
+		erl:                   *util.NewElasticRateLimiter(10000, 100, nil),
 	}
 
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
@@ -230,13 +230,13 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 
 	// if the ElasticRateLimiter doesn't have a reservation for this Peer, attempt to make one
 	if !handler.erl.ContainsReservationFor(rawmsg.Sender) {
-		err := handler.erl.ReserveCapacity(rawmsg.Sender)
+		err := handler.erl.OpenReservation(rawmsg.Sender)
 		if err != nil {
 			logging.Base().Warnf("Peer could not be given reservedCapacity. Peer may use sharedCapacity: %v", err)
 		} else {
 			// unregistration of capacity to happen when the peer is closed
 			rawmsg.Sender.(network.PeerCloseRegistrar).OnClose(func() {
-				handler.erl.UnreserveCapacity(rawmsg.Sender)
+				handler.erl.CloseReservation(rawmsg.Sender)
 			},
 			)
 		}

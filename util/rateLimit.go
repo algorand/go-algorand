@@ -19,8 +19,9 @@ package util
 import (
 	"fmt"
 	"math/rand"
-	"sync"
 	"time"
+
+	"github.com/algorand/go-deadlock"
 )
 
 // ElasticRateLimiter holds and distributes capacity tokens.
@@ -30,11 +31,12 @@ type ElasticRateLimiter struct {
 	MaxCapacity            int
 	CapacityPerReservation int
 	sharedCapacity         chan capacity
-	capacityByClient       map[interface{}]chan capacity
+	capacityByClient       map[client]chan capacity
+	closedClients          map[client]bool
+	clientMu               *deadlock.RWMutex
 	// CongestionManager and enable flag
-	cm         CongestionManager
-	enableCM   bool
-	cmEnableMu *sync.Mutex
+	cm       CongestionManager
+	enableCM bool
 }
 
 type client interface{}
@@ -45,7 +47,9 @@ func NewElasticRateLimiter(maxCapacity, reservedCapacity int, cm CongestionManag
 		MaxCapacity:            maxCapacity,
 		CapacityPerReservation: reservedCapacity,
 		sharedCapacity:         make(chan capacity, maxCapacity),
-		capacityByClient:       map[interface{}]chan capacity{},
+		capacityByClient:       map[client]chan capacity{},
+		closedClients:          map[client]bool{},
+		clientMu:               &deadlock.RWMutex{},
 		cm:                     cm,
 	}
 	// fill the sharedCapacity
@@ -56,41 +60,29 @@ func NewElasticRateLimiter(maxCapacity, reservedCapacity int, cm CongestionManag
 }
 
 func (erl ElasticRateLimiter) EnableCongestionControl() {
-	erl.cmEnableMu.Lock()
-	defer erl.cmEnableMu.Unlock()
-	if erl.enableCM != true {
-		erl.enableCM = true
-	}
+	erl.enableCM = true
 }
 
 func (erl ElasticRateLimiter) DisableCongestionControl() {
-	erl.cmEnableMu.Lock()
-	defer erl.cmEnableMu.Unlock()
-	if erl.enableCM != false {
-		erl.enableCM = false
-	}
+	erl.enableCM = false
 }
 
 // AvailableCapacityRatio returns how full the sharedCapacity is relative to maximum
 func (erl ElasticRateLimiter) AvailableCapacityRatio() float64 {
+	erl.clientMu.RLock()
+	defer erl.clientMu.RUnlock()
 	maximumSharedCapacity := erl.MaxCapacity - (erl.CapacityPerReservation * len(erl.capacityByClient))
-	return float64(len(erl.sharedCapacity)) / float64(maximumSharedCapacity)
-}
-
-func (erl ElasticRateLimiter) ContainsReservationFor(c client) bool {
-	for k := range erl.capacityByClient {
-		if k == c {
-			return true
-		}
+	if maximumSharedCapacity == 0 {
+		return 0
 	}
-	return false
+	return float64(len(erl.sharedCapacity)) / float64(maximumSharedCapacity)
 }
 
 // ConsumeCapacity will dispense one capacity from either the resource's reservedCapacity,
 // or the sharedCapacity. It will return a bool which will be True if the capacity it consumed was reserved
 // or will return an error if the capacity could not be consumed from any channel
 func (erl ElasticRateLimiter) ConsumeCapacity(c client) (bool, error) {
-	// if the client exists in the reservation map, attempt to use its capacity
+	// attempt to use the client's capacity first
 	if _, exists := erl.capacityByClient[c]; exists {
 		select {
 		// if capacity can be pulled from the reservedCapacity, return true
@@ -101,6 +93,8 @@ func (erl ElasticRateLimiter) ConsumeCapacity(c client) (bool, error) {
 			return true, nil
 		default:
 		}
+	} else {
+		return false, fmt.Errorf("client has no reservation")
 	}
 	// before comitting to using sharedCapacity, check with the congestionManager
 	if erl.cm != nil &&
@@ -123,40 +117,58 @@ func (erl ElasticRateLimiter) ConsumeCapacity(c client) (bool, error) {
 // ReturnCapacity will insert new capacity on the sharedCapacity or reservedCapacity of a client.
 // if the capacity could not be returned to any channel, an error is returned
 func (erl ElasticRateLimiter) ReturnCapacity(c client, reserved bool) error {
-	// return sharedCapacity to the sharedCapacity channel, ignoring failure
-	if !reserved {
+	erl.clientMu.RLock()
+	closed := erl.closedClients[c]
+	capChan, exists := erl.capacityByClient[c]
+	numClients := len(erl.capacityByClient)
+	erl.clientMu.RUnlock()
+	// all closed clients return their capacity to sharedCapacity
+	if closed {
 		select {
 		case erl.sharedCapacity <- capacity{}:
 			return nil
 		default:
+			return fmt.Errorf("client reservation is closed and could not return capacity to sharedCapacity")
 		}
 	}
-	// check if the client has a reservation, and if it does, return capacity to it
-	if _, exists := erl.capacityByClient[c]; exists {
+	if !exists {
+		return fmt.Errorf("client has no reservation")
+	}
+	if reserved {
 		select {
-		case erl.capacityByClient[c] <- capacity{}:
+		case capChan <- capacity{}:
 			return nil
 		default:
-		}
-	} else {
-		// an attempt to return reservedCapacity when the cient is unknown should reroute to returning to sharedCapacity
-		// this is because the return could be coming from a client who no longer has a reservation
-		// NOTE: this behavior may lead to inappropriate overprovisioning of sharedCapacity
-		select {
-		case erl.sharedCapacity <- capacity{}:
-			return nil
-		default:
+			return fmt.Errorf("could not return capacity to client reservation")
 		}
 	}
-	return fmt.Errorf("could not return capacity to any reservedCapacity or sharedCapacity")
+	// before adding to the sharedCapacity, confirm it wouldn't overprovision the sharedCapacity
+	maxShared := erl.MaxCapacity - (numClients * erl.CapacityPerReservation)
+	if len(erl.sharedCapacity) >= maxShared {
+		return fmt.Errorf("capacity return would overprovision the sharedCapacity")
+	}
+	select {
+	case erl.sharedCapacity <- capacity{}:
+		return nil
+	default:
+		return fmt.Errorf("could not return capacity to sharedCapacity")
+	}
 }
 
-// ReserveCapacity creates an entry in the ElasticRateLimiter's reservedCapacity map,
+func (erl ElasticRateLimiter) ContainsReservationFor(c client) bool {
+	erl.clientMu.RLock()
+	defer erl.clientMu.RUnlock()
+	_, exists := erl.capacityByClient[c]
+	return exists
+}
+
+// OpenReservation creates an entry in the ElasticRateLimiter's reservedCapacity map,
 // and optimistically transfers capacity from the sharedCapacity to the reservedCapacity
-func (erl ElasticRateLimiter) ReserveCapacity(c client) error {
+func (erl ElasticRateLimiter) OpenReservation(c client) error {
+	erl.clientMu.Lock()
+	defer erl.clientMu.Unlock()
 	if _, exists := erl.capacityByClient[c]; exists {
-		// don't touch any client with an existing reservation
-		return nil
+		return fmt.Errorf("client already has a reservation")
 	}
 	// guard against overprovisioning, if there is less than a reservedCapacity amount left
 	remaining := erl.MaxCapacity - (erl.CapacityPerReservation * len(erl.capacityByClient))
@@ -165,6 +177,7 @@ func (erl ElasticRateLimiter) ReserveCapacity(c client) error {
 	}
 	// make capacity for the provided client
 	erl.capacityByClient[c] = make(chan capacity, erl.CapacityPerReservation)
+	delete(erl.closedClients, c)
 
 	// start asynchronously filling the capacity
 	// by design, the ElasticRateLimiter will overprovision capacity for a newly connected host,
@@ -185,7 +198,10 @@ func (erl ElasticRateLimiter) ReserveCapacity(c client) error {
 	return nil
 }
 
-func (erl ElasticRateLimiter) UnreserveCapacity(c client) error {
+// CloseReservation will remove the client mapping to capacity channel,
+// will mark the client as "closed", and will drain the client's channel to the shared channel
+func (erl ElasticRateLimiter) CloseReservation(c client) error {
+	erl.clientMu.Lock()
 	clientCh, exists := erl.capacityByClient[c]
 	// guard clauses, and preventing the ElasticRateLimiter from draining its own sharedCapacity
 	if !exists ||
@@ -194,9 +210,16 @@ func (erl ElasticRateLimiter) UnreserveCapacity(c client) error {
 		return fmt.Errorf("client not registered for capacity")
 	}
 	delete(erl.capacityByClient, c)
+	erl.closedClients[c] = true
+	fmt.Println(erl.closedClients)
+	erl.clientMu.Unlock()
 	for len(clientCh) > 0 {
 		<-clientCh
-		erl.ReturnCapacity(nil, false)
+		// all capacity being returned is now shared, so set it that way
+		err := erl.ReturnCapacity(c, false)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -217,7 +240,7 @@ type ProportionalOddsCongestionManager struct {
 	activitiesByClient  map[interface{}][]activity
 	targetRate          float64
 	trMaintainerRunning bool
-	trMaintainerMu      *sync.Mutex
+	trMaintainerMu      *deadlock.Mutex
 }
 
 // MaintainTargetServiceRate will, every 10 seconds, prune every known client with tracked activity,
