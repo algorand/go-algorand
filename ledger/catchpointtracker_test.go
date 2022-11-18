@@ -1364,25 +1364,25 @@ func TestHashContract(t *testing.T) {
 
 	accountCase := func(genHash func() []byte, expectedHex string) testCase {
 		return testCase{
-			genHash, expectedHex, Account,
+			genHash, expectedHex, accountHK,
 		}
 	}
 
 	resourceAssetCase := func(genHash func() []byte, expectedHex string) testCase {
 		return testCase{
-			genHash, expectedHex, Asset,
+			genHash, expectedHex, assetHK,
 		}
 	}
 
 	resourceAppCase := func(genHash func() []byte, expectedHex string) testCase {
 		return testCase{
-			genHash, expectedHex, App,
+			genHash, expectedHex, appHK,
 		}
 	}
 
 	kvCase := func(genHash func() []byte, expectedHex string) testCase {
 		return testCase{
-			genHash, expectedHex, KV,
+			genHash, expectedHex, kvHK,
 		}
 	}
 

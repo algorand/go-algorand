@@ -1431,7 +1431,7 @@ func accountHashBuilderV6(addr basics.Address, accountData *baseAccountData, enc
 	if hashIntPrefix == 0 {
 		hashIntPrefix = accountData.RewardsBase
 	}
-	hash := hashBufV6(hashIntPrefix, Account)
+	hash := hashBufV6(hashIntPrefix, accountHK)
 	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
 	// recent updated to be in-cache, and "older" nodes will be left alone.
 
@@ -1452,10 +1452,10 @@ type hashKind byte
 // Defines known kinds of hashes.  Changing an enum ordinal value is a
 // breaking change.
 const (
-	Account hashKind = iota
-	Asset
-	App
-	KV
+	accountHK hashKind = iota
+	assetHK
+	appHK
+	kvHK
 )
 
 // HashKindEncodingIndex defines the []byte offset where the hash kind is
@@ -1464,11 +1464,11 @@ const HashKindEncodingIndex = 4
 
 func creatableHashKindFromResourcesData(rd resourcesData, a basics.Address, ci basics.CreatableIndex) (hashKind, error) {
 	if rd.IsAsset() {
-		return Asset, nil
+		return assetHK, nil
 	} else if rd.IsApp() {
-		return App, nil
+		return appHK, nil
 	}
-	return Account, fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", a.String(), ci, rd)
+	return accountHK, fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", a.String(), ci, rd)
 }
 
 // resourcesHashBuilderV6 calculates the hash key used for the trie by combining the creatable's resource data and its index
@@ -1490,7 +1490,7 @@ func resourcesHashBuilderV6(rd resourcesData, addr basics.Address, cidx basics.C
 
 // kvHashBuilderV6 calculates the hash key used for the trie by combining the key and value
 func kvHashBuilderV6(key string, value []byte) []byte {
-	hash := hashBufV6(0, KV)
+	hash := hashBufV6(0, kvHK)
 
 	prehash := make([]byte, len(key)+len(value))
 	copy(prehash[:], key)

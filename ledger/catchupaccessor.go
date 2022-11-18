@@ -600,7 +600,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 // The function is _not_ a general purpose way to count hashes by hash kind.
 func countHashes(hashes [][]byte) (accountCount, kvCount uint64) {
 	for _, hash := range hashes {
-		if hash[HashKindEncodingIndex] == byte(KV) {
+		if hash[HashKindEncodingIndex] == byte(kvHK) {
 			kvCount++
 		} else {
 			accountCount++
