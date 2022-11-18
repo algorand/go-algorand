@@ -1457,7 +1457,7 @@ restart:
 		time.Sleep(5 * time.Second)
 		goto restart
 	}
-	nextRound := st.LastRound + 1
+	nextRound := st.LastRound
 	for {
 		select {
 		case <-done:
@@ -1466,7 +1466,6 @@ restart:
 		default:
 		}
 		st, err = ac.WaitForRound(nextRound)
-		fmt.Printf("WaitForRound(%d) -> st.LastRound=%d\n", nextRound, st.LastRound)
 		if err != nil {
 			select {
 			case <-done:
@@ -1491,6 +1490,6 @@ restart:
 			goto restart
 		}
 		pps.latencyBlocks <- bb
-		nextRound = st.LastRound + 1
+		nextRound = st.LastRound
 	}
 }
