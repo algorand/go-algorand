@@ -1466,6 +1466,7 @@ restart:
 		default:
 		}
 		st, err = ac.WaitForRound(nextRound)
+		fmt.Printf("WaitForRound(%d) -> st.LastRound=%d\n", nextRound, st.LastRound)
 		if err != nil {
 			select {
 			case <-done:
@@ -1477,7 +1478,7 @@ restart:
 			time.Sleep(5 * time.Second)
 			goto restart
 		}
-		bb, err := ac.BookkeepingBlock(nextRound)
+		bb, err := ac.BookkeepingBlock(st.LastRound)
 		if err != nil {
 			select {
 			case <-done:
