@@ -1107,6 +1107,69 @@ func TestStreamVerifierIdel(t *testing.T) {
 	sv := streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
 	sv.activeLoopWg.Wait()
 }
+
+func TestGetNumberOfBatchableSigsInGroup(t *testing.T) {
+	numOfTxns := 10
+	txnGroups, _ := getSignedTransactions(numOfTxns, 1, 0)
+	mod := 1
+
+	// txn with 0 sigs
+	txnGroups[mod][0].Sig = crypto.Signature{}
+	batchSigs, err := getNumberOfBatchableSigsInGroup(txnGroups[mod])
+	require.Error(t, err, errSignedTxnHasNoSig)
+	mod++
+
+	_, signedTxns, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
+	txnGroups = generateTransactionGroups(1, signedTxns, secrets, addrs)
+	batchSigs, err = getNumberOfBatchableSigsInGroup(txnGroups[0])
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), batchSigs)
+
+	// stateproof txn
+	txnGroups[mod][0].Sig = crypto.Signature{}
+	txnGroups[mod][0].Txn.Type = protocol.StateProofTx
+	txnGroups[mod][0].Txn.Header.Sender = transactions.StateProofSender
+	batchSigs, err = getNumberOfBatchableSigsInGroup(txnGroups[mod])
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), batchSigs)
+	mod++
+
+	// multisig
+	_, mSigTxn, _, _ := generateMultiSigTxn(1, 6, 50, t)
+	batchSigs, err = getNumberOfBatchableSigsInGroup(mSigTxn)
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), batchSigs)
+	mod++
+
+	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
+	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
+
+	// logicsig
+	op, err := logic.AssembleString(`arg 0
+sha256
+byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
+==`)
+	require.NoError(t, err)
+	s := rand.Intn(len(secrets))
+	txnGroups[mod][0].Sig = crypto.Signature{}
+	txnGroups[mod][0].Txn.Sender = addrs[s]
+	txnGroups[mod][0].Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
+	txnGroups[mod][0].Lsig.Logic = op.Program
+	program := logic.Program(op.Program)
+	txnGroups[mod][0].Lsig.Sig = secrets[s].Sign(program)
+	batchSigs, err = getNumberOfBatchableSigsInGroup(txnGroups[mod])
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), batchSigs)
+	mod++
+
+	// txn with sig and msig
+	_, signedTxn, secrets, addrs = generateTestObjects(numOfTxns, 20, 50)
+	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
+	txnGroups[mod][0].Msig = mSigTxn[0].Msig
+	batchSigs, err = getNumberOfBatchableSigsInGroup(txnGroups[mod])
+	require.Error(t, err, errSignedTxnMaxOneSig)
+}
+
 /*
 // TestStreamVerifierPoolShutdown tests what happens when the exec pool shuts down
 func TestStreamVerifierPoolShutdown(t *testing.T) {
