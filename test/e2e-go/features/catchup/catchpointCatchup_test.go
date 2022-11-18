@@ -400,6 +400,13 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 	}
 }
 
+// TestNodeTxSyncRestart starts a two-node and one relay network
+// Waits until a catchpoint is created
+// Lets the primary node have the majority of the stake
+// Stops the primary node to miss the next transaction
+// Sends a transaction from the second node
+// Starts the primary node, and immediately after start the catchup
+// The transaction will be confirmed only when the TxSync of the pools passes the transaction to the primary node
 func TestNodeTxSyncRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -408,14 +415,6 @@ func TestNodeTxSyncRestart(t *testing.T) {
 		t.Skip()
 	}
 	a := require.New(fixtures.SynchronizedTest(t))
-	// Overview of this test:
-	// Start a two-node and one relay network
-	// Wait until a catchpoint is created
-	// Let the primary node have the majority of the stake
-	// Stop the primary node to miss the next transaction
-	// Send a transaction from the second node
-	// Start the primary node, and immediately after start the catchup
-	// The transaction will be confirmed only when the TxSync of the pools passes the transaction to the primary node
 
 	consensus := make(config.ConsensusProtocols)
 	protoVersion := protocol.ConsensusCurrentVersion
@@ -425,7 +424,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
 	catchpointCatchupProtocol.SeedLookback = 2
 	catchpointCatchupProtocol.SeedRefreshInterval = 2
-	catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 8
+	catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval
 	catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
 	catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
 	catchpointCatchupProtocol.StateProofInterval = 0
@@ -450,7 +449,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	relayNode, err := fixture.GetNodeController("Relay")
 	a.NoError(err)
 
-	// prepare it's configuration file to set it to generate a catchpoint every 4 rounds.
+	// prepare it's configuration file to set it to generate a catchpoint every 16 rounds.
 	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
 	a.NoError(err)
 	const catchpointInterval = 16
