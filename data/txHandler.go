@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sync"
 	"time"
 
@@ -80,7 +81,8 @@ type TxHandler struct {
 	postVerificationQueue chan *txBacklogMsg
 	backlogWg             sync.WaitGroup
 	net                   network.GossipNode
-	txidCache             *txidCache
+	txidCache             *digestCache
+	l1salt                uint32
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
 }
@@ -107,7 +109,8 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
-		txidCache:             makeTxidCache(txBacklogSize),
+		txidCache:             makeDigestCache(txBacklogSize),
+		l1salt:                uint32(crypto.RandUint64() % math.MaxUint32),
 	}
 	return handler
 }

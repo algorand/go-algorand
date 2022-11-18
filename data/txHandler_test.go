@@ -201,11 +201,12 @@ func makeRandomTransactions(num int) ([]transactions.SignedTxn, []byte) {
 
 func TestTxHandlerProcessIncomingTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	const numTxns = 11
 	handler := TxHandler{
 		backlogQueue: make(chan *txBacklogMsg, 1),
-		txidCache:    makeTxidCache(txBacklogSize),
+		txidCache:    makeDigestCache(txBacklogSize),
 	}
 	stxns, blob := makeRandomTransactions(numTxns)
 	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
@@ -230,7 +231,7 @@ func BenchmarkTxHandlerProcessIncomingTxn(b *testing.B) {
 	const numTxnsPerGroup = 16
 	handler := TxHandler{
 		backlogQueue: make(chan *txBacklogMsg, txBacklogSize),
-		txidCache:    makeTxidCache(txBacklogSize),
+		txidCache:    makeDigestCache(txBacklogSize),
 	}
 
 	// prepare tx groups
@@ -280,7 +281,7 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 	const numTxnsPerGroup = 16
 	handler := TxHandler{
 		backlogQueue: make(chan *txBacklogMsg, txBacklogSize),
-		txidCache:    makeTxidCache(txBacklogSize),
+		txidCache:    makeDigestCache(txBacklogSize),
 	}
 
 	// prepare tx groups
@@ -356,14 +357,18 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 
 // TestTxHandlerProcessIncomingTxnGroupSize ensures the constant value for group size matches reality
 func TestTxHandlerProcessIncomingTxnGroupSize(t *testing.T) {
+	t.Parallel()
 	require.GreaterOrEqual(t, maxTxGroupSize, config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize, "Increase maxTxGroupSize value")
 	require.GreaterOrEqual(t, maxTxGroupSize, config.Consensus[protocol.ConsensusFuture].MaxTxGroupSize, "Increase maxTxGroupSize value")
 }
 
 func TestTxHandlerProcessIncomingGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	handler := TxHandler{
 		backlogQueue: make(chan *txBacklogMsg, 20),
-		txidCache:    makeTxidCache(txBacklogSize),
+		txidCache:    makeDigestCache(txBacklogSize),
 	}
 
 	stxns1, blob1 := makeRandomTransactions(1)
@@ -404,9 +409,12 @@ func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 const benchTxnNum = 25_000
 
 func TestTxHandlerProcessIncomingCache(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	handler := TxHandler{
 		backlogQueue: make(chan *txBacklogMsg, 20),
-		txidCache:    makeTxidCache(txBacklogSize),
+		txidCache:    makeDigestCache(txBacklogSize),
 	}
 
 	var action network.OutgoingMessage
@@ -514,10 +522,16 @@ func BenchmarkTxHandlerDecoderMsgp(b *testing.B) {
 }
 
 func TestIncomingTxHandle(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	incomingTxHandlerProcessing(1, t)
 }
 
 func TestIncomingTxGroupHandle(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	incomingTxHandlerProcessing(proto.MaxTxGroupSize, t)
 }
 
