@@ -266,6 +266,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 			"Block Header Digest: %s",
 			"Catchpoint: %s",
 			"Total Accounts: %d",
+			"Total KVs: %d",
 			"Total Chunks: %d",
 		}
 		var headerValues = []interface{}{
@@ -275,6 +276,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 			fileHeader.BlockHeaderDigest.String(),
 			fileHeader.Catchpoint,
 			fileHeader.TotalAccounts,
+			fileHeader.TotalKVs,
 			fileHeader.TotalChunks,
 		}
 		// safety check

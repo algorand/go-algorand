@@ -332,6 +332,9 @@ func TestGetStatus(t *testing.T) {
 		CatchpointVerifiedAccounts:  &stat.CatchpointCatchupVerifiedAccounts,
 		CatchpointTotalBlocks:       &stat.CatchpointCatchupTotalBlocks,
 		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
+		CatchpointTotalKvs:          &stat.CatchpointCatchupTotalKVs,
+		CatchpointProcessedKvs:      &stat.CatchpointCatchupProcessedKVs,
+		CatchpointVerifiedKvs:       &stat.CatchpointCatchupVerifiedKVs,
 	}
 	actualResult := model.NodeStatusResponse{}
 	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResult)
