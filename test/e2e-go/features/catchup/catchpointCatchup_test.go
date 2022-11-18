@@ -400,6 +400,11 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 	}
 }
 
+// TestNodeTxHandlerRestart starts a two-node and one relay network
+// Waits until a catchpoint is created
+// Lets the primary node have the majority of the stake
+// Sends a transaction from the second node
+// The transaction will be confirmed only if the txHandler gets the transaction
 func TestNodeTxHandlerRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -408,12 +413,6 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 		t.Skip()
 	}
 	a := require.New(fixtures.SynchronizedTest(t))
-	// Overview of this test:
-	// Start a two-node and one relay network
-	// Wait until a catchpoint is created
-	// Let the primary node have the majority of the stake
-	// Send a transaction from the second node
-	// The transaction will be confirmed only if the txHandler gets the transaction
 
 	consensus := make(config.ConsensusProtocols)
 	protoVersion := protocol.ConsensusCurrentVersion
@@ -448,7 +447,7 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	relayNode, err := fixture.GetNodeController("Relay")
 	a.NoError(err)
 
-	// prepare it's configuration file to set it to generate a catchpoint every 4 rounds.
+	// prepare it's configuration file to set it to generate a catchpoint every 16 rounds.
 	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
 	a.NoError(err)
 	const catchpointInterval = 16
@@ -523,15 +522,10 @@ outer:
 	targetRound := status1.LastRound + 5
 
 	// Wait for the network to start making progress again
-	for t := 0; t < 10; t++ {
-		status1, err = client1.Status()
-		a.NoError(err)
-
-		if status1.LastRound+1 > targetRound {
-			break
-		}
-		time.Sleep(catchpointCatchupProtocol.AgreementFilterTimeout)
-	}
+	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
+	err = fixture.ClientWaitForRound(primaryNodeRestClient, targetRound,
+		10*catchpointCatchupProtocol.AgreementFilterTimeout)
+	a.NoError(err)
 
 	// let the 2nd client send a transaction
 	tx, err = client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 50000, nil)
