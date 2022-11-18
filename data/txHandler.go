@@ -232,7 +232,8 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	if !handler.erl.ContainsReservationFor(rawmsg.Sender) {
 		err := handler.erl.OpenReservation(rawmsg.Sender)
 		if err != nil {
-			logging.Base().Warnf("Peer could not be given reservedCapacity. Peer may use sharedCapacity: %v", err)
+			logging.Base().Warnf("Peer could not be given reservedCapacity: %v", err)
+			return network.OutgoingMessage{Action: network.Ignore}
 		} else {
 			// unregistration of capacity to happen when the peer is closed
 			rawmsg.Sender.(network.PeerCloseRegistrar).OnClose(func() {
