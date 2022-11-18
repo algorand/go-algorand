@@ -1414,7 +1414,7 @@ func hashBufV6(affinity uint64, kind hashKind) []byte {
 		// the following takes the prefix & 255 -> hash[i]
 		hash[i] = byte(prefix)
 	}
-	hash[HashKindEncodingIndex] = byte(kind)
+	hash[hashKindEncodingIndex] = byte(kind)
 	return hash
 }
 
@@ -1458,9 +1458,9 @@ const (
 	kvHK
 )
 
-// HashKindEncodingIndex defines the []byte offset where the hash kind is
+// hashKindEncodingIndex defines the []byte offset where the hash kind is
 // encoded.
-const HashKindEncodingIndex = 4
+const hashKindEncodingIndex = 4
 
 func creatableHashKindFromResourcesData(rd resourcesData, a basics.Address, ci basics.CreatableIndex) (hashKind, error) {
 	if rd.IsAsset() {

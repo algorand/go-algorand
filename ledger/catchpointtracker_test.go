@@ -1458,7 +1458,7 @@ func TestHashContract(t *testing.T) {
 	for i, tc := range allCases {
 		t.Run(fmt.Sprintf("index=%d", i), func(t *testing.T) {
 			h := tc.genHash()
-			require.Equal(t, byte(tc.expectedHashKind), h[HashKindEncodingIndex])
+			require.Equal(t, byte(tc.expectedHashKind), h[hashKindEncodingIndex])
 			require.Equal(t, tc.expectedHex, hex.EncodeToString(h))
 		})
 	}
