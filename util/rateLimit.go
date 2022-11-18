@@ -99,7 +99,7 @@ func (erl ElasticRateLimiter) ConsumeCapacity(c client) (bool, error) {
 	} else {
 		return false, fmt.Errorf("client has no reservation")
 	}
-	// before comitting to using sharedCapacity, check with the congestionManager
+	// before committing to using sharedCapacity, check with the congestionManager
 	if erl.cm != nil &&
 		erl.enableCM &&
 		erl.cm.ShouldDrop(c) {
