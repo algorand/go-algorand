@@ -89,7 +89,6 @@ func (c *digestCache) len() int {
 type txSaltedCache struct {
 	digestCache
 
-	maxSize  int
 	curSalt  [4]byte
 	prevSalt [4]byte
 	ctx      context.Context
@@ -156,9 +155,10 @@ func (c *txSaltedCache) check(msg []byte) bool {
 
 // innerCheck returns true if exists, and the current salted hash if does not
 func (c *txSaltedCache) innerCheck(msg []byte) (bool, *crypto.Digest) {
-	buf := saltedPool.Get().([]byte)
-	defer saltedPool.Put(buf)
+	ptr := saltedPool.Get()
+	defer saltedPool.Put(ptr)
 
+	buf := ptr.([]byte)
 	toBeHashed := append(buf[:0], msg...)
 	toBeHashed = append(toBeHashed, c.curSalt[:]...)
 	toBeHashed = toBeHashed[:len(msg)+len(c.curSalt)]

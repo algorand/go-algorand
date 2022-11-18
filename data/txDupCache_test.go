@@ -136,14 +136,45 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 	require.Equal(t, size+1, cache.len())
 }
 
-type cacheMaker interface {
-	make(size int) txidCacheIf
+// benchmark abstractions
+type cachePusher interface {
+	push()
 }
 
-type txidCacheMaker struct{}
+type cacheMaker interface {
+	make(size int) cachePusher
+}
 
-func (m txidCacheMaker) make(size int) txidCacheIf {
-	return makeDigestCache(size)
+type digestCacheMaker struct{}
+
+func (m digestCacheMaker) make(size int) cachePusher {
+	return &digestCachePusher{c: makeDigestCache(size)}
+}
+
+type digestCachePusher struct {
+	c *digestCache
+}
+
+func (p *digestCachePusher) push() {
+	var d crypto.Digest
+	crypto.RandBytes(d[:])
+	p.c.checkAndPut(&d)
+}
+
+type saltedCacheMaker struct{}
+
+func (m saltedCacheMaker) make(size int) cachePusher {
+	return &saltedCachePusher{c: makeSaltedCache(context.Background(), size, 0)}
+}
+
+type saltedCachePusher struct {
+	c *txSaltedCache
+}
+
+func (p *saltedCachePusher) push() {
+	var d [crypto.DigestSize]byte
+	crypto.RandBytes(d[:])
+	p.c.checkAndPut(d[:])
 }
 
 func BenchmarkDigestCaches(b *testing.B) {
@@ -153,15 +184,20 @@ func BenchmarkDigestCaches(b *testing.B) {
 		deadlock.Opts.Disable = deadlockDisable
 	}()
 
-	txidCacheMaker := txidCacheMaker{}
+	digestCacheMaker := digestCacheMaker{}
+	saltedCacheMaker := saltedCacheMaker{}
 	var benchmarks = []struct {
 		maker      cacheMaker
 		numThreads int
 	}{
-		{txidCacheMaker, 1},
-		{txidCacheMaker, 4},
-		{txidCacheMaker, 16},
-		{txidCacheMaker, 128},
+		{digestCacheMaker, 1},
+		{saltedCacheMaker, 1},
+		{digestCacheMaker, 4},
+		{saltedCacheMaker, 4},
+		{digestCacheMaker, 16},
+		{saltedCacheMaker, 16},
+		{digestCacheMaker, 128},
+		{saltedCacheMaker, 128},
 	}
 	for _, bench := range benchmarks {
 		b.Run(fmt.Sprintf("%T/threads=%d", bench.maker, bench.numThreads), func(b *testing.B) {
@@ -179,7 +215,7 @@ func calcCacheSize(numIter int) int {
 }
 
 func benchmarkDigestCache(b *testing.B, m cacheMaker, numThreads int) {
-	c := m.make(calcCacheSize(b.N))
+	p := m.make(calcCacheSize(b.N))
 	numHashes := b.N / numThreads // num hashes per goroutine
 	// b.Logf("inserting %d (%d) values in %d threads into cache of size %d", b.N, numHashes, numThreads, calcCacheSize(b.N))
 	var wg sync.WaitGroup
@@ -188,9 +224,7 @@ func benchmarkDigestCache(b *testing.B, m cacheMaker, numThreads int) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < numHashes; j++ {
-				var d crypto.Digest
-				crypto.RandBytes(d[:])
-				c.checkAndPut(&d)
+				p.push()
 			}
 		}()
 	}
