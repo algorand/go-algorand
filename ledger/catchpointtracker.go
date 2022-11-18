@@ -1443,13 +1443,13 @@ func accountHashBuilderV6(addr basics.Address, accountData *baseAccountData, enc
 }
 
 // hashKind enumerates the possible data types hashed into a catchpoint merkle
-// trie.  Each merkle trie hash includes the hashKind byte at a known-offset.
+// trie. Each merkle trie hash includes the hashKind byte at a known-offset.
 // By encoding hashKind at a known-offset, it's possible for hash readers to
 // disambiguate the hashed resource.
 //go:generate stringer -type=hashKind
 type hashKind byte
 
-// Defines known kinds of hashes.  Changing an enum ordinal value is a
+// Defines known kinds of hashes. Changing an enum ordinal value is a
 // breaking change.
 const (
 	accountHK hashKind = iota
