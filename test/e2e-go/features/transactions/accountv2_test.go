@@ -312,7 +312,7 @@ int 1
 		resp, err := client.GetParsedPendingTransactions(2)
 		a.NoError(err)
 		if resp.TotalTransactions == 1 {
-			a.Equal(resp.TopTransactions[0].Txn.ID(), txid)
+			a.Equal(resp.TopTransactions[0].Txn.ID().String(), txid)
 			continue
 		}
 		a.Equal(uint64(0), resp.TotalTransactions)
