@@ -113,8 +113,6 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		streamReturnChan:      make(chan verify.VerificationResult),
 	}
 
-	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
-
 	// prepare the transaction stream verifer
 	latest := handler.ledger.Latest()
 	latestHdr, err := handler.ledger.BlockHdr(latest)
@@ -154,6 +152,7 @@ func (handler *TxHandler) processTxnStreamVerifiedResults() {
 
 // Start enables the processing of incoming messages at the transaction handler
 func (handler *TxHandler) Start() {
+	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	handler.net.RegisterHandlers([]network.TaggedMessageHandler{
 		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
 	})

@@ -17,6 +17,7 @@
 package data
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -321,11 +322,13 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	// since Start is not called, set the context here
+	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
+	defer handler.ctxCancel()
+
 	// emulate handler.Start() without the backlog
 	go handler.processTxnStreamVerifiedResults()
 	handler.streamVerifier.Start()
-
-	defer handler.ctxCancel()
 
 	outChan := make(chan *txBacklogMsg, 10)
 	wg := sync.WaitGroup{}
@@ -562,6 +565,10 @@ func runHandlerBenchmark(rateAdjuster time.Duration, maxGroupSize, tps int, b *t
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	// since Start is not called, set the context here
+	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
+	defer handler.ctxCancel()
+
 	// emulate handler.Start() without the backlog
 	go handler.processTxnStreamVerifiedResults()
 	handler.streamVerifier.Start()
