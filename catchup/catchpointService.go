@@ -340,7 +340,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 }
 
 // updateVerifiedCounts update the user's statistics for the given verified hashes
-func (cs *CatchpointCatchupService) updateVerifiedCounts(kvCount, accountCount uint64) {
+func (cs *CatchpointCatchupService) updateVerifiedCounts(accountCount, kvCount uint64) {
 	cs.statsMu.Lock()
 	defer cs.statsMu.Unlock()
 
