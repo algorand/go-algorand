@@ -131,7 +131,7 @@ var fileCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("Unable to print account database : %v", err)
 			}
-			err = printKeyValueStore("./ledger.tracker.sqlite", true, fileHeader, outFile)
+			err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
 			if err != nil {
 				reportErrorf("Unable to print key value store : %v", err)
 			}
@@ -368,23 +368,61 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 			return nil
 		}
 
-		acctCount := 0
-		acctCb := func(addr basics.Address, data basics.AccountData) {
-			err = printer(addr, data, progress)
+		if fileHeader.Version != 0 && fileHeader.Version < ledger.CatchpointFileVersionV6 {
+			var rows *sql.Rows
+			rows, err = tx.Query(fmt.Sprintf("SELECT address, data FROM %s order by address", balancesTable))
 			if err != nil {
 				return
 			}
-			progress++
-			acctCount++
-		}
-		_, err = ledger.LoadAllFullAccounts(context.Background(), tx, balancesTable, resourcesTable, acctCb)
-		if err != nil {
-			return
-		}
-		if acctCount != int(rowsCount) {
-			return fmt.Errorf("expected %d accounts but got only %d", rowsCount, acctCount)
-		}
+			defer rows.Close()
 
+			for rows.Next() {
+				var addrbuf []byte
+				var buf []byte
+				err = rows.Scan(&addrbuf, &buf)
+				if err != nil {
+					return
+				}
+
+				var addr basics.Address
+				if len(addrbuf) != len(addr) {
+					err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+					return
+				}
+				copy(addr[:], addrbuf)
+
+				var data basics.AccountData
+				err = protocol.Decode(buf, &data)
+				if err != nil {
+					return
+				}
+
+				err = printer(addr, data, progress)
+				if err != nil {
+					return
+				}
+
+				progress++
+			}
+			err = rows.Err()
+		} else {
+			acctCount := 0
+			acctCb := func(addr basics.Address, data basics.AccountData) {
+				err = printer(addr, data, progress)
+				if err != nil {
+					return
+				}
+				progress++
+				acctCount++
+			}
+			_, err = ledger.LoadAllFullAccounts(context.Background(), tx, balancesTable, resourcesTable, acctCb)
+			if err != nil {
+				return
+			}
+			if acctCount != int(rowsCount) {
+				return fmt.Errorf("expected %d accounts but got only %d", rowsCount, acctCount)
+			}
+		}
 		// increase the deadline warning to disable the warning message.
 		_, _ = db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(5*time.Second))
 		return err
@@ -403,7 +441,7 @@ func printKeyValue(writer *bufio.Writer, key, value []byte) {
 	fmt.Fprintf(writer, "%s : %v\n", pretty, base64.StdEncoding.EncodeToString(value))
 }
 
-func printKeyValueStore(databaseName string, stagingTables bool, fileHeader ledger.CatchpointFileHeader, outFile *os.File) error {
+func printKeyValueStore(databaseName string, stagingTables bool, outFile *os.File) error {
 	fmt.Printf("\n")
 	printDumpingCatchpointProgressLine(0, 50, 0)
 	lastProgressUpdate := time.Now()

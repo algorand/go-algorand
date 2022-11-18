@@ -65,7 +65,7 @@ var databaseCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Unable to print account database : %v", err)
 		}
-		err = printKeyValueStore(ledgerTrackerFilename, ledgerTrackerStaging, ledger.CatchpointFileHeader{}, outFile)
+		err = printKeyValueStore(ledgerTrackerFilename, ledgerTrackerStaging, outFile)
 		if err != nil {
 			reportErrorf("Unable to print key value store : %v", err)
 		}
@@ -115,10 +115,10 @@ func checkDatabase(databaseName string, outFile *os.File) error {
 			return err
 		}
 		root, err := trie.RootHash()
-		fmt.Fprintf(outFile, " Root: %s\n", root.String())
 		if err != nil {
 			return err
 		}
+		fmt.Fprintf(outFile, " Root: %s\n", root)
 		stats, err = trie.GetStats()
 		if err != nil {
 			return err

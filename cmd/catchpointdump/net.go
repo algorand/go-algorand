@@ -357,7 +357,7 @@ func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitSt
 		if err != nil {
 			return err
 		}
-		err = printKeyValueStore("./ledger.tracker.sqlite", true, fileHeader, outFile)
+		err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
 		if err != nil {
 			return err
 		}
