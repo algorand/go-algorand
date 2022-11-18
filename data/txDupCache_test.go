@@ -31,12 +31,6 @@ import (
 	"golang.org/x/crypto/blake2b"
 )
 
-type txidCacheIf interface {
-	check(d *crypto.Digest) bool
-	checkAndPut(d *crypto.Digest) bool
-	len() int
-}
-
 func TestTxHandlerDigestCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -51,15 +45,12 @@ func TestTxHandlerDigestCache(t *testing.T) {
 		crypto.RandBytes([]byte(ds[i][:]))
 		exist := cache.checkAndPut(&ds[i])
 		require.False(t, exist)
+
+		exist = cache.check(&ds[i])
+		require.True(t, exist)
 	}
 
 	require.Equal(t, size, cache.len())
-
-	// check they exist
-	for i := 0; i < size; i++ {
-		exist := cache.check(&ds[i])
-		require.True(t, exist)
-	}
 
 	// try to re-add, ensure not added
 	for i := 0; i < size; i++ {
@@ -75,6 +66,9 @@ func TestTxHandlerDigestCache(t *testing.T) {
 		crypto.RandBytes(ds2[i][:])
 		exist := cache.checkAndPut(&ds2[i])
 		require.False(t, exist)
+
+		exist = cache.check(&ds2[i])
+		require.True(t, exist)
 	}
 
 	require.Equal(t, 2*size, cache.len())
@@ -83,8 +77,22 @@ func TestTxHandlerDigestCache(t *testing.T) {
 	crypto.RandBytes(d[:])
 	exist := cache.checkAndPut(&d)
 	require.False(t, exist)
+	exist = cache.check(&d)
+	require.True(t, exist)
 
 	require.Equal(t, size+1, cache.len())
+
+	// ensure hashes from the prev batch are still there
+	for i := 0; i < size; i++ {
+		exist := cache.check(&ds2[i])
+		require.True(t, exist)
+	}
+
+	// ensure hashes from the first batch are gone
+	for i := 0; i < size; i++ {
+		exist := cache.check(&ds[i])
+		require.False(t, exist)
+	}
 }
 
 // TestTxHandlerSaltedCacheBasic is the same as TestTxHandlerDigestCache but for the salted cache
@@ -102,15 +110,12 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 		crypto.RandBytes([]byte(ds[i][:]))
 		exist := cache.checkAndPut(ds[i][:])
 		require.False(t, exist)
+
+		exist = cache.check(ds[i][:])
+		require.True(t, exist)
 	}
 
 	require.Equal(t, size, cache.len())
-
-	// check they exist
-	for i := 0; i < size; i++ {
-		exist := cache.check(ds[i][:])
-		require.True(t, exist)
-	}
 
 	// try to re-add, ensure not added
 	for i := 0; i < size; i++ {
@@ -126,6 +131,9 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 		crypto.RandBytes(ds2[i][:])
 		exist := cache.checkAndPut(ds2[i][:])
 		require.False(t, exist)
+
+		exist = cache.check(ds2[i][:])
+		require.True(t, exist)
 	}
 
 	require.Equal(t, 2*size, cache.len())
@@ -134,8 +142,22 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 	crypto.RandBytes(d[:])
 	exist := cache.checkAndPut(d[:])
 	require.False(t, exist)
+	exist = cache.check(d[:])
+	require.True(t, exist)
 
 	require.Equal(t, size+1, cache.len())
+
+	// ensure hashes from the prev batch are still there
+	for i := 0; i < size; i++ {
+		exist := cache.check(ds2[i][:])
+		require.True(t, exist)
+	}
+
+	// ensure hashes from the first batch are gone
+	for i := 0; i < size; i++ {
+		exist := cache.check(ds[i][:])
+		require.False(t, exist)
+	}
 }
 
 // benchmark abstractions

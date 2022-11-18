@@ -136,16 +136,27 @@ func (c *txSaltedCache) moreSalt() {
 func (c *txSaltedCache) remix() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.swap()
+	c.innerSwap(true)
+}
+
+// swap cache maps and update the salt used
+func (c *txSaltedCache) innerSwap(scheduled bool) {
+	c.prevSalt = c.curSalt
+	c.prev = c.cur
+
+	if scheduled {
+		// updating by timer, the prev size is a good estimation of a current load => preallocate
+		c.cur = make(map[crypto.Digest]struct{}, len(c.prev))
+	} else {
+		// otherwise start empty
+		c.cur = map[crypto.Digest]struct{}{}
+	}
+	c.moreSalt()
 }
 
 // swap cache maps and update the salt used
 func (c *txSaltedCache) swap() {
-	c.prevSalt = c.curSalt
-	c.prev = c.cur
-
-	c.cur = map[crypto.Digest]struct{}{}
-	c.moreSalt()
+	c.innerSwap(false)
 }
 
 func (c *txSaltedCache) check(msg []byte) bool {
@@ -189,7 +200,21 @@ func (c *txSaltedCache) checkAndPut(msg []byte) bool {
 		return true
 	}
 
-	c.put(d)
+	if len(c.cur) >= c.maxSize {
+		c.swap()
+		ptr := saltedPool.Get()
+		defer saltedPool.Put(ptr)
+
+		buf := ptr.([]byte)
+		toBeHashed := append(buf[:0], msg...)
+		toBeHashed = append(toBeHashed, c.curSalt[:]...)
+		toBeHashed = toBeHashed[:len(msg)+len(c.curSalt)]
+
+		dn := crypto.Digest(blake2b.Sum256(toBeHashed))
+		d = &dn
+	}
+
+	c.cur[*d] = struct{}{}
 	return false
 }
 
