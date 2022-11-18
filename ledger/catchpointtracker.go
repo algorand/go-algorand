@@ -1462,7 +1462,7 @@ const (
 // encoded.
 const hashKindEncodingIndex = 4
 
-func creatableHashKindFromResourcesData(rd resourcesData, a basics.Address, ci basics.CreatableIndex) (hashKind, error) {
+func rdGetCreatableHashKind(rd resourcesData, a basics.Address, ci basics.CreatableIndex) (hashKind, error) {
 	if rd.IsAsset() {
 		return assetHK, nil
 	} else if rd.IsApp() {
@@ -1473,7 +1473,7 @@ func creatableHashKindFromResourcesData(rd resourcesData, a basics.Address, ci b
 
 // resourcesHashBuilderV6 calculates the hash key used for the trie by combining the creatable's resource data and its index
 func resourcesHashBuilderV6(rd resourcesData, addr basics.Address, cidx basics.CreatableIndex, updateRound uint64, encodedResourceData []byte) ([]byte, error) {
-	hk, err := creatableHashKindFromResourcesData(rd, addr, cidx)
+	hk, err := rdGetCreatableHashKind(rd, addr, cidx)
 	if err != nil {
 		return nil, err
 	}
