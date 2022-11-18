@@ -1597,6 +1597,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 		}
 
 		// Now add the kvstore hashes
+		pendingTrieHashes = 0
 		kvs, err := tx.QueryContext(ctx, "SELECT key, value FROM kvstore")
 		if err != nil {
 			return err
@@ -1610,12 +1611,23 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 				return err
 			}
 			hash := kvHashBuilderV6(string(k), v)
+			trieHashCount++
+			pendingTrieHashes++
 			added, err := trie.Add(hash)
 			if err != nil {
 				return fmt.Errorf("initializeHashes was unable to add kv (key=%s) to trie: %v", hex.EncodeToString(k), err)
 			}
 			if !added {
 				ct.log.Warnf("initializeHashes attempted to add duplicate kv hash '%s' to merkle trie for key %s", hex.EncodeToString(hash), k)
+			}
+			if pendingTrieHashes >= trieRebuildCommitFrequency {
+				// this trie Evict will commit using the current transaction.
+				// if anything goes wrong, it will still get rolled back.
+				_, err = trie.Evict(true)
+				if err != nil {
+					return fmt.Errorf("initializeHashes was unable to commit changes to trie: %v", err)
+				}
+				pendingTrieHashes = 0
 			}
 			// We could insert code to report things every 5 seconds, like was done for accounts.
 		}
