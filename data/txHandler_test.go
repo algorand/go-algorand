@@ -327,8 +327,9 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 	defer handler.ctxCancel()
 
 	// emulate handler.Start() without the backlog
+	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	go handler.processTxnStreamVerifiedResults()
-	handler.streamVerifier.Start()
+	handler.streamVerifier.Start(handler.ctx)
 
 	outChan := make(chan *txBacklogMsg, 10)
 	wg := sync.WaitGroup{}
@@ -570,8 +571,9 @@ func runHandlerBenchmark(rateAdjuster time.Duration, maxGroupSize, tps int, b *t
 	defer handler.ctxCancel()
 
 	// emulate handler.Start() without the backlog
+	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	go handler.processTxnStreamVerifiedResults()
-	handler.streamVerifier.Start()
+	handler.streamVerifier.Start(handler.ctx)
 
 	// Prepare the transactions
 	signedTransactionGroups, badTxnGroups := makeSignedTxnGroups(b.N, numUsers, maxGroupSize, 0.001, addresses, secrets)

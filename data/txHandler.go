@@ -123,7 +123,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 	}
 	nbw := verify.MakeNewBlockWatcher(latestHdr)
 	handler.ledger.RegisterBlockListeners([]ledgerpkg.BlockListener{nbw})
-	handler.streamVerifier = verify.MakeStreamVerifier(handler.ctx, handler.streamVerifierChan, handler.streamReturnChan,
+	handler.streamVerifier = verify.MakeStreamVerifier(handler.streamVerifierChan, handler.streamReturnChan,
 		handler.ledger, nbw, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache())
 	return handler
 }
@@ -161,7 +161,7 @@ func (handler *TxHandler) Start() {
 	go handler.backlogWorker()
 	go handler.backlogGaugeThread()
 	go handler.processTxnStreamVerifiedResults()
-	handler.streamVerifier.Start()
+	handler.streamVerifier.Start(handler.ctx)
 }
 
 // Stop suspends the processing of incoming messages at the transaction handler

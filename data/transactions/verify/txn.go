@@ -617,7 +617,7 @@ func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext
 
 // MakeStreamVerifier creates a new stream verifier and returns the chans used to send txn groups
 // to it and obtain the txn signature verification result from
-func MakeStreamVerifier(ctx context.Context, stxnChan <-chan UnverifiedElement, resultChan chan<- VerificationResult,
+func MakeStreamVerifier(stxnChan <-chan UnverifiedElement, resultChan chan<- VerificationResult,
 	ledger logic.LedgerForSignature, nbw *NewBlockWatcher, verificationPool execpool.BacklogPool,
 	cache VerifiedTransactionCache) (sv *StreamVerifier) {
 
@@ -625,7 +625,6 @@ func MakeStreamVerifier(ctx context.Context, stxnChan <-chan UnverifiedElement, 
 		resultChan:       resultChan,
 		stxnChan:         stxnChan,
 		verificationPool: verificationPool,
-		ctx:              ctx,
 		cache:            cache,
 		nbw:              nbw,
 		ledger:           ledger,
@@ -635,7 +634,8 @@ func MakeStreamVerifier(ctx context.Context, stxnChan <-chan UnverifiedElement, 
 
 // Start is called when the verifier is created and whenever it needs to restart after
 // the ctx is canceled
-func (sv *StreamVerifier) Start() {
+func (sv *StreamVerifier) Start(ctx context.Context) {
+	sv.ctx = ctx
 	sv.activeLoopWg.Add(1)
 	go sv.batchingLoop()
 }
