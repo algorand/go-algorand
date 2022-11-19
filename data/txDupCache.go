@@ -94,7 +94,7 @@ type txSaltedCache struct {
 	ctx      context.Context
 }
 
-func makeSaltedCache(ctx context.Context, size int, refreshIntervalSec time.Duration) *txSaltedCache {
+func makeSaltedCache(ctx context.Context, size int, refreshInterval time.Duration) *txSaltedCache {
 	c := &txSaltedCache{
 		digestCache: digestCache{
 			cur:     map[crypto.Digest]struct{}{},
@@ -103,8 +103,8 @@ func makeSaltedCache(ctx context.Context, size int, refreshIntervalSec time.Dura
 		ctx: ctx,
 	}
 
-	if refreshIntervalSec != 0 {
-		go c.salter(refreshIntervalSec)
+	if refreshInterval != 0 {
+		go c.salter(refreshInterval)
 	}
 
 	c.mu.Lock()
@@ -114,8 +114,8 @@ func makeSaltedCache(ctx context.Context, size int, refreshIntervalSec time.Dura
 	return c
 }
 
-func (c *txSaltedCache) salter(refreshSecs time.Duration) {
-	timer := time.NewTimer(refreshSecs)
+func (c *txSaltedCache) salter(refreshInterval time.Duration) {
+	timer := time.NewTimer(refreshInterval)
 	for {
 		select {
 		case <-timer.C:

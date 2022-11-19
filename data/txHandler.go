@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"sync"
 	"time"
 
@@ -81,8 +80,8 @@ type TxHandler struct {
 	postVerificationQueue chan *txBacklogMsg
 	backlogWg             sync.WaitGroup
 	net                   network.GossipNode
-	txidCache             *digestCache
-	l1salt                uint32
+	msgCache              *txSaltedCache
+	txCanonicalCache      *digestCache
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
 }
@@ -100,6 +99,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		return nil
 	}
 
+	ctx, ctxCancel := context.WithCancel(context.Background())
 	handler := &TxHandler{
 		txPool:                txPool,
 		genesisID:             genesisID,
@@ -109,8 +109,10 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
-		txidCache:             makeDigestCache(txBacklogSize),
-		l1salt:                uint32(crypto.RandUint64() % math.MaxUint32),
+		msgCache:              makeSaltedCache(ctx, txBacklogSize, 60*time.Second),
+		txCanonicalCache:      makeDigestCache(txBacklogSize),
+		ctx:                   ctx,
+		ctxCancel:             ctxCancel,
 	}
 	return handler
 }
@@ -293,19 +295,25 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 // or fallback to heap allocation it MaxTxGroupSize is greater than our constant
 const maxTxGroupSize = 16
 
+// processIncomingTxn decodes a transaction group from incoming message and enqueues into the back log for processing.
+// The function also performs some input data pre-validation;
+//  - txn groups are cut to MaxTxGroupSize size
+//  - message are checked for duplicates
+//  - transactions are checked for duplicates
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
-	var decTxGroupElemBackingArray [maxTxGroupSize]int
-	var decTxGroupElemOffsets []int // offsets of txn ends
+	// TODO: make it dedup configurable
 
-	if maxTxGroupSize < config.MaxTxGroupSize {
-		decTxGroupElemOffsets = make([]int, config.MaxTxGroupSize)
-	} else {
-		decTxGroupElemOffsets = decTxGroupElemBackingArray[:]
+	// check for duplicate messages
+	// this helps against relaying duplicates
+	if handler.msgCache.checkAndPut(rawmsg.Data) {
+		// TODO: ad metric
+		return network.OutgoingMessage{Action: network.Ignore}
 	}
 
 	unverifiedTxGroup := make([]transactions.SignedTxn, 1)
 	dec := protocol.NewMsgpDecoderBytes(rawmsg.Data)
 	ntx := 0
+	consumed := 0
 	for {
 		if len(unverifiedTxGroup) == ntx {
 			n := make([]transactions.SignedTxn, len(unverifiedTxGroup)*2)
@@ -320,7 +328,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 			logging.Base().Warnf("Received a non-decodable txn: %v", err)
 			return network.OutgoingMessage{Action: network.Disconnect}
 		}
-		decTxGroupElemOffsets[ntx] = dec.Consumed()
+		consumed = dec.Consumed()
 		ntx++
 		if ntx >= config.MaxTxGroupSize {
 			// max ever possible group size reached, done reading input.
@@ -334,23 +342,51 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
 
-	// calculate hashes and check duplicates.
-	allTxSeen := true
-	start := 0
-	for i := 0; i < ntx; i++ {
-		end := decTxGroupElemOffsets[i]
-		rawtxn := rawmsg.Data[start:end]
-		start = end
-		d := crypto.Hash(rawtxn)
-		if !handler.txidCache.checkAndPut(&d) {
-			allTxSeen = false
+	// consider situations where someone want to censor transactions A
+	// 1. Txn A is not part of a group => txn A with a valid signature is OK
+	// Censorship attempts are:
+	//  - txn A with an invalid signature => cache/dedup canonical txn with its signature
+	//  - txn A with a valid/invalid signature and part of a valid or invalid group => cache/dedup the entire group
+	//
+	// 2. Txn A is part of a group => txn A with valid GroupID and signature is OK
+	// Censorship attempts are:
+	// - txn A with a valid or invalid signature => cache/dedup canonical txn with its signature.
+	// - txn A as part of a group => cache/dedup the entire group
+	//
+	// what does not work:
+	// - using txid: {A} could be poisoned by {A, B} where B is invalid
+	// - using individual txn from a group: {A, Z} could be poisoned by {A, B}, where B is invalid
+
+	// max buf needed for txn encoding
+	if ntx == 1 {
+		// a single transaction => cache/dedup canonical txn with its signature
+		encodeBuf := make([]byte, 0, consumed)
+		enc := unverifiedTxGroup[0].MarshalMsg(encodeBuf)
+		d := crypto.Hash(enc)
+		if handler.txCanonicalCache.checkAndPut(&d) {
+			return network.OutgoingMessage{Action: network.Ignore}
 		}
-	}
-	if allTxSeen {
-		// duplicate, return
-		// TODO: metric after #4786 merged
-		// TODO: count duplicates per peer and drop?
-		return network.OutgoingMessage{Action: network.Ignore}
+	} else {
+		// a transaction group => cache/dedup the entire group canonical group
+		encodeBuf := make([]byte, 0, consumed)
+		var enc []byte
+		encoded := true
+		for i := range unverifiedTxGroup {
+			enc := unverifiedTxGroup[i].MarshalMsg(encodeBuf)
+			if &enc != &encodeBuf {
+				// reallocated, some assumption on size was wrong
+				// log and skip
+				logging.Base().Warnf("Decoded size %d does not match to encoded: want %d, have %d", consumed, len(enc), cap(encodeBuf)-len(encodeBuf))
+				encoded = false
+				break
+			}
+		}
+		if encoded {
+			d := crypto.Hash(enc)
+			if handler.txCanonicalCache.checkAndPut(&d) {
+				return network.OutgoingMessage{Action: network.Ignore}
+			}
+		}
 	}
 
 	unverifiedTxGroup = unverifiedTxGroup[:ntx]

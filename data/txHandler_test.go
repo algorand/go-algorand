@@ -204,10 +204,7 @@ func TestTxHandlerProcessIncomingTxn(t *testing.T) {
 	t.Parallel()
 
 	const numTxns = 11
-	handler := TxHandler{
-		backlogQueue: make(chan *txBacklogMsg, 1),
-		txidCache:    makeDigestCache(txBacklogSize),
-	}
+	handler := makeTestTxHandler(1)
 	stxns, blob := makeRandomTransactions(numTxns)
 	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
 	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
@@ -229,10 +226,7 @@ func BenchmarkTxHandlerProcessIncomingTxn(b *testing.B) {
 	}()
 
 	const numTxnsPerGroup = 16
-	handler := TxHandler{
-		backlogQueue: make(chan *txBacklogMsg, txBacklogSize),
-		txidCache:    makeDigestCache(txBacklogSize),
-	}
+	handler := makeTestTxHandler(txBacklogSize)
 
 	// prepare tx groups
 	blobs := make([][]byte, b.N)
@@ -279,10 +273,7 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 	}()
 
 	const numTxnsPerGroup = 16
-	handler := TxHandler{
-		backlogQueue: make(chan *txBacklogMsg, txBacklogSize),
-		txidCache:    makeDigestCache(txBacklogSize),
-	}
+	handler := makeTestTxHandler(txBacklogSize)
 
 	// prepare tx groups
 	blobs := make([][]byte, b.N)
@@ -366,10 +357,7 @@ func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler := TxHandler{
-		backlogQueue: make(chan *txBacklogMsg, 20),
-		txidCache:    makeDigestCache(txBacklogSize),
-	}
+	handler := makeTestTxHandler(20)
 
 	stxns1, blob1 := makeRandomTransactions(1)
 	require.Equal(t, 1, len(stxns1))
@@ -408,14 +396,22 @@ func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 
 const benchTxnNum = 25_000
 
+func makeTestTxHandler(backlogSize int) TxHandler {
+	if backlogSize <= 0 {
+		backlogSize = txBacklogSize
+	}
+	return TxHandler{
+		backlogQueue:     make(chan *txBacklogMsg, backlogSize),
+		msgCache:         makeSaltedCache(context.Background(), txBacklogSize, 0),
+		txCanonicalCache: makeDigestCache(txBacklogSize),
+	}
+}
+
 func TestTxHandlerProcessIncomingCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler := TxHandler{
-		backlogQueue: make(chan *txBacklogMsg, 20),
-		txidCache:    makeDigestCache(txBacklogSize),
-	}
+	handler := makeTestTxHandler(20)
 
 	var action network.OutgoingMessage
 	var msg *txBacklogMsg
@@ -468,7 +464,7 @@ func TestTxHandlerProcessIncomingCache(t *testing.T) {
 	require.Equal(t, stxns3[0], msg.unverifiedTxGroup[0])
 	require.Equal(t, stxns3[1], msg.unverifiedTxGroup[1])
 
-	// check a combo from two different seen groups, ensure it dropped
+	// check a combo from two different seen groups, ensure the group is still enqueued
 	stxns4 := make([]transactions.SignedTxn, 2)
 	stxns4[0] = stxns2[0]
 	stxns4[1] = stxns3[0]
@@ -480,7 +476,11 @@ func TestTxHandlerProcessIncomingCache(t *testing.T) {
 	require.Greater(t, len(blob4), 0)
 	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob4})
 	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
-	require.Equal(t, 0, len(handler.backlogQueue))
+	require.Equal(t, 1, len(handler.backlogQueue))
+	msg = <-handler.backlogQueue
+	require.Equal(t, 2, len(msg.unverifiedTxGroup))
+	require.Equal(t, stxns4[0], msg.unverifiedTxGroup[0])
+	require.Equal(t, stxns4[1], msg.unverifiedTxGroup[1])
 }
 
 func BenchmarkTxHandlerDecoder(b *testing.B) {
