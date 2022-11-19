@@ -59,6 +59,7 @@ var transactionMessagesBacklogErr = metrics.MakeCounter(metrics.TransactionMessa
 var transactionMessagesRemember = metrics.MakeCounter(metrics.TransactionMessagesRemember)
 var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionMessagesBacklogSize)
 
+var transactionGroupTxSyncHandled = metrics.MakeCounter(metrics.TransactionGroupTxSyncHandled)
 var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGroupTxSyncRemember)
 var transactionGroupTxSyncAlreadyCommitted = metrics.MakeCounter(metrics.TransactionGroupTxSyncAlreadyCommitted)
 
@@ -368,6 +369,8 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	tx := &txBacklogMsg{
 		unverifiedTxGroup: unverifiedTxGroup,
 	}
+	transactionGroupTxSyncHandled.Inc(nil)
+
 	if handler.checkAlreadyCommitted(tx) {
 		transactionGroupTxSyncAlreadyCommitted.Inc(nil)
 		return network.OutgoingMessage{}, true

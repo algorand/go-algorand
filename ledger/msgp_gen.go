@@ -109,6 +109,14 @@ import (
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
 //
+// hashKind
+//     |-----> MarshalMsg
+//     |-----> CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> Msgsize
+//     |-----> MsgIsZero
+//
 // resourceFlags
 //       |-----> MarshalMsg
 //       |-----> CanMarshalMsg
@@ -192,8 +200,8 @@ func (z CatchpointCatchupState) MsgIsZero() bool {
 func (z *CatchpointFileHeader) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(8)
-	var zb0001Mask uint16 /* 9 bits */
+	zb0001Len := uint32(9)
+	var zb0001Mask uint16 /* 10 bits */
 	if (*z).Totals.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -222,9 +230,13 @@ func (z *CatchpointFileHeader) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x80
 	}
-	if (*z).Version == 0 {
+	if (*z).TotalKVs == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x100
+	}
+	if (*z).Version == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x200
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -265,6 +277,11 @@ func (z *CatchpointFileHeader) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendUint64(o, (*z).TotalChunks)
 		}
 		if (zb0001Mask & 0x100) == 0 { // if not empty
+			// string "kvsCount"
+			o = append(o, 0xa8, 0x6b, 0x76, 0x73, 0x43, 0x6f, 0x75, 0x6e, 0x74)
+			o = msgp.AppendUint64(o, (*z).TotalKVs)
+		}
+		if (zb0001Mask & 0x200) == 0 { // if not empty
 			// string "version"
 			o = append(o, 0xa7, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
 			o = msgp.AppendUint64(o, (*z).Version)
@@ -336,6 +353,14 @@ func (z *CatchpointFileHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			(*z).TotalChunks, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TotalChunks")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).TotalKVs, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TotalKVs")
 				return
 			}
 		}
@@ -414,6 +439,12 @@ func (z *CatchpointFileHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "TotalChunks")
 					return
 				}
+			case "kvsCount":
+				(*z).TotalKVs, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TotalKVs")
+					return
+				}
 			case "catchpoint":
 				(*z).Catchpoint, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
@@ -446,13 +477,13 @@ func (_ *CatchpointFileHeader) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *CatchpointFileHeader) Msgsize() (s int) {
-	s = 1 + 8 + msgp.Uint64Size + 14 + (*z).BalancesRound.Msgsize() + 12 + (*z).BlocksRound.Msgsize() + 14 + (*z).Totals.Msgsize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 11 + msgp.StringPrefixSize + len((*z).Catchpoint) + 18 + (*z).BlockHeaderDigest.Msgsize()
+	s = 1 + 8 + msgp.Uint64Size + 14 + (*z).BalancesRound.Msgsize() + 12 + (*z).BlocksRound.Msgsize() + 14 + (*z).Totals.Msgsize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 9 + msgp.Uint64Size + 11 + msgp.StringPrefixSize + len((*z).Catchpoint) + 18 + (*z).BlockHeaderDigest.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *CatchpointFileHeader) MsgIsZero() bool {
-	return ((*z).Version == 0) && ((*z).BalancesRound.MsgIsZero()) && ((*z).BlocksRound.MsgIsZero()) && ((*z).Totals.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0) && ((*z).Catchpoint == "") && ((*z).BlockHeaderDigest.MsgIsZero())
+	return ((*z).Version == 0) && ((*z).BalancesRound.MsgIsZero()) && ((*z).BlocksRound.MsgIsZero()) && ((*z).Totals.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0) && ((*z).TotalKVs == 0) && ((*z).Catchpoint == "") && ((*z).BlockHeaderDigest.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2285,8 +2316,8 @@ func (z *catchpointFileChunkV6) MsgIsZero() bool {
 func (z *catchpointFirstStageInfo) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 6 bits */
+	zb0001Len := uint32(6)
+	var zb0001Mask uint8 /* 7 bits */
 	if (*z).Totals.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -2303,9 +2334,13 @@ func (z *catchpointFirstStageInfo) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if (*z).TrieBalancesHash.MsgIsZero() {
+	if (*z).TotalKVs == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x20
+	}
+	if (*z).TrieBalancesHash.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x40
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -2331,6 +2366,11 @@ func (z *catchpointFirstStageInfo) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendUint64(o, (*z).TotalChunks)
 		}
 		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "kvsCount"
+			o = append(o, 0xa8, 0x6b, 0x76, 0x73, 0x43, 0x6f, 0x75, 0x6e, 0x74)
+			o = msgp.AppendUint64(o, (*z).TotalKVs)
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not empty
 			// string "trieBalancesHash"
 			o = append(o, 0xb0, 0x74, 0x72, 0x69, 0x65, 0x42, 0x61, 0x6c, 0x61, 0x6e, 0x63, 0x65, 0x73, 0x48, 0x61, 0x73, 0x68)
 			o = (*z).TrieBalancesHash.MarshalMsg(o)
@@ -2378,6 +2418,14 @@ func (z *catchpointFirstStageInfo) UnmarshalMsg(bts []byte) (o []byte, err error
 			(*z).TotalAccounts, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TotalAccounts")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).TotalKVs, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TotalKVs")
 				return
 			}
 		}
@@ -2438,6 +2486,12 @@ func (z *catchpointFirstStageInfo) UnmarshalMsg(bts []byte) (o []byte, err error
 					err = msgp.WrapError(err, "TotalAccounts")
 					return
 				}
+			case "kvsCount":
+				(*z).TotalKVs, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TotalKVs")
+					return
+				}
 			case "chunksCount":
 				(*z).TotalChunks, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
@@ -2470,13 +2524,13 @@ func (_ *catchpointFirstStageInfo) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *catchpointFirstStageInfo) Msgsize() (s int) {
-	s = 1 + 14 + (*z).Totals.Msgsize() + 17 + (*z).TrieBalancesHash.Msgsize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 13 + msgp.Uint64Size
+	s = 1 + 14 + (*z).Totals.Msgsize() + 17 + (*z).TrieBalancesHash.Msgsize() + 14 + msgp.Uint64Size + 9 + msgp.Uint64Size + 12 + msgp.Uint64Size + 13 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *catchpointFirstStageInfo) MsgIsZero() bool {
-	return ((*z).Totals.MsgIsZero()) && ((*z).TrieBalancesHash.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0) && ((*z).BiggestChunkLen == 0)
+	return ((*z).Totals.MsgIsZero()) && ((*z).TrieBalancesHash.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalKVs == 0) && ((*z).TotalChunks == 0) && ((*z).BiggestChunkLen == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3075,6 +3129,52 @@ func (z *encodedKVRecordV6) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *encodedKVRecordV6) MsgIsZero() bool {
 	return (len((*z).Key) == 0) && (len((*z).Value) == 0)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z hashKind) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendByte(o, byte(z))
+	return
+}
+
+func (_ hashKind) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(hashKind)
+	if !ok {
+		_, ok = (z).(*hashKind)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *hashKind) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 byte
+		zb0001, bts, err = msgp.ReadByteBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = hashKind(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *hashKind) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*hashKind)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z hashKind) Msgsize() (s int) {
+	s = msgp.ByteSize
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z hashKind) MsgIsZero() bool {
+	return z == 0
 }
 
 // MarshalMsg implements msgp.Marshaler
