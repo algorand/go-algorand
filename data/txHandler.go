@@ -132,6 +132,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 // this is needed so that the exec pool never gets blocked when it is pushing out the result
 // if the postVerificationQueue is full, it will be reported to the transactionMessagesDroppedFromPool metric
 func (handler *TxHandler) processTxnStreamVerifiedResults() {
+	defer handler.backlogWg.Done()
 	for {
 		select {
 		case result := <-handler.streamReturnChan:
