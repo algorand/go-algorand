@@ -1170,12 +1170,14 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	require.Error(t, err, errSignedTxnMaxOneSig)
 }
 
-/*
+
 // TestStreamVerifierPoolShutdown tests what happens when the exec pool shuts down
 func TestStreamVerifierPoolShutdown(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	numOfTxns := 1000
+	// only one transaction should be sufficient for the batch verifier
+	// to realize the pool is terminated and to shut down
+	numOfTxns := 1
 	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, protoMaxGroupSize, 0.5)
 
 	// prepare the stream verifier
@@ -1191,8 +1193,8 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	nbw := MakeNewBlockWatcher(blkHdr)
 	stxnChan := make(chan UnverifiedElement)
 	resultChan := make(chan VerificationResult)
-	sv := MakeStreamVerifier(ctx, stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache)
-	sv.Start()
+	sv := MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache)
+	sv.Start(ctx)
 
 	errChan := make(chan error)
 
@@ -1202,6 +1204,15 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go processResults(ctx, errChan, resultChan, numOfTxnGroups, badTxnGroups, &badSigResultCounter, &goodSigResultCounter, &wg)
+
+	// When the exec pool shuts down, the batch verifier should gracefully stop
+	// cancel the context so that the test can terminate
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		sv.activeLoopWg.Wait()
+		cancel()
+	}()
 
 	wg.Add(1)
 	// send txn groups to be verified
@@ -1221,11 +1232,10 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 		cancel()
 		errored = true
 	}
-	require.True(t, errored)
-	sv.activeLoopWg.Wait()
+	require.False(t, errored)
 }
 
-
+	/*
 // TestStreamVerifierCtxCancel tests what happens when the context is canceled
 func TestStreamVerifierCtxCancel(t *testing.T) {
 	partitiontest.PartitionTest(t)

@@ -328,6 +328,7 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 
 	// emulate handler.Start() without the backlog
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
+	handler.backlogWg.Add(1)
 	go handler.processTxnStreamVerifiedResults()
 	handler.streamVerifier.Start(handler.ctx)
 
