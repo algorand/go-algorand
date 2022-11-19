@@ -58,6 +58,7 @@ var transactionMessagesBacklogErr = metrics.MakeCounter(metrics.TransactionMessa
 var transactionMessagesRemember = metrics.MakeCounter(metrics.TransactionMessagesRemember)
 var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionMessagesBacklogSize)
 
+var transactionGroupTxSyncHandled = metrics.MakeCounter(metrics.TransactionGroupTxSyncHandled)
 var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGroupTxSyncRemember)
 var transactionGroupTxSyncAlreadyCommitted = metrics.MakeCounter(metrics.TransactionGroupTxSyncAlreadyCommitted)
 
@@ -106,13 +107,12 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
 	}
-
-	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	return handler
 }
 
 // Start enables the processing of incoming messages at the transaction handler
 func (handler *TxHandler) Start() {
+	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	handler.net.RegisterHandlers([]network.TaggedMessageHandler{
 		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
 	})
@@ -351,6 +351,8 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	tx := &txBacklogMsg{
 		unverifiedTxGroup: unverifiedTxGroup,
 	}
+	transactionGroupTxSyncHandled.Inc(nil)
+
 	if handler.checkAlreadyCommitted(tx) {
 		transactionGroupTxSyncAlreadyCommitted.Inc(nil)
 		return network.OutgoingMessage{}, true
