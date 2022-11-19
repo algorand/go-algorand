@@ -342,6 +342,8 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
 
+	unverifiedTxGroup = unverifiedTxGroup[:ntx]
+
 	// consider situations where someone want to censor transactions A
 	// 1. Txn A is not part of a group => txn A with a valid signature is OK
 	// Censorship attempts are:
@@ -360,36 +362,28 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	// max buf needed for txn encoding
 	if ntx == 1 {
 		// a single transaction => cache/dedup canonical txn with its signature
-		encodeBuf := make([]byte, 0, consumed)
-		enc := unverifiedTxGroup[0].MarshalMsg(encodeBuf)
+		enc := unverifiedTxGroup[0].MarshalMsg(nil)
 		d := crypto.Hash(enc)
 		if handler.txCanonicalCache.checkAndPut(&d) {
 			return network.OutgoingMessage{Action: network.Ignore}
 		}
 	} else {
 		// a transaction group => cache/dedup the entire group canonical group
-		encodeBuf := make([]byte, 0, consumed)
-		var enc []byte
-		encoded := true
+		encodeBuf := make([]byte, 0, unverifiedTxGroup[0].Msgsize()*ntx)
 		for i := range unverifiedTxGroup {
-			enc := unverifiedTxGroup[i].MarshalMsg(encodeBuf)
-			if &enc != &encodeBuf {
-				// reallocated, some assumption on size was wrong
-				// log and skip
-				logging.Base().Warnf("Decoded size %d does not match to encoded: want %d, have %d", consumed, len(enc), cap(encodeBuf)-len(encodeBuf))
-				encoded = false
-				break
-			}
+			encodeBuf = unverifiedTxGroup[i].MarshalMsg(encodeBuf)
 		}
-		if encoded {
-			d := crypto.Hash(enc)
+		if len(encodeBuf) != consumed {
+			// reallocated, some assumption on size was wrong
+			// log and skip
+			logging.Base().Warnf("Decoded size %d does not match to encoded %d", consumed, len(encodeBuf))
+		} else {
+			d := crypto.Hash(encodeBuf)
 			if handler.txCanonicalCache.checkAndPut(&d) {
 				return network.OutgoingMessage{Action: network.Ignore}
 			}
 		}
 	}
-
-	unverifiedTxGroup = unverifiedTxGroup[:ntx]
 
 	select {
 	case handler.backlogQueue <- &txBacklogMsg{

@@ -293,7 +293,7 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 		}
 	}()
 
-	const ng = 64
+	const ng = 16
 	numHashes := b.N / ng
 	if numHashes == 0 {
 		numHashes = 1
@@ -430,7 +430,7 @@ func TestTxHandlerProcessIncomingCache(t *testing.T) {
 	require.Equal(t, 1, len(msg.unverifiedTxGroup))
 	require.Equal(t, stxns1[0], msg.unverifiedTxGroup[0])
 
-	// double enqueue a two txn message
+	// double enqueue a two txns message
 	stxns2, blob2 := makeRandomTransactions(2)
 	require.Equal(t, 2, len(stxns2))
 
