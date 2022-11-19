@@ -1170,7 +1170,6 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	require.Error(t, err, errSignedTxnMaxOneSig)
 }
 
-
 // TestStreamVerifierPoolShutdown tests what happens when the exec pool shuts down
 func TestStreamVerifierPoolShutdown(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1235,7 +1234,7 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	require.False(t, errored)
 }
 
-	/*
+/*
 // TestStreamVerifierCtxCancel tests what happens when the context is canceled
 func TestStreamVerifierCtxCancel(t *testing.T) {
 	partitiontest.PartitionTest(t)
