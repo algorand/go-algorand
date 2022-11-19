@@ -881,8 +881,8 @@ func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups m
 	nbw := MakeNewBlockWatcher(blkHdr)
 	stxnChan := make(chan UnverifiedElement)
 	resultChan := make(chan VerificationResult)
-	sv = MakeStreamVerifier(ctx, stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache)
-	sv.Start()
+	sv = MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache)
+	sv.Start(ctx)
 
 	wg := sync.WaitGroup{}
 
