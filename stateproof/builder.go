@@ -202,7 +202,7 @@ func (spw *Worker) getAllOnlineBuilderRounds() ([]basics.Round, error) {
 	var rnds []basics.Round
 	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
 		var err error
-		rnds, err = getSignatureRounds(tx, latestStateProofRound, threshold)
+		rnds, err = getSignatureRounds(tx, threshold, latestStateProofRound)
 		return err
 	})
 
