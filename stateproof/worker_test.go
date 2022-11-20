@@ -124,6 +124,7 @@ func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 		s.waiters[s.latest] = nil
 	}
 }
+
 func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateProofSecretsForRound) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -281,7 +282,7 @@ func (s *testWorkerStubs) BroadcastInternalSignedTxGroup(tx []transactions.Signe
 func (s *testWorkerStubs) RegisterHandlers([]network.TaggedMessageHandler) {
 }
 
-func (s *testWorkerStubs) waitForMe() {
+func (s *testWorkerStubs) waitForSignerAndBuilder() {
 	const maxRetries = 1000000
 	i := 0
 	for {
@@ -321,7 +322,7 @@ func (s *testWorkerStubs) advanceRoundsWithoutStateProof(delta uint64) {
 		s.mu.Lock()
 		s.addBlock(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 		s.mu.Unlock()
-		s.waitForMe()
+		s.waitForSignerAndBuilder()
 	}
 
 }
@@ -339,7 +340,7 @@ func (s *testWorkerStubs) advanceRoundsAndStateProofs(delta uint64) {
 
 		s.addBlock(stateProofNextRound)
 		s.mu.Unlock()
-		s.waitForMe()
+		s.waitForSignerAndBuilder()
 	}
 }
 
@@ -531,7 +532,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 	defer w.Shutdown()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	s.advanceRoundsWithoutStateProof(proto.StateProofInterval / 2)
+	s.advanceRoundsWithoutStateProof(proto.StateProofInterval/2 + 1)
 
 	for i := 0; i < len(keys); i++ {
 		// Expect all signatures to be broadcast.
@@ -693,56 +694,6 @@ func TestWorkerHandleSig(t *testing.T) {
 	}
 }
 
-//
-//func TestAllKeysRemovedAfterExpiration(t *testing.T) {
-//	partitiontest.PartitionTest(t)
-//
-//	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-//
-//	var keys []account.Participation
-//	for i := 0; i < 2; i++ {
-//		var parent basics.Address
-//		crypto.RandBytes(parent[:])
-//		p := newPartKeyWithVersion(t, proto, parent)
-//		defer p.Close()
-//		keys = append(keys, p.Participation)
-//	}
-//
-//	s := newWorkerStubs(t, keys, 10)
-//	dbs, _ := dbOpenTest(t, true)
-//
-//	logger := logging.NewLogger()
-//	logger.SetOutput(io.Discard)
-//
-//	w := NewWorker(dbs.Wdb, logger, s, s, s, s)
-//	w.Start()
-//	defer w.Shutdown()
-//
-//	s.advanceRoundsAndStateProofs(12 * proto.StateProofInterval)
-//
-//	s.mu.Lock()
-//	for _, prt := range s.keys {
-//		require.Equal(t, uint64(prt.LastValid)-proto.StateProofInterval, uint64(s.deletedKeysBeforeRoundMap[prt.ID()]))
-//	}
-//	s.mu.Unlock()
-//
-//	s.advanceRoundsAndStateProofs(proto.StateProofInterval)
-//
-//	s.mu.Lock()
-//	for _, prt := range s.keys {
-//		require.Equal(t, prt.LastValid, s.deletedKeysBeforeRoundMap[prt.ID()])
-//	}
-//	s.mu.Unlock()
-//
-//	s.advanceRoundsAndStateProofs(proto.StateProofInterval)
-//
-//	s.mu.Lock()
-//	for _, prt := range s.keys {
-//		require.Less(t, prt.LastValid, s.deletedKeysBeforeRoundMap[prt.ID()])
-//	}
-//	s.mu.Unlock()
-//}
-
 func TestKeysRemoveOnlyAfterStateProofAccepted(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -854,7 +805,7 @@ func TestWorkerRemovesBuildersAndSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	const expectedStateProofs = 8 // should be less than numBuildersInMemory for this test
+	const expectedStateProofs = buildersCacheLength + 2
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
@@ -901,7 +852,7 @@ func TestWorkerRemovesBuildersAndSignatures(t *testing.T) {
 	s.mu.Lock()
 	s.addBlock(basics.Round((expectedStateProofs) * config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
 	s.mu.Unlock()
-	s.waitForMe()
+	s.waitForSignerAndBuilder()
 
 	count := expectedNumberOfBuilders(proto.StateProofInterval, s.latest, basics.Round((expectedStateProofs)*config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
 	countDB, err = countBuildersInDB(w.db)
@@ -918,7 +869,7 @@ func TestWorkerRemovesBuildersAndSignatures(t *testing.T) {
 	a.Equal(count, len(roundSigs))
 }
 
-func TestWorkerDoesNotLimitBuildersOnDisk(t *testing.T) {
+func TestWorkerDoesNotLimitBuildersAndSignaturesOnDisk(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
