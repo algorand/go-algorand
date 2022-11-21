@@ -1022,20 +1022,6 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 	}
 
 	for _, record := range sDelta.Accts.GetAllAccounts() {
-		var apiParticipation *model.AccountParticipation
-		if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
-			apiParticipation = &model.AccountParticipation{
-				VoteParticipationKey:      record.VoteID[:],
-				SelectionParticipationKey: record.SelectionID[:],
-				VoteFirstValid:            uint64(record.VoteFirstValid),
-				VoteLastValid:             uint64(record.VoteLastValid),
-				VoteKeyDilution:           uint64(record.VoteKeyDilution),
-			}
-			if !record.StateProofID.IsEmpty() {
-				tmp := record.StateProofID[:]
-				apiParticipation.StateProofKey = &tmp
-			}
-		}
 		var ot basics.OverflowTracker
 		pendingRewards := basics.PendingRewards(&ot, consensusParams, record.MicroAlgos, record.RewardsBase, hdr.RewardsLevel)
 
@@ -1043,31 +1029,17 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 		if overflowed {
 			return internalError(ctx, errors.New("overflow on pending reward calculation"), errInternalFailure, v2.Log)
 		}
+
+		ad := basics.AccountData{}
+		ledgercore.AssignAccountData(&ad, record.AccountData)
+		a, err := AccountDataToAccount(record.Addr.String(), &ad, basics.Round(round), &consensusParams, amountWithoutPendingRewards)
+		if err != nil {
+			return internalError(ctx, err, errInternalFailure, v2.Log)
+		}
+
 		accts = append(accts, model.AccountBalanceRecord{
-			AccountData: model.Account{
-				SigType:                     nil,
-				Round:                       round,
-				Address:                     record.Addr.String(),
-				Amount:                      record.MicroAlgos.Raw,
-				PendingRewards:              pendingRewards.Raw,
-				AmountWithoutPendingRewards: amountWithoutPendingRewards.Raw,
-				Rewards:                     record.RewardedMicroAlgos.Raw,
-				Status:                      record.Status.String(),
-				RewardBase:                  &record.RewardsBase,
-				Participation:               apiParticipation,
-				TotalCreatedAssets:          record.TotalAssetParams,
-				TotalCreatedApps:            record.TotalAppParams,
-				TotalAssetsOptedIn:          record.TotalAssets,
-				AuthAddr:                    addrOrNil(record.AuthAddr),
-				TotalAppsOptedIn:            record.TotalAppLocalStates,
-				AppsTotalSchema: &model.ApplicationStateSchema{
-					NumByteSlice: record.TotalAppSchema.NumByteSlice,
-					NumUint:      record.TotalAppSchema.NumUint,
-				},
-				AppsTotalExtraPages: numOrNil(uint64(record.TotalExtraAppPages)),
-				MinBalance:          record.MinBalance(&consensusParams).Raw,
-			},
-			Address: record.Addr.String(),
+			AccountData: a,
+			Address:     record.Addr.String(),
 		})
 	}
 
