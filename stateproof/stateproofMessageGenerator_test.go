@@ -18,6 +18,7 @@ package stateproof
 
 import (
 	"context"
+	"io"
 	"testing"
 	"time"
 
@@ -197,7 +198,10 @@ func TestStateProofMessage(t *testing.T) {
 
 	s := newWorkerForStateProofMessageStubs(keys, len(keys))
 	dbs, _ := dbOpenTest(t, true)
-	w := NewWorker(dbs.Wdb, logging.TestingLog(t), s, s, s, s)
+	logger := logging.NewLogger()
+	logger.SetOutput(io.Discard)
+
+	w := NewWorker(dbs.Wdb, logger, s, s, s, s)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.w.latest--
@@ -346,7 +350,10 @@ func TestGenerateBlockProof(t *testing.T) {
 
 	s := newWorkerForStateProofMessageStubs(keys, len(keys))
 	dbs, _ := dbOpenTest(t, true)
-	w := NewWorker(dbs.Wdb, logging.TestingLog(t), s, s, s, s)
+	logger := logging.NewLogger()
+	logger.SetOutput(io.Discard)
+
+	w := NewWorker(dbs.Wdb, logger, s, s, s, s)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.w.latest--

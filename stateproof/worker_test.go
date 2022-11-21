@@ -361,7 +361,9 @@ func (s *testWorkerStubs) waitOnTxnWithTimeout(timeout time.Duration) (transacti
 }
 
 func newTestWorkerDB(t testing.TB, s *testWorkerStubs, dba db.Accessor) *Worker {
-	return NewWorker(dba, logging.TestingLog(t), s, s, s, s)
+	logger := logging.NewLogger()
+	logger.SetOutput(io.Discard)
+	return NewWorker(dba, logger, s, s, s, s)
 }
 
 func newTestWorker(t testing.TB, s *testWorkerStubs) *Worker {
@@ -1546,7 +1548,7 @@ func TestWorkerCacheAndDiskAfterRestart(t *testing.T) {
 
 	const expectedStateProofs = buildersCacheLength + 1
 	var keys []account.Participation
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 5; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -1613,7 +1615,7 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 
 	const expectedStateProofs = buildersCacheLength + 1
 	var keys []account.Participation
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 5; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
