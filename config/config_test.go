@@ -598,7 +598,7 @@ func TestLocal_TxFiltering(t *testing.T) {
 
 	cfg.TxIncomingFilteringFlags = 2
 	require.False(t, cfg.TxFilterRawMsgEnabled())
-	require.False(t, cfg.TxFilterCanonicalEnabled())
+	require.True(t, cfg.TxFilterCanonicalEnabled())
 
 	cfg.TxIncomingFilteringFlags = 3
 	require.True(t, cfg.TxFilterRawMsgEnabled())
