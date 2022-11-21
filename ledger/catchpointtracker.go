@@ -210,6 +210,7 @@ func (ct *catchpointTracker) GetLastCatchpointLabel() string {
 func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basics.Round, updatingBalancesDuration time.Duration) error {
 	ct.log.Infof("finishing catchpoint's first stage dbRound: %d", dbRound)
 
+	var totalKVs uint64
 	var totalAccounts uint64
 	var totalChunks uint64
 	var biggestChunkLen uint64
@@ -220,7 +221,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		// expects that the accounts data would not be modified in the
 		// background during its execution.
 		var err error
-		totalAccounts, totalChunks, biggestChunkLen, err = ct.generateCatchpointData(
+		totalKVs, totalAccounts, totalChunks, biggestChunkLen, err = ct.generateCatchpointData(
 			ctx, dbRound, updatingBalancesDuration)
 		atomic.StoreInt32(&ct.catchpointDataWriting, 0)
 		if err != nil {
@@ -229,7 +230,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 	}
 
 	f := func(ctx context.Context, tx *sql.Tx) error {
-		err := ct.recordFirstStageInfo(ctx, tx, dbRound, totalAccounts, totalChunks, biggestChunkLen)
+		err := ct.recordFirstStageInfo(ctx, tx, dbRound, totalKVs, totalAccounts, totalChunks, biggestChunkLen)
 		if err != nil {
 			return err
 		}
@@ -761,6 +762,7 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 		BlocksRound:       round,
 		Totals:            dataInfo.Totals,
 		TotalAccounts:     dataInfo.TotalAccounts,
+		TotalKVs:          dataInfo.TotalKVs,
 		TotalChunks:       dataInfo.TotalChunks,
 		Catchpoint:        label,
 		BlockHeaderDigest: blockHash,
@@ -799,6 +801,7 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 	ct.log.With("accountsRound", accountsRound).
 		With("writingDuration", uint64(time.Since(startTime).Nanoseconds())).
 		With("accountsCount", dataInfo.TotalAccounts).
+		With("kvsCount", dataInfo.TotalKVs).
 		With("fileSize", fileInfo.Size()).
 		With("catchpointLabel", label).
 		Infof("Catchpoint file was created")
@@ -968,15 +971,10 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		resDelta := resourcesDeltas.getByIdx(i)
 		addr := resDelta.address
 		if !resDelta.oldResource.data.IsEmpty() {
-			var ctype basics.CreatableType
-			if resDelta.oldResource.data.IsAsset() {
-				ctype = basics.AssetCreatable
-			} else if resDelta.oldResource.data.IsApp() {
-				ctype = basics.AppCreatable
-			} else {
-				return fmt.Errorf("unknown old creatable for addr %s (%d), aidx %d, data %v", addr.String(), resDelta.oldResource.addrid, resDelta.oldResource.aidx, resDelta.oldResource.data)
+			deleteHash, err := resourcesHashBuilderV6(&resDelta.oldResource.data, addr, resDelta.oldResource.aidx, resDelta.oldResource.data.UpdateRound, protocol.Encode(&resDelta.oldResource.data))
+			if err != nil {
+				return err
 			}
-			deleteHash := resourcesHashBuilderV6(addr, resDelta.oldResource.aidx, ctype, uint64(resDelta.oldResource.data.UpdateRound), protocol.Encode(&resDelta.oldResource.data))
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete resource hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
@@ -989,15 +987,10 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		}
 
 		if !resDelta.newResource.IsEmpty() {
-			var ctype basics.CreatableType
-			if resDelta.newResource.IsAsset() {
-				ctype = basics.AssetCreatable
-			} else if resDelta.newResource.IsApp() {
-				ctype = basics.AppCreatable
-			} else {
-				return fmt.Errorf("unknown new creatable for addr %s, aidx %d, data %v", addr.String(), resDelta.oldResource.aidx, resDelta.newResource)
+			addHash, err := resourcesHashBuilderV6(&resDelta.newResource, addr, resDelta.oldResource.aidx, resDelta.newResource.UpdateRound, protocol.Encode(&resDelta.newResource))
+			if err != nil {
+				return err
 			}
-			addHash := resourcesHashBuilderV6(addr, resDelta.oldResource.aidx, ctype, uint64(resDelta.newResource.UpdateRound), protocol.Encode(&resDelta.newResource))
 			added, err = ct.balancesTrie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("attempted to add duplicate resource hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
@@ -1082,7 +1075,7 @@ func (ct *catchpointTracker) IsWritingCatchpointDataFile() bool {
 }
 
 // Generates a (first stage) catchpoint data file.
-func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, updatingBalancesDuration time.Duration) (uint64 /*totalAccounts*/, uint64 /*totalChunks*/, uint64 /*biggestChunkLen*/, error) {
+func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, updatingBalancesDuration time.Duration) (totalKVs, totalAccounts, totalChunks, biggestChunkLen uint64, err error) {
 	ct.log.Debugf("catchpointTracker.generateCatchpointData() writing catchpoint accounts for round %d", accountsRound)
 
 	startTime := time.Now()
@@ -1108,7 +1101,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	var catchpointWriter *catchpointWriter
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
-	err := ct.dbs.Rdb.AtomicContext(ctx, func(dbCtx context.Context, tx *sql.Tx) (err error) {
+	err = ct.dbs.Rdb.AtomicContext(ctx, func(dbCtx context.Context, tx *sql.Tx) (err error) {
 		catchpointWriter, err = makeCatchpointWriter(dbCtx, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk)
 		if err != nil {
 			return
@@ -1163,26 +1156,28 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	ledgerGeneratecatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		ct.log.Warnf("catchpointTracker.generateCatchpointData() %v", err)
-		return 0, 0, 0, err
+		return 0, 0, 0, 0, err
 	}
 
 	catchpointGenerationStats.FileSize = uint64(catchpointWriter.writtenBytes)
 	catchpointGenerationStats.WritingDuration = uint64(time.Since(startTime).Nanoseconds())
 	catchpointGenerationStats.AccountsCount = catchpointWriter.totalAccounts
+	catchpointGenerationStats.KVsCount = catchpointWriter.totalKVs
 	ct.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointGenerationEvent, catchpointGenerationStats)
 	ct.log.With("accountsRound", accountsRound).
 		With("writingDuration", catchpointGenerationStats.WritingDuration).
 		With("CPUTime", catchpointGenerationStats.CPUTime).
 		With("balancesWriteTime", catchpointGenerationStats.BalancesWriteTime).
 		With("accountsCount", catchpointGenerationStats.AccountsCount).
+		With("kvsCount", catchpointGenerationStats.KVsCount).
 		With("fileSize", catchpointGenerationStats.FileSize).
 		With("catchpointLabel", catchpointGenerationStats.CatchpointLabel).
 		Infof("Catchpoint data file was generated")
 
-	return catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, nil
+	return catchpointWriter.totalKVs, catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, nil
 }
 
-func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.Tx, accountsRound basics.Round, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64) error {
+func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.Tx, accountsRound basics.Round, totalKVs uint64, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64) error {
 	accountTotals, err := accountsTotals(ctx, tx, false)
 	if err != nil {
 		return err
@@ -1211,6 +1206,7 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.T
 	info := catchpointFirstStageInfo{
 		Totals:           accountTotals,
 		TotalAccounts:    totalAccounts,
+		TotalKVs:         totalKVs,
 		TotalChunks:      totalChunks,
 		BiggestChunkLen:  biggestChunkLen,
 		TrieBalancesHash: trieBalancesHash,
@@ -1409,7 +1405,7 @@ func removeSingleCatchpointFileFromDisk(dbDirectory, fileToDelete string) (err e
 	return nil
 }
 
-func hashBufV6(affinity uint64, kind byte) []byte {
+func hashBufV6(affinity uint64, kind hashKind) []byte {
 	hash := make([]byte, 4+crypto.DigestSize)
 	// write out the lowest 32 bits of the affinity value. This should improve
 	// the caching of the trie by allowing recent updates to be in-cache, and
@@ -1418,7 +1414,7 @@ func hashBufV6(affinity uint64, kind byte) []byte {
 		// the following takes the prefix & 255 -> hash[i]
 		hash[i] = byte(prefix)
 	}
-	hash[4] = kind
+	hash[hashKindEncodingIndex] = byte(kind)
 	return hash
 }
 
@@ -1435,7 +1431,7 @@ func accountHashBuilderV6(addr basics.Address, accountData *baseAccountData, enc
 	if hashIntPrefix == 0 {
 		hashIntPrefix = accountData.RewardsBase
 	}
-	hash := hashBufV6(hashIntPrefix, 0) // 0 indicates an account
+	hash := hashBufV6(hashIntPrefix, accountHK)
 	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
 	// recent updated to be in-cache, and "older" nodes will be left alone.
 
@@ -1446,21 +1442,55 @@ func accountHashBuilderV6(addr basics.Address, accountData *baseAccountData, enc
 	return finishV6(hash, prehash)
 }
 
-// accountHashBuilderV6 calculates the hash key used for the trie by combining the account address and the account data
-func resourcesHashBuilderV6(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, updateRound uint64, encodedResourceData []byte) []byte {
-	hash := hashBufV6(updateRound, byte(ctype+1)) // one or two ( asset / application ) so we could differentiate the hashes.
+// hashKind enumerates the possible data types hashed into a catchpoint merkle
+// trie. Each merkle trie hash includes the hashKind byte at a known-offset.
+// By encoding hashKind at a known-offset, it's possible for hash readers to
+// disambiguate the hashed resource.
+//go:generate stringer -type=hashKind
+type hashKind byte
+
+// Defines known kinds of hashes. Changing an enum ordinal value is a
+// breaking change.
+const (
+	accountHK hashKind = iota
+	assetHK
+	appHK
+	kvHK
+)
+
+// hashKindEncodingIndex defines the []byte offset where the hash kind is
+// encoded.
+const hashKindEncodingIndex = 4
+
+func rdGetCreatableHashKind(rd *resourcesData, a basics.Address, ci basics.CreatableIndex) (hashKind, error) {
+	if rd.IsAsset() {
+		return assetHK, nil
+	} else if rd.IsApp() {
+		return appHK, nil
+	}
+	return accountHK, fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", a.String(), ci, rd)
+}
+
+// resourcesHashBuilderV6 calculates the hash key used for the trie by combining the creatable's resource data and its index
+func resourcesHashBuilderV6(rd *resourcesData, addr basics.Address, cidx basics.CreatableIndex, updateRound uint64, encodedResourceData []byte) ([]byte, error) {
+	hk, err := rdGetCreatableHashKind(rd, addr, cidx)
+	if err != nil {
+		return nil, err
+	}
+
+	hash := hashBufV6(updateRound, hk)
 
 	prehash := make([]byte, 8+crypto.DigestSize+len(encodedResourceData))
 	copy(prehash[:], addr[:])
 	binary.LittleEndian.PutUint64(prehash[crypto.DigestSize:], uint64(cidx))
 	copy(prehash[crypto.DigestSize+8:], encodedResourceData[:])
 
-	return finishV6(hash, prehash)
+	return finishV6(hash, prehash), nil
 }
 
 // kvHashBuilderV6 calculates the hash key used for the trie by combining the key and value
 func kvHashBuilderV6(key string, value []byte) []byte {
-	hash := hashBufV6(0, 3) // 3 indicates a kv pair
+	hash := hashBufV6(0, kvHK)
 
 	prehash := make([]byte, len(key)+len(value))
 	copy(prehash[:], key)

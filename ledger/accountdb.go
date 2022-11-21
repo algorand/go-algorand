@@ -478,15 +478,10 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 				if err != nil {
 					return nil, err
 				}
-				var ctype basics.CreatableType
-				if resData.IsAsset() {
-					ctype = basics.AssetCreatable
-				} else if resData.IsApp() {
-					ctype = basics.AppCreatable
-				} else {
-					err = fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", balance.Address.String(), cidx, resData)
+				normalizedAccountBalances[i].accountHashes[curHashIdx], err = resourcesHashBuilderV6(&resData, balance.Address, basics.CreatableIndex(cidx), resData.UpdateRound, res)
+				if err != nil {
+					return nil, err
 				}
-				normalizedAccountBalances[i].accountHashes[curHashIdx] = resourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), ctype, resData.UpdateRound, res)
 				normalizedAccountBalances[i].resources[basics.CreatableIndex(cidx)] = resData
 				normalizedAccountBalances[i].encodedResources[basics.CreatableIndex(cidx)] = res
 				curHashIdx++
@@ -4126,6 +4121,16 @@ func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
 	return
 }
 
+func totalKVs(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
+	err = tx.QueryRowContext(ctx, "SELECT count(1) FROM kvstore").Scan(&total)
+	if err == sql.ErrNoRows {
+		total = 0
+		err = nil
+		return
+	}
+	return
+}
+
 // reencodeAccounts reads all the accounts in the accountbase table, decode and reencode the account data.
 // if the account data is found to have a different encoding, it would update the encoded account on disk.
 // on return, it returns the number of modified accounts as well as an error ( if we had any )
@@ -4816,21 +4821,15 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		}
 
 		resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte, lastResource bool) error {
-			var err error
 			if resData != nil {
-				var ctype basics.CreatableType
-				if resData.IsAsset() {
-					ctype = basics.AssetCreatable
-				} else if resData.IsApp() {
-					ctype = basics.AppCreatable
-				} else {
-					err = fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", addr.String(), cidx, resData)
+				hash, err := resourcesHashBuilderV6(resData, addr, cidx, resData.UpdateRound, encodedResourceData)
+				if err != nil {
 					return err
 				}
-				hash := resourcesHashBuilderV6(addr, cidx, ctype, resData.UpdateRound, encodedResourceData)
 				_, err = iterator.insertStmt.ExecContext(ctx, lastAddrID, hash)
+				return err
 			}
-			return err
+			return nil
 		}
 
 		count := 0
@@ -5165,6 +5164,11 @@ type catchpointFirstStageInfo struct {
 	// Total number of accounts in the catchpoint data file. Only set when catchpoint
 	// data files are generated.
 	TotalAccounts uint64 `codec:"accountsCount"`
+
+	// Total number of accounts in the catchpoint data file. Only set when catchpoint
+	// data files are generated.
+	TotalKVs uint64 `codec:"kvsCount"`
+
 	// Total number of chunks in the catchpoint data file. Only set when catchpoint
 	// data files are generated.
 	TotalChunks uint64 `codec:"chunksCount"`
