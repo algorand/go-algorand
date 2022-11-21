@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -1182,8 +1183,37 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	// prepare the stream verifier
 	numOfTxnGroups := len(txnGroups)
 	execPool := execpool.MakePool(t)
-	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
-	verificationPool.Shutdown()
+	backlogQueueSize := 64
+	verificationPool := execpool.MakeBacklog(execPool, backlogQueueSize, execpool.LowPriority, t)
+	_, buffLen := verificationPool.BufferLength()
+
+	// make sure the pool is shut down and the buffer is full
+	holdTasks := make(chan interface{})
+	for x := 0; x < buffLen+runtime.NumCPU(); x++ {
+		verificationPool.EnqueueBacklog(context.Background(),
+			func(arg interface{}) interface{} { <-holdTasks; return nil }, nil, nil)
+	}
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// Shutdown will block until all tasks held by holdTasks is released
+		verificationPool.Shutdown()
+	}()
+	// Send more tasks to break the backlog worker  after b.pool.Enqueue returns the error
+	for x := 0; x < 100; x++ {
+		verificationPool.EnqueueBacklog(context.Background(),
+			func(arg interface{}) interface{} { <-holdTasks; return nil }, nil, nil)
+	}
+	// release the tasks
+	close(holdTasks)
+
+	// make sure the EnqueueBacklogis returning err
+	for x := 0; x < 10; x++ {
+		err := verificationPool.EnqueueBacklog(context.Background(),
+			func(arg interface{}) interface{} { return nil }, nil, nil)
+		require.Error(t, err, fmt.Sprintf("x = %d", x))
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50000)
@@ -1200,7 +1230,6 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	var badSigResultCounter int
 	var goodSigResultCounter int
 
-	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go processResults(ctx, errChan, resultChan, numOfTxnGroups, badTxnGroups, &badSigResultCounter, &goodSigResultCounter, &wg)
 

@@ -662,6 +662,7 @@ func (sv *StreamVerifier) batchingLoop() {
 	timer := time.NewTicker(waitForFirstTxnDuration)
 	var added bool
 	var numberOfSigsInCurrent uint64
+	var numberOfTimerResets uint64
 	uelts := make([]UnverifiedElement, 0)
 	defer sv.cleanup(uelts)
 	for {
@@ -692,7 +693,7 @@ func (sv *StreamVerifier) batchingLoop() {
 
 				if numberOfSigsInCurrent > batchSizeBlockLimit {
 					// do not consider adding more txns to this batch.
-					// bypass the seat count and block if the exec pool is busy
+					// bypass the exec pool situation and queue anyway
 					// this is to prevent creation of very large batches
 					err := sv.addVerificationTaskToThePoolNow(uelts)
 					if err != nil {
@@ -710,14 +711,17 @@ func (sv *StreamVerifier) batchingLoop() {
 					uelts = make([]UnverifiedElement, 0)
 					// starting a new batch. Can wait long, since nothing is blocked
 					timer.Reset(waitForFirstTxnDuration)
+					numberOfTimerResets = 0
 				} else {
 					// was not added because of the exec pool buffer length
 					timer.Reset(waitForNextTxnDuration)
+					numberOfTimerResets++
 				}
 			} else {
 				if isFirstInBatch {
 					// an element is added and is waiting. shorten the waiting time
 					timer.Reset(waitForNextTxnDuration)
+					numberOfTimerResets = 0
 				}
 			}
 		case <-timer.C:
@@ -725,9 +729,19 @@ func (sv *StreamVerifier) batchingLoop() {
 			if numberOfSigsInCurrent == 0 {
 				// nothing batched yet... wait some more
 				timer.Reset(waitForFirstTxnDuration)
+				numberOfTimerResets = 0
 				continue
 			}
-			added, err := sv.canAddVerificationTaskToThePool(uelts)
+			var err error
+			if numberOfTimerResets > 1 {
+				// bypass the exec pool situation and queue anyway
+				// this is to prevent long delays in transaction propagation
+				// at least one transaction here has waited 3 x waitForFirstTxnDuration
+				err = sv.addVerificationTaskToThePoolNow(uelts)
+				added = true
+			} else {
+				added, err = sv.canAddVerificationTaskToThePool(uelts)
+			}
 			if err != nil {
 				return
 			}
@@ -736,9 +750,11 @@ func (sv *StreamVerifier) batchingLoop() {
 				uelts = make([]UnverifiedElement, 0)
 				// starting a new batch. Can wait long, since nothing is blocked
 				timer.Reset(waitForFirstTxnDuration)
+				numberOfTimerResets = 0
 			} else {
 				// was not added because of the exec pool buffer length. wait for some more txns
 				timer.Reset(waitForNextTxnDuration)
+				numberOfTimerResets++
 			}
 		case <-sv.ctx.Done():
 			return
