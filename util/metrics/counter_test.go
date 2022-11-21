@@ -39,7 +39,7 @@ func TestMetricCounter(t *testing.T) {
 	}
 
 	// create a http listener.
-	port := test.createListener(":0")
+	port := test.createListener("127.0.0.1:0")
 
 	metricService := MakeMetricService(&ServiceConfig{
 		NodeExporterListenAddress: fmt.Sprintf("localhost:%d", port),
@@ -85,7 +85,7 @@ func TestMetricCounterFastInts(t *testing.T) {
 	}
 
 	// create a http listener.
-	port := test.createListener(":0")
+	port := test.createListener("127.0.0.1:0")
 
 	metricService := MakeMetricService(&ServiceConfig{
 		NodeExporterListenAddress: fmt.Sprintf("localhost:%d", port),
@@ -132,7 +132,7 @@ func TestMetricCounterMixed(t *testing.T) {
 	}
 
 	// create a http listener.
-	port := test.createListener(":0")
+	port := test.createListener("127.0.0.1:0")
 
 	metricService := MakeMetricService(&ServiceConfig{
 		NodeExporterListenAddress: fmt.Sprintf("localhost:%d", port),

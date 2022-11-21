@@ -23,7 +23,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"math"
 	"math/rand"
 	"os"
@@ -33,14 +32,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/client"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -155,7 +154,7 @@ func waitForRoundOne(t *testing.T, testClient libgoal.Client) {
 
 var errWaitForTransactionTimeout = errors.New("wait for transaction timed out")
 
-func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, txID string, timeout time.Duration) (tx v1.Transaction, err error) {
+func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, txID string, timeout time.Duration) (tx v2.PreEncodedTxInfo, err error) {
 	a := require.New(fixtures.SynchronizedTest(t))
 	rnd, err := testClient.Status()
 	a.NoError(err)
@@ -164,14 +163,11 @@ func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, tx
 	}
 	timeoutTime := time.Now().Add(timeout)
 	for {
-		tx, err = testClient.TransactionInformation(fromAddress, txID)
-		if err != nil && strings.HasPrefix(err.Error(), "HTTP 404") {
-			tx, err = testClient.PendingTransactionInformation(txID)
-		}
+		tx, err = testClient.ParsedPendingTransaction(txID)
 		if err == nil {
 			a.NotEmpty(tx)
 			a.Empty(tx.PoolError)
-			if tx.ConfirmedRound > 0 {
+			if tx.ConfirmedRound != nil && *tx.ConfirmedRound > 0 {
 				return
 			}
 		}
@@ -214,55 +210,6 @@ func TestClientCanGetStatusAfterBlock(t *testing.T) {
 	a.NotEmpty(statusResponse)
 }
 
-func TestTransactionsByAddr(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
-	a := require.New(fixtures.SynchronizedTest(t))
-	var localFixture fixtures.RestClientFixture
-	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
-	defer localFixture.Shutdown()
-
-	testClient := localFixture.LibGoalClient
-	waitForRoundOne(t, testClient)
-	wh, err := testClient.GetUnencryptedWalletHandle()
-	a.NoError(err)
-	addresses, err := testClient.ListAddresses(wh)
-	a.NoError(err)
-	_, someAddress := getMaxBalAddr(t, testClient, addresses)
-	if someAddress == "" {
-		t.Error("no addr with funds")
-	}
-	toAddress := getDestAddr(t, testClient, addresses, someAddress, wh)
-	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, nil, "", 0, 0)
-	a.NoError(err)
-	txID := tx.ID()
-	rnd, err := testClient.Status()
-	a.NoError(err)
-	t.Logf("rnd[%d] created txn %s", rnd.LastRound, txID)
-	_, err = waitForTransaction(t, testClient, someAddress, txID.String(), 30*time.Second)
-	a.NoError(err)
-
-	// what is my round?
-	rnd, err = testClient.Status()
-	a.NoError(err)
-	t.Logf("rnd %d", rnd.LastRound)
-
-	// Now let's get the transaction
-
-	restClient, err := localFixture.NC.AlgodClient()
-	a.NoError(err)
-	res, err := restClient.TransactionsByAddr(toAddress, 0, rnd.LastRound, 100)
-	a.NoError(err)
-	a.Equal(1, len(res.Transactions))
-
-	for _, tx := range res.Transactions {
-		a.Equal(tx.From, someAddress)
-		a.Equal(tx.Payment.Amount, uint64(100000))
-		a.Equal(tx.Fee, uint64(10000))
-	}
-}
-
 func TestClientCanGetVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -296,7 +243,7 @@ func TestClientCanGetMinTxnFee(t *testing.T) {
 	testClient := fixture.LibGoalClient
 	suggestedParamsRes, err := testClient.SuggestedParams()
 	a.NoError(err)
-	a.Truef(suggestedParamsRes.MinTxnFee > 0, "min txn fee not supplied")
+	a.Truef(suggestedParamsRes.MinFee > 0, "min txn fee not supplied")
 }
 
 func TestClientCanGetBlockInfo(t *testing.T) {
@@ -460,7 +407,7 @@ func TestClientCanSendAndGetNote(t *testing.T) {
 	a.NoError(err)
 	txStatus, err := waitForTransaction(t, testClient, someAddress, tx.ID().String(), 30*time.Second)
 	a.NoError(err)
-	a.Equal(note, txStatus.Note)
+	a.Equal(note, txStatus.Txn.Txn.Note)
 }
 
 func TestClientCanGetTransactionStatus(t *testing.T) {
@@ -512,7 +459,7 @@ func TestAccountBalance(t *testing.T) {
 	_, err = waitForTransaction(t, testClient, someAddress, tx.ID().String(), 30*time.Second)
 	a.NoError(err)
 
-	account, err := testClient.AccountInformation(toAddress)
+	account, err := testClient.AccountInformation(toAddress, false)
 	a.NoError(err)
 	a.Equal(account.AmountWithoutPendingRewards, uint64(100000))
 	a.Truef(account.Amount >= 100000, "account must have received money, and account information endpoint must print it")
@@ -579,12 +526,12 @@ func TestAccountParticipationInfo(t *testing.T) {
 	_, err = waitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
 	a.NoError(err)
 
-	account, err := testClient.AccountInformation(someAddress)
+	account, err := testClient.AccountInformation(someAddress, false)
 	a.NoError(err)
-	a.Equal(randomVotePKStr, string(account.Participation.ParticipationPK), "API must print correct root voting key")
-	a.Equal(randomSelPKStr, string(account.Participation.VRFPK), "API must print correct vrf key")
-	a.Equal(uint64(firstRound), account.Participation.VoteFirst, "API must print correct first participation round")
-	a.Equal(uint64(lastRound), account.Participation.VoteLast, "API must print correct last participation round")
+	a.Equal(randomVotePKStr, string(account.Participation.VoteParticipationKey), "API must print correct root voting key")
+	a.Equal(randomSelPKStr, string(account.Participation.SelectionParticipationKey), "API must print correct vrf key")
+	a.Equal(uint64(firstRound), account.Participation.VoteFirstValid, "API must print correct first participation round")
+	a.Equal(uint64(lastRound), account.Participation.VoteLastValid, "API must print correct last participation round")
 	a.Equal(dilution, account.Participation.VoteKeyDilution, "API must print correct key dilution")
 	// TODO: should we update the v1 API to support state proof? Currently it does not return this field.
 }
@@ -841,13 +788,15 @@ func TestClientCanGetPendingTransactions(t *testing.T) {
 	// Check that a single pending txn is corectly displayed
 	tx, err := testClient.SendPaymentFromUnencryptedWallet(fromAddress, toAddress, minTxnFee, minAcctBalance, nil)
 	a.NoError(err)
-	statusResponse, err := testClient.GetPendingTransactions(0)
+	statusResponse, err := testClient.GetParsedPendingTransactions(0)
 	a.NoError(err)
 	a.NotEmpty(statusResponse)
-	a.True(statusResponse.TotalTxns == 1)
-	a.True(len(statusResponse.TruncatedTxns.Transactions) == 1)
-	a.True(statusResponse.TruncatedTxns.Transactions[0].TxID == tx.ID().String())
+	a.True(statusResponse.TotalTransactions == 1)
+	a.True(len(statusResponse.TopTransactions) == 1)
 
+	// Parse response into SignedTxn
+	pendingTxn := statusResponse.TopTransactions[0]
+	a.True(pendingTxn.Txn.ID().String() == tx.ID().String())
 }
 
 func TestClientTruncatesPendingTransactions(t *testing.T) {
@@ -879,14 +828,13 @@ func TestClientTruncatesPendingTransactions(t *testing.T) {
 		a.NoError(err)
 		txIDsSeen[tx2.ID().String()] = true
 	}
-	statusResponse, err := testClient.GetPendingTransactions(uint64(MaxTxns))
+	statusResponse, err := testClient.GetParsedPendingTransactions(uint64(MaxTxns))
 	a.NoError(err)
-	a.NotEmpty(statusResponse)
-	a.True(int(statusResponse.TotalTxns) == NumTxns)
-	a.True(len(statusResponse.TruncatedTxns.Transactions) == MaxTxns)
-	for _, tx := range statusResponse.TruncatedTxns.Transactions {
-		a.True(txIDsSeen[tx.TxID])
-		delete(txIDsSeen, tx.TxID)
+	a.True(int(statusResponse.TotalTransactions) == NumTxns)
+	a.True(len(statusResponse.TopTransactions) == MaxTxns)
+	for _, tx := range statusResponse.TopTransactions {
+		a.True(txIDsSeen[tx.Txn.ID().String()])
+		delete(txIDsSeen, tx.Txn.ID().String())
 	}
 	a.True(len(txIDsSeen) == NumTxns-MaxTxns)
 }
@@ -926,12 +874,14 @@ func TestClientPrioritizesPendingTransactions(t *testing.T) {
 	txHigh, err := testClient.SendPaymentFromUnencryptedWallet(fromAddress, toAddress, minTxnFee*10, minAcctBalance, nil)
 	a.NoError(err)
 
-	statusResponse, err := testClient.GetPendingTransactions(uint64(MaxTxns))
+	statusResponse, err := testClient.GetParsedPendingTransactions(uint64(MaxTxns))
 	a.NoError(err)
 	a.NotEmpty(statusResponse)
-	a.True(int(statusResponse.TotalTxns) == NumTxns+1)
-	a.True(len(statusResponse.TruncatedTxns.Transactions) == MaxTxns)
-	a.True(statusResponse.TruncatedTxns.Transactions[0].TxID == txHigh.ID().String())
+	a.True(int(statusResponse.TotalTransactions) == NumTxns+1)
+	a.True(len(statusResponse.TopTransactions) == MaxTxns)
+
+	pendingTxn := statusResponse.TopTransactions[0]
+	a.True(pendingTxn.Txn.ID().String() == txHigh.ID().String())
 }
 
 func TestPendingTransactionInfoInnerTxnAssetCreate(t *testing.T) {
@@ -1000,7 +950,7 @@ return
 	a.NoError(err)
 
 	// get app ID
-	submittedAppCreateTxn, err := testClient.PendingTransactionInformationV2(appCreateTxID)
+	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
 	a.NoError(err)
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
@@ -1024,7 +974,7 @@ return
 	a.NoError(err)
 
 	// verify pending txn info of outer txn
-	submittedAppCallTxn, err := testClient.PendingTransactionInformationV2(appCallTxnTxID)
+	submittedAppCallTxn, err := testClient.PendingTransactionInformation(appCallTxnTxID)
 	a.NoError(err)
 	a.Nil(submittedAppCallTxn.ApplicationIndex)
 	a.Nil(submittedAppCallTxn.AssetIndex)
@@ -1038,7 +988,7 @@ return
 	createdAssetID := *innerTxn.AssetIndex
 	a.Greater(createdAssetID, uint64(0))
 
-	createdAssetInfo, err := testClient.AssetInformationV2(createdAssetID)
+	createdAssetInfo, err := testClient.AssetInformation(createdAssetID)
 	a.NoError(err)
 	a.Equal(createdAssetID, createdAssetInfo.Index)
 	a.Equal(createdAppID.Address().String(), createdAssetInfo.Params.Creator)
@@ -1119,7 +1069,7 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	_, err = waitForTransaction(t, testClient, someAddress, txID, 120*time.Second)
 	a.NoError(err)
 
-	account, err := testClient.AccountInformationV2(someAddress, false)
+	account, err := testClient.AccountInformation(someAddress, false)
 	a.NoError(err)
 	a.NotNil(account.Participation.StateProofKey)
 
@@ -1216,7 +1166,7 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 	_, err = waitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
 	a.NoError(err)
 
-	account, err := testClient.AccountInformationV2(someAddress, false)
+	account, err := testClient.AccountInformation(someAddress, false)
 	a.NoError(err)
 	a.Nil(account.Participation.StateProofKey)
 }
@@ -1306,7 +1256,7 @@ end:
 	a.NoError(err)
 
 	// get app ID
-	submittedAppCreateTxn, err := testClient.PendingTransactionInformationV2(appCreateTxID)
+	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
 	a.NoError(err)
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
@@ -1381,7 +1331,7 @@ end:
 		e := err.(client.HTTPError)
 		a.Equal(400, e.StatusCode)
 
-		var er *generated.ErrorResponse
+		var er *model.ErrorResponse
 		err = protocol.DecodeJSON([]byte(e.ErrorString), &er)
 		a.NoError(err)
 		a.Equal("Result limit exceeded", er.Message)
@@ -1449,7 +1399,7 @@ end:
 			createdBoxCount -= uint64(len(boxNames))
 		}
 
-		var resp generated.BoxesResponse
+		var resp model.BoxesResponse
 		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
 		a.NoError(err)
 

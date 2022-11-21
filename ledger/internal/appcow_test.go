@@ -119,7 +119,7 @@ func getCow(creatables []modsData) *roundCowState {
 		proto: config.Consensus[protocol.ConsensusCurrentVersion],
 	}
 	for _, e := range creatables {
-		cs.mods.Creatables[e.cidx] = ledgercore.ModifiedCreatable{Ctype: e.ctype, Creator: e.addr, Created: true}
+		cs.mods.AddCreatable(e.cidx, ledgercore.ModifiedCreatable{Ctype: e.ctype, Creator: e.addr, Created: true})
 	}
 	return cs
 }
