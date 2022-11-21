@@ -356,7 +356,7 @@ func (s *testWorkerStubs) waitOnTxnWithTimeout(timeout time.Duration) (transacti
 	case signedTx := <-s.txmsg:
 		return signedTx, nil
 	case <-time.After(timeout):
-		return transactions.SignedTxn{}, fmt.Errorf("timeout waiting on sigmsg")
+		return transactions.SignedTxn{}, fmt.Errorf("timeout waiting on stateproof txn")
 	}
 }
 
@@ -463,12 +463,13 @@ func TestWorkerAllSigs(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	s.advanceRoundsWithoutStateProof(t, 1)
+	// at this point the ledger is at round 511 - we add 2 blocks to pass the state proof interval
+	s.advanceRoundsWithoutStateProof(t, 2)
 	// Go through several iterations, making sure that we get
 	// the signatures and certs broadcast at each round.
 	for iter := 0; iter < 5; iter++ {
-		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval)
-		for i := 0; i < len(keys); i++ {
+		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval-1)
+		for i := 0; i < 2*len(keys); i++ {
 			// Expect all signatures to be broadcast.
 			_, err := s.waitOnSigWithTimeout(time.Second * 2)
 			require.NoError(t, err)
@@ -509,7 +510,7 @@ func TestWorkerAllSigs(t *testing.T) {
 			require.NoError(t, err)
 			break
 		}
-
+		s.advanceRoundsAndCreateStateProofs(t, proto.StateProofInterval)
 	}
 }
 
@@ -529,6 +530,9 @@ func TestWorkerPartialSigs(t *testing.T) {
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
+
+	// at this point the ledger is at round 511 - we push add one block, so it will start to create state proofs
+	s.advanceRoundsWithoutStateProof(t, 1)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2+1)
