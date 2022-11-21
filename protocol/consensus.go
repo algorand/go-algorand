@@ -217,6 +217,9 @@ const ConsensusVAlpha3 = ConsensusVersion("alpha3")
 // ConsensusVAlpha4 uses the same parameters as ConsensusV34.
 const ConsensusVAlpha4 = ConsensusVersion("alpha4")
 
+// ConsensusVAlpha5 uses the same parameters as ConsensusV36.
+const ConsensusVAlpha5 = ConsensusVersion("alpha5")
+
 // !!! ********************* !!!
 // !!! *** Please update ConsensusCurrentVersion when adding new protocol versions *** !!!
 // !!! ********************* !!!

@@ -56,6 +56,7 @@ type catchpointWriter struct {
 	tx                   *sql.Tx
 	filePath             string
 	totalAccounts        uint64
+	totalKVs             uint64
 	file                 *os.File
 	tar                  *tar.Writer
 	compressor           io.WriteCloser
@@ -73,7 +74,7 @@ type encodedBalanceRecordV5 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Address     basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
-	AccountData msgp.Raw       `codec:"ad"`
+	AccountData msgp.Raw       `codec:"ad"` // encoding of basics.AccountData
 }
 
 type catchpointFileBalancesChunkV5 struct {
@@ -89,8 +90,8 @@ type encodedBalanceRecordV6 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Address     basics.Address      `codec:"a,allocbound=crypto.DigestSize"`
-	AccountData msgp.Raw            `codec:"b"`
-	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=resourcesPerCatchpointFileChunkBackwardCompatible"`
+	AccountData msgp.Raw            `codec:"b"`                                                              // encoding of baseAccountData
+	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=resourcesPerCatchpointFileChunkBackwardCompatible"` // map of resourcesData
 
 	// flag indicating whether there are more records for the same account coming up
 	ExpectingMoreEntries bool `codec:"e"`
@@ -134,6 +135,11 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxR
 		return nil, err
 	}
 
+	totalKVs, err := totalKVs(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+
 	err = os.MkdirAll(filepath.Dir(filePath), 0700)
 	if err != nil {
 		return nil, err
@@ -153,6 +159,7 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxR
 		tx:                   tx,
 		filePath:             filePath,
 		totalAccounts:        totalAccounts,
+		totalKVs:             totalKVs,
 		file:                 file,
 		compressor:           compressor,
 		tar:                  tar,
