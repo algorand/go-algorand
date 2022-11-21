@@ -52,30 +52,6 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-// TestAccountsDbQueriesCreateClose tests to see that we can create the accountsDbQueries and close it.
-// it also verify that double-closing it doesn't create an issue.
-func TestAccountsDbQueriesCreateClose(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	dbs, _ := storetesting.DbOpenTest(t, true)
-	storetesting.SetDbLogging(t, dbs)
-	defer dbs.Close()
-
-	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
-		return nil
-	})
-	require.NoError(t, err)
-	qs, err := store.AccountsInitDbQueries(dbs.Rdb.Handle)
-	require.NoError(t, err)
-	// TODO[store-refactor]: internals are opaque, once we move the the remainder of accountdb we can mvoe this too
-	// require.NotNil(t, qs.listCreatablesStmt)
-	qs.Close()
-	// require.Nil(t, qs.listCreatablesStmt)
-	qs.Close()
-	// require.Nil(t, qs.listCreatablesStmt)
-}
-
 func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
 	newDB, err := accountsInit(tx, initAccounts, config.Consensus[proto])
 	require.NoError(tb, err)
@@ -986,6 +962,30 @@ func TestAccountsReencoding(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
+}
+
+// TestAccountsDbQueriesCreateClose tests to see that we can create the accountsDbQueries and close it.
+// it also verify that double-closing it doesn't create an issue.
+func TestAccountsDbQueriesCreateClose(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
+	defer dbs.Close()
+
+	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		return nil
+	})
+	require.NoError(t, err)
+	qs, err := store.AccountsInitDbQueries(dbs.Rdb.Handle)
+	require.NoError(t, err)
+	// TODO[store-refactor]: internals are opaque, once we move the the remainder of accountdb we can mvoe this too
+	// require.NotNil(t, qs.listCreatablesStmt)
+	qs.Close()
+	// require.Nil(t, qs.listCreatablesStmt)
+	qs.Close()
+	// require.Nil(t, qs.listCreatablesStmt)
 }
 
 func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder bool) {
