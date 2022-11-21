@@ -118,7 +118,7 @@ type StateDelta struct {
 	PrevTimestamp int64
 
 	// initial hint for allocating data structures for StateDelta
-	initialTransactionsCount int
+	initialHint int
 
 	// The account totals reflecting the changes in this StateDelta object.
 	Totals AccountTotals
@@ -199,7 +199,6 @@ type AccountDeltas struct {
 // hint is amount of transactions for evaluation, 2 * hint is for sender and receiver balance records.
 // This does not play well for AssetConfig and ApplicationCall transactions on scale
 func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, stateProofNext basics.Round) (sd StateDelta) {
-	sd = StateDelta{}
 	sd.PopulateStateDelta(hdr, prevTimestamp, hint, stateProofNext)
 	return
 }
@@ -210,13 +209,14 @@ func (sd *StateDelta) PopulateStateDelta(hdr *bookkeeping.BlockHeader, prevTimes
 	if sd.Txids == nil {
 		sd.Txids = make(map[transactions.Txid]IncludedTransactions, hint)
 	}
-	if sd.Accts.isEmpty() {
+	if sd.Accts.notAllocated() {
 		sd.Accts = MakeAccountDeltas(hint)
+		// initialHint is only used in OptimizeAllocatedMemory to resize it's allocated memory hence why we only reset it if we reallocate it
+		sd.initialHint = hint
 	}
 	sd.Hdr = hdr
 	sd.StateProofNext = stateProofNext
 	sd.PrevTimestamp = prevTimestamp
-	sd.initialTransactionsCount = hint
 }
 
 // MakeAccountDeltas creates account delta
@@ -246,10 +246,10 @@ func (sd *StateDelta) Reset() {
 	sd.Totals = AccountTotals{}
 
 	// these fields are going to be populated on next use but resetting them anyway for safety.
+	// we are not resetting sd.initialHint since it should only be reset if reallocating AccountDeltas
 	sd.Hdr = nil
 	sd.StateProofNext = basics.Round(0)
 	sd.PrevTimestamp = 0
-	sd.initialTransactionsCount = 0
 }
 
 // reset clears out allocated slices from AccountDeltas struct for reuse with sync.Pool
@@ -271,8 +271,8 @@ func (ad *AccountDeltas) reset() {
 	}
 }
 
-// isEmpty returns true if any of the fields allocated by MakeAccountDeltas is nil
-func (ad *AccountDeltas) isEmpty() bool {
+// notAllocated returns true if any of the fields allocated by MakeAccountDeltas is nil
+func (ad *AccountDeltas) notAllocated() bool {
 	return ad.Accts == nil || ad.acctsCache == nil
 }
 
@@ -501,8 +501,8 @@ func (sd *StateDelta) OptimizeAllocatedMemory(maxBalLookback uint64) {
 
 	// acctsCache takes up 64 bytes per entry, and is saved for 320 rounds
 	// realloc if original allocation capacity greater than length of data, and space difference is significant
-	if 2*sd.initialTransactionsCount > len(sd.Accts.acctsCache) &&
-		uint64(2*sd.initialTransactionsCount-len(sd.Accts.acctsCache))*accountMapCacheEntrySize*maxBalLookback > stateDeltaTargetOptimizationThreshold {
+	if 2*sd.initialHint > len(sd.Accts.acctsCache) &&
+		uint64(2*sd.initialHint-len(sd.Accts.acctsCache))*accountMapCacheEntrySize*maxBalLookback > stateDeltaTargetOptimizationThreshold {
 		acctsCache := make(map[basics.Address]int, len(sd.Accts.acctsCache))
 		for k, v := range sd.Accts.acctsCache {
 			acctsCache[k] = v
