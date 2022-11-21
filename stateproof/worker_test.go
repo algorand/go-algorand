@@ -323,7 +323,6 @@ func (s *testWorkerStubs) advanceRoundsWithoutStateProof(t *testing.T, delta uin
 		s.mu.Unlock()
 		s.waitForSignerAndBuilder(t)
 	}
-
 }
 
 // used to simulate to workers that rounds have advanced, and stateproofs were created.
@@ -464,11 +463,11 @@ func TestWorkerAllSigs(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
+	s.advanceRoundsWithoutStateProof(t, 1)
 	// Go through several iterations, making sure that we get
 	// the signatures and certs broadcast at each round.
 	for iter := 0; iter < 5; iter++ {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval)
-
 		for i := 0; i < len(keys); i++ {
 			// Expect all signatures to be broadcast.
 			_, err := s.waitOnSigWithTimeout(time.Second * 2)
@@ -510,6 +509,7 @@ func TestWorkerAllSigs(t *testing.T) {
 			require.NoError(t, err)
 			break
 		}
+
 	}
 }
 
