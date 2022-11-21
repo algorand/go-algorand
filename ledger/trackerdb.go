@@ -539,7 +539,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema8(ctx context.Context
 			return fmt.Errorf("upgradeDatabaseSchema8 unable to reset acctrounds table 'hashbase' round : %v", err)
 		}
 	}
-	return tu.setVersion(ctx, tx, 8)
+	return tu.setVersion(ctx, tx, 9)
 }
 
 // isDirEmpty returns if a given directory is empty or not.
