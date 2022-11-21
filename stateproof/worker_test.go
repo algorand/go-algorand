@@ -328,7 +328,7 @@ func (s *testWorkerStubs) advanceRoundsWithoutStateProof(delta uint64) {
 }
 
 // used to simulate to workers that rounds have advanced, and stateproofs were created.
-func (s *testWorkerStubs) advanceRoundsAndStateProofs(delta uint64) {
+func (s *testWorkerStubs) advanceRoundsAndCreateStateProofs(delta uint64) {
 	for r := uint64(0); r < delta; r++ {
 		s.mu.Lock()
 		interval := basics.Round(config.Consensus[s.blocks[s.latest].CurrentProtocol].StateProofInterval)
@@ -694,6 +694,81 @@ func TestWorkerHandleSig(t *testing.T) {
 	}
 }
 
+func TestWorkerIgnoresSignatureForNonCacheBuilders(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, 10)
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	targetRound := (buildersCacheLength + 1) * proto.StateProofInterval
+
+	s.advanceRoundsWithoutStateProof(targetRound)
+
+	// clean up the cache and clean up the signatures database so the handler will accept our signatures.
+	s.mu.Lock()
+	w.builders = make(map[basics.Round]builder)
+	a.NoError(w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("DELETE  from sigs")
+		return err
+	}))
+	s.mu.Unlock()
+
+	// rounds [2*proto.StateProofInterval, 3*proto.StateProofInterval, ... (buildersCacheLength - 1)*proto.StateProofInterval] should be
+	// accepted by handleSig
+	i := uint64(0)
+	for ; i < (buildersCacheLength - 1); i++ {
+		err, fwd := sendSigToHandler(proto, i, w, a, s)
+		a.Equal(network.Broadcast, fwd)
+		a.NoError(err)
+	}
+
+	// signature for (buildersCacheLength)*proto.StateProofInterval should be rejected - due to cache limit
+	err, fwd := sendSigToHandler(proto, i, w, a, s)
+	a.Equal(network.Ignore, fwd)
+	a.NoError(err)
+	i++
+
+	// newest signature should be accepted
+	err, fwd = sendSigToHandler(proto, i, w, a, s)
+	a.Equal(network.Broadcast, fwd)
+	a.NoError(err)
+
+}
+
+func sendSigToHandler(proto config.ConsensusParams, i uint64, w *Worker, a *require.Assertions, s *testWorkerStubs) (error, network.ForwardingPolicy) {
+	rnd := basics.Round(2*proto.StateProofInterval + i*proto.StateProofInterval)
+	latestBlockHeader, err := w.ledger.BlockHdr(rnd)
+	a.NoError(err)
+	stateproofMessage, err := GenerateStateProofMessage(w.ledger, uint64(latestBlockHeader.Round)-proto.StateProofInterval, latestBlockHeader)
+	a.NoError(err)
+
+	hashedStateproofMessage := stateproofMessage.Hash()
+	spRecords := s.StateProofKeys(rnd)
+	sig, err := spRecords[0].StateProofSecrets.SignBytes(hashedStateproofMessage[:])
+	a.NoError(err)
+
+	msg := sigFromAddr{
+		SignerAddress: spRecords[0].Account,
+		Round:         rnd,
+		Sig:           sig,
+	}
+
+	fwd, err := w.handleSig(msg, msg.SignerAddress)
+	return err, fwd
+}
 func TestKeysRemoveOnlyAfterStateProofAccepted(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -712,7 +787,7 @@ func TestKeysRemoveOnlyAfterStateProofAccepted(t *testing.T) {
 	require.Equal(t, len(keys), len(checkedKeys))
 	requireDeletedKeysToBeDeletedBefore(t, s, firstExpectedStateproof) // i should at this point have the keys to sign on round 512.... how come they were deleted?
 
-	s.advanceRoundsAndStateProofs(proto.StateProofInterval)
+	s.advanceRoundsAndCreateStateProofs(proto.StateProofInterval)
 
 	// the first state proof was confirmed keys for that state proof can be removed
 	// So we should have the not deleted keys for proto.StateProofInterval + firstExpectedStateproof
@@ -752,7 +827,7 @@ func TestKeysRemoveOnlyAfterStateProofAcceptedSmallIntervals(t *testing.T) {
 	require.Equal(t, len(keys), len(checkedKeys))
 
 	// confirm stateproof for firstExpectedStateproof
-	s.advanceRoundsAndStateProofs(proto.StateProofInterval)
+	s.advanceRoundsAndCreateStateProofs(proto.StateProofInterval)
 
 	// the first state proof was confirmed. However, since keylifetime is greater than the state proof interval
 	// the key for firstExpectedStateproof should be kept (since it is being reused on 3 * proto.StateProofInterval)
@@ -790,7 +865,7 @@ func TestKeysRemoveOnlyAfterStateProofAcceptedLargeIntervals(t *testing.T) {
 	require.Equal(t, len(keys), len(checkedKeys))
 
 	// confirm stateproof for firstExpectedStateproof
-	s.advanceRoundsAndStateProofs(proto.StateProofInterval)
+	s.advanceRoundsAndCreateStateProofs(proto.StateProofInterval)
 
 	// the first state proof was confirmed keys for that state proof can be removed
 	requireDeletedKeysToBeDeletedBefore(t, s, basics.Round(proto.StateProofInterval)+firstExpectedStateproof)
