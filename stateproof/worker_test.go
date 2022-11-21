@@ -69,6 +69,13 @@ func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int)
 	return newWorkerStubsWithVersion(t, keys, protocol.ConsensusCurrentVersion, totalWeight)
 }
 
+func newWorkerStubsWithChannel(t testing.TB, keys []account.Participation, totalWeight int) *testWorkerStubs {
+	worker := newWorkerStubsWithVersion(t, keys, protocol.ConsensusCurrentVersion, totalWeight)
+	worker.sigmsg = make(chan []byte, 1024*1024)
+	worker.txmsg = make(chan transactions.SignedTxn, 1024*1024)
+	return worker
+}
+
 func newWorkerStubsWithVersion(t testing.TB, keys []account.Participation, version protocol.ConsensusVersion, totalWeight int) *testWorkerStubs {
 	proto := config.Consensus[version]
 	s := &testWorkerStubs{
@@ -80,8 +87,8 @@ func newWorkerStubsWithVersion(t testing.TB, keys []account.Participation, versi
 		blocks:                    make(map[basics.Round]bookkeeping.BlockHeader),
 		keys:                      keys,
 		keysForVoters:             keys,
-		sigmsg:                    make(chan []byte, 1024*1024),
-		txmsg:                     make(chan transactions.SignedTxn, 1024*1024),
+		sigmsg:                    nil,
+		txmsg:                     nil,
 		totalWeight:               totalWeight,
 		deletedKeysBeforeRoundMap: map[account.ParticipationID]basics.Round{},
 		version:                   version,
@@ -269,12 +276,18 @@ func (s *testWorkerStubs) Wait(r basics.Round) chan struct{} {
 
 func (s *testWorkerStubs) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
 	require.Equal(s.t, tag, protocol.StateProofSigTag)
+	if s.sigmsg == nil {
+		return nil
+	}
 	s.sigmsg <- data
 	return nil
 }
 
 func (s *testWorkerStubs) BroadcastInternalSignedTxGroup(tx []transactions.SignedTxn) error {
 	require.Equal(s.t, len(tx), 1)
+	if s.txmsg == nil {
+		return nil
+	}
 	s.txmsg <- tx[0]
 	return nil
 }
@@ -456,7 +469,7 @@ func TestWorkerAllSigs(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubs(t, keys, len(keys))
+	s := newWorkerStubsWithChannel(t, keys, len(keys))
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
@@ -526,7 +539,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubs(t, keys, 10)
+	s := newWorkerStubsWithChannel(t, keys, 10)
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
@@ -593,7 +606,7 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubs(t, keys, 10)
+	s := newWorkerStubsWithChannel(t, keys, 10)
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
@@ -628,7 +641,7 @@ func TestWorkerRestart(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubs(t, keys, 10)
+	s := newWorkerStubsWithChannel(t, keys, 10)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -674,7 +687,7 @@ func TestWorkerHandleSig(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubs(t, keys, 10)
+	s := newWorkerStubsWithChannel(t, keys, 10)
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
@@ -772,6 +785,7 @@ func sendSigToHandler(proto config.ConsensusParams, i uint64, w *Worker, a *requ
 	fwd, err := w.handleSig(msg, msg.SignerAddress)
 	return fwd, err
 }
+
 func TestKeysRemoveOnlyAfterStateProofAccepted(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -903,12 +917,8 @@ func TestWorkerRemovesBuildersAndSignatures(t *testing.T) {
 	// we break the loop into two part since we don't want to add a state proof round (Round % 256 == 0)
 	for iter := 0; iter < expectedStateProofs-1; iter++ {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval)
-		tx := <-s.txmsg
-		a.Equal(tx.Txn.Type, protocol.StateProofTx)
 	}
 	s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2)
-	tx := <-s.txmsg
-	a.Equal(tx.Txn.Type, protocol.StateProofTx)
 
 	// at this point we expect the number of builders in memory to be bound with buildersCacheLength
 	a.Equal(buildersCacheLength, len(w.builders))
@@ -948,11 +958,6 @@ func TestWorkerRemovesBuildersAndSignatures(t *testing.T) {
 	a.Equal(count, len(roundSigs))
 }
 
-type sigTracking struct {
-	round basics.Round
-	count uint
-}
-
 func TestSignatureBroadcastPolicy(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -968,7 +973,7 @@ func TestSignatureBroadcastPolicy(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubs(t, keys, len(keys))
+	s := newWorkerStubsWithChannel(t, keys, len(keys))
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
@@ -978,8 +983,6 @@ func TestSignatureBroadcastPolicy(t *testing.T) {
 	// we break the loop into two part since we don't want to add a state proof round (Round % 256 == 0)
 	for iter := 0; iter < expectedStateProofs-1; iter++ {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval)
-		tx := <-s.txmsg
-		a.Equal(tx.Txn.Type, protocol.StateProofTx)
 	}
 
 	roundSigs := make(map[basics.Round]int)
@@ -1032,8 +1035,6 @@ func TestWorkerDoesNotLimitBuildersAndSignaturesOnDisk(t *testing.T) {
 
 	for iter := uint64(0); iter < proto.StateProofMaxRecoveryIntervals+1; iter++ {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval)
-		tx := <-s.txmsg
-		a.Equal(tx.Txn.Type, protocol.StateProofTx)
 	}
 
 	// should not give up on rounds
@@ -1083,7 +1084,7 @@ func getSignaturesInDatabase(t *testing.T, numAddresses int, sigFrom sigOrigin) 
 		signatureBcasted[parent] = 0
 	}
 
-	tns = newWorkerStubs(t, keys, len(keys))
+	tns = newWorkerStubsWithChannel(t, keys, len(keys))
 	spw = newTestWorker(t, tns)
 
 	// Prepare the database
@@ -1199,7 +1200,7 @@ func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubs(t, keys, len(keys))
+	s := newWorkerStubsWithChannel(t, keys, len(keys))
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
@@ -1283,7 +1284,7 @@ func setBlocksAndMessage(t *testing.T, sigRound basics.Round) (s *testWorkerStub
 	p := newPartKey(t, address)
 	defer p.Close()
 
-	s = newWorkerStubs(t, []account.Participation{p.Participation}, 10)
+	s = newWorkerStubsWithChannel(t, []account.Participation{p.Participation}, 10)
 	w = newTestWorker(t, s)
 
 	s.addBlock(basics.Round(proto.StateProofInterval * 2))
@@ -1376,7 +1377,7 @@ func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubs(t, keys[0:proto.StateProofTopVoters], 10)
+	s := newWorkerStubsWithChannel(t, keys[0:proto.StateProofTopVoters], 10)
 	w := newTestWorker(t, s)
 	err := makeStateProofDB(w.db)
 	require.NoError(t, err)
@@ -1630,12 +1631,8 @@ func TestWorkerCacheAndDiskAfterRestart(t *testing.T) {
 	// we break the loop into two part since we don't want to add a state proof round (Round % 256 == 0)
 	for iter := 0; iter < expectedStateProofs-1; iter++ {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval)
-		tx := <-s.txmsg
-		a.Equal(tx.Txn.Type, protocol.StateProofTx)
 	}
 	s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2)
-	tx := <-s.txmsg
-	a.Equal(tx.Txn.Type, protocol.StateProofTx)
 
 	// at this point we expect the number of builders in memory to be bound with buildersCacheLength
 	a.Equal(buildersCacheLength, len(w.builders))
@@ -1698,12 +1695,8 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 	// we break the loop into two part since we don't want to add a state proof round (Round % 256 == 0)
 	for iter := 0; iter < expectedStateProofs-1; iter++ {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval)
-		tx := <-s.txmsg
-		a.Equal(tx.Txn.Type, protocol.StateProofTx)
 	}
 	s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2)
-	tx := <-s.txmsg
-	a.Equal(tx.Txn.Type, protocol.StateProofTx)
 
 	// at this point we expect the number of builders in memory to be bound with buildersCacheLength
 	a.Equal(buildersCacheLength, len(w.builders))
