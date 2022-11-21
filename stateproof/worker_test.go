@@ -924,6 +924,7 @@ func TestWorkerRemovesBuildersAndSignatures(t *testing.T) {
 		roundSigs, err = getPendingSigs(tx, threshold, basics.Round(256+proto.StateProofInterval*expectedStateProofs), false)
 		return
 	})
+	a.NoError(err)
 	a.Equal(buildersCacheLength, len(roundSigs)) // Number of broadcasted sigs should be the same as number of (online) cached builders.
 
 	/*
@@ -945,8 +946,71 @@ func TestWorkerRemovesBuildersAndSignatures(t *testing.T) {
 		roundSigs, err = getPendingSigs(tx, threshold, maxStateProofRnd, false)
 		return
 	})
-
+	a.NoError(err)
 	a.Equal(count, len(roundSigs))
+}
+
+type sigTracking struct {
+	round basics.Round
+	count uint
+}
+
+func TestSignatureBroadcastPolicy(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	const numberOfParticipants = 5
+	const expectedStateProofs = buildersCacheLength + 2
+	var keys []account.Participation
+	for i := 0; i < numberOfParticipants; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	s := newWorkerStubs(t, keys, len(keys))
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	// we break the loop into two part since we don't want to add a state proof round (Round % 256 == 0)
+	for iter := 0; iter < expectedStateProofs-1; iter++ {
+		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval)
+		tx := <-s.txmsg
+		a.Equal(tx.Txn.Type, protocol.StateProofTx)
+	}
+
+	roundSigs := make(map[basics.Round]int)
+	for i := uint64(2); i < buildersCacheLength; i++ {
+		roundSigs[basics.Round(i*proto.StateProofInterval)] = 0
+	}
+	roundSigs[basics.Round((expectedStateProofs+1)*proto.StateProofInterval)] = 0
+
+	// empty all pending sigs
+	s.sigmsg = make(chan []byte, 1024*1024)
+
+	s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval)
+	for i := 0; i < numberOfParticipants*buildersCacheLength*2; i++ {
+		sigMessage := sigFromAddr{}
+		sigMessageBytes, err := s.waitOnSigWithTimeout(time.Second * 2)
+		a.NoError(err)
+
+		err = protocol.Decode(sigMessageBytes, &sigMessage)
+		a.NoError(err)
+		newCount := roundSigs[sigMessage.Round]
+		newCount++
+		roundSigs[sigMessage.Round] = newCount
+
+	}
+
+	a.Equal(buildersCacheLength, len(roundSigs))
+	for _, v := range roundSigs {
+		a.Equal(numberOfParticipants*2, v)
+	}
 }
 
 func TestWorkerDoesNotLimitBuildersAndSignaturesOnDisk(t *testing.T) {
@@ -986,6 +1050,7 @@ func TestWorkerDoesNotLimitBuildersAndSignaturesOnDisk(t *testing.T) {
 		roundSigs, err = getPendingSigs(tx, threshold, s.latest.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval)), false)
 		return
 	})
+	a.NoError(err)
 	a.Equal(buildersCacheLength, len(roundSigs))
 }
 
@@ -1586,6 +1651,7 @@ func TestWorkerCacheAndDiskAfterRestart(t *testing.T) {
 		roundSigs, err = getPendingSigs(tx, threshold, basics.Round(256+proto.StateProofInterval*expectedStateProofs), false)
 		return
 	})
+	a.NoError(err)
 	a.Equal(buildersCacheLength, len(roundSigs)) // Number of broadcasted sigs should be the same as number of (online) cached builders.
 
 	/*
@@ -1653,6 +1719,7 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 		roundSigs, err = getPendingSigs(tx, threshold, basics.Round(256+proto.StateProofInterval*expectedStateProofs), false)
 		return
 	})
+	a.NoError(err)
 	a.Equal(buildersCacheLength, len(roundSigs)) // Number of broadcasted sigs should be the same as number of (online) cached builders.
 
 	/*
