@@ -56,6 +56,9 @@ var transactionMessagesTxnLogicSig = metrics.MakeCounter(metrics.TransactionMess
 var transactionMessagesTxnSigVerificationFailed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigVerificationFailed)
 var transactionMessagesBacklogErr = metrics.MakeCounter(metrics.TransactionMessagesBacklogErr)
 var transactionMessagesRemember = metrics.MakeCounter(metrics.TransactionMessagesRemember)
+var transactionMessagesDupeRawMsg = metrics.MakeCounter(metrics.TransactionMessagesDupeRawMsg)
+var transactionMessagesLargeTxGroup = metrics.MakeCounter(metrics.TransactionMessagesLargeTxGroup)
+var transactionMessagesDupeCanonical = metrics.MakeCounter(metrics.TransactionMessagesDupeCanonical)
 var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionMessagesBacklogSize)
 
 var transactionGroupTxSyncHandled = metrics.MakeCounter(metrics.TransactionGroupTxSyncHandled)
@@ -368,7 +371,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		// check for duplicate messages
 		// this helps against relaying duplicates
 		if handler.msgCache.checkAndPut(rawmsg.Data) {
-			// TODO: ad metric
+			transactionMessagesDupeRawMsg.Inc(nil)
 			return network.OutgoingMessage{Action: network.Ignore}
 		}
 	}
@@ -396,7 +399,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		if ntx >= config.MaxTxGroupSize {
 			// max ever possible group size reached, done reading input.
 			// it is safe to stop earlier because groups of bigger size will be discarded in eval
-			// TODO: add metric after #4786 merged
+			transactionMessagesLargeTxGroup.Inc(nil)
 			break
 		}
 	}
@@ -409,7 +412,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 
 	if handler.cacheConfig.enableFilteringCanonical {
 		if handler.dedupCanonical(ntx, unverifiedTxGroup, consumed) {
-			// TODO: add metric
+			transactionMessagesDupeCanonical.Inc(nil)
 			return network.OutgoingMessage{Action: network.Ignore}
 		}
 	}
