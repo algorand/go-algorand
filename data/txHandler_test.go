@@ -573,6 +573,7 @@ func runHandlerBenchmark(rateAdjuster time.Duration, maxGroupSize, tps int, b *t
 
 	// emulate handler.Start() without the backlog
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
+	handler.backlogWg.Add(1)
 	go handler.processTxnStreamVerifiedResults()
 	handler.streamVerifier.Start(handler.ctx)
 
