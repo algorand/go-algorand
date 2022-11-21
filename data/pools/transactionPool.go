@@ -54,11 +54,10 @@ type TransactionPool struct {
 	feePerByte uint64
 
 	// const
-	logProcessBlockStats bool
-	logAssembleStats     bool
-	expFeeFactor         uint64
-	txPoolMaxSize        int
-	ledger               *ledger.Ledger
+	logAssembleStats bool
+	expFeeFactor     uint64
+	txPoolMaxSize    int
+	ledger           *ledger.Ledger
 
 	mu                     deadlock.Mutex
 	cond                   sync.Cond
@@ -712,7 +711,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			for _, tx := range txgroup {
 				pool.statusCache.put(tx, err.Error())
 			}
-			// metrics here are duplicated for historic reasons. stats is hardly used and should be removed in favor of asmstats
 			switch terr := err.(type) {
 			case *ledgercore.TransactionInLedgerError:
 				asmStats.CommittedCount++
