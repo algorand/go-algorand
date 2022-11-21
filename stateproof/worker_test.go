@@ -958,6 +958,8 @@ func TestWorkerRemovesBuildersAndSignatures(t *testing.T) {
 	a.Equal(count, len(roundSigs))
 }
 
+// TestSignatureBroadcastPolicy makes sure that during half of a state proof interval, every online accounts
+// will broadcast only buildersCacheLength amount of signatures
 func TestSignatureBroadcastPolicy(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -980,10 +982,11 @@ func TestSignatureBroadcastPolicy(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	// we break the loop into two part since we don't want to add a state proof round (Round % 256 == 0)
 	for iter := 0; iter < expectedStateProofs-1; iter++ {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval)
 	}
+	// set the latest block to be at round r, where r % 256 == 0
+	s.advanceRoundsWithoutStateProof(t, 1)
 
 	roundSigs := make(map[basics.Round]int)
 	for i := uint64(2); i < buildersCacheLength; i++ {
