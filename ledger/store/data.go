@@ -149,8 +149,6 @@ type BaseOnlineAccountData struct {
 }
 
 // PersistedKVData represents the stored entry behind a application boxed key/value.
-//
-//msgp:ignore persistedKVData
 type PersistedKVData struct {
 	// kv value
 	Value []byte
@@ -181,8 +179,6 @@ type PersistedAccountData struct {
 }
 
 // PersistedResourcesData is exported view of persistedResourcesData
-//
-//msgp:ignore persistedResourcesData
 type PersistedResourcesData struct {
 	// addrid is the rowid of the account address that holds this resource.
 	// it is used in update/delete operations so must be filled for existing records.
