@@ -214,6 +214,9 @@ type GossipNode interface {
 	// GetPeerData returns a value stored by SetPeerData
 	GetPeerData(peer Peer, key string) interface{}
 
+	// ExtendPeerList sets the peer data in the phonebook
+	ExtendPeerList(peers ...string)
+
 	// SetPeerData attaches a piece of data to a peer.
 	// Other services inside go-algorand may attach data to a peer that gets garbage collected when the peer is closed.
 	SetPeerData(peer Peer, key string, value interface{})
@@ -681,6 +684,11 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 		}
 	}
 	return outPeers
+}
+
+// ExtendPeerList is used for testing the node w/ manual phonebook configurations
+func (wn *WebsocketNetwork) ExtendPeerList(peers ...string) {
+	wn.phonebook.ExtendPeerList(peers, wn.config.DNSBootstrapID, PhoneBookEntryRelayRole)
 }
 
 // find the max value across the given uint64 numbers.
