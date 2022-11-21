@@ -84,6 +84,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 			initAccounts:      l.GenesisAccounts(),
 			initProto:         l.GenesisProtoVersion(),
 			genesisHash:       l.GenesisHash(),
+			fromCatchpoint:    false,
 			catchpointEnabled: catchpointEnabled,
 			dbPathPrefix:      dbPathPrefix,
 			blockDb:           bdbs,
