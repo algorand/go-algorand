@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
@@ -38,6 +39,7 @@ import (
 type trackerDBParams struct {
 	initAccounts      map[basics.Address]basics.AccountData
 	initProto         protocol.ConsensusVersion
+	genesisHash       crypto.Digest
 	catchpointEnabled bool
 	dbPathPrefix      string
 	blockDb           db.Pair
@@ -80,6 +82,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 		tp := trackerDBParams{
 			initAccounts:      l.GenesisAccounts(),
 			initProto:         l.GenesisProtoVersion(),
+			genesisHash:       l.GenesisHash(),
 			catchpointEnabled: catchpointEnabled,
 			dbPathPrefix:      dbPathPrefix,
 			blockDb:           bdbs,
@@ -187,6 +190,12 @@ func runMigrations(ctx context.Context, tx *sql.Tx, params trackerDBParams, log 
 				err = tu.upgradeDatabaseSchema7(ctx, tx)
 				if err != nil {
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 7 : %v", err)
+					return
+				}
+			case 8:
+				err = tu.upgradeDatabaseSchema8(ctx, tx)
+				if err != nil {
+					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 8 : %v", err)
 					return
 				}
 			default:
@@ -515,6 +524,20 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema7(ctx context.Context
 	err = accountsCreateBoxTable(ctx, tx)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema7 unable to create kvstore through createTables : %v", err)
+	}
+	return tu.setVersion(ctx, tx, 8)
+}
+
+// upgradeDatabaseSchema8 upgrades the database schema from version 8 to version 9,
+// forcing a rebuild of the accounthashes table on betanet nodes. Otherwise it has no effect.
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema8(ctx context.Context, tx *sql.Tx) (err error) {
+	betanetGenesisHash, _ := crypto.DigestFromString("TBMBVTC7W24RJNNUZCF7LWZD2NMESGZEQSMPG5XQD7JY4O7JKVWQ")
+	if tu.genesisHash == betanetGenesisHash {
+		// reset hash round to 0, forcing catchpointTracker.initializeHashes to rebuild accounthashes
+		err = updateAccountsHashRound(ctx, tx, 0)
+		if err != nil {
+			return fmt.Errorf("upgradeDatabaseSchema8 unable to reset acctrounds table 'hashbase' round : %v", err)
+		}
 	}
 	return tu.setVersion(ctx, tx, 8)
 }
