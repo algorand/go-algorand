@@ -82,35 +82,54 @@ type TxHandler struct {
 	net                   network.GossipNode
 	msgCache              *txSaltedCache
 	txCanonicalCache      *digestCache
+	cacheConfig           txHandlerConfig
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
 }
 
-// MakeTxHandler makes a new handler for transaction messages
-func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.GossipNode, genesisID string, genesisHash crypto.Digest, executionPool execpool.BacklogPool) *TxHandler {
+// TxHandlerOpts is TxHandler configuration options
+type TxHandlerOpts struct {
+	TxPool        *pools.TransactionPool
+	ExecutionPool execpool.BacklogPool
+	Ledger        *Ledger
+	Net           network.GossipNode
+	GenesisID     string
+	GenesisHash   crypto.Digest
+	Config        config.Local
+}
 
-	if txPool == nil {
+// txHandlerConfig is a subset of tx handler related options from config.Local
+type txHandlerConfig struct {
+	enableFilteringRawMsg    bool
+	enableFilteringCanonical bool
+}
+
+// MakeTxHandler makes a new handler for transaction messages
+func MakeTxHandler(opts TxHandlerOpts) *TxHandler {
+
+	if opts.TxPool == nil {
 		logging.Base().Fatal("MakeTxHandler: txPool is nil on initialization")
 		return nil
 	}
 
-	if ledger == nil {
+	if opts.Ledger == nil {
 		logging.Base().Fatal("MakeTxHandler: ledger is nil on initialization")
 		return nil
 	}
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	handler := &TxHandler{
-		txPool:                txPool,
-		genesisID:             genesisID,
-		genesisHash:           genesisHash,
-		ledger:                ledger,
-		txVerificationPool:    executionPool,
+		txPool:                opts.TxPool,
+		genesisID:             opts.GenesisID,
+		genesisHash:           opts.GenesisHash,
+		ledger:                opts.Ledger,
+		txVerificationPool:    opts.ExecutionPool,
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
-		net:                   net,
+		net:                   opts.Net,
 		msgCache:              makeSaltedCache(ctx, txBacklogSize, 60*time.Second),
 		txCanonicalCache:      makeDigestCache(txBacklogSize),
+		cacheConfig:           txHandlerConfig{opts.Config.TxFilterRawMsgEnabled(), opts.Config.TxFilterCanonicalEnabled()},
 		ctx:                   ctx,
 		ctxCancel:             ctxCancel,
 	}
@@ -290,6 +309,49 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 	return nil
 }
 
+func (handler *TxHandler) dedupCanonical(ntx int, unverifiedTxGroup []transactions.SignedTxn, consumed int) bool {
+	// consider situations where someone want to censor transactions A
+	// 1. Txn A is not part of a group => txn A with a valid signature is OK
+	// Censorship attempts are:
+	//  - txn A with an invalid signature => cache/dedup canonical txn with its signature
+	//  - txn A with a valid/invalid signature and part of a valid or invalid group => cache/dedup the entire group
+	//
+	// 2. Txn A is part of a group => txn A with valid GroupID and signature is OK
+	// Censorship attempts are:
+	// - txn A with a valid or invalid signature => cache/dedup canonical txn with its signature.
+	// - txn A as part of a group => cache/dedup the entire group
+	//
+	// what does not work:
+	// - using txid: {A} could be poisoned by {A, B} where B is invalid
+	// - using individual txn from a group: {A, Z} could be poisoned by {A, B}, where B is invalid
+
+	if ntx == 1 {
+		// a single transaction => cache/dedup canonical txn with its signature
+		enc := unverifiedTxGroup[0].MarshalMsg(nil)
+		d := crypto.Hash(enc)
+		if handler.txCanonicalCache.checkAndPut(&d) {
+			return true
+		}
+	} else {
+		// a transaction group => cache/dedup the entire group canonical group
+		encodeBuf := make([]byte, 0, unverifiedTxGroup[0].Msgsize()*ntx)
+		for i := range unverifiedTxGroup {
+			encodeBuf = unverifiedTxGroup[i].MarshalMsg(encodeBuf)
+		}
+		if len(encodeBuf) != consumed {
+			// reallocated, some assumption on size was wrong
+			// log and skip
+			logging.Base().Warnf("Decoded size %d does not match to encoded %d", consumed, len(encodeBuf))
+		} else {
+			d := crypto.Hash(encodeBuf)
+			if handler.txCanonicalCache.checkAndPut(&d) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // attempt to preallocate buffer on stack:
 // hardcode maxTxGroupSize constant in order to get rid ledger lookups and use backing arrays,
 // or fallback to heap allocation it MaxTxGroupSize is greater than our constant
@@ -301,13 +363,14 @@ const maxTxGroupSize = 16
 //  - message are checked for duplicates
 //  - transactions are checked for duplicates
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
-	// TODO: make it dedup configurable
 
-	// check for duplicate messages
-	// this helps against relaying duplicates
-	if handler.msgCache.checkAndPut(rawmsg.Data) {
-		// TODO: ad metric
-		return network.OutgoingMessage{Action: network.Ignore}
+	if handler.cacheConfig.enableFilteringRawMsg {
+		// check for duplicate messages
+		// this helps against relaying duplicates
+		if handler.msgCache.checkAndPut(rawmsg.Data) {
+			// TODO: ad metric
+			return network.OutgoingMessage{Action: network.Ignore}
+		}
 	}
 
 	unverifiedTxGroup := make([]transactions.SignedTxn, 1)
@@ -344,44 +407,10 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 
 	unverifiedTxGroup = unverifiedTxGroup[:ntx]
 
-	// consider situations where someone want to censor transactions A
-	// 1. Txn A is not part of a group => txn A with a valid signature is OK
-	// Censorship attempts are:
-	//  - txn A with an invalid signature => cache/dedup canonical txn with its signature
-	//  - txn A with a valid/invalid signature and part of a valid or invalid group => cache/dedup the entire group
-	//
-	// 2. Txn A is part of a group => txn A with valid GroupID and signature is OK
-	// Censorship attempts are:
-	// - txn A with a valid or invalid signature => cache/dedup canonical txn with its signature.
-	// - txn A as part of a group => cache/dedup the entire group
-	//
-	// what does not work:
-	// - using txid: {A} could be poisoned by {A, B} where B is invalid
-	// - using individual txn from a group: {A, Z} could be poisoned by {A, B}, where B is invalid
-
-	// max buf needed for txn encoding
-	if ntx == 1 {
-		// a single transaction => cache/dedup canonical txn with its signature
-		enc := unverifiedTxGroup[0].MarshalMsg(nil)
-		d := crypto.Hash(enc)
-		if handler.txCanonicalCache.checkAndPut(&d) {
+	if handler.cacheConfig.enableFilteringCanonical {
+		if handler.dedupCanonical(ntx, unverifiedTxGroup, consumed) {
+			// TODO: add metric
 			return network.OutgoingMessage{Action: network.Ignore}
-		}
-	} else {
-		// a transaction group => cache/dedup the entire group canonical group
-		encodeBuf := make([]byte, 0, unverifiedTxGroup[0].Msgsize()*ntx)
-		for i := range unverifiedTxGroup {
-			encodeBuf = unverifiedTxGroup[i].MarshalMsg(encodeBuf)
-		}
-		if len(encodeBuf) != consumed {
-			// reallocated, some assumption on size was wrong
-			// log and skip
-			logging.Base().Warnf("Decoded size %d does not match to encoded %d", consumed, len(encodeBuf))
-		} else {
-			d := crypto.Hash(encodeBuf)
-			if handler.txCanonicalCache.checkAndPut(&d) {
-				return network.OutgoingMessage{Action: network.Ignore}
-			}
 		}
 	}
 

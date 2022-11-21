@@ -230,7 +230,16 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		blockListeners = append(blockListeners, &accountListener)
 	}
 	node.ledger.RegisterBlockListeners(blockListeners)
-	node.txHandler = data.MakeTxHandler(node.transactionPool, node.ledger, node.net, node.genesisID, node.genesisHash, node.lowPriorityCryptoVerificationPool)
+	txHandlerOpts := data.TxHandlerOpts{
+		TxPool:        node.transactionPool,
+		ExecutionPool: node.lowPriorityCryptoVerificationPool,
+		Ledger:        node.ledger,
+		Net:           node.net,
+		GenesisID:     node.genesisID,
+		GenesisHash:   node.genesisHash,
+		Config:        cfg,
+	}
+	node.txHandler = data.MakeTxHandler(txHandlerOpts)
 
 	// Indexer setup
 	if cfg.IsIndexerActive && cfg.Archival {

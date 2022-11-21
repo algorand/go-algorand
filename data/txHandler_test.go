@@ -86,9 +86,7 @@ func BenchmarkTxHandlerProcessing(b *testing.B) {
 
 	cfg.TxPoolSize = 75000
 	cfg.EnableProcessBlockStats = false
-	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	txHandler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	txHandler := makeTestTxHandler(l, cfg)
 
 	makeTxns := func(N int) [][]transactions.SignedTxn {
 		ret := make([][]transactions.SignedTxn, 0, N)
@@ -204,7 +202,7 @@ func TestTxHandlerProcessIncomingTxn(t *testing.T) {
 	t.Parallel()
 
 	const numTxns = 11
-	handler := makeTestTxHandler(1)
+	handler := makeTestTxHandlerOrphaned(1)
 	stxns, blob := makeRandomTransactions(numTxns)
 	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
 	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
@@ -226,7 +224,7 @@ func BenchmarkTxHandlerProcessIncomingTxn(b *testing.B) {
 	}()
 
 	const numTxnsPerGroup = 16
-	handler := makeTestTxHandler(txBacklogSize)
+	handler := makeTestTxHandlerOrphaned(txBacklogSize)
 
 	// prepare tx groups
 	blobs := make([][]byte, b.N)
@@ -273,7 +271,7 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 	}()
 
 	const numTxnsPerGroup = 16
-	handler := makeTestTxHandler(txBacklogSize)
+	handler := makeTestTxHandlerOrphaned(txBacklogSize)
 
 	// prepare tx groups
 	blobs := make([][]byte, b.N)
@@ -348,6 +346,7 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 
 // TestTxHandlerProcessIncomingTxnGroupSize ensures the constant value for group size matches reality
 func TestTxHandlerProcessIncomingTxnGroupSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	require.GreaterOrEqual(t, maxTxGroupSize, config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize, "Increase maxTxGroupSize value")
 	require.GreaterOrEqual(t, maxTxGroupSize, config.Consensus[protocol.ConsensusFuture].MaxTxGroupSize, "Increase maxTxGroupSize value")
@@ -357,7 +356,7 @@ func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler := makeTestTxHandler(20)
+	handler := makeTestTxHandlerOrphaned(20)
 
 	stxns1, blob1 := makeRandomTransactions(1)
 	require.Equal(t, 1, len(stxns1))
@@ -394,24 +393,34 @@ func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 	}
 }
 
-const benchTxnNum = 25_000
-
-func makeTestTxHandler(backlogSize int) TxHandler {
+// makeTestTxHandlerOrphaned creates a tx handler without any backlog consumer.
+// It is caller responsibility to run a consumer thread.
+func makeTestTxHandlerOrphaned(backlogSize int) *TxHandler {
 	if backlogSize <= 0 {
 		backlogSize = txBacklogSize
 	}
-	return TxHandler{
+	return &TxHandler{
 		backlogQueue:     make(chan *txBacklogMsg, backlogSize),
 		msgCache:         makeSaltedCache(context.Background(), txBacklogSize, 0),
 		txCanonicalCache: makeDigestCache(txBacklogSize),
+		cacheConfig:      txHandlerConfig{true, true},
 	}
+}
+
+func makeTestTxHandler(dl *Ledger, cfg config.Local) *TxHandler {
+	tp := pools.MakeTransactionPool(dl.Ledger, cfg, logging.Base())
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	opts := TxHandlerOpts{
+		tp, backlogPool, dl, &mocks.MockNetwork{}, "", crypto.Digest{}, cfg,
+	}
+	return MakeTxHandler(opts)
 }
 
 func TestTxHandlerProcessIncomingCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler := makeTestTxHandler(20)
+	handler := makeTestTxHandlerOrphaned(20)
 
 	var action network.OutgoingMessage
 	var msg *txBacklogMsg
@@ -482,6 +491,8 @@ func TestTxHandlerProcessIncomingCache(t *testing.T) {
 	require.Equal(t, stxns4[0], msg.unverifiedTxGroup[0])
 	require.Equal(t, stxns4[1], msg.unverifiedTxGroup[1])
 }
+
+const benchTxnNum = 25_000
 
 func BenchmarkTxHandlerDecoder(b *testing.B) {
 	_, blob := makeRandomTransactions(benchTxnNum)
@@ -572,9 +583,8 @@ func incomingTxHandlerProcessing(maxGroupSize int, t *testing.T) {
 	require.NoError(t, err)
 
 	l := ledger
-	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	handler := makeTestTxHandler(l, cfg)
+
 	// since Start is not called, set the context here
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	defer handler.ctxCancel()
@@ -582,8 +592,8 @@ func incomingTxHandlerProcessing(maxGroupSize int, t *testing.T) {
 	outChan := make(chan *txBacklogMsg, 10)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	// Make a test backlog worker, which is simiar to backlogWorker, but sends the results
-	// through the outChan instead of passing it to postprocessCheckedTxn
+	// Make a test backlog worker, which is similar to backlogWorker, but sends the results
+	// through the outChan instead of passing it to postProcessCheckedTxn
 	go func() {
 		defer wg.Done()
 		defer close(outChan)
@@ -795,9 +805,7 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 	require.NoError(b, err)
 
 	l := ledger
-	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	handler := makeTestTxHandler(l, cfg)
 	// since Start is not called, set the context here
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	defer handler.ctxCancel()
