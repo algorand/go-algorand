@@ -174,7 +174,7 @@
 					"DeadlockOverride": -1,
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",  \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true }",
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",  \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true",
 					"Wallets": [
 						{
 							"Name": "Wallet1",
@@ -657,7 +657,7 @@
 					"DeadlockOverride": -1,
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",\"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true }",
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",\"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true",
 					"Wallets": [
 						{
 							"Name": "Wallet101",
@@ -900,7 +900,7 @@
 					"DeadlockOverride": -1,
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",\"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true }",
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",\"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true",
 					"Wallets": [
 						{
 							"Name": "Wallet151",
@@ -1143,7 +1143,7 @@
 					"DeadlockOverride": -1,
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",\"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true }",
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",\"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true",
 					"Wallets": [
 						{
 							"Name": "Wallet201",
@@ -1386,7 +1386,7 @@
 					"DeadlockOverride": -1,
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",\"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true }",
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",\"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true",
 					"Wallets": [
 						{
 							"Name": "Wallet251",

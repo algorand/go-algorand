@@ -21,7 +21,7 @@
           "MetricsURI": "{{MetricsURI}}",
           "EnableService": false,
           "EnableBlockStats": true,
-          "ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",  \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true }"
+          "ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",  \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true"
         }
       ]
     },
@@ -46,7 +46,7 @@
           "MetricsURI": "{{MetricsURI}}",
           "EnableService": false,
           "EnableBlockStats": true,
-          "ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",\"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true }"
+          "ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\",\"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true"
         }
       ]
     }
