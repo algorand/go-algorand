@@ -124,10 +124,6 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto conf
 }
 
 func (cb *roundCowState) deltas() ledgercore.StateDelta {
-	if len(cb.sdeltas) == 0 {
-		return cb.mods
-	}
-
 	// Apply storage deltas to account deltas
 	for addr, smap := range cb.sdeltas {
 		for aapp, storeDelta := range smap {

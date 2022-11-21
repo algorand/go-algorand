@@ -353,11 +353,11 @@ func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitSt
 			return err
 		}
 		defer outFile.Close()
-		err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, excludedFields.GetSlice())
+		err = printAccountsDatabase("./ledger.tracker.sqlite", true, fileHeader, outFile, excludedFields.GetSlice())
 		if err != nil {
 			return err
 		}
-		err = printKeyValueStore("./ledger.tracker.sqlite", outFile)
+		err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
 		if err != nil {
 			return err
 		}

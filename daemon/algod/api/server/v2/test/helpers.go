@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -53,17 +53,20 @@ var cannedStatusReportGolden = node.StatusReport{
 	CatchpointCatchupProcessedAccounts: 0,
 	CatchpointCatchupVerifiedAccounts:  0,
 	CatchpointCatchupTotalAccounts:     0,
+	CatchpointCatchupTotalKVs:          0,
+	CatchpointCatchupProcessedKVs:      0,
+	CatchpointCatchupVerifiedKVs:       0,
 	CatchpointCatchupTotalBlocks:       0,
 	LastCatchpoint:                     "",
 }
 
 var poolAddrRewardBaseGolden = uint64(0)
-var poolAddrAssetsGolden = make([]generatedV2.AssetHolding, 0)
-var poolAddrCreatedAssetsGolden = make([]generatedV2.Asset, 0)
-var appLocalStates = make([]generatedV2.ApplicationLocalState, 0)
-var appsTotalSchema = generatedV2.ApplicationStateSchema{}
-var appCreatedApps = make([]generatedV2.Application, 0)
-var poolAddrResponseGolden = generatedV2.AccountResponse{
+var poolAddrAssetsGolden = make([]model.AssetHolding, 0)
+var poolAddrCreatedAssetsGolden = make([]model.Asset, 0)
+var appLocalStates = make([]model.ApplicationLocalState, 0)
+var appsTotalSchema = model.ApplicationStateSchema{}
+var appCreatedApps = make([]model.Application, 0)
+var poolAddrResponseGolden = model.AccountResponse{
 	Address:                     poolAddr.String(),
 	Amount:                      50000000000,
 	AmountWithoutPendingRewards: 50000000000,

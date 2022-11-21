@@ -448,18 +448,14 @@ int 1
 	a.NoError(err)
 	signedTxn, err = client.SignTransactionWithWallet(wh, nil, tx)
 	a.NoError(err)
-	_, err = client.BroadcastTransaction(signedTxn)
+	txid, err := client.BroadcastTransaction(signedTxn)
 	a.NoError(err)
 
-	curStatus, err = client.Status()
+	// Try polling 10 rounds to ensure txn is committed.
+	round, err = client.CurrentRound()
 	a.NoError(err)
-
-	round = curStatus.LastRound
-
-	client.WaitForRound(round + 2)
-	pendingTx, err = client.GetPendingTransactions(1)
-	a.NoError(err)
-	a.Equal(uint64(0), pendingTx.TotalTransactions)
+	isCommitted := fixture.WaitForTxnConfirmation(round+10, creator, txid)
+	a.True(isCommitted)
 
 	// check creator's balance record for the app entry and the state changes
 	ad, err = client.AccountData(creator)
