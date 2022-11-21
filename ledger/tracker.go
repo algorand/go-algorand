@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -246,12 +247,12 @@ type deferredCommitContext struct {
 	compactKvDeltas        map[string]modifiedKvValue
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 
-	updatedPersistedAccounts  []persistedAccountData
-	updatedPersistedResources map[basics.Address][]persistedResourcesData
-	updatedPersistedKVs       map[string]persistedKVData
+	updatedPersistedAccounts  []store.PersistedAccountData
+	updatedPersistedResources map[basics.Address][]store.PersistedResourcesData
+	updatedPersistedKVs       map[string]store.PersistedKVData
 
 	compactOnlineAccountDeltas     compactOnlineAccountDeltas
-	updatedPersistedOnlineAccounts []persistedOnlineAccountData
+	updatedPersistedOnlineAccounts []store.PersistedOnlineAccountData
 
 	updatingBalancesDuration time.Duration
 
