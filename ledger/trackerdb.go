@@ -40,6 +40,7 @@ type trackerDBParams struct {
 	initAccounts      map[basics.Address]basics.AccountData
 	initProto         protocol.ConsensusVersion
 	genesisHash       crypto.Digest
+	fromCatchpoint    bool
 	catchpointEnabled bool
 	dbPathPrefix      string
 	blockDb           db.Pair
@@ -532,7 +533,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema7(ctx context.Context
 // forcing a rebuild of the accounthashes table on betanet nodes. Otherwise it has no effect.
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema8(ctx context.Context, tx *sql.Tx) (err error) {
 	betanetGenesisHash, _ := crypto.DigestFromString("TBMBVTC7W24RJNNUZCF7LWZD2NMESGZEQSMPG5XQD7JY4O7JKVWQ")
-	if tu.genesisHash == betanetGenesisHash {
+	if tu.genesisHash == betanetGenesisHash && !tu.fromCatchpoint {
 		// reset hash round to 0, forcing catchpointTracker.initializeHashes to rebuild accounthashes
 		err = updateAccountsHashRound(ctx, tx, 0)
 		if err != nil {

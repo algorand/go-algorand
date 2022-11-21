@@ -1012,6 +1012,7 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 				initAccounts:      c.ledger.GenesisAccounts(),
 				initProto:         c.ledger.GenesisProtoVersion(),
 				genesisHash:       c.ledger.GenesisHash(),
+				fromCatchpoint:    true,
 				catchpointEnabled: c.ledger.catchpoint.catchpointEnabled(),
 				dbPathPrefix:      c.ledger.catchpoint.dbDirectory,
 				blockDb:           c.ledger.blockDBs,
