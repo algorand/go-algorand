@@ -561,7 +561,7 @@ func (cfg Local) TxFilterRawMsgEnabled() bool {
 	return cfg.TxIncomingFilteringFlags&txFilterRawMsg != 0
 }
 
-// TxFilterRawMsgEnabled returns true if canonical tx group filtering is enabled
+// TxFilterCanonicalEnabled returns true if canonical tx group filtering is enabled
 func (cfg Local) TxFilterCanonicalEnabled() bool {
 	return cfg.TxIncomingFilteringFlags&txFilterCanonical != 0
 }
