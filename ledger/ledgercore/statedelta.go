@@ -211,7 +211,6 @@ func (sd *StateDelta) PopulateStateDelta(hdr *bookkeeping.BlockHeader, prevTimes
 	}
 	if sd.Accts.notAllocated() {
 		sd.Accts = MakeAccountDeltas(hint)
-		// initialHint is only used in OptimizeAllocatedMemory to resize it's allocated memory hence why we only reset it if we reallocate it
 		sd.initialHint = hint
 	}
 	sd.Hdr = hdr

@@ -194,9 +194,9 @@ func TestCowBalance(t *testing.T) {
 
 func BenchmarkCowChild(b *testing.B) {
 	b.ReportAllocs()
-	cow := makeRoundCowState(nil, bookkeeping.BlockHeader{}, config.ConsensusParams{}, 10000, ledgercore.AccountTotals{}, 300)
+	cow := makeRoundCowState(nil, bookkeeping.BlockHeader{}, config.ConsensusParams{}, 10000, ledgercore.AccountTotals{}, 16)
 	for i := 0; i < b.N; i++ {
-		cow.child(300)
+		cow.child(16)
 		cow.recycle()
 	}
 }
@@ -206,8 +206,8 @@ func BenchmarkCowChild(b *testing.B) {
 // fields are correctly reset but won't be able to catch any new fields added.
 func TestCowChildReset(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	cow := makeRoundCowState(nil, bookkeeping.BlockHeader{}, config.ConsensusParams{}, 10000, ledgercore.AccountTotals{}, 300)
-	calf := cow.child(100)
+	cow := makeRoundCowState(nil, bookkeeping.BlockHeader{}, config.ConsensusParams{}, 10000, ledgercore.AccountTotals{}, 16)
+	calf := cow.child(16)
 	require.NotEmpty(t, calf)
 	calf.compatibilityMode = true
 	calf.reset()
