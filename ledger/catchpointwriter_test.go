@@ -27,7 +27,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"testing"
 
@@ -35,7 +34,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -47,158 +45,59 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/msgp/msgp"
 )
-
-func makeString(len int) string {
-	s := ""
-	for i := 0; i < len; i++ {
-		s += string(byte(i))
-	}
-	return s
-}
-
-func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
-	er := encodedBalanceRecordV5{}
-	hash := crypto.Hash([]byte{1, 2, 3})
-	copy(er.Address[:], hash[:])
-	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
-	vrfSecrets := crypto.GenerateVRFSecrets()
-	var stateProofID merklesignature.Verifier
-	crypto.RandBytes(stateProofID.Commitment[:])
-
-	ad := basics.AccountData{
-		Status:             basics.NotParticipating,
-		MicroAlgos:         basics.MicroAlgos{},
-		RewardsBase:        0x1234123412341234,
-		RewardedMicroAlgos: basics.MicroAlgos{},
-		VoteID:             oneTimeSecrets.OneTimeSignatureVerifier,
-		SelectionID:        vrfSecrets.PK,
-		StateProofID:       stateProofID.Commitment,
-		VoteFirstValid:     basics.Round(0x1234123412341234),
-		VoteLastValid:      basics.Round(0x1234123412341234),
-		VoteKeyDilution:    0x1234123412341234,
-		AssetParams:        make(map[basics.AssetIndex]basics.AssetParams),
-		Assets:             make(map[basics.AssetIndex]basics.AssetHolding),
-		AuthAddr:           basics.Address(crypto.Hash([]byte{1, 2, 3, 4})),
-	}
-	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	maxAssetsPerAccount := currentConsensusParams.MaxAssetsPerAccount
-	// if the number of supported assets is unlimited, create only 1000 for the purpose of this unit test.
-	if maxAssetsPerAccount == 0 {
-		maxAssetsPerAccount = config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount
-	}
-	for assetCreatorAssets := 0; assetCreatorAssets < maxAssetsPerAccount; assetCreatorAssets++ {
-		ap := basics.AssetParams{
-			Total:         0x1234123412341234,
-			Decimals:      0x12341234,
-			DefaultFrozen: true,
-			UnitName:      makeString(currentConsensusParams.MaxAssetUnitNameBytes),
-			AssetName:     makeString(currentConsensusParams.MaxAssetNameBytes),
-			URL:           makeString(currentConsensusParams.MaxAssetURLBytes),
-			Manager:       basics.Address(crypto.Hash([]byte{1, byte(assetCreatorAssets)})),
-			Reserve:       basics.Address(crypto.Hash([]byte{2, byte(assetCreatorAssets)})),
-			Freeze:        basics.Address(crypto.Hash([]byte{3, byte(assetCreatorAssets)})),
-			Clawback:      basics.Address(crypto.Hash([]byte{4, byte(assetCreatorAssets)})),
-		}
-		copy(ap.MetadataHash[:], makeString(32))
-		ad.AssetParams[basics.AssetIndex(0x1234123412341234-assetCreatorAssets)] = ap
-	}
-
-	for assetHolderAssets := 0; assetHolderAssets < maxAssetsPerAccount; assetHolderAssets++ {
-		ah := basics.AssetHolding{
-			Amount: 0x1234123412341234,
-			Frozen: true,
-		}
-		ad.Assets[basics.AssetIndex(0x1234123412341234-assetHolderAssets)] = ah
-	}
-
-	maxApps := currentConsensusParams.MaxAppsCreated
-	maxOptIns := currentConsensusParams.MaxAppsOptedIn
-	if maxApps == 0 {
-		maxApps = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
-	}
-	if maxOptIns == 0 {
-		maxOptIns = config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
-	}
-	maxKeyBytesLen := currentConsensusParams.MaxAppKeyLen
-	maxSumBytesLen := currentConsensusParams.MaxAppSumKeyValueLens
-
-	genKey := func() (string, basics.TealValue) {
-		len := int(crypto.RandUint64() % uint64(maxKeyBytesLen))
-		if len == 0 {
-			return "k", basics.TealValue{Type: basics.TealUintType, Uint: 0}
-		}
-		key := make([]byte, maxSumBytesLen-len)
-		crypto.RandBytes(key)
-		return string(key), basics.TealValue{Type: basics.TealUintType, Bytes: string(key)}
-	}
-	startIndex := crypto.RandUint64() % 100000
-	ad.AppParams = make(map[basics.AppIndex]basics.AppParams, maxApps)
-	for aidx := startIndex; aidx < startIndex+uint64(maxApps); aidx++ {
-		ap := basics.AppParams{}
-		ap.GlobalState = make(basics.TealKeyValue)
-		for i := uint64(0); i < currentConsensusParams.MaxGlobalSchemaEntries/4; i++ {
-			k, v := genKey()
-			ap.GlobalState[k] = v
-		}
-		ad.AppParams[basics.AppIndex(aidx)] = ap
-		optins := maxApps
-		if maxApps > maxOptIns {
-			optins = maxOptIns
-		}
-		ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, optins)
-		keys := currentConsensusParams.MaxLocalSchemaEntries / 4
-		lkv := make(basics.TealKeyValue, keys)
-		for i := 0; i < optins; i++ {
-			for j := uint64(0); j < keys; j++ {
-				k, v := genKey()
-				lkv[k] = v
-			}
-		}
-		ad.AppLocalStates[basics.AppIndex(aidx)] = basics.AppLocalState{KeyValue: lkv}
-	}
-
-	encodedAd := ad.MarshalMsg(nil)
-	er.AccountData = encodedAd
-	return er
-}
-
-func TestEncodedBalanceRecordEncoding(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	er := makeTestEncodedBalanceRecordV5(t)
-	encodedBr := er.MarshalMsg(nil)
-
-	var er2 encodedBalanceRecordV5
-	_, err := er2.UnmarshalMsg(encodedBr)
-	require.NoError(t, err)
-
-	require.Equal(t, er, er2)
-}
 
 func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// The next operations are heavy on the memory.
-	// Garbage collection helps prevent thrashing
-	runtime.GC()
+	// check a low number of balances/kvs/resources
+	// otherwise it would take forever to serialize/deserialize
+	const numChunkEntries = BalancesPerCatchpointFileChunk / 50
+	require.Greater(t, numChunkEntries, 1)
 
-	fbc := catchpointFileBalancesChunkV5{}
-	for i := 0; i < 512; i++ {
-		fbc.Balances = append(fbc.Balances, makeTestEncodedBalanceRecordV5(t))
+	const numResources = ResourcesPerCatchpointFileChunk / 10000
+	require.Greater(t, numResources, 1)
+
+	baseAD := randomBaseAccountData()
+	encodedBaseAD := baseAD.MarshalMsg(nil)
+
+	resources := make(map[uint64]msgp.Raw, numResources/10)
+	rdApp := randomAppResourceData()
+	encodedResourceData := rdApp.MarshalMsg(nil)
+	for i := uint64(0); i < numResources; i++ {
+		resources[i] = encodedResourceData
 	}
-	encodedFbc := fbc.MarshalMsg(nil)
+	balance := encodedBalanceRecordV6{
+		Address:     ledgertesting.RandomAddress(),
+		AccountData: encodedBaseAD,
+		Resources:   resources,
+	}
+	balances := make([]encodedBalanceRecordV6, numChunkEntries)
+	kv := encodedKVRecordV6{
+		Key:   make([]byte, encodedKVRecordV6MaxKeyLength),
+		Value: make([]byte, encodedKVRecordV6MaxValueLength),
+	}
+	crypto.RandBytes(kv.Key[:])
+	crypto.RandBytes(kv.Value[:])
+	kvs := make([]encodedKVRecordV6, numChunkEntries)
 
-	var fbc2 catchpointFileBalancesChunkV5
-	_, err := fbc2.UnmarshalMsg(encodedFbc)
+	for i := 0; i < numChunkEntries; i++ {
+		balances[i] = balance
+		kvs[i] = kv
+	}
+
+	chunk1 := catchpointFileChunkV6{}
+	chunk1.Balances = balances
+	chunk1.KVs = kvs
+	encodedChunk := chunk1.MarshalMsg(nil)
+
+	var chunk2 catchpointFileChunkV6
+	_, err := chunk2.UnmarshalMsg(encodedChunk)
 	require.NoError(t, err)
 
-	require.Equal(t, fbc, fbc2)
-	// Garbage collection helps prevent trashing
-	// for next tests
-	runtime.GC()
+	require.Equal(t, chunk1, chunk2)
 }
 
 func TestBasicCatchpointWriter(t *testing.T) {
@@ -441,7 +340,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 		delete(config.Consensus, testProtocolVersion)
 	}()
 
-	maxResourcesPerChunk := 5
+	const maxResourcesPerChunk = 5
 
 	accts := ledgertesting.RandomAccounts(5, false)
 	// force each acct to have overflowing number of resources
@@ -480,6 +379,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 		totalResources := 0
 		var expectedTotalResources int
 		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
+		require.NoError(t, err)
 		err = cw.tx.QueryRowContext(cw.ctx, "SELECT count(1) FROM resources").Scan(&expectedTotalResources)
 		if err != nil {
 			return err

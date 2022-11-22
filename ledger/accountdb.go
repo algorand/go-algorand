@@ -193,7 +193,7 @@ var accountsResetExprs = []string{
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(8)
+var accountDBVersion = int32(9)
 
 // persistedAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
@@ -478,15 +478,10 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 				if err != nil {
 					return nil, err
 				}
-				var ctype basics.CreatableType
-				if resData.IsAsset() {
-					ctype = basics.AssetCreatable
-				} else if resData.IsApp() {
-					ctype = basics.AppCreatable
-				} else {
-					err = fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", balance.Address.String(), cidx, resData)
+				normalizedAccountBalances[i].accountHashes[curHashIdx], err = resourcesHashBuilderV6(&resData, balance.Address, basics.CreatableIndex(cidx), resData.UpdateRound, res)
+				if err != nil {
+					return nil, err
 				}
-				normalizedAccountBalances[i].accountHashes[curHashIdx] = resourcesHashBuilderV6(balance.Address, basics.CreatableIndex(cidx), ctype, resData.UpdateRound, res)
 				normalizedAccountBalances[i].resources[basics.CreatableIndex(cidx)] = resData
 				normalizedAccountBalances[i].encodedResources[basics.CreatableIndex(cidx)] = res
 				curHashIdx++
@@ -3830,11 +3825,18 @@ func accountsNewRoundImpl(
 	}
 
 	updatedKVs = make(map[string]persistedKVData, len(kvPairs))
-	for key, value := range kvPairs {
-		if value.data != nil {
-			err = writer.upsertKvPair(key, value.data)
-			updatedKVs[key] = persistedKVData{value: value.data, round: lastUpdateRound}
+	for key, mv := range kvPairs {
+		if mv.data != nil {
+			// reminder: check oldData for nil here, b/c bytes.Equal conflates nil and "".
+			if mv.oldData != nil && bytes.Equal(mv.oldData, mv.data) {
+				continue // changed back within the delta span
+			}
+			err = writer.upsertKvPair(key, mv.data)
+			updatedKVs[key] = persistedKVData{value: mv.data, round: lastUpdateRound}
 		} else {
+			if mv.oldData == nil { // Came and went within the delta span
+				continue
+			}
 			err = writer.deleteKvPair(key)
 			updatedKVs[key] = persistedKVData{value: nil, round: lastUpdateRound}
 		}
@@ -4111,6 +4113,16 @@ func updateAccountsHashRound(ctx context.Context, tx *sql.Tx, hashRound basics.R
 // totalAccounts returns the total number of accounts
 func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
 	err = tx.QueryRowContext(ctx, "SELECT count(1) FROM accountbase").Scan(&total)
+	if err == sql.ErrNoRows {
+		total = 0
+		err = nil
+		return
+	}
+	return
+}
+
+func totalKVs(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
+	err = tx.QueryRowContext(ctx, "SELECT count(1) FROM kvstore").Scan(&total)
 	if err == sql.ErrNoRows {
 		total = 0
 		err = nil
@@ -4809,21 +4821,15 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		}
 
 		resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *resourcesData, encodedResourceData []byte, lastResource bool) error {
-			var err error
 			if resData != nil {
-				var ctype basics.CreatableType
-				if resData.IsAsset() {
-					ctype = basics.AssetCreatable
-				} else if resData.IsApp() {
-					ctype = basics.AppCreatable
-				} else {
-					err = fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", addr.String(), cidx, resData)
+				hash, err := resourcesHashBuilderV6(resData, addr, cidx, resData.UpdateRound, encodedResourceData)
+				if err != nil {
 					return err
 				}
-				hash := resourcesHashBuilderV6(addr, cidx, ctype, resData.UpdateRound, encodedResourceData)
 				_, err = iterator.insertStmt.ExecContext(ctx, lastAddrID, hash)
+				return err
 			}
-			return err
+			return nil
 		}
 
 		count := 0
@@ -5158,6 +5164,11 @@ type catchpointFirstStageInfo struct {
 	// Total number of accounts in the catchpoint data file. Only set when catchpoint
 	// data files are generated.
 	TotalAccounts uint64 `codec:"accountsCount"`
+
+	// Total number of accounts in the catchpoint data file. Only set when catchpoint
+	// data files are generated.
+	TotalKVs uint64 `codec:"kvsCount"`
+
 	// Total number of chunks in the catchpoint data file. Only set when catchpoint
 	// data files are generated.
 	TotalChunks uint64 `codec:"chunksCount"`

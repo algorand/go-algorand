@@ -91,4 +91,31 @@ var (
 	TransactionMessagesDroppedFromBacklog = MetricName{Name: "algod_transaction_messages_dropped_backlog", Description: "Number of transaction messages dropped from backlog"}
 	// TransactionMessagesDroppedFromPool "Number of transaction messages dropped from pool"
 	TransactionMessagesDroppedFromPool = MetricName{Name: "algod_transaction_messages_dropped_pool", Description: "Number of transaction messages dropped from pool"}
+	// TransactionMessagesAlreadyCommitted "Number of duplicate or error transaction messages before placing into a backlog"
+	TransactionMessagesAlreadyCommitted = MetricName{Name: "algod_transaction_messages_err_or_committed", Description: "Number of duplicate or error transaction messages after TX handler backlog"}
+	// TransactionMessagesTxGroupInvalidFee "Number of transaction messages with invalid txgroup fee"
+	TransactionMessagesTxGroupInvalidFee = MetricName{Name: "algod_transaction_messages_txgroup_invalid_fee", Description: "Number of transaction messages with invalid txgroup fee"}
+	// TransactionMessagesTxnNotWellFormed "Number of transaction messages not well formed"
+	TransactionMessagesTxnNotWellFormed = MetricName{Name: "algod_transaction_messages_txn_notwell_formed", Description: "Number of transaction messages not well formed"}
+	// TransactionMessagesTxnSigNotWellFormed "Number of transaction messages with bad formed signature"
+	TransactionMessagesTxnSigNotWellFormed = MetricName{Name: "algod_transaction_messages_sig_bad_formed", Description: "Number of transaction messages with bad formed signature"}
+	// TransactionMessagesTxnMsigNotWellFormed "Number of transaction messages with bad formed multisig"
+	TransactionMessagesTxnMsigNotWellFormed = MetricName{Name: "algod_transaction_messages_msig_bas_formed", Description: "Number of transaction messages with bad formed msig"}
+	// TransactionMessagesTxnLogicSig "Number of transaction messages with invalid logic sig"
+	TransactionMessagesTxnLogicSig = MetricName{Name: "algod_transaction_messages_logic_sig_failed", Description: "Number of transaction messages with invalid logic sig"}
+	// TransactionMessagesTxnSigVerificationFailed "Number of transaction messages with signature verification failed"
+	TransactionMessagesTxnSigVerificationFailed = MetricName{Name: "algod_transaction_messages_sig_verify_failed", Description: "Number of transaction messages with signature verification failed"}
+	// TransactionMessagesBacklogErr "Number of transaction messages with some validation error"
+	TransactionMessagesBacklogErr = MetricName{Name: "algod_transaction_messages_backlog_err", Description: "Number of transaction messages with some validation error"}
+	// TransactionMessagesRemember "Number of transaction messages remembered in TX handler"
+	TransactionMessagesRemember = MetricName{Name: "algod_transaction_messages_remember", Description: "Number of transaction messages remembered in TX handler"}
+	// TransactionMessagesBacklogSize "Number of transaction messages in the TX handler backlog queue"
+	TransactionMessagesBacklogSize = MetricName{Name: "algod_transaction_messages_backlog_size", Description: "Number of transaction messages in the TX handler backlog queue"}
+
+	// TransactionGroupTxSyncHandled "Number of transaction groups handled via txsync"
+	TransactionGroupTxSyncHandled = MetricName{Name: "algod_transaction_group_txsync_handled", Description: "Number of transaction groups handled via txsync"}
+	// TransactionGroupTxSyncRemember "Number of transaction groups remembered via txsync"
+	TransactionGroupTxSyncRemember = MetricName{Name: "algod_transaction_group_txsync_remember", Description: "Number of transaction groups remembered via txsync"}
+	// TransactionGroupTxSyncAlreadyCommitted "Number of duplicate or error transaction groups received via txsync"
+	TransactionGroupTxSyncAlreadyCommitted = MetricName{Name: "algod_transaction_group_txsync_err_or_committed", Description: "Number of duplicate or error transaction groups received via txsync"}
 )

@@ -525,6 +525,10 @@
                   "description": "The number of accounts from the current catchpoint that have been processed so far as part of the catchup",
                   "type": "integer"
                 },
+                "catchpoint-processed-kvs": {
+                  "description": "The number of key-values (KVs) from the current catchpoint that have been processed so far as part of the catchup",
+                  "type": "integer"
+                },
                 "catchpoint-total-accounts": {
                   "description": "The total number of accounts included in the current catchpoint",
                   "type": "integer"
@@ -533,8 +537,16 @@
                   "description": "The total number of blocks that are required to complete the current catchpoint catchup",
                   "type": "integer"
                 },
+                "catchpoint-total-kvs": {
+                  "description": "The total number of key-values (KVs) included in the current catchpoint",
+                  "type": "integer"
+                },
                 "catchpoint-verified-accounts": {
                   "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
+                  "type": "integer"
+                },
+                "catchpoint-verified-kvs": {
+                  "description": "The number of key-values (KVs) from the current catchpoint that have been verified so far as part of the catchup",
                   "type": "integer"
                 },
                 "catchup-time": {
@@ -1894,6 +1906,7 @@
         },
         "summary": "Gets the genesis information.",
         "tags": [
+          "public",
           "common"
         ]
       }
@@ -1913,6 +1926,7 @@
         },
         "summary": "Returns OK if healthy.",
         "tags": [
+          "public",
           "common"
         ]
       }
@@ -1932,6 +1946,7 @@
         },
         "summary": "Return metrics about algod functioning.",
         "tags": [
+          "public",
           "common"
         ]
       }
@@ -1958,6 +1973,7 @@
         },
         "summary": "Gets the current swagger spec.",
         "tags": [
+          "public",
           "common"
         ]
       }
@@ -2068,7 +2084,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get account information."
+        "summary": "Get account information.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/accounts/{address}/applications/{application-id}": {
@@ -2204,7 +2224,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get account information about a given app."
+        "summary": "Get account information about a given app.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/accounts/{address}/assets/{asset-id}": {
@@ -2340,7 +2364,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get account information about a given asset."
+        "summary": "Get account information about a given asset.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/accounts/{address}/transactions/pending": {
@@ -2500,7 +2528,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get a list of unconfirmed transactions currently in the transaction pool by address."
+        "summary": "Get a list of unconfirmed transactions currently in the transaction pool by address.",
+        "tags": [
+          "public",
+          "participating"
+        ]
       }
     },
     "/v2/applications/{application-id}": {
@@ -2574,7 +2606,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get application information."
+        "summary": "Get application information.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/applications/{application-id}/box": {
@@ -2657,7 +2693,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get box information for a given application."
+        "summary": "Get box information for a given application.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/applications/{application-id}/boxes": {
@@ -2740,7 +2780,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get all box names for a given application."
+        "summary": "Get all box names for a given application.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/assets/{asset-id}": {
@@ -2814,7 +2858,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get asset information."
+        "summary": "Get asset information.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/blocks/{round}": {
@@ -2959,7 +3007,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get the block for the given round."
+        "summary": "Get the block for the given round.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/blocks/{round}/hash": {
@@ -3042,7 +3094,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get the block hash for the block on the given round."
+        "summary": "Get the block hash for the block on the given round.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/blocks/{round}/lightheader/proof": {
@@ -3126,7 +3182,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Gets a proof for a given light block header inside a state proof commitment"
+        "summary": "Gets a proof for a given light block header inside a state proof commitment",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/blocks/{round}/transactions/{txid}/proof": {
@@ -3270,7 +3330,11 @@
             "description": "Unknown error"
           }
         },
-        "summary": "Get a proof for a transaction in a block."
+        "summary": "Get a proof for a transaction in a block.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/catchup/{catchpoint}": {
@@ -3349,7 +3413,8 @@
         },
         "summary": "Aborts a catchpoint catchup.",
         "tags": [
-          "private"
+          "private",
+          "nonparticipating"
         ]
       },
       "post": {
@@ -3446,7 +3511,8 @@
         },
         "summary": "Starts a catchpoint catchup.",
         "tags": [
-          "private"
+          "private",
+          "nonparticipating"
         ]
       }
     },
@@ -3499,7 +3565,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get the current supply reported by the ledger."
+        "summary": "Get the current supply reported by the ledger.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/participation": {
@@ -3567,7 +3637,8 @@
         },
         "summary": "Return a list of participation keys",
         "tags": [
-          "private"
+          "private",
+          "participating"
         ]
       },
       "post": {
@@ -3661,7 +3732,8 @@
         },
         "summary": "Add a participation key to the node",
         "tags": [
-          "private"
+          "private",
+          "participating"
         ],
         "x-codegen-request-body-name": "participationkey"
       }
@@ -3732,7 +3804,8 @@
         },
         "summary": "Delete a given participation key by ID",
         "tags": [
-          "private"
+          "private",
+          "participating"
         ]
       },
       "get": {
@@ -3806,7 +3879,8 @@
         },
         "summary": "Get participation key info given a participation ID",
         "tags": [
-          "private"
+          "private",
+          "participating"
         ]
       },
       "post": {
@@ -3892,7 +3966,8 @@
         },
         "summary": "Append state proof keys to a participation key",
         "tags": [
-          "private"
+          "private",
+          "participating"
         ],
         "x-codegen-request-body-name": "keymap"
       }
@@ -3923,7 +3998,8 @@
           }
         },
         "tags": [
-          "private"
+          "private",
+          "nonparticipating"
         ]
       }
     },
@@ -4008,7 +4084,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get a state proof that covers a given round"
+        "summary": "Get a state proof that covers a given round",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/status": {
@@ -4033,6 +4113,10 @@
                       "description": "The number of accounts from the current catchpoint that have been processed so far as part of the catchup",
                       "type": "integer"
                     },
+                    "catchpoint-processed-kvs": {
+                      "description": "The number of key-values (KVs) from the current catchpoint that have been processed so far as part of the catchup",
+                      "type": "integer"
+                    },
                     "catchpoint-total-accounts": {
                       "description": "The total number of accounts included in the current catchpoint",
                       "type": "integer"
@@ -4041,8 +4125,16 @@
                       "description": "The total number of blocks that are required to complete the current catchpoint catchup",
                       "type": "integer"
                     },
+                    "catchpoint-total-kvs": {
+                      "description": "The total number of key-values (KVs) included in the current catchpoint",
+                      "type": "integer"
+                    },
                     "catchpoint-verified-accounts": {
                       "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
+                      "type": "integer"
+                    },
+                    "catchpoint-verified-kvs": {
+                      "description": "The number of key-values (KVs) from the current catchpoint that have been verified so far as part of the catchup",
                       "type": "integer"
                     },
                     "catchup-time": {
@@ -4122,7 +4214,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Gets the current node status."
+        "summary": "Gets the current node status.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/status/wait-for-block-after/{round}": {
@@ -4160,6 +4256,10 @@
                       "description": "The number of accounts from the current catchpoint that have been processed so far as part of the catchup",
                       "type": "integer"
                     },
+                    "catchpoint-processed-kvs": {
+                      "description": "The number of key-values (KVs) from the current catchpoint that have been processed so far as part of the catchup",
+                      "type": "integer"
+                    },
                     "catchpoint-total-accounts": {
                       "description": "The total number of accounts included in the current catchpoint",
                       "type": "integer"
@@ -4168,8 +4268,16 @@
                       "description": "The total number of blocks that are required to complete the current catchpoint catchup",
                       "type": "integer"
                     },
+                    "catchpoint-total-kvs": {
+                      "description": "The total number of key-values (KVs) included in the current catchpoint",
+                      "type": "integer"
+                    },
                     "catchpoint-verified-accounts": {
                       "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
+                      "type": "integer"
+                    },
+                    "catchpoint-verified-kvs": {
+                      "description": "The number of key-values (KVs) from the current catchpoint that have been verified so far as part of the catchup",
                       "type": "integer"
                     },
                     "catchup-time": {
@@ -4269,7 +4377,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Gets the node status after waiting for the given round."
+        "summary": "Gets the node status after waiting for the given round.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/teal/compile": {
@@ -4368,6 +4480,10 @@
           }
         },
         "summary": "Compile TEAL source code to binary, produce its hash",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "x-codegen-request-body-name": "source"
       }
     },
@@ -4447,6 +4563,10 @@
           }
         },
         "summary": "Disassemble program bytes into the TEAL source code.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "x-codegen-request-body-name": "source"
       }
     },
@@ -4541,6 +4661,10 @@
           }
         },
         "summary": "Provide debugging information for a transaction (or group).",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "x-codegen-request-body-name": "request"
       }
     },
@@ -4625,6 +4749,10 @@
           }
         },
         "summary": "Broadcasts a raw transaction to the network.",
+        "tags": [
+          "public",
+          "participating"
+        ],
         "x-codegen-request-body-name": "rawtxn"
       }
     },
@@ -4715,7 +4843,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get parameters for constructing a new transaction"
+        "summary": "Get parameters for constructing a new transaction",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/transactions/pending": {
@@ -4850,7 +4982,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get a list of unconfirmed transactions currently in the transaction pool."
+        "summary": "Get a list of unconfirmed transactions currently in the transaction pool.",
+        "tags": [
+          "public",
+          "participating"
+        ]
       }
     },
     "/v2/transactions/pending/{txid}": {
@@ -4947,7 +5083,11 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get a specific pending transaction."
+        "summary": "Get a specific pending transaction.",
+        "tags": [
+          "public",
+          "participating"
+        ]
       }
     },
     "/versions": {
@@ -4967,6 +5107,7 @@
           }
         },
         "tags": [
+          "public",
           "common"
         ]
       }

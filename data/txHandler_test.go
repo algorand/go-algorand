@@ -17,7 +17,9 @@
 package data
 
 import (
+	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -301,6 +303,8 @@ func incomingTxHandlerProcessing(maxGroupSize int, t *testing.T) {
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	// since Start is not called, set the context here
+	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	defer handler.ctxCancel()
 
 	outChan := make(chan *txBacklogMsg, 10)
@@ -522,6 +526,8 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	// since Start is not called, set the context here
+	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	defer handler.ctxCancel()
 
 	// Prepare the transactions
@@ -567,4 +573,87 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 	close(handler.postVerificationQueue)
 	close(handler.backlogQueue)
 	wg.Wait()
+}
+
+func TestTxHandlerPostProcessError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	collect := func() map[string]float64 {
+		// collect all specific error reason metrics except TxGroupErrorReasonNotWellFormed,
+		// it is tested in TestPostProcessErrorWithVerify
+		result := map[string]float64{}
+		transactionMessagesTxnSigVerificationFailed.AddMetric(result)
+		transactionMessagesAlreadyCommitted.AddMetric(result)
+		transactionMessagesTxGroupInvalidFee.AddMetric(result)
+		// transactionMessagesTxnNotWellFormed.AddMetric(result)
+		transactionMessagesTxnSigNotWellFormed.AddMetric(result)
+		transactionMessagesTxnMsigNotWellFormed.AddMetric(result)
+		transactionMessagesTxnLogicSig.AddMetric(result)
+		return result
+	}
+	var txh TxHandler
+
+	errSome := errors.New("some error")
+	txh.postProcessReportErrors(errSome)
+	result := collect()
+	require.Len(t, result, 0)
+	transactionMessagesBacklogErr.AddMetric(result)
+	require.Len(t, result, 1)
+
+	counter := 0
+	for i := verify.TxGroupErrorReasonGeneric; i <= verify.TxGroupErrorReasonLogicSigFailed; i++ {
+		if i == verify.TxGroupErrorReasonNotWellFormed {
+			// skip TxGroupErrorReasonNotWellFormed, tested in TestPostProcessErrorWithVerify.
+			// the test uses global metric counters, skipping makes the test deterministic
+			continue
+		}
+
+		errTxGroup := &verify.ErrTxGroupError{Reason: i}
+		txh.postProcessReportErrors(errTxGroup)
+		result = collect()
+		if i == verify.TxGroupErrorReasonSigNotWellFormed {
+			// TxGroupErrorReasonSigNotWellFormed and TxGroupErrorReasonHasNoSig increment the same metric
+			counter--
+			require.Equal(t, result[metrics.TransactionMessagesTxnSigNotWellFormed.Name], float64(2))
+		}
+		require.Len(t, result, counter)
+		counter++
+	}
+
+	// there are one less metrics than number of tracked values,
+	// plus one generic non-tracked value, plus skipped TxGroupErrorReasonNotWellFormed
+	const expected = int(verify.TxGroupErrorReasonNumValues) - 3
+	require.Len(t, result, expected)
+
+	errVerify := crypto.ErrBatchVerificationFailed
+	txh.postProcessReportErrors(errVerify)
+	result = collect()
+	require.Len(t, result, expected+1)
+}
+
+func TestTxHandlerPostProcessErrorWithVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	txn := transactions.Transaction{}
+	stxn := transactions.SignedTxn{Txn: txn}
+
+	hdr := bookkeeping.BlockHeader{
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
+		},
+	}
+	_, err := verify.TxnGroup([]transactions.SignedTxn{stxn}, hdr, nil, nil)
+	var txGroupErr *verify.ErrTxGroupError
+	require.ErrorAs(t, err, &txGroupErr)
+
+	result := map[string]float64{}
+	transactionMessagesTxnNotWellFormed.AddMetric(result)
+	require.Len(t, result, 0)
+
+	var txh TxHandler
+	txh.postProcessReportErrors(err)
+	transactionMessagesTxnNotWellFormed.AddMetric(result)
+	require.Len(t, result, 1)
 }
