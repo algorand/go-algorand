@@ -640,20 +640,16 @@ func (sv *StreamVerifier) Start(ctx context.Context) {
 	go sv.batchingLoop()
 }
 
-func (sv *StreamVerifier) cleanup(pending []UnverifiedElement) {
+func (sv *StreamVerifier) cleanup(pending *[]UnverifiedElement) {
 	// report an error for the unchecked txns
 	// drop the messages without reporting if the receiver does not consume
-	for _, uel := range pending {
+	for _, uel := range *pending {
 		vr := VerificationResult{
 			TxnGroup:       uel.TxnGroup,
 			BacklogMessage: uel.BacklogMessage,
 			Err:            errShuttingDownError,
 		}
-		select {
-		case sv.resultChan <- vr:
-		default:
-			return
-		}
+		sv.resultChan <- vr
 	}
 }
 
@@ -664,7 +660,7 @@ func (sv *StreamVerifier) batchingLoop() {
 	var numberOfSigsInCurrent uint64
 	var numberOfTimerResets uint64
 	uelts := make([]UnverifiedElement, 0)
-	defer sv.cleanup(uelts)
+	defer sv.cleanup(&uelts)
 	for {
 		select {
 		case stx := <-sv.stxnChan:
@@ -736,7 +732,7 @@ func (sv *StreamVerifier) batchingLoop() {
 			if numberOfTimerResets > 1 {
 				// bypass the exec pool situation and queue anyway
 				// this is to prevent long delays in transaction propagation
-				// at least one transaction here has waited 3 x waitForFirstTxnDuration
+				// at least one transaction here has waited 3 x waitForNextTxnDuration
 				err = sv.addVerificationTaskToThePoolNow(uelts)
 				added = true
 			} else {
@@ -780,7 +776,7 @@ func (sv *StreamVerifier) canAddVerificationTaskToThePool(uelts []UnverifiedElem
 	// more signatures to the batch do not harm performance but introduce latency when delayed (see crypto.BenchmarkBatchVerifierBig)
 
 	// if buffer is half full
-	if l, c := sv.verificationPool.BufferLength(); l > c/2 {
+	if l, c := sv.verificationPool.BufferLength(); l == c {
 		return false, nil
 	}
 	err = sv.addVerificationTaskToThePoolNow(uelts)
