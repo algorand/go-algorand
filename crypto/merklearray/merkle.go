@@ -409,3 +409,67 @@ func inspectRoot(root crypto.GenericDigest, pl partialLayer) error {
 	}
 	return nil
 }
+
+func DecompressProofVC(elems map[uint64]crypto.Hashable, proof *Proof, leafPosition uint64) (*SingleLeafProof, error) {
+	idx, err := merkleTreeToVectorCommitmentIndex(leafPosition, proof.TreeDepth)
+	if err != nil {
+		return nil, err
+	}
+
+	msbIndexedElements, err := convertIndexes(elems, proof.TreeDepth)
+	if err != nil {
+		return nil, err
+	}
+
+	return DecompressProof(msbIndexedElements, proof, idx)
+}
+
+func DecompressProof(elems map[uint64]crypto.Hashable, proof *Proof, leafPosition uint64) (*SingleLeafProof, error) {
+	hashedLeaves, err := hashLeaves(elems, proof.TreeDepth, proof.HashFactory.NewHash())
+	if err != nil {
+		return nil, err
+	}
+
+	hints := proof.Path
+	s := &siblings{
+		hints: hints,
+	}
+
+	hintsIdx := uint64(0)
+	hsh := proof.HashFactory.NewHash()
+
+	var partialTree []partialLayer
+	pl := buildFirstPartialLayer(hashedLeaves)
+	for j := 0; j < int(proof.TreeDepth); j++ {
+		pl = fillHints(pl, &hintsIdx, s)
+		partialTree = append(partialTree, pl)
+		pl = createNextLayer(pl, hsh)
+	}
+
+	var proofPath []crypto.GenericDigest
+	for i := 0; i < len(partialTree); i++ {
+		layer := partialTree[i]
+		for j := 0; j < len(layer); j += 2 {
+			sibling := leafPosition ^ 1
+			if layer[j].pos == sibling {
+				proofPath = append(proofPath, layer[j].hash)
+				//fmt.Println(layer[j].hash)
+				break
+			}
+			if layer[j+1].pos == sibling {
+				proofPath = append(proofPath, layer[j+1].hash)
+				//fmt.Println(layer[j+1].hash)
+				break
+			}
+		}
+		leafPosition = leafPosition / 2
+	}
+
+	return &SingleLeafProof{
+		Proof: Proof{
+			Path:        proofPath,
+			HashFactory: proof.HashFactory,
+			TreeDepth:   proof.TreeDepth,
+		},
+	}, nil
+}

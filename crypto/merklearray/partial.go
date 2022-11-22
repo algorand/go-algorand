@@ -128,3 +128,49 @@ func (pl partialLayer) up(s *siblings, l uint64, doHash bool, hsh hash.Hash) (pa
 
 	return res, nil
 }
+
+func createNextLayer(layer partialLayer, hash hash.Hash) partialLayer {
+	var newLayer partialLayer
+	for i := uint64(0); i < uint64(len(layer)); i += 2 {
+		nextLayerPos := layer[i].pos / 2
+		var nextLayerHash crypto.GenericDigest
+
+		p := pair{l: layer[i].hash, r: layer[i+1].hash, hashDigestSize: hash.Size()}
+
+		nextLayerHash = crypto.GenericHashObj(hash, &p)
+
+		newLayer = append(newLayer, layerItem{
+			pos:  nextLayerPos,
+			hash: nextLayerHash,
+		})
+	}
+	return newLayer
+}
+
+func fillHints(layer partialLayer, hintsIdx *uint64, siblings *siblings) partialLayer {
+	var newLayer partialLayer
+
+	for i := 0; i < len(layer); i++ {
+		siblingPos := layer[i].pos ^ 1
+		if i+1 < len(layer) && layer[i+1].pos == siblingPos {
+			newLayer = append(newLayer, layer[i])
+			newLayer = append(newLayer, layer[i+1])
+			i++
+		} else {
+			child := layerItem{
+				pos:  siblingPos,
+				hash: siblings.hints[*hintsIdx],
+			}
+			if siblingPos < layer[i].pos {
+				newLayer = append(newLayer, child)
+				newLayer = append(newLayer, layer[i])
+			} else {
+				newLayer = append(newLayer, layer[i])
+				newLayer = append(newLayer, child)
+			}
+			*hintsIdx++
+		}
+	}
+
+	return newLayer
+}
