@@ -1244,8 +1244,9 @@ func makeCatchpointFilePath(round basics.Round) string {
 // deleting 2 entries while inserting single entry allow us to adjust the size of the backing storage and have the
 // database and storage realign.
 func (ct *catchpointTracker) recordCatchpointFile(ctx context.Context, e db.Executable, round basics.Round, relCatchpointFilePath string, fileSize int64) (err error) {
+	cps := store.NewCatchpointSQLReaderWriter(e)
 	if ct.catchpointFileHistoryLength != 0 {
-		err = ct.catchpointStore.StoreCatchpoint(ctx, round, relCatchpointFilePath, "", fileSize)
+		err = cps.StoreCatchpoint(ctx, round, relCatchpointFilePath, "", fileSize)
 		if err != nil {
 			ct.log.Warnf("catchpointTracker.recordCatchpointFile() unable to save catchpoint: %v", err)
 			return
@@ -1260,9 +1261,6 @@ func (ct *catchpointTracker) recordCatchpointFile(ctx context.Context, e db.Exec
 	if ct.catchpointFileHistoryLength == -1 {
 		return
 	}
-
-	cps := store.NewCatchpointSQLReaderWriter(e)
-
 	var filesToDelete map[basics.Round]string
 	filesToDelete, err = cps.GetOldestCatchpointFiles(ctx, 2, ct.catchpointFileHistoryLength)
 	if err != nil {
@@ -1290,7 +1288,8 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 	// TODO: we need to generalize this, check @cce PoC PR, he has something
 	//       somewhat broken for some KVs..
 	err := ct.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		dbFileName, _, fileSize, err = ct.catchpointStore.GetCatchpoint(ctx, round)
+		cps := store.NewCatchpointSQLReaderWriter(tx)
+		dbFileName, _, fileSize, err = cps.GetCatchpoint(ctx, round)
 		return
 	})
 	ledgerGetcatchpointMicros.AddMicrosecondsSince(start, nil)
