@@ -18,8 +18,6 @@ package ledger
 
 import (
 	"database/sql"
-	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,17 +26,20 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/logging"
+	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
 
+// TODO[store-refactor]: temporary leftovers, refactor calls to store.*
 func dbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
-	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
-	dbs, err := db.OpenPair(fn, inMemory)
-	require.NoErrorf(t, err, "Filename : %s\nInMemory: %v", fn, inMemory)
-	return dbs, fn
+	return storetesting.DbOpenTest(t, inMemory)
+}
+
+// TODO[store-refactor]: temporary leftovers, refactor calls to store.*
+func setDbLogging(t testing.TB, dbs db.Pair) {
+	storetesting.SetDbLogging(t, dbs)
 }
 
 func randomBlock(r basics.Round) blockEntry {
@@ -110,12 +111,6 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []blockEntry) {
 
 	_, err = blockGet(tx, basics.Round(len(blocks)))
 	require.Error(t, err)
-}
-
-func setDbLogging(t testing.TB, dbs db.Pair) {
-	dblogger := logging.TestingLog(t)
-	dbs.Rdb.SetLogger(dblogger)
-	dbs.Wdb.SetLogger(dblogger)
 }
 
 func TestBlockDBEmpty(t *testing.T) {

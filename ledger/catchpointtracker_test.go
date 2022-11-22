@@ -39,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -106,7 +107,7 @@ func TestGetCatchpointStream(t *testing.T) {
 		require.NoError(t, err)
 
 		// Store the catchpoint into the database
-		err := storeCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(i), fileName, "", int64(len(data)))
+		err := ct.catchpointStore.StoreCatchpoint(context.Background(), basics.Round(i), fileName, "", int64(len(data)))
 		require.NoError(t, err)
 	}
 
@@ -133,7 +134,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	require.Nil(t, reader)
 
 	// File on disk, but database lost the record
-	err = storeCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(3), "", "", 0)
+	err = ct.catchpointStore.StoreCatchpoint(context.Background(), basics.Round(3), "", "", 0)
 	require.NoError(t, err)
 	reader, err = ct.GetCatchpointStream(basics.Round(3))
 	require.NoError(t, err)
@@ -184,7 +185,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 		require.NoError(t, err)
 		err = f.Close()
 		require.NoError(t, err)
-		err = storeCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(i), file, "", 0)
+		err = ct.catchpointStore.StoreCatchpoint(context.Background(), basics.Round(i), file, "", 0)
 		require.NoError(t, err)
 	}
 
@@ -196,7 +197,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 		_, err := os.Open(file)
 		require.True(t, os.IsNotExist(err))
 	}
-	fileNames, err := getOldestCatchpointFiles(context.Background(), ml.dbs.Rdb.Handle, dummyCatchpointFilesToCreate, 0)
+	fileNames, err := ct.catchpointStore.GetOldestCatchpointFiles(context.Background(), dummyCatchpointFilesToCreate, 0)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fileNames))
 }
@@ -357,7 +358,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 			var updates compactAccountDeltas
 			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 				addr := ledgertesting.RandomAddress()
-				acctData := baseAccountData{}
+				acctData := store.BaseAccountData{}
 				acctData.MicroAlgos.Raw = 1
 				updates.upsert(addr, accountDelta{newAcct: acctData})
 				i++
@@ -1000,9 +1001,11 @@ func TestFirstStagePersistence(t *testing.T) {
 	defer ml2.Close()
 	ml.Close()
 
+	cps2 := store.NewCatchpointSQLReaderWriter(ml2.dbs.Wdb.Handle)
+
 	// Insert unfinished first stage record.
-	err = writeCatchpointStateUint64(
-		context.Background(), ml2.dbs.Wdb.Handle, catchpointStateWritingFirstStageInfo, 1)
+	err = cps2.WriteCatchpointStateUint64(
+		context.Background(), catchpointStateWritingFirstStageInfo, 1)
 	require.NoError(t, err)
 
 	// Delete the database record.
@@ -1027,8 +1030,8 @@ func TestFirstStagePersistence(t *testing.T) {
 	require.True(t, exists)
 
 	// Check that the unfinished first stage record is deleted.
-	v, err := readCatchpointStateUint64(
-		context.Background(), ml2.dbs.Rdb.Handle, catchpointStateWritingFirstStageInfo)
+	v, err := ct2.catchpointStore.ReadCatchpointStateUint64(
+		context.Background(), catchpointStateWritingFirstStageInfo)
 	require.NoError(t, err)
 	require.Zero(t, v)
 }
@@ -1130,19 +1133,21 @@ func TestSecondStagePersistence(t *testing.T) {
 	err = os.WriteFile(catchpointDataFilePath, catchpointData, 0644)
 	require.NoError(t, err)
 
+	cps2 := store.NewCatchpointSQLReaderWriter(ml2.dbs.Wdb.Handle)
+
 	// Restore the first stage database record.
 	err = insertOrReplaceCatchpointFirstStageInfo(
 		context.Background(), ml2.dbs.Wdb.Handle, firstStageRound, &firstStageInfo)
 	require.NoError(t, err)
 
 	// Insert unfinished catchpoint record.
-	err = insertUnfinishedCatchpoint(
-		context.Background(), ml2.dbs.Wdb.Handle, secondStageRound, crypto.Digest{})
+	err = cps2.InsertUnfinishedCatchpoint(
+		context.Background(), secondStageRound, crypto.Digest{})
 	require.NoError(t, err)
 
 	// Delete the catchpoint file database record.
-	err = storeCatchpoint(
-		context.Background(), ml2.dbs.Wdb.Handle, secondStageRound, "", "", 0)
+	err = cps2.StoreCatchpoint(
+		context.Background(), secondStageRound, "", "", 0)
 	require.NoError(t, err)
 
 	// Create a catchpoint tracker and let it restart catchpoint's second stage.
@@ -1156,14 +1161,14 @@ func TestSecondStagePersistence(t *testing.T) {
 	require.Greater(t, info.Size(), int64(1))
 
 	// Check that the database record exists.
-	filename, _, _, err := getCatchpoint(
-		context.Background(), ml2.dbs.Rdb.Handle, secondStageRound)
+	filename, _, _, err := ct2.catchpointStore.GetCatchpoint(
+		context.Background(), secondStageRound)
 	require.NoError(t, err)
 	require.NotEmpty(t, filename)
 
 	// Check that the unfinished catchpoint database record is deleted.
-	unfinishedCatchpoints, err := selectUnfinishedCatchpoints(
-		context.Background(), ml2.dbs.Rdb.Handle)
+	unfinishedCatchpoints, err := ct2.catchpointStore.SelectUnfinishedCatchpoints(
+		context.Background())
 	require.NoError(t, err)
 	require.Empty(t, unfinishedCatchpoints)
 }
@@ -1252,8 +1257,8 @@ func TestSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 	ml2.trackers.waitAccountsWriting()
 
 	// Check that the unfinished catchpoint database record is deleted.
-	unfinishedCatchpoints, err := selectUnfinishedCatchpoints(
-		context.Background(), ml2.dbs.Rdb.Handle)
+	unfinishedCatchpoints, err := ct2.catchpointStore.SelectUnfinishedCatchpoints(
+		context.Background())
 	require.NoError(t, err)
 	require.Empty(t, unfinishedCatchpoints)
 }
@@ -1320,6 +1325,8 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 	defer ml2.Close()
 	ml.Close()
 
+	cps2 := store.NewCatchpointSQLReaderWriter(ml2.dbs.Wdb.Handle)
+
 	// Sanity check: first stage record should be deleted.
 	_, exists, err := selectCatchpointFirstStageInfo(
 		context.Background(), ml2.dbs.Rdb.Handle, firstStageRound)
@@ -1327,8 +1334,8 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 	require.False(t, exists)
 
 	// Insert unfinished catchpoint record.
-	err = insertUnfinishedCatchpoint(
-		context.Background(), ml2.dbs.Wdb.Handle, secondStageRound, crypto.Digest{})
+	err = cps2.InsertUnfinishedCatchpoint(
+		context.Background(), secondStageRound, crypto.Digest{})
 	require.NoError(t, err)
 
 	// Create a catchpoint tracker and let it restart catchpoint's second stage.
@@ -1336,8 +1343,8 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 	defer ct2.close()
 
 	// Check that the unfinished catchpoint database record is deleted.
-	unfinishedCatchpoints, err := selectUnfinishedCatchpoints(
-		context.Background(), ml2.dbs.Rdb.Handle)
+	unfinishedCatchpoints, err := ct2.catchpointStore.SelectUnfinishedCatchpoints(
+		context.Background())
 	require.NoError(t, err)
 	require.Empty(t, unfinishedCatchpoints)
 }
@@ -1391,7 +1398,7 @@ func TestHashContract(t *testing.T) {
 	accounts := []testCase{
 		accountCase(
 			func() []byte {
-				b := baseAccountData{
+				b := store.BaseAccountData{
 					UpdateRound: 1024,
 				}
 				return accountHashBuilderV6(a, &b, protocol.Encode(&b))
@@ -1400,7 +1407,7 @@ func TestHashContract(t *testing.T) {
 		),
 		accountCase(
 			func() []byte {
-				b := baseAccountData{
+				b := store.BaseAccountData{
 					RewardsBase: 10000,
 				}
 				return accountHashBuilderV6(a, &b, protocol.Encode(&b))
@@ -1412,7 +1419,7 @@ func TestHashContract(t *testing.T) {
 	resourceAssets := []testCase{
 		resourceAssetCase(
 			func() []byte {
-				r := resourcesData{
+				r := store.ResourcesData{
 					Amount:    1000,
 					Decimals:  3,
 					AssetName: "test",
@@ -1430,7 +1437,7 @@ func TestHashContract(t *testing.T) {
 	resourceApps := []testCase{
 		resourceAppCase(
 			func() []byte {
-				r := resourcesData{
+				r := store.ResourcesData{
 					ApprovalProgram:          []byte{1, 3, 10, 15},
 					ClearStateProgram:        []byte{15, 10, 3, 1},
 					LocalStateSchemaNumUint:  2,
