@@ -235,7 +235,7 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 		datapath, filepath)
 	require.NoError(t, err)
 
-	l := testNewLedgerFromCatchpoint(t, filepath, rdb)
+	l := testNewLedgerFromCatchpoint(t, rdb, filepath)
 	defer l.Close()
 
 	return catchpointFileHeader
@@ -442,7 +442,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	const maxResourcesPerChunk = 5
 	testWriteCatchpoint(t, ml.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, maxResourcesPerChunk)
 
-	l := testNewLedgerFromCatchpoint(t, catchpointFilePath, ml.trackerDB().Rdb)
+	l := testNewLedgerFromCatchpoint(t, ml.trackerDB().Rdb, catchpointFilePath)
 	defer l.Close()
 
 	// verify that the account data aligns with what we originally stored :
@@ -515,7 +515,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	require.Equal(t, h1, h2)
 }
 
-func testNewLedgerFromCatchpoint(t *testing.T, filepath string, catchpointWriterReadAccess db.Accessor) *Ledger {
+func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess db.Accessor, filepath string) *Ledger {
 	// create a ledger.
 	var initState ledgercore.InitState
 	initState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
@@ -635,7 +635,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	catchpointFilePath := filepath.Join(temporaryDirectory, "15.catchpoint")
 	testWriteCatchpoint(t, ml.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
 
-	l := testNewLedgerFromCatchpoint(t, catchpointFilePath, ml.trackerDB().Rdb)
+	l := testNewLedgerFromCatchpoint(t, ml.trackerDB().Rdb, catchpointFilePath)
 	defer l.Close()
 	// verify that the account data aligns with what we originally stored :
 	for addr, acct := range accts {
@@ -684,7 +684,7 @@ func TestExactAccountChunk(t *testing.T) {
 	cph := testWriteCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
 	require.EqualValues(t, cph.TotalChunks, 1)
 
-	l := testNewLedgerFromCatchpoint(t, catchpointFilePath, dl.generator.trackerDB().Rdb)
+	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB().Rdb, catchpointFilePath)
 	defer l.Close()
 }
 
@@ -736,7 +736,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 		cph := testWriteCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
 		require.EqualValues(t, 2, cph.TotalChunks)
 
-		l := testNewLedgerFromCatchpoint(t, catchpointFilePath, dl.validator.trackerDB().Rdb)
+		l := testNewLedgerFromCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointFilePath)
 		defer l.Close()
 		values, err := l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
 		require.NoError(t, err)
@@ -754,7 +754,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 
 		// Drive home the point that `last` is _not_ included in the catchpoint by inspecting balance read from catchpoint.
 		{
-			l = testNewLedgerFromCatchpoint(t, catchpointFilePath, dl.validator.trackerDB().Rdb)
+			l = testNewLedgerFromCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointFilePath)
 			defer l.Close()
 			_, _, algos, err := l.LookupLatest(last)
 			require.NoError(t, err)
@@ -768,7 +768,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 		cph = testWriteCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
 		require.EqualValues(t, cph.TotalChunks, 3)
 
-		l = testNewLedgerFromCatchpoint(t, catchpointFilePath, dl.validator.trackerDBs.Rdb)
+		l = testNewLedgerFromCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointFilePath)
 		defer l.Close()
 		values, err = l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
 		require.NoError(t, err)
@@ -854,7 +854,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 		cph := testWriteCatchpoint(t, dl.generator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
 		require.EqualValues(t, 2, cph.TotalChunks)
 
-		l := testNewLedgerFromCatchpoint(t, catchpointFilePath, dl.generator.trackerDB().Rdb)
+		l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB().Rdb, catchpointFilePath)
 		defer l.Close()
 
 		values, err := l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
