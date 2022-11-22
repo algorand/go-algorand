@@ -26,6 +26,9 @@ const (
 
 	// FalconMaxSignatureSize Represents the max possible size in bytes of a falcon signature
 	FalconMaxSignatureSize = cfalcon.CTSignatureSize
+
+	//FalconDegree degree of Falcon det1024 polynomials
+	FalconDegree = cfalcon.N
 )
 
 type (
@@ -38,6 +41,10 @@ type (
 	// FalconSignature represents a Falcon signature in a compressed-form
 	//msgp:allocbound FalconSignature FalconMaxSignatureSize
 	FalconSignature []byte
+	// FalconCTSignature represents a Falcon signature in a ct-form
+	FalconCTSignature [cfalcon.CTSignatureSize]byte
+	// FalconS1Coefficients represents a vector of polynomial coefficients of s1
+	FalconS1Coefficients [FalconDegree]int16
 )
 
 // FalconSigner is the implementation of Signer for the Falcon signature scheme.
@@ -123,4 +130,27 @@ func (s FalconSignature) GetFixedLengthHashableRepresentation() ([]byte, error) 
 // IsSaltVersionEqual of the signature matches the given version
 func (s FalconSignature) IsSaltVersionEqual(version byte) bool {
 	return (*cfalcon.CompressedSignature)(&s).SaltVersion() == version
+}
+
+// GetSignatureAuxiliaryData returns a signature's auxiliary values needed for the SNARK verification
+func GetSignatureAuxiliaryData(d *FalconVerifier, data []byte, sig FalconSignature) (s1Coefficients FalconS1Coefficients, ctSig FalconCTSignature, err error) {
+	ctSignature, err := (*cfalcon.CompressedSignature)(&sig).ConvertToCT()
+	if err != nil {
+		return FalconS1Coefficients{}, FalconCTSignature{}, err
+	}
+
+	h, err := (*cfalcon.PublicKey)(&d.PublicKey).Coefficients()
+	if err != nil {
+		return FalconS1Coefficients{}, FalconCTSignature{}, err
+	}
+	c := cfalcon.HashToPointCoefficients(data, ctSignature.SaltVersion())
+	s2, err := ctSignature.S2Coefficients()
+	if err != nil {
+		return FalconS1Coefficients{}, FalconCTSignature{}, err
+	}
+	s1, err := cfalcon.S1Coefficients(h, c, s2)
+	if err != nil {
+		return FalconS1Coefficients{}, FalconCTSignature{}, err
+	}
+	return s1, FalconCTSignature(ctSignature), nil
 }

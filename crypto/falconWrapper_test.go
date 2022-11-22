@@ -128,3 +128,26 @@ func TestFalconSignature_ValidateVersion(t *testing.T) {
 	byteSig[1]++
 	a.False(byteSig.IsSaltVersionEqual(falcon.CurrentSaltVersion))
 }
+
+func TestFalconCoefficients(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	var seed FalconSeed
+	SystemRNG.RandBytes(seed[:])
+	key, err := GenerateFalconSigner(seed)
+	a.NoError(err)
+
+	msg := []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")
+	sig, err := key.SignBytes(msg)
+	a.NoError(err)
+
+	_, ctSig, err := GetSignatureAuxiliaryData(key.GetVerifyingKey(), msg, sig)
+	a.NoError(err)
+
+	ctSig2, err := sig.GetFixedLengthHashableRepresentation()
+	a.NoError(err)
+
+	a.Equal(ctSig[:], ctSig2)
+
+}
