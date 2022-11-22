@@ -16,7 +16,12 @@
 
 package store
 
-import "github.com/algorand/go-algorand/data/basics"
+import (
+	"context"
+
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
+)
 
 // AccountsWriter is the write interface for:
 // - accounts, resources, app kvs, creatables
@@ -72,4 +77,28 @@ type OnlineAccountsReader interface {
 	LookupOnlineHistory(addr basics.Address) (result []PersistedOnlineAccountData, rnd basics.Round, err error)
 
 	Close()
+}
+
+// CatchpointWriter is the write interface for:
+// - catchpoints
+type CatchpointWriter interface {
+	StoreCatchpoint(ctx context.Context, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error)
+
+	WriteCatchpointStateUint64(ctx context.Context, stateName CatchpointState, setValue uint64) (err error)
+	WriteCatchpointStateString(ctx context.Context, stateName CatchpointState, setValue string) (err error)
+
+	InsertUnfinishedCatchpoint(ctx context.Context, round basics.Round, blockHash crypto.Digest) error
+	DeleteUnfinishedCatchpoint(ctx context.Context, round basics.Round) error
+}
+
+// CatchpointReader is the read interface for:
+// - catchpoints
+type CatchpointReader interface {
+	GetCatchpoint(ctx context.Context, round basics.Round) (fileName string, catchpoint string, fileSize int64, err error)
+	GetOldestCatchpointFiles(ctx context.Context, fileCount int, filesToKeep int) (fileNames map[basics.Round]string, err error)
+
+	ReadCatchpointStateUint64(ctx context.Context, stateName CatchpointState) (val uint64, err error)
+	ReadCatchpointStateString(ctx context.Context, stateName CatchpointState) (val string, err error)
+
+	SelectUnfinishedCatchpoints(ctx context.Context) ([]UnfinishedCatchpointRecord, error)
 }
