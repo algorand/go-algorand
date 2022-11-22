@@ -26,6 +26,8 @@ import (
 )
 
 // CatchpointState is used to store catchpoint related variables into the catchpointstate table.
+//
+//msgp:ignore CatchpointState
 type CatchpointState string
 
 // UnfinishedCatchpointRecord represents a stored record of an unfinished catchpoint.
