@@ -1190,7 +1190,8 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 			return true, fmt.Errorf("overflow computing totals")
 		}
 
-		err = accountsPutTotals(tx, totals, false)
+		arw := store.NewAccountsSQLReaderWriter(tx)
+		err = arw.AccountsPutTotals(totals, false)
 		if err != nil {
 			return true, err
 		}
@@ -1463,7 +1464,8 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 	var processedAccounts uint64
 	var totalBaseAccounts uint64
 
-	totalBaseAccounts, err = totalAccounts(ctx, tx)
+	arw := store.NewAccountsSQLReaderWriter(tx)
+	totalBaseAccounts, err = arw.TotalAccounts(ctx)
 	if err != nil {
 		return err
 	}
@@ -1542,7 +1544,8 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		return nil
 	}
 
-	dbRound, err := accountsRound(tx)
+	arw := store.NewAccountsSQLReaderWriter(tx)
+	dbRound, err := arw.AccountsRound()
 	if err != nil {
 		return fmt.Errorf("latest block number cannot be retrieved : %w", err)
 	}
@@ -1601,11 +1604,12 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 }
 
 func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, blockDb db.Accessor, newDatabase bool, initProto protocol.ConsensusVersion) (err error) {
-	totals, err := accountsTotals(ctx, tx, false)
+	arw := store.NewAccountsSQLReaderWriter(tx)
+	totals, err := arw.AccountsTotals(ctx, false)
 	if err != nil {
 		return err
 	}
-	rnd, err := accountsRound(tx)
+	rnd, err := arw.AccountsRound()
 	if err != nil {
 		return err
 	}
@@ -1664,7 +1668,8 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 	var processedAccounts uint64
 	var totalOnlineBaseAccounts uint64
 
-	totalOnlineBaseAccounts, err = totalAccounts(ctx, tx)
+	arw := store.NewAccountsSQLReaderWriter(tx)
+	totalOnlineBaseAccounts, err = arw.TotalAccounts(ctx)
 	var total uint64
 	err = tx.QueryRowContext(ctx, "SELECT count(1) FROM accountbase").Scan(&total)
 	if err != nil {
@@ -1885,159 +1890,6 @@ func accountsReset(ctx context.Context, tx *sql.Tx) error {
 		}
 	}
 	_, err := db.SetUserVersion(ctx, tx, 0)
-	return err
-}
-
-// accountsRound returns the tracker balances round number
-func accountsRound(q db.Queryable) (rnd basics.Round, err error) {
-	err = q.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&rnd)
-	if err != nil {
-		return
-	}
-	return
-}
-
-// accountsHashRound returns the round of the hash tree
-// if the hash of the tree doesn't exists, it returns zero.
-func accountsHashRound(ctx context.Context, tx *sql.Tx) (hashrnd basics.Round, err error) {
-	err = tx.QueryRowContext(ctx, "SELECT rnd FROM acctrounds WHERE id='hashbase'").Scan(&hashrnd)
-	if err == sql.ErrNoRows {
-		hashrnd = basics.Round(0)
-		err = nil
-	}
-	return
-}
-
-// accountsOnlineTop returns the top n online accounts starting at position offset
-// (that is, the top offset'th account through the top offset+n-1'th account).
-//
-// The accounts are sorted by their normalized balance and address.  The normalized
-// balance has to do with the reward parts of online account balances.  See the
-// normalization procedure in AccountData.NormalizedOnlineBalance().
-//
-// Note that this does not check if the accounts have a vote key valid for any
-// particular round (past, present, or future).
-func accountsOnlineTop(tx *sql.Tx, rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error) {
-	// onlineaccounts has historical data ordered by updround for both online and offline accounts.
-	// This means some account A might have norm balance != 0 at round N and norm balance == 0 at some round K > N.
-	// For online top query one needs to find entries not fresher than X with norm balance != 0.
-	// To do that the query groups row by address and takes the latest updround, and then filters out rows with zero nor balance.
-	rows, err := tx.Query(`SELECT address, normalizedonlinebalance, data, max(updround) FROM onlineaccounts
-WHERE updround <= ?
-GROUP BY address HAVING normalizedonlinebalance > 0
-ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, offset)
-
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	res := make(map[basics.Address]*ledgercore.OnlineAccount, n)
-	for rows.Next() {
-		var addrbuf []byte
-		var buf []byte
-		var normBal sql.NullInt64
-		var updround sql.NullInt64
-		err = rows.Scan(&addrbuf, &normBal, &buf, &updround)
-		if err != nil {
-			return nil, err
-		}
-
-		var data store.BaseOnlineAccountData
-		err = protocol.Decode(buf, &data)
-		if err != nil {
-			return nil, err
-		}
-
-		var addr basics.Address
-		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-			return nil, err
-		}
-
-		if !normBal.Valid {
-			return nil, fmt.Errorf("non valid norm balance for online account %s", addr.String())
-		}
-
-		copy(addr[:], addrbuf)
-		// TODO: figure out protocol to use for rewards
-		// The original implementation uses current proto to recalculate norm balance
-		// In the same time, in accountsNewRound genesis protocol is used to fill norm balance value
-		// In order to be consistent with the original implementation recalculate the balance with current proto
-		normBalance := basics.NormalizedOnlineAccountBalance(basics.Online, data.RewardsBase, data.MicroAlgos, proto)
-		oa := data.GetOnlineAccount(addr, normBalance)
-		res[addr] = &oa
-	}
-
-	return res, rows.Err()
-}
-
-func onlineAccountsAll(tx *sql.Tx, maxAccounts uint64) ([]store.PersistedOnlineAccountData, error) {
-	rows, err := tx.Query("SELECT rowid, address, updround, data FROM onlineaccounts ORDER BY address, updround ASC")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	result := make([]store.PersistedOnlineAccountData, 0, maxAccounts)
-	var numAccounts uint64
-	seenAddr := make([]byte, len(basics.Address{}))
-	for rows.Next() {
-		var addrbuf []byte
-		var buf []byte
-		data := store.PersistedOnlineAccountData{}
-		err := rows.Scan(&data.Rowid, &addrbuf, &data.UpdRound, &buf)
-		if err != nil {
-			return nil, err
-		}
-		if len(addrbuf) != len(data.Addr) {
-			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(data.Addr))
-			return nil, err
-		}
-		if maxAccounts > 0 {
-			if !bytes.Equal(seenAddr, addrbuf) {
-				numAccounts++
-				if numAccounts > maxAccounts {
-					break
-				}
-				copy(seenAddr, addrbuf)
-			}
-		}
-		copy(data.Addr[:], addrbuf)
-		err = protocol.Decode(buf, &data.AccountData)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, data)
-	}
-	return result, nil
-}
-
-func accountsTotals(ctx context.Context, q db.Queryable, catchpointStaging bool) (totals ledgercore.AccountTotals, err error) {
-	id := ""
-	if catchpointStaging {
-		id = "catchpointStaging"
-	}
-	row := q.QueryRowContext(ctx, "SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
-	err = row.Scan(&totals.Online.Money.Raw, &totals.Online.RewardUnits,
-		&totals.Offline.Money.Raw, &totals.Offline.RewardUnits,
-		&totals.NotParticipating.Money.Raw, &totals.NotParticipating.RewardUnits,
-		&totals.RewardsLevel)
-
-	return
-}
-
-func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointStaging bool) error {
-	id := ""
-	if catchpointStaging {
-		id = "catchpointStaging"
-	}
-	_, err := tx.Exec("REPLACE INTO accounttotals (id, online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		id,
-		totals.Online.Money.Raw, totals.Online.RewardUnits,
-		totals.Offline.Money.Raw, totals.Offline.RewardUnits,
-		totals.NotParticipating.Money.Raw, totals.NotParticipating.RewardUnits,
-		totals.RewardsLevel)
 	return err
 }
 
@@ -2610,27 +2462,6 @@ func updateAccountsHashRound(ctx context.Context, tx *sql.Tx, hashRound basics.R
 
 	if aff != 1 {
 		err = fmt.Errorf("updateAccountsHashRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
-		return
-	}
-	return
-}
-
-// totalAccounts returns the total number of accounts
-func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
-	err = tx.QueryRowContext(ctx, "SELECT count(1) FROM accountbase").Scan(&total)
-	if err == sql.ErrNoRows {
-		total = 0
-		err = nil
-		return
-	}
-	return
-}
-
-func totalKVs(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
-	err = tx.QueryRowContext(ctx, "SELECT count(1) FROM kvstore").Scan(&total)
-	if err == sql.ErrNoRows {
-		total = 0
-		err = nil
 		return
 	}
 	return

@@ -1188,7 +1188,8 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 }
 
 func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.Tx, accountsRound basics.Round, totalKVs uint64, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64) error {
-	accountTotals, err := accountsTotals(ctx, tx, false)
+	arw := store.NewAccountsSQLReaderWriter(tx)
+	accountTotals, err := arw.AccountsTotals(ctx, false)
 	if err != nil {
 		return err
 	}
@@ -1536,7 +1537,8 @@ func (ct *catchpointTracker) catchpointEnabled() bool {
 // initializeHashes initializes account/resource/kv hashes.
 // as part of the initialization, it tests if a hash table matches to account base and updates the former.
 func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, rnd basics.Round) error {
-	hashRound, err := accountsHashRound(ctx, tx)
+	arw := store.NewAccountsSQLReaderWriter(tx)
+	hashRound, err := arw.AccountsHashRound(ctx)
 	if err != nil {
 		return err
 	}

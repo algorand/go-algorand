@@ -152,6 +152,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	ao.log = l.trackerLog()
 
 	err = ao.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		arw := store.NewAccountsSQLReaderWriter(tx)
 		var err0 error
 		var endRound basics.Round
 		ao.onlineRoundParamsData, endRound, err0 = accountsOnlineRoundParams(tx)
@@ -162,7 +163,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 			return fmt.Errorf("last onlineroundparams round %d does not match dbround %d", endRound, ao.cachedDBRoundOnline)
 		}
 
-		onlineAccounts, err0 := onlineAccountsAll(tx, onlineAccountsCacheMaxSize)
+		onlineAccounts, err0 := arw.OnlineAccountsAll(onlineAccountsCacheMaxSize)
 		if err0 != nil {
 			return err0
 		}
@@ -817,11 +818,12 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 			start := time.Now()
 			ledgerAccountsonlinetopCount.Inc(nil)
 			err = ao.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				accts, err = accountsOnlineTop(tx, rnd, batchOffset, batchSize, genesisProto)
+				arw := store.NewAccountsSQLReaderWriter(tx)
+				accts, err = arw.AccountsOnlineTop(rnd, batchOffset, batchSize, genesisProto)
 				if err != nil {
 					return
 				}
-				dbRound, err = accountsRound(tx)
+				dbRound, err = arw.AccountsRound()
 				return
 			})
 			ledgerAccountsonlinetopMicros.AddMicrosecondsSince(start, nil)

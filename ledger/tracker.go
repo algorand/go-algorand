@@ -280,7 +280,8 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 	tr.log = l.trackerLog()
 
 	err = tr.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		tr.dbRound, err = accountsRound(tx)
+		arw := store.NewAccountsSQLReaderWriter(tx)
+		tr.dbRound, err = arw.AccountsRound()
 		return err
 	})
 

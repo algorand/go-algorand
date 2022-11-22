@@ -80,6 +80,8 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 	}
 
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		arw := store.NewAccountsSQLReaderWriter(tx)
+
 		tp := trackerDBParams{
 			initAccounts:      l.GenesisAccounts(),
 			initProto:         l.GenesisProtoVersion(),
@@ -94,7 +96,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 		if err0 != nil {
 			return err0
 		}
-		lastBalancesRound, err := accountsRound(tx)
+		lastBalancesRound, err := arw.AccountsRound()
 		if err != nil {
 			return err
 		}

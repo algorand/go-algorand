@@ -334,6 +334,8 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	ledgerProcessstagingcontentCount.Inc(nil)
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		cps := store.NewCatchpointSQLReaderWriter(tx)
+		arw := store.NewAccountsSQLReaderWriter(tx)
+
 		err = cps.WriteCatchpointStateUint64(ctx, catchpointStateCatchupBlockRound, uint64(fileHeader.BlocksRound))
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupBlockRound, err)
@@ -344,7 +346,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 				return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupHashRound, err)
 			}
 		}
-		err = accountsPutTotals(tx, fileHeader.Totals, true)
+		err = arw.AccountsPutTotals(fileHeader.Totals, true)
 		return
 	})
 	ledgerProcessstagingcontentMicros.AddMicrosecondsSince(start, nil)
@@ -829,6 +831,7 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 	start := time.Now()
 	ledgerVerifycatchpointCount.Inc(nil)
 	err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		arw := store.NewAccountsSQLReaderWriter(tx)
 		// create the merkle trie for the balances
 		mc, err0 := MakeMerkleCommitter(tx, true)
 		if err0 != nil {
@@ -845,7 +848,7 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 			return fmt.Errorf("unable to get trie root hash: %v", err)
 		}
 
-		totals, err = accountsTotals(ctx, tx, true)
+		totals, err = arw.AccountsTotals(ctx, true)
 		if err != nil {
 			return fmt.Errorf("unable to get accounts totals: %v", err)
 		}
@@ -979,6 +982,7 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 	ledgerCatchpointFinishBalsCount.Inc(nil)
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		cps := store.NewCatchpointSQLReaderWriter(tx)
+		arw := store.NewAccountsSQLReaderWriter(tx)
 
 		var balancesRound, hashRound uint64
 		var totals ledgercore.AccountTotals
@@ -993,7 +997,7 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			return err
 		}
 
-		totals, err = accountsTotals(ctx, tx, true)
+		totals, err = arw.AccountsTotals(ctx, true)
 		if err != nil {
 			return err
 		}
@@ -1036,7 +1040,7 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			return err
 		}
 
-		err = accountsPutTotals(tx, totals, false)
+		err = arw.AccountsPutTotals(totals, false)
 		if err != nil {
 			return err
 		}
