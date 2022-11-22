@@ -132,7 +132,7 @@ var createResourcesTable = []string{
 		PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID`,
 }
 
-var kvStoreTable = []string{
+var createKVStoreTable = []string{
 	`CREATE TABLE IF NOT EXISTS kvstore (
 		key blob primary key,
 		value blob)`,
@@ -1421,7 +1421,7 @@ func accountsCreateBoxTable(ctx context.Context, tx *sql.Tx) error {
 	if err != sql.ErrNoRows {
 		return err
 	}
-	for _, stmt := range kvStoreTable {
+	for _, stmt := range createKVStoreTable {
 		_, err = tx.ExecContext(ctx, stmt)
 		if err != nil {
 			return err
