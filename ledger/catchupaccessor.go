@@ -856,7 +856,7 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 		return err
 	}
 	if blockRound != blk.Round() {
-		return fmt.Errorf("block round in block header doesn't match block round in catchpoint")
+		return fmt.Errorf("block round in block header doesn't match block round in catchpoint:  %d != %d", blockRound, blk.Round())
 	}
 
 	catchpointLabelMaker := ledgercore.MakeCatchpointLabel(blockRound, blk.Digest(), balancesHash, totals)
