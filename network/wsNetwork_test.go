@@ -2681,6 +2681,10 @@ func TestPreparePeerData(t *testing.T) {
 func TestWebsocketNetworkTelemetryTCP(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
+		t.Skip("Flaky on CIRCLECI")
+	}
+
 	// start two networks and send 2 messages from A to B
 	closed := false
 	netA, netB, counter, closeFunc := setupWebsocketNetworkAB(t, 2)
