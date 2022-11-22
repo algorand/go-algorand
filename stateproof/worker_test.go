@@ -72,7 +72,7 @@ func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int)
 func newWorkerStubsWithChannel(t testing.TB, keys []account.Participation, totalWeight int) *testWorkerStubs {
 	worker := newWorkerStubsWithVersion(t, keys, protocol.ConsensusCurrentVersion, totalWeight)
 	worker.sigmsg = make(chan []byte, 1024*1024)
-	worker.txmsg = make(chan transactions.SignedTxn, 1024*1024)
+	worker.txmsg = make(chan transactions.SignedTxn, 1024)
 	return worker
 }
 
@@ -523,7 +523,7 @@ func TestWorkerAllSigs(t *testing.T) {
 			require.NoError(t, err)
 			break
 		}
-		s.advanceRoundsAndCreateStateProofs(t, proto.StateProofInterval)
+		s.advanceRoundsAndCreateStateProofs(t, 1)
 	}
 }
 
@@ -975,7 +975,7 @@ func TestSignatureBroadcastPolicy(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubsWithChannel(t, keys, len(keys))
+	s := newWorkerStubs(t, keys, len(keys))
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
