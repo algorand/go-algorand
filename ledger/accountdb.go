@@ -36,8 +36,6 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
@@ -1588,16 +1586,16 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 				return fmt.Errorf("block for round %d ( %d - %d ) cannot be retrieved : %w", rnd, firstRound, dbRound, err)
 			}
 
-			tail, err := txTailRoundFromBlock(blk)
+			tail, err := store.TxTailRoundFromBlock(blk)
 			if err != nil {
 				return err
 			}
 
-			encodedTail, _ := tail.encode()
+			encodedTail, _ := tail.Encode()
 			tailRounds = append(tailRounds, encodedTail)
 		}
 
-		return txtailNewRound(ctx, tx, firstRound, tailRounds, firstRound)
+		return arw.TxtailNewRound(ctx, firstRound, tailRounds, firstRound)
 	})
 
 	return err
@@ -3354,117 +3352,6 @@ func (iterator *catchpointPendingHashesIterator) Close() {
 		iterator.rows.Close()
 		iterator.rows = nil
 	}
-}
-
-// txTailRoundLease is used as part of txTailRound for storing
-// a single lease.
-type txTailRoundLease struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Sender basics.Address `codec:"s"`
-	Lease  [32]byte       `codec:"l,allocbound=-"`
-	TxnIdx uint64         `code:"i"` //!-- index of the entry in TxnIDs/LastValid
-}
-
-// TxTailRound contains the information about a single round of transactions.
-// The TxnIDs and LastValid would both be of the same length, and are stored
-// in that way for efficient message=pack encoding. The Leases would point to the
-// respective transaction index. Note that this isn’t optimized for storing
-// leases, as leases are extremely rare.
-type txTailRound struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	TxnIDs    []transactions.Txid     `codec:"i,allocbound=-"`
-	LastValid []basics.Round          `codec:"v,allocbound=-"`
-	Leases    []txTailRoundLease      `codec:"l,allocbound=-"`
-	Hdr       bookkeeping.BlockHeader `codec:"h,allocbound=-"`
-}
-
-// encode the transaction tail data into a serialized form, and return the serialized data
-// as well as the hash of the data.
-func (t *txTailRound) encode() ([]byte, crypto.Digest) {
-	tailData := protocol.Encode(t)
-	hash := crypto.Hash(tailData)
-	return tailData, hash
-}
-
-func txTailRoundFromBlock(blk bookkeeping.Block) (*txTailRound, error) {
-	payset, err := blk.DecodePaysetFlat()
-	if err != nil {
-		return nil, err
-	}
-
-	tail := &txTailRound{}
-
-	tail.TxnIDs = make([]transactions.Txid, len(payset))
-	tail.LastValid = make([]basics.Round, len(payset))
-	tail.Hdr = blk.BlockHeader
-
-	for txIdxtxid, txn := range payset {
-		tail.TxnIDs[txIdxtxid] = txn.ID()
-		tail.LastValid[txIdxtxid] = txn.Txn.LastValid
-		if txn.Txn.Lease != [32]byte{} {
-			tail.Leases = append(tail.Leases, txTailRoundLease{
-				Sender: txn.Txn.Sender,
-				Lease:  txn.Txn.Lease,
-				TxnIdx: uint64(txIdxtxid),
-			})
-		}
-	}
-	return tail, nil
-}
-
-func txtailNewRound(ctx context.Context, tx *sql.Tx, baseRound basics.Round, roundData [][]byte, forgetBeforeRound basics.Round) error {
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO txtail(rnd, data) VALUES(?, ?)")
-	if err != nil {
-		return err
-	}
-	defer insertStmt.Close()
-
-	for i, data := range roundData {
-		_, err = insertStmt.ExecContext(ctx, int(baseRound)+i, data[:])
-		if err != nil {
-			return err
-		}
-	}
-
-	_, err = tx.ExecContext(ctx, "DELETE FROM txtail WHERE rnd < ?", forgetBeforeRound)
-	return err
-}
-
-func loadTxTail(ctx context.Context, tx *sql.Tx, dbRound basics.Round) (roundData []*txTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error) {
-	rows, err := tx.QueryContext(ctx, "SELECT rnd, data FROM txtail ORDER BY rnd DESC")
-	if err != nil {
-		return nil, nil, 0, err
-	}
-	defer rows.Close()
-
-	expectedRound := dbRound
-	for rows.Next() {
-		var round basics.Round
-		var data []byte
-		err = rows.Scan(&round, &data)
-		if err != nil {
-			return nil, nil, 0, err
-		}
-		if round != expectedRound {
-			return nil, nil, 0, fmt.Errorf("txtail table contain unexpected round %d; round %d was expected", round, expectedRound)
-		}
-		tail := &txTailRound{}
-		err = protocol.Decode(data, tail)
-		if err != nil {
-			return nil, nil, 0, err
-		}
-		roundData = append(roundData, tail)
-		roundHash = append(roundHash, crypto.Hash(data))
-		expectedRound--
-	}
-	// reverse the array ordering in-place so that it would be incremental order.
-	for i := 0; i < len(roundData)/2; i++ {
-		roundData[i], roundData[len(roundData)-i-1] = roundData[len(roundData)-i-1], roundData[i]
-		roundHash[i], roundHash[len(roundHash)-i-1] = roundHash[len(roundHash)-i-1], roundHash[i]
-	}
-	return roundData, roundHash, expectedRound + 1, nil
 }
 
 // For the `catchpointfirststageinfo` table.

@@ -21,7 +21,10 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // BaseAccountData is the base struct used to store account data
@@ -208,6 +211,30 @@ type PersistedOnlineAccountData struct {
 	Round basics.Round
 	// the round number that the online account is for, i.e. account state change round.
 	UpdRound basics.Round
+}
+
+// TxTailRound contains the information about a single round of transactions.
+// The TxnIDs and LastValid would both be of the same length, and are stored
+// in that way for efficient message=pack encoding. The Leases would point to the
+// respective transaction index. Note that this isn’t optimized for storing
+// leases, as leases are extremely rare.
+type TxTailRound struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	TxnIDs    []transactions.Txid     `codec:"i,allocbound=-"`
+	LastValid []basics.Round          `codec:"v,allocbound=-"`
+	Leases    []TxTailRoundLease      `codec:"l,allocbound=-"`
+	Hdr       bookkeeping.BlockHeader `codec:"h,allocbound=-"`
+}
+
+// TxTailRoundLease is used as part of txTailRound for storing
+// a single lease.
+type TxTailRoundLease struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Sender basics.Address `codec:"s"`
+	Lease  [32]byte       `codec:"l,allocbound=-"`
+	TxnIdx uint64         `code:"i"` //!-- index of the entry in TxnIDs/LastValid
 }
 
 // AccountResource returns the corresponding account resource data based on the type of resource.
@@ -757,4 +784,39 @@ func (prd PersistedKVData) Before(other *PersistedKVData) bool {
 // happened before the other.
 func (pac *PersistedOnlineAccountData) Before(other *PersistedOnlineAccountData) bool {
 	return pac.UpdRound < other.UpdRound
+}
+
+// Encode the transaction tail data into a serialized form, and return the serialized data
+// as well as the hash of the data.
+func (t *TxTailRound) Encode() ([]byte, crypto.Digest) {
+	tailData := protocol.Encode(t)
+	hash := crypto.Hash(tailData)
+	return tailData, hash
+}
+
+// TxTailRoundFromBlock creates a TxTailRound for the given block
+func TxTailRoundFromBlock(blk bookkeeping.Block) (*TxTailRound, error) {
+	payset, err := blk.DecodePaysetFlat()
+	if err != nil {
+		return nil, err
+	}
+
+	tail := &TxTailRound{}
+
+	tail.TxnIDs = make([]transactions.Txid, len(payset))
+	tail.LastValid = make([]basics.Round, len(payset))
+	tail.Hdr = blk.BlockHeader
+
+	for txIdxtxid, txn := range payset {
+		tail.TxnIDs[txIdxtxid] = txn.ID()
+		tail.LastValid[txIdxtxid] = txn.Txn.LastValid
+		if txn.Txn.Lease != [32]byte{} {
+			tail.Leases = append(tail.Leases, TxTailRoundLease{
+				Sender: txn.Txn.Sender,
+				Lease:  txn.Txn.Lease,
+				TxnIdx: uint64(txIdxtxid),
+			})
+		}
+	}
+	return tail, nil
 }

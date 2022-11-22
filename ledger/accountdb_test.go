@@ -2963,6 +2963,8 @@ func TestAccountDBTxTailLoad(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback()
 
+	arw := store.NewAccountsSQLReaderWriter(tx)
+
 	err = accountsCreateTxTailTable(context.Background(), tx)
 	require.NoError(t, err)
 
@@ -2972,14 +2974,14 @@ func TestAccountDBTxTailLoad(t *testing.T) {
 	roundData := make([][]byte, 1500)
 	const retainSize = 1001
 	for i := startRound; i <= endRound; i++ {
-		data := txTailRound{Hdr: bookkeeping.BlockHeader{TimeStamp: int64(i)}}
+		data := store.TxTailRound{Hdr: bookkeeping.BlockHeader{TimeStamp: int64(i)}}
 		roundData[i-1] = protocol.Encode(&data)
 	}
 	forgetBefore := (endRound + 1).SubSaturate(retainSize)
-	err = txtailNewRound(context.Background(), tx, startRound, roundData, forgetBefore)
+	err = arw.TxtailNewRound(context.Background(), startRound, roundData, forgetBefore)
 	require.NoError(t, err)
 
-	data, _, baseRound, err := loadTxTail(context.Background(), tx, endRound)
+	data, _, baseRound, err := arw.LoadTxTail(context.Background(), endRound)
 	require.NoError(t, err)
 	require.Len(t, data, retainSize)
 	require.Equal(t, basics.Round(endRound-retainSize+1), baseRound) // 500...1500

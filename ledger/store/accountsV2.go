@@ -23,6 +23,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -213,6 +214,42 @@ func (r *accountsV2Reader) TotalKVs(ctx context.Context) (total uint64, err erro
 	return
 }
 
+// LoadTxTail returns the tx tails
+func (r *accountsV2Reader) LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error) {
+	rows, err := r.q.QueryContext(ctx, "SELECT rnd, data FROM txtail ORDER BY rnd DESC")
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	defer rows.Close()
+
+	expectedRound := dbRound
+	for rows.Next() {
+		var round basics.Round
+		var data []byte
+		err = rows.Scan(&round, &data)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		if round != expectedRound {
+			return nil, nil, 0, fmt.Errorf("txtail table contain unexpected round %d; round %d was expected", round, expectedRound)
+		}
+		tail := &TxTailRound{}
+		err = protocol.Decode(data, tail)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		roundData = append(roundData, tail)
+		roundHash = append(roundHash, crypto.Hash(data))
+		expectedRound--
+	}
+	// reverse the array ordering in-place so that it would be incremental order.
+	for i := 0; i < len(roundData)/2; i++ {
+		roundData[i], roundData[len(roundData)-i-1] = roundData[len(roundData)-i-1], roundData[i]
+		roundHash[i], roundHash[len(roundHash)-i-1] = roundHash[len(roundHash)-i-1], roundHash[i]
+	}
+	return roundData, roundHash, expectedRound + 1, nil
+}
+
 // AccountsPutTotals updates account totals
 func (w *accountsV2Writer) AccountsPutTotals(totals ledgercore.AccountTotals, catchpointStaging bool) error {
 	id := ""
@@ -225,5 +262,23 @@ func (w *accountsV2Writer) AccountsPutTotals(totals ledgercore.AccountTotals, ca
 		totals.Offline.Money.Raw, totals.Offline.RewardUnits,
 		totals.NotParticipating.Money.Raw, totals.NotParticipating.RewardUnits,
 		totals.RewardsLevel)
+	return err
+}
+
+func (w *accountsV2Writer) TxtailNewRound(ctx context.Context, baseRound basics.Round, roundData [][]byte, forgetBeforeRound basics.Round) error {
+	insertStmt, err := w.e.PrepareContext(ctx, "INSERT INTO txtail(rnd, data) VALUES(?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertStmt.Close()
+
+	for i, data := range roundData {
+		_, err = insertStmt.ExecContext(ctx, int(baseRound)+i, data[:])
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = w.e.ExecContext(ctx, "DELETE FROM txtail WHERE rnd < ?", forgetBeforeRound)
 	return err
 }
