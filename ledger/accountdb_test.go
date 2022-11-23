@@ -1577,8 +1577,10 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	require.NoError(t, err)
 
 	err = dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		arw := store.NewAccountsSQLReaderWriter(tx)
+
 		for addr, addrid := range addrsids {
-			retAddr, err := lookupAccountAddressFromAddressID(ctx, tx, addrid)
+			retAddr, err := arw.LookupAccountAddressFromAddressID(ctx, addrid)
 			if err != nil {
 				return err
 			}
@@ -1587,7 +1589,7 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 			}
 		}
 		// test fail case:
-		retAddr, err := lookupAccountAddressFromAddressID(ctx, tx, -1)
+		retAddr, err := arw.LookupAccountAddressFromAddressID(ctx, -1)
 
 		if !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("unexpected error : %w", err)

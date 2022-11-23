@@ -251,6 +251,24 @@ func (r *accountsV2Reader) LoadTxTail(ctx context.Context, dbRound basics.Round)
 	return roundData, roundHash, expectedRound + 1, nil
 }
 
+// LookupAccountAddressFromAddressID looks up an account based on a rowid
+func (r *accountsV2Reader) LookupAccountAddressFromAddressID(ctx context.Context, addrid int64) (address basics.Address, err error) {
+	var addrbuf []byte
+	err = r.q.QueryRowContext(ctx, "SELECT address FROM accountbase WHERE rowid = ?", addrid).Scan(&addrbuf)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			err = fmt.Errorf("no matching address could be found for rowid %d: %w", addrid, err)
+		}
+		return
+	}
+	if len(addrbuf) != len(address) {
+		err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(address))
+		return
+	}
+	copy(address[:], addrbuf)
+	return
+}
+
 // AccountsPutTotals updates account totals
 func (w *accountsV2Writer) AccountsPutTotals(totals ledgercore.AccountTotals, catchpointStaging bool) error {
 	id := ""
@@ -418,6 +436,25 @@ func (w *accountsV2Writer) UpdateAccountsRound(rnd basics.Round) (err error) {
 			err = fmt.Errorf("updateAccountsRound(acctbase, %d): expected to update 1 row but got %d", rnd, aff)
 			return
 		}
+	}
+	return
+}
+
+// UpdateAccountsHashRound updates the round number associated with the hash of current account data.
+func (w *accountsV2Writer) UpdateAccountsHashRound(ctx context.Context, hashRound basics.Round) (err error) {
+	res, err := w.e.ExecContext(ctx, "INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('hashbase',?)", hashRound)
+	if err != nil {
+		return
+	}
+
+	aff, err := res.RowsAffected()
+	if err != nil {
+		return
+	}
+
+	if aff != 1 {
+		err = fmt.Errorf("updateAccountsHashRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
+		return
 	}
 	return
 }

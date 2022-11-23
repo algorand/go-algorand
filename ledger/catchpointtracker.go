@@ -518,6 +518,7 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 	}()
 
 	crw := store.NewCatchpointSQLReaderWriter(tx)
+	arw := store.NewAccountsSQLReaderWriter(tx)
 
 	if ct.catchpointEnabled() {
 		var mc *MerkleCommitter
@@ -554,7 +555,7 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 		dcc.stats.MerkleTrieUpdateDuration = now - dcc.stats.MerkleTrieUpdateDuration
 	}
 
-	err = updateAccountsHashRound(ctx, tx, treeTargetRound)
+	err = arw.UpdateAccountsHashRound(ctx, treeTargetRound)
 	if err != nil {
 		return err
 	}
@@ -1603,7 +1604,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 					if !added {
 						// we need to translate the "addrid" into actual account address so that
 						// we can report the failure.
-						addr, err := lookupAccountAddressFromAddressID(ctx, tx, acct.addrid)
+						addr, err := arw.LookupAccountAddressFromAddressID(ctx, acct.addrid)
 						if err != nil {
 							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account id %d : %v", hex.EncodeToString(acct.digest), acct.addrid, err)
 						} else {
@@ -1689,7 +1690,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 		}
 
 		// we've just updated the merkle trie, update the hashRound to reflect that.
-		err = updateAccountsHashRound(ctx, tx, rnd)
+		err = arw.UpdateAccountsHashRound(ctx, rnd)
 		if err != nil {
 			return fmt.Errorf("initializeHashes was unable to update the account hash round to %d: %v", rnd, err)
 		}

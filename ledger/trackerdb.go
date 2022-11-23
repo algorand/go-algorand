@@ -535,10 +535,11 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema7(ctx context.Context
 // upgradeDatabaseSchema8 upgrades the database schema from version 8 to version 9,
 // forcing a rebuild of the accounthashes table on betanet nodes. Otherwise it has no effect.
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema8(ctx context.Context, tx *sql.Tx) (err error) {
+	arw := store.NewAccountsSQLReaderWriter(tx)
 	betanetGenesisHash, _ := crypto.DigestFromString("TBMBVTC7W24RJNNUZCF7LWZD2NMESGZEQSMPG5XQD7JY4O7JKVWQ")
 	if tu.genesisHash == betanetGenesisHash && !tu.fromCatchpoint {
 		// reset hash round to 0, forcing catchpointTracker.initializeHashes to rebuild accounthashes
-		err = updateAccountsHashRound(ctx, tx, 0)
+		err = arw.UpdateAccountsHashRound(ctx, 0)
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema8 unable to reset acctrounds table 'hashbase' round : %v", err)
 		}

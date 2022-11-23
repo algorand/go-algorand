@@ -2307,25 +2307,6 @@ func onlineAccountsNewRoundImpl(
 	return
 }
 
-// updates the round number associated with the hash of current account data.
-func updateAccountsHashRound(ctx context.Context, tx *sql.Tx, hashRound basics.Round) (err error) {
-	res, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('hashbase',?)", hashRound)
-	if err != nil {
-		return
-	}
-
-	aff, err := res.RowsAffected()
-	if err != nil {
-		return
-	}
-
-	if aff != 1 {
-		err = fmt.Errorf("updateAccountsHashRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
-		return
-	}
-	return
-}
-
 // reencodeAccounts reads all the accounts in the accountbase table, decode and reencode the account data.
 // if the account data is found to have a different encoding, it would update the encoded account on disk.
 // on return, it returns the number of modified accounts as well as an error ( if we had any )
@@ -3135,24 +3116,6 @@ func (iterator *orderedAccountsIter) Close(ctx context.Context) (err error) {
 		iterator.insertStmt = nil
 	}
 	_, err = iterator.tx.ExecContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
-	return
-}
-
-// createCatchpointStagingHashesIndex creates an index on catchpointpendinghashes to allow faster scanning according to the hash order
-func lookupAccountAddressFromAddressID(ctx context.Context, tx *sql.Tx, addrid int64) (address basics.Address, err error) {
-	var addrbuf []byte
-	err = tx.QueryRowContext(ctx, "SELECT address FROM accountbase WHERE rowid = ?", addrid).Scan(&addrbuf)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			err = fmt.Errorf("no matching address could be found for rowid %d: %w", addrid, err)
-		}
-		return
-	}
-	if len(addrbuf) != len(address) {
-		err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(address))
-		return
-	}
-	copy(address[:], addrbuf)
 	return
 }
 

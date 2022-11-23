@@ -354,6 +354,8 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
 	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		arw := store.NewAccountsSQLReaderWriter(tx)
+
 		for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
 			var updates compactAccountDeltas
 			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
@@ -370,7 +372,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 			}
 		}
 
-		return updateAccountsHashRound(ctx, tx, 1)
+		return arw.UpdateAccountsHashRound(ctx, 1)
 	})
 	require.NoError(b, err)
 
