@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/util"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
@@ -243,6 +244,10 @@ func (s *Secrets) GetSigner(round uint64) *Signer {
 // IsEmpty returns true if the verifier contains an empty key
 func (v *Commitment) IsEmpty() bool {
 	return *v == [MerkleSignatureSchemeRootSize]byte{}
+}
+
+func (c Commitment) String() string {
+	return util.ToCommaSeparatedString(c[:])
 }
 
 // ValidateSaltVersion validates that the version of the signature is matching the expected version

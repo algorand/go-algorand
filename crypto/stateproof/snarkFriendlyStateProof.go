@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/util"
 )
 
 type snarkFriendlySigslotCommit struct {
@@ -41,15 +42,16 @@ type snarkFriendlyReveal struct {
 }
 
 type snarkFriendlyStateProof struct {
-	SigCommit                  crypto.GenericDigest
+	SigCommit                  Commitment
 	SignedWeight               uint64
 	MerkleSignatureSaltVersion byte
 	Reveals                    []snarkFriendlyReveal
 }
 
-func (s *StateProof) createSnarkFriendlyCert(data []byte) (*snarkFriendlyStateProof, error) {
-	newData := make([]byte, len(data))
-	copy(newData, data)
+func (s *StateProof) createSnarkFriendlyCert(message []byte) (*snarkFriendlyStateProof, error) {
+	// todo why this is here?
+	newData := make([]byte, len(message))
+	copy(newData, message)
 
 	sigs := make(map[uint64]crypto.Hashable)
 	parts := make(map[uint64]crypto.Hashable)
@@ -102,7 +104,7 @@ func (s *StateProof) createSnarkFriendlyCert(data []byte) (*snarkFriendlyStatePr
 	}
 
 	return &snarkFriendlyStateProof{
-		SigCommit:                  s.SigCommit,
+		SigCommit:                  Commitment(s.SigCommit),
 		SignedWeight:               s.SignedWeight,
 		MerkleSignatureSaltVersion: s.MerkleSignatureSaltVersion,
 		Reveals:                    reveals,
@@ -168,7 +170,7 @@ def main() -> bool:
 		panic(err)
 	}
 	buf.WriteString(fmt.Sprintf("	field round = %d\n", round))
-	buf.WriteString(fmt.Sprintf("	u8[DATA_LEN] data = %v\n", data[:]))
+	buf.WriteString(fmt.Sprintf("	u8[DATA_LEN] data = %v\n", util.ToCommaSeparatedString(data[:])))
 	var veriferTemplate = `
 	field P = {{.LnProvenWeight}}
 	field target = {{.StrengthTarget}}

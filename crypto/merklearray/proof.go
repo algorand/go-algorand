@@ -18,6 +18,8 @@ package merklearray
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/util"
+	"strings"
 
 	"github.com/algorand/go-algorand/crypto"
 )
@@ -144,5 +146,21 @@ func PadProofToMaxDepth(p *SingleLeafProof) []crypto.GenericDigest {
 	}
 
 	return newPath
+}
 
+func (p ProofPath) String() string {
+	builder := strings.Builder{}
+	builder.WriteString("[")
+	if len(p) == 0 {
+		builder.WriteString("]")
+		return builder.String()
+	}
+	i := 0
+	for ; i < len(p)-1; i++ {
+		builder.WriteString(util.ToCommaSeparatedString(p[i]))
+		builder.WriteString(",")
+	}
+	builder.WriteString(util.ToCommaSeparatedString(p[i]))
+	builder.WriteString("]")
+	return builder.String()
 }

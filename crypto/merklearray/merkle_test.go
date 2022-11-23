@@ -241,7 +241,7 @@ func TestMerkleProveEdgeCases(t *testing.T) {
 	// prove on nothing
 	proof, err := tree.Prove(nil)
 	a.NoError(err)
-	a.Equal(proof.Path, []crypto.GenericDigest(nil))
+	a.Equal(proof.Path, ProofPath(nil))
 	a.Equal(proof.TreeDepth, uint8(2))
 
 	arr = make(TestArray, 0)
@@ -255,7 +255,7 @@ func TestMerkleProveEdgeCases(t *testing.T) {
 	// prove on nothing - now the tree is empty as well
 	proof, err = tree.Prove(nil)
 	a.NoError(err)
-	a.Equal(proof.Path, []crypto.GenericDigest(nil))
+	a.Equal(proof.Path, ProofPath(nil))
 	a.Equal(proof.TreeDepth, uint8(0))
 }
 
@@ -283,7 +283,7 @@ func TestMerkleVCProveEdgeCases(t *testing.T) {
 	// prove on nothing
 	proof, err := tree.Prove(nil)
 	a.NoError(err)
-	a.Equal(proof.Path, []crypto.GenericDigest(nil))
+	a.Equal(proof.Path, ProofPath(nil))
 	a.Equal(proof.TreeDepth, uint8(3))
 
 	arr = make(TestArray, 0)
@@ -297,7 +297,7 @@ func TestMerkleVCProveEdgeCases(t *testing.T) {
 	// prove on nothing - now the tree is empty as well
 	proof, err = tree.Prove(nil)
 	a.NoError(err)
-	a.Equal(proof.Path, []crypto.GenericDigest(nil))
+	a.Equal(proof.Path, ProofPath(nil))
 	a.Equal(proof.TreeDepth, uint8(0))
 }
 
@@ -349,7 +349,7 @@ func TestMerkleVerifyEdgeCases(t *testing.T) {
 	a.NoError(err)
 	proof, err = tree.Prove([]uint64{0})
 	a.NoError(err)
-	a.Equal(trivialProof.Path, []crypto.GenericDigest(nil))
+	a.Equal(trivialProof.Path, ProofPath(nil))
 	err = Verify(tree.Root(), map[uint64]crypto.Hashable{0: arr[0]}, proof)
 	a.NoError(err)
 }
@@ -433,7 +433,7 @@ func TestMerkleVCVerifyEdgeCases(t *testing.T) {
 	a.NoError(err)
 	proof, err = tree.Prove([]uint64{0})
 	a.NoError(err)
-	a.Equal(trivialProof.Path, []crypto.GenericDigest(nil))
+	a.Equal(trivialProof.Path, ProofPath(nil))
 	err = VerifyVectorCommitment(tree.Root(), map[uint64]crypto.Hashable{0: arr[0]}, proof)
 	a.NoError(err)
 }

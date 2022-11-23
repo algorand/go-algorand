@@ -18,6 +18,7 @@ package stateproof
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/util"
 	"strconv"
 	"strings"
 
@@ -29,6 +30,9 @@ import (
 
 // MessageHash represents the message that a state proof will attest to.
 type MessageHash [32]byte
+
+// Commitment represents the root of the vector commitment tree used by the state proof package.
+type Commitment crypto.GenericDigest
 
 //msgp:ignore sigslot
 type sigslot struct {
@@ -102,6 +106,14 @@ func (s StateProof) stringBuild() (b strings.Builder) {
 func (s StateProof) String() string {
 	b := s.stringBuild()
 	return b.String()
+}
+
+func (c Commitment) String() string {
+	return util.ToCommaSeparatedString(c[:])
+}
+
+func (m MessageHash) String() string {
+	return util.ToCommaSeparatedString(m[:])
 }
 
 // SortUint64 implements sorting by uint64 keys for

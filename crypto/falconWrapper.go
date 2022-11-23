@@ -17,7 +17,9 @@
 package crypto
 
 import (
+	"encoding/json"
 	cfalcon "github.com/algorand/falcon"
+	"github.com/algorand/go-algorand/util"
 )
 
 const (
@@ -153,4 +155,17 @@ func GetSignatureAuxiliaryData(d *FalconVerifier, data []byte, sig FalconSignatu
 		return FalconS1Coefficients{}, FalconCTSignature{}, err
 	}
 	return s1, FalconCTSignature(ctSignature), nil
+}
+
+func (sig FalconCTSignature) String() string {
+	return util.ToCommaSeparatedString(sig[:])
+}
+
+func (pk FalconPublicKey) String() string {
+	return util.ToCommaSeparatedString(pk[:])
+}
+
+func (s1 FalconS1Coefficients) String() string {
+	str, _ := json.Marshal(s1)
+	return string(str)
 }

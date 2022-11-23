@@ -53,13 +53,13 @@ func LnIntApproximation(x uint64) (uint64, error) {
 // to the signedWeight and a provenWeight upper bound.
 // This function checks that the following inequality is satisfied
 //
-// numReveals * (3 * 2^b * (signedWeight^2 - 2^2d) + d * (T-1) * Y) >= ((strengthTarget) * T + numReveals * P) * Y
+// numReveals * (3 * 2^b * (signedWeight^2 - 2^2d) + d * (T-1) * Y) >= ((StrengthTarget) * T + numReveals * P) * Y
 //
 // where signedWeight/(2^d) >=1 for some integer d>=0, p = P/(2^b) >= ln(provenWeight), t = T/(2^b) >= ln(2) >= (T-1)/(2^b)
 // for some integers P,T >= 0 and b=16.
 //
 // T and b are defined in the code as the constants ln2IntApproximation and precisionBits respectively.
-// P is set to lnProvenWeight argument
+// P is set to LnProvenWeight argument
 // more details can be found on the Algorand's spec
 func verifyWeights(signedWeight uint64, lnProvenWeight uint64, numOfReveals uint64, strengthTarget uint64) error {
 	if numOfReveals > MaxReveals {
@@ -75,11 +75,11 @@ func verifyWeights(signedWeight uint64, lnProvenWeight uint64, numOfReveals uint
 	// x = 3 * 2^b * (signedWeight^2 - 2^2d)
 	// w = d * (T - 1)
 	//
-	//  numReveals * (3 * 2^b * (signedWeight^2 - 2^2d) + d * (T-1) * Y) >= ((strengthTarget) * T + numReveals * P) * Y
+	//  numReveals * (3 * 2^b * (signedWeight^2 - 2^2d) + d * (T-1) * Y) >= ((StrengthTarget) * T + numReveals * P) * Y
 	//        /\
 	//        ||
 	//        \/
-	// numReveals * (x + w * y) >= ((strengthTarget) * T + numReveals * P) * y
+	// numReveals * (x + w * y) >= ((StrengthTarget) * T + numReveals * P) * y
 	y, x, w := getSubExpressions(signedWeight)
 	lhs := &big.Int{}
 	lhs.Set(w).
@@ -108,12 +108,12 @@ func verifyWeights(signedWeight uint64, lnProvenWeight uint64, numOfReveals uint
 // inequality checked by the verifyWeights function.
 // In order to make sure the number will satisfy the verifier we will use the following inequality
 //
-// numReveals >= ((strengthTarget) * T * Y / (3 * 2^b * (signedWeight^2 - 2^2d) + (d * (T - 1) - P) * Y))
+// numReveals >= ((StrengthTarget) * T * Y / (3 * 2^b * (signedWeight^2 - 2^2d) + (d * (T - 1) - P) * Y))
 // where signedWeight/(2^d) >=1 for some integer d>=0, p = P/(2^b) >= ln(provenWeight), t = T/(2^b) >= ln(2) >= (T-1)/(2^b)
 // for some integers P,T >= 0 and b=16.
 //
 // T and b are defined in the code as the constants ln2IntApproximation and precisionBits respectively,
-// and P is set to lnProvenWeight argument.
+// and P is set to LnProvenWeight argument.
 //
 //
 // more details can be found on the Algorand's spec
@@ -123,19 +123,19 @@ func numReveals(signedWeight uint64, lnProvenWeight uint64, strengthTarget uint6
 	// x = 3 * 2^b * (signedWeight^2 - 2^2d)
 	// w = d * (T - 1)
 	//
-	// numReveals >= ((strengthTarget) * T * Y / (3 * 2^b * (signedWeight^2 - 2^2d) + (d * (T - 1) - P) * Y))
+	// numReveals >= ((StrengthTarget) * T * Y / (3 * 2^b * (signedWeight^2 - 2^2d) + (d * (T - 1) - P) * Y))
 	//        /\
 	//        ||
 	//        \/
-	// numReveals >= ((strengthTarget) * T * y / (x + (w - P) * y))
+	// numReveals >= ((StrengthTarget) * T * y / (x + (w - P) * y))
 	y, x, w := getSubExpressions(signedWeight)
 
-	// numerator = strengthTarget * ln2IntApproximation * y
+	// numerator = StrengthTarget * ln2IntApproximation * y
 	numerator := bigInt(strengthTarget)
 	numerator.Mul(numerator, bigInt(ln2IntApproximation)).
 		Mul(numerator, y)
 
-	// denom =  x + (w - lnProvenWeight)  * y
+	// denom =  x + (w - LnProvenWeight)  * y
 	denom := w
 	denom.Sub(denom, bigInt(lnProvenWeight)).
 		Mul(denom, y).

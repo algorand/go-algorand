@@ -38,19 +38,19 @@ func TestCertToJSON(t *testing.T) {
 	npart := npartHi + npartLo
 	const targetForSampleCert = 4
 
-	data := testMessage("hello world").IntoStateProofMessageHash()
+	message := testMessage("hello world").IntoStateProofMessageHash()
 	provenWt := uint64(totalWeight / 2)
 
 	var parts []basics.Participant
 	var sigs []merklesignature.Signature
 	for i := 0; i < npartHi; i++ {
-		part, sig := createParticipantAndSignature(a, totalWeight, npartHi, data)
+		part, sig := createParticipantAndSignature(a, totalWeight, npartHi, message)
 		parts = append(parts, part)
 		sigs = append(sigs, sig)
 	}
 
 	for i := 0; i < npartLo; i++ {
-		part, sig := createParticipantAndSignature(a, totalWeight, npartLo, data)
+		part, sig := createParticipantAndSignature(a, totalWeight, npartLo, message)
 		parts = append(parts, part)
 		sigs = append(sigs, sig)
 	}
@@ -58,7 +58,7 @@ func TestCertToJSON(t *testing.T) {
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	b, err := MakeBuilder(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, targetForSampleCert)
+	b, err := MakeBuilder(message, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, targetForSampleCert)
 	a.NoError(err)
 
 	for i := 0; i < npart; i++ {
@@ -73,10 +73,10 @@ func TestCertToJSON(t *testing.T) {
 	verif, err := MkVerifier(partcom.Root(), provenWt, targetForSampleCert)
 	a.NoError(err)
 
-	err = verif.Verify(stateProofIntervalForTests, data, cert)
+	err = verif.Verify(stateProofIntervalForTests, message, cert)
 	a.NoError(err, "failed to verify the compact cert")
 
-	certenc, err := cert.createSnarkFriendlyCert(data[:])
+	certenc, err := cert.createSnarkFriendlyCert(message[:])
 	a.NoError(err)
 
 	fmt.Printf(toZokCode(certenc, verif, testMessage("hello world").IntoStateProofMessageHash(), stateProofIntervalForTests))
