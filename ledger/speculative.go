@@ -33,24 +33,14 @@ import (
 
 // LedgerForEvaluator defines the ledger interface needed by the evaluator.
 type LedgerForEvaluator interface {
-	// Needed for cow.go
-	Block(basics.Round) (bookkeeping.Block, error)
-	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
-	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
-	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
-	StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*internal.BlockEvaluator, error)
-	LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error)
-	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
-	VerifiedTransactionCache() verify.VerifiedTransactionCache
-	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
+	internal.LedgerForEvaluator
 
-	// Needed for the evaluator
-	GenesisHash() crypto.Digest
+	// and a few more Ledger functions
+
+	Block(basics.Round) (bookkeeping.Block, error)
 	Latest() basics.Round
-	VotersForStateProof(basics.Round) (*ledgercore.VotersForRound, error)
-	GenesisProto() config.ConsensusParams
-	BlockHdrCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error)
+	VerifiedTransactionCache() verify.VerifiedTransactionCache
+	StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*internal.BlockEvaluator, error)
 }
 
 // validatedBlockAsLFE presents a LedgerForEvaluator interface on top of

@@ -51,6 +51,7 @@ type player struct {
 
 	// SpeculativeAssemblyDeadline contains the next timeout expected for
 	// speculative block assembly.
+	// TODO: delete, UNUSED
 	SpeculativeAssemblyDeadline time.Duration
 
 	// Pending holds the player's proposalTable, which stores proposals that
@@ -137,6 +138,8 @@ func (p *player) handle(r routerHandle, e event) []action {
 	}
 }
 
+// handleSpeculationTimeout TODO: rename this 'timeout' is the START of speculative assembly.
+// TODO: start based on some proposal based event, e.g. 0.3 seconds after the first proposal arrives instead of the current '2.4s afer the round starts'
 func (p *player) handleSpeculationTimeout(r routerHandle, e timeoutEvent) []action {
 	p.SpeculativeAssemblyDeadline = 0
 	if e.Proto.Err != nil {

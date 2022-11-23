@@ -1269,6 +1269,7 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.Valid
 }
 
 // OnNewSpeculativeBlock handles creating a speculative block
+// TODO: rename StartNewSpeculativeBlock
 func (node *AlgorandFullNode) OnNewSpeculativeBlock(ctx context.Context, avb agreement.ValidatedBlock) {
 	vb, ok := avb.(validatedBlock)
 	if ok {

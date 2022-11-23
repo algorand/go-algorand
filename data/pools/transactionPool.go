@@ -98,6 +98,7 @@ type TransactionPool struct {
 	ctx                       context.Context
 	cancelSpeculativeAssembly context.CancelFunc
 
+	// TODO specBlockCh/specBlockMu is wrong and needs rewriting
 	// specBlockCh has an assembled speculative block
 	specBlockCh chan *ledgercore.ValidatedBlock
 	// specBlockMu protects setting/getting specBlockCh only
@@ -149,6 +150,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	return &pool
 }
 
+// TODO: this needs a careful read for lock/shallow-copy issues
 func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(ctx context.Context, vb *ledgercore.ValidatedBlock) (*TransactionPool, chan<- *ledgercore.ValidatedBlock, chan<- struct{}, error) {
 	specLedger, err := ledger.MakeValidatedBlockAsLFE(vb, pool.ledger)
 	if err != nil {
@@ -563,6 +565,7 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 }
 
 // OnNewSpeculativeBlock handles creating a speculative block
+// TODO: rename StartNewSpeculativeBlock
 func (pool *TransactionPool) OnNewSpeculativeBlock(ctx context.Context, vb *ledgercore.ValidatedBlock) {
 
 	pool.mu.Lock()
@@ -796,7 +799,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator). Expects that the pool.mu mutex would be already taken.
-func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint, speculativeAsm bool) (stats telemetryspec.ProcessBlockMetrics) {
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint, stopAtFirstBlock bool) (stats telemetryspec.ProcessBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
@@ -880,7 +883,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			continue
 		}
 
-		hasBlock, err := pool.add(txgroup, &asmStats, speculativeAsm)
+		hasBlock, err := pool.add(txgroup, &asmStats, stopAtFirstBlock)
 		if err != nil {
 			for _, tx := range txgroup {
 				pool.statusCache.put(tx, err.Error())
@@ -933,7 +936,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	pool.assemblyMu.Unlock()
 
 	// remember the changes made to the tx pool if we're not in speculative assembly
-	if !speculativeAsm {
+	if !stopAtFirstBlock {
 		pool.rememberCommit(true)
 	}
 	return
@@ -1051,6 +1054,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	}
 
 	// Maybe we have a block already assembled
+	// TODO: this needs to be changed if a speculative block is in flight and if it is valid. If it is not valid, cancel it, if it is valid, wait for it.
 	prev, err := pool.ledger.Block(round.SubSaturate(1))
 	if err == nil {
 		validatedBlock, err := pool.tryReadSpeculativeBlock(prev.Hash())

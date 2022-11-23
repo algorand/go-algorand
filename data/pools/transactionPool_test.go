@@ -1200,7 +1200,7 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		transactionPool[i].recomputeBlockEvaluator(committedTxIds[i], knownCommitted[i])
+		transactionPool[i].recomputeBlockEvaluator(committedTxIds[i], knownCommitted[i], false)
 	}
 	b.StopTimer()
 	if profF != nil {
