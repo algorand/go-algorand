@@ -17,305 +17,449 @@
 package util
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/algorand/go-deadlock"
 )
 
-// ElasticRateLimiter holds and distributes capacity tokens.
+// ElasticRateLimiter holds and distributes capacity through capacityQueues
 // Capacity consumers are given an error if there is no capacity available for them,
-// and a boolean indicating if the capacity they consumed was reserved
+// and a "capacityGuard" structure they can use to return the capacity when finished
 type ElasticRateLimiter struct {
 	MaxCapacity            int
 	CapacityPerReservation int
-	sharedCapacity         chan capacity
-	capacityByClient       map[client]chan capacity
-	closedClients          map[client]bool
-	clientMu               *deadlock.RWMutex
+	sharedCapacity         capacityQueue
+	capacityByClient       map[ErlClient]capacityQueue
+	clientLock             *deadlock.RWMutex
 	// CongestionManager and enable flag
 	cm       CongestionManager
 	enableCM bool
 }
 
-type client interface{}
-type capacity struct{}
+// ErlClient clients must support OnClose for reservation closing
+type ErlClient interface {
+	OnClose(func())
+}
+
+// capacity is an empty structure used for loading and draining queues
+type capacity struct {
+}
+
+// Capacity Queue wraps and maintains a channel of opaque capacity structs
+type capacityQueue chan capacity
+
+// ErlCapacityGuard is the structure returned to clients so they can release the capacity when needed
+// they also inform the congestion manager of events
+type ErlCapacityGuard struct {
+	client ErlClient
+	cq     capacityQueue
+	cm     *CongestionManager
+}
+
+// Release will put capacity back into the queue attached to this capacity guard
+func (cg ErlCapacityGuard) Release() error {
+	select {
+	case cg.cq <- capacity{}:
+		return nil
+	default:
+		return fmt.Errorf("could not replace capacity to channel: %v", cg.cq)
+	}
+}
+
+// Served will notify the CongestionManager that this resource has been served, informing the Service Rate
+func (cg ErlCapacityGuard) Served() {
+	if *cg.cm != nil {
+		(*cg.cm).Served(time.Now())
+	}
+}
+
+func (q capacityQueue) blockingRelease() {
+	q <- capacity{}
+}
+
+func (q capacityQueue) blockingConsume() {
+	<-q
+}
+
+func (q capacityQueue) consume(cm *CongestionManager) (ErlCapacityGuard, error) {
+	select {
+	case <-q:
+		return ErlCapacityGuard{
+			cq: q,
+			cm: cm,
+		}, nil
+	default:
+		return ErlCapacityGuard{}, fmt.Errorf("could not consume capacity from capacityQueue: %v", q)
+	}
+}
 
 // NewElasticRateLimiter creates an ElasticRateLimiter and initializes maps
 func NewElasticRateLimiter(maxCapacity, reservedCapacity int, cm CongestionManager) *ElasticRateLimiter {
 	ret := ElasticRateLimiter{
 		MaxCapacity:            maxCapacity,
 		CapacityPerReservation: reservedCapacity,
-		sharedCapacity:         make(chan capacity, maxCapacity),
-		capacityByClient:       map[client]chan capacity{},
-		closedClients:          map[client]bool{},
-		clientMu:               &deadlock.RWMutex{},
+		capacityByClient:       map[ErlClient]capacityQueue{},
+		clientLock:             &deadlock.RWMutex{},
 		cm:                     cm,
+		sharedCapacity:         capacityQueue(make(chan capacity, maxCapacity)),
 	}
 	// fill the sharedCapacity
 	for i := 0; i < maxCapacity; i++ {
-		ret.sharedCapacity <- capacity{}
+		ret.sharedCapacity.blockingRelease()
 	}
 	return &ret
 }
 
 // EnableCongestionControl turns on the flag that the ERL uses to check with its CongestionManager
 func (erl *ElasticRateLimiter) EnableCongestionControl() {
+	erl.clientLock.Lock()
 	erl.enableCM = true
+	fmt.Println(erl.enableCM)
+	erl.clientLock.Unlock()
 }
 
 // DisableCongestionControl turns off the flag that the ERL uses to check with its CongestionManager
 func (erl *ElasticRateLimiter) DisableCongestionControl() {
+	erl.clientLock.Lock()
 	erl.enableCM = false
-}
-
-// AvailableCapacityRatio returns how full the sharedCapacity is relative to maximum
-func (erl ElasticRateLimiter) AvailableCapacityRatio() float64 {
-	erl.clientMu.RLock()
-	defer erl.clientMu.RUnlock()
-	maximumSharedCapacity := erl.MaxCapacity - (erl.CapacityPerReservation * len(erl.capacityByClient))
-	if maximumSharedCapacity == 0 {
-		return 0
-	}
-	return float64(len(erl.sharedCapacity)) / float64(maximumSharedCapacity)
+	fmt.Println(erl.enableCM)
+	erl.clientLock.Unlock()
 }
 
 // ConsumeCapacity will dispense one capacity from either the resource's reservedCapacity,
-// or the sharedCapacity. It will return a bool which will be True if the capacity it consumed was reserved
-// or will return an error if the capacity could not be consumed from any channel
-func (erl ElasticRateLimiter) ConsumeCapacity(c client) (bool, error) {
-	// attempt to use the client's capacity first
-	if _, exists := erl.capacityByClient[c]; exists {
-		select {
-		// if capacity can be pulled from the reservedCapacity, return true
-		case <-erl.capacityByClient[c]:
-			if erl.cm != nil {
-				erl.cm.TrackActivity(c, true, time.Now())
-			}
-			return true, nil
-		default:
-		}
-	} else {
-		return false, fmt.Errorf("client has no reservation")
-	}
-	// before committing to using sharedCapacity, check with the congestionManager
-	if erl.cm != nil &&
-		erl.enableCM &&
-		erl.cm.ShouldDrop(c) {
-		return false, fmt.Errorf("congestionManager prevented client from consuming capacity")
-	}
-	// attempt to pull from sharedCapacity
-	select {
-	case <-erl.sharedCapacity:
-		if erl.cm != nil {
-			erl.cm.TrackActivity(c, false, time.Now())
-		}
-		return false, nil
-	default:
-	}
-	return false, fmt.Errorf("unable to consume capacity from ElasticRateLimiter")
-}
+// and will return a guard who can return capacity when the client is ready
+func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (ErlCapacityGuard, error) {
+	var q capacityQueue
+	var err error
+	var exists bool
+	var enableCM bool
+	// get the client's queue
+	erl.clientLock.RLock()
+	q, exists = erl.capacityByClient[c]
+	enableCM = erl.enableCM
+	fmt.Println("and", erl.enableCM)
+	erl.clientLock.RUnlock()
 
-// ReturnCapacity will insert new capacity on the sharedCapacity or reservedCapacity of a client.
-// if the capacity could not be returned to any channel, an error is returned
-func (erl ElasticRateLimiter) ReturnCapacity(c client, reserved bool) error {
-	erl.clientMu.RLock()
-	closed := erl.closedClients[c]
-	capChan, exists := erl.capacityByClient[c]
-	numClients := len(erl.capacityByClient)
-	erl.clientMu.RUnlock()
-	// all closed clients return their capacity to sharedCapacity
-	if closed {
-		select {
-		case erl.sharedCapacity <- capacity{}:
-			return nil
-		default:
-			return fmt.Errorf("client reservation is closed and could not return capacity to sharedCapacity")
-		}
-	}
+	// Step 0: Check for, and create a capacity reservation if needed
 	if !exists {
-		return fmt.Errorf("client has no reservation")
-	}
-	if reserved {
-		select {
-		case capChan <- capacity{}:
-			return nil
-		default:
-			return fmt.Errorf("could not return capacity to client reservation")
+		q, err = erl.openReservation(c)
+		if err != nil {
+			return ErlCapacityGuard{}, err
 		}
+		// if the client has been given a new reservation, make sure it cleans up OnClose
+		c.OnClose(func() { erl.closeReservation(c) })
 	}
-	// before adding to the sharedCapacity, confirm it wouldn't overprovision the sharedCapacity
-	maxShared := erl.MaxCapacity - (numClients * erl.CapacityPerReservation)
-	if len(erl.sharedCapacity) >= maxShared {
-		return fmt.Errorf("capacity return would overprovision the sharedCapacity")
+
+	// Step 1: Attempt consumption from the reserved queue
+	cg, err := q.consume(&erl.cm)
+	if err == nil {
+		if erl.cm != nil {
+			erl.cm.Consumed(c, time.Now()) // notify the congestion manager that this client consumed from this queue
+		}
+		return cg, nil
 	}
-	select {
-	case erl.sharedCapacity <- capacity{}:
-		return nil
-	default:
-		return fmt.Errorf("could not return capacity to sharedCapacity")
+	// Step 2: Potentially gate shared queue access if the congestion manager disallows it
+	if erl.cm != nil &&
+		enableCM &&
+		erl.cm.ShouldDrop(c) {
+		fmt.Println("weee")
+		return ErlCapacityGuard{}, fmt.Errorf("congestionManager prevented client from consuming capacity")
 	}
+	// Step 3: Attempt consumption from the shared queue
+	cg, err = erl.sharedCapacity.consume(&erl.cm)
+	if err != nil {
+		return ErlCapacityGuard{}, err
+	}
+	if erl.cm != nil {
+		erl.cm.Consumed(c, time.Now()) // notify the congestion manager that this client consumed from this queue
+	}
+	return cg, nil
 }
 
-// ContainsReservationFor is a lock-safe check for a client having a reservation
-func (erl ElasticRateLimiter) ContainsReservationFor(c client) bool {
-	erl.clientMu.RLock()
-	defer erl.clientMu.RUnlock()
-	_, exists := erl.capacityByClient[c]
-	return exists
-}
-
-// OpenReservation creates an entry in the ElasticRateLimiter's reservedCapacity map,
+// openReservation creates an entry in the ElasticRateLimiter's reservedCapacity map,
 // and optimistically transfers capacity from the sharedCapacity to the reservedCapacity
-func (erl ElasticRateLimiter) OpenReservation(c client) error {
-	erl.clientMu.Lock()
-	defer erl.clientMu.Unlock()
+func (erl ElasticRateLimiter) openReservation(c ErlClient) (capacityQueue, error) {
+	erl.clientLock.Lock()
 	if _, exists := erl.capacityByClient[c]; exists {
-		return fmt.Errorf("client already has a reservation")
+		return capacityQueue(nil), fmt.Errorf("client already has a reservation")
 	}
 	// guard against overprovisioning, if there is less than a reservedCapacity amount left
 	remaining := erl.MaxCapacity - (erl.CapacityPerReservation * len(erl.capacityByClient))
 	if erl.CapacityPerReservation > remaining {
-		return fmt.Errorf("not enough capacity to reserve for client: %d remaining, %d requested", remaining, erl.CapacityPerReservation)
+		return capacityQueue(nil), fmt.Errorf("not enough capacity to reserve for client: %d remaining, %d requested", remaining, erl.CapacityPerReservation)
 	}
 	// make capacity for the provided client
-	erl.capacityByClient[c] = make(chan capacity, erl.CapacityPerReservation)
-	delete(erl.closedClients, c)
+	q := capacityQueue(make(chan capacity, erl.CapacityPerReservation))
+	erl.capacityByClient[c] = q
+	erl.clientLock.Unlock()
 
-	// start asynchronously filling the capacity
-	// by design, the ElasticRateLimiter will overprovision capacity for a newly connected host,
-	// but will resolve the discrepancy ASAP by consuming capacity from the shared capacity which it will not return
+	// fill the reservation with capacity optimistically before consuming the shared capacity
 	for i := 0; i < erl.CapacityPerReservation; i++ {
+		q <- capacity{}
+	}
+	// create a thread to drain the capacity from sharedCapacity in a blocking way
+	go func() {
+		for i := 0; i < erl.CapacityPerReservation; i++ {
+			erl.sharedCapacity.blockingConsume()
+		}
+	}()
+	return q, nil
+}
+
+// closeReservation will remove the client mapping to capacity channel,
+// and will kick off a routine to drain the capacity and replace it to the shared capacity
+func (erl ElasticRateLimiter) closeReservation(c ErlClient) {
+	erl.clientLock.Lock()
+	q, exists := erl.capacityByClient[c]
+	// guard clauses, and preventing the ElasticRateLimiter from draining its own sharedCapacity
+	if !exists || q == erl.sharedCapacity {
+		return
+	}
+	delete(erl.capacityByClient, c)
+	erl.clientLock.Unlock()
+
+	// start a routine to consume capacity from the closed reservation, and return it to the sharedCapacity
+	go func() {
+		for i := 0; i < erl.CapacityPerReservation; i++ {
+			erl.sharedCapacity.blockingRelease()
+			q.blockingConsume()
+		}
+	}()
+}
+
+// CongestionManager is an interface for tracking events which happen to capacityQueues
+type CongestionManager interface {
+	Start(ctx context.Context, wg *sync.WaitGroup)
+	Consumed(c ErlClient, t time.Time)
+	Served(t time.Time)
+	ShouldDrop(c ErlClient) bool
+}
+
+type event struct {
+	c ErlClient
+	t time.Time
+}
+
+type shouldDropQuery struct {
+	c   ErlClient
+	ret chan bool
+}
+
+// "Random Early Detection" congestion manager,
+// will propose to drop messages proportional to the caller's request rate vs Average Service Rate
+type redCongestionManager struct {
+	runLock                *deadlock.Mutex
+	running                bool
+	window                 time.Duration
+	consumed               chan event
+	served                 chan event
+	shouldDropQueries      chan shouldDropQuery
+	targetRate             float64
+	targetRateRefreshTicks int
+	// consumed is the only value tracked by-queue. The others are calculated in-total
+	// TODO: If we desire later, we can add mappings onto release/done for more insight
+	consumedByClient map[ErlClient]*[]time.Time
+	serves           []time.Time
+}
+
+// NewREDCongestionManager creates a Congestion Manager which will watches capacityGuard activity,
+// and regularly calculates a Target Service Rate, and can give "Should Drop" suggestions
+func NewREDCongestionManager(d time.Duration, r int) *redCongestionManager {
+	ret := redCongestionManager{
+		runLock:                &deadlock.Mutex{},
+		window:                 d,
+		consumed:               make(chan event, 100000),
+		served:                 make(chan event, 100000),
+		shouldDropQueries:      make(chan shouldDropQuery, 100000),
+		targetRateRefreshTicks: r,
+		consumedByClient:       map[ErlClient]*[]time.Time{},
+	}
+	return &ret
+}
+
+// Consumed implements CongestionManager by putting an event on the consumed channel,
+// to be processed by the Start() loop
+func (cm redCongestionManager) Consumed(c ErlClient, t time.Time) {
+	select {
+	case cm.consumed <- event{
+		c: c,
+		t: t,
+	}:
+	default:
+	}
+}
+
+// Served implements CongestionManager by putting an event on the done channel,
+// to be processed by the Start() loop
+func (cm redCongestionManager) Served(t time.Time) {
+	select {
+	case cm.served <- event{
+		t: t,
+	}:
+	default:
+	}
+}
+
+// ShouldDrop implements CongestionManager by putting a query shouldDropQueries channel,
+// and blocks on the response to return synchronously to the caller
+// if an error should prevent the query from running, the result is defaulted to false
+func (cm redCongestionManager) ShouldDrop(c ErlClient) bool {
+	ret := make(chan bool)
+	select {
+	case cm.shouldDropQueries <- shouldDropQuery{
+		c:   c,
+		ret: ret,
+	}:
+		return <-ret
+	default:
+		return false
+	}
+}
+
+// Start will kick off a goroutine to consume activity from the different activity channels,
+// as well as service queries about if a given capacityQueue should drop
+func (cm *redCongestionManager) Start(ctx context.Context, wg *sync.WaitGroup) {
+	// check if the maintainer is already running to ensure there is only one routine
+	cm.runLock.Lock()
+	defer cm.runLock.Unlock()
+	if cm.running {
+		return
+	}
+	cm.running = true
+	go cm.run(ctx, wg)
+}
+
+func (cm *redCongestionManager) run(ctx context.Context, wg *sync.WaitGroup) {
+	tick := 0
+	targetRate := float64(0)
+	consumedByClient := map[ErlClient]*[]time.Time{}
+	serves := []time.Time{}
+	for {
+		cutoff := time.Now().Add(-1 * cm.window)
+		// first process any new events happening
 		select {
-		case erl.capacityByClient[c] <- capacity{}:
+		case e := <-cm.consumed:
+			if consumedByClient[e.c] == nil {
+				ts := []time.Time{}
+				consumedByClient[e.c] = &ts
+			}
+			*(consumedByClient[e.c]) = append(*(consumedByClient[e.c]), e.t)
+			prune(consumedByClient[e.c], cutoff)
+			tick = (tick + 1) % cm.targetRateRefreshTicks
+		case e := <-cm.served:
+			serves = append(serves, e.t)
+			tick = (tick + 1) % cm.targetRateRefreshTicks
+		default:
+		}
+		// only recalculate the service rate every N ticks, because we have to make sure all entries are pruned
+		if tick == 0 {
+			tick = 1
+			prune(&serves, cutoff)
+			for c := range consumedByClient {
+				if prune(consumedByClient[c], cutoff) == 0 {
+					delete(consumedByClient, c)
+				}
+			}
+			targetRate = 0
+			// targetRate is the average service rate per client per second
+			if len(consumedByClient) > 0 {
+				targetRate = float64(len(serves)) / float64(len(consumedByClient)) / float64(cm.window/time.Second)
+			}
+		}
+		// consume all queries
+		for {
+			select {
+			case query := <-cm.shouldDropQueries:
+				query.ret <- cm.shouldDrop(targetRate, query.c, consumedByClient[query.c])
+			default:
+				goto GOTNONE
+			}
+		}
+	GOTNONE:
+
+		// check for context Done and close the thread. Probably only needed for tests
+		// record the latest data to the struct for tests
+		select {
+		case <-ctx.Done():
+			// prune lists and calculate targetRate once more before writing and exiting
+			prune(&serves, cutoff)
+			for c := range consumedByClient {
+				if prune(consumedByClient[c], cutoff) == 0 {
+					delete(consumedByClient, c)
+				}
+			}
+			targetRate = 0
+			// targetRate is the average service rate per client per second
+			if len(consumedByClient) > 0 {
+				targetRate = float64(len(serves)) / float64(len(consumedByClient)) / float64(cm.window/time.Second)
+			}
+			cm.setTargetRate(targetRate)
+			cm.setConsumedByClient(consumedByClient)
+			cm.setServes(serves)
+			cm.stop(wg)
+			return
 		default:
 		}
 	}
-	go func() {
-		// allow this thread to stubbornly wait and consume any available capacity,
-		// since it needs to repay the capacity loaned to the client
-		for i := 0; i < erl.CapacityPerReservation; i++ {
-			<-erl.sharedCapacity
-		}
-	}()
-	return nil
 }
 
-// CloseReservation will remove the client mapping to capacity channel,
-// will mark the client as "closed", and will drain the client's channel to the shared channel
-func (erl ElasticRateLimiter) CloseReservation(c client) error {
-	erl.clientMu.Lock()
-	clientCh, exists := erl.capacityByClient[c]
-	// guard clauses, and preventing the ElasticRateLimiter from draining its own sharedCapacity
-	if !exists ||
-		clientCh == nil ||
-		clientCh == erl.sharedCapacity {
-		return fmt.Errorf("client not registered for capacity")
+func (cm *redCongestionManager) setTargetRate(tr float64) {
+	cm.targetRate = tr
+}
+
+func (cm *redCongestionManager) setConsumedByClient(cbc map[ErlClient]*[]time.Time) {
+	cm.consumedByClient = cbc
+}
+
+func (cm *redCongestionManager) setServes(ts []time.Time) {
+	cm.serves = ts
+}
+
+func (cm *redCongestionManager) stop(wg *sync.WaitGroup) {
+	cm.runLock.Lock()
+	defer cm.runLock.Unlock()
+	cm.running = false
+	if wg != nil {
+		wg.Done()
 	}
-	delete(erl.capacityByClient, c)
-	erl.closedClients[c] = true
-	fmt.Println(erl.closedClients)
-	erl.clientMu.Unlock()
-	for len(clientCh) > 0 {
-		<-clientCh
-		// all capacity being returned is now shared, so set it that way
-		err := erl.ReturnCapacity(c, false)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
-// CongestionManager can be told of client activity
-// with the intention of being able to decide if a client is unfairly claiming capacity
-type CongestionManager interface {
-	TrackActivity(c client, reserved bool, t time.Time)
-	ShouldDrop(c client) bool
-}
-
-type activity struct {
-	t        time.Time
-	reserved bool
-}
-
-// ProportionalOddsCongestionManager will track Activity and will give probability based responses to ShouldDrop
-type ProportionalOddsCongestionManager struct {
-	window              time.Duration
-	activitiesByClient  map[interface{}][]activity
-	targetRate          float64
-	trMaintainerRunning bool
-	trMaintainerMu      *deadlock.Mutex
-}
-
-// MaintainTargetServiceRate will, every 10 seconds, prune every known client with tracked activity,
-// and will adjust the targetRate to be the total amount of activity per client per second
-func (cm ProportionalOddsCongestionManager) MaintainTargetServiceRate() {
-	// check if the maintainer is already running to ensure there is only one routine
-	cm.trMaintainerMu.Lock()
-	defer cm.trMaintainerMu.Unlock()
-	if cm.trMaintainerRunning {
-		return
-	}
-	go func() {
-		for {
-			cutoff := time.Now().Add((-1 * cm.window))
-			n := 0
-			i := 0
-			for k := range cm.activitiesByClient {
-				j := cm.prune(k, cutoff)
-				if j > 0 {
-					i += j
-					n++
-				}
-			}
-			if n > 0 {
-				cm.targetRate = (float64(i) / float64(n)) / float64(cm.window/time.Second)
-			}
-			time.Sleep(10 * time.Second)
-		}
-	}()
-}
-
-// TrackActivity implements the CongestionManager interface by appending activity to the client's activity list
-func (cm ProportionalOddsCongestionManager) TrackActivity(c client, reserved bool, t time.Time) {
-	cm.activitiesByClient[c] = append(cm.activitiesByClient[c], activity{t, reserved})
-	cm.prune(c, time.Now().Add(-1*cm.window))
-}
-
-// prune eliminates activity entries prior to the cutoff time, and will return
-// the length of the list post-prune
-func (cm ProportionalOddsCongestionManager) prune(c client, cutoff time.Time) int {
-	if _, exists := cm.activitiesByClient[c]; !exists {
-		return 0
-	}
-	// prune the list of old entries, using an in-place slice filter
+func prune(ts *[]time.Time, cutoff time.Time) int {
 	i := 0
-	for _, activity := range cm.activitiesByClient[c] {
-		if activity.t.Before(cutoff) {
-			cm.activitiesByClient[c][i] = activity
+	// prune times from the given list by pulling in any times which are recent
+	for _, t := range *ts {
+		if t.After(cutoff) {
+			(*ts)[i] = t
 			i++
 		}
 	}
-	// if after purning, there is no activity for the client, delete the entry
-	// otherwise, just cut down the slice since it's been reorganized
-	if i == 0 {
-		delete(cm.activitiesByClient, c)
-	} else {
-		cm.activitiesByClient[c] = cm.activitiesByClient[c][:i]
-	}
+	// all values which are After the cutoff will now exist inside of the range to i,
+	// so slice the list down to just what is still valid
+	*ts = (*ts)[:i]
 	return i
 }
 
-// ShouldDrop implements the CongestionManager interface by returning a randomized true/false proportional to
-// the given client's activity vs others
-func (cm ProportionalOddsCongestionManager) ShouldDrop(c client) bool {
-	clientServiceRate := cm.prune(c, time.Now().Add(-1*cm.window))
-	// A random float is selected, and the Actions per Second of the given client is
+func (cm redCongestionManager) arrivalRateFor(arrivals *[]time.Time) float64 {
+	clientArrivalRate := float64(0)
+	if arrivals != nil {
+		clientArrivalRate = float64(len(*arrivals)) / float64(cm.window/time.Second)
+	}
+	return clientArrivalRate
+}
+
+func (cm redCongestionManager) shouldDrop(targetRate float64, c ErlClient, arrivals *[]time.Time) bool {
+	// clients who have "never" been seen do not get dropped
+	clientArrivalRate := cm.arrivalRateFor(arrivals)
+	if clientArrivalRate == 0 {
+		return false
+	}
+	// A random float is selected, and the arrival rate of the given client is
 	// turned to a ratio against targetRate. the congestion manager recommends to drop activity
 	// proportional to its overuse above the targetRate
 	r := rand.Float64()
-	aps := float64(clientServiceRate) / float64(cm.window/time.Second)
-	return (aps / cm.targetRate) > r
+	return (clientArrivalRate / targetRate) > r
 }
