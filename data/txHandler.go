@@ -355,11 +355,6 @@ func (handler *TxHandler) dedupCanonical(ntx int, unverifiedTxGroup []transactio
 	return false
 }
 
-// attempt to preallocate buffer on stack:
-// hardcode maxTxGroupSize constant in order to get rid ledger lookups and use backing arrays,
-// or fallback to heap allocation it MaxTxGroupSize is greater than our constant
-const maxTxGroupSize = 16
-
 // processIncomingTxn decodes a transaction group from incoming message and enqueues into the back log for processing.
 // The function also performs some input data pre-validation;
 //  - txn groups are cut to MaxTxGroupSize size

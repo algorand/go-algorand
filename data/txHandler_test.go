@@ -272,6 +272,8 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 
 	const numTxnsPerGroup = 16
 	handler := makeTestTxHandlerOrphaned(txBacklogSize)
+	// uncomment to benchmark no-dedup version
+	// handler.cacheConfig = txHandlerConfig{}
 
 	// prepare tx groups
 	blobs := make([][]byte, b.N)
@@ -286,8 +288,20 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 	go func() {
 		defer wgc.Done()
 		for i := 0; i < b.N; i++ {
-			msg := <-handler.backlogQueue
-			require.Equal(b, numTxnsPerGroup, len(msg.unverifiedTxGroup))
+			if b.N <= txBacklogSize {
+				msg := <-handler.backlogQueue
+				require.Equal(b, numTxnsPerGroup, len(msg.unverifiedTxGroup))
+			} else {
+				// expect some dropped messages
+				select {
+				case msg := <-handler.backlogQueue:
+					require.Equal(b, numTxnsPerGroup, len(msg.unverifiedTxGroup))
+				default:
+					if len(handler.backlogQueue) == 0 {
+						return
+					}
+				}
+			}
 		}
 	}()
 
@@ -344,14 +358,6 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 	wgc.Wait()
 }
 
-// TestTxHandlerProcessIncomingTxnGroupSize ensures the constant value for group size matches reality
-func TestTxHandlerProcessIncomingTxnGroupSize(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	require.GreaterOrEqual(t, maxTxGroupSize, config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize, "Increase maxTxGroupSize value")
-	require.GreaterOrEqual(t, maxTxGroupSize, config.Consensus[protocol.ConsensusFuture].MaxTxGroupSize, "Increase maxTxGroupSize value")
-}
-
 func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -360,10 +366,10 @@ func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 
 	stxns1, blob1 := makeRandomTransactions(1)
 	require.Equal(t, 1, len(stxns1))
-	stxns2, blob2 := makeRandomTransactions(maxTxGroupSize)
-	require.Equal(t, maxTxGroupSize, len(stxns2))
-	stxns3, blob3 := makeRandomTransactions(maxTxGroupSize + 1)
-	require.Equal(t, maxTxGroupSize+1, len(stxns3))
+	stxns2, blob2 := makeRandomTransactions(config.MaxTxGroupSize)
+	require.Equal(t, config.MaxTxGroupSize, len(stxns2))
+	stxns3, blob3 := makeRandomTransactions(config.MaxTxGroupSize + 1)
+	require.Equal(t, config.MaxTxGroupSize+1, len(stxns3))
 
 	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob1})
 	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
@@ -381,8 +387,8 @@ func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 		numDecoded int
 	}{
 		{&stxns1, 1},
-		{&stxns2, maxTxGroupSize},
-		{&stxns3, maxTxGroupSize},
+		{&stxns2, config.MaxTxGroupSize},
+		{&stxns3, config.MaxTxGroupSize},
 	}
 	for _, check := range checks {
 		msg := <-handler.backlogQueue

@@ -188,6 +188,7 @@ func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
 		}
 	}
 
+	require.Less(t, cache.len(), size)
 	require.Greater(t, cache.len(), 0)
 }
 
@@ -232,6 +233,7 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 
 	// rotate again, check only new data left
 	cache.remix()
+
 	require.Equal(t, size, cache.len())
 	for i := 0; i < size; i++ {
 		exist := cache.check(ds[i][:])
