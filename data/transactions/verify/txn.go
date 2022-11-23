@@ -559,6 +559,7 @@ type StreamVerifier struct {
 	activeLoopWg     sync.WaitGroup
 	nbw              *NewBlockWatcher
 	ledger           logic.LedgerForSignature
+	droppedFromPool  *metrics.Counter
 }
 
 // NewBlockWatcher is a struct used to provide a new block header to the
@@ -619,7 +620,7 @@ func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext
 // to it and obtain the txn signature verification result from
 func MakeStreamVerifier(stxnChan <-chan UnverifiedElement, resultChan chan<- VerificationResult,
 	ledger logic.LedgerForSignature, nbw *NewBlockWatcher, verificationPool execpool.BacklogPool,
-	cache VerifiedTransactionCache) (sv *StreamVerifier) {
+	cache VerifiedTransactionCache, droppedFromPool *metrics.Counter) (sv *StreamVerifier) {
 
 	sv = &StreamVerifier{
 		resultChan:       resultChan,
@@ -628,6 +629,7 @@ func MakeStreamVerifier(stxnChan <-chan UnverifiedElement, resultChan chan<- Ver
 		cache:            cache,
 		nbw:              nbw,
 		ledger:           ledger,
+		droppedFromPool:  droppedFromPool,
 	}
 	return sv
 }
@@ -644,12 +646,7 @@ func (sv *StreamVerifier) cleanup(pending *[]UnverifiedElement) {
 	// report an error for the unchecked txns
 	// drop the messages without reporting if the receiver does not consume
 	for _, uel := range *pending {
-		vr := VerificationResult{
-			TxnGroup:       uel.TxnGroup,
-			BacklogMessage: uel.BacklogMessage,
-			Err:            errShuttingDownError,
-		}
-		sv.resultChan <- vr
+		sv.sendResult(uel.TxnGroup, uel.BacklogMessage, errShuttingDownError)
 	}
 }
 
@@ -765,9 +762,13 @@ func (sv *StreamVerifier) sendResult(veTxnGroup []transactions.SignedTxn, veBack
 		Err:            err,
 	}
 	// send the txn result out the pipe
-	// this is expected not to block. the receiver end of this channel will drop transactions if the
-	// postVerificationQueue is blocked, and report it
-	sv.resultChan <- vr
+	select {
+	case sv.resultChan <- vr:
+	default:
+		// we failed to write to the output queue, since the queue was full.
+		// adding the metric here allows us to monitor how frequently it happens.
+		sv.droppedFromPool.Inc(nil)
+	}
 }
 
 func (sv *StreamVerifier) canAddVerificationTaskToThePool(uelts []UnverifiedElement) (added bool, err error) {

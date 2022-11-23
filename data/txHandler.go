@@ -78,14 +78,13 @@ type TxHandler struct {
 	genesisHash           crypto.Digest
 	txVerificationPool    execpool.BacklogPool
 	backlogQueue          chan *txBacklogMsg
-	postVerificationQueue chan *txBacklogMsg
+	postVerificationQueue chan verify.VerificationResult
 	backlogWg             sync.WaitGroup
 	net                   network.GossipNode
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
 	streamVerifier        *verify.StreamVerifier
 	streamVerifierChan    chan verify.UnverifiedElement
-	streamReturnChan      chan verify.VerificationResult
 }
 
 // MakeTxHandler makes a new handler for transaction messages
@@ -108,10 +107,9 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		ledger:                ledger,
 		txVerificationPool:    executionPool,
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
-		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
+		postVerificationQueue: make(chan verify.VerificationResult, txBacklogSize),
 		net:                   net,
 		streamVerifierChan:    make(chan verify.UnverifiedElement),
-		streamReturnChan:      make(chan verify.VerificationResult),
 	}
 
 	// prepare the transaction stream verifer
@@ -123,33 +121,10 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 	}
 	nbw := verify.MakeNewBlockWatcher(latestHdr)
 	handler.ledger.RegisterBlockListeners([]ledgerpkg.BlockListener{nbw})
-	handler.streamVerifier = verify.MakeStreamVerifier(handler.streamVerifierChan, handler.streamReturnChan,
-		handler.ledger, nbw, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache())
+	handler.streamVerifier = verify.MakeStreamVerifier(handler.streamVerifierChan,
+		handler.postVerificationQueue, handler.ledger, nbw, handler.txVerificationPool,
+		handler.ledger.VerifiedTransactionCache(), transactionMessagesDroppedFromPool)
 	return handler
-}
-
-// processTxnStreamVerifiedResults relays the results from the stream verifier to the postVerificationQueue
-// this is needed so that the exec pool never gets blocked when it is pushing out the result
-// if the postVerificationQueue is full, it will be reported to the transactionMessagesDroppedFromPool metric
-func (handler *TxHandler) processTxnStreamVerifiedResults() {
-	defer handler.backlogWg.Done()
-	for {
-		select {
-		case result := <-handler.streamReturnChan:
-			txBLMsg := result.BacklogMessage.(*txBacklogMsg)
-			txBLMsg.verificationErr = result.Err
-			select {
-			case handler.postVerificationQueue <- txBLMsg:
-			default:
-				// we failed to write to the output queue, since the queue was full.
-				// adding the metric here allows us to monitor how frequently it happens.
-				transactionMessagesDroppedFromPool.Inc(nil)
-			}
-		case <-handler.ctx.Done():
-			return
-
-		}
-	}
 }
 
 // Start enables the processing of incoming messages at the transaction handler
@@ -158,10 +133,9 @@ func (handler *TxHandler) Start() {
 	handler.net.RegisterHandlers([]network.TaggedMessageHandler{
 		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
 	})
-	handler.backlogWg.Add(3)
+	handler.backlogWg.Add(2)
 	go handler.backlogWorker()
 	go handler.backlogGaugeThread()
-	go handler.processTxnStreamVerifiedResults()
 	handler.streamVerifier.Start(handler.ctx)
 }
 
@@ -206,7 +180,9 @@ func (handler *TxHandler) backlogWorker() {
 			if !ok {
 				return
 			}
-			handler.postProcessCheckedTxn(wi)
+			txBLMsg := wi.BacklogMessage.(*txBacklogMsg)
+			txBLMsg.verificationErr = wi.Err
+			handler.postProcessCheckedTxn(txBLMsg)
 
 			// restart the loop so that we could empty out the post verification queue.
 			continue
@@ -231,7 +207,9 @@ func (handler *TxHandler) backlogWorker() {
 				// this is never happening since handler.postVerificationQueue is never closed
 				return
 			}
-			handler.postProcessCheckedTxn(wi)
+			txBLMsg := wi.BacklogMessage.(*txBacklogMsg)
+			txBLMsg.verificationErr = wi.Err
+			handler.postProcessCheckedTxn(txBLMsg)
 
 		case <-handler.ctx.Done():
 			return

@@ -260,7 +260,7 @@ func TestIncomingTxHandle(t *testing.T) {
 	incomingTxHandlerProcessing(1, numberOfTransactionGroups, t)
 }
 
-// TestIncomingTxHandle checks the correctness with txn groups
+// TestIncomingTxGroupHandle checks the correctness with txn groups
 func TestIncomingTxGroupHandle(t *testing.T) {
 	numberOfTransactionGroups := 1000 / proto.MaxTxGroupSize
 	incomingTxHandlerProcessing(proto.MaxTxGroupSize, numberOfTransactionGroups, t)
@@ -288,7 +288,6 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 
 	const numUsers = 100
 	log := logging.TestingLog(t)
-	log.SetLevel(logging.Warn)
 	addresses := make([]basics.Address, numUsers)
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
 
@@ -328,15 +327,13 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 
 	// emulate handler.Start() without the backlog
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
-	handler.backlogWg.Add(1)
-	go handler.processTxnStreamVerifiedResults()
 	handler.streamVerifier.Start(handler.ctx)
 
-	outChan := make(chan *txBacklogMsg, 10)
+	testResultChan := make(chan *txBacklogMsg, 10)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	// Make a test backlog worker, which is simiar to backlogWorker, but sends the results
-	// through the outChan instead of passing it to postprocessCheckedTxn
+	// through the testResultChan instead of passing it to postprocessCheckedTxn
 	go func() {
 		defer wg.Done()
 		for {
@@ -346,7 +343,10 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 				if !ok {
 					return
 				}
-				outChan <- wi
+				txBLMsg := wi.BacklogMessage.(*txBacklogMsg)
+				txBLMsg.verificationErr = wi.Err
+				testResultChan <- txBLMsg
+				
 				// restart the loop so that we could empty out the post verification queue.
 				continue
 			default:
@@ -367,7 +367,9 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 				if !ok {
 					return
 				}
-				outChan <- wi
+				txBLMsg := wi.BacklogMessage.(*txBacklogMsg)
+				txBLMsg.verificationErr = wi.Err
+				testResultChan <- txBLMsg
 
 			case <-handler.ctx.Done():
 				return
@@ -406,7 +408,7 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 		timer := time.NewTicker(250 * time.Millisecond)
 		for {
 			select {
-			case wi := <-outChan:
+			case wi := <-testResultChan:
 				txnCounter = txnCounter + len(wi.unverifiedTxGroup)
 				groupCounter++
 				u, _ := binary.Uvarint(wi.unverifiedTxGroup[0].Txn.Note)
@@ -573,13 +575,11 @@ func runHandlerBenchmark(rateAdjuster time.Duration, maxGroupSize, tps int, b *t
 
 	// emulate handler.Start() without the backlog
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
-	handler.backlogWg.Add(1)
-	go handler.processTxnStreamVerifiedResults()
 	handler.streamVerifier.Start(handler.ctx)
 
 	// Prepare the transactions
 	signedTransactionGroups, badTxnGroups := makeSignedTxnGroups(b.N, numUsers, maxGroupSize, 0.001, addresses, secrets)
-	outChan := handler.postVerificationQueue
+	testResultChan := handler.postVerificationQueue
 	wg := sync.WaitGroup{}
 
 	var tt time.Time
@@ -598,12 +598,12 @@ func runHandlerBenchmark(rateAdjuster time.Duration, maxGroupSize, tps int, b *t
 				b.Logf("processed total: [%d groups (%d invalid)] [%d txns]", groupCounter, invalidCounter, txnCounter)
 			}
 		}()
-		for wi := range outChan {
-			txnCounter = txnCounter + uint64(len(wi.unverifiedTxGroup))
+		for wi := range testResultChan {
+			txnCounter = txnCounter + uint64(len(wi.TxnGroup))
 			groupCounter++
-			u, _ := binary.Uvarint(wi.unverifiedTxGroup[0].Txn.Note)
+			u, _ := binary.Uvarint(wi.TxnGroup[0].Txn.Note)
 			_, inBad := badTxnGroups[u]
-			if wi.verificationErr == nil {
+			if wi.Err == nil {
 				require.False(b, inBad, "No error for invalid signature")
 			} else {
 				invalidCounter++

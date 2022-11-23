@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 var feeSink = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
@@ -52,6 +53,7 @@ var blockHeader = &bookkeeping.BlockHeader{
 	},
 }
 var protoMaxGroupSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize
+var txBacklogSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnBytesPerBlock / 200
 
 var spec = transactions.SpecialAddresses{
 	FeeSink:     feeSink,
@@ -865,6 +867,8 @@ func BenchmarkTxn(b *testing.B) {
 	b.StopTimer()
 }
 
+var droppedFromPool = metrics.MakeCounter(metrics.MetricName{Name: "test_streamVerifierTestCore_messages_dropped_pool", Description: "Test streamVerifierTestCore messages dropped from pool"})
+
 func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64]struct{},
 	expectedError error, t *testing.T) (sv *StreamVerifier) {
 
@@ -881,8 +885,8 @@ func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups m
 	blkHdr := createDummyBlockHeader()
 	nbw := MakeNewBlockWatcher(blkHdr)
 	stxnChan := make(chan UnverifiedElement)
-	resultChan := make(chan VerificationResult)
-	sv = MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache)
+	resultChan := make(chan VerificationResult, txBacklogSize)
+	sv = MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache, droppedFromPool)
 	sv.Start(ctx)
 
 	wg := sync.WaitGroup{}
@@ -1229,8 +1233,8 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	blkHdr := createDummyBlockHeader()
 	nbw := MakeNewBlockWatcher(blkHdr)
 	stxnChan := make(chan UnverifiedElement)
-	resultChan := make(chan VerificationResult)
-	sv := MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache)
+	resultChan := make(chan VerificationResult, txBacklogSize)
+	sv := MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache, droppedFromPool)
 	sv.Start(ctx)
 
 	errChan := make(chan error)
@@ -1284,10 +1288,10 @@ func TestStreamVerifierRestart(t *testing.T) {
 	blkHdr := createDummyBlockHeader()
 	nbw := MakeNewBlockWatcher(blkHdr)
 	stxnChan := make(chan UnverifiedElement)
-	resultChan := make(chan VerificationResult)
+	resultChan := make(chan VerificationResult, txBacklogSize)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	sv := MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache)
+	sv := MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache, droppedFromPool)
 	sv.Start(ctx)
 
 	errChan := make(chan error)
