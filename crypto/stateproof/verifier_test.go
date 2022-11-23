@@ -74,8 +74,8 @@ func TestVerifyWrongCoinSlot(t *testing.T) {
 	// that doesn't match
 	coinAt0 := sProof.PositionsToReveal[0]
 	choice := coinChoiceSeed{
-		partCommitment: verifier.participantsCommitment,
-		lnProvenWeight: verifier.lnProvenWeight,
+		partCommitment: crypto.GenericDigest(verifier.ParticipantsCommitment),
+		lnProvenWeight: verifier.LnProvenWeight,
 		sigCommitment:  sProof.SigCommit,
 		signedWeight:   sProof.SignedWeight,
 		data:           p.data,
