@@ -94,7 +94,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		rootDirectory := t.TempDir()
 		rootDirs = append(rootDirs, rootDirectory)
 
-		defaultConfig.NetAddress = "127.0.0.1:0"
+		defaultConfig.NetAddress = neighbors[i]
 		defaultConfig.SaveToDisk(rootDirectory)
 
 		// Save empty phonebook - we'll add peers after they've been assigned listening ports
@@ -170,7 +170,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		require.NoError(t, err)
 
-		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), rootDirectory, cfg, []string{}, g)
+		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), rootDirectory, cfg, append(neighbors[:i], neighbors[i+1:]...), g)
 		nodes[i] = node
 		require.NoError(t, err)
 	}
@@ -399,13 +399,7 @@ func startAndConnectNodes(nodes []*AlgorandFullNode, delayStartFirstNode bool) {
 }
 
 func connectPeers(nodes []*AlgorandFullNode) {
-	neighbors := make([]string, 0)
 	for _, node := range nodes {
-		neighbors = append(neighbors, node.config.NetAddress)
-	}
-
-	for _, node := range nodes {
-		node.net.ExtendPeerList(neighbors...)
 		node.net.RequestConnectOutgoing(false, nil)
 	}
 }
@@ -420,14 +414,9 @@ func delayStartNode(node *AlgorandFullNode, peers []*AlgorandFullNode, delay tim
 	}()
 	wg.Wait()
 
-	node0Addr := node.config.NetAddress
-	node0Neighbors := make([]string, 0)
 	for _, peer := range peers {
-		node0Neighbors = append(node0Neighbors, peer.config.NetAddress)
-		node.net.ExtendPeerList(node0Addr)
 		peer.net.RequestConnectOutgoing(false, nil)
 	}
-	node.net.ExtendPeerList(node0Neighbors...)
 	node.net.RequestConnectOutgoing(false, nil)
 }
 
