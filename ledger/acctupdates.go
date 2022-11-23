@@ -935,7 +935,8 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
 	err = au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		totals, err0 := accountsTotals(ctx, tx, false)
+		arw := store.NewAccountsSQLReaderWriter(tx)
+		totals, err0 := arw.AccountsTotals(ctx, false)
 		if err0 != nil {
 			return err0
 		}
@@ -1688,7 +1689,9 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		dcc.stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano()) - dcc.stats.OldAccountPreloadDuration
 	}
 
-	err = accountsPutTotals(tx, dcc.roundTotals, false)
+	arw := store.NewAccountsSQLReaderWriter(tx)
+
+	err = arw.AccountsPutTotals(dcc.roundTotals, false)
 	if err != nil {
 		return err
 	}
