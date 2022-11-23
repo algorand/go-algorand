@@ -402,12 +402,16 @@ func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 // makeTestTxHandlerOrphaned creates a tx handler without any backlog consumer.
 // It is caller responsibility to run a consumer thread.
 func makeTestTxHandlerOrphaned(backlogSize int) *TxHandler {
+	return makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, 0)
+}
+
+func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, refreshInterval time.Duration) *TxHandler {
 	if backlogSize <= 0 {
 		backlogSize = txBacklogSize
 	}
 	return &TxHandler{
 		backlogQueue:     make(chan *txBacklogMsg, backlogSize),
-		msgCache:         makeSaltedCache(context.Background(), txBacklogSize, 0),
+		msgCache:         makeSaltedCache(ctx, txBacklogSize, refreshInterval),
 		txCanonicalCache: makeDigestCache(txBacklogSize),
 		cacheConfig:      txHandlerConfig{true, true},
 	}
@@ -496,6 +500,80 @@ func TestTxHandlerProcessIncomingCache(t *testing.T) {
 	require.Equal(t, 2, len(msg.unverifiedTxGroup))
 	require.Equal(t, stxns4[0], msg.unverifiedTxGroup[0])
 	require.Equal(t, stxns4[1], msg.unverifiedTxGroup[1])
+}
+
+func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	stxns1, blob1 := makeRandomTransactions(1)
+	require.Equal(t, 1, len(stxns1))
+
+	resetCanonical := func(handler *TxHandler) {
+		handler.txCanonicalCache.swap()
+		handler.txCanonicalCache.swap()
+	}
+
+	t.Run("scheduled", func(t *testing.T) {
+		// double enqueue a single txn message, ensure it discarded
+		ctx, cancelFunc := context.WithCancel(context.Background())
+		handler := makeTestTxHandlerOrphanedWithContext(ctx, txBacklogSize, 10*time.Millisecond)
+
+		var action network.OutgoingMessage
+		var msg *txBacklogMsg
+
+		action = handler.processIncomingTxn(network.IncomingMessage{Data: blob1})
+		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+		require.Equal(t, 1, len(handler.backlogQueue))
+		resetCanonical(handler)
+		action = handler.processIncomingTxn(network.IncomingMessage{Data: blob1})
+		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+		require.Equal(t, 1, len(handler.backlogQueue))
+		msg = <-handler.backlogQueue
+		require.Equal(t, 1, len(msg.unverifiedTxGroup))
+		require.Equal(t, stxns1[0], msg.unverifiedTxGroup[0])
+		cancelFunc()
+	})
+
+	t.Run("manual", func(t *testing.T) {
+		// double enqueue a single txn message, ensure it discarded
+		handler := makeTestTxHandlerOrphaned(txBacklogSize)
+		var action network.OutgoingMessage
+		var msg *txBacklogMsg
+
+		action = handler.processIncomingTxn(network.IncomingMessage{Data: blob1})
+		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+		require.Equal(t, 1, len(handler.backlogQueue))
+		resetCanonical(handler)
+		action = handler.processIncomingTxn(network.IncomingMessage{Data: blob1})
+		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+		require.Equal(t, 1, len(handler.backlogQueue))
+		msg = <-handler.backlogQueue
+		require.Equal(t, 1, len(msg.unverifiedTxGroup))
+		require.Equal(t, stxns1[0], msg.unverifiedTxGroup[0])
+
+		// rotate once, ensure the txn still there
+		handler.msgCache.remix()
+		resetCanonical(handler)
+		action = handler.processIncomingTxn(network.IncomingMessage{Data: blob1})
+		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+		require.Equal(t, 0, len(handler.backlogQueue))
+
+		// rotate twice, ensure the txn done
+		handler.msgCache.remix()
+		resetCanonical(handler)
+		action = handler.processIncomingTxn(network.IncomingMessage{Data: blob1})
+		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+		require.Equal(t, 1, len(handler.backlogQueue))
+		resetCanonical(handler)
+		action = handler.processIncomingTxn(network.IncomingMessage{Data: blob1})
+		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+		require.Equal(t, 1, len(handler.backlogQueue))
+		msg = <-handler.backlogQueue
+		require.Equal(t, 1, len(msg.unverifiedTxGroup))
+		require.Equal(t, stxns1[0], msg.unverifiedTxGroup[0])
+	})
+
 }
 
 const benchTxnNum = 25_000
