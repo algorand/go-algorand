@@ -125,7 +125,6 @@ func (erl *ElasticRateLimiter) EnableCongestionControl() {
 func (erl *ElasticRateLimiter) DisableCongestionControl() {
 	erl.clientLock.Lock()
 	erl.enableCM = false
-	fmt.Println(erl.enableCM)
 	erl.clientLock.Unlock()
 }
 
