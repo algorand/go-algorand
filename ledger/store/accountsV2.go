@@ -21,6 +21,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -281,4 +282,142 @@ func (w *accountsV2Writer) TxtailNewRound(ctx context.Context, baseRound basics.
 
 	_, err = w.e.ExecContext(ctx, "DELETE FROM txtail WHERE rnd < ?", forgetBeforeRound)
 	return err
+}
+
+// OnlineAccountsDelete deleted entries with updRound <= expRound
+func (w *accountsV2Writer) OnlineAccountsDelete(forgetBefore basics.Round) (err error) {
+	rows, err := w.e.Query("SELECT rowid, address, updRound, data FROM onlineaccounts WHERE updRound < ? ORDER BY address, updRound DESC", forgetBefore)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var rowids []int64
+	var rowid sql.NullInt64
+	var updRound sql.NullInt64
+	var buf []byte
+	var addrbuf []byte
+
+	var prevAddr []byte
+
+	for rows.Next() {
+		err = rows.Scan(&rowid, &addrbuf, &updRound, &buf)
+		if err != nil {
+			return err
+		}
+		if !rowid.Valid || !updRound.Valid {
+			return fmt.Errorf("onlineAccountsDelete: invalid rowid or updRound")
+		}
+		if len(addrbuf) != len(basics.Address{}) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(basics.Address{}))
+			return
+		}
+
+		if !bytes.Equal(addrbuf, prevAddr) {
+			// new address
+			// if the first (latest) entry is
+			//  - offline then delete all
+			//  - online then safe to delete all previous except this first (latest)
+
+			// reset the state
+			prevAddr = addrbuf
+
+			var oad BaseOnlineAccountData
+			err = protocol.Decode(buf, &oad)
+			if err != nil {
+				return
+			}
+			if oad.IsVotingEmpty() {
+				// delete this and all subsequent
+				rowids = append(rowids, rowid.Int64)
+			}
+
+			// restart the loop
+			// if there are some subsequent entries, they will deleted on the next iteration
+			// if no subsequent entries, the loop will reset the state and the latest entry does not get deleted
+			continue
+		}
+		// delete all subsequent entries
+		rowids = append(rowids, rowid.Int64)
+	}
+
+	return onlineAccountsDeleteByRowIDs(w.e, rowids)
+}
+
+func onlineAccountsDeleteByRowIDs(e db.Executable, rowids []int64) (err error) {
+	if len(rowids) == 0 {
+		return
+	}
+
+	// sqlite3 < 3.32.0 allows SQLITE_MAX_VARIABLE_NUMBER = 999 bindings
+	// see https://www.sqlite.org/limits.html
+	// rowids might be larger => split to chunks are remove
+	chunks := rowidsToChunkedArgs(rowids)
+	for _, chunk := range chunks {
+		_, err = e.Exec("DELETE FROM onlineaccounts WHERE rowid IN (?"+strings.Repeat(",?", len(chunk)-1)+")", chunk...)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
+func rowidsToChunkedArgs(rowids []int64) [][]interface{} {
+	const sqliteMaxVariableNumber = 999
+
+	numChunks := len(rowids)/sqliteMaxVariableNumber + 1
+	if len(rowids)%sqliteMaxVariableNumber == 0 {
+		numChunks--
+	}
+	chunks := make([][]interface{}, numChunks)
+	if numChunks == 1 {
+		// optimize memory consumption for the most common case
+		chunks[0] = make([]interface{}, len(rowids))
+		for i, rowid := range rowids {
+			chunks[0][i] = interface{}(rowid)
+		}
+	} else {
+		for i := 0; i < numChunks; i++ {
+			chunkSize := sqliteMaxVariableNumber
+			if i == numChunks-1 {
+				chunkSize = len(rowids) - (numChunks-1)*sqliteMaxVariableNumber
+			}
+			chunks[i] = make([]interface{}, chunkSize)
+		}
+		for i, rowid := range rowids {
+			chunkIndex := i / sqliteMaxVariableNumber
+			chunks[chunkIndex][i%sqliteMaxVariableNumber] = interface{}(rowid)
+		}
+	}
+	return chunks
+}
+
+// UpdateAccountsRound updates the round number associated with the current account data.
+func (w *accountsV2Writer) UpdateAccountsRound(rnd basics.Round) (err error) {
+	res, err := w.e.Exec("UPDATE acctrounds SET rnd=? WHERE id='acctbase' AND rnd<?", rnd, rnd)
+	if err != nil {
+		return
+	}
+
+	aff, err := res.RowsAffected()
+	if err != nil {
+		return
+	}
+
+	if aff != 1 {
+		// try to figure out why we couldn't update the round number.
+		var base basics.Round
+		err = w.e.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&base)
+		if err != nil {
+			return
+		}
+		if base > rnd {
+			err = fmt.Errorf("newRound %d is not after base %d", rnd, base)
+			return
+		} else if base != rnd {
+			err = fmt.Errorf("updateAccountsRound(acctbase, %d): expected to update 1 row but got %d", rnd, aff)
+			return
+		}
+	}
+	return
 }

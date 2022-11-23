@@ -422,7 +422,9 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		return err
 	}
 
-	err = onlineAccountsDelete(tx, dcc.onlineAccountsForgetBefore)
+	arw := store.NewAccountsSQLReaderWriter(tx)
+
+	err = arw.OnlineAccountsDelete(dcc.onlineAccountsForgetBefore)
 	if err != nil {
 		return err
 	}

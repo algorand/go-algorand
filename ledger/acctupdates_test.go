@@ -2441,11 +2441,12 @@ func TestAcctUpdatesResources(t *testing.T) {
 				err := au.prepareCommit(dcc)
 				require.NoError(t, err)
 				err = ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+					arw := store.NewAccountsSQLReaderWriter(tx)
 					err = au.commitRound(ctx, tx, dcc)
 					if err != nil {
 						return err
 					}
-					err = updateAccountsRound(tx, newBase)
+					err = arw.UpdateAccountsRound(newBase)
 					return err
 				})
 				require.NoError(t, err)
@@ -2734,11 +2735,12 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 			err := au.prepareCommit(dcc)
 			require.NoError(t, err)
 			err = ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+				arw := store.NewAccountsSQLReaderWriter(tx)
 				err = au.commitRound(ctx, tx, dcc)
 				if err != nil {
 					return err
 				}
-				err = updateAccountsRound(tx, newBase)
+				err = arw.UpdateAccountsRound(newBase)
 				return err
 			})
 			require.NoError(t, err)

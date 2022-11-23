@@ -332,7 +332,7 @@ func TestAccountDBRound(t *testing.T) {
 		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, basics.Round(i))
 		require.NoError(t, err)
 
-		err = updateAccountsRound(tx, basics.Round(i))
+		err = arw.UpdateAccountsRound(basics.Round(i))
 		require.NoError(t, err)
 
 		// TODO: calculate exact number of updates?
@@ -2450,7 +2450,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEmpty(t, updatedOnlineAccts)
 
-		err = updateAccountsRound(tx, rnd)
+		err = arw.UpdateAccountsRound(rnd)
 		require.NoError(t, err)
 	}
 
@@ -2886,70 +2886,6 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	require.Equal(t, maxRounds, int(endRound))
 }
 
-func TestRowidsToChunkedArgs(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	res := rowidsToChunkedArgs([]int64{1})
-	require.Equal(t, 1, cap(res))
-	require.Equal(t, 1, len(res))
-	require.Equal(t, 1, cap(res[0]))
-	require.Equal(t, 1, len(res[0]))
-	require.Equal(t, []interface{}{int64(1)}, res[0])
-
-	input := make([]int64, 999)
-	for i := 0; i < len(input); i++ {
-		input[i] = int64(i)
-	}
-	res = rowidsToChunkedArgs(input)
-	require.Equal(t, 1, cap(res))
-	require.Equal(t, 1, len(res))
-	require.Equal(t, 999, cap(res[0]))
-	require.Equal(t, 999, len(res[0]))
-	for i := 0; i < len(input); i++ {
-		require.Equal(t, interface{}(int64(i)), res[0][i])
-	}
-
-	input = make([]int64, 1001)
-	for i := 0; i < len(input); i++ {
-		input[i] = int64(i)
-	}
-	res = rowidsToChunkedArgs(input)
-	require.Equal(t, 2, cap(res))
-	require.Equal(t, 2, len(res))
-	require.Equal(t, 999, cap(res[0]))
-	require.Equal(t, 999, len(res[0]))
-	require.Equal(t, 2, cap(res[1]))
-	require.Equal(t, 2, len(res[1]))
-	for i := 0; i < 999; i++ {
-		require.Equal(t, interface{}(int64(i)), res[0][i])
-	}
-	j := 0
-	for i := 999; i < len(input); i++ {
-		require.Equal(t, interface{}(int64(i)), res[1][j])
-		j++
-	}
-
-	input = make([]int64, 2*999)
-	for i := 0; i < len(input); i++ {
-		input[i] = int64(i)
-	}
-	res = rowidsToChunkedArgs(input)
-	require.Equal(t, 2, cap(res))
-	require.Equal(t, 2, len(res))
-	require.Equal(t, 999, cap(res[0]))
-	require.Equal(t, 999, len(res[0]))
-	require.Equal(t, 999, cap(res[1]))
-	require.Equal(t, 999, len(res[1]))
-	for i := 0; i < 999; i++ {
-		require.Equal(t, interface{}(int64(i)), res[0][i])
-	}
-	j = 0
-	for i := 999; i < len(input); i++ {
-		require.Equal(t, interface{}(int64(i)), res[1][j])
-		j++
-	}
-}
-
 // TestAccountDBTxTailLoad checks txtailNewRound and loadTxTail delete and load right data
 func TestAccountDBTxTailLoad(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -3015,6 +2951,8 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 	var accts map[basics.Address]basics.AccountData
 	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 
+	arw := store.NewAccountsSQLReaderWriter(tx)
+
 	updates := compactOnlineAccountDeltas{}
 	addrA := ledgertesting.RandomAddress()
 	addrB := ledgertesting.RandomAddress()
@@ -3074,7 +3012,7 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 	var history []store.PersistedOnlineAccountData
 	var validThrough basics.Round
 	for _, rnd := range []basics.Round{1, 2, 3} {
-		err = onlineAccountsDelete(tx, rnd)
+		err = arw.OnlineAccountsDelete(rnd)
 		require.NoError(t, err)
 
 		err = tx.QueryRow("SELECT COUNT(1) FROM onlineaccounts").Scan(&count)
@@ -3092,7 +3030,7 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 	}
 
 	for _, rnd := range []basics.Round{4, 5, 6, 7} {
-		err = onlineAccountsDelete(tx, rnd)
+		err = arw.OnlineAccountsDelete(rnd)
 		require.NoError(t, err)
 
 		err = tx.QueryRow("SELECT COUNT(1) FROM onlineaccounts").Scan(&count)
@@ -3110,7 +3048,7 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 	}
 
 	for _, rnd := range []basics.Round{8, 9} {
-		err = onlineAccountsDelete(tx, rnd)
+		err = arw.OnlineAccountsDelete(rnd)
 		require.NoError(t, err)
 
 		err = tx.QueryRow("SELECT COUNT(1) FROM onlineaccounts").Scan(&count)
