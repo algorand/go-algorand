@@ -595,9 +595,9 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess db.Acc
 		return stats
 	}
 
+	ws := balanceTrieStats(catchpointWriterReadAccess)
 	// Skip invariant check for tests using mocks that do _not_ update
 	// balancesTrie by checking for zero value stats.
-	ws := balanceTrieStats(catchpointWriterReadAccess)
 	if ws != (merkletrie.Stats{}) {
 		require.Equal(t, ws, balanceTrieStats(l.trackerDBs.Rdb), "Invariant broken - Catchpoint writer and reader merkle tries should _always_ agree")
 	}
@@ -688,182 +688,183 @@ func TestExactAccountChunk(t *testing.T) {
 	defer l.Close()
 }
 
+// Exercises interactions between transaction evaluation and catchpoint
+// generation to confirm catchpoints include expected transactions.
 func TestCatchpointAfterTxns(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// Exercises interactions between transaction evaluation and catchpoint
-	// generation to confirm catchpoints include expected transactions.
-	t.Run("chunks", func(t *testing.T) {
-		genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-		dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture)
-		defer dl.Close()
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture)
+	defer dl.Close()
 
-		boxApp := dl.fundedApp(addrs[1], 1_000_000, boxAppSource)
-		callBox := txntest.Txn{
-			Type:          "appl",
-			Sender:        addrs[2],
-			ApplicationID: boxApp,
-		}
+	boxApp := dl.fundedApp(addrs[1], 1_000_000, boxAppSource)
+	callBox := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[2],
+		ApplicationID: boxApp,
+	}
 
-		makeBox := callBox.Args("create", "xxx")
-		makeBox.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("xxx")}}
-		dl.txn(makeBox)
+	makeBox := callBox.Args("create", "xxx")
+	makeBox.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("xxx")}}
+	dl.txn(makeBox)
 
-		pay := txntest.Txn{
-			Type:     "pay",
-			Sender:   addrs[0],
-			Receiver: addrs[1],
-			Amount:   100000,
-		}
-		// There are 12 accounts in the NewTestGenesis, plus 1 app account, so we
-		// create more so that we have exactly one chunk's worth, to make sure that
-		// works without an empty chunk between accounts and kvstore.
-		for i := 0; i < (BalancesPerCatchpointFileChunk - 13); i++ {
-			newacctpay := pay
-			newacctpay.Receiver = ledgertesting.RandomAddress()
-			dl.fullBlock(&newacctpay)
-		}
-		for i := 0; i < 40; i++ {
-			dl.fullBlock(pay.Noted(strconv.Itoa(i)))
-		}
-
-		tempDir := t.TempDir()
-
-		catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
-		catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
-
-		cph := testWriteCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
-		require.EqualValues(t, 2, cph.TotalChunks)
-
-		l := testNewLedgerFromCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointFilePath)
-		defer l.Close()
-		values, err := l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
-		require.NoError(t, err)
-		require.Len(t, values, 1)
-
-		// Add one more account
+	pay := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: addrs[1],
+		Amount:   100000,
+	}
+	// There are 12 accounts in the NewTestGenesis, plus 1 app account, so we
+	// create more so that we have exactly one chunk's worth, to make sure that
+	// works without an empty chunk between accounts and kvstore.
+	for i := 0; i < (BalancesPerCatchpointFileChunk - 13); i++ {
 		newacctpay := pay
-		last := ledgertesting.RandomAddress()
-		newacctpay.Receiver = last
+		newacctpay.Receiver = ledgertesting.RandomAddress()
 		dl.fullBlock(&newacctpay)
+	}
+	for i := 0; i < 40; i++ {
+		dl.fullBlock(pay.Noted(strconv.Itoa(i)))
+	}
 
-		// Write and read back in, and ensure even the last effect exists.
-		cph = testWriteCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
-		require.EqualValues(t, cph.TotalChunks, 2) // Still only 2 chunks, as last was in a recent block
+	tempDir := t.TempDir()
 
-		// Drive home the point that `last` is _not_ included in the catchpoint by inspecting balance read from catchpoint.
-		{
-			l = testNewLedgerFromCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointFilePath)
-			defer l.Close()
-			_, _, algos, err := l.LookupLatest(last)
-			require.NoError(t, err)
-			require.Equal(t, basics.MicroAlgos{}, algos)
-		}
+	catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
+	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
-		for i := 0; i < 40; i++ { // Advance so catchpoint sees the txns
-			dl.fullBlock(pay.Noted(strconv.Itoa(i)))
-		}
+	cph := testWriteCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
+	require.EqualValues(t, 2, cph.TotalChunks)
 
-		cph = testWriteCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
-		require.EqualValues(t, cph.TotalChunks, 3)
+	l := testNewLedgerFromCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointFilePath)
+	defer l.Close()
+	values, err := l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
+	require.NoError(t, err)
+	require.Len(t, values, 1)
 
+	// Add one more account
+	newacctpay := pay
+	last := ledgertesting.RandomAddress()
+	newacctpay.Receiver = last
+	dl.fullBlock(&newacctpay)
+
+	// Write and read back in, and ensure even the last effect exists.
+	cph = testWriteCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
+	require.EqualValues(t, cph.TotalChunks, 2) // Still only 2 chunks, as last was in a recent block
+
+	// Drive home the point that `last` is _not_ included in the catchpoint by inspecting balance read from catchpoint.
+	{
 		l = testNewLedgerFromCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointFilePath)
 		defer l.Close()
-		values, err = l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
+		_, _, algos, err := l.LookupLatest(last)
 		require.NoError(t, err)
-		require.Len(t, values, 1)
-		v, err := l.LookupKv(l.Latest(), logic.MakeBoxKey(boxApp, "xxx"))
+		require.Equal(t, basics.MicroAlgos{}, algos)
+	}
+
+	for i := 0; i < 40; i++ { // Advance so catchpoint sees the txns
+		dl.fullBlock(pay.Noted(strconv.Itoa(i)))
+	}
+
+	cph = testWriteCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
+	require.EqualValues(t, cph.TotalChunks, 3)
+
+	l = testNewLedgerFromCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointFilePath)
+	defer l.Close()
+	values, err = l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
+	require.NoError(t, err)
+	require.Len(t, values, 1)
+	v, err := l.LookupKv(l.Latest(), logic.MakeBoxKey(boxApp, "xxx"))
+	require.NoError(t, err)
+	require.Equal(t, strings.Repeat("\x00", 24), string(v))
+
+	// Confirm `last` balance is now available in the catchpoint.
+	{
+		// Since fast catchup consists of multiple steps and the test only performs catchpoint reads, the resulting ledger is incomplete.
+		// That's why the assertion ignores rewards and does _not_ use `LookupLatest`.
+		ad, _, err := l.LookupWithoutRewards(0, last)
 		require.NoError(t, err)
-		require.Equal(t, strings.Repeat("\x00", 24), string(v))
+		require.Equal(t, basics.MicroAlgos{Raw: 100_000}, ad.MicroAlgos)
+	}
+}
 
-		// Confirm `last` balance is now available in the catchpoint.
-		{
-			// Since fast catchup consists of multiple steps and the test only performs catchpoint reads, the resulting ledger is incomplete.
-			// That's why the assertion ignores rewards and does _not_ use `LookupLatest`.
-			ad, _, err := l.LookupWithoutRewards(0, last)
-			require.NoError(t, err)
-			require.Equal(t, basics.MicroAlgos{Raw: 100_000}, ad.MicroAlgos)
-		}
-	})
+// Exercises a sequence of box modifications that caused a bug in
+// catchpoint writes.
+//
+// The problematic sequence of values is:  v1 -> v2 -> v1.  Where each
+// box value is:
+// * Part of a transaction that does _not_ modify global/local state.
+// * Written to `balancesTrie`.
+func TestCatchpointAfterBoxTxns(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	// Exercises a sequence of box modifications that caused a bug in
-	// catchpoint writes.
-	//
-	// The problematic sequence of values is:  v1 -> v2 -> v1.  Where each
-	// box value is:
-	// * Part of a transaction that does _not_ modify global/local state.
-	// * Written to `balancesTrie`.
-	t.Run("box_reset", func(t *testing.T) {
-		genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-		dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture)
-		defer dl.Close()
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture)
+	defer dl.Close()
 
-		boxApp := dl.fundedApp(addrs[1], 1_000_000, boxAppSource)
-		callBox := txntest.Txn{
-			Type:          "appl",
-			Sender:        addrs[2],
-			ApplicationID: boxApp,
-		}
+	boxApp := dl.fundedApp(addrs[1], 1_000_000, boxAppSource)
+	callBox := txntest.Txn{
+		Type:          "appl",
+		Sender:        addrs[2],
+		ApplicationID: boxApp,
+	}
 
-		makeBox := callBox.Args("create", "xxx")
-		makeBox.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("xxx")}}
-		dl.fullBlock(makeBox)
+	makeBox := callBox.Args("create", "xxx")
+	makeBox.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("xxx")}}
+	dl.fullBlock(makeBox)
 
-		setBox := callBox.Args("set", "xxx", strings.Repeat("f", 24))
-		setBox.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("xxx")}}
-		dl.fullBlock(setBox)
+	setBox := callBox.Args("set", "xxx", strings.Repeat("f", 24))
+	setBox.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("xxx")}}
+	dl.fullBlock(setBox)
 
-		pay := txntest.Txn{
-			Type:     "pay",
-			Sender:   addrs[0],
-			Receiver: addrs[1],
-			Amount:   100000,
-		}
+	pay := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: addrs[1],
+		Amount:   100000,
+	}
 
-		// There are 12 accounts in the NewTestGenesis, plus 1 app account, so we
-		// create more so that we have exactly one chunk's worth, to make sure that
-		// works without an empty chunk between accounts and kvstore.
-		for i := 0; i < (BalancesPerCatchpointFileChunk - 13); i++ {
-			newacctpay := pay
-			newacctpay.Receiver = ledgertesting.RandomAddress()
-			dl.fullBlock(&newacctpay)
-		}
-		for i := 0; i < 40; i++ {
-			dl.fullBlock(pay.Noted(strconv.Itoa(i)))
-		}
+	// There are 12 accounts in the NewTestGenesis, plus 1 app account, so we
+	// create more so that we have exactly one chunk's worth, to make sure that
+	// works without an empty chunk between accounts and kvstore.
+	for i := 0; i < (BalancesPerCatchpointFileChunk - 13); i++ {
+		newacctpay := pay
+		newacctpay.Receiver = ledgertesting.RandomAddress()
+		dl.fullBlock(&newacctpay)
+	}
+	for i := 0; i < 40; i++ {
+		dl.fullBlock(pay.Noted(strconv.Itoa(i)))
+	}
 
-		resetBox := callBox.Args("set", "xxx", strings.Repeat("z", 24))
-		resetBox.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("xxx")}}
-		dl.fullBlock(resetBox)
+	resetBox := callBox.Args("set", "xxx", strings.Repeat("z", 24))
+	resetBox.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("xxx")}}
+	dl.fullBlock(resetBox)
 
-		for i := 0; i < 40; i++ {
-			dl.fullBlock(pay.Noted(strconv.Itoa(i)))
-		}
+	for i := 0; i < 40; i++ {
+		dl.fullBlock(pay.Noted(strconv.Itoa(i)))
+	}
 
-		dl.fullBlock(setBox.Noted("reset back to f's"))
-		for i := 0; i < 40; i++ {
-			dl.fullBlock(pay.Noted(strconv.Itoa(i)))
-		}
+	dl.fullBlock(setBox.Noted("reset back to f's"))
+	for i := 0; i < 40; i++ {
+		dl.fullBlock(pay.Noted(strconv.Itoa(i)))
+	}
 
-		tempDir := t.TempDir()
+	tempDir := t.TempDir()
 
-		catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
-		catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
+	catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
+	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
-		cph := testWriteCatchpoint(t, dl.generator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
-		require.EqualValues(t, 2, cph.TotalChunks)
+	cph := testWriteCatchpoint(t, dl.generator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
+	require.EqualValues(t, 2, cph.TotalChunks)
 
-		l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB().Rdb, catchpointFilePath)
-		defer l.Close()
+	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB().Rdb, catchpointFilePath)
+	defer l.Close()
 
-		values, err := l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
-		require.NoError(t, err)
-		require.Len(t, values, 1)
-		v, err := l.LookupKv(l.Latest(), logic.MakeBoxKey(boxApp, "xxx"))
-		require.NoError(t, err)
-		require.Equal(t, strings.Repeat("f", 24), string(v))
-	})
+	values, err := l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
+	require.NoError(t, err)
+	require.Len(t, values, 1)
+	v, err := l.LookupKv(l.Latest(), logic.MakeBoxKey(boxApp, "xxx"))
+	require.NoError(t, err)
+	require.Equal(t, strings.Repeat("f", 24), string(v))
 }
 
 func TestEncodedKVRecordV6Allocbounds(t *testing.T) {
