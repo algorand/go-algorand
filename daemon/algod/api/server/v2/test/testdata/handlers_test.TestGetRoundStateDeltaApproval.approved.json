@@ -1,0 +1,45 @@
+{
+  "body": {
+    "accts": {
+      "accounts": [
+        {
+          "account-data": {
+            "address": "7777777777777777777777777777777777777777777777777774MSJUVU",
+            "amount": 50000000000,
+            "amount-without-pending-rewards": 50000000000,
+            "min-balance": 100000,
+            "pending-rewards": 0,
+            "rewards": 0,
+            "round": 2,
+            "status": "Not Participating",
+            "total-apps-opted-in": 0,
+            "total-assets-opted-in": 0,
+            "total-created-apps": 0,
+            "total-created-assets": 0
+          },
+          "address": "7777777777777777777777777777777777777777777777777774MSJUVU"
+        }
+      ]
+    },
+    "totals": {
+      "not-participating": 100000000000,
+      "offline": 0,
+      "online": 658511,
+      "rewards-level": 0
+    },
+    "tx-ids": [
+      {
+        "intra": 0,
+        "lastValid": 0,
+        "txId": "Z7ATVET4TI3UG32H2PYJQPREPYOQHAH376E25M3KB57OEW66YMPA"
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": [
+      "application/json; charset=UTF-8"
+    ]
+  },
+  "status": "200 OK",
+  "statusCode": 200
+}
