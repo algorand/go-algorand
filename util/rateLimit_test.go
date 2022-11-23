@@ -17,7 +17,6 @@
 package util
 
 import (
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -187,7 +186,6 @@ func TestREDCongestionManagerShouldntDrop(t *testing.T) {
 	time.Sleep(1000 * time.Millisecond)
 	cancel()
 	wg.Wait()
-	fmt.Println(*red.consumedByClient[client])
 	assert.Equal(t, 1, len(*red.consumedByClient[client]))
 	assert.Equal(t, 10000, len(red.serves))
 	assert.Equal(t, 0.1, red.arrivalRateFor(red.consumedByClient[client]))
@@ -211,7 +209,6 @@ func TestREDCongestionManagerTargetRate(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	cancel()
 	wg.Wait()
-	fmt.Println(*red.consumedByClient[client])
 	assert.Equal(t, 0.3, red.arrivalRateFor(red.consumedByClient[client]))
 	assert.Equal(t, 0.3, red.targetRate)
 }

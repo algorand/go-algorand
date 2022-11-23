@@ -118,7 +118,6 @@ func NewElasticRateLimiter(maxCapacity, reservedCapacity int, cm CongestionManag
 func (erl *ElasticRateLimiter) EnableCongestionControl() {
 	erl.clientLock.Lock()
 	erl.enableCM = true
-	fmt.Println(erl.enableCM)
 	erl.clientLock.Unlock()
 }
 
@@ -141,7 +140,6 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (ErlCapacityGuard, e
 	erl.clientLock.RLock()
 	q, exists = erl.capacityByClient[c]
 	enableCM = erl.enableCM
-	fmt.Println("and", erl.enableCM)
 	erl.clientLock.RUnlock()
 
 	// Step 0: Check for, and create a capacity reservation if needed
@@ -166,7 +164,6 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (ErlCapacityGuard, e
 	if erl.cm != nil &&
 		enableCM &&
 		erl.cm.ShouldDrop(c) {
-		fmt.Println("weee")
 		return ErlCapacityGuard{}, fmt.Errorf("congestionManager prevented client from consuming capacity")
 	}
 	// Step 3: Attempt consumption from the shared queue
