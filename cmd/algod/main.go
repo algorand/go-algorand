@@ -344,7 +344,7 @@ func run() int {
 
 		// Send a heartbeat event every 10 minutes as a sign of life
 		go func() {
-			ticker := time.NewTicker(10 * time.Minute)
+			ticker := time.NewTicker(time.Second * time.Duration(cfg.HeartbeatUpdateInterval))
 			defer ticker.Stop()
 
 			sendHeartbeat := func() {
