@@ -112,7 +112,7 @@ func (counter *Counter) AddMicrosecondsSince(t time.Time, labels map[string]stri
 }
 
 // GetValue returns the value of the counter.
-func (counter *Counter) GetValue() (x uint64) {
+func (counter *Counter) GetUint64Value() (x uint64) {
 	return atomic.LoadUint64(&counter.intValue)
 }
 

@@ -1122,6 +1122,8 @@ func TestStreamVerifierIdel(t *testing.T) {
 }
 
 func TestGetNumberOfBatchableSigsInGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numOfTxns := 10
 	txnGroups, _ := getSignedTransactions(numOfTxns, 1, 0)
 	mod := 1
