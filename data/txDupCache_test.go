@@ -19,8 +19,10 @@ package data
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -105,7 +107,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 	require.Zero(t, cache.len())
 
 	// add some unique random
-	var ds [size][128]byte
+	var ds [size][8]byte
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds[i][:]))
 		exist := cache.checkAndPut(ds[i][:])
@@ -126,7 +128,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 	require.Equal(t, size, cache.len())
 
 	// add some more and ensure capacity switch
-	var ds2 [size][128]byte
+	var ds2 [size][8]byte
 	for i := 0; i < size; i++ {
 		crypto.RandBytes(ds2[i][:])
 		exist := cache.checkAndPut(ds2[i][:])
@@ -138,7 +140,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 
 	require.Equal(t, 2*size, cache.len())
 
-	var d [64]byte
+	var d [8]byte
 	crypto.RandBytes(d[:])
 	exist := cache.checkAndPut(d[:])
 	require.False(t, exist)
@@ -157,6 +159,85 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 	for i := 0; i < size; i++ {
 		exist := cache.check(ds[i][:])
 		require.False(t, exist)
+	}
+}
+
+func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const size = 20
+	updateInterval := 1000 * time.Microsecond
+	cache := makeSaltedCache(context.Background(), size, updateInterval)
+	require.Zero(t, cache.len())
+
+	// add some unique random
+	var ds [size][8]byte
+	for i := 0; i < size; i++ {
+		cache.mu.Lock()
+		crypto.RandBytes([]byte(ds[i][:]))
+		exist := cache.innerCheckAndPut(ds[i][:])
+		require.False(t, exist)
+
+		exist = cache.check(ds[i][:])
+		require.True(t, exist)
+		cache.mu.Unlock()
+
+		if rand.Int()%2 == 0 {
+			time.Sleep(updateInterval / 2)
+		}
+	}
+
+	require.Greater(t, cache.len(), 0)
+}
+
+func TestTxHandlerSaltedCacheManual(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const size = 20
+	cache := makeSaltedCache(context.Background(), 2*size, 0)
+	require.Zero(t, cache.len())
+
+	// add some unique random
+	var ds [size][8]byte
+	for i := 0; i < size; i++ {
+		crypto.RandBytes([]byte(ds[i][:]))
+		exist := cache.checkAndPut(ds[i][:])
+		require.False(t, exist)
+		exist = cache.check(ds[i][:])
+		require.True(t, exist)
+	}
+
+	require.Equal(t, size, cache.len())
+
+	// rotate and add more data
+	cache.remix()
+
+	var ds2 [size][8]byte
+	for i := 0; i < size; i++ {
+		crypto.RandBytes([]byte(ds2[i][:]))
+		exist := cache.checkAndPut(ds2[i][:])
+		require.False(t, exist)
+		exist = cache.check(ds2[i][:])
+		require.True(t, exist)
+	}
+	require.Equal(t, 2*size, cache.len())
+
+	// ensure the old data still in
+	for i := 0; i < size; i++ {
+		exist := cache.check(ds[i][:])
+		require.True(t, exist)
+	}
+
+	// rotate again, check only new data left
+	cache.remix()
+	require.Equal(t, size, cache.len())
+	for i := 0; i < size; i++ {
+		exist := cache.check(ds[i][:])
+		require.False(t, exist)
+		exist = cache.check(ds2[i][:])
+		require.True(t, exist)
 	}
 }
 

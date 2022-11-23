@@ -115,13 +115,13 @@ func makeSaltedCache(ctx context.Context, size int, refreshInterval time.Duratio
 }
 
 func (c *txSaltedCache) salter(refreshInterval time.Duration) {
-	timer := time.NewTimer(refreshInterval)
+	ticker := time.NewTicker(refreshInterval)
+	defer ticker.Stop()
 	for {
 		select {
-		case <-timer.C:
+		case <-ticker.C:
 			c.remix()
 		case <-c.ctx.Done():
-			timer.Stop()
 			return
 		}
 	}
@@ -194,7 +194,10 @@ func (c *txSaltedCache) innerCheck(msg []byte) (bool, *crypto.Digest) {
 func (c *txSaltedCache) checkAndPut(msg []byte) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.innerCheckAndPut(msg)
+}
 
+func (c *txSaltedCache) innerCheckAndPut(msg []byte) bool {
 	found, d := c.innerCheck(msg)
 	if found {
 		return true
