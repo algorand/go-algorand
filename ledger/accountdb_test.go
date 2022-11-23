@@ -3173,43 +3173,45 @@ func TestUnfinishedCatchpointsTable(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 	defer dbs.Close()
 
+	cts := store.NewCatchpointSQLReaderWriter(dbs.Wdb.Handle)
+
 	err := accountsCreateUnfinishedCatchpointsTable(
 		context.Background(), dbs.Wdb.Handle)
 	require.NoError(t, err)
 
 	var d3 crypto.Digest
 	rand.Read(d3[:])
-	err = insertUnfinishedCatchpoint(context.Background(), dbs.Wdb.Handle, 3, d3)
+	err = cts.InsertUnfinishedCatchpoint(context.Background(), 3, d3)
 	require.NoError(t, err)
 
 	var d5 crypto.Digest
 	rand.Read(d5[:])
-	err = insertUnfinishedCatchpoint(context.Background(), dbs.Wdb.Handle, 5, d5)
+	err = cts.InsertUnfinishedCatchpoint(context.Background(), 5, d5)
 	require.NoError(t, err)
 
-	ret, err := selectUnfinishedCatchpoints(context.Background(), dbs.Rdb.Handle)
+	ret, err := cts.SelectUnfinishedCatchpoints(context.Background())
 	require.NoError(t, err)
-	expected := []unfinishedCatchpointRecord{
+	expected := []store.UnfinishedCatchpointRecord{
 		{
-			round:     3,
-			blockHash: d3,
+			Round:     3,
+			BlockHash: d3,
 		},
 		{
-			round:     5,
-			blockHash: d5,
+			Round:     5,
+			BlockHash: d5,
 		},
 	}
 	require.Equal(t, expected, ret)
 
-	err = deleteUnfinishedCatchpoint(context.Background(), dbs.Wdb.Handle, 3)
+	err = cts.DeleteUnfinishedCatchpoint(context.Background(), 3)
 	require.NoError(t, err)
 
-	ret, err = selectUnfinishedCatchpoints(context.Background(), dbs.Rdb.Handle)
+	ret, err = cts.SelectUnfinishedCatchpoints(context.Background())
 	require.NoError(t, err)
-	expected = []unfinishedCatchpointRecord{
+	expected = []store.UnfinishedCatchpointRecord{
 		{
-			round:     5,
-			blockHash: d5,
+			Round:     5,
+			BlockHash: d5,
 		},
 	}
 	require.Equal(t, expected, ret)
