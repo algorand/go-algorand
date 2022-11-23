@@ -158,7 +158,7 @@ func TestGetRoundStateDelta(t *testing.T) {
 }
 
 type AssertableHTTPResponse struct {
-	Status     string      `json:"status""`
+	Status     string      `json:"status"`
 	StatusCode int         `json:"statusCode"`
 	Headers    http.Header `json:"headers"`
 	Body       interface{} `json:"body"`
