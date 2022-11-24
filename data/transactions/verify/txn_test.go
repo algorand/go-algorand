@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -1334,4 +1335,37 @@ func TestStreamVerifierRestart(t *testing.T) {
 	}
 	cancel2()
 	sv.activeLoopWg.Wait()
+}
+
+// TestBlockWatcher runs multiple goroutines to check the concurency and correctness of the block watcher
+func TestBlockWatcher(t *testing.T) {
+	blkHdr := createDummyBlockHeader()
+	nbw := MakeNewBlockWatcher(blkHdr)
+	startingRound := blkHdr.Round
+
+	wg := sync.WaitGroup{}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for x := 1; x < 10; x++ {
+			blkHdr.Round++
+			nbw.OnNewBlock(bookkeeping.Block{BlockHeader: blkHdr}, ledgercore.StateDelta{})
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			bh := nbw.getBlockHeader()
+			if bh.Round == startingRound+10 {
+				break
+			}
+		}
+	}()
+	wg.Wait()
+	bh := nbw.getBlockHeader()
+	require.Equal(t, startingRound+10, bh.Round)
 }
