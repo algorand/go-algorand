@@ -563,7 +563,8 @@ func TestAcctUpdates(t *testing.T) {
 			// check the account totals.
 			var dbRound basics.Round
 			err := ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				dbRound, err = accountsRound(tx)
+				arw := store.NewAccountsSQLReaderWriter(tx)
+				dbRound, err = arw.AccountsRound()
 				return
 			})
 			require.NoError(t, err)
@@ -576,7 +577,8 @@ func TestAcctUpdates(t *testing.T) {
 			expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardsLevels[dbRound], proto, nil, ledgercore.AccountTotals{})
 			var actualTotals ledgercore.AccountTotals
 			err = ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				actualTotals, err = accountsTotals(ctx, tx, false)
+				arw := store.NewAccountsSQLReaderWriter(tx)
+				actualTotals, err = arw.AccountsTotals(ctx, false)
 				return
 			})
 			require.NoError(t, err)
@@ -2439,11 +2441,12 @@ func TestAcctUpdatesResources(t *testing.T) {
 				err := au.prepareCommit(dcc)
 				require.NoError(t, err)
 				err = ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+					arw := store.NewAccountsSQLReaderWriter(tx)
 					err = au.commitRound(ctx, tx, dcc)
 					if err != nil {
 						return err
 					}
-					err = updateAccountsRound(tx, newBase)
+					err = arw.UpdateAccountsRound(newBase)
 					return err
 				})
 				require.NoError(t, err)
@@ -2732,11 +2735,12 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 			err := au.prepareCommit(dcc)
 			require.NoError(t, err)
 			err = ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+				arw := store.NewAccountsSQLReaderWriter(tx)
 				err = au.commitRound(ctx, tx, dcc)
 				if err != nil {
 					return err
 				}
-				err = updateAccountsRound(tx, newBase)
+				err = arw.UpdateAccountsRound(newBase)
 				return err
 			})
 			require.NoError(t, err)

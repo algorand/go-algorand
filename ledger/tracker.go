@@ -280,7 +280,8 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 	tr.log = l.trackerLog()
 
 	err = tr.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		tr.dbRound, err = accountsRound(tx)
+		arw := store.NewAccountsSQLReaderWriter(tx)
+		tr.dbRound, err = arw.AccountsRound()
 		return err
 	})
 
@@ -510,6 +511,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
 	err := tr.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		arw := store.NewAccountsSQLReaderWriter(tx)
 		for _, lt := range tr.trackers {
 			err0 := lt.commitRound(ctx, tx, dcc)
 			if err0 != nil {
@@ -517,7 +519,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 			}
 		}
 
-		return updateAccountsRound(tx, dbRound+basics.Round(offset))
+		return arw.UpdateAccountsRound(dbRound + basics.Round(offset))
 	})
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 

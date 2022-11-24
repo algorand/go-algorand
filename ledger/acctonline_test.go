@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -81,6 +82,7 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 				require.NoError(t, err)
 			}
 			err := ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+				arw := store.NewAccountsSQLReaderWriter(tx)
 				for _, lt := range ml.trackers.trackers {
 					err0 := lt.commitRound(ctx, tx, dcc)
 					if err0 != nil {
@@ -88,7 +90,7 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 					}
 				}
 
-				return updateAccountsRound(tx, newBase)
+				return arw.UpdateAccountsRound(newBase)
 			})
 			require.NoError(t, err)
 		}()

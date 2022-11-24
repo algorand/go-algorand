@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -195,6 +196,8 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 
 	err := rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		writer, err := makeCatchpointWriter(context.Background(), datapath, tx, maxResourcesPerChunk)
+		arw := store.NewAccountsSQLReaderWriter(tx)
+
 		if err != nil {
 			return err
 		}
@@ -208,11 +211,11 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 		totalAccounts = writer.totalAccounts
 		totalChunks = writer.chunkNum
 		biggestChunkLen = writer.biggestChunkLen
-		accountsRnd, err = accountsRound(tx)
+		accountsRnd, err = arw.AccountsRound()
 		if err != nil {
 			return
 		}
-		totals, err = accountsTotals(ctx, tx, false)
+		totals, err = arw.AccountsTotals(ctx, false)
 		return
 	})
 	require.NoError(t, err)
@@ -371,7 +374,8 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 	readDb := ml.trackerDB().Rdb
 
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		expectedTotalAccounts, err := totalAccounts(ctx, tx)
+		arw := store.NewAccountsSQLReaderWriter(tx)
+		expectedTotalAccounts, err := arw.TotalAccounts(ctx)
 		if err != nil {
 			return err
 		}
