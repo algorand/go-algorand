@@ -109,6 +109,8 @@ var (
 	TransactionMessagesBacklogErr = MetricName{Name: "algod_transaction_messages_backlog_err", Description: "Number of transaction messages with some validation error"}
 	// TransactionMessagesRemember "Number of transaction messages remembered in TX handler"
 	TransactionMessagesRemember = MetricName{Name: "algod_transaction_messages_remember", Description: "Number of transaction messages remembered in TX handler"}
+	// TransactionMessageTxGroupLarge "Number of transaction messages with greater than config.MaxTxGroupSize txns"
+	TransactionMessageTxGroupLarge = MetricName{Name: "algod_transaction_messages_txgroup_large", Description: "Number of transaction messages with greater than config.MaxTxGroupSize txns"}
 	// TransactionMessagesBacklogSize "Number of transaction messages in the TX handler backlog queue"
 	TransactionMessagesBacklogSize = MetricName{Name: "algod_transaction_messages_backlog_size", Description: "Number of transaction messages in the TX handler backlog queue"}
 

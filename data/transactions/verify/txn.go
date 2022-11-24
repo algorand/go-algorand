@@ -36,6 +36,12 @@ import (
 var logicGoodTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_ok", Description: "Total transaction scripts executed and accepted"})
 var logicRejTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_rej", Description: "Total transaction scripts executed and rejected"})
 var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_err", Description: "Total transaction scripts executed and errored"})
+var msigLessOrEqual4 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_4", Description: "Total transactions with 1-4 msigs"})
+var msigLessOrEqual16 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_4_16", Description: "Total transactions with 4-16 msigs"})
+var msigMore16 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_16", Description: "Total transactions with 16+ msigs"})
+var msigLsigLessOrEqual4 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_lsig_4", Description: "Total transaction scripts with 1-4 msigs"})
+var msigLsigLessOrEqual16 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_lsig_4_16", Description: "Total transaction scripts with 4-16 msigs"})
+var msigLsigMore16 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_lsig_16", Description: "Total transaction scripts with 16+ msigs"})
 
 // The PaysetGroups is taking large set of transaction groups and attempt to verify their validity using multiple go-routines.
 // When doing so, it attempts to break these into smaller "worksets" where each workset takes about 2ms of execution time in order
@@ -262,6 +268,19 @@ func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		if err := crypto.MultisigBatchPrep(s.Txn, crypto.Digest(s.Authorizer()), s.Msig, batchVerifier); err != nil {
 			return &ErrTxGroupError{err: fmt.Errorf("multisig validation failed: %w", err), Reason: TxGroupErrorReasonMsigNotWellFormed}
 		}
+		counter := 0
+		for _, subsigi := range s.Msig.Subsigs {
+			if (subsigi.Sig != crypto.Signature{}) {
+				counter++
+			}
+		}
+		if counter <= 4 {
+			msigLessOrEqual4.Inc(nil)
+		} else if counter <= 16 {
+			msigLessOrEqual16.Inc(nil)
+		} else {
+			msigMore16.Inc(nil)
+		}
 		return nil
 	}
 	if hasLogicSig {
@@ -351,6 +370,19 @@ func logicSigSanityCheckBatchPrep(txn *transactions.SignedTxn, groupIndex int, g
 		program := logic.Program(lsig.Logic)
 		if err := crypto.MultisigBatchPrep(&program, crypto.Digest(txn.Authorizer()), lsig.Msig, batchVerifier); err != nil {
 			return fmt.Errorf("logic multisig validation failed: %w", err)
+		}
+		counter := 0
+		for _, subsigi := range lsig.Msig.Subsigs {
+			if (subsigi.Sig != crypto.Signature{}) {
+				counter++
+			}
+		}
+		if counter <= 4 {
+			msigLsigLessOrEqual4.Inc(nil)
+		} else if counter <= 16 {
+			msigLsigLessOrEqual16.Inc(nil)
+		} else {
+			msigLsigMore16.Inc(nil)
 		}
 	}
 	return nil
