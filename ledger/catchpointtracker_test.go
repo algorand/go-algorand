@@ -1010,8 +1010,7 @@ func TestFirstStagePersistence(t *testing.T) {
 	require.NoError(t, err)
 
 	// Delete the database record.
-	err = deleteOldCatchpointFirstStageInfo(
-		context.Background(), ml2.dbs.Wdb.Handle, firstStageRound)
+	err = cps2.DeleteOldCatchpointFirstStageInfo(context.Background(), firstStageRound)
 	require.NoError(t, err)
 
 	// Create a catchpoint tracker and let it restart catchpoint's first stage.

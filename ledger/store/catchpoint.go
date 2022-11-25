@@ -214,6 +214,37 @@ func (cr *catchpointReader) SelectCatchpointFirstStageInfo(ctx context.Context, 
 	return res, true, nil
 }
 
+func (cr *catchpointReader) SelectOldCatchpointFirstStageInfoRounds(ctx context.Context, maxRound basics.Round) ([]basics.Round, error) {
+	var res []basics.Round
+
+	f := func() error {
+		query := "SELECT round FROM catchpointfirststageinfo WHERE round <= ?"
+		rows, err := cr.q.QueryContext(ctx, query, maxRound)
+		if err != nil {
+			return err
+		}
+
+		// Clear `res` in case this function is repeated.
+		res = res[:0]
+		for rows.Next() {
+			var r basics.Round
+			err = rows.Scan(&r)
+			if err != nil {
+				return err
+			}
+			res = append(res, r)
+		}
+
+		return nil
+	}
+	err := db.Retry(f)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
 func (cw *catchpointWriter) StoreCatchpoint(ctx context.Context, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
 	err = db.Retry(func() (err error) {
 		query := "DELETE FROM storedcatchpoints WHERE round=?"
@@ -286,6 +317,15 @@ func (cw *catchpointWriter) InsertOrReplaceCatchpointFirstStageInfo(ctx context.
 	f := func() error {
 		query := "INSERT OR REPLACE INTO catchpointfirststageinfo(round, info) VALUES(?, ?)"
 		_, err := cw.e.ExecContext(ctx, query, round, infoSerialized)
+		return err
+	}
+	return db.Retry(f)
+}
+
+func (cw *catchpointWriter) DeleteOldCatchpointFirstStageInfo(ctx context.Context, maxRoundToDelete basics.Round) error {
+	f := func() error {
+		query := "DELETE FROM catchpointfirststageinfo WHERE round <= ?"
+		_, err := cw.e.ExecContext(ctx, query, maxRoundToDelete)
 		return err
 	}
 	return db.Retry(f)

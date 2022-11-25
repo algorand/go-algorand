@@ -3105,14 +3105,14 @@ func TestCatchpointFirstStageInfoTable(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, exists)
 
-	rounds, err := selectOldCatchpointFirstStageInfoRounds(ctx, dbs.Rdb.Handle, 6)
+	rounds, err := crw.SelectOldCatchpointFirstStageInfoRounds(ctx, 6)
 	require.NoError(t, err)
 	require.Equal(t, []basics.Round{4, 6}, rounds)
 
-	err = deleteOldCatchpointFirstStageInfo(ctx, dbs.Wdb.Handle, 6)
+	err = crw.DeleteOldCatchpointFirstStageInfo(ctx, 6)
 	require.NoError(t, err)
 
-	rounds, err = selectOldCatchpointFirstStageInfoRounds(ctx, dbs.Rdb.Handle, 9)
+	rounds, err = crw.SelectOldCatchpointFirstStageInfoRounds(ctx, 9)
 	require.NoError(t, err)
 	require.Equal(t, []basics.Round{8}, rounds)
 }

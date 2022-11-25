@@ -870,8 +870,7 @@ func (ct *catchpointTracker) calculateCatchpointRounds(dcc *deferredCommitContex
 
 // Delete old first stage catchpoint records and data files.
 func (ct *catchpointTracker) pruneFirstStageRecordsData(ctx context.Context, maxRoundToDelete basics.Round) error {
-	rounds, err := selectOldCatchpointFirstStageInfoRounds(
-		ctx, ct.dbs.Rdb.Handle, maxRoundToDelete)
+	rounds, err := ct.catchpointStore.SelectOldCatchpointFirstStageInfoRounds(ctx, maxRoundToDelete)
 	if err != nil {
 		return err
 	}
@@ -885,7 +884,7 @@ func (ct *catchpointTracker) pruneFirstStageRecordsData(ctx context.Context, max
 		}
 	}
 
-	return deleteOldCatchpointFirstStageInfo(ctx, ct.dbs.Rdb.Handle, maxRoundToDelete)
+	return ct.catchpointStore.DeleteOldCatchpointFirstStageInfo(ctx, maxRoundToDelete)
 }
 
 func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
