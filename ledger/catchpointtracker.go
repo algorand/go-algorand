@@ -729,7 +729,7 @@ func repackCatchpoint(ctx context.Context, header CatchpointFileHeader, biggestC
 
 // Create a catchpoint (a label and possibly a file with db record) and remove
 // the unfinished catchpoint record.
-func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound basics.Round, round basics.Round, dataInfo catchpointFirstStageInfo, blockHash crypto.Digest) error {
+func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound basics.Round, round basics.Round, dataInfo store.CatchpointFirstStageInfo, blockHash crypto.Digest) error {
 	startTime := time.Now()
 	label := ledgercore.MakeCatchpointLabel(
 		round, blockHash, dataInfo.TrieBalancesHash, dataInfo.Totals).String()
@@ -827,8 +827,7 @@ func (ct *catchpointTracker) finishCatchpoint(ctx context.Context, round basics.
 
 	ct.log.Infof("finishing catchpoint round: %d accountsRound: %d", round, accountsRound)
 
-	dataInfo, exists, err :=
-		selectCatchpointFirstStageInfo(ctx, ct.dbs.Rdb.Handle, accountsRound)
+	dataInfo, exists, err := ct.catchpointStore.SelectCatchpointFirstStageInfo(ctx, accountsRound)
 	if err != nil {
 		return err
 	}
@@ -1215,7 +1214,8 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.T
 		return err
 	}
 
-	info := catchpointFirstStageInfo{
+	crw := store.NewCatchpointSQLReaderWriter(tx)
+	info := store.CatchpointFirstStageInfo{
 		Totals:           accountTotals,
 		TotalAccounts:    totalAccounts,
 		TotalKVs:         totalKVs,
@@ -1223,7 +1223,7 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.T
 		BiggestChunkLen:  biggestChunkLen,
 		TrieBalancesHash: trieBalancesHash,
 	}
-	return insertOrReplaceCatchpointFirstStageInfo(ctx, tx, accountsRound, &info)
+	return crw.InsertOrReplaceCatchpointFirstStageInfo(ctx, accountsRound, &info)
 }
 
 func makeCatchpointDataFilePath(accountsRound basics.Round) string {

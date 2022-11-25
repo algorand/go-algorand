@@ -3080,26 +3080,28 @@ func TestCatchpointFirstStageInfoTable(t *testing.T) {
 	err := accountsCreateCatchpointFirstStageInfoTable(ctx, dbs.Wdb.Handle)
 	require.NoError(t, err)
 
+	crw := store.NewCatchpointSQLReaderWriter(dbs.Wdb.Handle)
+
 	for _, round := range []basics.Round{4, 6, 8} {
-		info := catchpointFirstStageInfo{
+		info := store.CatchpointFirstStageInfo{
 			TotalAccounts: uint64(round) * 10,
 		}
-		err = insertOrReplaceCatchpointFirstStageInfo(ctx, dbs.Wdb.Handle, round, &info)
+		err = crw.InsertOrReplaceCatchpointFirstStageInfo(ctx, round, &info)
 		require.NoError(t, err)
 	}
 
 	for _, round := range []basics.Round{4, 6, 8} {
-		info, exists, err := selectCatchpointFirstStageInfo(ctx, dbs.Rdb.Handle, round)
+		info, exists, err := crw.SelectCatchpointFirstStageInfo(ctx, round)
 		require.NoError(t, err)
 		require.True(t, exists)
 
-		infoExpected := catchpointFirstStageInfo{
+		infoExpected := store.CatchpointFirstStageInfo{
 			TotalAccounts: uint64(round) * 10,
 		}
 		require.Equal(t, infoExpected, info)
 	}
 
-	_, exists, err := selectCatchpointFirstStageInfo(ctx, dbs.Rdb.Handle, 7)
+	_, exists, err := crw.SelectCatchpointFirstStageInfo(ctx, 7)
 	require.NoError(t, err)
 	require.False(t, exists)
 

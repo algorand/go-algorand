@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
@@ -3176,66 +3175,6 @@ func (iterator *catchpointPendingHashesIterator) Close() {
 		iterator.rows.Close()
 		iterator.rows = nil
 	}
-}
-
-// For the `catchpointfirststageinfo` table.
-type catchpointFirstStageInfo struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Totals           ledgercore.AccountTotals `codec:"accountTotals"`
-	TrieBalancesHash crypto.Digest            `codec:"trieBalancesHash"`
-	// Total number of accounts in the catchpoint data file. Only set when catchpoint
-	// data files are generated.
-	TotalAccounts uint64 `codec:"accountsCount"`
-
-	// Total number of accounts in the catchpoint data file. Only set when catchpoint
-	// data files are generated.
-	TotalKVs uint64 `codec:"kvsCount"`
-
-	// Total number of chunks in the catchpoint data file. Only set when catchpoint
-	// data files are generated.
-	TotalChunks uint64 `codec:"chunksCount"`
-	// BiggestChunkLen is the size in the bytes of the largest chunk, used when re-packing.
-	BiggestChunkLen uint64 `codec:"biggestChunk"`
-}
-
-func insertOrReplaceCatchpointFirstStageInfo(ctx context.Context, e db.Executable, round basics.Round, info *catchpointFirstStageInfo) error {
-	infoSerialized := protocol.Encode(info)
-	f := func() error {
-		query := "INSERT OR REPLACE INTO catchpointfirststageinfo(round, info) VALUES(?, ?)"
-		_, err := e.ExecContext(ctx, query, round, infoSerialized)
-		return err
-	}
-	return db.Retry(f)
-}
-
-func selectCatchpointFirstStageInfo(ctx context.Context, q db.Queryable, round basics.Round) (catchpointFirstStageInfo, bool /*exists*/, error) {
-	var data []byte
-	f := func() error {
-		query := "SELECT info FROM catchpointfirststageinfo WHERE round=?"
-		err := q.QueryRowContext(ctx, query, round).Scan(&data)
-		if err == sql.ErrNoRows {
-			data = nil
-			return nil
-		}
-		return err
-	}
-	err := db.Retry(f)
-	if err != nil {
-		return catchpointFirstStageInfo{}, false, err
-	}
-
-	if data == nil {
-		return catchpointFirstStageInfo{}, false, nil
-	}
-
-	var res catchpointFirstStageInfo
-	err = protocol.Decode(data, &res)
-	if err != nil {
-		return catchpointFirstStageInfo{}, false, err
-	}
-
-	return res, true, nil
 }
 
 func selectOldCatchpointFirstStageInfoRounds(ctx context.Context, q db.Queryable, maxRound basics.Round) ([]basics.Round, error) {

@@ -101,4 +101,6 @@ type CatchpointReader interface {
 	ReadCatchpointStateString(ctx context.Context, stateName CatchpointState) (val string, err error)
 
 	SelectUnfinishedCatchpoints(ctx context.Context) ([]UnfinishedCatchpointRecord, error)
+
+	SelectCatchpointFirstStageInfo(ctx context.Context, round basics.Round) (CatchpointFirstStageInfo, bool /*exists*/, error)
 }
