@@ -167,7 +167,6 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 
 	for i := range nodes {
 		var nodeNeighbors []string
-		copy(nodeNeighbors, neighbors)
 		nodeNeighbors = append(nodeNeighbors, neighbors[:i]...)
 		nodeNeighbors = append(nodeNeighbors, neighbors[i+1:]...)
 		rootDirectory := rootDirs[i]
