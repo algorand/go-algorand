@@ -84,6 +84,9 @@ type StatusReport struct {
 	CatchpointCatchupTotalAccounts     uint64
 	CatchpointCatchupProcessedAccounts uint64
 	CatchpointCatchupVerifiedAccounts  uint64
+	CatchpointCatchupTotalKVs          uint64
+	CatchpointCatchupProcessedKVs      uint64
+	CatchpointCatchupVerifiedKVs       uint64
 	CatchpointCatchupTotalBlocks       uint64
 	CatchpointCatchupAcquiredBlocks    uint64
 }
@@ -385,8 +388,9 @@ func (node *AlgorandFullNode) startMonitoringRoutines() {
 	// Delete old participation keys
 	go node.oldKeyDeletionThread(node.ctx.Done())
 
-	// TODO re-enable with configuration flag post V1
-	//go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
+	if node.config.EnableUsageLog {
+		go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
+	}
 }
 
 // waitMonitoringRoutines waits for all the monitoring routines to exit. Note that
@@ -674,6 +678,9 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 		s.CatchpointCatchupTotalAccounts = stats.TotalAccounts
 		s.CatchpointCatchupProcessedAccounts = stats.ProcessedAccounts
 		s.CatchpointCatchupVerifiedAccounts = stats.VerifiedAccounts
+		s.CatchpointCatchupTotalKVs = stats.TotalKVs
+		s.CatchpointCatchupProcessedKVs = stats.ProcessedKVs
+		s.CatchpointCatchupVerifiedKVs = stats.VerifiedKVs
 		s.CatchpointCatchupTotalBlocks = stats.TotalBlocks
 		s.CatchpointCatchupAcquiredBlocks = stats.AcquiredBlocks
 		s.CatchupTime = time.Now().Sub(stats.StartTime)
@@ -941,7 +948,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 				renamedFileName := filepath.Join(fullname, ".old")
 				err = os.Rename(fullname, renamedFileName)
 				if err != nil {
-					node.log.Warn("loadParticipationKeys: failed to rename unsupported participation key file '%s' to '%s': %v", fullname, renamedFileName, err)
+					node.log.Warnf("loadParticipationKeys: failed to rename unsupported participation key file '%s' to '%s': %v", fullname, renamedFileName, err)
 				}
 			} else {
 				return fmt.Errorf("AlgorandFullNode.loadParticipationKeys: cannot load account at %v: %v", info.Name(), err)
@@ -1070,7 +1077,7 @@ func (node *AlgorandFullNode) oldKeyDeletionThread(done <-chan struct{}) {
 		// Persist participation registry updates to last-used round and voting key changes.
 		err = node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
 		if err != nil {
-			node.log.Warnf("error while flushing the registry: %w", err)
+			node.log.Warnf("error while flushing the registry: %v", err)
 		}
 	}
 }

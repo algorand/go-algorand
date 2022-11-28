@@ -52,13 +52,13 @@ func (m *MockCatchpointCatchupAccessor) ResetStagingBalances(ctx context.Context
 	return nil
 }
 
-// ProgressStagingBalances deserialize the given bytes as a temporary staging balances
-func (m *MockCatchpointCatchupAccessor) ProgressStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *ledger.CatchpointCatchupAccessorProgress) (err error) {
+// ProcessStagingBalances deserialize the given bytes as a temporary staging balances
+func (m *MockCatchpointCatchupAccessor) ProcessStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *ledger.CatchpointCatchupAccessorProgress) (err error) {
 	return nil
 }
 
 // BuildMerkleTrie inserts the account hashes into the merkle trie
-func (m *MockCatchpointCatchupAccessor) BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64)) (err error) {
+func (m *MockCatchpointCatchupAccessor) BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64, uint64)) (err error) {
 	return nil
 }
 

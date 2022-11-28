@@ -1,7 +1,8 @@
 {
   "network": {
     "wallets": 100,
-    "nodes": 50
+    "nodes": 50,
+    "npn": 10
   },
   "instances": {
     "relays": {

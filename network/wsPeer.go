@@ -124,6 +124,11 @@ type wsPeerWebsocketConn interface {
 	CloseWithoutFlush() error
 	SetPingHandler(h func(appData string) error)
 	SetPongHandler(h func(appData string) error)
+	wrappedConn
+}
+
+type wrappedConn interface {
+	UnderlyingConn() net.Conn
 }
 
 type sendMessage struct {
@@ -180,6 +185,14 @@ type wsPeer struct {
 	// Nonce used to uniquely identify requests
 	requestNonce uint64
 
+	// duplicateFilterCount counts how many times the remote peer has sent us a message hash
+	// to filter that it had already sent before.
+	// this needs to be 64-bit aligned for use with atomic.AddUint64 on 32-bit platforms.
+	duplicateFilterCount uint64
+
+	// These message counters need to be 64-bit aligned as well.
+	txMessageCount, miMessageCount, ppMessageCount, avMessageCount uint64
+
 	wsPeerCore
 
 	// conn will be *websocket.Conn (except in testing)
@@ -203,9 +216,6 @@ type wsPeer struct {
 
 	incomingMsgFilter *messageFilter
 	outgoingMsgFilter *messageFilter
-	// duplicateFilterCount counts how many times the remote peer has sent us a message hash
-	// to filter that it had already sent before.
-	duplicateFilterCount int64
 
 	processed chan struct{}
 
@@ -489,6 +499,7 @@ func (wp *wsPeer) readLoop() {
 		switch msg.Tag {
 		case protocol.MsgOfInterestTag:
 			// try to decode the message-of-interest
+			atomic.AddUint64(&wp.miMessageCount, 1)
 			if wp.handleMessageOfInterest(msg) {
 				return
 			}
@@ -515,13 +526,19 @@ func (wp *wsPeer) readLoop() {
 			case channel <- &Response{Topics: topics}:
 				// do nothing. writing was successful.
 			default:
-				wp.net.log.Warnf("wsPeer readLoop: channel blocked. Could not pass the response to the requester", wp.conn.RemoteAddr().String())
+				wp.net.log.Warn("wsPeer readLoop: channel blocked. Could not pass the response to the requester", wp.conn.RemoteAddr().String())
 			}
 			continue
 		case protocol.MsgDigestSkipTag:
 			// network maintenance message handled immediately instead of handing off to general handlers
 			wp.handleFilterMessage(msg)
 			continue
+		case protocol.TxnTag:
+			atomic.AddUint64(&wp.txMessageCount, 1)
+		case protocol.AgreementVoteTag:
+			atomic.AddUint64(&wp.avMessageCount, 1)
+		case protocol.ProposalPayloadTag:
+			atomic.AddUint64(&wp.ppMessageCount, 1)
 		}
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {
@@ -614,7 +631,7 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 		// large message concurrently from several peers, and then sent the filter message to us after
 		// each large message finished transferring.
 		duplicateNetworkFilterReceivedTotal.Inc(nil)
-		atomic.AddInt64(&wp.duplicateFilterCount, 1)
+		atomic.AddUint64(&wp.duplicateFilterCount, 1)
 	}
 }
 

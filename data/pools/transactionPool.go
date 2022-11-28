@@ -737,16 +737,24 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			for _, tx := range txgroup {
 				pool.statusCache.put(tx, err.Error())
 			}
-
-			switch err.(type) {
+			// metrics here are duplicated for historic reasons. stats is hardly used and should be removed in favor of asmstats
+			switch terr := err.(type) {
 			case *ledgercore.TransactionInLedgerError:
 				asmStats.CommittedCount++
 				stats.RemovedInvalidCount++
 			case transactions.TxnDeadError:
-				asmStats.InvalidCount++
+				if int(terr.LastValid-terr.FirstValid) > 20 {
+					// cutoff value  here is picked as a somewhat arbitrary cutoff trying to separate longer lived transactions from very short lived ones
+					asmStats.ExpiredLongLivedCount++
+				}
+				asmStats.ExpiredCount++
 				stats.ExpiredCount++
+			case *ledgercore.LeaseInLedgerError:
+				asmStats.LeaseErrorCount++
+				stats.RemovedInvalidCount++
+				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
 			case transactions.MinFeeError:
-				asmStats.InvalidCount++
+				asmStats.MinFeeErrorCount++
 				stats.RemovedInvalidCount++
 				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
 			default:

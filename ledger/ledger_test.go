@@ -2230,6 +2230,8 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 		tp := trackerDBParams{
 			initAccounts:      l.GenesisAccounts(),
 			initProto:         l.GenesisProtoVersion(),
+			genesisHash:       l.GenesisHash(),
+			fromCatchpoint:    true,
 			catchpointEnabled: l.catchpoint.catchpointEnabled(),
 			dbPathPrefix:      l.catchpoint.dbDirectory,
 			blockDb:           l.blockDBs,
@@ -2382,14 +2384,15 @@ int %d // 10001000
 func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	prevAccountDBVersion := accountDBVersion
 	accountDBVersion = 6
 	defer func() {
-		accountDBVersion = 7
+		accountDBVersion = prevAccountDBVersion
 	}()
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-migrate-shrink-deltas")
 	proto := config.Consensus[protocol.ConsensusV31]
-	proto.RewardsRateRefreshInterval = 500
+	proto.RewardsRateRefreshInterval = 200
 	config.Consensus[testProtocolVersion] = proto
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -2420,6 +2423,11 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		if err := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err != nil {
 			return err
 		}
+		// this line creates kvstore table, even if it is not required in accountDBVersion 6 -> 7
+		// or in later version where we need kvstore table, this test will fail
+		if err := accountsCreateBoxTable(ctx, tx); err != nil {
+			return err
+		}
 		return nil
 	})
 	require.NoError(t, err)
@@ -2446,7 +2454,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	l.trackers.acctsOnline = nil
 	l.acctsOnline = onlineAccounts{}
 
-	maxBlocks := 2000
+	maxBlocks := 1000
 	accounts := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts))
 	keys := make(map[basics.Address]*crypto.SignatureSecrets, len(initKeys))
 	// regular addresses: all init accounts minus pools

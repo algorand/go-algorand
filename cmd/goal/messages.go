@@ -64,7 +64,7 @@ const (
 	infoNodeStatus                     = "Last committed block: %d\nTime since last block: %s\nSync Time: %s\nLast consensus protocol: %s\nNext consensus protocol: %s\nRound for next consensus protocol: %d\nNext consensus protocol supported: %v"
 	catchupStoppedOnUnsupported        = "Last supported block (%d) is committed. The next block consensus protocol is not supported. Catchup service is stopped."
 	infoNodeCatchpointCatchupStatus    = "Last committed block: %d\nSync Time: %s\nCatchpoint: %s"
-	infoNodeCatchpointCatchupAccounts  = "Catchpoint total accounts: %d\nCatchpoint accounts processed: %d\nCatchpoint accounts verified: %d"
+	infoNodeCatchpointCatchupAccounts  = "Catchpoint total accounts: %d\nCatchpoint accounts processed: %d\nCatchpoint accounts verified: %d\nCatchpoint total KVs: %d\nCatchpoint KVs processed: %d\nCatchpoint KVs verified: %d"
 	infoNodeCatchpointCatchupBlocks    = "Catchpoint total blocks: %d\nCatchpoint downloaded blocks: %d"
 	nodeLastCatchpoint                 = "Last Catchpoint: %s"
 	errorNodeCreationIPFailure         = "Parsing passed IP %v failed: need a valid IPv4 or IPv6 address with a specified port number"
@@ -100,6 +100,9 @@ const (
 	errorMarshalingState           = "failed to encode state: %s"
 	errorApprovProgArgsRequired    = "Exactly one of --approval-prog or --approval-prog-raw is required"
 	errorClearProgArgsRequired     = "Exactly one of --clear-prog or --clear-prog-raw is required"
+	errorMissingBoxName            = "Box --name is required"
+	errorInvalidBoxName            = "Failed to parse box name %s. It must have the same form as app-arg. Error: %s"
+	errorBoxNameMismatch           = "Inputted box name %s does not match box name %s received from algod"
 
 	// Clerk
 	infoTxIssued               = "Sent %d MicroAlgos from account %s to address %s, transaction ID: %s. Fee set to %d"

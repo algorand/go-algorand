@@ -36,6 +36,7 @@ type PpConfig struct {
 	RandomizeFee    bool
 	RandomizeAmt    bool
 	RandomizeDst    bool
+	MaxRandomDst    uint64
 	MaxFee          uint64
 	MinFee          uint64
 	MaxAmt          uint64
@@ -60,7 +61,11 @@ type PpConfig struct {
 	// NumApp is the total number of apps to create
 	NumApp uint32
 	// NumAppOptIn is the number of apps each account opts in to
-	NumAppOptIn     uint32
+	NumAppOptIn uint32
+	// NumBoxUpdate is the number of boxes used per app, where box values are updated each call
+	NumBoxUpdate uint32
+	// NumBoxRead is the number of boxes used per app, where box values are only read each call
+	NumBoxRead      uint32
 	AppProgOps      uint32
 	AppProgHashes   uint32
 	AppProgHashSize string
@@ -94,6 +99,7 @@ var DefaultConfig = PpConfig{
 	RandomizeFee:    false,
 	RandomizeAmt:    false,
 	RandomizeDst:    false,
+	MaxRandomDst:    200000,
 	MaxFee:          10000,
 	MinFee:          1000,
 	MaxAmt:          1000,
@@ -106,6 +112,8 @@ var DefaultConfig = PpConfig{
 	NumAsset:        0,
 	MinAccountAsset: 10000000,
 	NumApp:          0,
+	NumBoxUpdate:    0,
+	NumBoxRead:      0,
 	AppProgOps:      0,
 	AppProgHashes:   0,
 	AppProgHashSize: "sha256",
