@@ -166,11 +166,14 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 	}
 
 	for i := range nodes {
+		var nodeNeighbors []string
+		copy(nodeNeighbors, neighbors)
+		nodeNeighbors = append(nodeNeighbors, neighbors[:i]...)
+		nodeNeighbors = append(nodeNeighbors, neighbors[i+1:]...)
 		rootDirectory := rootDirs[i]
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		require.NoError(t, err)
-
-		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), rootDirectory, cfg, append(neighbors[:i], neighbors[i+1:]...), g)
+		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), rootDirectory, cfg, nodeNeighbors, g)
 		nodes[i] = node
 		require.NoError(t, err)
 	}
