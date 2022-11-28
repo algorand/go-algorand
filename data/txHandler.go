@@ -63,8 +63,8 @@ var transactionGroupTxSyncHandled = metrics.MakeCounter(metrics.TransactionGroup
 var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGroupTxSyncRemember)
 var transactionGroupTxSyncAlreadyCommitted = metrics.MakeCounter(metrics.TransactionGroupTxSyncAlreadyCommitted)
 
-var erlSharedSize = 10000
-var erlReservationSize = 100
+var erlReservationsMax = config.AutogenLocal.IncomingConnectionsLimit
+var erlReservationSize = 20
 var serviceRateWindow = 10 * time.Second
 var serviceRateUpdateTicks = 25
 
@@ -114,7 +114,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
-		erl:                   *util.NewElasticRateLimiter(erlSharedSize, erlReservationSize, congestionManager),
+		erl:                   *util.NewElasticRateLimiter(erlReservationSize*erlReservationsMax, erlReservationSize, congestionManager),
 	}
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	congestionManager.Start(handler.ctx, nil)
