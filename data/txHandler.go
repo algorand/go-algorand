@@ -56,6 +56,8 @@ var transactionMessagesTxnLogicSig = metrics.MakeCounter(metrics.TransactionMess
 var transactionMessagesTxnSigVerificationFailed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigVerificationFailed)
 var transactionMessagesBacklogErr = metrics.MakeCounter(metrics.TransactionMessagesBacklogErr)
 var transactionMessagesRemember = metrics.MakeCounter(metrics.TransactionMessagesRemember)
+var transactionMessageTxGroupExcessive = metrics.MakeCounter(metrics.TransactionMessageTxGroupExcessive)
+var transactionMessageTxGroupFull = metrics.MakeCounter(metrics.TransactionMessageTxGroupFull)
 var transactionMessagesDupRawMsg = metrics.MakeCounter(metrics.TransactionMessagesDupRawMsg)
 var transactionMessagesLargeTxGroup = metrics.MakeCounter(metrics.TransactionMessagesLargeTxGroup)
 var transactionMessagesDupCanonical = metrics.MakeCounter(metrics.TransactionMessagesDupCanonical)
@@ -404,6 +406,13 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	}
 
 	unverifiedTxGroup = unverifiedTxGroup[:ntx]
+
+	if ntx == config.MaxTxGroupSize {
+		transactionMessageTxGroupFull.Inc(nil)
+		if len(rawmsg.Data) > consumed + 1 {
+			transactionMessageTxGroupExcessive.Inc(nil)
+		}
+	}
 
 	if handler.cacheConfig.enableFilteringCanonical {
 		if handler.dedupCanonical(ntx, unverifiedTxGroup, consumed) {
