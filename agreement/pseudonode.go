@@ -189,7 +189,7 @@ func (n asyncPseudonode) MakeProposals(ctx context.Context, r round, p period) (
 }
 
 func (n asyncPseudonode) StartSpeculativeBlockAssembly(ctx context.Context, ve ValidatedBlock) {
-	go n.factory.OnNewSpeculativeBlock(ctx, ve)
+	go n.factory.StartSpeculativeBlockAssembly(ctx, ve)
 }
 
 func (n asyncPseudonode) MakeVotes(ctx context.Context, r round, p period, s step, prop proposalValue, persistStateDone chan error) (chan externalEvent, error) {

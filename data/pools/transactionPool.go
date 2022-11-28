@@ -564,9 +564,9 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	return pool.statusCache.check(txid)
 }
 
-// OnNewSpeculativeBlock handles creating a speculative block
+// StartSpeculativeBlockAssembly handles creating a speculative block
 // TODO: rename StartNewSpeculativeBlock
-func (pool *TransactionPool) OnNewSpeculativeBlock(ctx context.Context, vb *ledgercore.ValidatedBlock) {
+func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, vb *ledgercore.ValidatedBlock) {
 
 	pool.mu.Lock()
 	// cancel any pending speculative assembly
@@ -585,7 +585,7 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(ctx context.Context, vb *ledg
 	pool.mu.Unlock()
 
 	if err != nil {
-		pool.log.Warnf("OnNewSpeculativeBlock: %v", err)
+		pool.log.Warnf("StartSpeculativeBlockAssembly: %v", err)
 		return
 	}
 

@@ -1274,12 +1274,12 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.Valid
 	return validatedBlock{vb: lvb}, nil
 }
 
-// OnNewSpeculativeBlock handles creating a speculative block
+// StartSpeculativeBlockAssembly handles creating a speculative block
 // TODO: rename StartNewSpeculativeBlock
-func (node *AlgorandFullNode) OnNewSpeculativeBlock(ctx context.Context, avb agreement.ValidatedBlock) {
+func (node *AlgorandFullNode) StartSpeculativeBlockAssembly(ctx context.Context, avb agreement.ValidatedBlock) {
 	vb, ok := avb.(validatedBlock)
 	if ok {
-		node.transactionPool.OnNewSpeculativeBlock(ctx, vb.vb)
+		node.transactionPool.StartSpeculativeBlockAssembly(ctx, vb.vb)
 	} else {
 		node.log.Errorf("cannot convert agreement ValidatedBlock to ValidateBlock")
 	}

@@ -1695,7 +1695,7 @@ func TestSpeculativeBlockAssembly(t *testing.T) {
 	block, err := blockEval.GenerateBlock()
 	require.NoError(t, err)
 
-	transactionPool.OnNewSpeculativeBlock(context.Background(), block)
+	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block)
 	<-transactionPool.specAsmDone
 
 	// add the block
@@ -1777,7 +1777,7 @@ func TestSpeculativeBlockAssemblyWithOverlappingBlock(t *testing.T) {
 	block, err := blockEval.GenerateBlock()
 	require.NoError(t, err)
 
-	transactionPool.OnNewSpeculativeBlock(context.Background(), block)
+	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block)
 	<-transactionPool.specAsmDone
 	specBlock, err := transactionPool.tryReadSpeculativeBlock(block.Block().Hash())
 	require.NoError(t, err)
@@ -1893,7 +1893,7 @@ func TestSpeculativeBlockAssemblyDataRace(t *testing.T) {
 			}
 		}
 	}()
-	transactionPool.OnNewSpeculativeBlock(context.Background(), block)
+	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block)
 	wg.Wait()
 	<-transactionPool.specAsmDone
 	specBlock, err := transactionPool.tryReadSpeculativeBlock(block.Block().Hash())
