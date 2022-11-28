@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	approvals "github.com/approvals/go-approval-tests"
+	"github.com/approvals/go-approval-tests/reporters"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -153,6 +155,46 @@ func TestGetRoundStateDelta(t *testing.T) {
 	require.Equal(t, poolDeltaResponseGolden.TxLeases, actualResponse.TxLeases)
 	require.Equal(t, poolDeltaResponseGolden.TxIds, actualResponse.TxIds)
 	require.Equal(t, poolDeltaResponseGolden.Totals, actualResponse.Totals)
+}
+
+type AssertableHTTPResponse struct {
+	Status     string      `json:"status"`
+	StatusCode int         `json:"statusCode"`
+	Headers    http.Header `json:"headers"`
+	Body       interface{} `json:"body"`
+}
+
+func TestGetRoundStateDeltaApproval(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+	insertRounds(a, handler, 3)
+
+	err := handler.GetRoundStateDelta(c, 2)
+	require.NoError(t, err)
+
+	actualResponse := model.RoundStateDelta{}
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResponse)
+
+	// Blot out non-deterministic PrevTimestamp
+	require.NotZero(t, actualResponse.PrevTimestamp)
+	z := uint64(0)
+	actualResponse.PrevTimestamp = &z
+
+	res := rec.Result()
+	resp := AssertableHTTPResponse{
+		res.Status,
+		res.StatusCode,
+		res.Header,
+		actualResponse,
+	}
+
+	approvals.UseFolder("testdata")
+	approvals.UseReporter(reporters.NewRealDiffReporter())
+	approvals.VerifyJSONBytes(t, protocol.EncodeJSON(resp))
 }
 
 func TestSyncRound(t *testing.T) {
