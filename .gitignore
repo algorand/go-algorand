@@ -67,6 +67,3 @@ index.html
 
 # test summary
 testresults.json
-
-# Received approval test files
-*.received.*
