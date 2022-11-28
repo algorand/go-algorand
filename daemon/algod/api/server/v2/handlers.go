@@ -769,17 +769,6 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		return internalError(ctx, err, errFailedRetrievingLatestBlockHeaderStatus, v2.Log)
 	}
 
-	votesToGo := uint64(latestBlkHdr.NextProtocolVoteBefore) - uint64(stat.LastRound)
-	consensus := config.Consensus[protocol.ConsensusCurrentVersion]
-	upgradeVoteRounds := consensus.UpgradeVoteRounds
-	upgradeThreshold := consensus.UpgradeThreshold
-	votes := uint64(upgradeVoteRounds) - votesToGo
-	votesYes := latestBlkHdr.UpgradeState.NextProtocolApprovals
-	votesNo := votes - votesYes
-
-	upgradePropose := string(latestBlkHdr.UpgradeVote.UpgradePropose)
-	upgradeDelay := uint64(latestBlkHdr.UpgradeVote.UpgradeDelay)
-
 	response := model.NodeStatusResponse{
 		LastRound:                   uint64(stat.LastRound),
 		LastVersion:                 string(stat.LastVersion),
@@ -798,7 +787,17 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
 	}
 
-	if upgradePropose != "" {
+	upgradePropose := string(latestBlkHdr.UpgradeVote.UpgradePropose)
+	if upgradePropose != "" && latestBlkHdr.NextProtocolVoteBefore > stat.LastRound {
+		votesToGo := uint64(latestBlkHdr.NextProtocolVoteBefore) - uint64(stat.LastRound)
+		consensus := config.Consensus[protocol.ConsensusCurrentVersion]
+		upgradeVoteRounds := consensus.UpgradeVoteRounds
+		upgradeThreshold := consensus.UpgradeThreshold
+		votes := uint64(upgradeVoteRounds) - votesToGo
+		votesYes := latestBlkHdr.UpgradeState.NextProtocolApprovals
+		votesNo := votes - votesYes
+		upgradeDelay := uint64(latestBlkHdr.UpgradeVote.UpgradeDelay)
+
 		response.UpgradePropose = &upgradePropose
 		response.UpgradeThreshold = &upgradeThreshold
 		response.UpgradeApprove = &latestBlkHdr.UpgradeApprove

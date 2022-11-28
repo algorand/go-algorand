@@ -460,7 +460,7 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 			statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
 		}
 
-		if stat.UpgradePropose != nil {
+		if stat.UpgradePropose != nil && stat.LastVersion != stat.NextVersion {
 			upgradeThreshold := uint64(0)
 			upgradeApprove := false
 			upgradeDelay := uint64(0)
