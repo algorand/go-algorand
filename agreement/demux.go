@@ -60,10 +60,13 @@ type demux struct {
 
 	queue             []<-chan externalEvent
 	processingMonitor EventsProcessingMonitor
-	monitor           *coserviceMonitor
 	cancelTokenizers  context.CancelFunc
 
 	log logging.Logger
+
+	// coserviceMonitor is unit test instrumentation.
+	// should be fast no-op if monitor == nil
+	monitor *coserviceMonitor
 }
 
 // demuxParams contains the parameters required to initliaze a new demux object
@@ -74,7 +77,10 @@ type demuxParams struct {
 	voteVerifier      *AsyncVoteVerifier
 	processingMonitor EventsProcessingMonitor
 	log               logging.Logger
-	monitor           *coserviceMonitor
+
+	// coserviceMonitor is unit test instrumentation.
+	// should be fast no-op if monitor == nil
+	monitor *coserviceMonitor
 }
 
 // makeDemux initializes the goroutines needed to process external events, setting up the appropriate channels.
@@ -144,9 +150,7 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 				case protocol.VoteBundleTag:
 					msg = message{messageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedBundle: o.(unauthenticatedBundle)}
 				case protocol.ProposalPayloadTag:
-					compound := o.(compoundMessage)
-					// TODO: maybe we never actually use message.CompoundMessage anymore?
-					msg = message{messageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: compound, UnauthenticatedProposal: compound.Proposal}
+					msg = message{messageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: o.(compoundMessage)}
 				default:
 					err := fmt.Errorf("bad message tag: %v", tag)
 					d.UpdateEventsQueue(fmt.Sprintf("Tokenizing-%s", tag), 0)
@@ -261,6 +265,8 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		speculationDeadlineCh = s.Clock.TimeoutAt(speculationDeadline)
 	}
 
+	//d.log.Infof("demux deadline %d, fastD %d, specD %d, d.monitor %v", deadline, fastDeadline, speculationDeadline, d.monitor) // not threadsafe in some tests
+
 	d.UpdateEventsQueue(eventQueueDemux, 0)
 	d.monitor.dec(demuxCoserviceType)
 
@@ -331,11 +337,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		if !open {
 			return emptyEvent{}, false
 		}
-		//e = setupCompoundMessage(d.ledger, m)
-		// TODO? assert(m.CompoundMessage.Vote == (unauthenticatedVote{}))
-		// TODO? assert(m.Tag == protocol.ProposalPayloadTag)
-		//m.UnauthenticatedProposal = m.CompoundMessage.Proposal
-		e = messageEvent{T: payloadPresent, Input: m}
+		e = setupCompoundMessage(d.ledger, m)
 		d.UpdateEventsQueue(eventQueueDemux, 1)
 		d.UpdateEventsQueue(eventQueueTokenized[protocol.ProposalPayloadTag], 0)
 		d.monitor.inc(demuxCoserviceType)
@@ -374,8 +376,8 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 	return
 }
 
-// TODO: unused, was only ever used in Proposal case, that code has folded into .next() select{} case
 // setupCompoundMessage processes compound messages: distinct messages which are delivered together
+// TODO: does this ever really see something other than empty .Vote?
 func setupCompoundMessage(l LedgerReader, m message) (res externalEvent) {
 	compound := m.CompoundMessage
 	if compound.Vote == (unauthenticatedVote{}) {

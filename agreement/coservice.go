@@ -17,9 +17,10 @@
 package agreement
 
 import (
-	"github.com/algorand/go-deadlock"
+	"runtime"
+	"testing"
 
-	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-deadlock"
 )
 
 //go:generate stringer -type=coserviceType
@@ -35,10 +36,12 @@ const (
 //msgp:ignore coserviceType
 type coserviceType int
 
+// coserviceMonitor is unit test instrumentation
 type coserviceMonitor struct {
 	deadlock.Mutex
 
 	id int
+	t  *testing.T
 	c  map[coserviceType]uint
 
 	coserviceListener
@@ -79,7 +82,14 @@ func (m *coserviceMonitor) dec(t coserviceType) {
 		m.c = make(map[coserviceType]uint)
 	}
 	if m.c[t] == 0 {
-		logging.Base().Panicf("%d: tried to decrement empty coservice queue %v", m.id, t)
+		for i := 1; i < 10; i++ {
+			_, file, line, ok := runtime.Caller(i)
+			if !ok {
+				break
+			}
+			m.t.Logf("from %s:%d", file, line)
+		}
+		m.t.Fatalf("%d: tried to decrement empty coservice queue %v", m.id, t)
 	}
 	m.c[t]--
 

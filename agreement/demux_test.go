@@ -69,6 +69,7 @@ type demuxTestUsecase struct {
 	e                  event
 	ok                 bool
 	speculativeAsmTime time.Duration
+	desc               string
 }
 
 var demuxTestUsecases = []demuxTestUsecase{
@@ -197,6 +198,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		verifiedBundle:      testChanState{eventCount: 0, closed: false},
 		e:                   messageEvent{T: votePresent},
 		ok:                  true,
+		desc:                "one vote one prop",
 	},
 	{
 		queue:               []testChanState{},
@@ -413,6 +415,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		verifiedBundle:      testChanState{eventCount: 0, closed: false},
 		e:                   messageEvent{T: votePresent},
 		ok:                  true,
+		desc:                "one prop",
 	},
 	{
 		queue:               []testChanState{{eventCount: 0, closed: false}},
@@ -677,6 +680,7 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 
 	dmx := &demux{}
 
+	dmx.log = logging.TestingLog(t)
 	dmx.crypto = t
 	dmx.ledger = t
 	dmx.rawVotes = t.makeRawChannel(protocol.AgreementVoteTag, testcase.rawVotes, false)
@@ -704,7 +708,7 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 		return false
 	}
 
-	if !assert.Equalf(t, strings.Replace(testcase.e.String(), "{test_index}", fmt.Sprintf("%d", t.testIdx), 1), e.String(), "Test case %d failed.", t.testIdx+1) {
+	if !assert.Equalf(t, strings.Replace(testcase.e.String(), "{test_index}", fmt.Sprintf("%d", t.testIdx), 1), e.String(), "Test case %d (%s) failed.", t.testIdx+1, testcase.desc) {
 		return false
 	}
 
