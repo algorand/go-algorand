@@ -565,7 +565,6 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 }
 
 // StartSpeculativeBlockAssembly handles creating a speculative block
-// TODO: rename StartNewSpeculativeBlock
 func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, vb *ledgercore.ValidatedBlock) {
 
 	pool.mu.Lock()
