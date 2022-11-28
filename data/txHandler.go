@@ -59,7 +59,6 @@ var transactionMessagesRemember = metrics.MakeCounter(metrics.TransactionMessage
 var transactionMessageTxGroupExcessive = metrics.MakeCounter(metrics.TransactionMessageTxGroupExcessive)
 var transactionMessageTxGroupFull = metrics.MakeCounter(metrics.TransactionMessageTxGroupFull)
 var transactionMessagesDupRawMsg = metrics.MakeCounter(metrics.TransactionMessagesDupRawMsg)
-var transactionMessagesLargeTxGroup = metrics.MakeCounter(metrics.TransactionMessagesLargeTxGroup)
 var transactionMessagesDupCanonical = metrics.MakeCounter(metrics.TransactionMessagesDupCanonical)
 var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionMessagesBacklogSize)
 
@@ -396,7 +395,6 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		if ntx >= config.MaxTxGroupSize {
 			// max ever possible group size reached, done reading input.
 			// it is safe to stop earlier because groups of bigger size will be discarded in eval
-			transactionMessagesLargeTxGroup.Inc(nil)
 			break
 		}
 	}
@@ -409,7 +407,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 
 	if ntx == config.MaxTxGroupSize {
 		transactionMessageTxGroupFull.Inc(nil)
-		if len(rawmsg.Data) > consumed + 1 {
+		if len(rawmsg.Data) > consumed+1 {
 			transactionMessageTxGroupExcessive.Inc(nil)
 		}
 	}
