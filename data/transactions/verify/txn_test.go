@@ -1348,7 +1348,7 @@ func TestBlockWatcher(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for x := 1; x < 10; x++ {
+		for x := 0; x < 10; x++ {
 			blkHdr.Round++
 			nbw.OnNewBlock(bookkeeping.Block{BlockHeader: blkHdr}, ledgercore.StateDelta{})
 			time.Sleep(10 * time.Millisecond)
