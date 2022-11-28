@@ -58,8 +58,7 @@ var transactionMessagesBacklogErr = metrics.MakeCounter(metrics.TransactionMessa
 var transactionMessagesRemember = metrics.MakeCounter(metrics.TransactionMessagesRemember)
 var transactionMessageTxGroupExcessive = metrics.MakeCounter(metrics.TransactionMessageTxGroupExcessive)
 
-// TODO: enable
-// var transactionMessageTxGroupFull = metrics.MakeCounter(metrics.TransactionMessageTxGroupFull)
+var transactionMessageTxGroupFull = metrics.MakeCounter(metrics.TransactionMessageTxGroupFull)
 var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionMessagesBacklogSize)
 
 var transactionGroupTxSyncHandled = metrics.MakeCounter(metrics.TransactionGroupTxSyncHandled)
@@ -314,7 +313,9 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	}
 	unverifiedTxGroup = unverifiedTxGroup[:ntx]
 
-	if ntx > config.MaxTxGroupSize {
+	if ntx == config.MaxTxGroupSize {
+		transactionMessageTxGroupFull.Inc(nil)
+	} else if ntx > config.MaxTxGroupSize {
 		transactionMessageTxGroupExcessive.Inc(nil)
 	}
 
