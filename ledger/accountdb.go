@@ -1632,7 +1632,7 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 			CurrentProtocol: currentProto,
 		},
 	}
-	return accountsPutOnlineRoundParams(tx, onlineRoundParams, rnd)
+	return arw.AccountsPutOnlineRoundParams(onlineRoundParams, rnd)
 }
 
 func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progress func(processed, total uint64), log logging.Logger) (err error) {
@@ -1881,53 +1881,6 @@ func accountsReset(ctx context.Context, tx *sql.Tx) error {
 		}
 	}
 	_, err := db.SetUserVersion(ctx, tx, 0)
-	return err
-}
-
-func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error) {
-	rows, err := tx.Query("SELECT rnd, data FROM onlineroundparamstail ORDER BY rnd ASC")
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var buf []byte
-		err = rows.Scan(&endRound, &buf)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		var data ledgercore.OnlineRoundParamsData
-		err = protocol.Decode(buf, &data)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		onlineRoundParamsData = append(onlineRoundParamsData, data)
-	}
-	return
-}
-
-func accountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData []ledgercore.OnlineRoundParamsData, startRound basics.Round) error {
-	insertStmt, err := tx.Prepare("INSERT INTO onlineroundparamstail (rnd, data) VALUES (?, ?)")
-	if err != nil {
-		return err
-	}
-
-	for i, onlineRoundParams := range onlineRoundParamsData {
-		_, err = insertStmt.Exec(startRound+basics.Round(i), protocol.Encode(&onlineRoundParams))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func accountsPruneOnlineRoundParams(tx *sql.Tx, deleteBeforeRound basics.Round) error {
-	_, err := tx.Exec("DELETE FROM onlineroundparamstail WHERE rnd<?",
-		deleteBeforeRound,
-	)
 	return err
 }
 

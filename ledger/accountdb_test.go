@@ -266,7 +266,7 @@ func TestAccountDBRound(t *testing.T) {
 	checkAccounts(t, tx, 0, accts)
 	totals, err := arw.AccountsTotals(context.Background(), false)
 	require.NoError(t, err)
-	expectedOnlineRoundParams, endRound, err := accountsOnlineRoundParams(tx)
+	expectedOnlineRoundParams, endRound, err := arw.AccountsOnlineRoundParams()
 	require.NoError(t, err)
 	require.Equal(t, 1, len(expectedOnlineRoundParams))
 	require.Equal(t, 0, int(endRound))
@@ -315,7 +315,7 @@ func TestAccountDBRound(t *testing.T) {
 		err = arw.AccountsPutTotals(totals, false)
 		require.NoError(t, err)
 		onlineRoundParams := ledgercore.OnlineRoundParamsData{RewardsLevel: totals.RewardsLevel, OnlineSupply: totals.Online.Money.Raw, CurrentProtocol: protocol.ConsensusCurrentVersion}
-		err = accountsPutOnlineRoundParams(tx, []ledgercore.OnlineRoundParamsData{onlineRoundParams}, basics.Round(i))
+		err = arw.AccountsPutOnlineRoundParams([]ledgercore.OnlineRoundParamsData{onlineRoundParams}, basics.Round(i))
 		require.NoError(t, err)
 		expectedOnlineRoundParams = append(expectedOnlineRoundParams, onlineRoundParams)
 
@@ -354,7 +354,7 @@ func TestAccountDBRound(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expectedTotals, actualTotals)
 
-	actualOnlineRoundParams, endRound, err := accountsOnlineRoundParams(tx)
+	actualOnlineRoundParams, endRound, err := arw.AccountsOnlineRoundParams()
 	require.NoError(t, err)
 	require.Equal(t, expectedOnlineRoundParams, actualOnlineRoundParams)
 	require.Equal(t, 9, int(endRound))
@@ -2858,6 +2858,8 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback()
 
+	arw := store.NewAccountsSQLReaderWriter(tx)
+
 	var accts map[basics.Address]basics.AccountData
 	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 
@@ -2870,19 +2872,19 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 		onlineRoundParams[i].RewardsLevel = uint64(i + 1)
 	}
 
-	err = accountsPutOnlineRoundParams(tx, onlineRoundParams, 1)
+	err = arw.AccountsPutOnlineRoundParams(onlineRoundParams, 1)
 	require.NoError(t, err)
 
-	dbOnlineRoundParams, endRound, err := accountsOnlineRoundParams(tx)
+	dbOnlineRoundParams, endRound, err := arw.AccountsOnlineRoundParams()
 	require.NoError(t, err)
 	require.Equal(t, maxRounds+1, len(dbOnlineRoundParams)) // +1 comes from init state
 	require.Equal(t, onlineRoundParams, dbOnlineRoundParams[1:])
 	require.Equal(t, maxRounds, int(endRound))
 
-	err = accountsPruneOnlineRoundParams(tx, 10)
+	err = arw.AccountsPruneOnlineRoundParams(10)
 	require.NoError(t, err)
 
-	dbOnlineRoundParams, endRound, err = accountsOnlineRoundParams(tx)
+	dbOnlineRoundParams, endRound, err = arw.AccountsOnlineRoundParams()
 	require.NoError(t, err)
 	require.Equal(t, onlineRoundParams[9:], dbOnlineRoundParams)
 	require.Equal(t, maxRounds, int(endRound))

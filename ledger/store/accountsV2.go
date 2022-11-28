@@ -410,6 +410,31 @@ func (r *accountsV2Reader) LoadFullAccount(ctx context.Context, resourcesTable s
 	return
 }
 
+func (r *accountsV2Reader) AccountsOnlineRoundParams() (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error) {
+	rows, err := r.q.Query("SELECT rnd, data FROM onlineroundparamstail ORDER BY rnd ASC")
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var buf []byte
+		err = rows.Scan(&endRound, &buf)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		var data ledgercore.OnlineRoundParamsData
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		onlineRoundParamsData = append(onlineRoundParamsData, data)
+	}
+	return
+}
+
 // AccountsPutTotals updates account totals
 func (w *accountsV2Writer) AccountsPutTotals(totals ledgercore.AccountTotals, catchpointStaging bool) error {
 	id := ""
@@ -604,4 +629,26 @@ func (w *accountsV2Writer) UpdateAccountsHashRound(ctx context.Context, hashRoun
 func (w *accountsV2Writer) ResetAccountHashes(ctx context.Context) (err error) {
 	_, err = w.e.ExecContext(ctx, `DELETE FROM accounthashes`)
 	return
+}
+
+func (w *accountsV2Writer) AccountsPutOnlineRoundParams(onlineRoundParamsData []ledgercore.OnlineRoundParamsData, startRound basics.Round) error {
+	insertStmt, err := w.e.Prepare("INSERT INTO onlineroundparamstail (rnd, data) VALUES (?, ?)")
+	if err != nil {
+		return err
+	}
+
+	for i, onlineRoundParams := range onlineRoundParamsData {
+		_, err = insertStmt.Exec(startRound+basics.Round(i), protocol.Encode(&onlineRoundParams))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *accountsV2Writer) AccountsPruneOnlineRoundParams(deleteBeforeRound basics.Round) error {
+	_, err := w.e.Exec("DELETE FROM onlineroundparamstail WHERE rnd<?",
+		deleteBeforeRound,
+	)
+	return err
 }
