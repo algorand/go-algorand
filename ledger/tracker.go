@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -246,12 +247,12 @@ type deferredCommitContext struct {
 	compactKvDeltas        map[string]modifiedKvValue
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 
-	updatedPersistedAccounts  []persistedAccountData
-	updatedPersistedResources map[basics.Address][]persistedResourcesData
-	updatedPersistedKVs       map[string]persistedKVData
+	updatedPersistedAccounts  []store.PersistedAccountData
+	updatedPersistedResources map[basics.Address][]store.PersistedResourcesData
+	updatedPersistedKVs       map[string]store.PersistedKVData
 
 	compactOnlineAccountDeltas     compactOnlineAccountDeltas
-	updatedPersistedOnlineAccounts []persistedOnlineAccountData
+	updatedPersistedOnlineAccounts []store.PersistedOnlineAccountData
 
 	updatingBalancesDuration time.Duration
 
@@ -279,7 +280,8 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 	tr.log = l.trackerLog()
 
 	err = tr.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		tr.dbRound, err = accountsRound(tx)
+		arw := store.NewAccountsSQLReaderWriter(tx)
+		tr.dbRound, err = arw.AccountsRound()
 		return err
 	})
 
@@ -509,6 +511,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
 	err := tr.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		arw := store.NewAccountsSQLReaderWriter(tx)
 		for _, lt := range tr.trackers {
 			err0 := lt.commitRound(ctx, tx, dcc)
 			if err0 != nil {
@@ -516,7 +519,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 			}
 		}
 
-		return updateAccountsRound(tx, dbRound+basics.Round(offset))
+		return arw.UpdateAccountsRound(dbRound + basics.Round(offset))
 	})
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 
