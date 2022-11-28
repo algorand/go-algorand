@@ -56,9 +56,9 @@ var transactionMessagesTxnLogicSig = metrics.MakeCounter(metrics.TransactionMess
 var transactionMessagesTxnSigVerificationFailed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigVerificationFailed)
 var transactionMessagesBacklogErr = metrics.MakeCounter(metrics.TransactionMessagesBacklogErr)
 var transactionMessagesRemember = metrics.MakeCounter(metrics.TransactionMessagesRemember)
-var transactionMessagesDupeRawMsg = metrics.MakeCounter(metrics.TransactionMessagesDupeRawMsg)
+var transactionMessagesDupRawMsg = metrics.MakeCounter(metrics.TransactionMessagesDupRawMsg)
 var transactionMessagesLargeTxGroup = metrics.MakeCounter(metrics.TransactionMessagesLargeTxGroup)
-var transactionMessagesDupeCanonical = metrics.MakeCounter(metrics.TransactionMessagesDupeCanonical)
+var transactionMessagesDupCanonical = metrics.MakeCounter(metrics.TransactionMessagesDupCanonical)
 var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionMessagesBacklogSize)
 
 var transactionGroupTxSyncHandled = metrics.MakeCounter(metrics.TransactionGroupTxSyncHandled)
@@ -366,7 +366,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		// check for duplicate messages
 		// this helps against relaying duplicates
 		if handler.msgCache.checkAndPut(rawmsg.Data) {
-			transactionMessagesDupeRawMsg.Inc(nil)
+			transactionMessagesDupRawMsg.Inc(nil)
 			return network.OutgoingMessage{Action: network.Ignore}
 		}
 	}
@@ -407,7 +407,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 
 	if handler.cacheConfig.enableFilteringCanonical {
 		if handler.dedupCanonical(ntx, unverifiedTxGroup, consumed) {
-			transactionMessagesDupeCanonical.Inc(nil)
+			transactionMessagesDupCanonical.Inc(nil)
 			return network.OutgoingMessage{Action: network.Ignore}
 		}
 	}

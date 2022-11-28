@@ -24,11 +24,13 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/stretchr/testify/require"
 
@@ -262,7 +264,179 @@ func BenchmarkTxHandlerProcessIncomingTxn(b *testing.B) {
 	wg.Wait()
 }
 
-// BenchmarkTxHandlerProcessIncomingTxn16 is with 16 goroutines
+func ipow(x, n int) int {
+	var res int = 1
+	for n != 0 {
+		if n&1 != 0 {
+			res *= x
+		}
+		n >>= 1
+		x *= x
+	}
+	return res
+}
+
+func TestPow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.Equal(t, 1, ipow(10, 0))
+	require.Equal(t, 10, ipow(10, 1))
+	require.Equal(t, 100, ipow(10, 2))
+	require.Equal(t, 8, ipow(2, 3))
+}
+
+func numFromMetricString(str string) int {
+	var val int
+	// go backward and parse string
+	// "algod_transaction_messages_dropped_backlog{} 270609\n"
+	pos := 0
+	for i := len(str) - 1; i >= 0; i-- {
+		if str[i] == ' ' {
+			break
+		}
+		if unicode.IsDigit(rune(str[i])) {
+			val += ipow(10, pos) * int(str[i]-'0')
+			pos++
+		}
+	}
+	return val
+
+}
+
+func TestNumFromMetricString(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.Equal(t, 1, numFromMetricString("1"))
+	require.Equal(t, 1, numFromMetricString("1\n"))
+	require.Equal(t, 1, numFromMetricString(" 1\n"))
+
+	require.Equal(t, 123, numFromMetricString("123"))
+	require.Equal(t, 123, numFromMetricString("123\n"))
+	require.Equal(t, 123, numFromMetricString(" 123\n"))
+
+	require.Equal(t, 270609, numFromMetricString("algod_transaction_messages_dropped_backlog{} 270609\n"))
+}
+
+func getNumBacklogDropped() int {
+	var b strings.Builder
+	transactionMessagesDroppedFromBacklog.WriteMetric(&b, "")
+	return numFromMetricString(b.String())
+}
+
+func getNumRawMsgDup() int {
+	var b strings.Builder
+	transactionMessagesDupRawMsg.WriteMetric(&b, "")
+	return numFromMetricString(b.String())
+}
+
+func TestGetNumBacklogDropped(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.Equal(t, 0, getNumBacklogDropped())
+
+	transactionMessagesDroppedFromBacklog.Inc(nil)
+	require.Equal(t, 1, getNumBacklogDropped())
+
+	for i := 1; i < 235; i++ {
+		transactionMessagesDroppedFromBacklog.Inc(nil)
+	}
+	require.Equal(t, 235, getNumBacklogDropped())
+}
+
+type benchFinalize func()
+
+func benchTxHandlerProcessIncomingTxnSubmit(b *testing.B, handler *TxHandler, blobs [][]byte, numThreads int) benchFinalize {
+	// submit tx groups
+	var wgp sync.WaitGroup
+	wgp.Add(numThreads)
+
+	hashesPerThread := b.N / numThreads
+	if hashesPerThread == 0 {
+		hashesPerThread = 1
+	}
+
+	finalize := func() {}
+
+	if b.N == 100001 {
+		profpath := b.Name() + "_cpuprof.pprof"
+		profout, err := os.Create(profpath)
+		if err != nil {
+			b.Fatal(err)
+			return finalize
+		}
+		b.Logf("%s: cpu profile for b.N=%d", profpath, b.N)
+		pprof.StartCPUProfile(profout)
+
+		finalize = func() {
+			pprof.StopCPUProfile()
+			profout.Close()
+		}
+	}
+
+	for g := 0; g < numThreads; g++ {
+		start := g * hashesPerThread
+		end := (g + 1) * (hashesPerThread)
+		// workaround for trivial runs with b.N = 1
+		if start >= b.N {
+			start = 0
+		}
+		if end >= b.N {
+			end = b.N
+		}
+		// handle the remaining blobs
+		if g == numThreads-1 {
+			end = b.N
+		}
+		// b.Logf("%d: %d %d", b.N, start, end)
+		go func(start int, end int) {
+			defer wgp.Done()
+			for i := start; i < end; i++ {
+				action := handler.processIncomingTxn(network.IncomingMessage{Data: blobs[i]})
+				require.Equal(b, network.OutgoingMessage{Action: network.Ignore}, action)
+			}
+		}(start, end)
+	}
+	wgp.Wait()
+
+	return finalize
+}
+
+func benchTxHandlerProcessIncomingTxnConsume(b *testing.B, handler *TxHandler, numTxnsPerGroup int, avgDelay time.Duration, statsCh chan<- [3]int) benchFinalize {
+	droppedStart := getNumBacklogDropped()
+	dupStart := getNumRawMsgDup()
+	// start consumer
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(statsCh chan<- [3]int) {
+		defer wg.Done()
+		received := 0
+		dropped := getNumBacklogDropped() - droppedStart
+		dups := getNumRawMsgDup() - dupStart
+		for dups+dropped+received < b.N {
+			select {
+			case msg := <-handler.backlogQueue:
+				require.Equal(b, numTxnsPerGroup, len(msg.unverifiedTxGroup))
+				received++
+			default:
+				dropped = getNumBacklogDropped() - droppedStart
+				dups = getNumRawMsgDup() - dupStart
+			}
+			if avgDelay > 0 {
+				time.Sleep(avgDelay)
+			}
+		}
+		statsCh <- [3]int{dropped, received, dups}
+	}(statsCh)
+
+	return func() {
+		wg.Wait()
+	}
+}
+
+// BenchmarkTxHandlerProcessIncomingTxn16 is the same BenchmarkTxHandlerProcessIncomingTxn with 16 goroutines
 func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 	deadlockDisable := deadlock.Opts.Disable
 	deadlock.Opts.Disable = true
@@ -270,6 +444,7 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 		deadlock.Opts.Disable = deadlockDisable
 	}()
 
+	const nuThreads = 16
 	const numTxnsPerGroup = 16
 	handler := makeTestTxHandlerOrphaned(txBacklogSize)
 	// uncomment to benchmark no-dedup version
@@ -282,80 +457,68 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 		stxns[i], blobs[i] = makeRandomTransactions(numTxnsPerGroup)
 	}
 
-	// start consumer
-	var wgc sync.WaitGroup
-	wgc.Add(1)
-	go func() {
-		defer wgc.Done()
-		for i := 0; i < b.N; i++ {
-			if b.N <= txBacklogSize {
-				msg := <-handler.backlogQueue
-				require.Equal(b, numTxnsPerGroup, len(msg.unverifiedTxGroup))
-			} else {
-				// expect some dropped messages
-				select {
-				case msg := <-handler.backlogQueue:
-					require.Equal(b, numTxnsPerGroup, len(msg.unverifiedTxGroup))
-				default:
-					if len(handler.backlogQueue) == 0 {
-						return
-					}
+	statsCh := make(chan [3]int, 1)
+	defer close(statsCh)
+	finConsume := benchTxHandlerProcessIncomingTxnConsume(b, handler, numTxnsPerGroup, 0, statsCh)
+
+	// submit tx groups
+	b.ResetTimer()
+	finalizeSubmit := benchTxHandlerProcessIncomingTxnSubmit(b, handler, blobs, nuThreads)
+
+	finalizeSubmit()
+	finConsume()
+}
+
+// BenchmarkTxHandlerProcessIncomingTxnDup checks txn receiving with duplicates
+// simulating processing delay
+func BenchmarkTxHandlerProcessIncomingTxnDup(b *testing.B) {
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() {
+		deadlock.Opts.Disable = deadlockDisable
+	}()
+
+	// parameters
+	const numTxnsPerGroup = 16
+	const dupeFactor = 4
+	const numThreads = 16
+	const workerProcTime = 10 * time.Microsecond
+	numPoolWorkers := runtime.NumCPU()
+	avgDelay := workerProcTime / time.Duration(numPoolWorkers)
+
+	handler := makeTestTxHandlerOrphaned(txBacklogSize)
+	// uncomment to benchmark no-dedup version
+	// handler.cacheConfig = txHandlerConfig{enableFilteringRawMsg: true, enableFilteringCanonical: false}
+	// handler.cacheConfig = txHandlerConfig{}
+
+	// prepare tx groups
+	blobs := make([][]byte, b.N)
+	stxns := make([][]transactions.SignedTxn, b.N)
+	for i := 0; i < b.N; i += dupeFactor {
+		stxns[i], blobs[i] = makeRandomTransactions(numTxnsPerGroup)
+		if b.N >= dupeFactor { // skip trivial runs
+			for j := 1; j < dupeFactor; j++ {
+				if i+j < b.N {
+					stxns[i+j], blobs[i+j] = stxns[i], blobs[i]
 				}
 			}
 		}
-	}()
-
-	const ng = 16
-	numHashes := b.N / ng
-	if numHashes == 0 {
-		numHashes = 1
 	}
+
+	statsCh := make(chan [3]int, 1)
+	defer close(statsCh)
+
+	finConsume := benchTxHandlerProcessIncomingTxnConsume(b, handler, numTxnsPerGroup, avgDelay, statsCh)
 
 	// submit tx groups
-	var wgp sync.WaitGroup
-	wgp.Add(ng)
 	b.ResetTimer()
+	finalizeSubmit := benchTxHandlerProcessIncomingTxnSubmit(b, handler, blobs, numThreads)
 
-	if b.N == 100000 {
-		profpath := b.Name() + "_cpuprof.pprof"
-		profout, err := os.Create(profpath)
-		if err != nil {
-			b.Fatal(err)
-			return
-		}
-		b.Logf("%s: cpu profile for b.N=%d", profpath, b.N)
-		pprof.StartCPUProfile(profout)
-		defer func() {
-			pprof.StopCPUProfile()
-			profout.Close()
-		}()
-	}
+	finalizeSubmit()
+	finConsume()
 
-	for g := 0; g < ng; g++ {
-		start := g * numHashes
-		end := (g + 1) * (numHashes)
-		// workaround b.N = 1
-		if start >= b.N {
-			start = 0
-		}
-		if end >= b.N {
-			end = b.N
-		}
-		// handle the remaining blobs
-		if g == ng-1 {
-			end = b.N
-		}
-		b.Logf("%d: %d %d", b.N, start, end)
-		go func(start int, end int) {
-			defer wgp.Done()
-			for i := start; i < end; i++ {
-				action := handler.processIncomingTxn(network.IncomingMessage{Data: blobs[i]})
-				require.Equal(b, network.OutgoingMessage{Action: network.Ignore}, action)
-			}
-		}(start, end)
-	}
-	wgp.Wait()
-	wgc.Wait()
+	stats := <-statsCh
+	b.Logf("dropped %d, received %d, dups %d", stats[0], stats[1], stats[2])
 }
 
 func TestTxHandlerProcessIncomingGroup(t *testing.T) {
@@ -522,7 +685,6 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 		nonCan := make([]transactions.SignedTxn, num)
 		copied = copy(nonCan, stxns)
 		require.Equal(t, num, copied)
-		// encode one by one and record offsets
 		blobNonCan := make([]byte, 0, len(blob))
 		for j := 0; j < num; j++ {
 			enc := protocol.Encode(&nonCan[j])
