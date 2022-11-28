@@ -391,6 +391,154 @@ func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 	}
 }
 
+func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	craftNonCanonical := func(t *testing.T, stxn *transactions.SignedTxn, blobStxn []byte) []byte {
+		// make non-canonical encoding and ensure it is not accepted
+		stxnNonCanTxn := transactions.SignedTxn{Txn: stxn.Txn}
+		blobTxn := protocol.Encode(&stxnNonCanTxn)
+		stxnNonCanAuthAddr := transactions.SignedTxn{AuthAddr: stxn.AuthAddr}
+		blobAuthAddr := protocol.Encode(&stxnNonCanAuthAddr)
+		stxnNonCanAuthSig := transactions.SignedTxn{Sig: stxn.Sig}
+		blobSig := protocol.Encode(&stxnNonCanAuthSig)
+
+		if blobStxn == nil {
+			blobStxn = protocol.Encode(stxn)
+		}
+
+		// double check our skills for transactions.SignedTxn creation by creating a new canonical encoding and comparing to the original
+		blobValidation := make([]byte, 0, len(blobTxn)+len(blobAuthAddr)+len(blobSig))
+		blobValidation = append(blobValidation[:], blobAuthAddr...)
+		blobValidation = append(blobValidation[:], blobSig[1:]...) // cut transactions.SignedTxn's field count
+		blobValidation = append(blobValidation[:], blobTxn[1:]...) // cut transactions.SignedTxn's field count
+		blobValidation[0] += 2                                     // increase field count
+		require.Equal(t, blobStxn, blobValidation)
+
+		// craft non-canonical
+		blobNonCan := make([]byte, 0, len(blobTxn)+len(blobAuthAddr)+len(blobSig))
+		blobNonCan = append(blobNonCan[:], blobTxn...)
+		blobNonCan = append(blobNonCan[:], blobAuthAddr[1:]...) // cut transactions.SignedTxn's field count
+		blobNonCan = append(blobNonCan[:], blobSig[1:]...)      // cut transactions.SignedTxn's field count
+		blobNonCan[0] += 2                                      // increase field count
+		require.Len(t, blobNonCan, len(blobStxn))
+		require.NotEqual(t, blobStxn, blobNonCan)
+		return blobNonCan
+	}
+
+	forgeSig := func(t *testing.T, stxn *transactions.SignedTxn, blobStxn []byte) (transactions.SignedTxn, []byte) {
+		stxnForged := *stxn
+		crypto.RandBytes(stxnForged.Sig[:])
+		blobForged := protocol.Encode(&stxnForged)
+		require.NotEqual(t, blobStxn, blobForged)
+		return stxnForged, blobForged
+	}
+
+	encodeGroup := func(t *testing.T, g []transactions.SignedTxn, blobRef []byte) []byte {
+		result := make([]byte, 0, len(blobRef))
+		for i := 0; i < len(g); i++ {
+			enc := protocol.Encode(&g[i])
+			result = append(result, enc...)
+		}
+		require.NotEqual(t, blobRef, result)
+		return result
+	}
+
+	t.Run("single", func(t *testing.T) {
+		handler := makeTestTxHandlerOrphaned(txBacklogSize)
+		stxns, blob := makeRandomTransactions(1)
+		stxn := stxns[0]
+		action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
+		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+		msg := <-handler.backlogQueue
+		require.Equal(t, 1, len(msg.unverifiedTxGroup))
+		require.Equal(t, stxn, msg.unverifiedTxGroup[0])
+
+		// forge signature, ensure accepted
+		stxnForged, blobForged := forgeSig(t, &stxn, blob)
+		action = handler.processIncomingTxn(network.IncomingMessage{Data: blobForged})
+		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+		msg = <-handler.backlogQueue
+		require.Equal(t, 1, len(msg.unverifiedTxGroup))
+		require.Equal(t, stxnForged, msg.unverifiedTxGroup[0])
+
+		// make non-canonical encoding and ensure it is not accepted
+		blobNonCan := craftNonCanonical(t, &stxn, blob)
+		action = handler.processIncomingTxn(network.IncomingMessage{Data: blobNonCan})
+		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+		require.Len(t, handler.backlogQueue, 0)
+	})
+
+	t.Run("group", func(t *testing.T) {
+		handler := makeTestTxHandlerOrphaned(txBacklogSize)
+		num := rand.Intn(config.MaxTxGroupSize-1) + 2 // 2..config.MaxTxGroupSize
+		require.LessOrEqual(t, num, config.MaxTxGroupSize)
+		stxns, blob := makeRandomTransactions(num)
+		action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
+		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+		msg := <-handler.backlogQueue
+		require.Equal(t, num, len(msg.unverifiedTxGroup))
+		for i := 0; i < num; i++ {
+			require.Equal(t, stxns[i], msg.unverifiedTxGroup[i])
+		}
+
+		// swap two txns
+		i := rand.Intn(num / 2)
+		j := rand.Intn(num-num/2) + num/2
+		require.Less(t, i, j)
+		swapped := make([]transactions.SignedTxn, num)
+		copied := copy(swapped, stxns)
+		require.Equal(t, num, copied)
+		swapped[i], swapped[j] = swapped[j], swapped[i]
+		blobSwapped := encodeGroup(t, swapped, blob)
+		action = handler.processIncomingTxn(network.IncomingMessage{Data: blobSwapped})
+		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+		require.Len(t, handler.backlogQueue, 1)
+		msg = <-handler.backlogQueue
+		require.Equal(t, num, len(msg.unverifiedTxGroup))
+		for i := 0; i < num; i++ {
+			require.Equal(t, swapped[i], msg.unverifiedTxGroup[i])
+		}
+
+		// forge signature, ensure accepted
+		i = rand.Intn(num)
+		forged := make([]transactions.SignedTxn, num)
+		copied = copy(forged, stxns)
+		require.Equal(t, num, copied)
+		crypto.RandBytes(forged[i].Sig[:])
+		blobForged := encodeGroup(t, forged, blob)
+		action = handler.processIncomingTxn(network.IncomingMessage{Data: blobForged})
+		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+		require.Len(t, handler.backlogQueue, 1)
+		msg = <-handler.backlogQueue
+		require.Equal(t, num, len(msg.unverifiedTxGroup))
+		for i := 0; i < num; i++ {
+			require.Equal(t, forged[i], msg.unverifiedTxGroup[i])
+		}
+
+		// make non-canonical encoding and ensure it is not accepted
+		i = rand.Intn(num)
+		nonCan := make([]transactions.SignedTxn, num)
+		copied = copy(nonCan, stxns)
+		require.Equal(t, num, copied)
+		// encode one by one and record offsets
+		blobNonCan := make([]byte, 0, len(blob))
+		for j := 0; j < num; j++ {
+			enc := protocol.Encode(&nonCan[j])
+			if j == i {
+				enc = craftNonCanonical(t, &stxns[j], enc)
+			}
+			blobNonCan = append(blobNonCan, enc...)
+		}
+		require.Len(t, blobNonCan, len(blob))
+		require.NotEqual(t, blob, blobNonCan)
+		action = handler.processIncomingTxn(network.IncomingMessage{Data: blobNonCan})
+		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+		require.Len(t, handler.backlogQueue, 0)
+	})
+}
+
 // makeTestTxHandlerOrphaned creates a tx handler without any backlog consumer.
 // It is caller responsibility to run a consumer thread.
 func makeTestTxHandlerOrphaned(backlogSize int) *TxHandler {
