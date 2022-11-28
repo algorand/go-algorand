@@ -284,12 +284,13 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 
 	if modifiedAccounts > 0 {
 		cts := store.NewCatchpointSQLReaderWriter(tx)
+		arw := store.NewAccountsSQLReaderWriter(tx)
 
 		tu.log.Infof("upgradeDatabaseSchema1 reencoded %d accounts", modifiedAccounts)
 
 		tu.log.Infof("upgradeDatabaseSchema1 resetting account hashes")
 		// reset the merkle trie
-		err = resetAccountHashes(ctx, tx)
+		err = arw.ResetAccountHashes(ctx)
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema1 unable to reset account hashes : %v", err)
 		}
@@ -358,7 +359,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema4(ctx context.Context
 	}
 
 	if tu.catchpointEnabled && len(addresses) > 0 {
-		mc, err := MakeMerkleCommitter(tx, false)
+		mc, err := store.MakeMerkleCommitter(tx, false)
 		if err != nil {
 			// at this point record deleted and DB is pruned for account data
 			// if hash deletion fails just log it and do not abort startup
@@ -402,6 +403,8 @@ done:
 // upgradeDatabaseSchema5 upgrades the database schema from version 5 to version 6,
 // adding the resources table and clearing empty catchpoint directories.
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context, tx *sql.Tx) (err error) {
+	arw := store.NewAccountsSQLReaderWriter(tx)
+
 	err = accountsCreateResourceTable(ctx, tx)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema5 unable to create resources table : %v", err)
@@ -428,7 +431,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 	}
 
 	// reset the merkle trie
-	err = resetAccountHashes(ctx, tx)
+	err = arw.ResetAccountHashes(ctx)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema5 unable to reset account hashes : %v", err)
 	}

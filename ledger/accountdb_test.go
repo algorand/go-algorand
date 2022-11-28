@@ -3223,7 +3223,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 		require.NoError(t, err)
 		defer rows.Close()
 
-		mc, err := MakeMerkleCommitter(tx, false)
+		mc, err := store.MakeMerkleCommitter(tx, false)
 		require.NoError(t, err)
 		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
 		require.NoError(t, err)
@@ -3264,7 +3264,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 	require.NoError(t, err)
 
 	// get the new hash and ensure it does not match to the old one (data migrated)
-	mc, err := MakeMerkleCommitter(tx, false)
+	mc, err := store.MakeMerkleCommitter(tx, false)
 	require.NoError(t, err)
 	trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
 	require.NoError(t, err)

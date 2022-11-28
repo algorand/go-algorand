@@ -1775,7 +1775,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 			return nil
 		}
 
-		mc, err := MakeMerkleCommitter(tx, false)
+		mc, err := store.MakeMerkleCommitter(tx, false)
 		if err != nil {
 			return nil
 		}
@@ -1871,11 +1871,6 @@ func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, pro
 		VoteLastValid:           ad.VoteLastValid,
 		StateProofID:            ad.StateProofID,
 	}
-}
-
-func resetAccountHashes(ctx context.Context, tx *sql.Tx) (err error) {
-	_, err = tx.ExecContext(ctx, `DELETE FROM accounthashes`)
-	return
 }
 
 func accountsReset(ctx context.Context, tx *sql.Tx) error {
@@ -2380,62 +2375,6 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 	err = rows.Err()
 	updateStmt.Close()
 	return
-}
-
-// MerkleCommitter allows storing and loading merkletrie pages from a sqlite database.
-//
-//msgp:ignore MerkleCommitter
-type MerkleCommitter struct {
-	tx         *sql.Tx
-	deleteStmt *sql.Stmt
-	insertStmt *sql.Stmt
-	selectStmt *sql.Stmt
-}
-
-// MakeMerkleCommitter creates a MerkleCommitter object that implements the merkletrie.Committer interface allowing storing and loading
-// merkletrie pages from a sqlite database.
-func MakeMerkleCommitter(tx *sql.Tx, staging bool) (mc *MerkleCommitter, err error) {
-	mc = &MerkleCommitter{tx: tx}
-	accountHashesTable := "accounthashes"
-	if staging {
-		accountHashesTable = "catchpointaccounthashes"
-	}
-	mc.deleteStmt, err = tx.Prepare("DELETE FROM " + accountHashesTable + " WHERE id=?")
-	if err != nil {
-		return nil, err
-	}
-	mc.insertStmt, err = tx.Prepare("INSERT OR REPLACE INTO " + accountHashesTable + "(id, data) VALUES(?, ?)")
-	if err != nil {
-		return nil, err
-	}
-	mc.selectStmt, err = tx.Prepare("SELECT data FROM " + accountHashesTable + " WHERE id = ?")
-	if err != nil {
-		return nil, err
-	}
-	return mc, nil
-}
-
-// StorePage is the merkletrie.Committer interface implementation, stores a single page in a sqlite database table.
-func (mc *MerkleCommitter) StorePage(page uint64, content []byte) error {
-	if len(content) == 0 {
-		_, err := mc.deleteStmt.Exec(page)
-		return err
-	}
-	_, err := mc.insertStmt.Exec(page, content)
-	return err
-}
-
-// LoadPage is the merkletrie.Committer interface implementation, load a single page from a sqlite database table.
-func (mc *MerkleCommitter) LoadPage(page uint64) (content []byte, err error) {
-	err = mc.selectStmt.QueryRow(page).Scan(&content)
-	if err == sql.ErrNoRows {
-		content = nil
-		err = nil
-		return
-	} else if err != nil {
-		return nil, err
-	}
-	return content, nil
 }
 
 // catchpointAccountResourceCounter keeps track of the resources processed for the current account

@@ -521,8 +521,8 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 	arw := store.NewAccountsSQLReaderWriter(tx)
 
 	if ct.catchpointEnabled() {
-		var mc *MerkleCommitter
-		mc, err = MakeMerkleCommitter(tx, false)
+		var mc *store.MerkleCommitter
+		mc, err = store.MakeMerkleCommitter(tx, false)
 		if err != nil {
 			return
 		}
@@ -1194,7 +1194,7 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.T
 	}
 
 	{
-		mc, err := MakeMerkleCommitter(tx, false)
+		mc, err := store.MakeMerkleCommitter(tx, false)
 		if err != nil {
 			return err
 		}
@@ -1546,7 +1546,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 	if hashRound != rnd {
 		// if the hashed round is different then the base round, something was modified, and the accounts aren't in sync
 		// with the hashes.
-		err = resetAccountHashes(ctx, tx)
+		err = arw.ResetAccountHashes(ctx)
 		if err != nil {
 			return err
 		}
@@ -1557,7 +1557,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 	}
 
 	// create the merkle trie for the balances
-	committer, err := MakeMerkleCommitter(tx, false)
+	committer, err := store.MakeMerkleCommitter(tx, false)
 	if err != nil {
 		return fmt.Errorf("initializeHashes was unable to makeMerkleCommitter: %v", err)
 	}
