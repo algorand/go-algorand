@@ -364,7 +364,7 @@ func TestAccountDBRound(t *testing.T) {
 	acctCb := func(addr basics.Address, data basics.AccountData) {
 		loaded[addr] = data
 	}
-	count, err := LoadAllFullAccounts(context.Background(), tx, "accountbase", "resources", acctCb)
+	count, err := arw.LoadAllFullAccounts(context.Background(), "accountbase", "resources", acctCb)
 	require.NoError(t, err)
 	require.Equal(t, count, len(accts))
 	require.Equal(t, count, len(loaded))
