@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -38,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -105,7 +107,7 @@ func TestGetCatchpointStream(t *testing.T) {
 		require.NoError(t, err)
 
 		// Store the catchpoint into the database
-		err := storeCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(i), fileName, "", int64(len(data)))
+		err := ct.catchpointStore.StoreCatchpoint(context.Background(), basics.Round(i), fileName, "", int64(len(data)))
 		require.NoError(t, err)
 	}
 
@@ -132,7 +134,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	require.Nil(t, reader)
 
 	// File on disk, but database lost the record
-	err = storeCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(3), "", "", 0)
+	err = ct.catchpointStore.StoreCatchpoint(context.Background(), basics.Round(3), "", "", 0)
 	require.NoError(t, err)
 	reader, err = ct.GetCatchpointStream(basics.Round(3))
 	require.NoError(t, err)
@@ -183,7 +185,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 		require.NoError(t, err)
 		err = f.Close()
 		require.NoError(t, err)
-		err = storeCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(i), file, "", 0)
+		err = ct.catchpointStore.StoreCatchpoint(context.Background(), basics.Round(i), file, "", 0)
 		require.NoError(t, err)
 	}
 
@@ -195,7 +197,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 		_, err := os.Open(file)
 		require.True(t, os.IsNotExist(err))
 	}
-	fileNames, err := getOldestCatchpointFiles(context.Background(), ml.dbs.Rdb.Handle, dummyCatchpointFilesToCreate, 0)
+	fileNames, err := ct.catchpointStore.GetOldestCatchpointFiles(context.Background(), dummyCatchpointFilesToCreate, 0)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fileNames))
 }
@@ -296,7 +298,7 @@ func TestRecordCatchpointFile(t *testing.T) {
 	for _, round := range []basics.Round{2000000, 3000010, 3000015, 3000020} {
 		accountsRound := round - 1
 
-		_, _, biggestChunkLen, err := ct.generateCatchpointData(
+		_, _, _, biggestChunkLen, err := ct.generateCatchpointData(
 			context.Background(), accountsRound, time.Second)
 		require.NoError(t, err)
 
@@ -356,7 +358,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 			var updates compactAccountDeltas
 			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 				addr := ledgertesting.RandomAddress()
-				acctData := baseAccountData{}
+				acctData := store.BaseAccountData{}
 				acctData.MicroAlgos.Raw = 1
 				updates.upsert(addr, accountDelta{newAcct: acctData})
 				i++
@@ -999,9 +1001,11 @@ func TestFirstStagePersistence(t *testing.T) {
 	defer ml2.Close()
 	ml.Close()
 
+	cps2 := store.NewCatchpointSQLReaderWriter(ml2.dbs.Wdb.Handle)
+
 	// Insert unfinished first stage record.
-	err = writeCatchpointStateUint64(
-		context.Background(), ml2.dbs.Wdb.Handle, catchpointStateWritingFirstStageInfo, 1)
+	err = cps2.WriteCatchpointStateUint64(
+		context.Background(), catchpointStateWritingFirstStageInfo, 1)
 	require.NoError(t, err)
 
 	// Delete the database record.
@@ -1026,8 +1030,8 @@ func TestFirstStagePersistence(t *testing.T) {
 	require.True(t, exists)
 
 	// Check that the unfinished first stage record is deleted.
-	v, err := readCatchpointStateUint64(
-		context.Background(), ml2.dbs.Rdb.Handle, catchpointStateWritingFirstStageInfo)
+	v, err := ct2.catchpointStore.ReadCatchpointStateUint64(
+		context.Background(), catchpointStateWritingFirstStageInfo)
 	require.NoError(t, err)
 	require.Zero(t, v)
 }
@@ -1129,19 +1133,21 @@ func TestSecondStagePersistence(t *testing.T) {
 	err = os.WriteFile(catchpointDataFilePath, catchpointData, 0644)
 	require.NoError(t, err)
 
+	cps2 := store.NewCatchpointSQLReaderWriter(ml2.dbs.Wdb.Handle)
+
 	// Restore the first stage database record.
 	err = insertOrReplaceCatchpointFirstStageInfo(
 		context.Background(), ml2.dbs.Wdb.Handle, firstStageRound, &firstStageInfo)
 	require.NoError(t, err)
 
 	// Insert unfinished catchpoint record.
-	err = insertUnfinishedCatchpoint(
-		context.Background(), ml2.dbs.Wdb.Handle, secondStageRound, crypto.Digest{})
+	err = cps2.InsertUnfinishedCatchpoint(
+		context.Background(), secondStageRound, crypto.Digest{})
 	require.NoError(t, err)
 
 	// Delete the catchpoint file database record.
-	err = storeCatchpoint(
-		context.Background(), ml2.dbs.Wdb.Handle, secondStageRound, "", "", 0)
+	err = cps2.StoreCatchpoint(
+		context.Background(), secondStageRound, "", "", 0)
 	require.NoError(t, err)
 
 	// Create a catchpoint tracker and let it restart catchpoint's second stage.
@@ -1155,14 +1161,14 @@ func TestSecondStagePersistence(t *testing.T) {
 	require.Greater(t, info.Size(), int64(1))
 
 	// Check that the database record exists.
-	filename, _, _, err := getCatchpoint(
-		context.Background(), ml2.dbs.Rdb.Handle, secondStageRound)
+	filename, _, _, err := ct2.catchpointStore.GetCatchpoint(
+		context.Background(), secondStageRound)
 	require.NoError(t, err)
 	require.NotEmpty(t, filename)
 
 	// Check that the unfinished catchpoint database record is deleted.
-	unfinishedCatchpoints, err := selectUnfinishedCatchpoints(
-		context.Background(), ml2.dbs.Rdb.Handle)
+	unfinishedCatchpoints, err := ct2.catchpointStore.SelectUnfinishedCatchpoints(
+		context.Background())
 	require.NoError(t, err)
 	require.Empty(t, unfinishedCatchpoints)
 }
@@ -1251,8 +1257,8 @@ func TestSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 	ml2.trackers.waitAccountsWriting()
 
 	// Check that the unfinished catchpoint database record is deleted.
-	unfinishedCatchpoints, err := selectUnfinishedCatchpoints(
-		context.Background(), ml2.dbs.Rdb.Handle)
+	unfinishedCatchpoints, err := ct2.catchpointStore.SelectUnfinishedCatchpoints(
+		context.Background())
 	require.NoError(t, err)
 	require.Empty(t, unfinishedCatchpoints)
 }
@@ -1319,6 +1325,8 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 	defer ml2.Close()
 	ml.Close()
 
+	cps2 := store.NewCatchpointSQLReaderWriter(ml2.dbs.Wdb.Handle)
+
 	// Sanity check: first stage record should be deleted.
 	_, exists, err := selectCatchpointFirstStageInfo(
 		context.Background(), ml2.dbs.Rdb.Handle, firstStageRound)
@@ -1326,8 +1334,8 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 	require.False(t, exists)
 
 	// Insert unfinished catchpoint record.
-	err = insertUnfinishedCatchpoint(
-		context.Background(), ml2.dbs.Wdb.Handle, secondStageRound, crypto.Digest{})
+	err = cps2.InsertUnfinishedCatchpoint(
+		context.Background(), secondStageRound, crypto.Digest{})
 	require.NoError(t, err)
 
 	// Create a catchpoint tracker and let it restart catchpoint's second stage.
@@ -1335,8 +1343,145 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 	defer ct2.close()
 
 	// Check that the unfinished catchpoint database record is deleted.
-	unfinishedCatchpoints, err := selectUnfinishedCatchpoints(
-		context.Background(), ml2.dbs.Rdb.Handle)
+	unfinishedCatchpoints, err := ct2.catchpointStore.SelectUnfinishedCatchpoints(
+		context.Background())
 	require.NoError(t, err)
 	require.Empty(t, unfinishedCatchpoints)
+}
+
+// TestHashContract confirms the account, resource, and KV hashing algorithm
+// remains unchanged by comparing a newly calculated hash against a
+// known-to-be-correct hex-encoded hash.
+//
+// When the test fails a hash equality check, it implies a hash calculated
+// before the change != hash calculated now.  Accepting the new hash risks
+// breaking backwards compatibility.
+//
+// The test also confirms each hashKind has at least 1 test case.  The check
+// defends against the addition of a hashed data type without test coverage.
+func TestHashContract(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	type testCase struct {
+		genHash          func() []byte
+		expectedHex      string
+		expectedHashKind hashKind
+	}
+
+	accountCase := func(genHash func() []byte, expectedHex string) testCase {
+		return testCase{
+			genHash, expectedHex, accountHK,
+		}
+	}
+
+	resourceAssetCase := func(genHash func() []byte, expectedHex string) testCase {
+		return testCase{
+			genHash, expectedHex, assetHK,
+		}
+	}
+
+	resourceAppCase := func(genHash func() []byte, expectedHex string) testCase {
+		return testCase{
+			genHash, expectedHex, appHK,
+		}
+	}
+
+	kvCase := func(genHash func() []byte, expectedHex string) testCase {
+		return testCase{
+			genHash, expectedHex, kvHK,
+		}
+	}
+
+	a := basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
+
+	accounts := []testCase{
+		accountCase(
+			func() []byte {
+				b := store.BaseAccountData{
+					UpdateRound: 1024,
+				}
+				return accountHashBuilderV6(a, &b, protocol.Encode(&b))
+			},
+			"0000040000c3c39a72c146dc6bcb87b499b63ef730145a8fe4a187c96e9a52f74ef17f54",
+		),
+		accountCase(
+			func() []byte {
+				b := store.BaseAccountData{
+					RewardsBase: 10000,
+				}
+				return accountHashBuilderV6(a, &b, protocol.Encode(&b))
+			},
+			"0000271000804b58bcc81190c3c7343c1db9c737621ff0438104bdd20a25d12aa4e9b6e5",
+		),
+	}
+
+	resourceAssets := []testCase{
+		resourceAssetCase(
+			func() []byte {
+				r := store.ResourcesData{
+					Amount:    1000,
+					Decimals:  3,
+					AssetName: "test",
+					Manager:   a,
+				}
+
+				bytes, err := resourcesHashBuilderV6(&r, a, 7, 1024, protocol.Encode(&r))
+				require.NoError(t, err)
+				return bytes
+			},
+			"0000040001ca4157130516bd7f120cef4b3a28715e464d9a29f7575db9b2173b4eccd18e",
+		),
+	}
+
+	resourceApps := []testCase{
+		resourceAppCase(
+			func() []byte {
+				r := store.ResourcesData{
+					ApprovalProgram:          []byte{1, 3, 10, 15},
+					ClearStateProgram:        []byte{15, 10, 3, 1},
+					LocalStateSchemaNumUint:  2,
+					GlobalStateSchemaNumUint: 2,
+				}
+
+				bytes, err := resourcesHashBuilderV6(&r, a, 7, 1024, protocol.Encode(&r))
+				require.NoError(t, err)
+				return bytes
+			},
+			"00000400023547567f3234873b48fd4152f296a92ae260b024b93c2408f35caccff57c32",
+		),
+	}
+
+	kvs := []testCase{
+		kvCase(
+			func() []byte {
+				return kvHashBuilderV6("sample key", []byte("sample value"))
+			},
+			"0000000003cca3d1a8d7d724daa445c795ad277a7a64b351b4b9407f738841282f9c348b",
+		),
+	}
+
+	allCases := append(append(append(accounts, resourceAssets...), resourceApps...), kvs...)
+	for i, tc := range allCases {
+		t.Run(fmt.Sprintf("index=%d", i), func(t *testing.T) {
+			h := tc.genHash()
+			require.Equal(t, byte(tc.expectedHashKind), h[hashKindEncodingIndex])
+			require.Equal(t, tc.expectedHex, hex.EncodeToString(h))
+		})
+	}
+
+	hasTestCoverageForKind := func(hk hashKind) bool {
+		for _, c := range allCases {
+			if c.expectedHashKind == hk {
+				return true
+			}
+		}
+		return false
+	}
+
+	for i := byte(0); i < 255; i++ {
+		if !strings.HasPrefix(hashKind(i).String(), "hashKind(") {
+			require.True(t, hasTestCoverageForKind(hashKind(i)), fmt.Sprintf("Missing test coverage for hashKind ordinal value = %d", i))
+		}
+	}
 }

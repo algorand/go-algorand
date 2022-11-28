@@ -27,9 +27,10 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
-
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -38,6 +39,8 @@ import (
 type trackerDBParams struct {
 	initAccounts      map[basics.Address]basics.AccountData
 	initProto         protocol.ConsensusVersion
+	genesisHash       crypto.Digest
+	fromCatchpoint    bool
 	catchpointEnabled bool
 	dbPathPrefix      string
 	blockDb           db.Pair
@@ -77,9 +80,13 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 	}
 
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		arw := store.NewAccountsSQLReaderWriter(tx)
+
 		tp := trackerDBParams{
 			initAccounts:      l.GenesisAccounts(),
 			initProto:         l.GenesisProtoVersion(),
+			genesisHash:       l.GenesisHash(),
+			fromCatchpoint:    false,
 			catchpointEnabled: catchpointEnabled,
 			dbPathPrefix:      dbPathPrefix,
 			blockDb:           bdbs,
@@ -89,7 +96,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 		if err0 != nil {
 			return err0
 		}
-		lastBalancesRound, err := accountsRound(tx)
+		lastBalancesRound, err := arw.AccountsRound()
 		if err != nil {
 			return err
 		}
@@ -189,6 +196,12 @@ func runMigrations(ctx context.Context, tx *sql.Tx, params trackerDBParams, log 
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 7 : %v", err)
 					return
 				}
+			case 8:
+				err = tu.upgradeDatabaseSchema8(ctx, tx)
+				if err != nil {
+					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 8 : %v", err)
+					return
+				}
 			default:
 				return trackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to upgrade database from schema version %d", tu.schemaVersion)
 			}
@@ -232,7 +245,6 @@ func (tu trackerDBSchemaInitializer) version() int32 {
 // The accountbase would get initialized with the au.initAccounts
 // The accounttotals would get initialized to align with the initialization account added to accountbase
 // The acctrounds would get updated to indicate that the balance matches round 0
-//
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (err error) {
 	tu.log.Infof("upgradeDatabaseSchema0 initializing schema")
 	tu.newDatabase, err = accountsInit(tx, tu.initAccounts, config.Consensus[tu.initProto])
@@ -257,7 +269,6 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context
 //
 // This upgrade doesn't change any of the actual database schema ( i.e. tables, indexes ) but rather just performing
 // a functional update to it's content.
-//
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx) (err error) {
 	var modifiedAccounts uint
 	if tu.newDatabase {
@@ -272,6 +283,8 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 	}
 
 	if modifiedAccounts > 0 {
+		cts := store.NewCatchpointSQLReaderWriter(tx)
+
 		tu.log.Infof("upgradeDatabaseSchema1 reencoded %d accounts", modifiedAccounts)
 
 		tu.log.Infof("upgradeDatabaseSchema1 resetting account hashes")
@@ -284,7 +297,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 		tu.log.Infof("upgradeDatabaseSchema1 preparing queries")
 		tu.log.Infof("upgradeDatabaseSchema1 resetting prior catchpoints")
 		// delete the last catchpoint label if we have any.
-		err = writeCatchpointStateString(ctx, tx, catchpointStateLastCatchpoint, "")
+		err = cts.WriteCatchpointStateString(ctx, catchpointStateLastCatchpoint, "")
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema1 unable to clear prior catchpoint : %v", err)
 		}
@@ -308,7 +321,6 @@ schemaUpdateComplete:
 // This upgrade only enables the database vacuuming which will take place once the upgrade process is complete.
 // If the user has already specified the OptimizeAccountsDatabaseOnStartup flag in the configuration file, this
 // step becomes a no-op.
-//
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx) (err error) {
 	if !tu.newDatabase {
 		tu.vacuumOnStartup = true
@@ -426,8 +438,9 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 }
 
 func (tu *trackerDBSchemaInitializer) deleteUnfinishedCatchpoint(ctx context.Context, tx *sql.Tx) error {
+	cts := store.NewCatchpointSQLReaderWriter(tx)
 	// Delete an unfinished catchpoint if there is one.
-	round, err := readCatchpointStateUint64(ctx, tx, catchpointStateWritingCatchpoint)
+	round, err := cts.ReadCatchpointStateUint64(ctx, catchpointStateWritingCatchpoint)
 	if err != nil {
 		return err
 	}
@@ -443,7 +456,7 @@ func (tu *trackerDBSchemaInitializer) deleteUnfinishedCatchpoint(ctx context.Con
 		return err
 	}
 
-	return writeCatchpointStateUint64(ctx, tx, catchpointStateWritingCatchpoint, 0)
+	return cts.WriteCatchpointStateUint64(ctx, catchpointStateWritingCatchpoint, 0)
 }
 
 // upgradeDatabaseSchema6 upgrades the database schema from version 6 to version 7,
@@ -517,6 +530,20 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema7(ctx context.Context
 		return fmt.Errorf("upgradeDatabaseSchema7 unable to create kvstore through createTables : %v", err)
 	}
 	return tu.setVersion(ctx, tx, 8)
+}
+
+// upgradeDatabaseSchema8 upgrades the database schema from version 8 to version 9,
+// forcing a rebuild of the accounthashes table on betanet nodes. Otherwise it has no effect.
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema8(ctx context.Context, tx *sql.Tx) (err error) {
+	betanetGenesisHash, _ := crypto.DigestFromString("TBMBVTC7W24RJNNUZCF7LWZD2NMESGZEQSMPG5XQD7JY4O7JKVWQ")
+	if tu.genesisHash == betanetGenesisHash && !tu.fromCatchpoint {
+		// reset hash round to 0, forcing catchpointTracker.initializeHashes to rebuild accounthashes
+		err = updateAccountsHashRound(ctx, tx, 0)
+		if err != nil {
+			return fmt.Errorf("upgradeDatabaseSchema8 unable to reset acctrounds table 'hashbase' round : %v", err)
+		}
+	}
+	return tu.setVersion(ctx, tx, 9)
 }
 
 // isDirEmpty returns if a given directory is empty or not.
