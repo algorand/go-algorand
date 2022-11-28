@@ -551,8 +551,8 @@ type VerificationResult struct {
 // StreamVerifier verifies txn groups received through the stxnChan channel, and returns the
 // results through the resultChan
 type StreamVerifier struct {
-	resultChan       chan<- VerificationResult
-	stxnChan         <-chan UnverifiedElement
+	resultChan       chan<- *VerificationResult
+	stxnChan         <-chan *UnverifiedElement
 	verificationPool execpool.BacklogPool
 	ctx              context.Context
 	cache            VerifiedTransactionCache
@@ -618,7 +618,7 @@ func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext
 
 // MakeStreamVerifier creates a new stream verifier and returns the chans used to send txn groups
 // to it and obtain the txn signature verification result from
-func MakeStreamVerifier(stxnChan <-chan UnverifiedElement, resultChan chan<- VerificationResult,
+func MakeStreamVerifier(stxnChan <-chan *UnverifiedElement, resultChan chan<- *VerificationResult,
 	ledger logic.LedgerForSignature, nbw *NewBlockWatcher, verificationPool execpool.BacklogPool,
 	cache VerifiedTransactionCache, droppedFromPool *metrics.Counter) (sv *StreamVerifier) {
 
@@ -642,10 +642,10 @@ func (sv *StreamVerifier) Start(ctx context.Context) {
 	go sv.batchingLoop()
 }
 
-func (sv *StreamVerifier) cleanup(pending *[]UnverifiedElement) {
+func (sv *StreamVerifier) cleanup(pending []*UnverifiedElement) {
 	// report an error for the unchecked txns
 	// drop the messages without reporting if the receiver does not consume
-	for _, uel := range *pending {
+	for _, uel := range pending {
 		sv.sendResult(uel.TxnGroup, uel.BacklogMessage, errShuttingDownError)
 	}
 }
@@ -656,8 +656,8 @@ func (sv *StreamVerifier) batchingLoop() {
 	var added bool
 	var numberOfSigsInCurrent uint64
 	var numberOfTimerResets uint64
-	uelts := make([]UnverifiedElement, 0)
-	defer sv.cleanup(&uelts)
+	uelts := make([]*UnverifiedElement, 0)
+	defer func() { sv.cleanup(uelts) }()
 	for {
 		select {
 		case stx := <-sv.stxnChan:
@@ -671,7 +671,7 @@ func (sv *StreamVerifier) batchingLoop() {
 
 			// if no batchable signatures here, send this as a task of its own
 			if numberOfBatchableSigsInGroup == 0 {
-				err := sv.addVerificationTaskToThePoolNow([]UnverifiedElement{stx})
+				err := sv.addVerificationTaskToThePoolNow([]*UnverifiedElement{stx})
 				if err != nil {
 					return
 				}
@@ -701,7 +701,7 @@ func (sv *StreamVerifier) batchingLoop() {
 				}
 				if added {
 					numberOfSigsInCurrent = 0
-					uelts = make([]UnverifiedElement, 0)
+					uelts = make([]*UnverifiedElement, 0)
 					// starting a new batch. Can wait long, since nothing is blocked
 					timer.Reset(waitForFirstTxnDuration)
 					numberOfTimerResets = 0
@@ -740,7 +740,7 @@ func (sv *StreamVerifier) batchingLoop() {
 			}
 			if added {
 				numberOfSigsInCurrent = 0
-				uelts = make([]UnverifiedElement, 0)
+				uelts = make([]*UnverifiedElement, 0)
 				// starting a new batch. Can wait long, since nothing is blocked
 				timer.Reset(waitForFirstTxnDuration)
 				numberOfTimerResets = 0
@@ -756,14 +756,13 @@ func (sv *StreamVerifier) batchingLoop() {
 }
 
 func (sv *StreamVerifier) sendResult(veTxnGroup []transactions.SignedTxn, veBacklogMessage interface{}, err error) {
-	vr := VerificationResult{
+	// send the txn result out the pipe
+	select {
+	case sv.resultChan <- &VerificationResult{
 		TxnGroup:       veTxnGroup,
 		BacklogMessage: veBacklogMessage,
 		Err:            err,
-	}
-	// send the txn result out the pipe
-	select {
-	case sv.resultChan <- vr:
+	}:
 	default:
 		// we failed to write to the output queue, since the queue was full.
 		// adding the metric here allows us to monitor how frequently it happens.
@@ -771,12 +770,12 @@ func (sv *StreamVerifier) sendResult(veTxnGroup []transactions.SignedTxn, veBack
 	}
 }
 
-func (sv *StreamVerifier) canAddVerificationTaskToThePool(uelts []UnverifiedElement) (added bool, err error) {
+func (sv *StreamVerifier) canAddVerificationTaskToThePool(uelts []*UnverifiedElement) (added bool, err error) {
 	// if the exec pool buffer is (half) full, can go back and collect
 	// more signatures instead of waiting in the exec pool buffer
 	// more signatures to the batch do not harm performance but introduce latency when delayed (see crypto.BenchmarkBatchVerifierBig)
 
-	// if buffer is half full
+	// if the buffer is full
 	if l, c := sv.verificationPool.BufferLength(); l == c {
 		return false, nil
 	}
@@ -788,13 +787,13 @@ func (sv *StreamVerifier) canAddVerificationTaskToThePool(uelts []UnverifiedElem
 	return true, nil
 }
 
-func (sv *StreamVerifier) addVerificationTaskToThePoolNow(uelts []UnverifiedElement) error {
+func (sv *StreamVerifier) addVerificationTaskToThePoolNow(uelts []*UnverifiedElement) error {
 	function := func(arg interface{}) interface{} {
 		if sv.ctx.Err() != nil {
 			return nil
 		}
 
-		uelts := arg.([]UnverifiedElement)
+		uelts := arg.([]*UnverifiedElement)
 		batchVerifier := crypto.MakeBatchVerifier()
 
 		bl := makeBatchLoad()
@@ -868,7 +867,7 @@ func getNumberOfBatchableSigsInGroup(stxs []transactions.SignedTxn) (batchSigs u
 	return
 }
 
-func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (batchSigs uint64, err error) {
+func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (uint64, error) {
 	var hasSig, hasMsig bool
 	numSigs := 0
 	if stx.Sig != (crypto.Signature{}) {
@@ -901,11 +900,13 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (batchSigs uint6
 	}
 	if hasMsig {
 		sig := stx.Msig
+		batchSigs := uint64(0)
 		for _, subsigi := range sig.Subsigs {
 			if (subsigi.Sig != crypto.Signature{}) {
 				batchSigs++
 			}
 		}
+		return batchSigs, nil
 	}
-	return
+	return 0, nil
 }

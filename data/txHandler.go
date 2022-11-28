@@ -78,13 +78,13 @@ type TxHandler struct {
 	genesisHash           crypto.Digest
 	txVerificationPool    execpool.BacklogPool
 	backlogQueue          chan *txBacklogMsg
-	postVerificationQueue chan verify.VerificationResult
+	postVerificationQueue chan *verify.VerificationResult
 	backlogWg             sync.WaitGroup
 	net                   network.GossipNode
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
 	streamVerifier        *verify.StreamVerifier
-	streamVerifierChan    chan verify.UnverifiedElement
+	streamVerifierChan    chan *verify.UnverifiedElement
 }
 
 // MakeTxHandler makes a new handler for transaction messages
@@ -107,9 +107,9 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		ledger:                ledger,
 		txVerificationPool:    executionPool,
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
-		postVerificationQueue: make(chan verify.VerificationResult, txBacklogSize),
+		postVerificationQueue: make(chan *verify.VerificationResult, txBacklogSize),
 		net:                   net,
-		streamVerifierChan:    make(chan verify.UnverifiedElement),
+		streamVerifierChan:    make(chan *verify.UnverifiedElement),
 	}
 
 	// prepare the transaction stream verifer
@@ -200,7 +200,7 @@ func (handler *TxHandler) backlogWorker() {
 				transactionMessagesAlreadyCommitted.Inc(nil)
 				continue
 			}
-			handler.streamVerifierChan <- verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}
+			handler.streamVerifierChan <- &verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}
 
 		case wi, ok := <-handler.postVerificationQueue:
 			if !ok {

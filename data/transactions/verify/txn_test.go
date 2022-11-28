@@ -885,8 +885,8 @@ func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups m
 
 	blkHdr := createDummyBlockHeader()
 	nbw := MakeNewBlockWatcher(blkHdr)
-	stxnChan := make(chan UnverifiedElement)
-	resultChan := make(chan VerificationResult, txBacklogSize)
+	stxnChan := make(chan *UnverifiedElement)
+	resultChan := make(chan *VerificationResult, txBacklogSize)
 	sv = MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache, droppedFromPool)
 	sv.Start(ctx)
 
@@ -904,7 +904,7 @@ func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups m
 	go func() {
 		defer wg.Done()
 		for _, tg := range txnGroups {
-			stxnChan <- UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}
+			stxnChan <- &UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}
 		}
 	}()
 
@@ -918,7 +918,7 @@ func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups m
 	return sv
 }
 
-func processResults(ctx context.Context, errChan chan<- error, resultChan <-chan VerificationResult,
+func processResults(ctx context.Context, errChan chan<- error, resultChan <-chan *VerificationResult,
 	numOfTxnGroups int, badTxnGroups map[uint64]struct{},
 	badSigResultCounter, goodSigResultCounter *int, wg *sync.WaitGroup) {
 	defer wg.Done()
@@ -1235,8 +1235,8 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 
 	blkHdr := createDummyBlockHeader()
 	nbw := MakeNewBlockWatcher(blkHdr)
-	stxnChan := make(chan UnverifiedElement)
-	resultChan := make(chan VerificationResult, txBacklogSize)
+	stxnChan := make(chan *UnverifiedElement)
+	resultChan := make(chan *VerificationResult, txBacklogSize)
 	sv := MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache, droppedFromPool)
 	sv.Start(ctx)
 
@@ -1265,7 +1265,7 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 			select {
 			case <-ctx.Done():
 				break
-			case stxnChan <- UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}:
+			case stxnChan <- &UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}:
 			}
 		}
 	}()
@@ -1290,8 +1290,8 @@ func TestStreamVerifierRestart(t *testing.T) {
 
 	blkHdr := createDummyBlockHeader()
 	nbw := MakeNewBlockWatcher(blkHdr)
-	stxnChan := make(chan UnverifiedElement)
-	resultChan := make(chan VerificationResult, txBacklogSize)
+	stxnChan := make(chan *UnverifiedElement)
+	resultChan := make(chan *VerificationResult, txBacklogSize)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	sv := MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache, droppedFromPool)
@@ -1322,7 +1322,7 @@ func TestStreamVerifierRestart(t *testing.T) {
 			select {
 			case <-ctx2.Done():
 				break
-			case stxnChan <- UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}:
+			case stxnChan <- &UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}:
 			}
 		}
 		cancel()

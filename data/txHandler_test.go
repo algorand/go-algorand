@@ -370,7 +370,7 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 					// this is not expected during the test
 					continue
 				}
-				handler.streamVerifierChan <- verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}
+				handler.streamVerifierChan <- &verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}
 			case wi, ok := <-handler.postVerificationQueue:
 				if !ok {
 					return
@@ -648,7 +648,7 @@ func runHandlerBenchmarkWithBacklog(rateAdjuster time.Duration, maxGroupSize, tp
 						// this is not expected during the test
 						continue
 					}
-					handler.streamVerifierChan <- verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}
+					handler.streamVerifierChan <- &verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}
 				case wi, ok := <-handler.postVerificationQueue:
 					if !ok {
 						return
@@ -769,7 +769,7 @@ func runHandlerBenchmarkWithBacklog(rateAdjuster time.Duration, maxGroupSize, tp
 	} else {
 		for _, stxngrp := range signedTransactionGroups {
 			blm := txBacklogMsg{rawmsg: nil, unverifiedTxGroup: stxngrp}
-			handler.streamVerifierChan <- verify.UnverifiedElement{TxnGroup: stxngrp, BacklogMessage: &blm}
+			handler.streamVerifierChan <- &verify.UnverifiedElement{TxnGroup: stxngrp, BacklogMessage: &blm}
 			time.Sleep(rateAdjuster)
 		}
 	}
