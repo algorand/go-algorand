@@ -362,40 +362,32 @@ func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler := makeTestTxHandlerOrphaned(20)
-
-	stxns1, blob1 := makeRandomTransactions(1)
-	require.Equal(t, 1, len(stxns1))
-	stxns2, blob2 := makeRandomTransactions(config.MaxTxGroupSize)
-	require.Equal(t, config.MaxTxGroupSize, len(stxns2))
-	stxns3, blob3 := makeRandomTransactions(config.MaxTxGroupSize + 1)
-	require.Equal(t, config.MaxTxGroupSize+1, len(stxns3))
-
-	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob1})
-	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
-
-	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob2})
-	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
-
-	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob3})
-	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
-
-	require.Equal(t, 3, len(handler.backlogQueue))
-
-	var checks = []struct {
-		stxns      *[]transactions.SignedTxn
+	type T struct {
+		inputSize  int
 		numDecoded int
-	}{
-		{&stxns1, 1},
-		{&stxns2, config.MaxTxGroupSize},
-		{&stxns3, config.MaxTxGroupSize},
 	}
+	var checks = []T{}
+	for i := 1; i <= config.MaxTxGroupSize; i++ {
+		checks = append(checks, T{i, i})
+	}
+	for i := 1; i < 10; i++ {
+		checks = append(checks, T{config.MaxTxGroupSize + i, config.MaxTxGroupSize})
+	}
+
 	for _, check := range checks {
-		msg := <-handler.backlogQueue
-		require.Equal(t, check.numDecoded, len(msg.unverifiedTxGroup))
-		for i := 0; i < check.numDecoded; i++ {
-			require.Equal(t, (*check.stxns)[i], msg.unverifiedTxGroup[i])
-		}
+		t.Run(fmt.Sprintf("%d-%d", check.inputSize, check.numDecoded), func(t *testing.T) {
+			handler := TxHandler{
+				backlogQueue: make(chan *txBacklogMsg, 1),
+			}
+			stxns, blob := makeRandomTransactions(check.inputSize)
+			action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
+			require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+			msg := <-handler.backlogQueue
+			require.Equal(t, check.numDecoded, len(msg.unverifiedTxGroup))
+			for i := 0; i < check.numDecoded; i++ {
+				require.Equal(t, stxns[i], msg.unverifiedTxGroup[i])
+			}
+		})
 	}
 }
 
