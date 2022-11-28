@@ -153,19 +153,16 @@ func (handler *TxHandler) backlogWorker() {
 		// we have no more post verification items. wait for either backlog queue item or post verification item.
 		select {
 		case wi, ok := <-handler.backlogQueue:
+			if err := wi.capguard.Release(); err != nil {
+				logging.Base().Warnf("Failed to release capacity to ElasticRateLimiter: %v", err)
+			}
+			defer wi.capguard.Served()
 			if !ok {
 				return
 			}
 			if handler.checkAlreadyCommitted(wi) {
 				continue
 			}
-
-			// let the capacity guard return capacity,
-			// and when this function is done, report to the underlying congestion manager that the request is fully serviced
-			if err := wi.capguard.Release(); err != nil {
-				logging.Base().Warnf("Failed to release capacity to ElasticRateLimiter: %v", err)
-			}
-			defer wi.capguard.Served()
 
 			// enqueue the task to the verification pool.
 			handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignature, wi, nil)
@@ -246,7 +243,6 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	// consume a capacity unit
 	capguard, err := handler.erl.ConsumeCapacity(rawmsg.Sender.(util.ErlClient))
 	if err != nil {
-		logging.Base().Warnf("Could not consume capacity for client %v: %v", rawmsg.Sender, err)
 		return network.OutgoingMessage{Action: network.Ignore}
 	}
 	// if the backlog Queue has 50% of its buffer back, turn congestion control off

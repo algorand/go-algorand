@@ -149,6 +149,11 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (ErlCapacityGuard, e
 		}
 		// if the client has been given a new reservation, make sure it cleans up OnClose
 		c.OnClose(func() { erl.closeReservation(c) })
+
+		// if this reservation is newly created, directly (blocking) take a capacity
+		q.blockingConsume()
+		fmt.Println(len(q))
+		return ErlCapacityGuard{cq: q, cm: &erl.cm}, nil
 	}
 
 	// Step 1: Attempt consumption from the reserved queue
@@ -181,11 +186,13 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (ErlCapacityGuard, e
 func (erl ElasticRateLimiter) openReservation(c ErlClient) (capacityQueue, error) {
 	erl.clientLock.Lock()
 	if _, exists := erl.capacityByClient[c]; exists {
+		erl.clientLock.Unlock()
 		return capacityQueue(nil), fmt.Errorf("client already has a reservation")
 	}
 	// guard against overprovisioning, if there is less than a reservedCapacity amount left
 	remaining := erl.MaxCapacity - (erl.CapacityPerReservation * len(erl.capacityByClient))
 	if erl.CapacityPerReservation > remaining {
+		erl.clientLock.Unlock()
 		return capacityQueue(nil), fmt.Errorf("not enough capacity to reserve for client: %d remaining, %d requested", remaining, erl.CapacityPerReservation)
 	}
 	// make capacity for the provided client
@@ -193,14 +200,12 @@ func (erl ElasticRateLimiter) openReservation(c ErlClient) (capacityQueue, error
 	erl.capacityByClient[c] = q
 	erl.clientLock.Unlock()
 
-	// fill the reservation with capacity optimistically before consuming the shared capacity
-	for i := 0; i < erl.CapacityPerReservation; i++ {
-		q <- capacity{}
-	}
 	// create a thread to drain the capacity from sharedCapacity in a blocking way
+	// and move it to the reservation, also in a blocking way
 	go func() {
 		for i := 0; i < erl.CapacityPerReservation; i++ {
 			erl.sharedCapacity.blockingConsume()
+			q.blockingRelease()
 		}
 	}()
 	return q, nil
@@ -213,6 +218,7 @@ func (erl ElasticRateLimiter) closeReservation(c ErlClient) {
 	q, exists := erl.capacityByClient[c]
 	// guard clauses, and preventing the ElasticRateLimiter from draining its own sharedCapacity
 	if !exists || q == erl.sharedCapacity {
+		erl.clientLock.Unlock()
 		return
 	}
 	delete(erl.capacityByClient, c)
@@ -221,8 +227,8 @@ func (erl ElasticRateLimiter) closeReservation(c ErlClient) {
 	// start a routine to consume capacity from the closed reservation, and return it to the sharedCapacity
 	go func() {
 		for i := 0; i < erl.CapacityPerReservation; i++ {
-			erl.sharedCapacity.blockingRelease()
 			q.blockingConsume()
+			erl.sharedCapacity.blockingRelease()
 		}
 	}()
 }
@@ -334,54 +340,35 @@ func (cm *redCongestionManager) run(ctx context.Context, wg *sync.WaitGroup) {
 	targetRate := float64(0)
 	consumedByClient := map[ErlClient]*[]time.Time{}
 	serves := []time.Time{}
+	exit := false
 	for {
-		cutoff := time.Now().Add(-1 * cm.window)
 		// first process any new events happening
 		select {
+		// consumed events -- a client has consumed capacity from a queue
 		case e := <-cm.consumed:
 			if consumedByClient[e.c] == nil {
 				ts := []time.Time{}
 				consumedByClient[e.c] = &ts
 			}
 			*(consumedByClient[e.c]) = append(*(consumedByClient[e.c]), e.t)
-			prune(consumedByClient[e.c], cutoff)
-			tick = (tick + 1) % cm.targetRateRefreshTicks
+		// served events -- the capacity has been totally served
 		case e := <-cm.served:
 			serves = append(serves, e.t)
-			tick = (tick + 1) % cm.targetRateRefreshTicks
-		default:
-		}
-		// only recalculate the service rate every N ticks, because we have to make sure all entries are pruned
-		if tick == 0 {
-			tick = 1
-			prune(&serves, cutoff)
-			for c := range consumedByClient {
-				if prune(consumedByClient[c], cutoff) == 0 {
-					delete(consumedByClient, c)
-				}
-			}
-			targetRate = 0
-			// targetRate is the average service rate per client per second
-			if len(consumedByClient) > 0 {
-				targetRate = float64(len(serves)) / float64(len(consumedByClient)) / float64(cm.window/time.Second)
-			}
-		}
-		// consume all queries
-		for {
-			select {
-			case query := <-cm.shouldDropQueries:
-				query.ret <- cm.shouldDrop(targetRate, query.c, consumedByClient[query.c])
-			default:
-				goto GOTNONE
-			}
-		}
-	GOTNONE:
+		// "should drop" queries
+		case query := <-cm.shouldDropQueries:
+			cutoff := time.Now().Add(-1 * cm.window)
+			prune(consumedByClient[query.c], cutoff)
+			query.ret <- cm.shouldDrop(targetRate, query.c, consumedByClient[query.c])
 
-		// check for context Done and close the thread. Probably only needed for tests
-		// record the latest data to the struct for tests
-		select {
+		// check for context Done, and start the thread shutdown
 		case <-ctx.Done():
-			// prune lists and calculate targetRate once more before writing and exiting
+			exit = true
+		}
+		tick = (tick + 1) % cm.targetRateRefreshTicks
+		// only recalculate the service rate every N ticks, because all lists must be pruned, which can be expensive
+		// also calculate if the routine is going to exit
+		if tick == 0 || exit {
+			cutoff := time.Now().Add(-1 * cm.window)
 			prune(&serves, cutoff)
 			for c := range consumedByClient {
 				if prune(consumedByClient[c], cutoff) == 0 {
@@ -391,14 +378,16 @@ func (cm *redCongestionManager) run(ctx context.Context, wg *sync.WaitGroup) {
 			targetRate = 0
 			// targetRate is the average service rate per client per second
 			if len(consumedByClient) > 0 {
-				targetRate = float64(len(serves)) / float64(len(consumedByClient)) / float64(cm.window/time.Second)
+				serviceRate := float64(len(serves)) / float64(cm.window/time.Second)
+				targetRate = serviceRate / float64(len(consumedByClient))
 			}
+		}
+		if exit {
 			cm.setTargetRate(targetRate)
 			cm.setConsumedByClient(consumedByClient)
 			cm.setServes(serves)
 			cm.stop(wg)
 			return
-		default:
 		}
 	}
 }
@@ -425,18 +414,19 @@ func (cm *redCongestionManager) stop(wg *sync.WaitGroup) {
 }
 
 func prune(ts *[]time.Time, cutoff time.Time) int {
-	i := 0
-	// prune times from the given list by pulling in any times which are recent
-	for _, t := range *ts {
+	if ts == nil {
+		return 0
+	}
+	// find the first inserted timestamp *after* the cutoff, and cut everything behind it off
+	for i, t := range *ts {
 		if t.After(cutoff) {
-			(*ts)[i] = t
-			i++
+			*ts = (*ts)[i:]
+			return len(*ts)
 		}
 	}
-	// all values which are After the cutoff will now exist inside of the range to i,
-	// so slice the list down to just what is still valid
-	*ts = (*ts)[:i]
-	return i
+	//if there are no values after the cutoff, just set to empty and return
+	*ts = (*ts)[:0]
+	return 0
 }
 
 func (cm redCongestionManager) arrivalRateFor(arrivals *[]time.Time) float64 {

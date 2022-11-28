@@ -27,12 +27,12 @@ import (
 
 type mockClient string
 
-type mockCongestionCongrol struct{}
+type mockCongestionControl struct{}
 
-func (cg mockCongestionCongrol) Start(ctx context.Context, wg *sync.WaitGroup) {}
-func (cg mockCongestionCongrol) Consumed(c ErlClient, t time.Time)             {}
-func (cg mockCongestionCongrol) Served(t time.Time)                            {}
-func (cg mockCongestionCongrol) ShouldDrop(c ErlClient) bool                   { return true }
+func (cg mockCongestionControl) Start(ctx context.Context, wg *sync.WaitGroup) {}
+func (cg mockCongestionControl) Consumed(c ErlClient, t time.Time)             {}
+func (cg mockCongestionControl) Served(t time.Time)                            {}
+func (cg mockCongestionControl) ShouldDrop(c ErlClient) bool                   { return true }
 
 func (c mockClient) OnClose(func()) {
 	return
@@ -47,7 +47,7 @@ func TestNewElasticRateLimiter(t *testing.T) {
 
 func TestElasticRateLimiterCongestionControlled(t *testing.T) {
 	client := mockClient("client")
-	cg := mockCongestionCongrol{}
+	cg := mockCongestionControl{}
 	erl := NewElasticRateLimiter(3, 2, cg)
 
 	_, err := erl.ConsumeCapacity(client)
@@ -169,13 +169,10 @@ func TestREDCongestionManagerShouldntDrop(t *testing.T) {
 	red.Start(ctx, &wg)
 	// indicate that the arrival rate is essentially 0.1/s!
 	red.Consumed(client, time.Now())
-	// drive 10k messages over 2 seconds
+	// drive 10k messages
 	// indicates that the service rate is essentially 100/s (10s rolling window)
-	for i := 0; i < 10; i++ {
-		for i := 0; i < 1000; i++ {
-			red.Served(time.Now())
-		}
-		time.Sleep(200 * time.Millisecond)
+	for i := 0; i < 10000; i++ {
+		red.Served(time.Now())
 	}
 	// the service rate should be 1000/s, and the arrival rate for this client should be 0.1/s
 	// for this reason, shouldDrop should almost certainly return false (true only 1/100k times)
