@@ -204,7 +204,7 @@ func (handler *TxHandler) postProcessReportErrors(err error) {
 		return
 	}
 
-	var txGroupErr *verify.ErrTxGroupError
+	var txGroupErr *verify.TxGroupError
 	if errors.As(err, &txGroupErr) {
 		switch txGroupErr.Reason {
 		case verify.TxGroupErrorReasonNotWellFormed:

@@ -797,7 +797,7 @@ func TestTxHandlerPostProcessError(t *testing.T) {
 			continue
 		}
 
-		errTxGroup := &verify.ErrTxGroupError{Reason: i}
+		errTxGroup := &verify.TxGroupError{Reason: i}
 		txh.postProcessReportErrors(errTxGroup)
 		result = collect()
 		if i == verify.TxGroupErrorReasonSigNotWellFormed {
@@ -833,7 +833,7 @@ func TestTxHandlerPostProcessErrorWithVerify(t *testing.T) {
 		},
 	}
 	_, err := verify.TxnGroup([]transactions.SignedTxn{stxn}, hdr, nil, nil)
-	var txGroupErr *verify.ErrTxGroupError
+	var txGroupErr *verify.TxGroupError
 	require.ErrorAs(t, err, &txGroupErr)
 
 	result := map[string]float64{}
