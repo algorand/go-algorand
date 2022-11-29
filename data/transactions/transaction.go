@@ -234,7 +234,7 @@ func (tx Header) Alive(tc TxnContext) error {
 	// Check round validity
 	round := tc.Round()
 	if round < tx.FirstValid || round > tx.LastValid {
-		return TxnDeadError{
+		return &TxnDeadError{
 			Round:      round,
 			FirstValid: tx.FirstValid,
 			LastValid:  tx.LastValid,

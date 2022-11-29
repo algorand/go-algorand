@@ -581,7 +581,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 	r := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
 	for _, tx := range txgroup {
 		if tx.Txn.LastValid < r {
-			return transactions.TxnDeadError{
+			return &transactions.TxnDeadError{
 				Round:      r,
 				FirstValid: tx.Txn.FirstValid,
 				LastValid:  tx.Txn.LastValid,
@@ -600,7 +600,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 
 	if recomputing {
 		if !pool.assemblyResults.assemblyCompletedOrAbandoned {
-			transactionGroupDuration := time.Now().Sub(transactionGroupStartsTime)
+			transactionGroupDuration := time.Since(transactionGroupStartsTime)
 			pool.assemblyMu.Lock()
 			defer pool.assemblyMu.Unlock()
 			if pool.assemblyRound > pool.pendingBlockEvaluator.Round() {
@@ -630,7 +630,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 				} else {
 					pool.assemblyResults.blk = lvb
 				}
-				stats.BlockGenerationDuration = uint64(time.Now().Sub(blockGenerationStarts))
+				stats.BlockGenerationDuration = uint64(time.Since(blockGenerationStarts))
 				pool.assemblyResults.stats = *stats
 				pool.assemblyCond.Broadcast()
 			} else {
@@ -742,7 +742,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			case *ledgercore.TransactionInLedgerError:
 				asmStats.CommittedCount++
 				stats.RemovedInvalidCount++
-			case transactions.TxnDeadError:
+			case *transactions.TxnDeadError:
 				if int(terr.LastValid-terr.FirstValid) > 20 {
 					// cutoff value  here is picked as a somewhat arbitrary cutoff trying to separate longer lived transactions from very short lived ones
 					asmStats.ExpiredLongLivedCount++
@@ -753,7 +753,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 				asmStats.LeaseErrorCount++
 				stats.RemovedInvalidCount++
 				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
-			case transactions.MinFeeError:
+			case *transactions.MinFeeError:
 				asmStats.MinFeeErrorCount++
 				stats.RemovedInvalidCount++
 				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
@@ -835,7 +835,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 			}
 
 			// Measure time here because we want to know how close to deadline we are
-			dt := time.Now().Sub(start)
+			dt := time.Since(start)
 			stats.Nanoseconds = dt.Nanoseconds()
 
 			payset := assembled.Block().Payset
@@ -919,7 +919,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 
 		if pool.assemblyResults.roundStartedEvaluating > round {
 			// this case is expected to happen only if the transaction pool was able to construct *two* rounds during the time we were trying to assemble the empty block.
-			// while this is extreamly unlikely, we need to handle this. the handling it quite straight-forward :
+			// while this is extremely unlikely, we need to handle this. the handling it quite straight-forward :
 			// since the network is already ahead of us, there is no issue here in not generating a block ( since the block would get discarded anyway )
 			pool.log.Infof("AssembleBlock: requested round is behind transaction pool round after timing out %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
 			return nil, ErrStaleBlockAssemblyRequest
@@ -949,7 +949,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	if pool.assemblyResults.roundStartedEvaluating > round {
 		// this scenario should not happen unless the txpool is receiving the new blocks via OnNewBlock
 		// with "jumps" between consecutive blocks ( which is why it's a warning )
-		// The "normal" usecase is evaluated on the top of the function.
+		// The "normal" use case is evaluated on the top of the function.
 		pool.log.Warnf("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
 		return nil, ErrStaleBlockAssemblyRequest
 	} else if pool.assemblyResults.roundStartedEvaluating == round.SubSaturate(1) {
