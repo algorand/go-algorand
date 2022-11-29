@@ -39,6 +39,11 @@ import (
 	"github.com/algorand/go-algorand/util"
 )
 
+var Usage = func() {
+	fmt.Fprintf(os.Stderr, "algoh wraps the Algorand daemon with telemetry and provides logging capture and forwarding.\n Usage: \n")
+	flag.PrintDefaults()
+}
+
 var dataDirectory = flag.String("d", "", "Root Algorand daemon data path")
 var versionCheck = flag.Bool("v", false, "Display and write current build version and exit")
 var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1")`)
@@ -71,6 +76,7 @@ func (c *stdCollector) Write(p []byte) (n int, err error) {
 
 func main() {
 	blockWatcherInitialized := false
+	flag.CommandLine.Usage = Usage;
 	flag.Parse()
 	nc := getNodeController()
 
