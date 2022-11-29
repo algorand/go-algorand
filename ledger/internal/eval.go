@@ -926,7 +926,10 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	}
 
 	if len(txgroup) > eval.proto.MaxTxGroupSize {
-		return fmt.Errorf("group size %d exceeds maximum %d", len(txgroup), eval.proto.MaxTxGroupSize)
+		return &ledgercore.TxGroupMalformedError{
+			Msg:    fmt.Sprintf("group size %d exceeds maximum %d", len(txgroup), eval.proto.MaxTxGroupSize),
+			Reason: ledgercore.TxGroupMalformedErrorReasonExceedMaxSize,
+		}
 	}
 
 	var txibs []transactions.SignedTxnInBlock
@@ -959,8 +962,11 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 		// Make sure all transactions in group have the same group value
 		if txad.SignedTxn.Txn.Group != txgroup[0].SignedTxn.Txn.Group {
-			return fmt.Errorf("transactionGroup: inconsistent group values: %v != %v",
-				txad.SignedTxn.Txn.Group, txgroup[0].SignedTxn.Txn.Group)
+			return &ledgercore.TxGroupMalformedError{
+				Msg: fmt.Sprintf("transactionGroup: inconsistent group values: %v != %v",
+					txad.SignedTxn.Txn.Group, txgroup[0].SignedTxn.Txn.Group),
+				Reason: ledgercore.TxGroupMalformedErrorReasonInconsistentGroupID,
+			}
 		}
 
 		if !txad.SignedTxn.Txn.Group.IsZero() {
@@ -969,15 +975,21 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txWithoutGroup.ID()))
 		} else if len(txgroup) > 1 {
-			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
+			return &ledgercore.TxGroupMalformedError{
+				Msg:    fmt.Sprintf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup)),
+				Reason: ledgercore.TxGroupMalformedErrorReasonEmptyGroupID,
+			}
 		}
 	}
 
 	// If we had a non-zero Group value, check that all group members are present.
 	if group.TxGroupHashes != nil {
 		if txgroup[0].SignedTxn.Txn.Group != crypto.HashObj(group) {
-			return fmt.Errorf("transactionGroup: incomplete group: %v != %v (%v)",
-				txgroup[0].SignedTxn.Txn.Group, crypto.HashObj(group), group)
+			return &ledgercore.TxGroupMalformedError{
+				Msg: fmt.Sprintf("transactionGroup: incomplete group: %v != %v (%v)",
+					txgroup[0].SignedTxn.Txn.Group, crypto.HashObj(group), group),
+				Reason: ledgercore.TxGroupMalformedErrorReasonIncompleteGroup,
+			}
 		}
 	}
 

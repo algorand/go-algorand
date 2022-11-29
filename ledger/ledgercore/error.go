@@ -107,3 +107,29 @@ type ErrNonSequentialBlockEval struct {
 func (err ErrNonSequentialBlockEval) Error() string {
 	return fmt.Sprintf("block evaluation for round %d requires sequential evaluation while the latest round is %d", err.EvaluatorRound, err.LatestRound)
 }
+
+// TxGroupMalformedErrorReasonCode is a reason code for TxGroupMalformed
+type TxGroupMalformedErrorReasonCode int
+
+const (
+	// TxGroupMalformedErrorReasonGeneric is a generic (not specific) reason code
+	TxGroupMalformedErrorReasonGeneric TxGroupMalformedErrorReasonCode = iota
+	// TxGroupMalformedErrorReasonExceedMaxSize indicates too large txgroup
+	TxGroupMalformedErrorReasonExceedMaxSize
+	// TxGroupMalformedErrorReasonInconsistentGroupID indicates different group IDs in a txgroup
+	TxGroupMalformedErrorReasonInconsistentGroupID
+	// TxGroupMalformedErrorReasonEmptyGroupID is for empty group ID but multiple transactions in a txgroup
+	TxGroupMalformedErrorReasonEmptyGroupID
+	// TxGroupMalformedErrorReasonIncompleteGroup indicates expected group ID does not match to provided
+	TxGroupMalformedErrorReasonIncompleteGroup
+)
+
+// TxGroupMalformedError indicates txgroup has group ID problems or too large
+type TxGroupMalformedError struct {
+	Msg    string
+	Reason TxGroupMalformedErrorReasonCode
+}
+
+func (e *TxGroupMalformedError) Error() string {
+	return e.Msg
+}
