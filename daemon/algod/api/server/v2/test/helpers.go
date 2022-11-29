@@ -79,7 +79,7 @@ var poolAddrResponseGolden = model.AccountResponse{
 	MinBalance:                  100000,
 }
 var txnPoolGolden = make([]transactions.SignedTxn, 2)
-var poolDeltaResponseGolden = model.RoundStateDelta{
+var poolDeltaResponseGolden = model.LedgerStateDelta{
 	Accts: &model.AccountDeltas{
 		Accounts: &[]model.AccountBalanceRecord{
 			{
@@ -88,23 +88,16 @@ var poolDeltaResponseGolden = model.RoundStateDelta{
 					Amount:                      50000000000,
 					AmountWithoutPendingRewards: 50000000000,
 					MinBalance:                  100000,
-					CreatedApps:                 nil,
+					CreatedApps:                 &[]model.Application{},
 					AppsTotalSchema:             &appsTotalSchema,
-					AppsLocalState:              nil,
+					AppsLocalState:              &[]model.ApplicationLocalState{},
 					Status:                      "Not Participating",
 					RewardBase:                  &poolAddrRewardBaseGolden,
-					CreatedAssets:               nil,
-					Assets:                      nil,
+					CreatedAssets:               &[]model.Asset{},
+					Assets:                      &[]model.AssetHolding{},
 				},
 				Address: poolAddr.String(),
 			},
-		},
-	},
-	TxIds: &[]model.IncludedTransaction{
-		{
-			Intra:     0,
-			LastValid: 0,
-			TxId:      "Z7ATVET4TI3UG32H2PYJQPREPYOQHAH376E25M3KB57OEW66YMPA",
 		},
 	},
 	Totals: &model.AccountTotals{

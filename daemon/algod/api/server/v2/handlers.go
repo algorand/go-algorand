@@ -986,10 +986,10 @@ func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, model.GetSyncRoundResponse{Round: rnd})
 }
 
-// GetRoundStateDelta returns the deltas for a given round.
+// GetLedgerStateDelta returns the deltas for a given round.
 // This should be a ledgercore.StateDelta object.
 // (GET /v2/deltas/{round})
-func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
+func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64) error {
 	sDelta, err := v2.Node.LedgerForAPI().GetStateDeltaForRound(basics.Round(round))
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingStateDelta, v2.Log)
@@ -999,9 +999,9 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 	var apps []model.AppResourceRecord
 	var assets []model.AssetResourceRecord
 	var keyValues []model.KvDelta
-	var modifiedCreatables []model.ModifiedCreatable
+	var modifiedApps []model.ModifiedApp
+	var modifiedAssets []model.ModifiedAsset
 	var txLeases []model.TxLease
-	var inclTxns []model.IncludedTransaction
 
 	consensusParams, err := v2.Node.LedgerForAPI().ConsensusParams(basics.Round(round))
 	if err != nil {
@@ -1015,9 +1015,8 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 	for key, kvDelta := range sDelta.KvMods {
 		var keyBytes = []byte(key)
 		keyValues = append(keyValues, model.KvDelta{
-			Key:       &keyBytes,
-			PrevValue: &kvDelta.OldData,
-			Value:     &kvDelta.Data,
+			Key:   &keyBytes,
+			Value: &kvDelta.Data,
 		})
 	}
 
@@ -1078,7 +1077,7 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 		apps = append(apps, model.AppResourceRecord{
 			Address:              app.Addr.String(),
 			AppIndex:             uint64(app.Aidx),
-			AppParamsDeleted:     app.Params.Deleted,
+			AppDeleted:           app.Params.Deleted,
 			AppParams:            appParams,
 			AppLocalStateDeleted: app.State.Deleted,
 			AppLocalState:        appLocalState,
@@ -1120,26 +1119,27 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 			AssetHoldingDeleted: asset.Holding.Deleted,
 			AssetHolding:        assetHolding,
 			AssetParams:         assetParams,
-			AssetParamsDeleted:  asset.Params.Deleted,
+			AssetDeleted:        asset.Params.Deleted,
 		})
 	}
 
 	for createIdx, mod := range sDelta.Creatables {
-		var creatableType model.ModifiedCreatableCreatableType
 		switch mod.Ctype {
 		case basics.AppCreatable:
-			creatableType = model.ModifiedCreatableCreatableTypeApp
+			modifiedApps = append(modifiedApps, model.ModifiedApp{
+				Created: mod.Created,
+				Creator: mod.Creator.String(),
+				Id:      uint64(createIdx),
+			})
 		case basics.AssetCreatable:
-			creatableType = model.ModifiedCreatableCreatableTypeAsset
+			modifiedAssets = append(modifiedAssets, model.ModifiedAsset{
+				Created: mod.Created,
+				Creator: mod.Creator.String(),
+				Id:      uint64(createIdx),
+			})
 		default:
 			return internalError(ctx, fmt.Errorf("unable to determine type of creatable for modified creatable with index %d", createIdx), errInternalFailure, v2.Log)
 		}
-		modifiedCreatables = append(modifiedCreatables, model.ModifiedCreatable{
-			CreatableType: creatableType,
-			Created:       mod.Created,
-			Creator:       mod.Creator.String(),
-			Index:         uint64(createIdx),
-		})
 	}
 
 	for lease, expRnd := range sDelta.Txleases {
@@ -1150,21 +1150,14 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 		})
 	}
 
-	for txid, inclTxn := range sDelta.Txids {
-		inclTxns = append(inclTxns, model.IncludedTransaction{
-			Intra:     inclTxn.Intra,
-			LastValid: uint64(inclTxn.LastValid),
-			TxId:      txid.String(),
-		})
-	}
-
-	response := model.RoundStateDeltaResponse{
+	response := model.LedgerStateDeltaResponse{
 		Accts: &model.AccountDeltas{
 			Accounts: &accts,
 			Apps:     &apps,
 			Assets:   &assets,
 		},
-		Creatables:     &modifiedCreatables,
+		ModifiedApps:   &modifiedApps,
+		ModifiedAssets: &modifiedAssets,
 		KvMods:         &keyValues,
 		PrevTimestamp:  numOrNil(uint64(sDelta.PrevTimestamp)),
 		StateProofNext: numOrNil(uint64(sDelta.StateProofNext)),
@@ -1174,7 +1167,6 @@ func (v2 *Handlers) GetRoundStateDelta(ctx echo.Context, round uint64) error {
 			Online:           sDelta.Totals.Online.Money.Raw,
 			RewardsLevel:     sDelta.Totals.RewardsLevel,
 		},
-		TxIds:    &inclTxns,
 		TxLeases: &txLeases,
 	}
 

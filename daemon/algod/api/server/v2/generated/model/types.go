@@ -21,12 +21,6 @@ const (
 	AccountSigTypeSig  AccountSigType = "sig"
 )
 
-// Defines values for ModifiedCreatableCreatableType.
-const (
-	ModifiedCreatableCreatableTypeApp   ModifiedCreatableCreatableType = "app"
-	ModifiedCreatableCreatableTypeAsset ModifiedCreatableCreatableType = "asset"
-)
-
 // Defines values for AddressRole.
 const (
 	FreezeTarget AddressRole = "freeze-target"
@@ -297,6 +291,9 @@ type AppResourceRecord struct {
 	// Address App account address
 	Address string `json:"address"`
 
+	// AppDeleted Whether the app was deleted
+	AppDeleted bool `json:"app-deleted"`
+
 	// AppIndex App index
 	AppIndex uint64 `json:"app-index"`
 
@@ -308,9 +305,6 @@ type AppResourceRecord struct {
 
 	// AppParams Stores the global information associated with an application.
 	AppParams *ApplicationParams `json:"app-params,omitempty"`
-
-	// AppParamsDeleted Whether the app params were deleted
-	AppParamsDeleted bool `json:"app-params-deleted"`
 }
 
 // Application Application index and its parameters
@@ -454,6 +448,9 @@ type AssetResourceRecord struct {
 	// Address Account address of the asset
 	Address string `json:"address"`
 
+	// AssetDeleted Whether the asset was deleted
+	AssetDeleted bool `json:"asset-deleted"`
+
 	// AssetHolding Describes an asset held by an account.
 	//
 	// Definition:
@@ -473,9 +470,6 @@ type AssetResourceRecord struct {
 	// Definition:
 	// data/transactions/asset.go : AssetParams
 	AssetParams *AssetParams `json:"asset-params,omitempty"`
-
-	// AssetParamsDeleted Whether the asset params were deleted
-	AssetParamsDeleted bool `json:"asset-params-deleted"`
 }
 
 // Box Box name and its content.
@@ -598,27 +592,40 @@ type EvalDeltaKeyValue struct {
 	Value EvalDelta `json:"value"`
 }
 
-// IncludedTransaction Location information for a transaction included in a block
-type IncludedTransaction struct {
-	// Intra Intra round index of the transaction in the block.
-	Intra uint64 `json:"intra"`
-
-	// LastValid Last valid round of the included transaction.
-	LastValid uint64 `json:"lastValid"`
-
-	// TxId ID of the transaction.
-	TxId string `json:"txId"`
-}
-
 // KvDelta A single Delta containing the key, the previous value and the current value for a single round.
 type KvDelta struct {
+	// Key The key, base64 encoded.
 	Key *[]byte `json:"key,omitempty"`
 
-	// PrevValue The previous value of the KV store entry.
-	PrevValue *[]byte `json:"prev-value,omitempty"`
-
-	// Value The new value of the KV store entry.
+	// Value The new value of the KV store entry, base64 encoded.
 	Value *[]byte `json:"value,omitempty"`
+}
+
+// LedgerStateDelta Contains ledger updates.
+type LedgerStateDelta struct {
+	// Accts Exposes deltas for account based resources in a single round
+	Accts *AccountDeltas `json:"accts,omitempty"`
+
+	// KvMods Array of KV Deltas
+	KvMods *[]KvDelta `json:"kv-mods,omitempty"`
+
+	// ModifiedApps List of modified Apps
+	ModifiedApps *[]ModifiedApp `json:"modified-apps,omitempty"`
+
+	// ModifiedAssets List of modified Assets
+	ModifiedAssets *[]ModifiedAsset `json:"modified-assets,omitempty"`
+
+	// PrevTimestamp Previous block timestamp
+	PrevTimestamp *uint64 `json:"prev-timestamp,omitempty"`
+
+	// StateProofNext Next round for which we expect a state proof
+	StateProofNext *uint64 `json:"state-proof-next,omitempty"`
+
+	// Totals Total Algos in the system grouped by account status
+	Totals *AccountTotals `json:"totals,omitempty"`
+
+	// TxLeases List of transaction leases
+	TxLeases *[]TxLease `json:"tx-leases,omitempty"`
 }
 
 // LightBlockHeaderProof Proof of membership and position of a light block header.
@@ -633,23 +640,29 @@ type LightBlockHeaderProof struct {
 	Treedepth uint64 `json:"treedepth"`
 }
 
-// ModifiedCreatable Creatable which was created or deleted during the round.
-type ModifiedCreatable struct {
-	// CreatableType Type of creatable
-	CreatableType ModifiedCreatableCreatableType `json:"creatable-type"`
-
-	// Created Created during this round if true, deleted if false
+// ModifiedApp App which was created or deleted.
+type ModifiedApp struct {
+	// Created Created if true, deleted if false
 	Created bool `json:"created"`
 
-	// Creator Address of the creator of the Creatable.
+	// Creator Address of the creator.
 	Creator string `json:"creator"`
 
-	// Index Index of the Creatable
-	Index uint64 `json:"index"`
+	// Id App Id
+	Id uint64 `json:"id"`
 }
 
-// ModifiedCreatableCreatableType Type of creatable
-type ModifiedCreatableCreatableType string
+// ModifiedAsset Asset which was created or deleted.
+type ModifiedAsset struct {
+	// Created Created if true, deleted if false
+	Created bool `json:"created"`
+
+	// Creator Address of the creator.
+	Creator string `json:"creator"`
+
+	// Id Asset Id
+	Id uint64 `json:"id"`
+}
 
 // ParticipationKey Represents a participation key used by the node.
 type ParticipationKey struct {
@@ -721,31 +734,6 @@ type PendingTransactionResponse struct {
 
 	// Txn The raw signed transaction.
 	Txn map[string]interface{} `json:"txn"`
-}
-
-// RoundStateDelta Contains updates from a given round.
-type RoundStateDelta struct {
-	// Accts Exposes deltas for account based resources in a single round
-	Accts *AccountDeltas `json:"accts,omitempty"`
-
-	// Creatables List of modified Creatables for the given round.
-	Creatables *[]ModifiedCreatable `json:"creatables,omitempty"`
-
-	// KvMods Array of KV Deltas for the round.
-	KvMods *[]KvDelta `json:"kv-mods,omitempty"`
-
-	// PrevTimestamp Previous block timestamp
-	PrevTimestamp *uint64 `json:"prev-timestamp,omitempty"`
-
-	// StateProofNext Next round for which we expect a state proof
-	StateProofNext *uint64 `json:"state-proof-next,omitempty"`
-
-	// Totals Total Algos in the system grouped by account status
-	Totals *AccountTotals `json:"totals,omitempty"`
-
-	// TxIds List of included transactions for a given round.
-	TxIds    *[]IncludedTransaction `json:"tx-ids,omitempty"`
-	TxLeases *[]TxLease             `json:"tx-leases,omitempty"`
 }
 
 // StateDelta Application state delta.
@@ -999,6 +987,9 @@ type GetSyncRoundResponse struct {
 	Round uint64 `json:"round"`
 }
 
+// LedgerStateDeltaResponse Contains ledger updates.
+type LedgerStateDeltaResponse = LedgerStateDelta
+
 // LightBlockHeaderProofResponse Proof of membership and position of a light block header.
 type LightBlockHeaderProofResponse = LightBlockHeaderProof
 
@@ -1076,9 +1067,6 @@ type PostTransactionsResponse struct {
 	// TxId encoding of the transaction hash.
 	TxId string `json:"txId"`
 }
-
-// RoundStateDeltaResponse Contains updates from a given round.
-type RoundStateDeltaResponse = RoundStateDelta
 
 // StateProofResponse Represents a state proof and its corresponding message
 type StateProofResponse = StateProof

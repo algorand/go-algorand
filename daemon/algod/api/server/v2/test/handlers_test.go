@@ -129,7 +129,7 @@ func TestGetBlock(t *testing.T) {
 	getBlockTest(t, 0, "bad format", 400)
 }
 
-func TestGetRoundStateDelta(t *testing.T) {
+func TestGetLedgerStateDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	a := require.New(t)
@@ -142,16 +142,16 @@ func TestGetRoundStateDelta(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
 
-	actualResponse := model.RoundStateDelta{}
+	actualResponse := model.LedgerStateDelta{}
 	expectedResponse := poolDeltaResponseGolden
 	(*expectedResponse.Accts.Accounts)[0].AccountData.Round = 2
 	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResponse)
 	require.NoError(t, err)
 	require.Equal(t, poolDeltaResponseGolden.Accts, actualResponse.Accts)
 	require.Equal(t, poolDeltaResponseGolden.KvMods, actualResponse.KvMods)
-	require.Equal(t, poolDeltaResponseGolden.Creatables, actualResponse.Creatables)
+	require.Equal(t, poolDeltaResponseGolden.ModifiedAssets, actualResponse.ModifiedAssets)
+	require.Equal(t, poolDeltaResponseGolden.ModifiedApps, actualResponse.ModifiedApps)
 	require.Equal(t, poolDeltaResponseGolden.TxLeases, actualResponse.TxLeases)
-	require.Equal(t, poolDeltaResponseGolden.TxIds, actualResponse.TxIds)
 	require.Equal(t, poolDeltaResponseGolden.Totals, actualResponse.Totals)
 }
 

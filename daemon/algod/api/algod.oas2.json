@@ -1369,9 +1369,8 @@
     },
     "/v2/deltas/{round}": {
       "get": {
-        "description": "Get deltas for a round.",
+        "description": "Get ledger deltas for a round.",
         "tags": [
-          "private"
         ],
         "produces": [
           "application/json"
@@ -1379,8 +1378,8 @@
         "schemes": [
           "http"
         ],
-        "summary": "Get a RoundStateDelta object for a given round",
-        "operationId": "GetRoundStateDelta",
+        "summary": "Get a LedgerStateDelta object for a given round",
+        "operationId": "GetLedgerStateDelta",
         "parameters": [
           {
             "type": "integer",
@@ -1393,7 +1392,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/responses/RoundStateDeltaResponse"
+            "$ref": "#/responses/LedgerStateDeltaResponse"
           },
           "401": {
             "description": "Invalid API Token",
@@ -1402,7 +1401,7 @@
             }
           },
           "404": {
-            "description": "Could not find a delta that covers a given round",
+            "description": "Could not find a delta for round",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -2432,43 +2431,42 @@
         }
       }
     },
-    "RoundStateDelta": {
-      "description": "Contains updates from a given round.",
+    "LedgerStateDelta": {
+      "description": "Contains ledger updates.",
       "type": "object",
       "required": [
-
       ],
       "properties": {
         "accts": {
-          "description": "AccountDeltas object for the round",
+          "description": "AccountDeltas object",
           "$ref": "#/definitions/AccountDeltas"
         },
         "kv-mods": {
-          "description": "Array of KV Deltas for the round.",
+          "description": "Array of KV Deltas",
           "type": "array",
           "items": {
             "$ref": "#/definitions/KvDelta"
           }
         },
-        "tx-ids": {
-          "description": "List of included transactions for a given round.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/IncludedTransaction"
-          }
-        },
         "tx-leases": {
-          "description": "",
+          "description": "List of transaction leases",
           "type": "array",
           "items": {
             "$ref": "#/definitions/TxLease"
           }
         },
-        "creatables": {
-          "description": "List of modified Creatables for the given round.",
+        "modified-apps": {
+          "description": "List of modified Apps",
           "type": "array",
           "items": {
-            "$ref": "#/definitions/ModifiedCreatable"
+            "$ref": "#/definitions/ModifiedApp"
+          }
+        },
+        "modified-assets": {
+          "description": "List of modified Assets",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ModifiedAsset"
           }
         },
         "state-proof-next": {
@@ -2480,7 +2478,7 @@
           "type": "integer"
         },
         "totals": {
-          "description": "Account Totals for the given round",
+          "description": "Account Totals",
           "$ref": "#/definitions/AccountTotals"
         }
       }
@@ -2564,58 +2562,49 @@
         }
       }
     },
-    "ModifiedCreatable": {
-      "description": "Creatable which was created or deleted during the round.",
+    "ModifiedAsset": {
+      "description": "Asset which was created or deleted.",
       "type": "object",
       "required": [
-        "index",
-        "creatable-type",
+        "id",
         "created",
         "creator"
       ],
       "properties": {
-        "index": {
-          "description": "Index of the Creatable",
+        "id": {
+          "description": "Asset Id",
           "type": "integer"
         },
-        "creatable-type": {
-          "description": "Type of creatable",
-          "type": "string",
-          "enum": [
-            "app",
-            "asset"
-          ]
-        },
         "created": {
-          "description": "Created during this round if true, deleted if false",
+          "description": "Created if true, deleted if false",
           "type": "boolean"
         },
         "creator": {
-          "description": "Address of the creator of the Creatable.",
+          "description": "Address of the creator.",
           "type": "string"
         }
       }
     },
-    "IncludedTransaction": {
-      "description": "Location information for a transaction included in a block",
+    "ModifiedApp": {
+      "description": "App which was created or deleted.",
       "type": "object",
       "required": [
-        "txId",
-        "lastValid",
-        "intra"
+        "id",
+        "created",
+        "creator"
       ],
       "properties": {
-        "txId": {
-          "description": "ID of the transaction.",
+        "id": {
+          "description": "App Id",
+          "type": "integer"
+        },
+        "created": {
+          "description": "Created if true, deleted if false",
+          "type": "boolean"
+        },
+        "creator": {
+          "description": "Address of the creator.",
           "type": "string"
-        },
-        "lastValid": {
-          "description": "Last valid round of the included transaction.",
-          "type": "integer"
-        },
-        "intra": {
-          "description": "Intra round index of the transaction in the block.",
-          "type": "integer"
         }
       }
     },
@@ -2643,7 +2632,7 @@
       "required": [
         "app-index",
         "address",
-        "app-params-deleted",
+        "app-deleted",
         "app-local-state-deleted"
       ],
       "properties": {
@@ -2656,8 +2645,8 @@
           "description": "App account address",
           "type": "string"
         },
-        "app-params-deleted": {
-          "description": "Whether the app params were deleted",
+        "app-deleted": {
+          "description": "Whether the app was deleted",
           "type": "boolean"
         },
         "app-local-state-deleted": {
@@ -2679,7 +2668,7 @@
       "required": [
         "asset-index",
         "address",
-        "asset-params-deleted",
+        "asset-deleted",
         "asset-holding-deleted"
       ],
       "properties": {
@@ -2692,12 +2681,12 @@
           "description": "Account address of the asset",
           "type": "string"
         },
-        "asset-params-deleted": {
-          "description": "Whether the asset params were deleted",
+        "asset-deleted": {
+          "description": "Whether the asset was deleted",
           "type": "boolean"
         },
         "asset-params": {
-          "description": "Assets params",
+          "description": "Asset params",
           "$ref": "#/definitions/AssetParams"
         },
         "asset-holding-deleted": {
@@ -3372,17 +3361,12 @@
       "type": "object",
       "properties": {
         "key": {
-          "description": "",
-          "type": "string",
-          "format": "byte"
-        },
-        "prev-value": {
-          "description": "The previous value of the KV store entry.",
+          "description": "The key, base64 encoded.",
           "type": "string",
           "format": "byte"
         },
         "value": {
-          "description": "The new value of the KV store entry.",
+          "description": "The new value of the KV store entry, base64 encoded.",
           "type": "string",
           "format": "byte"
         }
@@ -3800,10 +3784,10 @@
         }
       }
     },
-    "RoundStateDeltaResponse": {
-      "description": "Contains the deltas for a given round.",
+    "LedgerStateDeltaResponse": {
+      "description": "Contains ledger deltas",
       "schema": {
-        "$ref": "#/definitions/RoundStateDelta"
+        "$ref": "#/definitions/LedgerStateDelta"
       }
     },
     "LightBlockHeaderProofResponse": {

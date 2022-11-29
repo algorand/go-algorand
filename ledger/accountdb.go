@@ -496,17 +496,17 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 	return
 }
 
-// makeCompactResourceDeltas takes an array of AccountDeltas ( one array entry per round ), and compacts the resource portions of the arrays into a single
+// makeCompactResourceDeltas takes an array of StateDeltas containing AccountDeltas ( one array entry per round ), and compacts the resource portions of the AccountDeltas into a single
 // data structure that contains all the resources deltas changes. While doing that, the function eliminate any intermediate resources changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the resourcesDeltas.
-// As an optimization, accountDeltas is passed as a slice and must not be modified.
-func makeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
-	if len(accountDeltas) == 0 {
+// As an optimization, stateDeltas is passed as a slice and must not be modified.
+func makeCompactResourceDeltas(stateDeltas []ledgercore.StateDelta, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
+	if len(stateDeltas) == 0 {
 		return
 	}
 
 	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
-	size := accountDeltas[0].Len()*len(accountDeltas) + 1
+	size := stateDeltas[0].Accts.Len()*len(stateDeltas) + 1
 	outResourcesDeltas.cache = make(map[accountCreatable]int, size)
 	outResourcesDeltas.deltas = make([]resourceDelta, 0, size)
 	outResourcesDeltas.misses = make([]int, 0, size)
@@ -519,7 +519,8 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRou
 	if setUpdateRound {
 		updateRoundMultiplier = 1
 	}
-	for _, roundDelta := range accountDeltas {
+	for _, stateDelta := range stateDeltas {
+		roundDelta := stateDelta.Accts
 		deltaRound++
 		// assets
 		for _, res := range roundDelta.GetAllAssetResources() {
@@ -714,17 +715,17 @@ func (a *compactResourcesDeltas) updateOld(idx int, old persistedResourcesData) 
 	a.deltas[idx].oldResource = old
 }
 
-// makeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
+// makeCompactAccountDeltas takes an array of account StateDeltas with AccountDeltas ( one array entry per round ), and compacts the AccountDeltas into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the accountDeltaCount/modifiedCreatable.
-// As an optimization, accountDeltas is passed as a slice and must not be modified.
-func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
-	if len(accountDeltas) == 0 {
+// As an optimization, stateDeltas is passed as a slice and must not be modified.
+func makeCompactAccountDeltas(stateDeltas []ledgercore.StateDelta, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
+	if len(stateDeltas) == 0 {
 		return
 	}
 
 	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
-	size := accountDeltas[0].Len()*len(accountDeltas) + 1
+	size := stateDeltas[0].Accts.Len()*len(stateDeltas) + 1
 	outAccountDeltas.cache = make(map[basics.Address]int, size)
 	outAccountDeltas.deltas = make([]accountDelta, 0, size)
 	outAccountDeltas.misses = make([]int, 0, size)
@@ -737,7 +738,8 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 	if setUpdateRound {
 		updateRoundMultiplier = 1
 	}
-	for _, roundDelta := range accountDeltas {
+	for _, stateDelta := range stateDeltas {
+		roundDelta := stateDelta.Accts
 		deltaRound++
 		for i := 0; i < roundDelta.Len(); i++ {
 			addr, acctDelta := roundDelta.GetByIdx(i)

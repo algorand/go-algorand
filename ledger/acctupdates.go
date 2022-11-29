@@ -1639,18 +1639,10 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
-	var acctDeltas []ledgercore.AccountDeltas
-	var kvDeltas []map[string]ledgercore.KvValueDelta
-	var creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable
-	for _, sDelta := range au.deltas[:offset] {
-		acctDeltas = append(acctDeltas, sDelta.Accts)
-		kvDeltas = append(kvDeltas, sDelta.KvMods)
-		creatableDeltas = append(creatableDeltas, sDelta.Creatables)
-	}
-	dcc.compactAccountDeltas = makeCompactAccountDeltas(acctDeltas, dcc.oldBase, setUpdateRound, au.baseAccounts)
-	dcc.compactResourcesDeltas = makeCompactResourceDeltas(acctDeltas, dcc.oldBase, setUpdateRound, au.baseAccounts, au.baseResources)
-	dcc.compactKvDeltas = compactKvDeltas(kvDeltas)
-	dcc.compactCreatableDeltas = compactCreatableDeltas(creatableDeltas)
+	dcc.compactAccountDeltas = makeCompactAccountDeltas(au.deltas[:offset], dcc.oldBase, setUpdateRound, au.baseAccounts)
+	dcc.compactResourcesDeltas = makeCompactResourceDeltas(au.deltas[:offset], dcc.oldBase, setUpdateRound, au.baseAccounts, au.baseResources)
+	dcc.compactKvDeltas = compactKvDeltas(au.deltas[:offset])
+	dcc.compactCreatableDeltas = compactCreatableDeltas(au.deltas[:offset])
 
 	au.accountsMu.RUnlock()
 
@@ -1877,18 +1869,19 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 func (au *accountUpdates) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-// compactKvDeltas takes an array of kv deltas (one array entry per round), and
+// compactKvDeltas takes an array of StateDeltas containing kv deltas (one array entry per round), and
 // compacts the array into a single map that contains all the
 // changes. Intermediate changes are eliminated.  It counts the number of
 // changes per round by specifying it in the ndeltas field of the
 // modifiedKv. The modifiedValues in the returned map have the earliest
 // mv.oldData, and the newest mv.data.
-func compactKvDeltas(kvDeltas []map[string]ledgercore.KvValueDelta) map[string]modifiedKvValue {
-	if len(kvDeltas) == 0 {
+func compactKvDeltas(stateDeltas []ledgercore.StateDelta) map[string]modifiedKvValue {
+	if len(stateDeltas) == 0 {
 		return nil
 	}
 	outKvDeltas := make(map[string]modifiedKvValue)
-	for _, roundKv := range kvDeltas {
+	for _, stateDelta := range stateDeltas {
+		roundKv := stateDelta.KvMods
 		for key, current := range roundKv {
 			prev, ok := outKvDeltas[key]
 			if !ok { // Record only the first OldData
@@ -1902,16 +1895,18 @@ func compactKvDeltas(kvDeltas []map[string]ledgercore.KvValueDelta) map[string]m
 	return outKvDeltas
 }
 
-// compactCreatableDeltas takes an array of creatables map deltas ( one array entry per round ), and compact the array into a single
-// map that contains all the deltas changes. While doing that, the function eliminate any intermediate changes.
+// compactCreatableDeltas takes an array of StateDeltas containing creatables map deltas ( one array entry per round ),
+// and compacts the array into a single map that of createable deltas which contains all the deltas changes.
+// While doing that, the function eliminate any intermediate changes.
 // It counts the number of changes per round by specifying it in the ndeltas field of the modifiedCreatable.
-func compactCreatableDeltas(creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable) (outCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
-	if len(creatableDeltas) == 0 {
+func compactCreatableDeltas(stateDeltas []ledgercore.StateDelta) (outCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
+	if len(stateDeltas) == 0 {
 		return
 	}
 	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
-	outCreatableDeltas = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1+len(creatableDeltas[0])*len(creatableDeltas))
-	for _, roundCreatable := range creatableDeltas {
+	outCreatableDeltas = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1+len(stateDeltas[0].KvMods)*len(stateDeltas))
+	for _, stateDelta := range stateDeltas {
+		roundCreatable := stateDelta.Creatables
 		for creatableIdx, creatable := range roundCreatable {
 			if prev, has := outCreatableDeltas[creatableIdx]; has {
 				outCreatableDeltas[creatableIdx] = ledgercore.ModifiedCreatable{

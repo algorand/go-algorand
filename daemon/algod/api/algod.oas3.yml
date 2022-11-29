@@ -516,6 +516,16 @@
         },
         "description": "Response containing the ledger's minimum sync round"
       },
+      "LedgerStateDeltaResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/LedgerStateDelta"
+            }
+          }
+        },
+        "description": "Contains ledger deltas"
+      },
       "LightBlockHeaderProofResponse": {
         "content": {
           "application/json": {
@@ -698,16 +708,6 @@
           }
         },
         "description": "Transaction ID of the submission."
-      },
-      "RoundStateDeltaResponse": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/RoundStateDelta"
-            }
-          }
-        },
-        "description": "Contains the deltas for a given round."
       },
       "StateProofResponse": {
         "content": {
@@ -1126,6 +1126,10 @@
             "description": "App account address",
             "type": "string"
           },
+          "app-deleted": {
+            "description": "Whether the app was deleted",
+            "type": "boolean"
+          },
           "app-index": {
             "description": "App index",
             "type": "integer",
@@ -1140,17 +1144,13 @@
           },
           "app-params": {
             "$ref": "#/components/schemas/ApplicationParams"
-          },
-          "app-params-deleted": {
-            "description": "Whether the app params were deleted",
-            "type": "boolean"
           }
         },
         "required": [
           "address",
+          "app-deleted",
           "app-index",
-          "app-local-state-deleted",
-          "app-params-deleted"
+          "app-local-state-deleted"
         ],
         "type": "object"
       },
@@ -1383,6 +1383,10 @@
             "description": "Account address of the asset",
             "type": "string"
           },
+          "asset-deleted": {
+            "description": "Whether the asset was deleted",
+            "type": "boolean"
+          },
           "asset-holding": {
             "$ref": "#/components/schemas/AssetHolding"
           },
@@ -1397,17 +1401,13 @@
           },
           "asset-params": {
             "$ref": "#/components/schemas/AssetParams"
-          },
-          "asset-params-deleted": {
-            "description": "Whether the asset params were deleted",
-            "type": "boolean"
           }
         },
         "required": [
           "address",
+          "asset-deleted",
           "asset-holding-deleted",
-          "asset-index",
-          "asset-params-deleted"
+          "asset-index"
         ],
         "type": "object"
       },
@@ -1730,49 +1730,68 @@
         ],
         "type": "object"
       },
-      "IncludedTransaction": {
-        "description": "Location information for a transaction included in a block",
-        "properties": {
-          "intra": {
-            "description": "Intra round index of the transaction in the block.",
-            "type": "integer"
-          },
-          "lastValid": {
-            "description": "Last valid round of the included transaction.",
-            "type": "integer"
-          },
-          "txId": {
-            "description": "ID of the transaction.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "intra",
-          "lastValid",
-          "txId"
-        ],
-        "type": "object"
-      },
       "KvDelta": {
         "description": "A single Delta containing the key, the previous value and the current value for a single round.",
         "properties": {
           "key": {
-            "description": "",
-            "format": "byte",
-            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-            "type": "string"
-          },
-          "prev-value": {
-            "description": "The previous value of the KV store entry.",
+            "description": "The key, base64 encoded.",
             "format": "byte",
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             "type": "string"
           },
           "value": {
-            "description": "The new value of the KV store entry.",
+            "description": "The new value of the KV store entry, base64 encoded.",
             "format": "byte",
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "LedgerStateDelta": {
+        "description": "Contains ledger updates.",
+        "properties": {
+          "accts": {
+            "$ref": "#/components/schemas/AccountDeltas"
+          },
+          "kv-mods": {
+            "description": "Array of KV Deltas",
+            "items": {
+              "$ref": "#/components/schemas/KvDelta"
+            },
+            "type": "array"
+          },
+          "modified-apps": {
+            "description": "List of modified Apps",
+            "items": {
+              "$ref": "#/components/schemas/ModifiedApp"
+            },
+            "type": "array"
+          },
+          "modified-assets": {
+            "description": "List of modified Assets",
+            "items": {
+              "$ref": "#/components/schemas/ModifiedAsset"
+            },
+            "type": "array"
+          },
+          "prev-timestamp": {
+            "description": "Previous block timestamp",
+            "type": "integer"
+          },
+          "state-proof-next": {
+            "description": "Next round for which we expect a state proof",
+            "type": "integer"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/AccountTotals"
+          },
+          "tx-leases": {
+            "description": "List of transaction leases",
+            "items": {
+              "$ref": "#/components/schemas/TxLease"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -1802,35 +1821,49 @@
         ],
         "type": "object"
       },
-      "ModifiedCreatable": {
-        "description": "Creatable which was created or deleted during the round.",
+      "ModifiedApp": {
+        "description": "App which was created or deleted.",
         "properties": {
-          "creatable-type": {
-            "description": "Type of creatable",
-            "enum": [
-              "app",
-              "asset"
-            ],
-            "type": "string"
-          },
           "created": {
-            "description": "Created during this round if true, deleted if false",
+            "description": "Created if true, deleted if false",
             "type": "boolean"
           },
           "creator": {
-            "description": "Address of the creator of the Creatable.",
+            "description": "Address of the creator.",
             "type": "string"
           },
-          "index": {
-            "description": "Index of the Creatable",
+          "id": {
+            "description": "App Id",
             "type": "integer"
           }
         },
         "required": [
-          "creatable-type",
           "created",
           "creator",
-          "index"
+          "id"
+        ],
+        "type": "object"
+      },
+      "ModifiedAsset": {
+        "description": "Asset which was created or deleted.",
+        "properties": {
+          "created": {
+            "description": "Created if true, deleted if false",
+            "type": "boolean"
+          },
+          "creator": {
+            "description": "Address of the creator.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Asset Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created",
+          "creator",
+          "id"
         ],
         "type": "object"
       },
@@ -1955,54 +1988,6 @@
           "pool-error",
           "txn"
         ],
-        "type": "object"
-      },
-      "RoundStateDelta": {
-        "description": "Contains updates from a given round.",
-        "properties": {
-          "accts": {
-            "$ref": "#/components/schemas/AccountDeltas"
-          },
-          "creatables": {
-            "description": "List of modified Creatables for the given round.",
-            "items": {
-              "$ref": "#/components/schemas/ModifiedCreatable"
-            },
-            "type": "array"
-          },
-          "kv-mods": {
-            "description": "Array of KV Deltas for the round.",
-            "items": {
-              "$ref": "#/components/schemas/KvDelta"
-            },
-            "type": "array"
-          },
-          "prev-timestamp": {
-            "description": "Previous block timestamp",
-            "type": "integer"
-          },
-          "state-proof-next": {
-            "description": "Next round for which we expect a state proof",
-            "type": "integer"
-          },
-          "totals": {
-            "$ref": "#/components/schemas/AccountTotals"
-          },
-          "tx-ids": {
-            "description": "List of included transactions for a given round.",
-            "items": {
-              "$ref": "#/components/schemas/IncludedTransaction"
-            },
-            "type": "array"
-          },
-          "tx-leases": {
-            "description": "",
-            "items": {
-              "$ref": "#/components/schemas/TxLease"
-            },
-            "type": "array"
-          }
-        },
         "type": "object"
       },
       "StateDelta": {
@@ -3829,8 +3814,8 @@
     },
     "/v2/deltas/{round}": {
       "get": {
-        "description": "Get deltas for a round.",
-        "operationId": "GetRoundStateDelta",
+        "description": "Get ledger deltas for a round.",
+        "operationId": "GetLedgerStateDelta",
         "parameters": [
           {
             "description": "The round for which the deltas are desired.",
@@ -3848,11 +3833,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoundStateDelta"
+                  "$ref": "#/components/schemas/LedgerStateDelta"
                 }
               }
             },
-            "description": "Contains the deltas for a given round."
+            "description": "Contains ledger deltas"
           },
           "401": {
             "content": {
@@ -3872,7 +3857,7 @@
                 }
               }
             },
-            "description": "Could not find a delta that covers a given round"
+            "description": "Could not find a delta for round"
           },
           "408": {
             "content": {
@@ -3909,10 +3894,8 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get a RoundStateDelta object for a given round",
-        "tags": [
-          "private"
-        ]
+        "summary": "Get a LedgerStateDelta object for a given round",
+        "tags": []
       }
     },
     "/v2/ledger/supply": {
