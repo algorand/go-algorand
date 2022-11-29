@@ -138,7 +138,7 @@ func TestGetLedgerStateDelta(t *testing.T) {
 	defer releasefunc()
 	insertRounds(a, handler, 3)
 
-	err := handler.GetRoundStateDelta(c, 2)
+	err := handler.GetLedgerStateDelta(c, 2)
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
 
