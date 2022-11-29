@@ -39,7 +39,7 @@ func (c mockClient) OnClose(func()) {
 }
 
 func TestNewElasticRateLimiter(t *testing.T) {
-	erl := NewElasticRateLimiter(100, 10, nil)
+	erl := NewElasticRateLimiter(100, 10, nil, nil, nil)
 
 	assert.Equal(t, len(erl.sharedCapacity), 100)
 	assert.Equal(t, len(erl.capacityByClient), 0)
@@ -48,7 +48,7 @@ func TestNewElasticRateLimiter(t *testing.T) {
 func TestElasticRateLimiterCongestionControlled(t *testing.T) {
 	client := mockClient("client")
 	cg := mockCongestionControl{}
-	erl := NewElasticRateLimiter(3, 2, cg)
+	erl := NewElasticRateLimiter(3, 2, cg, nil, nil)
 
 	_, err := erl.ConsumeCapacity(client)
 	assert.Equal(t, 1, len(erl.capacityByClient[client]))
@@ -78,7 +78,7 @@ func TestElasticRateLimiterCongestionControlled(t *testing.T) {
 
 func TestConsumeReleaseCapacity(t *testing.T) {
 	client := mockClient("client")
-	erl := NewElasticRateLimiter(4, 3, nil)
+	erl := NewElasticRateLimiter(4, 3, nil, nil, nil)
 
 	c1, err := erl.ConsumeCapacity(client)
 	assert.Equal(t, 2, len(erl.capacityByClient[client]))

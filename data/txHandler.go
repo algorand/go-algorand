@@ -42,8 +42,12 @@ import (
 // The size txBacklogSize used to determine the size of the backlog that is used to store incoming transaction messages before starting dropping them.
 // It should be configured to be higher then the number of CPU cores, so that the execution pool get saturated, but not too high to avoid lockout of the
 // execution pool for a long duration of time.
-// Set backlog at 'approximately one block' by dividing block size by a typical transaction size.
-var txBacklogSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnBytesPerBlock / 200
+
+// 'approximately one block' by dividing block size by a typical transaction size.
+var txPerBlock = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnBytesPerBlock / 200
+
+// backlog size is big enough for each peer to have its reserved capacity in the backlog, plus two blocks of shared capacity
+var txBacklogSize = (2 * txPerBlock) + (config.AutogenLocal.IncomingConnectionsLimit * config.AutogenLocal.TxBacklogReservedCapacityPerPeer)
 
 var transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessagesHandled)
 var transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
@@ -62,11 +66,6 @@ var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionM
 var transactionGroupTxSyncHandled = metrics.MakeCounter(metrics.TransactionGroupTxSyncHandled)
 var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGroupTxSyncRemember)
 var transactionGroupTxSyncAlreadyCommitted = metrics.MakeCounter(metrics.TransactionGroupTxSyncAlreadyCommitted)
-
-var erlReservationsMax = config.AutogenLocal.IncomingConnectionsLimit
-var erlReservationSize = 20
-var serviceRateWindow = 10 * time.Second
-var serviceRateUpdateTicks = 25
 
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
@@ -104,7 +103,16 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		logging.Base().Fatal("MakeTxHandler: ledger is nil on initialization")
 		return nil
 	}
-	congestionManager := util.NewREDCongestionManager(serviceRateWindow, serviceRateUpdateTicks)
+	congestionManager := util.NewREDCongestionManager(
+		(time.Second * time.Duration(config.AutogenLocal.TxBacklogServiceRateWindowSeconds)),
+		100*config.AutogenLocal.TxBacklogServiceRateWindowSeconds) // Service Rates update 1/s @ 100 requests per second to the congestion manager
+	rateLimiter := util.NewElasticRateLimiter(
+		txBacklogSize,
+		config.AutogenLocal.TxBacklogReservedCapacityPerPeer,
+		congestionManager,
+		metrics.MakeCounter(metrics.TransactionMessagesTxnBacklogNoCapacity),
+		metrics.MakeCounter(metrics.TransactionMessagesTxnDroppedCongestionManagement),
+	)
 	handler := &TxHandler{
 		txPool:                txPool,
 		genesisID:             genesisID,
@@ -114,7 +122,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
-		erl:                   *util.NewElasticRateLimiter(erlReservationSize*erlReservationsMax, erlReservationSize, congestionManager),
+		erl:                   *rateLimiter,
 	}
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	congestionManager.Start(handler.ctx, nil)

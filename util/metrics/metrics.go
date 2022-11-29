@@ -95,7 +95,11 @@ var (
 	TransactionMessagesAlreadyCommitted = MetricName{Name: "algod_transaction_messages_err_or_committed", Description: "Number of duplicate or error transaction messages after TX handler backlog"}
 	// TransactionMessagesTxGroupInvalidFee "Number of transaction messages with invalid txgroup fee"
 	TransactionMessagesTxGroupInvalidFee = MetricName{Name: "algod_transaction_messages_txgroup_invalid_fee", Description: "Number of transaction messages with invalid txgroup fee"}
-	// TransactionMessagesTxnNotWellFormed "Number of transaction messages not well formed"
+	// TransactionMessagesTxnDroppedCongestionManagement "Number of transaction messages dropped because the tx backlog is under congestion management"
+	TransactionMessagesTxnDroppedCongestionManagement = MetricName{Name: "algod_transaction_messages_txn_dropped_congestion_ctrl", Description: "Number of transaction messages dropped because the tx backlog is under congestion management"}
+	// TransactionMessagesTxnBacklogNoCapacity "Number of transaction messages dropped because the tx backlog did not have capacity"
+	TransactionMessagesTxnBacklogNoCapacity = MetricName{Name: "algod_transaction_messages_txn_backlog_no_capacity", Description: "Number of transaction messages dropped because the tx backlog did not have capacity"}
+	// TransactionMessagesTxnSigNotWellFormed "Number of transaction messages with bad formed signature"
 	TransactionMessagesTxnNotWellFormed = MetricName{Name: "algod_transaction_messages_txn_notwell_formed", Description: "Number of transaction messages not well formed"}
 	// TransactionMessagesTxnSigNotWellFormed "Number of transaction messages with bad formed signature"
 	TransactionMessagesTxnSigNotWellFormed = MetricName{Name: "algod_transaction_messages_sig_bad_formed", Description: "Number of transaction messages with bad formed signature"}

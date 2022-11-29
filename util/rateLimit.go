@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-deadlock"
 )
 
@@ -35,9 +36,11 @@ type ElasticRateLimiter struct {
 	sharedCapacity         capacityQueue
 	capacityByClient       map[ErlClient]capacityQueue
 	clientLock             *deadlock.RWMutex
+	noCapacityCounter      *metrics.Counter
 	// CongestionManager and enable flag
-	cm       CongestionManager
-	enableCM bool
+	cm                       CongestionManager
+	enableCM                 bool
+	congestionControlCounter *metrics.Counter
 }
 
 // ErlClient clients must support OnClose for reservation closing
@@ -98,14 +101,21 @@ func (q capacityQueue) consume(cm *CongestionManager) (ErlCapacityGuard, error) 
 }
 
 // NewElasticRateLimiter creates an ElasticRateLimiter and initializes maps
-func NewElasticRateLimiter(maxCapacity, reservedCapacity int, cm CongestionManager) *ElasticRateLimiter {
+func NewElasticRateLimiter(
+	maxCapacity int,
+	reservedCapacity int,
+	cm CongestionManager,
+	nocapCount *metrics.Counter,
+	conmanCount *metrics.Counter) *ElasticRateLimiter {
 	ret := ElasticRateLimiter{
-		MaxCapacity:            maxCapacity,
-		CapacityPerReservation: reservedCapacity,
-		capacityByClient:       map[ErlClient]capacityQueue{},
-		clientLock:             &deadlock.RWMutex{},
-		cm:                     cm,
-		sharedCapacity:         capacityQueue(make(chan capacity, maxCapacity)),
+		MaxCapacity:              maxCapacity,
+		CapacityPerReservation:   reservedCapacity,
+		capacityByClient:         map[ErlClient]capacityQueue{},
+		clientLock:               &deadlock.RWMutex{},
+		cm:                       cm,
+		sharedCapacity:           capacityQueue(make(chan capacity, maxCapacity)),
+		noCapacityCounter:        nocapCount,
+		congestionControlCounter: conmanCount,
 	}
 	// fill the sharedCapacity
 	for i := 0; i < maxCapacity; i++ {
@@ -168,11 +178,17 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (ErlCapacityGuard, e
 	if erl.cm != nil &&
 		enableCM &&
 		erl.cm.ShouldDrop(c) {
+		if erl.congestionControlCounter != nil {
+			erl.congestionControlCounter.Inc(nil)
+		}
 		return ErlCapacityGuard{}, fmt.Errorf("congestionManager prevented client from consuming capacity")
 	}
 	// Step 3: Attempt consumption from the shared queue
 	cg, err = erl.sharedCapacity.consume(&erl.cm)
 	if err != nil {
+		if erl.noCapacityCounter != nil {
+			erl.noCapacityCounter.Inc(nil)
+		}
 		return ErlCapacityGuard{}, err
 	}
 	if erl.cm != nil {
