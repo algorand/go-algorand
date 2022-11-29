@@ -57,6 +57,27 @@ var cannedStatusReportGolden = node.StatusReport{
 	LastCatchpoint:                     "",
 }
 
+var cannedStatusReportConsensusUpgradeGolden = node.StatusReport{
+	LastRound:                          basics.Round(1),
+	LastVersion:                        protocol.ConsensusCurrentVersion,
+	NextVersion:                        protocol.ConsensusCurrentVersion,
+	NextVersionRound:                   basics.Round(1),
+	NextVersionSupported:               true,
+	StoppedAtUnsupportedRound:          true,
+	Catchpoint:                         "",
+	CatchpointCatchupAcquiredBlocks:    0,
+	CatchpointCatchupProcessedAccounts: 0,
+	CatchpointCatchupVerifiedAccounts:  0,
+	CatchpointCatchupTotalAccounts:     0,
+	CatchpointCatchupTotalBlocks:       0,
+	LastCatchpoint:                     "",
+	UpgradePropose:                     "upgradePropose",
+	UpgradeApprove:                     false,
+	UpgradeDelay:                       0,
+	NextProtocolVoteBefore:             1000,
+	NextProtocolApprovals:              1000,
+}
+
 var poolAddrRewardBaseGolden = uint64(0)
 var poolAddrAssetsGolden = make([]model.AssetHolding, 0)
 var poolAddrCreatedAssetsGolden = make([]model.Asset, 0)
@@ -82,13 +103,14 @@ var txnPoolGolden = make([]transactions.SignedTxn, 2)
 // but doing this would create an import cycle, as mockNode needs
 // package `data` and package `node`, which themselves import `mocks`
 type mockNode struct {
-	ledger    v2.LedgerForAPI
-	genesisID string
-	config    config.Local
-	err       error
-	id        account.ParticipationID
-	keys      account.StateProofKeys
-	usertxns  map[basics.Address][]node.TxnWithStatus
+	ledger           v2.LedgerForAPI
+	genesisID        string
+	config           config.Local
+	err              error
+	id               account.ParticipationID
+	keys             account.StateProofKeys
+	usertxns         map[basics.Address][]node.TxnWithStatus
+	consensusUpgrade bool
 }
 
 func (m mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
@@ -113,13 +135,14 @@ func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys acco
 	return m.err
 }
 
-func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error) *mockNode {
+func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error, consensusUpgrade bool) *mockNode {
 	return &mockNode{
-		ledger:    ledger,
-		genesisID: genesisID,
-		config:    config.GetDefaultLocal(),
-		err:       nodeError,
-		usertxns:  map[basics.Address][]node.TxnWithStatus{},
+		ledger:           ledger,
+		genesisID:        genesisID,
+		config:           config.GetDefaultLocal(),
+		err:              nodeError,
+		usertxns:         map[basics.Address][]node.TxnWithStatus{},
+		consensusUpgrade: consensusUpgrade,
 	}
 }
 
@@ -128,7 +151,11 @@ func (m mockNode) LedgerForAPI() v2.LedgerForAPI {
 }
 
 func (m mockNode) Status() (s node.StatusReport, err error) {
-	s = cannedStatusReportGolden
+	if m.consensusUpgrade {
+		s = cannedStatusReportConsensusUpgradeGolden
+	} else {
+		s = cannedStatusReportGolden
+	}
 	return
 }
 func (m mockNode) GenesisID() string {
