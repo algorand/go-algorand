@@ -869,20 +869,20 @@ func getNumberOfBatchableSigsInGroup(stxs []transactions.SignedTxn) (batchSigs u
 
 func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (uint64, error) {
 	var hasSig, hasMsig bool
-	numSigs := 0
+	numSigCategories := 0
 	if stx.Sig != (crypto.Signature{}) {
-		numSigs++
+		numSigCategories++
 		hasSig = true
 	}
 	if !stx.Msig.Blank() {
-		numSigs++
+		numSigCategories++
 		hasMsig = true
 	}
 	if !stx.Lsig.Blank() {
-		numSigs++
+		numSigCategories++
 	}
 
-	if numSigs == 0 {
+	if numSigCategories == 0 {
 		// Special case: special sender address can issue special transaction
 		// types (state proof txn) without any signature.  The well-formed
 		// check ensures that this transaction cannot pay any fee, and
@@ -892,7 +892,7 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (uint64, error) 
 		}
 		return 0, errSignedTxnHasNoSig
 	}
-	if numSigs != 1 {
+	if numSigCategories != 1 {
 		return 0, errSignedTxnMaxOneSig
 	}
 	if hasSig {
@@ -908,5 +908,6 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (uint64, error) 
 		}
 		return batchSigs, nil
 	}
+	// This is the Lsig case. Currently the sigs in here are not batched. Something to consider later.
 	return 0, nil
 }
