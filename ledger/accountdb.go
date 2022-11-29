@@ -3832,11 +3832,18 @@ func accountsNewRoundImpl(
 	}
 
 	updatedKVs = make(map[string]persistedKVData, len(kvPairs))
-	for key, value := range kvPairs {
-		if value.data != nil {
-			err = writer.upsertKvPair(key, value.data)
-			updatedKVs[key] = persistedKVData{value: value.data, round: lastUpdateRound}
+	for key, mv := range kvPairs {
+		if mv.data != nil {
+			// reminder: check oldData for nil here, b/c bytes.Equal conflates nil and "".
+			if mv.oldData != nil && bytes.Equal(mv.oldData, mv.data) {
+				continue // changed back within the delta span
+			}
+			err = writer.upsertKvPair(key, mv.data)
+			updatedKVs[key] = persistedKVData{value: mv.data, round: lastUpdateRound}
 		} else {
+			if mv.oldData == nil { // Came and went within the delta span
+				continue
+			}
 			err = writer.deleteKvPair(key)
 			updatedKVs[key] = persistedKVData{value: nil, round: lastUpdateRound}
 		}
