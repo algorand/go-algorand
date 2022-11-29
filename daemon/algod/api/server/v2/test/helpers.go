@@ -55,6 +55,9 @@ var cannedStatusReportGolden = node.StatusReport{
 	CatchpointCatchupProcessedAccounts: 0,
 	CatchpointCatchupVerifiedAccounts:  0,
 	CatchpointCatchupTotalAccounts:     0,
+	CatchpointCatchupTotalKVs:          0,
+	CatchpointCatchupProcessedKVs:      0,
+	CatchpointCatchupVerifiedKVs:       0,
 	CatchpointCatchupTotalBlocks:       0,
 	LastCatchpoint:                     "",
 }

@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
 )
 
@@ -32,7 +33,7 @@ type lruAccounts struct {
 	accounts map[basics.Address]*persistedAccountDataListNode
 	// pendingAccounts are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the accounts/accountsList
-	pendingAccounts chan persistedAccountData
+	pendingAccounts chan store.PersistedAccountData
 	// log interface; used for logging the threshold event.
 	log logging.Logger
 	// pendingWritesWarnThreshold is the threshold beyond we would write a warning for exceeding the number of pendingAccounts entries
@@ -47,7 +48,7 @@ type lruAccounts struct {
 func (m *lruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	m.accountsList = newPersistedAccountList().allocateFreeNodes(pendingWrites)
 	m.accounts = make(map[basics.Address]*persistedAccountDataListNode, pendingWrites)
-	m.pendingAccounts = make(chan persistedAccountData, pendingWrites)
+	m.pendingAccounts = make(chan store.PersistedAccountData, pendingWrites)
 	m.notFound = make(map[basics.Address]struct{}, pendingWrites)
 	m.pendingNotFound = make(chan basics.Address, pendingWrites)
 	m.log = log
@@ -56,11 +57,11 @@ func (m *lruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesW
 
 // read the persistedAccountData object that the lruAccounts has for the given address.
 // thread locking semantics : read lock
-func (m *lruAccounts) read(addr basics.Address) (data persistedAccountData, has bool) {
+func (m *lruAccounts) read(addr basics.Address) (data store.PersistedAccountData, has bool) {
 	if el := m.accounts[addr]; el != nil {
 		return *el.Value, true
 	}
-	return persistedAccountData{}, false
+	return store.PersistedAccountData{}, false
 }
 
 // readNotFound returns whether we have attempted to read this address but it did not exist in the db.
@@ -103,7 +104,7 @@ outer2:
 // writePending write a single persistedAccountData entry to the pendingAccounts buffer.
 // the function doesn't block, and in case of a buffer overflow the entry would not be added.
 // thread locking semantics : no lock is required.
-func (m *lruAccounts) writePending(acct persistedAccountData) {
+func (m *lruAccounts) writePending(acct store.PersistedAccountData) {
 	select {
 	case m.pendingAccounts <- acct:
 	default:
@@ -125,17 +126,17 @@ func (m *lruAccounts) writeNotFoundPending(addr basics.Address) {
 // version of what's already on the cache or not. In all cases, the entry is going
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
-func (m *lruAccounts) write(acctData persistedAccountData) {
-	if el := m.accounts[acctData.addr]; el != nil {
+func (m *lruAccounts) write(acctData store.PersistedAccountData) {
+	if el := m.accounts[acctData.Addr]; el != nil {
 		// already exists; is it a newer ?
-		if el.Value.before(&acctData) {
+		if el.Value.Before(&acctData) {
 			// we update with a newer version.
 			el.Value = &acctData
 		}
 		m.accountsList.moveToFront(el)
 	} else {
 		// new entry.
-		m.accounts[acctData.addr] = m.accountsList.pushFront(&acctData)
+		m.accounts[acctData.Addr] = m.accountsList.pushFront(&acctData)
 	}
 }
 
@@ -148,7 +149,7 @@ func (m *lruAccounts) prune(newSize int) (removed int) {
 			break
 		}
 		back := m.accountsList.back()
-		delete(m.accounts, back.Value.addr)
+		delete(m.accounts, back.Value.Addr)
 		m.accountsList.remove(back)
 		removed++
 	}

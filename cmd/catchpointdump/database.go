@@ -30,13 +30,16 @@ import (
 )
 
 var ledgerTrackerFilename string
+var ledgerTrackerStaging bool
 
 func init() {
 	databaseCmd.Flags().StringVarP(&ledgerTrackerFilename, "tracker", "t", "", "Specify the ledger tracker file name ( i.e. ./ledger.tracker.sqlite )")
 	databaseCmd.Flags().StringVarP(&outFileName, "output", "o", "", "Specify an outfile for the dump ( i.e. ledger.dump.txt )")
+	databaseCmd.Flags().BoolVarP(&ledgerTrackerStaging, "staging", "s", false, "Specify whether to look in the catchpoint staging or regular tables. (default false)")
 	databaseCmd.AddCommand(checkCmd)
 
 	checkCmd.Flags().StringVarP(&ledgerTrackerFilename, "tracker", "t", "", "Specify the ledger tracker file name ( i.e. ./ledger.tracker.sqlite )")
+	checkCmd.Flags().BoolVarP(&ledgerTrackerStaging, "staging", "s", false, "Specify whether to look in the catchpoint staging or regular tables. (default false)")
 }
 
 var databaseCmd = &cobra.Command{
@@ -58,9 +61,13 @@ var databaseCmd = &cobra.Command{
 			}
 			defer outFile.Close()
 		}
-		err = printAccountsDatabase(ledgerTrackerFilename, ledger.CatchpointFileHeader{}, outFile, nil)
+		err = printAccountsDatabase(ledgerTrackerFilename, ledgerTrackerStaging, ledger.CatchpointFileHeader{}, outFile, nil)
 		if err != nil {
 			reportErrorf("Unable to print account database : %v", err)
+		}
+		err = printKeyValueStore(ledgerTrackerFilename, ledgerTrackerStaging, outFile)
+		if err != nil {
+			reportErrorf("Unable to print key value store : %v", err)
 		}
 	},
 }
@@ -99,7 +106,7 @@ func checkDatabase(databaseName string, outFile *os.File) error {
 
 	var stats merkletrie.Stats
 	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		committer, err := ledger.MakeMerkleCommitter(tx, false)
+		committer, err := ledger.MakeMerkleCommitter(tx, ledgerTrackerStaging)
 		if err != nil {
 			return err
 		}
@@ -107,6 +114,11 @@ func checkDatabase(databaseName string, outFile *os.File) error {
 		if err != nil {
 			return err
 		}
+		root, err := trie.RootHash()
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(outFile, " Root: %s\n", root)
 		stats, err = trie.GetStats()
 		if err != nil {
 			return err
