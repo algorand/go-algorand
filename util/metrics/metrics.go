@@ -99,7 +99,7 @@ var (
 	TransactionMessagesTxnDroppedCongestionManagement = MetricName{Name: "algod_transaction_messages_txn_dropped_congestion_ctrl", Description: "Number of transaction messages dropped because the tx backlog is under congestion management"}
 	// TransactionMessagesTxnBacklogNoCapacity "Number of transaction messages dropped because the tx backlog did not have capacity"
 	TransactionMessagesTxnBacklogNoCapacity = MetricName{Name: "algod_transaction_messages_txn_backlog_no_capacity", Description: "Number of transaction messages dropped because the tx backlog did not have capacity"}
-	// TransactionMessagesTxnSigNotWellFormed "Number of transaction messages with bad formed signature"
+	// TransactionMessagesTxnNotWellFormed "Number of transaction messages not well formed"
 	TransactionMessagesTxnNotWellFormed = MetricName{Name: "algod_transaction_messages_txn_notwell_formed", Description: "Number of transaction messages not well formed"}
 	// TransactionMessagesTxnSigNotWellFormed "Number of transaction messages with bad formed signature"
 	TransactionMessagesTxnSigNotWellFormed = MetricName{Name: "algod_transaction_messages_sig_bad_formed", Description: "Number of transaction messages with bad formed signature"}
