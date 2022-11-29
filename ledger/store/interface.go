@@ -89,6 +89,7 @@ type CatchpointWriter interface {
 
 	InsertUnfinishedCatchpoint(ctx context.Context, round basics.Round, blockHash crypto.Digest) error
 	DeleteUnfinishedCatchpoint(ctx context.Context, round basics.Round) error
+	DeleteOldCatchpointFirstStageInfo(ctx context.Context, maxRoundToDelete basics.Round) error
 }
 
 // CatchpointReader is the read interface for:
@@ -101,4 +102,6 @@ type CatchpointReader interface {
 	ReadCatchpointStateString(ctx context.Context, stateName CatchpointState) (val string, err error)
 
 	SelectUnfinishedCatchpoints(ctx context.Context) ([]UnfinishedCatchpointRecord, error)
+	SelectCatchpointFirstStageInfo(ctx context.Context, round basics.Round) (CatchpointFirstStageInfo, bool /*exists*/, error)
+	SelectOldCatchpointFirstStageInfoRounds(ctx context.Context, maxRound basics.Round) ([]basics.Round, error)
 }

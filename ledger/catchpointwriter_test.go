@@ -466,8 +466,10 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback()
 
+	arw := store.NewAccountsSQLReaderWriter(tx)
+
 	// save the existing hash
-	committer, err := MakeMerkleCommitter(tx, false)
+	committer, err := store.MakeMerkleCommitter(tx, false)
 	require.NoError(t, err)
 	trie, err := merkletrie.MakeTrie(committer, TrieMemoryConfig)
 	require.NoError(t, err)
@@ -477,11 +479,11 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	require.NotEmpty(t, h1)
 
 	// reset hashes
-	err = resetAccountHashes(ctx, tx)
+	err = arw.ResetAccountHashes(ctx)
 	require.NoError(t, err)
 
 	// rebuild the MT
-	committer, err = MakeMerkleCommitter(tx, false)
+	committer, err = store.MakeMerkleCommitter(tx, false)
 	require.NoError(t, err)
 	trie, err = merkletrie.MakeTrie(committer, TrieMemoryConfig)
 	require.NoError(t, err)
