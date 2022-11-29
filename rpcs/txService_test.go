@@ -17,6 +17,7 @@
 package rpcs
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"net/url"
@@ -90,7 +91,7 @@ func (b *basicRPCNode) RegisterHandlers(dispatch []network.TaggedMessageHandler)
 
 func (b *basicRPCNode) start() bool {
 	var err error
-	b.listener, err = net.Listen("tcp", "")
+	b.listener, err = net.Listen("tcp", "127.0.0.1:")
 	if err != nil {
 		logging.Base().Error("tcp listen", err)
 		return false
@@ -149,6 +150,8 @@ func TestTxSync(t *testing.T) {
 	syncTimeout := time.Second
 	syncerPool := makeMockPendingTxAggregate(0)
 	syncer := MakeTxSyncer(syncerPool, nodeB, &handler, syncInterval, syncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	// Since syncer is not Started, set the context here
+	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	require.NoError(t, syncer.sync())
 	require.Equal(t, int32(3), atomic.LoadInt32(&handler.messageCounter))
 }

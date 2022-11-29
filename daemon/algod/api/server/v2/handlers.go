@@ -783,6 +783,9 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		CatchpointTotalAccounts:     &stat.CatchpointCatchupTotalAccounts,
 		CatchpointProcessedAccounts: &stat.CatchpointCatchupProcessedAccounts,
 		CatchpointVerifiedAccounts:  &stat.CatchpointCatchupVerifiedAccounts,
+		CatchpointTotalKvs:          &stat.CatchpointCatchupTotalKVs,
+		CatchpointProcessedKvs:      &stat.CatchpointCatchupProcessedKVs,
+		CatchpointVerifiedKvs:       &stat.CatchpointCatchupVerifiedKVs,
 		CatchpointTotalBlocks:       &stat.CatchpointCatchupTotalBlocks,
 		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
 	}
