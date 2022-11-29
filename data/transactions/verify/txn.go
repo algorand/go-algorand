@@ -41,6 +41,12 @@ import (
 var logicGoodTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_ok", Description: "Total transaction scripts executed and accepted"})
 var logicRejTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_rej", Description: "Total transaction scripts executed and rejected"})
 var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_err", Description: "Total transaction scripts executed and errored"})
+var msigLessOrEqual4 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_4", Description: "Total transactions with 1-4 msigs"})
+var msigLessOrEqual10 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_5_10", Description: "Total transactions with 5-10 msigs"})
+var msigMore10 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_16", Description: "Total transactions with 11+ msigs"})
+var msigLsigLessOrEqual4 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_lsig_4", Description: "Total transaction scripts with 1-4 msigs"})
+var msigLsigLessOrEqual10 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_lsig_5_10", Description: "Total transaction scripts with 5-10 msigs"})
+var msigLsigMore10 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_lsig_10", Description: "Total transaction scripts with 11+ msigs"})
 
 // ErrInvalidSignature is the error returned to report that at least one signature is invalid
 var ErrInvalidSignature = errors.New("At least one signature didn't pass verification")
@@ -51,7 +57,7 @@ var errShuttingDownError = errors.New("not verified, verifier is shutting down")
 
 // The PaysetGroups is taking large set of transaction groups and attempt to verify their validity using multiple go-routines.
 // When doing so, it attempts to break these into smaller "worksets" where each workset takes about 2ms of execution time in order
-// to avoid context switching overhead while providing good validation cancelation responsiveness. Each one of these worksets is
+// to avoid context switching overhead while providing good validation cancellation responsiveness. Each one of these worksets is
 // "populated" with roughly txnPerWorksetThreshold transactions. ( note that the real evaluation time is unknown, but benchmarks
 // show that these are realistic numbers )
 const txnPerWorksetThreshold = 32
@@ -76,7 +82,7 @@ var waitForFirstTxnDuration = 2000 * time.Millisecond
 // purposes :
 // - if the verification task need to be aborted, there are only concurrentWorksets entries that are currently redundant on the execution pool queue.
 // - that number of concurrent tasks would not get beyond the capacity of the execution pool back buffer.
-// - if we were to "redundantly" execute all these during context cancelation, we would spent at most 2ms * 16 = 32ms time.
+// - if we were to "redundantly" execute all these during context cancellation, we would spent at most 2ms * 16 = 32ms time.
 // - it allows us to linearly scan the input, and process elements only once we're going to queue them into the pool.
 const concurrentWorksets = 16
 
@@ -290,6 +296,19 @@ func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		if err := crypto.MultisigBatchPrep(s.Txn, crypto.Digest(s.Authorizer()), s.Msig, batchVerifier); err != nil {
 			return &ErrTxGroupError{err: fmt.Errorf("multisig validation failed: %w", err), Reason: TxGroupErrorReasonMsigNotWellFormed}
 		}
+		counter := 0
+		for _, subsigi := range s.Msig.Subsigs {
+			if (subsigi.Sig != crypto.Signature{}) {
+				counter++
+			}
+		}
+		if counter <= 4 {
+			msigLessOrEqual4.Inc(nil)
+		} else if counter <= 10 {
+			msigLessOrEqual10.Inc(nil)
+		} else {
+			msigMore10.Inc(nil)
+		}
 		return nil
 	}
 	if hasLogicSig {
@@ -379,6 +398,19 @@ func logicSigSanityCheckBatchPrep(txn *transactions.SignedTxn, groupIndex int, g
 		program := logic.Program(lsig.Logic)
 		if err := crypto.MultisigBatchPrep(&program, crypto.Digest(txn.Authorizer()), lsig.Msig, batchVerifier); err != nil {
 			return fmt.Errorf("logic multisig validation failed: %w", err)
+		}
+		counter := 0
+		for _, subsigi := range lsig.Msig.Subsigs {
+			if (subsigi.Sig != crypto.Signature{}) {
+				counter++
+			}
+		}
+		if counter <= 4 {
+			msigLsigLessOrEqual4.Inc(nil)
+		} else if counter <= 10 {
+			msigLsigLessOrEqual10.Inc(nil)
+		} else {
+			msigLsigMore10.Inc(nil)
 		}
 	}
 	return nil
