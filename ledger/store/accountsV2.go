@@ -321,7 +321,7 @@ func (r *accountsV2Reader) LoadAllFullAccounts(
 	return
 }
 
-// LoadFullAccount converts baseAccountData into basics.AccountData and loads all resources as needed
+// LoadFullAccount converts BaseAccountData into basics.AccountData and loads all resources as needed
 func (r *accountsV2Reader) LoadFullAccount(ctx context.Context, resourcesTable string, addr basics.Address, addrid int64, data BaseAccountData) (ad basics.AccountData, err error) {
 	ad = data.GetAccountData()
 
