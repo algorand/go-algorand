@@ -787,17 +787,16 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
 	}
 
-	upgradePropose := string(latestBlkHdr.UpgradeVote.UpgradePropose)
-	if upgradePropose != "" && latestBlkHdr.NextProtocolVoteBefore > stat.LastRound {
-		votesToGo := uint64(latestBlkHdr.NextProtocolVoteBefore) - uint64(stat.LastRound)
+	upgradePropose := string(stat.UpgradePropose)
+	votesToGo := uint64(stat.NextProtocolVoteBefore) - uint64(stat.LastRound)
+	if upgradePropose != "" && votesToGo > 0 {
 		consensus := config.Consensus[protocol.ConsensusCurrentVersion]
 		upgradeVoteRounds := consensus.UpgradeVoteRounds
 		upgradeThreshold := consensus.UpgradeThreshold
 		votes := uint64(upgradeVoteRounds) - votesToGo
-		votesYes := latestBlkHdr.UpgradeState.NextProtocolApprovals
+		votesYes := stat.NextProtocolApprovals
 		votesNo := votes - votesYes
-		upgradeDelay := uint64(latestBlkHdr.UpgradeVote.UpgradeDelay)
-
+		upgradeDelay := uint64(stat.UpgradeDelay)
 		response.UpgradePropose = &upgradePropose
 		response.UpgradeThreshold = &upgradeThreshold
 		response.UpgradeApprove = &latestBlkHdr.UpgradeApprove
