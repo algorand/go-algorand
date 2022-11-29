@@ -1023,7 +1023,7 @@ func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64) error {
 		})
 	}
 
-	for _, record := range sDelta.Accts.GetAllAccounts() {
+	for _, record := range sDelta.Accts.Accts {
 		var ot basics.OverflowTracker
 		pendingRewards := basics.PendingRewards(&ot, consensusParams, record.MicroAlgos, record.RewardsBase, hdr.RewardsLevel)
 
