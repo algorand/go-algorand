@@ -444,7 +444,7 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 		deadlock.Opts.Disable = deadlockDisable
 	}()
 
-	const nuThreads = 16
+	const numSendThreads = 16
 	const numTxnsPerGroup = 16
 	handler := makeTestTxHandlerOrphaned(txBacklogSize)
 	// uncomment to benchmark no-dedup version
@@ -463,15 +463,15 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 
 	// submit tx groups
 	b.ResetTimer()
-	finalizeSubmit := benchTxHandlerProcessIncomingTxnSubmit(b, handler, blobs, nuThreads)
+	finalizeSubmit := benchTxHandlerProcessIncomingTxnSubmit(b, handler, blobs, numSendThreads)
 
 	finalizeSubmit()
 	finConsume()
 }
 
-// BenchmarkTxHandlerProcessIncomingTxnDup checks txn receiving with duplicates
+// BenchmarkTxHandlerIncDeDup checks txn receiving with duplicates
 // simulating processing delay
-func BenchmarkTxHandlerProcessIncomingTxnDup(b *testing.B) {
+func BenchmarkTxHandlerIncDeDup(b *testing.B) {
 	deadlockDisable := deadlock.Opts.Disable
 	deadlock.Opts.Disable = true
 	defer func() {
@@ -479,46 +479,89 @@ func BenchmarkTxHandlerProcessIncomingTxnDup(b *testing.B) {
 	}()
 
 	// parameters
+	const numSendThreads = 16
 	const numTxnsPerGroup = 16
-	const dupeFactor = 4
-	const numThreads = 16
-	const workerProcTime = 10 * time.Microsecond
-	numPoolWorkers := runtime.NumCPU()
-	avgDelay := workerProcTime / time.Duration(numPoolWorkers)
 
-	handler := makeTestTxHandlerOrphaned(txBacklogSize)
-	// uncomment to benchmark no-dedup version
-	// handler.cacheConfig = txHandlerConfig{enableFilteringRawMsg: true, enableFilteringCanonical: false}
-	// handler.cacheConfig = txHandlerConfig{}
-
-	// prepare tx groups
-	blobs := make([][]byte, b.N)
-	stxns := make([][]transactions.SignedTxn, b.N)
-	for i := 0; i < b.N; i += dupeFactor {
-		stxns[i], blobs[i] = makeRandomTransactions(numTxnsPerGroup)
-		if b.N >= dupeFactor { // skip trivial runs
-			for j := 1; j < dupeFactor; j++ {
-				if i+j < b.N {
-					stxns[i+j], blobs[i+j] = stxns[i], blobs[i]
-				}
-			}
-		}
+	var tests = []struct {
+		dedup          bool
+		dupFactor      int
+		workerDelay    time.Duration
+		firstLevelOnly bool
+	}{
+		{false, 4, 10 * time.Microsecond, false},
+		{true, 4, 10 * time.Microsecond, false},
+		{false, 8, 10 * time.Microsecond, false},
+		{true, 8, 10 * time.Microsecond, false},
+		{false, 4, 4 * time.Microsecond, false},
+		{true, 4, 4 * time.Microsecond, false},
+		{false, 4, 0, false},
+		{true, 4, 0, false},
+		{true, 4, 10 * time.Microsecond, true},
 	}
 
-	statsCh := make(chan [3]int, 1)
-	defer close(statsCh)
+	for _, test := range tests {
+		var name string
+		var enabled string = "Y"
+		if !test.dedup {
+			enabled = "N"
+		}
+		name = fmt.Sprintf("x%d/on=%s/delay=%v", test.dupFactor, enabled, test.workerDelay)
+		if test.firstLevelOnly {
+			name = fmt.Sprintf("%s/one-level", name)
+		}
+		b.Run(name, func(b *testing.B) {
+			numPoolWorkers := runtime.NumCPU()
+			dupFactor := test.dupFactor
+			avgDelay := test.workerDelay / time.Duration(numPoolWorkers)
 
-	finConsume := benchTxHandlerProcessIncomingTxnConsume(b, handler, numTxnsPerGroup, avgDelay, statsCh)
+			handler := makeTestTxHandlerOrphaned(txBacklogSize)
+			if test.firstLevelOnly {
+				handler.cacheConfig = txHandlerConfig{enableFilteringRawMsg: true, enableFilteringCanonical: false}
+			} else if !test.dedup {
+				handler.cacheConfig = txHandlerConfig{}
+			}
 
-	// submit tx groups
-	b.ResetTimer()
-	finalizeSubmit := benchTxHandlerProcessIncomingTxnSubmit(b, handler, blobs, numThreads)
+			// prepare tx groups
+			blobs := make([][]byte, b.N)
+			stxns := make([][]transactions.SignedTxn, b.N)
+			for i := 0; i < b.N; i += dupFactor {
+				stxns[i], blobs[i] = makeRandomTransactions(numTxnsPerGroup)
+				if b.N >= dupFactor { // skip trivial runs
+					for j := 1; j < dupFactor; j++ {
+						if i+j < b.N {
+							stxns[i+j], blobs[i+j] = stxns[i], blobs[i]
+						}
+					}
+				}
+			}
 
-	finalizeSubmit()
-	finConsume()
+			statsCh := make(chan [3]int, 1)
+			defer close(statsCh)
 
-	stats := <-statsCh
-	b.Logf("dropped %d, received %d, dups %d", stats[0], stats[1], stats[2])
+			finConsume := benchTxHandlerProcessIncomingTxnConsume(b, handler, numTxnsPerGroup, avgDelay, statsCh)
+
+			// submit tx groups
+			b.ResetTimer()
+			finalizeSubmit := benchTxHandlerProcessIncomingTxnSubmit(b, handler, blobs, numSendThreads)
+
+			finalizeSubmit()
+			finConsume()
+
+			stats := <-statsCh
+			unique := b.N / dupFactor
+			dropped := stats[0]
+			received := stats[1]
+			dups := stats[2]
+			b.ReportMetric(float64(received)/float64(unique)*100, "ack,%")
+			b.ReportMetric(float64(dropped)/float64(b.N)*100, "drop,%")
+			if test.dedup {
+				b.ReportMetric(float64(dups)/float64(b.N)*100, "trap,%")
+			}
+			if b.N > 1 && os.Getenv("DEBUG") != "" {
+				b.Logf("unique %d, dropped %d, received %d, dups %d", unique, dropped, received, dups)
+			}
+		})
+	}
 }
 
 func TestTxHandlerProcessIncomingGroup(t *testing.T) {
