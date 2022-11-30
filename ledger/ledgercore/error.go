@@ -109,6 +109,7 @@ func (err ErrNonSequentialBlockEval) Error() string {
 }
 
 // TxGroupMalformedErrorReasonCode is a reason code for TxGroupMalformed
+//msgp:ignore TxGroupMalformedErrorReasonCode
 type TxGroupMalformedErrorReasonCode int
 
 const (

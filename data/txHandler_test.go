@@ -47,6 +47,8 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
+
+	"github.com/algorand/go-deadlock"
 )
 
 func BenchmarkTxHandlerProcessing(b *testing.B) {
@@ -1017,7 +1019,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	// require.Equal(t, float64(1), result[metrics.TransactionMessageTxGroupRememberFeeError.Name])
 
 	// make an invalid block to fail recompute pool and expose transactionMessageTxGroupRememberNoPendingEval metric
-	blockTicker := &blockTicker{cond: *sync.NewCond(&sync.Mutex{})}
+	blockTicker := &blockTicker{cond: *sync.NewCond(&deadlock.Mutex{})}
 	blockListeners := []realledger.BlockListener{
 		tp,
 		blockTicker,
@@ -1040,6 +1042,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	require.NoError(t, err)
 	blockTicker.Wait()
 
+	wi.unverifiedTxGroup = []transactions.SignedTxn{}
 	handler.postProcessCheckedTxn(&wi)
 	transactionMessageTxGroupRememberNoPendingEval.AddMetric(result)
 	require.Equal(t, float64(1), result[metrics.TransactionMessageTxGroupRememberNoPendingEval.Name])
