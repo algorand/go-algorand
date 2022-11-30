@@ -574,7 +574,8 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess db.Acc
 	require.NoError(t, err)
 
 	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err := applyCatchpointStagingBalances(ctx, tx, 0, 0)
+		crw := store.NewCatchpointSQLReaderWriter(tx)
+		err := crw.ApplyCatchpointStagingBalances(ctx, 0, 0)
 		return err
 	})
 	require.NoError(t, err)
