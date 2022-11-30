@@ -253,21 +253,23 @@ func (handler *TxHandler) rememberReportErrors(err error) {
 		return
 	}
 
-	var feeErr *pools.ErrTxPoolFeeError
-	if errors.As(err, &feeErr) {
+	// it is possible to call errors.As but it requires additional allocations
+	// instead, unwrap and type assert.
+	underlyingErr := errors.Unwrap(err)
+	if underlyingErr == nil {
+		// something went wrong
+		return
+	}
+
+	switch err := underlyingErr.(type) {
+	case *pools.ErrTxPoolFeeError:
 		transactionMessageTxGroupRememberFeeError.Inc(nil)
 		return
-	}
-
-	var txnDeadErr *transactions.TxnDeadError
-	if errors.As(err, &txnDeadErr) {
+	case *transactions.TxnDeadError:
 		transactionMessageTxGroupRememberTxnDead.Inc(nil)
 		return
-	}
-
-	var txgroupMalformedErr *ledgercore.TxGroupMalformedError
-	if errors.As(err, &txgroupMalformedErr) {
-		switch txgroupMalformedErr.Reason {
+	case *ledgercore.TxGroupMalformedError:
+		switch err.Reason {
 		case ledgercore.TxGroupMalformedErrorReasonExceedMaxSize:
 			transactionMessageTxGroupRememberTxGroupTooLarge.Inc(nil)
 		default:

@@ -869,15 +869,12 @@ func TestTxHandlerRememberReportErrors(t *testing.T) {
 	require.Equal(t, float64(2), result[metrics.TransactionMessageTxGroupRememberNoSpace.Name])
 
 	feeErr := pools.ErrTxPoolFeeError("test")
-	txh.rememberReportErrors(&feeErr)
-	transactionMessageTxGroupRememberFeeError.AddMetric(result)
-	require.Equal(t, float64(1), result[metrics.TransactionMessageTxGroupRememberFeeError.Name])
 
 	wrapped = fmt.Errorf("wrap: %w", &feeErr) // simulate wrapping
 	txh.rememberReportErrors(wrapped)
 
 	transactionMessageTxGroupRememberFeeError.AddMetric(result)
-	require.Equal(t, float64(2), result[metrics.TransactionMessageTxGroupRememberFeeError.Name])
+	require.Equal(t, float64(1), result[metrics.TransactionMessageTxGroupRememberFeeError.Name])
 }
 
 type blockTicker struct {
@@ -1011,7 +1008,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	transactionMessageTxGroupRememberEvalError.AddMetric(result)
 	require.Equal(t, float64(1), result[metrics.TransactionMessageTxGroupRememberEvalError.Name])
 
-	// TODO: not sure how to trigger fee error - need to return NoSpaceError from ledger
+	// TODO: not sure how to trigger fee error - need to return ErrNoSpace from ledger
 	// trigger pool fee error
 	// txn1.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee / 2}
 	// wi.unverifiedTxGroup = []transactions.SignedTxn{txn1.Sign(secrets[0])}

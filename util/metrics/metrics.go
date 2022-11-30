@@ -116,7 +116,7 @@ var (
 
 	// TransactionMessageTxGroupRememberPoolMaxCap "Number of transaction messages not added into txpool b/c its cap limit"
 	TransactionMessageTxGroupRememberPoolMaxCap = MetricName{Name: "algod_transaction_messages_txpool_cap", Description: "Number of transaction messages not added into txpool b/c its cap limit"}
-	// TransactionMessageTxGroupExcessive "Number of transaction messages not added into txpool b/c no pending"
+	// TransactionMessageTxGroupRememberNoPendingEval "Number of transaction messages not added into txpool b/c no pending"
 	TransactionMessageTxGroupRememberNoPendingEval = MetricName{Name: "algod_transaction_messages_txpool_no_pending", Description: "Number of transaction messages not added into txpool b/c no pending"}
 	// TransactionMessageTxGroupRememberNoSpace "Number of transaction messages not added into txpool b/c no space in a block"
 	TransactionMessageTxGroupRememberNoSpace = MetricName{Name: "algod_transaction_messages_txpool_no_space", Description: "Number of transaction messages not added into txpool b/c no space in a block"}
@@ -128,7 +128,7 @@ var (
 	TransactionMessageTxGroupRememberTxGroupTooLarge = MetricName{Name: "algod_transaction_messages_txpool_txgroup_too_large", Description: "Number of transaction messages not added into txpool b/c txgroup too large"}
 	// TransactionMessageTxGroupRememberGroupIDError "Number of transaction messages not added into txpool b/c txgroup id mismatch"
 	TransactionMessageTxGroupRememberGroupIDError = MetricName{Name: "algod_transaction_messages_txpool_txgroup_id_mismatch", Description: "Number of transaction messages not added into txpool b/c txgroup id mismatch"}
-	// TransactionMessageTxGroupRememberEvalError
+	// TransactionMessageTxGroupRememberEvalError "Number of transaction messages not added into txpool b/c of eval error"}
 	TransactionMessageTxGroupRememberEvalError = MetricName{Name: "algod_transaction_messages_txpool_eval_error", Description: "Number of transaction messages not added into txpool b/c of eval error"}
 
 	// TransactionMessagesBacklogSize "Number of transaction messages in the TX handler backlog queue"

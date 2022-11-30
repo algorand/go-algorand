@@ -30,38 +30,9 @@ var ErrPendingQueueReachedMaxCap = errors.New("TransactionPool.checkPendingQueue
 // ErrNoPendingBlockEvaluator indicates there is no pending block evaluator to accept a new tx group
 var ErrNoPendingBlockEvaluator = errors.New("TransactionPool.ingest: no pending block evaluator")
 
-// TxPoolErrorReason is reason code for ErrTxPoolError
-type TxPoolErrorReason int
-
-const (
-	// TxPoolErrorReasonGeneric is a generic (not tracked) reason code
-	TxPoolErrorReasonGeneric TxPoolErrorReason = iota
-	// TxPoolErrorReasonInsufficientFee is insufficient fee in at least one transaction in the group
-	TxPoolErrorReasonInsufficientFee
-
-	// TxGroupErrorReasonNumValues is number of enum values
-	TxPoolErrorReasonNumValues
-)
-
+// ErrTxPoolFeeError is an error type for txpool fee escalation checks
 type ErrTxPoolFeeError string
 
 func (e *ErrTxPoolFeeError) Error() string {
 	return string(*e)
-}
-
-// ErrTxPoolError is an error from transaction group evaluation done by txpool.
-// It can be unwrapped into underlying error, as well as has a specific failure reason code.
-type ErrTxPoolError struct {
-	err    error
-	Reason TxPoolErrorReason
-}
-
-// Error returns an error message from the underlying error
-func (e *ErrTxPoolError) Error() string {
-	return e.err.Error()
-}
-
-// Unwrap returns an underlying error
-func (e *ErrTxPoolError) Unwrap() error {
-	return e.err
 }
