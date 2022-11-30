@@ -80,7 +80,7 @@ type roundSeed struct {
 func LoadLedger(
 	log logging.Logger, dbFilenamePrefix string, memory bool,
 	genesisProto protocol.ConsensusVersion, genesisBal bookkeeping.GenesisBalances, genesisID string, genesisHash crypto.Digest,
-	blockListeners []ledger.BlockListener, cfg config.Local,
+	blockListeners []ledgercore.BlockListener, cfg config.Local,
 ) (*Ledger, error) {
 	if genesisBal.Balances == nil {
 		genesisBal.Balances = make(map[basics.Address]basics.AccountData)
