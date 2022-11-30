@@ -26,7 +26,7 @@ func TestDeletePartKey(t *testing.T) {
 	numberOfPartKeys := len(partKeyResponse)
 	require.True(t, numberOfPartKeys > 0)
 	participationID := partKeyResponse[0].Id
-	deleteResponse, err := sClient.RemoveParticipationKey(participationId)
+	deleteResponse, err := sClient.RemoveParticipationKey(participationID)
 	require.NoError(t, err)
 	// Expect null response
 	require.Equal(t, deleteResponse.Id, "")

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -1028,7 +1029,12 @@ func (c *Client) RemoveParticipationKey(participationID string) (resp model.Part
 		return
 	}
 
-	return algod.RemoveParticipationKeyByID(participationID)
+	deleteResponse, err := algod.RemoveParticipationKeyByID(participationID)
+	if errors.Is(err, io.EOF) {
+		return deleteResponse, nil
+	}
+
+	return deleteResponse, err
 }
 
 // AddParticipationKey takes a participation key file and sends it to the node.

@@ -221,15 +221,7 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 	if decodeJSON {
 		dec := json.NewDecoder(resp.Body)
 		decodeErr := dec.Decode(&response)
-		switch decodeErr {
-		case io.EOF:
-			if resp.ContentLength == 0 {
-				return nil
-			}
-			return decodeErr
-		default:
-			return decodeErr
-		}
+		return decodeErr
 	}
 
 	// Response must implement RawResponse
