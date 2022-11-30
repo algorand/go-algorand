@@ -82,8 +82,8 @@ type Service struct {
 	deadlineTimeout     time.Duration
 	blockValidationPool execpool.BacklogPool
 	// SyncRound, provided externally, which the ledger must keep in cache
-	syncRoundMu  deadlock.RWMutex
-	syncRound    uint64
+	syncRoundMu deadlock.RWMutex
+	syncRound   uint64
 
 	// suspendForCatchpointWriting defines whether we've ran into a state where the ledger is currently busy writing the
 	// catchpoint file. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
