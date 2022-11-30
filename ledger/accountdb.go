@@ -287,7 +287,7 @@ func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.Con
 			return nil, err
 		}
 		normalizedAccountBalances[i].AccountHashes = make([][]byte, 1)
-		normalizedAccountBalances[i].AccountHashes[0] = accountHashBuilder(balance.Address, accountDataV5, balance.AccountData)
+		normalizedAccountBalances[i].AccountHashes[0] = store.AccountHashBuilder(balance.Address, accountDataV5, balance.AccountData)
 		if len(resources) > 0 {
 			normalizedAccountBalances[i].Resources = make(map[basics.CreatableIndex]store.ResourcesData, len(resources))
 			normalizedAccountBalances[i].EncodedResources = make(map[basics.CreatableIndex][]byte, len(resources))
@@ -326,7 +326,7 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 			normalizedAccountBalances[i].PartialBalance = true
 		} else {
 			normalizedAccountBalances[i].AccountHashes = make([][]byte, 1+len(balance.Resources))
-			normalizedAccountBalances[i].AccountHashes[0] = accountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].AccountData, balance.AccountData)
+			normalizedAccountBalances[i].AccountHashes[0] = store.AccountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].AccountData, balance.AccountData)
 			curHashIdx++
 		}
 		if len(balance.Resources) > 0 {
@@ -338,7 +338,7 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 				if err != nil {
 					return nil, err
 				}
-				normalizedAccountBalances[i].AccountHashes[curHashIdx], err = resourcesHashBuilderV6(&resData, balance.Address, basics.CreatableIndex(cidx), resData.UpdateRound, res)
+				normalizedAccountBalances[i].AccountHashes[curHashIdx], err = store.ResourcesHashBuilderV6(&resData, balance.Address, basics.CreatableIndex(cidx), resData.UpdateRound, res)
 				if err != nil {
 					return nil, err
 				}
@@ -1515,7 +1515,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 			return fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 		}
 		for addr, state := range acctRehash {
-			deleteHash := accountHashBuilderV6(addr, &state.old, state.oldEnc)
+			deleteHash := store.AccountHashBuilderV6(addr, &state.old, state.oldEnc)
 			deleted, err := trie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
@@ -1524,7 +1524,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 				log.Warnf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
 			}
 
-			addHash := accountHashBuilderV6(addr, &state.new, state.newEnc)
+			addHash := store.AccountHashBuilderV6(addr, &state.new, state.newEnc)
 			added, err := trie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("performOnlineAccountsTableMigration attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
@@ -2467,7 +2467,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	if iterator.step == oaiStepInsertAccountData {
 		var lastAddrID int64
 		baseCb := func(addr basics.Address, rowid int64, accountData *store.BaseAccountData, encodedAccountData []byte) (err error) {
-			hash := accountHashBuilderV6(addr, accountData, encodedAccountData)
+			hash := store.AccountHashBuilderV6(addr, accountData, encodedAccountData)
 			_, err = iterator.insertStmt.ExecContext(ctx, rowid, hash)
 			if err != nil {
 				return
@@ -2478,7 +2478,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 
 		resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *store.ResourcesData, encodedResourceData []byte, lastResource bool) error {
 			if resData != nil {
-				hash, err := resourcesHashBuilderV6(resData, addr, cidx, resData.UpdateRound, encodedResourceData)
+				hash, err := store.ResourcesHashBuilderV6(resData, addr, cidx, resData.UpdateRound, encodedResourceData)
 				if err != nil {
 					return err
 				}

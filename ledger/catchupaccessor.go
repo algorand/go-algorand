@@ -122,7 +122,7 @@ func (w *stagingWriterImpl) writeKVs(ctx context.Context, kvrs []encodedKVRecord
 		for i := 0; i < len(kvrs); i++ {
 			keys[i] = kvrs[i].Key
 			values[i] = kvrs[i].Value
-			hashes[i] = kvHashBuilderV6(string(keys[i]), values[i])
+			hashes[i] = store.KvHashBuilderV6(string(keys[i]), values[i])
 		}
 
 		return crw.WriteCatchpointStagingKVs(ctx, keys, values, hashes)
@@ -622,7 +622,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 // The function is _not_ a general purpose way to count hashes by hash kind.
 func countHashes(hashes [][]byte) (accountCount, kvCount uint64) {
 	for _, hash := range hashes {
-		if hash[hashKindEncodingIndex] == byte(kvHK) {
+		if hash[store.HashKindEncodingIndex] == byte(store.KvHK) {
 			kvCount++
 		} else {
 			accountCount++
@@ -734,7 +734,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 					var added bool
 					added, err = trie.Add(hash)
 					if !added {
-						return fmt.Errorf("CatchpointCatchupAccessorImpl::BuildMerkleTrie: The provided catchpoint file contained the same account more than once. hash = '%s' hash kind = %s", hex.EncodeToString(hash), hashKind(hash[hashKindEncodingIndex]))
+						return fmt.Errorf("CatchpointCatchupAccessorImpl::BuildMerkleTrie: The provided catchpoint file contained the same account more than once. hash = '%s' hash kind = %s", hex.EncodeToString(hash), store.HashKind(hash[store.HashKindEncodingIndex]))
 					}
 					if err != nil {
 						return

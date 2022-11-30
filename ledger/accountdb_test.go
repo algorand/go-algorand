@@ -3244,7 +3244,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 			if expected && ba.Status != basics.Online {
 				require.Equal(t, merklesignature.Commitment{}, ba.StateProofID)
 			}
-			addHash := accountHashBuilderV6(addr, &ba, encodedAcctData)
+			addHash := store.AccountHashBuilderV6(addr, &ba, encodedAcctData)
 			added, err := trie.Add(addHash)
 			require.NoError(t, err)
 			require.True(t, added)
