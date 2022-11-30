@@ -30,15 +30,15 @@ func setupManager(t *testing.T, r round) (pWhite *proposalManager, pMachine ioAu
 	rRouter := new(rootRouter)
 	rRouter.update(player{Round: r}, r, false)
 
+	pWhite = &rRouter.ProposalManager
 	pMachine = &ioAutomataConcrete{
-		listener:  rRouter.proposalRoot,
+		listener:  pWhite,
 		routerCtx: rRouter,
 		playerCtx: player{Round: r},
 	}
 
 	helper = &voteMakerHelper{}
 	helper.Setup()
-	pWhite = rRouter.proposalRoot.underlying().(*proposalManager)
 	return
 }
 

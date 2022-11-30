@@ -249,8 +249,8 @@ func dumpPlayerStr(w io.Writer, p player, r rootRouter, tag string) {
 	stageStatus := "(none)"
 
 	rRouter := r.Children[p.Round]
-	if rRouter != nil && rRouter.proposalRoot != nil {
-		proposalStore := rRouter.proposalRoot.underlying().(*proposalStore)
+	if rRouter != nil {
+		proposalStore := rRouter.ProposalStore
 		if proposalStore.Pinned != bottom {
 			pinned := fmt.Sprintf("%.5v (Pinned),", proposalStore.Pinned.BlockDigest)
 			receivedBlocks = append(receivedBlocks, pinned)
@@ -266,8 +266,8 @@ func dumpPlayerStr(w io.Writer, p player, r rootRouter, tag string) {
 		}
 
 		pRouter := rRouter.Children[p.Period]
-		if pRouter != nil && pRouter.proposalRoot != nil {
-			proposalTrack := pRouter.proposalRoot.underlying().(*proposalTracker)
+		if pRouter != nil {
+			proposalTrack := pRouter.ProposalTracker
 			if proposalTrack.Staging != bottom {
 				stageStatus = fmt.Sprintf("%.5v", proposalTrack.Staging.BlockDigest)
 			}
