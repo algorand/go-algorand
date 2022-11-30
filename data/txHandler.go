@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -57,9 +58,18 @@ var transactionMessagesTxnSigVerificationFailed = metrics.MakeCounter(metrics.Tr
 var transactionMessagesBacklogErr = metrics.MakeCounter(metrics.TransactionMessagesBacklogErr)
 var transactionMessagesRemember = metrics.MakeCounter(metrics.TransactionMessagesRemember)
 var transactionMessageTxGroupExcessive = metrics.MakeCounter(metrics.TransactionMessageTxGroupExcessive)
-
 var transactionMessageTxGroupFull = metrics.MakeCounter(metrics.TransactionMessageTxGroupFull)
+
 var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionMessagesBacklogSize)
+
+var transactionMessageTxGroupRememberPoolMaxCap = metrics.MakeCounter(metrics.TransactionMessageTxGroupRememberPoolMaxCap)
+var transactionMessageTxGroupRememberNoPendingEval = metrics.MakeCounter(metrics.TransactionMessageTxGroupRememberNoPendingEval)
+var transactionMessageTxGroupRememberNoSpace = metrics.MakeCounter(metrics.TransactionMessageTxGroupRememberNoSpace)
+var transactionMessageTxGroupRememberFeeError = metrics.MakeCounter(metrics.TransactionMessageTxGroupRememberFeeError)
+var transactionMessageTxGroupRememberTxnDead = metrics.MakeCounter(metrics.TransactionMessageTxGroupRememberTxnDead)
+var transactionMessageTxGroupRememberTxGroupTooLarge = metrics.MakeCounter(metrics.TransactionMessageTxGroupRememberTxGroupTooLarge)
+var transactionMessageTxGroupRememberGroupIDError = metrics.MakeCounter(metrics.TransactionMessageTxGroupRememberGroupIDError)
+var transactionMessageTxGroupRememberEvalError = metrics.MakeCounter(metrics.TransactionMessageTxGroupRememberEvalError)
 
 var transactionGroupTxSyncHandled = metrics.MakeCounter(metrics.TransactionGroupTxSyncHandled)
 var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGroupTxSyncRemember)
@@ -227,6 +237,48 @@ func (handler *TxHandler) postProcessReportErrors(err error) {
 	}
 }
 
+func (handler *TxHandler) rememberReportErrors(err error) {
+	if errors.Is(err, pools.ErrPendingQueueReachedMaxCap) {
+		transactionMessageTxGroupRememberPoolMaxCap.Inc(nil)
+		return
+	}
+
+	if errors.Is(err, pools.ErrNoPendingBlockEvaluator) {
+		transactionMessageTxGroupRememberNoPendingEval.Inc(nil)
+		return
+	}
+
+	if errors.Is(err, ledgercore.ErrNoSpace) {
+		transactionMessageTxGroupRememberNoSpace.Inc(nil)
+		return
+	}
+
+	var feeErr *pools.ErrTxPoolFeeError
+	if errors.As(err, &feeErr) {
+		transactionMessageTxGroupRememberFeeError.Inc(nil)
+		return
+	}
+
+	var txnDeadErr *transactions.TxnDeadError
+	if errors.As(err, &txnDeadErr) {
+		transactionMessageTxGroupRememberTxnDead.Inc(nil)
+		return
+	}
+
+	var txgroupMalformedErr *ledgercore.TxGroupMalformedError
+	if errors.As(err, &txgroupMalformedErr) {
+		switch txgroupMalformedErr.Reason {
+		case ledgercore.TxGroupMalformedErrorReasonExceedMaxSize:
+			transactionMessageTxGroupRememberTxGroupTooLarge.Inc(nil)
+		default:
+			transactionMessageTxGroupRememberGroupIDError.Inc(nil)
+		}
+		return
+	}
+
+	transactionMessageTxGroupRememberEvalError.Inc(nil)
+}
+
 func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 	if wi.verificationErr != nil {
 		// disconnect from peer.
@@ -245,6 +297,7 @@ func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 	// save the transaction, if it has high enough fee and not already in the cache
 	err := handler.txPool.Remember(verifiedTxGroup)
 	if err != nil {
+		handler.rememberReportErrors(err)
 		logging.Base().Debugf("could not remember tx: %v", err)
 		return
 	}

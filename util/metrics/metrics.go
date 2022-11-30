@@ -113,6 +113,24 @@ var (
 	TransactionMessageTxGroupFull = MetricName{Name: "algod_transaction_messages_txgroup_full", Description: "Number of transaction messages with max txns allowed"}
 	// TransactionMessageTxGroupExcessive "Number of transaction messages with greater than config.MaxTxGroupSize txns"
 	TransactionMessageTxGroupExcessive = MetricName{Name: "algod_transaction_messages_txgroup_excessive", Description: "Number of transaction messages with greater than config.MaxTxGroupSize txns"}
+
+	// TransactionMessageTxGroupRememberPoolMaxCap "Number of transaction messages not added into txpool b/c its cap limit"
+	TransactionMessageTxGroupRememberPoolMaxCap = MetricName{Name: "algod_transaction_messages_txpool_cap", Description: "Number of transaction messages not added into txpool b/c its cap limit"}
+	// TransactionMessageTxGroupExcessive "Number of transaction messages not added into txpool b/c no pending"
+	TransactionMessageTxGroupRememberNoPendingEval = MetricName{Name: "algod_transaction_messages_txpool_no_pending", Description: "Number of transaction messages not added into txpool b/c no pending"}
+	// TransactionMessageTxGroupRememberNoSpace "Number of transaction messages not added into txpool b/c no space in a block"
+	TransactionMessageTxGroupRememberNoSpace = MetricName{Name: "algod_transaction_messages_txpool_no_space", Description: "Number of transaction messages not added into txpool b/c no space in a block"}
+	// TransactionMessageTxGroupRememberFeeError "Number of transaction messages not added into txpool b/c fee error"
+	TransactionMessageTxGroupRememberFeeError = MetricName{Name: "algod_transaction_messages_txpool_fee_error", Description: "Number of transaction messages not added into txpool b/c fee error"}
+	// TransactionMessageTxGroupRememberTxnDead "Number of transaction messages not added into txpool b/c it is dead"
+	TransactionMessageTxGroupRememberTxnDead = MetricName{Name: "algod_transaction_messages_txpool_tx_dead", Description: "Number of transaction messages not added into txpool b/c it is dead"}
+	// TransactionMessageTxGroupRememberTxGroupTooLarge "Number of transaction messages not added into txpool b/c txgroup too large"
+	TransactionMessageTxGroupRememberTxGroupTooLarge = MetricName{Name: "algod_transaction_messages_txpool_txgroup_too_large", Description: "Number of transaction messages not added into txpool b/c txgroup too large"}
+	// TransactionMessageTxGroupRememberGroupIDError "Number of transaction messages not added into txpool b/c txgroup id mismatch"
+	TransactionMessageTxGroupRememberGroupIDError = MetricName{Name: "algod_transaction_messages_txpool_txgroup_id_mismatch", Description: "Number of transaction messages not added into txpool b/c txgroup id mismatch"}
+	// TransactionMessageTxGroupRememberEvalError
+	TransactionMessageTxGroupRememberEvalError = MetricName{Name: "algod_transaction_messages_txpool_eval_error", Description: "Number of transaction messages not added into txpool b/c of eval error"}
+
 	// TransactionMessagesBacklogSize "Number of transaction messages in the TX handler backlog queue"
 	TransactionMessagesBacklogSize = MetricName{Name: "algod_transaction_messages_backlog_size", Description: "Number of transaction messages in the TX handler backlog queue"}
 
