@@ -76,6 +76,14 @@ type DummyLedgerForSignature struct {
 func (d *DummyLedgerForSignature) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
 	return createDummyBlockHeader(), nil
 }
+func (d *DummyLedgerForSignature) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
+	return createDummyBlockHeader(), nil
+}
+func (d *DummyLedgerForSignature) Latest() basics.Round {
+	return 0
+}
+func (d *DummyLedgerForSignature) RegisterBlockListeners([]ledgercore.BlockListener) {
+}
 
 func keypair() *crypto.SignatureSecrets {
 	var seed crypto.Seed
@@ -883,11 +891,10 @@ func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups m
 
 	defer cancel()
 
-	blkHdr := createDummyBlockHeader()
-	nbw := MakeNewBlockWatcher(blkHdr)
 	stxnChan := make(chan *UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
-	sv = MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache, droppedFromPool)
+	sv, err := MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, verificationPool, cache, droppedFromPool)
+	require.NoError(t, err)
 	sv.Start(ctx)
 
 	wg := sync.WaitGroup{}
@@ -1233,11 +1240,10 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50000)
 
-	blkHdr := createDummyBlockHeader()
-	nbw := MakeNewBlockWatcher(blkHdr)
 	stxnChan := make(chan *UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
-	sv := MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache, droppedFromPool)
+	sv, err := MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, verificationPool, cache, droppedFromPool)
+	require.NoError(t, err)
 	sv.Start(ctx)
 
 	errChan := make(chan error)
@@ -1288,13 +1294,12 @@ func TestStreamVerifierRestart(t *testing.T) {
 
 	cache := MakeVerifiedTransactionCache(50000)
 
-	blkHdr := createDummyBlockHeader()
-	nbw := MakeNewBlockWatcher(blkHdr)
 	stxnChan := make(chan *UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	sv := MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, nbw, verificationPool, cache, droppedFromPool)
+	sv, err := MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, verificationPool, cache, droppedFromPool)
+	require.NoError(t, err)
 	sv.Start(ctx)
 
 	errChan := make(chan error)
@@ -1352,6 +1357,7 @@ func TestBlockWatcher(t *testing.T) {
 			blkHdr.Round++
 			nbw.OnNewBlock(bookkeeping.Block{BlockHeader: blkHdr}, ledgercore.StateDelta{})
 			time.Sleep(10 * time.Millisecond)
+			nbw.OnNewBlock(bookkeeping.Block{BlockHeader: blkHdr}, ledgercore.StateDelta{})
 		}
 	}()
 
@@ -1369,3 +1375,138 @@ func TestBlockWatcher(t *testing.T) {
 	bh := nbw.getBlockHeader()
 	require.Equal(t, startingRound+10, bh.Round)
 }
+
+/*
+// TestStreamVerifierCtxCancel tests the termination when the ctx is canceled
+func TestStreamVerifierCtxCancel(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	numOfTxns := batchSizeBlockLimit * 2
+	txnGroups, _ := getSignedTransactions(numOfTxns, 1, 0.5)
+
+	// prepare the stream verifier
+	execPool := execpool.MakePool(t)
+	backlogQueueSize := 4
+	verificationPool := execpool.MakeBacklog(execPool, backlogQueueSize, execpool.LowPriority, t)
+	_, buffLen := verificationPool.BufferLength()
+
+	// make the buffer full to control when the tasks get executed (after canceling the ctx)
+	holdTasks := make(chan interface{})
+	for x := 0; x < buffLen+runtime.NumCPU() + 0; x++ {
+		verificationPool.EnqueueBacklog(context.Background(),
+			func(arg interface{}) interface{} { <-holdTasks; return nil }, nil, nil)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cache := MakeVerifiedTransactionCache(50000)
+
+	stxnChan := make(chan *UnverifiedElement)
+	resultChan := make(chan *VerificationResult, txBacklogSize)
+	sv, err := MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, verificationPool, cache, droppedFromPool)
+	require.NoError(t, err)
+	sv.Start(ctx)
+
+	// As the tasks are added, some will be queued in the exec pool, others in the batch preperation loop
+	//	verifierBlocked := false
+	//	timer := time.NewTicker(time.Millisecond * 5)
+	for i, tg := range txnGroups {
+		fmt.Println(i)
+		stxnChan <- &UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}
+		//		select {
+		//		case stxnChan <- &UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}:
+		//		case <-timer.C:
+		//			verifierBlocked = true
+		//		}
+		//		timer.Reset(time.Millisecond * 5)
+		//		if verifierBlocked {
+			// the batch verifier is no longer able to accept new sigs
+			// the exec pool is full, and the current batch has batchSizeBlockLimit txns
+			// this is the assumption. 5ms might not be enough and the loop might terminate
+			// sooner, but the test should still behave
+		//			break
+		//		}
+	}
+
+	resultReceived := false
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// no verification tasks should be executed
+		// at least one result (the batch held before the cancel, should be returned
+		for res := range resultChan {
+			require.ErrorIs(t, res.Err, errShuttingDownError)
+			resultReceived = true
+			return
+		}
+	}()
+
+	// cancel the ctx as the tasks are waiting in the exc pool
+	cancel()
+
+	// the main loop should stop after cancel()
+	sv.activeLoopWg.Wait()
+
+	// release the tasks
+	close(holdTasks)
+
+	wg.Wait()
+	require.True(t, resultReceived)
+}
+
+// TestStreamVerifierPostVBlocked tests what happens when the ctx canceled when the task is in exec pool
+func TestStreamVerifierPostVBlocked(t *testing.T) {
+
+	// prepare the stream verifier
+	execPool := execpool.MakePool(t)
+	backlogQueueSize := 64
+	verificationPool := execpool.MakeBacklog(execPool, backlogQueueSize, execpool.LowPriority, t)
+	errChan := make(chan error)
+	var badSigResultCounter int
+	var goodSigResultCounter int
+
+	ctx, _ := context.WithCancel(context.Background())
+	cache := MakeVerifiedTransactionCache(50000)
+
+	stxnChan := make(chan *UnverifiedElement)
+	resultChan := make(chan *VerificationResult, txBacklogSize)
+	sv, err := MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, verificationPool, cache, droppedFromPool)
+	require.NoError(t, err)
+
+	// start the verifier
+	sv.Start(ctx)
+	//xxx
+	// send transactions to overflow the result chan
+	numOfTxns := txBacklogSize + 1
+	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0.5)
+	numOfTxnGroups := len(txnGroups)
+	for _, tg := range txnGroups {
+		select {
+		case <-ctx.Done():
+			break
+		case stxnChan <- &UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}:
+		}
+	}
+
+	// wait until the one extra transaction is dropped
+	for w := 0; w < 100; w++ {
+		droppedPool := sv.droppedFromPool.GetUint64Value()
+		if droppedPool > 0 { // there could be more from the previous iteration
+			break
+		}
+		time.Sleep(time.Millisecond * 5)
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	// make sure the other results are fine
+	go processResults(ctx, errChan, resultChan, numOfTxnGroups, badTxnGroups, &badSigResultCounter, &goodSigResultCounter, &wg)
+
+	for err := range errChan {
+		require.ErrorIs(t, err, errShuttingDownError)
+		fmt.Println(badTxnGroups)
+	}
+
+	wg.Wait()
+}
+*/

@@ -64,7 +64,7 @@ const txnPerWorksetThreshold = 32
 
 // batchSizeBlockLimit is the limit when the batch exceeds, will be added to the exec pool, even if the pool is saturated
 // and the batch verifier will block until the exec pool accepts the batch
-const batchSizeBlockLimit = 512
+const batchSizeBlockLimit = 1024
 
 // waitForNextTxnDuration is the time to wait before sending the batch to the exec pool
 // If the incoming txn rate is low, a txn in the batch may  wait no less than
