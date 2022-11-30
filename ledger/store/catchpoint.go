@@ -21,9 +21,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -31,10 +35,57 @@ import (
 	"github.com/mattn/go-sqlite3"
 )
 
+// TrieMemoryConfig is the memory configuration setup used for the merkle trie.
+var TrieMemoryConfig = merkletrie.MemoryConfig{
+	NodesCountPerPage:         MerkleCommitterNodesPerPage,
+	CachedNodesCount:          TrieCachedNodesCount,
+	PageFillFactor:            0.95,
+	MaxChildrenPagesThreshold: 64,
+}
+
+// MerkleCommitterNodesPerPage controls how many nodes will be stored in a single page
+// value was calibrated using BenchmarkCalibrateNodesPerPage
+var MerkleCommitterNodesPerPage = int64(116)
+
+// TrieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory.
+// value was calibrated using BenchmarkCalibrateCacheNodeSize
+var TrieCachedNodesCount = 9000
+
+// CatchpointDirName represents the directory name in which all the catchpoints files are stored
+var CatchpointDirName = "catchpoints"
+
 // CatchpointState is used to store catchpoint related variables into the catchpointstate table.
 //
 //msgp:ignore CatchpointState
 type CatchpointState string
+
+const (
+	// CatchpointStateLastCatchpoint is written by a node once a catchpoint label is created for a round
+	CatchpointStateLastCatchpoint = CatchpointState("lastCatchpoint")
+	// This state variable is set to 1 if catchpoint's first stage is unfinished,
+	// and is 0 otherwise. Used to clear / restart the first stage after a crash.
+	// This key is set in the same db transaction as the account updates, so the
+	// unfinished first stage corresponds to the current db round.
+	CatchpointStateWritingFirstStageInfo = CatchpointState("writingFirstStageInfo")
+	// catchpointStateWritingCatchpoint if there is an unfinished catchpoint, this state variable is set to
+	// the catchpoint's round. Otherwise, it is set to 0.
+	// DEPRECATED.
+	catchpointStateWritingCatchpoint = CatchpointState("writingCatchpoint")
+	// CatchpointStateCatchupState is the state of the catchup process. The variable is stored only during the catchpoint catchup process, and removed afterward.
+	CatchpointStateCatchupState = CatchpointState("catchpointCatchupState")
+	// CatchpointStateCatchupLabel is the label to which the currently catchpoint catchup process is trying to catchup to.
+	CatchpointStateCatchupLabel = CatchpointState("catchpointCatchupLabel")
+	// CatchpointStateCatchupBlockRound is the block round that is associated with the current running catchpoint catchup.
+	CatchpointStateCatchupBlockRound = CatchpointState("catchpointCatchupBlockRound")
+	// CatchpointStateCatchupBalancesRound is the balance round that is associated with the current running catchpoint catchup. Typically it would be
+	// equal to CatchpointStateCatchupBlockRound - 320.
+	CatchpointStateCatchupBalancesRound = CatchpointState("catchpointCatchupBalancesRound")
+	// CatchpointStateCatchupHashRound is the round that is associated with the hash of the merkle trie. Normally, it's identical to CatchpointStateCatchupBalancesRound,
+	// however, it could differ when we catchup from a catchpoint that was created using a different version : in this case,
+	// we set it to zero in order to reset the merkle trie. This would force the merkle trie to be re-build on startup ( if needed ).
+	CatchpointStateCatchupHashRound   = CatchpointState("catchpointCatchupHashRound")
+	CatchpointStateCatchpointLookback = CatchpointState("catchpointLookback")
+)
 
 // UnfinishedCatchpointRecord represents a stored record of an unfinished catchpoint.
 type UnfinishedCatchpointRecord struct {
@@ -543,8 +594,8 @@ func (cw *catchpointWriter) ResetCatchpointStagingBalances(ctx context.Context, 
 			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
 			"CREATE TABLE IF NOT EXISTS catchpointkvstore (key blob primary key, value blob)",
 
-			CreateNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
-			CreateUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
+			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
+			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
 		)
 	}
 
@@ -556,19 +607,6 @@ func (cw *catchpointWriter) ResetCatchpointStagingBalances(ctx context.Context, 
 	}
 
 	return nil
-}
-
-// TODO: will make private on the next PR once the migration/creations are moved out of `ledger`.
-
-// CreateUniqueAddressBalanceIndex is sql query to create a uninque index on `address`.
-func CreateUniqueAddressBalanceIndex(idxname string, tablename string) string {
-	return fmt.Sprintf(`CREATE UNIQUE INDEX IF NOT EXISTS %s ON %s (address)`, idxname, tablename)
-}
-
-// CreateNormalizedOnlineBalanceIndex handles accountbase/catchpointbalances tables
-func CreateNormalizedOnlineBalanceIndex(idxname string, tablename string) string {
-	return fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %s
-		ON %s ( normalizedonlinebalance, address, data ) WHERE normalizedonlinebalance>0`, idxname, tablename)
 }
 
 // ApplyCatchpointStagingBalances switches the staged catchpoint catchup tables onto the actual
@@ -606,4 +644,88 @@ func (cw *catchpointWriter) ApplyCatchpointStagingBalances(ctx context.Context, 
 	}
 
 	return
+}
+
+// CreateCatchpointStagingHashesIndex creates an index on catchpointpendinghashes to allow faster scanning according to the hash order
+func (cw *catchpointWriter) CreateCatchpointStagingHashesIndex(ctx context.Context) (err error) {
+	_, err = cw.e.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS catchpointpendinghashesidx ON catchpointpendinghashes(data)")
+	if err != nil {
+		return
+	}
+	return
+}
+
+// DeleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
+// once all the files have been deleted, it would go ahead and remove the entries from the table.
+func (crw *catchpointReaderWriter) DeleteStoredCatchpoints(ctx context.Context, dbDirectory string) (err error) {
+	catchpointsFilesChunkSize := 50
+	for {
+		fileNames, err := crw.GetOldestCatchpointFiles(ctx, catchpointsFilesChunkSize, 0)
+		if err != nil {
+			return err
+		}
+		if len(fileNames) == 0 {
+			break
+		}
+
+		for round, fileName := range fileNames {
+			err = RemoveSingleCatchpointFileFromDisk(dbDirectory, fileName)
+			if err != nil {
+				return err
+			}
+			// clear the entry from the database
+			err = crw.StoreCatchpoint(ctx, round, "", "", 0)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// RemoveSingleCatchpointFileFromDisk removes a single catchpoint file from the disk. this function does not leave empty directories
+func RemoveSingleCatchpointFileFromDisk(dbDirectory, fileToDelete string) (err error) {
+	absCatchpointFileName := filepath.Join(dbDirectory, fileToDelete)
+	err = os.Remove(absCatchpointFileName)
+	if err == nil || os.IsNotExist(err) {
+		// it's ok if the file doesn't exist.
+		err = nil
+	} else {
+		// we can't delete the file, abort -
+		return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
+	}
+	splitedDirName := strings.Split(fileToDelete, string(os.PathSeparator))
+
+	var subDirectoriesToScan []string
+	//build a list of all the subdirs
+	currentSubDir := ""
+	for _, element := range splitedDirName {
+		currentSubDir = filepath.Join(currentSubDir, element)
+		subDirectoriesToScan = append(subDirectoriesToScan, currentSubDir)
+	}
+
+	// iterating over the list of directories. starting from the sub dirs and moving up.
+	// skipping the file itself.
+	for i := len(subDirectoriesToScan) - 2; i >= 0; i-- {
+		absSubdir := filepath.Join(dbDirectory, subDirectoriesToScan[i])
+		if _, err := os.Stat(absSubdir); os.IsNotExist(err) {
+			continue
+		}
+
+		isEmpty, err := isDirEmpty(absSubdir)
+		if err != nil {
+			return fmt.Errorf("unable to read old catchpoint directory '%s' : %v", subDirectoriesToScan[i], err)
+		}
+		if isEmpty {
+			err = os.Remove(absSubdir)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return fmt.Errorf("unable to delete old catchpoint directory '%s' : %v", subDirectoriesToScan[i], err)
+			}
+		}
+	}
+
+	return nil
 }

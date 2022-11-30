@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -2223,20 +2224,21 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 	// reset tables and re-init again, similary to the catchpount apply code
 	// since the ledger has only genesis accounts, this recreates them
 	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err0 := accountsReset(ctx, tx)
+		arw := store.NewAccountsSQLReaderWriter(tx)
+		err0 := arw.AccountsReset(ctx)
 		if err0 != nil {
 			return err0
 		}
-		tp := trackerDBParams{
-			initAccounts:      l.GenesisAccounts(),
-			initProto:         l.GenesisProtoVersion(),
-			genesisHash:       l.GenesisHash(),
-			fromCatchpoint:    true,
-			catchpointEnabled: l.catchpoint.catchpointEnabled(),
-			dbPathPrefix:      l.catchpoint.dbDirectory,
-			blockDb:           l.blockDBs,
+		tp := store.TrackerDBParams{
+			InitAccounts:      l.GenesisAccounts(),
+			InitProto:         l.GenesisProtoVersion(),
+			GenesisHash:       l.GenesisHash(),
+			FromCatchpoint:    true,
+			CatchpointEnabled: l.catchpoint.catchpointEnabled(),
+			DbPathPrefix:      l.catchpoint.dbDirectory,
+			BlockDb:           l.blockDBs,
 		}
-		_, err0 = runMigrations(ctx, tx, tp, l.log, preReleaseDBVersion /*target database version*/)
+		_, err0 = store.RunMigrations(ctx, tx, tp, l.log, preReleaseDBVersion /*target database version*/)
 		if err0 != nil {
 			return err0
 		}
@@ -2384,10 +2386,10 @@ int %d // 10001000
 func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	prevAccountDBVersion := accountDBVersion
-	accountDBVersion = 6
+	prevAccountDBVersion := store.AccountDBVersion
+	store.AccountDBVersion = 6
 	defer func() {
-		accountDBVersion = prevAccountDBVersion
+		store.AccountDBVersion = prevAccountDBVersion
 	}()
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-migrate-shrink-deltas")
@@ -2599,7 +2601,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	l.Close()
 
 	cfg.MaxAcctLookback = shorterLookback
-	accountDBVersion = 7
+	store.AccountDBVersion = 7
 	// delete tables since we want to check they can be made from other data
 	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineaccounts"); err != nil {

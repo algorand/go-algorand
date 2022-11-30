@@ -774,26 +774,26 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 func BenchmarkCalibrateNodesPerPage(b *testing.B) {
 	b.Skip("This benchmark was used to tune up the NodesPerPage; it's not really useful otherwise")
-	defaultNodesPerPage := merkleCommitterNodesPerPage
+	defaultNodesPerPage := store.MerkleCommitterNodesPerPage
 	for nodesPerPage := 32; nodesPerPage < 300; nodesPerPage++ {
 		b.Run(fmt.Sprintf("Test_merkleCommitterNodesPerPage_%d", nodesPerPage), func(b *testing.B) {
-			merkleCommitterNodesPerPage = int64(nodesPerPage)
+			store.MerkleCommitterNodesPerPage = int64(nodesPerPage)
 			BenchmarkBalancesChanges(b)
 		})
 	}
-	merkleCommitterNodesPerPage = defaultNodesPerPage
+	store.MerkleCommitterNodesPerPage = defaultNodesPerPage
 }
 
 func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
-	//b.Skip("This benchmark was used to tune up the trieCachedNodesCount; it's not really useful otherwise")
-	defaultTrieCachedNodesCount := trieCachedNodesCount
+	//b.Skip("This benchmark was used to tune up the TrieCachedNodesCount; it's not really useful otherwise")
+	defaultTrieCachedNodesCount := store.TrieCachedNodesCount
 	for cacheSize := 3000; cacheSize < 50000; cacheSize += 1000 {
 		b.Run(fmt.Sprintf("Test_cacheSize_%d", cacheSize), func(b *testing.B) {
-			trieCachedNodesCount = cacheSize
+			store.TrieCachedNodesCount = cacheSize
 			BenchmarkBalancesChanges(b)
 		})
 	}
-	trieCachedNodesCount = defaultTrieCachedNodesCount
+	store.TrieCachedNodesCount = defaultTrieCachedNodesCount
 }
 
 // TestLargeAccountCountCatchpointGeneration creates a ledger containing a large set of accounts ( i.e. 100K accounts )
@@ -821,7 +821,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
-		os.RemoveAll(CatchpointDirName)
+		os.RemoveAll(store.CatchpointDirName)
 	}()
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(100000, true)}
@@ -1194,10 +1194,7 @@ func TestListCreatables(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := make(map[basics.Address]basics.AccountData)
-	_ = accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
-	require.NoError(t, err)
-
-	err = accountsAddNormalizedBalance(tx, proto)
+	_ = store.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	require.NoError(t, err)
 
 	au := &accountUpdates{}
