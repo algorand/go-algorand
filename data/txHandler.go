@@ -314,6 +314,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	// consume a capacity unit
 	capguard, err := handler.erl.ConsumeCapacity(rawmsg.Sender.(util.ErlClient))
 	if err != nil {
+		handler.erl.EnableCongestionControl()
 		return network.OutgoingMessage{Action: network.Ignore}
 	}
 	// if the backlog Queue has 50% of its buffer back, turn congestion control off
