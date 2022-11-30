@@ -582,7 +582,7 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess db.Acc
 	balanceTrieStats := func(db db.Accessor) merkletrie.Stats {
 		var stats merkletrie.Stats
 		err = db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			committer, err := MakeMerkleCommitter(tx, false)
+			committer, err := store.MakeMerkleCommitter(tx, false)
 			if err != nil {
 				return err
 			}
