@@ -22,6 +22,8 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -47,6 +49,27 @@ type catchpointWriter struct {
 type catchpointReaderWriter struct {
 	catchpointReader
 	catchpointWriter
+}
+
+// CatchpointFirstStageInfo For the `catchpointfirststageinfo` table.
+type CatchpointFirstStageInfo struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Totals           ledgercore.AccountTotals `codec:"accountTotals"`
+	TrieBalancesHash crypto.Digest            `codec:"trieBalancesHash"`
+	// Total number of accounts in the catchpoint data file. Only set when catchpoint
+	// data files are generated.
+	TotalAccounts uint64 `codec:"accountsCount"`
+
+	// Total number of accounts in the catchpoint data file. Only set when catchpoint
+	// data files are generated.
+	TotalKVs uint64 `codec:"kvsCount"`
+
+	// Total number of chunks in the catchpoint data file. Only set when catchpoint
+	// data files are generated.
+	TotalChunks uint64 `codec:"chunksCount"`
+	// BiggestChunkLen is the size in the bytes of the largest chunk, used when re-packing.
+	BiggestChunkLen uint64 `codec:"biggestChunk"`
 }
 
 // NewCatchpointSQLReaderWriter creates a Catchpoint SQL reader+writer
@@ -162,6 +185,66 @@ func (cr *catchpointReader) SelectUnfinishedCatchpoints(ctx context.Context) ([]
 	return res, nil
 }
 
+func (cr *catchpointReader) SelectCatchpointFirstStageInfo(ctx context.Context, round basics.Round) (CatchpointFirstStageInfo, bool /*exists*/, error) {
+	var data []byte
+	f := func() error {
+		query := "SELECT info FROM catchpointfirststageinfo WHERE round=?"
+		err := cr.q.QueryRowContext(ctx, query, round).Scan(&data)
+		if err == sql.ErrNoRows {
+			data = nil
+			return nil
+		}
+		return err
+	}
+	err := db.Retry(f)
+	if err != nil {
+		return CatchpointFirstStageInfo{}, false, err
+	}
+
+	if data == nil {
+		return CatchpointFirstStageInfo{}, false, nil
+	}
+
+	var res CatchpointFirstStageInfo
+	err = protocol.Decode(data, &res)
+	if err != nil {
+		return CatchpointFirstStageInfo{}, false, err
+	}
+
+	return res, true, nil
+}
+
+func (cr *catchpointReader) SelectOldCatchpointFirstStageInfoRounds(ctx context.Context, maxRound basics.Round) ([]basics.Round, error) {
+	var res []basics.Round
+
+	f := func() error {
+		query := "SELECT round FROM catchpointfirststageinfo WHERE round <= ?"
+		rows, err := cr.q.QueryContext(ctx, query, maxRound)
+		if err != nil {
+			return err
+		}
+
+		// Clear `res` in case this function is repeated.
+		res = res[:0]
+		for rows.Next() {
+			var r basics.Round
+			err = rows.Scan(&r)
+			if err != nil {
+				return err
+			}
+			res = append(res, r)
+		}
+
+		return nil
+	}
+	err := db.Retry(f)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
 func (cw *catchpointWriter) StoreCatchpoint(ctx context.Context, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
 	err = db.Retry(func() (err error) {
 		query := "DELETE FROM storedcatchpoints WHERE round=?"
@@ -227,4 +310,23 @@ func deleteCatchpointStateImpl(ctx context.Context, e db.Executable, stateName C
 	query := "DELETE FROM catchpointstate WHERE id=?"
 	_, err := e.ExecContext(ctx, query, stateName)
 	return err
+}
+
+func (cw *catchpointWriter) InsertOrReplaceCatchpointFirstStageInfo(ctx context.Context, round basics.Round, info *CatchpointFirstStageInfo) error {
+	infoSerialized := protocol.Encode(info)
+	f := func() error {
+		query := "INSERT OR REPLACE INTO catchpointfirststageinfo(round, info) VALUES(?, ?)"
+		_, err := cw.e.ExecContext(ctx, query, round, infoSerialized)
+		return err
+	}
+	return db.Retry(f)
+}
+
+func (cw *catchpointWriter) DeleteOldCatchpointFirstStageInfo(ctx context.Context, maxRoundToDelete basics.Round) error {
+	f := func() error {
+		query := "DELETE FROM catchpointfirststageinfo WHERE round <= ?"
+		_, err := cw.e.ExecContext(ctx, query, maxRoundToDelete)
+		return err
+	}
+	return db.Retry(f)
 }

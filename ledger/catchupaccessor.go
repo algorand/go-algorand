@@ -678,11 +678,11 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		uncommitedHashesCount := 0
 		keepWriting := true
 		accountHashesWritten, kvHashesWritten := uint64(0), uint64(0)
-		var mc *MerkleCommitter
+		var mc *store.MerkleCommitter
 
 		err := wdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
 			// create the merkle trie for the balances
-			mc, err = MakeMerkleCommitter(tx, true)
+			mc, err = store.MakeMerkleCommitter(tx, true)
 			if err != nil {
 				return
 			}
@@ -710,7 +710,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			}
 
 			err = rdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
-				mc, err = MakeMerkleCommitter(tx, true)
+				mc, err = store.MakeMerkleCommitter(tx, true)
 				if err != nil {
 					return
 				}
@@ -742,7 +742,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 				err = wdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
 					// set a long 30-second window for the evict before warning is generated.
 					db.ResetTransactionWarnDeadline(transactionCtx, tx, time.Now().Add(30*time.Second))
-					mc, err = MakeMerkleCommitter(tx, true)
+					mc, err = store.MakeMerkleCommitter(tx, true)
 					if err != nil {
 						return
 					}
@@ -772,7 +772,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			err = wdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
 				// set a long 30-second window for the evict before warning is generated.
 				db.ResetTransactionWarnDeadline(transactionCtx, tx, time.Now().Add(30*time.Second))
-				mc, err = MakeMerkleCommitter(tx, true)
+				mc, err = store.MakeMerkleCommitter(tx, true)
 				if err != nil {
 					return
 				}
@@ -833,7 +833,7 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 	err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		arw := store.NewAccountsSQLReaderWriter(tx)
 		// create the merkle trie for the balances
-		mc, err0 := MakeMerkleCommitter(tx, true)
+		mc, err0 := store.MakeMerkleCommitter(tx, true)
 		if err0 != nil {
 			return fmt.Errorf("unable to make MerkleCommitter: %v", err0)
 		}
@@ -1003,7 +1003,7 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 		}
 
 		if hashRound == 0 {
-			err = resetAccountHashes(ctx, tx)
+			err = arw.ResetAccountHashes(ctx)
 			if err != nil {
 				return err
 			}

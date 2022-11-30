@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
@@ -1633,7 +1632,7 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 			CurrentProtocol: currentProto,
 		},
 	}
-	return accountsPutOnlineRoundParams(tx, onlineRoundParams, rnd)
+	return arw.AccountsPutOnlineRoundParams(onlineRoundParams, rnd)
 }
 
 func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progress func(processed, total uint64), log logging.Logger) (err error) {
@@ -1776,7 +1775,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 			return nil
 		}
 
-		mc, err := MakeMerkleCommitter(tx, false)
+		mc, err := store.MakeMerkleCommitter(tx, false)
 		if err != nil {
 			return nil
 		}
@@ -1874,11 +1873,6 @@ func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, pro
 	}
 }
 
-func resetAccountHashes(ctx context.Context, tx *sql.Tx) (err error) {
-	_, err = tx.ExecContext(ctx, `DELETE FROM accounthashes`)
-	return
-}
-
 func accountsReset(ctx context.Context, tx *sql.Tx) error {
 	for _, stmt := range accountsResetExprs {
 		_, err := tx.ExecContext(ctx, stmt)
@@ -1887,53 +1881,6 @@ func accountsReset(ctx context.Context, tx *sql.Tx) error {
 		}
 	}
 	_, err := db.SetUserVersion(ctx, tx, 0)
-	return err
-}
-
-func accountsOnlineRoundParams(tx *sql.Tx) (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error) {
-	rows, err := tx.Query("SELECT rnd, data FROM onlineroundparamstail ORDER BY rnd ASC")
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var buf []byte
-		err = rows.Scan(&endRound, &buf)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		var data ledgercore.OnlineRoundParamsData
-		err = protocol.Decode(buf, &data)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		onlineRoundParamsData = append(onlineRoundParamsData, data)
-	}
-	return
-}
-
-func accountsPutOnlineRoundParams(tx *sql.Tx, onlineRoundParamsData []ledgercore.OnlineRoundParamsData, startRound basics.Round) error {
-	insertStmt, err := tx.Prepare("INSERT INTO onlineroundparamstail (rnd, data) VALUES (?, ?)")
-	if err != nil {
-		return err
-	}
-
-	for i, onlineRoundParams := range onlineRoundParamsData {
-		_, err = insertStmt.Exec(startRound+basics.Round(i), protocol.Encode(&onlineRoundParams))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func accountsPruneOnlineRoundParams(tx *sql.Tx, deleteBeforeRound basics.Round) error {
-	_, err := tx.Exec("DELETE FROM onlineroundparamstail WHERE rnd<?",
-		deleteBeforeRound,
-	)
 	return err
 }
 
@@ -2307,25 +2254,6 @@ func onlineAccountsNewRoundImpl(
 	return
 }
 
-// updates the round number associated with the hash of current account data.
-func updateAccountsHashRound(ctx context.Context, tx *sql.Tx, hashRound basics.Round) (err error) {
-	res, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('hashbase',?)", hashRound)
-	if err != nil {
-		return
-	}
-
-	aff, err := res.RowsAffected()
-	if err != nil {
-		return
-	}
-
-	if aff != 1 {
-		err = fmt.Errorf("updateAccountsHashRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
-		return
-	}
-	return
-}
-
 // reencodeAccounts reads all the accounts in the accountbase table, decode and reencode the account data.
 // if the account data is found to have a different encoding, it would update the encoded account on disk.
 // on return, it returns the number of modified accounts as well as an error ( if we had any )
@@ -2400,62 +2328,6 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 	err = rows.Err()
 	updateStmt.Close()
 	return
-}
-
-// MerkleCommitter allows storing and loading merkletrie pages from a sqlite database.
-//
-//msgp:ignore MerkleCommitter
-type MerkleCommitter struct {
-	tx         *sql.Tx
-	deleteStmt *sql.Stmt
-	insertStmt *sql.Stmt
-	selectStmt *sql.Stmt
-}
-
-// MakeMerkleCommitter creates a MerkleCommitter object that implements the merkletrie.Committer interface allowing storing and loading
-// merkletrie pages from a sqlite database.
-func MakeMerkleCommitter(tx *sql.Tx, staging bool) (mc *MerkleCommitter, err error) {
-	mc = &MerkleCommitter{tx: tx}
-	accountHashesTable := "accounthashes"
-	if staging {
-		accountHashesTable = "catchpointaccounthashes"
-	}
-	mc.deleteStmt, err = tx.Prepare("DELETE FROM " + accountHashesTable + " WHERE id=?")
-	if err != nil {
-		return nil, err
-	}
-	mc.insertStmt, err = tx.Prepare("INSERT OR REPLACE INTO " + accountHashesTable + "(id, data) VALUES(?, ?)")
-	if err != nil {
-		return nil, err
-	}
-	mc.selectStmt, err = tx.Prepare("SELECT data FROM " + accountHashesTable + " WHERE id = ?")
-	if err != nil {
-		return nil, err
-	}
-	return mc, nil
-}
-
-// StorePage is the merkletrie.Committer interface implementation, stores a single page in a sqlite database table.
-func (mc *MerkleCommitter) StorePage(page uint64, content []byte) error {
-	if len(content) == 0 {
-		_, err := mc.deleteStmt.Exec(page)
-		return err
-	}
-	_, err := mc.insertStmt.Exec(page, content)
-	return err
-}
-
-// LoadPage is the merkletrie.Committer interface implementation, load a single page from a sqlite database table.
-func (mc *MerkleCommitter) LoadPage(page uint64) (content []byte, err error) {
-	err = mc.selectStmt.QueryRow(page).Scan(&content)
-	if err == sql.ErrNoRows {
-		content = nil
-		err = nil
-		return
-	} else if err != nil {
-		return nil, err
-	}
-	return content, nil
 }
 
 // catchpointAccountResourceCounter keeps track of the resources processed for the current account
@@ -2809,147 +2681,6 @@ func processAllBaseAccountRecords(
 	return count, pendingBaseRow{}, pendingResource, nil
 }
 
-// loadFullAccount converts baseAccountData into basics.AccountData and loads all resources as needed
-func loadFullAccount(ctx context.Context, tx *sql.Tx, resourcesTable string, addr basics.Address, addrid int64, data store.BaseAccountData) (ad basics.AccountData, err error) {
-	ad = data.GetAccountData()
-
-	hasResources := false
-	if data.TotalAppParams > 0 {
-		ad.AppParams = make(map[basics.AppIndex]basics.AppParams, data.TotalAppParams)
-		hasResources = true
-	}
-	if data.TotalAppLocalStates > 0 {
-		ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, data.TotalAppLocalStates)
-		hasResources = true
-	}
-	if data.TotalAssetParams > 0 {
-		ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, data.TotalAssetParams)
-		hasResources = true
-	}
-	if data.TotalAssets > 0 {
-		ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding, data.TotalAssets)
-		hasResources = true
-	}
-
-	if !hasResources {
-		return
-	}
-
-	var resRows *sql.Rows
-	query := fmt.Sprintf("SELECT aidx, data FROM %s where addrid = ?", resourcesTable)
-	resRows, err = tx.QueryContext(ctx, query, addrid)
-	if err != nil {
-		return
-	}
-	defer resRows.Close()
-
-	for resRows.Next() {
-		var buf []byte
-		var aidx int64
-		err = resRows.Scan(&aidx, &buf)
-		if err != nil {
-			return
-		}
-		var resData store.ResourcesData
-		err = protocol.Decode(buf, &resData)
-		if err != nil {
-			return
-		}
-		if resData.ResourceFlags == store.ResourceFlagsNotHolding {
-			err = fmt.Errorf("addr %s (%d) aidx = %d resourceFlagsNotHolding should not be persisted", addr.String(), addrid, aidx)
-			return
-		}
-		if resData.IsApp() {
-			if resData.IsOwning() {
-				ad.AppParams[basics.AppIndex(aidx)] = resData.GetAppParams()
-			}
-			if resData.IsHolding() {
-				ad.AppLocalStates[basics.AppIndex(aidx)] = resData.GetAppLocalState()
-			}
-		} else if resData.IsAsset() {
-			if resData.IsOwning() {
-				ad.AssetParams[basics.AssetIndex(aidx)] = resData.GetAssetParams()
-			}
-			if resData.IsHolding() {
-				ad.Assets[basics.AssetIndex(aidx)] = resData.GetAssetHolding()
-			}
-		} else {
-			err = fmt.Errorf("unknown resource data: %v", resData)
-			return
-		}
-	}
-
-	if uint64(len(ad.AssetParams)) != data.TotalAssetParams {
-		err = fmt.Errorf("%s assets params mismatch: %d != %d", addr.String(), len(ad.AssetParams), data.TotalAssetParams)
-	}
-	if err == nil && uint64(len(ad.Assets)) != data.TotalAssets {
-		err = fmt.Errorf("%s assets mismatch: %d != %d", addr.String(), len(ad.Assets), data.TotalAssets)
-	}
-	if err == nil && uint64(len(ad.AppParams)) != data.TotalAppParams {
-		err = fmt.Errorf("%s app params mismatch: %d != %d", addr.String(), len(ad.AppParams), data.TotalAppParams)
-	}
-	if err == nil && uint64(len(ad.AppLocalStates)) != data.TotalAppLocalStates {
-		err = fmt.Errorf("%s app local states mismatch: %d != %d", addr.String(), len(ad.AppLocalStates), data.TotalAppLocalStates)
-	}
-	if err != nil {
-		return
-	}
-
-	return
-}
-
-// LoadAllFullAccounts loads all accounts from balancesTable and resourcesTable.
-// On every account full load it invokes acctCb callback to report progress and data.
-func LoadAllFullAccounts(
-	ctx context.Context, tx *sql.Tx,
-	balancesTable string, resourcesTable string,
-	acctCb func(basics.Address, basics.AccountData),
-) (count int, err error) {
-	baseRows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT rowid, address, data FROM %s ORDER BY address", balancesTable))
-	if err != nil {
-		return
-	}
-	defer baseRows.Close()
-
-	for baseRows.Next() {
-		var addrbuf []byte
-		var buf []byte
-		var rowid sql.NullInt64
-		err = baseRows.Scan(&rowid, &addrbuf, &buf)
-		if err != nil {
-			return
-		}
-		if !rowid.Valid {
-			err = fmt.Errorf("invalid rowid in %s", balancesTable)
-			return
-		}
-
-		var data store.BaseAccountData
-		err = protocol.Decode(buf, &data)
-		if err != nil {
-			return
-		}
-
-		var addr basics.Address
-		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-			return
-		}
-		copy(addr[:], addrbuf)
-
-		var ad basics.AccountData
-		ad, err = loadFullAccount(ctx, tx, resourcesTable, addr, rowid.Int64, data)
-		if err != nil {
-			return
-		}
-
-		acctCb(addr, ad)
-
-		count++
-	}
-	return
-}
-
 // accountAddressHash is used by Next to return a single account address and the associated hash.
 type accountAddressHash struct {
 	addrid int64
@@ -3138,24 +2869,6 @@ func (iterator *orderedAccountsIter) Close(ctx context.Context) (err error) {
 	return
 }
 
-// createCatchpointStagingHashesIndex creates an index on catchpointpendinghashes to allow faster scanning according to the hash order
-func lookupAccountAddressFromAddressID(ctx context.Context, tx *sql.Tx, addrid int64) (address basics.Address, err error) {
-	var addrbuf []byte
-	err = tx.QueryRowContext(ctx, "SELECT address FROM accountbase WHERE rowid = ?", addrid).Scan(&addrbuf)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			err = fmt.Errorf("no matching address could be found for rowid %d: %w", addrid, err)
-		}
-		return
-	}
-	if len(addrbuf) != len(address) {
-		err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(address))
-		return
-	}
-	copy(address[:], addrbuf)
-	return
-}
-
 // catchpointPendingHashesIterator allows us to iterate over the hashes in the catchpointpendinghashes table in their order.
 type catchpointPendingHashesIterator struct {
 	hashCount int
@@ -3213,104 +2926,4 @@ func (iterator *catchpointPendingHashesIterator) Close() {
 		iterator.rows.Close()
 		iterator.rows = nil
 	}
-}
-
-// For the `catchpointfirststageinfo` table.
-type catchpointFirstStageInfo struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Totals           ledgercore.AccountTotals `codec:"accountTotals"`
-	TrieBalancesHash crypto.Digest            `codec:"trieBalancesHash"`
-	// Total number of accounts in the catchpoint data file. Only set when catchpoint
-	// data files are generated.
-	TotalAccounts uint64 `codec:"accountsCount"`
-
-	// Total number of accounts in the catchpoint data file. Only set when catchpoint
-	// data files are generated.
-	TotalKVs uint64 `codec:"kvsCount"`
-
-	// Total number of chunks in the catchpoint data file. Only set when catchpoint
-	// data files are generated.
-	TotalChunks uint64 `codec:"chunksCount"`
-	// BiggestChunkLen is the size in the bytes of the largest chunk, used when re-packing.
-	BiggestChunkLen uint64 `codec:"biggestChunk"`
-}
-
-func insertOrReplaceCatchpointFirstStageInfo(ctx context.Context, e db.Executable, round basics.Round, info *catchpointFirstStageInfo) error {
-	infoSerialized := protocol.Encode(info)
-	f := func() error {
-		query := "INSERT OR REPLACE INTO catchpointfirststageinfo(round, info) VALUES(?, ?)"
-		_, err := e.ExecContext(ctx, query, round, infoSerialized)
-		return err
-	}
-	return db.Retry(f)
-}
-
-func selectCatchpointFirstStageInfo(ctx context.Context, q db.Queryable, round basics.Round) (catchpointFirstStageInfo, bool /*exists*/, error) {
-	var data []byte
-	f := func() error {
-		query := "SELECT info FROM catchpointfirststageinfo WHERE round=?"
-		err := q.QueryRowContext(ctx, query, round).Scan(&data)
-		if err == sql.ErrNoRows {
-			data = nil
-			return nil
-		}
-		return err
-	}
-	err := db.Retry(f)
-	if err != nil {
-		return catchpointFirstStageInfo{}, false, err
-	}
-
-	if data == nil {
-		return catchpointFirstStageInfo{}, false, nil
-	}
-
-	var res catchpointFirstStageInfo
-	err = protocol.Decode(data, &res)
-	if err != nil {
-		return catchpointFirstStageInfo{}, false, err
-	}
-
-	return res, true, nil
-}
-
-func selectOldCatchpointFirstStageInfoRounds(ctx context.Context, q db.Queryable, maxRound basics.Round) ([]basics.Round, error) {
-	var res []basics.Round
-
-	f := func() error {
-		query := "SELECT round FROM catchpointfirststageinfo WHERE round <= ?"
-		rows, err := q.QueryContext(ctx, query, maxRound)
-		if err != nil {
-			return err
-		}
-
-		// Clear `res` in case this function is repeated.
-		res = res[:0]
-		for rows.Next() {
-			var r basics.Round
-			err = rows.Scan(&r)
-			if err != nil {
-				return err
-			}
-			res = append(res, r)
-		}
-
-		return nil
-	}
-	err := db.Retry(f)
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
-func deleteOldCatchpointFirstStageInfo(ctx context.Context, e db.Executable, maxRoundToDelete basics.Round) error {
-	f := func() error {
-		query := "DELETE FROM catchpointfirststageinfo WHERE round <= ?"
-		_, err := e.ExecContext(ctx, query, maxRoundToDelete)
-		return err
-	}
-	return db.Retry(f)
 }
