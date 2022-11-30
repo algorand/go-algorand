@@ -356,11 +356,12 @@ func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn
 	for _, t := range txgroup {
 		feeThreshold := feePerByte * uint64(t.GetEncodedLength())
 		if t.Txn.Fee.Raw < feeThreshold {
-			feeErr := ErrTxPoolFeeError(
-				fmt.Sprintf("fee %d below threshold %d (%d per byte * %d bytes)",
-					t.Txn.Fee, feeThreshold, feePerByte, t.GetEncodedLength()),
-			)
-			return &feeErr
+			return &ErrTxPoolFeeError{
+				fee:           t.Txn.Fee,
+				feeThreshold:  feeThreshold,
+				feePerByte:    feePerByte,
+				encodedLength: t.GetEncodedLength(),
+			}
 		}
 	}
 
