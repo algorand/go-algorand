@@ -214,7 +214,7 @@ func init() {
 	dumpCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
 	balanceCmd.MarkFlagRequired("address")
 
-	// Rewards flags
+	// deletePartkeyCmd flags
 	deletePartKeyCmd.Flags().StringVarP(&partKeyIDToDelete, "partkeyid", "", "", "Participation Key ID to delete")
 	rewardsCmd.MarkFlagRequired("partkeyid")
 

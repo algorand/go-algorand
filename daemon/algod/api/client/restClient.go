@@ -223,7 +223,10 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 		decodeErr := dec.Decode(&response)
 		switch decodeErr {
 		case io.EOF:
-			return nil
+			if resp.ContentLength == 0 {
+				return nil
+			}
+			return decodeErr
 		default:
 			return decodeErr
 		}
