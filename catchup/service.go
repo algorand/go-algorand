@@ -83,7 +83,6 @@ type Service struct {
 	blockValidationPool execpool.BacklogPool
 	// SyncRound, provided externally, which the ledger must keep in cache
 	syncRoundMu  deadlock.RWMutex
-	syncRoundSet bool
 	syncRound    uint64
 
 	// suspendForCatchpointWriting defines whether we've ran into a state where the ledger is currently busy writing the
