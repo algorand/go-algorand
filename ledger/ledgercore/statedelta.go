@@ -32,6 +32,11 @@ const (
 	stateDeltaTargetOptimizationThreshold = uint64(50000000)
 )
 
+// BlockListener represents an object that needs to get notified on new blocks.
+type BlockListener interface {
+	OnNewBlock(block bookkeeping.Block, delta StateDelta)
+}
+
 // ModifiedCreatable defines the changes to a single single creatable state
 type ModifiedCreatable struct {
 	// Type of the creatable: app or asset

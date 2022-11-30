@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	ledgerpkg "github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -91,16 +90,14 @@ type TxHandler struct {
 }
 
 // MakeTxHandler makes a new handler for transaction messages
-func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.GossipNode, genesisID string, genesisHash crypto.Digest, executionPool execpool.BacklogPool) *TxHandler {
+func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.GossipNode, genesisID string, genesisHash crypto.Digest, executionPool execpool.BacklogPool) (*TxHandler, error) {
 
 	if txPool == nil {
-		logging.Base().Fatal("MakeTxHandler: txPool is nil on initialization")
-		return nil
+		return nil, errors.New("MakeTxHandler: txPool is nil on initialization")
 	}
 
 	if ledger == nil {
-		logging.Base().Fatal("MakeTxHandler: ledger is nil on initialization")
-		return nil
+		return nil, errors.New("MakeTxHandler: ledger is nil on initialization")
 	}
 
 	handler := &TxHandler{
@@ -116,18 +113,14 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 	}
 
 	// prepare the transaction stream verifer
-	latest := handler.ledger.Latest()
-	latestHdr, err := handler.ledger.BlockHdr(latest)
-	if err != nil {
-		logging.Base().Fatal("MakeTxHandler: Could not get header for previous block")
-		return nil
-	}
-	nbw := verify.MakeNewBlockWatcher(latestHdr)
-	handler.ledger.RegisterBlockListeners([]ledgerpkg.BlockListener{nbw})
-	handler.streamVerifier = verify.MakeStreamVerifier(handler.streamVerifierChan,
-		handler.postVerificationQueue, handler.ledger, nbw, handler.txVerificationPool,
+	var err error
+	handler.streamVerifier, err = verify.MakeStreamVerifier(handler.streamVerifierChan,
+		handler.postVerificationQueue, handler.ledger, handler.txVerificationPool,
 		handler.ledger.VerifiedTransactionCache(), transactionMessagesDroppedFromPool)
-	return handler
+	if err != nil {
+		return nil, err
+	}
+	return handler, nil
 }
 
 // Start enables the processing of incoming messages at the transaction handler

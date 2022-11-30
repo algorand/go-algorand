@@ -648,13 +648,30 @@ func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext
 
 }
 
+// LedgerForStreamVerifier defines the ledger methods used by the StreamVerifier.
+type LedgerForStreamVerifier interface {
+	logic.LedgerForSignature
+	RegisterBlockListeners([]ledgercore.BlockListener)
+	Latest() basics.Round
+	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
+}
+
 // MakeStreamVerifier creates a new stream verifier and returns the chans used to send txn groups
 // to it and obtain the txn signature verification result from
 func MakeStreamVerifier(stxnChan <-chan *UnverifiedElement, resultChan chan<- *VerificationResult,
-	ledger logic.LedgerForSignature, nbw *NewBlockWatcher, verificationPool execpool.BacklogPool,
-	cache VerifiedTransactionCache, droppedFromPool *metrics.Counter) (sv *StreamVerifier) {
+	ledger LedgerForStreamVerifier, verificationPool execpool.BacklogPool,
+	cache VerifiedTransactionCache, droppedFromPool *metrics.Counter) (*StreamVerifier, error) {
 
-	sv = &StreamVerifier{
+	latest := ledger.Latest()
+	latestHdr, err := ledger.BlockHdr(latest)
+	if err != nil {
+		return nil, errors.New("MakeStreamVerifier: Could not get header for previous block")
+	}
+
+	nbw := MakeNewBlockWatcher(latestHdr)
+	ledger.RegisterBlockListeners([]ledgercore.BlockListener{nbw})
+
+	return &StreamVerifier{
 		resultChan:       resultChan,
 		stxnChan:         stxnChan,
 		verificationPool: verificationPool,
@@ -662,8 +679,7 @@ func MakeStreamVerifier(stxnChan <-chan *UnverifiedElement, resultChan chan<- *V
 		nbw:              nbw,
 		ledger:           ledger,
 		droppedFromPool:  droppedFromPool,
-	}
-	return sv
+	}, nil
 }
 
 // Start is called when the verifier is created and whenever it needs to restart after
