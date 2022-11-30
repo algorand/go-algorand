@@ -62,18 +62,28 @@ var transactionMessageTxGroupFull = metrics.MakeCounter(metrics.TransactionMessa
 
 var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionMessagesBacklogSize)
 
-var transactionMessageTxGroupRememberPoolMaxCap = metrics.MakeCounter(metrics.TransactionMessageTxGroupRememberPoolMaxCap)
-var transactionMessageTxGroupRememberNoPendingEval = metrics.MakeCounter(metrics.TransactionMessageTxGroupRememberNoPendingEval)
-var transactionMessageTxGroupRememberNoSpace = metrics.MakeCounter(metrics.TransactionMessageTxGroupRememberNoSpace)
-var transactionMessageTxGroupRememberFeeError = metrics.MakeCounter(metrics.TransactionMessageTxGroupRememberFeeError)
-var transactionMessageTxGroupRememberTxnDead = metrics.MakeCounter(metrics.TransactionMessageTxGroupRememberTxnDead)
-var transactionMessageTxGroupRememberTxGroupTooLarge = metrics.MakeCounter(metrics.TransactionMessageTxGroupRememberTxGroupTooLarge)
-var transactionMessageTxGroupRememberGroupIDError = metrics.MakeCounter(metrics.TransactionMessageTxGroupRememberGroupIDError)
-var transactionMessageTxGroupRememberEvalError = metrics.MakeCounter(metrics.TransactionMessageTxGroupRememberEvalError)
-
 var transactionGroupTxSyncHandled = metrics.MakeCounter(metrics.TransactionGroupTxSyncHandled)
 var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGroupTxSyncRemember)
 var transactionGroupTxSyncAlreadyCommitted = metrics.MakeCounter(metrics.TransactionGroupTxSyncAlreadyCommitted)
+
+var transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
+	"algod_transaction_messages_txpool_remember_{TAG}", "Number of transaction messages not remembered by txpool b/c if {TAG}",
+	txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+	txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagEvalGeneric,
+)
+
+const (
+	txPoolRememberTagCap         = "cap"
+	txPoolRememberPendingEval    = "pending_eval"
+	txPoolRememberTagNoSpace     = "no_space"
+	txPoolRememberTagFee         = "fee"
+	txPoolRememberTagTxnDead     = "txn_dead"
+	txPoolRememberTagTooLarge    = "too_large"
+	txPoolRememberTagGroupID     = "groupid"
+	txPoolRememberTagTxID        = "txid"
+	txPoolRememberTagLease       = "lease"
+	txPoolRememberTagEvalGeneric = "eval"
+)
 
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
@@ -239,17 +249,17 @@ func (handler *TxHandler) postProcessReportErrors(err error) {
 
 func (handler *TxHandler) rememberReportErrors(err error) {
 	if errors.Is(err, pools.ErrPendingQueueReachedMaxCap) {
-		transactionMessageTxGroupRememberPoolMaxCap.Inc(nil)
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagCap, 1)
 		return
 	}
 
 	if errors.Is(err, pools.ErrNoPendingBlockEvaluator) {
-		transactionMessageTxGroupRememberNoPendingEval.Inc(nil)
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberPendingEval, 1)
 		return
 	}
 
 	if errors.Is(err, ledgercore.ErrNoSpace) {
-		transactionMessageTxGroupRememberNoSpace.Inc(nil)
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagNoSpace, 1)
 		return
 	}
 
@@ -263,22 +273,28 @@ func (handler *TxHandler) rememberReportErrors(err error) {
 
 	switch err := underlyingErr.(type) {
 	case *pools.ErrTxPoolFeeError:
-		transactionMessageTxGroupRememberFeeError.Inc(nil)
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagFee, 1)
 		return
 	case *transactions.TxnDeadError:
-		transactionMessageTxGroupRememberTxnDead.Inc(nil)
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxnDead, 1)
+		return
+	case *ledgercore.TransactionInLedgerError:
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxID, 1)
+		return
+	case *ledgercore.LeaseInLedgerError:
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagLease, 1)
 		return
 	case *ledgercore.TxGroupMalformedError:
 		switch err.Reason {
 		case ledgercore.TxGroupMalformedErrorReasonExceedMaxSize:
-			transactionMessageTxGroupRememberTxGroupTooLarge.Inc(nil)
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTooLarge, 1)
 		default:
-			transactionMessageTxGroupRememberGroupIDError.Inc(nil)
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagGroupID, 1)
 		}
 		return
 	}
 
-	transactionMessageTxGroupRememberEvalError.Inc(nil)
+	transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagEvalGeneric, 1)
 }
 
 func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
