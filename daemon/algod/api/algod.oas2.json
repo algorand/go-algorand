@@ -1075,6 +1075,37 @@
         }
       }
     },
+    "/v2/ready": {
+      "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Returns OK if healthy and fully caught up.",
+        "operationId": "GetReady",
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "$ref": "#/responses/NodeStatusResponse"
+          },
+          "400": {
+            "description": "bad request"
+          },
+          "500": {
+            "description": "Internal Error"
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/status/wait-for-block-after/{round}": {
       "get": {
         "tags": [

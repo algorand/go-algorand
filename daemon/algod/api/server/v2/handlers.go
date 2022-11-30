@@ -787,6 +787,25 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// GetReady gets if the current node is healthy and fully caught up.
+// (GET /v2/ready)
+func (v2 *Handlers) GetReady(ctx echo.Context) error {
+	// TODO should probably use NodeStatusResponse
+	stat, err := v2.Node.Status()
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	}
+	if stat.StoppedAtUnsupportedRound {
+		return badRequest(ctx, err, errRequestedRoundInUnsupportedRound, v2.Log)
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("ready failed as the node is catchpoint catching up"), errOperationNotAvailableDuringCatchup, v2.Log)
+	}
+	//common.HealthCheck()
+	return v2.GetStatus(ctx)
+}
+
 // WaitForBlock returns the node status after waiting for the given round.
 // (GET /v2/status/wait-for-block-after/{round}/)
 func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {

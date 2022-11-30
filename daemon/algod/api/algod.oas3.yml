@@ -3972,6 +3972,124 @@
         "x-codegen-request-body-name": "keymap"
       }
     },
+    "/v2/ready": {
+      "get": {
+        "operationId": "GetReady",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "NodeStatus contains the information about a node status",
+                  "properties": {
+                    "catchpoint": {
+                      "description": "The current catchpoint that is being caught up to",
+                      "type": "string"
+                    },
+                    "catchpoint-acquired-blocks": {
+                      "description": "The number of blocks that have already been obtained by the node as part of the catchup",
+                      "type": "integer"
+                    },
+                    "catchpoint-processed-accounts": {
+                      "description": "The number of accounts from the current catchpoint that have been processed so far as part of the catchup",
+                      "type": "integer"
+                    },
+                    "catchpoint-processed-kvs": {
+                      "description": "The number of key-values (KVs) from the current catchpoint that have been processed so far as part of the catchup",
+                      "type": "integer"
+                    },
+                    "catchpoint-total-accounts": {
+                      "description": "The total number of accounts included in the current catchpoint",
+                      "type": "integer"
+                    },
+                    "catchpoint-total-blocks": {
+                      "description": "The total number of blocks that are required to complete the current catchpoint catchup",
+                      "type": "integer"
+                    },
+                    "catchpoint-total-kvs": {
+                      "description": "The total number of key-values (KVs) included in the current catchpoint",
+                      "type": "integer"
+                    },
+                    "catchpoint-verified-accounts": {
+                      "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
+                      "type": "integer"
+                    },
+                    "catchpoint-verified-kvs": {
+                      "description": "The number of key-values (KVs) from the current catchpoint that have been verified so far as part of the catchup",
+                      "type": "integer"
+                    },
+                    "catchup-time": {
+                      "description": "CatchupTime in nanoseconds",
+                      "type": "integer"
+                    },
+                    "last-catchpoint": {
+                      "description": "The last catchpoint seen by the node",
+                      "type": "string"
+                    },
+                    "last-round": {
+                      "description": "LastRound indicates the last round seen",
+                      "type": "integer"
+                    },
+                    "last-version": {
+                      "description": "LastVersion indicates the last consensus version supported",
+                      "type": "string"
+                    },
+                    "next-version": {
+                      "description": "NextVersion of consensus protocol to use",
+                      "type": "string"
+                    },
+                    "next-version-round": {
+                      "description": "NextVersionRound is the round at which the next consensus version will apply",
+                      "type": "integer"
+                    },
+                    "next-version-supported": {
+                      "description": "NextVersionSupported indicates whether the next consensus version is supported by this node",
+                      "type": "boolean"
+                    },
+                    "stopped-at-unsupported-round": {
+                      "description": "StoppedAtUnsupportedRound indicates that the node does not support the new rounds and has stopped making progress",
+                      "type": "boolean"
+                    },
+                    "time-since-last-round": {
+                      "description": "TimeSinceLastRound in nanoseconds",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "catchup-time",
+                    "last-round",
+                    "last-version",
+                    "next-version",
+                    "next-version-round",
+                    "next-version-supported",
+                    "stopped-at-unsupported-round",
+                    "time-since-last-round"
+                  ],
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {},
+            "description": "bad request"
+          },
+          "500": {
+            "content": {},
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Returns OK if healthy and fully caught up.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
     "/v2/shutdown": {
       "post": {
         "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds.",
