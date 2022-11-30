@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -1279,11 +1280,11 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 	// when migrating there is only MaxTxnLife blocks in the block DB
 	// since the original txTail.commmittedUpTo preserved only (rnd+1)-MaxTxnLife = 1000 blocks back
 	err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
-		latestBlockRound, err := blockLatest(blockTx)
+		latestBlockRound, err := blockdb.BlockLatest(blockTx)
 		if err != nil {
 			return fmt.Errorf("latest block number cannot be retrieved : %w", err)
 		}
-		latestHdr, err := blockGetHdr(blockTx, dbRound)
+		latestHdr, err := blockdb.BlockGetHdr(blockTx, dbRound)
 		if err != nil {
 			return fmt.Errorf("latest block header %d cannot be retrieved : %w", dbRound, err)
 		}
@@ -1299,7 +1300,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		if firstRound == basics.Round(0) {
 			firstRound++
 		}
-		if _, err := blockGet(blockTx, firstRound); err != nil {
+		if _, err := blockdb.BlockGet(blockTx, firstRound); err != nil {
 			// looks like not catchpoint but a regular migration, start from maxTxnLife + deeperBlockHistory back
 			firstRound = (latestBlockRound + 1).SubSaturate(maxTxnLife + deeperBlockHistory)
 			if firstRound == basics.Round(0) {
@@ -1308,7 +1309,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		}
 		tailRounds := make([][]byte, 0, maxTxnLife)
 		for rnd := firstRound; rnd <= dbRound; rnd++ {
-			blk, err := blockGet(blockTx, rnd)
+			blk, err := blockdb.BlockGet(blockTx, rnd)
 			if err != nil {
 				return fmt.Errorf("block for round %d ( %d - %d ) cannot be retrieved : %w", rnd, firstRound, dbRound, err)
 			}
@@ -1343,7 +1344,7 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 		currentProto = initProto
 	} else {
 		err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
-			hdr, err := blockGetHdr(blockTx, rnd)
+			hdr, err := blockdb.BlockGetHdr(blockTx, rnd)
 			if err != nil {
 				return err
 			}
