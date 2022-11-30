@@ -30,6 +30,7 @@ import (
 // disambiguate the hashed resource.
 //
 //go:generate stringer -type=hashKind
+//msgp:ignore HashKind
 type HashKind byte
 
 // Defines known kinds of hashes. Changing an enum ordinal value is a
