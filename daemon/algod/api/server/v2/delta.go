@@ -52,11 +52,8 @@ func convertAppResourceRecordToGenerated(app ledgercore.AppResourceRecord) model
 func convertAssetResourceRecordToGenerated(asset ledgercore.AssetResourceRecord) model.AssetResourceRecord {
 	var assetHolding *model.AssetHolding = nil
 	if asset.Holding.Holding != nil {
-		assetHolding = &model.AssetHolding{
-			Amount:   asset.Holding.Holding.Amount,
-			AssetID:  uint64(asset.Aidx),
-			IsFrozen: asset.Holding.Holding.Frozen,
-		}
+		a := AssetHolding(*asset.Holding.Holding, asset.Aidx)
+		assetHolding = &a
 	}
 	var assetParams *model.AssetParams = nil
 	if asset.Params.Params != nil {

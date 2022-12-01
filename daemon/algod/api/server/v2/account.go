@@ -28,6 +28,14 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
+func AssetHolding(ah basics.AssetHolding, ai basics.AssetIndex) model.AssetHolding {
+	return model.AssetHolding{
+		Amount:   ah.Amount,
+		AssetID:  uint64(ai),
+		IsFrozen: ah.Frozen,
+	}
+}
+
 // AccountDataToAccount converts basics.AccountData to v2.model.Account
 func AccountDataToAccount(
 	address string, record *basics.AccountData,
@@ -39,11 +47,7 @@ func AccountDataToAccount(
 	for curid, holding := range record.Assets {
 		// Empty is ok, asset may have been deleted, so we can no
 		// longer fetch the creator
-		holding := model.AssetHolding{
-			Amount:   holding.Amount,
-			AssetID:  uint64(curid),
-			IsFrozen: holding.Frozen,
-		}
+		holding := AssetHolding(holding, curid)
 
 		assets = append(assets, holding)
 	}
@@ -439,7 +443,6 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 	return app
 }
 
-// AppLocalState constructs model.ApplicationLocalState from basics.AppLocalState.
 func AppLocalState(state basics.AppLocalState, appIdx basics.AppIndex) model.ApplicationLocalState {
 	localState := convertTKVToGenerated(&state.KeyValue)
 	return model.ApplicationLocalState{
