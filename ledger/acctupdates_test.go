@@ -1546,6 +1546,8 @@ func TestKVCache(t *testing.T) {
 }
 
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
+	arw := store.NewAccountsSQLReaderWriter(tx)
+
 	rows, err := tx.Query("SELECT rowid, address, data FROM accountbase")
 	if err != nil {
 		return
@@ -1576,7 +1578,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 		copy(addr[:], addrbuf)
 
 		var ad basics.AccountData
-		ad, err = loadFullAccount(context.Background(), tx, "resources", addr, rowid.Int64, data)
+		ad, err = arw.LoadFullAccount(context.Background(), "resources", addr, rowid.Int64, data)
 		if err != nil {
 			return
 		}
@@ -1631,7 +1633,8 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	}
 
 	err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		return updateAccountsHashRound(ctx, tx, 1)
+		arw := store.NewAccountsSQLReaderWriter(tx)
+		return arw.UpdateAccountsHashRound(ctx, 1)
 	})
 	require.NoError(b, err)
 

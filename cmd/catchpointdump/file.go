@@ -39,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -318,6 +319,8 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 			totals.RewardsLevel)
 	}
 	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		arw := store.NewAccountsSQLReaderWriter(tx)
+
 		fmt.Printf("\n")
 		printDumpingCatchpointProgressLine(0, 50, 0)
 
@@ -417,7 +420,7 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 				progress++
 				acctCount++
 			}
-			_, err = ledger.LoadAllFullAccounts(context.Background(), tx, balancesTable, resourcesTable, acctCb)
+			_, err = arw.LoadAllFullAccounts(context.Background(), balancesTable, resourcesTable, acctCb)
 			if err != nil {
 				return
 			}

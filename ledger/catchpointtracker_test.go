@@ -302,7 +302,7 @@ func TestRecordCatchpointFile(t *testing.T) {
 			context.Background(), accountsRound, time.Second)
 		require.NoError(t, err)
 
-		err = ct.createCatchpoint(context.Background(), accountsRound, round, catchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
+		err = ct.createCatchpoint(context.Background(), accountsRound, round, store.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
 		require.NoError(t, err)
 	}
 
@@ -354,6 +354,8 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
 	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		arw := store.NewAccountsSQLReaderWriter(tx)
+
 		for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
 			var updates compactAccountDeltas
 			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
@@ -370,7 +372,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 			}
 		}
 
-		return updateAccountsHashRound(ctx, tx, 1)
+		return arw.UpdateAccountsHashRound(ctx, 1)
 	})
 	require.NoError(b, err)
 
@@ -911,8 +913,7 @@ func TestFirstStageInfoPruning(t *testing.T) {
 	numEntries := uint64(0)
 	i -= basics.Round(cfg.MaxAcctLookback)
 	for i > 0 {
-		_, recordExists, err := selectCatchpointFirstStageInfo(
-			context.Background(), ct.dbs.Rdb.Handle, i)
+		_, recordExists, err := ct.catchpointStore.SelectCatchpointFirstStageInfo(context.Background(), i)
 		require.NoError(t, err)
 
 		catchpointDataFilePath :=
@@ -1009,8 +1010,7 @@ func TestFirstStagePersistence(t *testing.T) {
 	require.NoError(t, err)
 
 	// Delete the database record.
-	err = deleteOldCatchpointFirstStageInfo(
-		context.Background(), ml2.dbs.Wdb.Handle, firstStageRound)
+	err = cps2.DeleteOldCatchpointFirstStageInfo(context.Background(), firstStageRound)
 	require.NoError(t, err)
 
 	// Create a catchpoint tracker and let it restart catchpoint's first stage.
@@ -1024,8 +1024,7 @@ func TestFirstStagePersistence(t *testing.T) {
 	require.Greater(t, info.Size(), int64(1))
 
 	// Check that the database record exists.
-	_, exists, err := selectCatchpointFirstStageInfo(
-		context.Background(), ml2.dbs.Rdb.Handle, firstStageRound)
+	_, exists, err := ct2.catchpointStore.SelectCatchpointFirstStageInfo(context.Background(), firstStageRound)
 	require.NoError(t, err)
 	require.True(t, exists)
 
@@ -1072,7 +1071,7 @@ func TestSecondStagePersistence(t *testing.T) {
 	firstStageRound := secondStageRound - basics.Round(protoParams.CatchpointLookback)
 	catchpointDataFilePath :=
 		filepath.Join(catchpointsDirectory, makeCatchpointDataFilePath(firstStageRound))
-	var firstStageInfo catchpointFirstStageInfo
+	var firstStageInfo store.CatchpointFirstStageInfo
 	var catchpointData []byte
 
 	// Add blocks until the first catchpoint round.
@@ -1081,8 +1080,7 @@ func TestSecondStagePersistence(t *testing.T) {
 			// Save first stage info and data file.
 			var exists bool
 			var err error
-			firstStageInfo, exists, err = selectCatchpointFirstStageInfo(
-				context.Background(), ml.dbs.Rdb.Handle, firstStageRound)
+			firstStageInfo, exists, err = ct.catchpointStore.SelectCatchpointFirstStageInfo(context.Background(), firstStageRound)
 			require.NoError(t, err)
 			require.True(t, exists)
 
@@ -1136,8 +1134,7 @@ func TestSecondStagePersistence(t *testing.T) {
 	cps2 := store.NewCatchpointSQLReaderWriter(ml2.dbs.Wdb.Handle)
 
 	// Restore the first stage database record.
-	err = insertOrReplaceCatchpointFirstStageInfo(
-		context.Background(), ml2.dbs.Wdb.Handle, firstStageRound, &firstStageInfo)
+	err = cps2.InsertOrReplaceCatchpointFirstStageInfo(context.Background(), firstStageRound, &firstStageInfo)
 	require.NoError(t, err)
 
 	// Insert unfinished catchpoint record.
@@ -1328,8 +1325,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 	cps2 := store.NewCatchpointSQLReaderWriter(ml2.dbs.Wdb.Handle)
 
 	// Sanity check: first stage record should be deleted.
-	_, exists, err := selectCatchpointFirstStageInfo(
-		context.Background(), ml2.dbs.Rdb.Handle, firstStageRound)
+	_, exists, err := cps2.SelectCatchpointFirstStageInfo(context.Background(), firstStageRound)
 	require.NoError(t, err)
 	require.False(t, exists)
 
