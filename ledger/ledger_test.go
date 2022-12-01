@@ -2243,17 +2243,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 			return err0
 		}
 
-		// trackers need new talbes, create in order to allow commits
-		if err0 := accountsCreateOnlineAccountsTable(ctx, tx); err0 != nil {
-			return err0
-		}
-		if err0 := accountsCreateTxTailTable(ctx, tx); err0 != nil {
-			return err0
-		}
-		if err0 := accountsCreateOnlineRoundParamsTable(ctx, tx); err0 != nil {
-			return err0
-		}
-		if err0 := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err0 != nil {
+		if err0 := store.AccountsUpdateSchemaTest(t, ctx, tx); err != nil {
 			return err0
 		}
 
@@ -2413,21 +2403,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	}()
 	// create tables so online accounts can still be written
 	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		if err := accountsCreateOnlineAccountsTable(ctx, tx); err != nil {
-			return err
-		}
-		if err := accountsCreateTxTailTable(ctx, tx); err != nil {
-			return err
-		}
-		if err := accountsCreateOnlineRoundParamsTable(ctx, tx); err != nil {
-			return err
-		}
-		if err := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err != nil {
-			return err
-		}
-		// this line creates kvstore table, even if it is not required in accountDBVersion 6 -> 7
-		// or in later version where we need kvstore table, this test will fail
-		if err := accountsCreateBoxTable(ctx, tx); err != nil {
+		if err := store.AccountsUpdateSchemaTest(t, ctx, tx); err != nil {
 			return err
 		}
 		return nil

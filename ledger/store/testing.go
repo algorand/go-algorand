@@ -73,3 +73,24 @@ func AccountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address
 
 	return newDB
 }
+
+func AccountsUpdateSchemaTest(tb testing.TB, ctx context.Context, tx *sql.Tx) (err error) {
+	if err := accountsCreateOnlineAccountsTable(ctx, tx); err != nil {
+		return err
+	}
+	if err := accountsCreateTxTailTable(ctx, tx); err != nil {
+		return err
+	}
+	if err := accountsCreateOnlineRoundParamsTable(ctx, tx); err != nil {
+		return err
+	}
+	if err := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err != nil {
+		return err
+	}
+	// this line creates kvstore table, even if it is not required in accountDBVersion 6 -> 7
+	// or in later version where we need kvstore table, some tests will fail
+	if err := accountsCreateBoxTable(ctx, tx); err != nil {
+		return err
+	}
+	return nil
+}
