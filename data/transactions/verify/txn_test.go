@@ -1512,7 +1512,8 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 	var badSigResultCounter int
 	var goodSigResultCounter int
 
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	cache := MakeVerifiedTransactionCache(50)
 
 	txBacklogSizeMod := txBacklogSize / 20
