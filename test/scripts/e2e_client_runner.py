@@ -123,7 +123,7 @@ def _script_thread_inner(runset, scriptname, timeout):
         if txinfo.get('round'):
             break
         status = algod.status_after_block(round_num=round)
-        round = status['lastRound']
+        round = status['last-round']
 
     if ptxinfo is not None:
         sys.stderr.write('failed to initialize temporary test wallet account for test ({}) for {} rounds.\n'.format(scriptname, max_init_wait_rounds))
