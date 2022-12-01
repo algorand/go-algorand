@@ -30,15 +30,8 @@ import (
 func convertAppResourceRecordToGenerated(app ledgercore.AppResourceRecord) model.AppResourceRecord {
 	var appLocalState *model.ApplicationLocalState = nil
 	if app.State.LocalState != nil {
-		localState := convertTKVToGenerated(&app.State.LocalState.KeyValue)
-		appLocalState = &model.ApplicationLocalState{
-			Id:       uint64(app.Aidx),
-			KeyValue: localState,
-			Schema: model.ApplicationStateSchema{
-				NumByteSlice: app.State.LocalState.Schema.NumByteSlice,
-				NumUint:      app.State.LocalState.Schema.NumUint,
-			},
-		}
+		s := AppLocalState(*app.State.LocalState, app.Aidx)
+		appLocalState = &s
 	}
 	var appParams *model.ApplicationParams = nil
 	if app.Params.Params != nil {

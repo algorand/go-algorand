@@ -86,15 +86,7 @@ func AccountDataToAccount(
 
 	appsLocalState := make([]model.ApplicationLocalState, 0, len(record.AppLocalStates))
 	for appIdx, state := range record.AppLocalStates {
-		localState := convertTKVToGenerated(&state.KeyValue)
-		appsLocalState = append(appsLocalState, model.ApplicationLocalState{
-			Id:       uint64(appIdx),
-			KeyValue: localState,
-			Schema: model.ApplicationStateSchema{
-				NumByteSlice: state.Schema.NumByteSlice,
-				NumUint:      state.Schema.NumUint,
-			},
-		})
+		appsLocalState = append(appsLocalState, AppLocalState(state, appIdx))
 	}
 	sort.Slice(appsLocalState, func(i, j int) bool {
 		return appsLocalState[i].Id < appsLocalState[j].Id
@@ -445,6 +437,19 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 		},
 	}
 	return app
+}
+
+// AppLocalState constructs model.ApplicationLocalState from basics.AppLocalState.
+func AppLocalState(state basics.AppLocalState, appIdx basics.AppIndex) model.ApplicationLocalState {
+	localState := convertTKVToGenerated(&state.KeyValue)
+	return model.ApplicationLocalState{
+		Id:       uint64(appIdx),
+		KeyValue: localState,
+		Schema: model.ApplicationStateSchema{
+			NumByteSlice: state.Schema.NumByteSlice,
+			NumUint:      state.Schema.NumUint,
+		},
+	}
 }
 
 // AssetParamsToAsset converts basics.AssetParams to model.Asset
