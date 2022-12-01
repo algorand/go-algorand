@@ -47,7 +47,7 @@ func TestVoteAggregatorVotes(t *testing.T) {
 	var l listener = checkedListener{listener: new(voteAggregator), listenerContract: voteAggregatorContract{}}
 
 	var router router
-	rr := routerFixture
+	var rr rootRouter
 	rr.voteRoot = l
 	router = &rr
 
@@ -98,7 +98,7 @@ func TestVoteAggregatorBundles(t *testing.T) {
 	var l listener = checkedListener{listener: new(voteAggregator), listenerContract: voteAggregatorContract{}}
 
 	var router router
-	rr := routerFixture
+	var rr rootRouter
 	rr.voteRoot = l
 	router = &rr
 

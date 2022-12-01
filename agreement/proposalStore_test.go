@@ -791,7 +791,7 @@ func TestProposalStoreRegressionBlockRedeliveryBug_b29ea57(t *testing.T) {
 		player := player{Round: curRound}
 
 		var router router
-		rr := routerFixture
+		var rr rootRouter
 		router = &rr
 
 		var res event
@@ -899,7 +899,7 @@ func TestProposalStoreRegressionWrongPipelinePeriodBug_39387501(t *testing.T) {
 	player := player{Round: curRound}
 
 	var router router
-	rr := routerFixture
+	var rr rootRouter
 	router = &rr
 
 	var res event

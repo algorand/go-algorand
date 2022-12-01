@@ -54,8 +54,6 @@ var readOnlyAddrs7000 []basics.Address
 var readOnlyVRF7000 []*crypto.VRFSecrets
 var readOnlyOT7000 []crypto.OneTimeSigner
 
-var routerFixture rootRouter
-
 func init() {
 	rand.Seed(randseed)
 

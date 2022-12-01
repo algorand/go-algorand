@@ -418,7 +418,7 @@ func testPlayerSetup() (player, rootRouter, testAccountData, testBlockFactory, L
 	player := player{Round: round, Period: period, Step: soft}
 
 	var p actor = ioLoggedActor{checkedActor{actor: &player, actorContract: playerContract{}}, playerTracer}
-	router := routerFixture
+	var router rootRouter
 	router.root = p
 	f := testBlockFactory{Owner: 1} // TODO this should change with given address
 
