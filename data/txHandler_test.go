@@ -964,7 +964,6 @@ func BenchmarkTxHandlerDecoderMsgp(b *testing.B) {
 // TestIncomingTxHandle checks the correctness with single txns
 func TestIncomingTxHandle(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numberOfTransactionGroups := 1000
 	incomingTxHandlerProcessing(1, numberOfTransactionGroups, t)
@@ -973,7 +972,6 @@ func TestIncomingTxHandle(t *testing.T) {
 // TestIncomingTxGroupHandle checks the correctness with txn groups
 func TestIncomingTxGroupHandle(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numberOfTransactionGroups := 1000 / proto.MaxTxGroupSize
 	incomingTxHandlerProcessing(proto.MaxTxGroupSize, numberOfTransactionGroups, t)
