@@ -597,14 +597,14 @@ type StreamVerifier struct {
 // NewBlockWatcher is a struct used to provide a new block header to the
 // stream verifier
 type NewBlockWatcher struct {
-	blkHeader bookkeeping.BlockHeader
+	blkHeader *bookkeeping.BlockHeader
 	mu        deadlock.RWMutex
 }
 
 // MakeNewBlockWatcher construct a new block watcher with the initial blkHdr
 func MakeNewBlockWatcher(blkHdr bookkeeping.BlockHeader) (nbw *NewBlockWatcher) {
 	nbw = &NewBlockWatcher{
-		blkHeader: blkHdr,
+		blkHeader: &blkHdr,
 	}
 	return nbw
 }
@@ -616,10 +616,10 @@ func (nbw *NewBlockWatcher) OnNewBlock(block bookkeeping.Block, delta ledgercore
 	}
 	nbw.mu.Lock()
 	defer nbw.mu.Unlock()
-	nbw.blkHeader = block.BlockHeader
+	nbw.blkHeader = &block.BlockHeader
 }
 
-func (nbw *NewBlockWatcher) getBlockHeader() (bh bookkeeping.BlockHeader) {
+func (nbw *NewBlockWatcher) getBlockHeader() (bh *bookkeeping.BlockHeader) {
 	nbw.mu.RLock()
 	defer nbw.mu.RUnlock()
 	return nbw.blkHeader
@@ -848,7 +848,7 @@ func (sv *StreamVerifier) addVerificationTaskToThePoolNow(uelts []*UnverifiedEle
 		// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
 		blockHeader := sv.nbw.getBlockHeader()
 		for _, ue := range uelts {
-			groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, &blockHeader, sv.ledger, batchVerifier)
+			groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, blockHeader, sv.ledger, batchVerifier)
 			if err != nil {
 				// verification failed, no need to add the sig to the batch, report the error
 				sv.sendResult(ue.TxnGroup, ue.BacklogMessage, err)
