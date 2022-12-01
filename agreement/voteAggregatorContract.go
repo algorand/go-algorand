@@ -18,20 +18,18 @@ package agreement
 
 import "fmt"
 
-type voteAggregatorContract struct {
-}
-
-func (c voteAggregatorContract) pre(p player, in event) (pre []error) {
+func (c voteAggregator) pre(r routerHandle, p player, in event) {
+	var errs []error
 	if in.t() == voteAccepted {
 		if in.(voteAcceptedEvent).Vote.R.Step == propose {
-			pre = append(pre, fmt.Errorf("incoming event has step propose"))
+			errs = append(errs, fmt.Errorf("incoming event has step propose"))
 		}
 	}
-
-	return
+	maybePreconditionPanic(r, errs)
 }
 
-func (c voteAggregatorContract) post(p player, in, out event) (errs []error) {
+func (c voteAggregator) post(r routerHandle, p player, in, out event) {
+	var errs []error
 	// prop 1: voteFiltered directly preceded by votePresent or voteVerified
 	if out.t() == voteFiltered {
 		if in.t() != votePresent && in.t() != voteVerified {
@@ -55,5 +53,5 @@ func (c voteAggregatorContract) post(p player, in, out event) (errs []error) {
 	}
 	// Relay rule contracts should go here...
 
-	return errs
+	maybePostconditionPanic(r, errs)
 }

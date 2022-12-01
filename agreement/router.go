@@ -68,8 +68,7 @@ type router interface {
 type rootRouter struct {
 	_struct struct{} `codec:","`
 
-	root     actor    // playerMachine   (not restored: explicitly set on construction)
-	voteRoot listener // voteMachine
+	root actor // playerMachine   (not restored: explicitly set on construction)
 
 	ProposalManager proposalManager
 	VoteAggregator  voteAggregator
@@ -112,9 +111,6 @@ func makeRootRouter(p player) (res rootRouter) {
 }
 
 func (router *rootRouter) update(state player, r round, gc bool) {
-	if router.voteRoot == nil {
-		router.voteRoot = checkedListener{listener: &router.VoteAggregator, listenerContract: voteAggregatorContract{}}
-	}
 	if router.Children == nil {
 		router.Children = make(map[round]*roundRouter)
 	}
@@ -157,9 +153,9 @@ func (router *rootRouter) dispatch(t *tracer, state player, e event, src stateMa
 		handle := routerHandle{t: t, r: router, src: proposalMachine}
 		return router.ProposalManager.handle(handle, state, e)
 	}
-	if router.voteRoot.T() == dest {
+	if router.VoteAggregator.T() == dest {
 		handle := routerHandle{t: t, r: router, src: voteMachine}
-		return router.voteRoot.handle(handle, state, e)
+		return router.VoteAggregator.handle(handle, state, e)
 	}
 	return router.Children[r].dispatch(t, state, e, src, dest, r, p, s)
 }

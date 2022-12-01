@@ -70,9 +70,11 @@ func (agg *voteAggregator) underlying() listener {
 //       thresholdEvent to occur, the thresholdEvent is propagated to the
 //       parent.  Otherwise, a bundleFiltered event is propagated to the parent.
 func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res event) {
+	agg.pre(r, pr, em)
 	e := em.(filterableMessageEvent)
 	defer func() {
 		r.t.logVoteAggregatorResult(e, res)
+		agg.post(r, pr, em, res)
 	}()
 
 	switch e.t() {

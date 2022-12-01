@@ -44,11 +44,8 @@ func TestVoteAggregatorVotes(t *testing.T) {
 	period := period(0)
 	player := player{Round: round, Period: period}
 
-	var l listener = checkedListener{listener: new(voteAggregator), listenerContract: voteAggregatorContract{}}
-
 	var router router
 	var rr rootRouter
-	rr.voteRoot = l
 	router = &rr
 
 	var proposal proposalValue
@@ -95,11 +92,8 @@ func TestVoteAggregatorBundles(t *testing.T) {
 	period := period(0)
 	player := player{Round: round, Period: period}
 
-	var l listener = checkedListener{listener: new(voteAggregator), listenerContract: voteAggregatorContract{}}
-
 	var router router
 	var rr rootRouter
-	rr.voteRoot = l
 	router = &rr
 
 	var proposal proposalValue
@@ -167,7 +161,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 	rRouter := new(rootRouter)
 	rRouter.update(player{}, 0, false)
 	voteM := &ioAutomataConcrete{
-		listener:  rRouter.voteRoot,
+		listener:  &rRouter.VoteAggregator,
 		routerCtx: rRouter,
 	}
 	helper := voteMakerHelper{}
@@ -253,7 +247,7 @@ func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 	rRouter := new(rootRouter)
 	rRouter.update(player{}, 0, false)
 	voteM := &ioAutomataConcrete{
-		listener:  rRouter.voteRoot,
+		listener:  &rRouter.VoteAggregator,
 		routerCtx: rRouter,
 	}
 	helper := voteMakerHelper{}
@@ -330,7 +324,7 @@ func TestVoteAggregatorFiltersVoteVerifiedThreshold(t *testing.T) {
 	rRouter := new(rootRouter)
 	rRouter.update(player{}, 0, false)
 	voteM := &ioAutomataConcrete{
-		listener:  rRouter.voteRoot,
+		listener:  &rRouter.VoteAggregator,
 		routerCtx: rRouter,
 	}
 	helper := voteMakerHelper{}
@@ -387,7 +381,7 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 	rRouter := new(rootRouter)
 	rRouter.update(player{}, 0, false)
 	voteM := &ioAutomataConcrete{
-		listener:  rRouter.voteRoot,
+		listener:  &rRouter.VoteAggregator,
 		routerCtx: rRouter,
 	}
 	helper := voteMakerHelper{}
@@ -491,7 +485,7 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 	rRouter := new(rootRouter)
 	rRouter.update(player{}, 0, false)
 	voteM := &ioAutomataConcrete{
-		listener:  rRouter.voteRoot,
+		listener:  &rRouter.VoteAggregator,
 		routerCtx: rRouter,
 	}
 	helper := voteMakerHelper{}
@@ -609,7 +603,7 @@ func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
 	rRouter := new(rootRouter)
 	rRouter.update(player{}, 0, false)
 	voteM := &ioAutomataConcrete{
-		listener:  rRouter.voteRoot,
+		listener:  &rRouter.VoteAggregator,
 		routerCtx: rRouter,
 	}
 	helper := voteMakerHelper{}
@@ -723,7 +717,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 	rRouter := new(rootRouter)
 	rRouter.update(player{}, 0, false)
 	voteM := &ioAutomataConcrete{
-		listener:  rRouter.voteRoot,
+		listener:  &rRouter.VoteAggregator,
 		routerCtx: rRouter,
 	}
 	helper := voteMakerHelper{}
@@ -810,7 +804,7 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 	rRouter := new(rootRouter)
 	rRouter.update(player{}, 0, false)
 	voteM := &ioAutomataConcrete{
-		listener:  rRouter.voteRoot,
+		listener:  &rRouter.VoteAggregator,
 		routerCtx: rRouter,
 	}
 	helper := voteMakerHelper{}
