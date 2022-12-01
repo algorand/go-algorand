@@ -984,7 +984,7 @@ func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
 }
 
 // GetLedgerStateDelta returns the deltas for a given round.
-// This should be a ledgercore.StateDelta object.
+// This should be a representation of the ledgercore.StateDelta object.
 // (GET /v2/deltas/{round})
 func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64) error {
 	sDelta, err := v2.Node.LedgerForAPI().GetStateDeltaForRound(basics.Round(round))
