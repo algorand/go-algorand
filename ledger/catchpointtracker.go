@@ -518,10 +518,11 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 	}()
 
 	crw := store.NewCatchpointSQLReaderWriter(tx)
+	arw := store.NewAccountsSQLReaderWriter(tx)
 
 	if ct.catchpointEnabled() {
-		var mc *MerkleCommitter
-		mc, err = MakeMerkleCommitter(tx, false)
+		var mc *store.MerkleCommitter
+		mc, err = store.MakeMerkleCommitter(tx, false)
 		if err != nil {
 			return
 		}
@@ -554,7 +555,7 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 		dcc.stats.MerkleTrieUpdateDuration = now - dcc.stats.MerkleTrieUpdateDuration
 	}
 
-	err = updateAccountsHashRound(ctx, tx, treeTargetRound)
+	err = arw.UpdateAccountsHashRound(ctx, treeTargetRound)
 	if err != nil {
 		return err
 	}
@@ -728,7 +729,7 @@ func repackCatchpoint(ctx context.Context, header CatchpointFileHeader, biggestC
 
 // Create a catchpoint (a label and possibly a file with db record) and remove
 // the unfinished catchpoint record.
-func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound basics.Round, round basics.Round, dataInfo catchpointFirstStageInfo, blockHash crypto.Digest) error {
+func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound basics.Round, round basics.Round, dataInfo store.CatchpointFirstStageInfo, blockHash crypto.Digest) error {
 	startTime := time.Now()
 	label := ledgercore.MakeCatchpointLabel(
 		round, blockHash, dataInfo.TrieBalancesHash, dataInfo.Totals).String()
@@ -826,8 +827,7 @@ func (ct *catchpointTracker) finishCatchpoint(ctx context.Context, round basics.
 
 	ct.log.Infof("finishing catchpoint round: %d accountsRound: %d", round, accountsRound)
 
-	dataInfo, exists, err :=
-		selectCatchpointFirstStageInfo(ctx, ct.dbs.Rdb.Handle, accountsRound)
+	dataInfo, exists, err := ct.catchpointStore.SelectCatchpointFirstStageInfo(ctx, accountsRound)
 	if err != nil {
 		return err
 	}
@@ -870,8 +870,7 @@ func (ct *catchpointTracker) calculateCatchpointRounds(dcc *deferredCommitContex
 
 // Delete old first stage catchpoint records and data files.
 func (ct *catchpointTracker) pruneFirstStageRecordsData(ctx context.Context, maxRoundToDelete basics.Round) error {
-	rounds, err := selectOldCatchpointFirstStageInfoRounds(
-		ctx, ct.dbs.Rdb.Handle, maxRoundToDelete)
+	rounds, err := ct.catchpointStore.SelectOldCatchpointFirstStageInfoRounds(ctx, maxRoundToDelete)
 	if err != nil {
 		return err
 	}
@@ -885,7 +884,7 @@ func (ct *catchpointTracker) pruneFirstStageRecordsData(ctx context.Context, max
 		}
 	}
 
-	return deleteOldCatchpointFirstStageInfo(ctx, ct.dbs.Rdb.Handle, maxRoundToDelete)
+	return ct.catchpointStore.DeleteOldCatchpointFirstStageInfo(ctx, maxRoundToDelete)
 }
 
 func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
@@ -1195,7 +1194,7 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.T
 	}
 
 	{
-		mc, err := MakeMerkleCommitter(tx, false)
+		mc, err := store.MakeMerkleCommitter(tx, false)
 		if err != nil {
 			return err
 		}
@@ -1214,7 +1213,8 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.T
 		return err
 	}
 
-	info := catchpointFirstStageInfo{
+	crw := store.NewCatchpointSQLReaderWriter(tx)
+	info := store.CatchpointFirstStageInfo{
 		Totals:           accountTotals,
 		TotalAccounts:    totalAccounts,
 		TotalKVs:         totalKVs,
@@ -1222,7 +1222,7 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.T
 		BiggestChunkLen:  biggestChunkLen,
 		TrieBalancesHash: trieBalancesHash,
 	}
-	return insertOrReplaceCatchpointFirstStageInfo(ctx, tx, accountsRound, &info)
+	return crw.InsertOrReplaceCatchpointFirstStageInfo(ctx, accountsRound, &info)
 }
 
 func makeCatchpointDataFilePath(accountsRound basics.Round) string {
@@ -1546,7 +1546,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 	if hashRound != rnd {
 		// if the hashed round is different then the base round, something was modified, and the accounts aren't in sync
 		// with the hashes.
-		err = resetAccountHashes(ctx, tx)
+		err = arw.ResetAccountHashes(ctx)
 		if err != nil {
 			return err
 		}
@@ -1557,7 +1557,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 	}
 
 	// create the merkle trie for the balances
-	committer, err := MakeMerkleCommitter(tx, false)
+	committer, err := store.MakeMerkleCommitter(tx, false)
 	if err != nil {
 		return fmt.Errorf("initializeHashes was unable to makeMerkleCommitter: %v", err)
 	}
@@ -1603,7 +1603,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 					if !added {
 						// we need to translate the "addrid" into actual account address so that
 						// we can report the failure.
-						addr, err := lookupAccountAddressFromAddressID(ctx, tx, acct.addrid)
+						addr, err := arw.LookupAccountAddressFromAddressID(ctx, acct.addrid)
 						if err != nil {
 							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account id %d : %v", hex.EncodeToString(acct.digest), acct.addrid, err)
 						} else {
@@ -1689,7 +1689,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 		}
 
 		// we've just updated the merkle trie, update the hashRound to reflect that.
-		err = updateAccountsHashRound(ctx, tx, rnd)
+		err = arw.UpdateAccountsHashRound(ctx, rnd)
 		if err != nil {
 			return fmt.Errorf("initializeHashes was unable to update the account hash round to %d: %v", rnd, err)
 		}

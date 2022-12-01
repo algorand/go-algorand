@@ -961,27 +961,50 @@ func BenchmarkTxHandlerDecoderMsgp(b *testing.B) {
 	}
 }
 
+// TestIncomingTxHandle checks the correctness with single txns
 func TestIncomingTxHandle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	incomingTxHandlerProcessing(1, t)
+	numberOfTransactionGroups := 1000
+	incomingTxHandlerProcessing(1, numberOfTransactionGroups, t)
 }
 
+// TestIncomingTxGroupHandle checks the correctness with txn groups
 func TestIncomingTxGroupHandle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	incomingTxHandlerProcessing(proto.MaxTxGroupSize, t)
+	numberOfTransactionGroups := 1000 / proto.MaxTxGroupSize
+	incomingTxHandlerProcessing(proto.MaxTxGroupSize, numberOfTransactionGroups, t)
+}
+
+// TestIncomingTxHandleDrops accounts for the dropped txns when the verifier/exec pool is saturated
+func TestIncomingTxHandleDrops(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// use smaller backlog size to test the message drops
+	origValue := txBacklogSize
+	defer func() {
+		txBacklogSize = origValue
+	}()
+	txBacklogSize = 10
+
+	numberOfTransactionGroups := 1000
+	incomingTxHandlerProcessing(1, numberOfTransactionGroups, t)
 }
 
 // incomingTxHandlerProcessing is a comprehensive transaction handling test
 // It handles the singed transactions by passing them to the backlog for verification
-func incomingTxHandlerProcessing(maxGroupSize int, t *testing.T) {
+func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t *testing.T) {
+	defer func() {
+		// reset the counters
+		transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
+		transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
+	}()
+
 	const numUsers = 100
-	numberOfTransactionGroups := 1000
 	log := logging.TestingLog(t)
-	log.SetLevel(logging.Warn)
 	addresses := make([]basics.Address, numUsers)
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
 
@@ -1090,44 +1113,54 @@ func incomingTxHandlerProcessing(maxGroupSize int, t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		groupCounter := 0
+		var groupCounter uint64
 		txnCounter := 0
 		invalidCounter := 0
+		var droppedBacklog, droppedPool uint64
 		defer func() {
+			t.Logf("Txn groups with invalid sigs: %d\n", invalidCounter)
+			t.Logf("dropped: [%d backlog] [%d pool]\n", droppedBacklog, droppedPool)
+			// release the backlog worker
 			t.Logf("processed %d txn groups (%d txns)\n", groupCounter, txnCounter)
+			handler.Stop() // cancel the handler ctx
 		}()
-		for wi := range outChan {
-			txnCounter = txnCounter + len(wi.unverifiedTxGroup)
-			groupCounter++
-			u, _ := binary.Uvarint(wi.unverifiedTxGroup[0].Txn.Note)
-			_, inBad := badTxnGroups[u]
-			if wi.verificationErr == nil {
-				require.False(t, inBad, "No error for invalid signature")
-			} else {
-				invalidCounter++
-				require.True(t, inBad, "Error for good signature")
+		timer := time.NewTicker(250 * time.Millisecond)
+		for {
+			select {
+			case wi := <-outChan:
+				txnCounter = txnCounter + len(wi.unverifiedTxGroup)
+				groupCounter++
+				u, _ := binary.Uvarint(wi.unverifiedTxGroup[0].Txn.Note)
+				_, inBad := badTxnGroups[u]
+				if wi.verificationErr == nil {
+					require.False(t, inBad, "No error for invalid signature")
+				} else {
+					invalidCounter++
+					require.True(t, inBad, "Error for good signature")
+				}
+			case <-timer.C:
+				droppedBacklog, droppedPool = getDropped()
+				if int(groupCounter+droppedBacklog+droppedPool) == len(signedTransactionGroups) {
+					// all the benchmark txns processed
+					return
+				}
+				time.Sleep(250 * time.Millisecond)
+				timer.Reset(250 * time.Millisecond)
 			}
 		}
-		t.Logf("Txn groups with invalid sigs: %d\n", invalidCounter)
 	}()
 
 	// Send the transactions to the verifier
 	for _, tg := range encodedSignedTransactionGroups {
 		handler.processIncomingTxn(tg)
-		randduration := time.Duration(uint64(((1 + rand.Float32()) * 3)))
-		time.Sleep(randduration * time.Microsecond)
 	}
-	close(handler.backlogQueue)
 	wg.Wait()
+}
 
-	// Report the number of transactions dropped because the backlog was busy
-	var buf strings.Builder
-	metrics.DefaultRegistry().WriteMetrics(&buf, "")
-	str := buf.String()
-	x := strings.Index(str, "\nalgod_transaction_messages_dropped_backlog")
-	str = str[x+44 : x+44+strings.Index(str[x+44:], "\n")]
-	str = strings.TrimSpace(strings.ReplaceAll(str, "}", " "))
-	t.Logf("dropped %s txn gropus\n", str)
+func getDropped() (droppedBacklog, droppedPool uint64) {
+	droppedBacklog = transactionMessagesDroppedFromBacklog.GetUint64Value()
+	droppedPool = transactionMessagesDroppedFromPool.GetUint64Value()
+	return
 }
 
 // makeSignedTxnGroups prepares N transaction groups of random (maxGroupSize) sizes with random
@@ -1165,13 +1198,17 @@ func makeSignedTxnGroups(N, numUsers, maxGroupSize int, invalidProb float32, add
 					Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance + (rand.Uint64() % 10000)},
 				},
 			}
-			txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.Digest(tx.ID()))
+			if grpSize > 1 {
+				txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.Digest(tx.ID()))
+			}
 			txns = append(txns, tx)
 		}
 		groupHash := crypto.HashObj(txGroup)
 		signedTxGroup := make([]transactions.SignedTxn, 0, grpSize)
 		for g, txn := range txns {
-			txn.Group = groupHash
+			if grpSize > 1 {
+				txn.Group = groupHash
+			}
 			signedTx := txn.Sign(secrets[(u+g)%numUsers])
 			signedTx.Txn = txn
 			signedTxGroup = append(signedTxGroup, signedTx)
@@ -1187,20 +1224,72 @@ func makeSignedTxnGroups(N, numUsers, maxGroupSize int, invalidProb float32, add
 	return
 }
 
-// BenchmarkHandler sends singed transactions the the verifier
+// BenchmarkHandleTxns sends signed transactions directly to the verifier
 func BenchmarkHandleTxns(b *testing.B) {
-	b.N = b.N * proto.MaxTxGroupSize / 2
-	runHandlerBenchmark(1, b)
+	maxGroupSize := 1
+	tpss := []int{6000000, 600000, 60000, 6000}
+	invalidRates := []float32{0.5, 0.001}
+	for _, tps := range tpss {
+		for _, ivr := range invalidRates {
+			b.Run(fmt.Sprintf("tps_%d_inv_%.3f", tps, ivr), func(b *testing.B) {
+				runHandlerBenchmarkWithBacklog(maxGroupSize, tps, ivr, b, false)
+			})
+		}
+	}
 }
 
-// BenchmarkHandler sends signed transaction groups to the verifier
+// BenchmarkHandleTxnGroups sends signed transaction groups directly to the verifier
 func BenchmarkHandleTxnGroups(b *testing.B) {
-	runHandlerBenchmark(proto.MaxTxGroupSize, b)
+	maxGroupSize := proto.MaxTxGroupSize / 2
+	tpss := []int{6000000, 600000, 60000, 6000}
+	invalidRates := []float32{0.5, 0.001}
+	for _, tps := range tpss {
+		for _, ivr := range invalidRates {
+			b.Run(fmt.Sprintf("tps_%d_inv_%.3f", tps, ivr), func(b *testing.B) {
+				runHandlerBenchmarkWithBacklog(maxGroupSize, tps, ivr, b, false)
+			})
+		}
+	}
 }
 
-// runHandlerBenchmark has a similar workflow to incomingTxHandlerProcessing,
-// but bypasses the backlog, and sends the transactions directly to the verifier
-func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
+// BenchmarkBacklogWorkerHandleTxns sends signed transactions to the verifier
+// using a backlog worker replica
+func BenchmarkHandleBLWTxns(b *testing.B) {
+	maxGroupSize := 1
+	tpss := []int{6000000, 600000, 60000, 6000}
+	invalidRates := []float32{0.5, 0.001}
+	for _, tps := range tpss {
+		for _, ivr := range invalidRates {
+			b.Run(fmt.Sprintf("tps_%d_inv_%.3f", tps, ivr), func(b *testing.B) {
+				runHandlerBenchmarkWithBacklog(maxGroupSize, tps, ivr, b, true)
+			})
+		}
+	}
+}
+
+// BenchmarkBacklogWorkerHandleTxnGroups sends signed transaction groups to the verifier
+// using a backlog worker replica
+func BenchmarkHandleBLWTxnGroups(b *testing.B) {
+	maxGroupSize := proto.MaxTxGroupSize / 2
+	tpss := []int{6000000, 600000, 60000, 6000}
+	invalidRates := []float32{0.5, 0.001}
+	for _, tps := range tpss {
+		for _, ivr := range invalidRates {
+			b.Run(fmt.Sprintf("tps_%d_inv_%.3f", tps, ivr), func(b *testing.B) {
+				runHandlerBenchmarkWithBacklog(maxGroupSize, tps, ivr, b, true)
+			})
+		}
+	}
+}
+
+// runHandlerBenchmarkWithBacklog benchmarks the number of transactions verfied or dropped
+func runHandlerBenchmarkWithBacklog(maxGroupSize, tps int, invalidRate float32, b *testing.B, useBacklogWorker bool) {
+	defer func() {
+		// reset the counters
+		transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
+		transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
+	}()
+
 	const numUsers = 100
 	log := logging.TestingLog(b)
 	log.SetLevel(logging.Warn)
@@ -1226,7 +1315,9 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 
 	require.Equal(b, len(genesis), numUsers+1)
 	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
-	ledgerName := fmt.Sprintf("%s-mem-%d", b.Name(), b.N)
+	ivrString := strings.IndexAny(fmt.Sprintf("%f", invalidRate), "1")
+	ledgerName := fmt.Sprintf("%s-mem-%d-%d", b.Name(), b.N, ivrString)
+	ledgerName = strings.Replace(ledgerName, "#", "-", 1)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
@@ -1239,49 +1330,142 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	defer handler.ctxCancel()
 
-	// Prepare the transactions
-	signedTransactionGroups, badTxnGroups := makeSignedTxnGroups(b.N, numUsers, maxGroupSize, 0.001, addresses, secrets)
-	outChan := handler.postVerificationQueue
+	testResultChan := handler.postVerificationQueue
 	wg := sync.WaitGroup{}
+
+	if useBacklogWorker {
+		wg.Add(1)
+		testResultChan = make(chan *txBacklogMsg, 10)
+		// Make a test backlog worker, which is simiar to backlogWorker, but sends the results
+		// through the testResultChan instead of passing it to postprocessCheckedTxn
+		go func() {
+			defer wg.Done()
+			for {
+				// prioritize the postVerificationQueue
+				select {
+				case wi, ok := <-handler.postVerificationQueue:
+					if !ok {
+						return
+					}
+					testResultChan <- wi
+
+					// restart the loop so that we could empty out the post verification queue.
+					continue
+				default:
+				}
+
+				// we have no more post verification items. wait for either backlog queue item or post verification item.
+				select {
+				case wi, ok := <-handler.backlogQueue:
+					if !ok {
+						return
+					}
+					if handler.checkAlreadyCommitted(wi) {
+						// this is not expected during the test
+						continue
+					}
+					handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignature, wi, nil)
+
+				case wi, ok := <-handler.postVerificationQueue:
+					if !ok {
+						return
+					}
+					testResultChan <- wi
+
+				case <-handler.ctx.Done():
+					return
+				}
+			}
+		}()
+	}
+
+	// Prepare the transactions
+	signedTransactionGroups, badTxnGroups := makeSignedTxnGroups(b.N, numUsers, maxGroupSize, invalidRate, addresses, secrets)
+	var encodedSignedTransactionGroups []network.IncomingMessage
+	if useBacklogWorker {
+		encodedSignedTransactionGroups = make([]network.IncomingMessage, 0, b.N)
+		for _, stxngrp := range signedTransactionGroups {
+			data := make([]byte, 0)
+			for _, stxn := range stxngrp {
+				data = append(data, protocol.Encode(&stxn)...)
+			}
+			encodedSignedTransactionGroups =
+				append(encodedSignedTransactionGroups, network.IncomingMessage{Data: data})
+		}
+	}
 
 	var tt time.Time
 	// Process the results and make sure they are correct
+	rateAdjuster := time.Second / time.Duration(tps)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		groupCounter := 0
+		groupCounter := uint64(0)
 		var txnCounter uint64
 		invalidCounter := 0
-		for wi := range outChan {
-			txnCounter = txnCounter + uint64(len(wi.unverifiedTxGroup))
-			groupCounter++
-			u, _ := binary.Uvarint(wi.unverifiedTxGroup[0].Txn.Note)
-			_, inBad := badTxnGroups[u]
-			if wi.verificationErr == nil {
-				require.False(b, inBad, "No error for invalid signature")
-			} else {
-				invalidCounter++
-				require.True(b, inBad, "Error for good signature")
+		defer func() {
+			if groupCounter > 1 {
+				droppedBacklog, droppedPool := getDropped()
+				b.Logf("Input T(grp)PS: %d (delay %f microsec)", tps, float64(rateAdjuster)/float64(time.Microsecond))
+				b.Logf("Verified TPS: %d", uint64(txnCounter)*uint64(time.Second)/uint64(time.Since(tt)))
+				b.Logf("Time/txn: %d(microsec)", uint64((time.Since(tt)/time.Microsecond))/txnCounter)
+				b.Logf("processed total: [%d groups (%d invalid)] [%d txns]", groupCounter, invalidCounter, txnCounter)
+				b.Logf("dropped: [%d backlog] [%d pool]\n", droppedBacklog, droppedPool)
 			}
-		}
-		if txnCounter > 0 {
-			b.Logf("TPS: %d\n", uint64(txnCounter)*1000000000/uint64(time.Since(tt)))
-			b.Logf("Time/txn: %d(microsec)\n", uint64((time.Since(tt)/time.Microsecond))/txnCounter)
-			b.Logf("processed total: [%d groups (%d invalid)] [%d txns]\n", groupCounter, invalidCounter, txnCounter)
+			handler.Stop() // cancel the handler ctx
+		}()
+		stopChan := make(chan interface{})
+		go func() {
+			for {
+				time.Sleep(200 * time.Millisecond)
+				droppedBacklog, droppedPool := getDropped()
+				if int(groupCounter+droppedBacklog+droppedPool) == len(signedTransactionGroups) {
+					// all the benchmark txns processed
+					close(stopChan)
+					return
+				}
+			}
+		}()
+
+		for {
+			select {
+			case wi := <-testResultChan:
+				txnCounter = txnCounter + uint64(len(wi.unverifiedTxGroup))
+				groupCounter++
+				u, _ := binary.Uvarint(wi.unverifiedTxGroup[0].Txn.Note)
+				_, inBad := badTxnGroups[u]
+				if wi.verificationErr == nil {
+					require.False(b, inBad, "No error for invalid signature")
+				} else {
+					invalidCounter++
+					require.True(b, inBad, "Error for good signature")
+				}
+				if groupCounter == uint64(len(signedTransactionGroups)) {
+					// all the benchmark txns processed
+					return
+				}
+			case <-stopChan:
+				return
+			}
 		}
 	}()
 
 	b.ResetTimer()
 	tt = time.Now()
-	for _, stxngrp := range signedTransactionGroups {
-		blm := txBacklogMsg{rawmsg: nil, unverifiedTxGroup: stxngrp}
-		handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignature, &blm, nil)
+	if useBacklogWorker {
+		for _, tg := range encodedSignedTransactionGroups {
+			handler.processIncomingTxn(tg)
+			time.Sleep(rateAdjuster)
+		}
+	} else {
+		for _, stxngrp := range signedTransactionGroups {
+			blm := txBacklogMsg{rawmsg: nil, unverifiedTxGroup: stxngrp}
+			handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignature, &blm, nil)
+			time.Sleep(rateAdjuster)
+		}
 	}
-	// shut down to end the test
-	handler.txVerificationPool.Shutdown()
-	close(handler.postVerificationQueue)
-	close(handler.backlogQueue)
 	wg.Wait()
+	handler.Stop() // cancel the handler ctx
 }
 
 func TestTxHandlerPostProcessError(t *testing.T) {

@@ -266,7 +266,7 @@ func TestAccountDBRound(t *testing.T) {
 	checkAccounts(t, tx, 0, accts)
 	totals, err := arw.AccountsTotals(context.Background(), false)
 	require.NoError(t, err)
-	expectedOnlineRoundParams, endRound, err := accountsOnlineRoundParams(tx)
+	expectedOnlineRoundParams, endRound, err := arw.AccountsOnlineRoundParams()
 	require.NoError(t, err)
 	require.Equal(t, 1, len(expectedOnlineRoundParams))
 	require.Equal(t, 0, int(endRound))
@@ -315,7 +315,7 @@ func TestAccountDBRound(t *testing.T) {
 		err = arw.AccountsPutTotals(totals, false)
 		require.NoError(t, err)
 		onlineRoundParams := ledgercore.OnlineRoundParamsData{RewardsLevel: totals.RewardsLevel, OnlineSupply: totals.Online.Money.Raw, CurrentProtocol: protocol.ConsensusCurrentVersion}
-		err = accountsPutOnlineRoundParams(tx, []ledgercore.OnlineRoundParamsData{onlineRoundParams}, basics.Round(i))
+		err = arw.AccountsPutOnlineRoundParams([]ledgercore.OnlineRoundParamsData{onlineRoundParams}, basics.Round(i))
 		require.NoError(t, err)
 		expectedOnlineRoundParams = append(expectedOnlineRoundParams, onlineRoundParams)
 
@@ -354,7 +354,7 @@ func TestAccountDBRound(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expectedTotals, actualTotals)
 
-	actualOnlineRoundParams, endRound, err := accountsOnlineRoundParams(tx)
+	actualOnlineRoundParams, endRound, err := arw.AccountsOnlineRoundParams()
 	require.NoError(t, err)
 	require.Equal(t, expectedOnlineRoundParams, actualOnlineRoundParams)
 	require.Equal(t, 9, int(endRound))
@@ -364,7 +364,7 @@ func TestAccountDBRound(t *testing.T) {
 	acctCb := func(addr basics.Address, data basics.AccountData) {
 		loaded[addr] = data
 	}
-	count, err := LoadAllFullAccounts(context.Background(), tx, "accountbase", "resources", acctCb)
+	count, err := arw.LoadAllFullAccounts(context.Background(), "accountbase", "resources", acctCb)
 	require.NoError(t, err)
 	require.Equal(t, count, len(accts))
 	require.Equal(t, count, len(loaded))
@@ -1053,7 +1053,8 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		require.NoError(b, err)
 		b.StartTimer()
 		err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			err = writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
+			crw := store.NewCatchpointSQLReaderWriter(tx)
+			err = crw.WriteCatchpointStagingBalances(ctx, normalizedAccountBalances)
 			return
 		})
 
@@ -1577,8 +1578,10 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	require.NoError(t, err)
 
 	err = dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		arw := store.NewAccountsSQLReaderWriter(tx)
+
 		for addr, addrid := range addrsids {
-			retAddr, err := lookupAccountAddressFromAddressID(ctx, tx, addrid)
+			retAddr, err := arw.LookupAccountAddressFromAddressID(ctx, addrid)
 			if err != nil {
 				return err
 			}
@@ -1587,7 +1590,7 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 			}
 		}
 		// test fail case:
-		retAddr, err := lookupAccountAddressFromAddressID(ctx, tx, -1)
+		retAddr, err := arw.LookupAccountAddressFromAddressID(ctx, -1)
 
 		if !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("unexpected error : %w", err)
@@ -2856,6 +2859,8 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback()
 
+	arw := store.NewAccountsSQLReaderWriter(tx)
+
 	var accts map[basics.Address]basics.AccountData
 	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 
@@ -2868,19 +2873,19 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 		onlineRoundParams[i].RewardsLevel = uint64(i + 1)
 	}
 
-	err = accountsPutOnlineRoundParams(tx, onlineRoundParams, 1)
+	err = arw.AccountsPutOnlineRoundParams(onlineRoundParams, 1)
 	require.NoError(t, err)
 
-	dbOnlineRoundParams, endRound, err := accountsOnlineRoundParams(tx)
+	dbOnlineRoundParams, endRound, err := arw.AccountsOnlineRoundParams()
 	require.NoError(t, err)
 	require.Equal(t, maxRounds+1, len(dbOnlineRoundParams)) // +1 comes from init state
 	require.Equal(t, onlineRoundParams, dbOnlineRoundParams[1:])
 	require.Equal(t, maxRounds, int(endRound))
 
-	err = accountsPruneOnlineRoundParams(tx, 10)
+	err = arw.AccountsPruneOnlineRoundParams(10)
 	require.NoError(t, err)
 
-	dbOnlineRoundParams, endRound, err = accountsOnlineRoundParams(tx)
+	dbOnlineRoundParams, endRound, err = arw.AccountsOnlineRoundParams()
 	require.NoError(t, err)
 	require.Equal(t, onlineRoundParams[9:], dbOnlineRoundParams)
 	require.Equal(t, maxRounds, int(endRound))
@@ -3078,37 +3083,39 @@ func TestCatchpointFirstStageInfoTable(t *testing.T) {
 	err := accountsCreateCatchpointFirstStageInfoTable(ctx, dbs.Wdb.Handle)
 	require.NoError(t, err)
 
+	crw := store.NewCatchpointSQLReaderWriter(dbs.Wdb.Handle)
+
 	for _, round := range []basics.Round{4, 6, 8} {
-		info := catchpointFirstStageInfo{
+		info := store.CatchpointFirstStageInfo{
 			TotalAccounts: uint64(round) * 10,
 		}
-		err = insertOrReplaceCatchpointFirstStageInfo(ctx, dbs.Wdb.Handle, round, &info)
+		err = crw.InsertOrReplaceCatchpointFirstStageInfo(ctx, round, &info)
 		require.NoError(t, err)
 	}
 
 	for _, round := range []basics.Round{4, 6, 8} {
-		info, exists, err := selectCatchpointFirstStageInfo(ctx, dbs.Rdb.Handle, round)
+		info, exists, err := crw.SelectCatchpointFirstStageInfo(ctx, round)
 		require.NoError(t, err)
 		require.True(t, exists)
 
-		infoExpected := catchpointFirstStageInfo{
+		infoExpected := store.CatchpointFirstStageInfo{
 			TotalAccounts: uint64(round) * 10,
 		}
 		require.Equal(t, infoExpected, info)
 	}
 
-	_, exists, err := selectCatchpointFirstStageInfo(ctx, dbs.Rdb.Handle, 7)
+	_, exists, err := crw.SelectCatchpointFirstStageInfo(ctx, 7)
 	require.NoError(t, err)
 	require.False(t, exists)
 
-	rounds, err := selectOldCatchpointFirstStageInfoRounds(ctx, dbs.Rdb.Handle, 6)
+	rounds, err := crw.SelectOldCatchpointFirstStageInfoRounds(ctx, 6)
 	require.NoError(t, err)
 	require.Equal(t, []basics.Round{4, 6}, rounds)
 
-	err = deleteOldCatchpointFirstStageInfo(ctx, dbs.Wdb.Handle, 6)
+	err = crw.DeleteOldCatchpointFirstStageInfo(ctx, 6)
 	require.NoError(t, err)
 
-	rounds, err = selectOldCatchpointFirstStageInfoRounds(ctx, dbs.Rdb.Handle, 9)
+	rounds, err = crw.SelectOldCatchpointFirstStageInfoRounds(ctx, 9)
 	require.NoError(t, err)
 	require.Equal(t, []basics.Round{8}, rounds)
 }
@@ -3219,7 +3226,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 		require.NoError(t, err)
 		defer rows.Close()
 
-		mc, err := MakeMerkleCommitter(tx, false)
+		mc, err := store.MakeMerkleCommitter(tx, false)
 		require.NoError(t, err)
 		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
 		require.NoError(t, err)
@@ -3260,7 +3267,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 	require.NoError(t, err)
 
 	// get the new hash and ensure it does not match to the old one (data migrated)
-	mc, err := MakeMerkleCommitter(tx, false)
+	mc, err := store.MakeMerkleCommitter(tx, false)
 	require.NoError(t, err)
 	trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
 	require.NoError(t, err)

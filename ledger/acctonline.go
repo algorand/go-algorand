@@ -155,7 +155,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		arw := store.NewAccountsSQLReaderWriter(tx)
 		var err0 error
 		var endRound basics.Round
-		ao.onlineRoundParamsData, endRound, err0 = accountsOnlineRoundParams(tx)
+		ao.onlineRoundParamsData, endRound, err0 = arw.AccountsOnlineRoundParams()
 		if err0 != nil {
 			return err0
 		}
@@ -429,13 +429,13 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		return err
 	}
 
-	err = accountsPutOnlineRoundParams(tx, dcc.onlineRoundParams, dcc.oldBase+1)
+	err = arw.AccountsPutOnlineRoundParams(dcc.onlineRoundParams, dcc.oldBase+1)
 	if err != nil {
 		return err
 	}
 
 	// delete all entries all older than maxBalLookback (or votersLookback) rounds ago
-	err = accountsPruneOnlineRoundParams(tx, dcc.onlineAccountsForgetBefore)
+	err = arw.AccountsPruneOnlineRoundParams(dcc.onlineAccountsForgetBefore)
 
 	return
 }
