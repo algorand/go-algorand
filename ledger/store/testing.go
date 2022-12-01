@@ -28,12 +28,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// AccountsInitLightTest initializes an empty database for testing without the extra methods being called.
 func AccountsInitLightTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
 	newDB, err := accountsInit(tx, initAccounts, proto)
 	require.NoError(tb, err)
 	return newDB, err
 }
 
+// AccountsInitTest initializes an empty database for testing.
 func AccountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
 	newDB, err := accountsInit(tx, initAccounts, config.Consensus[proto])
 	require.NoError(tb, err)
@@ -74,7 +76,8 @@ func AccountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address
 	return newDB
 }
 
-func AccountsUpdateSchemaTest(tb testing.TB, ctx context.Context, tx *sql.Tx) (err error) {
+// AccountsUpdateSchemaTest adds some empty tables for tests to work with a "v6" store.
+func AccountsUpdateSchemaTest(ctx context.Context, tx *sql.Tx) (err error) {
 	if err := accountsCreateOnlineAccountsTable(ctx, tx); err != nil {
 		return err
 	}

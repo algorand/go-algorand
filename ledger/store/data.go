@@ -825,6 +825,7 @@ func TxTailRoundFromBlock(blk bookkeeping.Block) (*TxTailRound, error) {
 	return tail, nil
 }
 
+// AccountDataResources calls outputResourceCb with the data resources for the specified account.
 func AccountDataResources(
 	ctx context.Context,
 	accountData *basics.AccountData, rowid int64,

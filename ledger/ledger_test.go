@@ -2243,7 +2243,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 			return err0
 		}
 
-		if err0 := store.AccountsUpdateSchemaTest(t, ctx, tx); err != nil {
+		if err0 := store.AccountsUpdateSchemaTest(ctx, tx); err != nil {
 			return err0
 		}
 
@@ -2403,7 +2403,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	}()
 	// create tables so online accounts can still be written
 	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		if err := store.AccountsUpdateSchemaTest(t, ctx, tx); err != nil {
+		if err := store.AccountsUpdateSchemaTest(ctx, tx); err != nil {
 			return err
 		}
 		return nil

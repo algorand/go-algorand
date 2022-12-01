@@ -62,7 +62,7 @@ type CatchpointState string
 const (
 	// CatchpointStateLastCatchpoint is written by a node once a catchpoint label is created for a round
 	CatchpointStateLastCatchpoint = CatchpointState("lastCatchpoint")
-	// This state variable is set to 1 if catchpoint's first stage is unfinished,
+	// CatchpointStateWritingFirstStageInfo state variable is set to 1 if catchpoint's first stage is unfinished,
 	// and is 0 otherwise. Used to clear / restart the first stage after a crash.
 	// This key is set in the same db transaction as the account updates, so the
 	// unfinished first stage corresponds to the current db round.
@@ -83,7 +83,8 @@ const (
 	// CatchpointStateCatchupHashRound is the round that is associated with the hash of the merkle trie. Normally, it's identical to CatchpointStateCatchupBalancesRound,
 	// however, it could differ when we catchup from a catchpoint that was created using a different version : in this case,
 	// we set it to zero in order to reset the merkle trie. This would force the merkle trie to be re-build on startup ( if needed ).
-	CatchpointStateCatchupHashRound   = CatchpointState("catchpointCatchupHashRound")
+	CatchpointStateCatchupHashRound = CatchpointState("catchpointCatchupHashRound")
+	// CatchpointStateCatchpointLookback is the number of rounds we keep catchpoints for
 	CatchpointStateCatchpointLookback = CatchpointState("catchpointLookback")
 )
 

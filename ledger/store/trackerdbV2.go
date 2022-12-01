@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
+// TrackerDBParams contains parameters for initializing trackerDB
 type TrackerDBParams struct {
 	InitAccounts      map[basics.Address]basics.AccountData
 	InitProto         protocol.ConsensusVersion
@@ -59,6 +60,7 @@ type trackerDBSchemaInitializer struct {
 	log logging.Logger
 }
 
+// TrackerDBInitParams params used during db init
 type TrackerDBInitParams struct {
 	SchemaVersion   int32
 	VacuumOnStartup bool
@@ -408,6 +410,7 @@ func (tu *trackerDBSchemaInitializer) deleteUnfinishedCatchpoint(ctx context.Con
 	return cts.WriteCatchpointStateUint64(ctx, catchpointStateWritingCatchpoint, 0)
 }
 
+// MakeCatchpointFilePath builds the path of a catchpoint file.
 func MakeCatchpointFilePath(round basics.Round) string {
 	irnd := int64(round) / 256
 	outStr := ""

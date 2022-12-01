@@ -863,7 +863,10 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 		if scannedAccounts%1000 == 0 {
 			// The return value from ResetTransactionWarnDeadline can be safely ignored here since it would only default to writing the warning
 			// message, which would let us know that it failed anyway.
-			db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(time.Second))
+			_, err = db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(time.Second))
+			if err != nil {
+				return
+			}
 		}
 
 		var addrbuf []byte
