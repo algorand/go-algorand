@@ -149,11 +149,11 @@ func (router *rootRouter) submitTop(t *tracer, state player, e event) (player, [
 
 func (router *rootRouter) dispatch(t *tracer, state player, e event, src stateMachineTag, dest stateMachineTag, r round, p period, s step) event {
 	router.update(state, r, true)
-	if router.ProposalManager.T() == dest { // TODO: proposalManager.T() == proposalMachine
+	if router.ProposalManager.T() == dest { // proposalMachine
 		handle := routerHandle{t: t, r: router, src: proposalMachine}
 		return router.ProposalManager.handle(handle, state, e)
 	}
-	if router.VoteAggregator.T() == dest {
+	if router.VoteAggregator.T() == dest { // voteMachine
 		handle := routerHandle{t: t, r: router, src: voteMachine}
 		return router.VoteAggregator.handle(handle, state, e)
 	}
@@ -188,11 +188,11 @@ func (router *roundRouter) update(state player, p period, gc bool) {
 
 func (router *roundRouter) dispatch(t *tracer, state player, e event, src stateMachineTag, dest stateMachineTag, r round, p period, s step) event {
 	router.update(state, p, true)
-	if router.ProposalStore.T() == dest { // TOD: proposalStore.T() == proposalMachineRound
+	if router.ProposalStore.T() == dest { // proposalMachineRound
 		handle := routerHandle{t: t, r: router, src: proposalMachineRound}
 		return router.ProposalStore.handle(handle, state, e)
 	}
-	if router.VoteTrackerRound.T() == dest {
+	if router.VoteTrackerRound.T() == dest { // voteMachineRound
 		handle := routerHandle{t: t, r: router, src: voteMachineRound}
 		return router.VoteTrackerRound.handle(handle, state, e)
 	}
@@ -211,11 +211,11 @@ func (router *periodRouter) update(s step) {
 
 func (router *periodRouter) dispatch(t *tracer, state player, e event, src stateMachineTag, dest stateMachineTag, r round, p period, s step) event {
 	router.update(s)
-	if router.ProposalTracker.T() == dest {
+	if router.ProposalTracker.T() == dest { // proposalMachinePeriod
 		handle := routerHandle{t: t, r: router, src: proposalMachinePeriod}
 		return router.ProposalTracker.handle(handle, state, e)
 	}
-	if router.VoteTrackerPeriod.T() == dest {
+	if router.VoteTrackerPeriod.T() == dest { // voteMachinePeriod
 		handle := routerHandle{t: t, r: router, src: voteMachinePeriod}
 		return router.VoteTrackerPeriod.handle(handle, state, e)
 	}
@@ -230,7 +230,7 @@ func (router *stepRouter) update(state player, gc bool) {
 
 func (router *stepRouter) dispatch(t *tracer, state player, e event, src stateMachineTag, dest stateMachineTag, r round, p period, s step) event {
 	router.update(state, true)
-	if router.voteRoot.T() == dest {
+	if router.voteRoot.T() == dest { // voteMachineStep
 		handle := routerHandle{t: t, r: router, src: voteMachineStep}
 		return router.voteRoot.handle(handle, state, e)
 	}
