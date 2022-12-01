@@ -91,7 +91,7 @@ type roundRouter struct {
 type periodRouter struct {
 	_struct struct{} `codec:","`
 
-	voteRoot listener // voteMachinePeriod
+	//voteRoot listener // voteMachinePeriod
 
 	ProposalTracker   proposalTracker
 	VoteTrackerPeriod voteTrackerPeriod
@@ -212,9 +212,9 @@ func (router *roundRouter) dispatch(t *tracer, state player, e event, src stateM
 
 // we do not garbage-collect step because memory use here grows logarithmically slowly
 func (router *periodRouter) update(s step) {
-	if router.voteRoot == nil {
-		router.voteRoot = checkedListener{listener: &router.VoteTrackerPeriod, listenerContract: voteTrackerPeriodContract{}}
-	}
+	// if router.voteRoot == nil {
+	// 	router.voteRoot = checkedListener{listener: &router.VoteTrackerPeriod, listenerContract: voteTrackerPeriodContract{}}
+	// }
 	if router.Children == nil {
 		router.Children = make(map[step]*stepRouter)
 	}
@@ -229,9 +229,9 @@ func (router *periodRouter) dispatch(t *tracer, state player, e event, src state
 		handle := routerHandle{t: t, r: router, src: proposalMachinePeriod}
 		return router.ProposalTracker.handle(handle, state, e)
 	}
-	if router.voteRoot.T() == dest {
+	if router.VoteTrackerPeriod.T() == dest {
 		handle := routerHandle{t: t, r: router, src: voteMachinePeriod}
-		return router.voteRoot.handle(handle, state, e)
+		return router.VoteTrackerPeriod.handle(handle, state, e)
 	}
 	return router.Children[s].dispatch(t, state, e, src, dest, r, p, s)
 }

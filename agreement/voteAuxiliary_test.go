@@ -95,7 +95,7 @@ func TestVoteTrackerPeriodStepCachedThresholdPrivate(t *testing.T) {
 	perRouter.update(next)
 
 	votePeriodM := &ioAutomataConcrete{
-		listener:  perRouter.voteRoot, // start at zero state
+		listener:  &perRouter.VoteTrackerPeriod, // start at zero state
 		routerCtx: perRouter,
 	}
 	res, err := testCase.Validate(votePeriodM)
@@ -103,7 +103,7 @@ func TestVoteTrackerPeriodStepCachedThresholdPrivate(t *testing.T) {
 	require.NoErrorf(t, res, "Expected threshold event not relayed")
 
 	// now, given that a bottom threshold was emitted, make sure private state was set (so we can appropriately respond to queries)
-	vt := perRouter.voteRoot.underlying().(*voteTrackerPeriod)
+	vt := &perRouter.VoteTrackerPeriod
 	require.Truef(t, vt.Cached.Bottom, "VoteTrackerPeriod didn't set bottom to true")
 
 	// now, add votes for next + 1...
