@@ -1916,3 +1916,10 @@ func GetTransactionByID(ctx lib.ReqContext, context echo.Context) {
 	lib.ErrorResponse(w, http.StatusNotFound, errors.New(errTransactionNotFound), errTransactionNotFound, ctx.Log)
 	return
 }
+
+// V1Sunset is a generic handler for all v1 routes that shows the sunset message.
+func V1Sunset(ctx lib.ReqContext, context echo.Context) {
+	w := context.Response().Writer
+
+	lib.ErrorResponse(w, http.StatusGone, errors.New(errV1Sunset), errV1Sunset, ctx.Log)
+}

@@ -51,4 +51,5 @@ var (
 	errRequestedRoundInUnsupportedRound    = "requested round would reach only after the protocol upgrade which isn't supported"
 	errOperationNotAvailableDuringCatchup  = "operation not available during catchup"
 	errCertificateIsMissingFromBlock       = "certificate is missing from block"
+	errV1Sunset                            = "v1 algod APIs are no longer available, please use the v2 algod API"
 )
