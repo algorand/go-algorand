@@ -790,7 +790,7 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 // GetReady gets if the current node is healthy and fully caught up.
 // (GET /v2/ready)
 func (v2 *Handlers) GetReady(ctx echo.Context) error {
-	// TODO should probably use NodeStatusResponse
+	// how to perform healthcheck?
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
@@ -802,7 +802,6 @@ func (v2 *Handlers) GetReady(ctx echo.Context) error {
 		// node is currently catching up to the requested catchpoint.
 		return serviceUnavailable(ctx, fmt.Errorf("ready failed as the node is catchpoint catching up"), errOperationNotAvailableDuringCatchup, v2.Log)
 	}
-	//common.HealthCheck()
 	return v2.GetStatus(ctx)
 }
 
