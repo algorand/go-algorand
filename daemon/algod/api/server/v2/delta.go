@@ -17,7 +17,6 @@
 package v2
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 
@@ -31,34 +30,13 @@ import (
 func convertAppResourceRecordToGenerated(app ledgercore.AppResourceRecord) model.AppResourceRecord {
 	var appLocalState *model.ApplicationLocalState = nil
 	if app.State.LocalState != nil {
-		localState := convertTKVToGenerated(&app.State.LocalState.KeyValue)
-		appLocalState = &model.ApplicationLocalState{
-			Id:       uint64(app.Aidx),
-			KeyValue: localState,
-			Schema: model.ApplicationStateSchema{
-				NumByteSlice: app.State.LocalState.Schema.NumByteSlice,
-				NumUint:      app.State.LocalState.Schema.NumUint,
-			},
-		}
+		s := AppLocalState(*app.State.LocalState, app.Aidx)
+		appLocalState = &s
 	}
 	var appParams *model.ApplicationParams = nil
 	if app.Params.Params != nil {
-		globalState := convertTKVToGenerated(&app.Params.Params.GlobalState)
-		appParams = &model.ApplicationParams{
-			ApprovalProgram:   app.Params.Params.ApprovalProgram,
-			ClearStateProgram: app.Params.Params.ClearStateProgram,
-			Creator:           app.Addr.String(),
-			ExtraProgramPages: numOrNil(uint64(app.Params.Params.ExtraProgramPages)),
-			GlobalState:       globalState,
-			GlobalStateSchema: &model.ApplicationStateSchema{
-				NumByteSlice: app.Params.Params.GlobalStateSchema.NumByteSlice,
-				NumUint:      app.Params.Params.GlobalStateSchema.NumUint,
-			},
-			LocalStateSchema: &model.ApplicationStateSchema{
-				NumByteSlice: app.Params.Params.LocalStateSchema.NumByteSlice,
-				NumUint:      app.Params.Params.LocalStateSchema.NumUint,
-			},
-		}
+		p := AppParamsToApplication(app.Addr.String(), app.Aidx, app.Params.Params).Params
+		appParams = &p
 	}
 	return model.AppResourceRecord{
 		Address:              app.Addr.String(),
@@ -74,31 +52,13 @@ func convertAppResourceRecordToGenerated(app ledgercore.AppResourceRecord) model
 func convertAssetResourceRecordToGenerated(asset ledgercore.AssetResourceRecord) model.AssetResourceRecord {
 	var assetHolding *model.AssetHolding = nil
 	if asset.Holding.Holding != nil {
-		assetHolding = &model.AssetHolding{
-			Amount:   asset.Holding.Holding.Amount,
-			AssetID:  uint64(asset.Aidx),
-			IsFrozen: asset.Holding.Holding.Frozen,
-		}
+		a := AssetHolding(*asset.Holding.Holding, asset.Aidx)
+		assetHolding = &a
 	}
 	var assetParams *model.AssetParams = nil
 	if asset.Params.Params != nil {
-		assetParams = &model.AssetParams{
-			Clawback:      strOrNil(asset.Params.Params.Clawback.String()),
-			Creator:       asset.Addr.String(),
-			Decimals:      uint64(asset.Params.Params.Decimals),
-			DefaultFrozen: &asset.Params.Params.DefaultFrozen,
-			Freeze:        strOrNil(asset.Params.Params.Freeze.String()),
-			Manager:       strOrNil(asset.Params.Params.Manager.String()),
-			MetadataHash:  byteOrNil(asset.Params.Params.MetadataHash[:]),
-			Name:          strOrNil(asset.Params.Params.AssetName),
-			NameB64:       byteOrNil([]byte(base64.StdEncoding.EncodeToString([]byte(asset.Params.Params.AssetName)))),
-			Reserve:       strOrNil(asset.Params.Params.Reserve.String()),
-			Total:         asset.Params.Params.Total,
-			UnitName:      strOrNil(asset.Params.Params.UnitName),
-			UnitNameB64:   byteOrNil([]byte(base64.StdEncoding.EncodeToString([]byte(asset.Params.Params.UnitName)))),
-			Url:           strOrNil(asset.Params.Params.URL),
-			UrlB64:        byteOrNil([]byte(base64.StdEncoding.EncodeToString([]byte(asset.Params.Params.URL)))),
-		}
+		a := AssetParamsToAsset(asset.Addr.String(), asset.Aidx, asset.Params.Params)
+		assetParams = &a.Params
 	}
 	return model.AssetResourceRecord{
 		Address:             asset.Addr.String(),
