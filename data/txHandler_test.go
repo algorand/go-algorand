@@ -482,35 +482,35 @@ func makeSignedTxnGroups(N, numUsers, maxGroupSize int, invalidProb float32, add
 	return
 }
 
-// BenchmarkHandleTxns sends singed transactions the the verifier
+// BenchmarkHandleTxns sends signed transactions directly to the verifier
 func BenchmarkHandleTxns(b *testing.B) {
 	maxGroupSize := 1
 	tpss := []int{6000000, 600000, 60000, 6000}
 	invalidRates := []float32{0.5, 0.001}
 	for _, tps := range tpss {
 		for _, ivr := range invalidRates {
-			b.Run(fmt.Sprintf("tps: %d", tps), func(b *testing.B) {
+			b.Run(fmt.Sprintf("tps_%d_inv_%.3f", tps, ivr), func(b *testing.B) {
 				runHandlerBenchmarkWithBacklog(maxGroupSize, tps, ivr, b, false)
 			})
 		}
 	}
 }
 
-// BenchmarkHandleTxnGroups sends singed transaction groups to the verifier
+// BenchmarkHandleTxnGroups sends signed transaction groups directly to the verifier
 func BenchmarkHandleTxnGroups(b *testing.B) {
 	maxGroupSize := proto.MaxTxGroupSize / 2
 	tpss := []int{6000000, 600000, 60000, 6000}
 	invalidRates := []float32{0.5, 0.001}
 	for _, tps := range tpss {
 		for _, ivr := range invalidRates {
-			b.Run(fmt.Sprintf("tps: %d", tps), func(b *testing.B) {
+			b.Run(fmt.Sprintf("tps_%d_inv_%.3f", tps, ivr), func(b *testing.B) {
 				runHandlerBenchmarkWithBacklog(maxGroupSize, tps, ivr, b, false)
 			})
 		}
 	}
 }
 
-// BenchmarkBacklogWorkerHandleTxns sends singed transactions the the verifier
+// BenchmarkBacklogWorkerHandleTxns sends signed transactions to the verifier
 // using a backlog worker replica
 func BenchmarkHandleBLWTxns(b *testing.B) {
 	maxGroupSize := 1
@@ -518,14 +518,14 @@ func BenchmarkHandleBLWTxns(b *testing.B) {
 	invalidRates := []float32{0.5, 0.001}
 	for _, tps := range tpss {
 		for _, ivr := range invalidRates {
-			b.Run(fmt.Sprintf("tps: %d", tps), func(b *testing.B) {
+			b.Run(fmt.Sprintf("tps_%d_inv_%.3f", tps, ivr), func(b *testing.B) {
 				runHandlerBenchmarkWithBacklog(maxGroupSize, tps, ivr, b, true)
 			})
 		}
 	}
 }
 
-// BenchmarkBacklogWorkerHandleTxnGroups sends singed transaction groups to the verifier
+// BenchmarkBacklogWorkerHandleTxnGroups sends signed transaction groups to the verifier
 // using a backlog worker replica
 func BenchmarkHandleBLWTxnGroups(b *testing.B) {
 	maxGroupSize := proto.MaxTxGroupSize / 2
@@ -533,7 +533,7 @@ func BenchmarkHandleBLWTxnGroups(b *testing.B) {
 	invalidRates := []float32{0.5, 0.001}
 	for _, tps := range tpss {
 		for _, ivr := range invalidRates {
-			b.Run(fmt.Sprintf("tps: %d", tps), func(b *testing.B) {
+			b.Run(fmt.Sprintf("tps_%d_inv_%.3f", tps, ivr), func(b *testing.B) {
 				runHandlerBenchmarkWithBacklog(maxGroupSize, tps, ivr, b, true)
 			})
 		}
