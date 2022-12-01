@@ -1053,7 +1053,8 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		require.NoError(b, err)
 		b.StartTimer()
 		err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			err = writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
+			crw := store.NewCatchpointSQLReaderWriter(tx)
+			err = crw.WriteCatchpointStagingBalances(ctx, normalizedAccountBalances)
 			return
 		})
 
