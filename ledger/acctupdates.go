@@ -166,9 +166,6 @@ type accountUpdates struct {
 	// deltas stores updates for every round after dbRound.
 	deltas []ledgercore.StateDelta
 
-	// deltas stores updates for every round after dbRound.
-	// deltas []ledgercore.AccountDeltas
-
 	// accounts stores the most recent account state for every
 	// address that appears in deltas.
 	accounts map[basics.Address]modifiedAccount
