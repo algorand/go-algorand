@@ -108,8 +108,8 @@ type NodeInterface interface {
 	RemoveParticipationKey(account.ParticipationID) error
 	AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error
 	SetSyncRound(rnd uint64) error
-	GetSyncRound() (uint64, error)
-	UnsetSyncRound() error
+	GetSyncRound() uint64
+	UnsetSyncRound()
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {
@@ -954,10 +954,7 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 // UnsetSyncRound removes the sync round restriction from the ledger.
 // (DELETE /v2/ledger/sync)
 func (v2 *Handlers) UnsetSyncRound(ctx echo.Context) error {
-	err := v2.Node.UnsetSyncRound()
-	if err != nil {
-		return internalError(ctx, err, errFailedSettingSyncRound, v2.Log)
-	}
+	v2.Node.UnsetSyncRound()
 	return ctx.NoContent(http.StatusOK)
 }
 
@@ -979,10 +976,7 @@ func (v2 *Handlers) SetSyncRound(ctx echo.Context, round uint64) error {
 // GetSyncRound gets the sync round from the ledger.
 // (GET /v2/ledger/sync)
 func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
-	rnd, err := v2.Node.GetSyncRound()
-	if err != nil {
-		return internalError(ctx, err, errFailedRetrievingSyncRound, v2.Log)
-	}
+	rnd := v2.Node.GetSyncRound()
 	if rnd == 0 {
 		return notFound(ctx, fmt.Errorf("sync round is not set"), errFailedRetrievingSyncRound, v2.Log)
 	}

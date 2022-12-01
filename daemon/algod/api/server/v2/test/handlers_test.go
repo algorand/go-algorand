@@ -199,31 +199,26 @@ func TestSyncRound(t *testing.T) {
 	c, rec = newReq(t)
 
 	// TestGetSyncRound 200
-	mockCall = mockNode.On("GetSyncRound").Return(true, 2, nil)
+	mockCall = mockNode.On("GetSyncRound").Return(2)
 	err = handler.GetSyncRound(c)
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
 	mockCall.Unset()
 	c, rec = newReq(t)
-	// TestGetSyncRound 500 InternalError
-	mockCall = mockNode.On("GetSyncRound").Return(false, 0, fmt.Errorf("unknown error"))
+	// TestGetSyncRound 404 NotFound
+	mockCall = mockNode.On("GetSyncRound").Return(0)
 	err = handler.GetSyncRound(c)
 	require.NoError(t, err)
-	require.Equal(t, 500, rec.Code)
+	require.Equal(t, 404, rec.Code)
 	c, rec = newReq(t)
 
 	// TestUnsetSyncRound 200
-	mockCall = mockNode.On("UnsetSyncRound").Return(nil)
+	mockCall = mockNode.On("UnsetSyncRound").Return()
 	err = handler.UnsetSyncRound(c)
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
 	mockCall.Unset()
 	c, rec = newReq(t)
-	// TestGetSyncRound 500 InternalError
-	mockCall = mockNode.On("UnsetSyncRound").Return(fmt.Errorf("unknown error"))
-	err = handler.UnsetSyncRound(c)
-	require.NoError(t, err)
-	require.Equal(t, 500, rec.Code)
 
 	mock.AssertExpectationsForObjects(t, mockNode)
 }

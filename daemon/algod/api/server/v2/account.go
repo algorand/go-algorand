@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
+// AssetHolding converts between basics.AssetHolding and model.AssetHolding
 func AssetHolding(ah basics.AssetHolding, ai basics.AssetIndex) model.AssetHolding {
 	return model.AssetHolding{
 		Amount:   ah.Amount,
@@ -443,6 +444,7 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 	return app
 }
 
+// AppLocalState converts between basics.AppLocalState and model.ApplicationLocalState
 func AppLocalState(state basics.AppLocalState, appIdx basics.AppIndex) model.ApplicationLocalState {
 	localState := convertTKVToGenerated(&state.KeyValue)
 	return model.ApplicationLocalState{

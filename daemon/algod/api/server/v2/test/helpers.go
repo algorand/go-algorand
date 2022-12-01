@@ -146,14 +146,12 @@ func (m *mockNode) SetSyncRound(rnd uint64) error {
 	return args.Error(0)
 }
 
-func (m *mockNode) UnsetSyncRound() error {
-	args := m.Called()
-	return args.Error(0)
+func (m *mockNode) UnsetSyncRound() {
 }
 
-func (m *mockNode) GetSyncRound() (uint64, error) {
+func (m *mockNode) GetSyncRound() uint64 {
 	args := m.Called()
-	return uint64(args.Int(1)), args.Error(2)
+	return uint64(args.Int(0))
 }
 
 func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error {

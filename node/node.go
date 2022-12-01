@@ -1391,11 +1391,11 @@ func (node *AlgorandFullNode) SetSyncRound(rnd uint64) error {
 }
 
 // GetSyncRound retrieves the sync round, and any error
-func (node *AlgorandFullNode) GetSyncRound() (uint64, error) {
+func (node *AlgorandFullNode) GetSyncRound() uint64 {
 	return node.catchupService.GetSyncRound()
 }
 
 // UnsetSyncRound removes the sync round constraint on the ledger
-func (node *AlgorandFullNode) UnsetSyncRound() error {
-	return node.catchupService.UnsetSyncRound()
+func (node *AlgorandFullNode) UnsetSyncRound() {
+	node.catchupService.UnsetSyncRound()
 }

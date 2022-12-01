@@ -240,8 +240,7 @@ func TestSyncRound(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	// Assert that the last block is the one we expect--i.e. syncRound(inclusive)..syncRound+MaxAccountLookback(non-inclusive)
-	rnd, err := s.GetSyncRound()
-	require.NoError(t, err)
+	rnd := s.GetSyncRound()
 	rr, lr := basics.Round(rnd+s.cfg.MaxAcctLookback-1), local.LastRound()
 	require.Equal(t, rr, lr)
 
@@ -254,8 +253,7 @@ func TestSyncRound(t *testing.T) {
 	}
 
 	// unset syncRound and make sure we finish catching up
-	err = s.UnsetSyncRound()
-	require.NoError(t, err)
+	s.UnsetSyncRound()
 	// wait until the catchup is done
 	waitStart = time.Now()
 	for time.Now().Sub(waitStart) < 8*s.deadlineTimeout {
