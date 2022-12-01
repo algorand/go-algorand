@@ -80,7 +80,7 @@ type rootRouter struct {
 type roundRouter struct {
 	_struct struct{} `codec:","`
 
-	voteRoot listener // voteMachineRound
+	//voteRoot listener // voteMachineRound
 
 	ProposalStore    proposalStore
 	VoteTrackerRound voteTrackerRound
@@ -169,9 +169,9 @@ func (router *rootRouter) dispatch(t *tracer, state player, e event, src stateMa
 }
 
 func (router *roundRouter) update(state player, p period, gc bool) {
-	if router.voteRoot == nil {
-		router.voteRoot = checkedListener{listener: &router.VoteTrackerRound, listenerContract: voteTrackerRoundContract{}}
-	}
+	// if router.voteRoot == nil {
+	// 	router.voteRoot = checkedListener{listener: &router.VoteTrackerRound, listenerContract: voteTrackerRoundContract{}}
+	// }
 	if router.Children == nil {
 		router.Children = make(map[period]*periodRouter)
 	}
@@ -203,9 +203,9 @@ func (router *roundRouter) dispatch(t *tracer, state player, e event, src stateM
 		handle := routerHandle{t: t, r: router, src: proposalMachineRound}
 		return router.ProposalStore.handle(handle, state, e)
 	}
-	if router.voteRoot.T() == dest {
+	if router.VoteTrackerRound.T() == dest {
 		handle := routerHandle{t: t, r: router, src: voteMachineRound}
-		return router.voteRoot.handle(handle, state, e)
+		return router.VoteTrackerRound.handle(handle, state, e)
 	}
 	return router.Children[p].dispatch(t, state, e, src, dest, r, p, s)
 }

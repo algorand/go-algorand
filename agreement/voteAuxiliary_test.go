@@ -350,7 +350,7 @@ func TestVoteTrackerRoundForwardsVoteAccepted(t *testing.T) {
 	perRouter.update(player{}, 0, false)
 
 	voteRoundM := &ioAutomataConcrete{
-		listener:  perRouter.voteRoot,
+		listener:  &perRouter.VoteTrackerRound,
 		routerCtx: perRouter,
 	}
 

@@ -16,6 +16,8 @@
 
 package agreement
 
+import "runtime"
+
 // A listener is a state machine which can handle events, returning new events.
 type listener interface {
 	// T returns the stateMachineTag describing the listener.
@@ -69,4 +71,20 @@ func (l checkedListener) handle(r routerHandle, p player, in event) event {
 		r.t.log.Panicf("%v: postcondition violated: %v", l.T(), errs[0])
 	}
 	return out
+}
+
+func maybePreconditionPanic(r routerHandle, errs []error) {
+	maybePanic(r, "precondition", errs)
+}
+func maybePostconditionPanic(r routerHandle, errs []error) {
+	maybePanic(r, "precondition", errs)
+}
+func maybePanic(r routerHandle, area string, errs []error) {
+	if len(errs) != 0 {
+		_, file, line, _ := runtime.Caller(2)
+		for _, err := range errs {
+			r.t.log.Errorf("%s:%d %s violated: %v", file, line, area, err)
+		}
+		r.t.log.Panicf("%v: %s violated: %v", file, line, area, errs[0])
+	}
 }

@@ -274,8 +274,8 @@ func dumpPlayerStr(w io.Writer, p player, r rootRouter, tag string) {
 		}
 	}
 
-	if rRouter != nil && rRouter.voteRoot != nil {
-		voteRound := rRouter.voteRoot.underlying().(*voteTrackerRound)
+	if rRouter != nil {
+		voteRound := &rRouter.VoteTrackerRound
 		if voteRound.Freshest.t() != none {
 			fmt.Fprintf(w, "autopsy: (%s) player has freshest bundle: %+v, (%v, %v, %v)\n",
 				tag, voteRound.Freshest, voteRound.Freshest.Round, voteRound.Freshest.Period, voteRound.Freshest.Step)
