@@ -490,14 +490,13 @@ func BenchmarkHandleTxns(b *testing.B) {
 	for _, tps := range tpss {
 		for _, ivr := range invalidRates {
 			b.Run(fmt.Sprintf("tps: %d", tps), func(b *testing.B) {
-				rateAdjuster := time.Second / time.Duration(tps)
-				runHandlerBenchmarkWithBacklog(rateAdjuster, maxGroupSize, tps, ivr, b, false)
+				runHandlerBenchmarkWithBacklog(maxGroupSize, tps, ivr, b, false)
 			})
 		}
 	}
 }
 
-// BenchmarkHandleTransactionGroups sends singed transaction groups to the verifier
+// BenchmarkHandleTxnGroups sends singed transaction groups to the verifier
 func BenchmarkHandleTxnGroups(b *testing.B) {
 	maxGroupSize := proto.MaxTxGroupSize / 2
 	tpss := []int{6000000, 600000, 60000, 6000}
@@ -505,8 +504,7 @@ func BenchmarkHandleTxnGroups(b *testing.B) {
 	for _, tps := range tpss {
 		for _, ivr := range invalidRates {
 			b.Run(fmt.Sprintf("tps: %d", tps), func(b *testing.B) {
-				rateAdjuster := time.Second / time.Duration(tps)
-				runHandlerBenchmarkWithBacklog(rateAdjuster, maxGroupSize, tps, ivr, b, false)
+				runHandlerBenchmarkWithBacklog(maxGroupSize, tps, ivr, b, false)
 			})
 		}
 	}
@@ -521,8 +519,7 @@ func BenchmarkHandleBLWTxns(b *testing.B) {
 	for _, tps := range tpss {
 		for _, ivr := range invalidRates {
 			b.Run(fmt.Sprintf("tps: %d", tps), func(b *testing.B) {
-				rateAdjuster := time.Second / time.Duration(tps)
-				runHandlerBenchmarkWithBacklog(rateAdjuster, maxGroupSize, tps, ivr, b, true)
+				runHandlerBenchmarkWithBacklog(maxGroupSize, tps, ivr, b, true)
 			})
 		}
 	}
@@ -537,15 +534,14 @@ func BenchmarkHandleBLWTxnGroups(b *testing.B) {
 	for _, tps := range tpss {
 		for _, ivr := range invalidRates {
 			b.Run(fmt.Sprintf("tps: %d", tps), func(b *testing.B) {
-				rateAdjuster := time.Second / time.Duration(tps)
-				runHandlerBenchmarkWithBacklog(rateAdjuster, maxGroupSize, tps, ivr, b, true)
+				runHandlerBenchmarkWithBacklog(maxGroupSize, tps, ivr, b, true)
 			})
 		}
 	}
 }
 
 // runHandlerBenchmarkWithBacklog benchmarks the number of transactions verfied or dropped
-func runHandlerBenchmarkWithBacklog(rateAdjuster time.Duration, maxGroupSize, tps int, invalidRate float32, b *testing.B, useBacklogWorker bool) {
+func runHandlerBenchmarkWithBacklog(maxGroupSize, tps int, invalidRate float32, b *testing.B, useBacklogWorker bool) {
 	defer func() {
 		// reset the counters
 		transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
@@ -660,6 +656,7 @@ func runHandlerBenchmarkWithBacklog(rateAdjuster time.Duration, maxGroupSize, tp
 
 	var tt time.Time
 	// Process the results and make sure they are correct
+	rateAdjuster := time.Second / time.Duration(tps)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -667,15 +664,15 @@ func runHandlerBenchmarkWithBacklog(rateAdjuster time.Duration, maxGroupSize, tp
 		var txnCounter uint64
 		invalidCounter := 0
 		defer func() {
-			if txnCounter > 0 {
+			if groupCounter > 1 {
 				droppedBacklog, droppedPool := getDropped()
-				b.Logf("Input TPS: %d (delay %f microsec)", tps, float64(rateAdjuster)/float64(time.Microsecond))
-				b.Logf("Verified TPS: %d", uint64(txnCounter)*1000000000/uint64(time.Since(tt)))
+				b.Logf("Input T(grp)PS: %d (delay %f microsec)", tps, float64(rateAdjuster)/float64(time.Microsecond))
+				b.Logf("Verified TPS: %d", uint64(txnCounter)*uint64(time.Second)/uint64(time.Since(tt)))
 				b.Logf("Time/txn: %d(microsec)", uint64((time.Since(tt)/time.Microsecond))/txnCounter)
 				b.Logf("processed total: [%d groups (%d invalid)] [%d txns]", groupCounter, invalidCounter, txnCounter)
 				b.Logf("dropped: [%d backlog] [%d pool]\n", droppedBacklog, droppedPool)
-				handler.Stop() // cancel the handler ctx
 			}
+			handler.Stop() // cancel the handler ctx
 		}()
 		stopChan := make(chan interface{})
 		go func() {
