@@ -898,14 +898,14 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 		require.Equal(t, stxns1[0], msg.unverifiedTxGroup[0])
 
 		// rotate once, ensure the txn still there
-		handler.msgCache.remix()
+		handler.msgCache.Remix()
 		resetCanonical(handler)
 		action = handler.processIncomingTxn(network.IncomingMessage{Data: blob1})
 		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
 		require.Equal(t, 0, len(handler.backlogQueue))
 
 		// rotate twice, ensure the txn done
-		handler.msgCache.remix()
+		handler.msgCache.Remix()
 		resetCanonical(handler)
 		action = handler.processIncomingTxn(network.IncomingMessage{Data: blob1})
 		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)

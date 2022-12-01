@@ -39,50 +39,50 @@ func TestTxHandlerDigestCache(t *testing.T) {
 
 	const size = 20
 	cache := makeDigestCache(size)
-	require.Zero(t, cache.len())
+	require.Zero(t, cache.Len())
 
 	// add some unique random
 	var ds [size]crypto.Digest
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds[i][:]))
-		exist := cache.checkAndPut(&ds[i])
+		exist := cache.CheckAndPut(&ds[i])
 		require.False(t, exist)
 
 		exist = cache.check(&ds[i])
 		require.True(t, exist)
 	}
 
-	require.Equal(t, size, cache.len())
+	require.Equal(t, size, cache.Len())
 
 	// try to re-add, ensure not added
 	for i := 0; i < size; i++ {
-		exist := cache.checkAndPut(&ds[i])
+		exist := cache.CheckAndPut(&ds[i])
 		require.True(t, exist)
 	}
 
-	require.Equal(t, size, cache.len())
+	require.Equal(t, size, cache.Len())
 
 	// add some more and ensure capacity switch
 	var ds2 [size]crypto.Digest
 	for i := 0; i < size; i++ {
 		crypto.RandBytes(ds2[i][:])
-		exist := cache.checkAndPut(&ds2[i])
+		exist := cache.CheckAndPut(&ds2[i])
 		require.False(t, exist)
 
 		exist = cache.check(&ds2[i])
 		require.True(t, exist)
 	}
 
-	require.Equal(t, 2*size, cache.len())
+	require.Equal(t, 2*size, cache.Len())
 
 	var d crypto.Digest
 	crypto.RandBytes(d[:])
-	exist := cache.checkAndPut(&d)
+	exist := cache.CheckAndPut(&d)
 	require.False(t, exist)
 	exist = cache.check(&d)
 	require.True(t, exist)
 
-	require.Equal(t, size+1, cache.len())
+	require.Equal(t, size+1, cache.Len())
 
 	// ensure hashes from the prev batch are still there
 	for i := 0; i < size; i++ {
@@ -97,6 +97,11 @@ func TestTxHandlerDigestCache(t *testing.T) {
 	}
 }
 
+func (c *txSaltedCache) check(msg []byte) bool {
+	found, _ := c.innerCheck(msg)
+	return found
+}
+
 // TestTxHandlerSaltedCacheBasic is the same as TestTxHandlerDigestCache but for the salted cache
 func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -104,50 +109,50 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 
 	const size = 20
 	cache := makeSaltedCache(context.Background(), size, 0)
-	require.Zero(t, cache.len())
+	require.Zero(t, cache.Len())
 
 	// add some unique random
 	var ds [size][8]byte
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds[i][:]))
-		exist := cache.checkAndPut(ds[i][:])
+		exist := cache.CheckAndPut(ds[i][:])
 		require.False(t, exist)
 
 		exist = cache.check(ds[i][:])
 		require.True(t, exist)
 	}
 
-	require.Equal(t, size, cache.len())
+	require.Equal(t, size, cache.Len())
 
 	// try to re-add, ensure not added
 	for i := 0; i < size; i++ {
-		exist := cache.checkAndPut(ds[i][:])
+		exist := cache.CheckAndPut(ds[i][:])
 		require.True(t, exist)
 	}
 
-	require.Equal(t, size, cache.len())
+	require.Equal(t, size, cache.Len())
 
 	// add some more and ensure capacity switch
 	var ds2 [size][8]byte
 	for i := 0; i < size; i++ {
 		crypto.RandBytes(ds2[i][:])
-		exist := cache.checkAndPut(ds2[i][:])
+		exist := cache.CheckAndPut(ds2[i][:])
 		require.False(t, exist)
 
 		exist = cache.check(ds2[i][:])
 		require.True(t, exist)
 	}
 
-	require.Equal(t, 2*size, cache.len())
+	require.Equal(t, 2*size, cache.Len())
 
 	var d [8]byte
 	crypto.RandBytes(d[:])
-	exist := cache.checkAndPut(d[:])
+	exist := cache.CheckAndPut(d[:])
 	require.False(t, exist)
 	exist = cache.check(d[:])
 	require.True(t, exist)
 
-	require.Equal(t, size+1, cache.len())
+	require.Equal(t, size+1, cache.Len())
 
 	// ensure hashes from the prev batch are still there
 	for i := 0; i < size; i++ {
@@ -169,7 +174,7 @@ func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
 	const size = 20
 	updateInterval := 1000 * time.Microsecond
 	cache := makeSaltedCache(context.Background(), size, updateInterval)
-	require.Zero(t, cache.len())
+	require.Zero(t, cache.Len())
 
 	// add some unique random
 	var ds [size][8]byte
@@ -188,8 +193,8 @@ func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
 		}
 	}
 
-	require.Less(t, cache.len(), size)
-	require.Greater(t, cache.len(), 0)
+	require.Less(t, cache.Len(), size)
+	require.Greater(t, cache.Len(), 0)
 }
 
 func TestTxHandlerSaltedCacheManual(t *testing.T) {
@@ -198,32 +203,32 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 
 	const size = 20
 	cache := makeSaltedCache(context.Background(), 2*size, 0)
-	require.Zero(t, cache.len())
+	require.Zero(t, cache.Len())
 
 	// add some unique random
 	var ds [size][8]byte
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds[i][:]))
-		exist := cache.checkAndPut(ds[i][:])
+		exist := cache.CheckAndPut(ds[i][:])
 		require.False(t, exist)
 		exist = cache.check(ds[i][:])
 		require.True(t, exist)
 	}
 
-	require.Equal(t, size, cache.len())
+	require.Equal(t, size, cache.Len())
 
 	// rotate and add more data
-	cache.remix()
+	cache.Remix()
 
 	var ds2 [size][8]byte
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds2[i][:]))
-		exist := cache.checkAndPut(ds2[i][:])
+		exist := cache.CheckAndPut(ds2[i][:])
 		require.False(t, exist)
 		exist = cache.check(ds2[i][:])
 		require.True(t, exist)
 	}
-	require.Equal(t, 2*size, cache.len())
+	require.Equal(t, 2*size, cache.Len())
 
 	// ensure the old data still in
 	for i := 0; i < size; i++ {
@@ -232,9 +237,9 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 	}
 
 	// rotate again, check only new data left
-	cache.remix()
+	cache.Remix()
 
-	require.Equal(t, size, cache.len())
+	require.Equal(t, size, cache.Len())
 	for i := 0; i < size; i++ {
 		exist := cache.check(ds[i][:])
 		require.False(t, exist)
@@ -273,13 +278,13 @@ func (p *digestCachePusher) push() {
 	var d [crypto.DigestSize]byte
 	crypto.RandBytes(d[:])
 	h := crypto.Digest(blake2b.Sum256(d[:])) // digestCache does not hashes so calculate hash here
-	p.c.checkAndPut(&h)
+	p.c.CheckAndPut(&h)
 }
 
 func (p *saltedCachePusher) push() {
 	var d [crypto.DigestSize]byte
 	crypto.RandBytes(d[:])
-	p.c.checkAndPut(d[:]) // saltedCache hashes inside
+	p.c.CheckAndPut(d[:]) // saltedCache hashes inside
 }
 
 func BenchmarkDigestCaches(b *testing.B) {

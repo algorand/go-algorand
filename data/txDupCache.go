@@ -47,6 +47,8 @@ func makeDigestCache(size int) *digestCache {
 	return c
 }
 
+// check if digest d is in a cache.
+// locking semantic: write lock must be taken
 func (c *digestCache) check(d *crypto.Digest) bool {
 	_, found := c.cur[*d]
 	if !found {
@@ -55,11 +57,15 @@ func (c *digestCache) check(d *crypto.Digest) bool {
 	return found
 }
 
+// swap rotates cache pages.
+// locking semantic: write lock must be taken
 func (c *digestCache) swap() {
 	c.prev = c.cur
 	c.cur = map[crypto.Digest]struct{}{}
 }
 
+// put adds digest d into a cache.
+// locking semantic: write lock must be taken
 func (c *digestCache) put(d *crypto.Digest) {
 	if len(c.cur) >= c.maxSize {
 		c.swap()
@@ -67,7 +73,8 @@ func (c *digestCache) put(d *crypto.Digest) {
 	c.cur[*d] = struct{}{}
 }
 
-func (c *digestCache) checkAndPut(d *crypto.Digest) bool {
+// CheckAndPut adds digest d into a cache if not found
+func (c *digestCache) CheckAndPut(d *crypto.Digest) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.check(d) {
@@ -77,7 +84,8 @@ func (c *digestCache) checkAndPut(d *crypto.Digest) bool {
 	return false
 }
 
-func (c *digestCache) len() int {
+// Len returns size of a cache
+func (c *digestCache) Len() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -114,32 +122,35 @@ func makeSaltedCache(ctx context.Context, size int, refreshInterval time.Duratio
 	return c
 }
 
+// salter is a goroutine refreshing the cache by schedule
 func (c *txSaltedCache) salter(refreshInterval time.Duration) {
 	ticker := time.NewTicker(refreshInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			c.remix()
+			c.Remix()
 		case <-c.ctx.Done():
 			return
 		}
 	}
 }
 
+// moreSalt updates salt value used for hashing
 func (c *txSaltedCache) moreSalt() {
 	r := uint32(crypto.RandUint64() % math.MaxUint32)
 	binary.LittleEndian.PutUint32(c.curSalt[:], r)
 }
 
-// remix is a locked version of swap, called on schedule
-func (c *txSaltedCache) remix() {
+// remix is a locked version of innerSwap, called on schedule
+func (c *txSaltedCache) Remix() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.innerSwap(true)
 }
 
-// swap cache maps and update the salt used
+// innerSwap rotates cache pages and update the salt used.
+// locking semantic: write lock must be held
 func (c *txSaltedCache) innerSwap(scheduled bool) {
 	c.prevSalt = c.curSalt
 	c.prev = c.cur
@@ -154,17 +165,8 @@ func (c *txSaltedCache) innerSwap(scheduled bool) {
 	c.moreSalt()
 }
 
-// swap cache maps and update the salt used
-func (c *txSaltedCache) swap() {
-	c.innerSwap(false)
-}
-
-func (c *txSaltedCache) check(msg []byte) bool {
-	found, _ := c.innerCheck(msg)
-	return found
-}
-
-// innerCheck returns true if exists, and the current salted hash if does not
+// innerCheck returns true if exists, and the current salted hash if does not.
+// locking semantic: write lock must be held
 func (c *txSaltedCache) innerCheck(msg []byte) (bool, *crypto.Digest) {
 	ptr := saltedPool.Get()
 	defer saltedPool.Put(ptr)
@@ -191,12 +193,15 @@ func (c *txSaltedCache) innerCheck(msg []byte) (bool, *crypto.Digest) {
 	return false, &d
 }
 
-func (c *txSaltedCache) checkAndPut(msg []byte) bool {
+// CheckAndPut adds msg into a cache if not found
+func (c *txSaltedCache) CheckAndPut(msg []byte) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.innerCheckAndPut(msg)
 }
 
+// innerCheckAndPut adds msg into a cache if not found.
+// locking semantic: write lock must be held
 func (c *txSaltedCache) innerCheckAndPut(msg []byte) bool {
 	found, d := c.innerCheck(msg)
 	if found {
@@ -204,7 +209,7 @@ func (c *txSaltedCache) innerCheckAndPut(msg []byte) bool {
 	}
 
 	if len(c.cur) >= c.maxSize {
-		c.swap()
+		c.innerSwap(false)
 		ptr := saltedPool.Get()
 		defer saltedPool.Put(ptr)
 

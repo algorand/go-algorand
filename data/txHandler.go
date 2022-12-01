@@ -333,7 +333,7 @@ func (handler *TxHandler) dedupCanonical(ntx int, unverifiedTxGroup []transactio
 		// a single transaction => cache/dedup canonical txn with its signature
 		enc := unverifiedTxGroup[0].MarshalMsg(nil)
 		d := crypto.Hash(enc)
-		if handler.txCanonicalCache.checkAndPut(&d) {
+		if handler.txCanonicalCache.CheckAndPut(&d) {
 			return true
 		}
 	} else {
@@ -348,7 +348,7 @@ func (handler *TxHandler) dedupCanonical(ntx int, unverifiedTxGroup []transactio
 			logging.Base().Warnf("Decoded size %d does not match to encoded %d", consumed, len(encodeBuf))
 		} else {
 			d := crypto.Hash(encodeBuf)
-			if handler.txCanonicalCache.checkAndPut(&d) {
+			if handler.txCanonicalCache.CheckAndPut(&d) {
 				return true
 			}
 		}
@@ -366,7 +366,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	if handler.cacheConfig.enableFilteringRawMsg {
 		// check for duplicate messages
 		// this helps against relaying duplicates
-		if handler.msgCache.checkAndPut(rawmsg.Data) {
+		if handler.msgCache.CheckAndPut(rawmsg.Data) {
 			transactionMessagesDupRawMsg.Inc(nil)
 			return network.OutgoingMessage{Action: network.Ignore}
 		}
