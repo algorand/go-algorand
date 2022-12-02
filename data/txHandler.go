@@ -196,8 +196,13 @@ func (handler *TxHandler) backlogWorker() {
 				transactionMessagesAlreadyCommitted.Inc(nil)
 				continue
 			}
-			handler.streamVerifierChan <- &verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}
-
+			// handler.streamVerifierChan does not receive if ctx is cancled
+			select {
+			case handler.streamVerifierChan <- &verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}:
+			case <-handler.ctx.Done():
+				transactionMessagesDroppedFromBacklog.Inc(nil)
+				return
+			}
 		case wi, ok := <-handler.postVerificationQueue:
 			if !ok {
 				// this is never happening since handler.postVerificationQueue is never closed
