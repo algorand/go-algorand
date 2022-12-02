@@ -164,7 +164,6 @@ func (s *Service) SetSyncRound(rnd uint64) error {
 // UnsetSyncRound removes any previously set sync round
 func (s *Service) UnsetSyncRound() {
 	atomic.StoreUint64(&s.syncRound, 0)
-	s.syncRound = 0
 }
 
 // GetSyncRound returns the minimum sync round, and an error
