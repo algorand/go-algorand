@@ -16,7 +16,7 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"BaseLoggerDebugLevel\": 4 }"
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4 }"
 				}
 			]
 		},
@@ -36,7 +36,7 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"BaseLoggerDebugLevel\": 4 }"
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4 }"
 				}
 			]
 		},
@@ -56,7 +56,7 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"BaseLoggerDebugLevel\": 4 }"
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4 }"
 				}
 			]
 		},
@@ -76,7 +76,7 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"BaseLoggerDebugLevel\": 4 }"
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4 }"
 				}
 			]
 		},
@@ -96,7 +96,7 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"BaseLoggerDebugLevel\": 4 }"
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4 }"
 				}
 			]
 		},
@@ -116,7 +116,7 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"BaseLoggerDebugLevel\": 4 }"
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4 }"
 				}
 			]
 		},
@@ -136,7 +136,7 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"BaseLoggerDebugLevel\": 4 }"
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4 }"
 				}
 			]
 		},
@@ -156,7 +156,7 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"BaseLoggerDebugLevel\": 4 }"
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4 }"
 				}
 			]
 		},
@@ -176,7 +176,7 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"BaseLoggerDebugLevel\": 4 }"
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4 }"
 				}
 			]
 		},
@@ -196,7 +196,7 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"BaseLoggerDebugLevel\": 4 }"
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4 }"
 				}
 			]
 		},
@@ -530,7 +530,7 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"BaseLoggerDebugLevel\": 4 }"
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4 }"
 				},
 				{
 					"Name": "node22",
@@ -805,7 +805,7 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"BaseLoggerDebugLevel\": 4 }"
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4 }"
 				},
 				{
 					"Name": "node23",
@@ -859,7 +859,7 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"BaseLoggerDebugLevel\": 4 }"
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4 }"
 				},
 				{
 					"Name": "node43",
@@ -1080,7 +1080,7 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"BaseLoggerDebugLevel\": 4 }"
+					"ConfigJSONOverride": "{ \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4 }"
 				},
 				{
 					"Name": "node24",
