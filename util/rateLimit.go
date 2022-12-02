@@ -199,7 +199,7 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (ErlCapacityGuard, e
 
 // openReservation creates an entry in the ElasticRateLimiter's reservedCapacity map,
 // and optimistically transfers capacity from the sharedCapacity to the reservedCapacity
-func (erl ElasticRateLimiter) openReservation(c ErlClient) (capacityQueue, error) {
+func (erl *ElasticRateLimiter) openReservation(c ErlClient) (capacityQueue, error) {
 	erl.clientLock.Lock()
 	if _, exists := erl.capacityByClient[c]; exists {
 		erl.clientLock.Unlock()
@@ -229,7 +229,7 @@ func (erl ElasticRateLimiter) openReservation(c ErlClient) (capacityQueue, error
 
 // closeReservation will remove the client mapping to capacity channel,
 // and will kick off a routine to drain the capacity and replace it to the shared capacity
-func (erl ElasticRateLimiter) closeReservation(c ErlClient) {
+func (erl *ElasticRateLimiter) closeReservation(c ErlClient) {
 	erl.clientLock.Lock()
 	q, exists := erl.capacityByClient[c]
 	// guard clauses, and preventing the ElasticRateLimiter from draining its own sharedCapacity

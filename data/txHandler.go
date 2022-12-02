@@ -88,7 +88,7 @@ type TxHandler struct {
 	net                   network.GossipNode
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
-	erl                   util.ElasticRateLimiter
+	erl                   *util.ElasticRateLimiter
 }
 
 // MakeTxHandler makes a new handler for transaction messages
@@ -122,7 +122,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
-		erl:                   *rateLimiter,
+		erl:                   rateLimiter,
 	}
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	congestionManager.Start(handler.ctx, nil)
