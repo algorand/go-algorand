@@ -110,7 +110,7 @@ func TestDelta(t *testing.T) {
 		Totals:        ledgercore.AccountTotals{},
 	}
 
-	converted, err := StateDeltaToLedgerDelta(original, config.Consensus[protocol.ConsensusCurrentVersion], 25, 4)
+	converted, err := stateDeltaToLedgerDelta(original, config.Consensus[protocol.ConsensusCurrentVersion], 25, 4)
 	require.NoError(t, err)
 	require.Equal(t, original.Accts.Len(), len(*converted.Accts.Accounts))
 	expAccDelta := original.Accts.Accts[0]

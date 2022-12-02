@@ -2888,6 +2888,8 @@ func TestAcctUpdatesLookupResources(t *testing.T) {
 	require.NotContains(t, data.Assets, aidx2)
 }
 
+// TestAcctUpdatesLookupStateDelta simulates rounds w/ both account and kv changes in them,
+// validating that a StateDelta can be retrieved for expected rounds containing the same updates.
 func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -2925,21 +2927,22 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 	aidx2 := basics.AssetIndex(2)
 	aidx3 := basics.AssetIndex(3)
 
-	// Store AccountDeltas for each round
+	// Stores AccountDeltas for each round. These are used as the source of truth for comparing retrieved StateDeltas.
 	updatesI := make(map[basics.Round]ledgercore.AccountDeltas)
+	// Stores KVMods for each round. These are used as the source of truth for comparing retireved StateDeltas.
+	var roundMods = make(map[basics.Round]map[string]ledgercore.KvValueDelta)
 
+	// Sets up random keys & values to store.
 	kvCnt := 1000
 	kvsPerBlock := 100
 	curKV := 0
 	var currentRound basics.Round
-
 	kvMap := make(map[string][]byte)
 	for i := 0; i < kvCnt; i++ {
 		kvMap[fmt.Sprintf("%d", i)] = []byte(fmt.Sprintf("value%d", i))
 	}
 
-	var roundMods = make(map[basics.Round]map[string]ledgercore.KvValueDelta)
-
+	// Iterate through rounds 1..9, creating KvDeltas and modifying some accounts/assets
 	for i := 1; i < kvCnt/kvsPerBlock; i++ {
 		var updates ledgercore.AccountDeltas
 		currentRound = currentRound + 1
@@ -2953,9 +2956,11 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 				kvMods[name] = ledgercore.KvValueDelta{Data: val, OldData: nil}
 			}
 		}
+		// Stores created kvMods for assertions against StateDeltas
 		roundMods[currentRound] = kvMods
 
-		// Construct acct updates for round
+		// Construct acct updates. These are arbitrary updates made for a few rounds to ensure they are properly
+		// reflected in the retrieved StateDeltas.
 		if i == 1 {
 			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 1}})
 			updates.UpsertAssetResource(addr1, aidx1, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 100}})
@@ -2969,17 +2974,18 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 			updates.Upsert(addr1, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 1000000}, TotalAssets: 2}})
 			updates.UpsertAssetResource(addr1, aidx2, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Deleted: true})
 		}
+		// Store whatever updates were made for later assertions.
 		updatesI[basics.Round(i)] = updates
 		base := accts[i-1]
 		newAccts := applyPartialDeltas(base, updates)
 		accts = append(accts, newAccts)
 
-		// Commit the block
+		// Commit the block with the changes
 		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
 		auNewBlock(t, currentRound, au, base, opts, kvMods)
 		auCommitSync(t, currentRound, au, ml)
 
-		// ensure rounds
+		// Ensure the db round is what we expect, and the proper amount is in cache versus in ledger.
 		rnd := au.latest()
 		require.Equal(t, currentRound, rnd)
 		if uint64(currentRound) > conf.MaxAcctLookback {
@@ -2988,6 +2994,7 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 			require.Equal(t, basics.Round(0), au.cachedDBRound)
 		}
 
+		// Iterate backwards through deltas, ensuring proper data exists in StateDelta
 		for j := uint64(rnd); j > uint64(au.cachedDBRound); j-- {
 			// fetch StateDelta
 			actualDelta, err := au.lookupStateDelta(basics.Round(j))
@@ -2995,20 +3002,25 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 			actualAccountDeltas := actualDelta.Accts
 			actualKvDeltas := actualDelta.KvMods
 
-			// Validate AccountUpdates
+			// Make sure we know about the expected changes for the delta's round
 			expectedAccountDeltas, has := updatesI[basics.Round(j)]
 			require.True(t, has)
-			// Do basic checking
+			// Do basic checking on the size and existence of accounts in deltas
 			require.Equal(t, expectedAccountDeltas.Len(), actualAccountDeltas.Len())
 			require.Equal(t, len(expectedAccountDeltas.Accts), len(actualAccountDeltas.Accts))
 			for _, acct := range expectedAccountDeltas.Accts {
-				_, has := expectedAccountDeltas.GetBasicsAccountData(acct.Addr)
+				_, has := actualAccountDeltas.GetBasicsAccountData(acct.Addr)
 				require.True(t, has)
 			}
-			require.Equal(t, len(expectedAccountDeltas.AppResources), len(actualAccountDeltas.AppResources))
+			// Do basic checking on the existence of asset changes in deltas
 			require.Equal(t, len(expectedAccountDeltas.AssetResources), len(actualAccountDeltas.AssetResources))
+			for _, asset := range expectedAccountDeltas.AssetResources {
+				_, ok := actualAccountDeltas.GetResource(asset.Addr, basics.CreatableIndex(asset.Aidx), basics.AssetCreatable)
+				require.True(t, ok)
+			}
+			require.Equal(t, len(expectedAccountDeltas.AppResources), len(actualAccountDeltas.AppResources))
 
-			// Validate KvDeltas
+			// Validate KvDeltas contains updates w/ new/old values.
 			startKV := (j - 1) * uint64(kvsPerBlock)
 			expectedKvDeltas, has := roundMods[basics.Round(j)]
 			require.True(t, has)
@@ -3024,4 +3036,13 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 			}
 		}
 	}
+	// For rounds evicted from cache, perform sanity checks to confirm intended
+	// side effects took effect.
+	data, rnd, _, err := au.lookupLatest(addr1)
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(kvCnt/kvsPerBlock-1), rnd)
+	require.Len(t, data.Assets, 2)
+	require.Contains(t, data.Assets, aidx1)
+	require.Contains(t, data.Assets, aidx3)
+	require.NotContains(t, data.Assets, aidx2)
 }

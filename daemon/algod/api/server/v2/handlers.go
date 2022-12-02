@@ -1000,7 +1000,7 @@ func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64) error {
 		return internalError(ctx, fmt.Errorf("unable to retrieve block header for round %d", round), errInternalFailure, v2.Log)
 	}
 
-	response, err := StateDeltaToLedgerDelta(sDelta, consensusParams, hdr.RewardsLevel, round)
+	response, err := stateDeltaToLedgerDelta(sDelta, consensusParams, hdr.RewardsLevel, round)
 	if err != nil {
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}

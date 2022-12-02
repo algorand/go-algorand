@@ -70,8 +70,8 @@ func convertAssetResourceRecordToGenerated(asset ledgercore.AssetResourceRecord)
 	}
 }
 
-// StateDeltaToLedgerDelta converts ledgercore.StateDelta to v2.model.LedgerStateDelta
-func StateDeltaToLedgerDelta(sDelta ledgercore.StateDelta, consensus config.ConsensusParams, rewardsLevel uint64, round uint64) (response model.LedgerStateDelta, err error) {
+// stateDeltaToLedgerDelta converts ledgercore.StateDelta to v2.model.LedgerStateDelta
+func stateDeltaToLedgerDelta(sDelta ledgercore.StateDelta, consensus config.ConsensusParams, rewardsLevel uint64, round uint64) (response model.LedgerStateDelta, err error) {
 	var accts []model.AccountBalanceRecord
 	var apps []model.AppResourceRecord
 	var assets []model.AssetResourceRecord
