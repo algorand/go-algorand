@@ -359,7 +359,7 @@ var deletePartKeyCmd = &cobra.Command{
 
 		client := ensureAlgodClient(dataDir)
 
-		_, err := client.RemoveParticipationKey(partKeyIDToDelete)
+		err := client.RemoveParticipationKey(partKeyIDToDelete)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}

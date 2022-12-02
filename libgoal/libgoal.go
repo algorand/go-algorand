@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -1023,18 +1022,13 @@ func (c *Client) VerifyParticipationKey(timeout time.Duration, participationID s
 }
 
 // RemoveParticipationKey removes a participation key by its id
-func (c *Client) RemoveParticipationKey(participationID string) (resp model.ParticipationKeyResponse, err error) {
+func (c *Client) RemoveParticipationKey(participationID string) error {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
-		return
+		return nil
 	}
 
-	deleteResponse, err := algod.RemoveParticipationKeyByID(participationID)
-	if errors.Is(err, io.EOF) {
-		return deleteResponse, nil
-	}
-
-	return deleteResponse, err
+	return algod.RemoveParticipationKeyByID(participationID)
 }
 
 // AddParticipationKey takes a participation key file and sends it to the node.

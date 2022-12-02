@@ -163,6 +163,7 @@ type RawResponse interface {
 }
 
 // submitForm is a helper used for submitting (ex.) GETs and POSTs to the server
+// if response is nil, then it is expected that the response received will have a content length of zero
 func (client RestClient) submitForm(response interface{}, path string, request interface{}, requestMethod string, encodeJSON bool, decodeJSON bool) error {
 	var err error
 	queryURL := client.serverURL
@@ -216,6 +217,14 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 	err = extractError(resp)
 	if err != nil {
 		return err
+	}
+
+	if response == nil {
+		if resp.ContentLength == 0 {
+			return nil
+		}
+
+		return fmt.Errorf("expected empty json response but got response of %d bytes", resp.ContentLength)
 	}
 
 	if decodeJSON {
@@ -658,8 +667,8 @@ func (client RestClient) GetParticipationKeyByID(participationID string) (respon
 }
 
 // RemoveParticipationKeyByID removes a particiption key by its ID
-func (client RestClient) RemoveParticipationKeyByID(participationID string) (response model.ParticipationKeyResponse, err error) {
-	err = client.delete(&response, fmt.Sprintf("/v2/participation/%s", participationID), nil)
+func (client RestClient) RemoveParticipationKeyByID(participationID string) (err error) {
+	err = client.delete(nil, fmt.Sprintf("/v2/participation/%s", participationID), nil)
 	return
 
 }
