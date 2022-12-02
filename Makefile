@@ -147,21 +147,6 @@ deps:
 
 # artifacts
 
-# Regenerate algod swagger spec files
-ALGOD_API_SWAGGER_SPEC := daemon/algod/api/swagger.json
-ALGOD_API_FILES := $(shell find daemon/algod/api/server/common daemon/algod/api/server/v1 daemon/algod/api/spec/v1 -type f) \
-	daemon/algod/api/server/router.go
-ALGOD_API_SWAGGER_INJECT := daemon/algod/api/server/lib/bundledSpecInject.go
-
-# Note that swagger.json requires the go-swagger dep.
-$(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
-	cd daemon/algod/api && \
-		PATH=$(GOPATH1)/bin:$$PATH \
-		go generate ./...
-
-$(ALGOD_API_SWAGGER_INJECT): deps $(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated
-	./daemon/algod/api/server/lib/bundle_swagger_json.sh
-
 # Regenerate kmd swagger spec files
 KMD_API_SWAGGER_SPEC := daemon/kmd/api/swagger.json
 KMD_API_FILES := $(shell find daemon/kmd/api/ -type f | grep -v $(KMD_API_SWAGGER_SPEC))

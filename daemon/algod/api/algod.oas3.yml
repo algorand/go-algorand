@@ -773,8 +773,7 @@
                 "last-round",
                 "min-fee"
               ],
-              "type": "object",
-              "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+              "type": "object"
             }
           }
         },
@@ -4801,8 +4800,7 @@
                     "last-round",
                     "min-fee"
                   ],
-                  "type": "object",
-                  "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+                  "type": "object"
                 }
               }
             },
