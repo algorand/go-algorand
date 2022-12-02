@@ -24,8 +24,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/algorand/go-deadlock"
-
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -69,7 +67,9 @@ type Ledger interface {
 
 // Service represents the catchup service. Once started and until it is stopped, it ensures that the ledger is up to date with network.
 type Service struct {
-	syncStartNS         int64 // at top of struct to keep 64 bit aligned for atomic.* ops
+	syncStartNS int64 // at top of struct to keep 64 bit aligned for atomic.* ops
+	// SyncRound, provided externally, which the ledger must keep in cache
+	syncRound           uint64
 	cfg                 config.Local
 	ledger              Ledger
 	ctx                 context.Context
@@ -81,9 +81,6 @@ type Service struct {
 	parallelBlocks      uint64
 	deadlineTimeout     time.Duration
 	blockValidationPool execpool.BacklogPool
-	// SyncRound, provided externally, which the ledger must keep in cache
-	syncRoundMu deadlock.RWMutex
-	syncRound   uint64
 
 	// suspendForCatchpointWriting defines whether we've ran into a state where the ledger is currently busy writing the
 	// catchpoint file. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
@@ -160,24 +157,19 @@ func (s *Service) SetSyncRound(rnd uint64) error {
 	if basics.Round(rnd) < s.ledger.LastRound() {
 		return ErrSyncRoundInvalid
 	}
-	s.syncRoundMu.Lock()
-	defer s.syncRoundMu.Unlock()
-	s.syncRound = rnd
+	atomic.StoreUint64(&s.syncRound, rnd)
 	return nil
 }
 
 // UnsetSyncRound removes any previously set sync round
 func (s *Service) UnsetSyncRound() {
-	s.syncRoundMu.Lock()
-	defer s.syncRoundMu.Unlock()
+	atomic.StoreUint64(&s.syncRound, 0)
 	s.syncRound = 0
 }
 
 // GetSyncRound returns the minimum sync round, and an error
 func (s *Service) GetSyncRound() uint64 {
-	s.syncRoundMu.RLock()
-	defer s.syncRoundMu.RUnlock()
-	return s.syncRound
+	return atomic.LoadUint64(&s.syncRound)
 }
 
 // SynchronizingTime returns the time we've been performing a catchup operation (0 if not currently catching up)
