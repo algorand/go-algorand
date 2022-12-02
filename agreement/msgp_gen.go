@@ -795,7 +795,7 @@ func (z *ConsensusVersionView) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "struct-from-array", "Err")
 						return
 					}
-					*(*z).Err = serializableError(zb0003)
+					(*(*z).Err) = serializableError(zb0003)
 				}
 			}
 		}
@@ -848,7 +848,7 @@ func (z *ConsensusVersionView) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "Err")
 							return
 						}
-						*(*z).Err = serializableError(zb0004)
+						(*(*z).Err) = serializableError(zb0004)
 					}
 				}
 			case "Version":
@@ -2965,7 +2965,7 @@ func (z *messageEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "struct-from-array", "Err")
 						return
 					}
-					*(*z).Err = serializableError(zb0004)
+					(*(*z).Err) = serializableError(zb0004)
 				}
 			}
 		}
@@ -2989,7 +2989,7 @@ func (z *messageEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if (*z).Tail == nil {
 					(*z).Tail = new(messageEvent)
 				}
-				bts, err = (*z).Tail.UnmarshalMsg(bts)
+				bts, err = (*(*z).Tail).UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Tail")
 					return
@@ -3069,7 +3069,7 @@ func (z *messageEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "Err")
 							return
 						}
-						*(*z).Err = serializableError(zb0006)
+						(*(*z).Err) = serializableError(zb0006)
 					}
 				}
 			case "TaskIndex":
@@ -3089,7 +3089,7 @@ func (z *messageEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					if (*z).Tail == nil {
 						(*z).Tail = new(messageEvent)
 					}
-					bts, err = (*z).Tail.UnmarshalMsg(bts)
+					bts, err = (*(*z).Tail).UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Tail")
 						return
@@ -3311,18 +3311,18 @@ func (z *periodRouter) MarshalMsg(b []byte) (o []byte) {
 	// map header, size 4
 	// string "Children"
 	o = append(o, 0x84, 0xa8, 0x43, 0x68, 0x69, 0x6c, 0x64, 0x72, 0x65, 0x6e)
-	if (*z).Children == nil {
+	if (*z).Steps == nil {
 		o = msgp.AppendNil(o)
 	} else {
-		o = msgp.AppendMapHeader(o, uint32(len((*z).Children)))
+		o = msgp.AppendMapHeader(o, uint32(len((*z).Steps)))
 	}
-	zb0001_keys := make([]step, 0, len((*z).Children))
-	for zb0001 := range (*z).Children {
+	zb0001_keys := make([]step, 0, len((*z).Steps))
+	for zb0001 := range (*z).Steps {
 		zb0001_keys = append(zb0001_keys, zb0001)
 	}
 	sort.Sort(SortStep(zb0001_keys))
 	for _, zb0001 := range zb0001_keys {
-		zb0002 := (*z).Children[zb0001]
+		zb0002 := (*z).Steps[zb0001]
 		_ = zb0002
 		o = zb0001.MarshalMsg(o)
 		if zb0002 == nil {
@@ -3391,13 +3391,13 @@ func (z *periodRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0006 bool
 			zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Children")
+				err = msgp.WrapError(err, "struct-from-array", "Steps")
 				return
 			}
 			if zb0006 {
-				(*z).Children = nil
-			} else if (*z).Children == nil {
-				(*z).Children = make(map[step]*stepRouter, zb0005)
+				(*z).Steps = nil
+			} else if (*z).Steps == nil {
+				(*z).Steps = make(map[step]*stepRouter, zb0005)
 			}
 			for zb0005 > 0 {
 				var zb0001 step
@@ -3405,7 +3405,7 @@ func (z *periodRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				zb0005--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Children")
+					err = msgp.WrapError(err, "struct-from-array", "Steps")
 					return
 				}
 				if msgp.IsNil(bts) {
@@ -3418,13 +3418,13 @@ func (z *periodRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					if zb0002 == nil {
 						zb0002 = new(stepRouter)
 					}
-					bts, err = zb0002.UnmarshalMsg(bts)
+					bts, err = (*zb0002).UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Children", zb0001)
+						err = msgp.WrapError(err, "struct-from-array", "Steps", zb0001)
 						return
 					}
 				}
-				(*z).Children[zb0001] = zb0002
+				(*z).Steps[zb0001] = zb0002
 			}
 		}
 		if zb0003 > 0 {
@@ -3473,13 +3473,13 @@ func (z *periodRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0008 bool
 				zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Children")
+					err = msgp.WrapError(err, "Steps")
 					return
 				}
 				if zb0008 {
-					(*z).Children = nil
-				} else if (*z).Children == nil {
-					(*z).Children = make(map[step]*stepRouter, zb0007)
+					(*z).Steps = nil
+				} else if (*z).Steps == nil {
+					(*z).Steps = make(map[step]*stepRouter, zb0007)
 				}
 				for zb0007 > 0 {
 					var zb0001 step
@@ -3487,7 +3487,7 @@ func (z *periodRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					zb0007--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "Children")
+						err = msgp.WrapError(err, "Steps")
 						return
 					}
 					if msgp.IsNil(bts) {
@@ -3500,13 +3500,13 @@ func (z *periodRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						if zb0002 == nil {
 							zb0002 = new(stepRouter)
 						}
-						bts, err = zb0002.UnmarshalMsg(bts)
+						bts, err = (*zb0002).UnmarshalMsg(bts)
 						if err != nil {
-							err = msgp.WrapError(err, "Children", zb0001)
+							err = msgp.WrapError(err, "Steps", zb0001)
 							return
 						}
 					}
-					(*z).Children[zb0001] = zb0002
+					(*z).Steps[zb0001] = zb0002
 				}
 			default:
 				err = msgp.ErrNoField(string(field))
@@ -3529,8 +3529,8 @@ func (_ *periodRouter) CanUnmarshalMsg(z interface{}) bool {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *periodRouter) Msgsize() (s int) {
 	s = 1 + 16 + (*z).ProposalTracker.Msgsize() + 18 + (*z).VoteTrackerPeriod.Msgsize() + 24 + (*z).ProposalTrackerContract.Msgsize() + 9 + msgp.MapHeaderSize
-	if (*z).Children != nil {
-		for zb0001, zb0002 := range (*z).Children {
+	if (*z).Steps != nil {
+		for zb0001, zb0002 := range (*z).Steps {
 			_ = zb0001
 			_ = zb0002
 			s += 0 + zb0001.Msgsize()
@@ -3546,7 +3546,7 @@ func (z *periodRouter) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *periodRouter) MsgIsZero() bool {
-	return ((*z).ProposalTracker.MsgIsZero()) && ((*z).VoteTrackerPeriod.MsgIsZero()) && ((*z).ProposalTrackerContract.MsgIsZero()) && (len((*z).Children) == 0)
+	return ((*z).ProposalTracker.MsgIsZero()) && ((*z).VoteTrackerPeriod.MsgIsZero()) && ((*z).ProposalTrackerContract.MsgIsZero()) && (len((*z).Steps) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -5248,7 +5248,7 @@ func (z *proposalTable) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					if zb0002 == nil {
 						zb0002 = new(messageEvent)
 					}
-					bts, err = zb0002.UnmarshalMsg(bts)
+					bts, err = (*zb0002).UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "Pending", zb0001)
 						return
@@ -5320,7 +5320,7 @@ func (z *proposalTable) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						if zb0002 == nil {
 							zb0002 = new(messageEvent)
 						}
-						bts, err = zb0002.UnmarshalMsg(bts)
+						bts, err = (*zb0002).UnmarshalMsg(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "Pending", zb0001)
 							return
@@ -6411,18 +6411,18 @@ func (z *rootRouter) MarshalMsg(b []byte) (o []byte) {
 	// map header, size 3
 	// string "Children"
 	o = append(o, 0x83, 0xa8, 0x43, 0x68, 0x69, 0x6c, 0x64, 0x72, 0x65, 0x6e)
-	if (*z).Children == nil {
+	if (*z).Rounds == nil {
 		o = msgp.AppendNil(o)
 	} else {
-		o = msgp.AppendMapHeader(o, uint32(len((*z).Children)))
+		o = msgp.AppendMapHeader(o, uint32(len((*z).Rounds)))
 	}
-	zb0001_keys := make([]round, 0, len((*z).Children))
-	for zb0001 := range (*z).Children {
+	zb0001_keys := make([]round, 0, len((*z).Rounds))
+	for zb0001 := range (*z).Rounds {
 		zb0001_keys = append(zb0001_keys, zb0001)
 	}
 	sort.Sort(SortRound(zb0001_keys))
 	for _, zb0001 := range zb0001_keys {
-		zb0002 := (*z).Children[zb0001]
+		zb0002 := (*z).Rounds[zb0001]
 		_ = zb0002
 		o = zb0001.MarshalMsg(o)
 		if zb0002 == nil {
@@ -6554,13 +6554,13 @@ func (z *rootRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0010 bool
 			zb0009, zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Children")
+				err = msgp.WrapError(err, "struct-from-array", "Rounds")
 				return
 			}
 			if zb0010 {
-				(*z).Children = nil
-			} else if (*z).Children == nil {
-				(*z).Children = make(map[round]*roundRouter, zb0009)
+				(*z).Rounds = nil
+			} else if (*z).Rounds == nil {
+				(*z).Rounds = make(map[round]*roundRouter, zb0009)
 			}
 			for zb0009 > 0 {
 				var zb0001 round
@@ -6568,7 +6568,7 @@ func (z *rootRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				zb0009--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Children")
+					err = msgp.WrapError(err, "struct-from-array", "Rounds")
 					return
 				}
 				if msgp.IsNil(bts) {
@@ -6581,13 +6581,13 @@ func (z *rootRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					if zb0002 == nil {
 						zb0002 = new(roundRouter)
 					}
-					bts, err = zb0002.UnmarshalMsg(bts)
+					bts, err = (*zb0002).UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Children", zb0001)
+						err = msgp.WrapError(err, "struct-from-array", "Rounds", zb0001)
 						return
 					}
 				}
-				(*z).Children[zb0001] = zb0002
+				(*z).Rounds[zb0001] = zb0002
 			}
 		}
 		if zb0003 > 0 {
@@ -6702,13 +6702,13 @@ func (z *rootRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0016 bool
 				zb0015, zb0016, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Children")
+					err = msgp.WrapError(err, "Rounds")
 					return
 				}
 				if zb0016 {
-					(*z).Children = nil
-				} else if (*z).Children == nil {
-					(*z).Children = make(map[round]*roundRouter, zb0015)
+					(*z).Rounds = nil
+				} else if (*z).Rounds == nil {
+					(*z).Rounds = make(map[round]*roundRouter, zb0015)
 				}
 				for zb0015 > 0 {
 					var zb0001 round
@@ -6716,7 +6716,7 @@ func (z *rootRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					zb0015--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "Children")
+						err = msgp.WrapError(err, "Rounds")
 						return
 					}
 					if msgp.IsNil(bts) {
@@ -6729,13 +6729,13 @@ func (z *rootRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						if zb0002 == nil {
 							zb0002 = new(roundRouter)
 						}
-						bts, err = zb0002.UnmarshalMsg(bts)
+						bts, err = (*zb0002).UnmarshalMsg(bts)
 						if err != nil {
-							err = msgp.WrapError(err, "Children", zb0001)
+							err = msgp.WrapError(err, "Rounds", zb0001)
 							return
 						}
 					}
-					(*z).Children[zb0001] = zb0002
+					(*z).Rounds[zb0001] = zb0002
 				}
 			default:
 				err = msgp.ErrNoField(string(field))
@@ -6758,8 +6758,8 @@ func (_ *rootRouter) CanUnmarshalMsg(z interface{}) bool {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *rootRouter) Msgsize() (s int) {
 	s = 1 + 16 + 1 + 15 + 1 + 9 + msgp.MapHeaderSize
-	if (*z).Children != nil {
-		for zb0001, zb0002 := range (*z).Children {
+	if (*z).Rounds != nil {
+		for zb0001, zb0002 := range (*z).Rounds {
 			_ = zb0001
 			_ = zb0002
 			s += 0 + zb0001.Msgsize()
@@ -6775,7 +6775,7 @@ func (z *rootRouter) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *rootRouter) MsgIsZero() bool {
-	return (len((*z).Children) == 0)
+	return (len((*z).Rounds) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -6784,18 +6784,18 @@ func (z *roundRouter) MarshalMsg(b []byte) (o []byte) {
 	// map header, size 3
 	// string "Children"
 	o = append(o, 0x83, 0xa8, 0x43, 0x68, 0x69, 0x6c, 0x64, 0x72, 0x65, 0x6e)
-	if (*z).Children == nil {
+	if (*z).Periods == nil {
 		o = msgp.AppendNil(o)
 	} else {
-		o = msgp.AppendMapHeader(o, uint32(len((*z).Children)))
+		o = msgp.AppendMapHeader(o, uint32(len((*z).Periods)))
 	}
-	zb0001_keys := make([]period, 0, len((*z).Children))
-	for zb0001 := range (*z).Children {
+	zb0001_keys := make([]period, 0, len((*z).Periods))
+	for zb0001 := range (*z).Periods {
 		zb0001_keys = append(zb0001_keys, zb0001)
 	}
 	sort.Sort(SortPeriod(zb0001_keys))
 	for _, zb0001 := range zb0001_keys {
-		zb0002 := (*z).Children[zb0001]
+		zb0002 := (*z).Periods[zb0001]
 		_ = zb0002
 		o = zb0001.MarshalMsg(o)
 		if zb0002 == nil {
@@ -6923,13 +6923,13 @@ func (z *roundRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0008 bool
 			zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Children")
+				err = msgp.WrapError(err, "struct-from-array", "Periods")
 				return
 			}
 			if zb0008 {
-				(*z).Children = nil
-			} else if (*z).Children == nil {
-				(*z).Children = make(map[period]*periodRouter, zb0007)
+				(*z).Periods = nil
+			} else if (*z).Periods == nil {
+				(*z).Periods = make(map[period]*periodRouter, zb0007)
 			}
 			for zb0007 > 0 {
 				var zb0001 period
@@ -6937,7 +6937,7 @@ func (z *roundRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				zb0007--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Children")
+					err = msgp.WrapError(err, "struct-from-array", "Periods")
 					return
 				}
 				if msgp.IsNil(bts) {
@@ -6950,13 +6950,13 @@ func (z *roundRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					if zb0002 == nil {
 						zb0002 = new(periodRouter)
 					}
-					bts, err = zb0002.UnmarshalMsg(bts)
+					bts, err = (*zb0002).UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "Children", zb0001)
+						err = msgp.WrapError(err, "struct-from-array", "Periods", zb0001)
 						return
 					}
 				}
-				(*z).Children[zb0001] = zb0002
+				(*z).Periods[zb0001] = zb0002
 			}
 		}
 		if zb0003 > 0 {
@@ -7063,13 +7063,13 @@ func (z *roundRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0012 bool
 				zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Children")
+					err = msgp.WrapError(err, "Periods")
 					return
 				}
 				if zb0012 {
-					(*z).Children = nil
-				} else if (*z).Children == nil {
-					(*z).Children = make(map[period]*periodRouter, zb0011)
+					(*z).Periods = nil
+				} else if (*z).Periods == nil {
+					(*z).Periods = make(map[period]*periodRouter, zb0011)
 				}
 				for zb0011 > 0 {
 					var zb0001 period
@@ -7077,7 +7077,7 @@ func (z *roundRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					zb0011--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "Children")
+						err = msgp.WrapError(err, "Periods")
 						return
 					}
 					if msgp.IsNil(bts) {
@@ -7090,13 +7090,13 @@ func (z *roundRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						if zb0002 == nil {
 							zb0002 = new(periodRouter)
 						}
-						bts, err = zb0002.UnmarshalMsg(bts)
+						bts, err = (*zb0002).UnmarshalMsg(bts)
 						if err != nil {
-							err = msgp.WrapError(err, "Children", zb0001)
+							err = msgp.WrapError(err, "Periods", zb0001)
 							return
 						}
 					}
-					(*z).Children[zb0001] = zb0002
+					(*z).Periods[zb0001] = zb0002
 				}
 			default:
 				err = msgp.ErrNoField(string(field))
@@ -7119,8 +7119,8 @@ func (_ *roundRouter) CanUnmarshalMsg(z interface{}) bool {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *roundRouter) Msgsize() (s int) {
 	s = 1 + 14 + (*z).ProposalStore.Msgsize() + 17 + 1 + 9 + (*z).VoteTrackerRound.Freshest.Msgsize() + 3 + msgp.BoolSize + 9 + msgp.MapHeaderSize
-	if (*z).Children != nil {
-		for zb0001, zb0002 := range (*z).Children {
+	if (*z).Periods != nil {
+		for zb0001, zb0002 := range (*z).Periods {
 			_ = zb0001
 			_ = zb0002
 			s += 0 + zb0001.Msgsize()
@@ -7136,7 +7136,7 @@ func (z *roundRouter) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *roundRouter) MsgIsZero() bool {
-	return ((*z).ProposalStore.MsgIsZero()) && (((*z).VoteTrackerRound.Freshest.MsgIsZero()) && ((*z).VoteTrackerRound.Ok == false)) && (len((*z).Children) == 0)
+	return ((*z).ProposalStore.MsgIsZero()) && (((*z).VoteTrackerRound.Freshest.MsgIsZero()) && ((*z).VoteTrackerRound.Ok == false)) && (len((*z).Periods) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

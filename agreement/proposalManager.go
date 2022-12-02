@@ -61,19 +61,22 @@ func (m *proposalManager) handle(r routerHandle, p player, e event) event {
 	case roundInterruption:
 		return m.handleNewRound(r, p, e.(roundInterruptionEvent).Round)
 	case softThreshold, certThreshold:
-		e := e.(thresholdEvent)
-		if p.Period < e.Period {
-			r = m.handleNewPeriod(r, p, e)
-		}
-
-		ec := r.dispatch(p, e, proposalMachineRound, e.Round, e.Period, 0)
-		return ec
+		return m.handleThresholdEvent(r, p, e.(thresholdEvent))
 	case nextThreshold:
 		r = m.handleNewPeriod(r, p, e.(thresholdEvent))
 		return emptyEvent{}
 	}
 	r.t.log.Panicf("proposalManager: bad event type: observed an event of type %v", e.t())
 	panic("not reached")
+}
+
+func (m *proposalManager) handleThresholdEvent(r routerHandle, p player, e thresholdEvent) event {
+	if p.Period < e.Period {
+		r = m.handleNewPeriod(r, p, e)
+	}
+
+	ec := r.dispatch(p, e, proposalMachineRound, e.Round, e.Period, 0)
+	return ec
 }
 
 // handleNewRound is called for roundInterruption and certThreshold events.  The

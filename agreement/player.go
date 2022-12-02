@@ -268,7 +268,8 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 	case certThreshold:
 		// for future periods, fast-forwarding below will ensure correct staging
 		// for past periods, having a freshest certThreshold will prevent losing the block
-		r.dispatch(*p, e, proposalMachine, 0, 0, 0)
+		//r.dispatch(*p, e, proposalMachine, 0, 0, 0)
+		r.r.(*rootRouter).ProposalManager.handle(r, *p, e)
 		// Now, also check if we have the block.
 		res := stagedValue(*p, r, e.Round, e.Period)
 		if res.Committable {
@@ -295,7 +296,8 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 		if p.Period < e.Period {
 			return p.enterPeriod(r, e, e.Period)
 		}
-		ec := r.dispatch(*p, e, proposalMachine, p.Round, p.Period, 0)
+		//ec := r.dispatch(*p, e, proposalMachine, p.Round, p.Period, 0)
+		ec := r.r.(*rootRouter).ProposalManager.handle(r, *p, e)
 		if ec.t() == proposalCommittable && p.Step <= cert {
 			actions = append(actions, p.issueCertVote(r, ec.(committableEvent)))
 		}

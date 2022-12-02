@@ -73,7 +73,7 @@ type rootRouter struct {
 	ProposalManager proposalManager
 	VoteAggregator  voteAggregator
 
-	Children map[round]*roundRouter `codec:"Children,allocbound=-"`
+	Rounds map[round]*roundRouter `codec:"Children,allocbound=-"`
 }
 
 type roundRouter struct {
@@ -82,7 +82,7 @@ type roundRouter struct {
 	ProposalStore    proposalStore
 	VoteTrackerRound voteTrackerRound
 
-	Children map[period]*periodRouter `codec:"Children,allocbound=-"`
+	Periods map[period]*periodRouter `codec:"Children,allocbound=-"`
 }
 
 type periodRouter struct {
@@ -93,7 +93,7 @@ type periodRouter struct {
 
 	ProposalTrackerContract proposalTrackerContract
 
-	Children map[step]*stepRouter `codec:"Children,allocbound=-"`
+	Steps map[step]*stepRouter `codec:"Children,allocbound=-"`
 }
 
 type stepRouter struct {
@@ -111,21 +111,21 @@ func makeRootRouter(p player) (res rootRouter) {
 }
 
 func (router *rootRouter) update(state player, r round, gc bool) {
-	if router.Children == nil {
-		router.Children = make(map[round]*roundRouter)
+	if router.Rounds == nil {
+		router.Rounds = make(map[round]*roundRouter)
 	}
-	if router.Children[r] == nil {
-		router.Children[r] = new(roundRouter)
+	if router.Rounds[r] == nil {
+		router.Rounds[r] = new(roundRouter)
 	}
 
 	if gc {
 		children := make(map[round]*roundRouter)
-		for r, c := range router.Children {
+		for r, c := range router.Rounds {
 			if r >= state.Round {
 				children[r] = c
 			}
 		}
-		router.Children = children
+		router.Rounds = children
 	}
 }
 
@@ -157,20 +157,20 @@ func (router *rootRouter) dispatch(t *tracer, state player, e event, src stateMa
 		handle := routerHandle{t: t, r: router, src: voteMachine}
 		return router.VoteAggregator.handle(handle, state, e)
 	}
-	return router.Children[r].dispatch(t, state, e, src, dest, r, p, s)
+	return router.Rounds[r].dispatch(t, state, e, src, dest, r, p, s)
 }
 
 func (router *roundRouter) update(state player, p period, gc bool) {
-	if router.Children == nil {
-		router.Children = make(map[period]*periodRouter)
+	if router.Periods == nil {
+		router.Periods = make(map[period]*periodRouter)
 	}
-	if router.Children[p] == nil {
-		router.Children[p] = new(periodRouter)
+	if router.Periods[p] == nil {
+		router.Periods[p] = new(periodRouter)
 	}
 
 	if gc {
 		children := make(map[period]*periodRouter)
-		for p, c := range router.Children {
+		for p, c := range router.Periods {
 			if p+1 >= state.Period {
 				children[p] = c
 			} else if p <= 1 {
@@ -182,7 +182,7 @@ func (router *roundRouter) update(state player, p period, gc bool) {
 			}
 
 		}
-		router.Children = children
+		router.Periods = children
 	}
 }
 
@@ -196,16 +196,16 @@ func (router *roundRouter) dispatch(t *tracer, state player, e event, src stateM
 		handle := routerHandle{t: t, r: router, src: voteMachineRound}
 		return router.VoteTrackerRound.handle(handle, state, e)
 	}
-	return router.Children[p].dispatch(t, state, e, src, dest, r, p, s)
+	return router.Periods[p].dispatch(t, state, e, src, dest, r, p, s)
 }
 
 // we do not garbage-collect step because memory use here grows logarithmically slowly
 func (router *periodRouter) update(s step) {
-	if router.Children == nil {
-		router.Children = make(map[step]*stepRouter)
+	if router.Steps == nil {
+		router.Steps = make(map[step]*stepRouter)
 	}
-	if router.Children[s] == nil {
-		router.Children[s] = new(stepRouter)
+	if router.Steps[s] == nil {
+		router.Steps[s] = new(stepRouter)
 	}
 }
 
@@ -219,7 +219,7 @@ func (router *periodRouter) dispatch(t *tracer, state player, e event, src state
 		handle := routerHandle{t: t, r: router, src: voteMachinePeriod}
 		return router.VoteTrackerPeriod.handle(handle, state, e)
 	}
-	return router.Children[s].dispatch(t, state, e, src, dest, r, p, s)
+	return router.Steps[s].dispatch(t, state, e, src, dest, r, p, s)
 }
 
 func (router *stepRouter) update(state player, gc bool) {

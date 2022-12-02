@@ -225,11 +225,11 @@ func BenchmarkRandomizedDecode(b *testing.B) {
 func TestEmptyMapDeserialization(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var rr, rr1 rootRouter
-	rr.Children = make(map[basics.Round]*roundRouter)
+	rr.Rounds = make(map[basics.Round]*roundRouter)
 	e := protocol.Encode(&rr)
 	err := protocol.Decode(e, &rr1)
 	require.NoError(t, err)
-	require.NotNil(t, rr1.Children)
+	require.NotNil(t, rr1.Rounds)
 
 	var v, v1 voteTracker
 	v.Equivocators = make(map[basics.Address]equivocationVote)

@@ -248,7 +248,7 @@ func dumpPlayerStr(w io.Writer, p player, r rootRouter, tag string) {
 	receivedBlocks := make([]string, 0)
 	stageStatus := "(none)"
 
-	rRouter := r.Children[p.Round]
+	rRouter := r.Rounds[p.Round]
 	if rRouter != nil {
 		proposalStore := rRouter.ProposalStore
 		if proposalStore.Pinned != bottom {
@@ -265,7 +265,7 @@ func dumpPlayerStr(w io.Writer, p player, r rootRouter, tag string) {
 			}
 		}
 
-		pRouter := rRouter.Children[p.Period]
+		pRouter := rRouter.Periods[p.Period]
 		if pRouter != nil {
 			proposalTrack := pRouter.ProposalTracker
 			if proposalTrack.Staging != bottom {
