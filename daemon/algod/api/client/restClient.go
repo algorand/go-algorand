@@ -224,7 +224,7 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 			return nil
 		}
 
-		return fmt.Errorf("expected empty json response but got response of %d bytes", resp.ContentLength)
+		return fmt.Errorf("expected empty response but got response of %d bytes", resp.ContentLength)
 	}
 
 	if decodeJSON {
