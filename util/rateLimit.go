@@ -19,6 +19,7 @@ package util
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"sync"
 	"time"
@@ -278,6 +279,8 @@ type redCongestionManager struct {
 	shouldDropQueries      chan shouldDropQuery
 	targetRate             float64
 	targetRateRefreshTicks int
+	// exp is applied as an exponential factor in shouldDrop. 1 would be linearly proportional, higher values punish noisy neighbors more
+	exp float64
 	// consumed is the only value tracked by-queue. The others are calculated in-total
 	// TODO: If we desire later, we can add mappings onto release/done for more insight
 	consumedByClient map[ErlClient]*[]time.Time
@@ -295,6 +298,7 @@ func NewREDCongestionManager(d time.Duration, r int) *redCongestionManager {
 		shouldDropQueries:      make(chan shouldDropQuery, 100000),
 		targetRateRefreshTicks: r,
 		consumedByClient:       map[ErlClient]*[]time.Time{},
+		exp:                    4,
 	}
 	return &ret
 }
@@ -463,5 +467,5 @@ func (cm redCongestionManager) shouldDrop(targetRate float64, c ErlClient, arriv
 	// turned to a ratio against targetRate. the congestion manager recommends to drop activity
 	// proportional to its overuse above the targetRate
 	r := rand.Float64()
-	return (clientArrivalRate / targetRate) > r
+	return (math.Pow(clientArrivalRate, cm.exp) / math.Pow(targetRate, cm.exp)) > r
 }
