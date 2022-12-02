@@ -269,7 +269,8 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 		// for future periods, fast-forwarding below will ensure correct staging
 		// for past periods, having a freshest certThreshold will prevent losing the block
 		//r.dispatch(*p, e, proposalMachine, 0, 0, 0)
-		r.r.(*rootRouter).ProposalManager.handle(r, *p, e)
+		//r.r.(*rootRouter).ProposalManager.handle(r, *p, e)
+		r.r.(*rootRouter).ProposalManager.handleThresholdEvent(r, *p, e)
 		// Now, also check if we have the block.
 		res := stagedValue(*p, r, e.Round, e.Period)
 		if res.Committable {
@@ -297,7 +298,8 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 			return p.enterPeriod(r, e, e.Period)
 		}
 		//ec := r.dispatch(*p, e, proposalMachine, p.Round, p.Period, 0)
-		ec := r.r.(*rootRouter).ProposalManager.handle(r, *p, e)
+		//ec := r.r.(*rootRouter).ProposalManager.handle(r, *p, e)
+		ec := r.r.(*rootRouter).ProposalManager.handleThresholdEvent(r, *p, e)
 		if ec.t() == proposalCommittable && p.Step <= cert {
 			actions = append(actions, p.issueCertVote(r, ec.(committableEvent)))
 		}
@@ -321,7 +323,8 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 
 	// this needs to happen before changing player state so the correct old blockAssemblers can be promoted
 	// TODO might be better passing through the old period explicitly in the {soft,next}Threshold event
-	e := r.dispatch(*p, source, proposalMachine, p.Round, p.Period, 0)
+	//e := r.dispatch(*p, source, proposalMachine, p.Round, p.Period, 0)
+	e := r.r.(*rootRouter).ProposalManager.handle(r, *p, source)
 	r.t.logPeriodConcluded(*p, target, source.Proposal)
 
 	p.LastConcluding = p.Step
