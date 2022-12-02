@@ -46,6 +46,11 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
+// mock sender is used to implement OnClose, since TXHandlers expect to use Senders and ERL Clients
+type mockSender struct{}
+
+func (m mockSender) OnClose(func()) {}
+
 func BenchmarkTxHandlerProcessing(b *testing.B) {
 	const numUsers = 100
 	log := logging.TestingLog(b)
@@ -204,7 +209,7 @@ func TestTxHandlerProcessIncomingTxn(t *testing.T) {
 		backlogQueue: make(chan *txBacklogMsg, 1),
 	}
 	stxns, blob := makeRandomTransactions(numTxns)
-	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
+	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: mockSender{}})
 	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
 
 	require.Equal(t, 1, len(handler.backlogQueue))
@@ -372,7 +377,7 @@ func incomingTxHandlerProcessing(maxGroupSize int, t *testing.T) {
 			data = append(data, protocol.Encode(&stxn)...)
 		}
 		encodedSignedTransactionGroups =
-			append(encodedSignedTransactionGroups, network.IncomingMessage{Data: data})
+			append(encodedSignedTransactionGroups, network.IncomingMessage{Data: data, Sender: mockSender{}})
 	}
 
 	// Process the results and make sure they are correct
