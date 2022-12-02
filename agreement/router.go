@@ -80,7 +80,7 @@ type roundRouter struct {
 	_struct struct{} `codec:","`
 
 	ProposalStore    proposalStore
-	VoteTrackerRound voteTrackerRound
+	VoteTrackerRound voteTrackerRound // voteMachineRound
 
 	Periods map[period]*periodRouter `codec:"Children,allocbound=-"`
 }

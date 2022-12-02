@@ -148,9 +148,13 @@ func (t *voteTrackerRound) handle(r routerHandle, p player, e event) event {
 		}
 		return emptyEvent{}
 	case freshestBundleRequest:
-		return freshestBundleEvent{Ok: t.Ok, Event: t.Freshest}
+		return t.freshestBundle()
 	default:
 		r.t.log.Panicf("voteTrackerRound: bad event type: observed an event of type %v", e.t())
 		panic("not reached")
 	}
+}
+
+func (t *voteTrackerRound) freshestBundle() freshestBundleEvent {
+	return freshestBundleEvent{Ok: t.Ok, Event: t.Freshest}
 }

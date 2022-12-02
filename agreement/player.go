@@ -403,8 +403,7 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 	}
 
 	// we might need to handle a pipelined threshold event
-	res := r.dispatch(*p, freshestBundleRequestEvent{}, voteMachineRound, p.Round, 0, 0)
-	freshestRes := res.(freshestBundleEvent) // panic if violate postcondition
+	freshestRes := r.r.(*rootRouter).Rounds[p.Round].VoteTrackerRound.freshestBundle()
 	if freshestRes.Ok {
 		a4 := p.handle(r, freshestRes.Event)
 		actions = append(actions, a4...)
@@ -425,8 +424,7 @@ func (p *player) partitionPolicy(r routerHandle) (actions []action) {
 		return
 	}
 
-	res := r.dispatch(*p, freshestBundleRequestEvent{}, voteMachineRound, p.Round, 0, 0)
-	bundleResponse := res.(freshestBundleEvent) // panic if violate postcondition
+	bundleResponse := r.r.(*rootRouter).Rounds[p.Round].VoteTrackerRound.freshestBundle()
 	if bundleResponse.Ok {
 		// TODO do we want to authenticate our own bundles?
 		b := bundleResponse.Event.Bundle
@@ -520,7 +518,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			actions = append(actions, suffix...)
 		}()
 
-		ef := r.dispatch(*p, delegatedE, proposalMachine, 0, 0, 0)
+		ef := r.r.(*rootRouter).ProposalManager.handleMessageEvent(r, *p, delegatedE)
 		switch ef.t() {
 		case voteMalformed:
 			err := ef.(filteredEvent).Err
@@ -551,7 +549,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 
 	switch e.t() {
 	case payloadPresent, payloadVerified:
-		ef := r.dispatch(*p, delegatedE, proposalMachine, 0, 0, 0)
+		ef := r.r.(*rootRouter).ProposalManager.handleMessageEvent(r, *p, delegatedE)
 		switch ef.t() {
 		case payloadMalformed:
 			err := makeSerErrf("rejected message since it was invalid: %v", ef.(filteredEvent).Err)
