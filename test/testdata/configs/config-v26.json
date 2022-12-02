@@ -1,5 +1,5 @@
 {
-    "Version": 25,
+    "Version": 26,
     "AccountUpdatesStatsInterval": 5000000000,
     "AccountsRebuildSynchronousMode": 1,
     "AgreementIncomingBundlesQueueLength": 7,

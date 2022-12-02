@@ -36,7 +36,7 @@ type ElasticRateLimiter struct {
 	CapacityPerReservation int
 	sharedCapacity         capacityQueue
 	capacityByClient       map[ErlClient]capacityQueue
-	clientLock             *deadlock.RWMutex
+	clientLock             deadlock.RWMutex
 	noCapacityCounter      *metrics.Counter
 	// CongestionManager and enable flag
 	cm                       CongestionManager
@@ -112,7 +112,6 @@ func NewElasticRateLimiter(
 		MaxCapacity:              maxCapacity,
 		CapacityPerReservation:   reservedCapacity,
 		capacityByClient:         map[ErlClient]capacityQueue{},
-		clientLock:               &deadlock.RWMutex{},
 		cm:                       cm,
 		sharedCapacity:           capacityQueue(make(chan capacity, maxCapacity)),
 		noCapacityCounter:        nocapCount,
