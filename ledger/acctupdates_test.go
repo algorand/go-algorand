@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -562,7 +563,8 @@ func TestAcctUpdates(t *testing.T) {
 			// check the account totals.
 			var dbRound basics.Round
 			err := ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				dbRound, err = accountsRound(tx)
+				arw := store.NewAccountsSQLReaderWriter(tx)
+				dbRound, err = arw.AccountsRound()
 				return
 			})
 			require.NoError(t, err)
@@ -575,7 +577,8 @@ func TestAcctUpdates(t *testing.T) {
 			expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardsLevels[dbRound], proto, nil, ledgercore.AccountTotals{})
 			var actualTotals ledgercore.AccountTotals
 			err = ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				actualTotals, err = accountsTotals(ctx, tx, false)
+				arw := store.NewAccountsSQLReaderWriter(tx)
+				actualTotals, err = arw.AccountsTotals(ctx, false)
 				return
 			})
 			require.NoError(t, err)
@@ -1198,7 +1201,7 @@ func TestListCreatables(t *testing.T) {
 	require.NoError(t, err)
 
 	au := &accountUpdates{}
-	au.accountsq, err = accountsInitDbQueries(tx)
+	au.accountsq, err = store.AccountsInitDbQueries(tx)
 	require.NoError(t, err)
 
 	// ******* All results are obtained from the cache. Empty database *******
@@ -1435,7 +1438,7 @@ func TestKVCache(t *testing.T) {
 				name := fmt.Sprintf("%d", uint64(startKV)+uint64(j))
 				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
-				require.Equal(t, kvMap[name], persistedValue.value)
+				require.Equal(t, kvMap[name], persistedValue.Value)
 			}
 		}
 	}
@@ -1468,7 +1471,7 @@ func TestKVCache(t *testing.T) {
 			for name := range kvMods {
 				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
-				require.Equal(t, kvMap[name], persistedValue.value)
+				require.Equal(t, kvMap[name], persistedValue.Value)
 			}
 		}
 
@@ -1485,7 +1488,7 @@ func TestKVCache(t *testing.T) {
 				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
 				expectedValue := fmt.Sprintf("modified value%s", name)
-				require.Equal(t, expectedValue, string(persistedValue.value))
+				require.Equal(t, expectedValue, string(persistedValue.Value))
 			}
 		}
 	}
@@ -1520,7 +1523,7 @@ func TestKVCache(t *testing.T) {
 				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
 				value := fmt.Sprintf("modified value%s", name)
-				require.Equal(t, value, string(persistedValue.value))
+				require.Equal(t, value, string(persistedValue.Value))
 			}
 		}
 
@@ -1536,13 +1539,15 @@ func TestKVCache(t *testing.T) {
 				name := fmt.Sprintf("%d", uint64(startKV)+uint64(j))
 				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
-				require.True(t, persistedValue.value == nil)
+				require.True(t, persistedValue.Value == nil)
 			}
 		}
 	}
 }
 
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
+	arw := store.NewAccountsSQLReaderWriter(tx)
+
 	rows, err := tx.Query("SELECT rowid, address, data FROM accountbase")
 	if err != nil {
 		return
@@ -1559,7 +1564,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 			return
 		}
 
-		var data baseAccountData
+		var data store.BaseAccountData
 		err = protocol.Decode(buf, &data)
 		if err != nil {
 			return
@@ -1573,7 +1578,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 		copy(addr[:], addrbuf)
 
 		var ad basics.AccountData
-		ad, err = loadFullAccount(context.Background(), tx, "resources", addr, rowid.Int64, data)
+		ad, err = arw.LoadFullAccount(context.Background(), "resources", addr, rowid.Int64, data)
 		if err != nil {
 			return
 		}
@@ -1614,7 +1619,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 		var updates compactAccountDeltas
 		for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 			addr := ledgertesting.RandomAddress()
-			acctData := baseAccountData{}
+			acctData := store.BaseAccountData{}
 			acctData.MicroAlgos.Raw = 1
 			updates.upsert(addr, accountDelta{newAcct: acctData})
 			i++
@@ -1628,7 +1633,8 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	}
 
 	err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		return updateAccountsHashRound(ctx, tx, 1)
+		arw := store.NewAccountsSQLReaderWriter(tx)
+		return arw.UpdateAccountsHashRound(ctx, 1)
 	})
 	require.NoError(b, err)
 
@@ -1695,17 +1701,17 @@ func TestCompactDeltas(t *testing.T) {
 
 	// check deltas with missing accounts
 	delta, _ := outAccountDeltas.get(addrs[0])
-	require.Equal(t, persistedAccountData{}, delta.oldAcct)
+	require.Equal(t, store.PersistedAccountData{}, delta.oldAcct)
 	require.NotEmpty(t, delta.newAcct)
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
 
 	// check deltas without missing accounts
-	baseAccounts.write(persistedAccountData{addr: addrs[0], accountData: baseAccountData{}})
+	baseAccounts.write(store.PersistedAccountData{Addr: addrs[0], AccountData: store.BaseAccountData{}})
 	outAccountDeltas = makeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
 	require.Equal(t, 0, len(outAccountDeltas.misses))
 	delta, _ = outAccountDeltas.get(addrs[0])
-	require.Equal(t, persistedAccountData{addr: addrs[0]}, delta.oldAcct)
-	require.Equal(t, baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}, UpdateRound: 2}, delta.newAcct)
+	require.Equal(t, store.PersistedAccountData{Addr: addrs[0]}, delta.oldAcct)
+	require.Equal(t, store.BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}, UpdateRound: 2}, delta.newAcct)
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
 	baseAccounts.init(nil, 100, 80)
 
@@ -1718,8 +1724,8 @@ func TestCompactDeltas(t *testing.T) {
 	creatableDeltas[1][100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: false}
 	creatableDeltas[1][101] = ledgercore.ModifiedCreatable{Creator: addrs[4], Created: true}
 
-	baseAccounts.write(persistedAccountData{addr: addrs[0], accountData: baseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
-	baseAccounts.write(persistedAccountData{addr: addrs[3], accountData: baseAccountData{}})
+	baseAccounts.write(store.PersistedAccountData{Addr: addrs[0], AccountData: store.BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
+	baseAccounts.write(store.PersistedAccountData{Addr: addrs[3], AccountData: store.BaseAccountData{}})
 	outAccountDeltas = makeCompactAccountDeltas(accountDeltas, basics.Round(1), true, baseAccounts)
 	outCreatableDeltas = compactCreatableDeltas(creatableDeltas)
 
@@ -1727,11 +1733,11 @@ func TestCompactDeltas(t *testing.T) {
 	require.Equal(t, 2, len(outCreatableDeltas))
 
 	delta, _ = outAccountDeltas.get(addrs[0])
-	require.Equal(t, uint64(1), delta.oldAcct.accountData.MicroAlgos.Raw)
+	require.Equal(t, uint64(1), delta.oldAcct.AccountData.MicroAlgos.Raw)
 	require.Equal(t, uint64(3), delta.newAcct.MicroAlgos.Raw)
 	require.Equal(t, int(2), delta.nAcctDeltas)
 	delta, _ = outAccountDeltas.get(addrs[3])
-	require.Equal(t, uint64(0), delta.oldAcct.accountData.MicroAlgos.Raw)
+	require.Equal(t, uint64(0), delta.oldAcct.AccountData.MicroAlgos.Raw)
 	require.Equal(t, uint64(8), delta.newAcct.MicroAlgos.Raw)
 	require.Equal(t, int(1), delta.nAcctDeltas)
 
@@ -1766,22 +1772,22 @@ func TestCompactDeltasResources(t *testing.T) {
 	delta, _ := outResourcesDeltas.get(addrs[0], 100)
 	require.NotEmpty(t, delta.newResource)
 	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
-	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+	require.Equal(t, store.ResourceFlagsNotHolding, delta.newResource.ResourceFlags)
 
 	delta, _ = outResourcesDeltas.get(addrs[1], 101)
 	require.NotEmpty(t, delta.newResource)
 	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
-	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+	require.Equal(t, store.ResourceFlagsNotHolding, delta.newResource.ResourceFlags)
 
 	delta, _ = outResourcesDeltas.get(addrs[2], 102)
 	require.NotEmpty(t, delta.newResource)
 	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
-	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+	require.Equal(t, store.ResourceFlagsNotHolding, delta.newResource.ResourceFlags)
 
 	delta, _ = outResourcesDeltas.get(addrs[3], 103)
 	require.NotEmpty(t, delta.newResource)
 	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
-	require.Equal(t, resourceFlagsNotHolding, delta.newResource.ResourceFlags)
+	require.Equal(t, store.ResourceFlagsNotHolding, delta.newResource.ResourceFlags)
 
 	// check actual data on non-empty input
 	accountDeltas = make([]ledgercore.AccountDeltas, 1)
@@ -1853,19 +1859,19 @@ func TestCompactDeltasResources(t *testing.T) {
 	for i := int64(0); i < 4; i++ {
 		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
 		require.NotEqual(t, -1, idx)
-		require.Equal(t, persistedResourcesData{aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
+		require.Equal(t, store.PersistedResourcesData{Aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
 		if i%2 == 0 {
 			delta, idx = outResourcesDeltas.get(addrs[i], basics.CreatableIndex(200+i))
 			require.NotEqual(t, -1, idx)
-			require.Equal(t, persistedResourcesData{aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
+			require.Equal(t, store.PersistedResourcesData{Aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
 		}
 	}
 
 	// check deltas without missing accounts
 	for i := int64(0); i < 4; i++ {
-		baseResources.write(persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(100 + i)}, addrs[i])
+		baseResources.write(store.PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(100 + i)}, addrs[i])
 		if i%2 == 0 {
-			baseResources.write(persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(200 + i)}, addrs[i])
+			baseResources.write(store.PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(200 + i)}, addrs[i])
 		}
 	}
 
@@ -1877,11 +1883,11 @@ func TestCompactDeltasResources(t *testing.T) {
 	for i := int64(0); i < 4; i++ {
 		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
 		require.NotEqual(t, -1, idx)
-		require.Equal(t, persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
+		require.Equal(t, store.PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
 		if i%2 == 0 {
 			delta, idx = outResourcesDeltas.get(addrs[i], basics.CreatableIndex(200+i))
 			require.NotEqual(t, -1, idx)
-			require.Equal(t, persistedResourcesData{addrid: i + 1, aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
+			require.Equal(t, store.PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
 		}
 	}
 
@@ -1897,7 +1903,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	appLocalState204 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"204": basics.TealValue{Type: basics.TealBytesType, Bytes: "204"}}}
 	accountDeltas[1].UpsertAppResource(addrs[4], 104, ledgercore.AppParamsDelta{Params: &appParams104}, ledgercore.AppLocalStateDelta{LocalState: &appLocalState204})
 
-	baseResources.write(persistedResourcesData{addrid: 5 /* 4+1 */, aidx: basics.CreatableIndex(104)}, addrs[4])
+	baseResources.write(store.PersistedResourcesData{Addrid: 5 /* 4+1 */, Aidx: basics.CreatableIndex(104)}, addrs[4])
 	outResourcesDeltas = makeCompactResourceDeltas(accountDeltas, basics.Round(1), true, baseAccounts, baseResources)
 
 	require.Equal(t, 0, len(outResourcesDeltas.misses))
@@ -2438,11 +2444,12 @@ func TestAcctUpdatesResources(t *testing.T) {
 				err := au.prepareCommit(dcc)
 				require.NoError(t, err)
 				err = ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+					arw := store.NewAccountsSQLReaderWriter(tx)
 					err = au.commitRound(ctx, tx, dcc)
 					if err != nil {
 						return err
 					}
-					err = updateAccountsRound(tx, newBase)
+					err = arw.UpdateAccountsRound(newBase)
 					return err
 				})
 				require.NoError(t, err)
@@ -2731,11 +2738,12 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 			err := au.prepareCommit(dcc)
 			require.NoError(t, err)
 			err = ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+				arw := store.NewAccountsSQLReaderWriter(tx)
 				err = au.commitRound(ctx, tx, dcc)
 				if err != nil {
 					return err
 				}
-				err = updateAccountsRound(tx, newBase)
+				err = arw.UpdateAccountsRound(newBase)
 				return err
 			})
 			require.NoError(t, err)
@@ -2856,16 +2864,16 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 
 	pad, ok := au.baseAccounts.read(addr1)
 	require.True(t, ok)
-	pad.round = au.cachedDBRound
+	pad.Round = au.cachedDBRound
 	au.baseAccounts.write(pad)
 
 	prd, ok := au.baseResources.read(addr1, basics.CreatableIndex(aidx1))
 	require.True(t, ok)
-	prd.round = oldCachedDBRound
+	prd.Round = oldCachedDBRound
 	au.baseResources.write(prd, addr1)
 	prd, ok = au.baseResources.read(addr1, basics.CreatableIndex(aidx2))
 	require.True(t, ok)
-	prd.round = oldCachedDBRound
+	prd.Round = oldCachedDBRound
 	au.baseResources.write(prd, addr1)
 
 	var ad basics.AccountData
