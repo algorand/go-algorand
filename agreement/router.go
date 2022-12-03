@@ -177,7 +177,21 @@ func (router *roundRouter) Period(p period) *periodRouter {
 
 func (router *roundRouter) update(state player, p period, gc bool) {
 	router.Period(p)
+	if gc {
+		router.trim(state)
+	}
+}
 
+func (router *roundRouter) trim(state player) {
+	gc := false
+	for p := range router.Periods {
+		if p+1 >= state.Period {
+		} else if p <= 1 {
+		} else {
+			gc = true
+			break
+		}
+	}
 	if gc {
 		children := make(map[period]*periodRouter)
 		for p, c := range router.Periods {
