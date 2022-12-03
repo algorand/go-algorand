@@ -77,54 +77,54 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
 		pM.update(*plyr, r, true)
-		pM.Rounds[r].ProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
-		pM.Rounds[r].ProposalStore.Assemblers[pV] = blockAssembler{}
-		pM.Rounds[r].update(*plyr, p, true)
-		pM.Rounds[r].Period(p).ProposalTracker.Duplicate = make(map[basics.Address]bool)
+		pM.Round(r).ProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
+		pM.Round(r).ProposalStore.Assemblers[pV] = blockAssembler{}
+		pM.Round(r).update(*plyr, p, true)
+		pM.Round(r).Period(p).ProposalTracker.Duplicate = make(map[basics.Address]bool)
 		helper.addresses[0] = basics.Address(randomBlockHash())
-		pM.Rounds[r].Period(p).ProposalTracker.Duplicate[helper.addresses[0]] = true
-		pM.Rounds[r].Period(p).ProposalTrackerContract.SawOneVote = true
-		pM.Rounds[r].Period(p).Step(0)
+		pM.Round(r).Period(p).ProposalTracker.Duplicate[helper.addresses[0]] = true
+		pM.Round(r).Period(p).ProposalTrackerContract.SawOneVote = true
+		pM.Round(r).Period(p).Step(0)
 	case playerSameRoundReachedSoftThreshold: // already reached soft threshold
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
 		pM.update(*plyr, r, true)
-		pM.Rounds[r].ProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
-		pM.Rounds[r].ProposalStore.Assemblers[pV] = blockAssembler{}
-		pM.Rounds[r].update(*plyr, p, true)
-		pM.Rounds[r].Period(p).ProposalTracker.Duplicate = make(map[basics.Address]bool)
+		pM.Round(r).ProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
+		pM.Round(r).ProposalStore.Assemblers[pV] = blockAssembler{}
+		pM.Round(r).update(*plyr, p, true)
+		pM.Round(r).Period(p).ProposalTracker.Duplicate = make(map[basics.Address]bool)
 		helper.addresses[0] = basics.Address(randomBlockHash())
-		pM.Rounds[r].Period(p).ProposalTracker.Duplicate[helper.addresses[0]] = true
-		pM.Rounds[r].Period(p).ProposalTracker.Staging = pV
-		pM.Rounds[r].Period(p).ProposalTrackerContract.SawOneVote = true
-		pM.Rounds[r].Period(p).Step(0)
+		pM.Round(r).Period(p).ProposalTracker.Duplicate[helper.addresses[0]] = true
+		pM.Round(r).Period(p).ProposalTracker.Staging = pV
+		pM.Round(r).Period(p).ProposalTrackerContract.SawOneVote = true
+		pM.Round(r).Period(p).Step(0)
 	case playerSameRoundReachedCertThreshold: // already reached cert threshold
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
 		pM.update(*plyr, r, true)
-		pM.Rounds[r].ProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
-		pM.Rounds[r].ProposalStore.Assemblers[pV] = blockAssembler{}
-		pM.Rounds[r].VoteTrackerRound.Freshest = thresholdEvent{T: certThreshold, Proposal: pV, Round: r, Period: p, Bundle: unauthenticatedBundle{Round: r}}
-		pM.Rounds[r].VoteTrackerRound.Ok = true
-		pM.Rounds[r].update(*plyr, p, true)
-		pM.Rounds[r].Period(p).ProposalTracker.Duplicate = make(map[basics.Address]bool)
+		pM.Round(r).ProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
+		pM.Round(r).ProposalStore.Assemblers[pV] = blockAssembler{}
+		pM.Round(r).VoteTrackerRound.Freshest = thresholdEvent{T: certThreshold, Proposal: pV, Round: r, Period: p, Bundle: unauthenticatedBundle{Round: r}}
+		pM.Round(r).VoteTrackerRound.Ok = true
+		pM.Round(r).update(*plyr, p, true)
+		pM.Round(r).Period(p).ProposalTracker.Duplicate = make(map[basics.Address]bool)
 		helper.addresses[0] = basics.Address(randomBlockHash())
-		pM.Rounds[r].Period(p).ProposalTracker.Duplicate[helper.addresses[0]] = true
-		pM.Rounds[r].Period(p).ProposalTracker.Staging = pV
-		pM.Rounds[r].Period(p).ProposalTrackerContract.SawOneVote = true
-		pM.Rounds[r].Period(p).Step(0)
+		pM.Round(r).Period(p).ProposalTracker.Duplicate[helper.addresses[0]] = true
+		pM.Round(r).Period(p).ProposalTracker.Staging = pV
+		pM.Round(r).Period(p).ProposalTrackerContract.SawOneVote = true
+		pM.Round(r).Period(p).Step(0)
 	case playerSameRoundProcessedProposal: // already processed proposal
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
 		pM.update(*plyr, r, true)
-		pM.Rounds[r].ProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
-		pM.Rounds[r].ProposalStore.Assemblers[pV] = blockAssembler{Assembled: true, Payload: *payload}
-		pM.Rounds[r].update(*plyr, p, true)
-		pM.Rounds[r].Period(p).ProposalTracker.Duplicate = make(map[basics.Address]bool)
+		pM.Round(r).ProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
+		pM.Round(r).ProposalStore.Assemblers[pV] = blockAssembler{Assembled: true, Payload: *payload}
+		pM.Round(r).update(*plyr, p, true)
+		pM.Round(r).Period(p).ProposalTracker.Duplicate = make(map[basics.Address]bool)
 		helper.addresses[0] = basics.Address(randomBlockHash())
-		pM.Rounds[r].Period(p).ProposalTracker.Duplicate[helper.addresses[0]] = true
-		pM.Rounds[r].Period(p).ProposalTrackerContract.SawOneVote = true
-		pM.Rounds[r].Period(p).Step(0)
+		pM.Round(r).Period(p).ProposalTracker.Duplicate[helper.addresses[0]] = true
+		pM.Round(r).Period(p).ProposalTrackerContract.SawOneVote = true
+		pM.Round(r).Period(p).Step(0)
 	default:
 		require.Fail(t, "player permutation %v does not exist", n)
 	}

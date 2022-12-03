@@ -398,7 +398,7 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 	}
 
 	// we might need to handle a pipelined threshold event
-	freshestRes := r.r.(*rootRouter).Rounds[p.Round].VoteTrackerRound.freshestBundle()
+	freshestRes := r.r.(*rootRouter).Round(p.Round).VoteTrackerRound.freshestBundle()
 	if freshestRes.Ok {
 		a4 := p.handle(r, freshestRes.Event)
 		actions = append(actions, a4...)
@@ -419,7 +419,7 @@ func (p *player) partitionPolicy(r routerHandle) (actions []action) {
 		return
 	}
 
-	bundleResponse := r.r.(*rootRouter).Rounds[p.Round].VoteTrackerRound.freshestBundle()
+	bundleResponse := r.r.(*rootRouter).Round(p.Round).VoteTrackerRound.freshestBundle()
 	if bundleResponse.Ok {
 		// TODO do we want to authenticate our own bundles?
 		b := bundleResponse.Event.Bundle

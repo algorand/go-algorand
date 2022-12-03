@@ -248,7 +248,7 @@ func dumpPlayerStr(w io.Writer, p player, r rootRouter, tag string) {
 	receivedBlocks := make([]string, 0)
 	stageStatus := "(none)"
 
-	rRouter := r.Rounds[p.Round]
+	rRouter := r.Round(p.Round)
 	if rRouter != nil {
 		proposalStore := rRouter.ProposalStore
 		if proposalStore.Pinned != bottom {
