@@ -200,17 +200,22 @@ func (router *roundRouter) dispatch(t *tracer, state player, e event, src stateM
 }
 
 // we do not garbage-collect step because memory use here grows logarithmically slowly
-func (router *periodRouter) update(s step) {
+func (router *periodRouter) Step(s step) *stepRouter {
 	if router.Steps == nil {
 		router.Steps = make(map[step]*stepRouter)
+		out := new(stepRouter)
+		router.Steps[s] = out
+		return out
 	}
-	if router.Steps[s] == nil {
-		router.Steps[s] = new(stepRouter)
+	out, ok := router.Steps[s]
+	if !ok {
+		out = new(stepRouter)
+		router.Steps[s] = out
 	}
+	return out
 }
 
 func (router *periodRouter) dispatch(t *tracer, state player, e event, src stateMachineTag, dest stateMachineTag, r round, p period, s step) event {
-	router.update(s)
 	if router.ProposalTracker.T() == dest { // proposalMachinePeriod
 		handle := routerHandle{t: t, r: router, src: proposalMachinePeriod}
 		return router.ProposalTracker.handle(handle, state, e)
@@ -219,7 +224,7 @@ func (router *periodRouter) dispatch(t *tracer, state player, e event, src state
 		handle := routerHandle{t: t, r: router, src: voteMachinePeriod}
 		return router.VoteTrackerPeriod.handle(handle, state, e)
 	}
-	return router.Steps[s].dispatch(t, state, e, src, dest, r, p, s)
+	return router.Step(s).dispatch(t, state, e, src, dest, r, p, s)
 }
 
 func (router *stepRouter) update(state player, gc bool) {

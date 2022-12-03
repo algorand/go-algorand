@@ -92,7 +92,7 @@ func TestVoteTrackerPeriodStepCachedThresholdPrivate(t *testing.T) {
 	// We need to construct a composition of voteTrackerPeriod (voteMachinePeriod) and
 	// a whole set of voteTrackerStep machines... enter the router! (for now)
 	perRouter := new(periodRouter)
-	perRouter.update(next)
+	perRouter.Step(next)
 
 	votePeriodM := &ioAutomataConcrete{
 		listener:  &perRouter.VoteTrackerPeriod, // start at zero state

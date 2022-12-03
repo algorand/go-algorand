@@ -84,7 +84,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 		helper.addresses[0] = basics.Address(randomBlockHash())
 		pM.Rounds[r].Periods[p].ProposalTracker.Duplicate[helper.addresses[0]] = true
 		pM.Rounds[r].Periods[p].ProposalTrackerContract.SawOneVote = true
-		pM.Rounds[r].Periods[p].update(0)
+		pM.Rounds[r].Periods[p].Step(0)
 	case playerSameRoundReachedSoftThreshold: // already reached soft threshold
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
@@ -97,7 +97,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 		pM.Rounds[r].Periods[p].ProposalTracker.Duplicate[helper.addresses[0]] = true
 		pM.Rounds[r].Periods[p].ProposalTracker.Staging = pV
 		pM.Rounds[r].Periods[p].ProposalTrackerContract.SawOneVote = true
-		pM.Rounds[r].Periods[p].update(0)
+		pM.Rounds[r].Periods[p].Step(0)
 	case playerSameRoundReachedCertThreshold: // already reached cert threshold
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
@@ -112,7 +112,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 		pM.Rounds[r].Periods[p].ProposalTracker.Duplicate[helper.addresses[0]] = true
 		pM.Rounds[r].Periods[p].ProposalTracker.Staging = pV
 		pM.Rounds[r].Periods[p].ProposalTrackerContract.SawOneVote = true
-		pM.Rounds[r].Periods[p].update(0)
+		pM.Rounds[r].Periods[p].Step(0)
 	case playerSameRoundProcessedProposal: // already processed proposal
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
@@ -124,7 +124,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 		helper.addresses[0] = basics.Address(randomBlockHash())
 		pM.Rounds[r].Periods[p].ProposalTracker.Duplicate[helper.addresses[0]] = true
 		pM.Rounds[r].Periods[p].ProposalTrackerContract.SawOneVote = true
-		pM.Rounds[r].Periods[p].update(0)
+		pM.Rounds[r].Periods[p].Step(0)
 	default:
 		require.Fail(t, "player permutation %v does not exist", n)
 	}
