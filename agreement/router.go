@@ -176,7 +176,6 @@ func (router *roundRouter) Period(p period) *periodRouter {
 }
 
 func (router *roundRouter) update(state player, p period, gc bool) {
-	router.Period(p)
 	if gc {
 		router.trim(state)
 	}
