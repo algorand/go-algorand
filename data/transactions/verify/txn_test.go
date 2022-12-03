@@ -1010,7 +1010,7 @@ func TestStreamVerifier(t *testing.T) {
 	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, protoMaxGroupSize, 0.5)
 
 	sv := streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
-	sv.activeLoopWg.Wait()
+	sv.WaitForStop()
 }
 
 // TestStreamVerifierCases tests various valid and invalid transaction signature cases
@@ -1026,7 +1026,7 @@ func TestStreamVerifierCases(t *testing.T) {
 	u, _ := binary.Uvarint(txnGroups[mod][0].Txn.Note)
 	badTxnGroups[u] = struct{}{}
 	sv := streamVerifierTestCore(txnGroups, badTxnGroups, errSignedTxnHasNoSig, t)
-	sv.activeLoopWg.Wait()
+	sv.WaitForStop()
 	mod++
 
 	_, signedTxns, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
@@ -1041,7 +1041,7 @@ func TestStreamVerifierCases(t *testing.T) {
 	badTxnGroups[u] = struct{}{}
 	errFeeMustBeZeroInStateproofTxn := errors.New("fee must be zero in state-proof transaction")
 	sv = streamVerifierTestCore(txnGroups, badTxnGroups, errFeeMustBeZeroInStateproofTxn, t)
-	sv.activeLoopWg.Wait()
+	sv.WaitForStop()
 	mod++
 
 	_, signedTxns, secrets, addrs = generateTestObjects(numOfTxns, 20, 50)
@@ -1056,14 +1056,14 @@ func TestStreamVerifierCases(t *testing.T) {
 	txnGroups[mod][0].Txn.Header.Sender = transactions.StateProofSender
 	txnGroups[mod][0].Txn.PaymentTxnFields = transactions.PaymentTxnFields{}
 	sv = streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
-	sv.activeLoopWg.Wait()
+	sv.WaitForStop()
 	mod++
 
 	// multisig
 	_, mSigTxn, _, _ := generateMultiSigTxn(1, 6, 50, t)
 	txnGroups[mod] = mSigTxn
 	sv = streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
-	sv.activeLoopWg.Wait()
+	sv.WaitForStop()
 	mod++
 
 	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
@@ -1086,7 +1086,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	program := logic.Program(op.Program)
 	txnGroups[mod][0].Lsig.Sig = secrets[s].Sign(program)
 	sv = streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
-	sv.activeLoopWg.Wait()
+	sv.WaitForStop()
 	mod++
 
 	// bad lgicsig
@@ -1100,7 +1100,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	u, _ = binary.Uvarint(txnGroups[mod][0].Txn.Note)
 	badTxnGroups[u] = struct{}{}
 	sv = streamVerifierTestCore(txnGroups, badTxnGroups, errors.New("rejected by logic"), t)
-	sv.activeLoopWg.Wait()
+	sv.WaitForStop()
 	mod++
 
 	_, signedTxn, secrets, addrs = generateTestObjects(numOfTxns, 20, 50)
@@ -1112,7 +1112,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	u, _ = binary.Uvarint(txnGroups[mod][0].Txn.Note)
 	badTxnGroups[u] = struct{}{}
 	sv = streamVerifierTestCore(txnGroups, badTxnGroups, errSignedTxnMaxOneSig, t)
-	sv.activeLoopWg.Wait()
+	sv.WaitForStop()
 }
 
 // TestStreamVerifierIdel starts the verifer and sends nothing, to trigger the timer, then sends a txn
@@ -1130,7 +1130,7 @@ func TestStreamVerifierIdel(t *testing.T) {
 	// resume and process the incoming transactions
 	waitForFirstTxnDuration = 1 * time.Microsecond
 	sv := streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
-	sv.activeLoopWg.Wait()
+	sv.WaitForStop()
 }
 
 func TestGetNumberOfBatchableSigsInGroup(t *testing.T) {
@@ -1263,7 +1263,7 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		sv.activeLoopWg.Wait()
+		sv.WaitForStop()
 		cancel()
 	}()
 
@@ -1288,15 +1288,17 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 func TestStreamVerifierRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	numOfTxns := 100
+	numOfTxns := 1000
 	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0.5)
 
 	// prepare the stream verifier
 	numOfTxnGroups := len(txnGroups)
 	execPool := execpool.MakePool(t)
+	defer execPool.Shutdown()
 	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
+	defer verificationPool.Shutdown()
 
-	cache := MakeVerifiedTransactionCache(50000)
+	cache := MakeVerifiedTransactionCache(50)
 
 	stxnChan := make(chan *UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
@@ -1324,7 +1326,7 @@ func TestStreamVerifierRestart(t *testing.T) {
 		for i, tg := range txnGroups {
 			if (i+1)%10 == 0 {
 				cancel()
-				sv.activeLoopWg.Wait()
+				sv.WaitForStop()
 				ctx, cancel = context.WithCancel(context.Background())
 				sv.Start(ctx)
 			}
@@ -1338,12 +1340,10 @@ func TestStreamVerifierRestart(t *testing.T) {
 	}()
 	for err := range errChan {
 		require.ErrorIs(t, err, errShuttingDownError)
-		if err != errShuttingDownError {
-			cancel2()
-		}
 	}
-	cancel2()
-	sv.activeLoopWg.Wait()
+	wg.Wait()
+	sv.WaitForStop()
+	cancel2() // not necessary, but the golint will want to see this
 }
 
 // TestBlockWatcher runs multiple goroutines to check the concurency and correctness of the block watcher
@@ -1441,7 +1441,7 @@ func TestStreamVerifierCtxCancel(t *testing.T) {
 	cancel()
 
 	// the main loop should stop after cancel()
-	sv.activeLoopWg.Wait()
+	sv.WaitForStop()
 
 	// release the tasks
 	close(holdTasks)
@@ -1491,7 +1491,7 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
 	cancel()
 
 	// the main loop should stop after cancel()
-	sv.activeLoopWg.Wait()
+	sv.WaitForStop()
 
 	// release the tasks
 	close(holdTasks)
@@ -1579,4 +1579,57 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 func TestStreamVerifierMakeStreamVerifierErr(t *testing.T) {
 	_, err := MakeStreamVerifier(nil, nil, &DummyLedgerForSignature{badHdr: true}, nil, nil, nil)
 	require.Error(t, err)
+}
+
+// TestStreamVerifierCancelWhenPooled tests the case where the ctx is cancled after the verification
+// task is queued to the exec pool and before the task is executed in the pool
+func TestStreamVerifierCancelWhenPooled(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	numOfTxns := 1000
+	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0.5)
+
+	// prepare the stream verifier
+	numOfTxnGroups := len(txnGroups)
+	execPool := execpool.MakePool(t)
+	defer execPool.Shutdown()
+	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
+	defer verificationPool.Shutdown()
+
+	cache := MakeVerifiedTransactionCache(50)
+
+	stxnChan := make(chan *UnverifiedElement)
+	resultChan := make(chan *VerificationResult, txBacklogSize)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	sv, err := MakeStreamVerifier(stxnChan, resultChan, &DummyLedgerForSignature{}, verificationPool, cache, droppedFromPool)
+	require.NoError(t, err)
+	sv.Start(ctx)
+
+	errChan := make(chan error)
+
+	var badSigResultCounter int
+	var goodSigResultCounter int
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go processResults(ctx2, errChan, resultChan, numOfTxnGroups, badTxnGroups, &badSigResultCounter, &goodSigResultCounter, &wg)
+
+	wg.Add(1)
+	// send txn groups to be verified
+	go func() {
+		defer wg.Done()
+		for _, tg := range txnGroups {
+			stxnChan <- &UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}
+		}
+		// cancel the ctx, and expect at least one task queued to the pool but not yet executed
+		cancel()
+	}()
+	for err := range errChan {
+		require.ErrorIs(t, err, errShuttingDownError)
+	}
+	wg.Wait()
+	sv.WaitForStop()
+	cancel2() // not necessary, but the golint will want to see this
 }

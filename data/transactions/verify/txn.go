@@ -690,6 +690,10 @@ func (sv *StreamVerifier) Start(ctx context.Context) {
 	go sv.batchingLoop()
 }
 
+func (sv *StreamVerifier) WaitForStop() {
+	sv.activeLoopWg.Wait()
+}
+
 func (sv *StreamVerifier) cleanup(pending []*UnverifiedElement) {
 	// report an error for the unchecked txns
 	// drop the messages without reporting if the receiver does not consume
@@ -701,6 +705,7 @@ func (sv *StreamVerifier) cleanup(pending []*UnverifiedElement) {
 func (sv *StreamVerifier) batchingLoop() {
 	defer sv.activeLoopWg.Done()
 	timer := time.NewTicker(waitForFirstTxnDuration)
+	defer timer.Stop()
 	var added bool
 	var numberOfSigsInCurrent uint64
 	var numberOfTimerResets uint64
@@ -836,8 +841,14 @@ func (sv *StreamVerifier) canAddVerificationTaskToThePool(uelts []*UnverifiedEle
 }
 
 func (sv *StreamVerifier) addVerificationTaskToThePoolNow(uelts []*UnverifiedElement) error {
+	// if the context is canceled when the task is in the queue, it should be cancled
+	// copy the ctx here so that when the StreamVerifier is started again, and a new context
+	// is created, this task still gets cancled due to the ctx at the time of this task
+	taskCtx := sv.ctx
 	function := func(arg interface{}) interface{} {
-		if sv.ctx.Err() != nil {
+		if taskCtx.Err() != nil {
+			// ctx is canceled. the results will be returned
+			sv.cleanup(uelts)
 			return nil
 		}
 
