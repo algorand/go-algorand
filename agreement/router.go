@@ -110,13 +110,23 @@ func makeRootRouter(p player) (res rootRouter) {
 	return
 }
 
-func (router *rootRouter) update(state player, r round, gc bool) {
+func (router *rootRouter) Round(r round) *roundRouter {
 	if router.Rounds == nil {
 		router.Rounds = make(map[round]*roundRouter)
+		out := new(roundRouter)
+		router.Rounds[r] = out
+		return out
 	}
-	if router.Rounds[r] == nil {
-		router.Rounds[r] = new(roundRouter)
+	out, ok := router.Rounds[r]
+	if !ok {
+		out = new(roundRouter)
+		router.Rounds[r] = out
 	}
+	return out
+}
+
+func (router *rootRouter) update(state player, r round, gc bool) {
+	router.Round(r)
 
 	if gc {
 		children := make(map[round]*roundRouter)
@@ -157,7 +167,7 @@ func (router *rootRouter) dispatch(t *tracer, state player, e event, src stateMa
 		handle := routerHandle{t: t, r: router, src: voteMachine}
 		return router.VoteAggregator.handle(handle, state, e)
 	}
-	return router.Rounds[r].dispatch(t, state, e, src, dest, r, p, s)
+	return router.Round(r).dispatch(t, state, e, src, dest, r, p, s)
 }
 
 func (router *roundRouter) Period(p period) *periodRouter {
