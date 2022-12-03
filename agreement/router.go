@@ -160,13 +160,23 @@ func (router *rootRouter) dispatch(t *tracer, state player, e event, src stateMa
 	return router.Rounds[r].dispatch(t, state, e, src, dest, r, p, s)
 }
 
-func (router *roundRouter) update(state player, p period, gc bool) {
+func (router *roundRouter) Period(p period) *periodRouter {
 	if router.Periods == nil {
 		router.Periods = make(map[period]*periodRouter)
+		out := new(periodRouter)
+		router.Periods[p] = out
+		return out
 	}
-	if router.Periods[p] == nil {
-		router.Periods[p] = new(periodRouter)
+	out, ok := router.Periods[p]
+	if !ok {
+		out = new(periodRouter)
+		router.Periods[p] = out
 	}
+	return out
+}
+
+func (router *roundRouter) update(state player, p period, gc bool) {
+	router.Period(p)
 
 	if gc {
 		children := make(map[period]*periodRouter)
@@ -196,7 +206,7 @@ func (router *roundRouter) dispatch(t *tracer, state player, e event, src stateM
 		handle := routerHandle{t: t, r: router, src: voteMachineRound}
 		return router.VoteTrackerRound.handle(handle, state, e)
 	}
-	return router.Periods[p].dispatch(t, state, e, src, dest, r, p, s)
+	return router.Period(p).dispatch(t, state, e, src, dest, r, p, s)
 }
 
 // we do not garbage-collect step because memory use here grows logarithmically slowly
