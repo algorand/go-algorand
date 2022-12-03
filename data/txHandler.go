@@ -394,8 +394,11 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		ntx++
 		if ntx >= config.MaxTxGroupSize {
 			// max ever possible group size reached, done reading input.
-			// it is safe to stop earlier because groups of bigger size will be discarded in eval
-			break
+			if dec.Remaining() > 0 {
+				// if something else left in the buffer - this is an error, drop
+				transactionMessageTxGroupExcessive.Inc(nil)
+				return network.OutgoingMessage{Action: network.Disconnect}
+			}
 		}
 	}
 	if ntx == 0 {
@@ -407,9 +410,6 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 
 	if ntx == config.MaxTxGroupSize {
 		transactionMessageTxGroupFull.Inc(nil)
-		if len(rawmsg.Data) > consumed+1 {
-			transactionMessageTxGroupExcessive.Inc(nil)
-		}
 	}
 
 	if handler.cacheConfig.enableFilteringCanonical {

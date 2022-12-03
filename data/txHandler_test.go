@@ -571,13 +571,14 @@ func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 	type T struct {
 		inputSize  int
 		numDecoded int
+		action     network.ForwardingPolicy
 	}
 	var checks = []T{}
 	for i := 1; i <= config.MaxTxGroupSize; i++ {
-		checks = append(checks, T{i, i})
+		checks = append(checks, T{i, i, network.Ignore})
 	}
 	for i := 1; i < 10; i++ {
-		checks = append(checks, T{config.MaxTxGroupSize + i, config.MaxTxGroupSize})
+		checks = append(checks, T{config.MaxTxGroupSize + i, 0, network.Disconnect})
 	}
 
 	for _, check := range checks {
@@ -587,11 +588,15 @@ func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 			}
 			stxns, blob := makeRandomTransactions(check.inputSize)
 			action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
-			require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
-			msg := <-handler.backlogQueue
-			require.Equal(t, check.numDecoded, len(msg.unverifiedTxGroup))
-			for i := 0; i < check.numDecoded; i++ {
-				require.Equal(t, stxns[i], msg.unverifiedTxGroup[i])
+			require.Equal(t, network.OutgoingMessage{Action: check.action}, action)
+			if check.numDecoded > 0 {
+				msg := <-handler.backlogQueue
+				require.Equal(t, check.numDecoded, len(msg.unverifiedTxGroup))
+				for i := 0; i < check.numDecoded; i++ {
+					require.Equal(t, stxns[i], msg.unverifiedTxGroup[i])
+				}
+			} else {
+				require.Len(t, handler.backlogQueue, 0)
 			}
 		})
 	}

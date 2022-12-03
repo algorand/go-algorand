@@ -280,6 +280,11 @@ func (d *MsgpDecoderBytes) Consumed() int {
 	return d.pos
 }
 
+// Remaining returns number of bytes remained in the input buffer.
+func (d *MsgpDecoderBytes) Remaining() int {
+	return len(d.b) - d.pos
+}
+
 // encodingPool holds temporary byte slice buffers used for encoding messages.
 var encodingPool = sync.Pool{
 	New: func() interface{} {
