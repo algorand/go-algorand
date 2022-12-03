@@ -886,8 +886,7 @@ func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups m
 	expectedError error, t *testing.T) (sv *StreamVerifier) {
 
 	numOfTxnGroups := len(txnGroups)
-	execPool := execpool.MakePool(t)
-	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
+	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
 	defer verificationPool.Shutdown()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1208,9 +1207,7 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 
 	// prepare the stream verifier
 	numOfTxnGroups := len(txnGroups)
-	execPool := execpool.MakePool(t)
-	backlogQueueSize := 64
-	verificationPool := execpool.MakeBacklog(execPool, backlogQueueSize, execpool.LowPriority, t)
+	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
 	_, buffLen := verificationPool.BufferLength()
 
 	// make sure the pool is shut down and the buffer is full
@@ -1293,9 +1290,7 @@ func TestStreamVerifierRestart(t *testing.T) {
 
 	// prepare the stream verifier
 	numOfTxnGroups := len(txnGroups)
-	execPool := execpool.MakePool(t)
-	defer execPool.Shutdown()
-	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
+	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
 	defer verificationPool.Shutdown()
 
 	cache := MakeVerifiedTransactionCache(50)
@@ -1387,10 +1382,8 @@ func TestStreamVerifierBlockWatcher(t *testing.T) {
 	}
 }
 
-func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan interface{}) {
-	execPool := execpool.MakePool(t)
-	backlogQueueSize := 4
-	verificationPool := execpool.MakeBacklog(execPool, backlogQueueSize, execpool.LowPriority, t)
+func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan interface{}, execpool.BacklogPool) {
+	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
 	_, buffLen := verificationPool.BufferLength()
 
 	// make the buffer full to control when the tasks get executed
@@ -1402,7 +1395,7 @@ func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan interface{})
 				return nil
 			}, nil, nil)
 	}
-	return verificationPool, holdTasks
+	return verificationPool, holdTasks, verificationPool
 }
 
 // TestStreamVerifierCtxCancel tests the termination when the ctx is canceled
@@ -1413,8 +1406,8 @@ func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan interface{})
 func TestStreamVerifierCtxCancel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	verificationPool, holdTasks := getSaturatedExecPool(t)
-
+	verificationPool, holdTasks, vp := getSaturatedExecPool(t)
+	defer vp.Shutdown()
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50)
 	stxnChan := make(chan *UnverifiedElement)
@@ -1460,7 +1453,8 @@ func TestStreamVerifierCtxCancel(t *testing.T) {
 func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	verificationPool, holdTasks := getSaturatedExecPool(t)
+	verificationPool, holdTasks, vp := getSaturatedExecPool(t)
+	defer vp.Shutdown()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50)
@@ -1505,9 +1499,8 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
 func TestStreamVerifierPostVBlocked(t *testing.T) {
 
 	// prepare the stream verifier
-	execPool := execpool.MakePool(t)
-	backlogQueueSize := 64
-	verificationPool := execpool.MakeBacklog(execPool, backlogQueueSize, execpool.LowPriority, t)
+	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
+	defer verificationPool.Shutdown()
 	errChan := make(chan error)
 	var badSigResultCounter int
 	var goodSigResultCounter int
