@@ -893,7 +893,7 @@ func TestKeysRemoveOnlyAfterStateProofAcceptedLargeIntervals(t *testing.T) {
 	require.Equal(t, len(keys), len(checkedKeys))
 }
 
-func TestWorkerRemovesBuildersAndSignatures(t *testing.T) {
+func TestWorkersBuildersCacheAndSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -920,8 +920,9 @@ func TestWorkerRemovesBuildersAndSignatures(t *testing.T) {
 	}
 	s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2)
 
-	// at this point we expect the number of builders in memory to be bound with buildersCacheLength
 	a.Equal(buildersCacheLength, len(w.builders))
+	verifyBuilderCache(proto, w, a, expectedStateProofs)
+
 	countDB, err := countBuildersInDB(w.db)
 	a.NoError(err)
 	a.Equal(expectedStateProofs, countDB)
@@ -956,6 +957,16 @@ func TestWorkerRemovesBuildersAndSignatures(t *testing.T) {
 	})
 	a.NoError(err)
 	a.Equal(count, len(roundSigs))
+}
+
+func verifyBuilderCache(proto config.ConsensusParams, w *Worker, a *require.Assertions, expectedStateProofs uint64) {
+	for i := uint64(0); i < buildersCacheLength-1; i++ {
+		rnd := proto.StateProofInterval*2 + proto.StateProofInterval*i
+		_, exists := w.builders[basics.Round(rnd)]
+		a.True(exists)
+	}
+	_, exists := w.builders[basics.Round(proto.StateProofInterval*(expectedStateProofs+1))]
+	a.True(exists)
 }
 
 // TestSignatureBroadcastPolicy makes sure that during half of a state proof interval, every online account
@@ -1038,9 +1049,8 @@ func TestWorkerDoesNotLimitBuildersAndSignaturesOnDisk(t *testing.T) {
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
-	s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2)
 
-	for iter := uint64(0); iter < proto.StateProofMaxRecoveryIntervals+9; iter++ {
+	for iter := uint64(0); iter < proto.StateProofMaxRecoveryIntervals+1; iter++ {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval)
 	}
 
@@ -1050,14 +1060,27 @@ func TestWorkerDoesNotLimitBuildersAndSignaturesOnDisk(t *testing.T) {
 	a.NoError(err)
 	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(countDB))
 
-	threshold := onlineBuildersThreshold(&proto, s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound) // first StateProof round (no stateproof txns should be confirmed yet)
+	sigsCount := countAllSignaturesInDB(t, w.db)
+	a.Equal(proto.StateProofMaxRecoveryIntervals+1, sigsCount)
+}
+
+func countAllSignaturesInDB(t *testing.T, accessor db.Accessor) uint64 {
 	var roundSigs map[basics.Round][]pendingSig
-	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		roundSigs, err = getPendingSigs(tx, threshold, s.latest.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval)), false)
-		return
+	err := accessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		query := "SELECT sprnd, signer, sig, from_this_node FROM sigs "
+		rows, err := tx.Query(query)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		roundSigs, err = rowsToPendingSigs(rows)
+		if err != nil {
+			return err
+		}
+		return nil
 	})
-	a.NoError(err)
-	a.Equal(buildersCacheLength, len(roundSigs))
+	require.NoError(t, err)
+	return uint64(len(roundSigs))
 }
 
 type sigOrigin int
@@ -1597,10 +1620,10 @@ func TestWorkerHandleSigCorrupt(t *testing.T) {
 	require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, reply)
 }
 
-func compareBuilders(a *require.Assertions, w *Worker) {
+func verifyPersistedBuilders(a *require.Assertions, w *Worker) {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 
+	defer w.mu.Unlock()
 	for k, v := range w.builders {
 		var builderFromDisk builder
 		a.NoError(
@@ -1656,10 +1679,7 @@ func TestWorkerCacheAndDiskAfterRestart(t *testing.T) {
 	a.NoError(err)
 	a.Equal(buildersCacheLength, len(roundSigs)) // Number of broadcasted sigs should be the same as number of (online) cached builders.
 
-	/*
-		check that after restart the same amount of builders is loaded into memory
-	*/
-
+	// restart worker
 	w.Shutdown()
 	// we make sure that the worker will not be able to create a builder by disabling the mock ledger
 	s.keysForVoters = []account.Participation{}
@@ -1674,7 +1694,7 @@ func TestWorkerCacheAndDiskAfterRestart(t *testing.T) {
 	a.NoError(err)
 	a.Equal(expectedStateProofs, countDB)
 
-	compareBuilders(a, w)
+	verifyPersistedBuilders(a, w)
 }
 
 func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
@@ -1720,10 +1740,7 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 	a.NoError(err)
 	a.Equal(buildersCacheLength, len(roundSigs)) // Number of broadcasted sigs should be the same as number of (online) cached builders.
 
-	/*
-		check that after restart the same amount of builders is loaded into memory
-	*/
-
+	// restart worker
 	w.Shutdown()
 
 	dbs, _ = dbOpenTestRand(t, true, dbRand)
@@ -1739,11 +1756,9 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 	a.Equal(buildersCacheLength, len(w.builders))
 	countDB, err = countBuildersInDB(w.db)
 	a.NoError(err)
-	// TODO do we want this? - loading from disk will not trigger
-	// creation of builders
 	a.Equal(buildersCacheLength, countDB)
 
-	compareBuilders(a, w)
+	verifyPersistedBuilders(a, w)
 }
 
 func TestWorkerLoadsBuilderAndSignatureUponMsgRecv(t *testing.T) {
