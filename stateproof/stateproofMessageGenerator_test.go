@@ -146,8 +146,11 @@ func (s *workerForStateProofMessageTests) addBlockWithStateProofHeaders(ccNextRo
 	}
 
 	s.w.blocks[s.w.latest] = hdr
+
+	s.w.waitersCount[s.w.latest] = 0
 	if s.w.waiters[s.w.latest] != nil {
 		close(s.w.waiters[s.w.latest])
+		s.w.waiters[s.w.latest] = nil
 	}
 }
 
