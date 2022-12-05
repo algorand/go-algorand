@@ -211,7 +211,7 @@ func TestTxHandlerProcessIncomingTxn(t *testing.T) {
 		backlogQueue: make(chan *txBacklogMsg, 1),
 	}
 	stxns, blob := makeRandomTransactions(numTxns)
-	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
+	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: mockSender{}})
 	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
 
 	require.Equal(t, 1, len(handler.backlogQueue))
