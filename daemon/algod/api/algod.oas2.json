@@ -3523,6 +3523,18 @@
             "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
             "type": "integer"
           },
+          "catchpoint-total-kvs": {
+            "description": "The total number of key-values (KVs) included in the current catchpoint",
+            "type": "integer"
+          },
+          "catchpoint-processed-kvs": {
+            "description": "The number of key-values (KVs) from the current catchpoint that have been processed so far as part of the catchup",
+            "type": "integer"
+          },
+          "catchpoint-verified-kvs": {
+            "description": "The number of key-values (KVs) from the current catchpoint that have been verified so far as part of the catchup",
+            "type": "integer"
+          },
           "catchpoint-total-blocks": {
             "description": "The total number of blocks that are required to complete the current catchpoint catchup",
             "type": "integer"

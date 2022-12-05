@@ -39,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -126,17 +127,15 @@ var fileCmd = &cobra.Command{
 				}
 				defer outFile.Close()
 			}
-
 			err = printStateProofVerificationContext("./ledger.tracker.sqlite", outFile)
 			if err != nil {
 				reportErrorf("Unable to print state proof verification database : %v", err)
 			}
-
-			err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, excludedFields.GetSlice())
+			err = printAccountsDatabase("./ledger.tracker.sqlite", true, fileHeader, outFile, excludedFields.GetSlice())
 			if err != nil {
 				reportErrorf("Unable to print account database : %v", err)
 			}
-			err = printKeyValueStore("./ledger.tracker.sqlite", outFile)
+			err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
 			if err != nil {
 				reportErrorf("Unable to print key value store : %v", err)
 			}
@@ -251,7 +250,7 @@ func printDumpingCatchpointProgressLine(progress int, barLength int, dld int64) 
 	fmt.Printf(escapeCursorUp + escapeDeleteLine + outString + "\n")
 }
 
-func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFileHeader, outFile *os.File, excludeFields []string) error {
+func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader ledger.CatchpointFileHeader, outFile *os.File, excludeFields []string) error {
 	lastProgressUpdate := time.Now()
 	progress := uint64(0)
 	defer printDumpingCatchpointProgressLine(0, 0, 0)
@@ -271,6 +270,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 			"Block Header Digest: %s",
 			"Catchpoint: %s",
 			"Total Accounts: %d",
+			"Total KVs: %d",
 			"Total Chunks: %d",
 		}
 		var headerValues = []interface{}{
@@ -280,6 +280,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 			fileHeader.BlockHeaderDigest.String(),
 			fileHeader.Catchpoint,
 			fileHeader.TotalAccounts,
+			fileHeader.TotalKVs,
 			fileHeader.TotalChunks,
 		}
 		// safety check
@@ -321,12 +322,17 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 			totals.RewardsLevel)
 	}
 	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		arw := store.NewAccountsSQLReaderWriter(tx)
+
 		fmt.Printf("\n")
 		printDumpingCatchpointProgressLine(0, 50, 0)
 
 		if fileHeader.Version == 0 {
 			var totals ledgercore.AccountTotals
 			id := ""
+			if stagingTables {
+				id = "catchpointStaging"
+			}
 			row := tx.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
 			err = row.Scan(&totals.Online.Money.Raw, &totals.Online.RewardUnits,
 				&totals.Offline.Money.Raw, &totals.Offline.RewardUnits,
@@ -344,7 +350,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 
 		balancesTable := "accountbase"
 		resourcesTable := "resources"
-		if fileHeader.Version != 0 {
+		if stagingTables {
 			balancesTable = "catchpointbalances"
 			resourcesTable = "catchpointresources"
 		}
@@ -370,7 +376,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 			return nil
 		}
 
-		if fileHeader.Version < ledger.CatchpointFileVersionV6 {
+		if fileHeader.Version != 0 && fileHeader.Version < ledger.CatchpointFileVersionV6 {
 			var rows *sql.Rows
 			rows, err = tx.Query(fmt.Sprintf("SELECT address, data FROM %s order by address", balancesTable))
 			if err != nil {
@@ -417,7 +423,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 				progress++
 				acctCount++
 			}
-			_, err = ledger.LoadAllFullAccounts(context.Background(), tx, balancesTable, resourcesTable, acctCb)
+			_, err = arw.LoadAllFullAccounts(context.Background(), balancesTable, resourcesTable, acctCb)
 			if err != nil {
 				return
 			}
@@ -425,7 +431,6 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 				return fmt.Errorf("expected %d accounts but got only %d", rowsCount, acctCount)
 			}
 		}
-
 		// increase the deadline warning to disable the warning message.
 		_, _ = db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(5*time.Second))
 		return err
@@ -476,7 +481,7 @@ func printKeyValue(writer *bufio.Writer, key, value []byte) {
 	fmt.Fprintf(writer, "%s : %v\n", pretty, base64.StdEncoding.EncodeToString(value))
 }
 
-func printKeyValueStore(databaseName string, outFile *os.File) error {
+func printKeyValueStore(databaseName string, stagingTables bool, outFile *os.File) error {
 	fmt.Printf("\n")
 	printDumpingCatchpointProgressLine(0, 50, 0)
 	lastProgressUpdate := time.Now()
@@ -491,15 +496,20 @@ func printKeyValueStore(databaseName string, outFile *os.File) error {
 		return err
 	}
 
+	kvTable := "kvstore"
+	if stagingTables {
+		kvTable = "catchpointkvstore"
+	}
+
 	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var rowsCount int64
-		err := tx.QueryRow("SELECT count(*) from catchpointkvstore").Scan(&rowsCount)
+		err := tx.QueryRow(fmt.Sprintf("SELECT count(*) from %s", kvTable)).Scan(&rowsCount)
 		if err != nil {
 			return err
 		}
 
 		// ordered to make dumps more "diffable"
-		rows, err := tx.Query("SELECT key, value FROM catchpointkvstore order by key")
+		rows, err := tx.Query(fmt.Sprintf("SELECT key, value FROM %s order by key", kvTable))
 		if err != nil {
 			return err
 		}

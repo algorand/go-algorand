@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -60,7 +61,7 @@ func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]
 		chunk.Balances = make([]encodedBalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
 			var randomAccount encodedBalanceRecordV6
-			accountData := baseAccountData{}
+			accountData := store.BaseAccountData{}
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)
 			// have the first account be the zero address
@@ -296,7 +297,7 @@ func TestBuildMerkleTrie(t *testing.T) {
 	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
 
 	progressCallCount := 0
-	progressNop := func(uint64) {
+	progressNop := func(uint64, uint64) {
 		progressCallCount++
 	}
 
@@ -312,10 +313,9 @@ func TestBuildMerkleTrie(t *testing.T) {
 	require.NoError(t, err, "ResetStagingBalances")
 	err = catchpointAccessor.BuildMerkleTrie(ctx, progressNop)
 	require.NoError(t, err)
-	require.True(t, progressCallCount > 0)
+	require.False(t, progressCallCount > 0)
 
 	// process some data...
-	progressCallCount = 0
 	err = catchpointAccessor.ResetStagingBalances(ctx, true)
 	require.NoError(t, err, "ResetStagingBalances")
 	// TODO: catchpointAccessor.ProcessStagingBalances() like in ledgerFetcher.downloadLedger(cs.ctx, peer, round) like catchup/catchpointService.go which is the real usage of BuildMerkleTrie()
@@ -412,13 +412,9 @@ func TestCatchupAccessorBlockdb(t *testing.T) {
 	}()
 	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
 	ctx := context.Background()
-	progressCallCount := 0
-	progressNop := func(uint64) {
-		progressCallCount++
-	}
 
 	// actual testing...
-	err = catchpointAccessor.BuildMerkleTrie(ctx, progressNop)
+	err = catchpointAccessor.BuildMerkleTrie(ctx, func(uint64, uint64) {})
 	require.Error(t, err)
 }
 
@@ -508,7 +504,7 @@ func TestCatchupAccessorResourceCountMismatch(t *testing.T) {
 	var balances catchpointFileChunkV6
 	balances.Balances = make([]encodedBalanceRecordV6, 1)
 	var randomAccount encodedBalanceRecordV6
-	accountData := baseAccountData{}
+	accountData := store.BaseAccountData{}
 	accountData.MicroAlgos.Raw = crypto.RandUint63()
 	accountData.TotalAppParams = 1
 	randomAccount.AccountData = protocol.Encode(&accountData)
@@ -527,11 +523,11 @@ type testStagingWriter struct {
 	hashes map[[4 + crypto.DigestSize]byte]int
 }
 
-func (w *testStagingWriter) writeBalances(ctx context.Context, balances []normalizedAccountBalance) error {
+func (w *testStagingWriter) writeBalances(ctx context.Context, balances []store.NormalizedAccountBalance) error {
 	return nil
 }
 
-func (w *testStagingWriter) writeCreatables(ctx context.Context, balances []normalizedAccountBalance) error {
+func (w *testStagingWriter) writeCreatables(ctx context.Context, balances []store.NormalizedAccountBalance) error {
 	return nil
 }
 
@@ -539,9 +535,9 @@ func (w *testStagingWriter) writeKVs(ctx context.Context, kvrs []encodedKVRecord
 	return nil
 }
 
-func (w *testStagingWriter) writeHashes(ctx context.Context, balances []normalizedAccountBalance) error {
+func (w *testStagingWriter) writeHashes(ctx context.Context, balances []store.NormalizedAccountBalance) error {
 	for _, bal := range balances {
-		for _, hash := range bal.accountHashes {
+		for _, hash := range bal.AccountHashes {
 			var key [4 + crypto.DigestSize]byte
 			require.Len(w.t, hash, 4+crypto.DigestSize)
 			copy(key[:], hash)
@@ -576,8 +572,8 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 	}
 	catchpointAccessor := makeTestCatchpointCatchupAccessor(&l, log, writer)
 
-	randomSimpleBaseAcct := func() baseAccountData {
-		accountData := baseAccountData{
+	randomSimpleBaseAcct := func() store.BaseAccountData {
+		accountData := store.BaseAccountData{
 			RewardsBase: crypto.RandUint63(),
 			MicroAlgos:  basics.MicroAlgos{Raw: crypto.RandUint63()},
 			AuthAddr:    ledgertesting.RandomAddress(),
@@ -585,7 +581,7 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 		return accountData
 	}
 
-	encodedBalanceRecordFromBase := func(addr basics.Address, base baseAccountData, resources map[uint64]msgp.Raw, more bool) encodedBalanceRecordV6 {
+	encodedBalanceRecordFromBase := func(addr basics.Address, base store.BaseAccountData, resources map[uint64]msgp.Raw, more bool) encodedBalanceRecordV6 {
 		ebr := encodedBalanceRecordV6{
 			Address:              addr,
 			AccountData:          protocol.Encode(&base),
@@ -617,7 +613,7 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 	acctX.TotalAssets = acctXNumRes
 	acctXRes1 := make(map[uint64]msgp.Raw, acctXNumRes/2+1)
 	acctXRes2 := make(map[uint64]msgp.Raw, acctXNumRes/2)
-	emptyRes := resourcesData{ResourceFlags: resourceFlagsEmptyAsset}
+	emptyRes := store.ResourcesData{ResourceFlags: store.ResourceFlagsEmptyAsset}
 	emptyResEnc := protocol.Encode(&emptyRes)
 	for i := 0; i < acctXNumRes; i++ {
 		if i <= acctXNumRes/2 {

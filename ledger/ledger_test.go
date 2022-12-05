@@ -2236,6 +2236,8 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 		tp := trackerDBParams{
 			initAccounts:      l.GenesisAccounts(),
 			initProto:         l.GenesisProtoVersion(),
+			genesisHash:       l.GenesisHash(),
+			fromCatchpoint:    true,
 			catchpointEnabled: l.catchpoint.catchpointEnabled(),
 			dbPathPrefix:      l.catchpoint.dbDirectory,
 			blockDb:           l.blockDBs,
