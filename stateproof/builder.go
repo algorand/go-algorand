@@ -34,6 +34,12 @@ import (
 	"github.com/algorand/go-algorand/stateproof/verify"
 )
 
+func (spw *Worker) OnPrepareCommit(rnd basics.Round) {
+	// TODO: Don't load the builder every time.
+	// TODO: Log errors
+	spw.loadOrCreateBuilder(rnd)
+}
+
 // loadOrCreateBuilderWithSignatures either loads a builder from the DB or creates a new builder.
 // this function fills the builder with all the available signatures
 func (spw *Worker) loadOrCreateBuilderWithSignatures(rnd basics.Round) (builder, error) {
@@ -356,6 +362,8 @@ func (spw *Worker) sigExistsInDB(round basics.Round, account basics.Address) (bo
 }
 
 func (spw *Worker) builder(latest basics.Round) {
+	spw.ledger.RegisterSyncListener(spw)
+
 	// We clock the building of state proofs based on new
 	// blocks.  This is because the acceptable state proof
 	// size grows over time, so that we aim to construct an extremely

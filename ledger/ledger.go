@@ -404,6 +404,12 @@ func (l *Ledger) RegisterBlockListeners(listeners []BlockListener) {
 	l.notifier.register(listeners)
 }
 
+// RegisterSyncListener registers a listener that will be called when a
+// commit is about to cover a round.
+func (l *Ledger) RegisterSyncListener(listener SyncListener) {
+	l.notifier.registerSync(listener)
+}
+
 // notifyCommit informs the trackers that all blocks up to r have been
 // written to disk.  Returns the minimum block number that must be kept
 // in the database.
