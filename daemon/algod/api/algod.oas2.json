@@ -1091,8 +1091,7 @@
         "operationId": "GetReady",
         "responses": {
           "200": {
-            "description": "OK.",
-            "$ref": "#/responses/NodeStatusResponse"
+            "description": "OK."
           },
           "400": {
             "description": "bad request"

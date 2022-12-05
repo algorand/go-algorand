@@ -802,7 +802,7 @@ func (v2 *Handlers) GetReady(ctx echo.Context) error {
 		// node is currently catching up to the requested catchpoint.
 		return serviceUnavailable(ctx, fmt.Errorf("ready failed as the node is catchpoint catching up"), errOperationNotAvailableDuringCatchup, v2.Log)
 	}
-	return v2.GetStatus(ctx)
+	return ctx.NoContent(http.StatusOK)
 }
 
 // WaitForBlock returns the node status after waiting for the given round.
