@@ -143,6 +143,9 @@ func (router *rootRouter) trim(state player) {
 		}
 		router.Rounds = children
 	}
+	for _, c := range router.Rounds {
+		c.trim(state)
+	}
 }
 
 func (router *rootRouter) update(state player, r round, gc bool) {

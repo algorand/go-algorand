@@ -315,6 +315,8 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 }
 
 func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target period) []action {
+	r.r.(*rootRouter).trim(*p)
+
 	actions := p.partitionPolicy(r)
 
 	// this needs to happen before changing player state so the correct old blockAssemblers can be promoted
@@ -353,6 +355,8 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 
 func (p *player) enterRound(r routerHandle, source event, target round) []action {
 	var actions []action
+
+	r.r.(*rootRouter).trim(*p)
 
 	newRoundEvent := source
 	// passing in a cert threshold to the proposalMachine is now ambiguous,
