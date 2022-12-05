@@ -690,6 +690,7 @@ func (sv *StreamVerifier) Start(ctx context.Context) {
 	go sv.batchingLoop()
 }
 
+// WaitForStop waits until the batching loop terminates afer the ctx is cancled
 func (sv *StreamVerifier) WaitForStop() {
 	sv.activeLoopWg.Wait()
 }

@@ -887,12 +887,16 @@ func TestMakeTxHandlerErrors(t *testing.T) {
 	// get the leger return an error for returining the header of its latest round
 }
 
-func TestTxHandlerRealBLWRestart(t *testing.T) {
+func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) {
 	defer func() {
 		// reset the counters
 		transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
 		transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
 		transactionMessagesTxnSigVerificationFailed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigVerificationFailed)
+		transactionMessagesBacklogErr = metrics.MakeCounter(metrics.TransactionMessagesBacklogErr)
+		transactionMessagesAlreadyCommitted = metrics.MakeCounter(metrics.TransactionMessagesAlreadyCommitted)
+		transactionMessagesRemember = metrics.MakeCounter(metrics.TransactionMessagesRemember)
+		transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessagesHandled)
 	}()
 
 	const numUsers = 100
@@ -901,6 +905,7 @@ func TestTxHandlerRealBLWRestart(t *testing.T) {
 	addresses := make([]basics.Address, numUsers)
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
 
+	// avoid printing the warning messages
 	origLevel := logging.Base().GetLevel()
 	defer func() { logging.Base().SetLevel(origLevel) }()
 	logging.Base().SetLevel(logging.Error)
@@ -931,21 +936,19 @@ func TestTxHandlerRealBLWRestart(t *testing.T) {
 	cfg.Archival = true
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(t, err)
+	defer ledger.Ledger.Close()
 
-	l := ledger
-	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
+	tp := pools.MakeTransactionPool(ledger.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	handler, err := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	defer backlogPool.Shutdown()
+	handler, err := MakeTxHandler(tp, ledger, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
 	require.NoError(t, err)
-	// since Start is not called, set the context here
-	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
-	defer handler.ctxCancel()
 
 	// prepare the transactions
-	numTxns := 100
+	numTxns := 3000
 	maxGroupSize := 1
-	tps := 6000
-	invalidRate := float32(0.2)
+	tps := 40000
+	invalidRate := float32(0.5)
 	rateAdjuster := time.Second / time.Duration(tps)
 	signedTransactionGroups, badTxnGroups := makeSignedTxnGroups(numTxns, numUsers, maxGroupSize, invalidRate, addresses, secrets)
 	var encodedSignedTransactionGroups []network.IncomingMessage
@@ -969,38 +972,52 @@ func TestTxHandlerRealBLWRestart(t *testing.T) {
 		time.Sleep(rateAdjuster)
 	}
 	// stop in a loop to test for possible race conditions
-	for x := 0; x < 10; x++ {
+	for x := 0; x < 1000; x++ {
 		handler.Stop()
 		handler.Start()
 	}
 	handler.Stop()
 
+	// send the second half after stopping the txHandler
 	for _, tg := range encodedSignedTransactionGroups[numTxns/2:] {
 		handler.processIncomingTxn(tg)
 		time.Sleep(rateAdjuster)
 	}
 
-	dropped := transactionMessagesDroppedFromBacklog.GetUint64Value()
-	stuckInQueue := uint64(len(handler.backlogQueue))
+	// check that all the incomming transactions are accounted for
+	droppeda, droppedb := getDropped()
+	dropped := droppeda + droppedb
+	stuckInBLQueue := uint64(len(handler.backlogQueue))
 	resultBadTxnCount := transactionMessagesTxnSigVerificationFailed.GetUint64Value()
-	resultGoodTxnCount := uint64(len(tp.PendingTxIDs()))
-return
-	require.Equal(t, numTxns, int(dropped+resultGoodTxnCount+resultBadTxnCount+stuckInQueue))
-	fmt.Println(int(dropped + resultGoodTxnCount + resultBadTxnCount))
+	resultGoodTxnCount := transactionMessagesHandled.GetUint64Value()
+	shutdownDropCount := transactionMessagesBacklogErr.GetUint64Value()
+	require.Equal(t, numTxns, int(dropped+resultGoodTxnCount+resultBadTxnCount+stuckInBLQueue+shutdownDropCount))
 
+	// start the handler again
 	handler.Start()
+	defer handler.Stop()
+
+	// no dpulicates are sent at this point
+	require.Equal(t, 0, int(transactionMessagesAlreadyCommitted.GetUint64Value()))
+
+	// send the same set of transactions again
 	for _, tg := range encodedSignedTransactionGroups {
 		handler.processIncomingTxn(tg)
 		time.Sleep(rateAdjuster)
 	}
 
-	defer handler.Stop()
+	inputGoodTxnCount := len(signedTransactionGroups) - len(badTxnGroups)
 
-	resultBadTxnCount = transactionMessagesTxnSigVerificationFailed.GetUint64Value()
-	//	inputGoodTxnCount := len(signedTransactionGroups) - len(badTxnGroups)
-	//	require.Equal(t, len(badTxnGroups), int(resultBadTxnCount))
-	//require.Equal(t, inputGoodTxnCount, len(tp.PendingTxIDs()))
+	// Wait untill all the expected transactions are in the pool
+	for x := 0; x < 100; x++ {
+		if len(tp.PendingTxGroups()) == inputGoodTxnCount {
+			break
+		}
+		time.Sleep(40 * time.Millisecond)
+	}
 
+	// check the couters and the accepted transactions
+	require.Equal(t, inputGoodTxnCount, len(tp.PendingTxGroups()))
 	for _, txg := range tp.PendingTxGroups() {
 		u, _ := binary.Uvarint(txg[0].Txn.Note)
 		_, inBad := badTxnGroups[u]
