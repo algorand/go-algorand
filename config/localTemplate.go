@@ -207,6 +207,10 @@ type Local struct {
 	// Generate AssembleBlockMetrics telemetry event
 	EnableAssembleStats bool `version[0]:""`
 
+	// Legacy setting that is effectively replaces by EnableAssembleStats.
+	// If either is set to true AssembleBlockMetrics will be enabled
+	EnableProcessBlockStats bool `version[0]:""`
+
 	// SuggestedFeeSlidingWindowSize is number of past blocks that will be considered in computing the suggested fee
 	SuggestedFeeSlidingWindowSize uint32 `version[3]:"50"`
 
