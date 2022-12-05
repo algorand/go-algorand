@@ -1208,7 +1208,7 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	// prepare the stream verifier
 	numOfTxnGroups := len(txnGroups)
 	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
-	_, buffLen := verificationPool.BufferLength()
+	_, buffLen := verificationPool.BufferSize()
 
 	// make sure the pool is shut down and the buffer is full
 	holdTasks := make(chan interface{})
@@ -1384,7 +1384,7 @@ func TestStreamVerifierBlockWatcher(t *testing.T) {
 
 func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan interface{}, execpool.BacklogPool) {
 	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
-	_, buffLen := verificationPool.BufferLength()
+	_, buffLen := verificationPool.BufferSize()
 
 	// make the buffer full to control when the tasks get executed
 	holdTasks := make(chan interface{})

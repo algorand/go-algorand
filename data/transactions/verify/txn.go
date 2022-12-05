@@ -48,9 +48,6 @@ var msigLsigLessOrEqual4 = metrics.MakeCounter(metrics.MetricName{Name: "algod_v
 var msigLsigLessOrEqual10 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_lsig_5_10", Description: "Total transaction scripts with 5-10 msigs"})
 var msigLsigMore10 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_lsig_10", Description: "Total transaction scripts with 11+ msigs"})
 
-// ErrInvalidSignature is the error returned to report that at least one signature is invalid
-var ErrInvalidSignature = errors.New("At least one signature didn't pass verification")
-
 var errSignedTxnHasNoSig = errors.New("signedtxn has no sig")
 var errSignedTxnMaxOneSig = errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
 var errShuttingDownError = errors.New("not verified, verifier is shutting down")
@@ -710,8 +707,8 @@ func (sv *StreamVerifier) batchingLoop() {
 	var added bool
 	var numberOfSigsInCurrent uint64
 	var numberOfTimerResets uint64
-	uelts := make([]*UnverifiedElement, 0)
-	defer func() { sv.cleanup(uelts) }()
+	ue := make([]*UnverifiedElement, 0)
+	defer func() { sv.cleanup(ue) }()
 	for {
 		select {
 		case stx := <-sv.stxnChan:
@@ -734,7 +731,7 @@ func (sv *StreamVerifier) batchingLoop() {
 
 			// add this txngrp to the list of batchable txn groups
 			numberOfSigsInCurrent = numberOfSigsInCurrent + numberOfBatchableSigsInGroup
-			uelts = append(uelts, stx)
+			ue = append(ue, stx)
 			if numberOfSigsInCurrent > txnPerWorksetThreshold {
 				// enough transaction in the batch to efficiently verify
 
@@ -742,20 +739,20 @@ func (sv *StreamVerifier) batchingLoop() {
 					// do not consider adding more txns to this batch.
 					// bypass the exec pool situation and queue anyway
 					// this is to prevent creation of very large batches
-					err := sv.addVerificationTaskToThePoolNow(uelts)
+					err := sv.addVerificationTaskToThePoolNow(ue)
 					if err != nil {
 						return
 					}
 					added = true
 				} else {
-					added, err = sv.canAddVerificationTaskToThePool(uelts)
+					added, err = sv.canAddVerificationTaskToThePool(ue)
 					if err != nil {
 						return
 					}
 				}
 				if added {
 					numberOfSigsInCurrent = 0
-					uelts = make([]*UnverifiedElement, 0)
+					ue = make([]*UnverifiedElement, 0)
 					// starting a new batch. Can wait long, since nothing is blocked
 					timer.Reset(waitForFirstTxnDuration)
 					numberOfTimerResets = 0
@@ -784,17 +781,17 @@ func (sv *StreamVerifier) batchingLoop() {
 				// bypass the exec pool situation and queue anyway
 				// this is to prevent long delays in transaction propagation
 				// at least one transaction here has waited 3 x waitForNextTxnDuration
-				err = sv.addVerificationTaskToThePoolNow(uelts)
+				err = sv.addVerificationTaskToThePoolNow(ue)
 				added = true
 			} else {
-				added, err = sv.canAddVerificationTaskToThePool(uelts)
+				added, err = sv.canAddVerificationTaskToThePool(ue)
 			}
 			if err != nil {
 				return
 			}
 			if added {
 				numberOfSigsInCurrent = 0
-				uelts = make([]*UnverifiedElement, 0)
+				ue = make([]*UnverifiedElement, 0)
 				// starting a new batch. Can wait long, since nothing is blocked
 				timer.Reset(waitForFirstTxnDuration)
 				numberOfTimerResets = 0
@@ -824,16 +821,16 @@ func (sv *StreamVerifier) sendResult(veTxnGroup []transactions.SignedTxn, veBack
 	}
 }
 
-func (sv *StreamVerifier) canAddVerificationTaskToThePool(uelts []*UnverifiedElement) (added bool, err error) {
+func (sv *StreamVerifier) canAddVerificationTaskToThePool(ue []*UnverifiedElement) (added bool, err error) {
 	// if the exec pool buffer is (half) full, can go back and collect
 	// more signatures instead of waiting in the exec pool buffer
 	// more signatures to the batch do not harm performance but introduce latency when delayed (see crypto.BenchmarkBatchVerifierBig)
 
 	// if the buffer is full
-	if l, c := sv.verificationPool.BufferLength(); l == c {
+	if l, c := sv.verificationPool.BufferSize(); l == c {
 		return false, nil
 	}
-	err = sv.addVerificationTaskToThePoolNow(uelts)
+	err = sv.addVerificationTaskToThePoolNow(ue)
 	if err != nil {
 		// An error is returned when the context of the pool expires
 		return false, err
@@ -841,7 +838,7 @@ func (sv *StreamVerifier) canAddVerificationTaskToThePool(uelts []*UnverifiedEle
 	return true, nil
 }
 
-func (sv *StreamVerifier) addVerificationTaskToThePoolNow(uelts []*UnverifiedElement) error {
+func (sv *StreamVerifier) addVerificationTaskToThePoolNow(ue []*UnverifiedElement) error {
 	// if the context is canceled when the task is in the queue, it should be cancled
 	// copy the ctx here so that when the StreamVerifier is started again, and a new context
 	// is created, this task still gets cancled due to the ctx at the time of this task
@@ -849,17 +846,17 @@ func (sv *StreamVerifier) addVerificationTaskToThePoolNow(uelts []*UnverifiedEle
 	function := func(arg interface{}) interface{} {
 		if taskCtx.Err() != nil {
 			// ctx is canceled. the results will be returned
-			sv.cleanup(uelts)
+			sv.cleanup(ue)
 			return nil
 		}
 
-		uelts := arg.([]*UnverifiedElement)
+		ue := arg.([]*UnverifiedElement)
 		batchVerifier := crypto.MakeBatchVerifier()
 
 		bl := makeBatchLoad()
 		// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
 		blockHeader := sv.nbw.getBlockHeader()
-		for _, ue := range uelts {
+		for _, ue := range ue {
 			groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, blockHeader, sv.ledger, batchVerifier)
 			if err != nil {
 				// verification failed, no need to add the sig to the batch, report the error
@@ -911,7 +908,7 @@ func (sv *StreamVerifier) addVerificationTaskToThePoolNow(uelts []*UnverifiedEle
 	}
 
 	// EnqueueBacklog returns an error when the context is canceled
-	err := sv.verificationPool.EnqueueBacklog(sv.ctx, function, uelts, nil)
+	err := sv.verificationPool.EnqueueBacklog(sv.ctx, function, ue, nil)
 	return err
 }
 

@@ -43,7 +43,7 @@ type backlogItemTask struct {
 type BacklogPool interface {
 	ExecutionPool
 	EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg interface{}, out chan interface{}) error
-	BufferLength() (length, capacity int)
+	BufferSize() (length, capacity int)
 }
 
 // MakeBacklog creates a backlog
@@ -95,8 +95,8 @@ func (b *backlog) Enqueue(enqueueCtx context.Context, t ExecFunc, arg interface{
 	}
 }
 
-// BufferLength returns the length and the capacity of the buffer
-func (b *backlog) BufferLength() (length, capacity int) {
+// BufferSize returns the length and the capacity of the buffer
+func (b *backlog) BufferSize() (length, capacity int) {
 	return len(b.buffer), cap(b.buffer)
 }
 
