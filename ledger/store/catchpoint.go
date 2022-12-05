@@ -19,12 +19,16 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
+	"time"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/mattn/go-sqlite3"
 )
 
 // CatchpointState is used to store catchpoint related variables into the catchpointstate table.
@@ -36,6 +40,27 @@ type CatchpointState string
 type UnfinishedCatchpointRecord struct {
 	Round     basics.Round
 	BlockHash crypto.Digest
+}
+
+// NormalizedAccountBalance is a staging area for a catchpoint file account information before it's being added to the catchpoint staging tables.
+type NormalizedAccountBalance struct {
+	// The public key address to which the account belongs.
+	Address basics.Address
+	// accountData contains the baseAccountData for that account.
+	AccountData BaseAccountData
+	// resources is a map, where the key is the creatable index, and the value is the resource data.
+	Resources map[basics.CreatableIndex]ResourcesData
+	// encodedAccountData contains the baseAccountData encoded bytes that are going to be written to the accountbase table.
+	EncodedAccountData []byte
+	// accountHashes contains a list of all the hashes that would need to be added to the merkle trie for that account.
+	// on V6, we could have multiple hashes, since we have separate account/resource hashes.
+	AccountHashes [][]byte
+	// normalizedBalance contains the normalized balance for the account.
+	NormalizedBalance uint64
+	// encodedResources provides the encoded form of the resources
+	EncodedResources map[basics.CreatableIndex][]byte
+	// partial balance indicates that the original account balance was split into multiple parts in catchpoint creation time
+	PartialBalance bool
 }
 
 type catchpointReader struct {
@@ -329,4 +354,256 @@ func (cw *catchpointWriter) DeleteOldCatchpointFirstStageInfo(ctx context.Contex
 		return err
 	}
 	return db.Retry(f)
+}
+
+// WriteCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
+func (cw *catchpointWriter) WriteCatchpointStagingBalances(ctx context.Context, bals []NormalizedAccountBalance) error {
+	selectAcctStmt, err := cw.e.PrepareContext(ctx, "SELECT rowid FROM catchpointbalances WHERE address = ?")
+	if err != nil {
+		return err
+	}
+
+	insertAcctStmt, err := cw.e.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
+	if err != nil {
+		return err
+	}
+
+	insertRscStmt, err := cw.e.PrepareContext(ctx, "INSERT INTO catchpointresources(addrid, aidx, data) VALUES(?, ?, ?)")
+	if err != nil {
+		return err
+	}
+
+	var result sql.Result
+	var rowID int64
+	for _, balance := range bals {
+		result, err = insertAcctStmt.ExecContext(ctx, balance.Address[:], balance.NormalizedBalance, balance.EncodedAccountData)
+		if err == nil {
+			var aff int64
+			aff, err = result.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if aff != 1 {
+				return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+			}
+			rowID, err = result.LastInsertId()
+			if err != nil {
+				return err
+			}
+		} else {
+			var sqliteErr sqlite3.Error
+			if errors.As(err, &sqliteErr) && sqliteErr.Code == sqlite3.ErrConstraint && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
+				// address exists: overflowed account record: find addrid
+				err = selectAcctStmt.QueryRowContext(ctx, balance.Address[:]).Scan(&rowID)
+				if err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		}
+
+		// write resources
+		for aidx := range balance.Resources {
+			var result sql.Result
+			result, err = insertRscStmt.ExecContext(ctx, rowID, aidx, balance.EncodedResources[aidx])
+			if err != nil {
+				return err
+			}
+			var aff int64
+			aff, err = result.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if aff != 1 {
+				return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+			}
+		}
+	}
+	return nil
+}
+
+// WriteCatchpointStagingHashes inserts all the account hashes in the provided array into the catchpoint pending hashes table catchpointpendinghashes.
+func (cw *catchpointWriter) WriteCatchpointStagingHashes(ctx context.Context, bals []NormalizedAccountBalance) error {
+	insertStmt, err := cw.e.PrepareContext(ctx, "INSERT INTO catchpointpendinghashes(data) VALUES(?)")
+	if err != nil {
+		return err
+	}
+
+	for _, balance := range bals {
+		for _, hash := range balance.AccountHashes {
+			result, err := insertStmt.ExecContext(ctx, hash[:])
+			if err != nil {
+				return err
+			}
+
+			aff, err := result.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if aff != 1 {
+				return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+			}
+		}
+	}
+	return nil
+}
+
+// WriteCatchpointStagingCreatable inserts all the creatables in the provided array into the catchpoint asset creator staging table catchpointassetcreators.
+// note that we cannot insert the resources here : in order to insert the resources, we need the rowid of the accountbase entry. This is being inserted by
+// writeCatchpointStagingBalances via a separate go-routine.
+func (cw *catchpointWriter) WriteCatchpointStagingCreatable(ctx context.Context, bals []NormalizedAccountBalance) error {
+	var insertCreatorsStmt *sql.Stmt
+	var err error
+	insertCreatorsStmt, err = cw.e.PrepareContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertCreatorsStmt.Close()
+
+	for _, balance := range bals {
+		for aidx, resData := range balance.Resources {
+			if resData.IsOwning() {
+				// determine if it's an asset
+				if resData.IsAsset() {
+					_, err := insertCreatorsStmt.ExecContext(ctx, aidx, balance.Address[:], basics.AssetCreatable)
+					if err != nil {
+						return err
+					}
+				}
+				// determine if it's an application
+				if resData.IsApp() {
+					_, err := insertCreatorsStmt.ExecContext(ctx, aidx, balance.Address[:], basics.AppCreatable)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// WriteCatchpointStagingKVs inserts all the KVs in the provided array into the
+// catchpoint kvstore staging table catchpointkvstore, and their hashes to the pending
+func (cw *catchpointWriter) WriteCatchpointStagingKVs(ctx context.Context, keys [][]byte, values [][]byte, hashes [][]byte) error {
+	insertKV, err := cw.e.PrepareContext(ctx, "INSERT INTO catchpointkvstore(key, value) VALUES(?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertKV.Close()
+
+	insertHash, err := cw.e.PrepareContext(ctx, "INSERT INTO catchpointpendinghashes(data) VALUES(?)")
+	if err != nil {
+		return err
+	}
+	defer insertHash.Close()
+
+	for i := 0; i < len(keys); i++ {
+		_, err := insertKV.ExecContext(ctx, keys[i], values[i])
+		if err != nil {
+			return err
+		}
+
+		_, err = insertHash.ExecContext(ctx, hashes[i])
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (cw *catchpointWriter) ResetCatchpointStagingBalances(ctx context.Context, newCatchup bool) (err error) {
+	s := []string{
+		"DROP TABLE IF EXISTS catchpointbalances",
+		"DROP TABLE IF EXISTS catchpointassetcreators",
+		"DROP TABLE IF EXISTS catchpointaccounthashes",
+		"DROP TABLE IF EXISTS catchpointpendinghashes",
+		"DROP TABLE IF EXISTS catchpointresources",
+		"DROP TABLE IF EXISTS catchpointkvstore",
+		"DELETE FROM accounttotals where id='catchpointStaging'",
+	}
+
+	if newCatchup {
+		// SQLite has no way to rename an existing index.  So, we need
+		// to cook up a fresh name for the index, which will be kept
+		// around after we rename the table from "catchpointbalances"
+		// to "accountbase".  To construct a unique index name, we
+		// use the current time.
+		// Apply the same logic to
+		now := time.Now().UnixNano()
+		idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", now)
+		idxnameAddress := fmt.Sprintf("accountbase_address_idx_%d", now)
+
+		s = append(s,
+			"CREATE TABLE IF NOT EXISTS catchpointassetcreators (asset integer primary key, creator blob, ctype integer)",
+			"CREATE TABLE IF NOT EXISTS catchpointbalances (addrid INTEGER PRIMARY KEY NOT NULL, address blob NOT NULL, data blob, normalizedonlinebalance INTEGER)",
+			"CREATE TABLE IF NOT EXISTS catchpointpendinghashes (data blob)",
+			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
+			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
+			"CREATE TABLE IF NOT EXISTS catchpointkvstore (key blob primary key, value blob)",
+
+			CreateNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
+			CreateUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
+		)
+	}
+
+	for _, stmt := range s {
+		_, err = cw.e.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// TODO: will make private on the next PR once the migration/creations are moved out of `ledger`.
+
+// CreateUniqueAddressBalanceIndex is sql query to create a uninque index on `address`.
+func CreateUniqueAddressBalanceIndex(idxname string, tablename string) string {
+	return fmt.Sprintf(`CREATE UNIQUE INDEX IF NOT EXISTS %s ON %s (address)`, idxname, tablename)
+}
+
+// CreateNormalizedOnlineBalanceIndex handles accountbase/catchpointbalances tables
+func CreateNormalizedOnlineBalanceIndex(idxname string, tablename string) string {
+	return fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %s
+		ON %s ( normalizedonlinebalance, address, data ) WHERE normalizedonlinebalance>0`, idxname, tablename)
+}
+
+// ApplyCatchpointStagingBalances switches the staged catchpoint catchup tables onto the actual
+// tables and update the correct balance round. This is the final step in switching onto the new catchpoint round.
+func (cw *catchpointWriter) ApplyCatchpointStagingBalances(ctx context.Context, balancesRound basics.Round, merkleRootRound basics.Round) (err error) {
+	stmts := []string{
+		"DROP TABLE IF EXISTS accountbase",
+		"DROP TABLE IF EXISTS assetcreators",
+		"DROP TABLE IF EXISTS accounthashes",
+		"DROP TABLE IF EXISTS resources",
+		"DROP TABLE IF EXISTS kvstore",
+
+		"ALTER TABLE catchpointbalances RENAME TO accountbase",
+		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
+		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
+		"ALTER TABLE catchpointresources RENAME TO resources",
+		"ALTER TABLE catchpointkvstore RENAME TO kvstore",
+	}
+
+	for _, stmt := range stmts {
+		_, err = cw.e.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = cw.e.Exec("INSERT OR REPLACE INTO acctrounds(id, rnd) VALUES('acctbase', ?)", balancesRound)
+	if err != nil {
+		return err
+	}
+
+	_, err = cw.e.Exec("INSERT OR REPLACE INTO acctrounds(id, rnd) VALUES('hashbase', ?)", merkleRootRound)
+	if err != nil {
+		return err
+	}
+
+	return
 }
