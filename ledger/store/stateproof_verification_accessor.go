@@ -10,13 +10,15 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-type stateProofVerificationDbQueries struct {
+type StateProofVerificationDbQueries struct {
 	lookupStateProofVerificationContext *sql.Stmt
 }
 
-func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificationDbQueries, error) {
+// StateProofVerificationInitDbQueries initializes queries that are being used to interact with
+//  the stateproof verification table
+func StateProofVerificationInitDbQueries(r db.Queryable) (*StateProofVerificationDbQueries, error) {
 	var err error
-	qs := &stateProofVerificationDbQueries{}
+	qs := &StateProofVerificationDbQueries{}
 
 	qs.lookupStateProofVerificationContext, err = r.Prepare("SELECT verificationcontext FROM stateproofverification WHERE lastattestedround=?")
 	if err != nil {
@@ -26,9 +28,9 @@ func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificatio
 	return qs, nil
 }
 
-// writeCatchpointStateProofVerificationContext inserts all the state proof verification data in the provided array into
+// WriteCatchpointStateProofVerificationContext inserts all the state proof verification data in the provided array into
 // the catchpointstateproofverification table.
-func writeCatchpointStateProofVerificationContext(ctx context.Context, tx *sql.Tx, verificationContext *ledgercore.StateProofVerificationContext) error {
+func WriteCatchpointStateProofVerificationContext(ctx context.Context, tx *sql.Tx, verificationContext *ledgercore.StateProofVerificationContext) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointstateproofverification(lastattestedround, verificationContext) VALUES(?, ?)")
 
 	if err != nil {
@@ -41,37 +43,12 @@ func writeCatchpointStateProofVerificationContext(ctx context.Context, tx *sql.T
 	return err
 }
 
-func insertStateProofVerificationContext(ctx context.Context, tx *sql.Tx, contexts []verificationCommitContext) error {
-	if len(contexts) == 0 {
-		return nil
-	}
-
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO stateproofverification(lastattestedround, verificationcontext) VALUES(?, ?)")
-
-	if err != nil {
-		return err
-	}
-
-	defer insertStmt.Close()
-
-	for _, commitContext := range contexts {
-		verificationcontext := commitContext.verificationContext
-		_, err = insertStmt.ExecContext(ctx, verificationcontext.LastAttestedRound, protocol.Encode(&verificationcontext))
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func deleteOldStateProofVerificationContext(ctx context.Context, tx *sql.Tx, earliestLastAttestedRound basics.Round) error {
+func DeleteOldStateProofVerificationContext(ctx context.Context, tx *sql.Tx, earliestLastAttestedRound basics.Round) error {
 	_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE lastattestedround < ?", earliestLastAttestedRound)
 	return err
 }
 
-func (qs *stateProofVerificationDbQueries) lookupContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+func (qs *StateProofVerificationDbQueries) LookupContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	verificationContext := ledgercore.StateProofVerificationContext{}
 	queryFunc := func() error {
 		row := qs.lookupStateProofVerificationContext.QueryRow(stateProofLastAttestedRound)
@@ -89,6 +66,13 @@ func (qs *stateProofVerificationDbQueries) lookupContext(stateProofLastAttestedR
 
 	err := db.Retry(queryFunc)
 	return &verificationContext, err
+}
+
+func (qs *StateProofVerificationDbQueries) Close() {
+	if qs.lookupStateProofVerificationContext != nil {
+		qs.lookupStateProofVerificationContext.Close()
+		qs.lookupStateProofVerificationContext = nil
+	}
 }
 
 // stateProofVerificationTable returns all verification data currently committed to the given table.

@@ -342,7 +342,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingStateProofVerificationCont
 
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		for _, data := range decodedData.Data {
-			err = writeCatchpointStateProofVerificationContext(ctx, tx, &data)
+			err = store.WriteCatchpointStateProofVerificationContext(ctx, tx, &data)
 			if err != nil {
 				return err
 			}
@@ -912,7 +912,7 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 			return fmt.Errorf("unable to get accounts totals: %v", err)
 		}
 
-		rawStateProofVerificationContext, err = CatchpointStateProofVerification(ctx, tx)
+		rawStateProofVerificationContext, err = store.CatchpointStateProofVerification(ctx, tx)
 		if err != nil {
 			return fmt.Errorf("unable to get state proof verification data: %v", err)
 		}
