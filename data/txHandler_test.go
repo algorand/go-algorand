@@ -81,6 +81,8 @@ func BenchmarkTxHandlerProcessing(b *testing.B) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
+	cfg.TxBacklogReservedCapacityPerPeer = 1
+	cfg.IncomingConnectionsLimit = 10
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(b, err)
 
@@ -90,7 +92,7 @@ func BenchmarkTxHandlerProcessing(b *testing.B) {
 	cfg.EnableProcessBlockStats = false
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	txHandler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	txHandler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool, cfg)
 
 	makeTxns := func(N int) [][]transactions.SignedTxn {
 		ret := make([][]transactions.SignedTxn, 0, N)
@@ -209,7 +211,7 @@ func TestTxHandlerProcessIncomingTxn(t *testing.T) {
 		backlogQueue: make(chan *txBacklogMsg, 1),
 	}
 	stxns, blob := makeRandomTransactions(numTxns)
-	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: mockSender{}})
+	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
 	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
 
 	require.Equal(t, 1, len(handler.backlogQueue))
@@ -301,13 +303,15 @@ func incomingTxHandlerProcessing(maxGroupSize int, t *testing.T) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
+	cfg.TxBacklogReservedCapacityPerPeer = 1
+	cfg.IncomingConnectionsLimit = 10
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(t, err)
 
 	l := ledger
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool, cfg)
 	// since Start is not called, set the context here
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	defer handler.ctxCancel()
@@ -524,13 +528,15 @@ func runHandlerBenchmark(maxGroupSize int, b *testing.B) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
+	cfg.TxBacklogReservedCapacityPerPeer = 1
+	cfg.IncomingConnectionsLimit = 10
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(b, err)
 
 	l := ledger
 	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool, cfg)
 	// since Start is not called, set the context here
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	defer handler.ctxCancel()
