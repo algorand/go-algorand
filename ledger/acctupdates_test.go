@@ -39,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
+	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -93,7 +94,7 @@ func setupAccts(niter int) []map[basics.Address]basics.AccountData {
 }
 
 func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, l logging.Logger) *mockLedgerForTracker {
-	dbs, fileName := dbOpenTest(t, inMemory)
+	dbs, fileName := storetesting.DbOpenTest(t, inMemory)
 	dbs.Rdb.SetLogger(l)
 	dbs.Wdb.SetLogger(l)
 
@@ -1149,8 +1150,8 @@ func TestListCreatables(t *testing.T) {
 	numElementsPerSegement := 25
 
 	// set up the database
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
