@@ -200,20 +200,21 @@ func (handler *TxHandler) backlogWorker() {
 		// we have no more post verification items. wait for either backlog queue item or post verification item.
 		select {
 		case wi, ok := <-handler.backlogQueue:
-			if err := wi.capguard.Release(); err != nil {
-				logging.Base().Warnf("Failed to release capacity to ElasticRateLimiter: %v", err)
-			}
-			defer wi.capguard.Served()
 			if !ok {
 				return
 			}
+			if err := wi.capguard.Release(); err != nil {
+				logging.Base().Warnf("Failed to release capacity to ElasticRateLimiter: %v", err)
+			}
 			if handler.checkAlreadyCommitted(wi) {
 				transactionMessagesAlreadyCommitted.Inc(nil)
+				wi.capguard.Served()
 				continue
 			}
 
 			// enqueue the task to the verification pool.
 			handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignature, wi, nil)
+			wi.capguard.Served()
 
 		case wi, ok := <-handler.postVerificationQueue:
 			if !ok {
