@@ -142,6 +142,7 @@ func (p *player) handleSpeculationTimeout(r routerHandle, e timeoutEvent) []acti
 	}
 
 	// get the best proposal we have
+	// TODO: if a lower proposal is in-flight still being validated we should wait; in which case set a marker so that player.handleMessageEvent() knows that it has the responsibility of starting the speculative block; BUT we also need to capture non-validation of that in-flight proposal validation, and that's currently just dropped and ignored?
 	re := readLowestEvent{T: readLowestPayload, Round: p.Round, Period: p.Period}
 	re = r.dispatch(*p, re, proposalMachineRound, p.Round, p.Period, 0).(readLowestEvent)
 
@@ -617,6 +618,12 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 
 			a := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
 			actions = append(actions, a)
+		}
+
+		// TODO: this might be the spot where we should start speculative block assembly?
+		if ef.t() == payloadAccepted && false /*(round time > AgreementFilterTimeoutPeriod0/2)*/ {
+			a := p.startSpeculativeBlockAsm(r, e.Input.Proposal.ve)
+			actions = append(actions, a...)
 		}
 
 		// If the payload is valid, check it against any received cert threshold.

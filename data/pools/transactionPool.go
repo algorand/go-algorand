@@ -648,6 +648,7 @@ func (pool *TransactionPool) onNewBlock(block bookkeeping.Block, delta ledgercor
 	defer pool.mu.Unlock()
 	defer pool.cond.Broadcast()
 
+	// TODO: if the actual new block is the guessed new block and speculative assembly is in flight, allow it to finish and use its result
 	if !stopReprocessingAtFirstAsmBlock && pool.cancelSpeculativeAssembly != nil {
 		pool.cancelSpeculativeAssembly()
 	}
