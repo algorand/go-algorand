@@ -51,10 +51,10 @@ func TestElasticRateLimiterCongestionControlled(t *testing.T) {
 	erl := NewElasticRateLimiter(3, 2, cg, nil, nil)
 
 	_, err := erl.ConsumeCapacity(client)
-	assert.Equal(t, 1, len(erl.capacityByClient[client]))
 	// because the ERL gives capacity to a reservation, and then asynchronously drains capacity from the share,
 	// wait a moment before testing the size of the sharedCapacity
 	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, 1, len(erl.capacityByClient[client]))
 	assert.Equal(t, 1, len(erl.sharedCapacity))
 	assert.NoError(t, err)
 
@@ -81,10 +81,10 @@ func TestConsumeReleaseCapacity(t *testing.T) {
 	erl := NewElasticRateLimiter(4, 3, nil, nil, nil)
 
 	c1, err := erl.ConsumeCapacity(client)
-	assert.Equal(t, 2, len(erl.capacityByClient[client]))
 	// because the ERL gives capacity to a reservation, and then asynchronously drains capacity from the share,
 	// wait a moment before testing the size of the sharedCapacity
 	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, 2, len(erl.capacityByClient[client]))
 	assert.Equal(t, 1, len(erl.sharedCapacity))
 	assert.NoError(t, err)
 
