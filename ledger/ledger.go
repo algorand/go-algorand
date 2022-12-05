@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -251,12 +252,12 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	start := time.Now()
 	ledgerVerifygenhashCount.Inc(nil)
 	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		latest, err := blockLatest(tx)
+		latest, err := blockdb.BlockLatest(tx)
 		if err != nil {
 			return err
 		}
 
-		hdr, err := blockGetHdr(tx, latest)
+		hdr, err := blockdb.BlockGetHdr(tx, latest)
 		if err != nil {
 			return err
 		}
@@ -340,7 +341,7 @@ func (l *Ledger) setSynchronousMode(ctx context.Context, synchronousMode db.Sync
 // - creates and populates it with genesis blocks
 // - ensures DB is in good shape for archival mode and resets it if not
 func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchival bool) (err error) {
-	err = blockInit(tx, initBlocks)
+	err = blockdb.BlockInit(tx, initBlocks)
 	if err != nil {
 		err = fmt.Errorf("initBlocksDB.blockInit %v", err)
 		return err
@@ -348,7 +349,7 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 
 	// in archival mode check if DB contains all blocks up to the latest
 	if isArchival {
-		earliest, err := blockEarliest(tx)
+		earliest, err := blockdb.BlockEarliest(tx)
 		if err != nil {
 			err = fmt.Errorf("initBlocksDB.blockEarliest %v", err)
 			return err
@@ -358,12 +359,12 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 		// So reset the DB and init it again
 		if earliest != basics.Round(0) {
 			l.log.Warnf("resetting blocks DB (earliest block is %v)", earliest)
-			err := blockResetDB(tx)
+			err := blockdb.BlockResetDB(tx)
 			if err != nil {
 				err = fmt.Errorf("initBlocksDB.blockResetDB %v", err)
 				return err
 			}
-			err = blockInit(tx, initBlocks)
+			err = blockdb.BlockInit(tx, initBlocks)
 			if err != nil {
 				err = fmt.Errorf("initBlocksDB.blockInit 2 %v", err)
 				return err

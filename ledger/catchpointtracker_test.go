@@ -1362,30 +1362,30 @@ func TestHashContract(t *testing.T) {
 	type testCase struct {
 		genHash          func() []byte
 		expectedHex      string
-		expectedHashKind hashKind
+		expectedHashKind store.HashKind
 	}
 
 	accountCase := func(genHash func() []byte, expectedHex string) testCase {
 		return testCase{
-			genHash, expectedHex, accountHK,
+			genHash, expectedHex, store.AccountHK,
 		}
 	}
 
 	resourceAssetCase := func(genHash func() []byte, expectedHex string) testCase {
 		return testCase{
-			genHash, expectedHex, assetHK,
+			genHash, expectedHex, store.AssetHK,
 		}
 	}
 
 	resourceAppCase := func(genHash func() []byte, expectedHex string) testCase {
 		return testCase{
-			genHash, expectedHex, appHK,
+			genHash, expectedHex, store.AppHK,
 		}
 	}
 
 	kvCase := func(genHash func() []byte, expectedHex string) testCase {
 		return testCase{
-			genHash, expectedHex, kvHK,
+			genHash, expectedHex, store.KvHK,
 		}
 	}
 
@@ -1397,7 +1397,7 @@ func TestHashContract(t *testing.T) {
 				b := store.BaseAccountData{
 					UpdateRound: 1024,
 				}
-				return accountHashBuilderV6(a, &b, protocol.Encode(&b))
+				return store.AccountHashBuilderV6(a, &b, protocol.Encode(&b))
 			},
 			"0000040000c3c39a72c146dc6bcb87b499b63ef730145a8fe4a187c96e9a52f74ef17f54",
 		),
@@ -1406,7 +1406,7 @@ func TestHashContract(t *testing.T) {
 				b := store.BaseAccountData{
 					RewardsBase: 10000,
 				}
-				return accountHashBuilderV6(a, &b, protocol.Encode(&b))
+				return store.AccountHashBuilderV6(a, &b, protocol.Encode(&b))
 			},
 			"0000271000804b58bcc81190c3c7343c1db9c737621ff0438104bdd20a25d12aa4e9b6e5",
 		),
@@ -1422,7 +1422,7 @@ func TestHashContract(t *testing.T) {
 					Manager:   a,
 				}
 
-				bytes, err := resourcesHashBuilderV6(&r, a, 7, 1024, protocol.Encode(&r))
+				bytes, err := store.ResourcesHashBuilderV6(&r, a, 7, 1024, protocol.Encode(&r))
 				require.NoError(t, err)
 				return bytes
 			},
@@ -1440,7 +1440,7 @@ func TestHashContract(t *testing.T) {
 					GlobalStateSchemaNumUint: 2,
 				}
 
-				bytes, err := resourcesHashBuilderV6(&r, a, 7, 1024, protocol.Encode(&r))
+				bytes, err := store.ResourcesHashBuilderV6(&r, a, 7, 1024, protocol.Encode(&r))
 				require.NoError(t, err)
 				return bytes
 			},
@@ -1451,7 +1451,7 @@ func TestHashContract(t *testing.T) {
 	kvs := []testCase{
 		kvCase(
 			func() []byte {
-				return kvHashBuilderV6("sample key", []byte("sample value"))
+				return store.KvHashBuilderV6("sample key", []byte("sample value"))
 			},
 			"0000000003cca3d1a8d7d724daa445c795ad277a7a64b351b4b9407f738841282f9c348b",
 		),
@@ -1461,12 +1461,12 @@ func TestHashContract(t *testing.T) {
 	for i, tc := range allCases {
 		t.Run(fmt.Sprintf("index=%d", i), func(t *testing.T) {
 			h := tc.genHash()
-			require.Equal(t, byte(tc.expectedHashKind), h[hashKindEncodingIndex])
+			require.Equal(t, byte(tc.expectedHashKind), h[store.HashKindEncodingIndex])
 			require.Equal(t, tc.expectedHex, hex.EncodeToString(h))
 		})
 	}
 
-	hasTestCoverageForKind := func(hk hashKind) bool {
+	hasTestCoverageForKind := func(hk store.HashKind) bool {
 		for _, c := range allCases {
 			if c.expectedHashKind == hk {
 				return true
@@ -1476,8 +1476,8 @@ func TestHashContract(t *testing.T) {
 	}
 
 	for i := byte(0); i < 255; i++ {
-		if !strings.HasPrefix(hashKind(i).String(), "hashKind(") {
-			require.True(t, hasTestCoverageForKind(hashKind(i)), fmt.Sprintf("Missing test coverage for hashKind ordinal value = %d", i))
+		if !strings.HasPrefix(store.HashKind(i).String(), "hashKind(") {
+			require.True(t, hasTestCoverageForKind(store.HashKind(i)), fmt.Sprintf("Missing test coverage for hashKind ordinal value = %d", i))
 		}
 	}
 }

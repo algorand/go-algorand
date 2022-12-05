@@ -22,7 +22,6 @@ import (
 	"compress/gzip"
 	"context"
 	"database/sql"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -950,7 +949,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 	for i := 0; i < accountsDeltas.len(); i++ {
 		delta := accountsDeltas.getByIdx(i)
 		if !delta.oldAcct.AccountData.IsEmpty() {
-			deleteHash := accountHashBuilderV6(delta.address, &delta.oldAcct.AccountData, protocol.Encode(&delta.oldAcct.AccountData))
+			deleteHash := store.AccountHashBuilderV6(delta.address, &delta.oldAcct.AccountData, protocol.Encode(&delta.oldAcct.AccountData))
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), delta.address, err)
@@ -963,7 +962,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		}
 
 		if !delta.newAcct.IsEmpty() {
-			addHash := accountHashBuilderV6(delta.address, &delta.newAcct, protocol.Encode(&delta.newAcct))
+			addHash := store.AccountHashBuilderV6(delta.address, &delta.newAcct, protocol.Encode(&delta.newAcct))
 			added, err = ct.balancesTrie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), delta.address, err)
@@ -980,7 +979,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		resDelta := resourcesDeltas.getByIdx(i)
 		addr := resDelta.address
 		if !resDelta.oldResource.Data.IsEmpty() {
-			deleteHash, err := resourcesHashBuilderV6(&resDelta.oldResource.Data, addr, resDelta.oldResource.Aidx, resDelta.oldResource.Data.UpdateRound, protocol.Encode(&resDelta.oldResource.Data))
+			deleteHash, err := store.ResourcesHashBuilderV6(&resDelta.oldResource.Data, addr, resDelta.oldResource.Aidx, resDelta.oldResource.Data.UpdateRound, protocol.Encode(&resDelta.oldResource.Data))
 			if err != nil {
 				return err
 			}
@@ -996,7 +995,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		}
 
 		if !resDelta.newResource.IsEmpty() {
-			addHash, err := resourcesHashBuilderV6(&resDelta.newResource, addr, resDelta.oldResource.Aidx, resDelta.newResource.UpdateRound, protocol.Encode(&resDelta.newResource))
+			addHash, err := store.ResourcesHashBuilderV6(&resDelta.newResource, addr, resDelta.oldResource.Aidx, resDelta.newResource.UpdateRound, protocol.Encode(&resDelta.newResource))
 			if err != nil {
 				return err
 			}
@@ -1021,7 +1020,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 			if mv.data != nil && bytes.Equal(mv.oldData, mv.data) {
 				continue // changed back within the delta span
 			}
-			deleteHash := kvHashBuilderV6(key, mv.oldData)
+			deleteHash := store.KvHashBuilderV6(key, mv.oldData)
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete kv hash '%s' from merkle trie for key %v: %w", hex.EncodeToString(deleteHash), key, err)
@@ -1034,7 +1033,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		}
 
 		if mv.data != nil {
-			addHash := kvHashBuilderV6(key, mv.data)
+			addHash := store.KvHashBuilderV6(key, mv.data)
 			added, err = ct.balancesTrie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("attempted to add duplicate kv hash '%s' from merkle trie for key %v: %w", hex.EncodeToString(addHash), key, err)
@@ -1421,115 +1420,6 @@ func removeSingleCatchpointFileFromDisk(dbDirectory, fileToDelete string) (err e
 	return nil
 }
 
-func hashBufV6(affinity uint64, kind hashKind) []byte {
-	hash := make([]byte, 4+crypto.DigestSize)
-	// write out the lowest 32 bits of the affinity value. This should improve
-	// the caching of the trie by allowing recent updates to be in-cache, and
-	// "older" nodes will be left alone.
-	for i, prefix := 3, affinity; i >= 0; i, prefix = i-1, prefix>>8 {
-		// the following takes the prefix & 255 -> hash[i]
-		hash[i] = byte(prefix)
-	}
-	hash[hashKindEncodingIndex] = byte(kind)
-	return hash
-}
-
-func finishV6(v6hash []byte, prehash []byte) []byte {
-	entryHash := crypto.Hash(prehash)
-	copy(v6hash[5:], entryHash[1:])
-	return v6hash[:]
-
-}
-
-// accountHashBuilderV6 calculates the hash key used for the trie by combining the account address and the account data
-func accountHashBuilderV6(addr basics.Address, accountData *store.BaseAccountData, encodedAccountData []byte) []byte {
-	hashIntPrefix := accountData.UpdateRound
-	if hashIntPrefix == 0 {
-		hashIntPrefix = accountData.RewardsBase
-	}
-	hash := hashBufV6(hashIntPrefix, accountHK)
-	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
-	// recent updated to be in-cache, and "older" nodes will be left alone.
-
-	prehash := make([]byte, crypto.DigestSize+len(encodedAccountData))
-	copy(prehash[:], addr[:])
-	copy(prehash[crypto.DigestSize:], encodedAccountData[:])
-
-	return finishV6(hash, prehash)
-}
-
-// hashKind enumerates the possible data types hashed into a catchpoint merkle
-// trie. Each merkle trie hash includes the hashKind byte at a known-offset.
-// By encoding hashKind at a known-offset, it's possible for hash readers to
-// disambiguate the hashed resource.
-//
-//go:generate stringer -type=hashKind
-type hashKind byte
-
-// Defines known kinds of hashes. Changing an enum ordinal value is a
-// breaking change.
-const (
-	accountHK hashKind = iota
-	assetHK
-	appHK
-	kvHK
-)
-
-// hashKindEncodingIndex defines the []byte offset where the hash kind is
-// encoded.
-const hashKindEncodingIndex = 4
-
-func rdGetCreatableHashKind(rd *store.ResourcesData, a basics.Address, ci basics.CreatableIndex) (hashKind, error) {
-	if rd.IsAsset() {
-		return assetHK, nil
-	} else if rd.IsApp() {
-		return appHK, nil
-	}
-	return accountHK, fmt.Errorf("unknown creatable for addr %s, aidx %d, data %v", a.String(), ci, rd)
-}
-
-// resourcesHashBuilderV6 calculates the hash key used for the trie by combining the creatable's resource data and its index
-func resourcesHashBuilderV6(rd *store.ResourcesData, addr basics.Address, cidx basics.CreatableIndex, updateRound uint64, encodedResourceData []byte) ([]byte, error) {
-	hk, err := rdGetCreatableHashKind(rd, addr, cidx)
-	if err != nil {
-		return nil, err
-	}
-
-	hash := hashBufV6(updateRound, hk)
-
-	prehash := make([]byte, 8+crypto.DigestSize+len(encodedResourceData))
-	copy(prehash[:], addr[:])
-	binary.LittleEndian.PutUint64(prehash[crypto.DigestSize:], uint64(cidx))
-	copy(prehash[crypto.DigestSize+8:], encodedResourceData[:])
-
-	return finishV6(hash, prehash), nil
-}
-
-// kvHashBuilderV6 calculates the hash key used for the trie by combining the key and value
-func kvHashBuilderV6(key string, value []byte) []byte {
-	hash := hashBufV6(0, kvHK)
-
-	prehash := make([]byte, len(key)+len(value))
-	copy(prehash[:], key)
-	copy(prehash[len(key):], value)
-
-	return finishV6(hash, prehash)
-}
-
-// accountHashBuilder calculates the hash key used for the trie by combining the account address and the account data
-func accountHashBuilder(addr basics.Address, accountData basics.AccountData, encodedAccountData []byte) []byte {
-	hash := make([]byte, 4+crypto.DigestSize)
-	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
-	// recent updated to be in-cache, and "older" nodes will be left alone.
-	for i, rewards := 3, accountData.RewardsBase; i >= 0; i, rewards = i-1, rewards>>8 {
-		// the following takes the rewards & 255 -> hash[i]
-		hash[i] = byte(rewards)
-	}
-	entryHash := crypto.Hash(append(addr[:], encodedAccountData[:]...))
-	copy(hash[4:], entryHash[:])
-	return hash[:]
-}
-
 func (ct *catchpointTracker) catchpointEnabled() bool {
 	return ct.catchpointInterval != 0
 }
@@ -1659,7 +1549,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 			if err != nil {
 				return err
 			}
-			hash := kvHashBuilderV6(string(k), v)
+			hash := store.KvHashBuilderV6(string(k), v)
 			trieHashCount++
 			pendingTrieHashes++
 			added, err := trie.Add(hash)
