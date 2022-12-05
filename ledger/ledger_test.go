@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"testing"
@@ -3178,4 +3179,74 @@ func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
 		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
 	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(lastStateProofContextTargetRound),
 		1, proto.StateProofInterval, true, trackerMemory)
+}
+
+func feedBlocksUntilRound(t *testing.T, l *Ledger, prevBlk bookkeeping.Block, targetRound basics.Round) bookkeeping.Block {
+	for prevBlk.Round() < targetRound {
+		prevBlk.BlockHeader.Round++
+		prevBlk.BlockHeader.TimeStamp += 10
+		err := l.AddBlock(prevBlk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+
+	return prevBlk
+}
+
+func TestCatchpointStateProofVerificationTracker(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, initkeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	// This assures us that the first catchpoint file will contain exactly 1 state proof data.
+	cfg.CatchpointInterval = proto.StateProofInterval + proto.MaxBalLookback
+	cfg.MaxAcctLookback = 4
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+
+	firstStateProofDataConfirmedRound := proto.StateProofInterval
+	firstStateProofDataTargetRound := firstStateProofDataConfirmedRound + proto.StateProofInterval
+
+	blk := genesisInitState.Block
+	var sp bookkeeping.StateProofTrackingData
+	sp.StateProofNextRound = basics.Round(firstStateProofDataTargetRound)
+	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+		protocol.StateProofBasic: sp,
+	}
+
+	// Feeding blocks until we can know for sure we have at least one catchpoint written.
+	blk = feedBlocksUntilRound(t, l, blk, basics.Round(cfg.CatchpointInterval*2))
+	l.WaitForCommit(basics.Round(cfg.CatchpointInterval * 2))
+
+	numTrackedDataFirstCatchpoint := (cfg.CatchpointInterval - proto.MaxBalLookback) / proto.StateProofInterval
+
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		numTrackedDataFirstCatchpoint, proto.StateProofInterval, true, any)
+	l.Close()
+
+	l, err = OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	defer l.Close()
+	require.NoError(t, err)
+
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		numTrackedDataFirstCatchpoint, proto.StateProofInterval, false, any)
+
+	catchpointAccessor, accessorProgress := initializeTestCatchupAccessor(t, l, uint64(len(initkeys)))
+
+	relCatchpointFilePath := filepath.Join(CatchpointDirName, makeCatchpointFilePath(basics.Round(cfg.CatchpointInterval)))
+	catchpointData := readCatchpointFile(t, relCatchpointFilePath)
+
+	err = catchpointAccessor.ProcessStagingBalances(context.Background(), catchpointData[1].headerName, catchpointData[1].data, &accessorProgress)
+	require.NoError(t, err)
+	err = catchpointAccessor.CompleteCatchup(context.Background())
+	require.NoError(t, err)
+
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+		numTrackedDataFirstCatchpoint, proto.StateProofInterval, true, any)
 }

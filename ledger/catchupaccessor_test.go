@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"context"
+	"database/sql"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -99,7 +100,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 
 	accountsCount := uint64(b.N)
 	fileHeader := CatchpointFileHeader{
-		Version:           CatchpointFileVersionV6,
+		Version:           CatchpointFileVersionV7,
 		BalancesRound:     basics.Round(0),
 		BlocksRound:       basics.Round(0),
 		Totals:            ledgercore.AccountTotals{},
@@ -144,6 +145,83 @@ func BenchmarkRestoringFromCatchpointFile(b *testing.B) {
 			benchmarkRestoringFromCatchpointFileHelper(b)
 		})
 	}
+}
+
+func initializeTestCatchupAccessor(t *testing.T, l *Ledger, accountsCount uint64) (CatchpointCatchupAccessor, CatchpointCatchupAccessorProgress) {
+	log := logging.TestingLog(t)
+	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
+
+	var progress CatchpointCatchupAccessorProgress
+
+	ctx := context.Background()
+
+	// We do this to create catchpoint staging tables.
+	err := catchpointAccessor.ResetStagingBalances(ctx, true)
+	require.NoError(t, err)
+
+	// We do this to initialize the catchpointblocks table. Needed to be able to use CompleteCatchup.
+	err = catchpointAccessor.StoreFirstBlock(ctx, &bookkeeping.Block{})
+	require.NoError(t, err)
+
+	// We do this to initialize the accounttotals table. Needed to be able to use CompleteCatchup.
+	fileHeader := CatchpointFileHeader{
+		Version:           CatchpointFileVersionV7,
+		BalancesRound:     basics.Round(0),
+		BlocksRound:       basics.Round(0),
+		Totals:            ledgercore.AccountTotals{},
+		TotalAccounts:     accountsCount,
+		TotalChunks:       (accountsCount + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk,
+		Catchpoint:        "",
+		BlockHeaderDigest: crypto.Digest{},
+	}
+	encodedFileHeader := protocol.Encode(&fileHeader)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+
+	return catchpointAccessor, progress
+}
+
+func verifyStateProofVerificationCatchupAccessor(t *testing.T, targetData []ledgercore.StateProofVerificationContext) {
+	// setup boilerplate
+	log := logging.TestingLog(t)
+	dbBaseFileName := t.Name()
+	const inMem = true
+	genesisInitState, initkeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer func() {
+		l.Close()
+	}()
+
+	catchpointAccessor, progress := initializeTestCatchupAccessor(t, l, uint64(len(initkeys)))
+
+	require.NoError(t, err)
+
+	wrappedData := catchpointStateProofVerificationContext{
+		Data: targetData,
+	}
+	blob := protocol.Encode(&wrappedData)
+
+	ctx := context.Background()
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "stateProofVerificationContext.msgpack", blob, &progress)
+	require.NoError(t, err)
+
+	err = catchpointAccessor.CompleteCatchup(ctx)
+	require.NoError(t, err)
+
+	var trackedStateProofVerificationContext []ledgercore.StateProofVerificationContext
+	err = l.trackerDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		dbData, err := StateProofVerification(ctx, tx)
+		trackedStateProofVerificationContext = dbData
+		return err
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, len(targetData), len(trackedStateProofVerificationContext))
+	for index, data := range targetData {
+		require.Equal(t, data, trackedStateProofVerificationContext[index])
+	}
+	require.NoError(t, err)
 }
 
 func TestCatchupAccessorFoo(t *testing.T) {
@@ -255,7 +333,7 @@ func TestBuildMerkleTrie(t *testing.T) {
 	// content.msgpack from this:
 	accountsCount := uint64(len(initKeys))
 	fileHeader := CatchpointFileHeader{
-		Version:           CatchpointFileVersionV6,
+		Version:           CatchpointFileVersionV7,
 		BalancesRound:     basics.Round(0),
 		BlocksRound:       basics.Round(0),
 		Totals:            ledgercore.AccountTotals{},
@@ -291,6 +369,24 @@ func TestBuildMerkleTrie(t *testing.T) {
 	blockRound, err := catchpointAccessor.GetCatchupBlockRound(ctx)
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(0), blockRound)
+}
+
+func TestCatchupAccessorStateProofVerificationContext(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	verificationContext := ledgercore.StateProofVerificationContext{
+		LastAttestedRound: 120,
+		VotersCommitment:  nil,
+		OnlineTotalWeight: basics.MicroAlgos{Raw: 100},
+	}
+
+	verifyStateProofVerificationCatchupAccessor(t, []ledgercore.StateProofVerificationContext{verificationContext})
+}
+
+func TestCatchupAccessorEmptyStateProofVerificationContext(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	verifyStateProofVerificationCatchupAccessor(t, []ledgercore.StateProofVerificationContext{})
 }
 
 // blockdb.go code
@@ -396,7 +492,7 @@ func TestCatchupAccessorResourceCountMismatch(t *testing.T) {
 
 	// content.msgpack from this:
 	fileHeader := CatchpointFileHeader{
-		Version:           CatchpointFileVersionV6,
+		Version:           CatchpointFileVersionV7,
 		BalancesRound:     basics.Round(0),
 		BlocksRound:       basics.Round(0),
 		Totals:            ledgercore.AccountTotals{},
@@ -506,7 +602,7 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 		TotalAccounts: numAccounts,
 		TotalChunks:   2,
 		SeenHeader:    true,
-		Version:       CatchpointFileVersionV6,
+		Version:       CatchpointFileVersionV7,
 	}
 
 	// create some walking gentlemen

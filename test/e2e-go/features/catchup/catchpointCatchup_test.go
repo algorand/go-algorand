@@ -30,7 +30,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -82,30 +81,6 @@ func (ec *nodeExitErrorCollector) Print() {
 	}
 }
 
-// awaitCatchpointCreation attempts catchpoint retrieval with retries when the catchpoint is not yet available.
-func awaitCatchpointCreation(client algodclient.RestClient, fixture *fixtures.RestClientFixture, roundWaitCount uint8) (model.NodeStatusResponse, error) {
-	s, err := client.Status()
-	if err != nil {
-		return model.NodeStatusResponse{}, err
-	}
-
-	if len(*s.LastCatchpoint) > 0 {
-		return s, nil
-
-	}
-
-	if roundWaitCount-1 > 0 {
-		err = fixture.ClientWaitForRound(client, s.LastRound+1, 10*time.Second)
-		if err != nil {
-			return model.NodeStatusResponse{}, err
-		}
-
-		return awaitCatchpointCreation(client, fixture, roundWaitCount-1)
-	}
-
-	return model.NodeStatusResponse{}, fmt.Errorf("No catchpoint exists")
-}
-
 func TestBasicCatchpointCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -128,6 +103,10 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	const consensusCatchpointCatchupTestProtocol = protocol.ConsensusVersion("catchpointtestingprotocol")
 	catchpointCatchupProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
 	catchpointCatchupProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// We would like state proof verification data to be present in the catchpoint.
+	catchpointCatchupProtocol.StateProofInterval = 10
+
 	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
 	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
 	catchpointCatchupProtocol.SeedLookback = 2
@@ -137,8 +116,8 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
 	catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
 
-	if runtime.GOARCH == "amd64" {
-		// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
+	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+		// amd64 and arm64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
 		catchpointCatchupProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
 		catchpointCatchupProtocol.AgreementFilterTimeout = 1 * time.Second
 	}
@@ -334,8 +313,8 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 			catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
 			catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
 
-			if runtime.GOARCH == "amd64" {
-				// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
+			if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+				// amd64 and arm64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
 				catchpointCatchupProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
 				catchpointCatchupProtocol.AgreementFilterTimeout = 1 * time.Second
 			}

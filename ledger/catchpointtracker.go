@@ -68,10 +68,13 @@ const (
 
 	// CatchpointFileVersionV5 is the catchpoint file version that was used when the database schema was V0-V5.
 	CatchpointFileVersionV5 = uint64(0200)
-	// CatchpointFileVersionV6 is the catchpoint file version that is matching database schema V6.
+	// CatchpointFileVersionV6 is the catchpoint file version that is matching database schema V6-V8.
 	// This version introduced accounts and resources separation. The first catchpoint
 	// round of this version is >= `reenableCatchpointsRound`.
 	CatchpointFileVersionV6 = uint64(0201)
+	// CatchpointFileVersionV7 is the catchpoint file version that is matching database schema V9.
+	// This version introduced state proof verification data and versioning for CatchpointLabel.
+	CatchpointFileVersionV7 = uint64(0202)
 )
 
 // TrieMemoryConfig is the memory configuration setup used for the merkle trie.
@@ -213,6 +216,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 	var totalAccounts uint64
 	var totalChunks uint64
 	var biggestChunkLen uint64
+	var stateProofVerificationHash crypto.Digest
 
 	if ct.enableGeneratingCatchpointFiles {
 		// Generate the catchpoint file. This is done inline so that it will
@@ -220,7 +224,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		// expects that the accounts data would not be modified in the
 		// background during its execution.
 		var err error
-		totalAccounts, totalChunks, biggestChunkLen, err = ct.generateCatchpointData(
+		totalAccounts, totalChunks, biggestChunkLen, stateProofVerificationHash, err = ct.generateCatchpointData(
 			ctx, dbRound, updatingBalancesDuration)
 		atomic.StoreInt32(&ct.catchpointDataWriting, 0)
 		if err != nil {
@@ -229,7 +233,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 	}
 
 	f := func(ctx context.Context, tx *sql.Tx) error {
-		err := ct.recordFirstStageInfo(ctx, tx, dbRound, totalAccounts, totalChunks, biggestChunkLen)
+		err := ct.recordFirstStageInfo(ctx, tx, dbRound, totalAccounts, totalChunks, biggestChunkLen, stateProofVerificationHash)
 		if err != nil {
 			return err
 		}
@@ -720,8 +724,8 @@ func repackCatchpoint(ctx context.Context, header CatchpointFileHeader, biggestC
 // the unfinished catchpoint record.
 func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound basics.Round, round basics.Round, dataInfo catchpointFirstStageInfo, blockHash crypto.Digest) error {
 	startTime := time.Now()
-	label := ledgercore.MakeCatchpointLabel(
-		round, blockHash, dataInfo.TrieBalancesHash, dataInfo.Totals).String()
+	labelMaker := ledgercore.MakeCatchpointLabelMakerCurrent(round, &blockHash, &dataInfo.TrieBalancesHash, dataInfo.Totals, &dataInfo.StateProofVerificationHash)
+	label := ledgercore.MakeLabel(labelMaker)
 
 	ct.log.Infof(
 		"creating catchpoint round: %d accountsRound: %d label: %s",
@@ -756,7 +760,7 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 
 	// Make a catchpoint file.
 	header := CatchpointFileHeader{
-		Version:           CatchpointFileVersionV6,
+		Version:           CatchpointFileVersionV7,
 		BalancesRound:     accountsRound,
 		BlocksRound:       round,
 		Totals:            dataInfo.Totals,
@@ -1081,7 +1085,15 @@ func (ct *catchpointTracker) IsWritingCatchpointDataFile() bool {
 }
 
 // Generates a (first stage) catchpoint data file.
-func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, updatingBalancesDuration time.Duration) (uint64 /*totalAccounts*/, uint64 /*totalChunks*/, uint64 /*biggestChunkLen*/, error) {
+// The file is built in the following order:
+// - Catchpoint file header (named content.msgpack). The header is generated and appended to the file at the end of the
+// 	 second stage of catchpoint generation.
+// - State proof verification data chunk (named stateProofVerificationContext.msgpack).
+// - Balance and KV chunk (named balances.x.msgpack).
+// 	 ...
+// - Balance and KV chunk (named balances.x.msgpack).
+func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, updatingBalancesDuration time.Duration) (
+	uint64 /*totalAccounts*/, uint64 /*totalChunks*/, uint64 /*biggestChunkLen*/, crypto.Digest /*stateProofVerificationContextHash*/, error) {
 	ct.log.Debugf("catchpointTracker.generateCatchpointData() writing catchpoint accounts for round %d", accountsRound)
 
 	startTime := time.Now()
@@ -1105,6 +1117,8 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	}
 
 	var catchpointWriter *catchpointWriter
+	var stateProofVerificationContextHash crypto.Digest
+
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
 	err := ct.dbs.Rdb.AtomicContext(ctx, func(dbCtx context.Context, tx *sql.Tx) (err error) {
@@ -1112,6 +1126,12 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 		if err != nil {
 			return
 		}
+
+		stateProofVerificationContextHash, err = catchpointWriter.WriteStateProofVerificationContext()
+		if err != nil {
+			return
+		}
+
 		for more {
 			stepCtx, stepCancelFunction := context.WithTimeout(dbCtx, chunkExecutionDuration)
 			writeStepStartTime := time.Now()
@@ -1162,7 +1182,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	ledgerGeneratecatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		ct.log.Warnf("catchpointTracker.generateCatchpointData() %v", err)
-		return 0, 0, 0, err
+		return 0, 0, 0, crypto.Digest{}, err
 	}
 
 	catchpointGenerationStats.FileSize = uint64(catchpointWriter.writtenBytes)
@@ -1178,10 +1198,11 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 		With("catchpointLabel", catchpointGenerationStats.CatchpointLabel).
 		Infof("Catchpoint data file was generated")
 
-	return catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, nil
+	return catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, stateProofVerificationContextHash, nil
 }
 
-func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.Tx, accountsRound basics.Round, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64) error {
+func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.Tx, accountsRound basics.Round,
+	totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64, stateProofVerificationHash crypto.Digest) error {
 	accountTotals, err := accountsTotals(ctx, tx, false)
 	if err != nil {
 		return err
@@ -1208,11 +1229,12 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.T
 	}
 
 	info := catchpointFirstStageInfo{
-		Totals:           accountTotals,
-		TotalAccounts:    totalAccounts,
-		TotalChunks:      totalChunks,
-		BiggestChunkLen:  biggestChunkLen,
-		TrieBalancesHash: trieBalancesHash,
+		Totals:                     accountTotals,
+		TotalAccounts:              totalAccounts,
+		TotalChunks:                totalChunks,
+		BiggestChunkLen:            biggestChunkLen,
+		TrieBalancesHash:           trieBalancesHash,
+		StateProofVerificationHash: stateProofVerificationHash,
 	}
 	return insertOrReplaceCatchpointFirstStageInfo(ctx, tx, accountsRound, &info)
 }

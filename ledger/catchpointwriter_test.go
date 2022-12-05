@@ -34,6 +34,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -47,6 +48,254 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/msgp/msgp"
 )
+
+type decodedCatchpointChunkData struct {
+	headerName string
+	data       []byte
+}
+
+func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
+	er := encodedBalanceRecordV5{}
+	hash := crypto.Hash([]byte{1, 2, 3})
+	copy(er.Address[:], hash[:])
+	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
+	vrfSecrets := crypto.GenerateVRFSecrets()
+	var stateProofID merklesignature.Verifier
+	crypto.RandBytes(stateProofID.Commitment[:])
+
+	ad := basics.AccountData{
+		Status:             basics.NotParticipating,
+		MicroAlgos:         basics.MicroAlgos{},
+		RewardsBase:        0x1234123412341234,
+		RewardedMicroAlgos: basics.MicroAlgos{},
+		VoteID:             oneTimeSecrets.OneTimeSignatureVerifier,
+		SelectionID:        vrfSecrets.PK,
+		StateProofID:       stateProofID.Commitment,
+		VoteFirstValid:     basics.Round(0x1234123412341234),
+		VoteLastValid:      basics.Round(0x1234123412341234),
+		VoteKeyDilution:    0x1234123412341234,
+		AssetParams:        make(map[basics.AssetIndex]basics.AssetParams),
+		Assets:             make(map[basics.AssetIndex]basics.AssetHolding),
+		AuthAddr:           basics.Address(crypto.Hash([]byte{1, 2, 3, 4})),
+	}
+	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	maxAssetsPerAccount := currentConsensusParams.MaxAssetsPerAccount
+	// if the number of supported assets is unlimited, create only 1000 for the purpose of this unit test.
+	if maxAssetsPerAccount == 0 {
+		maxAssetsPerAccount = config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount
+	}
+	for assetCreatorAssets := 0; assetCreatorAssets < maxAssetsPerAccount; assetCreatorAssets++ {
+		ap := basics.AssetParams{
+			Total:         0x1234123412341234,
+			Decimals:      0x12341234,
+			DefaultFrozen: true,
+			UnitName:      makeString(currentConsensusParams.MaxAssetUnitNameBytes),
+			AssetName:     makeString(currentConsensusParams.MaxAssetNameBytes),
+			URL:           makeString(currentConsensusParams.MaxAssetURLBytes),
+			Manager:       basics.Address(crypto.Hash([]byte{1, byte(assetCreatorAssets)})),
+			Reserve:       basics.Address(crypto.Hash([]byte{2, byte(assetCreatorAssets)})),
+			Freeze:        basics.Address(crypto.Hash([]byte{3, byte(assetCreatorAssets)})),
+			Clawback:      basics.Address(crypto.Hash([]byte{4, byte(assetCreatorAssets)})),
+		}
+		copy(ap.MetadataHash[:], makeString(32))
+		ad.AssetParams[basics.AssetIndex(0x1234123412341234-assetCreatorAssets)] = ap
+	}
+
+	for assetHolderAssets := 0; assetHolderAssets < maxAssetsPerAccount; assetHolderAssets++ {
+		ah := basics.AssetHolding{
+			Amount: 0x1234123412341234,
+			Frozen: true,
+		}
+		ad.Assets[basics.AssetIndex(0x1234123412341234-assetHolderAssets)] = ah
+	}
+
+	maxApps := currentConsensusParams.MaxAppsCreated
+	maxOptIns := currentConsensusParams.MaxAppsOptedIn
+	if maxApps == 0 {
+		maxApps = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
+	}
+	if maxOptIns == 0 {
+		maxOptIns = config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
+	}
+	maxKeyBytesLen := currentConsensusParams.MaxAppKeyLen
+	maxSumBytesLen := currentConsensusParams.MaxAppSumKeyValueLens
+
+	genKey := func() (string, basics.TealValue) {
+		len := int(crypto.RandUint64() % uint64(maxKeyBytesLen))
+		if len == 0 {
+			return "k", basics.TealValue{Type: basics.TealUintType, Uint: 0}
+		}
+		key := make([]byte, maxSumBytesLen-len)
+		crypto.RandBytes(key)
+		return string(key), basics.TealValue{Type: basics.TealUintType, Bytes: string(key)}
+	}
+	startIndex := crypto.RandUint64() % 100000
+	ad.AppParams = make(map[basics.AppIndex]basics.AppParams, maxApps)
+	for aidx := startIndex; aidx < startIndex+uint64(maxApps); aidx++ {
+		ap := basics.AppParams{}
+		ap.GlobalState = make(basics.TealKeyValue)
+		for i := uint64(0); i < currentConsensusParams.MaxGlobalSchemaEntries/4; i++ {
+			k, v := genKey()
+			ap.GlobalState[k] = v
+		}
+		ad.AppParams[basics.AppIndex(aidx)] = ap
+		optins := maxApps
+		if maxApps > maxOptIns {
+			optins = maxOptIns
+		}
+		ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, optins)
+		keys := currentConsensusParams.MaxLocalSchemaEntries / 4
+		lkv := make(basics.TealKeyValue, keys)
+		for i := 0; i < optins; i++ {
+			for j := uint64(0); j < keys; j++ {
+				k, v := genKey()
+				lkv[k] = v
+			}
+		}
+		ad.AppLocalStates[basics.AppIndex(aidx)] = basics.AppLocalState{KeyValue: lkv}
+	}
+
+	encodedAd := ad.MarshalMsg(nil)
+	er.AccountData = encodedAd
+	return er
+}
+
+func readCatchpointContent(t *testing.T, tarReader *tar.Reader) []decodedCatchpointChunkData {
+	result := make([]decodedCatchpointChunkData, 0)
+	for {
+		header, err := tarReader.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+			break
+		}
+		data := make([]byte, header.Size)
+		readComplete := int64(0)
+
+		for readComplete < header.Size {
+			bytesRead, err := tarReader.Read(data[readComplete:])
+			readComplete += int64(bytesRead)
+			if err != nil {
+				if err == io.EOF {
+					if readComplete == header.Size {
+						break
+					}
+					require.NoError(t, err)
+				}
+				break
+			}
+		}
+
+		result = append(result, decodedCatchpointChunkData{headerName: header.Name, data: data})
+	}
+
+	return result
+}
+
+func readCatchpointDataFile(t *testing.T, catchpointDataPath string) []decodedCatchpointChunkData {
+	fileContent, err := os.ReadFile(catchpointDataPath)
+	require.NoError(t, err)
+
+	compressorReader, err := catchpointStage1Decoder(bytes.NewBuffer(fileContent))
+	require.NoError(t, err)
+
+	tarReader := tar.NewReader(compressorReader)
+	return readCatchpointContent(t, tarReader)
+}
+
+func readCatchpointFile(t *testing.T, catchpointPath string) []decodedCatchpointChunkData {
+	fileContent, err := os.ReadFile(catchpointPath)
+	require.NoError(t, err)
+
+	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
+	require.NoError(t, err)
+	defer gzipReader.Close()
+
+	tarReader := tar.NewReader(gzipReader)
+	return readCatchpointContent(t, tarReader)
+}
+
+func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.StateProofVerificationContext) {
+	// create new protocol version, which has lower lookback
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBasicCatchpointWriter")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.CatchpointLookback = 32
+	config.Consensus[testProtocolVersion] = protoParams
+	temporaryDirectory := t.TempDir()
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+	accts := ledgertesting.RandomAccounts(300, false)
+
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, []map[basics.Address]basics.AccountData{accts})
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	conf.Archival = true
+	au, _ := newAcctUpdates(t, ml, conf)
+	err := au.loadFromDisk(ml, 0)
+	require.NoError(t, err)
+	au.close()
+	fileName := filepath.Join(temporaryDirectory, "15.data")
+
+	mockCommitData := make([]verificationCommitContext, 0)
+	for _, element := range data {
+		mockCommitData = append(mockCommitData, verificationCommitContext{verificationContext: element})
+	}
+
+	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return insertStateProofVerificationContext(ctx, tx, mockCommitData)
+	})
+
+	require.NoError(t, err)
+
+	readDb := ml.trackerDB().Rdb
+	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		writer, err := makeCatchpointWriter(context.Background(), fileName, tx, ResourcesPerCatchpointFileChunk)
+		if err != nil {
+			return err
+		}
+		_, err = writer.WriteStateProofVerificationContext()
+		if err != nil {
+			return err
+		}
+		for {
+			more, err := writer.WriteStep(context.Background())
+			require.NoError(t, err)
+			if !more {
+				break
+			}
+		}
+		return
+	})
+
+	catchpointData := readCatchpointDataFile(t, fileName)
+	require.Equal(t, "stateProofVerificationContext.msgpack", catchpointData[0].headerName)
+	var wrappedData catchpointStateProofVerificationContext
+	err = protocol.Decode(catchpointData[0].data, &wrappedData)
+	require.NoError(t, err)
+
+	for index, verificationContext := range wrappedData.Data {
+		require.Equal(t, data[index], verificationContext)
+	}
+}
+
+func TestEncodedBalanceRecordEncoding(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	er := makeTestEncodedBalanceRecordV5(t)
+	encodedBr := er.MarshalMsg(nil)
+
+	var er2 encodedBalanceRecordV5
+	_, err := er2.UnmarshalMsg(encodedBr)
+	require.NoError(t, err)
+
+	require.Equal(t, er, er2)
+}
 
 func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -133,6 +382,10 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		if err != nil {
 			return err
 		}
+		_, err = writer.WriteStateProofVerificationContext()
+		if err != nil {
+			return err
+		}
 		for {
 			more, err := writer.WriteStep(context.Background())
 			require.NoError(t, err)
@@ -142,45 +395,14 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		}
 		return
 	})
-	require.NoError(t, err)
 
-	// load the file from disk.
-	fileContent, err := os.ReadFile(fileName)
-	require.NoError(t, err)
-	compressorReader, err := catchpointStage1Decoder(bytes.NewBuffer(fileContent))
-	require.NoError(t, err)
-	defer compressorReader.Close()
-	tarReader := tar.NewReader(compressorReader)
-
-	header, err := tarReader.Next()
-	require.NoError(t, err)
-
-	balancesBlockBytes := make([]byte, header.Size)
-	readComplete := int64(0)
-
-	for readComplete < header.Size {
-		bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
-		readComplete += int64(bytesRead)
-		if err != nil {
-			if err == io.EOF {
-				if readComplete == header.Size {
-					break
-				}
-				require.NoError(t, err)
-			}
-			break
-		}
-	}
-
-	require.Equal(t, "balances.1.msgpack", header.Name)
+	catchpointContent := readCatchpointDataFile(t, fileName)
+	require.Equal(t, "balances.1.msgpack", catchpointContent[1].headerName)
 
 	var chunk catchpointFileChunkV6
-	err = protocol.Decode(balancesBlockBytes, &chunk)
+	err = protocol.Decode(catchpointContent[1].data, &chunk)
 	require.NoError(t, err)
 	require.Equal(t, uint64(len(accts)), uint64(len(chunk.Balances)))
-
-	_, err = tarReader.Next()
-	require.Equal(t, io.EOF, err)
 }
 
 func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepath string, maxResourcesPerChunk int) CatchpointFileHeader {
@@ -195,6 +417,10 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 
 	err := rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		writer, err := makeCatchpointWriter(context.Background(), datapath, tx, maxResourcesPerChunk)
+		if err != nil {
+			return err
+		}
+		_, err = writer.WriteStateProofVerificationContext()
 		if err != nil {
 			return err
 		}
@@ -220,7 +446,7 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
 	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
 	catchpointFileHeader := CatchpointFileHeader{
-		Version:           CatchpointFileVersionV6,
+		Version:           CatchpointFileVersionV7,
 		BalancesRound:     accountsRnd,
 		BlocksRound:       blocksRound,
 		Totals:            totals,
@@ -238,6 +464,26 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 	defer l.Close()
 
 	return catchpointFileHeader
+}
+
+func TestStateProofVerificationContextWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	//t.Parallel() verifyStateProofVerificationContextWrite changes consensus
+
+	verificationContext := ledgercore.StateProofVerificationContext{
+		LastAttestedRound: 120,
+		VotersCommitment:  nil,
+		OnlineTotalWeight: basics.MicroAlgos{Raw: 100},
+	}
+
+	verifyStateProofVerificationContextWrite(t, []ledgercore.StateProofVerificationContext{verificationContext})
+}
+
+func TestEmptyStateProofVerificationContextWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	//t.Parallel() verifyStateProofVerificationContextWrite changes consensus
+
+	verifyStateProofVerificationContextWrite(t, []ledgercore.StateProofVerificationContext{})
 }
 
 func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
@@ -526,40 +772,10 @@ func testNewLedgerFromCatchpoint(t *testing.T, filepath string) *Ledger {
 	err = accessor.ResetStagingBalances(context.Background(), true)
 	require.NoError(t, err)
 
-	// load the file from disk.
-	fileContent, err := os.ReadFile(filepath)
-	require.NoError(t, err)
-	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
-	require.NoError(t, err)
-	tarReader := tar.NewReader(gzipReader)
 	var catchupProgress CatchpointCatchupAccessorProgress
-	defer gzipReader.Close()
-	for {
-		header, err := tarReader.Next()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			require.NoError(t, err)
-			break
-		}
-		balancesBlockBytes := make([]byte, header.Size)
-		readComplete := int64(0)
-
-		for readComplete < header.Size {
-			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
-			readComplete += int64(bytesRead)
-			if err != nil {
-				if err == io.EOF {
-					if readComplete == header.Size {
-						break
-					}
-					require.NoError(t, err)
-				}
-				break
-			}
-		}
-		err = accessor.ProcessStagingBalances(context.Background(), header.Name, balancesBlockBytes, &catchupProgress)
+	catchpointContent := readCatchpointFile(t, filepath)
+	for _, catchpointData := range catchpointContent {
+		err = accessor.ProcessStagingBalances(context.Background(), catchpointData.headerName, catchpointData.data, &catchupProgress)
 		require.NoError(t, err)
 	}
 

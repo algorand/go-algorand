@@ -381,6 +381,8 @@ const (
 	// we set it to zero in order to reset the merkle trie. This would force the merkle trie to be re-build on startup ( if needed ).
 	catchpointStateCatchupHashRound   = catchpointState("catchpointCatchupHashRound")
 	catchpointStateCatchpointLookback = catchpointState("catchpointLookback")
+	// catchpointStateCatchupVersion is the catchpoint version which the currently catchpoint catchup process is trying to catchup to.
+	catchpointStateCatchupVersion = catchpointState("catchpointCatchupVersion")
 )
 
 // MaxEncodedBaseAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the base account data serialized.
@@ -1107,6 +1109,21 @@ func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normal
 	return nil
 }
 
+// writeCatchpointStateProofVerificationContext inserts all the state proof verification data in the provided array into
+// the catchpointstateproofverification table.
+func writeCatchpointStateProofVerificationContext(ctx context.Context, tx *sql.Tx, verificationContext *ledgercore.StateProofVerificationContext) error {
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointstateproofverification(lastattestedround, verificationContext) VALUES(?, ?)")
+
+	if err != nil {
+		return err
+	}
+
+	defer insertStmt.Close()
+
+	_, err = insertStmt.ExecContext(ctx, verificationContext.LastAttestedRound, protocol.Encode(verificationContext))
+	return err
+}
+
 // createCatchpointStagingHashesIndex creates an index on catchpointpendinghashes to allow faster scanning according to the hash order
 func createCatchpointStagingHashesIndex(ctx context.Context, tx *sql.Tx) (err error) {
 	_, err = tx.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS catchpointpendinghashesidx ON catchpointpendinghashes(data)")
@@ -1189,6 +1206,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		"DROP TABLE IF EXISTS catchpointpendinghashes",
 		"DROP TABLE IF EXISTS catchpointresources",
 		"DROP TABLE IF EXISTS catchpointkvstore",
+		"DROP TABLE IF EXISTS catchpointstateproofverification",
 		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
 
@@ -1210,6 +1228,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
 			"CREATE TABLE IF NOT EXISTS catchpointkvstore (key blob primary key, value blob)",
+			"CREATE TABLE IF NOT EXISTS catchpointstateproofverification (lastattestedround INTEGER PRIMARY KEY NOT NULL, verificationContext BLOB NOT NULL)",
 
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
 			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
@@ -1235,12 +1254,14 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 		"DROP TABLE IF EXISTS accounthashes",
 		"DROP TABLE IF EXISTS resources",
 		"DROP TABLE IF EXISTS kvstore",
+		"DROP TABLE IF EXISTS stateproofverification",
 
 		"ALTER TABLE catchpointbalances RENAME TO accountbase",
 		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
 		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
 		"ALTER TABLE catchpointresources RENAME TO resources",
 		"ALTER TABLE catchpointkvstore RENAME TO kvstore",
+		"ALTER TABLE catchpointstateproofverification RENAME TO stateproofverification",
 	}
 
 	for _, stmt := range stmts {
@@ -5178,6 +5199,8 @@ type catchpointFirstStageInfo struct {
 	TotalChunks uint64 `codec:"chunksCount"`
 	// BiggestChunkLen is the size in the bytes of the largest chunk, used when re-packing.
 	BiggestChunkLen uint64 `codec:"biggestChunk"`
+	// StateProofVerificationHash is the hash of the state proof verification data contained in the catchpoint data file.
+	StateProofVerificationHash crypto.Digest `codec:"spVerificationHash"`
 }
 
 func insertOrReplaceCatchpointFirstStageInfo(ctx context.Context, e db.Executable, round basics.Round, info *catchpointFirstStageInfo) error {
@@ -5330,12 +5353,8 @@ func insertStateProofVerificationContext(ctx context.Context, tx *sql.Tx, contex
 
 	for _, commitContext := range contexts {
 		verificationcontext := commitContext.verificationContext
-		f := func() error {
-			_, err = insertStmt.ExecContext(ctx, verificationcontext.LastAttestedRound, protocol.Encode(&verificationcontext))
-			return err
-		}
+		_, err = insertStmt.ExecContext(ctx, verificationcontext.LastAttestedRound, protocol.Encode(&verificationcontext))
 
-		err = db.Retry(f)
 		if err != nil {
 			return err
 		}
@@ -5345,11 +5364,8 @@ func insertStateProofVerificationContext(ctx context.Context, tx *sql.Tx, contex
 }
 
 func deleteOldStateProofVerificationContext(ctx context.Context, tx *sql.Tx, earliestLastAttestedRound basics.Round) error {
-	f := func() error {
-		_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE lastattestedround < ?", earliestLastAttestedRound)
-		return err
-	}
-	return db.Retry(f)
+	_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE lastattestedround < ?", earliestLastAttestedRound)
+	return err
 }
 
 func stateProofVerificationInitDbQueries(r db.Queryable) (*stateProofVerificationDbQueries, error) {
@@ -5382,4 +5398,52 @@ func (qs *stateProofVerificationDbQueries) lookupContext(stateProofLastAttestedR
 
 	err := db.Retry(queryFunc)
 	return &verificationContext, err
+}
+
+// stateProofVerificationTable returns all verification data currently committed to the given table.
+func stateProofVerificationTable(ctx context.Context, tx *sql.Tx, tableName string) ([]ledgercore.StateProofVerificationContext, error) {
+	var result []ledgercore.StateProofVerificationContext
+	queryFunc := func() error {
+		selectQuery := fmt.Sprintf("SELECT verificationContext FROM %s ORDER BY lastattestedround", tableName)
+		rows, err := tx.QueryContext(ctx, selectQuery)
+
+		if err != nil {
+			return err
+		}
+
+		defer rows.Close()
+
+		// Clear `res` in case this function is repeated.
+		result = result[:0]
+		for rows.Next() {
+			var rawData []byte
+			err = rows.Scan(&rawData)
+			if err != nil {
+				return err
+			}
+
+			var record ledgercore.StateProofVerificationContext
+			err = protocol.Decode(rawData, &record)
+			if err != nil {
+				return err
+			}
+
+			result = append(result, record)
+		}
+
+		return nil
+	}
+
+	err := db.Retry(queryFunc)
+	return result, err
+}
+
+// StateProofVerification returns all state proof verification data from the stateProofVerification table.
+func StateProofVerification(ctx context.Context, tx *sql.Tx) ([]ledgercore.StateProofVerificationContext, error) {
+	return stateProofVerificationTable(ctx, tx, "stateProofVerification")
+}
+
+// CatchpointStateProofVerification returns all state proof verification data from the catchpointStateProofVerification table.
+func CatchpointStateProofVerification(ctx context.Context, tx *sql.Tx) ([]ledgercore.StateProofVerificationContext, error) {
+	return stateProofVerificationTable(ctx, tx, "catchpointStateProofVerification")
 }

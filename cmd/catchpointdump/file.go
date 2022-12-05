@@ -46,7 +46,7 @@ import (
 
 var catchpointFile string
 var outFileName string
-var excludedFields *cmdutil.CobraStringSliceValue = cmdutil.MakeCobraStringSliceValue(nil, []string{"version", "catchpoint"})
+var excludedFields = cmdutil.MakeCobraStringSliceValue(nil, []string{"version", "catchpoint"})
 
 func init() {
 	fileCmd.Flags().StringVarP(&catchpointFile, "tar", "t", "", "Specify the catchpoint file (either .tar or .tar.gz) to process")
@@ -125,6 +125,11 @@ var fileCmd = &cobra.Command{
 					reportErrorf("Unable to create file '%s' : %v", outFileName, err)
 				}
 				defer outFile.Close()
+			}
+
+			err = printStateProofVerificationContext("./ledger.tracker.sqlite", outFile)
+			if err != nil {
+				reportErrorf("Unable to print state proof verification database : %v", err)
 			}
 
 			err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, excludedFields.GetSlice())
@@ -425,6 +430,38 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 		_, _ = db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(5*time.Second))
 		return err
 	})
+}
+
+func printStateProofVerificationContext(databaseName string, outFile *os.File) error {
+	fileWriter := bufio.NewWriterSize(outFile, 1024*1024)
+	defer fileWriter.Flush()
+
+	dbAccessor, err := db.MakeAccessor(databaseName, true, false)
+	if err != nil || dbAccessor.Handle == nil {
+		return err
+	}
+	defer dbAccessor.Close()
+
+	var stateProofVerificationContext []ledgercore.StateProofVerificationContext
+	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		stateProofVerificationContext, err = ledger.CatchpointStateProofVerification(ctx, tx)
+		return err
+	})
+
+	if err != nil {
+		return err
+	}
+
+	var printedLines []string
+	for _, ctx := range stateProofVerificationContext {
+		jsonData, err := json.Marshal(ctx)
+		if err != nil {
+			return err
+		}
+		printedLines = append(printedLines, fmt.Sprintf("%d : %s", ctx.LastAttestedRound, string(jsonData)))
+	}
+	_, err = fmt.Fprintf(fileWriter, "State Proof Verification Data:\n"+strings.Join(printedLines, "\n")+"\n")
+	return err
 }
 
 func printKeyValue(writer *bufio.Writer, key, value []byte) {

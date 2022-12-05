@@ -10,6 +10,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // The following msgp objects are implemented in this file:
@@ -84,6 +85,14 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> Msgsize
 //        |-----> MsgIsZero
+//
+// catchpointStateProofVerificationContext
+//                    |-----> (*) MarshalMsg
+//                    |-----> (*) CanMarshalMsg
+//                    |-----> (*) UnmarshalMsg
+//                    |-----> (*) CanUnmarshalMsg
+//                    |-----> (*) Msgsize
+//                    |-----> (*) MsgIsZero
 //
 // encodedBalanceRecordV5
 //            |-----> (*) MarshalMsg
@@ -2285,8 +2294,8 @@ func (z *catchpointFileChunkV6) MsgIsZero() bool {
 func (z *catchpointFirstStageInfo) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 6 bits */
+	zb0001Len := uint32(6)
+	var zb0001Mask uint8 /* 7 bits */
 	if (*z).Totals.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -2303,9 +2312,13 @@ func (z *catchpointFirstStageInfo) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if (*z).TrieBalancesHash.MsgIsZero() {
+	if (*z).StateProofVerificationHash.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x20
+	}
+	if (*z).TrieBalancesHash.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x40
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -2331,6 +2344,11 @@ func (z *catchpointFirstStageInfo) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendUint64(o, (*z).TotalChunks)
 		}
 		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "spVerificationHash"
+			o = append(o, 0xb2, 0x73, 0x70, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x48, 0x61, 0x73, 0x68)
+			o = (*z).StateProofVerificationHash.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not empty
 			// string "trieBalancesHash"
 			o = append(o, 0xb0, 0x74, 0x72, 0x69, 0x65, 0x42, 0x61, 0x6c, 0x61, 0x6e, 0x63, 0x65, 0x73, 0x48, 0x61, 0x73, 0x68)
 			o = (*z).TrieBalancesHash.MarshalMsg(o)
@@ -2398,6 +2416,14 @@ func (z *catchpointFirstStageInfo) UnmarshalMsg(bts []byte) (o []byte, err error
 			}
 		}
 		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).StateProofVerificationHash.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "StateProofVerificationHash")
+				return
+			}
+		}
+		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -2450,6 +2476,12 @@ func (z *catchpointFirstStageInfo) UnmarshalMsg(bts []byte) (o []byte, err error
 					err = msgp.WrapError(err, "BiggestChunkLen")
 					return
 				}
+			case "spVerificationHash":
+				bts, err = (*z).StateProofVerificationHash.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "StateProofVerificationHash")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -2470,13 +2502,13 @@ func (_ *catchpointFirstStageInfo) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *catchpointFirstStageInfo) Msgsize() (s int) {
-	s = 1 + 14 + (*z).Totals.Msgsize() + 17 + (*z).TrieBalancesHash.Msgsize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 13 + msgp.Uint64Size
+	s = 1 + 14 + (*z).Totals.Msgsize() + 17 + (*z).TrieBalancesHash.Msgsize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 13 + msgp.Uint64Size + 19 + (*z).StateProofVerificationHash.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *catchpointFirstStageInfo) MsgIsZero() bool {
-	return ((*z).Totals.MsgIsZero()) && ((*z).TrieBalancesHash.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0) && ((*z).BiggestChunkLen == 0)
+	return ((*z).Totals.MsgIsZero()) && ((*z).TrieBalancesHash.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0) && ((*z).BiggestChunkLen == 0) && ((*z).StateProofVerificationHash.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2523,6 +2555,164 @@ func (z catchpointState) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z catchpointState) MsgIsZero() bool {
 	return z == ""
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *catchpointStateProofVerificationContext) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0002Len := uint32(1)
+	var zb0002Mask uint8 /* 2 bits */
+	if len((*z).Data) == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x2
+	}
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "spd"
+			o = append(o, 0xa3, 0x73, 0x70, 0x64)
+			if (*z).Data == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).Data)))
+			}
+			for zb0001 := range (*z).Data {
+				o = (*z).Data[zb0001].MarshalMsg(o)
+			}
+		}
+	}
+	return
+}
+
+func (_ *catchpointStateProofVerificationContext) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*catchpointStateProofVerificationContext)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *catchpointStateProofVerificationContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 0 {
+			zb0002--
+			var zb0004 int
+			var zb0005 bool
+			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Data")
+				return
+			}
+			if zb0004 > StateProofVerificationContextPerCatchpointFile {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(StateProofVerificationContextPerCatchpointFile))
+				err = msgp.WrapError(err, "struct-from-array", "Data")
+				return
+			}
+			if zb0005 {
+				(*z).Data = nil
+			} else if (*z).Data != nil && cap((*z).Data) >= zb0004 {
+				(*z).Data = ((*z).Data)[:zb0004]
+			} else {
+				(*z).Data = make([]ledgercore.StateProofVerificationContext, zb0004)
+			}
+			for zb0001 := range (*z).Data {
+				bts, err = (*z).Data[zb0001].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Data", zb0001)
+					return
+				}
+			}
+		}
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0003 {
+			(*z) = catchpointStateProofVerificationContext{}
+		}
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "spd":
+				var zb0006 int
+				var zb0007 bool
+				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Data")
+					return
+				}
+				if zb0006 > StateProofVerificationContextPerCatchpointFile {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(StateProofVerificationContextPerCatchpointFile))
+					err = msgp.WrapError(err, "Data")
+					return
+				}
+				if zb0007 {
+					(*z).Data = nil
+				} else if (*z).Data != nil && cap((*z).Data) >= zb0006 {
+					(*z).Data = ((*z).Data)[:zb0006]
+				} else {
+					(*z).Data = make([]ledgercore.StateProofVerificationContext, zb0006)
+				}
+				for zb0001 := range (*z).Data {
+					bts, err = (*z).Data[zb0001].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Data", zb0001)
+						return
+					}
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *catchpointStateProofVerificationContext) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*catchpointStateProofVerificationContext)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *catchpointStateProofVerificationContext) Msgsize() (s int) {
+	s = 1 + 4 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Data {
+		s += (*z).Data[zb0001].Msgsize()
+	}
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *catchpointStateProofVerificationContext) MsgIsZero() bool {
+	return (len((*z).Data) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

@@ -255,6 +255,7 @@ func (cs *CatchpointCatchupService) processStageInactive() (err error) {
 	if err != nil {
 		return cs.abort(fmt.Errorf("processStageInactive failed to set a catchpoint label : %v", err))
 	}
+
 	err = cs.updateStage(ledger.CatchpointCatchupStateLedgerDownload)
 	if err != nil {
 		return cs.abort(fmt.Errorf("processStageInactive failed to update stage : %v", err))

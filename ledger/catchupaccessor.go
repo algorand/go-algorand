@@ -224,6 +224,7 @@ func (c *catchpointCatchupAccessorImpl) SetLabel(ctx context.Context, label stri
 	if err != nil {
 		return
 	}
+
 	err = writeCatchpointStateString(ctx, c.ledger.trackerDB().Wdb.Handle, catchpointStateCatchupLabel, label)
 	if err != nil {
 		return fmt.Errorf("unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupLabel, err)
@@ -292,8 +293,12 @@ type CatchpointCatchupAccessorProgress struct {
 
 // ProcessStagingBalances deserialize the given bytes as a temporary staging balances
 func (c *catchpointCatchupAccessorImpl) ProcessStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error) {
+	// content.msgpack comes first, followed by stateProofVerificationContext.msgpack and then by balances.x.msgpack.
 	if sectionName == "content.msgpack" {
 		return c.processStagingContent(ctx, bytes, progress)
+	}
+	if sectionName == "stateProofVerificationContext.msgpack" {
+		return c.processStagingStateProofVerificationContext(ctx, bytes, progress)
 	}
 	if strings.HasPrefix(sectionName, "balances.") && strings.HasSuffix(sectionName, ".msgpack") {
 		return c.processStagingBalances(ctx, bytes, progress)
@@ -301,6 +306,32 @@ func (c *catchpointCatchupAccessorImpl) ProcessStagingBalances(ctx context.Conte
 	// we want to allow undefined sections to support backward compatibility.
 	c.log.Warnf("CatchpointCatchupAccessorImpl::ProcessStagingBalances encountered unexpected section name '%s' of length %d, which would be ignored", sectionName, len(bytes))
 	return nil
+}
+
+// processStagingStateProofVerificationContext deserialize the given bytes as a temporary staging state proof verification data
+func (c *catchpointCatchupAccessorImpl) processStagingStateProofVerificationContext(_ context.Context, bytes []byte, _ *CatchpointCatchupAccessorProgress) (err error) {
+	var decodedData catchpointStateProofVerificationContext
+	err = protocol.Decode(bytes, &decodedData)
+	if err != nil {
+		return err
+	}
+
+	wdb := c.ledger.trackerDB().Wdb
+
+	// 6 months of stuck state proofs should lead to about 1.5 MB of data, so we avoid redundant timers
+	// and progress reports.
+
+	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		for _, data := range decodedData.Data {
+			err = writeCatchpointStateProofVerificationContext(ctx, tx, &data)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	return err
 }
 
 // processStagingContent deserialize the given bytes as a temporary staging balances content
@@ -316,6 +347,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	switch fileHeader.Version {
 	case CatchpointFileVersionV5:
 	case CatchpointFileVersionV6:
+	case CatchpointFileVersionV7:
 	default:
 		return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to process catchpoint - version %d is not supported", fileHeader.Version)
 	}
@@ -326,12 +358,17 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	wdb := c.ledger.trackerDB().Wdb
 	start := time.Now()
 	ledgerProcessstagingcontentCount.Inc(nil)
+	err = writeCatchpointStateUint64(ctx, wdb.Handle, catchpointStateCatchupVersion, fileHeader.Version)
+	if err != nil {
+		return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupVersion, err)
+	}
+
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		err = writeCatchpointStateUint64(ctx, tx, catchpointStateCatchupBlockRound, uint64(fileHeader.BlocksRound))
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupBlockRound, err)
 		}
-		if fileHeader.Version == CatchpointFileVersionV6 {
+		if fileHeader.Version == CatchpointFileVersionV6 || fileHeader.Version == CatchpointFileVersionV7 {
 			err = writeCatchpointStateUint64(ctx, tx, catchpointStateCatchupHashRound, uint64(fileHeader.BlocksRound))
 			if err != nil {
 				return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupHashRound, err)
@@ -348,6 +385,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 		progress.Version = fileHeader.Version
 		c.ledger.setSynchronousMode(ctx, c.ledger.accountsRebuildSynchronousMode)
 	}
+
 	return err
 }
 
@@ -384,6 +422,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		expectingMoreEntries = make([]bool, len(balances.Balances))
 
 	case CatchpointFileVersionV6:
+	case CatchpointFileVersionV7:
 		var chunk catchpointFileChunkV6
 		err = protocol.Decode(bytes, &chunk)
 		if err != nil {
@@ -781,13 +820,20 @@ func (c *catchpointCatchupAccessorImpl) GetCatchupBlockRound(ctx context.Context
 func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, blk *bookkeeping.Block) (err error) {
 	rdb := c.ledger.trackerDB().Rdb
 	var balancesHash crypto.Digest
+	var rawStateProofVerificationContext []ledgercore.StateProofVerificationContext
 	var blockRound basics.Round
 	var totals ledgercore.AccountTotals
 	var catchpointLabel string
+	var version uint64
 
 	catchpointLabel, err = readCatchpointStateString(ctx, rdb.Handle, catchpointStateCatchupLabel)
 	if err != nil {
 		return fmt.Errorf("unable to read catchpoint catchup state '%s': %v", catchpointStateCatchupLabel, err)
+	}
+
+	version, err = readCatchpointStateUint64(ctx, rdb.Handle, catchpointStateCatchupVersion)
+	if err != nil {
+		return fmt.Errorf("unable to retrieve catchpoint version: %v", err)
 	}
 
 	var iRound uint64
@@ -799,6 +845,7 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 
 	start := time.Now()
 	ledgerVerifycatchpointCount.Inc(nil)
+
 	err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		// create the merkle trie for the balances
 		mc, err0 := MakeMerkleCommitter(tx, true)
@@ -820,6 +867,12 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 		if err != nil {
 			return fmt.Errorf("unable to get accounts totals: %v", err)
 		}
+
+		rawStateProofVerificationContext, err = CatchpointStateProofVerification(ctx, tx)
+		if err != nil {
+			return fmt.Errorf("unable to get state proof verification data: %v", err)
+		}
+
 		return
 	})
 	ledgerVerifycatchpointMicros.AddMicrosecondsSince(start, nil)
@@ -830,10 +883,20 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 		return fmt.Errorf("block round in block header doesn't match block round in catchpoint")
 	}
 
-	catchpointLabelMaker := ledgercore.MakeCatchpointLabel(blockRound, blk.Digest(), balancesHash, totals)
+	wrappedContext := catchpointStateProofVerificationContext{Data: rawStateProofVerificationContext}
+	stateProofVerificationContextHash := crypto.HashObj(wrappedContext)
 
-	if catchpointLabel != catchpointLabelMaker.String() {
-		return fmt.Errorf("catchpoint hash mismatch; expected %s, calculated %s", catchpointLabel, catchpointLabelMaker.String())
+	var catchpointLabelMaker ledgercore.CatchpointLabelMaker
+	blockDigest := blk.Digest()
+	if version <= CatchpointFileVersionV6 {
+		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerV6(blockRound, &blockDigest, &balancesHash, totals)
+	} else {
+		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerCurrent(blockRound, &blockDigest, &balancesHash, totals, &stateProofVerificationContextHash)
+	}
+	generatedLabel := ledgercore.MakeLabel(catchpointLabelMaker)
+
+	if catchpointLabel != generatedLabel {
+		return fmt.Errorf("catchpoint hash mismatch; expected %s, calculated %s", catchpointLabel, generatedLabel)
 	}
 	return nil
 }
@@ -978,7 +1041,7 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 		// When implementing a new catchpoint format (e.g. adding a new table),
 		// it might be necessary to restore it into the latest database version. To do that, one
 		// will need to run the 6->7 migration code manually here or in a similar function to create
-		// onlineaccounts and other V7 tables.
+		// onlineaccounts and other tables.
 		err = accountsReset(ctx, tx)
 		if err != nil {
 			return err

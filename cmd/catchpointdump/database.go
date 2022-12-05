@@ -58,6 +58,10 @@ var databaseCmd = &cobra.Command{
 			}
 			defer outFile.Close()
 		}
+		err = printStateProofVerificationContext("./ledger.tracker.sqlite", outFile)
+		if err != nil {
+			reportWarnf("Unable to print state proof verification database : %v", err)
+		}
 		err = printAccountsDatabase(ledgerTrackerFilename, ledger.CatchpointFileHeader{}, outFile, nil)
 		if err != nil {
 			reportErrorf("Unable to print account database : %v", err)
