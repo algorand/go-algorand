@@ -66,6 +66,9 @@ type ErlCapacityGuard struct {
 
 // Release will put capacity back into the queue attached to this capacity guard
 func (cg ErlCapacityGuard) Release() error {
+	if cg.cq == nil {
+		return nil
+	}
 	select {
 	case cg.cq <- capacity{}:
 		return nil
@@ -126,21 +129,30 @@ func NewElasticRateLimiter(
 
 // EnableCongestionControl turns on the flag that the ERL uses to check with its CongestionManager
 func (erl *ElasticRateLimiter) EnableCongestionControl() {
+	if erl == nil {
+		return
+	}
 	erl.clientLock.Lock()
+	defer erl.clientLock.Unlock()
 	erl.enableCM = true
-	erl.clientLock.Unlock()
 }
 
 // DisableCongestionControl turns off the flag that the ERL uses to check with its CongestionManager
 func (erl *ElasticRateLimiter) DisableCongestionControl() {
+	if erl == nil {
+		return
+	}
 	erl.clientLock.Lock()
+	defer erl.clientLock.Unlock()
 	erl.enableCM = false
-	erl.clientLock.Unlock()
 }
 
 // ConsumeCapacity will dispense one capacity from either the resource's reservedCapacity,
 // and will return a guard who can return capacity when the client is ready
 func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (ErlCapacityGuard, error) {
+	if erl == nil {
+		return ErlCapacityGuard{}, nil
+	}
 	var q capacityQueue
 	var err error
 	var exists bool
@@ -162,7 +174,6 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (ErlCapacityGuard, e
 
 		// if this reservation is newly created, directly (blocking) take a capacity
 		q.blockingConsume()
-		fmt.Println(len(q))
 		return ErlCapacityGuard{cq: q, cm: &erl.cm}, nil
 	}
 
@@ -201,21 +212,18 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (ErlCapacityGuard, e
 // and optimistically transfers capacity from the sharedCapacity to the reservedCapacity
 func (erl *ElasticRateLimiter) openReservation(c ErlClient) (capacityQueue, error) {
 	erl.clientLock.Lock()
+	defer erl.clientLock.Unlock()
 	if _, exists := erl.capacityByClient[c]; exists {
-		erl.clientLock.Unlock()
 		return capacityQueue(nil), fmt.Errorf("client already has a reservation")
 	}
 	// guard against overprovisioning, if there is less than a reservedCapacity amount left
 	remaining := erl.MaxCapacity - (erl.CapacityPerReservation * len(erl.capacityByClient))
 	if erl.CapacityPerReservation > remaining {
-		erl.clientLock.Unlock()
 		return capacityQueue(nil), fmt.Errorf("not enough capacity to reserve for client: %d remaining, %d requested", remaining, erl.CapacityPerReservation)
 	}
 	// make capacity for the provided client
 	q := capacityQueue(make(chan capacity, erl.CapacityPerReservation))
 	erl.capacityByClient[c] = q
-	erl.clientLock.Unlock()
-
 	// create a thread to drain the capacity from sharedCapacity in a blocking way
 	// and move it to the reservation, also in a blocking way
 	go func() {
@@ -231,15 +239,13 @@ func (erl *ElasticRateLimiter) openReservation(c ErlClient) (capacityQueue, erro
 // and will kick off a routine to drain the capacity and replace it to the shared capacity
 func (erl *ElasticRateLimiter) closeReservation(c ErlClient) {
 	erl.clientLock.Lock()
+	defer erl.clientLock.Unlock()
 	q, exists := erl.capacityByClient[c]
 	// guard clauses, and preventing the ElasticRateLimiter from draining its own sharedCapacity
 	if !exists || q == erl.sharedCapacity {
-		erl.clientLock.Unlock()
 		return
 	}
 	delete(erl.capacityByClient, c)
-	erl.clientLock.Unlock()
-
 	// start a routine to consume capacity from the closed reservation, and return it to the sharedCapacity
 	go func() {
 		for i := 0; i < erl.CapacityPerReservation; i++ {
