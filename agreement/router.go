@@ -125,9 +125,15 @@ func (router *rootRouter) Round(r round) *roundRouter {
 	return out
 }
 
-func (router *rootRouter) update(state player, r round, gc bool) {
-	router.Round(r)
-
+func (router *rootRouter) trim(state player) {
+	gc := false
+	for r := range router.Rounds {
+		if r >= state.Round {
+		} else {
+			gc = true
+			break
+		}
+	}
 	if gc {
 		children := make(map[round]*roundRouter)
 		for r, c := range router.Rounds {
@@ -136,6 +142,14 @@ func (router *rootRouter) update(state player, r round, gc bool) {
 			}
 		}
 		router.Rounds = children
+	}
+}
+
+func (router *rootRouter) update(state player, r round, gc bool) {
+	router.Round(r)
+
+	if gc {
+		router.trim(state)
 	}
 }
 
