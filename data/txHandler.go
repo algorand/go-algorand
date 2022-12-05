@@ -107,21 +107,6 @@ func MakeTxHandler(
 	// backlog size is big enough for each peer to have its reserved capacity in the backlog, plus two blocks of shared capacity
 	txBacklogSize := (2 * txPerBlock) + (cfg.IncomingConnectionsLimit * cfg.TxBacklogReservedCapacityPerPeer)
 
-	var rateLimiter *util.ElasticRateLimiter
-
-	if cfg.EnableTxBacklogRateLimiting {
-		congestionManager := util.NewREDCongestionManager(
-			(time.Second * time.Duration(cfg.TxBacklogServiceRateWindowSeconds)),
-			100*cfg.TxBacklogServiceRateWindowSeconds) // Service Rates update 1/s @ 100 requests per second to the congestion manager
-		rateLimiter = util.NewElasticRateLimiter(
-			txBacklogSize,
-			config.AutogenLocal.TxBacklogReservedCapacityPerPeer,
-			congestionManager,
-			metrics.MakeCounter(metrics.TransactionMessagesTxnBacklogNoCapacity),
-			metrics.MakeCounter(metrics.TransactionMessagesTxnDroppedCongestionManagement),
-		)
-
-	}
 	handler := &TxHandler{
 		txPool:                txPool,
 		genesisID:             genesisID,
@@ -131,10 +116,22 @@ func MakeTxHandler(
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   net,
-		erl:                   rateLimiter,
 	}
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
-	congestionManager.Start(handler.ctx, nil)
+	if cfg.EnableTxBacklogRateLimiting {
+		congestionManager := util.NewREDCongestionManager(
+			(time.Second * time.Duration(cfg.TxBacklogServiceRateWindowSeconds)),
+			100*cfg.TxBacklogServiceRateWindowSeconds) // Service Rates update 1/s @ 100 requests per second to the congestion manager
+		rateLimiter := util.NewElasticRateLimiter(
+			txBacklogSize,
+			config.AutogenLocal.TxBacklogReservedCapacityPerPeer,
+			congestionManager,
+			metrics.MakeCounter(metrics.TransactionMessagesTxnBacklogNoCapacity),
+			metrics.MakeCounter(metrics.TransactionMessagesTxnDroppedCongestionManagement),
+		)
+		handler.erl = rateLimiter
+		congestionManager.Start(handler.ctx, nil)
+	}
 	return handler
 }
 
