@@ -68,8 +68,9 @@ type Ledger interface {
 // Service represents the catchup service. Once started and until it is stopped, it ensures that the ledger is up to date with network.
 type Service struct {
 	syncStartNS int64 // at top of struct to keep 64 bit aligned for atomic.* ops
-	// SyncRound, provided externally, which the ledger must keep in cache
-	syncRound           uint64
+	// disableSyncRound, provided externally, is the first round we will _not_ fetch from the network
+	// any round >= disableSyncRound will not be fetched. If set to 0, it will be disregarded.
+	disableSyncRound    uint64
 	cfg                 config.Local
 	ledger              Ledger
 	ctx                 context.Context
@@ -152,23 +153,24 @@ func (s *Service) IsSynchronizing() (synchronizing bool, initialSync bool) {
 	return
 }
 
-// SetSyncRound attempts to set the minimum sync round to keep in the cache
-func (s *Service) SetSyncRound(rnd uint64) error {
+// SetDisableSyncRound attempts to set the first round we _do_not_ want to fetch from the network
+// Blocks from disableSyncRound or any round after disableSyncRound will not be fetched while this is set
+func (s *Service) SetDisableSyncRound(rnd uint64) error {
 	if basics.Round(rnd) < s.ledger.LastRound() {
 		return ErrSyncRoundInvalid
 	}
-	atomic.StoreUint64(&s.syncRound, rnd)
+	atomic.StoreUint64(&s.disableSyncRound, rnd)
 	return nil
 }
 
-// UnsetSyncRound removes any previously set sync round
-func (s *Service) UnsetSyncRound() {
-	atomic.StoreUint64(&s.syncRound, 0)
+// UnsetDisableSyncRound removes any previously set disabled sync round
+func (s *Service) UnsetDisableSyncRound() {
+	atomic.StoreUint64(&s.disableSyncRound, 0)
 }
 
-// GetSyncRound returns the minimum sync round, and an error
-func (s *Service) GetSyncRound() uint64 {
-	return atomic.LoadUint64(&s.syncRound)
+// GetDisableSyncRound returns the disabled sync round
+func (s *Service) GetDisableSyncRound() uint64 {
+	return atomic.LoadUint64(&s.disableSyncRound)
 }
 
 // SynchronizingTime returns the time we've been performing a catchup operation (0 if not currently catching up)
@@ -226,8 +228,8 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 //  - If the block is already in the ledger (e.g. if agreement service has already written it)
 //  - If the retrieval of the previous block was unsuccessful
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
-	// If sync-ing this round would break our cache invariant, don't fetch it
-	if syncRound := s.GetSyncRound(); syncRound != 0 && r >= basics.Round(syncRound+s.cfg.MaxAcctLookback) {
+	// If sync-ing this round is not intended, don't fetch it
+	if dontSyncRound := s.GetDisableSyncRound(); dontSyncRound != 0 && r >= basics.Round(dontSyncRound) {
 		return false
 	}
 	i := 0
