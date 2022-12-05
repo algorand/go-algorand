@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-deadlock"
 
@@ -228,6 +229,9 @@ func (c *txSaltedCache) innerCheckAndPut(msg []byte) bool {
 
 var saltedPool = sync.Pool{
 	New: func() interface{} {
-		return make([]byte, 4*4096) // should be enough for most of transactions
+		// 2 x MaxAvailableAppProgramLen that covers
+		// max approve + clear state programs with max args for app create txn.
+		// other transactions are much smaller.
+		return make([]byte, 2*config.MaxAvailableAppProgramLen)
 	},
 }
