@@ -21,8 +21,9 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -42,14 +43,7 @@ func (spw *Worker) signer(latest basics.Round) {
 	for { // Start signing StateProofs from nextRnd onwards
 		select {
 		case <-spw.ledger.Wait(nextRnd):
-			hdr, err := spw.ledger.BlockHdr(nextRnd)
-			if err != nil {
-				spw.log.Warnf("spw.signer(): BlockHdr(next %d): %v", nextRnd, err)
-				time.Sleep(1 * time.Second)
-				nextRnd = spw.nextStateProofRound(spw.ledger.Latest())
-				continue
-			}
-			spw.signStateProof(hdr)
+			spw.signStateProof(nextRnd)
 			spw.invokeBuilder(nextRnd)
 			nextRnd++
 
@@ -83,18 +77,33 @@ func (spw *Worker) nextStateProofRound(latest basics.Round) basics.Round {
 	return nextrnd
 }
 
-func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
-	proto := config.Consensus[hdr.CurrentProtocol]
+func (spw *Worker) signStateProof(round basics.Round) {
+	// TODO: What happens right after upgrade when the tracker doesn't contain the context?
+	// TODO: Perhaps we should add a fallback for the voters
+	verificationContext, err := spw.ledger.StateProofVerificationContext(round)
+	if err != nil {
+		// TODO: Should this really be the error handling here? This really shouldn't happen
+		spw.log.Warnf("spw.signBlock(%d): StateProofVerificationContext(%d): %v", round, round, err)
+		return
+	}
+
+	proto := config.Consensus[verificationContext.Version]
 	if proto.StateProofInterval == 0 {
 		return
 	}
 
 	// Only sign blocks that are a multiple of StateProofInterval.
-	if hdr.Round%basics.Round(proto.StateProofInterval) != 0 {
+	if round%basics.Round(proto.StateProofInterval) != 0 {
 		return
 	}
 
-	keys := spw.accts.StateProofKeys(hdr.Round)
+	if verificationContext.VotersCommitment.IsEmpty() {
+		// No voter commitment, perhaps because state proofs were
+		// just enabled.
+		return
+	}
+
+	keys := spw.accts.StateProofKeys(round)
 	if len(keys) == 0 {
 		// No keys, nothing to do.
 		return
@@ -102,54 +111,72 @@ func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
 
 	// votersRound is the round containing the merkle root commitment
 	// for the voters that are going to sign this block.
-	votersRound := hdr.Round.SubSaturate(basics.Round(proto.StateProofInterval))
-	votersHdr, err := spw.ledger.BlockHdr(votersRound)
+	votersRound := round.SubSaturate(basics.Round(proto.StateProofInterval))
+
+	stateProofMessage, err := spw.getStateProofMessage(round, votersRound)
 	if err != nil {
-		spw.log.Warnf("spw.signBlock(%d): BlockHdr(%d): %v", hdr.Round, votersRound, err)
+		// TODO: Warn? Or something else?
+		spw.log.Warnf("spw.signBlock(%d): getStateProofMessage: %v", round, err)
 		return
 	}
 
-	if votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment.IsEmpty() {
-		// No voter commitment, perhaps because state proofs were
-		// just enabled.
-		return
+	spw.signStateProofMessage(stateProofMessage, round, keys)
+}
+
+func (spw *Worker) getStateProofMessage(round basics.Round, votersRound basics.Round) (*stateproofmsg.Message, error) {
+	// TODO: Do we maybe want to save information indicating whether I've signed the builder
+	dbBuilder, err := spw.loadBuilderFromDB(round)
+	if err == nil {
+		return &dbBuilder.Message, nil
 	}
+
+	// TODO: Do we really want this fall back on every error?
+	// TODO: Add a comment here
+
+	hdr, err := spw.ledger.BlockHdr(round)
+	if err != nil {
+		return nil, err
+	}
+
+	stateproofMessage, err := GenerateStateProofMessage(spw.ledger, uint64(votersRound), hdr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &stateproofMessage, nil
+}
+
+func (spw *Worker) signStateProofMessage(message *stateproofmsg.Message, round basics.Round, keys []account.StateProofSecretsForRound) {
+	hashedStateproofMessage := message.Hash()
 
 	sigs := make([]sigFromAddr, 0, len(keys))
 
-	stateproofMessage, err := GenerateStateProofMessage(spw.ledger, uint64(votersHdr.Round), hdr)
-	if err != nil {
-		spw.log.Warnf("spw.signBlock(%d): GenerateStateProofMessage: %v", hdr.Round, err)
-		return
-	}
-	hashedStateproofMessage := stateproofMessage.Hash()
-
 	for _, key := range keys {
-		if key.FirstValid > hdr.Round || hdr.Round > key.LastValid {
+		if key.FirstValid > round || round > key.LastValid {
 			continue
 		}
 
 		if key.StateProofSecrets == nil {
-			spw.log.Warnf("spw.signBlock(%d): empty state proof secrets for round", hdr.Round)
+			spw.log.Warnf("spw.signBlock(%d): empty state proof secrets for round", round)
 			continue
 		}
 
-		exists, err := spw.sigExistsInDB(hdr.Round, key.Account)
+		exists, err := spw.sigExistsInDB(round, key.Account)
 		if err != nil {
-			spw.log.Warnf("spw.signBlock(%d): couldn't figure if sig exists in DB: %v", hdr.Round, err)
+			spw.log.Warnf("spw.signBlock(%d): couldn't figure if sig exists in DB: %v", round, err)
 		} else if exists {
 			continue
 		}
 
 		sig, err := key.StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 		if err != nil {
-			spw.log.Warnf("spw.signBlock(%d): StateProofSecrets.Sign: %v", hdr.Round, err)
+			spw.log.Warnf("spw.signBlock(%d): StateProofSecrets.Sign: %v", round, err)
 			continue
 		}
 
 		sigs = append(sigs, sigFromAddr{
 			SignerAddress: key.Account,
-			Round:         hdr.Round,
+			Round:         round,
 			Sig:           sig,
 		})
 	}
@@ -157,9 +184,9 @@ func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
 	// any error in handle sig indicates the signature wasn't stored in disk, thus we cannot delete the key.
 	for _, sfa := range sigs {
 		if _, err := spw.handleSig(sfa, nil); err != nil {
-			spw.log.Warnf("spw.signBlock(%d): handleSig: %v", hdr.Round, err)
+			spw.log.Warnf("spw.signBlock(%d): handleSig: %v", round, err)
 			continue
 		}
-		spw.log.Infof("spw.signBlock(%d): sp message was signed with address %v", hdr.Round, sfa.SignerAddress)
+		spw.log.Infof("spw.signBlock(%d): sp message was signed with address %v", round, sfa.SignerAddress)
 	}
 }
