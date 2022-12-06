@@ -878,10 +878,10 @@ func TestTxHandlerPostProcessErrorWithVerify(t *testing.T) {
 
 func TestMakeTxHandlerErrors(t *testing.T) {
 	_, err := MakeTxHandler(nil, nil, &mocks.MockNetwork{}, "", crypto.Digest{}, nil)
-	require.Error(t, err, errors.New("MakeTxHandler: txPool is nil on initialization"))
+	require.Error(t, err, ErrInvalidTxPool)
 
 	_, err = MakeTxHandler(&pools.TransactionPool{}, nil, &mocks.MockNetwork{}, "", crypto.Digest{}, nil)
-	require.Error(t, err, errors.New("MakeTxHandler: ledger is nil on initialization"))
+	require.Error(t, err, ErrInvalidLedger)
 
 	// it is not possible to test MakeStreamVerifier returning an error, because it is not possible to
 	// get the leger return an error for returining the header of its latest round

@@ -65,6 +65,12 @@ var transactionGroupTxSyncHandled = metrics.MakeCounter(metrics.TransactionGroup
 var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGroupTxSyncRemember)
 var transactionGroupTxSyncAlreadyCommitted = metrics.MakeCounter(metrics.TransactionGroupTxSyncAlreadyCommitted)
 
+// ErrInvalidTxPool is reported when nil is passed for the tx pool
+var ErrInvalidTxPool = errors.New("MakeTxHandler: txPool is nil on initialization")
+
+// ErrInvalidLedger is reported when nil is passed for the ledger
+var ErrInvalidLedger = errors.New("MakeTxHandler: ledger is nil on initialization")
+
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
 	rawmsg            *network.IncomingMessage // the raw message from the network
@@ -93,11 +99,11 @@ type TxHandler struct {
 func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.GossipNode, genesisID string, genesisHash crypto.Digest, executionPool execpool.BacklogPool) (*TxHandler, error) {
 
 	if txPool == nil {
-		return nil, errors.New("MakeTxHandler: txPool is nil on initialization")
+		return nil, ErrInvalidTxPool
 	}
 
 	if ledger == nil {
-		return nil, errors.New("MakeTxHandler: ledger is nil on initialization")
+		return nil, ErrInvalidLedger
 	}
 
 	handler := &TxHandler{
@@ -177,9 +183,9 @@ func (handler *TxHandler) backlogWorker() {
 			if !ok {
 				return
 			}
-			txBLMsg := wi.BacklogMessage.(*txBacklogMsg)
-			txBLMsg.verificationErr = wi.Err
-			handler.postProcessCheckedTxn(txBLMsg)
+			m := wi.BacklogMessage.(*txBacklogMsg)
+			m.verificationErr = wi.Err
+			handler.postProcessCheckedTxn(m)
 
 			// restart the loop so that we could empty out the post verification queue.
 			continue
@@ -209,9 +215,9 @@ func (handler *TxHandler) backlogWorker() {
 				// this is never happening since handler.postVerificationQueue is never closed
 				return
 			}
-			txBLMsg := wi.BacklogMessage.(*txBacklogMsg)
-			txBLMsg.verificationErr = wi.Err
-			handler.postProcessCheckedTxn(txBLMsg)
+			m := wi.BacklogMessage.(*txBacklogMsg)
+			m.verificationErr = wi.Err
+			handler.postProcessCheckedTxn(m)
 
 		case <-handler.ctx.Done():
 			return
