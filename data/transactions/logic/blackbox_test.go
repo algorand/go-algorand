@@ -79,6 +79,7 @@ func TestNewAppEvalParams(t *testing.T) {
 	}
 
 	for i, param := range params {
+		param := param
 		for j, testCase := range cases {
 			i, j, param, testCase := i, j, param, testCase
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
