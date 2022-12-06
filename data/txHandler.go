@@ -121,7 +121,8 @@ func MakeTxHandler(
 	if cfg.EnableTxBacklogRateLimiting {
 		congestionManager := util.NewREDCongestionManager(
 			(time.Second * time.Duration(cfg.TxBacklogServiceRateWindowSeconds)),
-			100*cfg.TxBacklogServiceRateWindowSeconds) // Service Rates update 1/s @ 100 requests per second to the congestion manager
+			100*cfg.TxBacklogServiceRateWindowSeconds, // Service Rates update 1/s @ 100 requests per second to the congestion manager
+			txBacklogSize)
 		rateLimiter := util.NewElasticRateLimiter(
 			txBacklogSize,
 			config.AutogenLocal.TxBacklogReservedCapacityPerPeer,

@@ -299,13 +299,13 @@ type redCongestionManager struct {
 
 // NewREDCongestionManager creates a Congestion Manager which will watches capacityGuard activity,
 // and regularly calculates a Target Service Rate, and can give "Should Drop" suggestions
-func NewREDCongestionManager(d time.Duration, r int) *redCongestionManager {
+func NewREDCongestionManager(d time.Duration, r int, bsize int) *redCongestionManager {
 	ret := redCongestionManager{
 		runLock:                &deadlock.Mutex{},
 		window:                 d,
-		consumed:               make(chan event, 100000),
-		served:                 make(chan event, 100000),
-		shouldDropQueries:      make(chan shouldDropQuery, 100000),
+		consumed:               make(chan event, bsize),
+		served:                 make(chan event, bsize),
+		shouldDropQueries:      make(chan shouldDropQuery, bsize),
 		targetRateRefreshTicks: r,
 		consumedByClient:       map[ErlClient]*[]time.Time{},
 		exp:                    4,

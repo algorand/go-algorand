@@ -125,7 +125,7 @@ func TestConsumeReleaseCapacity(t *testing.T) {
 func TestREDCongestionManagerShouldDrop(t *testing.T) {
 	client := mockClient("client")
 	other := mockClient("other")
-	red := NewREDCongestionManager(time.Second*10, 1)
+	red := NewREDCongestionManager(time.Second*10, 1, 10000)
 	red.Start()
 	// indicate that the arrival rate is essentially 1/s
 	for i := 0; i < 10; i++ {
@@ -158,7 +158,7 @@ func TestREDCongestionManagerShouldDrop(t *testing.T) {
 
 func TestREDCongestionManagerShouldntDrop(t *testing.T) {
 	client := mockClient("client")
-	red := NewREDCongestionManager(time.Second*10, 1)
+	red := NewREDCongestionManager(time.Second*10, 1, 10000)
 	red.Start()
 	// indicate that the arrival rate is essentially 0.1/s!
 	red.Consumed(client, time.Now())
@@ -184,7 +184,7 @@ func TestREDCongestionManagerShouldntDrop(t *testing.T) {
 
 func TestREDCongestionManagerTargetRate(t *testing.T) {
 	client := mockClient("client")
-	red := NewREDCongestionManager(time.Second*10, 10)
+	red := NewREDCongestionManager(time.Second*10, 10, 10000)
 	red.Start()
 	red.Consumed(client, time.Now())
 	red.Consumed(client, time.Now())
@@ -202,7 +202,7 @@ func TestREDCongestionManagerTargetRate(t *testing.T) {
 
 func TestREDCongestionManagerPrune(t *testing.T) {
 	client := mockClient("client")
-	red := NewREDCongestionManager(time.Second*10, 3)
+	red := NewREDCongestionManager(time.Second*10, 3, 10000)
 	red.Start()
 	red.Consumed(client, time.Now().Add(-11*time.Second))
 	red.Consumed(client, time.Now().Add(-11*time.Second))
