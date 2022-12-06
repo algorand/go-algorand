@@ -298,6 +298,7 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 
 	const numUsers = 100
 	log := logging.TestingLog(t)
+	log.SetLevel(logging.Warn)
 	addresses := make([]basics.Address, numUsers)
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
 
