@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
@@ -61,7 +62,7 @@ type pseudonode interface {
 	MakeProposals(ctx context.Context, r round, p period) (<-chan externalEvent, error)
 
 	// StartSpeculativeBlockAssembly calls the BlockFactory's StartSpeculativeBlockAssembly on a new go routine.
-	StartSpeculativeBlockAssembly(ctx context.Context, ve ValidatedBlock)
+	StartSpeculativeBlockAssembly(ctx context.Context, ve ValidatedBlock, blockHash crypto.Digest)
 
 	// MakeVotes returns a vote for a given proposal in some round, period, and step.
 	//
@@ -188,8 +189,8 @@ func (n asyncPseudonode) MakeProposals(ctx context.Context, r round, p period) (
 	}
 }
 
-func (n asyncPseudonode) StartSpeculativeBlockAssembly(ctx context.Context, ve ValidatedBlock) {
-	go n.factory.StartSpeculativeBlockAssembly(ctx, ve)
+func (n asyncPseudonode) StartSpeculativeBlockAssembly(ctx context.Context, ve ValidatedBlock, blockHash crypto.Digest) {
+	go n.factory.StartSpeculativeBlockAssembly(ctx, ve, blockHash)
 }
 
 func (n asyncPseudonode) MakeVotes(ctx context.Context, r round, p period, s step, prop proposalValue, persistStateDone chan error) (chan externalEvent, error) {

@@ -183,7 +183,7 @@ func (f testBlockFactory) AssembleBlock(r basics.Round) (ValidatedBlock, error) 
 	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
 }
 
-func (f testBlockFactory) StartSpeculativeBlockAssembly(context.Context, ValidatedBlock) {
+func (f testBlockFactory) StartSpeculativeBlockAssembly(context.Context, ValidatedBlock, crypto.Digest) {
 	return
 }
 

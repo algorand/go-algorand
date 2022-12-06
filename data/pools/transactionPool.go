@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -565,7 +566,12 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 }
 
 // StartSpeculativeBlockAssembly handles creating a speculative block
-func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, vb *ledgercore.ValidatedBlock) {
+func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, vb *ledgercore.ValidatedBlock, blockHash crypto.Digest) {
+
+	if blockHash.IsZero() {
+		blockHash = vb.Block().Digest()
+	}
+	pool.log.Infof("StartSpeculativeBlockAssembly %s", vb.Block().Hash().String())
 
 	pool.mu.Lock()
 	// cancel any pending speculative assembly

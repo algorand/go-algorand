@@ -349,7 +349,7 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 			s.log.Errorf("pseudonode.MakeProposals call failed %v", err)
 		}
 	case speculativeAssembly:
-		s.loopback.StartSpeculativeBlockAssembly(ctx, a.ValidatedBlock)
+		s.loopback.StartSpeculativeBlockAssembly(ctx, a.ValidatedBlock, a.Proposal.BlockDigest)
 
 	case repropose:
 		logEvent := logspec.AgreementEvent{
