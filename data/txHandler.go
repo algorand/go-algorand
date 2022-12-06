@@ -130,7 +130,7 @@ func MakeTxHandler(
 			metrics.MakeCounter(metrics.TransactionMessagesTxnDroppedCongestionManagement),
 		)
 		handler.erl = rateLimiter
-		congestionManager.Start(handler.ctx, nil)
+		congestionManager.Start()
 	}
 	return handler
 }
