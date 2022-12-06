@@ -1388,3 +1388,21 @@ func (node *AlgorandFullNode) IsParticipating() bool {
 	round := node.ledger.Latest() + 1
 	return node.accountManager.HasLiveKeys(round, round+10)
 }
+
+// SetSyncRound sets the minimum sync round on the catchup service
+func (node *AlgorandFullNode) SetSyncRound(rnd uint64) error {
+	// Calculate the first round for which we want to disable catchup from the network.
+	// This is based on the size of the cache used in the ledger.
+	disableSyncRound := rnd + node.Config().MaxAcctLookback
+	return node.catchupService.SetDisableSyncRound(disableSyncRound)
+}
+
+// GetSyncRound retrieves the sync round, removes cache offset used during SetSyncRound
+func (node *AlgorandFullNode) GetSyncRound() uint64 {
+	return node.catchupService.GetDisableSyncRound() - node.Config().MaxAcctLookback
+}
+
+// UnsetSyncRound removes the sync round constraint on the catchup service
+func (node *AlgorandFullNode) UnsetSyncRound() {
+	node.catchupService.UnsetDisableSyncRound()
+}

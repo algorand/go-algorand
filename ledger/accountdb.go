@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -286,7 +287,7 @@ func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.Con
 			return nil, err
 		}
 		normalizedAccountBalances[i].AccountHashes = make([][]byte, 1)
-		normalizedAccountBalances[i].AccountHashes[0] = accountHashBuilder(balance.Address, accountDataV5, balance.AccountData)
+		normalizedAccountBalances[i].AccountHashes[0] = store.AccountHashBuilder(balance.Address, accountDataV5, balance.AccountData)
 		if len(resources) > 0 {
 			normalizedAccountBalances[i].Resources = make(map[basics.CreatableIndex]store.ResourcesData, len(resources))
 			normalizedAccountBalances[i].EncodedResources = make(map[basics.CreatableIndex][]byte, len(resources))
@@ -325,7 +326,7 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 			normalizedAccountBalances[i].PartialBalance = true
 		} else {
 			normalizedAccountBalances[i].AccountHashes = make([][]byte, 1+len(balance.Resources))
-			normalizedAccountBalances[i].AccountHashes[0] = accountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].AccountData, balance.AccountData)
+			normalizedAccountBalances[i].AccountHashes[0] = store.AccountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].AccountData, balance.AccountData)
 			curHashIdx++
 		}
 		if len(balance.Resources) > 0 {
@@ -337,7 +338,7 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 				if err != nil {
 					return nil, err
 				}
-				normalizedAccountBalances[i].AccountHashes[curHashIdx], err = resourcesHashBuilderV6(&resData, balance.Address, basics.CreatableIndex(cidx), resData.UpdateRound, res)
+				normalizedAccountBalances[i].AccountHashes[curHashIdx], err = store.ResourcesHashBuilderV6(&resData, balance.Address, basics.CreatableIndex(cidx), resData.UpdateRound, res)
 				if err != nil {
 					return nil, err
 				}
@@ -350,17 +351,17 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 	return
 }
 
-// makeCompactResourceDeltas takes an array of AccountDeltas ( one array entry per round ), and compacts the resource portions of the arrays into a single
+// makeCompactResourceDeltas takes an array of StateDeltas containing AccountDeltas ( one array entry per round ), and compacts the resource portions of the AccountDeltas into a single
 // data structure that contains all the resources deltas changes. While doing that, the function eliminate any intermediate resources changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the resourcesDeltas.
-// As an optimization, accountDeltas is passed as a slice and must not be modified.
-func makeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
-	if len(accountDeltas) == 0 {
+// As an optimization, stateDeltas is passed as a slice and must not be modified.
+func makeCompactResourceDeltas(stateDeltas []ledgercore.StateDelta, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
+	if len(stateDeltas) == 0 {
 		return
 	}
 
 	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
-	size := accountDeltas[0].Len()*len(accountDeltas) + 1
+	size := stateDeltas[0].Accts.Len()*len(stateDeltas) + 1
 	outResourcesDeltas.cache = make(map[accountCreatable]int, size)
 	outResourcesDeltas.deltas = make([]resourceDelta, 0, size)
 	outResourcesDeltas.misses = make([]int, 0, size)
@@ -373,7 +374,8 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRou
 	if setUpdateRound {
 		updateRoundMultiplier = 1
 	}
-	for _, roundDelta := range accountDeltas {
+	for _, stateDelta := range stateDeltas {
+		roundDelta := stateDelta.Accts
 		deltaRound++
 		// assets
 		for _, res := range roundDelta.GetAllAssetResources() {
@@ -568,17 +570,17 @@ func (a *compactResourcesDeltas) updateOld(idx int, old store.PersistedResources
 	a.deltas[idx].oldResource = old
 }
 
-// makeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
+// makeCompactAccountDeltas takes an array of account StateDeltas with AccountDeltas ( one array entry per round ), and compacts the AccountDeltas into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the accountDeltaCount/modifiedCreatable.
-// As an optimization, accountDeltas is passed as a slice and must not be modified.
-func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
-	if len(accountDeltas) == 0 {
+// As an optimization, stateDeltas is passed as a slice and must not be modified.
+func makeCompactAccountDeltas(stateDeltas []ledgercore.StateDelta, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
+	if len(stateDeltas) == 0 {
 		return
 	}
 
 	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
-	size := accountDeltas[0].Len()*len(accountDeltas) + 1
+	size := stateDeltas[0].Accts.Len()*len(stateDeltas) + 1
 	outAccountDeltas.cache = make(map[basics.Address]int, size)
 	outAccountDeltas.deltas = make([]accountDelta, 0, size)
 	outAccountDeltas.misses = make([]int, 0, size)
@@ -591,7 +593,8 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 	if setUpdateRound {
 		updateRoundMultiplier = 1
 	}
-	for _, roundDelta := range accountDeltas {
+	for _, stateDelta := range stateDeltas {
+		roundDelta := stateDelta.Accts
 		deltaRound++
 		for i := 0; i < roundDelta.Len(); i++ {
 			addr, acctDelta := roundDelta.GetByIdx(i)
@@ -1279,11 +1282,11 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 	// when migrating there is only MaxTxnLife blocks in the block DB
 	// since the original txTail.commmittedUpTo preserved only (rnd+1)-MaxTxnLife = 1000 blocks back
 	err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
-		latestBlockRound, err := blockLatest(blockTx)
+		latestBlockRound, err := blockdb.BlockLatest(blockTx)
 		if err != nil {
 			return fmt.Errorf("latest block number cannot be retrieved : %w", err)
 		}
-		latestHdr, err := blockGetHdr(blockTx, dbRound)
+		latestHdr, err := blockdb.BlockGetHdr(blockTx, dbRound)
 		if err != nil {
 			return fmt.Errorf("latest block header %d cannot be retrieved : %w", dbRound, err)
 		}
@@ -1299,7 +1302,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		if firstRound == basics.Round(0) {
 			firstRound++
 		}
-		if _, err := blockGet(blockTx, firstRound); err != nil {
+		if _, err := blockdb.BlockGet(blockTx, firstRound); err != nil {
 			// looks like not catchpoint but a regular migration, start from maxTxnLife + deeperBlockHistory back
 			firstRound = (latestBlockRound + 1).SubSaturate(maxTxnLife + deeperBlockHistory)
 			if firstRound == basics.Round(0) {
@@ -1308,7 +1311,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		}
 		tailRounds := make([][]byte, 0, maxTxnLife)
 		for rnd := firstRound; rnd <= dbRound; rnd++ {
-			blk, err := blockGet(blockTx, rnd)
+			blk, err := blockdb.BlockGet(blockTx, rnd)
 			if err != nil {
 				return fmt.Errorf("block for round %d ( %d - %d ) cannot be retrieved : %w", rnd, firstRound, dbRound, err)
 			}
@@ -1343,7 +1346,7 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 		currentProto = initProto
 	} else {
 		err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
-			hdr, err := blockGetHdr(blockTx, rnd)
+			hdr, err := blockdb.BlockGetHdr(blockTx, rnd)
 			if err != nil {
 				return err
 			}
@@ -1514,7 +1517,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 			return fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 		}
 		for addr, state := range acctRehash {
-			deleteHash := accountHashBuilderV6(addr, &state.old, state.oldEnc)
+			deleteHash := store.AccountHashBuilderV6(addr, &state.old, state.oldEnc)
 			deleted, err := trie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
@@ -1523,7 +1526,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 				log.Warnf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
 			}
 
-			addHash := accountHashBuilderV6(addr, &state.new, state.newEnc)
+			addHash := store.AccountHashBuilderV6(addr, &state.new, state.newEnc)
 			added, err := trie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("performOnlineAccountsTableMigration attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
@@ -2466,7 +2469,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	if iterator.step == oaiStepInsertAccountData {
 		var lastAddrID int64
 		baseCb := func(addr basics.Address, rowid int64, accountData *store.BaseAccountData, encodedAccountData []byte) (err error) {
-			hash := accountHashBuilderV6(addr, accountData, encodedAccountData)
+			hash := store.AccountHashBuilderV6(addr, accountData, encodedAccountData)
 			_, err = iterator.insertStmt.ExecContext(ctx, rowid, hash)
 			if err != nil {
 				return
@@ -2477,7 +2480,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 
 		resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *store.ResourcesData, encodedResourceData []byte, lastResource bool) error {
 			if resData != nil {
-				hash, err := resourcesHashBuilderV6(resData, addr, cidx, resData.UpdateRound, encodedResourceData)
+				hash, err := store.ResourcesHashBuilderV6(resData, addr, cidx, resData.UpdateRound, encodedResourceData)
 				if err != nil {
 					return err
 				}
