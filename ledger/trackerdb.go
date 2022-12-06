@@ -205,7 +205,7 @@ func runMigrations(ctx context.Context, tx *sql.Tx, params trackerDBParams, log 
 			case 9:
 				err = tu.upgradeDatabaseSchema9(ctx, tx)
 				if err != nil {
-					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 8 : %v", err)
+					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 9 : %v", err)
 					return
 				}
 			default:

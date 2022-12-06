@@ -317,7 +317,7 @@ func (c *catchpointCatchupAccessorImpl) ProcessStagingBalances(ctx context.Conte
 		return c.processStagingContent(ctx, bytes, progress)
 	}
 	if sectionName == "stateProofVerificationContext.msgpack" {
-		return c.processStagingStateProofVerificationContext(ctx, bytes, progress)
+		return c.processStagingStateProofVerificationContext(bytes)
 	}
 	if strings.HasPrefix(sectionName, "balances.") && strings.HasSuffix(sectionName, ".msgpack") {
 		return c.processStagingBalances(ctx, bytes, progress)
@@ -328,7 +328,7 @@ func (c *catchpointCatchupAccessorImpl) ProcessStagingBalances(ctx context.Conte
 }
 
 // processStagingStateProofVerificationContext deserialize the given bytes as a temporary staging state proof verification data
-func (c *catchpointCatchupAccessorImpl) processStagingStateProofVerificationContext(_ context.Context, bytes []byte, _ *CatchpointCatchupAccessorProgress) (err error) {
+func (c *catchpointCatchupAccessorImpl) processStagingStateProofVerificationContext(bytes []byte) (err error) {
 	var decodedData catchpointStateProofVerificationContext
 	err = protocol.Decode(bytes, &decodedData)
 	if err != nil {

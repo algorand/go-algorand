@@ -69,11 +69,11 @@ const (
 
 	// CatchpointFileVersionV5 is the catchpoint file version that was used when the database schema was V0-V5.
 	CatchpointFileVersionV5 = uint64(0200)
-	// CatchpointFileVersionV6 is the catchpoint file version that is matching database schema V6-V8.
+	// CatchpointFileVersionV6 is the catchpoint file version that is matching database schema V6-V9.
 	// This version introduced accounts and resources separation. The first catchpoint
 	// round of this version is >= `reenableCatchpointsRound`.
 	CatchpointFileVersionV6 = uint64(0201)
-	// CatchpointFileVersionV7 is the catchpoint file version that is matching database schema V9.
+	// CatchpointFileVersionV7 is the catchpoint file version that is matching database schema V10.
 	// This version introduced state proof verification data and versioning for CatchpointLabel.
 	CatchpointFileVersionV7 = uint64(0202)
 )

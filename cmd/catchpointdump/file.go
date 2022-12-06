@@ -127,10 +127,6 @@ var fileCmd = &cobra.Command{
 				}
 				defer outFile.Close()
 			}
-			err = printStateProofVerificationContext("./ledger.tracker.sqlite", outFile)
-			if err != nil {
-				reportErrorf("Unable to print state proof verification database : %v", err)
-			}
 			err = printAccountsDatabase("./ledger.tracker.sqlite", true, fileHeader, outFile, excludedFields.GetSlice())
 			if err != nil {
 				reportErrorf("Unable to print account database : %v", err)
@@ -138,6 +134,10 @@ var fileCmd = &cobra.Command{
 			err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
 			if err != nil {
 				reportErrorf("Unable to print key value store : %v", err)
+			}
+			err = printStateProofVerificationContext("./ledger.tracker.sqlite", outFile)
+			if err != nil {
+				reportErrorf("Unable to print state proof verification database : %v", err)
 			}
 		}
 	},

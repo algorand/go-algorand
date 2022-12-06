@@ -28,21 +28,6 @@ func StateProofVerificationInitDbQueries(r db.Queryable) (*StateProofVerificatio
 	return qs, nil
 }
 
-// WriteCatchpointStateProofVerificationContext inserts all the state proof verification data in the provided array into
-// the catchpointstateproofverification table.
-func WriteCatchpointStateProofVerificationContext(ctx context.Context, tx *sql.Tx, verificationContext *ledgercore.StateProofVerificationContext) error {
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointstateproofverification(lastattestedround, verificationContext) VALUES(?, ?)")
-
-	if err != nil {
-		return err
-	}
-
-	defer insertStmt.Close()
-
-	_, err = insertStmt.ExecContext(ctx, verificationContext.LastAttestedRound, protocol.Encode(verificationContext))
-	return err
-}
-
 func DeleteOldStateProofVerificationContext(ctx context.Context, tx *sql.Tx, earliestLastAttestedRound basics.Round) error {
 	_, err := tx.ExecContext(ctx, "DELETE FROM stateproofverification WHERE lastattestedround < ?", earliestLastAttestedRound)
 	return err
@@ -121,4 +106,19 @@ func StateProofVerification(ctx context.Context, tx *sql.Tx) ([]ledgercore.State
 // CatchpointStateProofVerification returns all state proof verification data from the catchpointStateProofVerification table.
 func CatchpointStateProofVerification(ctx context.Context, tx *sql.Tx) ([]ledgercore.StateProofVerificationContext, error) {
 	return stateProofVerificationTable(ctx, tx, "catchpointStateProofVerification")
+}
+
+// WriteCatchpointStateProofVerificationContext inserts all the state proof verification data in the provided array into
+// the catchpointstateproofverification table.
+func WriteCatchpointStateProofVerificationContext(ctx context.Context, tx *sql.Tx, verificationContext *ledgercore.StateProofVerificationContext) error {
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointstateproofverification(lastattestedround, verificationContext) VALUES(?, ?)")
+
+	if err != nil {
+		return err
+	}
+
+	defer insertStmt.Close()
+
+	_, err = insertStmt.ExecContext(ctx, verificationContext.LastAttestedRound, protocol.Encode(verificationContext))
+	return err
 }
