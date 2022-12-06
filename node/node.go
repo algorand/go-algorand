@@ -84,6 +84,9 @@ type StatusReport struct {
 	CatchpointCatchupTotalAccounts     uint64
 	CatchpointCatchupProcessedAccounts uint64
 	CatchpointCatchupVerifiedAccounts  uint64
+	CatchpointCatchupTotalKVs          uint64
+	CatchpointCatchupProcessedKVs      uint64
+	CatchpointCatchupVerifiedKVs       uint64
 	CatchpointCatchupTotalBlocks       uint64
 	CatchpointCatchupAcquiredBlocks    uint64
 }
@@ -676,6 +679,9 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 		s.CatchpointCatchupTotalAccounts = stats.TotalAccounts
 		s.CatchpointCatchupProcessedAccounts = stats.ProcessedAccounts
 		s.CatchpointCatchupVerifiedAccounts = stats.VerifiedAccounts
+		s.CatchpointCatchupTotalKVs = stats.TotalKVs
+		s.CatchpointCatchupProcessedKVs = stats.ProcessedKVs
+		s.CatchpointCatchupVerifiedKVs = stats.VerifiedKVs
 		s.CatchpointCatchupTotalBlocks = stats.TotalBlocks
 		s.CatchpointCatchupAcquiredBlocks = stats.AcquiredBlocks
 		s.CatchupTime = time.Now().Sub(stats.StartTime)

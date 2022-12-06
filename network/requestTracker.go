@@ -254,6 +254,10 @@ type requestTrackedConnection struct {
 	tracker *RequestTracker
 }
 
+func (c *requestTrackedConnection) UnderlyingConn() net.Conn {
+	return c.Conn
+}
+
 // Close removes the connection from the tracker's connections map and call the underlaying Close function.
 func (c *requestTrackedConnection) Close() error {
 	c.tracker.hostRequestsMu.Lock()
