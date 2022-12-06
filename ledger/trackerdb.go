@@ -284,12 +284,13 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 
 	if modifiedAccounts > 0 {
 		cts := store.NewCatchpointSQLReaderWriter(tx)
+		arw := store.NewAccountsSQLReaderWriter(tx)
 
 		tu.log.Infof("upgradeDatabaseSchema1 reencoded %d accounts", modifiedAccounts)
 
 		tu.log.Infof("upgradeDatabaseSchema1 resetting account hashes")
 		// reset the merkle trie
-		err = resetAccountHashes(ctx, tx)
+		err = arw.ResetAccountHashes(ctx)
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema1 unable to reset account hashes : %v", err)
 		}
@@ -358,7 +359,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema4(ctx context.Context
 	}
 
 	if tu.catchpointEnabled && len(addresses) > 0 {
-		mc, err := MakeMerkleCommitter(tx, false)
+		mc, err := store.MakeMerkleCommitter(tx, false)
 		if err != nil {
 			// at this point record deleted and DB is pruned for account data
 			// if hash deletion fails just log it and do not abort startup
@@ -373,7 +374,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema4(ctx context.Context
 
 		var totalHashesDeleted int
 		for _, addr := range addresses {
-			hash := accountHashBuilder(addr, basics.AccountData{}, []byte{0x80})
+			hash := store.AccountHashBuilder(addr, basics.AccountData{}, []byte{0x80})
 			deleted, err := trie.Delete(hash)
 			if err != nil {
 				tu.log.Errorf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v: %v", hex.EncodeToString(hash), addr, err)
@@ -402,6 +403,8 @@ done:
 // upgradeDatabaseSchema5 upgrades the database schema from version 5 to version 6,
 // adding the resources table and clearing empty catchpoint directories.
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context, tx *sql.Tx) (err error) {
+	arw := store.NewAccountsSQLReaderWriter(tx)
+
 	err = accountsCreateResourceTable(ctx, tx)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema5 unable to create resources table : %v", err)
@@ -428,7 +431,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 	}
 
 	// reset the merkle trie
-	err = resetAccountHashes(ctx, tx)
+	err = arw.ResetAccountHashes(ctx)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema5 unable to reset account hashes : %v", err)
 	}
@@ -535,10 +538,11 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema7(ctx context.Context
 // upgradeDatabaseSchema8 upgrades the database schema from version 8 to version 9,
 // forcing a rebuild of the accounthashes table on betanet nodes. Otherwise it has no effect.
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema8(ctx context.Context, tx *sql.Tx) (err error) {
+	arw := store.NewAccountsSQLReaderWriter(tx)
 	betanetGenesisHash, _ := crypto.DigestFromString("TBMBVTC7W24RJNNUZCF7LWZD2NMESGZEQSMPG5XQD7JY4O7JKVWQ")
 	if tu.genesisHash == betanetGenesisHash && !tu.fromCatchpoint {
 		// reset hash round to 0, forcing catchpointTracker.initializeHashes to rebuild accounthashes
-		err = updateAccountsHashRound(ctx, tx, 0)
+		err = arw.UpdateAccountsHashRound(ctx, 0)
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema8 unable to reset acctrounds table 'hashbase' round : %v", err)
 		}
