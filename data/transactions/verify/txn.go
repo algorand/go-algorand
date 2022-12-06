@@ -22,9 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
-
-	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -594,32 +593,27 @@ type StreamVerifier struct {
 // NewBlockWatcher is a struct used to provide a new block header to the
 // stream verifier
 type NewBlockWatcher struct {
-	blkHeader *bookkeeping.BlockHeader
-	mu        deadlock.RWMutex
+	blkHeader atomic.Value
 }
 
 // MakeNewBlockWatcher construct a new block watcher with the initial blkHdr
 func MakeNewBlockWatcher(blkHdr bookkeeping.BlockHeader) (nbw *NewBlockWatcher) {
-	nbw = &NewBlockWatcher{
-		blkHeader: &blkHdr,
-	}
+	nbw = &NewBlockWatcher{}
+	nbw.blkHeader.Store(&blkHdr)
 	return nbw
 }
 
 // OnNewBlock implements the interface to subscribe to new block notifications from the ledger
 func (nbw *NewBlockWatcher) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
-	if nbw.blkHeader.Round >= block.BlockHeader.Round {
+	bh := nbw.blkHeader.Load().(*bookkeeping.BlockHeader)
+	if bh.Round >= block.BlockHeader.Round {
 		return
 	}
-	nbw.mu.Lock()
-	defer nbw.mu.Unlock()
-	nbw.blkHeader = &block.BlockHeader
+	nbw.blkHeader.Store(&block.BlockHeader)
 }
 
 func (nbw *NewBlockWatcher) getBlockHeader() (bh *bookkeeping.BlockHeader) {
-	nbw.mu.RLock()
-	defer nbw.mu.RUnlock()
-	return nbw.blkHeader
+	return nbw.blkHeader.Load().(*bookkeeping.BlockHeader)
 }
 
 type batchLoad struct {
