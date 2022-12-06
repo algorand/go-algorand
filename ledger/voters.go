@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/stateproof"
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
@@ -105,7 +104,7 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.Onl
 		return nil
 	}
 
-	startR := stateproof.GetOldestExpectedStateProof(&hdr)
+	startR := GetOldestExpectedStateProof(&hdr)
 	startR = votersRoundForStateProofRound(startR, &proto)
 
 	// Sanity check: we should never underflow or even reach 0.
@@ -173,8 +172,6 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 		return
 	}
 
-	vt.removeOldVoters(hdr)
-
 	// This might be a block where we snapshot the online participants,
 	// to eventually construct a vector commitment in a later
 	// block.
@@ -192,6 +189,17 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 
 }
 
+func (vt *votersTracker) postCommit(dcc *deferredCommitContext) {
+	// TODO: Am I sure?
+	lastHeaderCommitted, err := vt.l.BlockHdr(dcc.newBase)
+	if err != nil {
+		vt.l.trackerLog().Errorf("votersTracker.postCommit: could not retrieve header for round %d: %v", dcc.newBase, err)
+		return
+	}
+
+	vt.removeOldVoters(lastHeaderCommitted)
+}
+
 // removeOldVoters removes voters data form the tracker and allows the database to commit previous rounds.
 // voters would be removed if one of the two condition is met
 // 1 - Voters are for a round which was already been confirmed by stateproof
@@ -204,7 +212,7 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 // Since the map is small (Usually  0 - 2 elements and up to StateProofMaxRecoveryIntervals) we decided to keep the code simple
 // and check for deletion in every round.
 func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
-	lowestStateProofRound := stateproof.GetOldestExpectedStateProof(&hdr)
+	lowestStateProofRound := GetOldestExpectedStateProof(&hdr)
 
 	for r, tr := range vt.votersForRoundCache {
 		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
@@ -247,4 +255,22 @@ func (vt *votersTracker) getVoters(r basics.Round) (*ledgercore.VotersForRound, 
 	}
 
 	return tr, nil
+}
+
+// GetOldestExpectedStateProof returns the lowest round for which the node should create a state proof.
+func GetOldestExpectedStateProof(latestHeader *bookkeeping.BlockHeader) basics.Round {
+	proto := config.Consensus[latestHeader.CurrentProtocol]
+	if proto.StateProofInterval == 0 {
+		return 0
+	}
+
+	recentRoundOnRecoveryPeriod := basics.Round(uint64(latestHeader.Round) - uint64(latestHeader.Round)%proto.StateProofInterval)
+	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * (proto.StateProofMaxRecoveryIntervals)))
+
+	nextStateproofRound := latestHeader.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+
+	if nextStateproofRound > oldestRoundOnRecoveryPeriod {
+		return nextStateproofRound
+	}
+	return oldestRoundOnRecoveryPeriod
 }

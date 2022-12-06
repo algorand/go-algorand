@@ -82,8 +82,8 @@ func (spw *Worker) signStateProof(round basics.Round) {
 	// TODO: Perhaps we should add a fallback for the voters
 	verificationContext, err := spw.ledger.StateProofVerificationContext(round)
 	if err != nil {
-		// TODO: Should this really be the error handling here? This really shouldn't happen
-		spw.log.Warnf("spw.signBlock(%d): StateProofVerificationContext(%d): %v", round, round, err)
+		// TODO: Should this really be the error handling here?
+		spw.log.Infof("spw.signBlock(%d): StateProofVerificationContext(%d): %v", round, round, err)
 		return
 	}
 
@@ -92,6 +92,7 @@ func (spw *Worker) signStateProof(round basics.Round) {
 		return
 	}
 
+	// TODO: Seems like at the moment we don't actually enter this code
 	// Only sign blocks that are a multiple of StateProofInterval.
 	if round%basics.Round(proto.StateProofInterval) != 0 {
 		return

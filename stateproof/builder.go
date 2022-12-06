@@ -37,7 +37,22 @@ import (
 func (spw *Worker) OnPrepareCommit(rnd basics.Round) {
 	// TODO: Don't load the builder every time.
 	// TODO: Log errors
-	spw.loadOrCreateBuilder(rnd)
+	header, err := spw.ledger.BlockHdr(rnd)
+
+	if err != nil {
+		spw.log.Warnf("OnPreapreCommit(%d): could not retrieve header: %v\n", rnd, err)
+		return
+	}
+
+	proto := config.Consensus[header.CurrentProtocol]
+	if uint64(rnd)%proto.StateProofInterval != 0 {
+		return
+	}
+
+	_, err = spw.loadOrCreateBuilder(rnd)
+	if err != nil {
+		spw.log.Warnf("OnPreapreCommit(%d): %v\n", rnd, err)
+	}
 }
 
 // loadOrCreateBuilderWithSignatures either loads a builder from the DB or creates a new builder.
