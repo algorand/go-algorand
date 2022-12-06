@@ -257,7 +257,8 @@ func (erl *ElasticRateLimiter) closeReservation(c ErlClient) {
 
 // CongestionManager is an interface for tracking events which happen to capacityQueues
 type CongestionManager interface {
-	Start(ctx context.Context, wg *sync.WaitGroup)
+	Start()
+	Stop()
 	Consumed(c ErlClient, t time.Time)
 	Served(t time.Time)
 	ShouldDrop(c ErlClient) bool
@@ -290,6 +291,10 @@ type redCongestionManager struct {
 	// TODO: If we desire later, we can add mappings onto release/done for more insight
 	consumedByClient map[ErlClient]*[]time.Time
 	serves           []time.Time
+	// synchronization for unit tests
+	ctx       context.Context
+	ctxCancel context.CancelFunc
+	wg        sync.WaitGroup
 }
 
 // NewREDCongestionManager creates a Congestion Manager which will watches capacityGuard activity,
@@ -304,13 +309,15 @@ func NewREDCongestionManager(d time.Duration, r int) *redCongestionManager {
 		targetRateRefreshTicks: r,
 		consumedByClient:       map[ErlClient]*[]time.Time{},
 		exp:                    4,
+		wg:                     sync.WaitGroup{},
 	}
+	ret.ctx, ret.ctxCancel = context.WithCancel(context.Background())
 	return &ret
 }
 
 // Consumed implements CongestionManager by putting an event on the consumed channel,
 // to be processed by the Start() loop
-func (cm redCongestionManager) Consumed(c ErlClient, t time.Time) {
+func (cm *redCongestionManager) Consumed(c ErlClient, t time.Time) {
 	select {
 	case cm.consumed <- event{
 		c: c,
@@ -322,7 +329,7 @@ func (cm redCongestionManager) Consumed(c ErlClient, t time.Time) {
 
 // Served implements CongestionManager by putting an event on the done channel,
 // to be processed by the Start() loop
-func (cm redCongestionManager) Served(t time.Time) {
+func (cm *redCongestionManager) Served(t time.Time) {
 	select {
 	case cm.served <- event{
 		t: t,
@@ -334,7 +341,7 @@ func (cm redCongestionManager) Served(t time.Time) {
 // ShouldDrop implements CongestionManager by putting a query shouldDropQueries channel,
 // and blocks on the response to return synchronously to the caller
 // if an error should prevent the query from running, the result is defaulted to false
-func (cm redCongestionManager) ShouldDrop(c ErlClient) bool {
+func (cm *redCongestionManager) ShouldDrop(c ErlClient) bool {
 	ret := make(chan bool)
 	select {
 	case cm.shouldDropQueries <- shouldDropQuery{
@@ -349,7 +356,7 @@ func (cm redCongestionManager) ShouldDrop(c ErlClient) bool {
 
 // Start will kick off a goroutine to consume activity from the different activity channels,
 // as well as service queries about if a given capacityQueue should drop
-func (cm *redCongestionManager) Start(ctx context.Context, wg *sync.WaitGroup) {
+func (cm *redCongestionManager) Start() {
 	// check if the maintainer is already running to ensure there is only one routine
 	cm.runLock.Lock()
 	defer cm.runLock.Unlock()
@@ -357,41 +364,49 @@ func (cm *redCongestionManager) Start(ctx context.Context, wg *sync.WaitGroup) {
 		return
 	}
 	cm.running = true
-	go cm.run(ctx, wg)
+	cm.wg.Add(1)
+	go cm.run()
 }
 
-func (cm *redCongestionManager) run(ctx context.Context, wg *sync.WaitGroup) {
+func (cm *redCongestionManager) run() {
 	tick := 0
 	targetRate := float64(0)
 	consumedByClient := map[ErlClient]*[]time.Time{}
 	serves := []time.Time{}
 	exit := false
 	for {
-		// first process any new events happening
 		select {
-		// consumed events -- a client has consumed capacity from a queue
-		case e := <-cm.consumed:
-			if consumedByClient[e.c] == nil {
-				ts := []time.Time{}
-				consumedByClient[e.c] = &ts
-			}
-			*(consumedByClient[e.c]) = append(*(consumedByClient[e.c]), e.t)
-		// served events -- the capacity has been totally served
-		case e := <-cm.served:
-			serves = append(serves, e.t)
-		// "should drop" queries
+		// prioritize shouldDropQueries
 		case query := <-cm.shouldDropQueries:
 			cutoff := time.Now().Add(-1 * cm.window)
 			prune(consumedByClient[query.c], cutoff)
 			query.ret <- cm.shouldDrop(targetRate, query.c, consumedByClient[query.c])
+		default:
+			select {
+			// "should drop" queries
+			case query := <-cm.shouldDropQueries:
+				cutoff := time.Now().Add(-1 * cm.window)
+				prune(consumedByClient[query.c], cutoff)
+				query.ret <- cm.shouldDrop(targetRate, query.c, consumedByClient[query.c])
+			// consumed events -- a client has consumed capacity from a queue
+			case e := <-cm.consumed:
+				if consumedByClient[e.c] == nil {
+					ts := []time.Time{}
+					consumedByClient[e.c] = &ts
+				}
+				*(consumedByClient[e.c]) = append(*(consumedByClient[e.c]), e.t)
+			// served events -- the capacity has been totally served
+			case e := <-cm.served:
+				serves = append(serves, e.t)
+			// check for context Done, and flag the thread for shutdown
+			case <-cm.ctx.Done():
+				exit = true
+			}
 
-		// check for context Done, and start the thread shutdown
-		case <-ctx.Done():
-			exit = true
 		}
-		tick = (tick + 1) % cm.targetRateRefreshTicks
 		// only recalculate the service rate every N ticks, because all lists must be pruned, which can be expensive
 		// also calculate if the routine is going to exit
+		tick = (tick + 1) % cm.targetRateRefreshTicks
 		if tick == 0 || exit {
 			cutoff := time.Now().Add(-1 * cm.window)
 			prune(&serves, cutoff)
@@ -411,10 +426,17 @@ func (cm *redCongestionManager) run(ctx context.Context, wg *sync.WaitGroup) {
 			cm.setTargetRate(targetRate)
 			cm.setConsumedByClient(consumedByClient)
 			cm.setServes(serves)
-			cm.stop(wg)
+			cm.runLock.Lock()
+			defer cm.runLock.Unlock()
+			cm.running = false
+			cm.wg.Done()
 			return
 		}
 	}
+}
+
+func (cm *redCongestionManager) Stop() {
+	cm.ctxCancel()
 }
 
 func (cm *redCongestionManager) setTargetRate(tr float64) {
@@ -429,13 +451,25 @@ func (cm *redCongestionManager) setServes(ts []time.Time) {
 	cm.serves = ts
 }
 
-func (cm *redCongestionManager) stop(wg *sync.WaitGroup) {
-	cm.runLock.Lock()
-	defer cm.runLock.Unlock()
-	cm.running = false
-	if wg != nil {
-		wg.Done()
+func (cm *redCongestionManager) arrivalRateFor(arrivals *[]time.Time) float64 {
+	clientArrivalRate := float64(0)
+	if arrivals != nil {
+		clientArrivalRate = float64(len(*arrivals)) / float64(cm.window/time.Second)
 	}
+	return clientArrivalRate
+}
+
+func (cm *redCongestionManager) shouldDrop(targetRate float64, c ErlClient, arrivals *[]time.Time) bool {
+	// clients who have "never" been seen do not get dropped
+	clientArrivalRate := cm.arrivalRateFor(arrivals)
+	if clientArrivalRate == 0 {
+		return false
+	}
+	// A random float is selected, and the arrival rate of the given client is
+	// turned to a ratio against targetRate. the congestion manager recommends to drop activity
+	// proportional to its overuse above the targetRate
+	r := rand.Float64()
+	return (math.Pow(clientArrivalRate, cm.exp) / math.Pow(targetRate, cm.exp)) > r
 }
 
 func prune(ts *[]time.Time, cutoff time.Time) int {
@@ -452,25 +486,4 @@ func prune(ts *[]time.Time, cutoff time.Time) int {
 	//if there are no values after the cutoff, just set to empty and return
 	*ts = (*ts)[:0]
 	return 0
-}
-
-func (cm redCongestionManager) arrivalRateFor(arrivals *[]time.Time) float64 {
-	clientArrivalRate := float64(0)
-	if arrivals != nil {
-		clientArrivalRate = float64(len(*arrivals)) / float64(cm.window/time.Second)
-	}
-	return clientArrivalRate
-}
-
-func (cm redCongestionManager) shouldDrop(targetRate float64, c ErlClient, arrivals *[]time.Time) bool {
-	// clients who have "never" been seen do not get dropped
-	clientArrivalRate := cm.arrivalRateFor(arrivals)
-	if clientArrivalRate == 0 {
-		return false
-	}
-	// A random float is selected, and the arrival rate of the given client is
-	// turned to a ratio against targetRate. the congestion manager recommends to drop activity
-	// proportional to its overuse above the targetRate
-	r := rand.Float64()
-	return (math.Pow(clientArrivalRate, cm.exp) / math.Pow(targetRate, cm.exp)) > r
 }
