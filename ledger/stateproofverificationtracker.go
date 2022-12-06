@@ -323,18 +323,14 @@ func insertStateProofVerificationContext(ctx context.Context, tx *sql.Tx, contex
 		return nil
 	}
 
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO stateproofverification(lastattestedround, verificationcontext) VALUES(?, ?)")
-
+	writer, err := store.MakeStateProofVerificationWriter(ctx, tx)
 	if err != nil {
 		return err
 	}
-
-	defer insertStmt.Close()
+	defer writer.Close()
 
 	for _, commitContext := range contexts {
-		verificationcontext := commitContext.verificationContext
-		_, err = insertStmt.ExecContext(ctx, verificationcontext.LastAttestedRound, protocol.Encode(&verificationcontext))
-
+		err = writer.WriteStateProofVerificationContext(&commitContext.verificationContext)
 		if err != nil {
 			return err
 		}

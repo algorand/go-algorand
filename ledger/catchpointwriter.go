@@ -196,7 +196,7 @@ func (cw *catchpointWriter) Abort() error {
 }
 
 func (cw *catchpointWriter) WriteStateProofVerificationContext() (crypto.Digest, error) {
-	rawData, err := store.StateProofVerification(cw.ctx, cw.tx)
+	rawData, err := store.GetAllStateProofVerification(cw.ctx, cw.tx)
 	if err != nil {
 		return crypto.Digest{}, err
 	}
