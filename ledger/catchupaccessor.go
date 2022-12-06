@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -121,7 +122,7 @@ func (w *stagingWriterImpl) writeKVs(ctx context.Context, kvrs []encodedKVRecord
 		for i := 0; i < len(kvrs); i++ {
 			keys[i] = kvrs[i].Key
 			values[i] = kvrs[i].Value
-			hashes[i] = kvHashBuilderV6(string(keys[i]), values[i])
+			hashes[i] = store.KvHashBuilderV6(string(keys[i]), values[i])
 		}
 
 		return crw.WriteCatchpointStagingKVs(ctx, keys, values, hashes)
@@ -621,7 +622,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 // The function is _not_ a general purpose way to count hashes by hash kind.
 func countHashes(hashes [][]byte) (accountCount, kvCount uint64) {
 	for _, hash := range hashes {
-		if hash[hashKindEncodingIndex] == byte(kvHK) {
+		if hash[store.HashKindEncodingIndex] == byte(store.KvHK) {
 			kvCount++
 		} else {
 			accountCount++
@@ -733,7 +734,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 					var added bool
 					added, err = trie.Add(hash)
 					if !added {
-						return fmt.Errorf("CatchpointCatchupAccessorImpl::BuildMerkleTrie: The provided catchpoint file contained the same account more than once. hash = '%s' hash kind = %s", hex.EncodeToString(hash), hashKind(hash[hashKindEncodingIndex]))
+						return fmt.Errorf("CatchpointCatchupAccessorImpl::BuildMerkleTrie: The provided catchpoint file contained the same account more than once. hash = '%s' hash kind = %s", hex.EncodeToString(hash), store.HashKind(hash[store.HashKindEncodingIndex]))
 					}
 					if err != nil {
 						return
@@ -915,7 +916,7 @@ func (c *catchpointCatchupAccessorImpl) StoreFirstBlock(ctx context.Context, blk
 	start := time.Now()
 	ledgerStorefirstblockCount.Inc(nil)
 	err = blockDbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		return blockStartCatchupStaging(tx, *blk)
+		return blockdb.BlockStartCatchupStaging(tx, *blk)
 	})
 	ledgerStorefirstblockMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
@@ -930,7 +931,7 @@ func (c *catchpointCatchupAccessorImpl) StoreBlock(ctx context.Context, blk *boo
 	start := time.Now()
 	ledgerCatchpointStoreblockCount.Inc(nil)
 	err = blockDbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		return blockPutStaging(tx, *blk)
+		return blockdb.BlockPutStaging(tx, *blk)
 	})
 	ledgerCatchpointStoreblockMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
@@ -946,10 +947,10 @@ func (c *catchpointCatchupAccessorImpl) FinishBlocks(ctx context.Context, applyC
 	ledgerCatchpointFinishblocksCount.Inc(nil)
 	err = blockDbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		if applyChanges {
-			return blockCompleteCatchup(tx)
+			return blockdb.BlockCompleteCatchup(tx)
 		}
 		// TODO: unused, either actually implement cleanup on catchpoint failure, or delete this
-		return blockAbortCatchup(tx)
+		return blockdb.BlockAbortCatchup(tx)
 	})
 	ledgerCatchpointFinishblocksMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
@@ -964,7 +965,7 @@ func (c *catchpointCatchupAccessorImpl) EnsureFirstBlock(ctx context.Context) (b
 	start := time.Now()
 	ledgerCatchpointEnsureblock1Count.Inc(nil)
 	err = blockDbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		blk, err = blockEnsureSingleBlock(tx)
+		blk, err = blockdb.BlockEnsureSingleBlock(tx)
 		return
 	})
 	ledgerCatchpointEnsureblock1Micros.AddMicrosecondsSince(start, nil)
