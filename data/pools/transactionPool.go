@@ -127,7 +127,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	}
 	pool.cond.L = &pool.mu
 	pool.assemblyCond.L = &pool.assemblyMu
-	pool.recomputeBlockEvaluator(nil, 0)
+	pool.recomputeBlockEvaluator(nil)
 	return &pool
 }
 
@@ -183,7 +183,7 @@ func (pool *TransactionPool) Reset() {
 	pool.numPendingWholeBlocks = 0
 	pool.pendingBlockEvaluator = nil
 	pool.statusCache.reset()
-	pool.recomputeBlockEvaluator(nil, 0)
+	pool.recomputeBlockEvaluator(nil)
 }
 
 // NumExpired returns the number of transactions that expired at the
@@ -496,7 +496,6 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
 func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
-	var knownCommitted uint
 	var stats telemetryspec.AssembleBlockMetrics
 
 	committedTxids := delta.Txids
@@ -531,7 +530,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 		// Recompute the pool by starting from the new latest block.
 		// This has the side-effect of discarding transactions that
 		// have been committed (or that are otherwise no longer valid).
-		stats = pool.recomputeBlockEvaluator(committedTxids, knownCommitted)
+		stats = pool.recomputeBlockEvaluator(committedTxids)
 	}
 
 	proto := config.Consensus[block.CurrentProtocol]
@@ -630,7 +629,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator). Expects that the pool.mu mutex would be already taken.
-func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint) (asmStats telemetryspec.AssembleBlockMetrics) {
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions) (asmStats telemetryspec.AssembleBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
@@ -670,11 +669,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	next := bookkeeping.MakeBlock(prev)
 	pool.numPendingWholeBlocks = 0
-	hint := pendingCount - int(knownCommitted)
-	if hint < 0 || int(knownCommitted) < 0 {
-		hint = 0
-	}
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, pendingCount, 0)
 	if err != nil {
 		// The pendingBlockEvaluator is an interface, and in case of an evaluator error
 		// we want to remove the interface itself rather then keeping an interface
@@ -965,7 +960,7 @@ func (pool *TransactionPool) AssembleDevModeBlock() (assembled *ledgercore.Valid
 	defer pool.mu.Unlock()
 
 	// drop the current block evaluator and start with a new one.
-	pool.recomputeBlockEvaluator(nil, 0)
+	pool.recomputeBlockEvaluator(nil)
 
 	// The above was already pregenerating the entire block,
 	// so there won't be any waiting on this call.

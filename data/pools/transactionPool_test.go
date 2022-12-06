@@ -1118,7 +1118,7 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = poolSize
 
-	setupPool := func() (*TransactionPool, map[transactions.Txid]ledgercore.IncludedTransactions, uint) {
+	setupPool := func() (*TransactionPool, map[transactions.Txid]ledgercore.IncludedTransactions) {
 		transactionPool := MakeTransactionPool(l, cfg, logging.Base())
 
 		// make some transactions
@@ -1145,25 +1145,22 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 		}
 
 		// make args for recomputeBlockEvaluator() like OnNewBlock() would
-		var knownCommitted uint
 		committedTxIds := make(map[transactions.Txid]ledgercore.IncludedTransactions)
 		for i := 0; i < blockTxnCount; i++ {
-			knownCommitted++
 			// OK to use empty IncludedTransactions: recomputeBlockEvaluator is only checking map membership
 			committedTxIds[signedTransactions[i].ID()] = ledgercore.IncludedTransactions{}
 		}
-		b.Logf("Made transactionPool with %d signedTransactions, %d committedTxIds, %d knownCommitted",
-			len(signedTransactions), len(committedTxIds), knownCommitted)
+		b.Logf("Made transactionPool with %d signedTransactions, %d committedTxIds",
+			len(signedTransactions), len(committedTxIds))
 		b.Logf("transactionPool pendingTxGroups %d rememberedTxGroups %d",
 			len(transactionPool.pendingTxGroups), len(transactionPool.rememberedTxGroups))
-		return transactionPool, committedTxIds, knownCommitted
+		return transactionPool, committedTxIds
 	}
 
 	transactionPool := make([]*TransactionPool, b.N)
 	committedTxIds := make([]map[transactions.Txid]ledgercore.IncludedTransactions, b.N)
-	knownCommitted := make([]uint, b.N)
 	for i := 0; i < b.N; i++ {
-		transactionPool[i], committedTxIds[i], knownCommitted[i] = setupPool()
+		transactionPool[i], committedTxIds[i] = setupPool()
 	}
 	time.Sleep(time.Second)
 	runtime.GC()
@@ -1181,7 +1178,7 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		transactionPool[i].recomputeBlockEvaluator(committedTxIds[i], knownCommitted[i])
+		transactionPool[i].recomputeBlockEvaluator(committedTxIds[i])
 	}
 	b.StopTimer()
 	if profF != nil {
@@ -1508,7 +1505,7 @@ func TestStateProofLogging(t *testing.T) {
 
 	err = transactionPool.RememberOne(stxn)
 	require.NoError(t, err)
-	transactionPool.recomputeBlockEvaluator(nil, 0)
+	transactionPool.recomputeBlockEvaluator(nil)
 	_, err = transactionPool.AssembleBlock(514, time.Time{})
 	require.NoError(t, err)
 
