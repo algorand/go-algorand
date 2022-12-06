@@ -1353,7 +1353,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 // before the change != hash calculated now.  Accepting the new hash risks
 // breaking backwards compatibility.
 //
-// The test also confirms each hashKind has at least 1 test case.  The check
+// The test also confirms each HashKind has at least 1 test case.  The check
 // defends against the addition of a hashed data type without test coverage.
 func TestHashContract(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1475,9 +1475,10 @@ func TestHashContract(t *testing.T) {
 		return false
 	}
 
+	require.True(t, strings.HasPrefix(store.HashKind(255).String(), "HashKind("))
 	for i := byte(0); i < 255; i++ {
-		if !strings.HasPrefix(store.HashKind(i).String(), "hashKind(") {
-			require.True(t, hasTestCoverageForKind(store.HashKind(i)), fmt.Sprintf("Missing test coverage for hashKind ordinal value = %d", i))
+		if !strings.HasPrefix(store.HashKind(i).String(), "HashKind(") {
+			require.True(t, hasTestCoverageForKind(store.HashKind(i)), fmt.Sprintf("Missing test coverage for HashKind ordinal value = %d", i))
 		}
 	}
 }
