@@ -32,7 +32,8 @@ import (
 )
 
 type accountsV2Reader struct {
-	q db.Queryable
+	q                  db.Queryable
+	preparedStatements map[string]*sql.Stmt
 }
 
 type accountsV2Writer struct {
@@ -47,9 +48,25 @@ type accountsV2ReaderWriter struct {
 // NewAccountsSQLReaderWriter creates a Catchpoint SQL reader+writer
 func NewAccountsSQLReaderWriter(e db.Executable) *accountsV2ReaderWriter {
 	return &accountsV2ReaderWriter{
-		accountsV2Reader{q: e},
+		accountsV2Reader{q: e, preparedStatements: make(map[string]*sql.Stmt)},
 		accountsV2Writer{e: e},
 	}
+}
+
+func (r *accountsV2Reader) get_or_prepare(key string, queryString string) (stmt *sql.Stmt, err error) {
+	// fetch statement
+	if stmt, ok := r.preparedStatements[key]; ok {
+		return stmt, nil
+	}
+	// we do not have it, prepare it
+	stmt, err = r.q.Prepare(queryString)
+	if err != nil {
+		return
+	}
+	// cache the statement
+	r.preparedStatements[key] = stmt
+
+	return stmt, nil
 }
 
 // AccountsTotals returns account totals
@@ -270,12 +287,12 @@ func (r *accountsV2Reader) LookupAccountAddressFromAddressID(ctx context.Context
 }
 
 func (r *accountsV2Reader) LookupAccountDataByAddress(addr basics.Address) (rowid int64, data []byte, err error) {
-	// prepare statement and TODO: cache it
-	selectStmt, err := r.q.Prepare("SELECT rowid, data FROM accountbase WHERE address=?")
+	// optimize this query for repeated usage
+	selectStmt, err := r.get_or_prepare("LookupAccountDataByAddress", "SELECT rowid, data FROM accountbase WHERE address=?")
 	if err != nil {
 		return
 	}
-	defer selectStmt.Close()
+
 	err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &data)
 	if err != nil {
 		return
@@ -284,13 +301,15 @@ func (r *accountsV2Reader) LookupAccountDataByAddress(addr basics.Address) (rowi
 }
 
 func (r *accountsV2Reader) LookupOnlineAccountDataByAddress(addr basics.Address) (rowid int64, data []byte, err error) {
-	// prepare statement and TODO: cache it
-	// fetch the latest entry
-	selectStmt, err := r.q.Prepare("SELECT rowid, data FROM onlineaccounts WHERE address=? ORDER BY updround DESC LIMIT 1")
+	// optimize this query for repeated usage
+	selectStmt, err := r.get_or_prepare(
+		"LookupOnlineAccountDataByAddress",
+		"SELECT rowid, data FROM onlineaccounts WHERE address=? ORDER BY updround DESC LIMIT 1",
+	)
 	if err != nil {
 		return
 	}
-	defer selectStmt.Close()
+
 	err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &data)
 	if err != nil {
 		return
@@ -299,12 +318,11 @@ func (r *accountsV2Reader) LookupOnlineAccountDataByAddress(addr basics.Address)
 }
 
 func (r *accountsV2Reader) LookupAccountRowId(addr basics.Address) (rowid int64, err error) {
-	// prepare statement and TODO: cache it
-	addrRowidStmt, err := r.q.Prepare("SELECT rowid FROM accountbase WHERE address=?")
+	// optimize this query for repeated usage
+	addrRowidStmt, err := r.get_or_prepare("LookupAccountRowId", "SELECT rowid FROM accountbase WHERE address=?")
 	if err != nil {
 		return
 	}
-	defer addrRowidStmt.Close()
 
 	err = addrRowidStmt.QueryRow(addr[:]).Scan(&rowid)
 	if err != nil {
@@ -314,12 +332,11 @@ func (r *accountsV2Reader) LookupAccountRowId(addr basics.Address) (rowid int64,
 }
 
 func (r *accountsV2Reader) LookupResourceDataByAddrId(addrid int64, aidx basics.CreatableIndex) (data []byte, err error) {
-	// prepare statement and TODO: cache it
-	selectStmt, err := r.q.Prepare("SELECT data FROM resources WHERE addrid = ? AND aidx = ?")
+	// optimize this query for repeated usage
+	selectStmt, err := r.get_or_prepare("LookupResourceDataByAddrId", "SELECT data FROM resources WHERE addrid = ? AND aidx = ?")
 	if err != nil {
 		return
 	}
-	defer selectStmt.Close()
 
 	err = selectStmt.QueryRow(addrid, aidx).Scan(&data)
 	if err != nil {
