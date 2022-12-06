@@ -269,6 +269,65 @@ func (r *accountsV2Reader) LookupAccountAddressFromAddressID(ctx context.Context
 	return
 }
 
+func (r *accountsV2Reader) LookupAccountDataByAddress(addr basics.Address) (rowid int64, data []byte, err error) {
+	// prepare statement and TODO: cache it
+	selectStmt, err := r.q.Prepare("SELECT rowid, data FROM accountbase WHERE address=?")
+	if err != nil {
+		return
+	}
+	defer selectStmt.Close()
+	err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &data)
+	if err != nil {
+		return
+	}
+	return rowid, data, err
+}
+
+func (r *accountsV2Reader) LookupOnlineAccountDataByAddress(addr basics.Address) (rowid int64, data []byte, err error) {
+	// prepare statement and TODO: cache it
+	// fetch the latest entry
+	selectStmt, err := r.q.Prepare("SELECT rowid, data FROM onlineaccounts WHERE address=? ORDER BY updround DESC LIMIT 1")
+	if err != nil {
+		return
+	}
+	defer selectStmt.Close()
+	err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &data)
+	if err != nil {
+		return
+	}
+	return rowid, data, err
+}
+
+func (r *accountsV2Reader) LookupAccountRowId(addr basics.Address) (rowid int64, err error) {
+	// prepare statement and TODO: cache it
+	addrRowidStmt, err := r.q.Prepare("SELECT rowid FROM accountbase WHERE address=?")
+	if err != nil {
+		return
+	}
+	defer addrRowidStmt.Close()
+
+	err = addrRowidStmt.QueryRow(addr[:]).Scan(&rowid)
+	if err != nil {
+		return
+	}
+	return rowid, err
+}
+
+func (r *accountsV2Reader) LookupResourceDataByAddrId(addrid int64, aidx basics.CreatableIndex) (data []byte, err error) {
+	// prepare statement and TODO: cache it
+	selectStmt, err := r.q.Prepare("SELECT data FROM resources WHERE addrid = ? AND aidx = ?")
+	if err != nil {
+		return
+	}
+	defer selectStmt.Close()
+
+	err = selectStmt.QueryRow(addrid, aidx).Scan(&data)
+	if err != nil {
+		return
+	}
+	return data, err
+}
+
 // LoadAllFullAccounts loads all accounts from balancesTable and resourcesTable.
 // On every account full load it invokes acctCb callback to report progress and data.
 func (r *accountsV2Reader) LoadAllFullAccounts(
