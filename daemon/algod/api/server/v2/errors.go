@@ -44,6 +44,7 @@ var (
 	errFailedToAbortCatchup                    = "failed to abort catchup : %v"
 	errFailedToStartCatchup                    = "failed to start catchup : %v"
 	errOperationNotAvailableDuringCatchup      = "operation not available during catchup"
+	errOperationNotAvailableDuringLedgerReload = "operation not available during ledger reload"
 	errRESTPayloadZeroLength                   = "payload was of zero length"
 	errRoundGreaterThanTheLatest               = "given round is greater than the latest round"
 )

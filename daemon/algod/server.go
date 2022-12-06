@@ -48,6 +48,7 @@ import (
 )
 
 var server http.Server
+var IsDBSchemeFinished = false
 
 // Server represents an instance of the REST API HTTP server
 type Server struct {

@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/daemon/algod"
 	"io"
 	"math"
 	"net/http"
@@ -801,6 +802,9 @@ func (v2 *Handlers) GetReady(ctx echo.Context) error {
 	if stat.Catchpoint != "" {
 		// node is currently catching up to the requested catchpoint.
 		return serviceUnavailable(ctx, fmt.Errorf("ready failed as the node is catchpoint catching up"), errOperationNotAvailableDuringCatchup, v2.Log)
+	}
+	if !algod.IsDBSchemeFinished {
+		return serviceUnavailable(ctx, fmt.Errorf("ready failed as the node has not finished ledger reload"), errOperationNotAvailableDuringLedgerReload, v2.Log)
 	}
 	return ctx.NoContent(http.StatusOK)
 }
