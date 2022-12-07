@@ -224,7 +224,6 @@ func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
 	}
 
 	require.Less(t, cache.Len(), size)
-	require.Greater(t, cache.Len(), 0)
 }
 
 func TestTxHandlerSaltedCacheManual(t *testing.T) {
