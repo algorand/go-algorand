@@ -313,7 +313,9 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 	return nil
 }
 
-func (handler *TxHandler) dedupCanonical(ntx int, unverifiedTxGroup []transactions.SignedTxn, consumed int) bool {
+// dedupCanonical checks if the transaction group has been seen before after reencoding to canonical representation.
+// returns a key used for insertion if the group was not found.
+func (handler *TxHandler) dedupCanonical(ntx int, unverifiedTxGroup []transactions.SignedTxn, consumed int) (*crypto.Digest, bool) {
 	// consider situations where someone want to censor transactions A
 	// 1. Txn A is not part of a group => txn A with a valid signature is OK
 	// Censorship attempts are:
@@ -325,16 +327,17 @@ func (handler *TxHandler) dedupCanonical(ntx int, unverifiedTxGroup []transactio
 	// - txn A with a valid or invalid signature => cache/dedup canonical txn with its signature.
 	// - txn A as part of a group => cache/dedup the entire group
 	//
-	// what does not work:
+	// caching approaches that would not work:
 	// - using txid: {A} could be poisoned by {A, B} where B is invalid
 	// - using individual txn from a group: {A, Z} could be poisoned by {A, B}, where B is invalid
 
+	var d crypto.Digest
 	if ntx == 1 {
 		// a single transaction => cache/dedup canonical txn with its signature
 		enc := unverifiedTxGroup[0].MarshalMsg(nil)
-		d := crypto.Hash(enc)
+		d = crypto.Hash(enc)
 		if handler.txCanonicalCache.CheckAndPut(&d) {
-			return true
+			return nil, true
 		}
 	} else {
 		// a transaction group => cache/dedup the entire group canonical group
@@ -346,14 +349,15 @@ func (handler *TxHandler) dedupCanonical(ntx int, unverifiedTxGroup []transactio
 			// reallocated, some assumption on size was wrong
 			// log and skip
 			logging.Base().Warnf("Decoded size %d does not match to encoded %d", consumed, len(encodeBuf))
+			return nil, false
 		} else {
-			d := crypto.Hash(encodeBuf)
+			d = crypto.Hash(encodeBuf)
 			if handler.txCanonicalCache.CheckAndPut(&d) {
-				return true
+				return nil, true
 			}
 		}
 	}
-	return false
+	return &d, false
 }
 
 // processIncomingTxn decodes a transaction group from incoming message and enqueues into the back log for processing.
@@ -362,11 +366,12 @@ func (handler *TxHandler) dedupCanonical(ntx int, unverifiedTxGroup []transactio
 //  - message are checked for duplicates
 //  - transactions are checked for duplicates
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
-
+	var msgKey *crypto.Digest
+	var ok bool
 	if handler.cacheConfig.enableFilteringRawMsg {
 		// check for duplicate messages
 		// this helps against relaying duplicates
-		if handler.msgCache.CheckAndPut(rawmsg.Data) {
+		if msgKey, ok = handler.msgCache.CheckAndPut(rawmsg.Data); ok {
 			transactionMessagesDupRawMsg.Inc(nil)
 			return network.OutgoingMessage{Action: network.Ignore}
 		}
@@ -412,8 +417,9 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		transactionMessageTxGroupFull.Inc(nil)
 	}
 
+	var canonicalKey *crypto.Digest
 	if handler.cacheConfig.enableFilteringCanonical {
-		if handler.dedupCanonical(ntx, unverifiedTxGroup, consumed) {
+		if canonicalKey, ok = handler.dedupCanonical(ntx, unverifiedTxGroup, consumed); ok {
 			transactionMessagesDupCanonical.Inc(nil)
 			return network.OutgoingMessage{Action: network.Ignore}
 		}
@@ -428,6 +434,13 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		// if we failed here we want to increase the corresponding metric. It might suggest that we
 		// want to increase the queue size.
 		transactionMessagesDroppedFromBacklog.Inc(nil)
+		// additionally, remove the txn from duplicate caches to ensure it can be re-submitted
+		if canonicalKey != nil {
+			handler.txCanonicalCache.Delete(canonicalKey)
+		}
+		if msgKey != nil {
+			handler.msgCache.DeleteByKey(msgKey)
+		}
 	}
 
 	return network.OutgoingMessage{Action: network.Ignore}

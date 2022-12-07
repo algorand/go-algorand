@@ -95,10 +95,21 @@ func TestTxHandlerDigestCache(t *testing.T) {
 		exist := cache.check(&ds[i])
 		require.False(t, exist)
 	}
+
+	// check deletion works
+	for i := 0; i < size; i++ {
+		cache.Delete(&ds[i])
+		cache.Delete(&ds2[i])
+	}
+
+	require.Equal(t, 1, cache.Len())
+
+	cache.Delete(&d)
+	require.Equal(t, 0, cache.Len())
 }
 
 func (c *txSaltedCache) check(msg []byte) bool {
-	found, _ := c.innerCheck(msg)
+	_, found := c.innerCheck(msg)
 	return found
 }
 
@@ -113,10 +124,13 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 
 	// add some unique random
 	var ds [size][8]byte
+	var ks [size]*crypto.Digest
+	var exist bool
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds[i][:]))
-		exist := cache.CheckAndPut(ds[i][:])
+		ks[i], exist = cache.CheckAndPut(ds[i][:])
 		require.False(t, exist)
+		require.NotEmpty(t, ks[i])
 
 		exist = cache.check(ds[i][:])
 		require.True(t, exist)
@@ -126,18 +140,21 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 
 	// try to re-add, ensure not added
 	for i := 0; i < size; i++ {
-		exist := cache.CheckAndPut(ds[i][:])
+		k, exist := cache.CheckAndPut(ds[i][:])
 		require.True(t, exist)
+		require.Empty(t, k)
 	}
 
 	require.Equal(t, size, cache.Len())
 
 	// add some more and ensure capacity switch
 	var ds2 [size][8]byte
+	var ks2 [size]*crypto.Digest
 	for i := 0; i < size; i++ {
 		crypto.RandBytes(ds2[i][:])
-		exist := cache.CheckAndPut(ds2[i][:])
+		ks2[i], exist = cache.CheckAndPut(ds2[i][:])
 		require.False(t, exist)
+		require.NotEmpty(t, ks2[i])
 
 		exist = cache.check(ds2[i][:])
 		require.True(t, exist)
@@ -147,8 +164,9 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 
 	var d [8]byte
 	crypto.RandBytes(d[:])
-	exist := cache.CheckAndPut(d[:])
+	k, exist := cache.CheckAndPut(d[:])
 	require.False(t, exist)
+	require.NotEmpty(t, k)
 	exist = cache.check(d[:])
 	require.True(t, exist)
 
@@ -165,6 +183,17 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 		exist := cache.check(ds[i][:])
 		require.False(t, exist)
 	}
+
+	// check deletion works
+	for i := 0; i < size; i++ {
+		cache.DeleteByKey(ks[i])
+		cache.DeleteByKey(ks2[i])
+	}
+
+	require.Equal(t, 1, cache.Len())
+
+	cache.Delete(k)
+	require.Equal(t, 0, cache.Len())
 }
 
 func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
@@ -181,8 +210,9 @@ func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
 	for i := 0; i < size; i++ {
 		cache.mu.Lock()
 		crypto.RandBytes([]byte(ds[i][:]))
-		exist := cache.innerCheckAndPut(ds[i][:])
+		k, exist := cache.innerCheckAndPut(ds[i][:])
 		require.False(t, exist)
+		require.NotEmpty(t, k)
 
 		exist = cache.check(ds[i][:])
 		require.True(t, exist)
@@ -209,8 +239,9 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 	var ds [size][8]byte
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds[i][:]))
-		exist := cache.CheckAndPut(ds[i][:])
+		k, exist := cache.CheckAndPut(ds[i][:])
 		require.False(t, exist)
+		require.NotEmpty(t, k)
 		exist = cache.check(ds[i][:])
 		require.True(t, exist)
 	}
@@ -223,8 +254,9 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 	var ds2 [size][8]byte
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds2[i][:]))
-		exist := cache.CheckAndPut(ds2[i][:])
+		k, exist := cache.CheckAndPut(ds2[i][:])
 		require.False(t, exist)
+		require.NotEmpty(t, k)
 		exist = cache.check(ds2[i][:])
 		require.True(t, exist)
 	}

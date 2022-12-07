@@ -93,6 +93,14 @@ func (c *digestCache) Len() int {
 	return len(c.cur) + len(c.prev)
 }
 
+// Delete from the cache
+func (c *digestCache) Delete(d *crypto.Digest) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.cur, *d)
+	delete(c.prev, *d)
+}
+
 // txSaltedCache is a digest cache with a rotating salt
 // uses blake2b hash function
 type txSaltedCache struct {
@@ -168,7 +176,7 @@ func (c *txSaltedCache) innerSwap(scheduled bool) {
 
 // innerCheck returns true if exists, and the current salted hash if does not.
 // locking semantic: write lock must be held
-func (c *txSaltedCache) innerCheck(msg []byte) (bool, *crypto.Digest) {
+func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, bool) {
 	ptr := saltedPool.Get()
 	defer saltedPool.Put(ptr)
 
@@ -181,7 +189,7 @@ func (c *txSaltedCache) innerCheck(msg []byte) (bool, *crypto.Digest) {
 
 	_, found := c.cur[d]
 	if found {
-		return true, nil
+		return nil, true
 	}
 
 	toBeHashed = append(toBeHashed[:len(msg)], c.prevSalt[:]...)
@@ -189,24 +197,26 @@ func (c *txSaltedCache) innerCheck(msg []byte) (bool, *crypto.Digest) {
 	pd := crypto.Digest(blake2b.Sum256(toBeHashed))
 	_, found = c.prev[pd]
 	if found {
-		return true, nil
+		return nil, true
 	}
-	return false, &d
+	return &d, false
 }
 
 // CheckAndPut adds msg into a cache if not found
-func (c *txSaltedCache) CheckAndPut(msg []byte) bool {
+// returns a hashing key used for insertion if the message not found.
+func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.innerCheckAndPut(msg)
 }
 
 // innerCheckAndPut adds msg into a cache if not found.
+// returns a hashing key used for insertion if the message not found.
 // locking semantic: write lock must be held
-func (c *txSaltedCache) innerCheckAndPut(msg []byte) bool {
-	found, d := c.innerCheck(msg)
+func (c *txSaltedCache) innerCheckAndPut(msg []byte) (*crypto.Digest, bool) {
+	d, found := c.innerCheck(msg)
 	if found {
-		return true
+		return d, found
 	}
 
 	if len(c.cur) >= c.maxSize {
@@ -224,7 +234,12 @@ func (c *txSaltedCache) innerCheckAndPut(msg []byte) bool {
 	}
 
 	c.cur[*d] = struct{}{}
-	return false
+	return d, false
+}
+
+// DeleteByKey from the cache by using a key used for insertion
+func (c *txSaltedCache) DeleteByKey(d *crypto.Digest) {
+	c.Delete(d)
 }
 
 var saltedPool = sync.Pool{
