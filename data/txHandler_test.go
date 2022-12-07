@@ -30,7 +30,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"unicode"
 
 	"github.com/stretchr/testify/require"
 
@@ -51,13 +50,9 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
-func BenchmarkTxHandlerProcessing(b *testing.B) {
-	const numUsers = 100
-	log := logging.TestingLog(b)
-	log.SetLevel(logging.Warn)
-	secrets := make([]*crypto.SignatureSecrets, numUsers)
+func makeTestGenesisAccounts(tb require.TestingT, numUsers int) ([]basics.Address, []*crypto.SignatureSecrets, map[basics.Address]basics.AccountData) {
 	addresses := make([]basics.Address, numUsers)
-
+	secrets := make([]*crypto.SignatureSecrets, numUsers)
 	genesis := make(map[basics.Address]basics.AccountData)
 	for i := 0; i < numUsers; i++ {
 		secret := keypair()
@@ -75,7 +70,16 @@ func BenchmarkTxHandlerProcessing(b *testing.B) {
 		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
 	}
 
-	require.Equal(b, len(genesis), numUsers+1)
+	require.Equal(tb, len(genesis), numUsers+1)
+	return addresses, secrets, genesis
+}
+
+func BenchmarkTxHandlerProcessing(b *testing.B) {
+	const numUsers = 100
+	log := logging.TestingLog(b)
+	log.SetLevel(logging.Warn)
+
+	addresses, secrets, genesis := makeTestGenesisAccounts(b, numUsers)
 	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	ledgerName := fmt.Sprintf("%s-mem-%d", b.Name(), b.N)
 	const inMem = true
@@ -286,64 +290,12 @@ func TestPow(t *testing.T) {
 	require.Equal(t, 8, ipow(2, 3))
 }
 
-func numFromMetricString(str string) int {
-	var val int
-	// go backward and parse string
-	// "algod_transaction_messages_dropped_backlog{} 270609\n"
-	pos := 0
-	for i := len(str) - 1; i >= 0; i-- {
-		if str[i] == ' ' {
-			break
-		}
-		if unicode.IsDigit(rune(str[i])) {
-			val += ipow(10, pos) * int(str[i]-'0')
-			pos++
-		}
-	}
-	return val
-
-}
-
-func TestNumFromMetricString(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	require.Equal(t, 1, numFromMetricString("1"))
-	require.Equal(t, 1, numFromMetricString("1\n"))
-	require.Equal(t, 1, numFromMetricString(" 1\n"))
-
-	require.Equal(t, 123, numFromMetricString("123"))
-	require.Equal(t, 123, numFromMetricString("123\n"))
-	require.Equal(t, 123, numFromMetricString(" 123\n"))
-
-	require.Equal(t, 270609, numFromMetricString("algod_transaction_messages_dropped_backlog{} 270609\n"))
-}
-
 func getNumBacklogDropped() int {
-	var b strings.Builder
-	transactionMessagesDroppedFromBacklog.WriteMetric(&b, "")
-	return numFromMetricString(b.String())
+	return int(transactionMessagesDroppedFromBacklog.GetUint64Value())
 }
 
 func getNumRawMsgDup() int {
-	var b strings.Builder
-	transactionMessagesDupRawMsg.WriteMetric(&b, "")
-	return numFromMetricString(b.String())
-}
-
-func TestGetNumBacklogDropped(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	require.Equal(t, 0, getNumBacklogDropped())
-
-	transactionMessagesDroppedFromBacklog.Inc(nil)
-	require.Equal(t, 1, getNumBacklogDropped())
-
-	for i := 1; i < 235; i++ {
-		transactionMessagesDroppedFromBacklog.Inc(nil)
-	}
-	require.Equal(t, 235, getNumBacklogDropped())
+	return int(transactionMessagesDupRawMsg.GetUint64Value())
 }
 
 type benchFinalize func()
@@ -752,17 +704,20 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 // makeTestTxHandlerOrphaned creates a tx handler without any backlog consumer.
 // It is caller responsibility to run a consumer thread.
 func makeTestTxHandlerOrphaned(backlogSize int) *TxHandler {
-	return makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, 0)
+	return makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, txBacklogSize, 0)
 }
 
-func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, refreshInterval time.Duration) *TxHandler {
+func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, cacheSize int, refreshInterval time.Duration) *TxHandler {
 	if backlogSize <= 0 {
 		backlogSize = txBacklogSize
 	}
+	if cacheSize <= 0 {
+		cacheSize = txBacklogSize
+	}
 	return &TxHandler{
 		backlogQueue:     make(chan *txBacklogMsg, backlogSize),
-		msgCache:         makeSaltedCache(ctx, txBacklogSize, refreshInterval),
-		txCanonicalCache: makeDigestCache(txBacklogSize),
+		msgCache:         makeSaltedCache(ctx, cacheSize, refreshInterval),
+		txCanonicalCache: makeDigestCache(cacheSize),
 		cacheConfig:      txHandlerConfig{true, true},
 	}
 }
@@ -867,7 +822,7 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 	t.Run("scheduled", func(t *testing.T) {
 		// double enqueue a single txn message, ensure it discarded
 		ctx, cancelFunc := context.WithCancel(context.Background())
-		handler := makeTestTxHandlerOrphanedWithContext(ctx, txBacklogSize, 10*time.Millisecond)
+		handler := makeTestTxHandlerOrphanedWithContext(ctx, txBacklogSize, txBacklogSize, 10*time.Millisecond)
 
 		var action network.OutgoingMessage
 		var msg *txBacklogMsg
@@ -923,7 +878,100 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 		require.Equal(t, 1, len(msg.unverifiedTxGroup))
 		require.Equal(t, stxns1[0], msg.unverifiedTxGroup[0])
 	})
+}
 
+// TestTxHandlerProcessIncomingCacheBacklogDrop checks if dropped messages are also removed from caches
+func TestTxHandlerProcessIncomingCacheBacklogDrop(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler := makeTestTxHandlerOrphanedWithContext(context.Background(), 1, 20, 0)
+
+	stxns1, blob1 := makeRandomTransactions(1)
+	require.Equal(t, 1, len(stxns1))
+
+	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob1})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+	require.Equal(t, 1, handler.msgCache.Len())
+	require.Equal(t, 1, handler.txCanonicalCache.Len())
+
+	stxns2, blob2 := makeRandomTransactions(1)
+	require.Equal(t, 1, len(stxns2))
+
+	initialValue := transactionMessagesDroppedFromBacklog.GetUint64Value()
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob2})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+	require.Equal(t, 1, handler.msgCache.Len())
+	require.Equal(t, 1, handler.txCanonicalCache.Len())
+	currentValue := transactionMessagesDroppedFromBacklog.GetUint64Value()
+	require.Equal(t, initialValue+1, currentValue)
+
+	// ensure deleteFromCaches also works
+	handler.deleteFromCaches(blob1, stxns1)
+	require.Equal(t, 0, handler.msgCache.Len())
+	require.Equal(t, 0, handler.txCanonicalCache.Len())
+}
+
+func TestTxHandlerProcessIncomingCacheTxPoolDrop(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const numUsers = 100
+	log := logging.TestingLog(t)
+
+	// prepare the accounts
+	addresses, secrets, genesis := makeTestGenesisAccounts(t, numUsers)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	ledgerName := fmt.Sprintf("%s-mem", t.Name())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	require.NoError(t, err)
+
+	l := ledger
+	handler := makeTestTxHandler(l, cfg)
+	handler.postVerificationQueue = make(chan *txBacklogMsg)
+
+	makeTxns := func(sendIdx, recvIdx int) ([]transactions.SignedTxn, []byte) {
+		tx := transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:     addresses[sendIdx],
+				Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+				FirstValid: 0,
+				LastValid:  basics.Round(proto.MaxTxnLife),
+				Note:       make([]byte, 2),
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: addresses[recvIdx],
+				Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance + (rand.Uint64() % 10000)},
+			},
+		}
+		signedTx := tx.Sign(secrets[sendIdx])
+		blob := protocol.Encode(&signedTx)
+		return []transactions.SignedTxn{signedTx}, blob
+	}
+
+	stxns, blob := makeTxns(1, 2)
+
+	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+	require.Equal(t, 1, handler.msgCache.Len())
+	require.Equal(t, 1, handler.txCanonicalCache.Len())
+
+	msg := <-handler.backlogQueue
+	require.Equal(t, 1, len(msg.unverifiedTxGroup))
+	require.Equal(t, stxns, msg.unverifiedTxGroup)
+
+	initialCount := transactionMessagesDroppedFromPool.GetUint64Value()
+	handler.asyncVerifySignature(msg)
+	currentCount := transactionMessagesDroppedFromPool.GetUint64Value()
+	require.Equal(t, initialCount+1, currentCount)
+	require.Equal(t, 0, handler.msgCache.Len())
+	require.Equal(t, 0, handler.txCanonicalCache.Len())
 }
 
 const benchTxnNum = 25_000
@@ -966,24 +1014,24 @@ func BenchmarkTxHandlerDecoderMsgp(b *testing.B) {
 	}
 }
 
-// TestIncomingTxHandle checks the correctness with single txns
-func TestIncomingTxHandle(t *testing.T) {
+// TestTxHandlerIncomingTxHandle checks the correctness with single txns
+func TestTxHandlerIncomingTxHandle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numberOfTransactionGroups := 1000
 	incomingTxHandlerProcessing(1, numberOfTransactionGroups, t)
 }
 
-// TestIncomingTxGroupHandle checks the correctness with txn groups
-func TestIncomingTxGroupHandle(t *testing.T) {
+// TestTxHandlerIncomingTxGroupHandle checks the correctness with txn groups
+func TestTxHandlerIncomingTxGroupHandle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numberOfTransactionGroups := 1000 / proto.MaxTxGroupSize
 	incomingTxHandlerProcessing(proto.MaxTxGroupSize, numberOfTransactionGroups, t)
 }
 
-// TestIncomingTxHandleDrops accounts for the dropped txns when the verifier/exec pool is saturated
-func TestIncomingTxHandleDrops(t *testing.T) {
+// TestTxHandlerIncomingTxHandleDrops accounts for the dropped txns when the verifier/exec pool is saturated
+func TestTxHandlerIncomingTxHandleDrops(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// use smaller backlog size to test the message drops
@@ -1008,27 +1056,9 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 
 	const numUsers = 100
 	log := logging.TestingLog(t)
-	addresses := make([]basics.Address, numUsers)
-	secrets := make([]*crypto.SignatureSecrets, numUsers)
 
 	// prepare the accounts
-	genesis := make(map[basics.Address]basics.AccountData)
-	for i := 0; i < numUsers; i++ {
-		secret := keypair()
-		addr := basics.Address(secret.SignatureVerifier)
-		secrets[i] = secret
-		addresses[i] = addr
-		genesis[addr] = basics.AccountData{
-			Status:     basics.Online,
-			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
-		}
-	}
-	genesis[poolAddr] = basics.AccountData{
-		Status:     basics.NotParticipating,
-		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
-	}
-
-	require.Equal(t, len(genesis), numUsers+1)
+	addresses, secrets, genesis := makeTestGenesisAccounts(t, numUsers)
 	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	ledgerName := fmt.Sprintf("%s-mem-%d", t.Name(), numberOfTransactionGroups)
 	const inMem = true
@@ -1296,27 +1326,8 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, tps int, invalidRate float32, 
 	const numUsers = 100
 	log := logging.TestingLog(b)
 	log.SetLevel(logging.Warn)
-	addresses := make([]basics.Address, numUsers)
-	secrets := make([]*crypto.SignatureSecrets, numUsers)
 
-	// prepare the accounts
-	genesis := make(map[basics.Address]basics.AccountData)
-	for i := 0; i < numUsers; i++ {
-		secret := keypair()
-		addr := basics.Address(secret.SignatureVerifier)
-		secrets[i] = secret
-		addresses[i] = addr
-		genesis[addr] = basics.AccountData{
-			Status:     basics.Online,
-			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
-		}
-	}
-	genesis[poolAddr] = basics.AccountData{
-		Status:     basics.NotParticipating,
-		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
-	}
-
-	require.Equal(b, len(genesis), numUsers+1)
+	addresses, secrets, genesis := makeTestGenesisAccounts(b, numUsers)
 	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	ivrString := strings.IndexAny(fmt.Sprintf("%f", invalidRate), "1")
 	ledgerName := fmt.Sprintf("%s-mem-%d-%d", b.Name(), b.N, ivrString)
@@ -1339,8 +1350,8 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, tps int, invalidRate float32, 
 	if useBacklogWorker {
 		wg.Add(1)
 		testResultChan = make(chan *txBacklogMsg, 10)
-		// Make a test backlog worker, which is simiar to backlogWorker, but sends the results
-		// through the testResultChan instead of passing it to postprocessCheckedTxn
+		// Make a test backlog worker, which is similar to backlogWorker, but sends the results
+		// through the testResultChan instead of passing it to postProcessCheckedTxn
 		go func() {
 			defer wg.Done()
 			for {

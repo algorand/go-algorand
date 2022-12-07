@@ -312,16 +312,21 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 
 		// delete from duplicate caches to give it chance to be re-submitted
 		// this relatively rare operation and implementation is expensive (requires re-hashing)
-		var result []byte
-		for i := range tx.unverifiedTxGroup {
-			encodeBuf := tx.unverifiedTxGroup[i].MarshalMsg(nil)
-			result = append(result, encodeBuf...)
-		}
-		d := crypto.Hash(result)
-		handler.txCanonicalCache.Delete(&d)
-		handler.msgCache.Delete(tx.rawmsg.Data)
+		handler.deleteFromCaches(tx.rawmsg.Data, tx.unverifiedTxGroup)
+
 	}
 	return nil
+}
+
+func (handler *TxHandler) deleteFromCaches(msg []byte, unverifiedTxGroup []transactions.SignedTxn) {
+	var result []byte
+	for i := range unverifiedTxGroup {
+		encodeBuf := unverifiedTxGroup[i].MarshalMsg(nil)
+		result = append(result, encodeBuf...)
+	}
+	d := crypto.Hash(result)
+	handler.txCanonicalCache.Delete(&d)
+	handler.msgCache.Delete(msg)
 }
 
 // dedupCanonical checks if the transaction group has been seen before after reencoding to canonical representation.
@@ -444,6 +449,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		// if we failed here we want to increase the corresponding metric. It might suggest that we
 		// want to increase the queue size.
 		transactionMessagesDroppedFromBacklog.Inc(nil)
+
 		// additionally, remove the txn from duplicate caches to ensure it can be re-submitted
 		if canonicalKey != nil {
 			handler.txCanonicalCache.Delete(canonicalKey)
