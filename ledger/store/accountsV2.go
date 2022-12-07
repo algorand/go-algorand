@@ -321,7 +321,7 @@ func (r *accountsV2Reader) LoadAllFullAccounts(
 	return
 }
 
-// LoadFullAccount converts baseAccountData into basics.AccountData and loads all resources as needed
+// LoadFullAccount converts BaseAccountData into basics.AccountData and loads all resources as needed
 func (r *accountsV2Reader) LoadFullAccount(ctx context.Context, resourcesTable string, addr basics.Address, addrid int64, data BaseAccountData) (ad basics.AccountData, err error) {
 	ad = data.GetAccountData()
 
@@ -403,11 +403,8 @@ func (r *accountsV2Reader) LoadFullAccount(ctx context.Context, resourcesTable s
 	if err == nil && uint64(len(ad.AppLocalStates)) != data.TotalAppLocalStates {
 		err = fmt.Errorf("%s app local states mismatch: %d != %d", addr.String(), len(ad.AppLocalStates), data.TotalAppLocalStates)
 	}
-	if err != nil {
-		return
-	}
 
-	return
+	return ad, err
 }
 
 func (r *accountsV2Reader) AccountsOnlineRoundParams() (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error) {

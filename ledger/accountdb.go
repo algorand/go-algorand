@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -81,26 +82,16 @@ var creatablesMigration = []string{
 	`ALTER TABLE assetcreators ADD COLUMN ctype INTEGER DEFAULT 0`,
 }
 
-// createNormalizedOnlineBalanceIndex handles accountbase/catchpointbalances tables
-func createNormalizedOnlineBalanceIndex(idxname string, tablename string) string {
-	return fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %s
-		ON %s ( normalizedonlinebalance, address, data ) WHERE normalizedonlinebalance>0`, idxname, tablename)
-}
-
 // createNormalizedOnlineBalanceIndexOnline handles onlineaccounts/catchpointonlineaccounts tables
 func createNormalizedOnlineBalanceIndexOnline(idxname string, tablename string) string {
 	return fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %s
 		ON %s ( normalizedonlinebalance, address )`, idxname, tablename)
 }
 
-func createUniqueAddressBalanceIndex(idxname string, tablename string) string {
-	return fmt.Sprintf(`CREATE UNIQUE INDEX IF NOT EXISTS %s ON %s (address)`, idxname, tablename)
-}
-
 var createOnlineAccountIndex = []string{
 	`ALTER TABLE accountbase
 		ADD COLUMN normalizedonlinebalance INTEGER`,
-	createNormalizedOnlineBalanceIndex("onlineaccountbals", "accountbase"),
+	store.CreateNormalizedOnlineBalanceIndex("onlineaccountbals", "accountbase"),
 }
 
 var createResourcesTable = []string{
@@ -111,7 +102,7 @@ var createResourcesTable = []string{
 		PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID`,
 }
 
-var createBoxTable = []string{
+var createKVStoreTable = []string{
 	`CREATE TABLE IF NOT EXISTS kvstore (
 		key blob primary key,
 		value blob)`,
@@ -271,39 +262,18 @@ const MaxEncodedBaseAccountDataSize = 350
 // this number is verified by the TestEncodedBaseResourceSize function.
 const MaxEncodedBaseResourceDataSize = 20000
 
-// normalizedAccountBalance is a staging area for a catchpoint file account information before it's being added to the catchpoint staging tables.
-type normalizedAccountBalance struct {
-	// The public key address to which the account belongs.
-	address basics.Address
-	// accountData contains the baseAccountData for that account.
-	accountData store.BaseAccountData
-	// resources is a map, where the key is the creatable index, and the value is the resource data.
-	resources map[basics.CreatableIndex]store.ResourcesData
-	// encodedAccountData contains the baseAccountData encoded bytes that are going to be written to the accountbase table.
-	encodedAccountData []byte
-	// accountHashes contains a list of all the hashes that would need to be added to the merkle trie for that account.
-	// on V6, we could have multiple hashes, since we have separate account/resource hashes.
-	accountHashes [][]byte
-	// normalizedBalance contains the normalized balance for the account.
-	normalizedBalance uint64
-	// encodedResources provides the encoded form of the resources
-	encodedResources map[basics.CreatableIndex][]byte
-	// partial balance indicates that the original account balance was split into multiple parts in catchpoint creation time
-	partialBalance bool
-}
-
 // prepareNormalizedBalancesV5 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
-func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.ConsensusParams) (normalizedAccountBalances []normalizedAccountBalance, err error) {
-	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals))
+func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.ConsensusParams) (normalizedAccountBalances []store.NormalizedAccountBalance, err error) {
+	normalizedAccountBalances = make([]store.NormalizedAccountBalance, len(bals))
 	for i, balance := range bals {
-		normalizedAccountBalances[i].address = balance.Address
+		normalizedAccountBalances[i].Address = balance.Address
 		var accountDataV5 basics.AccountData
 		err = protocol.Decode(balance.AccountData, &accountDataV5)
 		if err != nil {
 			return nil, err
 		}
-		normalizedAccountBalances[i].accountData.SetAccountData(&accountDataV5)
-		normalizedAccountBalances[i].normalizedBalance = accountDataV5.NormalizedOnlineBalance(proto)
+		normalizedAccountBalances[i].AccountData.SetAccountData(&accountDataV5)
+		normalizedAccountBalances[i].NormalizedBalance = accountDataV5.NormalizedOnlineBalance(proto)
 		type resourcesRow struct {
 			aidx basics.CreatableIndex
 			store.ResourcesData
@@ -316,64 +286,64 @@ func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.Con
 		if err = accountDataResources(context.Background(), &accountDataV5, 0, addResourceRow); err != nil {
 			return nil, err
 		}
-		normalizedAccountBalances[i].accountHashes = make([][]byte, 1)
-		normalizedAccountBalances[i].accountHashes[0] = accountHashBuilder(balance.Address, accountDataV5, balance.AccountData)
+		normalizedAccountBalances[i].AccountHashes = make([][]byte, 1)
+		normalizedAccountBalances[i].AccountHashes[0] = store.AccountHashBuilder(balance.Address, accountDataV5, balance.AccountData)
 		if len(resources) > 0 {
-			normalizedAccountBalances[i].resources = make(map[basics.CreatableIndex]store.ResourcesData, len(resources))
-			normalizedAccountBalances[i].encodedResources = make(map[basics.CreatableIndex][]byte, len(resources))
+			normalizedAccountBalances[i].Resources = make(map[basics.CreatableIndex]store.ResourcesData, len(resources))
+			normalizedAccountBalances[i].EncodedResources = make(map[basics.CreatableIndex][]byte, len(resources))
 		}
 		for _, resource := range resources {
-			normalizedAccountBalances[i].resources[resource.aidx] = resource.ResourcesData
-			normalizedAccountBalances[i].encodedResources[resource.aidx] = protocol.Encode(&resource.ResourcesData)
+			normalizedAccountBalances[i].Resources[resource.aidx] = resource.ResourcesData
+			normalizedAccountBalances[i].EncodedResources[resource.aidx] = protocol.Encode(&resource.ResourcesData)
 		}
-		normalizedAccountBalances[i].encodedAccountData = protocol.Encode(&normalizedAccountBalances[i].accountData)
+		normalizedAccountBalances[i].EncodedAccountData = protocol.Encode(&normalizedAccountBalances[i].AccountData)
 	}
 	return
 }
 
 // prepareNormalizedBalancesV6 converts an array of encodedBalanceRecordV6 into an equal size array of normalizedAccountBalances.
-func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.ConsensusParams) (normalizedAccountBalances []normalizedAccountBalance, err error) {
-	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals))
+func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.ConsensusParams) (normalizedAccountBalances []store.NormalizedAccountBalance, err error) {
+	normalizedAccountBalances = make([]store.NormalizedAccountBalance, len(bals))
 	for i, balance := range bals {
-		normalizedAccountBalances[i].address = balance.Address
-		err = protocol.Decode(balance.AccountData, &(normalizedAccountBalances[i].accountData))
+		normalizedAccountBalances[i].Address = balance.Address
+		err = protocol.Decode(balance.AccountData, &(normalizedAccountBalances[i].AccountData))
 		if err != nil {
 			return nil, err
 		}
-		normalizedAccountBalances[i].normalizedBalance = basics.NormalizedOnlineAccountBalance(
-			normalizedAccountBalances[i].accountData.Status,
-			normalizedAccountBalances[i].accountData.RewardsBase,
-			normalizedAccountBalances[i].accountData.MicroAlgos,
+		normalizedAccountBalances[i].NormalizedBalance = basics.NormalizedOnlineAccountBalance(
+			normalizedAccountBalances[i].AccountData.Status,
+			normalizedAccountBalances[i].AccountData.RewardsBase,
+			normalizedAccountBalances[i].AccountData.MicroAlgos,
 			proto)
-		normalizedAccountBalances[i].encodedAccountData = balance.AccountData
+		normalizedAccountBalances[i].EncodedAccountData = balance.AccountData
 		curHashIdx := 0
 		if balance.ExpectingMoreEntries {
 			// There is a single chunk in the catchpoint file with ExpectingMoreEntries
 			// set to false for this account. There may be multiple chunks with
 			// ExpectingMoreEntries set to true. In this case, we do not have to add the
 			// account's own hash to accountHashes.
-			normalizedAccountBalances[i].accountHashes = make([][]byte, len(balance.Resources))
-			normalizedAccountBalances[i].partialBalance = true
+			normalizedAccountBalances[i].AccountHashes = make([][]byte, len(balance.Resources))
+			normalizedAccountBalances[i].PartialBalance = true
 		} else {
-			normalizedAccountBalances[i].accountHashes = make([][]byte, 1+len(balance.Resources))
-			normalizedAccountBalances[i].accountHashes[0] = accountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].accountData, balance.AccountData)
+			normalizedAccountBalances[i].AccountHashes = make([][]byte, 1+len(balance.Resources))
+			normalizedAccountBalances[i].AccountHashes[0] = store.AccountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].AccountData, balance.AccountData)
 			curHashIdx++
 		}
 		if len(balance.Resources) > 0 {
-			normalizedAccountBalances[i].resources = make(map[basics.CreatableIndex]store.ResourcesData, len(balance.Resources))
-			normalizedAccountBalances[i].encodedResources = make(map[basics.CreatableIndex][]byte, len(balance.Resources))
+			normalizedAccountBalances[i].Resources = make(map[basics.CreatableIndex]store.ResourcesData, len(balance.Resources))
+			normalizedAccountBalances[i].EncodedResources = make(map[basics.CreatableIndex][]byte, len(balance.Resources))
 			for cidx, res := range balance.Resources {
 				var resData store.ResourcesData
 				err = protocol.Decode(res, &resData)
 				if err != nil {
 					return nil, err
 				}
-				normalizedAccountBalances[i].accountHashes[curHashIdx], err = resourcesHashBuilderV6(&resData, balance.Address, basics.CreatableIndex(cidx), resData.UpdateRound, res)
+				normalizedAccountBalances[i].AccountHashes[curHashIdx], err = store.ResourcesHashBuilderV6(&resData, balance.Address, basics.CreatableIndex(cidx), resData.UpdateRound, res)
 				if err != nil {
 					return nil, err
 				}
-				normalizedAccountBalances[i].resources[basics.CreatableIndex(cidx)] = resData
-				normalizedAccountBalances[i].encodedResources[basics.CreatableIndex(cidx)] = res
+				normalizedAccountBalances[i].Resources[basics.CreatableIndex(cidx)] = resData
+				normalizedAccountBalances[i].EncodedResources[basics.CreatableIndex(cidx)] = res
 				curHashIdx++
 			}
 		}
@@ -381,17 +351,17 @@ func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.Con
 	return
 }
 
-// makeCompactResourceDeltas takes an array of AccountDeltas ( one array entry per round ), and compacts the resource portions of the arrays into a single
+// makeCompactResourceDeltas takes an array of StateDeltas containing AccountDeltas ( one array entry per round ), and compacts the resource portions of the AccountDeltas into a single
 // data structure that contains all the resources deltas changes. While doing that, the function eliminate any intermediate resources changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the resourcesDeltas.
-// As an optimization, accountDeltas is passed as a slice and must not be modified.
-func makeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
-	if len(accountDeltas) == 0 {
+// As an optimization, stateDeltas is passed as a slice and must not be modified.
+func makeCompactResourceDeltas(stateDeltas []ledgercore.StateDelta, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts, baseResources lruResources) (outResourcesDeltas compactResourcesDeltas) {
+	if len(stateDeltas) == 0 {
 		return
 	}
 
 	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
-	size := accountDeltas[0].Len()*len(accountDeltas) + 1
+	size := stateDeltas[0].Accts.Len()*len(stateDeltas) + 1
 	outResourcesDeltas.cache = make(map[accountCreatable]int, size)
 	outResourcesDeltas.deltas = make([]resourceDelta, 0, size)
 	outResourcesDeltas.misses = make([]int, 0, size)
@@ -404,7 +374,8 @@ func makeCompactResourceDeltas(accountDeltas []ledgercore.AccountDeltas, baseRou
 	if setUpdateRound {
 		updateRoundMultiplier = 1
 	}
-	for _, roundDelta := range accountDeltas {
+	for _, stateDelta := range stateDeltas {
+		roundDelta := stateDelta.Accts
 		deltaRound++
 		// assets
 		for _, res := range roundDelta.GetAllAssetResources() {
@@ -599,17 +570,17 @@ func (a *compactResourcesDeltas) updateOld(idx int, old store.PersistedResources
 	a.deltas[idx].oldResource = old
 }
 
-// makeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
+// makeCompactAccountDeltas takes an array of account StateDeltas with AccountDeltas ( one array entry per round ), and compacts the AccountDeltas into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the accountDeltaCount/modifiedCreatable.
-// As an optimization, accountDeltas is passed as a slice and must not be modified.
-func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
-	if len(accountDeltas) == 0 {
+// As an optimization, stateDeltas is passed as a slice and must not be modified.
+func makeCompactAccountDeltas(stateDeltas []ledgercore.StateDelta, baseRound basics.Round, setUpdateRound bool, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
+	if len(stateDeltas) == 0 {
 		return
 	}
 
 	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
-	size := accountDeltas[0].Len()*len(accountDeltas) + 1
+	size := stateDeltas[0].Accts.Len()*len(stateDeltas) + 1
 	outAccountDeltas.cache = make(map[basics.Address]int, size)
 	outAccountDeltas.deltas = make([]accountDelta, 0, size)
 	outAccountDeltas.misses = make([]int, 0, size)
@@ -622,7 +593,8 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRoun
 	if setUpdateRound {
 		updateRoundMultiplier = 1
 	}
-	for _, roundDelta := range accountDeltas {
+	for _, stateDelta := range stateDeltas {
+		roundDelta := stateDelta.Accts
 		deltaRound++
 		for i := 0; i < roundDelta.Len(); i++ {
 			addr, acctDelta := roundDelta.GetByIdx(i)
@@ -889,252 +861,12 @@ func (a *compactOnlineAccountDeltas) updateOld(idx int, old store.PersistedOnlin
 	a.deltas[idx].oldAcct = old
 }
 
-// writeCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
-func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
-	selectAcctStmt, err := tx.PrepareContext(ctx, "SELECT rowid FROM catchpointbalances WHERE address = ?")
-	if err != nil {
-		return err
-	}
-
-	insertAcctStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
-	if err != nil {
-		return err
-	}
-
-	insertRscStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointresources(addrid, aidx, data) VALUES(?, ?, ?)")
-	if err != nil {
-		return err
-	}
-
-	var result sql.Result
-	var rowID int64
-	for _, balance := range bals {
-		result, err = insertAcctStmt.ExecContext(ctx, balance.address[:], balance.normalizedBalance, balance.encodedAccountData)
-		if err == nil {
-			var aff int64
-			aff, err = result.RowsAffected()
-			if err != nil {
-				return err
-			}
-			if aff != 1 {
-				return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
-			}
-			rowID, err = result.LastInsertId()
-			if err != nil {
-				return err
-			}
-		} else {
-			var sqliteErr sqlite3.Error
-			if errors.As(err, &sqliteErr) && sqliteErr.Code == sqlite3.ErrConstraint && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
-				// address exists: overflowed account record: find addrid
-				err = selectAcctStmt.QueryRowContext(ctx, balance.address[:]).Scan(&rowID)
-				if err != nil {
-					return err
-				}
-			} else {
-				return err
-			}
-		}
-
-		// write resources
-		for aidx := range balance.resources {
-			var result sql.Result
-			result, err = insertRscStmt.ExecContext(ctx, rowID, aidx, balance.encodedResources[aidx])
-			if err != nil {
-				return err
-			}
-			var aff int64
-			aff, err = result.RowsAffected()
-			if err != nil {
-				return err
-			}
-			if aff != 1 {
-				return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
-			}
-		}
-	}
-	return nil
-}
-
-// writeCatchpointStagingHashes inserts all the account hashes in the provided array into the catchpoint pending hashes table catchpointpendinghashes.
-func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointpendinghashes(data) VALUES(?)")
-	if err != nil {
-		return err
-	}
-
-	for _, balance := range bals {
-		for _, hash := range balance.accountHashes {
-			result, err := insertStmt.ExecContext(ctx, hash[:])
-			if err != nil {
-				return err
-			}
-
-			aff, err := result.RowsAffected()
-			if err != nil {
-				return err
-			}
-			if aff != 1 {
-				return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
-			}
-		}
-	}
-	return nil
-}
-
 // createCatchpointStagingHashesIndex creates an index on catchpointpendinghashes to allow faster scanning according to the hash order
 func createCatchpointStagingHashesIndex(ctx context.Context, tx *sql.Tx) (err error) {
 	_, err = tx.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS catchpointpendinghashesidx ON catchpointpendinghashes(data)")
 	if err != nil {
 		return
 	}
-	return
-}
-
-// writeCatchpointStagingCreatable inserts all the creatables in the provided array into the catchpoint asset creator staging table catchpointassetcreators.
-// note that we cannot insert the resources here : in order to insert the resources, we need the rowid of the accountbase entry. This is being inserted by
-// writeCatchpointStagingBalances via a separate go-routine.
-func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
-	var insertCreatorsStmt *sql.Stmt
-	var err error
-	insertCreatorsStmt, err = tx.PrepareContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)")
-	if err != nil {
-		return err
-	}
-	defer insertCreatorsStmt.Close()
-
-	for _, balance := range bals {
-		for aidx, resData := range balance.resources {
-			if resData.IsOwning() {
-				// determine if it's an asset
-				if resData.IsAsset() {
-					_, err := insertCreatorsStmt.ExecContext(ctx, aidx, balance.address[:], basics.AssetCreatable)
-					if err != nil {
-						return err
-					}
-				}
-				// determine if it's an application
-				if resData.IsApp() {
-					_, err := insertCreatorsStmt.ExecContext(ctx, aidx, balance.address[:], basics.AppCreatable)
-					if err != nil {
-						return err
-					}
-				}
-			}
-		}
-	}
-	return nil
-}
-
-// writeCatchpointStagingKVs inserts all the KVs in the provided array into the
-// catchpoint kvstore staging table catchpointkvstore, and their hashes to the pending
-func writeCatchpointStagingKVs(ctx context.Context, tx *sql.Tx, kvrs []encodedKVRecordV6) error {
-	insertKV, err := tx.PrepareContext(ctx, "INSERT INTO catchpointkvstore(key, value) VALUES(?, ?)")
-	if err != nil {
-		return err
-	}
-	defer insertKV.Close()
-
-	insertHash, err := tx.PrepareContext(ctx, "INSERT INTO catchpointpendinghashes(data) VALUES(?)")
-	if err != nil {
-		return err
-	}
-	defer insertHash.Close()
-
-	for _, kvr := range kvrs {
-		_, err := insertKV.ExecContext(ctx, kvr.Key, kvr.Value)
-		if err != nil {
-			return err
-		}
-
-		hash := kvHashBuilderV6(string(kvr.Key), kvr.Value)
-		_, err = insertHash.ExecContext(ctx, hash)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup bool) (err error) {
-	s := []string{
-		"DROP TABLE IF EXISTS catchpointbalances",
-		"DROP TABLE IF EXISTS catchpointassetcreators",
-		"DROP TABLE IF EXISTS catchpointaccounthashes",
-		"DROP TABLE IF EXISTS catchpointpendinghashes",
-		"DROP TABLE IF EXISTS catchpointresources",
-		"DROP TABLE IF EXISTS catchpointkvstore",
-		"DELETE FROM accounttotals where id='catchpointStaging'",
-	}
-
-	if newCatchup {
-		// SQLite has no way to rename an existing index.  So, we need
-		// to cook up a fresh name for the index, which will be kept
-		// around after we rename the table from "catchpointbalances"
-		// to "accountbase".  To construct a unique index name, we
-		// use the current time.
-		// Apply the same logic to
-		now := time.Now().UnixNano()
-		idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", now)
-		idxnameAddress := fmt.Sprintf("accountbase_address_idx_%d", now)
-
-		s = append(s,
-			"CREATE TABLE IF NOT EXISTS catchpointassetcreators (asset integer primary key, creator blob, ctype integer)",
-			"CREATE TABLE IF NOT EXISTS catchpointbalances (addrid INTEGER PRIMARY KEY NOT NULL, address blob NOT NULL, data blob, normalizedonlinebalance INTEGER)",
-			"CREATE TABLE IF NOT EXISTS catchpointpendinghashes (data blob)",
-			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
-			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
-			"CREATE TABLE IF NOT EXISTS catchpointkvstore (key blob primary key, value blob)",
-
-			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
-			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
-		)
-	}
-
-	for _, stmt := range s {
-		_, err = tx.Exec(stmt)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// applyCatchpointStagingBalances switches the staged catchpoint catchup tables onto the actual
-// tables and update the correct balance round. This is the final step in switching onto the new catchpoint round.
-func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRound basics.Round, merkleRootRound basics.Round) (err error) {
-	stmts := []string{
-		"DROP TABLE IF EXISTS accountbase",
-		"DROP TABLE IF EXISTS assetcreators",
-		"DROP TABLE IF EXISTS accounthashes",
-		"DROP TABLE IF EXISTS resources",
-		"DROP TABLE IF EXISTS kvstore",
-
-		"ALTER TABLE catchpointbalances RENAME TO accountbase",
-		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
-		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
-		"ALTER TABLE catchpointresources RENAME TO resources",
-		"ALTER TABLE catchpointkvstore RENAME TO kvstore",
-	}
-
-	for _, stmt := range stmts {
-		_, err = tx.Exec(stmt)
-		if err != nil {
-			return err
-		}
-	}
-
-	_, err = tx.Exec("INSERT OR REPLACE INTO acctrounds(id, rnd) VALUES('acctbase', ?)", balancesRound)
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Exec("INSERT OR REPLACE INTO acctrounds(id, rnd) VALUES('hashbase', ?)", merkleRootRound)
-	if err != nil {
-		return err
-	}
-
 	return
 }
 
@@ -1307,7 +1039,7 @@ func accountsCreateBoxTable(ctx context.Context, tx *sql.Tx) error {
 	if err != sql.ErrNoRows {
 		return err
 	}
-	for _, stmt := range createBoxTable {
+	for _, stmt := range createKVStoreTable {
 		_, err = tx.ExecContext(ctx, stmt)
 		if err != nil {
 			return err
@@ -1410,8 +1142,8 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 		address blob NOT NULL,
 		data blob,
 		normalizedonlinebalance INTEGER )`,
-		createNormalizedOnlineBalanceIndex(idxnameBalances, "accountbase_resources_migration"),
-		createUniqueAddressBalanceIndex(idxnameAddress, "accountbase_resources_migration"),
+		store.CreateNormalizedOnlineBalanceIndex(idxnameBalances, "accountbase_resources_migration"),
+		store.CreateUniqueAddressBalanceIndex(idxnameAddress, "accountbase_resources_migration"),
 	}
 
 	applyNewAcctBase := []string{
@@ -1550,11 +1282,11 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 	// when migrating there is only MaxTxnLife blocks in the block DB
 	// since the original txTail.commmittedUpTo preserved only (rnd+1)-MaxTxnLife = 1000 blocks back
 	err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
-		latestBlockRound, err := blockLatest(blockTx)
+		latestBlockRound, err := blockdb.BlockLatest(blockTx)
 		if err != nil {
 			return fmt.Errorf("latest block number cannot be retrieved : %w", err)
 		}
-		latestHdr, err := blockGetHdr(blockTx, dbRound)
+		latestHdr, err := blockdb.BlockGetHdr(blockTx, dbRound)
 		if err != nil {
 			return fmt.Errorf("latest block header %d cannot be retrieved : %w", dbRound, err)
 		}
@@ -1570,7 +1302,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		if firstRound == basics.Round(0) {
 			firstRound++
 		}
-		if _, err := blockGet(blockTx, firstRound); err != nil {
+		if _, err := blockdb.BlockGet(blockTx, firstRound); err != nil {
 			// looks like not catchpoint but a regular migration, start from maxTxnLife + deeperBlockHistory back
 			firstRound = (latestBlockRound + 1).SubSaturate(maxTxnLife + deeperBlockHistory)
 			if firstRound == basics.Round(0) {
@@ -1579,7 +1311,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		}
 		tailRounds := make([][]byte, 0, maxTxnLife)
 		for rnd := firstRound; rnd <= dbRound; rnd++ {
-			blk, err := blockGet(blockTx, rnd)
+			blk, err := blockdb.BlockGet(blockTx, rnd)
 			if err != nil {
 				return fmt.Errorf("block for round %d ( %d - %d ) cannot be retrieved : %w", rnd, firstRound, dbRound, err)
 			}
@@ -1614,7 +1346,7 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 		currentProto = initProto
 	} else {
 		err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
-			hdr, err := blockGetHdr(blockTx, rnd)
+			hdr, err := blockdb.BlockGetHdr(blockTx, rnd)
 			if err != nil {
 				return err
 			}
@@ -1785,7 +1517,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 			return fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 		}
 		for addr, state := range acctRehash {
-			deleteHash := accountHashBuilderV6(addr, &state.old, state.oldEnc)
+			deleteHash := store.AccountHashBuilderV6(addr, &state.old, state.oldEnc)
 			deleted, err := trie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
@@ -1794,7 +1526,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 				log.Warnf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
 			}
 
-			addHash := accountHashBuilderV6(addr, &state.new, state.newEnc)
+			addHash := store.AccountHashBuilderV6(addr, &state.new, state.newEnc)
 			added, err := trie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("performOnlineAccountsTableMigration attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
@@ -2737,7 +2469,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	if iterator.step == oaiStepInsertAccountData {
 		var lastAddrID int64
 		baseCb := func(addr basics.Address, rowid int64, accountData *store.BaseAccountData, encodedAccountData []byte) (err error) {
-			hash := accountHashBuilderV6(addr, accountData, encodedAccountData)
+			hash := store.AccountHashBuilderV6(addr, accountData, encodedAccountData)
 			_, err = iterator.insertStmt.ExecContext(ctx, rowid, hash)
 			if err != nil {
 				return
@@ -2748,7 +2480,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 
 		resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *store.ResourcesData, encodedResourceData []byte, lastResource bool) error {
 			if resData != nil {
-				hash, err := resourcesHashBuilderV6(resData, addr, cidx, resData.UpdateRound, encodedResourceData)
+				hash, err := store.ResourcesHashBuilderV6(resData, addr, cidx, resData.UpdateRound, encodedResourceData)
 				if err != nil {
 					return err
 				}
