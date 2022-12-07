@@ -113,7 +113,7 @@ int 1
 	require.NoError(t, err)
 	ep.TxnGroup[0].Lsig.Logic = ops.Program
 
-	_, _, err = logic.EvalSignature(0, ep)
+	_, err = logic.EvalSignature(0, ep)
 	require.NoError(t, err)
 
 	da.WaitForCompletion()

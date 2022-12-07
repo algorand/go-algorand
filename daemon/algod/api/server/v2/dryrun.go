@@ -423,7 +423,7 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 			var debug dryrunDebugReceiver
 			ep.Debugger = &debug
 			ep.SigLedger = &dl
-			pass, _, err := logic.EvalSignature(ti, ep)
+			pass, err := logic.EvalSignature(ti, ep)
 			var messages []string
 			result.Disassembly = debug.lines          // Keep backwards compat
 			result.LogicSigDisassembly = &debug.lines // Also add to Lsig specific

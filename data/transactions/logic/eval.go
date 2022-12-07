@@ -778,11 +778,12 @@ func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (b
 	return pass, err
 }
 
-// EvalSignature evaluates the logicsig of the ith transaction in params.
+// EvalSignatureFull evaluates the logicsig of the ith transaction in params.
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
-func EvalSignature(gi int, params *EvalParams) (pass bool, cost int, err error) {
+// It returns EvalContext suitable for obtaining additional info about the execution.
+func EvalSignatureFull(gi int, params *EvalParams) (pass bool, pcx *EvalContext, err error) {
 	if params.SigLedger == nil {
-		return false, 0, errors.New("no sig ledger in signature eval")
+		return false, nil, errors.New("no sig ledger in signature eval")
 	}
 	cx := EvalContext{
 		EvalParams:   params,
@@ -791,7 +792,14 @@ func EvalSignature(gi int, params *EvalParams) (pass bool, cost int, err error) 
 		txn:          &params.TxnGroup[gi],
 	}
 	pass, err = eval(cx.txn.Lsig.Logic, &cx)
-	return pass, cx.cost, err
+	return pass, &cx, err
+}
+
+// EvalSignature evaluates the logicsig of the ith transaction in params.
+// A program passes successfully if it finishes with one int element on the stack that is non-zero.
+func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
+	pass, _, err = EvalSignatureFull(gi, params)
+	return pass, err
 }
 
 // eval implementation
@@ -996,6 +1004,11 @@ func boolToUint(x bool) uint64 {
 
 func boolToSV(x bool) stackValue {
 	return stackValue{Uint: boolToUint(x)}
+}
+
+// Cost return cost incurred so far
+func (cx *EvalContext) Cost() int {
+	return cx.cost
 }
 
 func (cx *EvalContext) remainingBudget() int {

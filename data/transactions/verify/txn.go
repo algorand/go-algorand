@@ -405,7 +405,7 @@ func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *Group
 		MinAvmVersion: &groupCtx.minAvmVersion,
 		SigLedger:     groupCtx.ledger,
 	}
-	pass, cost, err := logic.EvalSignature(groupIndex, &ep)
+	pass, cx, err := logic.EvalSignatureFull(groupIndex, &ep)
 	if err != nil {
 		logicErrTotal.Inc(nil)
 		return fmt.Errorf("transaction %v: rejected by logic err=%v", txn.ID(), err)
@@ -415,7 +415,7 @@ func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *Group
 		return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
 	}
 	logicGoodTotal.Inc(nil)
-	logicCostTotal.AddUint64(uint64(cost), nil)
+	logicCostTotal.AddUint64(uint64(cx.Cost()), nil)
 	return nil
 
 }

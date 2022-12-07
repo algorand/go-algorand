@@ -243,7 +243,7 @@ func (e *evaluation) eval(gi int, ep *logic.EvalParams) (pass bool, err error) {
 		return
 	}
 	ep.TxnGroup[gi].Lsig.Logic = e.program
-	pass, _, err = logic.EvalSignature(gi, ep)
+	pass, err = logic.EvalSignature(gi, ep)
 	return pass, err
 }
 
