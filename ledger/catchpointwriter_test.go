@@ -493,7 +493,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, h)
 
-	iter := makeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
+	iter := store.MakeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
 	defer iter.Close(ctx)
 	for {
 		accts, _, err := iter.Next(ctx)
@@ -507,7 +507,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 
 		if len(accts) > 0 {
 			for _, acct := range accts {
-				added, err := trie.Add(acct.digest)
+				added, err := trie.Add(acct.Digest)
 				require.NoError(t, err)
 				require.True(t, added)
 			}
