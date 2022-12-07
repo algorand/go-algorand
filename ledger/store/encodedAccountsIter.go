@@ -21,6 +21,7 @@ import (
 	"database/sql"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/encoded"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -41,9 +42,14 @@ type catchpointAccountResourceCounter struct {
 	totalAssets         uint64
 }
 
+// MakeEncodedAccoutsBatchIter creates an empty accounts batch iterator.
+func MakeEncodedAccoutsBatchIter() *encodedAccountsBatchIter {
+	return &encodedAccountsBatchIter{}
+}
+
 // Next returns an array containing the account data, in the same way it appear in the database
 // returning accountCount accounts data at a time.
-func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int, resourceCount int) (bals []encodedBalanceRecordV6, numAccountsProcessed uint64, err error) {
+func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int, resourceCount int) (bals []encoded.BalanceRecordV6, numAccountsProcessed uint64, err error) {
 	if iterator.accountsRows == nil {
 		iterator.accountsRows, err = tx.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid")
 		if err != nil {
@@ -58,12 +64,12 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 	}
 
 	// gather up to accountCount encoded accounts.
-	bals = make([]encodedBalanceRecordV6, 0, accountCount)
-	var encodedRecord encodedBalanceRecordV6
-	var baseAcct store.BaseAccountData
+	bals = make([]encoded.BalanceRecordV6, 0, accountCount)
+	var encodedRecord encoded.BalanceRecordV6
+	var baseAcct BaseAccountData
 	var numAcct int
-	baseCb := func(addr basics.Address, rowid int64, accountData *store.BaseAccountData, encodedAccountData []byte) (err error) {
-		encodedRecord = encodedBalanceRecordV6{Address: addr, AccountData: encodedAccountData}
+	baseCb := func(addr basics.Address, rowid int64, accountData *BaseAccountData, encodedAccountData []byte) (err error) {
+		encodedRecord = encoded.BalanceRecordV6{Address: addr, AccountData: encodedAccountData}
 		baseAcct = *accountData
 		numAcct++
 		return nil
@@ -72,7 +78,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 	var totalResources int
 
 	// emptyCount := 0
-	resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *store.ResourcesData, encodedResourceData []byte, lastResource bool) error {
+	resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *ResourcesData, encodedResourceData []byte, lastResource bool) error {
 
 		emptyBaseAcct := baseAcct.TotalAppParams == 0 && baseAcct.TotalAppLocalStates == 0 && baseAcct.TotalAssetParams == 0 && baseAcct.TotalAssets == 0
 		if !emptyBaseAcct && resData != nil {

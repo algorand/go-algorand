@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/encoded"
 	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -41,11 +42,6 @@ const (
 	// 100,000 resources * 20KB/resource => roughly max 2GB per chunk if all of them are max'ed out apps.
 	// In reality most entries are asset holdings, and they are very small.
 	ResourcesPerCatchpointFileChunk = 100_000
-
-	// resourcesPerCatchpointFileChunkBackwardCompatible is the old value for ResourcesPerCatchpointFileChunk.
-	// Size of a single resource entry was underestimated to 300 bytes that holds only for assets and not for apps.
-	// It is safe to remove after April, 2023 since we are only supporting catchpoint that are 6 months old.
-	resourcesPerCatchpointFileChunkBackwardCompatible = 300_000
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
@@ -65,10 +61,15 @@ type catchpointWriter struct {
 	chunkNum             uint64
 	writtenBytes         int64
 	biggestChunkLen      uint64
-	accountsIterator     encodedAccountsBatchIter
+	accountsIterator     accountsBatchIter
 	maxResourcesPerChunk int
 	accountsDone         bool
 	kvRows               *sql.Rows
+}
+
+type accountsBatchIter interface {
+	Next(ctx context.Context, tx *sql.Tx, accountCount int, resourceCount int) ([]encoded.BalanceRecordV6, uint64, error)
+	Close()
 }
 
 type encodedBalanceRecordV5 struct {
@@ -83,47 +84,12 @@ type catchpointFileBalancesChunkV5 struct {
 	Balances []encodedBalanceRecordV5 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
-// SortUint64 re-export this sort, which is implemented in basics, and being used by the msgp when
-// encoding the resources map below.
-type SortUint64 = basics.SortUint64
-
-type encodedBalanceRecordV6 struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Address     basics.Address      `codec:"a,allocbound=crypto.DigestSize"`
-	AccountData msgp.Raw            `codec:"b"`                                                              // encoding of baseAccountData
-	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=resourcesPerCatchpointFileChunkBackwardCompatible"` // map of resourcesData
-
-	// flag indicating whether there are more records for the same account coming up
-	ExpectingMoreEntries bool `codec:"e"`
-}
-
-// Adjust these to be big enough for boxes, but not directly tied to box values.
-const (
-	// For boxes: "bx:<8 bytes><64 byte name>"
-	encodedKVRecordV6MaxKeyLength = 128
-
-	// For boxes: MaxBoxSize
-	encodedKVRecordV6MaxValueLength = 32768
-
-	// MaxEncodedKVDataSize is the max size of serialized KV entry, checked with TestEncodedKVDataSize.
-	// Exact value is 32906 that is 10 bytes more than 32768 + 128
-	MaxEncodedKVDataSize = 33000
-)
-
-type encodedKVRecordV6 struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Key   []byte `codec:"k,allocbound=encodedKVRecordV6MaxKeyLength"`
-	Value []byte `codec:"v,allocbound=encodedKVRecordV6MaxValueLength"`
-}
-
 type catchpointFileChunkV6 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Balances    []encodedBalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
+	Balances    []encoded.BalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 	numAccounts uint64
-	KVs         []encodedKVRecordV6 `codec:"kv,allocbound=BalancesPerCatchpointFileChunk"`
+	KVs         []encoded.KVRecordV6 `codec:"kv,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
 func (chunk catchpointFileChunkV6) empty() bool {
@@ -166,6 +132,7 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxR
 		file:                 file,
 		compressor:           compressor,
 		tar:                  tar,
+		accountsIterator:     store.MakeEncodedAccoutsBatchIter(),
 		maxResourcesPerChunk: maxResourcesPerChunk,
 	}
 	return res, nil
@@ -330,7 +297,7 @@ func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) er
 		cw.kvRows = rows
 	}
 
-	kvrs := make([]encodedKVRecordV6, 0, BalancesPerCatchpointFileChunk)
+	kvrs := make([]encoded.KVRecordV6, 0, BalancesPerCatchpointFileChunk)
 	for cw.kvRows.Next() {
 		var k []byte
 		var v []byte
@@ -338,7 +305,7 @@ func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) er
 		if err != nil {
 			return err
 		}
-		kvrs = append(kvrs, encodedKVRecordV6{Key: k, Value: v})
+		kvrs = append(kvrs, encoded.KVRecordV6{Key: k, Value: v})
 		if len(kvrs) == BalancesPerCatchpointFileChunk {
 			break
 		}

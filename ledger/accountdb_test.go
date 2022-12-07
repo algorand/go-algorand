@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/encoded"
 
 	"github.com/stretchr/testify/require"
 
@@ -905,9 +906,9 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 			last64KAccountCreationTime = time.Duration(0)
 		}
 		var chunk catchpointFileChunkV6
-		chunk.Balances = make([]encodedBalanceRecordV6, chunkSize)
+		chunk.Balances = make([]encoded.BalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
-			var randomAccount encodedBalanceRecordV6
+			var randomAccount encoded.BalanceRecordV6
 			accountData := store.BaseAccountData{RewardsBase: accountsLoaded + i}
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)

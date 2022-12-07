@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/protocol"
@@ -137,8 +138,8 @@ func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.Con
 	return
 }
 
-// prepareNormalizedBalancesV6 converts an array of encodedBalanceRecordV6 into an equal size array of normalizedAccountBalances.
-func prepareNormalizedBalancesV6(bals []encodedBalanceRecordV6, proto config.ConsensusParams) (normalizedAccountBalances []store.NormalizedAccountBalance, err error) {
+// prepareNormalizedBalancesV6 converts an array of encoded.BalanceRecordV6 into an equal size array of normalizedAccountBalances.
+func prepareNormalizedBalancesV6(bals []encoded.BalanceRecordV6, proto config.ConsensusParams) (normalizedAccountBalances []store.NormalizedAccountBalance, err error) {
 	normalizedAccountBalances = make([]store.NormalizedAccountBalance, len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].Address = balance.Address
