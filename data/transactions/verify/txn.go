@@ -36,6 +36,7 @@ import (
 var logicGoodTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_ok", Description: "Total transaction scripts executed and accepted"})
 var logicRejTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_rej", Description: "Total transaction scripts executed and rejected"})
 var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_err", Description: "Total transaction scripts executed and errored"})
+var logicCostTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_cost", Description: "Total cost of transaction scripts executed"})
 var msigLessOrEqual4 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_4", Description: "Total transactions with 1-4 msigs"})
 var msigLessOrEqual10 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_5_10", Description: "Total transactions with 5-10 msigs"})
 var msigMore10 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_16", Description: "Total transactions with 11+ msigs"})
@@ -404,7 +405,7 @@ func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *Group
 		MinAvmVersion: &groupCtx.minAvmVersion,
 		SigLedger:     groupCtx.ledger,
 	}
-	pass, err := logic.EvalSignature(groupIndex, &ep)
+	pass, cost, err := logic.EvalSignature(groupIndex, &ep)
 	if err != nil {
 		logicErrTotal.Inc(nil)
 		return fmt.Errorf("transaction %v: rejected by logic err=%v", txn.ID(), err)
@@ -414,6 +415,7 @@ func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *Group
 		return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
 	}
 	logicGoodTotal.Inc(nil)
+	logicCostTotal.AddUint64(uint64(cost), nil)
 	return nil
 
 }

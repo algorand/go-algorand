@@ -446,9 +446,10 @@ ecdsa_verify Secp256k1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 	ops := testProg(t, source, 5)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = ops.Program
-	pass, err := EvalSignature(0, defaultEvalParamsWithVersion(5, txn))
+	pass, cost, err := EvalSignature(0, defaultEvalParamsWithVersion(5, txn))
 	require.NoError(t, err)
 	require.True(t, pass)
+	require.Greater(t, cost, 0)
 }
 
 func TestEcdsaWithSecp256r1(t *testing.T) {
@@ -552,7 +553,7 @@ ecdsa_verify Secp256r1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 	ops := testProg(t, source, fidoVersion)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = ops.Program
-	pass, err := EvalSignature(0, defaultEvalParamsWithVersion(fidoVersion, txn))
+	pass, _, err := EvalSignature(0, defaultEvalParamsWithVersion(fidoVersion, txn))
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -692,7 +693,7 @@ ed25519verify`, pkStr), AssemblerMaxVersion)
 		txn.Lsig.Logic = programs[i]
 		txn.Lsig.Args = [][]byte{data[i][:], signatures[i][:]}
 		ep := defaultEvalParams(txn)
-		pass, err := EvalSignature(0, ep)
+		pass, _, err := EvalSignature(0, ep)
 		if !pass {
 			b.Log(hex.EncodeToString(programs[i]))
 			b.Log(ep.Trace.String())
@@ -777,7 +778,7 @@ func benchmarkEcdsa(b *testing.B, source string, curve EcdsaCurve) {
 		txn.Lsig.Logic = data[i].programs
 		txn.Lsig.Args = [][]byte{data[i].msg[:], data[i].r, data[i].s, data[i].x, data[i].y, data[i].pk, {uint8(data[i].v)}}
 		ep := defaultEvalParams(txn)
-		pass, err := EvalSignature(0, ep)
+		pass, _, err := EvalSignature(0, ep)
 		if !pass {
 			b.Log(hex.EncodeToString(data[i].programs))
 			b.Log(ep.Trace.String())
@@ -900,7 +901,7 @@ func benchmarkBn256(b *testing.B, source string) {
 		txn.Lsig.Logic = data[i].programs
 		txn.Lsig.Args = [][]byte{data[i].a, data[i].k, data[i].g1, data[i].g2}
 		ep := defaultEvalParams(txn)
-		pass, err := EvalSignature(0, ep)
+		pass, _, err := EvalSignature(0, ep)
 		if !pass {
 			b.Log(hex.EncodeToString(data[i].programs))
 			b.Log(ep.Trace.String())

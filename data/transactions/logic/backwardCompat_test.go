@@ -297,13 +297,14 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	err = CheckSignature(0, ep)
 	require.NoError(t, err)
 
-	pass, err := EvalSignature(0, ep)
+	pass, cost, err := EvalSignature(0, ep)
 	if err != nil || !pass {
 		t.Log(hex.EncodeToString(program))
 		t.Log(ep.Trace.String())
 	}
 	require.NoError(t, err)
 	require.True(t, pass)
+	require.Greater(t, cost, 0)
 
 	// Costs for v2 should be higher because of hash opcode cost changes
 	ep2, tx, _ := makeSampleEnvWithVersion(2)
@@ -370,19 +371,19 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		ep, _, _ := makeSampleEnvWithVersion(1)
 		ep.TxnGroup[0].Txn.RekeyTo = basics.Address{} // avoid min version issues
 		ep.TxnGroup[0].Lsig.Logic = ops.Program
-		_, err := EvalSignature(0, ep)
+		_, _, err := EvalSignature(0, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "greater than protocol supported version")
 
 		// check opcodes failures
 		ep.TxnGroup[0].Lsig.Logic[0] = 1 // set version to 1
-		_, err = EvalSignature(0, ep)
+		_, _, err = EvalSignature(0, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global field")
 
 		// check opcodes failures
 		ep.TxnGroup[0].Lsig.Logic[0] = 0 // set version to 0
-		_, err = EvalSignature(0, ep)
+		_, _, err = EvalSignature(0, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global field")
 	}
@@ -439,19 +440,19 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			ep.TxnGroup[0].Lsig.Logic = ops.Program
 
 			// check failure with version check
-			_, err = EvalSignature(0, ep)
+			_, _, err = EvalSignature(0, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "greater than protocol supported version")
 
 			// check opcodes failures
 			ops.Program[0] = 1 // set version to 1
-			_, err = EvalSignature(0, ep)
+			_, _, err = EvalSignature(0, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
 
 			// check opcodes failures
 			ops.Program[0] = 0 // set version to 0
-			_, err = EvalSignature(0, ep)
+			_, _, err = EvalSignature(0, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
 		}

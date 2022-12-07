@@ -197,7 +197,7 @@ func TestTooManyArgs(t *testing.T) {
 			txn.Lsig.Logic = ops.Program
 			args := [transactions.EvalMaxArgs + 1][]byte{}
 			txn.Lsig.Args = args[:]
-			pass, err := EvalSignature(0, defaultEvalParams(txn))
+			pass, _, err := EvalSignature(0, defaultEvalParams(txn))
 			require.Error(t, err)
 			require.False(t, pass)
 		})
@@ -389,9 +389,10 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 			ep := defaultEvalParams(txn)
 			err := CheckSignature(0, ep)
 			require.NoError(t, err)
-			pass, err := EvalSignature(0, ep)
+			pass, cost, err := EvalSignature(0, ep)
 			require.True(t, pass)
 			require.NoError(t, err)
+			require.Greater(t, cost, 0)
 		})
 	}
 }
@@ -454,10 +455,11 @@ func TestTLHC(t *testing.T) {
 				t.Log(ep.Trace.String())
 			}
 			require.NoError(t, err)
-			pass, err := EvalSignature(0, ep)
+			pass, cost, err := EvalSignature(0, ep)
 			if pass {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(ep.Trace.String())
+				require.Greater(t, cost, 0)
 			}
 			require.False(t, pass)
 			isNotPanic(t, err)
@@ -465,7 +467,7 @@ func TestTLHC(t *testing.T) {
 			txn.Txn.Receiver = a2
 			txn.Txn.CloseRemainderTo = a2
 			ep = defaultEvalParams(txn)
-			pass, err = EvalSignature(0, ep)
+			pass, _, err = EvalSignature(0, ep)
 			if !pass {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(ep.Trace.String())
@@ -477,7 +479,7 @@ func TestTLHC(t *testing.T) {
 			txn.Txn.CloseRemainderTo = a2
 			txn.Txn.FirstValid = 1
 			ep = defaultEvalParams(txn)
-			pass, err = EvalSignature(0, ep)
+			pass, _, err = EvalSignature(0, ep)
 			if pass {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(ep.Trace.String())
@@ -489,7 +491,7 @@ func TestTLHC(t *testing.T) {
 			txn.Txn.CloseRemainderTo = a1
 			txn.Txn.FirstValid = 999999
 			ep = defaultEvalParams(txn)
-			pass, err = EvalSignature(0, ep)
+			pass, _, err = EvalSignature(0, ep)
 			if !pass {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(ep.Trace.String())
@@ -501,7 +503,7 @@ func TestTLHC(t *testing.T) {
 			txn.Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849a")}
 			block.BlockHeader.Round = 1
 			ep = defaultEvalParams(txn)
-			pass, err = EvalSignature(0, ep)
+			pass, _, err = EvalSignature(0, ep)
 			if pass {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(ep.Trace.String())
@@ -2102,7 +2104,7 @@ func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problem
 	// may mean that the problems argument is often duplicated, but this seems
 	// the best way to be concise about all sorts of tests.
 
-	pass, err := EvalSignature(gi, ep)
+	pass, _, err := EvalSignature(gi, ep)
 	if evalProblem == "" {
 		require.NoError(t, err, "Eval%s\nExpected: PASS", sb)
 		assert.True(t, pass, "Eval%s\nExpected: PASS", sb)
@@ -3119,7 +3121,7 @@ func TestPanic(t *testing.T) {
 			txn.Lsig.Logic = ops.Program
 			params = defaultEvalParams(txn)
 			params.logger = log
-			pass, err := EvalSignature(0, params)
+			pass, _, err := EvalSignature(0, params)
 			if pass {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(params.Trace.String())
@@ -3551,12 +3553,12 @@ func evalLoop(b *testing.B, runs int, program []byte) {
 	for i := 0; i < runs; i++ {
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = program
-		pass, err := EvalSignature(0, benchmarkEvalParams(txn))
+		pass, _, err := EvalSignature(0, benchmarkEvalParams(txn))
 		if !pass {
 			// rerun to trace it.  tracing messes up timing too much
 			ep := benchmarkEvalParams(txn)
 			ep.Trace = &strings.Builder{}
-			pass, err = EvalSignature(0, ep)
+			pass, _, err = EvalSignature(0, ep)
 			b.Log(ep.Trace.String())
 		}
 		// require is super slow but makes useful error messages, wrap it in a check that makes the benchmark run a bunch faster
@@ -4306,7 +4308,7 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 					}
 					require.NoError(t, err)
 					ep = defaultEvalParamsWithVersion(lv, txn)
-					pass, err := EvalSignature(0, ep)
+					pass, _, err := EvalSignature(0, ep)
 					ok := tester(t, pass, err)
 					if !ok {
 						t.Log(ep.Trace.String())

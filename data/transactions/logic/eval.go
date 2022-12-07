@@ -780,9 +780,9 @@ func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (b
 
 // EvalSignature evaluates the logicsig of the ith transaction in params.
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
-func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
+func EvalSignature(gi int, params *EvalParams) (pass bool, cost int, err error) {
 	if params.SigLedger == nil {
-		return false, errors.New("no sig ledger in signature eval")
+		return false, 0, errors.New("no sig ledger in signature eval")
 	}
 	cx := EvalContext{
 		EvalParams:   params,
@@ -790,7 +790,8 @@ func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
 		groupIndex:   gi,
 		txn:          &params.TxnGroup[gi],
 	}
-	return eval(cx.txn.Lsig.Logic, &cx)
+	pass, err = eval(cx.txn.Lsig.Logic, &cx)
+	return pass, cx.cost, err
 }
 
 // eval implementation
