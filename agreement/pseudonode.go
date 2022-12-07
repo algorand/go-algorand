@@ -190,6 +190,7 @@ func (n asyncPseudonode) MakeProposals(ctx context.Context, r round, p period) (
 }
 
 func (n asyncPseudonode) StartSpeculativeBlockAssembly(ctx context.Context, ve ValidatedBlock, blockHash crypto.Digest) {
+	// TODO: make this synchronous instead of thread? (thread creation likely moving to inside transactionPool)
 	go n.factory.StartSpeculativeBlockAssembly(ctx, ve, blockHash)
 }
 

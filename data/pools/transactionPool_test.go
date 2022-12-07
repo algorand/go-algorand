@@ -1634,7 +1634,8 @@ func TestSpeculativeBlockAssembly(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(mockLedger, cfg, logging.Base())
+	log := logging.TestingLog(t)
+	transactionPool := MakeTransactionPool(mockLedger, cfg, log)
 
 	savedTransactions := 0
 	for i, sender := range addresses {
@@ -1695,8 +1696,11 @@ func TestSpeculativeBlockAssembly(t *testing.T) {
 	block, err := blockEval.GenerateBlock()
 	require.NoError(t, err)
 
+	t.Logf("prev block digest %s", block.Block().Digest().String())
+	t.Logf("prev block   hash %s", block.Block().Hash().String())
+
 	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{})
-	<-transactionPool.specAsmDone
+	//<-transactionPool.specAsmDone
 
 	// add the block
 	mockLedger.AddBlock(block.Block(), agreement.Certificate{})
@@ -1708,7 +1712,7 @@ func TestSpeculativeBlockAssembly(t *testing.T) {
 	// check that we still assemble the block
 	specBlock, err := transactionPool.AssembleBlock(block.Block().Round()+1, time.Now().Add(10*time.Millisecond))
 	require.NoError(t, err)
-	require.Equal(t, specBlock.Block().Branch, block.Block().Hash())
+	require.Equal(t, specBlock.Block().Branch, block.Block().Hash(), "spec.Branch %s", specBlock.Block().Branch.String())
 	require.NotNil(t, specBlock)
 	require.Len(t, specBlock.Block().Payset, savedTransactions)
 }
@@ -1778,9 +1782,8 @@ func TestSpeculativeBlockAssemblyWithOverlappingBlock(t *testing.T) {
 	require.NoError(t, err)
 
 	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{})
-	<-transactionPool.specAsmDone
-	specBlock, err := transactionPool.tryReadSpeculativeBlock(block.Block().Hash())
-	require.NoError(t, err)
+	//<-transactionPool.specAsmDone
+	specBlock := transactionPool.tryReadSpeculativeBlock(block.Block().Hash(), time.Now().Add(time.Second))
 	require.NotNil(t, specBlock)
 	// assembled block doesn't have txn in the speculated block
 	require.Len(t, specBlock.Block().Payset, savedTransactions-1)
@@ -1895,9 +1898,8 @@ func TestSpeculativeBlockAssemblyDataRace(t *testing.T) {
 	}()
 	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{})
 	wg.Wait()
-	<-transactionPool.specAsmDone
-	specBlock, err := transactionPool.tryReadSpeculativeBlock(block.Block().Hash())
-	require.NoError(t, err)
+	//<-transactionPool.specAsmDone
+	specBlock := transactionPool.tryReadSpeculativeBlock(block.Block().Hash(), time.Now().Add(time.Second))
 	require.NotNil(t, specBlock)
 	// assembled block doesn't have txn in the speculated block
 	require.Len(t, specBlock.Block().Payset, savedTransactions-1)
