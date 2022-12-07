@@ -1143,6 +1143,7 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 	}
 
 	// Process the results and make sure they are correct
+	initDroppedBacklog, initDroppedPool := getDropped()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -1173,7 +1174,7 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 				}
 			case <-timer.C:
 				droppedBacklog, droppedPool = getDropped()
-				if int(groupCounter+droppedBacklog+droppedPool) == len(signedTransactionGroups) {
+				if int(groupCounter+(droppedBacklog-initDroppedBacklog)+(droppedPool-initDroppedPool)) == len(signedTransactionGroups) {
 					// all the benchmark txns processed
 					return
 				}
