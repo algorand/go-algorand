@@ -317,7 +317,7 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, knownAddresses map
 		if delta.oldResource.Addrid != 0 {
 			addrid = delta.oldResource.Addrid
 		} else if addrid, ok = knownAddresses[addr]; !ok {
-			addrid, err = arw.LookupAccountRowId(addr)
+			addrid, err = arw.LookupAccountRowID(addr)
 			if err != nil {
 				if err != sql.ErrNoRows {
 					err = fmt.Errorf("base account cannot be read while processing resource for addr=%s, aidx=%d: %w", addr.String(), aidx, err)
@@ -330,7 +330,7 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, knownAddresses map
 				continue
 			}
 		}
-		resDataBuf, err = arw.LookupResourceDataByAddrId(addrid, aidx)
+		resDataBuf, err = arw.LookupResourceDataByAddrID(addrid, aidx)
 		switch err {
 		case nil:
 			if len(resDataBuf) > 0 {
@@ -624,7 +624,6 @@ func (a *compactOnlineAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
 			a.updateOld(idx, store.PersistedOnlineAccountData{Addr: addr})
-			err = nil
 		default:
 			// unexpected error - let the caller know that we couldn't complete the operation.
 			return err
