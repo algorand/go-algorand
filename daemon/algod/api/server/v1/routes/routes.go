@@ -21,9 +21,6 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/handlers"
 )
 
-// KeyLength is the an Algorand's public address length
-const KeyLength = 58
-
 // V1Routes contains all routes for v1
 // v1 algod paths will route to the sunset message, resulting in a 410 Gone response.
 var V1Routes = lib.Routes{
