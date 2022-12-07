@@ -192,7 +192,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 
 	require.Equal(t, 1, cache.Len())
 
-	cache.Delete(k)
+	cache.Delete(d[:])
 	require.Equal(t, 0, cache.Len())
 }
 

@@ -94,11 +94,16 @@ func (c *digestCache) Len() int {
 }
 
 // Delete from the cache
+func (c *digestCache) innerDelete(d *crypto.Digest) {
+	delete(c.cur, *d)
+	delete(c.prev, *d)
+}
+
+// Delete from the cache
 func (c *digestCache) Delete(d *crypto.Digest) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.cur, *d)
-	delete(c.prev, *d)
+	c.innerDelete(d)
 }
 
 // txSaltedCache is a digest cache with a rotating salt
@@ -239,7 +244,30 @@ func (c *txSaltedCache) innerCheckAndPut(msg []byte) (*crypto.Digest, bool) {
 
 // DeleteByKey from the cache by using a key used for insertion
 func (c *txSaltedCache) DeleteByKey(d *crypto.Digest) {
-	c.Delete(d)
+	c.digestCache.Delete(d)
+}
+
+// Delete from the cache
+func (c *txSaltedCache) Delete(msg []byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	ptr := saltedPool.Get()
+	defer saltedPool.Put(ptr)
+
+	buf := ptr.([]byte)
+	toBeHashed := append(buf[:0], msg...)
+	toBeHashed = append(toBeHashed, c.curSalt[:]...)
+	toBeHashed = toBeHashed[:len(msg)+len(c.curSalt)]
+	d1 := crypto.Digest(blake2b.Sum256(toBeHashed))
+
+	toBeHashed = append(buf[:0], msg...)
+	toBeHashed = append(toBeHashed, c.prevSalt[:]...)
+	toBeHashed = toBeHashed[:len(msg)+len(c.prevSalt)]
+	d2 := crypto.Digest(blake2b.Sum256(toBeHashed))
+
+	c.digestCache.innerDelete(&d1)
+	c.digestCache.innerDelete(&d2)
 }
 
 var saltedPool = sync.Pool{

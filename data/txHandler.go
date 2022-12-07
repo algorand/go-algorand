@@ -309,6 +309,17 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 		// we failed to write to the output queue, since the queue was full.
 		// adding the metric here allows us to monitor how frequently it happens.
 		transactionMessagesDroppedFromPool.Inc(nil)
+
+		// delete from duplicate caches to give it chance to be re-submitted
+		// this relatively rare operation and implementation is expensive (requires re-hashing)
+		var result []byte
+		for i := range tx.unverifiedTxGroup {
+			encodeBuf := tx.unverifiedTxGroup[i].MarshalMsg(nil)
+			result = append(result, encodeBuf...)
+		}
+		d := crypto.Hash(result)
+		handler.txCanonicalCache.Delete(&d)
+		handler.msgCache.Delete(tx.rawmsg.Data)
 	}
 	return nil
 }
@@ -350,11 +361,10 @@ func (handler *TxHandler) dedupCanonical(ntx int, unverifiedTxGroup []transactio
 			// log and skip
 			logging.Base().Warnf("Decoded size %d does not match to encoded %d", consumed, len(encodeBuf))
 			return nil, false
-		} else {
-			d = crypto.Hash(encodeBuf)
-			if handler.txCanonicalCache.CheckAndPut(&d) {
-				return nil, true
-			}
+		}
+		d = crypto.Hash(encodeBuf)
+		if handler.txCanonicalCache.CheckAndPut(&d) {
+			return nil, true
 		}
 	}
 	return &d, false
