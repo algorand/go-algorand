@@ -163,8 +163,8 @@ type RawResponse interface {
 }
 
 // submitForm is a helper used for submitting (ex.) GETs and POSTs to the server
-// if response is nil, then it is expected that the response received will have a content length of zero
-func (client RestClient) submitForm(response interface{}, path string, request interface{}, requestMethod string, encodeJSON bool, decodeJSON bool) error {
+// if expectNoContent is true, then it is expected that the response received will have a content length of zero
+func (client RestClient) submitForm(response interface{}, path string, request interface{}, requestMethod string, encodeJSON bool, decodeJSON bool, expectNoContent bool) error {
 	var err error
 	queryURL := client.serverURL
 	queryURL.Path = path
@@ -219,11 +219,10 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 		return err
 	}
 
-	if response == nil {
+	if expectNoContent {
 		if resp.ContentLength == 0 {
 			return nil
 		}
-
 		return fmt.Errorf("expected empty response but got response of %d bytes", resp.ContentLength)
 	}
 
@@ -249,25 +248,26 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 
 // get performs a GET request to the specific path against the server
 func (client RestClient) get(response interface{}, path string, request interface{}) error {
-	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, true /* decodeJSON */)
+	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, true /* decodeJSON */, false)
 }
 
 // delete performs a DELETE request to the specific path against the server
-func (client RestClient) delete(response interface{}, path string, request interface{}) error {
-	return client.submitForm(response, path, request, "DELETE", false /* encodeJSON */, true /* decodeJSON */)
+// when expectNoContent is true, then no content is expected to be returned from the endpoint
+func (client RestClient) delete(response interface{}, path string, request interface{}, expectNoContent bool) error {
+	return client.submitForm(response, path, request, "DELETE", false /* encodeJSON */, true /* decodeJSON */, expectNoContent)
 }
 
 // getRaw behaves identically to get but doesn't json decode the response, and
 // the response must implement the RawResponse interface
 func (client RestClient) getRaw(response RawResponse, path string, request interface{}) error {
-	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, false /* decodeJSON */)
+	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, false /* decodeJSON */, false)
 }
 
 // post sends a POST request to the given path with the given request object.
 // No query parameters will be sent if request is nil.
 // response must be a pointer to an object as post writes the response there.
 func (client RestClient) post(response interface{}, path string, request interface{}) error {
-	return client.submitForm(response, path, request, "POST", true /* encodeJSON */, true /* decodeJSON */)
+	return client.submitForm(response, path, request, "POST", true /* encodeJSON */, true /* decodeJSON */, false)
 }
 
 // Status retrieves the StatusResponse from the running node
@@ -544,13 +544,13 @@ func (client RestClient) Shutdown() (err error) {
 
 // AbortCatchup aborts the currently running catchup
 func (client RestClient) AbortCatchup(catchpointLabel string) (response model.CatchpointAbortResponse, err error) {
-	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "DELETE", false, true)
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "DELETE", false, true, false)
 	return
 }
 
 // Catchup start catching up to the give catchpoint label
 func (client RestClient) Catchup(catchpointLabel string) (response model.CatchpointStartResponse, err error) {
-	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "POST", false, true)
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "POST", false, true, false)
 	return
 }
 
@@ -568,7 +568,7 @@ func (client RestClient) GetGoRoutines(ctx context.Context) (goRoutines string, 
 // Compile compiles the given program and returned the compiled program
 func (client RestClient) Compile(program []byte) (compiledProgram []byte, programHash crypto.Digest, err error) {
 	var compileResponse model.CompileResponse
-	err = client.submitForm(&compileResponse, "/v2/teal/compile", program, "POST", false, true)
+	err = client.submitForm(&compileResponse, "/v2/teal/compile", program, "POST", false, true, false)
 	if err != nil {
 		return nil, crypto.Digest{}, err
 	}
@@ -624,7 +624,7 @@ func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryA
 // RawDryrun gets the raw DryrunResponse associated with the passed address
 func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	var blob Blob
-	err = client.submitForm(&blob, "/v2/teal/dryrun", data, "POST", false /* encodeJSON */, false /* decodeJSON */)
+	err = client.submitForm(&blob, "/v2/teal/dryrun", data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
 	response = blob
 	return
 }
@@ -668,7 +668,7 @@ func (client RestClient) GetParticipationKeyByID(participationID string) (respon
 
 // RemoveParticipationKeyByID removes a particiption key by its ID
 func (client RestClient) RemoveParticipationKeyByID(participationID string) (err error) {
-	err = client.delete(nil, fmt.Sprintf("/v2/participation/%s", participationID), nil)
+	err = client.delete(nil, fmt.Sprintf("/v2/participation/%s", participationID), nil, true)
 	return
 
 }
