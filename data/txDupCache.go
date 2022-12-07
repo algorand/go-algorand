@@ -37,7 +37,7 @@ type digestCache struct {
 	prev map[crypto.Digest]struct{}
 
 	maxSize int
-	mu      deadlock.Mutex
+	mu      deadlock.RWMutex
 }
 
 func makeDigestCache(size int) *digestCache {
@@ -205,18 +205,25 @@ func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, bool) {
 // CheckAndPut adds msg into a cache if not found
 // returns a hashing key used for insertion if the message not found.
 func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.innerCheckAndPut(msg)
-}
-
-// innerCheckAndPut adds msg into a cache if not found.
-// returns a hashing key used for insertion if the message not found.
-// locking semantic: write lock must be held
-func (c *txSaltedCache) innerCheckAndPut(msg []byte) (*crypto.Digest, bool) {
+	c.mu.RLock()
 	d, found := c.innerCheck(msg)
+	salt := c.curSalt
+	c.mu.RUnlock()
+	// fast read-only path: assuming most messages are duplicates, hash msg and check cache
 	if found {
 		return d, found
+	}
+
+	// not found: acquire write lock to add this msg hash to cache
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// salt may have changed between RUnlock() and Lock(), rehash if needed
+	if salt != c.curSalt {
+		d, found = c.innerCheck(msg)
+		if found {
+			// already added to cache between RUnlock() and Lock(), return
+			return d, found
+		}
 	}
 
 	if len(c.cur) >= c.maxSize {
