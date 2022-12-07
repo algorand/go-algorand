@@ -1166,7 +1166,7 @@ var dryrunCmd = &cobra.Command{
 				reportErrorf("program failed Check: %s", err)
 			}
 			ep.Trace = &strings.Builder{}
-			pass, err := logic.EvalSignature(i, ep)
+			pass, _, err := logic.EvalSignature(i, ep)
 			// TODO: optionally include `inspect` output here?
 			fmt.Fprintf(os.Stdout, "tx[%d] trace:\n%s\n", i, ep.Trace.String())
 			if pass {
