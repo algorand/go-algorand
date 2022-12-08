@@ -212,6 +212,17 @@ func getBuilder(tx *sql.Tx, rnd basics.Round) (builder, error) {
 	return bldr, nil
 }
 
+func isBuilderExists(tx *sql.Tx, rnd basics.Round) (bool, error) {
+	row := tx.QueryRow("SELECT EXISTS ( SELECT 1 FROM builders WHERE round=? )", rnd)
+
+	exists := 0
+	if err := row.Scan(&exists); err != nil {
+		return false, err
+	}
+
+	return exists != 0, nil
+}
+
 // deleteBuilders deletes all builders before (but not including) the given rnd
 func deleteBuilders(tx *sql.Tx, rnd basics.Round) error {
 	_, err := tx.Exec(deleteBuilderForRound, rnd)
