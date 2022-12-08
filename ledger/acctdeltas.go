@@ -485,7 +485,6 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
 			a.updateOld(idx, store.PersistedAccountData{Addr: addr})
-			err = nil
 		default:
 			// unexpected error - let the caller know that we couldn't complete the operation.
 			return err
