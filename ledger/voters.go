@@ -225,6 +225,7 @@ func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
 	}
 }
 
+// TODO: Are we currently effectively extending the ledger?
 // lowestRound() returns the lowest votersForRoundCache state (blocks and accounts) needed by
 // the votersTracker in case of a restart.  The accountUpdates tracker will
 // not delete account state before this round, so that after a restart, it's

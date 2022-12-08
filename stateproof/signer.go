@@ -133,6 +133,7 @@ func (spw *Worker) getStateProofMessage(round basics.Round, votersRound basics.R
 
 	// TODO: Do we really want this fall back on every error?
 	// TODO: Add a comment here
+	// TODO: Log here
 
 	hdr, err := spw.ledger.BlockHdr(round)
 	if err != nil {
