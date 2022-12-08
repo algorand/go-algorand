@@ -649,3 +649,14 @@ func (w *accountsV2Writer) AccountsPruneOnlineRoundParams(deleteBeforeRound basi
 	)
 	return err
 }
+
+func (w *accountsV2Writer) AccountsReset(ctx context.Context) error {
+	for _, stmt := range accountsResetExprs {
+		_, err := w.e.ExecContext(ctx, stmt)
+		if err != nil {
+			return err
+		}
+	}
+	_, err := db.SetUserVersion(ctx, w.e, 0)
+	return err
+}
