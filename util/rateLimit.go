@@ -127,6 +127,7 @@ func NewElasticRateLimiter(
 	return &ret
 }
 
+// Start will start any underlying component of the ElasticRateLimiter
 func (erl *ElasticRateLimiter) Start() {
 	if erl == nil {
 		return
@@ -136,6 +137,7 @@ func (erl *ElasticRateLimiter) Start() {
 	}
 }
 
+// Stop will stop any underlying component of the ElasticRateLimiter
 func (erl *ElasticRateLimiter) Stop() {
 	if erl == nil {
 		return
