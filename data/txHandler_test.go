@@ -1675,10 +1675,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(t, err)
 
-	l := ledger
-	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	handler := MakeTxHandler(tp, l, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	handler := makeTestTxHandler(ledger, cfg)
 	// since Start is not called, set the context here
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	defer handler.ctxCancel()
@@ -1782,7 +1779,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	// make an invalid block to fail recompute pool and expose transactionMessageTxGroupRememberNoPendingEval metric
 	blockTicker := &blockTicker{cond: *sync.NewCond(&deadlock.Mutex{})}
 	blockListeners := []realledger.BlockListener{
-		tp,
+		handler.txPool,
 		blockTicker,
 	}
 	ledger.RegisterBlockListeners(blockListeners)
