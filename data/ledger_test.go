@@ -125,7 +125,7 @@ func TestLedgerCirculation(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	log := logging.TestingLog(t)
-	log.SetLevel(logging.Warn)
+	log.SetLevel(logging.Error)
 	realLedger, err := ledger.OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer realLedger.Close()
@@ -325,6 +325,10 @@ func TestLedgerSeed(t *testing.T) {
 }
 
 func TestConsensusVersion(t *testing.T) {
+	if testing.Short() {
+		t.Log("this is a long test and skipping for -short")
+		return
+	}
 	partitiontest.PartitionTest(t)
 
 	// find a consensus protocol that leads to ConsensusCurrentVersion
@@ -513,7 +517,7 @@ func TestLedgerErrorValidate(t *testing.T) {
 	defer realLedger.Close()
 
 	l := Ledger{Ledger: realLedger, log: log}
-	l.log.SetLevel(logging.Debug)
+	l.log.SetLevel(logging.Warn)
 	require.NotNil(t, &l)
 
 	totalsRound, _, err := realLedger.LatestTotals()
