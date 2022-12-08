@@ -406,8 +406,8 @@ func (l *Ledger) RegisterBlockListeners(listeners []BlockListener) {
 
 // RegisterSyncListener registers a listener that will be called when a
 // commit is about to cover a round.
-func (l *Ledger) RegisterSyncListener(listener SyncListener) {
-	l.notifier.registerSync(listener)
+func (l *Ledger) RegisterSyncListener(listener CommitListener) {
+	l.notifier.registerCommit(listener)
 }
 
 // notifyCommit informs the trackers that all blocks up to r have been
