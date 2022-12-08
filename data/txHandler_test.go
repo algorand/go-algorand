@@ -1726,8 +1726,15 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	handler.postProcessCheckedTxn(&wi)
 	require.Equal(t, 1, getMetricCounter(txPoolRememberTagCap))
 
-	// trigger group id error
+	// trigger not well-formed error
 	txn2 := txn1
+	txn2.Sender = basics.Address{}
+	wi.unverifiedTxGroup = []transactions.SignedTxn{txn2.Sign(secrets[0])}
+	handler.checkAlreadyCommitted(&wi)
+	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagTxnNotWellFormed))
+
+	// trigger group id error
+	txn2 = txn1
 	crypto.RandBytes(txn2.Group[:])
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn1.Sign(secrets[0]), txn2.Sign(secrets[0])}
 	handler.checkAlreadyCommitted(&wi)
