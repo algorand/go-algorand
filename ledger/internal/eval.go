@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
@@ -1529,17 +1528,6 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 	if err != nil {
 		return ledgercore.StateDelta{}, err
 	}
-
-	var txidlist strings.Builder
-	for gi, tg := range paysetgroups {
-		for ti, stxn := range tg {
-			if (gi != 0) || (ti != 0) {
-				txidlist.WriteRune(' ')
-			}
-			txidlist.WriteString(stxn.ID().String())
-		}
-	}
-	logging.Base().Infof("Eval txid-in %s", txidlist.String())
 
 	accountLoadingCtx, accountLoadingCancel := context.WithCancel(ctx)
 	preloadedTxnsData := prefetcher.PrefetchAccounts(accountLoadingCtx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())

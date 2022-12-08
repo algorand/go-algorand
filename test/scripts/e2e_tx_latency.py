@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+#
+# Measure total percieved tx latency.
+# Submit transactions to algod, watch blocks for committed transaction.
 
 import argparse
 import atexit
