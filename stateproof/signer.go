@@ -110,11 +110,7 @@ func (spw *Worker) signStateProof(round basics.Round) {
 		return
 	}
 
-	// votersRound is the round containing the merkle root commitment
-	// for the voters that are going to sign this block.
-	votersRound := round.SubSaturate(basics.Round(proto.StateProofInterval))
-
-	stateProofMessage, err := spw.getStateProofMessage(round, votersRound)
+	stateProofMessage, err := spw.getStateProofMessage(round, &proto)
 	if err != nil {
 		// TODO: Warn? Or something else?
 		spw.log.Warnf("spw.signBlock(%d): getStateProofMessage: %v", round, err)
@@ -124,21 +120,24 @@ func (spw *Worker) signStateProof(round basics.Round) {
 	spw.signStateProofMessage(stateProofMessage, round, keys)
 }
 
-func (spw *Worker) getStateProofMessage(round basics.Round, votersRound basics.Round) (*stateproofmsg.Message, error) {
-	// TODO: Do we maybe want to save information indicating whether I've signed the builder
+func (spw *Worker) getStateProofMessage(round basics.Round, proto *config.ConsensusParams) (*stateproofmsg.Message, error) {
 	dbBuilder, err := spw.loadBuilderFromDB(round)
 	if err == nil {
 		return &dbBuilder.Message, nil
 	}
 
-	// TODO: Do we really want this fall back on every error?
-	// TODO: Add a comment here
-	// TODO: Log here
+	spw.log.Warnf("spw.getStateProofMessage(%d): Could not retrieve builder from DB, attempting to generate it from the ledger: %v")
 
+	return spw.generateStateProofMessageLedger(round, proto)
+}
+
+func (spw *Worker) generateStateProofMessageLedger(round basics.Round, proto *config.ConsensusParams) (*stateproofmsg.Message, error) {
 	hdr, err := spw.ledger.BlockHdr(round)
 	if err != nil {
 		return nil, err
 	}
+
+	votersRound := round.SubSaturate(basics.Round(proto.StateProofInterval))
 
 	stateproofMessage, err := GenerateStateProofMessage(spw.ledger, uint64(votersRound), hdr)
 	if err != nil {
