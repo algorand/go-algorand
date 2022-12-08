@@ -329,7 +329,7 @@ func (handler *TxHandler) deleteFromCaches(msgKey *crypto.Digest, canonicalKey *
 		handler.txCanonicalCache.Delete(canonicalKey)
 	}
 
-	if handler.cacheConfig.enableFilteringRawMsg {
+	if handler.cacheConfig.enableFilteringRawMsg && msgKey != nil {
 		handler.msgCache.DeleteByKey(msgKey)
 	}
 }
