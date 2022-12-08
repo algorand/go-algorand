@@ -1157,7 +1157,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Broadcasts a raw transaction to the network.",
+        "summary": "Broadcasts a raw transaction or transaction group to the network.",
         "operationId": "RawTransaction",
         "parameters": [
           {
@@ -1220,7 +1220,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Simulates a raw transaction as it would be evaluated on the network.",
+        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network.",
         "operationId": "SimulateTransaction",
         "parameters": [
           {

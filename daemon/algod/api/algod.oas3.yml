@@ -5375,7 +5375,7 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Broadcasts a raw transaction to the network.",
+        "summary": "Broadcasts a raw transaction or transaction group to the network.",
         "tags": [
           "public",
           "participating"
@@ -5802,7 +5802,7 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Simulates a raw transaction as it would be evaluated on the network.",
+        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network.",
         "tags": [
           "public",
           "participating"

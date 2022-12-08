@@ -24,7 +24,7 @@ type ServerInterface interface {
 	// Get a list of unconfirmed transactions currently in the transaction pool by address.
 	// (GET /v2/accounts/{address}/transactions/pending)
 	GetPendingTransactionsByAddress(ctx echo.Context, address string, params GetPendingTransactionsByAddressParams) error
-	// Broadcasts a raw transaction to the network.
+	// Broadcasts a raw transaction or transaction group to the network.
 	// (POST /v2/transactions)
 	RawTransaction(ctx echo.Context) error
 	// Get a list of unconfirmed transactions currently in the transaction pool.
@@ -33,7 +33,7 @@ type ServerInterface interface {
 	// Get a specific pending transaction.
 	// (GET /v2/transactions/pending/{txid})
 	PendingTransactionInformation(ctx echo.Context, txid string, params PendingTransactionInformationParams) error
-	// Simulates a raw transaction as it would be evaluated on the network.
+	// Simulates a raw transaction or transaction group as it would be evaluated on the network.
 	// (POST /v2/transactions/simulate)
 	SimulateTransaction(ctx echo.Context) error
 }
@@ -365,17 +365,17 @@ var swaggerSpec = []string{
 	"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",
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
