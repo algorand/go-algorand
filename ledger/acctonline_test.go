@@ -808,7 +808,8 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
 	var endRound basics.Round
 	err := ao.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		dbOnlineRoundParams, endRound, err = accountsOnlineRoundParams(tx)
+		arw := store.NewAccountsSQLReaderWriter(tx)
+		dbOnlineRoundParams, endRound, err = arw.AccountsOnlineRoundParams()
 		return err
 	})
 	require.NoError(t, err)
@@ -1292,7 +1293,8 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
 	var endRound basics.Round
 	err = oa.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		dbOnlineRoundParams, endRound, err = accountsOnlineRoundParams(tx)
+		arw := store.NewAccountsSQLReaderWriter(tx)
+		dbOnlineRoundParams, endRound, err = arw.AccountsOnlineRoundParams()
 		return err
 	})
 

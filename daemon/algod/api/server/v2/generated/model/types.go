@@ -218,6 +218,30 @@ type Account struct {
 // * lsig
 type AccountSigType string
 
+// AccountBalanceRecord Account and its address
+type AccountBalanceRecord struct {
+	// AccountData Account information at a given round.
+	//
+	// Definition:
+	// data/basics/userBalance.go : AccountData
+	AccountData Account `json:"account-data"`
+
+	// Address Address of the updated account.
+	Address string `json:"address"`
+}
+
+// AccountDeltas Exposes deltas for account based resources in a single round
+type AccountDeltas struct {
+	// Accounts Array of Account updates for the round
+	Accounts *[]AccountBalanceRecord `json:"accounts,omitempty"`
+
+	// Apps Array of App updates for the round.
+	Apps *[]AppResourceRecord `json:"apps,omitempty"`
+
+	// Assets Array of Asset updates for the round.
+	Assets *[]AssetResourceRecord `json:"assets,omitempty"`
+}
+
 // AccountParticipation AccountParticipation describes the parameters used by this account in consensus protocol.
 type AccountParticipation struct {
 	// SelectionParticipationKey \[sel\] Selection public key (if any) currently registered for this round.
@@ -245,6 +269,42 @@ type AccountStateDelta struct {
 
 	// Delta Application state delta.
 	Delta StateDelta `json:"delta"`
+}
+
+// AccountTotals Total Algos in the system grouped by account status
+type AccountTotals struct {
+	// NotParticipating Amount of stake in non-participating accounts
+	NotParticipating uint64 `json:"not-participating"`
+
+	// Offline Amount of stake in offline accounts
+	Offline uint64 `json:"offline"`
+
+	// Online Amount of stake in online accounts
+	Online uint64 `json:"online"`
+
+	// RewardsLevel Total number of algos received per reward unit since genesis
+	RewardsLevel uint64 `json:"rewards-level"`
+}
+
+// AppResourceRecord Represents AppParams and AppLocalStateDelta in deltas
+type AppResourceRecord struct {
+	// Address App account address
+	Address string `json:"address"`
+
+	// AppDeleted Whether the app was deleted
+	AppDeleted bool `json:"app-deleted"`
+
+	// AppIndex App index
+	AppIndex uint64 `json:"app-index"`
+
+	// AppLocalState Stores local state associated with an application.
+	AppLocalState *ApplicationLocalState `json:"app-local-state,omitempty"`
+
+	// AppLocalStateDeleted Whether the app local state was deleted
+	AppLocalStateDeleted bool `json:"app-local-state-deleted"`
+
+	// AppParams Stores the global information associated with an application.
+	AppParams *ApplicationParams `json:"app-params,omitempty"`
 }
 
 // Application Application index and its parameters
@@ -383,6 +443,35 @@ type AssetParams struct {
 	UrlB64 *[]byte `json:"url-b64,omitempty"`
 }
 
+// AssetResourceRecord Represents AssetParams and AssetHolding in deltas
+type AssetResourceRecord struct {
+	// Address Account address of the asset
+	Address string `json:"address"`
+
+	// AssetDeleted Whether the asset was deleted
+	AssetDeleted bool `json:"asset-deleted"`
+
+	// AssetHolding Describes an asset held by an account.
+	//
+	// Definition:
+	// data/basics/userBalance.go : AssetHolding
+	AssetHolding *AssetHolding `json:"asset-holding,omitempty"`
+
+	// AssetHoldingDeleted Whether the asset holding was deleted
+	AssetHoldingDeleted bool `json:"asset-holding-deleted"`
+
+	// AssetIndex Index of the asset
+	AssetIndex uint64 `json:"asset-index"`
+
+	// AssetParams AssetParams specifies the parameters for an asset.
+	//
+	// \[apar\] when part of an AssetConfig transaction.
+	//
+	// Definition:
+	// data/transactions/asset.go : AssetParams
+	AssetParams *AssetParams `json:"asset-params,omitempty"`
+}
+
 // Box Box name and its content.
 type Box struct {
 	// Name \[name\] box name, base64 encoded
@@ -503,6 +592,42 @@ type EvalDeltaKeyValue struct {
 	Value EvalDelta `json:"value"`
 }
 
+// KvDelta A single Delta containing the key, the previous value and the current value for a single round.
+type KvDelta struct {
+	// Key The key, base64 encoded.
+	Key *[]byte `json:"key,omitempty"`
+
+	// Value The new value of the KV store entry, base64 encoded.
+	Value *[]byte `json:"value,omitempty"`
+}
+
+// LedgerStateDelta Contains ledger updates.
+type LedgerStateDelta struct {
+	// Accts Exposes deltas for account based resources in a single round
+	Accts *AccountDeltas `json:"accts,omitempty"`
+
+	// KvMods Array of KV Deltas
+	KvMods *[]KvDelta `json:"kv-mods,omitempty"`
+
+	// ModifiedApps List of modified Apps
+	ModifiedApps *[]ModifiedApp `json:"modified-apps,omitempty"`
+
+	// ModifiedAssets List of modified Assets
+	ModifiedAssets *[]ModifiedAsset `json:"modified-assets,omitempty"`
+
+	// PrevTimestamp Previous block timestamp
+	PrevTimestamp *uint64 `json:"prev-timestamp,omitempty"`
+
+	// StateProofNext Next round for which we expect a state proof
+	StateProofNext *uint64 `json:"state-proof-next,omitempty"`
+
+	// Totals Total Algos in the system grouped by account status
+	Totals *AccountTotals `json:"totals,omitempty"`
+
+	// TxLeases List of transaction leases
+	TxLeases *[]TxLease `json:"tx-leases,omitempty"`
+}
+
 // LightBlockHeaderProof Proof of membership and position of a light block header.
 type LightBlockHeaderProof struct {
 	// Index The index of the light block header in the vector commitment tree
@@ -513,6 +638,30 @@ type LightBlockHeaderProof struct {
 
 	// Treedepth Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
 	Treedepth uint64 `json:"treedepth"`
+}
+
+// ModifiedApp App which was created or deleted.
+type ModifiedApp struct {
+	// Created Created if true, deleted if false
+	Created bool `json:"created"`
+
+	// Creator Address of the creator.
+	Creator string `json:"creator"`
+
+	// Id App Id
+	Id uint64 `json:"id"`
+}
+
+// ModifiedAsset Asset which was created or deleted.
+type ModifiedAsset struct {
+	// Created Created if true, deleted if false
+	Created bool `json:"created"`
+
+	// Creator Address of the creator.
+	Creator string `json:"creator"`
+
+	// Id Asset Id
+	Id uint64 `json:"id"`
 }
 
 // ParticipationKey Represents a participation key used by the node.
@@ -638,6 +787,18 @@ type TealValue struct {
 
 	// Uint \[ui\] uint value.
 	Uint uint64 `json:"uint"`
+}
+
+// TxLease defines model for TxLease.
+type TxLease struct {
+	// Expiration Round that the lease expires
+	Expiration uint64 `json:"expiration"`
+
+	// Lease Lease data
+	Lease []byte `json:"lease"`
+
+	// Sender Address of the lease sender
+	Sender string `json:"sender"`
 }
 
 // Version algod version information.
@@ -819,6 +980,15 @@ type DryrunResponse struct {
 	ProtocolVersion string            `json:"protocol-version"`
 	Txns            []DryrunTxnResult `json:"txns"`
 }
+
+// GetSyncRoundResponse defines model for GetSyncRoundResponse.
+type GetSyncRoundResponse struct {
+	// Round The minimum sync round for the ledger.
+	Round uint64 `json:"round"`
+}
+
+// LedgerStateDeltaResponse Contains ledger updates.
+type LedgerStateDeltaResponse = LedgerStateDelta
 
 // LightBlockHeaderProofResponse Proof of membership and position of a light block header.
 type LightBlockHeaderProofResponse = LightBlockHeaderProof
