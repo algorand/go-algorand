@@ -43,7 +43,7 @@ type Ledger interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
 	VotersForStateProof(basics.Round) (*ledgercore.VotersForRound, error)
-	RegisterSyncListener(listener ledger.SyncListener)
+	RegisterSyncListener(listener ledger.CommitListener)
 }
 
 // Network captures the aspects of the gossip network protocol that are
