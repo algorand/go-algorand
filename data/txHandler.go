@@ -145,7 +145,7 @@ func MakeTxHandler(opts TxHandlerOpts) *TxHandler {
 	}
 
 	// backlog size is big enough for each peer to have its reserved capacity in the backlog, plus two blocks of shared capacity
-	txBacklogSize := int(opts.Config.TxBacklogSizeMultiplier * float64(txPerBlock))
+	txBacklogSize := opts.Config.TxBacklogSizeMultiplier * txPerBlock
 	if opts.Config.EnableTxBacklogRateLimiting {
 		txBacklogSize += (opts.Config.IncomingConnectionsLimit * opts.Config.TxBacklogReservedCapacityPerPeer)
 	}

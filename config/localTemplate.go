@@ -172,7 +172,7 @@ type Local struct {
 	EnableTxBacklogRateLimiting bool `version[26]:"false"`
 
 	// TxBacklogSizeMultiplier is the constant multiplier used to determine TXBacklog Size. Defaults to 1, meaning 1 block of TXs
-	TxBacklogSizeMultiplier float64 `version[26]:"1"`
+	TxBacklogSizeMultiplier int `version[26]:"1"`
 
 	// TxPoolSize is the number of transactions that fit in the transaction pool
 	TxPoolSize int `version[0]:"50000" version[5]:"15000" version[23]:"75000"`
