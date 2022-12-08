@@ -34,9 +34,11 @@ import (
 	"github.com/algorand/go-algorand/stateproof/verify"
 )
 
+// OnPrepareCommit is a function called by the ledger when it's preparing to commit rnd. It gives the builder
+// the chance to persist the data it needs.
 func (spw *Worker) OnPrepareCommit(rnd basics.Round) {
-	// TODO: Don't load the builder every time.
-	// TODO: Log errors
+	// TODO: Is it really OK to reference the ledger here?
+	// TODO: Think about error handling some more
 	header, err := spw.ledger.BlockHdr(rnd)
 
 	if err != nil {
@@ -58,7 +60,7 @@ func (spw *Worker) OnPrepareCommit(rnd basics.Round) {
 
 	_, err = spw.createBuilder(rnd)
 	if err != nil {
-		spw.log.Warnf("OnPreapreCommit(%d): %v\n", rnd, err)
+		spw.log.Warnf("OnPreapreCommit(%d): could not createBuilder: %v\n", rnd, err)
 	}
 }
 
