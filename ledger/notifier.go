@@ -33,7 +33,8 @@ type BlockListener interface {
 	OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta)
 }
 
-type SyncListener interface {
+// CommitListener represents an object that needs to get notified on commit stages.
+type CommitListener interface {
 	OnPrepareCommit(rnd basics.Round)
 }
 
@@ -46,11 +47,13 @@ type blockNotifier struct {
 	mu            deadlock.Mutex
 	cond          *sync.Cond
 	listeners     []BlockListener
-	syncListener  *SyncListener
 	pendingBlocks []blockDeltaPair
 	running       bool
 	// closing is the waitgroup used to synchronize closing the worker goroutine. It's being increased during loadFromDisk, and the worker is responsible to call Done on it once it's aborting it's goroutine. The close function waits on this to complete.
 	closing sync.WaitGroup
+
+	commitListenerMu deadlock.Mutex
+	commitListener   *CommitListener
 }
 
 func (bn *blockNotifier) worker() {
@@ -108,11 +111,11 @@ func (bn *blockNotifier) register(listeners []BlockListener) {
 	bn.listeners = append(bn.listeners, listeners...)
 }
 
-func (bn *blockNotifier) registerSync(listener SyncListener) {
-	bn.mu.Lock()
-	defer bn.mu.Unlock()
+func (bn *blockNotifier) registerCommit(listener CommitListener) {
+	bn.commitListenerMu.Lock()
+	defer bn.commitListenerMu.Unlock()
 
-	bn.syncListener = &listener
+	bn.commitListener = &listener
 }
 
 func (bn *blockNotifier) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
@@ -127,17 +130,17 @@ func (bn *blockNotifier) committedUpTo(rnd basics.Round) (retRound, lookback bas
 }
 
 func (bn *blockNotifier) prepareCommit(dcc *deferredCommitContext) error {
-	bn.mu.Lock()
-	defer bn.mu.Unlock()
+	bn.commitListenerMu.Lock()
+	defer bn.commitListenerMu.Unlock()
 
-	if bn.syncListener == nil {
+	if bn.commitListener == nil {
 		return nil
 	}
 
-	syncListener := *bn.syncListener
+	commitListener := *bn.commitListener
 	for round := dcc.oldBase; round <= dcc.newBase; round++ {
 		// TODO: Error management in the listener?
-		syncListener.OnPrepareCommit(round)
+		commitListener.OnPrepareCommit(round)
 	}
 
 	return nil
