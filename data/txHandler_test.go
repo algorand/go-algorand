@@ -298,6 +298,10 @@ func getNumRawMsgDup() int {
 	return int(transactionMessagesDupRawMsg.GetUint64Value())
 }
 
+func getNumCanonicalDup() int {
+	return int(transactionMessagesDupCanonical.GetUint64Value())
+}
+
 type benchFinalize func()
 
 func benchTxHandlerProcessIncomingTxnSubmit(b *testing.B, handler *TxHandler, blobs [][]byte, numThreads int) benchFinalize {
@@ -356,18 +360,20 @@ func benchTxHandlerProcessIncomingTxnSubmit(b *testing.B, handler *TxHandler, bl
 	return finalize
 }
 
-func benchTxHandlerProcessIncomingTxnConsume(b *testing.B, handler *TxHandler, numTxnsPerGroup int, avgDelay time.Duration, statsCh chan<- [3]int) benchFinalize {
+func benchTxHandlerProcessIncomingTxnConsume(b *testing.B, handler *TxHandler, numTxnsPerGroup int, avgDelay time.Duration, statsCh chan<- [4]int) benchFinalize {
 	droppedStart := getNumBacklogDropped()
 	dupStart := getNumRawMsgDup()
+	cdupStart := getNumCanonicalDup()
 	// start consumer
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go func(statsCh chan<- [3]int) {
+	go func(statsCh chan<- [4]int) {
 		defer wg.Done()
 		received := 0
 		dropped := getNumBacklogDropped() - droppedStart
 		dups := getNumRawMsgDup() - dupStart
-		for dups+dropped+received < b.N {
+		cdups := getNumCanonicalDup() - cdupStart
+		for dups+dropped+received+cdups < b.N {
 			select {
 			case msg := <-handler.backlogQueue:
 				require.Equal(b, numTxnsPerGroup, len(msg.unverifiedTxGroup))
@@ -375,12 +381,13 @@ func benchTxHandlerProcessIncomingTxnConsume(b *testing.B, handler *TxHandler, n
 			default:
 				dropped = getNumBacklogDropped() - droppedStart
 				dups = getNumRawMsgDup() - dupStart
+				cdups = getNumCanonicalDup() - cdupStart
 			}
 			if avgDelay > 0 {
 				time.Sleep(avgDelay)
 			}
 		}
-		statsCh <- [3]int{dropped, received, dups}
+		statsCh <- [4]int{dropped, received, dups, cdups}
 	}(statsCh)
 
 	return func() {
@@ -409,7 +416,7 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 		stxns[i], blobs[i] = makeRandomTransactions(numTxnsPerGroup)
 	}
 
-	statsCh := make(chan [3]int, 1)
+	statsCh := make(chan [4]int, 1)
 	defer close(statsCh)
 	finConsume := benchTxHandlerProcessIncomingTxnConsume(b, handler, numTxnsPerGroup, 0, statsCh)
 
@@ -487,7 +494,7 @@ func BenchmarkTxHandlerIncDeDup(b *testing.B) {
 				}
 			}
 
-			statsCh := make(chan [3]int, 1)
+			statsCh := make(chan [4]int, 1)
 			defer close(statsCh)
 
 			finConsume := benchTxHandlerProcessIncomingTxnConsume(b, handler, numTxnsPerGroup, avgDelay, statsCh)
@@ -504,6 +511,7 @@ func BenchmarkTxHandlerIncDeDup(b *testing.B) {
 			dropped := stats[0]
 			received := stats[1]
 			dups := stats[2]
+			cdups := stats[3]
 			b.ReportMetric(float64(received)/float64(unique)*100, "ack,%")
 			b.ReportMetric(float64(dropped)/float64(b.N)*100, "drop,%")
 			if test.dedup {
@@ -511,6 +519,9 @@ func BenchmarkTxHandlerIncDeDup(b *testing.B) {
 			}
 			if b.N > 1 && os.Getenv("DEBUG") != "" {
 				b.Logf("unique %d, dropped %d, received %d, dups %d", unique, dropped, received, dups)
+				if cdups > 0 {
+					b.Logf("canonical dups %d vs %d recv", cdups, received)
+				}
 			}
 		})
 	}
@@ -907,11 +918,6 @@ func TestTxHandlerProcessIncomingCacheBacklogDrop(t *testing.T) {
 	require.Equal(t, 1, handler.txCanonicalCache.Len())
 	currentValue := transactionMessagesDroppedFromBacklog.GetUint64Value()
 	require.Equal(t, initialValue+1, currentValue)
-
-	// ensure deleteFromCaches also works
-	handler.deleteFromCaches(blob1, stxns1)
-	require.Equal(t, 0, handler.msgCache.Len())
-	require.Equal(t, 0, handler.txCanonicalCache.Len())
 }
 
 func TestTxHandlerProcessIncomingCacheTxPoolDrop(t *testing.T) {

@@ -462,7 +462,7 @@ type Local struct {
 	MaxAPIBoxPerApplication uint64 `version[25]:"100000"`
 
 	// TxIncomingFilteringFlags instructs algod filtering incoming tx messages
-	// Possible fla values
+	// Flag values:
 	// 0x00 - disabled
 	// 0x01 (txFilterRawMsg) - check for raw tx message duplicates
 	// 0x02 (txFilterCanonical) - check for canonical tx group duplicates

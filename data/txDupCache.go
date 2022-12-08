@@ -151,7 +151,7 @@ func (c *txSaltedCache) moreSalt() {
 	binary.LittleEndian.PutUint32(c.curSalt[:], r)
 }
 
-// remix is a locked version of innerSwap, called on schedule
+// Remix is a locked version of innerSwap, called on schedule
 func (c *txSaltedCache) Remix() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -247,28 +247,6 @@ func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
 // DeleteByKey from the cache by using a key used for insertion
 func (c *txSaltedCache) DeleteByKey(d *crypto.Digest) {
 	c.digestCache.Delete(d)
-}
-
-// Delete from the cache
-func (c *txSaltedCache) Delete(msg []byte) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	ptr := saltedPool.Get()
-	defer saltedPool.Put(ptr)
-
-	buf := ptr.([]byte)
-	toBeHashed := append(buf[:0], msg...)
-	toBeHashed = append(toBeHashed, c.curSalt[:]...)
-	toBeHashed = toBeHashed[:len(msg)+len(c.curSalt)]
-	d := crypto.Digest(blake2b.Sum256(toBeHashed))
-	delete(c.cur, d)
-
-	toBeHashed = append(buf[:0], msg...)
-	toBeHashed = append(toBeHashed, c.prevSalt[:]...)
-	toBeHashed = toBeHashed[:len(msg)+len(c.prevSalt)]
-	d = crypto.Digest(blake2b.Sum256(toBeHashed))
-	delete(c.prev, d)
 }
 
 var saltedPool = sync.Pool{

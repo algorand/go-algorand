@@ -192,7 +192,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 
 	require.Equal(t, 1, cache.Len())
 
-	cache.Delete(d[:])
+	cache.DeleteByKey(k)
 	require.Equal(t, 0, cache.Len())
 }
 
@@ -208,15 +208,10 @@ func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
 	// add some unique random
 	var ds [size][8]byte
 	for i := 0; i < size; i++ {
-		cache.mu.Lock()
 		crypto.RandBytes([]byte(ds[i][:]))
-		k, exist := cache.innerCheckAndPut(ds[i][:])
+		k, exist := cache.CheckAndPut(ds[i][:])
 		require.False(t, exist)
 		require.NotEmpty(t, k)
-
-		exist = cache.check(ds[i][:])
-		require.True(t, exist)
-		cache.mu.Unlock()
 
 		if rand.Int()%2 == 0 {
 			time.Sleep(updateInterval / 2)
