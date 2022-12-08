@@ -755,12 +755,6 @@ func (wn *WebsocketNetwork) setup() {
 	if wn.slowWritingPeerMonitorInterval == 0 {
 		wn.slowWritingPeerMonitorInterval = slowWritingPeerMonitorInterval
 	}
-
-	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
-	wn.identityKeys = crypto.GenerateSignatureSecrets(seed)
-	wn.peersByID = map[crypto.PublicKey]*wsPeer{}
-
 	readBufferLen := wn.config.IncomingConnectionsLimit + wn.config.GossipFanout
 	if readBufferLen < 100 {
 		readBufferLen = 100
@@ -780,10 +774,6 @@ func (wn *WebsocketNetwork) setup() {
 	wn.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag})
 	wn.lastNetworkAdvance = time.Now().UTC()
 	wn.handlers.log = wn.log
-
-	// identityHandlers are internal to the WS Network itself, and can be set without condition
-	wn.RegisterHandlers(identityHandlers)
-
 	// set our supported versions
 	if wn.config.NetworkProtocolVersion != "" {
 		wn.supportedProtocolVersions = []string{wn.config.NetworkProtocolVersion}
@@ -835,6 +825,28 @@ func (wn *WebsocketNetwork) Start() {
 	} else {
 		wn.scheme = "http"
 	}
+
+	// identityHandlers are internal to the WS Network itself, and can be set without condition
+	var seed crypto.Seed
+	crypto.RandBytes(seed[:])
+	wn.identityKeys = crypto.GenerateSignatureSecrets(seed)
+	wn.peersByID = map[crypto.PublicKey]*wsPeer{}
+	// guard against registering the handler on starup when it's already been configured
+	// (for example, unit tests like TestWebsocketNetworkTXMessageOfInterestRelay will attach handlers to all tags)
+	shouldAttachIdentityHandlers := true
+	var idTag protocol.Tag
+	for _, handler := range identityHandlers {
+		if _, exists := wn.handlers.getHandler(handler.Tag); exists {
+			shouldAttachIdentityHandlers = false
+			idTag = handler.Tag
+		}
+	}
+	if shouldAttachIdentityHandlers {
+		wn.RegisterHandlers(identityHandlers)
+	} else {
+		wn.log.Warnf("wsNetwork tried to register identity challenge handlers, but the required tag was already registered: %v", idTag)
+	}
+
 	wn.meshUpdateRequests <- meshRequest{false, nil}
 	if wn.prioScheme != nil {
 		wn.RegisterHandlers(prioHandlers)
