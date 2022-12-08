@@ -157,6 +157,7 @@ func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 		"GenesisHash",
 		"GenesisProto",
 		"LatestTotals",
+		"FlushCaches",
 	}
 
 	methodIsSkipped := func(methodName string) bool {

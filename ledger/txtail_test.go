@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -154,24 +155,24 @@ func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.Conse
 	tx, err := t.trackerDBs.Wdb.Handle.Begin()
 	require.NoError(ts, err)
 
+	arw := store.NewAccountsSQLReaderWriter(tx)
+
 	accts := ledgertesting.RandomAccounts(20, true)
 	proto := config.Consensus[protoVersion]
-	newDB := accountsInitTest(ts, tx, accts, protoVersion)
+	newDB := store.AccountsInitTest(ts, tx, accts, protoVersion)
 	require.True(ts, newDB)
-	_, err = accountsInit(tx, accts, proto)
-	require.NoError(ts, err)
 
 	roundData := make([][]byte, 0, proto.MaxTxnLife)
 	startRound := t.Latest() - basics.Round(proto.MaxTxnLife) + 1
 	for i := startRound; i <= t.Latest(); i++ {
 		blk, err := t.Block(i)
 		require.NoError(ts, err)
-		tail, err := txTailRoundFromBlock(blk)
+		tail, err := store.TxTailRoundFromBlock(blk)
 		require.NoError(ts, err)
-		encoded, _ := tail.encode()
+		encoded, _ := tail.Encode()
 		roundData = append(roundData, encoded)
 	}
-	err = txtailNewRound(context.Background(), tx, startRound, roundData, 0)
+	err = arw.TxtailNewRound(context.Background(), startRound, roundData, 0)
 	require.NoError(ts, err)
 	tx.Commit()
 	return nil
@@ -279,7 +280,7 @@ func TestTxTailDeltaTracking(t *testing.T) {
 					LastValid: basics.Round(i + 50),
 					Intra:     0,
 				}
-				deltas.Txleases[ledgercore.Txlease{Sender: blk.Payset[0].Txn.Sender, Lease: blk.Payset[0].Txn.Lease}] = basics.Round(i + 50)
+				deltas.AddTxLease(ledgercore.Txlease{Sender: blk.Payset[0].Txn.Sender, Lease: blk.Payset[0].Txn.Lease}, basics.Round(i+50))
 
 				txtail.newBlock(blk, deltas)
 				txtail.committedUpTo(basics.Round(i))

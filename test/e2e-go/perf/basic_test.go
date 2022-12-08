@@ -26,10 +26,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
@@ -125,7 +124,7 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 	// goroutines to talk to algod and kmd.
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 100
 
-	var status generatedV2.NodeStatusResponse
+	var status model.NodeStatusResponse
 
 	b.Run(template, func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -240,11 +239,11 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 
 	fmt.Printf("Block size statistics:\n")
 	for round := status.LastRound + 1; ; round++ {
-		blk, err := c.Block(round)
+		blk, err := c.BookkeepingBlock(round)
 		if err != nil {
 			break
 		}
 
-		fmt.Printf("  %d: %d txns\n", round, len(blk.Transactions.Transactions))
+		fmt.Printf("  %d: %d txns\n", round, len(blk.Payset))
 	}
 }

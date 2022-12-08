@@ -59,13 +59,10 @@ type TxSyncer struct {
 
 // MakeTxSyncer returns a TxSyncer
 func MakeTxSyncer(pool PendingTxAggregate, clientSource network.GossipNode, txHandler data.SolicitedTxHandler, syncInterval time.Duration, syncTimeout time.Duration, serverResponseSize int) *TxSyncer {
-	ctx, cancel := context.WithCancel(context.Background())
 	return &TxSyncer{
 		pool:         pool,
 		clientSource: clientSource,
 		handler:      txHandler,
-		ctx:          ctx,
-		cancel:       cancel,
 		syncInterval: syncInterval,
 		syncTimeout:  syncTimeout,
 		log:          logging.Base(),
@@ -76,6 +73,7 @@ func MakeTxSyncer(pool PendingTxAggregate, clientSource network.GossipNode, txHa
 // Start begins periodically syncing after the canStart chanel indicates it can begin
 func (syncer *TxSyncer) Start(canStart chan struct{}) {
 	syncer.wg.Add(1)
+	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	go func() {
 		defer syncer.wg.Done()
 		select {

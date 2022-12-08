@@ -603,6 +603,7 @@ type LedgerForEvaluator interface {
 	GenesisProto() config.ConsensusParams
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 	VotersForStateProof(basics.Round) (*ledgercore.VotersForRound, error)
+	FlushCaches()
 }
 
 // EvaluatorOptions defines the evaluator creation options
@@ -933,6 +934,8 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	var groupTxBytes int
 
 	cow := eval.state.child(len(txgroup))
+	defer cow.recycle()
+
 	evalParams := logic.NewEvalParams(txgroup, &eval.proto, &eval.specials)
 
 	// Evaluate each transaction in the group
@@ -1500,6 +1503,9 @@ func (validator *evalTxValidator) run() {
 // AddBlock: Eval(context.Background(), l, blk, false, txcache, nil)
 // tracker:  Eval(context.Background(), l, blk, false, txcache, nil)
 func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
+	// flush the pending writes in the cache to make everything read so far available during eval
+	l.FlushCaches()
+
 	eval, err := StartEvaluator(l, blk.BlockHeader,
 		EvaluatorOptions{
 			PaysetHint: len(blk.Payset),
