@@ -35,7 +35,7 @@ import (
 
 func TestTxHandlerDigestCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	//t.Parallel()
+	t.Parallel()
 
 	const size = 20
 	cache := makeDigestCache(size)
@@ -116,10 +116,11 @@ func (c *txSaltedCache) check(msg []byte) bool {
 // TestTxHandlerSaltedCacheBasic is the same as TestTxHandlerDigestCache but for the salted cache
 func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	//t.Parallel()
+	t.Parallel()
 
 	const size = 20
-	cache := makeSaltedCache(context.Background(), size, 0)
+	cache := makeSaltedCache(size)
+	cache.start(context.Background(), 0)
 	require.Zero(t, cache.Len())
 
 	// add some unique random
@@ -197,13 +198,13 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 }
 
 func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
-	return
 	partitiontest.PartitionTest(t)
-	//t.Parallel()
+	t.Parallel()
 
 	const size = 20
 	updateInterval := 1000 * time.Microsecond
-	cache := makeSaltedCache(context.Background(), size, updateInterval)
+	cache := makeSaltedCache(size)
+	cache.start(context.Background(), updateInterval)
 	require.Zero(t, cache.Len())
 
 	// add some unique random
@@ -224,10 +225,11 @@ func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
 
 func TestTxHandlerSaltedCacheManual(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	//t.Parallel()
+	t.Parallel()
 
 	const size = 20
-	cache := makeSaltedCache(context.Background(), 2*size, 0)
+	cache := makeSaltedCache(2 * size)
+	cache.start(context.Background(), 0)
 	require.Zero(t, cache.Len())
 
 	// add some unique random
@@ -291,7 +293,9 @@ func (m digestCacheMaker) make(size int) cachePusher {
 	return &digestCachePusher{c: makeDigestCache(size)}
 }
 func (m saltedCacheMaker) make(size int) cachePusher {
-	return &saltedCachePusher{c: makeSaltedCache(context.Background(), size, 0)}
+	scp := &saltedCachePusher{c: makeSaltedCache(size)}
+	scp.c.start(context.Background(), 0)
+	return scp
 }
 
 type digestCachePusher struct {

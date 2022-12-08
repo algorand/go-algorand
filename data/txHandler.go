@@ -123,7 +123,6 @@ func MakeTxHandler(opts TxHandlerOpts) *TxHandler {
 		return nil
 	}
 
-	ctx, ctxCancel := context.WithCancel(context.Background())
 	handler := &TxHandler{
 		txPool:                opts.TxPool,
 		genesisID:             opts.GenesisID,
@@ -133,22 +132,17 @@ func MakeTxHandler(opts TxHandlerOpts) *TxHandler {
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
 		net:                   opts.Net,
-		msgCache:              makeSaltedCache(ctx, 2*txBacklogSize, 60*time.Second),
+		msgCache:              makeSaltedCache(2 * txBacklogSize),
 		txCanonicalCache:      makeDigestCache(2 * txBacklogSize),
 		cacheConfig:           txHandlerConfig{opts.Config.TxFilterRawMsgEnabled(), opts.Config.TxFilterCanonicalEnabled()},
-		ctx:                   ctx,
-		ctxCancel:             ctxCancel,
 	}
 	return handler
 }
 
 // Start enables the processing of incoming messages at the transaction handler
 func (handler *TxHandler) Start() {
-	if handler.ctx.Err() != nil {
-		// existing context has gone, create a new one
-		handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
-		handler.msgCache = makeSaltedCache(handler.ctx, 2*txBacklogSize, 60*time.Second)
-	}
+	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
+	handler.msgCache.start(handler.ctx, 60*time.Second)
 	handler.net.RegisterHandlers([]network.TaggedMessageHandler{
 		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
 	})

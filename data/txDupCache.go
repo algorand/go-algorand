@@ -111,15 +111,14 @@ type txSaltedCache struct {
 	ctx      context.Context
 }
 
-func makeSaltedCache(ctx context.Context, size int, refreshInterval time.Duration) *txSaltedCache {
-	c := &txSaltedCache{
-		digestCache: digestCache{
-			cur:     map[crypto.Digest]struct{}{},
-			maxSize: size,
-		},
-		ctx: ctx,
+func makeSaltedCache(size int) *txSaltedCache {
+	return &txSaltedCache{
+		digestCache: *makeDigestCache(size),
 	}
+}
 
+func (c *txSaltedCache) start(ctx context.Context, refreshInterval time.Duration) {
+	c.ctx = ctx
 	if refreshInterval != 0 {
 		go c.salter(refreshInterval)
 	}
@@ -127,8 +126,6 @@ func makeSaltedCache(ctx context.Context, size int, refreshInterval time.Duratio
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.moreSalt()
-
-	return c
 }
 
 // salter is a goroutine refreshing the cache by schedule
