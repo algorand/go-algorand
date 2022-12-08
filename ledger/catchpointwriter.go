@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -56,6 +57,7 @@ type catchpointWriter struct {
 	tx                   *sql.Tx
 	filePath             string
 	totalAccounts        uint64
+	totalKVs             uint64
 	file                 *os.File
 	tar                  *tar.Writer
 	compressor           io.WriteCloser
@@ -129,7 +131,14 @@ func (chunk catchpointFileChunkV6) empty() bool {
 }
 
 func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxResourcesPerChunk int) (*catchpointWriter, error) {
-	totalAccounts, err := totalAccounts(ctx, tx)
+	arw := store.NewAccountsSQLReaderWriter(tx)
+
+	totalAccounts, err := arw.TotalAccounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	totalKVs, err := arw.TotalKVs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +162,7 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxR
 		tx:                   tx,
 		filePath:             filePath,
 		totalAccounts:        totalAccounts,
+		totalKVs:             totalKVs,
 		file:                 file,
 		compressor:           compressor,
 		tar:                  tar,

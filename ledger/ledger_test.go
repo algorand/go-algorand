@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -2223,33 +2224,26 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 	// reset tables and re-init again, similary to the catchpount apply code
 	// since the ledger has only genesis accounts, this recreates them
 	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err0 := accountsReset(ctx, tx)
+		arw := store.NewAccountsSQLReaderWriter(tx)
+		err0 := arw.AccountsReset(ctx)
 		if err0 != nil {
 			return err0
 		}
-		tp := trackerDBParams{
-			initAccounts:      l.GenesisAccounts(),
-			initProto:         l.GenesisProtoVersion(),
-			catchpointEnabled: l.catchpoint.catchpointEnabled(),
-			dbPathPrefix:      l.catchpoint.dbDirectory,
-			blockDb:           l.blockDBs,
+		tp := store.TrackerDBParams{
+			InitAccounts:      l.GenesisAccounts(),
+			InitProto:         l.GenesisProtoVersion(),
+			GenesisHash:       l.GenesisHash(),
+			FromCatchpoint:    true,
+			CatchpointEnabled: l.catchpoint.catchpointEnabled(),
+			DbPathPrefix:      l.catchpoint.dbDirectory,
+			BlockDb:           l.blockDBs,
 		}
-		_, err0 = runMigrations(ctx, tx, tp, l.log, preReleaseDBVersion /*target database version*/)
+		_, err0 = store.RunMigrations(ctx, tx, tp, l.log, preReleaseDBVersion /*target database version*/)
 		if err0 != nil {
 			return err0
 		}
 
-		// trackers need new talbes, create in order to allow commits
-		if err0 := accountsCreateOnlineAccountsTable(ctx, tx); err0 != nil {
-			return err0
-		}
-		if err0 := accountsCreateTxTailTable(ctx, tx); err0 != nil {
-			return err0
-		}
-		if err0 := accountsCreateOnlineRoundParamsTable(ctx, tx); err0 != nil {
-			return err0
-		}
-		if err0 := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err0 != nil {
+		if err0 := store.AccountsUpdateSchemaTest(ctx, tx); err != nil {
 			return err0
 		}
 
@@ -2382,10 +2376,10 @@ int %d // 10001000
 func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	prevAccountDBVersion := accountDBVersion
-	accountDBVersion = 6
+	prevAccountDBVersion := store.AccountDBVersion
+	store.AccountDBVersion = 6
 	defer func() {
-		accountDBVersion = prevAccountDBVersion
+		store.AccountDBVersion = prevAccountDBVersion
 	}()
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-migrate-shrink-deltas")
@@ -2409,21 +2403,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	}()
 	// create tables so online accounts can still be written
 	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		if err := accountsCreateOnlineAccountsTable(ctx, tx); err != nil {
-			return err
-		}
-		if err := accountsCreateTxTailTable(ctx, tx); err != nil {
-			return err
-		}
-		if err := accountsCreateOnlineRoundParamsTable(ctx, tx); err != nil {
-			return err
-		}
-		if err := accountsCreateCatchpointFirstStageInfoTable(ctx, tx); err != nil {
-			return err
-		}
-		// this line creates kvstore table, even if it is not required in accountDBVersion 6 -> 7
-		// or in later version where we need kvstore table, this test will fail
-		if err := accountsCreateBoxTable(ctx, tx); err != nil {
+		if err := store.AccountsUpdateSchemaTest(ctx, tx); err != nil {
 			return err
 		}
 		return nil
@@ -2597,7 +2577,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	l.Close()
 
 	cfg.MaxAcctLookback = shorterLookback
-	accountDBVersion = 7
+	store.AccountDBVersion = 7
 	// delete tables since we want to check they can be made from other data
 	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineaccounts"); err != nil {

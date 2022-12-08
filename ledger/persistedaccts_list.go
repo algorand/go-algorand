@@ -16,6 +16,8 @@
 
 package ledger
 
+import "github.com/algorand/go-algorand/ledger/store"
+
 // persistedAccountDataList represents a doubly linked list.
 // must initiate with newPersistedAccountList.
 type persistedAccountDataList struct {
@@ -31,7 +33,7 @@ type persistedAccountDataListNode struct {
 	// element (l.Front()).
 	next, prev *persistedAccountDataListNode
 
-	Value *persistedAccountData
+	Value *store.PersistedAccountData
 }
 
 func newPersistedAccountList() *persistedAccountDataList {
@@ -99,7 +101,7 @@ func (l *persistedAccountDataList) remove(e *persistedAccountDataListNode) {
 }
 
 // pushFront inserts a new element e with value v at the front of list l and returns e.
-func (l *persistedAccountDataList) pushFront(v *persistedAccountData) *persistedAccountDataListNode {
+func (l *persistedAccountDataList) pushFront(v *store.PersistedAccountData) *persistedAccountDataListNode {
 	newNode := l.getNewNode()
 	newNode.Value = v
 	return l.insertValue(newNode, &l.root)

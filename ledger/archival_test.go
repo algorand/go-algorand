@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -219,10 +220,10 @@ func TestArchivalRestart(t *testing.T) {
 
 	var latest, earliest basics.Round
 	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		latest, err = blockLatest(tx)
+		latest, err = blockdb.BlockLatest(tx)
 		require.NoError(t, err)
 
-		earliest, err = blockEarliest(tx)
+		earliest, err = blockdb.BlockEarliest(tx)
 		require.NoError(t, err)
 		return err
 	})
@@ -236,10 +237,10 @@ func TestArchivalRestart(t *testing.T) {
 	defer l.Close()
 
 	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		latest, err = blockLatest(tx)
+		latest, err = blockdb.BlockLatest(tx)
 		require.NoError(t, err)
 
-		earliest, err = blockEarliest(tx)
+		earliest, err = blockdb.BlockEarliest(tx)
 		require.NoError(t, err)
 		return err
 	})
@@ -754,10 +755,10 @@ func TestArchivalFromNonArchival(t *testing.T) {
 
 	var latest, earliest basics.Round
 	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		latest, err = blockLatest(tx)
+		latest, err = blockdb.BlockLatest(tx)
 		require.NoError(t, err)
 
-		earliest, err = blockEarliest(tx)
+		earliest, err = blockdb.BlockEarliest(tx)
 		require.NoError(t, err)
 		return err
 	})
@@ -774,10 +775,10 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	defer l.Close()
 
 	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		latest, err = blockLatest(tx)
+		latest, err = blockdb.BlockLatest(tx)
 		require.NoError(t, err)
 
-		earliest, err = blockEarliest(tx)
+		earliest, err = blockdb.BlockEarliest(tx)
 		require.NoError(t, err)
 		return err
 	})

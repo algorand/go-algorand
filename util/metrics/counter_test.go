@@ -39,7 +39,7 @@ func TestMetricCounter(t *testing.T) {
 	}
 
 	// create a http listener.
-	port := test.createListener(":0")
+	port := test.createListener("127.0.0.1:0")
 
 	metricService := MakeMetricService(&ServiceConfig{
 		NodeExporterListenAddress: fmt.Sprintf("localhost:%d", port),
@@ -85,7 +85,7 @@ func TestMetricCounterFastInts(t *testing.T) {
 	}
 
 	// create a http listener.
-	port := test.createListener(":0")
+	port := test.createListener("127.0.0.1:0")
 
 	metricService := MakeMetricService(&ServiceConfig{
 		NodeExporterListenAddress: fmt.Sprintf("localhost:%d", port),
@@ -132,7 +132,7 @@ func TestMetricCounterMixed(t *testing.T) {
 	}
 
 	// create a http listener.
-	port := test.createListener(":0")
+	port := test.createListener("127.0.0.1:0")
 
 	metricService := MakeMetricService(&ServiceConfig{
 		NodeExporterListenAddress: fmt.Sprintf("localhost:%d", port),
@@ -197,4 +197,15 @@ testname{host="myhost"} 0
 testname{host="myhost"} 2.3
 `
 	require.Equal(t, expected, sbOut.String())
+}
+
+func TestGetValue(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	c := MakeCounter(MetricName{Name: "testname", Description: "testhelp"})
+	require.Equal(t, uint64(0), c.GetUint64Value())
+	c.Inc(nil)
+	require.Equal(t, uint64(1), c.GetUint64Value())
+	c.Inc(nil)
+	require.Equal(t, uint64(2), c.GetUint64Value())
 }

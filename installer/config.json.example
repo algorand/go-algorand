@@ -1,5 +1,5 @@
 {
-    "Version": 25,
+    "Version": 26,
     "AccountUpdatesStatsInterval": 5000000000,
     "AccountsRebuildSynchronousMode": 1,
     "AgreementIncomingBundlesQueueLength": 7,
@@ -98,6 +98,7 @@
     "TelemetryToLog": true,
     "TransactionSyncDataExchangeRate": 0,
     "TransactionSyncSignificantMessageThreshold": 0,
+    "TxIncomingFilteringFlags": 3,
     "TxPoolExponentialIncreaseFactor": 2,
     "TxPoolSize": 75000,
     "TxSyncIntervalSeconds": 60,
