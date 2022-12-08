@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=2009,2093,2164
 
-UPDATER_MIN_VERSION="3.8.0"
+UPDATER_MIN_VERSION="3.12.2"
 UPDATER_CHANNEL="stable"
 FILENAME=$(basename -- "$0")
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"

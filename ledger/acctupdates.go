@@ -164,7 +164,7 @@ type accountUpdates struct {
 	cachedDBRound basics.Round
 
 	// deltas stores updates for every round after dbRound.
-	deltas []ledgercore.AccountDeltas
+	deltas []ledgercore.StateDelta
 
 	// accounts stores the most recent account state for every
 	// address that appears in deltas.
@@ -174,15 +174,9 @@ type accountUpdates struct {
 	// address&resource that appears in deltas.
 	resources resourcesUpdates
 
-	// kvDeltas stores kvPair updates for every round after dbRound.
-	kvDeltas []map[string]ledgercore.KvValueDelta
-
 	// kvStore has the most recent kv pairs for every write/del that appears in
 	// deltas.
 	kvStore map[string]modifiedKvValue
-
-	// creatableDeltas stores creatable updates for every round after dbRound.
-	creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 
 	// creatables stores the most recent state for every creatable that
 	// appears in creatableDeltas
@@ -381,7 +375,7 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 		if indeltas {
 			// Check if this is the most recent round, in which case, we can
 			// use a cache of the most recent kvStore state
-			if offset == uint64(len(au.kvDeltas)) {
+			if offset == uint64(len(au.deltas)) {
 				return mval.data, nil
 			}
 
@@ -390,7 +384,7 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 			// backwards so later updates take priority.
 			for offset > 0 {
 				offset--
-				mval, ok := au.kvDeltas[offset][key]
+				mval, ok := au.deltas[offset].KvMods[key]
 				if ok {
 					return mval.Data, nil
 				}
@@ -514,7 +508,7 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 
 		for offset > 0 {
 			offset--
-			for keyInRound, mv := range au.kvDeltas[offset] {
+			for keyInRound, mv := range au.deltas[offset].KvMods {
 				if !strings.HasPrefix(keyInRound, keyPrefix) {
 					continue
 				}
@@ -962,8 +956,6 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 
 	au.versions = []protocol.ConsensusVersion{hdr.CurrentProtocol}
 	au.deltas = nil
-	au.kvDeltas = nil
-	au.creatableDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
 	au.resources = make(resourcesUpdates)
 	au.kvStore = make(map[string]modifiedKvValue)
@@ -989,10 +981,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	if rnd != au.latest()+1 {
 		au.log.Panicf("accountUpdates: newBlockImpl %d too far in the future, dbRound %d, deltas %d", rnd, au.cachedDBRound, len(au.deltas))
 	}
-	au.deltas = append(au.deltas, delta.Accts)
+	au.deltas = append(au.deltas, delta)
 	au.versions = append(au.versions, blk.CurrentProtocol)
-	au.creatableDeltas = append(au.creatableDeltas, delta.Creatables)
-	au.kvDeltas = append(au.kvDeltas, delta.KvMods)
 	au.deltasAccum = append(au.deltasAccum, delta.Accts.Len()+au.deltasAccum[len(au.deltasAccum)-1])
 
 	au.baseAccounts.flushPendingWrites()
@@ -1319,7 +1309,7 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 			// backwards to ensure that later updates take priority if present.
 			for offset > 0 {
 				offset--
-				r, ok := au.deltas[offset].GetResource(addr, aidx, ctype)
+				r, ok := au.deltas[offset].Accts.GetResource(addr, aidx, ctype)
 				if ok {
 					// the returned validThrough here is not optimal, but it still correct. We could get a more accurate value by scanning
 					// the deltas forward, but this would be time consuming loop, which might not pay off.
@@ -1389,6 +1379,23 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 	}
 }
 
+func (au *accountUpdates) lookupStateDelta(rnd basics.Round) (ledgercore.StateDelta, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	var offset uint64
+	var delta ledgercore.StateDelta
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return delta, err
+	}
+	if offset == 0 {
+		err = fmt.Errorf("round %d not in deltas: dbRound %d, deltas %d, offset %d", rnd, au.cachedDBRound, len(au.deltas), offset)
+		return delta, err
+	}
+	delta = au.deltas[offset-1]
+	return delta, err
+}
+
 // lookupWithoutRewards returns the account data for a given address at a given round.
 func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Address, synchronized bool) (data ledgercore.AccountData, validThrough basics.Round, rewardsVersion protocol.ConsensusVersion, rewardsLevel uint64, err error) {
 	needUnlock := false
@@ -1427,7 +1434,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			// backwards to ensure that later updates take priority if present.
 			for offset > 0 {
 				offset--
-				d, ok := au.deltas[offset].GetData(addr)
+				d, ok := au.deltas[offset].Accts.GetData(addr)
 				if ok {
 					// the returned validThrough here is not optimal, but it still correct. We could get a more accurate value by scanning
 					// the deltas forward, but this would be time consuming loop, which might not pay off.
@@ -1533,7 +1540,7 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 		} else {
 			for offset > 0 {
 				offset--
-				creatableDelta, ok := au.creatableDeltas[offset][cidx]
+				creatableDelta, ok := au.deltas[offset].Creatables[cidx]
 				if ok {
 					if creatableDelta.Created && creatableDelta.Ctype == ctype {
 						return creatableDelta.Creator, true, nil
@@ -1633,8 +1640,8 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
 	dcc.compactAccountDeltas = makeCompactAccountDeltas(au.deltas[:offset], dcc.oldBase, setUpdateRound, au.baseAccounts)
 	dcc.compactResourcesDeltas = makeCompactResourceDeltas(au.deltas[:offset], dcc.oldBase, setUpdateRound, au.baseAccounts, au.baseResources)
-	dcc.compactKvDeltas = compactKvDeltas(au.kvDeltas[:offset])
-	dcc.compactCreatableDeltas = compactCreatableDeltas(au.creatableDeltas[:offset])
+	dcc.compactKvDeltas = compactKvDeltas(au.deltas[:offset])
+	dcc.compactCreatableDeltas = compactCreatableDeltas(au.deltas[:offset])
 
 	au.accountsMu.RUnlock()
 
@@ -1825,8 +1832,7 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	const deltasClearThreshold = 500
 	if offset > deltasClearThreshold {
 		for i := uint64(0); i < offset; i++ {
-			au.deltas[i] = ledgercore.AccountDeltas{}
-			au.creatableDeltas[i] = nil
+			au.deltas[i] = ledgercore.StateDelta{}
 		}
 	}
 
@@ -1834,8 +1840,6 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	au.deltasAccum = au.deltasAccum[offset:]
 	au.versions = au.versions[offset:]
 	au.roundTotals = au.roundTotals[offset:]
-	au.kvDeltas = au.kvDeltas[offset:]
-	au.creatableDeltas = au.creatableDeltas[offset:]
 	au.cachedDBRound = newBase
 
 	au.accountsMu.Unlock()
@@ -1866,18 +1870,19 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 func (au *accountUpdates) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-// compactKvDeltas takes an array of kv deltas (one array entry per round), and
+// compactKvDeltas takes an array of StateDeltas containing kv deltas (one array entry per round), and
 // compacts the array into a single map that contains all the
 // changes. Intermediate changes are eliminated.  It counts the number of
 // changes per round by specifying it in the ndeltas field of the
 // modifiedKv. The modifiedValues in the returned map have the earliest
 // mv.oldData, and the newest mv.data.
-func compactKvDeltas(kvDeltas []map[string]ledgercore.KvValueDelta) map[string]modifiedKvValue {
-	if len(kvDeltas) == 0 {
+func compactKvDeltas(stateDeltas []ledgercore.StateDelta) map[string]modifiedKvValue {
+	if len(stateDeltas) == 0 {
 		return nil
 	}
 	outKvDeltas := make(map[string]modifiedKvValue)
-	for _, roundKv := range kvDeltas {
+	for _, stateDelta := range stateDeltas {
+		roundKv := stateDelta.KvMods
 		for key, current := range roundKv {
 			prev, ok := outKvDeltas[key]
 			if !ok { // Record only the first OldData
@@ -1891,16 +1896,18 @@ func compactKvDeltas(kvDeltas []map[string]ledgercore.KvValueDelta) map[string]m
 	return outKvDeltas
 }
 
-// compactCreatableDeltas takes an array of creatables map deltas ( one array entry per round ), and compact the array into a single
-// map that contains all the deltas changes. While doing that, the function eliminate any intermediate changes.
+// compactCreatableDeltas takes an array of StateDeltas containing creatables map deltas ( one array entry per round ),
+// and compacts the array into a single map that of createable deltas which contains all the deltas changes.
+// While doing that, the function eliminate any intermediate changes.
 // It counts the number of changes per round by specifying it in the ndeltas field of the modifiedCreatable.
-func compactCreatableDeltas(creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable) (outCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
-	if len(creatableDeltas) == 0 {
+func compactCreatableDeltas(stateDeltas []ledgercore.StateDelta) (outCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
+	if len(stateDeltas) == 0 {
 		return
 	}
 	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
-	outCreatableDeltas = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1+len(creatableDeltas[0])*len(creatableDeltas))
-	for _, roundCreatable := range creatableDeltas {
+	outCreatableDeltas = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1+len(stateDeltas[0].KvMods)*len(stateDeltas))
+	for _, stateDelta := range stateDeltas {
+		roundCreatable := stateDelta.Creatables
 		for creatableIdx, creatable := range roundCreatable {
 			if prev, has := outCreatableDeltas[creatableIdx]; has {
 				outCreatableDeltas[creatableIdx] = ledgercore.ModifiedCreatable{

@@ -469,6 +469,13 @@ type Local struct {
 	// MaxAPIBoxPerApplication defines the maximum total number of boxes per application that will be returned
 	// in GetApplicationBoxes REST API responses.
 	MaxAPIBoxPerApplication uint64 `version[25]:"100000"`
+
+	// TxIncomingFilteringFlags instructs algod filtering incoming tx messages
+	// Flag values:
+	// 0x00 - disabled
+	// 0x01 (txFilterRawMsg) - check for raw tx message duplicates
+	// 0x02 (txFilterCanonical) - check for canonical tx group duplicates
+	TxIncomingFilteringFlags uint32 `version[26]:"3"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
@@ -556,4 +563,14 @@ func (cfg Local) CatchupVerifyTransactionSignatures() bool {
 // CatchupVerifyApplyData returns true if verifying the ApplyData of the payset needed
 func (cfg Local) CatchupVerifyApplyData() bool {
 	return cfg.CatchupBlockValidateMode&catchupValidationModeVerifyApplyData != 0
+}
+
+// TxFilterRawMsgEnabled returns true if raw tx filtering is enabled
+func (cfg Local) TxFilterRawMsgEnabled() bool {
+	return cfg.TxIncomingFilteringFlags&txFilterRawMsg != 0
+}
+
+// TxFilterCanonicalEnabled returns true if canonical tx group filtering is enabled
+func (cfg Local) TxFilterCanonicalEnabled() bool {
+	return cfg.TxIncomingFilteringFlags&txFilterCanonical != 0
 }

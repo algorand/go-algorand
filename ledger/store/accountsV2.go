@@ -251,6 +251,187 @@ func (r *accountsV2Reader) LoadTxTail(ctx context.Context, dbRound basics.Round)
 	return roundData, roundHash, expectedRound + 1, nil
 }
 
+// LookupAccountAddressFromAddressID looks up an account based on a rowid
+func (r *accountsV2Reader) LookupAccountAddressFromAddressID(ctx context.Context, addrid int64) (address basics.Address, err error) {
+	var addrbuf []byte
+	err = r.q.QueryRowContext(ctx, "SELECT address FROM accountbase WHERE rowid = ?", addrid).Scan(&addrbuf)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			err = fmt.Errorf("no matching address could be found for rowid %d: %w", addrid, err)
+		}
+		return
+	}
+	if len(addrbuf) != len(address) {
+		err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(address))
+		return
+	}
+	copy(address[:], addrbuf)
+	return
+}
+
+// LoadAllFullAccounts loads all accounts from balancesTable and resourcesTable.
+// On every account full load it invokes acctCb callback to report progress and data.
+func (r *accountsV2Reader) LoadAllFullAccounts(
+	ctx context.Context,
+	balancesTable string, resourcesTable string,
+	acctCb func(basics.Address, basics.AccountData),
+) (count int, err error) {
+	baseRows, err := r.q.QueryContext(ctx, fmt.Sprintf("SELECT rowid, address, data FROM %s ORDER BY address", balancesTable))
+	if err != nil {
+		return
+	}
+	defer baseRows.Close()
+
+	for baseRows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		var rowid sql.NullInt64
+		err = baseRows.Scan(&rowid, &addrbuf, &buf)
+		if err != nil {
+			return
+		}
+		if !rowid.Valid {
+			err = fmt.Errorf("invalid rowid in %s", balancesTable)
+			return
+		}
+
+		var data BaseAccountData
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return
+		}
+
+		var addr basics.Address
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return
+		}
+		copy(addr[:], addrbuf)
+
+		var ad basics.AccountData
+		ad, err = r.LoadFullAccount(ctx, resourcesTable, addr, rowid.Int64, data)
+		if err != nil {
+			return
+		}
+
+		acctCb(addr, ad)
+
+		count++
+	}
+	return
+}
+
+// LoadFullAccount converts BaseAccountData into basics.AccountData and loads all resources as needed
+func (r *accountsV2Reader) LoadFullAccount(ctx context.Context, resourcesTable string, addr basics.Address, addrid int64, data BaseAccountData) (ad basics.AccountData, err error) {
+	ad = data.GetAccountData()
+
+	hasResources := false
+	if data.TotalAppParams > 0 {
+		ad.AppParams = make(map[basics.AppIndex]basics.AppParams, data.TotalAppParams)
+		hasResources = true
+	}
+	if data.TotalAppLocalStates > 0 {
+		ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, data.TotalAppLocalStates)
+		hasResources = true
+	}
+	if data.TotalAssetParams > 0 {
+		ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, data.TotalAssetParams)
+		hasResources = true
+	}
+	if data.TotalAssets > 0 {
+		ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding, data.TotalAssets)
+		hasResources = true
+	}
+
+	if !hasResources {
+		return
+	}
+
+	var resRows *sql.Rows
+	query := fmt.Sprintf("SELECT aidx, data FROM %s where addrid = ?", resourcesTable)
+	resRows, err = r.q.QueryContext(ctx, query, addrid)
+	if err != nil {
+		return
+	}
+	defer resRows.Close()
+
+	for resRows.Next() {
+		var buf []byte
+		var aidx int64
+		err = resRows.Scan(&aidx, &buf)
+		if err != nil {
+			return
+		}
+		var resData ResourcesData
+		err = protocol.Decode(buf, &resData)
+		if err != nil {
+			return
+		}
+		if resData.ResourceFlags == ResourceFlagsNotHolding {
+			err = fmt.Errorf("addr %s (%d) aidx = %d resourceFlagsNotHolding should not be persisted", addr.String(), addrid, aidx)
+			return
+		}
+		if resData.IsApp() {
+			if resData.IsOwning() {
+				ad.AppParams[basics.AppIndex(aidx)] = resData.GetAppParams()
+			}
+			if resData.IsHolding() {
+				ad.AppLocalStates[basics.AppIndex(aidx)] = resData.GetAppLocalState()
+			}
+		} else if resData.IsAsset() {
+			if resData.IsOwning() {
+				ad.AssetParams[basics.AssetIndex(aidx)] = resData.GetAssetParams()
+			}
+			if resData.IsHolding() {
+				ad.Assets[basics.AssetIndex(aidx)] = resData.GetAssetHolding()
+			}
+		} else {
+			err = fmt.Errorf("unknown resource data: %v", resData)
+			return
+		}
+	}
+
+	if uint64(len(ad.AssetParams)) != data.TotalAssetParams {
+		err = fmt.Errorf("%s assets params mismatch: %d != %d", addr.String(), len(ad.AssetParams), data.TotalAssetParams)
+	}
+	if err == nil && uint64(len(ad.Assets)) != data.TotalAssets {
+		err = fmt.Errorf("%s assets mismatch: %d != %d", addr.String(), len(ad.Assets), data.TotalAssets)
+	}
+	if err == nil && uint64(len(ad.AppParams)) != data.TotalAppParams {
+		err = fmt.Errorf("%s app params mismatch: %d != %d", addr.String(), len(ad.AppParams), data.TotalAppParams)
+	}
+	if err == nil && uint64(len(ad.AppLocalStates)) != data.TotalAppLocalStates {
+		err = fmt.Errorf("%s app local states mismatch: %d != %d", addr.String(), len(ad.AppLocalStates), data.TotalAppLocalStates)
+	}
+
+	return ad, err
+}
+
+func (r *accountsV2Reader) AccountsOnlineRoundParams() (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error) {
+	rows, err := r.q.Query("SELECT rnd, data FROM onlineroundparamstail ORDER BY rnd ASC")
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var buf []byte
+		err = rows.Scan(&endRound, &buf)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		var data ledgercore.OnlineRoundParamsData
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		onlineRoundParamsData = append(onlineRoundParamsData, data)
+	}
+	return
+}
+
 // AccountsPutTotals updates account totals
 func (w *accountsV2Writer) AccountsPutTotals(totals ledgercore.AccountTotals, catchpointStaging bool) error {
 	id := ""
@@ -420,4 +601,62 @@ func (w *accountsV2Writer) UpdateAccountsRound(rnd basics.Round) (err error) {
 		}
 	}
 	return
+}
+
+// UpdateAccountsHashRound updates the round number associated with the hash of current account data.
+func (w *accountsV2Writer) UpdateAccountsHashRound(ctx context.Context, hashRound basics.Round) (err error) {
+	res, err := w.e.ExecContext(ctx, "INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('hashbase',?)", hashRound)
+	if err != nil {
+		return
+	}
+
+	aff, err := res.RowsAffected()
+	if err != nil {
+		return
+	}
+
+	if aff != 1 {
+		err = fmt.Errorf("updateAccountsHashRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
+		return
+	}
+	return
+}
+
+// ResetAccountHashes resets the account hashes generated by the merkle commiter.
+func (w *accountsV2Writer) ResetAccountHashes(ctx context.Context) (err error) {
+	_, err = w.e.ExecContext(ctx, `DELETE FROM accounthashes`)
+	return
+}
+
+func (w *accountsV2Writer) AccountsPutOnlineRoundParams(onlineRoundParamsData []ledgercore.OnlineRoundParamsData, startRound basics.Round) error {
+	insertStmt, err := w.e.Prepare("INSERT INTO onlineroundparamstail (rnd, data) VALUES (?, ?)")
+	if err != nil {
+		return err
+	}
+
+	for i, onlineRoundParams := range onlineRoundParamsData {
+		_, err = insertStmt.Exec(startRound+basics.Round(i), protocol.Encode(&onlineRoundParams))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *accountsV2Writer) AccountsPruneOnlineRoundParams(deleteBeforeRound basics.Round) error {
+	_, err := w.e.Exec("DELETE FROM onlineroundparamstail WHERE rnd<?",
+		deleteBeforeRound,
+	)
+	return err
+}
+
+func (w *accountsV2Writer) AccountsReset(ctx context.Context) error {
+	for _, stmt := range accountsResetExprs {
+		_, err := w.e.ExecContext(ctx, stmt)
+		if err != nil {
+			return err
+		}
+	}
+	_, err := db.SetUserVersion(ctx, w.e, 0)
+	return err
 }
