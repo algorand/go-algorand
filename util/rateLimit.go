@@ -127,6 +127,24 @@ func NewElasticRateLimiter(
 	return &ret
 }
 
+func (erl *ElasticRateLimiter) Start() {
+	if erl == nil {
+		return
+	}
+	if erl.cm != nil {
+		erl.cm.Start()
+	}
+}
+
+func (erl *ElasticRateLimiter) Stop() {
+	if erl == nil {
+		return
+	}
+	if erl.cm != nil {
+		erl.cm.Stop()
+	}
+}
+
 // EnableCongestionControl turns on the flag that the ERL uses to check with its CongestionManager
 func (erl *ElasticRateLimiter) EnableCongestionControl() {
 	if erl == nil {

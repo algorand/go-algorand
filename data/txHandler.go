@@ -63,6 +63,8 @@ var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionM
 var transactionGroupTxSyncHandled = metrics.MakeCounter(metrics.TransactionGroupTxSyncHandled)
 var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGroupTxSyncRemember)
 var transactionGroupTxSyncAlreadyCommitted = metrics.MakeCounter(metrics.TransactionGroupTxSyncAlreadyCommitted)
+var txBacklogNoCapacity = metrics.MakeCounter(metrics.TransactionMessagesTxnBacklogNoCapacity)
+var txBacklogDroppedCongestionManagement = metrics.MakeCounter(metrics.TransactionMessagesTxnDroppedCongestionManagement)
 
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
@@ -138,21 +140,19 @@ func MakeTxHandler(opts TxHandlerOpts) *TxHandler {
 		txCanonicalCache:      makeDigestCache(2 * txBacklogSize),
 		cacheConfig:           txHandlerConfig{opts.Config.TxFilterRawMsgEnabled(), opts.Config.TxFilterCanonicalEnabled()},
 	}
-	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	if opts.Config.EnableTxBacklogRateLimiting {
 		congestionManager := util.NewREDCongestionManager(
 			(time.Second * time.Duration(opts.Config.TxBacklogServiceRateWindowSeconds)),
-			100*opts.Config.TxBacklogServiceRateWindowSeconds, // Service Rates update 1/s @ 100 requests per second to the congestion manager
+			txBacklogSize,
 			txBacklogSize)
 		rateLimiter := util.NewElasticRateLimiter(
 			txBacklogSize,
 			opts.Config.TxBacklogReservedCapacityPerPeer,
 			congestionManager,
-			metrics.MakeCounter(metrics.TransactionMessagesTxnBacklogNoCapacity),
-			metrics.MakeCounter(metrics.TransactionMessagesTxnDroppedCongestionManagement),
+			txBacklogNoCapacity,
+			txBacklogDroppedCongestionManagement,
 		)
 		handler.erl = rateLimiter
-		congestionManager.Start()
 	}
 	return handler
 }
@@ -167,11 +167,13 @@ func (handler *TxHandler) Start() {
 	handler.backlogWg.Add(2)
 	go handler.backlogWorker()
 	go handler.backlogGaugeThread()
+	handler.erl.Start()
 }
 
 // Stop suspends the processing of incoming messages at the transaction handler
 func (handler *TxHandler) Stop() {
 	handler.ctxCancel()
+	handler.erl.Stop()
 	handler.backlogWg.Wait()
 }
 

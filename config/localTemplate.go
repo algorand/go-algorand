@@ -168,7 +168,7 @@ type Local struct {
 	TxBacklogReservedCapacityPerPeer int `version[26]:"20"`
 
 	// EnableTxBacklogRateLimiting controls if a rate limiter and congestion manager shouild be attached to the tx backlog enqueue process
-	EnableTxBacklogRateLimiting bool `version[26]:"true"`
+	EnableTxBacklogRateLimiting bool `version[26]:"false"`
 
 	// TxPoolSize is the number of transactions that fit in the transaction pool
 	TxPoolSize int `version[0]:"50000" version[5]:"15000" version[23]:"75000"`
