@@ -466,7 +466,7 @@ type Local struct {
 	// 0x00 - disabled
 	// 0x01 (txFilterRawMsg) - check for raw tx message duplicates
 	// 0x02 (txFilterCanonical) - check for canonical tx group duplicates
-	TxIncomingFilteringFlags uint32 `version[26]:"3"`
+	TxIncomingFilteringFlags uint32 `version[26]:"1"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

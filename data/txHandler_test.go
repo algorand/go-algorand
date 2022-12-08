@@ -939,6 +939,7 @@ func TestTxHandlerProcessIncomingCacheTxPoolDrop(t *testing.T) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
+	cfg.TxIncomingFilteringFlags = 3 // txFilterRawMsg + txFilterCanonical
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(t, err)
 

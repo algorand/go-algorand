@@ -119,7 +119,7 @@ var defaultLocal = Local{
 	TelemetryToLog:                             true,
 	TransactionSyncDataExchangeRate:            0,
 	TransactionSyncSignificantMessageThreshold: 0,
-	TxIncomingFilteringFlags:                   3,
+	TxIncomingFilteringFlags:                   1,
 	TxPoolExponentialIncreaseFactor:            2,
 	TxPoolSize:                                 75000,
 	TxSyncIntervalSeconds:                      60,
