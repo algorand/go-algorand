@@ -1435,6 +1435,8 @@ func (pps *WorkerState) txidLatencyDone() {
 	}
 }
 
+const errRestartTime = time.Second
+
 func (pps *WorkerState) txidLatencyBlockWaiter(ctx context.Context, ac *libgoal.Client) {
 	done := ctx.Done()
 restart:
@@ -1454,7 +1456,7 @@ restart:
 		default:
 		}
 		fmt.Fprintf(os.Stderr, "block waiter st : %v", err)
-		time.Sleep(5 * time.Second)
+		time.Sleep(errRestartTime)
 		goto restart
 	}
 	nextRound := st.LastRound
@@ -1474,7 +1476,7 @@ restart:
 			default:
 			}
 			fmt.Fprintf(os.Stderr, "block waiter w: %v", err)
-			time.Sleep(5 * time.Second)
+			time.Sleep(errRestartTime)
 			goto restart
 		}
 		bb, err := ac.BookkeepingBlock(st.LastRound)
@@ -1486,7 +1488,7 @@ restart:
 			default:
 			}
 			fmt.Fprintf(os.Stderr, "block waiter bb: %v", err)
-			time.Sleep(5 * time.Second)
+			time.Sleep(errRestartTime)
 			goto restart
 		}
 		pps.latencyBlocks <- bb
