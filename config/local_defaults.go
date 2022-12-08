@@ -122,7 +122,7 @@ var defaultLocal = Local{
 	TransactionSyncSignificantMessageThreshold: 0,
 	TxBacklogReservedCapacityPerPeer:           20,
 	TxBacklogServiceRateWindowSeconds:          10,
-	TxIncomingFilteringFlags:                   3,
+	TxIncomingFilteringFlags:                   1,
 	TxPoolExponentialIncreaseFactor:            2,
 	TxPoolSize:                                 75000,
 	TxSyncIntervalSeconds:                      60,

@@ -101,7 +101,7 @@
     "TransactionSyncSignificantMessageThreshold": 0,
     "TxBacklogServiceRateWindowSeconds": 10,
     "TxBacklogReservedCapacityPerPeer": 20,
-    "TxIncomingFilteringFlags": 3,
+    "TxIncomingFilteringFlags": 1,
     "TxPoolExponentialIncreaseFactor": 2,
     "TxPoolSize": 75000,
     "TxSyncIntervalSeconds": 60,

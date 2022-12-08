@@ -23,14 +23,16 @@ import (
 )
 
 // MinFeeError defines an error type which could be returned from the method WellFormed
+//msgp:ignore MinFeeError
 type MinFeeError string
 
-func (err MinFeeError) Error() string {
-	return string(err)
+func (err *MinFeeError) Error() string {
+	return string(*err)
 }
 
-func makeMinFeeErrorf(format string, args ...interface{}) MinFeeError {
-	return MinFeeError(fmt.Sprintf(format, args...))
+func makeMinFeeErrorf(format string, args ...interface{}) *MinFeeError {
+	err := MinFeeError(fmt.Sprintf(format, args...))
+	return &err
 }
 
 // TxnDeadError defines an error type which indicates a transaction is outside of the
@@ -41,6 +43,6 @@ type TxnDeadError struct {
 	LastValid  basics.Round
 }
 
-func (err TxnDeadError) Error() string {
+func (err *TxnDeadError) Error() string {
 	return fmt.Sprintf("txn dead: round %d outside of %d--%d", err.Round, err.FirstValid, err.LastValid)
 }
