@@ -501,6 +501,7 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	forgetBefore := (newBase + 1).SubSaturate(basics.Round(ao.maxBalLookback()))
 	ao.onlineAccountsCache.prune(forgetBefore)
 
+	ao.voters.postCommit(dcc)
 	ao.accountsMu.Unlock()
 
 	ao.accountsReadCond.Broadcast()
