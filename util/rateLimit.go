@@ -66,6 +66,9 @@ type ErlCapacityGuard struct {
 
 // Release will put capacity back into the queue attached to this capacity guard
 func (cg ErlCapacityGuard) Release() error {
+	if cg == (ErlCapacityGuard{}) {
+		return nil
+	}
 	if cg.cq == nil {
 		return nil
 	}
@@ -79,6 +82,9 @@ func (cg ErlCapacityGuard) Release() error {
 
 // Served will notify the CongestionManager that this resource has been served, informing the Service Rate
 func (cg ErlCapacityGuard) Served() {
+	if cg == (ErlCapacityGuard{}) {
+		return
+	}
 	if *cg.cm != nil {
 		(*cg.cm).Served(time.Now())
 	}
