@@ -316,7 +316,7 @@ func (handler *TxHandler) checkReportErrors(err error) {
 		return
 	}
 
-	transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagEvalGeneric, 1)
+	transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagEvalGeneric, 1)
 }
 
 func (handler *TxHandler) rememberReportErrors(err error) {
