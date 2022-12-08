@@ -1635,12 +1635,20 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	t.Parallel()
 
 	result := map[string]float64{}
+	checkResult := map[string]float64{}
 	getMetricName := func(tag string) string {
 		return strings.ReplaceAll(transactionMessageTxPoolRememberCounter.Name, "{TAG}", tag)
+	}
+	getCheckMetricName := func(tag string) string {
+		return strings.ReplaceAll(transactionMessageTxPoolCheckCounter.Name, "{TAG}", tag)
 	}
 	getMetricCounter := func(tag string) int {
 		transactionMessageTxPoolRememberCounter.AddMetric(result)
 		return int(result[getMetricName(tag)])
+	}
+	getCheckMetricCounter := func(tag string) int {
+		transactionMessageTxPoolCheckCounter.AddMetric(checkResult)
+		return int(checkResult[getCheckMetricName(tag)])
 	}
 
 	log := logging.TestingLog(t)
@@ -1722,6 +1730,8 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	txn2 := txn1
 	crypto.RandBytes(txn2.Group[:])
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn1.Sign(secrets[0]), txn2.Sign(secrets[0])}
+	handler.checkAlreadyCommitted(&wi)
+	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagGroupID))
 	handler.postProcessCheckedTxn(&wi)
 	require.Equal(t, 1, getMetricCounter(txPoolRememberTagGroupID))
 
@@ -1734,6 +1744,8 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	}
 	handler.postProcessCheckedTxn(&wi)
 	require.Equal(t, 1, getMetricCounter(txPoolRememberTagTooLarge))
+	handler.checkAlreadyCommitted(&wi)
+	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagTooLarge))
 
 	// trigger eval error
 	secret := keypair()
@@ -1751,13 +1763,17 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn2.Sign(secrets[0])}
 	handler.postProcessCheckedTxn(&wi)
 	require.Equal(t, prevTxnDead+1, getMetricCounter(txPoolRememberTagTxnDead))
+	handler.checkAlreadyCommitted(&wi)
+	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagTxnDead))
 
 	// trigger TransactionInLedgerError (txid) error
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn1.Sign(secrets[0])}
 	wi.rawmsg = &network.IncomingMessage{}
 	handler.postProcessCheckedTxn(&wi)
 	handler.postProcessCheckedTxn(&wi)
-	require.Equal(t, 1, getMetricCounter(txPoolRememberTagTxID))
+	require.Equal(t, 1, getMetricCounter(txPoolRememberTagTxIDEval))
+	handler.checkAlreadyCommitted(&wi)
+	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagTxIDEval))
 
 	// trigger LeaseInLedgerError (lease) error
 	txn2 = txn1
@@ -1768,7 +1784,9 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	handler.postProcessCheckedTxn(&wi)
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn3.Sign(secrets[0])}
 	handler.postProcessCheckedTxn(&wi)
-	require.Equal(t, 1, getMetricCounter(txPoolRememberTagLease))
+	require.Equal(t, 1, getMetricCounter(txPoolRememberTagLeaseEval))
+	handler.checkAlreadyCommitted(&wi)
+	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagLeaseEval))
 
 	// TODO: not sure how to trigger fee error - need to return ErrNoSpace from ledger
 	// trigger pool fee error

@@ -27,9 +27,19 @@ import (
 // ErrNoSpace indicates insufficient space for transaction in block
 var ErrNoSpace = errors.New("block does not have space for transaction")
 
-// TransactionInLedgerError is returned when a transaction cannot be added because it has already been done
+// TxnNotWellFormedError indicates a transaction was not well-formed when evaluated by the BlockEvaluator
+//msgp:ignore TxnNotWellFormedError
+type TxnNotWellFormedError string
+
+func (err *TxnNotWellFormedError) Error() string {
+	return string(*err)
+}
+
+// TransactionInLedgerError is returned when a transaction cannot be added because it has already been committed, either
+// to the blockchain's ledger or to the history of changes tracked by a BlockEvaluator.
 type TransactionInLedgerError struct {
-	Txid transactions.Txid
+	Txid             transactions.Txid
+	InBlockEvaluator bool
 }
 
 // Error satisfies builtin interface `error`
@@ -39,15 +49,17 @@ func (tile TransactionInLedgerError) Error() string {
 
 // LeaseInLedgerError is returned when a transaction cannot be added because it has a lease that already being used in the relevant rounds
 type LeaseInLedgerError struct {
-	txid  transactions.Txid
-	lease Txlease
+	txid             transactions.Txid
+	lease            Txlease
+	InBlockEvaluator bool
 }
 
 // MakeLeaseInLedgerError builds a LeaseInLedgerError object
-func MakeLeaseInLedgerError(txid transactions.Txid, lease Txlease) *LeaseInLedgerError {
+func MakeLeaseInLedgerError(txid transactions.Txid, lease Txlease, inBlockEvaluator bool) *LeaseInLedgerError {
 	return &LeaseInLedgerError{
-		txid:  txid,
-		lease: lease,
+		txid:             txid,
+		lease:            lease,
+		InBlockEvaluator: inBlockEvaluator,
 	}
 }
 
