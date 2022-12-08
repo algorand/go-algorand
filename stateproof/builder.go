@@ -49,7 +49,14 @@ func (spw *Worker) OnPrepareCommit(rnd basics.Round) {
 		return
 	}
 
-	_, err = spw.loadOrCreateBuilder(rnd)
+	builderExists, err := spw.builderExistsInDB(rnd)
+	if err != nil {
+		spw.log.Warnf("OnPreapreCommit(%d): could not check builder existence, assuming it doesn't exist: %v\n", rnd, err)
+	} else if builderExists {
+		return
+	}
+
+	_, err = spw.createBuilder(rnd)
 	if err != nil {
 		spw.log.Warnf("OnPreapreCommit(%d): %v\n", rnd, err)
 	}
@@ -374,6 +381,17 @@ func (spw *Worker) sigExistsInDB(round basics.Round, account basics.Address) (bo
 		return err
 	})
 	return exists, err
+}
+
+func (spw *Worker) builderExistsInDB(rnd basics.Round) (bool, error) {
+	var exist bool
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var err2 error
+		exist, err2 = isBuilderExists(tx, rnd)
+		return err2
+	})
+
+	return exist, err
 }
 
 func (spw *Worker) builder(latest basics.Round) {
