@@ -166,7 +166,7 @@ func TestResourcesDataApp(t *testing.T) {
 		a.True(rd.IsEmpty())
 		a.Equal(rd.ResourceFlags, ResourceFlagsNotHolding)
 
-		// check migration flow (accountDataResources)
+		// check migration flow (AccountDataResources)
 		// 1. both exist and empty
 		rd = MakeResourcesData(0)
 		rd.SetAppLocalState(appLocalEmpty)
@@ -377,7 +377,7 @@ func TestResourcesDataAsset(t *testing.T) {
 	a.True(rd.IsEmpty())
 	a.Equal(rd.ResourceFlags, ResourceFlagsNotHolding)
 
-	// check migration operations (accountDataResources)
+	// check migration operations (AccountDataResources)
 	// 1. both exist and empty
 	rd = MakeResourcesData(0)
 	rd.SetAssetHolding(assetHoldingEmpty)

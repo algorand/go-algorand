@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package blockdb
 
 import (
 	"database/sql"
@@ -26,24 +26,20 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-algorand/util/db"
 )
 
-// TODO[store-refactor]: temporary leftovers, refactor calls to store.*
-func dbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
-	return storetesting.DbOpenTest(t, inMemory)
+var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
+
+type testBlockEntry struct {
+	block bookkeeping.Block
+	cert  agreement.Certificate
 }
 
-// TODO[store-refactor]: temporary leftovers, refactor calls to store.*
-func setDbLogging(t testing.TB, dbs db.Pair) {
-	storetesting.SetDbLogging(t, dbs)
-}
-
-func randomBlock(r basics.Round) blockEntry {
+func randomBlock(r basics.Round) testBlockEntry {
 	b := bookkeeping.Block{}
 	c := agreement.Certificate{}
 
@@ -53,14 +49,14 @@ func randomBlock(r basics.Round) blockEntry {
 	b.FeeSink = testSinkAddr
 	c.Round = r
 
-	return blockEntry{
+	return testBlockEntry{
 		block: b,
 		cert:  c,
 	}
 }
 
-func randomInitChain(proto protocol.ConsensusVersion, nblock int) []blockEntry {
-	res := make([]blockEntry, 0)
+func randomInitChain(proto protocol.ConsensusVersion, nblock int) []testBlockEntry {
+	res := make([]testBlockEntry, 0)
 	for i := 0; i < nblock; i++ {
 		blkent := randomBlock(basics.Round(i))
 		blkent.cert = agreement.Certificate{}
@@ -70,20 +66,12 @@ func randomInitChain(proto protocol.ConsensusVersion, nblock int) []blockEntry {
 	return res
 }
 
-func blockChainBlocks(be []blockEntry) []bookkeeping.Block {
-	res := make([]bookkeeping.Block, 0)
-	for _, e := range be {
-		res = append(res, e.block)
-	}
-	return res
-}
-
-func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []blockEntry) {
-	next, err := blockdb.BlockNext(tx)
+func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []testBlockEntry) {
+	next, err := BlockNext(tx)
 	require.NoError(t, err)
 	require.Equal(t, next, basics.Round(len(blocks)))
 
-	latest, err := blockdb.BlockLatest(tx)
+	latest, err := BlockLatest(tx)
 	if len(blocks) == 0 {
 		require.Error(t, err)
 	} else {
@@ -91,7 +79,7 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []blockEntry) {
 		require.Equal(t, latest, basics.Round(len(blocks))-1)
 	}
 
-	earliest, err := blockdb.BlockEarliest(tx)
+	earliest, err := BlockEarliest(tx)
 	if len(blocks) == 0 {
 		require.Error(t, err)
 	} else {
@@ -100,32 +88,40 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []blockEntry) {
 	}
 
 	for rnd := basics.Round(0); rnd < basics.Round(len(blocks)); rnd++ {
-		blk, err := blockdb.BlockGet(tx, rnd)
+		blk, err := BlockGet(tx, rnd)
 		require.NoError(t, err)
 		require.Equal(t, blk, blocks[rnd].block)
 
-		blk, cert, err := blockdb.BlockGetCert(tx, rnd)
+		blk, cert, err := BlockGetCert(tx, rnd)
 		require.NoError(t, err)
 		require.Equal(t, blk, blocks[rnd].block)
 		require.Equal(t, cert, blocks[rnd].cert)
 	}
 
-	_, err = blockdb.BlockGet(tx, basics.Round(len(blocks)))
+	_, err = BlockGet(tx, basics.Round(len(blocks)))
 	require.Error(t, err)
+}
+
+func blockChainBlocks(be []testBlockEntry) []bookkeeping.Block {
+	res := make([]bookkeeping.Block, 0)
+	for _, e := range be {
+		res = append(res, e.block)
+	}
+	return res
 }
 
 func TestBlockDBEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
 	defer tx.Rollback()
 
-	err = blockdb.BlockInit(tx, nil)
+	err = BlockInit(tx, nil)
 	require.NoError(t, err)
 	checkBlockDB(t, tx, nil)
 }
@@ -133,8 +129,8 @@ func TestBlockDBEmpty(t *testing.T) {
 func TestBlockDBInit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -143,11 +139,11 @@ func TestBlockDBInit(t *testing.T) {
 
 	blocks := randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
-	err = blockdb.BlockInit(tx, blockChainBlocks(blocks))
+	err = BlockInit(tx, blockChainBlocks(blocks))
 	require.NoError(t, err)
 	checkBlockDB(t, tx, blocks)
 
-	err = blockdb.BlockInit(tx, blockChainBlocks(blocks))
+	err = BlockInit(tx, blockChainBlocks(blocks))
 	require.NoError(t, err)
 	checkBlockDB(t, tx, blocks)
 }
@@ -155,8 +151,8 @@ func TestBlockDBInit(t *testing.T) {
 func TestBlockDBAppend(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -165,13 +161,13 @@ func TestBlockDBAppend(t *testing.T) {
 
 	blocks := randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
-	err = blockdb.BlockInit(tx, blockChainBlocks(blocks))
+	err = BlockInit(tx, blockChainBlocks(blocks))
 	require.NoError(t, err)
 	checkBlockDB(t, tx, blocks)
 
 	for i := 0; i < 10; i++ {
 		blkent := randomBlock(basics.Round(len(blocks)))
-		err = blockdb.BlockPut(tx, blkent.block, blkent.cert)
+		err = BlockPut(tx, blkent.block, blkent.cert)
 		require.NoError(t, err)
 
 		blocks = append(blocks, blkent)
