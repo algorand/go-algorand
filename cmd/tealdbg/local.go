@@ -243,8 +243,7 @@ func (e *evaluation) eval(gi int, ep *logic.EvalParams) (pass bool, err error) {
 		return
 	}
 	ep.TxnGroup[gi].Lsig.Logic = e.program
-	pass, err = logic.EvalSignature(gi, ep)
-	return pass, err
+	return logic.EvalSignature(gi, ep)
 }
 
 // LocalRunner runs local eval
