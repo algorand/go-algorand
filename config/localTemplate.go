@@ -168,7 +168,11 @@ type Local struct {
 	TxBacklogReservedCapacityPerPeer int `version[26]:"20"`
 
 	// EnableTxBacklogRateLimiting controls if a rate limiter and congestion manager shouild be attached to the tx backlog enqueue process
+	// if Rate Limiting is enabled, the over-all TXBacklog Size will be larger by MAX_PEERS*TxBacklogReservedCapacityPerPeer
 	EnableTxBacklogRateLimiting bool `version[26]:"false"`
+
+	// TxBacklogSizeMultiplier is the constant multiplier used to determine TXBacklog Size. Defaults to 1, meaning 1 block of TXs
+	TxBacklogSizeMultiplier float64 `version[26]:"1"`
 
 	// TxPoolSize is the number of transactions that fit in the transaction pool
 	TxPoolSize int `version[0]:"50000" version[5]:"15000" version[23]:"75000"`

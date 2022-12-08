@@ -71,6 +71,7 @@ var defaultLocal = Local{
 	EnableRuntimeMetrics:                       false,
 	EnableTopAccountsReporting:                 false,
 	EnableTxBacklogRateLimiting:                false,
+	TxBacklogSizeMultiplier:                    1,
 	EnableUsageLog:                             false,
 	EnableVerbosedTransactionSyncLogging:       false,
 	EndpointAddress:                            "127.0.0.1:0",
