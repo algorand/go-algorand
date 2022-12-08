@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -65,6 +66,25 @@ var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionM
 var transactionGroupTxSyncHandled = metrics.MakeCounter(metrics.TransactionGroupTxSyncHandled)
 var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGroupTxSyncRemember)
 var transactionGroupTxSyncAlreadyCommitted = metrics.MakeCounter(metrics.TransactionGroupTxSyncAlreadyCommitted)
+
+var transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
+	"algod_transaction_messages_txpool_remember_{TAG}", "Number of transaction messages not remembered by txpool b/c if {TAG}",
+	txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+	txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagEvalGeneric,
+)
+
+const (
+	txPoolRememberTagCap         = "cap"
+	txPoolRememberPendingEval    = "pending_eval"
+	txPoolRememberTagNoSpace     = "no_space"
+	txPoolRememberTagFee         = "fee"
+	txPoolRememberTagTxnDead     = "txn_dead"
+	txPoolRememberTagTooLarge    = "too_large"
+	txPoolRememberTagGroupID     = "groupid"
+	txPoolRememberTagTxID        = "txid"
+	txPoolRememberTagLease       = "lease"
+	txPoolRememberTagEvalGeneric = "eval"
+)
 
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
@@ -231,7 +251,7 @@ func (handler *TxHandler) postProcessReportErrors(err error) {
 		return
 	}
 
-	var txGroupErr *verify.ErrTxGroupError
+	var txGroupErr *verify.TxGroupError
 	if errors.As(err, &txGroupErr) {
 		switch txGroupErr.Reason {
 		case verify.TxGroupErrorReasonNotWellFormed:
@@ -254,6 +274,56 @@ func (handler *TxHandler) postProcessReportErrors(err error) {
 	}
 }
 
+func (handler *TxHandler) rememberReportErrors(err error) {
+	if errors.Is(err, pools.ErrPendingQueueReachedMaxCap) {
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagCap, 1)
+		return
+	}
+
+	if errors.Is(err, pools.ErrNoPendingBlockEvaluator) {
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberPendingEval, 1)
+		return
+	}
+
+	if errors.Is(err, ledgercore.ErrNoSpace) {
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagNoSpace, 1)
+		return
+	}
+
+	// it is possible to call errors.As but it requires additional allocations
+	// instead, unwrap and type assert.
+	underlyingErr := errors.Unwrap(err)
+	if underlyingErr == nil {
+		// something went wrong
+		return
+	}
+
+	switch err := underlyingErr.(type) {
+	case *pools.ErrTxPoolFeeError:
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagFee, 1)
+		return
+	case *transactions.TxnDeadError:
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxnDead, 1)
+		return
+	case *ledgercore.TransactionInLedgerError:
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxID, 1)
+		return
+	case *ledgercore.LeaseInLedgerError:
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagLease, 1)
+		return
+	case *ledgercore.TxGroupMalformedError:
+		switch err.Reason {
+		case ledgercore.TxGroupMalformedErrorReasonExceedMaxSize:
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTooLarge, 1)
+		default:
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagGroupID, 1)
+		}
+		return
+	}
+
+	transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagEvalGeneric, 1)
+}
+
 func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 	if wi.verificationErr != nil {
 		// disconnect from peer.
@@ -272,6 +342,7 @@ func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 	// save the transaction, if it has high enough fee and not already in the cache
 	err := handler.txPool.Remember(verifiedTxGroup)
 	if err != nil {
+		handler.rememberReportErrors(err)
 		logging.Base().Debugf("could not remember tx: %v", err)
 		return
 	}

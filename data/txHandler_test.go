@@ -33,6 +33,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -41,12 +42,15 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	realledger "github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
+
 	"github.com/algorand/go-deadlock"
 )
 
@@ -1525,13 +1529,13 @@ func TestTxHandlerPostProcessError(t *testing.T) {
 			continue
 		}
 
-		errTxGroup := &verify.ErrTxGroupError{Reason: i}
+		errTxGroup := &verify.TxGroupError{Reason: i}
 		txh.postProcessReportErrors(errTxGroup)
 		result = collect()
 		if i == verify.TxGroupErrorReasonSigNotWellFormed {
 			// TxGroupErrorReasonSigNotWellFormed and TxGroupErrorReasonHasNoSig increment the same metric
 			counter--
-			require.Equal(t, result[metrics.TransactionMessagesTxnSigNotWellFormed.Name], float64(2))
+			require.Equal(t, float64(2), result[metrics.TransactionMessagesTxnSigNotWellFormed.Name])
 		}
 		require.Len(t, result, counter)
 		counter++
@@ -1561,7 +1565,7 @@ func TestTxHandlerPostProcessErrorWithVerify(t *testing.T) {
 		},
 	}
 	_, err := verify.TxnGroup([]transactions.SignedTxn{stxn}, hdr, nil, nil)
-	var txGroupErr *verify.ErrTxGroupError
+	var txGroupErr *verify.TxGroupError
 	require.ErrorAs(t, err, &txGroupErr)
 
 	result := map[string]float64{}
@@ -1572,4 +1576,231 @@ func TestTxHandlerPostProcessErrorWithVerify(t *testing.T) {
 	txh.postProcessReportErrors(err)
 	transactionMessagesTxnNotWellFormed.AddMetric(result)
 	require.Len(t, result, 1)
+}
+
+// TestTxHandlerRememberReportErrors checks Is and As statements work as expected
+func TestTxHandlerRememberReportErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var txh TxHandler
+	result := map[string]float64{}
+
+	getMetricName := func(tag string) string {
+		return strings.ReplaceAll(transactionMessageTxPoolRememberCounter.Name, "{TAG}", tag)
+	}
+	getMetricCounter := func(tag string) int {
+		transactionMessageTxPoolRememberCounter.AddMetric(result)
+		return int(result[getMetricName(tag)])
+	}
+
+	noSpaceErr := ledgercore.ErrNoSpace
+	txh.rememberReportErrors(noSpaceErr)
+	transactionMessageTxPoolRememberCounter.AddMetric(result)
+	require.Equal(t, 1, getMetricCounter(txPoolRememberTagNoSpace))
+
+	wrapped := fmt.Errorf("wrap: %w", noSpaceErr) // simulate wrapping
+	txh.rememberReportErrors(wrapped)
+
+	transactionMessageTxPoolRememberCounter.AddMetric(result)
+	require.Equal(t, 2, getMetricCounter(txPoolRememberTagNoSpace))
+
+	feeErr := pools.ErrTxPoolFeeError{}
+	wrapped = fmt.Errorf("wrap: %w", &feeErr) // simulate wrapping
+	txh.rememberReportErrors(wrapped)
+
+	transactionMessageTxPoolRememberCounter.AddMetric(result)
+	require.Equal(t, 1, getMetricCounter(txPoolRememberTagFee))
+}
+
+type blockTicker struct {
+	cond sync.Cond
+}
+
+func (t *blockTicker) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
+	t.cond.L.Lock()
+	defer t.cond.L.Unlock()
+	t.cond.Broadcast()
+}
+
+func (t *blockTicker) Wait() {
+	t.cond.L.Lock()
+	defer t.cond.L.Unlock()
+	t.cond.Wait()
+}
+
+func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	result := map[string]float64{}
+	getMetricName := func(tag string) string {
+		return strings.ReplaceAll(transactionMessageTxPoolRememberCounter.Name, "{TAG}", tag)
+	}
+	getMetricCounter := func(tag string) int {
+		transactionMessageTxPoolRememberCounter.AddMetric(result)
+		return int(result[getMetricName(tag)])
+	}
+
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Warn)
+
+	const numAccts = 2
+	genesis := make(map[basics.Address]basics.AccountData, numAccts+1)
+	addresses := make([]basics.Address, numAccts)
+	secrets := make([]*crypto.SignatureSecrets, numAccts)
+
+	for i := 0; i < numAccts; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+		genesis[addr] = basics.AccountData{
+			Status:     basics.Online,
+			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
+		}
+	}
+	genesis[poolAddr] = basics.AccountData{
+		Status:     basics.NotParticipating,
+		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
+	}
+
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+
+	ledgerName := fmt.Sprintf("%s-mem-%d", t.Name(), rand.Int())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	cfg.TxPoolSize = config.MaxTxGroupSize + 1
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	require.NoError(t, err)
+
+	handler := makeTestTxHandler(ledger, cfg)
+	// since Start is not called, set the context here
+	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
+	defer handler.ctxCancel()
+
+	var wi txBacklogMsg
+	wi.unverifiedTxGroup = []transactions.SignedTxn{{}}
+	handler.postProcessCheckedTxn(&wi)
+	require.Equal(t, 1, getMetricCounter(txPoolRememberTagTxnDead))
+
+	// trigger max pool capacity metric
+	hdr := bookkeeping.BlockHeader{
+		Round: 1,
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
+		},
+	}
+
+	txn1 := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			GenesisHash: genesisHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: poolAddr,
+			Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance + (rand.Uint64() % 10000)},
+		},
+	}
+
+	wi.unverifiedTxGroup = []transactions.SignedTxn{txn1.Sign(secrets[0])}
+	for i := 0; i <= cfg.TxPoolSize; i++ {
+		txn := txn1
+		crypto.RandBytes(txn.Note[:])
+		wi.unverifiedTxGroup = append(wi.unverifiedTxGroup, txn.Sign(secrets[0]))
+	}
+	handler.postProcessCheckedTxn(&wi)
+	require.Equal(t, 1, getMetricCounter(txPoolRememberTagCap))
+
+	// trigger group id error
+	txn2 := txn1
+	crypto.RandBytes(txn2.Group[:])
+	wi.unverifiedTxGroup = []transactions.SignedTxn{txn1.Sign(secrets[0]), txn2.Sign(secrets[0])}
+	handler.postProcessCheckedTxn(&wi)
+	require.Equal(t, 1, getMetricCounter(txPoolRememberTagGroupID))
+
+	// trigger group too large error
+	wi.unverifiedTxGroup = []transactions.SignedTxn{txn1.Sign(secrets[0])}
+	for i := 0; i < config.MaxTxGroupSize; i++ {
+		txn := txn1
+		crypto.RandBytes(txn.Note[:])
+		wi.unverifiedTxGroup = append(wi.unverifiedTxGroup, txn.Sign(secrets[0]))
+	}
+	handler.postProcessCheckedTxn(&wi)
+	require.Equal(t, 1, getMetricCounter(txPoolRememberTagTooLarge))
+
+	// trigger eval error
+	secret := keypair()
+	addr := basics.Address(secret.SignatureVerifier)
+	txn2 = txn1
+	txn2.Sender = addr
+	wi.unverifiedTxGroup = []transactions.SignedTxn{txn2.Sign(secret)}
+	handler.postProcessCheckedTxn(&wi)
+	require.Equal(t, 1, getMetricCounter(txPoolRememberTagEvalGeneric))
+
+	// trigger TxnDeadErr from the evaluator
+	txn2 = txn1
+	txn2.FirstValid = ledger.LastRound() + 10
+	prevTxnDead := getMetricCounter(txPoolRememberTagTxnDead)
+	wi.unverifiedTxGroup = []transactions.SignedTxn{txn2.Sign(secrets[0])}
+	handler.postProcessCheckedTxn(&wi)
+	require.Equal(t, prevTxnDead+1, getMetricCounter(txPoolRememberTagTxnDead))
+
+	// trigger TransactionInLedgerError (txid) error
+	wi.unverifiedTxGroup = []transactions.SignedTxn{txn1.Sign(secrets[0])}
+	wi.rawmsg = &network.IncomingMessage{}
+	handler.postProcessCheckedTxn(&wi)
+	handler.postProcessCheckedTxn(&wi)
+	require.Equal(t, 1, getMetricCounter(txPoolRememberTagTxID))
+
+	// trigger LeaseInLedgerError (lease) error
+	txn2 = txn1
+	crypto.RandBytes(txn2.Lease[:])
+	txn3 := txn2
+	txn3.Receiver = addr
+	wi.unverifiedTxGroup = []transactions.SignedTxn{txn2.Sign(secrets[0])}
+	handler.postProcessCheckedTxn(&wi)
+	wi.unverifiedTxGroup = []transactions.SignedTxn{txn3.Sign(secrets[0])}
+	handler.postProcessCheckedTxn(&wi)
+	require.Equal(t, 1, getMetricCounter(txPoolRememberTagLease))
+
+	// TODO: not sure how to trigger fee error - need to return ErrNoSpace from ledger
+	// trigger pool fee error
+	// txn1.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee / 2}
+	// wi.unverifiedTxGroup = []transactions.SignedTxn{txn1.Sign(secrets[0])}
+	// handler.postProcessCheckedTxn(&wi)
+	// require.Equal(t, 1, getMetricCounter(txPoolRememberFee))
+
+	// make an invalid block to fail recompute pool and expose transactionMessageTxGroupRememberNoPendingEval metric
+	blockTicker := &blockTicker{cond: *sync.NewCond(&deadlock.Mutex{})}
+	blockListeners := []realledger.BlockListener{
+		handler.txPool,
+		blockTicker,
+	}
+	ledger.RegisterBlockListeners(blockListeners)
+
+	hdr = bookkeeping.BlockHeader{
+		Round: 1,
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: "test",
+		},
+	}
+
+	blk := bookkeeping.Block{
+		BlockHeader: hdr,
+		Payset:      []transactions.SignedTxnInBlock{{}},
+	}
+	vb := ledgercore.MakeValidatedBlock(blk, ledgercore.StateDelta{})
+	err = ledger.AddValidatedBlock(vb, agreement.Certificate{})
+	require.NoError(t, err)
+	blockTicker.Wait()
+
+	wi.unverifiedTxGroup = []transactions.SignedTxn{}
+	handler.postProcessCheckedTxn(&wi)
+	require.Equal(t, 1, getMetricCounter(txPoolRememberPendingEval))
 }
