@@ -53,9 +53,9 @@ func NewAccountsSQLReaderWriter(e db.Executable) *accountsV2ReaderWriter {
 	}
 }
 
-func (r *accountsV2Reader) getOrPrepare(key string, queryString string) (stmt *sql.Stmt, err error) {
-	// fetch statement
-	if stmt, ok := r.preparedStatements[key]; ok {
+func (r *accountsV2Reader) getOrPrepare(queryString string) (stmt *sql.Stmt, err error) {
+	// fetch statement (use the query as the key)
+	if stmt, ok := r.preparedStatements[queryString]; ok {
 		return stmt, nil
 	}
 	// we do not have it, prepare it
@@ -64,7 +64,7 @@ func (r *accountsV2Reader) getOrPrepare(key string, queryString string) (stmt *s
 		return
 	}
 	// cache the statement
-	r.preparedStatements[key] = stmt
+	r.preparedStatements[queryString] = stmt
 
 	return stmt, nil
 }
@@ -288,7 +288,7 @@ func (r *accountsV2Reader) LookupAccountAddressFromAddressID(ctx context.Context
 
 func (r *accountsV2Reader) LookupAccountDataByAddress(addr basics.Address) (rowid int64, data []byte, err error) {
 	// optimize this query for repeated usage
-	selectStmt, err := r.getOrPrepare("LookupAccountDataByAddress", "SELECT rowid, data FROM accountbase WHERE address=?")
+	selectStmt, err := r.getOrPrepare("SELECT rowid, data FROM accountbase WHERE address=?")
 	if err != nil {
 		return
 	}
@@ -303,10 +303,7 @@ func (r *accountsV2Reader) LookupAccountDataByAddress(addr basics.Address) (rowi
 // LookupOnlineAccountDataByAddress looks up online account data by address.
 func (r *accountsV2Reader) LookupOnlineAccountDataByAddress(addr basics.Address) (rowid int64, data []byte, err error) {
 	// optimize this query for repeated usage
-	selectStmt, err := r.getOrPrepare(
-		"LookupOnlineAccountDataByAddress",
-		"SELECT rowid, data FROM onlineaccounts WHERE address=? ORDER BY updround DESC LIMIT 1",
-	)
+	selectStmt, err := r.getOrPrepare("SELECT rowid, data FROM onlineaccounts WHERE address=? ORDER BY updround DESC LIMIT 1")
 	if err != nil {
 		return
 	}
@@ -321,7 +318,7 @@ func (r *accountsV2Reader) LookupOnlineAccountDataByAddress(addr basics.Address)
 // LookupAccountRowID looks up the rowid of an account based on its address.
 func (r *accountsV2Reader) LookupAccountRowID(addr basics.Address) (rowid int64, err error) {
 	// optimize this query for repeated usage
-	addrRowidStmt, err := r.getOrPrepare("LookupAccountRowId", "SELECT rowid FROM accountbase WHERE address=?")
+	addrRowidStmt, err := r.getOrPrepare("SELECT rowid FROM accountbase WHERE address=?")
 	if err != nil {
 		return
 	}
@@ -336,7 +333,7 @@ func (r *accountsV2Reader) LookupAccountRowID(addr basics.Address) (rowid int64,
 // LookupResourceDataByAddrID looks up the resource data by account rowid + resource aidx.
 func (r *accountsV2Reader) LookupResourceDataByAddrID(addrid int64, aidx basics.CreatableIndex) (data []byte, err error) {
 	// optimize this query for repeated usage
-	selectStmt, err := r.getOrPrepare("LookupResourceDataByAddrId", "SELECT data FROM resources WHERE addrid = ? AND aidx = ?")
+	selectStmt, err := r.getOrPrepare("SELECT data FROM resources WHERE addrid = ? AND aidx = ?")
 	if err != nil {
 		return
 	}
