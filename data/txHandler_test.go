@@ -237,7 +237,7 @@ func BenchmarkTxHandlerProcessIncomingTxn(b *testing.B) {
 	}()
 
 	const numTxnsPerGroup = 16
-	handler := makeTestTxHandlerOrphaned(txBacklogSize)
+	handler := makeTestTxHandlerOrphaned(txPerBlock)
 
 	// prepare tx groups
 	blobs := make([][]byte, b.N)
@@ -412,7 +412,7 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 
 	const numSendThreads = 16
 	const numTxnsPerGroup = 16
-	handler := makeTestTxHandlerOrphaned(txBacklogSize)
+	handler := makeTestTxHandlerOrphaned(txPerBlock)
 	// uncomment to benchmark no-dedup version
 	// handler.cacheConfig = txHandlerConfig{}
 
@@ -480,7 +480,7 @@ func BenchmarkTxHandlerIncDeDup(b *testing.B) {
 			dupFactor := test.dupFactor
 			avgDelay := test.workerDelay / time.Duration(numPoolWorkers)
 
-			handler := makeTestTxHandlerOrphaned(txBacklogSize)
+			handler := makeTestTxHandlerOrphaned(txPerBlock)
 			if test.firstLevelOnly {
 				handler.cacheConfig = txHandlerConfig{enableFilteringRawMsg: true, enableFilteringCanonical: false}
 			} else if !test.dedup {
@@ -627,7 +627,7 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 	}
 
 	t.Run("single", func(t *testing.T) {
-		handler := makeTestTxHandlerOrphaned(txBacklogSize)
+		handler := makeTestTxHandlerOrphaned(txPerBlock)
 		stxns, blob := makeRandomTransactions(1)
 		stxn := stxns[0]
 		action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
@@ -652,7 +652,7 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 	})
 
 	t.Run("group", func(t *testing.T) {
-		handler := makeTestTxHandlerOrphaned(txBacklogSize)
+		handler := makeTestTxHandlerOrphaned(txPerBlock)
 		num := rand.Intn(config.MaxTxGroupSize-1) + 2 // 2..config.MaxTxGroupSize
 		require.LessOrEqual(t, num, config.MaxTxGroupSize)
 		stxns, blob := makeRandomTransactions(num)
@@ -722,15 +722,15 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 // makeTestTxHandlerOrphaned creates a tx handler without any backlog consumer.
 // It is caller responsibility to run a consumer thread.
 func makeTestTxHandlerOrphaned(backlogSize int) *TxHandler {
-	return makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, txBacklogSize, 0)
+	return makeTestTxHandlerOrphanedWithContext(context.Background(), txPerBlock, txPerBlock, 0)
 }
 
 func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, cacheSize int, refreshInterval time.Duration) *TxHandler {
 	if backlogSize <= 0 {
-		backlogSize = txBacklogSize
+		backlogSize = txPerBlock
 	}
 	if cacheSize <= 0 {
-		cacheSize = txBacklogSize
+		cacheSize = txPerBlock
 	}
 	handler := &TxHandler{
 		backlogQueue:     make(chan *txBacklogMsg, backlogSize),
@@ -842,7 +842,7 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 	t.Run("scheduled", func(t *testing.T) {
 		// double enqueue a single txn message, ensure it discarded
 		ctx, cancelFunc := context.WithCancel(context.Background())
-		handler := makeTestTxHandlerOrphanedWithContext(ctx, txBacklogSize, txBacklogSize, 10*time.Millisecond)
+		handler := makeTestTxHandlerOrphanedWithContext(ctx, txPerBlock, txPerBlock, 10*time.Millisecond)
 
 		var action network.OutgoingMessage
 		var msg *txBacklogMsg
@@ -862,7 +862,7 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 
 	t.Run("manual", func(t *testing.T) {
 		// double enqueue a single txn message, ensure it discarded
-		handler := makeTestTxHandlerOrphaned(txBacklogSize)
+		handler := makeTestTxHandlerOrphaned(txPerBlock)
 		var action network.OutgoingMessage
 		var msg *txBacklogMsg
 
@@ -942,6 +942,7 @@ func TestTxHandlerProcessIncomingCacheTxPoolDrop(t *testing.T) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
+	cfg.EnableTxBacklogRateLimiting = false
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(t, err)
 
@@ -1050,11 +1051,11 @@ func TestTxHandlerIncomingTxHandleDrops(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// use smaller backlog size to test the message drops
-	origValue := txBacklogSize
+	origValue := txPerBlock
 	defer func() {
-		txBacklogSize = origValue
+		txPerBlock = origValue
 	}()
-	txBacklogSize = 10
+	txPerBlock = 10
 
 	numberOfTransactionGroups := 1000
 	incomingTxHandlerProcessing(1, numberOfTransactionGroups, t)
@@ -1079,8 +1080,7 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	cfg.TxBacklogReservedCapacityPerPeer = 1
-	cfg.IncomingConnectionsLimit = 10
+	cfg.EnableTxBacklogRateLimiting = false
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(t, err)
 
