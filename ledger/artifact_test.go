@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/protocol"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -551,14 +552,37 @@ label8:
 		78, 104, 209, 2, 185, 110, 28, 42, 97,
 	}
 	secrets, err := crypto.SecretKeyToSignatureSecrets(signer)
-	stxns[0] = stxns[0].Txn.Sign(secrets)
-	stxns[2] = stxns[2].Txn.Sign(secrets)
+	require.NoError(b, err)
 	b.Run("group-check-actual", func(b *testing.B) {
+		// in order to better simulate different tx messages
+		// pre-generate all stxns
+		stxnss := make([][]transactions.SignedTxn, b.N)
 		for i := 0; i < b.N; i++ {
-			_, err := verify.TxnGroup(stxns, hdr, nil, &logic.NoHeaderLedger{})
+			note := make([]byte, 4)
+			crypto.RandBytes(note[:])
+			fees.Note = note[:]
+			appcall.Note = note[:]
+			deposit.Note = note[:]
+			withdraw.Note = note[:]
+			stxnss[i] = txntest.SignedTxns(&fees, appcall, &deposit, &withdraw)
+			program := make([]byte, len(ops.Program))
+			copied := copy(program, ops.Program)
+			require.Equal(b, len(ops.Program), copied)
+			stxnss[i][1].Lsig.Logic = program
+			stxnss[i][3].Lsig.Logic = program
+			stxnss[i][0] = stxnss[i][0].Txn.Sign(secrets)
+			stxnss[i][2] = stxnss[i][2].Txn.Sign(secrets)
+		}
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := verify.TxnGroup(stxnss[i], hdr, nil, &logic.NoHeaderLedger{})
 			require.NoError(b, err)
 		}
 	})
+
+	stxns = txntest.SignedTxns(&fees, appcall, &deposit, &withdraw)
+	stxns[0] = stxns[0].Txn.Sign(secrets)
+	stxns[2] = stxns[2].Txn.Sign(secrets)
 	stxns[1] = stxns[1].Txn.Sign(secrets)
 	stxns[3] = stxns[3].Txn.Sign(secrets)
 	b.Run("group-check-all-crypto", func(b *testing.B) {
