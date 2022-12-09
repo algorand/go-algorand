@@ -62,7 +62,7 @@ const (
 	infoNodeShuttingDown               = "Algorand node is shutting down..."
 	infoNodeSuccessfullyStopped        = "The node was successfully stopped."
 	infoNodeStatus                     = "Last committed block: %d\nTime since last block: %s\nSync Time: %s\nLast consensus protocol: %s\nNext consensus protocol: %s\nRound for next consensus protocol: %d\nNext consensus protocol supported: %v"
-	infoNodeStatusConsensusUpgrade     = "Next protocol: %s\nYes/No votes : %d / %d (%f %, %f % required.\nVote window close: %d (%f%, %d to go)"
+	infoNodeStatusConsensusUpgrade     = "Next protocol: %s\nYes/No votes : %d / %d (%f %%, %f %% required.\nVote window close: %d (%f %%, %d to go)"
 	catchupStoppedOnUnsupported        = "Last supported block (%d) is committed. The next block consensus protocol is not supported. Catchup service is stopped."
 	infoNodeCatchpointCatchupStatus    = "Last committed block: %d\nSync Time: %s\nCatchpoint: %s"
 	infoNodeCatchpointCatchupAccounts  = "Catchpoint total accounts: %d\nCatchpoint accounts processed: %d\nCatchpoint accounts verified: %d\nCatchpoint total KVs: %d\nCatchpoint KVs processed: %d\nCatchpoint KVs verified: %d"
