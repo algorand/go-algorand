@@ -37,7 +37,6 @@ type ElasticRateLimiter struct {
 	sharedCapacity         capacityQueue
 	capacityByClient       map[ErlClient]capacityQueue
 	clientLock             deadlock.RWMutex
-	noCapacityCounter      *metrics.Counter
 	// CongestionManager and enable flag
 	cm                       CongestionManager
 	enableCM                 bool
@@ -65,10 +64,7 @@ type ErlCapacityGuard struct {
 }
 
 // Release will put capacity back into the queue attached to this capacity guard
-func (cg ErlCapacityGuard) Release() error {
-	if cg == (ErlCapacityGuard{}) {
-		return nil
-	}
+func (cg *ErlCapacityGuard) Release() error {
 	if cg.cq == nil {
 		return nil
 	}
@@ -81,10 +77,7 @@ func (cg ErlCapacityGuard) Release() error {
 }
 
 // Served will notify the CongestionManager that this resource has been served, informing the Service Rate
-func (cg ErlCapacityGuard) Served() {
-	if cg == (ErlCapacityGuard{}) {
-		return
-	}
+func (cg *ErlCapacityGuard) Served() {
 	if *cg.cm != nil {
 		(*cg.cm).Served(time.Now())
 	}
@@ -111,21 +104,26 @@ func (q capacityQueue) consume(cm *CongestionManager) (ErlCapacityGuard, error) 
 }
 
 // NewElasticRateLimiter creates an ElasticRateLimiter and initializes maps
+// maxCapacity: the total (absolute maximum) number of capacity units vended by this ERL at a given time
+// reservedCapacity: the number of capacity units to be reserved per client
+// cmWindow:  the window duration of data collection for congestion management, passed to the congestion manager
+// conmanCount: the metric to increment when the congestion manager proposes dropping a request
 func NewElasticRateLimiter(
 	maxCapacity int,
 	reservedCapacity int,
-	cm CongestionManager,
-	nocapCount *metrics.Counter,
+	cmWindow time.Duration,
 	conmanCount *metrics.Counter) *ElasticRateLimiter {
 	ret := ElasticRateLimiter{
 		MaxCapacity:              maxCapacity,
 		CapacityPerReservation:   reservedCapacity,
 		capacityByClient:         map[ErlClient]capacityQueue{},
-		cm:                       cm,
 		sharedCapacity:           capacityQueue(make(chan capacity, maxCapacity)),
-		noCapacityCounter:        nocapCount,
 		congestionControlCounter: conmanCount,
 	}
+	congestionManager := NewREDCongestionManager(
+		cmWindow,
+		maxCapacity)
+	ret.cm = congestionManager
 	// fill the sharedCapacity
 	for i := 0; i < maxCapacity; i++ {
 		ret.sharedCapacity.blockingRelease()
@@ -135,9 +133,6 @@ func NewElasticRateLimiter(
 
 // Start will start any underlying component of the ElasticRateLimiter
 func (erl *ElasticRateLimiter) Start() {
-	if erl == nil {
-		return
-	}
 	if erl.cm != nil {
 		erl.cm.Start()
 	}
@@ -145,9 +140,6 @@ func (erl *ElasticRateLimiter) Start() {
 
 // Stop will stop any underlying component of the ElasticRateLimiter
 func (erl *ElasticRateLimiter) Stop() {
-	if erl == nil {
-		return
-	}
 	if erl.cm != nil {
 		erl.cm.Stop()
 	}
@@ -165,9 +157,6 @@ func (erl *ElasticRateLimiter) EnableCongestionControl() {
 
 // DisableCongestionControl turns off the flag that the ERL uses to check with its CongestionManager
 func (erl *ElasticRateLimiter) DisableCongestionControl() {
-	if erl == nil {
-		return
-	}
 	erl.clientLock.Lock()
 	defer erl.clientLock.Unlock()
 	erl.enableCM = false
@@ -176,9 +165,6 @@ func (erl *ElasticRateLimiter) DisableCongestionControl() {
 // ConsumeCapacity will dispense one capacity from either the resource's reservedCapacity,
 // and will return a guard who can return capacity when the client is ready
 func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (ErlCapacityGuard, error) {
-	if erl == nil {
-		return ErlCapacityGuard{}, nil
-	}
 	var q capacityQueue
 	var err error
 	var exists bool
@@ -223,9 +209,6 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (ErlCapacityGuard, e
 	// Step 3: Attempt consumption from the shared queue
 	cg, err = erl.sharedCapacity.consume(&erl.cm)
 	if err != nil {
-		if erl.noCapacityCounter != nil {
-			erl.noCapacityCounter.Inc(nil)
-		}
 		return ErlCapacityGuard{}, err
 	}
 	if erl.cm != nil {
@@ -325,19 +308,18 @@ type redCongestionManager struct {
 
 // NewREDCongestionManager creates a Congestion Manager which will watches capacityGuard activity,
 // and regularly calculates a Target Service Rate, and can give "Should Drop" suggestions
-func NewREDCongestionManager(d time.Duration, r int, bsize int) *redCongestionManager {
+func NewREDCongestionManager(d time.Duration, bsize int) *redCongestionManager {
 	ret := redCongestionManager{
 		runLock:                &deadlock.Mutex{},
 		window:                 d,
 		consumed:               make(chan event, bsize),
 		served:                 make(chan event, bsize),
 		shouldDropQueries:      make(chan shouldDropQuery, bsize),
-		targetRateRefreshTicks: r,
+		targetRateRefreshTicks: bsize,
 		consumedByClient:       map[ErlClient]*[]time.Time{},
 		exp:                    4,
 		wg:                     sync.WaitGroup{},
 	}
-	ret.ctx, ret.ctxCancel = context.WithCancel(context.Background())
 	return &ret
 }
 
@@ -389,6 +371,7 @@ func (cm *redCongestionManager) Start() {
 	if cm.running {
 		return
 	}
+	cm.ctx, cm.ctxCancel = context.WithCancel(context.Background())
 	cm.running = true
 	cm.wg.Add(1)
 	go cm.run()
@@ -463,6 +446,7 @@ func (cm *redCongestionManager) run() {
 
 func (cm *redCongestionManager) Stop() {
 	cm.ctxCancel()
+	cm.wg.Wait()
 }
 
 func (cm *redCongestionManager) setTargetRate(tr float64) {
@@ -489,6 +473,11 @@ func (cm *redCongestionManager) shouldDrop(targetRate float64, c ErlClient, arri
 	// clients who have "never" been seen do not get dropped
 	clientArrivalRate := cm.arrivalRateFor(arrivals)
 	if clientArrivalRate == 0 {
+		return false
+	}
+	// if targetRate is 0, it means we haven't had any activity to calculate (or there is not enough data)
+	// it should not drop in this case
+	if targetRate == 0 {
 		return false
 	}
 	// A random float is selected, and the arrival rate of the given client is

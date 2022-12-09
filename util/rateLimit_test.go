@@ -38,7 +38,7 @@ func (c mockClient) OnClose(func()) {
 }
 
 func TestNewElasticRateLimiter(t *testing.T) {
-	erl := NewElasticRateLimiter(100, 10, nil, nil, nil)
+	erl := NewElasticRateLimiter(100, 10, time.Second, nil)
 
 	assert.Equal(t, len(erl.sharedCapacity), 100)
 	assert.Equal(t, len(erl.capacityByClient), 0)
@@ -46,8 +46,9 @@ func TestNewElasticRateLimiter(t *testing.T) {
 
 func TestElasticRateLimiterCongestionControlled(t *testing.T) {
 	client := mockClient("client")
-	cg := mockCongestionControl{}
-	erl := NewElasticRateLimiter(3, 2, cg, nil, nil)
+	erl := NewElasticRateLimiter(3, 2, time.Second, nil)
+	// give the ERL a congestion controler with well defined behavior for testing
+	erl.cm = mockCongestionControl{}
 
 	_, err := erl.ConsumeCapacity(client)
 	// because the ERL gives capacity to a reservation, and then asynchronously drains capacity from the share,
@@ -77,7 +78,7 @@ func TestElasticRateLimiterCongestionControlled(t *testing.T) {
 
 func TestConsumeReleaseCapacity(t *testing.T) {
 	client := mockClient("client")
-	erl := NewElasticRateLimiter(4, 3, nil, nil, nil)
+	erl := NewElasticRateLimiter(4, 3, time.Second, nil)
 
 	c1, err := erl.ConsumeCapacity(client)
 	// because the ERL gives capacity to a reservation, and then asynchronously drains capacity from the share,
@@ -125,7 +126,9 @@ func TestConsumeReleaseCapacity(t *testing.T) {
 func TestREDCongestionManagerShouldDrop(t *testing.T) {
 	client := mockClient("client")
 	other := mockClient("other")
-	red := NewREDCongestionManager(time.Second*10, 1, 10000)
+	red := NewREDCongestionManager(time.Second*10, 10000)
+	// calculate the target rate every request for most accurate results
+	red.targetRateRefreshTicks = 1
 	red.Start()
 	// indicate that the arrival rate is essentially 1/s
 	for i := 0; i < 10; i++ {
@@ -149,7 +152,6 @@ func TestREDCongestionManagerShouldDrop(t *testing.T) {
 	// allow the congestion manager to consume and process the given messages
 	time.Sleep(100 * time.Millisecond)
 	red.Stop()
-	red.wg.Wait()
 	assert.Equal(t, 10, len(*red.consumedByClient[client]))
 	assert.Equal(t, float64(1), red.arrivalRateFor(red.consumedByClient[client]))
 	assert.Equal(t, 0.0, red.arrivalRateFor(red.consumedByClient[other]))
@@ -158,7 +160,9 @@ func TestREDCongestionManagerShouldDrop(t *testing.T) {
 
 func TestREDCongestionManagerShouldntDrop(t *testing.T) {
 	client := mockClient("client")
-	red := NewREDCongestionManager(time.Second*10, 1, 10000)
+	red := NewREDCongestionManager(time.Second*10, 10000)
+	// calculate the target rate every request for most accurate results
+	red.targetRateRefreshTicks = 1
 	red.Start()
 	// indicate that the arrival rate is essentially 0.1/s!
 	red.Consumed(client, time.Now())
@@ -175,7 +179,6 @@ func TestREDCongestionManagerShouldntDrop(t *testing.T) {
 	// allow the congestion manager to consume and process the given messages
 	time.Sleep(1000 * time.Millisecond)
 	red.Stop()
-	red.wg.Wait()
 	assert.Equal(t, 1, len(*red.consumedByClient[client]))
 	assert.Equal(t, 10000, len(red.serves))
 	assert.Equal(t, 0.1, red.arrivalRateFor(red.consumedByClient[client]))
@@ -184,7 +187,7 @@ func TestREDCongestionManagerShouldntDrop(t *testing.T) {
 
 func TestREDCongestionManagerTargetRate(t *testing.T) {
 	client := mockClient("client")
-	red := NewREDCongestionManager(time.Second*10, 10, 10000)
+	red := NewREDCongestionManager(time.Second*10, 10000)
 	red.Start()
 	red.Consumed(client, time.Now())
 	red.Consumed(client, time.Now())
@@ -195,14 +198,13 @@ func TestREDCongestionManagerTargetRate(t *testing.T) {
 	// allow the congestion manager to consume and process the given messages
 	time.Sleep(100 * time.Millisecond)
 	red.Stop()
-	red.wg.Wait()
 	assert.Equal(t, 0.3, red.arrivalRateFor(red.consumedByClient[client]))
 	assert.Equal(t, 0.3, red.targetRate)
 }
 
 func TestREDCongestionManagerPrune(t *testing.T) {
 	client := mockClient("client")
-	red := NewREDCongestionManager(time.Second*10, 3, 10000)
+	red := NewREDCongestionManager(time.Second*10, 10000)
 	red.Start()
 	red.Consumed(client, time.Now().Add(-11*time.Second))
 	red.Consumed(client, time.Now().Add(-11*time.Second))
@@ -213,7 +215,36 @@ func TestREDCongestionManagerPrune(t *testing.T) {
 	// allow the congestion manager to consume and process the given messages
 	time.Sleep(100 * time.Millisecond)
 	red.Stop()
-	red.wg.Wait()
 	assert.Equal(t, 0.0, red.arrivalRateFor(red.consumedByClient[client]))
 	assert.Equal(t, 0.0, red.targetRate)
+}
+
+func TestREDCongestionManagerStopStart(t *testing.T) {
+	client := mockClient("client")
+	red := NewREDCongestionManager(time.Second*10, 10000)
+	red.Start()
+	red.Consumed(client, time.Now())
+	red.Consumed(client, time.Now())
+	red.Consumed(client, time.Now())
+	red.Served(time.Now())
+	red.Served(time.Now())
+	red.Served(time.Now())
+	// allow the congestion manager to consume and process the given messages
+	time.Sleep(100 * time.Millisecond)
+	red.Stop()
+	assert.Equal(t, 0.3, red.arrivalRateFor(red.consumedByClient[client]))
+	assert.Equal(t, 0.3, red.targetRate)
+	// Do it all again, but with 2 calls instead of 3 and 4 serves instead of 3
+	red.Start()
+	red.Consumed(client, time.Now())
+	red.Consumed(client, time.Now())
+	red.Served(time.Now())
+	red.Served(time.Now())
+	red.Served(time.Now())
+	red.Served(time.Now())
+	// allow the congestion manager to consume and process the given messages
+	time.Sleep(100 * time.Millisecond)
+	red.Stop()
+	assert.Equal(t, 0.2, red.arrivalRateFor(red.consumedByClient[client]))
+	assert.Equal(t, 0.4, red.targetRate)
 }
