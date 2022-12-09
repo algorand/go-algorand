@@ -164,7 +164,7 @@ func (erl *ElasticRateLimiter) DisableCongestionControl() {
 
 // ConsumeCapacity will dispense one capacity from either the resource's reservedCapacity,
 // and will return a guard who can return capacity when the client is ready
-func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (ErlCapacityGuard, error) {
+func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, error) {
 	var q capacityQueue
 	var err error
 	var exists bool
@@ -179,14 +179,14 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (ErlCapacityGuard, e
 	if !exists {
 		q, err = erl.openReservation(c)
 		if err != nil {
-			return ErlCapacityGuard{}, err
+			return nil, err
 		}
 		// if the client has been given a new reservation, make sure it cleans up OnClose
 		c.OnClose(func() { erl.closeReservation(c) })
 
 		// if this reservation is newly created, directly (blocking) take a capacity
 		q.blockingConsume()
-		return ErlCapacityGuard{cq: q, cm: &erl.cm}, nil
+		return &ErlCapacityGuard{cq: q, cm: &erl.cm}, nil
 	}
 
 	// Step 1: Attempt consumption from the reserved queue
@@ -195,7 +195,7 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (ErlCapacityGuard, e
 		if erl.cm != nil {
 			erl.cm.Consumed(c, time.Now()) // notify the congestion manager that this client consumed from this queue
 		}
-		return cg, nil
+		return &cg, nil
 	}
 	// Step 2: Potentially gate shared queue access if the congestion manager disallows it
 	if erl.cm != nil &&
@@ -204,17 +204,17 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (ErlCapacityGuard, e
 		if erl.congestionControlCounter != nil {
 			erl.congestionControlCounter.Inc(nil)
 		}
-		return ErlCapacityGuard{}, fmt.Errorf("congestionManager prevented client from consuming capacity")
+		return nil, fmt.Errorf("congestionManager prevented client from consuming capacity")
 	}
 	// Step 3: Attempt consumption from the shared queue
 	cg, err = erl.sharedCapacity.consume(&erl.cm)
 	if err != nil {
-		return ErlCapacityGuard{}, err
+		return nil, err
 	}
 	if erl.cm != nil {
 		erl.cm.Consumed(c, time.Now()) // notify the congestion manager that this client consumed from this queue
 	}
-	return cg, nil
+	return &cg, nil
 }
 
 // openReservation creates an entry in the ElasticRateLimiter's reservedCapacity map,

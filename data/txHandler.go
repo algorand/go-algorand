@@ -250,7 +250,9 @@ func (handler *TxHandler) backlogWorker() {
 			}
 			if handler.checkAlreadyCommitted(wi) {
 				transactionMessagesAlreadyCommitted.Inc(nil)
-				wi.capguard.Served()
+				if wi.capguard != nil {
+					wi.capguard.Served()
+				}
 				continue
 			}
 
@@ -496,7 +498,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	consumed := 0
 
 	var err error
-	var capguard util.ErlCapacityGuard
+	var capguard *util.ErlCapacityGuard
 	if handler.erl != nil {
 		// consume a capacity unit
 		capguard, err = handler.erl.ConsumeCapacity(rawmsg.Sender.(util.ErlClient))
@@ -562,7 +564,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		unverifiedTxGroup:     unverifiedTxGroup,
 		rawmsgDataHash:        msgKey,
 		unverifiedTxGroupHash: canonicalKey,
-		capguard:              &capguard,
+		capguard:              capguard,
 	}:
 	default:
 		// if we failed here we want to increase the corresponding metric. It might suggest that we
