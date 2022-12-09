@@ -879,20 +879,32 @@ type NodeStatusResponse struct {
 	// TimeSinceLastRound TimeSinceLastRound in nanoseconds
 	TimeSinceLastRound uint64 `json:"time-since-last-round"`
 
-	// UpgradeApprove Upgrade approve
-	UpgradeApprove *bool `json:"upgrade-approve,omitempty"`
-
 	// UpgradeDelay Upgrade delay
 	UpgradeDelay *uint64 `json:"upgrade-delay,omitempty"`
 
-	// UpgradeNo Upgrade no votes
-	UpgradeNo *uint64 `json:"upgrade-no,omitempty"`
+	// UpgradeNextProtocol Upgrade next protocol
+	UpgradeNextProtocol *string `json:"upgrade-next-protocol,omitempty"`
 
-	// UpgradePropose Upgrade propose
-	UpgradePropose *string `json:"upgrade-propose,omitempty"`
+	// UpgradeNextProtocolVoteBefore Next protocol round
+	UpgradeNextProtocolVoteBefore *uint64 `json:"upgrade-next-protocol-vote-before,omitempty"`
 
-	// UpgradeThreshold Upgrade threshold
-	UpgradeThreshold *uint64 `json:"upgrade-threshold,omitempty"`
+	// UpgradeNoVotes Upgrade no votes
+	UpgradeNoVotes *uint64 `json:"upgrade-no-votes,omitempty"`
+
+	// UpgradeNodeVote Upgrade node vote
+	UpgradeNodeVote *bool `json:"upgrade-node-vote,omitempty"`
+
+	// UpgradeVoteRounds Total voting ounds for current upgrade
+	UpgradeVoteRounds *uint64 `json:"upgrade-vote-rounds,omitempty"`
+
+	// UpgradeVotes Upgrade votes
+	UpgradeVotes *uint64 `json:"upgrade-votes,omitempty"`
+
+	// UpgradeVotesRequired Upgrade yes votes required
+	UpgradeVotesRequired *uint64 `json:"upgrade-votes-required,omitempty"`
+
+	// UpgradeYesVotes Upgrade yes votes
+	UpgradeYesVotes *uint64 `json:"upgrade-yes-votes,omitempty"`
 }
 
 // ParticipationKeyResponse Represents a participation key used by the node.

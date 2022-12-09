@@ -585,24 +585,40 @@
                   "description": "TimeSinceLastRound in nanoseconds",
                   "type": "integer"
                 },
-                "upgrade-approve": {
-                  "description": "Upgrade approve",
-                  "type": "boolean"
-                },
                 "upgrade-delay": {
                   "description": "Upgrade delay",
                   "type": "integer"
                 },
-                "upgrade-no": {
+                "upgrade-next-protocol": {
+                  "description": "Upgrade next protocol",
+                  "type": "string"
+                },
+                "upgrade-next-protocol-vote-before": {
+                  "description": "Next protocol round",
+                  "type": "integer"
+                },
+                "upgrade-no-votes": {
                   "description": "Upgrade no votes",
                   "type": "integer"
                 },
-                "upgrade-propose": {
-                  "description": "Upgrade propose",
-                  "type": "string"
+                "upgrade-node-vote": {
+                  "description": "Upgrade node vote",
+                  "type": "boolean"
                 },
-                "upgrade-threshold": {
-                  "description": "Upgrade threshold",
+                "upgrade-vote-rounds": {
+                  "description": "Total voting ounds for current upgrade",
+                  "type": "integer"
+                },
+                "upgrade-votes": {
+                  "description": "Upgrade votes",
+                  "type": "integer"
+                },
+                "upgrade-votes-required": {
+                  "description": "Upgrade yes votes required",
+                  "type": "integer"
+                },
+                "upgrade-yes-votes": {
+                  "description": "Upgrade yes votes",
                   "type": "integer"
                 }
               },
@@ -4193,24 +4209,40 @@
                       "description": "TimeSinceLastRound in nanoseconds",
                       "type": "integer"
                     },
-                    "upgrade-approve": {
-                      "description": "Upgrade approve",
-                      "type": "boolean"
-                    },
                     "upgrade-delay": {
                       "description": "Upgrade delay",
                       "type": "integer"
                     },
-                    "upgrade-no": {
+                    "upgrade-next-protocol": {
+                      "description": "Upgrade next protocol",
+                      "type": "string"
+                    },
+                    "upgrade-next-protocol-vote-before": {
+                      "description": "Next protocol round",
+                      "type": "integer"
+                    },
+                    "upgrade-no-votes": {
                       "description": "Upgrade no votes",
                       "type": "integer"
                     },
-                    "upgrade-propose": {
-                      "description": "Upgrade propose",
-                      "type": "string"
+                    "upgrade-node-vote": {
+                      "description": "Upgrade node vote",
+                      "type": "boolean"
                     },
-                    "upgrade-threshold": {
-                      "description": "Upgrade threshold",
+                    "upgrade-vote-rounds": {
+                      "description": "Total voting ounds for current upgrade",
+                      "type": "integer"
+                    },
+                    "upgrade-votes": {
+                      "description": "Upgrade votes",
+                      "type": "integer"
+                    },
+                    "upgrade-votes-required": {
+                      "description": "Upgrade yes votes required",
+                      "type": "integer"
+                    },
+                    "upgrade-yes-votes": {
+                      "description": "Upgrade yes votes",
                       "type": "integer"
                     }
                   },
@@ -4356,24 +4388,40 @@
                       "description": "TimeSinceLastRound in nanoseconds",
                       "type": "integer"
                     },
-                    "upgrade-approve": {
-                      "description": "Upgrade approve",
-                      "type": "boolean"
-                    },
                     "upgrade-delay": {
                       "description": "Upgrade delay",
                       "type": "integer"
                     },
-                    "upgrade-no": {
+                    "upgrade-next-protocol": {
+                      "description": "Upgrade next protocol",
+                      "type": "string"
+                    },
+                    "upgrade-next-protocol-vote-before": {
+                      "description": "Next protocol round",
+                      "type": "integer"
+                    },
+                    "upgrade-no-votes": {
                       "description": "Upgrade no votes",
                       "type": "integer"
                     },
-                    "upgrade-propose": {
-                      "description": "Upgrade propose",
-                      "type": "string"
+                    "upgrade-node-vote": {
+                      "description": "Upgrade node vote",
+                      "type": "boolean"
                     },
-                    "upgrade-threshold": {
-                      "description": "Upgrade threshold",
+                    "upgrade-vote-rounds": {
+                      "description": "Total voting ounds for current upgrade",
+                      "type": "integer"
+                    },
+                    "upgrade-votes": {
+                      "description": "Upgrade votes",
+                      "type": "integer"
+                    },
+                    "upgrade-votes-required": {
+                      "description": "Upgrade yes votes required",
+                      "type": "integer"
+                    },
+                    "upgrade-yes-votes": {
+                      "description": "Upgrade yes votes",
                       "type": "integer"
                     }
                   },

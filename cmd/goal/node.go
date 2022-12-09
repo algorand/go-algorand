@@ -460,31 +460,47 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 			statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
 		}
 
-		if stat.UpgradePropose != nil && stat.LastVersion != stat.NextVersion {
-			upgradeThreshold := uint64(0)
-			upgradeApprove := false
-			upgradeDelay := uint64(0)
-			upgradeNo := uint64(0)
-			if stat.UpgradeThreshold != nil {
-				upgradeThreshold = *stat.UpgradeThreshold
+		if stat.UpgradeNextProtocol != nil && stat.LastVersion != stat.NextVersion {
+			upgradeVotesRequired := uint64(0)
+			upgradeNoVotes := uint64(0)
+			upgradeYesVotes := uint64(0)
+			upgradeNextProtocolVoteBefore := uint64(0)
+			upgradeVoteRounds := uint64(0)
+			if stat.UpgradeVotesRequired != nil {
+				upgradeVotesRequired = *stat.UpgradeVotesRequired
 			}
-			if stat.UpgradeApprove != nil {
-				upgradeApprove = *stat.UpgradeApprove
+			if stat.UpgradeNoVotes != nil {
+				upgradeNoVotes = *stat.UpgradeNoVotes
 			}
-			if stat.UpgradeDelay != nil {
-				upgradeDelay = *stat.UpgradeDelay
+			if stat.UpgradeYesVotes != nil {
+				upgradeYesVotes = *stat.UpgradeYesVotes
 			}
-			if stat.UpgradeNo != nil {
-				upgradeNo = *stat.UpgradeNo
+			if stat.UpgradeNextProtocolVoteBefore != nil {
+				upgradeNextProtocolVoteBefore = *stat.UpgradeNextProtocolVoteBefore
+			}
+			var pctYes float32
+			if upgradeYesVotes+upgradeNoVotes > 0 {
+				pctYes = float32(upgradeYesVotes) / float32(upgradeYesVotes+upgradeNoVotes)
+			}
+			var pctYesRequired float32
+			if upgradeVotesRequired > 0 {
+				pctYesRequired = float32(upgradeYesVotes) / float32(upgradeVotesRequired)
+			}
+
+			var pctVotes float32
+			if upgradeVoteRounds > 0 {
+				pctVotes = float32(upgradeYesVotes+upgradeNoVotes) / float32(upgradeVoteRounds)
 			}
 
 			statusString = statusString + "\n" + fmt.Sprintf(
 				infoNodeStatusConsensusUpgrade,
-				*stat.UpgradePropose,
-				upgradeThreshold,
-				upgradeApprove,
-				upgradeDelay,
-				upgradeNo)
+				upgradeYesVotes,
+				upgradeNoVotes,
+				pctYes,
+				pctYesRequired,
+				upgradeNextProtocolVoteBefore,
+				pctVotes,
+				upgradeNextProtocolVoteBefore-stat.LastRound)
 		}
 
 	} else {

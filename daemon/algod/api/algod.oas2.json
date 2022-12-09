@@ -3543,24 +3543,40 @@
             "description": "The number of blocks that have already been obtained by the node as part of the catchup",
             "type": "integer"
           },
-          "upgrade-propose": {
-            "description": "Upgrade propose",
+          "upgrade-next-protocol": {
+            "description": "Upgrade next protocol",
             "type": "string"
           },
           "upgrade-delay": {
             "description": "Upgrade delay",
             "type": "integer"
           },
-          "upgrade-approve": {
-            "description": "Upgrade approve",
+          "upgrade-node-vote": {
+            "description": "Upgrade node vote",
             "type": "boolean"
           },
-          "upgrade-threshold": {
-            "description": "Upgrade threshold",
+          "upgrade-votes-required": {
+            "description": "Upgrade yes votes required",
             "type": "integer"
           },
-          "upgrade-no": {
+          "upgrade-votes": {
+            "description": "Upgrade votes",
+            "type": "integer"
+          },
+          "upgrade-yes-votes": {
+            "description": "Upgrade yes votes",
+            "type": "integer"
+          },
+          "upgrade-no-votes": {
             "description": "Upgrade no votes",
+            "type": "integer"
+          },
+          "upgrade-next-protocol-vote-before": {
+            "description": "Next protocol round",
+            "type": "integer"
+          },
+          "upgrade-vote-rounds": {
+            "description": "Total voting ounds for current upgrade",
             "type": "integer"
           }
         }
