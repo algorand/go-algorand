@@ -54,6 +54,9 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
+// txPerBlock approximates a size for the TXHandler's queues for testing
+var txPerBlock = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnBytesPerBlock / 200
+
 // mock sender is used to implement OnClose, since TXHandlers expect to use Senders and ERL Clients
 type mockSender struct{}
 
