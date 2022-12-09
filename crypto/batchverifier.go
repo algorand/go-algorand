@@ -104,7 +104,7 @@ func (b *BatchVerifier) expand() {
 	b.signatures = signatures
 }
 
-// getNumberOfEnqueuedSignatures returns the number of signatures current enqueue onto the bacth verifier object
+// getNumberOfEnqueuedSignatures returns the number of signatures current enqueue onto the batch verifier object
 func (b *BatchVerifier) getNumberOfEnqueuedSignatures() int {
 	return len(b.messages)
 }
