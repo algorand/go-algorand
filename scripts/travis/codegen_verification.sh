@@ -31,7 +31,7 @@ echo "Running check_license..."
 ./scripts/check_license.sh
 
 echo "Rebuild swagger.json files"
-make rebuild_swagger
+make rebuild_kmd_swagger
 
 echo "Regenerate for stringer et el."
 make generate

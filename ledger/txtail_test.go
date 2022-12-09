@@ -218,7 +218,7 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 				txn.Txn.FirstValid, txn.Txn.LastValid, txn.Txn.ID(),
 				txl)
 			if r >= ledger.Latest()-testTxTailValidityRange {
-				require.Equal(t, ledgercore.MakeLeaseInLedgerError(txn.Txn.ID(), txl), dupResult)
+				require.Equal(t, ledgercore.MakeLeaseInLedgerError(txn.Txn.ID(), txl, false), dupResult)
 			} else {
 				require.Equal(t, &errTxTailMissingRound{round: txn.Txn.LastValid}, dupResult)
 			}
