@@ -11,6 +11,7 @@ output-options:
   - participating
   - data
   - common
+  - experimental
   type-mappings:
     integer: uint64
   skip-prune: true

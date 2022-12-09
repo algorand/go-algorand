@@ -1208,8 +1208,8 @@
     "/v2/transactions/simulate": {
       "post": {
         "tags": [
-          "public",
-          "participating"
+          "private",
+          "experimental"
         ],
         "consumes": [
           "application/x-binary"
@@ -4197,6 +4197,10 @@
     },
     "SimulationResponse": {
       "description": "Result of a transaction group simulation.",
+      "tags": [
+        "private",
+        "experimental"
+      ],
       "schema": {
         "type": "object",
         "required": [

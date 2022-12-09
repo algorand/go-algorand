@@ -5804,8 +5804,8 @@
         },
         "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network.",
         "tags": [
-          "public",
-          "participating"
+          "private",
+          "experimental"
         ],
         "x-codegen-request-body-name": "rawtxn"
       }
