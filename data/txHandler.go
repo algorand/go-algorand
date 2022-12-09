@@ -61,7 +61,6 @@ var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionM
 var transactionGroupTxSyncHandled = metrics.MakeCounter(metrics.TransactionGroupTxSyncHandled)
 var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGroupTxSyncRemember)
 var transactionGroupTxSyncAlreadyCommitted = metrics.MakeCounter(metrics.TransactionGroupTxSyncAlreadyCommitted)
-var txBacklogNoCapacity = metrics.MakeCounter(metrics.TransactionMessagesTxnBacklogNoCapacity)
 var txBacklogDroppedCongestionManagement = metrics.MakeCounter(metrics.TransactionMessagesTxnDroppedCongestionManagement)
 
 var transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
@@ -165,7 +164,7 @@ func MakeTxHandler(opts TxHandlerOpts) *TxHandler {
 			txBacklogSize,
 			opts.Config.TxBacklogReservedCapacityPerPeer,
 			time.Duration(opts.Config.TxBacklogServiceRateWindowSeconds),
-			txBacklogNoCapacity,
+			txBacklogDroppedCongestionManagement,
 		)
 		handler.erl = rateLimiter
 	}
