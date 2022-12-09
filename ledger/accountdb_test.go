@@ -148,8 +148,8 @@ func TestAccountDBInit(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -209,8 +209,8 @@ func TestAccountDBRound(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -365,8 +365,8 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 
 	for i, test := range tests {
 
-		dbs, _ := dbOpenTest(t, true)
-		setDbLogging(t, dbs)
+		dbs, _ := storetesting.DbOpenTest(t, true)
+		storetesting.SetDbLogging(t, dbs)
 		defer dbs.Close()
 
 		tx, err := dbs.Wdb.Handle.Begin()
@@ -437,8 +437,8 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 func TestAccountStorageWithStateProofID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -651,8 +651,8 @@ func cleanupTestDb(dbs db.Pair, dbName string, inMemory bool) {
 }
 
 func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
-	dbs, fn := dbOpenTest(b, inMemory)
-	setDbLogging(b, dbs)
+	dbs, fn := storetesting.DbOpenTest(b, inMemory)
+	storetesting.SetDbLogging(b, dbs)
 	defer cleanupTestDb(dbs, fn, inMemory)
 
 	benchmarkInitBalances(b, b.N, dbs, protocol.ConsensusCurrentVersion)
@@ -682,8 +682,8 @@ func BenchmarkReadingAllBalancesDisk(b *testing.B) {
 }
 
 func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
-	dbs, fn := dbOpenTest(b, inMemory)
-	setDbLogging(b, dbs)
+	dbs, fn := storetesting.DbOpenTest(b, inMemory)
+	storetesting.SetDbLogging(b, dbs)
 	defer cleanupTestDb(dbs, fn, inMemory)
 
 	accounts := benchmarkInitBalances(b, b.N, dbs, protocol.ConsensusCurrentVersion)
@@ -721,8 +721,8 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 	batchCount := 1000
 	startupAcct := 5
 	initDatabase := func() (*sql.Tx, func(), error) {
-		dbs, fn := dbOpenTest(b, false)
-		setDbLogging(b, dbs)
+		dbs, fn := storetesting.DbOpenTest(b, false)
+		storetesting.SetDbLogging(b, dbs)
 		cleanup := func() {
 			cleanupTestDb(dbs, fn, false)
 		}
@@ -963,8 +963,8 @@ func TestLookupKeysByPrefix(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	dbs, fn := dbOpenTest(t, false)
-	setDbLogging(t, dbs)
+	dbs, fn := storetesting.DbOpenTest(t, false)
+	storetesting.SetDbLogging(t, dbs)
 	defer cleanupTestDb(dbs, fn, false)
 
 	// return account data, initialize DB tables from AccountsInitTest
@@ -1144,8 +1144,8 @@ func TestLookupKeysByPrefix(t *testing.T) {
 func BenchmarkLookupKeyByPrefix(b *testing.B) {
 	// learn something from BenchmarkWritingRandomBalancesDisk
 
-	dbs, fn := dbOpenTest(b, false)
-	setDbLogging(b, dbs)
+	dbs, fn := storetesting.DbOpenTest(b, false)
+	storetesting.SetDbLogging(b, dbs)
 	defer cleanupTestDb(dbs, fn, false)
 
 	// return account data, initialize DB tables from AccountsInitTest
@@ -1422,8 +1422,8 @@ func TestCompactResourceDeltas(t *testing.T) {
 func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	addrs := make([]basics.Address, 100)
@@ -2080,8 +2080,8 @@ func initBoxDatabase(b *testing.B, totalBoxes, boxSize int) (db.Pair, func(), er
 	}
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	dbs, fn := dbOpenTest(b, false)
-	setDbLogging(b, dbs)
+	dbs, fn := storetesting.DbOpenTest(b, false)
+	storetesting.SetDbLogging(b, dbs)
 	cleanup := func() {
 		cleanupTestDb(dbs, fn, false)
 	}
@@ -2219,8 +2219,8 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -2723,8 +2723,8 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 func TestAccountOnlineRoundParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -2776,8 +2776,8 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 func TestOnlineAccountsDeletion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()

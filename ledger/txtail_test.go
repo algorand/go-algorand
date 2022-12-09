@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
+	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -148,8 +149,8 @@ func (t *txTailTestLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.ConsensusVersion) error {
 	// create a corresponding blockdb.
 	inMemory := true
-	t.blockDBs, _ = dbOpenTest(ts, inMemory)
-	t.trackerDBs, _ = dbOpenTest(ts, inMemory)
+	t.blockDBs, _ = storetesting.DbOpenTest(ts, inMemory)
+	t.trackerDBs, _ = storetesting.DbOpenTest(ts, inMemory)
 	t.protoVersion = protoVersion
 
 	tx, err := t.trackerDBs.Wdb.Handle.Begin()
@@ -217,7 +218,7 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 				txn.Txn.FirstValid, txn.Txn.LastValid, txn.Txn.ID(),
 				txl)
 			if r >= ledger.Latest()-testTxTailValidityRange {
-				require.Equal(t, ledgercore.MakeLeaseInLedgerError(txn.Txn.ID(), txl), dupResult)
+				require.Equal(t, ledgercore.MakeLeaseInLedgerError(txn.Txn.ID(), txl, false), dupResult)
 			} else {
 				require.Equal(t, &errTxTailMissingRound{round: txn.Txn.LastValid}, dupResult)
 			}

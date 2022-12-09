@@ -100,7 +100,7 @@ func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, 
 	genesisInitState := ledgercore.InitState{Block: initBlock, Accounts: initAccounts, GenesisHash: hash}
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := ledger.OpenLedger(logging.Base(), fn, true, genesisInitState, cfg)
+	l, err := ledger.OpenLedger(logging.Base(), fn, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	return l
 }
@@ -967,7 +967,7 @@ func TestTransactionPool_CurrentFeePerByte(t *testing.T) {
 					Amount:   basics.MicroAlgos{Raw: proto.MinBalance},
 				},
 			}
-			tx.Note = make([]byte, 8, 8)
+			tx.Note = make([]byte, 8)
 			crypto.RandBytes(tx.Note)
 			signedTx := tx.Sign(secrets[i])
 			err := transactionPool.RememberOne(signedTx)
@@ -1018,7 +1018,7 @@ func BenchmarkTransactionPoolRememberOne(b *testing.B) {
 					Amount:   basics.MicroAlgos{Raw: proto.MinBalance},
 				},
 			}
-			tx.Note = make([]byte, 8, 8)
+			tx.Note = make([]byte, 8)
 			crypto.RandBytes(tx.Note)
 			signedTx := tx.Sign(secrets[i])
 			signedTransactions = append(signedTransactions, signedTx)
@@ -1081,7 +1081,7 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 						Amount:   basics.MicroAlgos{Raw: proto.MinBalance},
 					},
 				}
-				tx.Note = make([]byte, 8, 8)
+				tx.Note = make([]byte, 8)
 				crypto.RandBytes(tx.Note)
 				signedTx := tx.Sign(secrets[i])
 				err := transactionPool.RememberOne(signedTx)
@@ -1247,7 +1247,7 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 				Amount:   basics.MicroAlgos{Raw: proto.MinBalance},
 			},
 		}
-		tx.Note = make([]byte, 8, 8)
+		tx.Note = make([]byte, 8)
 		crypto.RandBytes(tx.Note)
 
 		signedTx, err := transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
@@ -1453,7 +1453,7 @@ func TestStateProofLogging(t *testing.T) {
 	require.NoError(t, err)
 	b.BlockHeader.Branch = phdr.Hash()
 
-	eval, err := mockLedger.StartEvaluator(b.BlockHeader, 0, 10000)
+	_, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 10000)
 	require.NoError(t, err)
 
 	// Simulate the blocks up to round 512 without any transactions
@@ -1477,7 +1477,7 @@ func TestStateProofLogging(t *testing.T) {
 			break
 		}
 
-		eval, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 10000)
+		_, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 10000)
 		require.NoError(t, err)
 	}
 
@@ -1520,7 +1520,7 @@ func TestStateProofLogging(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add it to the transaction pool and assemble the block
-	eval, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 1000000)
+	eval, err := mockLedger.StartEvaluator(b.BlockHeader, 0, 1000000)
 	require.NoError(t, err)
 
 	err = eval.Transaction(stxn, transactions.ApplyData{})
