@@ -354,31 +354,39 @@ func TestGetStatusConsensusUpgrade(t *testing.T) {
 	stat := cannedStatusReportConsensusUpgradeGolden
 	consensus := config.Consensus[protocol.ConsensusCurrentVersion]
 	upgradePropose := string(stat.UpgradePropose)
-	upgradeNo := consensus.UpgradeVoteRounds - (uint64(stat.NextProtocolVoteBefore) - uint64(stat.LastRound)) - stat.NextProtocolApprovals
+	votesToGo := uint64(stat.NextProtocolVoteBefore) - uint64(stat.LastRound)
+	nextProtocolVoteBefore := uint64(stat.NextProtocolVoteBefore)
+	votes := uint64(consensus.UpgradeVoteRounds) - votesToGo
+	votesNo := votes - stat.NextProtocolApprovals
+
 	expectedResult := model.NodeStatusResponse{
-		LastRound:                   uint64(stat.LastRound),
-		LastVersion:                 string(stat.LastVersion),
-		NextVersion:                 string(stat.NextVersion),
-		NextVersionRound:            uint64(stat.NextVersionRound),
-		NextVersionSupported:        stat.NextVersionSupported,
-		TimeSinceLastRound:          uint64(stat.TimeSinceLastRound().Nanoseconds()),
-		CatchupTime:                 uint64(stat.CatchupTime.Nanoseconds()),
-		StoppedAtUnsupportedRound:   stat.StoppedAtUnsupportedRound,
-		LastCatchpoint:              &stat.LastCatchpoint,
-		Catchpoint:                  &stat.Catchpoint,
-		CatchpointTotalAccounts:     &stat.CatchpointCatchupTotalAccounts,
-		CatchpointProcessedAccounts: &stat.CatchpointCatchupProcessedAccounts,
-		CatchpointVerifiedAccounts:  &stat.CatchpointCatchupVerifiedAccounts,
-		CatchpointTotalBlocks:       &stat.CatchpointCatchupTotalBlocks,
-		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
-		CatchpointTotalKvs:          &stat.CatchpointCatchupTotalKVs,
-		CatchpointProcessedKvs:      &stat.CatchpointCatchupProcessedKVs,
-		CatchpointVerifiedKvs:       &stat.CatchpointCatchupVerifiedKVs,
-		UpgradePropose:              &upgradePropose,
-		UpgradeThreshold:            &consensus.UpgradeThreshold,
-		UpgradeApprove:              &stat.UpgradeApprove,
-		UpgradeDelay:                &stat.UpgradeDelay,
-		UpgradeNo:                   &upgradeNo,
+		LastRound:                     uint64(stat.LastRound),
+		LastVersion:                   string(stat.LastVersion),
+		NextVersion:                   string(stat.NextVersion),
+		NextVersionRound:              uint64(stat.NextVersionRound),
+		NextVersionSupported:          stat.NextVersionSupported,
+		TimeSinceLastRound:            uint64(stat.TimeSinceLastRound().Nanoseconds()),
+		CatchupTime:                   uint64(stat.CatchupTime.Nanoseconds()),
+		StoppedAtUnsupportedRound:     stat.StoppedAtUnsupportedRound,
+		LastCatchpoint:                &stat.LastCatchpoint,
+		Catchpoint:                    &stat.Catchpoint,
+		CatchpointTotalAccounts:       &stat.CatchpointCatchupTotalAccounts,
+		CatchpointProcessedAccounts:   &stat.CatchpointCatchupProcessedAccounts,
+		CatchpointVerifiedAccounts:    &stat.CatchpointCatchupVerifiedAccounts,
+		CatchpointTotalBlocks:         &stat.CatchpointCatchupTotalBlocks,
+		CatchpointAcquiredBlocks:      &stat.CatchpointCatchupAcquiredBlocks,
+		CatchpointTotalKvs:            &stat.CatchpointCatchupTotalKVs,
+		CatchpointProcessedKvs:        &stat.CatchpointCatchupProcessedKVs,
+		CatchpointVerifiedKvs:         &stat.CatchpointCatchupVerifiedKVs,
+		UpgradeNextProtocol:           &upgradePropose,
+		UpgradeVotesRequired:          &consensus.UpgradeThreshold,
+		UpgradeNodeVote:               &stat.UpgradeApprove,
+		UpgradeDelay:                  &stat.UpgradeDelay,
+		UpgradeNoVotes:                &votesNo,
+		UpgradeYesVotes:               &stat.NextProtocolApprovals,
+		UpgradeVoteRounds:             &consensus.UpgradeVoteRounds,
+		UpgradeNextProtocolVoteBefore: &nextProtocolVoteBefore,
+		UpgradeVotes:                  &votes,
 	}
 	actualResult := model.NodeStatusResponse{}
 	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResult)

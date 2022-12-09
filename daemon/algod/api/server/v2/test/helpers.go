@@ -61,10 +61,10 @@ var cannedStatusReportGolden = node.StatusReport{
 }
 
 var cannedStatusReportConsensusUpgradeGolden = node.StatusReport{
-	LastRound:                          basics.Round(1),
+	LastRound:                          basics.Round(97000),
 	LastVersion:                        protocol.ConsensusCurrentVersion,
 	NextVersion:                        protocol.ConsensusCurrentVersion,
-	NextVersionRound:                   basics.Round(1),
+	NextVersionRound:                   200000,
 	NextVersionSupported:               true,
 	StoppedAtUnsupportedRound:          true,
 	Catchpoint:                         "",
@@ -80,8 +80,8 @@ var cannedStatusReportConsensusUpgradeGolden = node.StatusReport{
 	UpgradePropose:                     "upgradePropose",
 	UpgradeApprove:                     false,
 	UpgradeDelay:                       0,
-	NextProtocolVoteBefore:             1000,
-	NextProtocolApprovals:              1000,
+	NextProtocolVoteBefore:             100000,
+	NextProtocolApprovals:              5000,
 }
 
 var poolAddrRewardBaseGolden = uint64(0)
