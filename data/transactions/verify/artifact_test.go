@@ -37,7 +37,7 @@ import (
 // algoexplorer, which adds some unusual stuff as comments
 func BenchmarkTinyMan(b *testing.B) {
 	txns := txntest.CreateTinyManTxGroup(b, false)
-	b.Run("eval-signature", func(b *testing.B) {
+	b.Run("eval-lsig-signature", func(b *testing.B) {
 		stxns, _ := txntest.CreateTinyManSignedTxGroup(b, txns)
 		require.NotEmpty(b, stxns[0].Sig)
 		require.NotEmpty(b, stxns[1].Lsig.Logic)
