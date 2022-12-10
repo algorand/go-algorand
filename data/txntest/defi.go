@@ -14,32 +14,76 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package txntest
 
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/data/txntest"
-	"github.com/algorand/go-algorand/protocol"
-
 	"github.com/stretchr/testify/require"
 )
 
-/* test/benchmark real programs found in the wild (testnet/mainnet).
- */
+// Test/benchmark real programs found in the wild (testnet/mainnet).
 
-// BenchmarkTinyMan tries to reproduce
+// CreateTinyManTxGroup repro this tx group by tinyman
 // https://algoexplorer.io/tx/group/d1bUcqFbNZDMIdcreM9Vw2jzOIZIa2UzDgTTlr2Sl4o%3D
-// which is an algo to USDC swap.  The source code below is extracted from
+func CreateTinyManTxGroup(tb testing.TB, randNote bool) []Txn {
+	user, err := basics.UnmarshalChecksumAddress("W2IZ3EHDRW2IQNPC33CI2CXSLMFCFICVKQVWIYLJWXCTD765RW47ONNCEY")
+	require.NoError(tb, err)
+
+	luser, err := basics.UnmarshalChecksumAddress("FPOU46NBKTWUZCNMNQNXRWNW3SMPOOK4ZJIN5WSILCWP662ANJLTXVRUKA")
+	require.NoError(tb, err)
+
+	var note []byte = nil
+	if randNote {
+		note = make([]byte, 12)
+		crypto.RandBytes(note[:])
+	}
+
+	fees := Txn{
+		Type:     "pay",
+		Fee:      1000,
+		Sender:   user,
+		Receiver: luser,
+		Amount:   2000, // must cover the luser fees in appcall and withdraw
+		Note:     note,
+	}
+
+	appcall := Txn{
+		Type:          "appl",
+		Fee:           1000,
+		Sender:        luser,
+		ApplicationID: 552635992,
+		Accounts:      []basics.Address{user},
+		Note:          note,
+	}.Args("swap", "fo")
+
+	deposit := Txn{
+		Type:          "axfer",
+		Fee:           1000,
+		Sender:        user,
+		AssetReceiver: luser,
+		Note:          note,
+	}
+
+	withdraw := Txn{
+		Type:     "pay",
+		Fee:      1000,
+		Sender:   luser,
+		Receiver: user,
+		Note:     note,
+	}
+	return []Txn{fees, *appcall, deposit, withdraw}
+}
+
+// CreateTinyManSignedTxGroup repro this tx group by tinyman
+// https://algoexplorer.io/tx/group/d1bUcqFbNZDMIdcreM9Vw2jzOIZIa2UzDgTTlr2Sl4o%3D
+// which is an algo to USDC swap. The source code below is extracted from
 // algoexplorer, which adds some unusual stuff as comments
-func BenchmarkTinyMan(b *testing.B) {
+func CreateTinyManSignedTxGroup(tb testing.TB, txns []Txn) ([]transactions.SignedTxn, []*crypto.SignatureSecrets) {
 	lsig := `
 	#pragma version 4
 	intcblock 1 0 0 31566704 3 4 5 6
@@ -478,67 +522,11 @@ label8:
 	return
 `
 	ops, err := logic.AssembleString(lsig)
-	require.NoError(b, err)
+	require.NoError(tb, err)
 
-	user, err := basics.UnmarshalChecksumAddress("W2IZ3EHDRW2IQNPC33CI2CXSLMFCFICVKQVWIYLJWXCTD765RW47ONNCEY")
-	require.NoError(b, err)
-
-	luser, err := basics.UnmarshalChecksumAddress("FPOU46NBKTWUZCNMNQNXRWNW3SMPOOK4ZJIN5WSILCWP662ANJLTXVRUKA")
-	require.NoError(b, err)
-
-	fees := txntest.Txn{
-		Type:     "pay",
-		Fee:      1000,
-		Sender:   user,
-		Receiver: luser,
-		Amount:   2000, // must cover the luser fees in appcall and withdraw
-	}
-	appcall := txntest.Txn{
-		Type:          "appl",
-		Fee:           1000,
-		Sender:        luser,
-		ApplicationID: 552635992,
-		Accounts:      []basics.Address{user},
-	}.Args("swap", "fo")
-	deposit := txntest.Txn{
-		Type:          "axfer",
-		Fee:           1000,
-		Sender:        user,
-		AssetReceiver: luser,
-	}
-	withdraw := txntest.Txn{
-		Type:     "pay",
-		Fee:      1000,
-		Sender:   luser,
-		Receiver: user,
-	}
-	stxns := txntest.SignedTxns(&fees, appcall, &deposit, &withdraw)
+	stxns := SignedTxns(&txns[0], &txns[1], &txns[2], &txns[3])
 	stxns[1].Lsig.Logic = ops.Program
 	stxns[3].Lsig.Logic = ops.Program
-	txgroup := transactions.WrapSignedTxnsWithAD(stxns)
-
-	b.Run("eval-signature", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			proto := config.Consensus[protocol.ConsensusCurrentVersion]
-			ep := logic.EvalParams{
-				Proto:     &proto,
-				TxnGroup:  txgroup,
-				SigLedger: &logic.NoHeaderLedger{},
-			}
-			pass, err := logic.EvalSignature(1, &ep)
-			require.NoError(b, err)
-			require.True(b, pass)
-			pass, err = logic.EvalSignature(3, &ep)
-			require.NoError(b, err)
-			require.True(b, pass)
-		}
-	})
-
-	hdr := bookkeeping.BlockHeader{
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
-		},
-	}
 
 	// add in some signatures, so TxnGroup can succeed.  A randomly generated
 	// private key. The actual value does not matter, as long as this is a valid
@@ -552,44 +540,9 @@ label8:
 		78, 104, 209, 2, 185, 110, 28, 42, 97,
 	}
 	secrets, err := crypto.SecretKeyToSignatureSecrets(signer)
-	require.NoError(b, err)
-	b.Run("group-check-actual", func(b *testing.B) {
-		// in order to better simulate different tx messages
-		// pre-generate all stxns
-		stxnss := make([][]transactions.SignedTxn, b.N)
-		for i := 0; i < b.N; i++ {
-			note := make([]byte, 4)
-			crypto.RandBytes(note[:])
-			fees.Note = note[:]
-			appcall.Note = note[:]
-			deposit.Note = note[:]
-			withdraw.Note = note[:]
-			stxnss[i] = txntest.SignedTxns(&fees, appcall, &deposit, &withdraw)
-			program := make([]byte, len(ops.Program))
-			copied := copy(program, ops.Program)
-			require.Equal(b, len(ops.Program), copied)
-			stxnss[i][1].Lsig.Logic = program
-			stxnss[i][3].Lsig.Logic = program
-			stxnss[i][0] = stxnss[i][0].Txn.Sign(secrets)
-			stxnss[i][2] = stxnss[i][2].Txn.Sign(secrets)
-		}
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			_, err := verify.TxnGroup(stxnss[i], hdr, nil, &logic.NoHeaderLedger{})
-			require.NoError(b, err)
-		}
-	})
+	require.NoError(tb, err)
 
-	stxns = txntest.SignedTxns(&fees, appcall, &deposit, &withdraw)
 	stxns[0] = stxns[0].Txn.Sign(secrets)
 	stxns[2] = stxns[2].Txn.Sign(secrets)
-	stxns[1] = stxns[1].Txn.Sign(secrets)
-	stxns[3] = stxns[3].Txn.Sign(secrets)
-	b.Run("group-check-all-crypto", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			_, err := verify.TxnGroup(stxns, hdr, nil, &logic.NoHeaderLedger{})
-			require.NoError(b, err)
-		}
-	})
-
+	return stxns, []*crypto.SignatureSecrets{secrets}
 }
