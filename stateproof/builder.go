@@ -38,7 +38,6 @@ import (
 // the chance to persist the data it needs.
 func (spw *Worker) OnPrepareCommit(rnd basics.Round) {
 	// TODO: Is it really OK to reference the ledger here?
-	// TODO: Think about error handling some more
 	header, err := spw.ledger.BlockHdr(rnd)
 
 	if err != nil {
