@@ -115,7 +115,7 @@ func checkDatabase(databaseName string, outFile *os.File) error {
 		if err != nil {
 			return err
 		}
-		trie, err := merkletrie.MakeTrie(committer, ledger.TrieMemoryConfig)
+		trie, err := merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
 		if err != nil {
 			return err
 		}

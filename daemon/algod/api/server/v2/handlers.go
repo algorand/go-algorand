@@ -30,7 +30,10 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/algorand/go-codec/codec"
+
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/catchup"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
@@ -47,7 +50,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/stateproof"
-	"github.com/algorand/go-codec/codec"
 )
 
 // max compiled teal program is currently 8k
@@ -84,6 +86,7 @@ type LedgerForAPI interface {
 	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
 	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
+	GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta, error)
 }
 
 // NodeInterface represents node fns used by the handlers.
@@ -104,6 +107,9 @@ type NodeInterface interface {
 	GetParticipationKey(account.ParticipationID) (account.ParticipationRecord, error)
 	RemoveParticipationKey(account.ParticipationID) error
 	AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error
+	SetSyncRound(rnd uint64) error
+	GetSyncRound() uint64
+	UnsetSyncRound()
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {
@@ -942,6 +948,63 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 
 	doDryrunRequest(&dr, &response)
 	response.ProtocolVersion = string(protocolVersion)
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// UnsetSyncRound removes the sync round restriction from the ledger.
+// (DELETE /v2/ledger/sync)
+func (v2 *Handlers) UnsetSyncRound(ctx echo.Context) error {
+	v2.Node.UnsetSyncRound()
+	return ctx.NoContent(http.StatusOK)
+}
+
+// SetSyncRound sets the sync round on the ledger.
+// (POST /v2/ledger/sync/{round})
+func (v2 *Handlers) SetSyncRound(ctx echo.Context, round uint64) error {
+	err := v2.Node.SetSyncRound(round)
+	if err != nil {
+		switch err {
+		case catchup.ErrSyncRoundInvalid:
+			return badRequest(ctx, err, errFailedSettingSyncRound, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedSettingSyncRound, v2.Log)
+		}
+	}
+	return ctx.NoContent(http.StatusOK)
+}
+
+// GetSyncRound gets the sync round from the ledger.
+// (GET /v2/ledger/sync)
+func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
+	rnd := v2.Node.GetSyncRound()
+	if rnd == 0 {
+		return notFound(ctx, fmt.Errorf("sync round is not set"), errFailedRetrievingSyncRound, v2.Log)
+	}
+	return ctx.JSON(http.StatusOK, model.GetSyncRoundResponse{Round: rnd})
+}
+
+// GetLedgerStateDelta returns the deltas for a given round.
+// This should be a representation of the ledgercore.StateDelta object.
+// (GET /v2/deltas/{round})
+func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64) error {
+	sDelta, err := v2.Node.LedgerForAPI().GetStateDeltaForRound(basics.Round(round))
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingStateDelta, v2.Log)
+	}
+	consensusParams, err := v2.Node.LedgerForAPI().ConsensusParams(basics.Round(round))
+	if err != nil {
+		return internalError(ctx, fmt.Errorf("unable to retrieve consensus params for round %d", round), errInternalFailure, v2.Log)
+	}
+	hdr, err := v2.Node.LedgerForAPI().BlockHdr(basics.Round(round))
+	if err != nil {
+		return internalError(ctx, fmt.Errorf("unable to retrieve block header for round %d", round), errInternalFailure, v2.Log)
+	}
+
+	response, err := stateDeltaToLedgerDelta(sDelta, consensusParams, hdr.RewardsLevel, round)
+	if err != nil {
+		return internalError(ctx, err, errInternalFailure, v2.Log)
+	}
+
 	return ctx.JSON(http.StatusOK, response)
 }
 

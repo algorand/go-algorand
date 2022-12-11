@@ -798,7 +798,7 @@ func (ledger *evalTestLedger) CheckDup(currentProto config.ConsensusParams, curr
 			}
 			currentTxid := txn.Txn.ID()
 			if bytes.Equal(txid[:], currentTxid[:]) {
-				return &ledgercore.TransactionInLedgerError{Txid: txid}
+				return &ledgercore.TransactionInLedgerError{Txid: txid, InBlockEvaluator: false}
 			}
 		}
 	}

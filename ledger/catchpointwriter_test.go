@@ -718,7 +718,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	// save the existing hash
 	committer, err := store.MakeMerkleCommitter(tx, false)
 	require.NoError(t, err)
-	trie, err := merkletrie.MakeTrie(committer, TrieMemoryConfig)
+	trie, err := merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
 	require.NoError(t, err)
 
 	h1, err := trie.RootHash()
@@ -732,7 +732,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	// rebuild the MT
 	committer, err = store.MakeMerkleCommitter(tx, false)
 	require.NoError(t, err)
-	trie, err = merkletrie.MakeTrie(committer, TrieMemoryConfig)
+	trie, err = merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
 	require.NoError(t, err)
 
 	h, err := trie.RootHash()
@@ -803,7 +803,7 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess db.Acc
 			if err != nil {
 				return err
 			}
-			trie, err := merkletrie.MakeTrie(committer, TrieMemoryConfig)
+			trie, err := merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
 			if err != nil {
 				return err
 			}
