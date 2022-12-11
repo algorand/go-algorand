@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -78,27 +79,23 @@ func (spw *Worker) nextStateProofRound(latest basics.Round) basics.Round {
 }
 
 func (spw *Worker) signStateProof(round basics.Round) {
-	// TODO: What happens right after upgrade when the tracker doesn't contain the context?
-	// TODO: Perhaps we should add a fallback for the voters
-	verificationContext, err := spw.ledger.StateProofVerificationContext(round)
+	proto, votersCommitment, err := spw.getProtoVoters(round)
+
 	if err != nil {
-		// TODO: Should this really be the error handling here?
-		spw.log.Infof("spw.signBlock(%d): StateProofVerificationContext(%d): %v", round, round, err)
+		spw.log.Warnf("spw.signStateProof(%d): getProtoVoters: %v", round, err)
 		return
 	}
 
-	proto := config.Consensus[verificationContext.Version]
 	if proto.StateProofInterval == 0 {
 		return
 	}
 
-	// TODO: Seems like at the moment we don't actually enter this code
 	// Only sign blocks that are a multiple of StateProofInterval.
 	if round%basics.Round(proto.StateProofInterval) != 0 {
 		return
 	}
 
-	if verificationContext.VotersCommitment.IsEmpty() {
+	if votersCommitment.IsEmpty() {
 		// No voter commitment, perhaps because state proofs were
 		// just enabled.
 		return
@@ -110,14 +107,44 @@ func (spw *Worker) signStateProof(round basics.Round) {
 		return
 	}
 
-	stateProofMessage, err := spw.getStateProofMessage(round, &proto)
+	stateProofMessage, err := spw.getStateProofMessage(round, proto)
 	if err != nil {
-		// TODO: Warn? Or something else?
-		spw.log.Warnf("spw.signBlock(%d): getStateProofMessage: %v", round, err)
+		spw.log.Warnf("spw.signStateProof(%d): getStateProofMessage: %v", round, err)
 		return
 	}
 
 	spw.signStateProofMessage(stateProofMessage, round, keys)
+}
+
+func (spw *Worker) getProtoVoters(round basics.Round) (*config.ConsensusParams, crypto.GenericDigest, error) {
+	// throughout this function, we assume that the protocol version
+	// (specifically for our purposes, the state proof interval) is identical in the last attested round -
+	// which should be the round parameter in this case - and in the voters round.
+
+	signedHeader, err := spw.ledger.BlockHdr(round)
+	if err != nil {
+		return spw.getProtoVotersFallback(round)
+	}
+
+	proto := config.Consensus[signedHeader.CurrentProtocol]
+	votersRound := round.SubSaturate(basics.Round(proto.StateProofInterval))
+	votersHdr, err := spw.ledger.BlockHdr(votersRound)
+
+	if err != nil {
+		return spw.getProtoVotersFallback(round)
+	}
+
+	return &proto, votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment, nil
+}
+
+func (spw *Worker) getProtoVotersFallback(round basics.Round) (*config.ConsensusParams, crypto.GenericDigest, error) {
+	verificationContext, err := spw.ledger.StateProofVerificationContext(round)
+	if err != nil {
+		return nil, crypto.GenericDigest{}, err
+	}
+
+	proto := config.Consensus[verificationContext.Version]
+	return &proto, verificationContext.VotersCommitment, nil
 }
 
 func (spw *Worker) getStateProofMessage(round basics.Round, proto *config.ConsensusParams) (*stateproofmsg.Message, error) {
@@ -126,7 +153,7 @@ func (spw *Worker) getStateProofMessage(round basics.Round, proto *config.Consen
 		return &dbBuilder.Message, nil
 	}
 
-	spw.log.Warnf("spw.getStateProofMessage(%d): Could not retrieve builder from DB, attempting to generate it from the ledger: %v")
+	spw.log.Warnf("spw.getStateProofMessage(%d): Could not retrieve builder from DB, attempting to generate it from the ledger. Error was: %v")
 
 	return spw.generateStateProofMessageLedger(round, proto)
 }
