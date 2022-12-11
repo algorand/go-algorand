@@ -92,13 +92,6 @@ func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 		return builder{}, err
 	}
 
-	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-		return persistBuilder(tx, rnd, &buildr)
-	})
-	if err != nil {
-		spw.log.Errorf("loadOrCreateBuilder: failed to insert builder into database: %v", err)
-	}
-
 	return buildr, nil
 }
 
@@ -182,6 +175,13 @@ func (spw *Worker) createBuilder(rnd basics.Round) (builder, error) {
 		config.Consensus[votersHdr.CurrentProtocol].StateProofStrengthTarget)
 	if err != nil {
 		return builder{}, err
+	}
+
+	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		return persistBuilder(tx, rnd, &res)
+	})
+	if err != nil {
+		spw.log.Errorf("loadOrCreateBuilder: failed to insert builder into database: %v", err)
 	}
 
 	return res, nil
