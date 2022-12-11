@@ -153,7 +153,7 @@ func (spw *Worker) getStateProofMessage(round basics.Round, proto *config.Consen
 		return &dbBuilder.Message, nil
 	}
 
-	spw.log.Warnf("spw.getStateProofMessage(%d): Could not retrieve builder from DB, attempting to generate it from the ledger. Error was: %v")
+	spw.log.Warnf("spw.getStateProofMessage(%d): Could not retrieve builder from DB, attempting to generate it from the ledger. Error was: %v", round, err)
 
 	return spw.generateStateProofMessageLedger(round, proto)
 }
