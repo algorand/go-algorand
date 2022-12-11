@@ -324,7 +324,9 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			return network.Ignore, fmt.Errorf("handleSig: latest round is smaller than given round %d", sfa.Round)
 		}
 
-		if sfa.Round > onlineBuildersThreshold(&proto, stateProofNextRound) && sfa.Round != latestHdr.Round.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval)) {
+		// We want to save the signature in the DB if we know we generated it. However, if the signature's source is
+		// external, we only want to process it if we know for sure it belongs to one of the builders in our threshold.
+		if sender != nil && (sfa.Round > onlineBuildersThreshold(&proto, stateProofNextRound) && sfa.Round != latestHdr.Round.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))) {
 			// Ignore signatures not under threshold round or equal to the latest StateProof round
 			// (this signature filtering is only relevant when the StateProof chain is stalled and many signatures may be spammed)
 			return network.Ignore, nil
