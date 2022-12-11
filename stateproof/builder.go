@@ -37,7 +37,6 @@ import (
 // OnPrepareCommit is a function called by the ledger when it's preparing to commit rnd. It gives the builder
 // the chance to persist the data it needs.
 func (spw *Worker) OnPrepareCommit(rnd basics.Round) {
-	// TODO: Is it really OK to reference the ledger here?
 	header, err := spw.ledger.BlockHdr(rnd)
 
 	if err != nil {
