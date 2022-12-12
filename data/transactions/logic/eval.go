@@ -933,7 +933,7 @@ func check(program []byte, params *EvalParams, mode runMode) (err error) {
 	cx.EvalParams = params
 	cx.runModeFlags = mode
 	cx.program = program
-	cx.branchTargets = make([]bool, len(program)+1) // teal v1 allowed jumping to the end of the prog
+	cx.branchTargets = make([]bool, len(program)+1) // teal v2 allowed jumping to the end of the prog
 	cx.instructionStarts = make([]bool, len(program)+1)
 
 	maxCost := cx.remainingBudget()
@@ -1229,7 +1229,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 		fmt.Fprintf(cx.Trace, "%3d %s\n", prevpc, spec.Name)
 	}
 	for pc := prevpc + 1; pc < cx.pc; pc++ {
-		if ok := cx.branchTargets[pc]; ok {
+		if pc < len(cx.branchTargets) && cx.branchTargets[pc] {
 			return 0, fmt.Errorf("branch target %d is not an aligned instruction", pc)
 		}
 	}
