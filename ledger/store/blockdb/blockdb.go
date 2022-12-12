@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package blockdb
 
 import (
 	"database/sql"
@@ -44,7 +44,8 @@ var blockResetExprs = []string{
 	`DROP TABLE IF EXISTS blocks`,
 }
 
-func blockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
+// BlockInit initializes blockdb
+func BlockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
 	for _, tableCreate := range blockSchema {
 		_, err := tx.Exec(tableCreate)
 		if err != nil {
@@ -52,14 +53,14 @@ func blockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
 		}
 	}
 
-	next, err := blockNext(tx)
+	next, err := BlockNext(tx)
 	if err != nil {
 		return err
 	}
 
 	if next == 0 {
 		for _, blk := range initBlocks {
-			err = blockPut(tx, blk, agreement.Certificate{})
+			err = BlockPut(tx, blk, agreement.Certificate{})
 			if err != nil {
 				serr, ok := err.(sqlite3.Error)
 				if ok && serr.Code == sqlite3.ErrConstraint {
@@ -73,7 +74,8 @@ func blockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
 	return nil
 }
 
-func blockResetDB(tx *sql.Tx) error {
+// BlockResetDB resets blockdb
+func BlockResetDB(tx *sql.Tx) error {
 	for _, stmt := range blockResetExprs {
 		_, err := tx.Exec(stmt)
 		if err != nil {
@@ -83,7 +85,8 @@ func blockResetDB(tx *sql.Tx) error {
 	return nil
 }
 
-func blockGet(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, err error) {
+// BlockGet retrieves a block by a round number
+func BlockGet(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, err error) {
 	var buf []byte
 	err = tx.QueryRow("SELECT blkdata FROM blocks WHERE rnd=?", rnd).Scan(&buf)
 	if err != nil {
@@ -98,7 +101,8 @@ func blockGet(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, err error) {
 	return
 }
 
-func blockGetHdr(tx *sql.Tx, rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
+// BlockGetHdr retrieves a block header by a round number
+func BlockGetHdr(tx *sql.Tx, rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
 	var buf []byte
 	err = tx.QueryRow("SELECT hdrdata FROM blocks WHERE rnd=?", rnd).Scan(&buf)
 	if err != nil {
@@ -113,7 +117,8 @@ func blockGetHdr(tx *sql.Tx, rnd basics.Round) (hdr bookkeeping.BlockHeader, err
 	return
 }
 
-func blockGetEncodedCert(tx *sql.Tx, rnd basics.Round) (blk []byte, cert []byte, err error) {
+// BlockGetEncodedCert retrieves raw block and cert by a round number
+func BlockGetEncodedCert(tx *sql.Tx, rnd basics.Round) (blk []byte, cert []byte, err error) {
 	err = tx.QueryRow("SELECT blkdata, certdata FROM blocks WHERE rnd=?", rnd).Scan(&blk, &cert)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -125,8 +130,9 @@ func blockGetEncodedCert(tx *sql.Tx, rnd basics.Round) (blk []byte, cert []byte,
 	return
 }
 
-func blockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
-	blkbuf, certbuf, err := blockGetEncodedCert(tx, rnd)
+// BlockGetCert retrieves block and cert by a round number
+func BlockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
+	blkbuf, certbuf, err := BlockGetEncodedCert(tx, rnd)
 	if err != nil {
 		return
 	}
@@ -145,7 +151,8 @@ func blockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agr
 	return
 }
 
-func blockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) error {
+// BlockPut stores block and certificate
+func BlockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) error {
 	var max sql.NullInt64
 	err := tx.QueryRow("SELECT MAX(rnd) FROM blocks").Scan(&max)
 	if err != nil {
@@ -174,7 +181,8 @@ func blockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) err
 	return err
 }
 
-func blockNext(tx *sql.Tx) (basics.Round, error) {
+// BlockNext returns the next expected round number
+func BlockNext(tx *sql.Tx) (basics.Round, error) {
 	var max sql.NullInt64
 	err := tx.QueryRow("SELECT MAX(rnd) FROM blocks").Scan(&max)
 	if err != nil {
@@ -188,7 +196,8 @@ func blockNext(tx *sql.Tx) (basics.Round, error) {
 	return 0, nil
 }
 
-func blockLatest(tx *sql.Tx) (basics.Round, error) {
+// BlockLatest returns the latest persisted round number
+func BlockLatest(tx *sql.Tx) (basics.Round, error) {
 	var max sql.NullInt64
 	err := tx.QueryRow("SELECT MAX(rnd) FROM blocks").Scan(&max)
 	if err != nil {
@@ -202,7 +211,8 @@ func blockLatest(tx *sql.Tx) (basics.Round, error) {
 	return 0, fmt.Errorf("no blocks present")
 }
 
-func blockEarliest(tx *sql.Tx) (basics.Round, error) {
+// BlockEarliest returns the lowest persisted round number
+func BlockEarliest(tx *sql.Tx) (basics.Round, error) {
 	var min sql.NullInt64
 	err := tx.QueryRow("SELECT MIN(rnd) FROM blocks").Scan(&min)
 	if err != nil {
@@ -216,8 +226,9 @@ func blockEarliest(tx *sql.Tx) (basics.Round, error) {
 	return 0, fmt.Errorf("no blocks present")
 }
 
-func blockForgetBefore(tx *sql.Tx, rnd basics.Round) error {
-	next, err := blockNext(tx)
+// BlockForgetBefore removes block entries with round numbers less than the specified round
+func BlockForgetBefore(tx *sql.Tx, rnd basics.Round) error {
+	next, err := BlockNext(tx)
 	if err != nil {
 		return err
 	}
@@ -230,7 +241,8 @@ func blockForgetBefore(tx *sql.Tx, rnd basics.Round) error {
 	return err
 }
 
-func blockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block) error {
+// BlockStartCatchupStaging initializes catchup for catchpoint
+func BlockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block) error {
 	// delete the old catchpointblocks table, if there is such.
 	for _, stmt := range blockResetExprs {
 		stmt = strings.Replace(stmt, "blocks", "catchpointblocks", 1)
@@ -262,7 +274,8 @@ func blockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block) error {
 	return nil
 }
 
-func blockCompleteCatchup(tx *sql.Tx) (err error) {
+// BlockCompleteCatchup applies catchpoint caught up blocks
+func BlockCompleteCatchup(tx *sql.Tx) (err error) {
 	_, err = tx.Exec("ALTER TABLE blocks RENAME TO blocks_old")
 	if err != nil {
 		return err
@@ -278,8 +291,8 @@ func blockCompleteCatchup(tx *sql.Tx) (err error) {
 	return nil
 }
 
-// TODO: unused, either actually implement cleanup on catchpoint failure, or delete this
-func blockAbortCatchup(tx *sql.Tx) error {
+// BlockAbortCatchup TODO: unused, either actually implement cleanup on catchpoint failure, or delete this
+func BlockAbortCatchup(tx *sql.Tx) error {
 	// delete the old catchpointblocks table, if there is such.
 	for _, stmt := range blockResetExprs {
 		stmt = strings.Replace(stmt, "blocks", "catchpointblocks", 1)
@@ -291,7 +304,8 @@ func blockAbortCatchup(tx *sql.Tx) error {
 	return nil
 }
 
-func blockPutStaging(tx *sql.Tx, blk bookkeeping.Block) (err error) {
+// BlockPutStaging store a block into catchpoint staging table
+func BlockPutStaging(tx *sql.Tx, blk bookkeeping.Block) (err error) {
 	// insert the new entry
 	_, err = tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata) VALUES (?, ?, ?, ?)",
 		blk.Round(),
@@ -305,7 +319,8 @@ func blockPutStaging(tx *sql.Tx, blk bookkeeping.Block) (err error) {
 	return nil
 }
 
-func blockEnsureSingleBlock(tx *sql.Tx) (blk bookkeeping.Block, err error) {
+// BlockEnsureSingleBlock retains only one (highest) block in catchpoint staging table
+func BlockEnsureSingleBlock(tx *sql.Tx) (blk bookkeeping.Block, err error) {
 	// delete all the blocks that aren't the latest one.
 	var max sql.NullInt64
 	err = tx.QueryRow("SELECT MAX(rnd) FROM catchpointblocks").Scan(&max)
