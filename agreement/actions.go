@@ -469,7 +469,7 @@ func zeroAction(t actionType) action {
 		return ensureAction{}
 	case rezero:
 		return rezeroAction{}
-	case attest, assemble, repropose:
+	case attest, assemble, repropose, speculativeAssembly:
 		return pseudonodeAction{}
 	case checkpoint:
 		return checkpointAction{}

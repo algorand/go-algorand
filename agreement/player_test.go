@@ -135,13 +135,25 @@ func simulateTimeoutExpectSoft(t *testing.T, router *rootRouter, player *player,
 	var res []action
 	e := makeTimeoutEvent()
 	*player, res = router.submitTop(&playerTracer, *player, e)
-	if len(res) != 1 {
-		panic("wrong number of actions")
-	}
+	// one or two actions, one must be attest, other _may_ be speculativeAssembly
+	require.True(t, 1 <= len(res) && len(res) <= 2, "wrong number of actions")
 
-	a1x := res[0]
-	if a1x.t() != attest {
-		panic("action 1 is not attest")
+	hasAttest := false
+	var a1x action
+
+	for _, ax := range res {
+		switch ax.t() {
+		case attest:
+			hasAttest = true
+			a1x = ax
+		case speculativeAssembly:
+			// ok
+		default:
+			t.Fatalf("bad action type: %v", ax.t())
+		}
+	}
+	if !hasAttest {
+		panic("missing attest")
 	}
 
 	a1 := a1x.(pseudonodeAction)

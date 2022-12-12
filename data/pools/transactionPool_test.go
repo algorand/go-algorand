@@ -46,6 +46,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/stateproof/verify"
@@ -1783,7 +1784,9 @@ func TestSpeculativeBlockAssemblyWithOverlappingBlock(t *testing.T) {
 
 	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{})
 	//<-transactionPool.specAsmDone
-	specBlock := transactionPool.tryReadSpeculativeBlock(block.Block().Hash(), time.Now().Add(time.Second))
+	var stats telemetryspec.AssembleBlockMetrics
+	specBlock, specErr := transactionPool.tryReadSpeculativeBlock(block.Block().Hash(), block.Block().Round()+1, time.Now().Add(time.Second), &stats)
+	require.NoError(t, specErr)
 	require.NotNil(t, specBlock)
 	// assembled block doesn't have txn in the speculated block
 	require.Len(t, specBlock.Block().Payset, savedTransactions-1)
@@ -1904,7 +1907,9 @@ func TestSpeculativeBlockAssemblyDataRace(t *testing.T) {
 	// tx pool should have old txns and new txns
 	require.Len(t, transactionPool.PendingTxIDs(), savedTransactions+newSavedTransactions)
 
-	specBlock := transactionPool.tryReadSpeculativeBlock(block.Block().Hash(), time.Now().Add(time.Second))
+	var stats telemetryspec.AssembleBlockMetrics
+	specBlock, specErr := transactionPool.tryReadSpeculativeBlock(block.Block().Hash(), block.Block().Round()+1, time.Now().Add(time.Second), &stats)
+	require.NoError(t, specErr)
 	require.NotNil(t, specBlock)
 	// assembled block doesn't have txn in the speculated block
 	require.Len(t, specBlock.Block().Payset, savedTransactions-1, "len(Payset)=%d, savedTransactions=%d", len(specBlock.Block().Payset), savedTransactions)

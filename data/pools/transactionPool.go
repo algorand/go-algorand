@@ -579,14 +579,14 @@ func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, 
 	defer pool.specBlockMu.Unlock()
 	if pool.specActive {
 		if blockHash == pool.specBlockDigest {
-			pool.log.Infof("StartSpeculativeBlockAssembly %s already running", vb.Block().Hash().String())
+			pool.log.Infof("StartSpeculativeBlockAssembly %s already running", blockHash.String())
 			return
 		} else {
 			// cancel prior speculative block assembly based on different block
 			pool.cancelSpeculativeAssembly()
 		}
 	}
-	pool.log.Infof("StartSpeculativeBlockAssembly %s", vb.Block().Hash().String())
+	pool.log.Infof("StartSpeculativeBlockAssembly %s", blockHash.String())
 	pool.specActive = true
 	pool.specBlockDigest = blockHash
 
@@ -612,21 +612,9 @@ func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, 
 	// process txns only until one block is full
 	// action on subordinate pool continues asynchronously, to be picked up in tryReadSpeculativeBlock
 	go speculativePool.onNewBlock(vb.Block(), vb.Delta(), true)
-
-	// TODO: capture results of re-processing from onNewBlock
-
-	// if speculativePool.assemblyResults.err != nil {
-	// 	return
-	// }
-
-	// select {
-	// case outchan <- speculativePool.assemblyResults.blk:
-	// default:
-	// 	speculativePool.log.Errorf("failed writing speculative block to channel, channel already has a block")
-	// }
 }
 
-func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHash, deadline time.Time) *ledgercore.ValidatedBlock {
+func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHash, round basics.Round, deadline time.Time, stats *telemetryspec.AssembleBlockMetrics) (*ledgercore.ValidatedBlock, error) {
 	// assumes pool.assemblyMu is held
 	pool.specBlockMu.Lock()
 
@@ -635,25 +623,18 @@ func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHas
 			pool.log.Infof("update speculative deadline: %s", deadline.String())
 			specPool := pool.speculativePool
 			pool.specBlockMu.Unlock()
+			// TODO: is continuing to hold outer pool.assemblyMu here a bad thing?
 			specPool.assemblyMu.Lock()
-			for time.Now().Before(deadline) && (!specPool.assemblyResults.ok) {
-				specPool.assemblyDeadline = deadline
-				condvar.TimedWait(&specPool.assemblyCond, deadline.Sub(time.Now()))
-			}
-			// TODO: block assembly doesn't always stop by deadline, keep waiting until it is actually done
-			var out *ledgercore.ValidatedBlock
-			if specPool.assemblyResults.ok {
-				out = specPool.assemblyResults.blk
-			}
+			assembled, err := specPool.waitForBlockAssembly(round, deadline, stats)
 			specPool.assemblyMu.Unlock()
-			return out
+			return assembled, err
 		}
 		pool.cancelSpeculativeAssembly()
 		pool.specActive = false
 	}
 	pool.specBlockMu.Unlock()
 	// nope, nothing
-	return nil
+	return nil, nil
 }
 
 // OnNewBlock callback calls the internal implementation, onNewBlock with the ``false'' parameter to process all transactions.
@@ -662,7 +643,9 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 	if pool.specActive && block.Digest() != pool.specBlockDigest {
 		pool.cancelSpeculativeAssembly()
 		pool.specActive = false
+		// cancel speculative assembly, fall through to starting normal assembly
 	}
+	// TODO: make core onNewBlock() _wait_ until speculative block is done, merge state from that result
 	pool.specBlockMu.Unlock()
 	pool.onNewBlock(block, delta, false)
 }
@@ -1102,14 +1085,22 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	// TODO: this needs to be changed if a speculative block is in flight and if it is valid. If it is not valid, cancel it, if it is valid, wait for it.
 	prev, err := pool.ledger.Block(round.SubSaturate(1))
 	if err == nil {
-		specBlock := pool.tryReadSpeculativeBlock(prev.Hash(), deadline)
-		if specBlock != nil {
-			pool.log.Infof("got spec block for %s", prev.Hash().String())
+		specBlock, specErr := pool.tryReadSpeculativeBlock(prev.Hash(), round, deadline, &stats)
+		if specBlock != nil || specErr != nil {
+			pool.log.Infof("got spec block for %s, specErr %v", prev.Hash().String(), specErr)
 			assembled = specBlock
-			return assembled, nil
+			if specErr == nil {
+			}
+			return assembled, specErr
 		}
 	}
 
+	assembled, err = pool.waitForBlockAssembly(round, deadline, &stats)
+	return
+}
+
+// should be called with assemblyMu held
+func (pool *TransactionPool) waitForBlockAssembly(round basics.Round, deadline time.Time, stats *telemetryspec.AssembleBlockMetrics) (assembled *ledgercore.ValidatedBlock, err error) {
 	pool.assemblyDeadline = deadline
 	pool.assemblyRound = round
 	for time.Now().Before(deadline) && (!pool.assemblyResults.ok || pool.assemblyResults.roundStartedEvaluating != round) {
@@ -1170,7 +1161,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 			pool.assemblyResults.roundStartedEvaluating, round)
 	}
 
-	stats = pool.assemblyResults.stats
+	*stats = pool.assemblyResults.stats
 	return pool.assemblyResults.blk, nil
 }
 

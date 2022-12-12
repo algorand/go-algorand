@@ -131,24 +131,13 @@ func (p *player) handle(r routerHandle, e event) []action {
 }
 
 // handleSpeculationTimeout TODO: rename this 'timeout' is the START of speculative assembly.
-// TODO: start based on some proposal based event, e.g. 0.3 seconds after the first proposal arrives instead of the current '2.4s afer the round starts'
 func (p *player) handleSpeculationTimeout(r routerHandle, e timeoutEvent) []action {
 	if e.Proto.Err != nil {
 		r.t.log.Errorf("failed to read protocol version for speculationTimeout event (proto %v): %v", e.Proto.Version, e.Proto.Err)
 		return nil
 	}
 
-	// get the best proposal we have
-	// TODO: if a lower proposal is in-flight still being validated we should wait; in which case set a marker so that player.handleMessageEvent() knows that it has the responsibility of starting the speculative block; BUT we also need to capture non-validation of that in-flight proposal validation, and that's currently just dropped and ignored?
-	re := readLowestEvent{T: readLowestPayload, Round: p.Round, Period: p.Period}
-	re = r.dispatch(*p, re, proposalMachineRound, p.Round, p.Period, 0).(readLowestEvent)
-
-	// if we have its payload and its been validated already, start speculating
-	// on top of it
-	if re.PayloadOK && re.Payload.ve != nil {
-		return p.startSpeculativeBlockAsm(r, re.Payload.ve)
-	}
-	return nil
+	return p.startSpeculativeBlockAsm(r, nil)
 }
 
 func (p *player) handleFastTimeout(r routerHandle, e timeoutEvent) []action {
@@ -189,6 +178,7 @@ func (p *player) issueSoftVote(r routerHandle) (actions []action) {
 		// If we arrive due to fast-forward/soft threshold; then answer.Bottom = false and answer.Proposal = bottom
 		// and we should soft-vote normally (not based on the starting value)
 		a.Proposal = nextStatus.Proposal
+		// TODO: how do we speculative block assemble based on nextStatus.Proposal?
 		return append(actions, a)
 	}
 
@@ -200,13 +190,18 @@ func (p *player) issueSoftVote(r routerHandle) (actions []action) {
 	if p.Period > a.Proposal.OriginalPeriod {
 		// leader sent reproposal: vote if we saw a quorum for that hash, even if we saw nextStatus.Bottom
 		if nextStatus.Proposal != bottom && nextStatus.Proposal == a.Proposal {
-			return append(actions, a)
+			// TODO: double check this speculative block assembly, we're going with the same action as below, so it's okay?
+			actions = append(actions, a)
+			actions = p.startSpeculativeBlockAsm(r, actions)
+			return actions
 		}
 		return nil
 	}
 
-	// original proposal: vote for it
-	return append(actions, a)
+	// original proposal: vote for it, maybe build
+	actions = append(actions, a)
+	actions = p.startSpeculativeBlockAsm(r, actions)
+	return actions
 }
 
 // A committableEvent is the trigger for issuing a cert vote.
@@ -245,8 +240,16 @@ func (p *player) issueNextVote(r routerHandle) []action {
 	return actions
 }
 
-func (p *player) startSpeculativeBlockAsm(r routerHandle, ve ValidatedBlock) (actions []action) {
-	return append(actions, pseudonodeAction{T: speculativeAssembly, Round: p.Round, Period: p.Period, ValidatedBlock: ve})
+func (p *player) startSpeculativeBlockAsm(r routerHandle, actions []action) []action {
+	// get the best proposal we have
+	re := readLowestEvent{T: readLowestPayload, Round: p.Round, Period: p.Period}
+	re = r.dispatch(*p, re, proposalMachineRound, p.Round, p.Period, 0).(readLowestEvent)
+
+	// if we have its payload and its been validated already, start speculating on top of it
+	if re.PayloadOK && re.Payload.ve != nil {
+		return append(actions, pseudonodeAction{T: speculativeAssembly, Round: p.Round, Period: p.Period, ValidatedBlock: re.Payload.ve, Proposal: re.Proposal})
+	}
+	return actions
 }
 
 func (p *player) issueFastVote(r routerHandle) (actions []action) {
@@ -615,12 +618,6 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 
 			a := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
 			actions = append(actions, a)
-		}
-
-		// TODO: this might be the spot where we should start speculative block assembly?
-		if ef.t() == payloadAccepted && false /*(round time > AgreementFilterTimeoutPeriod0/2)*/ {
-			a := p.startSpeculativeBlockAsm(r, e.Input.Proposal.ve)
-			actions = append(actions, a...)
 		}
 
 		// If the payload is valid, check it against any received cert threshold.
