@@ -739,7 +739,7 @@ func (sv *StreamVerifier) batchingLoop() {
 					}
 					added = true
 				} else {
-					added, err = sv.canAddVerificationTaskToThePool(ue)
+					added, err = sv.tryAddVerificationTaskToThePool(ue)
 					if err != nil {
 						return
 					}
@@ -778,7 +778,7 @@ func (sv *StreamVerifier) batchingLoop() {
 				err = sv.addVerificationTaskToThePoolNow(ue)
 				added = true
 			} else {
-				added, err = sv.canAddVerificationTaskToThePool(ue)
+				added, err = sv.tryAddVerificationTaskToThePool(ue)
 			}
 			if err != nil {
 				return
@@ -815,8 +815,8 @@ func (sv *StreamVerifier) sendResult(veTxnGroup []transactions.SignedTxn, veBack
 	}
 }
 
-func (sv *StreamVerifier) canAddVerificationTaskToThePool(ue []*UnverifiedElement) (added bool, err error) {
-	// if the exec pool buffer is (half) full, can go back and collect
+func (sv *StreamVerifier) tryAddVerificationTaskToThePool(ue []*UnverifiedElement) (added bool, err error) {
+	// if the exec pool buffer is full, can go back and collect
 	// more signatures instead of waiting in the exec pool buffer
 	// more signatures to the batch do not harm performance but introduce latency when delayed (see crypto.BenchmarkBatchVerifierBig)
 
