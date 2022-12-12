@@ -231,7 +231,7 @@ func (l *Ledger) reloadLedger() error {
 	}
 
 	// post-init actions
-	if trackerDBInitParams.vacuumOnStartup || l.cfg.OptimizeAccountsDatabaseOnStartup {
+	if trackerDBInitParams.VacuumOnStartup || l.cfg.OptimizeAccountsDatabaseOnStartup {
 		err = l.accts.vacuumDatabase(context.Background())
 		if err != nil {
 			return err

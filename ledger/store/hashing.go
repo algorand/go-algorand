@@ -25,11 +25,11 @@ import (
 )
 
 // HashKind enumerates the possible data types hashed into a catchpoint merkle
-// trie. Each merkle trie hash includes the hashKind byte at a known-offset.
-// By encoding hashKind at a known-offset, it's possible for hash readers to
+// trie. Each merkle trie hash includes the HashKind byte at a known-offset.
+// By encoding HashKind at a known-offset, it's possible for hash readers to
 // disambiguate the hashed resource.
 //
-//go:generate stringer -type=hashKind
+//go:generate stringer -type=HashKind
 //msgp:ignore HashKind
 type HashKind byte
 

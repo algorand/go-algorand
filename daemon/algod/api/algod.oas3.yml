@@ -802,8 +802,7 @@
                 "last-round",
                 "min-fee"
               ],
-              "type": "object",
-              "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+              "type": "object"
             }
           }
         },
@@ -1633,10 +1632,6 @@
           },
           "budget-consumed": {
             "description": "Budget consumed during execution of app call transaction.",
-            "type": "integer"
-          },
-          "cost": {
-            "description": "Net cost of app execution. Field is DEPRECATED and is subject for removal. Instead, use `budget-added` and `budget-consumed.",
             "type": "integer"
           },
           "disassembly": {
@@ -5404,8 +5399,7 @@
                     "last-round",
                     "min-fee"
                   ],
-                  "type": "object",
-                  "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+                  "type": "object"
                 }
               }
             },

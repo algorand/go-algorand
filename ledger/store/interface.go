@@ -90,6 +90,8 @@ type CatchpointWriter interface {
 	InsertUnfinishedCatchpoint(ctx context.Context, round basics.Round, blockHash crypto.Digest) error
 	DeleteUnfinishedCatchpoint(ctx context.Context, round basics.Round) error
 	DeleteOldCatchpointFirstStageInfo(ctx context.Context, maxRoundToDelete basics.Round) error
+
+	DeleteStoredCatchpoints(ctx context.Context, dbDirectory string) (err error)
 }
 
 // CatchpointReader is the read interface for:

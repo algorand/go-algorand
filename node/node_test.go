@@ -183,9 +183,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 func TestSyncingFullNode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	if testing.Short() {
-		t.Skip("Test takes ~80 seconds.")
-	}
+	t.Skip("Flaky in nightly test environment")
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
@@ -278,9 +276,8 @@ func TestInitialSync(t *testing.T) {
 
 func TestSimpleUpgrade(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	if testing.Short() {
-		t.Skip("This test takes ~80 seconds.")
-	}
+
+	t.Skip("Flaky in nightly test environment.")
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()

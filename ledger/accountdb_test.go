@@ -39,9 +39,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
-	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
 	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
@@ -51,46 +49,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
-
-func accountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
-	newDB, err := accountsInit(tx, initAccounts, config.Consensus[proto])
-	require.NoError(tb, err)
-
-	err = accountsAddNormalizedBalance(tx, config.Consensus[proto])
-	require.NoError(tb, err)
-
-	err = accountsCreateResourceTable(context.Background(), tx)
-	require.NoError(tb, err)
-
-	err = performResourceTableMigration(context.Background(), tx, nil)
-	require.NoError(tb, err)
-
-	err = accountsCreateOnlineAccountsTable(context.Background(), tx)
-	require.NoError(tb, err)
-
-	err = accountsCreateTxTailTable(context.Background(), tx)
-	require.NoError(tb, err)
-
-	err = performOnlineAccountsTableMigration(context.Background(), tx, nil, nil)
-	require.NoError(tb, err)
-
-	// since this is a test that starts from genesis, there is no tail that needs to be migrated.
-	// we'll pass a nil here in order to ensure we still call this method, although it would
-	// be a noop.
-	err = performTxTailTableMigration(context.Background(), nil, db.Accessor{})
-	require.NoError(tb, err)
-
-	err = accountsCreateOnlineRoundParamsTable(context.Background(), tx)
-	require.NoError(tb, err)
-
-	err = performOnlineRoundParamsTailMigration(context.Background(), tx, db.Accessor{}, true, proto)
-	require.NoError(tb, err)
-
-	err = accountsCreateBoxTable(context.Background(), tx)
-	require.NoError(tb, err)
-
-	return newDB
-}
 
 func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
 	arw := store.NewAccountsSQLReaderWriter(tx)
@@ -190,8 +148,8 @@ func TestAccountDBInit(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -199,12 +157,12 @@ func TestAccountDBInit(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, true)
-	newDB := accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	newDB := store.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	require.True(t, newDB)
 
 	checkAccounts(t, tx, 0, accts)
 
-	newDB, err = accountsInit(tx, accts, proto)
+	newDB, err = store.AccountsInitLightTest(t, tx, accts, proto)
 	require.NoError(t, err)
 	require.False(t, newDB)
 	checkAccounts(t, tx, 0, accts)
@@ -251,8 +209,8 @@ func TestAccountDBRound(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -262,7 +220,7 @@ func TestAccountDBRound(t *testing.T) {
 	arw := store.NewAccountsSQLReaderWriter(tx)
 
 	accts := ledgertesting.RandomAccounts(20, true)
-	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	store.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	checkAccounts(t, tx, 0, accts)
 	totals, err := arw.AccountsTotals(context.Background(), false)
 	require.NoError(t, err)
@@ -407,8 +365,8 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 
 	for i, test := range tests {
 
-		dbs, _ := dbOpenTest(t, true)
-		setDbLogging(t, dbs)
+		dbs, _ := storetesting.DbOpenTest(t, true)
+		storetesting.SetDbLogging(t, dbs)
 		defer dbs.Close()
 
 		tx, err := dbs.Wdb.Handle.Begin()
@@ -416,7 +374,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 		defer tx.Rollback()
 
 		accts := ledgertesting.RandomAccounts(1, true)
-		accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+		store.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 		addr := ledgertesting.RandomAddress()
 
 		// lastCreatableID stores asset or app max used index to get rid of conflicts
@@ -479,8 +437,8 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 func TestAccountStorageWithStateProofID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -488,7 +446,7 @@ func TestAccountStorageWithStateProofID(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := ledgertesting.RandomAccounts(20, false)
-	_ = accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	_ = store.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	checkAccounts(t, tx, 0, accts)
 	require.True(t, allAccountsHaveStateProofPKs(accts))
 }
@@ -679,7 +637,7 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto pro
 
 	updates = generateRandomTestingAccountBalances(numAccounts)
 
-	accountsInitTest(b, tx, updates, proto)
+	store.AccountsInitTest(b, tx, updates, proto)
 	err = tx.Commit()
 	require.NoError(b, err)
 	return
@@ -693,8 +651,8 @@ func cleanupTestDb(dbs db.Pair, dbName string, inMemory bool) {
 }
 
 func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
-	dbs, fn := dbOpenTest(b, inMemory)
-	setDbLogging(b, dbs)
+	dbs, fn := storetesting.DbOpenTest(b, inMemory)
+	storetesting.SetDbLogging(b, dbs)
 	defer cleanupTestDb(dbs, fn, inMemory)
 
 	benchmarkInitBalances(b, b.N, dbs, protocol.ConsensusCurrentVersion)
@@ -724,8 +682,8 @@ func BenchmarkReadingAllBalancesDisk(b *testing.B) {
 }
 
 func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
-	dbs, fn := dbOpenTest(b, inMemory)
-	setDbLogging(b, dbs)
+	dbs, fn := storetesting.DbOpenTest(b, inMemory)
+	storetesting.SetDbLogging(b, dbs)
 	defer cleanupTestDb(dbs, fn, inMemory)
 
 	accounts := benchmarkInitBalances(b, b.N, dbs, protocol.ConsensusCurrentVersion)
@@ -763,8 +721,8 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 	batchCount := 1000
 	startupAcct := 5
 	initDatabase := func() (*sql.Tx, func(), error) {
-		dbs, fn := dbOpenTest(b, false)
-		setDbLogging(b, dbs)
+		dbs, fn := storetesting.DbOpenTest(b, false)
+		storetesting.SetDbLogging(b, dbs)
 		cleanup := func() {
 			cleanupTestDb(dbs, fn, false)
 		}
@@ -881,92 +839,6 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 	err = tx.Commit()
 	require.NoError(b, err)
 }
-func TestAccountsReencoding(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	oldEncodedAccountsData := [][]byte{
-		{132, 164, 97, 108, 103, 111, 206, 5, 234, 236, 80, 164, 97, 112, 97, 114, 129, 206, 0, 3, 60, 164, 137, 162, 97, 109, 196, 32, 49, 54, 101, 102, 97, 97, 51, 57, 50, 52, 97, 54, 102, 100, 57, 100, 51, 97, 52, 56, 50, 52, 55, 57, 57, 97, 52, 97, 99, 54, 53, 100, 162, 97, 110, 167, 65, 80, 84, 75, 73, 78, 71, 162, 97, 117, 174, 104, 116, 116, 112, 58, 47, 47, 115, 111, 109, 101, 117, 114, 108, 161, 99, 196, 32, 183, 97, 139, 76, 1, 45, 180, 52, 183, 186, 220, 252, 85, 135, 185, 87, 156, 87, 158, 83, 49, 200, 133, 169, 43, 205, 26, 148, 50, 121, 28, 105, 161, 102, 196, 32, 183, 97, 139, 76, 1, 45, 180, 52, 183, 186, 220, 252, 85, 135, 185, 87, 156, 87, 158, 83, 49, 200, 133, 169, 43, 205, 26, 148, 50, 121, 28, 105, 161, 109, 196, 32, 60, 69, 244, 159, 234, 26, 168, 145, 153, 184, 85, 182, 46, 124, 227, 144, 84, 113, 176, 206, 109, 204, 245, 165, 100, 23, 71, 49, 32, 242, 146, 68, 161, 114, 196, 32, 183, 97, 139, 76, 1, 45, 180, 52, 183, 186, 220, 252, 85, 135, 185, 87, 156, 87, 158, 83, 49, 200, 133, 169, 43, 205, 26, 148, 50, 121, 28, 105, 161, 116, 205, 3, 32, 162, 117, 110, 163, 65, 80, 75, 165, 97, 115, 115, 101, 116, 129, 206, 0, 3, 60, 164, 130, 161, 97, 0, 161, 102, 194, 165, 101, 98, 97, 115, 101, 205, 98, 54},
-		{132, 164, 97, 108, 103, 111, 206, 5, 230, 217, 88, 164, 97, 112, 97, 114, 129, 206, 0, 3, 60, 175, 137, 162, 97, 109, 196, 32, 49, 54, 101, 102, 97, 97, 51, 57, 50, 52, 97, 54, 102, 100, 57, 100, 51, 97, 52, 56, 50, 52, 55, 57, 57, 97, 52, 97, 99, 54, 53, 100, 162, 97, 110, 167, 65, 80, 84, 75, 105, 110, 103, 162, 97, 117, 174, 104, 116, 116, 112, 58, 47, 47, 115, 111, 109, 101, 117, 114, 108, 161, 99, 196, 32, 111, 157, 243, 205, 146, 155, 167, 149, 44, 226, 153, 150, 6, 105, 206, 72, 182, 218, 38, 146, 98, 94, 57, 205, 145, 152, 12, 60, 175, 149, 94, 13, 161, 102, 196, 32, 111, 157, 243, 205, 146, 155, 167, 149, 44, 226, 153, 150, 6, 105, 206, 72, 182, 218, 38, 146, 98, 94, 57, 205, 145, 152, 12, 60, 175, 149, 94, 13, 161, 109, 196, 32, 60, 69, 244, 159, 234, 26, 168, 145, 153, 184, 85, 182, 46, 124, 227, 144, 84, 113, 176, 206, 109, 204, 245, 165, 100, 23, 71, 49, 32, 242, 146, 68, 161, 114, 196, 32, 111, 157, 243, 205, 146, 155, 167, 149, 44, 226, 153, 150, 6, 105, 206, 72, 182, 218, 38, 146, 98, 94, 57, 205, 145, 152, 12, 60, 175, 149, 94, 13, 161, 116, 205, 1, 44, 162, 117, 110, 164, 65, 80, 84, 75, 165, 97, 115, 115, 101, 116, 130, 206, 0, 3, 56, 153, 130, 161, 97, 10, 161, 102, 194, 206, 0, 3, 60, 175, 130, 161, 97, 0, 161, 102, 194, 165, 101, 98, 97, 115, 101, 205, 98, 54},
-		{131, 164, 97, 108, 103, 111, 206, 5, 233, 179, 208, 165, 97, 115, 115, 101, 116, 130, 206, 0, 3, 60, 164, 130, 161, 97, 2, 161, 102, 194, 206, 0, 3, 60, 175, 130, 161, 97, 30, 161, 102, 194, 165, 101, 98, 97, 115, 101, 205, 98, 54},
-		{131, 164, 97, 108, 103, 111, 206, 0, 3, 48, 104, 165, 97, 115, 115, 101, 116, 129, 206, 0, 1, 242, 159, 130, 161, 97, 0, 161, 102, 194, 165, 101, 98, 97, 115, 101, 205, 98, 54},
-	}
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
-	defer dbs.Close()
-
-	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
-	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
-	var stateProofID merklesignature.Verifier
-	crypto.RandBytes(stateProofID.Commitment[:])
-
-	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
-
-		for _, oldAccData := range oldEncodedAccountsData {
-			addr := ledgertesting.RandomAddress()
-			_, err = tx.ExecContext(ctx, "INSERT INTO accountbase (address, data) VALUES (?, ?)", addr[:], oldAccData)
-			if err != nil {
-				return err
-			}
-		}
-		for i := 0; i < 100; i++ {
-			addr := ledgertesting.RandomAddress()
-			accData := basics.AccountData{
-				MicroAlgos:         basics.MicroAlgos{Raw: 0x000ffffffffffffff},
-				Status:             basics.NotParticipating,
-				RewardsBase:        uint64(i),
-				RewardedMicroAlgos: basics.MicroAlgos{Raw: 0x000ffffffffffffff},
-				VoteID:             secrets.OneTimeSignatureVerifier,
-				SelectionID:        pubVrfKey,
-				StateProofID:       stateProofID.Commitment,
-				VoteFirstValid:     basics.Round(0x000ffffffffffffff),
-				VoteLastValid:      basics.Round(0x000ffffffffffffff),
-				VoteKeyDilution:    0x000ffffffffffffff,
-				AssetParams: map[basics.AssetIndex]basics.AssetParams{
-					0x000ffffffffffffff: {
-						Total:         0x000ffffffffffffff,
-						Decimals:      0x2ffffff,
-						DefaultFrozen: true,
-						UnitName:      "12345678",
-						AssetName:     "12345678901234567890123456789012",
-						URL:           "12345678901234567890123456789012",
-						MetadataHash:  pubVrfKey,
-						Manager:       addr,
-						Reserve:       addr,
-						Freeze:        addr,
-						Clawback:      addr,
-					},
-				},
-				Assets: map[basics.AssetIndex]basics.AssetHolding{
-					0x000ffffffffffffff: {
-						Amount: 0x000ffffffffffffff,
-						Frozen: true,
-					},
-				},
-			}
-
-			_, err = tx.ExecContext(ctx, "INSERT INTO accountbase (address, data) VALUES (?, ?)", addr[:], protocol.Encode(&accData))
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	require.NoError(t, err)
-
-	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		modifiedAccounts, err := reencodeAccounts(ctx, tx)
-		if err != nil {
-			return err
-		}
-		if len(oldEncodedAccountsData) != int(modifiedAccounts) {
-			return fmt.Errorf("len(oldEncodedAccountsData) != int(modifiedAccounts) %d != %d", len(oldEncodedAccountsData), int(modifiedAccounts))
-		}
-		require.Equal(t, len(oldEncodedAccountsData), int(modifiedAccounts))
-		return nil
-	})
-	require.NoError(t, err)
-}
 
 // TestAccountsDbQueriesCreateClose tests to see that we can create the accountsDbQueries and close it.
 // it also verify that double-closing it doesn't create an issue.
@@ -978,7 +850,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	defer dbs.Close()
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		store.AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
 		return nil
 	})
 	require.NoError(t, err)
@@ -1091,11 +963,11 @@ func TestLookupKeysByPrefix(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	dbs, fn := dbOpenTest(t, false)
-	setDbLogging(t, dbs)
+	dbs, fn := storetesting.DbOpenTest(t, false)
+	storetesting.SetDbLogging(t, dbs)
 	defer cleanupTestDb(dbs, fn, false)
 
-	// return account data, initialize DB tables from accountsInitTest
+	// return account data, initialize DB tables from AccountsInitTest
 	_ = benchmarkInitBalances(t, 1, dbs, protocol.ConsensusCurrentVersion)
 
 	qs, err := store.AccountsInitDbQueries(dbs.Rdb.Handle)
@@ -1272,11 +1144,11 @@ func TestLookupKeysByPrefix(t *testing.T) {
 func BenchmarkLookupKeyByPrefix(b *testing.B) {
 	// learn something from BenchmarkWritingRandomBalancesDisk
 
-	dbs, fn := dbOpenTest(b, false)
-	setDbLogging(b, dbs)
+	dbs, fn := storetesting.DbOpenTest(b, false)
+	storetesting.SetDbLogging(b, dbs)
 	defer cleanupTestDb(dbs, fn, false)
 
-	// return account data, initialize DB tables from accountsInitTest
+	// return account data, initialize DB tables from AccountsInitTest
 	_ = benchmarkInitBalances(b, 1, dbs, protocol.ConsensusCurrentVersion)
 
 	qs, err := store.AccountsInitDbQueries(dbs.Rdb.Handle)
@@ -1550,8 +1422,8 @@ func TestCompactResourceDeltas(t *testing.T) {
 func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	addrs := make([]basics.Address, 100)
@@ -1560,7 +1432,7 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	}
 	addrsids := make(map[basics.Address]int64)
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		accountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		store.AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
 
 		for i := range addrs {
 			res, err := tx.ExecContext(ctx, "INSERT INTO accountbase (address, data) VALUES (?, ?)", addrs[i][:], []byte{12, 3, 4})
@@ -2208,15 +2080,15 @@ func initBoxDatabase(b *testing.B, totalBoxes, boxSize int) (db.Pair, func(), er
 	}
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	dbs, fn := dbOpenTest(b, false)
-	setDbLogging(b, dbs)
+	dbs, fn := storetesting.DbOpenTest(b, false)
+	storetesting.SetDbLogging(b, dbs)
 	cleanup := func() {
 		cleanupTestDb(dbs, fn, false)
 	}
 
 	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(b, err)
-	_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), proto)
+	_, err = store.AccountsInitLightTest(b, tx, make(map[basics.Address]basics.AccountData), proto)
 	require.NoError(b, err)
 	err = tx.Commit()
 	require.NoError(b, err)
@@ -2347,8 +2219,8 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -2358,7 +2230,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 	arw := store.NewAccountsSQLReaderWriter(tx)
 
 	var accts map[basics.Address]basics.AccountData
-	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	store.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 	totals, err := arw.AccountsTotals(context.Background(), false)
 	require.NoError(t, err)
 
@@ -2851,8 +2723,8 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 func TestAccountOnlineRoundParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -2862,7 +2734,7 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	arw := store.NewAccountsSQLReaderWriter(tx)
 
 	var accts map[basics.Address]basics.AccountData
-	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	store.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 
 	// entry i is for round i+1 since db initialized with entry for round 0
 	const maxRounds = 40 // any number
@@ -2891,47 +2763,6 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	require.Equal(t, maxRounds, int(endRound))
 }
 
-// TestAccountDBTxTailLoad checks txtailNewRound and loadTxTail delete and load right data
-func TestAccountDBTxTailLoad(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	const inMem = true
-	dbs, _ := dbOpenTest(t, inMem)
-	setDbLogging(t, dbs)
-	defer dbs.Close()
-
-	tx, err := dbs.Wdb.Handle.Begin()
-	require.NoError(t, err)
-	defer tx.Rollback()
-
-	arw := store.NewAccountsSQLReaderWriter(tx)
-
-	err = accountsCreateTxTailTable(context.Background(), tx)
-	require.NoError(t, err)
-
-	// insert 1500 rounds and retain past 1001
-	startRound := basics.Round(1)
-	endRound := basics.Round(1500)
-	roundData := make([][]byte, 1500)
-	const retainSize = 1001
-	for i := startRound; i <= endRound; i++ {
-		data := store.TxTailRound{Hdr: bookkeeping.BlockHeader{TimeStamp: int64(i)}}
-		roundData[i-1] = protocol.Encode(&data)
-	}
-	forgetBefore := (endRound + 1).SubSaturate(retainSize)
-	err = arw.TxtailNewRound(context.Background(), startRound, roundData, forgetBefore)
-	require.NoError(t, err)
-
-	data, _, baseRound, err := arw.LoadTxTail(context.Background(), endRound)
-	require.NoError(t, err)
-	require.Len(t, data, retainSize)
-	require.Equal(t, basics.Round(endRound-retainSize+1), baseRound) // 500...1500
-
-	for i, entry := range data {
-		require.Equal(t, int64(i+int(baseRound)), entry.Hdr.TimeStamp)
-	}
-}
-
 // TestOnlineAccountsDeletion checks the onlineAccountsDelete preseves online accounts entries
 // and deleted only expired offline and online rows
 // Round    1   2   3   4   5   6   7
@@ -2945,8 +2776,8 @@ func TestAccountDBTxTailLoad(t *testing.T) {
 func TestOnlineAccountsDeletion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := dbOpenTest(t, true)
-	setDbLogging(t, dbs)
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
 	defer dbs.Close()
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -2954,7 +2785,7 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 	defer tx.Rollback()
 
 	var accts map[basics.Address]basics.AccountData
-	accountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	store.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 
 	arw := store.NewAccountsSQLReaderWriter(tx)
 
@@ -3068,232 +2899,6 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(0), validThrough)
 		require.Len(t, history, 1)
-	}
-}
-
-// Test functions operating on catchpointfirststageinfo table.
-func TestCatchpointFirstStageInfoTable(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	dbs, _ := dbOpenTest(t, true)
-	defer dbs.Close()
-
-	ctx := context.Background()
-
-	err := accountsCreateCatchpointFirstStageInfoTable(ctx, dbs.Wdb.Handle)
-	require.NoError(t, err)
-
-	crw := store.NewCatchpointSQLReaderWriter(dbs.Wdb.Handle)
-
-	for _, round := range []basics.Round{4, 6, 8} {
-		info := store.CatchpointFirstStageInfo{
-			TotalAccounts: uint64(round) * 10,
-		}
-		err = crw.InsertOrReplaceCatchpointFirstStageInfo(ctx, round, &info)
-		require.NoError(t, err)
-	}
-
-	for _, round := range []basics.Round{4, 6, 8} {
-		info, exists, err := crw.SelectCatchpointFirstStageInfo(ctx, round)
-		require.NoError(t, err)
-		require.True(t, exists)
-
-		infoExpected := store.CatchpointFirstStageInfo{
-			TotalAccounts: uint64(round) * 10,
-		}
-		require.Equal(t, infoExpected, info)
-	}
-
-	_, exists, err := crw.SelectCatchpointFirstStageInfo(ctx, 7)
-	require.NoError(t, err)
-	require.False(t, exists)
-
-	rounds, err := crw.SelectOldCatchpointFirstStageInfoRounds(ctx, 6)
-	require.NoError(t, err)
-	require.Equal(t, []basics.Round{4, 6}, rounds)
-
-	err = crw.DeleteOldCatchpointFirstStageInfo(ctx, 6)
-	require.NoError(t, err)
-
-	rounds, err = crw.SelectOldCatchpointFirstStageInfoRounds(ctx, 9)
-	require.NoError(t, err)
-	require.Equal(t, []basics.Round{8}, rounds)
-}
-
-func TestUnfinishedCatchpointsTable(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	dbs, _ := dbOpenTest(t, true)
-	defer dbs.Close()
-
-	cts := store.NewCatchpointSQLReaderWriter(dbs.Wdb.Handle)
-
-	err := accountsCreateUnfinishedCatchpointsTable(
-		context.Background(), dbs.Wdb.Handle)
-	require.NoError(t, err)
-
-	var d3 crypto.Digest
-	rand.Read(d3[:])
-	err = cts.InsertUnfinishedCatchpoint(context.Background(), 3, d3)
-	require.NoError(t, err)
-
-	var d5 crypto.Digest
-	rand.Read(d5[:])
-	err = cts.InsertUnfinishedCatchpoint(context.Background(), 5, d5)
-	require.NoError(t, err)
-
-	ret, err := cts.SelectUnfinishedCatchpoints(context.Background())
-	require.NoError(t, err)
-	expected := []store.UnfinishedCatchpointRecord{
-		{
-			Round:     3,
-			BlockHash: d3,
-		},
-		{
-			Round:     5,
-			BlockHash: d5,
-		},
-	}
-	require.Equal(t, expected, ret)
-
-	err = cts.DeleteUnfinishedCatchpoint(context.Background(), 3)
-	require.NoError(t, err)
-
-	ret, err = cts.SelectUnfinishedCatchpoints(context.Background())
-	require.NoError(t, err)
-	expected = []store.UnfinishedCatchpointRecord{
-		{
-			Round:     5,
-			BlockHash: d5,
-		},
-	}
-	require.Equal(t, expected, ret)
-}
-
-func TestRemoveOfflineStateProofID(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	accts := ledgertesting.RandomAccounts(20, true)
-	expectedAccts := make(map[basics.Address]basics.AccountData)
-	for addr, acct := range accts {
-		rand.Read(acct.StateProofID[:])
-		accts[addr] = acct
-
-		expectedAcct := acct
-		if acct.Status != basics.Online {
-			expectedAcct.StateProofID = merklesignature.Commitment{}
-		}
-		expectedAccts[addr] = expectedAcct
-
-	}
-
-	buildDB := func(accounts map[basics.Address]basics.AccountData) (db.Pair, *sql.Tx) {
-		dbs, _ := dbOpenTest(t, true)
-		setDbLogging(t, dbs)
-
-		tx, err := dbs.Wdb.Handle.Begin()
-		require.NoError(t, err)
-
-		// this is the same seq as accountsInitTest makes but it stops
-		// before the online accounts table creation to generate a trie and commit it
-		_, err = accountsInit(tx, accounts, config.Consensus[protocol.ConsensusCurrentVersion])
-		require.NoError(t, err)
-
-		err = accountsAddNormalizedBalance(tx, config.Consensus[protocol.ConsensusCurrentVersion])
-		require.NoError(t, err)
-
-		err = accountsCreateResourceTable(context.Background(), tx)
-		require.NoError(t, err)
-
-		err = performResourceTableMigration(context.Background(), tx, nil)
-		require.NoError(t, err)
-
-		return dbs, tx
-	}
-
-	dbs, tx := buildDB(accts)
-	defer dbs.Close()
-	defer tx.Rollback()
-
-	// make second copy of DB to prepare exepected/fixed merkle trie
-	expectedDBs, expectedTx := buildDB(expectedAccts)
-	defer expectedDBs.Close()
-	defer expectedTx.Rollback()
-
-	// create account hashes
-	computeRootHash := func(tx *sql.Tx, expected bool) (crypto.Digest, error) {
-		rows, err := tx.Query("SELECT address, data FROM accountbase")
-		require.NoError(t, err)
-		defer rows.Close()
-
-		mc, err := store.MakeMerkleCommitter(tx, false)
-		require.NoError(t, err)
-		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
-		require.NoError(t, err)
-
-		var addr basics.Address
-		for rows.Next() {
-			var addrbuf []byte
-			var encodedAcctData []byte
-			err = rows.Scan(&addrbuf, &encodedAcctData)
-			require.NoError(t, err)
-			copy(addr[:], addrbuf)
-			var ba store.BaseAccountData
-			err = protocol.Decode(encodedAcctData, &ba)
-			require.NoError(t, err)
-			if expected && ba.Status != basics.Online {
-				require.Equal(t, merklesignature.Commitment{}, ba.StateProofID)
-			}
-			addHash := store.AccountHashBuilderV6(addr, &ba, encodedAcctData)
-			added, err := trie.Add(addHash)
-			require.NoError(t, err)
-			require.True(t, added)
-		}
-		_, err = trie.Evict(true)
-		require.NoError(t, err)
-		return trie.RootHash()
-	}
-	oldRoot, err := computeRootHash(tx, false)
-	require.NoError(t, err)
-	require.NotEmpty(t, oldRoot)
-
-	expectedRoot, err := computeRootHash(expectedTx, true)
-	require.NoError(t, err)
-	require.NotEmpty(t, expectedRoot)
-
-	err = accountsCreateOnlineAccountsTable(context.Background(), tx)
-	require.NoError(t, err)
-	err = performOnlineAccountsTableMigration(context.Background(), tx, nil, nil)
-	require.NoError(t, err)
-
-	// get the new hash and ensure it does not match to the old one (data migrated)
-	mc, err := store.MakeMerkleCommitter(tx, false)
-	require.NoError(t, err)
-	trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
-	require.NoError(t, err)
-
-	newRoot, err := trie.RootHash()
-	require.NoError(t, err)
-	require.NotEmpty(t, newRoot)
-
-	require.NotEqual(t, oldRoot, newRoot)
-	require.Equal(t, expectedRoot, newRoot)
-
-	rows, err := tx.Query("SELECT addrid, data FROM accountbase")
-	require.NoError(t, err)
-	defer rows.Close()
-
-	for rows.Next() {
-		var addrid sql.NullInt64
-		var encodedAcctData []byte
-		err = rows.Scan(&addrid, &encodedAcctData)
-		require.NoError(t, err)
-		var ba store.BaseAccountData
-		err = protocol.Decode(encodedAcctData, &ba)
-		require.NoError(t, err)
-		if ba.Status != basics.Online {
-			require.True(t, ba.StateProofID.IsEmpty())
-		}
 	}
 }
 
