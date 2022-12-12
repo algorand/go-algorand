@@ -235,8 +235,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		}
 
 		// set speculative block assembly based on the current local configuration
-		status.SpeculativeAsmTimeDuration = s.parameters.Local.ProposalAssemblyTime + s.parameters.Local.SpeculativeBlockAssemblyGraceTime
-		specClock := SpeculativeBlockAsmTime(status.Period, status.ConsensusVersion, status.SpeculativeAsmTimeDuration)
+		specClock := SpeculativeBlockAsmTime(status.Period, status.ConsensusVersion, s.parameters.Local.SpeculativeAsmTimeOffset)
 
 		// TODO: e, ok := s.demuxOne(ctx, a, externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, SpeculativeBlockAsmDeadline: specClock, CurrentRound: status.Round})
 		output <- a

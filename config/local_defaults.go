@@ -112,7 +112,7 @@ var defaultLocal = Local{
 	RestReadTimeoutSeconds:                     15,
 	RestWriteTimeoutSeconds:                    120,
 	RunHosted:                                  false,
-	SpeculativeBlockAssemblyGraceTime:          50000000,
+	SpeculativeAsmTimeOffset:                   40000000,
 	SuggestedFeeBlockHistory:                   3,
 	SuggestedFeeSlidingWindowSize:              50,
 	TLSCertFile:                                "",

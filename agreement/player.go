@@ -55,9 +55,6 @@ type player struct {
 
 	// the current consensus version
 	ConsensusVersion protocol.ConsensusVersion
-
-	// the time offset before the filter deadline to start speculative block assembly
-	SpeculativeAsmTimeDuration time.Duration
 }
 
 func (p *player) T() stateMachineTag {

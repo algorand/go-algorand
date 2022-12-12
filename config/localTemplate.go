@@ -468,10 +468,9 @@ type Local struct {
 	// 0x02 (txFilterCanonical) - check for canonical tx group duplicates
 	TxIncomingFilteringFlags uint32 `version[26]:"1"`
 
-	// SpeculativeBlockAssemblyGraceTime sets additional time, on top of
-	// ProposalAssemblyTime, that this node allows for speculative block
-	// assembly.
-	SpeculativeBlockAssemblyGraceTime time.Duration `version[26]:"50000000"`
+	// SpeculativeAsmTimeOffset defines when speculative block assembly first starts, nanoseconds before consensus AgreementFilterTimeoutPeriod0 or AgreementFilterTimeout
+	// A huge value (greater than either AgreementFilterTimeout) disables this event.
+	SpeculativeAsmTimeOffset time.Duration `version[26]:"40000000"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

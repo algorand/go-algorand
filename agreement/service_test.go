@@ -756,7 +756,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 			BlockFactory:   testBlockFactory{Owner: i},
 			Clock:          clocks[i],
 			Accessor:       accessor,
-			Local:          config.Local{CadaverSizeTarget: 10000000, SpeculativeBlockAssemblyGraceTime: 9999999999},
+			Local:          config.Local{CadaverSizeTarget: 10000000, SpeculativeAsmTimeOffset: 9999999999},
 			RandomSource:   &testingRand{},
 		}
 
