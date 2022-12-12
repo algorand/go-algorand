@@ -198,3 +198,16 @@ testname{host="myhost"} 2.3
 `
 	require.Equal(t, expected, sbOut.String())
 }
+
+func TestGetValue(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	c := MakeCounter(MetricName{Name: "testname", Description: "testhelp"})
+	c.Deregister(nil)
+
+	require.Equal(t, uint64(0), c.GetUint64Value())
+	c.Inc(nil)
+	require.Equal(t, uint64(1), c.GetUint64Value())
+	c.Inc(nil)
+	require.Equal(t, uint64(2), c.GetUint64Value())
+}

@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/DataDog/zstd v1.5.2
-	github.com/algorand/avm-abi v0.1.0
+	github.com/algorand/avm-abi v0.1.1
 	github.com/algorand/falcon v0.0.0-20220727072124-02a2a64c4414
 	github.com/algorand/go-codec/codec v1.1.8
 	github.com/algorand/go-deadlock v0.2.2
@@ -63,6 +63,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/russross/blackfriday v1.5.2 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.1 // indirect
 	golang.org/x/net v0.1.0 // indirect
