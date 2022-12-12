@@ -113,7 +113,7 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	ppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
 	pprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
 
-	if node.Config().EnableTransactionSimulator { // TODO: rename this to EnableExperimentalEndpoints or similar
+	if node.Config().EnableExperimentalAPI {
 		experimental.RegisterHandlers(e, &v2Handler, apiAuthenticator)
 	}
 

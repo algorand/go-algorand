@@ -595,7 +595,7 @@ func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTran
 	mockLedger, _, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
-	mockNode.config.EnableTransactionSimulator = enableTransactionSimulator
+	mockNode.config.EnableExperimentalAPI = enableTransactionSimulator
 	handler = v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
