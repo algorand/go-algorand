@@ -7,7 +7,7 @@ version: 2.1
 orbs:
   win: circleci/windows@2.3.0
   go: circleci/go@1.7.0
-  slack: circleci/slack@4.4.2
+  slack: circleci/slack@4.10.1
 
 parameters:
   ubuntu_image:
@@ -64,6 +64,13 @@ executors:
   mac_arm64_large:
     <<: *executor-mac-arm64
 
+slack-fail-stop-step: &slack-fail-post-step
+  post-steps:
+    - slack/notify:
+        branch_pattern: "master,rel/beta,rel/nightly,rel/stable"
+        event: fail
+        template: basic_fail_1
+
 # ===== Workflow Definitions =====
 workflows:
   version: 2
@@ -80,6 +87,7 @@ workflows:
                 - /rel\/.*/
                 - << pipeline.parameters.valid_nightly_branch >>
           context: slack-secrets
+          <<: *slack-fail-post-step
 
       - test:
           name: << matrix.platform >>_test
@@ -91,6 +99,8 @@ workflows:
               ignore:
                 - /rel\/.*/
                 - << pipeline.parameters.valid_nightly_branch >>
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
       - test_nightly:
           name: << matrix.platform >>_test_nightly
@@ -99,6 +109,7 @@ workflows:
           requires:
             - << matrix.platform >>_build_nightly
           context: slack-secrets
+          <<: *slack-fail-post-step
 
       - integration:
           name: << matrix.platform >>_integration
@@ -106,6 +117,8 @@ workflows:
             <<: *matrix-default
           filters:
             <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
@@ -114,6 +127,7 @@ workflows:
           requires:
             - << matrix.platform >>_build_nightly
           context: slack-secrets
+          <<: *slack-fail-post-step
 
       - e2e_expect:
           name: << matrix.platform >>_e2e_expect
@@ -121,6 +135,8 @@ workflows:
             <<: *matrix-default
           filters:
             <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
@@ -129,6 +145,7 @@ workflows:
           requires:
             - << matrix.platform >>_build_nightly
           context: slack-secrets
+          <<: *slack-fail-post-step
 
       - e2e_subs:
           name: << matrix.platform >>_e2e_subs
@@ -136,6 +153,8 @@ workflows:
             <<: *matrix-default
           filters:
             <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
@@ -146,6 +165,7 @@ workflows:
           context:
             - slack-secrets
             - aws-secrets
+          <<: *slack-fail-post-step
 
       - tests_verification_job:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
@@ -155,6 +175,8 @@ workflows:
               job_type: ["test", "integration", "e2e_expect"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
       - tests_verification_job_nightly:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
@@ -165,6 +187,7 @@ workflows:
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
           context: slack-secrets
+          <<: *slack-fail-post-step
 
       - upload_binaries:
           name: << matrix.platform >>_upload_binaries
@@ -183,6 +206,7 @@ workflows:
           context:
             - slack-secrets
             - aws-secrets
+          <<: *slack-fail-post-step
 
       #- windows_x64_build
 
@@ -207,9 +231,6 @@ jobs:
             - go
             - gimme
             - .gimme
-      - slack/notify: &slack-fail-event
-          event: fail
-          template: basic_fail_1
 
   test:
     parameters:
@@ -240,9 +261,6 @@ jobs:
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
       - upload_coverage
-      - slack/notify: &slack-fail-event
-          event: fail
-          template: basic_fail_1
 
   integration:
     parameters:
@@ -275,8 +293,6 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_integration_nightly
           no_output_timeout: 45m
-      - slack/notify:
-          <<: *slack-fail-event
 
   e2e_expect:
     parameters:
@@ -309,8 +325,6 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform>>_e2e_expect_nightly
           no_output_timeout: 45m
-      - slack/notify:
-          <<: *slack-fail-event
 
   e2e_subs:
     parameters:
@@ -345,8 +359,6 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_e2e_subs_nightly
           no_output_timeout: 45m
-      - slack/notify:
-          <<: *slack-fail-event
 
   windows_x64_build:
     executor:
@@ -396,8 +408,6 @@ jobs:
       - checkout
       - tests_verification_command:
           result_subdir: << parameters.platform >>_<< parameters.job_type >>
-      - slack/notify:
-          <<: *slack-fail-event
 
   upload_binaries:
     working_directory: << pipeline.parameters.build_dir >>/project
@@ -410,8 +420,6 @@ jobs:
       - prepare_go
       - upload_binaries_command:
           platform: << parameters.platform >>
-      - slack/notify:
-          <<: *slack-fail-event
 
 # ===== Command Definitions =====
 commands:

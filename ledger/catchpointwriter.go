@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -56,6 +57,7 @@ type catchpointWriter struct {
 	tx                   *sql.Tx
 	filePath             string
 	totalAccounts        uint64
+	totalKVs             uint64
 	file                 *os.File
 	tar                  *tar.Writer
 	compressor           io.WriteCloser
@@ -73,7 +75,7 @@ type encodedBalanceRecordV5 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Address     basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
-	AccountData msgp.Raw       `codec:"ad"`
+	AccountData msgp.Raw       `codec:"ad"` // encoding of basics.AccountData
 }
 
 type catchpointFileBalancesChunkV5 struct {
@@ -89,8 +91,8 @@ type encodedBalanceRecordV6 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Address     basics.Address      `codec:"a,allocbound=crypto.DigestSize"`
-	AccountData msgp.Raw            `codec:"b"`
-	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=resourcesPerCatchpointFileChunkBackwardCompatible"`
+	AccountData msgp.Raw            `codec:"b"`                                                              // encoding of baseAccountData
+	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=resourcesPerCatchpointFileChunkBackwardCompatible"` // map of resourcesData
 
 	// flag indicating whether there are more records for the same account coming up
 	ExpectingMoreEntries bool `codec:"e"`
@@ -129,7 +131,14 @@ func (chunk catchpointFileChunkV6) empty() bool {
 }
 
 func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxResourcesPerChunk int) (*catchpointWriter, error) {
-	totalAccounts, err := totalAccounts(ctx, tx)
+	arw := store.NewAccountsSQLReaderWriter(tx)
+
+	totalAccounts, err := arw.TotalAccounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	totalKVs, err := arw.TotalKVs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +162,7 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxR
 		tx:                   tx,
 		filePath:             filePath,
 		totalAccounts:        totalAccounts,
+		totalKVs:             totalKVs,
 		file:                 file,
 		compressor:           compressor,
 		tar:                  tar,

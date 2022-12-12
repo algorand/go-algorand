@@ -25,9 +25,8 @@ import (
 	"strings"
 	"time"
 
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
@@ -402,7 +401,7 @@ func (n Network) Stop(binDir string) {
 
 // NetworkNodeStatus represents the result from checking the status of a particular node instance
 type NetworkNodeStatus struct {
-	Status generatedV2.NodeStatusResponse
+	Status model.NodeStatusResponse
 	Error  error
 }
 
@@ -430,7 +429,7 @@ func (n Network) NodesStatus(binDir string) map[string]NetworkNodeStatus {
 	statuses := make(map[string]NetworkNodeStatus)
 
 	for _, relayDir := range n.cfg.RelayDirs {
-		var status generatedV2.NodeStatusResponse
+		var status model.NodeStatusResponse
 		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(relayDir))
 		algodClient, err := nc.AlgodClient()
 		if err == nil {
@@ -443,7 +442,7 @@ func (n Network) NodesStatus(binDir string) map[string]NetworkNodeStatus {
 	}
 
 	for _, nodeDir := range n.nodeDirs {
-		var status generatedV2.NodeStatusResponse
+		var status model.NodeStatusResponse
 		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(nodeDir))
 		algodClient, err := nc.AlgodClient()
 		if err == nil {

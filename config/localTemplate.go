@@ -41,7 +41,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitely, otherwise, only the most recent blocks
@@ -461,8 +461,16 @@ type Local struct {
 	// in GetApplicationBoxes REST API responses.
 	MaxAPIBoxPerApplication uint64 `version[25]:"100000"`
 
-	// EnableTransactionSimulator enables the simulation API endpoint.
-	EnableTransactionSimulator bool `version[25]:"false"`
+	// TxIncomingFilteringFlags instructs algod filtering incoming tx messages
+	// Flag values:
+	// 0x00 - disabled
+	// 0x01 (txFilterRawMsg) - check for raw tx message duplicates
+	// 0x02 (txFilterCanonical) - check for canonical tx group duplicates
+	TxIncomingFilteringFlags uint32 `version[26]:"1"`
+
+	// EnableExperimentalAPI enables experimental API endpoint. Note that these endpoints have no
+	// guarantees in terms of functionality or future support.
+	EnableExperimentalAPI bool `version[26]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
@@ -550,4 +558,14 @@ func (cfg Local) CatchupVerifyTransactionSignatures() bool {
 // CatchupVerifyApplyData returns true if verifying the ApplyData of the payset needed
 func (cfg Local) CatchupVerifyApplyData() bool {
 	return cfg.CatchupBlockValidateMode&catchupValidationModeVerifyApplyData != 0
+}
+
+// TxFilterRawMsgEnabled returns true if raw tx filtering is enabled
+func (cfg Local) TxFilterRawMsgEnabled() bool {
+	return cfg.TxIncomingFilteringFlags&txFilterRawMsg != 0
+}
+
+// TxFilterCanonicalEnabled returns true if canonical tx group filtering is enabled
+func (cfg Local) TxFilterCanonicalEnabled() bool {
+	return cfg.TxIncomingFilteringFlags&txFilterCanonical != 0
 }

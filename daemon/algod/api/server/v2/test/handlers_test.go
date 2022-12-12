@@ -30,15 +30,18 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-codec/codec"
+
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/catchup"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -52,7 +55,6 @@ import (
 	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
-	"github.com/algorand/go-codec/codec"
 )
 
 const stateProofIntervalForHandlerTests = uint64(256)
@@ -88,12 +90,12 @@ func TestSimpleMockBuilding(t *testing.T) {
 func accountInformationTest(t *testing.T, address string, expectedCode int) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
-	err := handler.AccountInformation(c, address, generatedV2.AccountInformationParams{})
+	err := handler.AccountInformation(c, address, model.AccountInformationParams{})
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
 	if address == poolAddr.String() {
 		expectedResponse := poolAddrResponseGolden
-		actualResponse := generatedV2.AccountResponse{}
+		actualResponse := model.AccountResponse{}
 		err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResponse)
 		require.NoError(t, err)
 		require.Equal(t, expectedResponse, actualResponse)
@@ -111,7 +113,7 @@ func TestAccountInformation(t *testing.T) {
 func getBlockTest(t *testing.T, blockNum uint64, format string, expectedCode int) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
-	err := handler.GetBlock(c, blockNum, generatedV2.GetBlockParams{Format: &format})
+	err := handler.GetBlock(c, blockNum, model.GetBlockParams{Format: (*model.GetBlockParamsFormat)(&format)})
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
 }
@@ -125,6 +127,100 @@ func TestGetBlock(t *testing.T) {
 	getBlockTest(t, 1, "json", 404)
 	getBlockTest(t, 1, "msgpack", 404)
 	getBlockTest(t, 0, "bad format", 400)
+}
+
+func TestGetLedgerStateDelta(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+	insertRounds(a, handler, 3)
+
+	err := handler.GetLedgerStateDelta(c, 2)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+
+	actualResponse := model.LedgerStateDelta{}
+	expectedResponse := poolDeltaResponseGolden
+	(*expectedResponse.Accts.Accounts)[0].AccountData.Round = 2
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResponse)
+	require.NoError(t, err)
+	require.Equal(t, poolDeltaResponseGolden.Accts, actualResponse.Accts)
+	require.Equal(t, poolDeltaResponseGolden.KvMods, actualResponse.KvMods)
+	require.Equal(t, poolDeltaResponseGolden.ModifiedAssets, actualResponse.ModifiedAssets)
+	require.Equal(t, poolDeltaResponseGolden.ModifiedApps, actualResponse.ModifiedApps)
+	require.Equal(t, poolDeltaResponseGolden.TxLeases, actualResponse.TxLeases)
+	require.Equal(t, poolDeltaResponseGolden.Totals, actualResponse.Totals)
+}
+
+func TestSyncRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	numAccounts := 1
+	numTransactions := 1
+	offlineAccounts := true
+	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
+	dummyShutdownChan := make(chan struct{})
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	defer releasefunc()
+
+	// TestSetSyncRound 200
+	mockCall := mockNode.On("SetSyncRound", mock.Anything).Return(nil)
+	err := handler.SetSyncRound(c, 0)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	mockCall.Unset()
+	c, rec = newReq(t)
+	// TestSetSyncRound 400 SyncRoundInvalid
+	mockCall = mockNode.On("SetSyncRound", mock.Anything).Return(catchup.ErrSyncRoundInvalid)
+	err = handler.SetSyncRound(c, 0)
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	mockCall.Unset()
+	c, rec = newReq(t)
+	// TestSetSyncRound 500 InternalError
+	mockCall = mockNode.On("SetSyncRound", mock.Anything).Return(fmt.Errorf("unknown error"))
+	err = handler.SetSyncRound(c, 0)
+	require.NoError(t, err)
+	require.Equal(t, 500, rec.Code)
+	c, rec = newReq(t)
+
+	// TestGetSyncRound 200
+	mockCall = mockNode.On("GetSyncRound").Return(2)
+	err = handler.GetSyncRound(c)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	mockCall.Unset()
+	c, rec = newReq(t)
+	// TestGetSyncRound 404 NotFound
+	mockCall = mockNode.On("GetSyncRound").Return(0)
+	err = handler.GetSyncRound(c)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+	c, rec = newReq(t)
+
+	// TestUnsetSyncRound 200
+	mockCall = mockNode.On("UnsetSyncRound").Return()
+	err = handler.UnsetSyncRound(c)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	mockCall.Unset()
+	c, rec = newReq(t)
+
+	mock.AssertExpectationsForObjects(t, mockNode)
 }
 
 func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, transactions.SignedTxn, func()) {
@@ -239,11 +335,11 @@ func TestGetBlockGetBlockHash(t *testing.T) {
 	}
 
 	var block1, block2 blockResponse
-	var block1Hash generatedV2.BlockHashResponse
+	var block1Hash model.BlockHashResponse
 	format := "json"
 
 	// Get block 1
-	err := handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: &format})
+	err := handler.GetBlock(c, 1, model.GetBlockParams{Format: (*model.GetBlockParamsFormat)(&format)})
 	a.NoError(err)
 	a.Equal(200, rec.Code)
 	err = protocol.DecodeJSON(rec.Body.Bytes(), &block1)
@@ -251,7 +347,7 @@ func TestGetBlockGetBlockHash(t *testing.T) {
 
 	// Get block 2
 	c, rec = newReq(t)
-	err = handler.GetBlock(c, 2, generatedV2.GetBlockParams{Format: &format})
+	err = handler.GetBlock(c, 2, model.GetBlockParams{Format: (*model.GetBlockParamsFormat)(&format)})
 	a.NoError(err)
 	a.Equal(200, rec.Code)
 	err = protocol.DecodeJSON(rec.Body.Bytes(), &block2)
@@ -285,7 +381,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 
 	// fetch the block and ensure it can be properly decoded with the standard JSON decoder
 	format := "json"
-	err := handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: &format})
+	err := handler.GetBlock(c, 1, model.GetBlockParams{Format: (*model.GetBlockParamsFormat)(&format)})
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
 	body := rec.Body.Bytes()
@@ -317,7 +413,7 @@ func TestGetStatus(t *testing.T) {
 	err := handler.GetStatus(c)
 	require.NoError(t, err)
 	stat := cannedStatusReportGolden
-	expectedResult := generatedV2.NodeStatusResponse{
+	expectedResult := model.NodeStatusResponse{
 		LastRound:                   uint64(stat.LastRound),
 		LastVersion:                 string(stat.LastVersion),
 		NextVersion:                 string(stat.NextVersion),
@@ -333,8 +429,11 @@ func TestGetStatus(t *testing.T) {
 		CatchpointVerifiedAccounts:  &stat.CatchpointCatchupVerifiedAccounts,
 		CatchpointTotalBlocks:       &stat.CatchpointCatchupTotalBlocks,
 		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
+		CatchpointTotalKvs:          &stat.CatchpointCatchupTotalKVs,
+		CatchpointProcessedKvs:      &stat.CatchpointCatchupProcessedKVs,
+		CatchpointVerifiedKvs:       &stat.CatchpointCatchupVerifiedKVs,
 	}
-	actualResult := generatedV2.NodeStatusResponse{}
+	actualResult := model.NodeStatusResponse{}
 	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResult)
 	require.NoError(t, err)
 	require.Equal(t, expectedResult, actualResult)
@@ -371,7 +470,7 @@ func pendingTransactionInformationTest(t *testing.T, txidToUse int, format strin
 	if txidToUse >= 0 {
 		txid = stxns[txidToUse].ID().String()
 	}
-	params := generatedV2.PendingTransactionInformationParams{Format: &format}
+	params := model.PendingTransactionInformationParams{Format: (*model.PendingTransactionInformationParamsFormat)(&format)}
 	err := handler.PendingTransactionInformation(c, txid, params)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
@@ -390,12 +489,12 @@ func TestPendingTransactionInformation(t *testing.T) {
 func getPendingTransactionsTest(t *testing.T, format string, max uint64, expectedCode int) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
-	params := generatedV2.GetPendingTransactionsParams{Format: &format, Max: &max}
+	params := model.GetPendingTransactionsParams{Format: (*model.GetPendingTransactionsParamsFormat)(&format), Max: &max}
 	err := handler.GetPendingTransactions(c, params)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
 	if format == "json" && rec.Code == 200 {
-		var response generatedV2.PendingTransactionsResponse
+		var response model.PendingTransactionsResponse
 
 		data := rec.Body.Bytes()
 		err = protocol.DecodeJSON(data, &response)
@@ -417,7 +516,7 @@ func getPendingTransactionsTest(t *testing.T, format string, max uint64, expecte
 func TestPendingTransactionLogsEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	response := generated.PendingTransactionResponse{
+	response := model.PendingTransactionResponse{
 		Logs: &[][]byte{
 			{},
 			[]byte(string("a")),
@@ -473,7 +572,7 @@ func pendingTransactionsByAddressTest(t *testing.T, rootkeyToUse int, format str
 	if rootkeyToUse >= 0 {
 		address = rootkeys[rootkeyToUse].Address().String()
 	}
-	params := generatedV2.GetPendingTransactionsByAddressParams{Format: &format}
+	params := model.GetPendingTransactionsByAddressParams{Format: (*model.GetPendingTransactionsByAddressParamsFormat)(&format)}
 	err := handler.GetPendingTransactionsByAddress(c, address, params)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
@@ -496,7 +595,7 @@ func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTran
 	mockLedger, _, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
-	mockNode.config.EnableTransactionSimulator = enableTransactionSimulator
+	mockNode.config.EnableExperimentalAPI = enableTransactionSimulator
 	handler = v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -622,7 +721,7 @@ func TestAbortCatchup(t *testing.T) {
 }
 
 func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int,
-	enableDeveloperAPI bool, params generated.TealCompileParams,
+	enableDeveloperAPI bool, params model.TealCompileParams,
 	expectedSourcemap *logic.SourceMap,
 ) (response v2.CompileResponseWithSourceMap) {
 	numAccounts := 1
@@ -664,7 +763,7 @@ func TestTealCompile(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	params := generated.TealCompileParams{}
+	params := model.TealCompileParams{}
 	tealCompileTest(t, nil, 200, true, params, nil) // nil program should work
 
 	goodProgram := fmt.Sprintf(`#pragma version %d
@@ -678,10 +777,10 @@ int 1`, logic.AssemblerMaxVersion)
 	// Test good program with params
 	tealCompileTest(t, goodProgramBytes, 200, true, params, nil)
 	paramValue := true
-	params = generated.TealCompileParams{Sourcemap: &paramValue}
+	params = model.TealCompileParams{Sourcemap: &paramValue}
 	tealCompileTest(t, goodProgramBytes, 200, true, params, &expectedSourcemap)
 	paramValue = false
-	params = generated.TealCompileParams{Sourcemap: &paramValue}
+	params = model.TealCompileParams{Sourcemap: &paramValue}
 	tealCompileTest(t, goodProgramBytes, 200, true, params, nil)
 
 	// Test a program without the developer API flag.
@@ -695,7 +794,7 @@ int 1`, logic.AssemblerMaxVersion)
 
 func tealDisassembleTest(t *testing.T, program []byte, expectedCode int,
 	expectedString string, enableDeveloperAPI bool,
-) (response generatedV2.DisassembleResponse) {
+) (response model.DisassembleResponse) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
@@ -723,7 +822,7 @@ func tealDisassembleTest(t *testing.T, program []byte, expectedCode int,
 		require.NoError(t, err, string(data))
 		require.Equal(t, expectedString, response.Result)
 	} else if rec.Code == 400 {
-		var response generatedV2.ErrorResponse
+		var response model.ErrorResponse
 		data := rec.Body.Bytes()
 		err = protocol.DecodeJSON(data, &response)
 		require.NoError(t, err, string(data))
@@ -756,9 +855,9 @@ func TestTealDisassemble(t *testing.T) {
 }
 
 func tealDryrunTest(
-	t *testing.T, obj *generatedV2.DryrunRequest, format string,
+	t *testing.T, obj *model.DryrunRequest, format string,
 	expCode int, expResult string, enableDeveloperAPI bool,
-) (response generatedV2.DryrunResponse) {
+) (response model.DryrunResponse) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
@@ -807,7 +906,7 @@ func TestTealDryrun(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	var gdr generated.DryrunRequest
+	var gdr model.DryrunRequest
 	txns := []transactions.SignedTxn{
 		{
 			Txn: transactions.Transaction{
@@ -834,24 +933,24 @@ func TestTealDryrun(t *testing.T) {
 	failOps, err := logic.AssembleStringWithVersion("int 0", 2)
 	require.NoError(t, err)
 
-	gdr.Apps = []generated.Application{
+	gdr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: generated.ApplicationParams{
+			Params: model.ApplicationParams{
 				ApprovalProgram: sucOps.Program,
 			},
 		},
 	}
-	localv := make(generated.TealKeyValueStore, 1)
-	localv[0] = generated.TealKeyValue{
+	localv := make(model.TealKeyValueStore, 1)
+	localv[0] = model.TealKeyValue{
 		Key:   "foo",
-		Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
+		Value: model.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
 	}
 
-	gdr.Accounts = []generated.Account{
+	gdr.Accounts = []model.Account{
 		{
 			Address: basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalState{{
+			AppsLocalState: &[]model.ApplicationLocalState{{
 				Id:       1,
 				KeyValue: &localv,
 			}},
@@ -1028,19 +1127,19 @@ func TestGetProofDefault(t *testing.T) {
 	defer releasefunc()
 
 	txid := stx.ID()
-	err := handler.GetTransactionProof(c, 1, txid.String(), generated.GetTransactionProofParams{})
+	err := handler.GetTransactionProof(c, 1, txid.String(), model.GetTransactionProofParams{})
 	a.NoError(err)
 
-	var resp generatedV2.TransactionProofResponse
+	var resp model.TransactionProofResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	a.NoError(err)
-	a.Equal("sha512_256", resp.Hashtype)
+	a.Equal(model.TransactionProofResponseHashtypeSha512256, resp.Hashtype)
 
 	l := handler.Node.LedgerForAPI()
 	blkHdr, err := l.BlockHdr(1)
 	a.NoError(err)
 
-	singleLeafProof, err := merklearray.ProofDataToSingleLeafProof(resp.Hashtype, resp.Treedepth, resp.Proof)
+	singleLeafProof, err := merklearray.ProofDataToSingleLeafProof(string(resp.Hashtype), resp.Treedepth, resp.Proof)
 	a.NoError(err)
 
 	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
@@ -1166,7 +1265,7 @@ func TestStateProof200(t *testing.T) {
 	a.NoError(handler.GetStateProof(ctx, stateProofIntervalForHandlerTests+1))
 	a.Equal(200, responseRecorder.Code)
 
-	stprfResp := generated.StateProofResponse{}
+	stprfResp := model.StateProofResponse{}
 	a.NoError(json.Unmarshal(responseRecorder.Body.Bytes(), &stprfResp))
 
 	a.Equal([]byte{0x0, 0x1, 0x2}, stprfResp.Message.BlockHeadersCommitment)
@@ -1214,7 +1313,7 @@ func TestGetBlockProof200(t *testing.T) {
 	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(stateProofIntervalForHandlerTests, blkHdrArr, 1)
 	a.NoError(err)
 
-	proofResp := generated.LightBlockHeaderProofResponse{}
+	proofResp := model.LightBlockHeaderProofResponse{}
 	a.NoError(json.Unmarshal(responseRecorder.Body.Bytes(), &proofResp))
 	a.Equal(proofResp.Proof, leafproof.GetConcatenatedProof())
 	a.Equal(proofResp.Treedepth, uint64(leafproof.TreeDepth))

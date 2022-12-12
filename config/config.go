@@ -241,6 +241,11 @@ const (
 )
 
 const (
+	txFilterRawMsg    = 1
+	txFilterCanonical = 2
+)
+
+const (
 	catchupValidationModeCertificate                 = 1
 	catchupValidationModePaysetHash                  = 2
 	catchupValidationModeVerifyTransactionSignatures = 4

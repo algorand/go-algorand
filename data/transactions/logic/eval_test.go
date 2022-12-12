@@ -389,9 +389,10 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 			ep := defaultEvalParams(txn)
 			err := CheckSignature(0, ep)
 			require.NoError(t, err)
-			pass, err := EvalSignature(0, ep)
+			pass, cx, err := EvalSignatureFull(0, ep)
 			require.True(t, pass)
 			require.NoError(t, err)
+			require.Greater(t, cx.Cost(), 0)
 		})
 	}
 }
@@ -454,10 +455,12 @@ func TestTLHC(t *testing.T) {
 				t.Log(ep.Trace.String())
 			}
 			require.NoError(t, err)
-			pass, err := EvalSignature(0, ep)
+			pass, cx, err := EvalSignatureFull(0, ep)
 			if pass {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(ep.Trace.String())
+				require.Greater(t, cx.cost, 0)
+				require.Greater(t, cx.Cost(), 0)
 			}
 			require.False(t, pass)
 			isNotPanic(t, err)

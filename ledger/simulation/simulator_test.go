@@ -157,6 +157,7 @@ func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 		"GenesisHash",
 		"GenesisProto",
 		"LatestTotals",
+		"FlushCaches",
 	}
 
 	methodIsSkipped := func(methodName string) bool {
@@ -210,7 +211,9 @@ func TestPayTxn(t *testing.T) {
 	t.Parallel()
 
 	for _, signed := range []bool{true, false} {
+		signed := signed
 		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+			t.Parallel()
 			l, accounts, makeTxnHeader := prepareSimulatorTest(t)
 			defer l.Close()
 			s := simulation.MakeSimulator(l)
@@ -244,7 +247,9 @@ func TestOverspendPayTxn(t *testing.T) {
 	t.Parallel()
 
 	for _, signed := range []bool{true, false} {
+		signed := signed
 		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+			t.Parallel()
 			l, accounts, makeTxnHeader := prepareSimulatorTest(t)
 			defer l.Close()
 			s := simulation.MakeSimulator(l)
@@ -281,7 +286,9 @@ func TestAuthAddrTxn(t *testing.T) {
 	t.Parallel()
 
 	for _, signed := range []bool{true, false} {
+		signed := signed
 		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+			t.Parallel()
 			l, accounts, makeTxnHeader := prepareSimulatorTest(t)
 			defer l.Close()
 			s := simulation.MakeSimulator(l)
