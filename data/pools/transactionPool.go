@@ -610,7 +610,8 @@ func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, 
 	}
 
 	// process txns only until one block is full
-	speculativePool.onNewBlock(vb.Block(), vb.Delta(), true)
+	// action on subordinate pool continues asynchronously, to be picked up in tryReadSpeculativeBlock
+	go speculativePool.onNewBlock(vb.Block(), vb.Delta(), true)
 
 	// TODO: capture results of re-processing from onNewBlock
 
@@ -628,17 +629,18 @@ func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, 
 func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHash, deadline time.Time) *ledgercore.ValidatedBlock {
 	// assumes pool.assemblyMu is held
 	pool.specBlockMu.Lock()
-	defer pool.specBlockMu.Unlock()
 
 	if pool.specActive {
 		if pool.specBlockDigest == crypto.Digest(branch) {
 			pool.log.Infof("update speculative deadline: %s", deadline.String())
 			specPool := pool.speculativePool
+			pool.specBlockMu.Unlock()
 			specPool.assemblyMu.Lock()
 			for time.Now().Before(deadline) && (!specPool.assemblyResults.ok) {
 				specPool.assemblyDeadline = deadline
 				condvar.TimedWait(&specPool.assemblyCond, deadline.Sub(time.Now()))
 			}
+			// TODO: block assembly doesn't always stop by deadline, keep waiting until it is actually done
 			var out *ledgercore.ValidatedBlock
 			if specPool.assemblyResults.ok {
 				out = specPool.assemblyResults.blk
@@ -649,6 +651,7 @@ func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHas
 		pool.cancelSpeculativeAssembly()
 		pool.specActive = false
 	}
+	pool.specBlockMu.Unlock()
 	// nope, nothing
 	return nil
 }
