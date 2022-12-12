@@ -28,6 +28,17 @@ additionally ensure your new APIs are registered.
 For backwards compatibility, the default set of APIs registered will always be `participating` and `nonparticipating`
 APIs.
 
+The current set of API groups and some rough descriptions of how to think about them:
+* `participating`
+  * APIs used in forming blocks/transactions and generally advancing the chain. Things which use the txn pool,
+participation keys, the agreement service, etc.
+* `nonparticipating`
+  * Generally available APIs used to do things such as fetch data. For example, GetGenesis, GetBlock, Catchpoint Catchup, etc.
+* `data`
+  * A special set of APIs which require manipulating the node state in order to provide additional data about the node state
+at some predefined granularity. For example, SetSyncRound and GetLedgerStateDelta used together control and expose StateDelta objects
+containing per-round ledger differences that get compacted when actually written to the ledger DB.
+
 ## What codegen tool is used?
 
 We found that [oapi-codegen](https://github.com/deepmap/oapi-codegen) produced the cleanest code, and had an easy to work with codebase. There is an algorand fork of this project which contains a couple modifications that were needed to properly support our needs.
