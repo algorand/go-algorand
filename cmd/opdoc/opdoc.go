@@ -248,7 +248,7 @@ type OpRecord struct {
 	Doc           string
 	DocExtra      string `json:",omitempty"`
 	ImmediateNote string `json:",omitempty"`
-	Version       int
+	Version       uint64
 	Groups        []string
 }
 
@@ -333,7 +333,7 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].DocExtra = logic.OpDocExtra(spec.Name)
 		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
 		records[i].Groups = opGroups[spec.Name]
-		records[i].Version = int(spec.Version)
+		records[i].Version = spec.Version
 	}
 	return &LanguageSpec{
 		EvalMaxVersion:  docVersion,
