@@ -3423,13 +3423,17 @@ func opEcdsaVerify(cx *EvalContext) error {
 	} else if fs.field == Secp256r1 {
 		r := new(big.Int).SetBytes(sigR)
 		s := new(big.Int).SetBytes(sigS)
+		curve := elliptic.P256()
 
-		pubkey := ecdsa.PublicKey{
-			Curve: elliptic.P256(),
-			X:     x,
-			Y:     y,
+		// if not on curve, result remains false
+		if curve.IsOnCurve(x, y) {
+			pubkey := ecdsa.PublicKey{
+				Curve: curve,
+				X:     x,
+				Y:     y,
+			}
+			result = ecdsa.Verify(&pubkey, msg, r, s)
 		}
-		result = ecdsa.Verify(&pubkey, msg, r, s)
 	}
 
 	cx.stack[fifth] = boolToSV(result)
