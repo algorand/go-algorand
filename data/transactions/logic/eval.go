@@ -583,12 +583,12 @@ type EvalContext struct {
 	// Set of PC values that branches we've seen so far might
 	// go. So, if checkStep() skips one, that branch is trying to
 	// jump into the middle of a multibyte instruction
-	branchTargets map[int]bool
+	branchTargets []bool
 
 	// Set of PC values that we have begun a checkStep() with. So
 	// if a back jump is going to a value that isn't here, it's
 	// jumping into the middle of multibyte instruction.
-	instructionStarts map[int]bool
+	instructionStarts []bool
 
 	programHashCached crypto.Digest
 
@@ -933,8 +933,8 @@ func check(program []byte, params *EvalParams, mode runMode) (err error) {
 	cx.EvalParams = params
 	cx.runModeFlags = mode
 	cx.program = program
-	cx.branchTargets = make(map[int]bool)
-	cx.instructionStarts = make(map[int]bool)
+	cx.branchTargets = make([]bool, len(program)+1) // teal v1 allowed jumping to the end of the prog
+	cx.instructionStarts = make([]bool, len(program)+1)
 
 	maxCost := cx.remainingBudget()
 	staticCost := 0
@@ -1229,7 +1229,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 		fmt.Fprintf(cx.Trace, "%3d %s\n", prevpc, spec.Name)
 	}
 	for pc := prevpc + 1; pc < cx.pc; pc++ {
-		if _, ok := cx.branchTargets[pc]; ok {
+		if ok := cx.branchTargets[pc]; ok {
 			return 0, fmt.Errorf("branch target %d is not an aligned instruction", pc)
 		}
 	}
@@ -2183,7 +2183,7 @@ func checkBranch(cx *EvalContext) error {
 	}
 	if target < cx.pc+3 {
 		// If a branch goes backwards, we should have already noted that an instruction began at that location.
-		if _, ok := cx.instructionStarts[target]; !ok {
+		if ok := cx.instructionStarts[target]; !ok {
 			return fmt.Errorf("back branch target %d is not an aligned instruction", target)
 		}
 	}
@@ -2204,7 +2204,7 @@ func checkSwitch(cx *EvalContext) error {
 
 		if target < eoi {
 			// If a branch goes backwards, we should have already noted that an instruction began at that location.
-			if _, ok := cx.instructionStarts[target]; !ok {
+			if ok := cx.instructionStarts[target]; !ok {
 				return fmt.Errorf("back branch target %d is not an aligned instruction", target)
 			}
 		}
