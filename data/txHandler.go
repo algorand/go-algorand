@@ -219,6 +219,7 @@ func (handler *TxHandler) Stop() {
 	handler.ctxCancel()
 	handler.backlogWg.Wait()
 	handler.streamVerifier.WaitForStop()
+	handler.msgCache.WaitForStop()
 }
 
 func reencode(stxns []transactions.SignedTxn) []byte {

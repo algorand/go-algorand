@@ -109,6 +109,7 @@ type txSaltedCache struct {
 	curSalt  [4]byte
 	prevSalt [4]byte
 	ctx      context.Context
+	wg       sync.WaitGroup
 }
 
 func makeSaltedCache(size int) *txSaltedCache {
@@ -120,6 +121,7 @@ func makeSaltedCache(size int) *txSaltedCache {
 func (c *txSaltedCache) start(ctx context.Context, refreshInterval time.Duration) {
 	c.ctx = ctx
 	if refreshInterval != 0 {
+		c.wg.Add(1)
 		go c.salter(refreshInterval)
 	}
 
@@ -128,9 +130,14 @@ func (c *txSaltedCache) start(ctx context.Context, refreshInterval time.Duration
 	c.moreSalt()
 }
 
+func (c *txSaltedCache) WaitForStop() {
+	c.wg.Wait()
+}
+
 // salter is a goroutine refreshing the cache by schedule
 func (c *txSaltedCache) salter(refreshInterval time.Duration) {
 	ticker := time.NewTicker(refreshInterval)
+	defer c.wg.Done()
 	defer ticker.Stop()
 	for {
 		select {
