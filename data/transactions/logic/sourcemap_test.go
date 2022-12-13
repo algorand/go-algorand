@@ -26,6 +26,7 @@ import (
 
 func TestGetSourceMap(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	a := require.New(t)
 
 	sourceNames := []string{"test.teal"}
@@ -55,6 +56,7 @@ func TestGetSourceMap(t *testing.T) {
 
 func TestVLQ(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	a := require.New(t)
 
 	a.Equal("AAAA", MakeSourceMapLine(0, 0, 0, 0))
