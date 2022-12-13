@@ -1000,7 +1000,8 @@ loop:
 	handler.streamVerifier.Start(handler.ctx)
 	defer handler.streamVerifier.WaitForStop()
 	defer handler.ctxCancel()
-	handler.streamVerifierChan <- &verify.UnverifiedElement{msg.unverifiedTxGroup, msg}
+	handler.streamVerifierChan <- &verify.UnverifiedElement{
+		TxnGroup: msg.unverifiedTxGroup, BacklogMessage: msg}
 	var currentCount uint64
 	for x := 0; x < 1000; x++ {
 		currentCount = transactionMessagesDroppedFromPool.GetUint64Value()
