@@ -246,6 +246,7 @@ func (v *validatedBlockAsLFE) StartEvaluator(hdr bookkeeping.BlockHeader, payset
 func (v *validatedBlockAsLFE) FlushCaches() {
 }
 
+// ErrNotImplemented "Not implemented"
 var ErrNotImplemented = errors.New("Not implemented")
 
 // LookupKv is part of ledger/internal.LedgerForEvaluator interface

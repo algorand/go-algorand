@@ -581,10 +581,9 @@ func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, 
 		if blockHash == pool.specBlockDigest {
 			pool.log.Infof("StartSpeculativeBlockAssembly %s already running", blockHash.String())
 			return
-		} else {
-			// cancel prior speculative block assembly based on different block
-			pool.cancelSpeculativeAssembly()
 		}
+		// cancel prior speculative block assembly based on different block
+		pool.cancelSpeculativeAssembly()
 	}
 	pool.log.Infof("StartSpeculativeBlockAssembly %s", blockHash.String())
 	pool.specActive = true
@@ -1088,10 +1087,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		specBlock, specErr := pool.tryReadSpeculativeBlock(prev.Hash(), round, deadline, &stats)
 		if specBlock != nil || specErr != nil {
 			pool.log.Infof("got spec block for %s, specErr %v", prev.Hash().String(), specErr)
-			assembled = specBlock
-			if specErr == nil {
-			}
-			return assembled, specErr
+			return specBlock, specErr
 		}
 	}
 
