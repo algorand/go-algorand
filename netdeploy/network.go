@@ -58,22 +58,17 @@ type Network struct {
 
 // CreateNetworkFromTemplate uses the specified template to deploy a new private network
 // under the specified root directory.
-func CreateNetworkFromTemplate(name, rootDir, templateFile string, templateReader io.Reader, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols, overrideDevMode bool) (Network, error) {
+func CreateNetworkFromTemplate(name, rootDir string, templateReader io.Reader, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols, overrideDevMode bool) (Network, error) {
 	n := Network{
 		rootDir:          rootDir,
 		nodeExitCallback: nodeExitCallback,
 	}
 	n.cfg.Name = name
-	n.cfg.TemplateFile = templateFile
 
 	var err error
 	var template NetworkTemplate
 
-	if templateFile != "" {
-		template, err = loadTemplate(templateFile)
-	} else {
-		err = loadTemplateFromReader(templateReader, &template)
-	}
+	err = loadTemplateFromReader(templateReader, &template)
 
 	if err == nil {
 		if overrideDevMode {
