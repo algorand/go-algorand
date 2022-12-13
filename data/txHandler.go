@@ -68,13 +68,13 @@ var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGrou
 var transactionGroupTxSyncAlreadyCommitted = metrics.MakeCounter(metrics.TransactionGroupTxSyncAlreadyCommitted)
 
 var transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
-	"algod_transaction_messages_txpool_remember_{TAG}", "Number of transaction messages not remembered by txpool b/c if {TAG}",
+	"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
 	txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
 	txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
 )
 
 var transactionMessageTxPoolCheckCounter = metrics.NewTagCounter(
-	"algod_transaction_messages_txpool_check_{TAG}", "Number of transaction messages that didn't pass check by txpool b/c if {TAG}",
+	"algod_transaction_messages_txpool_check_err_{TAG}", "Number of transaction messages that didn't pass check by txpool b/c of {TAG}",
 	txPoolRememberTagTxnNotWellFormed, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
 	txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
 )
