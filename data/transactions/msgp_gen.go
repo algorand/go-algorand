@@ -93,14 +93,6 @@ import (
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
 //
-// MinFeeError
-//      |-----> MarshalMsg
-//      |-----> CanMarshalMsg
-//      |-----> (*) UnmarshalMsg
-//      |-----> (*) CanUnmarshalMsg
-//      |-----> Msgsize
-//      |-----> MsgIsZero
-//
 // OnCompletion
 //       |-----> MarshalMsg
 //       |-----> CanMarshalMsg
@@ -3080,52 +3072,6 @@ func (z *LogicSig) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *LogicSig) MsgIsZero() bool {
 	return (len((*z).Logic) == 0) && ((*z).Sig.MsgIsZero()) && ((*z).Msig.MsgIsZero()) && (len((*z).Args) == 0)
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z MinFeeError) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendString(o, string(z))
-	return
-}
-
-func (_ MinFeeError) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(MinFeeError)
-	if !ok {
-		_, ok = (z).(*MinFeeError)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *MinFeeError) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 string
-		zb0001, bts, err = msgp.ReadStringBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = MinFeeError(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (_ *MinFeeError) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*MinFeeError)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z MinFeeError) Msgsize() (s int) {
-	s = msgp.StringPrefixSize + len(string(z))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z MinFeeError) MsgIsZero() bool {
-	return z == ""
 }
 
 // MarshalMsg implements msgp.Marshaler

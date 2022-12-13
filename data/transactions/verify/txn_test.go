@@ -612,7 +612,7 @@ func TestTxnGroupCacheUpdateFailLogic(t *testing.T) {
 	_, signedTxn, _, _ := generateTestObjects(100, 20, 50)
 	blkHdr := createDummyBlockHeader()
 
-	// sign the transcation with logic
+	// sign the transaction with logic
 	for i := 0; i < len(signedTxn); i++ {
 		// add a simple logic that verifies this condition:
 		// sha256(arg0) == base64decode(5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=)
@@ -640,8 +640,10 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
 		txn.Lsig.Args[0][0]--
 	}
-	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
-
+	initCounter := logicCostTotal.GetUint64Value()
+	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
+	currentCounter := logicCostTotal.GetUint64Value()
+	require.Greater(t, currentCounter, initCounter)
 }
 
 // TestTxnGroupCacheUpdateLogicWithSig makes sure that a payment transaction contains logicsig signed with single signature is valid (and added to the cache) only
