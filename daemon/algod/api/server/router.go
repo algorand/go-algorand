@@ -15,48 +15,6 @@
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
 // Package server Algod REST API.
-//
-// API Endpoint for AlgoD Operations.
-//
-//
-//     Schemes: http
-//     Host: localhost
-//     BasePath: /
-//     Version: 0.0.1
-//     License:
-//     Contact: contact@algorand.com
-//
-//     Consumes:
-//     - application/json
-//
-//     Produces:
-//     - application/json
-//
-//     Security:
-//     - api_key:
-//
-//     SecurityDefinitions:
-//     api_key:
-//       type: apiKey
-//       name: X-Algo-API-Token
-//       in: header
-//       description: >-
-//         Generated header parameter. This token can be generated using the Goal command line tool. Example value
-//         ='b7e384d0317b8050ce45900a94a1931e28540e1f69b2d242b424659c341b4697'
-//       required: true
-//       x-example: b7e384d0317b8050ce45900a94a1931e28540e1f69b2d242b424659c341b4697
-//
-// swagger:meta
-//---
-// Currently, server implementation annotations serve as the API ground truth. From that,
-// we use go-swagger to generate a swagger spec.
-//
-// Autogenerate the swagger json - automatically run by the 'make build' step.
-// Base path must be a fully specified package name (else, it seems that swagger feeds a relative path to
-// loader.Config.Import(), and that breaks the vendor directory if the source is symlinked from elsewhere)
-//go:generate swagger generate spec -o="../swagger.json"
-//go:generate swagger validate ../swagger.json --stop-on-error
-//go:generate sh ./lib/bundle_swagger_json.sh
 package server
 
 import (

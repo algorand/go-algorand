@@ -90,7 +90,7 @@ func TestTrackerScheduleCommit(t *testing.T) {
 
 	// prepare deltas and versions
 	au.accountsMu.Lock()
-	au.deltas = make([]ledgercore.AccountDeltas, int(blockqRound))
+	au.deltas = make([]ledgercore.StateDelta, int(blockqRound))
 	au.deltasAccum = make([]int, int(blockqRound))
 	au.versions = make([]protocol.ConsensusVersion, int(blockqRound))
 	ao.deltas = make([]ledgercore.AccountDeltas, int(blockqRound))

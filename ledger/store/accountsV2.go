@@ -32,7 +32,8 @@ import (
 )
 
 type accountsV2Reader struct {
-	q db.Queryable
+	q                  db.Queryable
+	preparedStatements map[string]*sql.Stmt
 }
 
 type accountsV2Writer struct {
@@ -47,9 +48,25 @@ type accountsV2ReaderWriter struct {
 // NewAccountsSQLReaderWriter creates a Catchpoint SQL reader+writer
 func NewAccountsSQLReaderWriter(e db.Executable) *accountsV2ReaderWriter {
 	return &accountsV2ReaderWriter{
-		accountsV2Reader{q: e},
+		accountsV2Reader{q: e, preparedStatements: make(map[string]*sql.Stmt)},
 		accountsV2Writer{e: e},
 	}
+}
+
+func (r *accountsV2Reader) getOrPrepare(queryString string) (stmt *sql.Stmt, err error) {
+	// fetch statement (use the query as the key)
+	if stmt, ok := r.preparedStatements[queryString]; ok {
+		return stmt, nil
+	}
+	// we do not have it, prepare it
+	stmt, err = r.q.Prepare(queryString)
+	if err != nil {
+		return
+	}
+	// cache the statement
+	r.preparedStatements[queryString] = stmt
+
+	return stmt, nil
 }
 
 // AccountsTotals returns account totals
@@ -269,6 +286,65 @@ func (r *accountsV2Reader) LookupAccountAddressFromAddressID(ctx context.Context
 	return
 }
 
+func (r *accountsV2Reader) LookupAccountDataByAddress(addr basics.Address) (rowid int64, data []byte, err error) {
+	// optimize this query for repeated usage
+	selectStmt, err := r.getOrPrepare("SELECT rowid, data FROM accountbase WHERE address=?")
+	if err != nil {
+		return
+	}
+
+	err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &data)
+	if err != nil {
+		return
+	}
+	return rowid, data, err
+}
+
+// LookupOnlineAccountDataByAddress looks up online account data by address.
+func (r *accountsV2Reader) LookupOnlineAccountDataByAddress(addr basics.Address) (rowid int64, data []byte, err error) {
+	// optimize this query for repeated usage
+	selectStmt, err := r.getOrPrepare("SELECT rowid, data FROM onlineaccounts WHERE address=? ORDER BY updround DESC LIMIT 1")
+	if err != nil {
+		return
+	}
+
+	err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &data)
+	if err != nil {
+		return
+	}
+	return rowid, data, err
+}
+
+// LookupAccountRowID looks up the rowid of an account based on its address.
+func (r *accountsV2Reader) LookupAccountRowID(addr basics.Address) (rowid int64, err error) {
+	// optimize this query for repeated usage
+	addrRowidStmt, err := r.getOrPrepare("SELECT rowid FROM accountbase WHERE address=?")
+	if err != nil {
+		return
+	}
+
+	err = addrRowidStmt.QueryRow(addr[:]).Scan(&rowid)
+	if err != nil {
+		return
+	}
+	return rowid, err
+}
+
+// LookupResourceDataByAddrID looks up the resource data by account rowid + resource aidx.
+func (r *accountsV2Reader) LookupResourceDataByAddrID(addrid int64, aidx basics.CreatableIndex) (data []byte, err error) {
+	// optimize this query for repeated usage
+	selectStmt, err := r.getOrPrepare("SELECT data FROM resources WHERE addrid = ? AND aidx = ?")
+	if err != nil {
+		return
+	}
+
+	err = selectStmt.QueryRow(addrid, aidx).Scan(&data)
+	if err != nil {
+		return
+	}
+	return data, err
+}
+
 // LoadAllFullAccounts loads all accounts from balancesTable and resourcesTable.
 // On every account full load it invokes acctCb callback to report progress and data.
 func (r *accountsV2Reader) LoadAllFullAccounts(
@@ -321,7 +397,7 @@ func (r *accountsV2Reader) LoadAllFullAccounts(
 	return
 }
 
-// LoadFullAccount converts baseAccountData into basics.AccountData and loads all resources as needed
+// LoadFullAccount converts BaseAccountData into basics.AccountData and loads all resources as needed
 func (r *accountsV2Reader) LoadFullAccount(ctx context.Context, resourcesTable string, addr basics.Address, addrid int64, data BaseAccountData) (ad basics.AccountData, err error) {
 	ad = data.GetAccountData()
 
@@ -403,11 +479,8 @@ func (r *accountsV2Reader) LoadFullAccount(ctx context.Context, resourcesTable s
 	if err == nil && uint64(len(ad.AppLocalStates)) != data.TotalAppLocalStates {
 		err = fmt.Errorf("%s app local states mismatch: %d != %d", addr.String(), len(ad.AppLocalStates), data.TotalAppLocalStates)
 	}
-	if err != nil {
-		return
-	}
 
-	return
+	return ad, err
 }
 
 func (r *accountsV2Reader) AccountsOnlineRoundParams() (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error) {
@@ -650,5 +723,16 @@ func (w *accountsV2Writer) AccountsPruneOnlineRoundParams(deleteBeforeRound basi
 	_, err := w.e.Exec("DELETE FROM onlineroundparamstail WHERE rnd<?",
 		deleteBeforeRound,
 	)
+	return err
+}
+
+func (w *accountsV2Writer) AccountsReset(ctx context.Context) error {
+	for _, stmt := range accountsResetExprs {
+		_, err := w.e.ExecContext(ctx, stmt)
+		if err != nil {
+			return err
+		}
+	}
+	_, err := db.SetUserVersion(ctx, w.e, 0)
 	return err
 }

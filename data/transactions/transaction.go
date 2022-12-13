@@ -184,6 +184,7 @@ func (tx Transaction) ID() Txid {
 }
 
 // IDSha256 returns the digest (i.e., hash) of the transaction.
+// This is different from the canonical ID computed with Sum512_256 hashing function.
 func (tx Transaction) IDSha256() crypto.Digest {
 	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
 	defer protocol.PutEncodingBuf(enc)
@@ -234,7 +235,7 @@ func (tx Header) Alive(tc TxnContext) error {
 	// Check round validity
 	round := tc.Round()
 	if round < tx.FirstValid || round > tx.LastValid {
-		return TxnDeadError{
+		return &TxnDeadError{
 			Round:      round,
 			FirstValid: tx.FirstValid,
 			LastValid:  tx.LastValid,
