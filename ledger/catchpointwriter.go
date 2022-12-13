@@ -28,7 +28,7 @@ import (
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/encoded"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/protocol"
 )

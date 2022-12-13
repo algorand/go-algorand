@@ -5,7 +5,7 @@ package ledger
 import (
 	"github.com/algorand/msgp/msgp"
 
-	"github.com/algorand/go-algorand/encoded"
+	"github.com/algorand/go-algorand/ledger/encoded"
 )
 
 // The following msgp objects are implemented in this file:

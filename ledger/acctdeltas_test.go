@@ -33,7 +33,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/encoded"
+	"github.com/algorand/go-algorand/ledger/encoded"
 
 	"github.com/stretchr/testify/require"
 
