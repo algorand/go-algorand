@@ -47,7 +47,7 @@ type VotersForRoundFetcher interface {
 
 // VotersCommitListener represents an object that needs to get notified on commit stages in the voters tracker.
 type VotersCommitListener interface {
-	OnPrepareVoterCommit(rnd basics.Round, voters VotersForRoundFetcher)
+	OnPrepareVoterCommit(rnd basics.Round, voters VotersForRoundFetcher) error
 }
 
 // VotersForRound tracks the top online voting accounts as of a particular
