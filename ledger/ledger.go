@@ -404,10 +404,11 @@ func (l *Ledger) RegisterBlockListeners(listeners []BlockListener) {
 	l.notifier.register(listeners)
 }
 
-// RegisterSyncListener registers a listener that will be called when a
+// RegisterVotersCommitListener registers a listener that will be called when a
 // commit is about to cover a round.
-func (l *Ledger) RegisterSyncListener(listener CommitListener) {
-	l.notifier.registerCommit(listener)
+func (l *Ledger) RegisterVotersCommitListener(listener ledgercore.VotersCommitListener) {
+	// TODO: Do I need to lock the trackerMu?
+	l.acctsOnline.voters.registerPrepareCommitListener(listener)
 }
 
 // notifyCommit informs the trackers that all blocks up to r have been
@@ -457,7 +458,7 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 func (l *Ledger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.acctsOnline.voters.getVoters(rnd)
+	return l.acctsOnline.voters.VotersForStateProof(rnd)
 }
 
 // StateProofVerificationContext returns the data required to verify the state proof whose last attested round is

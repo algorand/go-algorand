@@ -20,12 +20,16 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
+
+// TODO: Restore the function here
 
 // The votersTracker maintains the vector commitment for the most recent
 // commitments to online accounts for state proofs.
@@ -75,6 +79,9 @@ type votersTracker struct {
 	// loadWaitGroup syncronizing the completion of the loadTree call so that we can
 	// shutdown the tracker without leaving any running go-routines.
 	loadWaitGroup sync.WaitGroup
+
+	commitListener   *ledgercore.VotersCommitListener
+	commitListenerMu deadlock.RWMutex
 }
 
 // votersRoundForStateProofRound computes the round number whose voting participants
@@ -189,8 +196,24 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 
 }
 
+func (vt *votersTracker) prepareCommit(dcc *deferredCommitContext) error {
+	vt.commitListenerMu.RLock()
+	defer vt.commitListenerMu.RUnlock()
+
+	if vt.commitListener == nil {
+		return nil
+	}
+
+	commitListener := *vt.commitListener
+	for round := dcc.oldBase; round <= dcc.newBase; round++ {
+		// TODO: Error management in the listener?
+		commitListener.OnPrepareVoterCommit(round, vt)
+	}
+
+	return nil
+}
+
 func (vt *votersTracker) postCommit(dcc *deferredCommitContext) {
-	// TODO: Am I sure?
 	lastHeaderCommitted, err := vt.l.BlockHdr(dcc.newBase)
 	if err != nil {
 		vt.l.trackerLog().Errorf("votersTracker.postCommit: could not retrieve header for round %d: %v", dcc.newBase, err)
@@ -225,7 +248,6 @@ func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
 	}
 }
 
-// TODO: Are we currently effectively extending the ledger?
 // lowestRound() returns the lowest votersForRoundCache state (blocks and accounts) needed by
 // the votersTracker in case of a restart.  The accountUpdates tracker will
 // not delete account state before this round, so that after a restart, it's
@@ -241,8 +263,8 @@ func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 	return minRound
 }
 
-// getVoters() returns the top online participants from round r.
-func (vt *votersTracker) getVoters(r basics.Round) (*ledgercore.VotersForRound, error) {
+// VotersForStateProof returns the top online participants from round r.
+func (vt *votersTracker) VotersForStateProof(r basics.Round) (*ledgercore.VotersForRound, error) {
 	tr, ok := vt.votersForRoundCache[r]
 	if !ok {
 		// Not tracked: stateproofs not enabled.
@@ -256,6 +278,13 @@ func (vt *votersTracker) getVoters(r basics.Round) (*ledgercore.VotersForRound, 
 	}
 
 	return tr, nil
+}
+
+func (vt *votersTracker) registerPrepareCommitListener(commitListener ledgercore.VotersCommitListener) {
+	vt.commitListenerMu.Lock()
+	defer vt.commitListenerMu.Unlock()
+
+	vt.commitListener = &commitListener
 }
 
 // GetOldestExpectedStateProof returns the lowest round for which the node should create a state proof.

@@ -267,7 +267,7 @@ func TestTopNAccountsThatHaveNoMssKeys(t *testing.T) {
 		addBlockToAccountsUpdate(block.block, ao, totals)
 	}
 
-	top, err := ao.voters.getVoters(basics.Round(intervalForTest - lookbackForTest))
+	top, err := ao.voters.VotersForStateProof(basics.Round(intervalForTest - lookbackForTest))
 	a.NoError(err)
 	for j := 0; j < len(top.Participants); j++ {
 		a.Equal(merklesignature.NoKeysCommitment, top.Participants[j].PK.Commitment)

@@ -28,15 +28,16 @@ import (
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/stateproof/verify"
 )
 
-// OnPrepareCommit is a function called by the ledger when it's preparing to commit rnd. It gives the builder
+// OnPrepareVoterCommit is a function called by the voters tracker when it's preparing to commit rnd. It gives the builder
 // the chance to persist the data it needs.
-func (spw *Worker) OnPrepareCommit(rnd basics.Round) {
+func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgercore.VotersForRoundFetcher) {
 	header, err := spw.ledger.BlockHdr(rnd)
 
 	if err != nil {
@@ -56,7 +57,7 @@ func (spw *Worker) OnPrepareCommit(rnd basics.Round) {
 		return
 	}
 
-	_, err = spw.createBuilder(rnd)
+	_, err = spw.createBuilder(rnd, votersFetcher)
 	if err != nil {
 		spw.log.Warnf("OnPreapreCommit(%d): could not createBuilder: %v\n", rnd, err)
 	}
@@ -86,7 +87,7 @@ func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 		spw.log.Errorf("loadOrCreateBuilder: error while fetching builder from DB: %v", err)
 	}
 
-	buildr, err = spw.createBuilder(rnd)
+	buildr, err = spw.createBuilder(rnd, spw.ledger)
 	if err != nil {
 		return builder{}, err
 	}
@@ -126,7 +127,7 @@ func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
 	return nil
 }
 
-func (spw *Worker) createBuilder(rnd basics.Round) (builder, error) {
+func (spw *Worker) createBuilder(rnd basics.Round, votersFetcher ledgercore.VotersForRoundFetcher) (builder, error) {
 	l := spw.ledger
 	hdr, err := l.BlockHdr(rnd)
 	if err != nil {
@@ -141,7 +142,7 @@ func (spw *Worker) createBuilder(rnd basics.Round) (builder, error) {
 	}
 
 	lookback := votersRnd.SubSaturate(basics.Round(hdrProto.StateProofVotersLookback))
-	voters, err := l.VotersForStateProof(lookback)
+	voters, err := votersFetcher.VotersForStateProof(lookback)
 	if err != nil {
 		return builder{}, err
 	}
@@ -397,7 +398,7 @@ func (spw *Worker) builderExistsInDB(rnd basics.Round) (bool, error) {
 }
 
 func (spw *Worker) builder(latest basics.Round) {
-	spw.ledger.RegisterSyncListener(spw)
+	spw.ledger.RegisterVotersCommitListener(spw)
 
 	// We clock the building of state proofs based on new
 	// blocks.  This is because the acceptable state proof

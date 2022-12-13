@@ -33,11 +33,6 @@ type BlockListener interface {
 	OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta)
 }
 
-// CommitListener represents an object that needs to get notified on commit stages.
-type CommitListener interface {
-	OnPrepareCommit(rnd basics.Round)
-}
-
 type blockDeltaPair struct {
 	block bookkeeping.Block
 	delta ledgercore.StateDelta
@@ -51,9 +46,6 @@ type blockNotifier struct {
 	running       bool
 	// closing is the waitgroup used to synchronize closing the worker goroutine. It's being increased during loadFromDisk, and the worker is responsible to call Done on it once it's aborting it's goroutine. The close function waits on this to complete.
 	closing sync.WaitGroup
-
-	commitListenerMu deadlock.Mutex
-	commitListener   *CommitListener
 }
 
 func (bn *blockNotifier) worker() {
@@ -111,13 +103,6 @@ func (bn *blockNotifier) register(listeners []BlockListener) {
 	bn.listeners = append(bn.listeners, listeners...)
 }
 
-func (bn *blockNotifier) registerCommit(listener CommitListener) {
-	bn.commitListenerMu.Lock()
-	defer bn.commitListenerMu.Unlock()
-
-	bn.commitListener = &listener
-}
-
 func (bn *blockNotifier) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	bn.mu.Lock()
 	defer bn.mu.Unlock()
@@ -130,19 +115,6 @@ func (bn *blockNotifier) committedUpTo(rnd basics.Round) (retRound, lookback bas
 }
 
 func (bn *blockNotifier) prepareCommit(dcc *deferredCommitContext) error {
-	bn.commitListenerMu.Lock()
-	defer bn.commitListenerMu.Unlock()
-
-	if bn.commitListener == nil {
-		return nil
-	}
-
-	commitListener := *bn.commitListener
-	for round := dcc.oldBase; round <= dcc.newBase; round++ {
-		// TODO: Error management in the listener?
-		commitListener.OnPrepareCommit(round)
-	}
-
 	return nil
 }
 
