@@ -75,8 +75,6 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile string, templateReade
 		err = loadTemplateFromReader(templateReader, &template)
 	}
 
-	err = template.Validate()
-
 	if err == nil {
 		if overrideDevMode {
 			template.Genesis.DevMode = true
@@ -85,6 +83,10 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile string, templateReade
 			}
 		}
 	} else {
+		return n, err
+	}
+
+	if template.Validate() != nil {
 		return n, err
 	}
 
