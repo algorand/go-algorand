@@ -582,6 +582,7 @@ type VerificationResult struct {
 // results through the resultChan
 type StreamVerifier struct {
 	resultChan       chan<- *VerificationResult
+	droppedChan      chan<- *UnverifiedElement
 	stxnChan         <-chan *UnverifiedElement
 	verificationPool execpool.BacklogPool
 	ctx              context.Context
@@ -589,7 +590,6 @@ type StreamVerifier struct {
 	activeLoopWg     sync.WaitGroup
 	nbw              *NewBlockWatcher
 	ledger           logic.LedgerForSignature
-	droppedFromPool  *metrics.Counter
 }
 
 // NewBlockWatcher is a struct used to provide a new block header to the
@@ -652,8 +652,8 @@ type LedgerForStreamVerifier interface {
 // MakeStreamVerifier creates a new stream verifier and returns the chans used to send txn groups
 // to it and obtain the txn signature verification result from
 func MakeStreamVerifier(stxnChan <-chan *UnverifiedElement, resultChan chan<- *VerificationResult,
-	ledger LedgerForStreamVerifier, verificationPool execpool.BacklogPool,
-	cache VerifiedTransactionCache, droppedFromPool *metrics.Counter) (*StreamVerifier, error) {
+	droppedChan chan<- *UnverifiedElement, ledger LedgerForStreamVerifier,
+	verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (*StreamVerifier, error) {
 
 	latest := ledger.Latest()
 	latestHdr, err := ledger.BlockHdr(latest)
@@ -667,11 +667,11 @@ func MakeStreamVerifier(stxnChan <-chan *UnverifiedElement, resultChan chan<- *V
 	return &StreamVerifier{
 		resultChan:       resultChan,
 		stxnChan:         stxnChan,
+		droppedChan:      droppedChan,
 		verificationPool: verificationPool,
 		cache:            cache,
 		nbw:              nbw,
 		ledger:           ledger,
-		droppedFromPool:  droppedFromPool,
 	}, nil
 }
 
@@ -812,8 +812,7 @@ func (sv *StreamVerifier) sendResult(veTxnGroup []transactions.SignedTxn, veBack
 	}:
 	default:
 		// we failed to write to the output queue, since the queue was full.
-		// adding the metric here allows us to monitor how frequently it happens.
-		sv.droppedFromPool.Inc(nil)
+		sv.droppedChan <- &UnverifiedElement{veTxnGroup, veBacklogMessage}
 	}
 }
 

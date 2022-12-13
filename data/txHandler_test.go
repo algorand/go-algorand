@@ -42,7 +42,6 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	realledger "github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -98,6 +97,8 @@ func BenchmarkTxHandlerProcessing(b *testing.B) {
 	cfg.EnableProcessBlockStats = false
 	txHandler, err := makeTestTxHandler(l, cfg)
 	require.NoError(b, err)
+	defer txHandler.txVerificationPool.Shutdown()
+	defer close(txHandler.streamVerifierDropped)
 
 	makeTxns := func(N int) [][]transactions.SignedTxn {
 		ret := make([][]transactions.SignedTxn, 0, N)
@@ -740,7 +741,7 @@ func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, 
 	return handler
 }
 
-func makeTestTxHandler(dl *Ledger, cfg config.Local) *TxHandler {
+func makeTestTxHandler(dl *Ledger, cfg config.Local) (*TxHandler, error) {
 	tp := pools.MakeTransactionPool(dl.Ledger, cfg, logging.Base())
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	opts := TxHandlerOpts{
@@ -901,7 +902,6 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 // TestTxHandlerProcessIncomingCacheBacklogDrop checks if dropped messages are also removed from caches
 func TestTxHandlerProcessIncomingCacheBacklogDrop(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	handler := makeTestTxHandlerOrphanedWithContext(context.Background(), 1, 20, 0)
 
@@ -932,6 +932,7 @@ func TestTxHandlerProcessIncomingCacheTxPoolDrop(t *testing.T) {
 
 	const numUsers = 100
 	log := logging.TestingLog(t)
+	log.SetLevel(logging.Panic)
 
 	// prepare the accounts
 	addresses, secrets, genesis := makeTestGenesisAccounts(t, numUsers)
@@ -945,8 +946,20 @@ func TestTxHandlerProcessIncomingCacheTxPoolDrop(t *testing.T) {
 	require.NoError(t, err)
 
 	l := ledger
-	handler := makeTestTxHandler(l, cfg)
-	handler.postVerificationQueue = make(chan *txBacklogMsg)
+	handler, err := makeTestTxHandler(l, cfg)
+	require.NoError(t, err)
+	defer handler.txVerificationPool.Shutdown()
+	defer close(handler.streamVerifierDropped)
+
+	// saturate the postVerificationQueue
+loop:
+	for {
+		select {
+		case handler.postVerificationQueue <- &verify.VerificationResult{}:
+		default:
+			break loop
+		}
+	}
 
 	makeTxns := func(sendIdx, recvIdx int) ([]transactions.SignedTxn, []byte) {
 		tx := transactions.Transaction{
@@ -981,8 +994,21 @@ func TestTxHandlerProcessIncomingCacheTxPoolDrop(t *testing.T) {
 	require.Equal(t, stxns, msg.unverifiedTxGroup)
 
 	initialCount := transactionMessagesDroppedFromPool.GetUint64Value()
-	handler.asyncVerifySignature(msg)
-	currentCount := transactionMessagesDroppedFromPool.GetUint64Value()
+
+	// emulate handler.Start() without the backlog
+	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
+	handler.streamVerifier.Start(handler.ctx)
+	defer handler.streamVerifier.WaitForStop()
+	defer handler.ctxCancel()
+	handler.streamVerifierChan <- &verify.UnverifiedElement{msg.unverifiedTxGroup, msg}
+	var currentCount uint64
+	for x := 0; x < 1000; x++ {
+		currentCount = transactionMessagesDroppedFromPool.GetUint64Value()
+		if currentCount > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	require.Equal(t, initialCount+1, currentCount)
 	require.Equal(t, 0, handler.msgCache.Len())
 	require.Equal(t, 0, handler.txCanonicalCache.Len())
@@ -1085,6 +1111,8 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 	l := ledger
 	handler, err := makeTestTxHandler(l, cfg)
 	require.NoError(t, err)
+	defer handler.txVerificationPool.Shutdown()
+	defer close(handler.streamVerifierDropped)
 
 	// since Start is not called, set the context here
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
@@ -1354,7 +1382,9 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, tps int, invalidRate float32, 
 
 	l := ledger
 	handler, err := makeTestTxHandler(l, cfg)
-	require.NoError(t, err)
+	require.NoError(b, err)
+	defer handler.txVerificationPool.Shutdown()
+	defer close(handler.streamVerifierDropped)
 	// since Start is not called, set the context here
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	defer handler.ctxCancel()
@@ -1663,7 +1693,6 @@ func (t *blockTicker) Wait() {
 
 func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	result := map[string]float64{}
 	checkResult := map[string]float64{}
@@ -1715,7 +1744,10 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(t, err)
 
-	handler := makeTestTxHandler(ledger, cfg)
+	handler, err := makeTestTxHandler(ledger, cfg)
+	require.NoError(t, err)
+	defer handler.txVerificationPool.Shutdown()
+	defer close(handler.streamVerifierDropped)
 	// since Start is not called, set the context here
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	defer handler.ctxCancel()
@@ -1835,7 +1867,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 
 	// make an invalid block to fail recompute pool and expose transactionMessageTxGroupRememberNoPendingEval metric
 	blockTicker := &blockTicker{cond: *sync.NewCond(&deadlock.Mutex{})}
-	blockListeners := []realledger.BlockListener{
+	blockListeners := []ledgercore.BlockListener{
 		handler.txPool,
 		blockTicker,
 	}
@@ -1863,17 +1895,34 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 }
 
 func TestMakeTxHandlerErrors(t *testing.T) {
-	_, err := MakeTxHandler(nil, nil, &mocks.MockNetwork{}, "", crypto.Digest{}, nil)
+	opts := TxHandlerOpts{
+		nil, nil, nil, &mocks.MockNetwork{}, "", crypto.Digest{}, config.Local{},
+	}
+	_, err := MakeTxHandler(opts)
 	require.Error(t, err, ErrInvalidTxPool)
 
-	_, err = MakeTxHandler(&pools.TransactionPool{}, nil, &mocks.MockNetwork{}, "", crypto.Digest{}, nil)
+	opts = TxHandlerOpts{
+		&pools.TransactionPool{}, nil, nil, &mocks.MockNetwork{}, "", crypto.Digest{}, config.Local{},
+	}
+	_, err = MakeTxHandler(opts)
 	require.Error(t, err, ErrInvalidLedger)
 
 	// it is not possible to test MakeStreamVerifier returning an error, because it is not possible to
 	// get the leger return an error for returining the header of its latest round
 }
 
+// TestTxHandlerRestartWithBacklogAndTxPool starts txHandler, sends transactions,
+// stops, starts in a loop, sends more transactions, and makes sure all the transactions
+// are accounted for. It uses the production backlog worker
 func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) {
+	transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
+	transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
+	transactionMessagesTxnSigVerificationFailed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigVerificationFailed)
+	transactionMessagesBacklogErr = metrics.MakeCounter(metrics.TransactionMessagesBacklogErr)
+	transactionMessagesAlreadyCommitted = metrics.MakeCounter(metrics.TransactionMessagesAlreadyCommitted)
+	transactionMessagesRemember = metrics.MakeCounter(metrics.TransactionMessagesRemember)
+	transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessagesHandled)
+
 	defer func() {
 		// reset the counters
 		transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
@@ -1924,12 +1973,10 @@ func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) {
 	require.NoError(t, err)
 	defer ledger.Ledger.Close()
 
-	tp := pools.MakeTransactionPool(ledger.Ledger, cfg, logging.Base())
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
-	handler, err := MakeTxHandler(tp, ledger, &mocks.MockNetwork{}, "", crypto.Digest{}, backlogPool)
+	handler, err := makeTestTxHandler(ledger, cfg)
 	require.NoError(t, err)
-
+	defer handler.txVerificationPool.Shutdown()
+	defer close(handler.streamVerifierDropped)
 	// prepare the transactions
 	numTxns := 3000
 	maxGroupSize := 1
@@ -1993,7 +2040,7 @@ func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) {
 	}
 
 	inputGoodTxnCount := len(signedTransactionGroups) - len(badTxnGroups)
-
+	tp := handler.txPool
 	// Wait untill all the expected transactions are in the pool
 	for x := 0; x < 100; x++ {
 		if len(tp.PendingTxGroups()) == inputGoodTxnCount {

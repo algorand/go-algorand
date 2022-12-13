@@ -129,6 +129,7 @@ type TxHandler struct {
 	ctxCancel             context.CancelFunc
 	streamVerifier        *verify.StreamVerifier
 	streamVerifierChan    chan *verify.UnverifiedElement
+	streamVerifierDropped chan *verify.UnverifiedElement
 }
 
 // TxHandlerOpts is TxHandler configuration options
@@ -151,11 +152,11 @@ type txHandlerConfig struct {
 // MakeTxHandler makes a new handler for transaction messages
 func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 
-	if opts.txPool == nil {
+	if opts.TxPool == nil {
 		return nil, ErrInvalidTxPool
 	}
 
-	if opts.ledger == nil {
+	if opts.Ledger == nil {
 		return nil, ErrInvalidLedger
 	}
 
@@ -166,23 +167,38 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		ledger:                opts.Ledger,
 		txVerificationPool:    opts.ExecutionPool,
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
-		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
+		postVerificationQueue: make(chan *verify.VerificationResult, txBacklogSize),
 		net:                   opts.Net,
 		msgCache:              makeSaltedCache(2 * txBacklogSize),
 		txCanonicalCache:      makeDigestCache(2 * txBacklogSize),
 		cacheConfig:           txHandlerConfig{opts.Config.TxFilterRawMsgEnabled(), opts.Config.TxFilterCanonicalEnabled()},
 		streamVerifierChan:    make(chan *verify.UnverifiedElement),
+		streamVerifierDropped: make(chan *verify.UnverifiedElement),
 	}
 
 	// prepare the transaction stream verifer
 	var err error
 	handler.streamVerifier, err = verify.MakeStreamVerifier(handler.streamVerifierChan,
-		handler.postVerificationQueue, handler.ledger, handler.txVerificationPool,
-		handler.ledger.VerifiedTransactionCache(), transactionMessagesDroppedFromPool)
+		handler.postVerificationQueue, handler.streamVerifierDropped, handler.ledger,
+		handler.txVerificationPool, handler.ledger.VerifiedTransactionCache())
 	if err != nil {
 		return nil, err
 	}
+	go handler.droppedTxnWatcher()
 	return handler, nil
+}
+
+func (handler *TxHandler) droppedTxnWatcher() {
+	for unverified := range handler.streamVerifierDropped {
+		// we failed to write to the output queue, since the queue was full.
+		// adding the metric here allows us to monitor how frequently it happens.
+		transactionMessagesDroppedFromPool.Inc(nil)
+
+		tx := unverified.BacklogMessage.(*txBacklogMsg)
+
+		// delete from duplicate caches to give it a chance to be re-submitted
+		handler.deleteFromCaches(tx.rawmsgDataHash, tx.unverifiedTxGroupHash)
+	}
 }
 
 // Start enables the processing of incoming messages at the transaction handler
