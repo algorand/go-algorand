@@ -27,9 +27,8 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/stateproof"
 )
-
-// TODO: Restore the function here
 
 // The votersTracker maintains the vector commitment for the most recent
 // commitments to online accounts for state proofs.
@@ -111,7 +110,7 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.Onl
 		return nil
 	}
 
-	startR := GetOldestExpectedStateProof(&hdr)
+	startR := stateproof.GetOldestExpectedStateProof(&hdr)
 	startR = votersRoundForStateProofRound(startR, &proto)
 
 	// Sanity check: we should never underflow or even reach 0.
@@ -235,7 +234,7 @@ func (vt *votersTracker) postCommit(dcc *deferredCommitContext) {
 // Since the map is small (Usually  0 - 2 elements and up to StateProofMaxRecoveryIntervals) we decided to keep the code simple
 // and check for deletion in every round.
 func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
-	lowestStateProofRound := GetOldestExpectedStateProof(&hdr)
+	lowestStateProofRound := stateproof.GetOldestExpectedStateProof(&hdr)
 
 	for r, tr := range vt.votersForRoundCache {
 		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
@@ -285,22 +284,4 @@ func (vt *votersTracker) registerPrepareCommitListener(commitListener ledgercore
 	defer vt.commitListenerMu.Unlock()
 
 	vt.commitListener = &commitListener
-}
-
-// GetOldestExpectedStateProof returns the lowest round for which the node should create a state proof.
-func GetOldestExpectedStateProof(latestHeader *bookkeeping.BlockHeader) basics.Round {
-	proto := config.Consensus[latestHeader.CurrentProtocol]
-	if proto.StateProofInterval == 0 {
-		return 0
-	}
-
-	recentRoundOnRecoveryPeriod := basics.Round(uint64(latestHeader.Round) - uint64(latestHeader.Round)%proto.StateProofInterval)
-	oldestRoundOnRecoveryPeriod := recentRoundOnRecoveryPeriod.SubSaturate(basics.Round(proto.StateProofInterval * (proto.StateProofMaxRecoveryIntervals)))
-
-	nextStateproofRound := latestHeader.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
-
-	if nextStateproofRound > oldestRoundOnRecoveryPeriod {
-		return nextStateproofRound
-	}
-	return oldestRoundOnRecoveryPeriod
 }

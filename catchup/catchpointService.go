@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/stateproof"
 )
 
 const (
@@ -486,7 +487,7 @@ func lookbackForStateproofsSupport(topBlock *bookkeeping.Block) uint64 {
 	if proto.StateProofInterval == 0 {
 		return 0
 	}
-	lowestStateProofRound := ledger.GetOldestExpectedStateProof(&topBlock.BlockHeader)
+	lowestStateProofRound := stateproof.GetOldestExpectedStateProof(&topBlock.BlockHeader)
 	// in order to be able to confirm/build lowestStateProofRound we would need to reconstruct
 	// the corresponding voterForRound which is (lowestStateProofRound - stateproofInterval - VotersLookback)
 	lowestStateProofRound = lowestStateProofRound.SubSaturate(basics.Round(proto.StateProofInterval))
