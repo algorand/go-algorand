@@ -32,7 +32,7 @@ import (
 )
 
 // LedgerForEvaluator defines the ledger interface needed by the evaluator.
-type LedgerForEvaluator interface {
+type LedgerForEvaluator interface { //nolint:revive //LedgerForEvaluator is a long established but newly leaking-out name, and there really isn't a better name for it despite how lint dislikes ledger.LedgerForEvaluator
 	internal.LedgerForEvaluator
 
 	// and a few more Ledger functions
