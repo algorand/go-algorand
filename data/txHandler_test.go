@@ -1763,9 +1763,19 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	handler.postProcessCheckedTxn(&wi)
 	require.Equal(t, 1, getMetricCounter(txPoolRememberTagEvalGeneric))
 
-	// trigger TxnDeadErr from the evaluator
+	// trigger TxnDeadErr from the evaluator for "early" case
 	txn2 = txn1
 	txn2.FirstValid = ledger.LastRound() + 10
+	prevTxnEarly := getMetricCounter(txPoolRememberTagTxnEarly)
+	wi.unverifiedTxGroup = []transactions.SignedTxn{txn2.Sign(secrets[0])}
+	handler.postProcessCheckedTxn(&wi)
+	require.Equal(t, prevTxnEarly+1, getMetricCounter(txPoolRememberTagTxnEarly))
+	handler.checkAlreadyCommitted(&wi)
+	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagTxnEarly))
+
+	// trigger TxnDeadErr from the evaluator for "late" case
+	txn2 = txn1
+	txn2.LastValid = 0
 	prevTxnDead := getMetricCounter(txPoolRememberTagTxnDead)
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn2.Sign(secrets[0])}
 	handler.postProcessCheckedTxn(&wi)
