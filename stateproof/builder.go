@@ -41,7 +41,7 @@ func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgerco
 	header, err := spw.ledger.BlockHdr(rnd)
 
 	if err != nil {
-		spw.log.Warnf("OnPreapreCommit(%d): could not retrieve header: %v\n", rnd, err)
+		spw.log.Warnf("OnPrepareVoterCommit(%d): could not retrieve header: %v\n", rnd, err)
 		return
 	}
 
@@ -52,14 +52,14 @@ func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgerco
 
 	builderExists, err := spw.builderExistsInDB(rnd)
 	if err != nil {
-		spw.log.Warnf("OnPreapreCommit(%d): could not check builder existence, assuming it doesn't exist: %v\n", rnd, err)
+		spw.log.Warnf("OnPrepareVoterCommit(%d): could not check builder existence, assuming it doesn't exist: %v\n", rnd, err)
 	} else if builderExists {
 		return
 	}
 
 	_, err = spw.createBuilder(rnd, votersFetcher)
 	if err != nil {
-		spw.log.Warnf("OnPreapreCommit(%d): could not createBuilder: %v\n", rnd, err)
+		spw.log.Warnf("OnPrepareVoterCommit(%d): could not createBuilder: %v\n", rnd, err)
 	}
 }
 

@@ -396,7 +396,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 		dcc.onlineAccountsForgetBefore = dcc.lowestRound
 	}
 
-	return nil
+	return ao.voters.prepareCommit(dcc)
 }
 
 // commitRound closure is called within the same transaction for all trackers
