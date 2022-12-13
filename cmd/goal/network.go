@@ -89,14 +89,21 @@ var networkCreateCmd = &cobra.Command{
 			panic(err)
 		}
 
-		var defaultReader io.Reader
+		var templateReader io.Reader
 
 		if networkTemplateFile == "" {
 			if devModeOverride {
-				defaultReader = strings.NewReader(defaultNetworkTemplate)
+				templateReader = strings.NewReader(defaultNetworkTemplate)
 			} else {
-				defaultReader = strings.NewReader(defaultDevNetworkTemplate)
+				templateReader = strings.NewReader(defaultDevNetworkTemplate)
 			}
+		} else {
+			file, err := os.Open(networkTemplateFile)
+			if err != nil {
+				panic(err)
+			}
+			defer file.Close()
+			templateReader = file
 		}
 		if networkTemplateFile != "" {
 			networkTemplateFile, err = filepath.Abs(networkTemplateFile)
@@ -122,7 +129,7 @@ var networkCreateCmd = &cobra.Command{
 			consensus, _ = config.PreloadConfigurableConsensusProtocols(dataDir)
 		}
 
-		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, networkTemplateFile, defaultReader, binDir, !noImportKeys, nil, consensus, devModeOverride)
+		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, templateReader, binDir, !noImportKeys, nil, consensus, devModeOverride)
 		if err != nil {
 			if noClean {
 				reportInfof(" ** failed ** - Preserving network rootdir '%s'", networkRootDir)
