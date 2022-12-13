@@ -52,6 +52,7 @@ import (
 type testWorkerStubs struct {
 	t                         testing.TB
 	mu                        deadlock.Mutex
+	listenerMu                deadlock.RWMutex
 	latest                    basics.Round
 	waiters                   map[basics.Round]chan struct{}
 	waitersCount              map[basics.Round]int
@@ -63,6 +64,7 @@ type testWorkerStubs struct {
 	totalWeight               int
 	deletedKeysBeforeRoundMap map[account.ParticipationID]basics.Round
 	version                   protocol.ConsensusVersion
+	commitListener            ledgercore.VotersCommitListener
 }
 
 func newWorkerStubs(keys []account.Participation, totalWeight int) *testWorkerStubs {
@@ -81,6 +83,7 @@ func newWorkerStubsWithVersion(keys []account.Participation, version protocol.Co
 	s := &testWorkerStubs{
 		t:                         nil,
 		mu:                        deadlock.Mutex{},
+		listenerMu:                deadlock.RWMutex{},
 		latest:                    0,
 		waiters:                   make(map[basics.Round]chan struct{}),
 		waitersCount:              make(map[basics.Round]int),
@@ -99,7 +102,20 @@ func newWorkerStubsWithVersion(keys []account.Participation, version protocol.Co
 	return s
 }
 
+func (s *testWorkerStubs) notifyPrepareCommit(round basics.Round) {
+	s.listenerMu.RLock()
+	defer s.listenerMu.RUnlock()
+
+	if s.commitListener == nil {
+		return
+	}
+
+	err := s.commitListener.OnPrepareVoterCommit(round, s)
+	require.NoError(s.t, err)
+}
+
 func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
+	s.mu.Lock()
 	s.latest++
 
 	hdr := bookkeeping.BlockHeader{}
@@ -130,6 +146,9 @@ func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 		close(s.waiters[s.latest])
 		s.waiters[s.latest] = nil
 	}
+
+	s.mu.Unlock()
+	s.notifyPrepareCommit(s.latest)
 }
 
 func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateProofSecretsForRound) {
@@ -216,6 +235,12 @@ func (s *testWorkerStubs) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, err
 
 var errEmptyVoters = errors.New("ledger does not have voters")
 
+func (s *testWorkerStubs) RegisterVotersCommitListener(listener ledgercore.VotersCommitListener) {
+	s.listenerMu.Lock()
+	defer s.listenerMu.Unlock()
+	s.commitListener = listener
+}
+
 func (s *testWorkerStubs) VotersForStateProof(r basics.Round) (*ledgercore.VotersForRound, error) {
 	if len(s.keysForVoters) == 0 {
 		return nil, errEmptyVoters
@@ -242,6 +267,17 @@ func (s *testWorkerStubs) VotersForStateProof(r basics.Round) (*ledgercore.Voter
 
 	voters.Tree = tree
 	return voters, nil
+}
+
+func (s *testWorkerStubs) StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	dummyContext := ledgercore.StateProofVerificationContext{
+		LastAttestedRound: stateProofLastAttestedRound,
+		VotersCommitment:  crypto.GenericDigest{0x1},
+		OnlineTotalWeight: basics.MicroAlgos{},
+		Version:           protocol.ConsensusCurrentVersion,
+	}
+
+	return &dummyContext, nil
 }
 
 func (s *testWorkerStubs) GenesisHash() crypto.Digest {
@@ -331,9 +367,7 @@ func (s *testWorkerStubs) advanceRoundsBeforeFirstStateProof(proto *config.Conse
 
 func (s *testWorkerStubs) advanceRoundsWithoutStateProof(t *testing.T, delta uint64) {
 	for r := uint64(0); r < delta; r++ {
-		s.mu.Lock()
 		s.addBlock(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
-		s.mu.Unlock()
 		s.waitForSignerAndBuilder(t)
 	}
 }
@@ -349,8 +383,8 @@ func (s *testWorkerStubs) advanceRoundsAndCreateStateProofs(t *testing.T, delta 
 			stateProofNextRound += interval
 		}
 
-		s.addBlock(stateProofNextRound)
 		s.mu.Unlock()
+		s.addBlock(stateProofNextRound)
 		s.waitForSignerAndBuilder(t)
 	}
 }
@@ -939,9 +973,7 @@ func TestWorkersBuildersCacheAndSignatures(t *testing.T) {
 	/*
 		add block that confirm a state proof for interval: expectedStateProofs
 	*/
-	s.mu.Lock()
 	s.addBlock(basics.Round((expectedStateProofs) * config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
-	s.mu.Unlock()
 	s.waitForSignerAndBuilder(t)
 
 	count := expectedNumberOfBuilders(proto.StateProofInterval, s.latest, basics.Round((expectedStateProofs)*config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
@@ -1524,9 +1556,7 @@ func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 	w := newTestWorker(t, s)
 	defer w.Shutdown()
 
-	s.mu.Lock()
 	s.addBlock(basics.Round(proto.StateProofInterval * 2))
-	s.mu.Unlock()
 
 	// remove the first block from the ledger
 	delete(s.blocks, 256)
