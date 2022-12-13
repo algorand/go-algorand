@@ -102,7 +102,7 @@ func newWorkerStubsWithVersion(keys []account.Participation, version protocol.Co
 	return s
 }
 
-func (s *testWorkerStubs) notifyPrepareCommit(round basics.Round) {
+func (s *testWorkerStubs) notifyPrepareVoterCommit(round basics.Round) {
 	s.listenerMu.RLock()
 	defer s.listenerMu.RUnlock()
 
@@ -148,7 +148,7 @@ func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 	}
 
 	s.mu.Unlock()
-	s.notifyPrepareCommit(s.latest)
+	s.notifyPrepareVoterCommit(s.latest)
 }
 
 func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateProofSecretsForRound) {
