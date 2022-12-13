@@ -1,10 +1,12 @@
 {
     "Genesis": {
-        "NetworkName": "Private dev network",
+        "NetworkName": "",
+        "FirstPartKeyRound": 0,
+        "LastPartKeyRound":  30000,
         "Wallets": [
             {
                 "Name": "Wallet1",
-                "Stake": 50,
+                "Stake": 40,
                 "Online": true
             },
             {
@@ -14,32 +16,27 @@
             },
             {
                 "Name": "Wallet3",
-                "Stake": 10,
+                "Stake": 20,
                 "Online": false
             }
         ]
     },
     "Nodes": [
         {
-            "Name": "Primary",
-            "IsRelay": true,
-            "Wallets": [
-                {
-                    "Name": "Wallet1",
-                    "ParticipationOnly": false
-                }
-            ]
-        },
-        {
             "Name": "Node",
+            "IsRelay": false,
             "Wallets": [
-                {
-                    "Name": "Wallet2",
-                    "ParticipationOnly": false
+                { 
+                    "Name": "Wallet1", 
+                    "ParticipationOnly": false 
                 },
-                {
-                    "Name": "Wallet3",
-                    "ParticipationOnly": false
+                { 
+                    "Name": "Wallet2", 
+                    "ParticipationOnly": false 
+                },
+                { 
+                    "Name": "Wallet3", 
+                    "ParticipationOnly": false 
                 }
             ]
         }
