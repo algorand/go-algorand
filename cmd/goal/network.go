@@ -75,9 +75,6 @@ The basic idea is that we create one or more data directories and wallets to for
 //go:embed defaultNetworkTemplate.json
 var defaultNetworkTemplate string
 
-//go:embed defaultDevNetworkTemplate.json
-var defaultDevNetworkTemplate string
-
 var networkCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a private named network from a template",
@@ -92,24 +89,19 @@ var networkCreateCmd = &cobra.Command{
 		var templateReader io.Reader
 
 		if networkTemplateFile == "" {
-			if devModeOverride {
-				templateReader = strings.NewReader(defaultNetworkTemplate)
-			} else {
-				templateReader = strings.NewReader(defaultDevNetworkTemplate)
-			}
+			templateReader = strings.NewReader(defaultNetworkTemplate)
 		} else {
-			file, err := os.Open(networkTemplateFile)
-			if err != nil {
-				panic(err)
-			}
-			defer file.Close()
-			templateReader = file
-		}
-		if networkTemplateFile != "" {
 			networkTemplateFile, err = filepath.Abs(networkTemplateFile)
 			if err != nil {
 				panic(err)
 			}
+			file, err := os.Open(networkTemplateFile)
+			if err != nil {
+				reportErrorf(errorCreateNetwork, err)
+			}
+
+			defer file.Close()
+			templateReader = file
 		}
 
 		// Make sure target directory does not exist or is empty
