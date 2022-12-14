@@ -276,6 +276,7 @@ func typeString(types []logic.StackType) string {
 		}
 	}
 
+	// Cant return None and !None from same op
 	if strings.Contains(string(out), "_") {
 		if strings.ContainsAny(string(out), "UB.") {
 			panic("unexpected StackNone in opdoc typeString")
