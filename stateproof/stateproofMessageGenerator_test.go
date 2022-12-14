@@ -199,7 +199,17 @@ func (s *workerForStateProofMessageTests) advanceLatest(delta uint64) {
 }
 
 func (s *workerForStateProofMessageTests) notifyPrepareVoterCommit(round basics.Round) {
-	s.w.notifyPrepareVoterCommit(round)
+	s.w.listenerMu.RLock()
+	defer s.w.listenerMu.RUnlock()
+
+	if s.w.commitListener == nil {
+		return
+	}
+
+	// It looks the same as s.w.notifyPrepareVoterCommit, but it provides OnPrepareVoterCommit with a different
+	// VotersForStateProof, which is important.
+	err := s.w.commitListener.OnPrepareVoterCommit(round, s)
+	require.NoError(s.w.t, err)
 }
 
 func TestStateProofMessage(t *testing.T) {
