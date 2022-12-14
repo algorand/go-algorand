@@ -25,9 +25,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/algorand/msgp/msgp"
-
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/protocol"
@@ -72,16 +69,9 @@ type accountsBatchIter interface {
 	Close()
 }
 
-type encodedBalanceRecordV5 struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Address     basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
-	AccountData msgp.Raw       `codec:"ad"` // encoding of basics.AccountData
-}
-
 type catchpointFileBalancesChunkV5 struct {
-	_struct  struct{}                 `codec:",omitempty,omitemptyarray"`
-	Balances []encodedBalanceRecordV5 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
+	_struct  struct{}                  `codec:",omitempty,omitemptyarray"`
+	Balances []encoded.BalanceRecordV5 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
 type catchpointFileChunkV6 struct {

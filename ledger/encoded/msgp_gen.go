@@ -9,6 +9,14 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
+// BalanceRecordV5
+//        |-----> (*) MarshalMsg
+//        |-----> (*) CanMarshalMsg
+//        |-----> (*) UnmarshalMsg
+//        |-----> (*) CanUnmarshalMsg
+//        |-----> (*) Msgsize
+//        |-----> (*) MsgIsZero
+//
 // BalanceRecordV6
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
@@ -25,6 +33,135 @@ import (
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
 //
+
+// MarshalMsg implements msgp.Marshaler
+func (z *BalanceRecordV5) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
+	if (*z).AccountData.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Address.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "ad"
+			o = append(o, 0xa2, 0x61, 0x64)
+			o = (*z).AccountData.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "pk"
+			o = append(o, 0xa2, 0x70, 0x6b)
+			o = (*z).Address.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *BalanceRecordV5) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*BalanceRecordV5)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *BalanceRecordV5) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Address.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Address")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).AccountData.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "AccountData")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = BalanceRecordV5{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "pk":
+				bts, err = (*z).Address.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Address")
+					return
+				}
+			case "ad":
+				bts, err = (*z).AccountData.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "AccountData")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *BalanceRecordV5) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*BalanceRecordV5)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *BalanceRecordV5) Msgsize() (s int) {
+	s = 1 + 3 + (*z).Address.Msgsize() + 3 + (*z).AccountData.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *BalanceRecordV5) MsgIsZero() bool {
+	return ((*z).Address.MsgIsZero()) && ((*z).AccountData.MsgIsZero())
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z *BalanceRecordV6) MarshalMsg(b []byte) (o []byte) {

@@ -100,7 +100,7 @@ const MaxEncodedBaseAccountDataSize = 350
 const MaxEncodedBaseResourceDataSize = 20000
 
 // prepareNormalizedBalancesV5 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
-func prepareNormalizedBalancesV5(bals []encodedBalanceRecordV5, proto config.ConsensusParams) (normalizedAccountBalances []store.NormalizedAccountBalance, err error) {
+func prepareNormalizedBalancesV5(bals []encoded.BalanceRecordV5, proto config.ConsensusParams) (normalizedAccountBalances []store.NormalizedAccountBalance, err error) {
 	normalizedAccountBalances = make([]store.NormalizedAccountBalance, len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].Address = balance.Address
