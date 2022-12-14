@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const legacyDebuggerTestProgram string = `intcblock 0 1 1 1 1 5 100
+const debuggerTestProgram string = `intcblock 0 1 1 1 1 5 100
 bytecblock 0x414c474f 0x1337 0x2001 0xdeadbeef 0x70077007
 bytec 0
 sha256
@@ -82,41 +82,41 @@ func TestWebDebuggerManual(t *testing.T) {
 		tx.Note,
 	}
 	ep.Tracer = MakeEvalTracerDebuggerAdaptor(&WebDebuggerHook{URL: debugURL})
-	testLogic(t, legacyDebuggerTestProgram, AssemblerMaxVersion, ep)
+	testLogic(t, debuggerTestProgram, AssemblerMaxVersion, ep)
 }
 
-type testLegacyDbgHook struct {
+type testDbgHook struct {
 	register int
 	update   int
 	complete int
 	state    *DebugState
 }
 
-func (d *testLegacyDbgHook) Register(state *DebugState) {
+func (d *testDbgHook) Register(state *DebugState) {
 	d.register++
 	d.state = state
 }
 
-func (d *testLegacyDbgHook) Update(state *DebugState) {
+func (d *testDbgHook) Update(state *DebugState) {
 	d.update++
 	d.state = state
 }
 
-func (d *testLegacyDbgHook) Complete(state *DebugState) {
+func (d *testDbgHook) Complete(state *DebugState) {
 	d.complete++
 	d.state = state
 }
 
-func TestLegacyDebuggerHook(t *testing.T) {
+func TestDebuggerHook(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	t.Run("logicsig", func(t *testing.T) {
 		t.Parallel()
-		testDbg := testLegacyDbgHook{}
+		testDbg := testDbgHook{}
 		ep := defaultEvalParams()
 		ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
-		testLogic(t, legacyDebuggerTestProgram, AssemblerMaxVersion, ep)
+		testLogic(t, debuggerTestProgram, AssemblerMaxVersion, ep)
 
 		require.Equal(t, 1, testDbg.register)
 		require.Equal(t, 1, testDbg.complete)
@@ -126,10 +126,10 @@ func TestLegacyDebuggerHook(t *testing.T) {
 
 	t.Run("simple app", func(t *testing.T) {
 		t.Parallel()
-		testDbg := testLegacyDbgHook{}
+		testDbg := testDbgHook{}
 		ep := defaultEvalParams()
 		ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
-		testApp(t, legacyDebuggerTestProgram, ep)
+		testApp(t, debuggerTestProgram, ep)
 
 		require.Equal(t, 1, testDbg.register)
 		require.Equal(t, 1, testDbg.complete)
@@ -139,7 +139,7 @@ func TestLegacyDebuggerHook(t *testing.T) {
 
 	t.Run("app with inner txns", func(t *testing.T) {
 		t.Parallel()
-		testDbg := testLegacyDbgHook{}
+		testDbg := testDbgHook{}
 		ep, tx, ledger := MakeSampleEnv()
 
 		// Establish 888 as the app id, and fund it.
@@ -259,7 +259,7 @@ func TestCallStackUpdate(t *testing.T) {
 		},
 	}
 
-	testDbg := testLegacyDbgHook{}
+	testDbg := testDbgHook{}
 	ep := defaultEvalParams()
 	ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
 	testLogic(t, testCallStackProgram, AssemblerMaxVersion, ep)

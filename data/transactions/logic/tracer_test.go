@@ -114,7 +114,7 @@ func TestEvalWithTracer(t *testing.T) {
 		testTracer := testEvalTracer{}
 		ep := defaultEvalParams()
 		ep.Tracer = &testTracer
-		testLogic(t, legacyDebuggerTestProgram, AssemblerMaxVersion, ep)
+		testLogic(t, debuggerTestProgram, AssemblerMaxVersion, ep)
 
 		// these should not be called because beforeTxn and afterTxn hooks
 		// are called within ledger evaluation, not logic.
@@ -137,7 +137,7 @@ func TestEvalWithTracer(t *testing.T) {
 		testTracer := testEvalTracer{}
 		ep := defaultEvalParams()
 		ep.Tracer = &testTracer
-		testApp(t, legacyDebuggerTestProgram, ep)
+		testApp(t, debuggerTestProgram, ep)
 
 		// these should not be called because beforeTxn and afterTxn hooks
 		// are called within ledger evaluation, not logic.
