@@ -1725,10 +1725,17 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 		addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
 	}
 
+	// Extra blocks committed to accumulate enough deltas to trigger committing blocks to trackerDB, required
+	// to trigger deletion of data by the voters tracker.
+	blocksForCommitFlush := uint64(50)
+	for i := uint64(0); i < blocksForCommitFlush; i++ {
+		addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
+	}
+
 	l.WaitForCommit(l.Latest())
+
 	// at this point the ledger would remove the voters block header. However, since
 	// the ledger uses the stateproof verification tracker the state proof be validated (or at least fail on the crypto part)
-
 	blk = createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
 
 	votersRound := basics.Round(proto.StateProofInterval)
