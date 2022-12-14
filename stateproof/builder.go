@@ -408,28 +408,30 @@ func (spw *Worker) builder(latest basics.Round) {
 	// will settle for a larger proof.  New blocks also tell us
 	// if a state proof has been committed, so that we can stop trying
 	// to build it.
+
+	nextBroadcastRnd := latest
 	for {
 		spw.tryBroadcast()
 
-		nextrnd := latest + 1
 		select {
 		case <-spw.ctx.Done():
 			spw.wg.Done()
 			return
 
-		case <-spw.ledger.Wait(nextrnd):
+		case <-spw.ledger.Wait(nextBroadcastRnd + 1):
 			// Continue on
 		}
 
-		// See if any new state proofs were formed, according to
-		// the new block, which would mean we can clean up some builders.
-		hdr, err := spw.ledger.BlockHdr(nextrnd)
+		newLatest := spw.ledger.Latest()
+		newLatestHdr, err := spw.ledger.BlockHdr(newLatest)
+
 		if err != nil {
-			spw.log.Warnf("spw.builder: BlockHdr(%d): %v", nextrnd, err)
+			spw.log.Warnf("spw.builder: BlockHdr(%d): %v", newLatest, err)
 			continue
 		}
-		proto := config.Consensus[hdr.CurrentProtocol]
-		stateProofNextRound := hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+
+		proto := config.Consensus[newLatestHdr.CurrentProtocol]
+		stateProofNextRound := newLatestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 
 		spw.deleteBuildData(&proto, stateProofNextRound)
 
@@ -437,13 +439,12 @@ func (spw *Worker) builder(latest basics.Round) {
 		// were agreed upon.  This ensures that, if we send a signature
 		// for block R, nodes will have already verified block R, because
 		// block R+1 has been formed.
-		newLatest := spw.ledger.Latest()
-		for r := latest; r < newLatest; r++ {
+		for r := nextBroadcastRnd; r < newLatest; r++ {
 			// Wait for the signer to catch up; mostly relevant in tests.
 			spw.waitForSignature(r)
 			spw.broadcastSigs(r, stateProofNextRound, proto)
 		}
-		latest = newLatest
+		nextBroadcastRnd = newLatest
 	}
 }
 
