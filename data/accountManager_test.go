@@ -101,6 +101,7 @@ func TestAccountManagerKeysRegistry(t *testing.T) {
 }
 
 func testAccountManagerKeys(t *testing.T, registry account.ParticipationRegistry, flushRegistry bool) {
+
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Error)
 
