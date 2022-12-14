@@ -245,11 +245,19 @@ type OpRecord struct {
 	ArgEnum      []string `json:",omitempty"`
 	ArgEnumTypes string   `json:",omitempty"`
 
+<<<<<<< HEAD
 	Doc           string
 	DocExtra      string `json:",omitempty"`
 	ImmediateNote string `json:",omitempty"`
 	Version       int
 	Groups        []string
+=======
+	Doc               string
+	DocExtra          string `json:",omitempty"`
+	ImmediateNote     string `json:",omitempty"`
+	IntroducedVersion uint64
+	Groups            []string
+>>>>>>> bd64ce81fc43f2648b0083044079b4e4c0145b0a
 }
 
 // LanguageSpec records the ops of the language at some version
@@ -333,7 +341,11 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].DocExtra = logic.OpDocExtra(spec.Name)
 		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
 		records[i].Groups = opGroups[spec.Name]
+<<<<<<< HEAD
 		records[i].Version = int(spec.Version)
+=======
+		records[i].IntroducedVersion = spec.Version
+>>>>>>> bd64ce81fc43f2648b0083044079b4e4c0145b0a
 	}
 	return &LanguageSpec{
 		EvalMaxVersion:  docVersion,
