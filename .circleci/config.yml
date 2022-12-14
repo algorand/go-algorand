@@ -739,3 +739,9 @@ commands:
                   command: |
                     export TRAVIS_BRANCH=${CIRCLE_BRANCH}
                     scripts/travis/test_release.sh
+
+        # make sure artifacts are cleaned up post build
+        - run:
+            name: Cleanup Binaries << parameters.platform >>
+            command: |
+              rm -rf << parameters.build_dir >>/node_pkg/*<< parameters.platform >>*<< parameters.arch >>*.tar.gz*
