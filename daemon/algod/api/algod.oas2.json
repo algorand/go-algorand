@@ -1208,7 +1208,7 @@
     "/v2/transactions/simulate": {
       "post": {
         "tags": [
-          "private",
+          "public",
           "experimental"
         ],
         "consumes": [
@@ -4194,7 +4194,6 @@
     "SimulationResponse": {
       "description": "Result of a transaction group simulation.",
       "tags": [
-        "private",
         "experimental"
       ],
       "schema": {
