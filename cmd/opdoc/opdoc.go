@@ -341,11 +341,7 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].DocExtra = logic.OpDocExtra(spec.Name)
 		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
 		records[i].Groups = opGroups[spec.Name]
-<<<<<<< HEAD
-		records[i].Version = int(spec.Version)
-=======
 		records[i].IntroducedVersion = spec.Version
->>>>>>> bd64ce81fc43f2648b0083044079b4e4c0145b0a
 	}
 	return &LanguageSpec{
 		EvalMaxVersion:  docVersion,
