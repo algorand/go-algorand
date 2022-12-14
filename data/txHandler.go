@@ -68,14 +68,14 @@ var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGrou
 var transactionGroupTxSyncAlreadyCommitted = metrics.MakeCounter(metrics.TransactionGroupTxSyncAlreadyCommitted)
 
 var transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
-	"algod_transaction_messages_txpool_remember_{TAG}", "Number of transaction messages not remembered by txpool b/c if {TAG}",
-	txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+	"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
+	txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
 	txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
 )
 
 var transactionMessageTxPoolCheckCounter = metrics.NewTagCounter(
-	"algod_transaction_messages_txpool_check_{TAG}", "Number of transaction messages that didn't pass check by txpool b/c if {TAG}",
-	txPoolRememberTagTxnNotWellFormed, txPoolRememberTagTxnDead, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+	"algod_transaction_messages_txpool_check_err_{TAG}", "Number of transaction messages that didn't pass check by txpool b/c of {TAG}",
+	txPoolRememberTagTxnNotWellFormed, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
 	txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
 )
 
@@ -85,6 +85,7 @@ const (
 	txPoolRememberTagNoSpace     = "no_space"
 	txPoolRememberTagFee         = "fee"
 	txPoolRememberTagTxnDead     = "txn_dead"
+	txPoolRememberTagTxnEarly    = "txn_early"
 	txPoolRememberTagTooLarge    = "too_large"
 	txPoolRememberTagGroupID     = "groupid"
 	txPoolRememberTagTxID        = "txid"
@@ -290,7 +291,11 @@ func (handler *TxHandler) checkReportErrors(err error) {
 		transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxnNotWellFormed, 1)
 		return
 	case *transactions.TxnDeadError:
-		transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxnDead, 1)
+		if err.Early {
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxnEarly, 1)
+		} else {
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxnDead, 1)
+		}
 		return
 	case *ledgercore.TransactionInLedgerError:
 		if err.InBlockEvaluator {
@@ -348,7 +353,11 @@ func (handler *TxHandler) rememberReportErrors(err error) {
 		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagFee, 1)
 		return
 	case *transactions.TxnDeadError:
-		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxnDead, 1)
+		if err.Early {
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxnEarly, 1)
+		} else {
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxnDead, 1)
+		}
 		return
 	case *ledgercore.TransactionInLedgerError:
 		if err.InBlockEvaluator {
