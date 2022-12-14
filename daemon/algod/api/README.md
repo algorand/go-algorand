@@ -38,6 +38,8 @@ participation keys, the agreement service, etc.
   * A special set of APIs which require manipulating the node state in order to provide additional data about the node state
 at some predefined granularity. For example, SetSyncRound and GetLedgerStateDelta used together control and expose StateDelta objects
 containing per-round ledger differences that get compacted when actually written to the ledger DB.
+* `experimental`
+  * APIs which are still in development and not ready to be generally released.
 
 ## What codegen tool is used?
 
