@@ -61,12 +61,12 @@ type testEvalTracer struct {
 	beforeTxnCalls int
 	afterTxnCalls  int
 
-	beforeLogicEvalCalls int
-	afterLogicEvalCalls  int
-	logicEvalModes       []RunMode
+	beforeProgramCalls int
+	afterProgramCalls  int
+	programModes       []RunMode
 
-	beforeTealOpCalls int
-	afterTealOpCalls  int
+	beforeOpcodeCalls int
+	afterOpcodeCalls  int
 
 	beforeInnerTxnGroupCalls int
 	afterInnerTxnGroupCalls  int
@@ -80,21 +80,21 @@ func (t *testEvalTracer) AfterTxn(ep *EvalParams, groupIndex int, ad transaction
 	t.afterTxnCalls++
 }
 
-func (t *testEvalTracer) BeforeLogicEval(cx *EvalContext) {
-	t.beforeLogicEvalCalls++
-	t.logicEvalModes = append(t.logicEvalModes, cx.RunMode())
+func (t *testEvalTracer) BeforeProgram(cx *EvalContext) {
+	t.beforeProgramCalls++
+	t.programModes = append(t.programModes, cx.RunMode())
 }
 
-func (t *testEvalTracer) AfterLogicEval(cx *EvalContext, evalError error) {
-	t.afterLogicEvalCalls++
+func (t *testEvalTracer) AfterProgram(cx *EvalContext, evalError error) {
+	t.afterProgramCalls++
 }
 
-func (t *testEvalTracer) BeforeTealOp(cx *EvalContext) {
-	t.beforeTealOpCalls++
+func (t *testEvalTracer) BeforeOpcode(cx *EvalContext) {
+	t.beforeOpcodeCalls++
 }
 
-func (t *testEvalTracer) AfterTealOp(cx *EvalContext, evalError error) {
-	t.afterTealOpCalls++
+func (t *testEvalTracer) AfterOpcode(cx *EvalContext, evalError error) {
+	t.afterOpcodeCalls++
 }
 
 func (t *testEvalTracer) BeforeInnerTxnGroup(ep *EvalParams) {
@@ -121,12 +121,12 @@ func TestEvalWithTracer(t *testing.T) {
 		require.Zero(t, testTracer.beforeTxnCalls)
 		require.Zero(t, testTracer.afterTxnCalls)
 
-		require.Equal(t, 1, testTracer.beforeLogicEvalCalls)
-		require.Equal(t, 1, testTracer.afterLogicEvalCalls)
-		require.Equal(t, []RunMode{ModeSig}, testTracer.logicEvalModes)
+		require.Equal(t, 1, testTracer.beforeProgramCalls)
+		require.Equal(t, 1, testTracer.afterProgramCalls)
+		require.Equal(t, []RunMode{ModeSig}, testTracer.programModes)
 
-		require.Equal(t, 35, testTracer.beforeTealOpCalls)
-		require.Equal(t, testTracer.beforeTealOpCalls, testTracer.afterTealOpCalls)
+		require.Equal(t, 35, testTracer.beforeOpcodeCalls)
+		require.Equal(t, testTracer.beforeOpcodeCalls, testTracer.afterOpcodeCalls)
 
 		require.Zero(t, testTracer.beforeInnerTxnGroupCalls)
 		require.Zero(t, testTracer.afterInnerTxnGroupCalls)
@@ -144,12 +144,12 @@ func TestEvalWithTracer(t *testing.T) {
 		require.Zero(t, testTracer.beforeTxnCalls)
 		require.Zero(t, testTracer.afterTxnCalls)
 
-		require.Equal(t, 1, testTracer.beforeLogicEvalCalls)
-		require.Equal(t, 1, testTracer.afterLogicEvalCalls)
-		require.Equal(t, []RunMode{ModeApp}, testTracer.logicEvalModes)
+		require.Equal(t, 1, testTracer.beforeProgramCalls)
+		require.Equal(t, 1, testTracer.afterProgramCalls)
+		require.Equal(t, []RunMode{ModeApp}, testTracer.programModes)
 
-		require.Equal(t, 35, testTracer.beforeTealOpCalls)
-		require.Equal(t, testTracer.beforeTealOpCalls, testTracer.afterTealOpCalls)
+		require.Equal(t, 35, testTracer.beforeOpcodeCalls)
+		require.Equal(t, testTracer.beforeOpcodeCalls, testTracer.afterOpcodeCalls)
 
 		require.Zero(t, testTracer.beforeInnerTxnGroupCalls)
 		require.Zero(t, testTracer.afterInnerTxnGroupCalls)
@@ -171,14 +171,14 @@ func TestEvalWithTracer(t *testing.T) {
 		require.Equal(t, 3, testTracer.beforeTxnCalls)
 		require.Equal(t, 3, testTracer.afterTxnCalls)
 
-		require.Equal(t, 2, testTracer.beforeLogicEvalCalls)
-		require.Equal(t, 2, testTracer.afterLogicEvalCalls)
-		require.Equal(t, []RunMode{ModeApp, ModeApp}, testTracer.logicEvalModes)
+		require.Equal(t, 2, testTracer.beforeProgramCalls)
+		require.Equal(t, 2, testTracer.afterProgramCalls)
+		require.Equal(t, []RunMode{ModeApp, ModeApp}, testTracer.programModes)
 
 		appCallTealOps := 27
 		innerAppCallTealOps := 1
-		require.Equal(t, appCallTealOps+innerAppCallTealOps, testTracer.beforeTealOpCalls)
-		require.Equal(t, testTracer.beforeTealOpCalls, testTracer.afterTealOpCalls)
+		require.Equal(t, appCallTealOps+innerAppCallTealOps, testTracer.beforeOpcodeCalls)
+		require.Equal(t, testTracer.beforeOpcodeCalls, testTracer.afterOpcodeCalls)
 
 		// two groups of inner transactions were issued
 		require.Equal(t, 2, testTracer.beforeInnerTxnGroupCalls)

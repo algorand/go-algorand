@@ -313,7 +313,7 @@ func tealOpLogs(count int) []mocktracer.Event {
 	var log []mocktracer.Event
 
 	for i := 0; i < count; i++ {
-		log = append(log, mocktracer.BeforeTealOp(), mocktracer.AfterTealOp())
+		log = append(log, mocktracer.BeforeOpcode(), mocktracer.AfterOpcode())
 	}
 
 	return log
@@ -462,45 +462,45 @@ int 1`
 	expectedEvents := flatten([][]mocktracer.Event{
 		{
 			mocktracer.BeforeTxn(protocol.ApplicationCallTx), // start basicAppCallTxn
-			mocktracer.BeforeLogicEval(logic.ModeApp),
+			mocktracer.BeforeProgram(logic.ModeApp),
 		},
 		tealOpLogs(3),
 		{
-			mocktracer.AfterLogicEval(logic.ModeApp),
+			mocktracer.AfterProgram(logic.ModeApp),
 			mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedADs[0]), // end basicAppCallTxn
 			mocktracer.BeforeTxn(protocol.PaymentTx),                        // start payTxn
 			mocktracer.AfterTxn(protocol.PaymentTx, expectedADs[1]),         // end payTxn
 			mocktracer.BeforeTxn(protocol.ApplicationCallTx),                // start innerAppCallTxn
-			mocktracer.BeforeLogicEval(logic.ModeApp),
+			mocktracer.BeforeProgram(logic.ModeApp),
 		},
 		tealOpLogs(10),
 		{
-			mocktracer.BeforeTealOp(),
+			mocktracer.BeforeOpcode(),
 			mocktracer.BeforeInnerTxnGroup(1), // start first itxn group
 			mocktracer.BeforeTxn(protocol.ApplicationCallTx),
-			mocktracer.BeforeLogicEval(logic.ModeApp),
+			mocktracer.BeforeProgram(logic.ModeApp),
 		},
 		tealOpLogs(1),
 		{
-			mocktracer.AfterLogicEval(logic.ModeApp),
+			mocktracer.AfterProgram(logic.ModeApp),
 			mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedADs[2].EvalDelta.InnerTxns[0].ApplyData),
 			mocktracer.AfterInnerTxnGroup(1), // end first itxn group
-			mocktracer.AfterTealOp(),
+			mocktracer.AfterOpcode(),
 		},
 		tealOpLogs(14),
 		{
-			mocktracer.BeforeTealOp(),
+			mocktracer.BeforeOpcode(),
 			mocktracer.BeforeInnerTxnGroup(2), // start second itxn group
 			mocktracer.BeforeTxn(protocol.PaymentTx),
 			mocktracer.AfterTxn(protocol.PaymentTx, expectedADs[2].EvalDelta.InnerTxns[1].ApplyData),
 			mocktracer.BeforeTxn(protocol.PaymentTx),
 			mocktracer.AfterTxn(protocol.PaymentTx, expectedADs[2].EvalDelta.InnerTxns[2].ApplyData),
 			mocktracer.AfterInnerTxnGroup(2), // end second itxn group
-			mocktracer.AfterTealOp(),
+			mocktracer.AfterOpcode(),
 		},
 		tealOpLogs(1),
 		{
-			mocktracer.AfterLogicEval(logic.ModeApp),
+			mocktracer.AfterProgram(logic.ModeApp),
 			mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedADs[2]), // end innerAppCallTxn
 		},
 	})

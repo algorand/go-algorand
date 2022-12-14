@@ -71,8 +71,8 @@ func (a *debuggerEvalTracerAdaptor) AfterInnerTxnGroup(ep *EvalParams) {
 	a.innerTxnDepth--
 }
 
-// BeforeLogicEval invokes the legacy debugger's Register hook
-func (a *debuggerEvalTracerAdaptor) BeforeLogicEval(cx *EvalContext) {
+// BeforeProgram invokes the debugger's Register hook
+func (a *debuggerEvalTracerAdaptor) BeforeProgram(cx *EvalContext) {
 	if a.innerTxnDepth > 0 {
 		// only report updates for top-level transactions, for backwards compatibility
 		return
@@ -81,8 +81,8 @@ func (a *debuggerEvalTracerAdaptor) BeforeLogicEval(cx *EvalContext) {
 	a.debugger.Register(a.refreshDebugState(cx, nil))
 }
 
-// BeforeTealOp invokes the legacy debugger's Update hook
-func (a *debuggerEvalTracerAdaptor) BeforeTealOp(cx *EvalContext) {
+// BeforeOpcode invokes the debugger's Update hook
+func (a *debuggerEvalTracerAdaptor) BeforeOpcode(cx *EvalContext) {
 	if a.innerTxnDepth > 0 {
 		// only report updates for top-level transactions, for backwards compatibility
 		return
@@ -90,8 +90,8 @@ func (a *debuggerEvalTracerAdaptor) BeforeTealOp(cx *EvalContext) {
 	a.debugger.Update(a.refreshDebugState(cx, nil))
 }
 
-// AfterLogicEval invokes the legacy debugger's Complete hook
-func (a *debuggerEvalTracerAdaptor) AfterLogicEval(cx *EvalContext, evalError error) {
+// AfterProgram invokes the debugger's Complete hook
+func (a *debuggerEvalTracerAdaptor) AfterProgram(cx *EvalContext, evalError error) {
 	if a.innerTxnDepth > 0 {
 		// only report updates for top-level transactions, for backwards compatibility
 		return

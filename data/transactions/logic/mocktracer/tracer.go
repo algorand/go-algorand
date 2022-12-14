@@ -26,18 +26,18 @@ import (
 type EventType string
 
 const (
-	// BeforeLogicEvalEvent represents the logic.EvalTracer.BeforeLogicEval event
-	BeforeLogicEvalEvent EventType = "BeforeLogicEval"
-	// AfterLogicEvalEvent represents the logic.EvalTracer.AfterLogicEval event
-	AfterLogicEvalEvent EventType = "AfterLogicEval"
+	// BeforeProgramEvent represents the logic.EvalTracer.BeforeProgram event
+	BeforeProgramEvent EventType = "BeforeProgram"
+	// AfterProgramEvent represents the logic.EvalTracer.AfterProgram event
+	AfterProgramEvent EventType = "AfterProgram"
 	// BeforeTxnEvent represents the logic.EvalTracer.BeforeTxn event
 	BeforeTxnEvent EventType = "BeforeTxn"
 	// AfterTxnEvent represents the logic.EvalTracer.AfterTxn event
 	AfterTxnEvent EventType = "AfterTxn"
-	// BeforeTealOpEvent represents the logic.EvalTracer.BeforeTealOp event
-	BeforeTealOpEvent EventType = "BeforeTealOp"
-	// AfterTealOpEvent represents the logic.EvalTracer.AfterTealOp event
-	AfterTealOpEvent EventType = "AfterTealOp"
+	// BeforeOpcodeEvent represents the logic.EvalTracer.BeforeOpcode event
+	BeforeOpcodeEvent EventType = "BeforeOpcode"
+	// AfterOpcodeEvent represents the logic.EvalTracer.AfterOpcode event
+	AfterOpcodeEvent EventType = "AfterOpcode"
 	// BeforeInnerTxnGroupEvent represents the logic.EvalTracer.BeforeInnerTxnGroup event
 	BeforeInnerTxnGroupEvent EventType = "BeforeInnerTxnGroup"
 	// AfterInnerTxnGroupEvent represents the logic.EvalTracer.AfterInnerTxnGroup event
@@ -48,7 +48,7 @@ const (
 type Event struct {
 	Type EventType
 
-	// only for BeforeLogicEval and AfterLogicEval
+	// only for BeforeProgram and AfterProgram
 	LogicEvalMode logic.RunMode
 
 	// only for BeforeTxn and AfterTxn
@@ -61,14 +61,14 @@ type Event struct {
 	InnerGroupSize int
 }
 
-// BeforeLogicEval creates a new Event with the type BeforeLogicEvalEvent
-func BeforeLogicEval(mode logic.RunMode) Event {
-	return Event{Type: BeforeLogicEvalEvent, LogicEvalMode: mode}
+// BeforeProgram creates a new Event with the type BeforeProgramEvent
+func BeforeProgram(mode logic.RunMode) Event {
+	return Event{Type: BeforeProgramEvent, LogicEvalMode: mode}
 }
 
-// AfterLogicEval creates a new Event with the type AfterLogicEvalEvent
-func AfterLogicEval(mode logic.RunMode) Event {
-	return Event{Type: AfterLogicEvalEvent, LogicEvalMode: mode}
+// AfterProgram creates a new Event with the type AfterProgramEvent
+func AfterProgram(mode logic.RunMode) Event {
+	return Event{Type: AfterProgramEvent, LogicEvalMode: mode}
 }
 
 // BeforeTxn creates a new Event with the type BeforeTxnEvent
@@ -81,14 +81,14 @@ func AfterTxn(txnType protocol.TxType, ad transactions.ApplyData) Event {
 	return Event{Type: AfterTxnEvent, TxnType: txnType, TxnApplyData: ad}
 }
 
-// BeforeTealOp creates a new Event with the type BeforeTealOpEvent
-func BeforeTealOp() Event {
-	return Event{Type: BeforeTealOpEvent}
+// BeforeOpcode creates a new Event with the type BeforeOpcodeEvent
+func BeforeOpcode() Event {
+	return Event{Type: BeforeOpcodeEvent}
 }
 
-// AfterTealOp creates a new Event with the type AfterTealOpEvent
-func AfterTealOp() Event {
-	return Event{Type: AfterTealOpEvent}
+// AfterOpcode creates a new Event with the type AfterOpcodeEvent
+func AfterOpcode() Event {
+	return Event{Type: AfterOpcodeEvent}
 }
 
 // BeforeInnerTxnGroup creates a new Event with the type BeforeInnerTxnGroupEvent
@@ -106,14 +106,14 @@ type Tracer struct {
 	Events []Event
 }
 
-// BeforeLogicEval mocks the logic.EvalTracer.BeforeLogicEval method
-func (d *Tracer) BeforeLogicEval(cx *logic.EvalContext) {
-	d.Events = append(d.Events, BeforeLogicEval(cx.RunMode()))
+// BeforeProgram mocks the logic.EvalTracer.BeforeProgram method
+func (d *Tracer) BeforeProgram(cx *logic.EvalContext) {
+	d.Events = append(d.Events, BeforeProgram(cx.RunMode()))
 }
 
-// AfterLogicEval mocks the logic.EvalTracer.AfterLogicEval method
-func (d *Tracer) AfterLogicEval(cx *logic.EvalContext, evalError error) {
-	d.Events = append(d.Events, AfterLogicEval(cx.RunMode()))
+// AfterProgram mocks the logic.EvalTracer.AfterProgram method
+func (d *Tracer) AfterProgram(cx *logic.EvalContext, evalError error) {
+	d.Events = append(d.Events, AfterProgram(cx.RunMode()))
 }
 
 // BeforeTxn mocks the logic.EvalTracer.BeforeTxn method
@@ -126,14 +126,14 @@ func (d *Tracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.
 	d.Events = append(d.Events, AfterTxn(ep.TxnGroup[groupIndex].Txn.Type, ad))
 }
 
-// BeforeTealOp mocks the logic.EvalTracer.BeforeTealOp method
-func (d *Tracer) BeforeTealOp(cx *logic.EvalContext) {
-	d.Events = append(d.Events, BeforeTealOp())
+// BeforeOpcode mocks the logic.EvalTracer.BeforeOpcode method
+func (d *Tracer) BeforeOpcode(cx *logic.EvalContext) {
+	d.Events = append(d.Events, BeforeOpcode())
 }
 
-// AfterTealOp mocks the logic.EvalTracer.AfterTealOp method
-func (d *Tracer) AfterTealOp(cx *logic.EvalContext, evalError error) {
-	d.Events = append(d.Events, AfterTealOp())
+// AfterOpcode mocks the logic.EvalTracer.AfterOpcode method
+func (d *Tracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
+	d.Events = append(d.Events, AfterOpcode())
 }
 
 // BeforeInnerTxnGroup mocks the logic.EvalTracer.BeforeInnerTxnGroup method

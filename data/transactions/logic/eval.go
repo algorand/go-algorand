@@ -840,10 +840,10 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	cx.txn.EvalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
 
 	if cx.Tracer != nil {
-		cx.Tracer.BeforeLogicEval(cx)
+		cx.Tracer.BeforeProgram(cx)
 		defer func() {
 			// Ensure we update the tracer before exiting
-			cx.Tracer.AfterLogicEval(cx, err)
+			cx.Tracer.AfterProgram(cx, err)
 		}()
 	}
 
@@ -859,13 +859,13 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 
 	for (err == nil) && (cx.pc < len(cx.program)) {
 		if cx.Tracer != nil {
-			cx.Tracer.BeforeTealOp(cx)
+			cx.Tracer.BeforeOpcode(cx)
 		}
 
 		err = cx.step()
 
 		if cx.Tracer != nil {
-			cx.Tracer.AfterTealOp(cx, err)
+			cx.Tracer.AfterOpcode(cx, err)
 		}
 	}
 	if err != nil {

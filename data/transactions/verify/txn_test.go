@@ -452,13 +452,13 @@ func TestTxnGroupWithTracer(t *testing.T) {
 	require.Equal(t, mockTracer, groupCtx.evalTracer)
 
 	expectedEvents := []mocktracer.Event{
-		mocktracer.BeforeLogicEval(logic.ModeSig),           // first txn start
-		mocktracer.BeforeTealOp(), mocktracer.AfterTealOp(), // first txn LogicSig: 1 op
-		mocktracer.AfterLogicEval(logic.ModeSig), // first txn end
+		mocktracer.BeforeProgram(logic.ModeSig),             // first txn start
+		mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(), // first txn LogicSig: 1 op
+		mocktracer.AfterProgram(logic.ModeSig), // first txn end
 		// nothing for second txn (not signed with a LogicSig)
-		mocktracer.BeforeLogicEval(logic.ModeSig),                                                                                                                     // third txn start
-		mocktracer.BeforeTealOp(), mocktracer.AfterTealOp(), mocktracer.BeforeTealOp(), mocktracer.AfterTealOp(), mocktracer.BeforeTealOp(), mocktracer.AfterTealOp(), // third txn LogicSig: 3 ops
-		mocktracer.AfterLogicEval(logic.ModeSig), // third txn end
+		mocktracer.BeforeProgram(logic.ModeSig),                                                                                                                       // third txn start
+		mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(), mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(), mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(), // third txn LogicSig: 3 ops
+		mocktracer.AfterProgram(logic.ModeSig), // third txn end
 	}
 	require.Equal(t, expectedEvents, mockTracer.Events)
 }

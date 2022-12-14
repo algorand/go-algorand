@@ -34,18 +34,18 @@ import "github.com/algorand/go-algorand/data/transactions"
 //   ┌─────────────────────────┐
 //   │ LogicSig Evaluation     │
 //   ├─────────────────────────┤
-//   │ > BeforeLogicEval       │
+//   │ > BeforeProgram         │
 //   │                         │
 //   │  ┌───────────────────┐  │
 //   │  │ Teal Operation    │  │
 //   │  ├───────────────────┤  │
-//   │  │ > BeforeTealOp    │  │
+//   │  │ > BeforeOpcode    │  │
 //   │  │                   │  │
-//   │  │ > AfterTealOp     │  │
+//   │  │ > AfterOpcode     │  │
 //   │  └───────────────────┘  │
 //   |   ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞   │
 //   │                         │
-//   │ > AfterLogicEval        │
+//   │ > AfterProgram          │
 //   └─────────────────────────┘
 //
 //   APP LIFECYCLE GRAPH
@@ -57,12 +57,12 @@ import "github.com/algorand/go-algorand/data/transactions"
 //   │  ┌──────────────────────────────────────────┐  │
 //   │  │ ? App Call                               │  │
 //   │  ├──────────────────────────────────────────┤  │
-//   │  │ > BeforeLogicEval                        │  │
+//   │  │ > BeforeProgram                          │  │
 //   │  │                                          │  │
 //   │  │  ┌────────────────────────────────────┐  │  │
 //   │  │  │ Teal Operation                     │  │  │
 //   │  │  ├────────────────────────────────────┤  │  │
-//   │  │  │ > BeforeTealOp                     │  │  │
+//   │  │  │ > BeforeOpcode                     │  │  │
 //   │  │  │  ┌──────────────────────────────┐  │  │  │
 //   │  │  │  │ ? Inner Transaction Group    │  │  │  │
 //   │  │  │  ├──────────────────────────────┤  │  │  │
@@ -76,11 +76,11 @@ import "github.com/algorand/go-algorand/data/transactions"
 //   │  │  │  │                              │  │  │  │
 //   │  │  │  │ > AfterInnerTxnGroup         │  │  │  │
 //   │  │  │  └──────────────────────────────┘  │  │  │
-//   │  │  │ > AfterTealOp                      │  │  │
+//   │  │  │ > AfterOpcode                      │  │  │
 //   │  │  └────────────────────────────────────┘  │  │
 //   │  │    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │  │
 //   │  │                                          │  │
-//   │  │ > AfterLogicEval                         │  │
+//   │  │ > AfterProgram                           │  │
 //   │  └──────────────────────────────────────────┘  │
 //   |    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │
 //   │                                                │
@@ -95,17 +95,17 @@ type EvalTracer interface {
 	// groupIndex refers to the index of the transaction in the transaction group that was just executed.
 	AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData)
 
-	// BeforeLogicEval is called before an app or LogicSig is evaluated.
-	BeforeLogicEval(cx *EvalContext)
+	// BeforeProgram is called before an app or LogicSig program is evaluated.
+	BeforeProgram(cx *EvalContext)
 
-	// AfterLogicEval is called after an app or LogicSig is evaluated.
-	AfterLogicEval(cx *EvalContext, evalError error)
+	// AfterProgram is called after an app or LogicSig program is evaluated.
+	AfterProgram(cx *EvalContext, evalError error)
 
-	// BeforeTealOp is called before the op is evaluated
-	BeforeTealOp(cx *EvalContext)
+	// BeforeOpcode is called before the op is evaluated
+	BeforeOpcode(cx *EvalContext)
 
-	// AfterTealOp is called after the op has been evaluated
-	AfterTealOp(cx *EvalContext, evalError error)
+	// AfterOpcode is called after the op has been evaluated
+	AfterOpcode(cx *EvalContext, evalError error)
 
 	// BeforeInnerTxnGroup is called before an inner transaction group is executed.
 	// Each inner transaction within the group calls BeforeTxn and subsequent hooks, as described
@@ -125,17 +125,17 @@ func (n NullEvalTracer) BeforeTxn(ep *EvalParams, groupIndex int) {}
 // AfterTxn does nothing
 func (n NullEvalTracer) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) {}
 
-// BeforeLogicEval does nothing
-func (n NullEvalTracer) BeforeLogicEval(cx *EvalContext) {}
+// BeforeProgram does nothing
+func (n NullEvalTracer) BeforeProgram(cx *EvalContext) {}
 
-// AfterLogicEval does nothing
-func (n NullEvalTracer) AfterLogicEval(cx *EvalContext, evalError error) {}
+// AfterProgram does nothing
+func (n NullEvalTracer) AfterProgram(cx *EvalContext, evalError error) {}
 
-// BeforeTealOp does nothing
-func (n NullEvalTracer) BeforeTealOp(cx *EvalContext) {}
+// BeforeOpcode does nothing
+func (n NullEvalTracer) BeforeOpcode(cx *EvalContext) {}
 
-// AfterTealOp does nothing
-func (n NullEvalTracer) AfterTealOp(cx *EvalContext, evalError error) {}
+// AfterOpcode does nothing
+func (n NullEvalTracer) AfterOpcode(cx *EvalContext, evalError error) {}
 
 // BeforeInnerTxnGroup does nothing
 func (n NullEvalTracer) BeforeInnerTxnGroup(ep *EvalParams) {}
