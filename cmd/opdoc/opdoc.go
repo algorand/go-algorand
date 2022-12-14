@@ -270,14 +270,19 @@ func typeString(types []logic.StackType) string {
 		case logic.StackAny:
 			out[i] = '.'
 		case logic.StackNone:
-			if i == 0 && len(types) == 1 {
-				return ""
-			}
-			panic("unexpected StackNone in opdoc typeString")
+			out[i] = '_'
 		default:
 			panic("unexpected type in opdoc typeString")
 		}
 	}
+
+	if strings.Contains(string(out), "_") {
+		if strings.ContainsAny(string(out), "UB.") {
+			panic("unexpected StackNone in opdoc typeString")
+		}
+		return ""
+	}
+
 	return string(out)
 }
 
@@ -314,6 +319,16 @@ func argEnums(name string) ([]string, string) {
 		return fieldsAndTypes(logic.AppParamsFields)
 	case "acct_params_get":
 		return fieldsAndTypes(logic.AcctParamsFields)
+	case "block":
+		return fieldsAndTypes(logic.BlockFields)
+	case "json_ref":
+		return fieldsAndTypes(logic.JSONRefTypes)
+	case "base64_decode":
+		return fieldsAndTypes(logic.Base64Encodings)
+	case "vrf_verify":
+		return fieldsAndTypes(logic.VrfStandards)
+	case "ecdsa_pk_recover", "ecdsa_verify", "ecdsa_pk_decompress":
+		return fieldsAndTypes(logic.EcdsaCurves)
 	default:
 		return nil, ""
 	}

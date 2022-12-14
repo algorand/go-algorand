@@ -224,12 +224,12 @@ var opcodeImmediateNotes = map[string]string{
 	"intc":       "{uint8 int constant index}",
 	"pushint":    "{varuint int}",
 	"pushints":   "{varuint count} [{varuint value}, ...]",
-	"bytecblock": "{varuint count} [({varuint value length} bytes), ...]",
+	"bytecblock": "{varuint count} [({varuint length} bytes), ...]",
 	"bytec":      "{uint8 byte constant index}",
 	"pushbytes":  "{varuint length} {bytes}",
-	"pushbytess": "{varuint count} [({varuint value length} bytes), ...]",
+	"pushbytess": "{varuint count} [({varuint length} bytes), ...]",
 
-	"arg":    "{uint8 arg index N}",
+	"arg":    "{uint8 arg index}",
 	"global": "{uint8 global field index}",
 
 	"txn":     "{uint8 transaction field index}",
@@ -242,10 +242,10 @@ var opcodeImmediateNotes = map[string]string{
 	"gtxnas":  "{uint8 transaction group index} {uint8 transaction field index}",
 	"gtxnsas": "{uint8 transaction field index}",
 
-	"bnz":     "{int16 branch offset, big-endian}",
-	"bz":      "{int16 branch offset, big-endian}",
-	"b":       "{int16 branch offset, big-endian}",
-	"callsub": "{int16 branch offset, big-endian}",
+	"bnz":     "{int16 branch offset}",
+	"bz":      "{int16 branch offset}",
+	"b":       "{int16 branch offset}",
+	"callsub": "{int16 branch offset}",
 
 	"load":   "{uint8 position in scratch space to load from}",
 	"store":  "{uint8 position in scratch space to store to}",
@@ -279,13 +279,13 @@ var opcodeImmediateNotes = map[string]string{
 	"ecdsa_pk_recover":    "{uint8 curve index}",
 
 	"base64_decode": "{uint8 encoding index}",
-	"json_ref":      "{uint8 return type}",
+	"json_ref":      "{uint8 return type index}",
 
 	"vrf_verify": "{uint8 parameters index}",
-	"block":      "{uint8 block field}",
+	"block":      "{uint8 block field index}",
 
-	"switch": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
-	"match":  "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
+	"switch": "{uint8 branch count} [{int16 branch offset}, ...]",
+	"match":  "{uint8 branch count} [{int16 branch offset}, ...]",
 
 	"proto":      "{uint8 arguments} {uint8 return values}",
 	"frame_dig":  "{int8 frame slot}",
@@ -357,7 +357,7 @@ var opDocExtras = map[string]string{
 	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
 
 	"base64_decode": "*Warning*: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings.	This opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.\n\n Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See [RFC 4648 sections 4 and 5](https://rfc-editor.org/rfc/rfc4648.html#section-4). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
-	"json_ref": "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
+	"json_ref":      "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
 
 	"match": "`match` consumes N+1 values from the stack. Let the top stack value be B. The following N values represent an ordered list of match cases/constants (A), where the first value (A[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (T). `match` will branch to target T[I], where A[I] = B. If there are no matches then execution continues on to the next instruction.",
 

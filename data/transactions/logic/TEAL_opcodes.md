@@ -280,7 +280,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## bytecblock bytes ...
 
-- Opcode: 0x26 {varuint count} [({varuint value length} bytes), ...]
+- Opcode: 0x26 {varuint count} [({varuint length} bytes), ...]
 - Stack: ... &rarr; ...
 - prepare block of byte-array constants for use by bytec
 
@@ -318,7 +318,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## arg n
 
-- Opcode: 0x2c {uint8 arg index N}
+- Opcode: 0x2c {uint8 arg index}
 - Stack: ... &rarr; ..., []byte
 - Nth LogicSig argument
 - Mode: Signature
@@ -570,7 +570,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 ## bnz target
 
-- Opcode: 0x40 {int16 branch offset, big-endian}
+- Opcode: 0x40 {int16 branch offset}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is not zero
 
@@ -580,7 +580,7 @@ At v2 it became allowed to branch to the end of the program exactly after the la
 
 ## bz target
 
-- Opcode: 0x41 {int16 branch offset, big-endian}
+- Opcode: 0x41 {int16 branch offset}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is zero
 - Availability: v2
@@ -589,7 +589,7 @@ See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.
 
 ## b target
 
-- Opcode: 0x42 {int16 branch offset, big-endian}
+- Opcode: 0x42 {int16 branch offset}
 - Stack: ... &rarr; ...
 - branch unconditionally to TARGET
 - Availability: v2
@@ -811,7 +811,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 ## json_ref r
 
-- Opcode: 0x5f {uint8 return type}
+- Opcode: 0x5f {uint8 return type index}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., any
 - key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A
 - **Cost**: 25 + 2 per 7 bytes of A
@@ -1059,7 +1059,7 @@ pushint args are not added to the intcblock during assembly processes
 
 ## pushbytess bytes ...
 
-- Opcode: 0x82 {varuint count} [({varuint value length} bytes), ...]
+- Opcode: 0x82 {varuint count} [({varuint length} bytes), ...]
 - Stack: ... &rarr; ..., [N items]
 - push sequences of immediate byte arrays to stack (first byte array being deepest)
 - Availability: v8
@@ -1085,7 +1085,7 @@ pushints args are not added to the intcblock during assembly processes
 
 ## callsub target
 
-- Opcode: 0x88 {int16 branch offset, big-endian}
+- Opcode: 0x88 {int16 branch offset}
 - Stack: ... &rarr; ...
 - branch unconditionally to TARGET, saving the next instruction on the call stack
 - Availability: v4
@@ -1126,14 +1126,14 @@ Fails unless the last instruction executed was a `callsub`.
 
 ## switch target ...
 
-- Opcode: 0x8d {uint8 branch count} [{int16 branch offset, big-endian}, ...]
+- Opcode: 0x8d {uint8 branch count} [{int16 branch offset}, ...]
 - Stack: ..., A: uint64 &rarr; ...
 - branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.
 - Availability: v8
 
 ## match target ...
 
-- Opcode: 0x8e {uint8 branch count} [{int16 branch offset, big-endian}, ...]
+- Opcode: 0x8e {uint8 branch count} [{int16 branch offset}, ...]
 - Stack: ..., [A1, A2, ..., AN], B &rarr; ...
 - given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.
 - Availability: v8
@@ -1548,7 +1548,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 
 ## block f
 
-- Opcode: 0xd1 {uint8 block field}
+- Opcode: 0xd1 {uint8 block field index}
 - Stack: ..., A: uint64 &rarr; ..., any
 - field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)
 - Availability: v7
