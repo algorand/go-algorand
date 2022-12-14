@@ -570,7 +570,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 ## bnz target
 
-- Opcode: 0x40 {int16 branch offset}
+- Opcode: 0x40 {int16 branch offset, big-endian}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is not zero
 
@@ -580,7 +580,7 @@ At v2 it became allowed to branch to the end of the program exactly after the la
 
 ## bz target
 
-- Opcode: 0x41 {int16 branch offset}
+- Opcode: 0x41 {int16 branch offset, big-endian}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is zero
 - Availability: v2
@@ -589,7 +589,7 @@ See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.
 
 ## b target
 
-- Opcode: 0x42 {int16 branch offset}
+- Opcode: 0x42 {int16 branch offset, big-endian}
 - Stack: ... &rarr; ...
 - branch unconditionally to TARGET
 - Availability: v2
@@ -1085,7 +1085,7 @@ pushints args are not added to the intcblock during assembly processes
 
 ## callsub target
 
-- Opcode: 0x88 {int16 branch offset}
+- Opcode: 0x88 {int16 branch offset, big-endian}
 - Stack: ... &rarr; ...
 - branch unconditionally to TARGET, saving the next instruction on the call stack
 - Availability: v4
@@ -1126,14 +1126,14 @@ Fails unless the last instruction executed was a `callsub`.
 
 ## switch target ...
 
-- Opcode: 0x8d {uint8 branch count} [{int16 branch offset}, ...]
+- Opcode: 0x8d {uint8 branch count} [{int16 branch offset, big-endian}, ...]
 - Stack: ..., A: uint64 &rarr; ...
 - branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.
 - Availability: v8
 
 ## match target ...
 
-- Opcode: 0x8e {uint8 branch count} [{int16 branch offset}, ...]
+- Opcode: 0x8e {uint8 branch count} [{int16 branch offset, big-endian}, ...]
 - Stack: ..., [A1, A2, ..., AN], B &rarr; ...
 - given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.
 - Availability: v8

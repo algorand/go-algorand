@@ -242,10 +242,10 @@ var opcodeImmediateNotes = map[string]string{
 	"gtxnas":  "{uint8 transaction group index} {uint8 transaction field index}",
 	"gtxnsas": "{uint8 transaction field index}",
 
-	"bnz":     "{int16 branch offset}",
-	"bz":      "{int16 branch offset}",
-	"b":       "{int16 branch offset}",
-	"callsub": "{int16 branch offset}",
+	"bnz":     "{int16 branch offset, big-endian}",
+	"bz":      "{int16 branch offset, big-endian}",
+	"b":       "{int16 branch offset, big-endian}",
+	"callsub": "{int16 branch offset, big-endian}",
 
 	"load":   "{uint8 position in scratch space to load from}",
 	"store":  "{uint8 position in scratch space to store to}",
@@ -284,8 +284,8 @@ var opcodeImmediateNotes = map[string]string{
 	"vrf_verify": "{uint8 parameters index}",
 	"block":      "{uint8 block field index}",
 
-	"switch": "{uint8 branch count} [{int16 branch offset}, ...]",
-	"match":  "{uint8 branch count} [{int16 branch offset}, ...]",
+	"switch": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
+	"match":  "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
 
 	"proto":      "{uint8 arguments} {uint8 return values}",
 	"frame_dig":  "{int8 frame slot}",
