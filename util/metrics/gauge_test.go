@@ -52,8 +52,8 @@ func TestMetricGauge(t *testing.T) {
 		gauges[i] = MakeGauge(MetricName{Name: fmt.Sprintf("gauge_%d", i), Description: "this is the metric test for gauge object"})
 	}
 	for i := 0; i < 9; i++ {
-		gauges[i%3].Set(float64(i * 100))
-		gauges[i%3].Add(float64(i))
+		gauges[i%3].Set(uint64(i * 100))
+		gauges[i%3].Add(uint64(i))
 		// wait half-a cycle
 		time.Sleep(test.sampleRate / 2)
 	}

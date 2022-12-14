@@ -54,7 +54,7 @@ func UsageLogThread(ctx context.Context, log Logger, period time.Duration, wg *s
 		Utime, Stime, _ = util.GetCurrentProcessTimes()
 
 		runtime.ReadMemStats(&mst)
-		ramUsageGauge.Set(float64(mst.HeapInuse))
+		ramUsageGauge.Set(uint64(mst.HeapInuse))
 
 		if hasPrev {
 			userNanos := Utime - prevUtime

@@ -203,7 +203,7 @@ func (handler *TxHandler) backlogGaugeThread() {
 	for {
 		select {
 		case <-ticker.C:
-			transactionMessagesBacklogSizeGauge.Set(float64(len(handler.backlogQueue)))
+			transactionMessagesBacklogSizeGauge.Set(uint64(len(handler.backlogQueue)))
 		case <-handler.ctx.Done():
 			return
 		}

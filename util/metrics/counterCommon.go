@@ -35,7 +35,7 @@ type Counter struct {
 }
 
 type counterValues struct {
-	counter         float64
+	counter         uint64
 	labels          map[string]string
 	formattedLabels string
 }

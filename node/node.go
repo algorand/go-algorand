@@ -1009,7 +1009,7 @@ func (node *AlgorandFullNode) txPoolGaugeThread(done <-chan struct{}) {
 	for true {
 		select {
 		case <-ticker.C:
-			txPoolGauge.Set(float64(node.transactionPool.PendingCount()))
+			txPoolGauge.Set(uint64(node.transactionPool.PendingCount()))
 		case <-done:
 			return
 		}

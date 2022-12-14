@@ -28,7 +28,7 @@ type Gauge struct {
 	deadlock.Mutex
 	name        string
 	description string
-	value       float64
+	value       uint64
 }
 
 // MakeGauge create a new gauge with the provided name and description.
@@ -60,14 +60,14 @@ func (gauge *Gauge) Deregister(reg *Registry) {
 }
 
 // Add increases gauge by x
-func (gauge *Gauge) Add(x float64) {
+func (gauge *Gauge) Add(x uint64) {
 	gauge.Lock()
 	defer gauge.Unlock()
 	gauge.value += x
 }
 
 // Set sets gauge to x
-func (gauge *Gauge) Set(x float64) {
+func (gauge *Gauge) Set(x uint64) {
 	gauge.Lock()
 	defer gauge.Unlock()
 	gauge.value = x
@@ -91,7 +91,7 @@ func (gauge *Gauge) WriteMetric(buf *strings.Builder, parentLabels string) {
 		buf.WriteString(parentLabels)
 	}
 	buf.WriteString("} ")
-	buf.WriteString(strconv.FormatFloat(gauge.value, 'f', -1, 32))
+	buf.WriteString(strconv.FormatUint(gauge.value, 10))
 	buf.WriteString("\n")
 }
 
@@ -100,5 +100,5 @@ func (gauge *Gauge) AddMetric(values map[string]float64) {
 	gauge.Lock()
 	defer gauge.Unlock()
 
-	values[sanitizeTelemetryName(gauge.name)] = gauge.value
+	values[sanitizeTelemetryName(gauge.name)] = float64(gauge.value)
 }

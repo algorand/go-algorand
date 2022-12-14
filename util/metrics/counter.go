@@ -66,13 +66,12 @@ func (counter *Counter) Inc(labels map[string]string) {
 	if len(labels) == 0 {
 		counter.fastAddUint64(1)
 	} else {
-		counter.Add(1.0, labels)
+		counter.addLabels(1.0, labels)
 	}
 }
 
-// Add increases counter by x
-// For adding an integer, see AddUint64(x)
-func (counter *Counter) Add(x float64, labels map[string]string) {
+// addLabels increases counter by x
+func (counter *Counter) addLabels(x uint64, labels map[string]string) {
 	counter.Lock()
 	defer counter.Unlock()
 
@@ -95,13 +94,12 @@ func (counter *Counter) Add(x float64, labels map[string]string) {
 }
 
 // AddUint64 increases counter by x
-// If labels is nil this is much faster than Add()
-// Calls through to Add() if labels is not nil.
+// If labels is nil this is much faster than if labels is not nil.
 func (counter *Counter) AddUint64(x uint64, labels map[string]string) {
 	if len(labels) == 0 {
 		counter.fastAddUint64(x)
 	} else {
-		counter.Add(float64(x), labels)
+		counter.addLabels(x, labels)
 	}
 }
 
@@ -122,7 +120,7 @@ func (counter *Counter) fastAddUint64(x uint64) {
 		// is the first Add. Create a dummy
 		// counterValue for the no-labels value.
 		// Dummy counterValue simplifies display in WriteMetric.
-		counter.Add(0, nil)
+		counter.addLabels(0, nil)
 	}
 }
 
@@ -191,9 +189,9 @@ func (counter *Counter) WriteMetric(buf *strings.Builder, parentLabels string) {
 		buf.WriteString("} ")
 		value := l.counter
 		if len(l.labels) == 0 {
-			value += float64(atomic.LoadUint64(&counter.intValue))
+			value += atomic.LoadUint64(&counter.intValue)
 		}
-		buf.WriteString(strconv.FormatFloat(value, 'f', -1, 32))
+		buf.WriteString(strconv.FormatUint(value, 10))
 		buf.WriteString("\n")
 	}
 }
@@ -210,12 +208,12 @@ func (counter *Counter) AddMetric(values map[string]float64) {
 	for _, l := range counter.values {
 		sum := l.counter
 		if len(l.labels) == 0 {
-			sum += float64(atomic.LoadUint64(&counter.intValue))
+			sum += atomic.LoadUint64(&counter.intValue)
 		}
 		var suffix string
 		if len(l.formattedLabels) > 0 {
 			suffix = ":" + l.formattedLabels
 		}
-		values[sanitizeTelemetryName(counter.name+suffix)] = sum
+		values[sanitizeTelemetryName(counter.name+suffix)] = float64(sum)
 	}
 }
