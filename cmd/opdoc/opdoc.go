@@ -301,6 +301,9 @@ func fieldsAndTypes(group logic.FieldGroup) ([]string, string) {
 }
 
 func argEnums(name string) ([]string, string) {
+	// reminder: this needs to be manually updated every time
+	// a new opcode is added with an associated FieldGroup
+	// it'd be nice to have this auto-update
 	switch name {
 	case "txn", "gtxn", "gtxns", "itxn", "gitxn":
 		return fieldsAndTypes(logic.TxnFields)
