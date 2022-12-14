@@ -116,7 +116,7 @@ func txgroup(t testing.TB, ledger *Ledger, eval *internal.BlockEvaluator, txns .
 	for _, txn := range txns {
 		fillDefaults(t, ledger, eval, txn)
 	}
-	txgroup := txntest.SignedTxns(txns...)
+	txgroup := txntest.Group(txns...)
 
 	return eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
 }

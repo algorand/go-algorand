@@ -404,7 +404,7 @@ int 1`
 		LastValid:   newBlock.Round() + 1000,
 		Fee:         minFee,
 		GenesisHash: genHash,
-	}.Txn()
+	}
 
 	// a non-app call txn
 	payTxn := txntest.Txn{
@@ -418,7 +418,7 @@ int 1`
 		LastValid:   newBlock.Round() + 1000,
 		Fee:         minFee,
 		GenesisHash: genHash,
-	}.Txn()
+	}
 
 	// an app call that spawns inner txns
 	innerAppCallTxn := txntest.Txn{
@@ -431,32 +431,27 @@ int 1`
 		LastValid:   newBlock.Round() + 1000,
 		Fee:         minFee,
 		GenesisHash: genHash,
-	}.Txn()
+	}
 
-	var group transactions.TxGroup
-	group.TxGroupHashes = []crypto.Digest{crypto.HashObj(basicAppCallTxn), crypto.HashObj(payTxn), crypto.HashObj(innerAppCallTxn)}
-	groupID := crypto.HashObj(group)
-	basicAppCallTxn.Group = groupID
-	payTxn.Group = groupID
-	innerAppCallTxn.Group = groupID
+	txntest.Group(&basicAppCallTxn, &payTxn, &innerAppCallTxn)
 
 	txgroup := transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
-		basicAppCallTxn.Sign(keys[0]),
-		payTxn.Sign(keys[1]),
-		innerAppCallTxn.Sign(keys[0]),
+		basicAppCallTxn.Txn().Sign(keys[0]),
+		payTxn.Txn().Sign(keys[1]),
+		innerAppCallTxn.Txn().Sign(keys[0]),
 	})
 
-	paysetOffset := len(eval.block.Payset)
+	require.Len(t, eval.block.Payset, 0)
 
 	tracer := &mocktracer.Tracer{}
 	err = eval.TransactionGroupWithTracer(txgroup, tracer)
 	require.NoError(t, err)
 
-	require.Len(t, eval.block.Payset, paysetOffset+len(txgroup))
+	require.Len(t, eval.block.Payset, len(txgroup))
 
-	expectedADs := make([]transactions.ApplyData, 0, len(txgroup))
-	for _, txn := range eval.block.Payset[paysetOffset:] {
-		expectedADs = append(expectedADs, txn.ApplyData)
+	expectedADs := make([]transactions.ApplyData, len(txgroup))
+	for i, txn := range eval.block.Payset {
+		expectedADs[i] = txn.ApplyData
 	}
 
 	expectedEvents := flatten([][]mocktracer.Event{

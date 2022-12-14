@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -387,62 +388,48 @@ func TestTxnGroupWithTracer(t *testing.T) {
 	program2 := []byte{0x06, 0x80, 0x04, 0x74, 0x65, 0x73, 0x74, 0x48, 0x81, 0x01}
 	program2Addr := basics.Address(logic.HashProgram(program2))
 
-	makeHeader := func(sender basics.Address) transactions.Header {
-		return transactions.Header{
-			Sender:     sender,
-			FirstValid: 0,
-			LastValid:  10,
-			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee},
-		}
+	// this shouldn't be invoked during this test
+	appProgram := "err"
+
+	lsigPay := txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   program1Addr,
+		Receiver: accountAddr,
+		Fee:      proto.MinTxnFee,
 	}
 
-	lsigPay := transactions.SignedTxn{
-		Lsig: transactions.LogicSig{
-			Logic: program1,
-		},
-		Txn: transactions.Transaction{
-			Type:   protocol.PaymentTx,
-			Header: makeHeader(program1Addr),
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: accountAddr,
-			},
-		},
+	normalSigAppCall := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            accountAddr,
+		ApprovalProgram:   appProgram,
+		ClearStateProgram: appProgram,
+		Fee:               proto.MinTxnFee,
 	}
 
-	normalSigPay := transactions.Transaction{
-		Type:   protocol.ApplicationCallTx,
-		Header: makeHeader(accountAddr),
-		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-			ApprovalProgram:   program1,
-			ClearStateProgram: program1,
-		},
+	lsigAppCall := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            program2Addr,
+		ApprovalProgram:   appProgram,
+		ClearStateProgram: appProgram,
+		Fee:               proto.MinTxnFee,
 	}
 
-	lsigAppCall := transactions.SignedTxn{
-		Lsig: transactions.LogicSig{
-			Logic: program2,
-		},
-		Txn: transactions.Transaction{
-			Type:   protocol.ApplicationCallTx,
-			Header: makeHeader(program2Addr),
-			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-				ApprovalProgram:   program2,
-				ClearStateProgram: program2,
-			},
-		},
-	}
-
-	var group transactions.TxGroup
-	group.TxGroupHashes = []crypto.Digest{crypto.HashObj(lsigPay.Txn), crypto.HashObj(normalSigPay), crypto.HashObj(lsigAppCall.Txn)}
-	groupID := crypto.HashObj(group)
-	lsigPay.Txn.Group = groupID
-	normalSigPay.Group = groupID
-	lsigAppCall.Txn.Group = groupID
+	txntest.Group(&lsigPay, &normalSigAppCall, &lsigAppCall)
 
 	txgroup := []transactions.SignedTxn{
-		lsigPay,
-		normalSigPay.Sign(account),
-		lsigAppCall,
+		{
+			Lsig: transactions.LogicSig{
+				Logic: program1,
+			},
+			Txn: lsigPay.Txn(),
+		},
+		normalSigAppCall.Txn().Sign(account),
+		{
+			Lsig: transactions.LogicSig{
+				Logic: program2,
+			},
+			Txn: lsigAppCall.Txn(),
+		},
 	}
 
 	mockTracer := &mocktracer.Tracer{}

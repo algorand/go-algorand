@@ -526,7 +526,7 @@ func CreateTinyManSignedTxGroup(tb testing.TB, txns []Txn) ([]transactions.Signe
 	ops, err := logic.AssembleString(TmLsig)
 	require.NoError(tb, err)
 
-	stxns := SignedTxns(&txns[0], &txns[1], &txns[2], &txns[3])
+	stxns := Group(&txns[0], &txns[1], &txns[2], &txns[3])
 	stxns[1].Lsig.Logic = ops.Program
 	stxns[3].Lsig.Logic = ops.Program
 
