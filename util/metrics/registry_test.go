@@ -29,10 +29,10 @@ func TestWriteAdd(t *testing.T) {
 
 	// Test AddMetrics and WriteMetrics with a counter
 	counter := MakeCounter(MetricName{Name: "gauge-name", Description: "gauge description"})
-	counter.addLabels(12, nil)
+	counter.AddUint64(12, nil)
 
 	labelCounter := MakeCounter(MetricName{Name: "label-counter", Description: "counter with labels"})
-	labelCounter.addLabels(5, map[string]string{"label": "a label value"})
+	labelCounter.AddUint64(5, map[string]string{"label": "a label value"})
 
 	results := make(map[string]float64)
 	DefaultRegistry().AddMetrics(results)
