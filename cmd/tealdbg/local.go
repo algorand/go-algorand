@@ -536,7 +536,7 @@ func (r *LocalRunner) RunAll() error {
 		// ep.Debugger = r.debugger
 		// if ep.Debugger != nil // FALSE
 		if r.debugger != nil {
-			ep.Debugger = logic.MakeLegacyDebuggerAdaptor(r.debugger)
+			ep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(r.debugger)
 		}
 	}
 

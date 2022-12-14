@@ -56,15 +56,15 @@ func (l simulatorLedger) LookupLatest(addr basics.Address) (basics.AccountData, 
 }
 
 // ==============================
-// > Simulator Debugger
+// > Simulator Tracer
 // ==============================
 
-type debuggerHook struct {
-	logic.NullDebuggerHook
+type evalTracer struct {
+	logic.NullEvalTracer
 }
 
-func makeDebuggerHook() logic.DebuggerHook {
-	return &debuggerHook{}
+func makeTracer() logic.EvalTracer {
+	return &evalTracer{}
 }
 
 // ==============================
@@ -128,7 +128,7 @@ var proxySigner = crypto.PrivateKey{
 // check verifies that the transaction is well-formed and has valid or missing signatures.
 // An invalid transaction group error is returned if the transaction is not well-formed or there are invalid signatures.
 // To make things easier, we support submitting unsigned transactions and will respond whether signatures are missing.
-func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn, debugger logic.DebuggerHook) (bool, error) {
+func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn, debugger logic.EvalTracer) (bool, error) {
 	proxySignerSecrets, err := crypto.SecretKeyToSignatureSecrets(proxySigner)
 	if err != nil {
 		return false, err
@@ -163,7 +163,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	}
 
 	// Verify the signed transactions are well-formed and have valid signatures
-	_, err = verify.TxnGroupWithDebugger(txnsToVerify, hdr, nil, s.ledger, debugger)
+	_, err = verify.TxnGroupWithTracer(txnsToVerify, hdr, nil, s.ledger, debugger)
 	if err != nil {
 		return false, InvalidTxGroupError{SimulatorError{err}}
 	}
@@ -171,7 +171,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	return len(missingSigs) != 0, nil
 }
 
-func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.SignedTxn, debugger logic.DebuggerHook) (*ledgercore.ValidatedBlock, error) {
+func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.SignedTxn, tracer logic.EvalTracer) (*ledgercore.ValidatedBlock, error) {
 	// s.ledger has 'StartEvaluator' because *data.Ledger is embedded in the simulatorLedger
 	// and data.Ledger embeds *ledger.Ledger
 	eval, err := s.ledger.StartEvaluator(hdr, len(stxns), 0)
@@ -181,7 +181,7 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.Si
 
 	group := transactions.WrapSignedTxnsWithAD(stxns)
 
-	err = eval.TransactionGroupWithDebugger(group, debugger)
+	err = eval.TransactionGroupWithTracer(group, tracer)
 	if err != nil {
 		return nil, EvalFailureError{SimulatorError{err}}
 	}
@@ -203,14 +203,14 @@ func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (*ledgercore.Valid
 	}
 	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
 	hdr := nextBlock.BlockHeader
-	simulatorDebugger := makeDebuggerHook()
+	simulatorTracer := makeTracer()
 
 	// check that the transaction is well-formed and mark whether signatures are missing
-	missingSignatures, err := s.check(hdr, txgroup, simulatorDebugger)
+	missingSignatures, err := s.check(hdr, txgroup, simulatorTracer)
 	if err != nil {
 		return nil, false, err
 	}
 
-	vb, err := s.evaluate(hdr, txgroup, simulatorDebugger)
+	vb, err := s.evaluate(hdr, txgroup, simulatorTracer)
 	return vb, missingSignatures, err
 }

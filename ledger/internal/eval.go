@@ -929,18 +929,18 @@ func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithA
 	return eval.transactionGroup(txads, nil)
 }
 
-// TransactionGroupWithDebugger tentatively adds a new transaction group as part of this block evaluation,
-// calling relevant debugger hooks along the way.
+// TransactionGroupWithTracer tentatively adds a new transaction group as part of this block evaluation,
+// calling relevant tracer hooks along the way.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) TransactionGroupWithDebugger(txads []transactions.SignedTxnWithAD, debugger logic.DebuggerHook) error {
-	return eval.transactionGroup(txads, debugger)
+func (eval *BlockEvaluator) TransactionGroupWithTracer(txads []transactions.SignedTxnWithAD, tracer logic.EvalTracer) error {
+	return eval.transactionGroup(txads, tracer)
 }
 
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD, debugger logic.DebuggerHook) error {
+func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD, tracer logic.EvalTracer) error {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -961,18 +961,15 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	defer cow.recycle()
 
 	evalParams := logic.NewEvalParams(txgroup, &eval.proto, &eval.specials)
-	evalParams.Debugger = debugger
+	evalParams.Tracer = tracer
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		if debugger != nil {
-			err := debugger.BeforeTxn(evalParams, gi)
-			if err != nil {
-				return fmt.Errorf("error while running debugger BeforeTxn hook: %w", err)
-			}
+		if tracer != nil {
+			tracer.BeforeTxn(evalParams, gi)
 		}
 
 		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
@@ -980,11 +977,8 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 			return err
 		}
 
-		if debugger != nil {
-			err = debugger.AfterTxn(evalParams, gi, txib.ApplyData)
-			if err != nil {
-				return fmt.Errorf("error while running debugger AfterTxn hook: %w", err)
-			}
+		if tracer != nil {
+			tracer.AfterTxn(evalParams, gi, txib.ApplyData)
 		}
 
 		txibs = append(txibs, txib)

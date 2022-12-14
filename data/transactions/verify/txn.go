@@ -74,7 +74,7 @@ type GroupContext struct {
 	minAvmVersion    uint64
 	signedGroupTxns  []transactions.SignedTxn
 	ledger           logic.LedgerForSignature
-	verifierDebugger logic.DebuggerHook
+	evalTracer       logic.EvalTracer
 }
 
 var errTxGroupInvalidFee = errors.New("txgroup fee requirement overflow")
@@ -173,15 +173,15 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 	return txnGroup(stxs, contextHdr, cache, ledger, nil)
 }
 
-// TxnGroupWithDebugger verifies a []SignedTxn as being signed and having no obviously inconsistent data, while using a debugger.
-func TxnGroupWithDebugger(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature, debugger logic.DebuggerHook) (groupCtx *GroupContext, err error) {
-	return txnGroup(stxs, contextHdr, cache, ledger, debugger)
+// TxnGroupWithTracer verifies a []SignedTxn as being signed and having no obviously inconsistent data, while using a tracer.
+func TxnGroupWithTracer(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature, evalTracer logic.EvalTracer) (groupCtx *GroupContext, err error) {
+	return txnGroup(stxs, contextHdr, cache, ledger, evalTracer)
 }
 
-func txnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature, verifierDebugger logic.DebuggerHook) (groupCtx *GroupContext, err error) {
+func txnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature, evalTracer logic.EvalTracer) (groupCtx *GroupContext, err error) {
 	batchVerifier := crypto.MakeBatchVerifier()
 
-	if groupCtx, err = txnGroupBatchPrep(stxs, contextHdr, ledger, batchVerifier, verifierDebugger); err != nil {
+	if groupCtx, err = txnGroupBatchPrep(stxs, contextHdr, ledger, batchVerifier, evalTracer); err != nil {
 		return nil, err
 	}
 
@@ -198,12 +198,12 @@ func txnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 
 // txnGroupBatchPrep verifies a []SignedTxn having no obviously inconsistent data.
 // it is the caller responsibility to call batchVerifier.Verify()
-func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, ledger logic.LedgerForSignature, verifier *crypto.BatchVerifier, verifierDebugger logic.DebuggerHook) (*GroupContext, error) {
+func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, ledger logic.LedgerForSignature, verifier *crypto.BatchVerifier, evalTracer logic.EvalTracer) (*GroupContext, error) {
 	groupCtx, err := PrepareGroupContext(stxs, contextHdr, ledger)
 	if err != nil {
 		return nil, err
 	}
-	groupCtx.verifierDebugger = verifierDebugger
+	groupCtx.evalTracer = evalTracer
 
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
@@ -415,7 +415,7 @@ func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *Group
 		TxnGroup:      transactions.WrapSignedTxnsWithAD(groupCtx.signedGroupTxns),
 		MinAvmVersion: &groupCtx.minAvmVersion,
 		SigLedger:     groupCtx.ledger,
-		Debugger:      groupCtx.verifierDebugger,
+		Tracer:        groupCtx.evalTracer,
 	}
 	pass, cx, err := logic.EvalSignatureFull(groupIndex, &ep)
 	if err != nil {

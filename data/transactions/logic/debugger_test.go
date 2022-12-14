@@ -81,7 +81,7 @@ func TestWebDebuggerManual(t *testing.T) {
 		tx.SelectionPK[:],
 		tx.Note,
 	}
-	ep.Debugger = MakeLegacyDebuggerAdaptor(&WebDebuggerHook{URL: debugURL})
+	ep.Tracer = MakeEvalTracerDebuggerAdaptor(&WebDebuggerHook{URL: debugURL})
 	testLogic(t, legacyDebuggerTestProgram, AssemblerMaxVersion, ep)
 }
 
@@ -92,22 +92,19 @@ type testLegacyDbgHook struct {
 	state    *DebugState
 }
 
-func (d *testLegacyDbgHook) Register(state *DebugState) error {
+func (d *testLegacyDbgHook) Register(state *DebugState) {
 	d.register++
 	d.state = state
-	return nil
 }
 
-func (d *testLegacyDbgHook) Update(state *DebugState) error {
+func (d *testLegacyDbgHook) Update(state *DebugState) {
 	d.update++
 	d.state = state
-	return nil
 }
 
-func (d *testLegacyDbgHook) Complete(state *DebugState) error {
+func (d *testLegacyDbgHook) Complete(state *DebugState) {
 	d.complete++
 	d.state = state
-	return nil
 }
 
 func TestLegacyDebuggerHook(t *testing.T) {
@@ -118,7 +115,7 @@ func TestLegacyDebuggerHook(t *testing.T) {
 		t.Parallel()
 		testDbg := testLegacyDbgHook{}
 		ep := defaultEvalParams()
-		ep.Debugger = MakeLegacyDebuggerAdaptor(&testDbg)
+		ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
 		testLogic(t, legacyDebuggerTestProgram, AssemblerMaxVersion, ep)
 
 		require.Equal(t, 1, testDbg.register)
@@ -131,7 +128,7 @@ func TestLegacyDebuggerHook(t *testing.T) {
 		t.Parallel()
 		testDbg := testLegacyDbgHook{}
 		ep := defaultEvalParams()
-		ep.Debugger = MakeLegacyDebuggerAdaptor(&testDbg)
+		ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
 		testApp(t, legacyDebuggerTestProgram, ep)
 
 		require.Equal(t, 1, testDbg.register)
@@ -149,7 +146,7 @@ func TestLegacyDebuggerHook(t *testing.T) {
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 		ledger.NewAccount(basics.AppIndex(888).Address(), 200000)
 
-		ep.Debugger = MakeLegacyDebuggerAdaptor(&testDbg)
+		ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
 		testApp(t, innerTxnTestProgram, ep)
 
 		require.Equal(t, 1, testDbg.register)
@@ -264,7 +261,7 @@ func TestCallStackUpdate(t *testing.T) {
 
 	testDbg := testLegacyDbgHook{}
 	ep := defaultEvalParams()
-	ep.Debugger = MakeLegacyDebuggerAdaptor(&testDbg)
+	ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
 	testLogic(t, testCallStackProgram, AssemblerMaxVersion, ep)
 
 	require.Equal(t, 1, testDbg.register)

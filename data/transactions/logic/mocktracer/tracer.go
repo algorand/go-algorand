@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package mockdebugger
+package mocktracer
 
 import (
 	"github.com/algorand/go-algorand/data/transactions"
@@ -22,29 +22,29 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// EventType represents a type of logic.DebuggerHook event
+// EventType represents a type of logic.EvalTracer event
 type EventType string
 
 const (
-	// BeforeLogicEvalEvent represents the logic.DebuggerHook.BeforeLogicEval event
+	// BeforeLogicEvalEvent represents the logic.EvalTracer.BeforeLogicEval event
 	BeforeLogicEvalEvent EventType = "BeforeLogicEval"
-	// AfterLogicEvalEvent represents the logic.DebuggerHook.AfterLogicEval event
+	// AfterLogicEvalEvent represents the logic.EvalTracer.AfterLogicEval event
 	AfterLogicEvalEvent EventType = "AfterLogicEval"
-	// BeforeTxnEvent represents the logic.DebuggerHook.BeforeTxn event
+	// BeforeTxnEvent represents the logic.EvalTracer.BeforeTxn event
 	BeforeTxnEvent EventType = "BeforeTxn"
-	// AfterTxnEvent represents the logic.DebuggerHook.AfterTxn event
+	// AfterTxnEvent represents the logic.EvalTracer.AfterTxn event
 	AfterTxnEvent EventType = "AfterTxn"
-	// BeforeTealOpEvent represents the logic.DebuggerHook.BeforeTealOp event
+	// BeforeTealOpEvent represents the logic.EvalTracer.BeforeTealOp event
 	BeforeTealOpEvent EventType = "BeforeTealOp"
-	// AfterTealOpEvent represents the logic.DebuggerHook.AfterTealOp event
+	// AfterTealOpEvent represents the logic.EvalTracer.AfterTealOp event
 	AfterTealOpEvent EventType = "AfterTealOp"
-	// BeforeInnerTxnGroupEvent represents the logic.DebuggerHook.BeforeInnerTxnGroup event
+	// BeforeInnerTxnGroupEvent represents the logic.EvalTracer.BeforeInnerTxnGroup event
 	BeforeInnerTxnGroupEvent EventType = "BeforeInnerTxnGroup"
-	// AfterInnerTxnGroupEvent represents the logic.DebuggerHook.AfterInnerTxnGroup event
+	// AfterInnerTxnGroupEvent represents the logic.EvalTracer.AfterInnerTxnGroup event
 	AfterInnerTxnGroupEvent EventType = "AfterInnerTxnGroup"
 )
 
-// Event represents a logic.DebuggerHook event
+// Event represents a logic.EvalTracer event
 type Event struct {
 	Type EventType
 
@@ -101,55 +101,47 @@ func AfterInnerTxnGroup(groupSize int) Event {
 	return Event{Type: AfterInnerTxnGroupEvent, InnerGroupSize: groupSize}
 }
 
-// Debugger is a mock debugger that implements logic.DebuggerHook
-type Debugger struct {
+// Tracer is a mock tracer that implements logic.EvalTracer
+type Tracer struct {
 	Events []Event
 }
 
-// BeforeLogicEval mocks the logic.Debugger.BeforeLogicEval method
-func (d *Debugger) BeforeLogicEval(cx *logic.EvalContext) error {
+// BeforeLogicEval mocks the logic.EvalTracer.BeforeLogicEval method
+func (d *Tracer) BeforeLogicEval(cx *logic.EvalContext) {
 	d.Events = append(d.Events, BeforeLogicEval(cx.RunMode()))
-	return nil
 }
 
-// AfterLogicEval mocks the logic.Debugger.AfterLogicEval method
-func (d *Debugger) AfterLogicEval(cx *logic.EvalContext, evalError error) error {
+// AfterLogicEval mocks the logic.EvalTracer.AfterLogicEval method
+func (d *Tracer) AfterLogicEval(cx *logic.EvalContext, evalError error) {
 	d.Events = append(d.Events, AfterLogicEval(cx.RunMode()))
-	return nil
 }
 
-// BeforeTxn mocks the logic.Debugger.BeforeTxn method
-func (d *Debugger) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
+// BeforeTxn mocks the logic.EvalTracer.BeforeTxn method
+func (d *Tracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 	d.Events = append(d.Events, BeforeTxn(ep.TxnGroup[groupIndex].Txn.Type))
-	return nil
 }
 
-// AfterTxn mocks the logic.Debugger.AfterTxn method
-func (d *Debugger) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData) error {
+// AfterTxn mocks the logic.EvalTracer.AfterTxn method
+func (d *Tracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData) {
 	d.Events = append(d.Events, AfterTxn(ep.TxnGroup[groupIndex].Txn.Type, ad))
-	return nil
 }
 
-// BeforeTealOp mocks the logic.Debugger.BeforeTealOp method
-func (d *Debugger) BeforeTealOp(cx *logic.EvalContext) error {
+// BeforeTealOp mocks the logic.EvalTracer.BeforeTealOp method
+func (d *Tracer) BeforeTealOp(cx *logic.EvalContext) {
 	d.Events = append(d.Events, BeforeTealOp())
-	return nil
 }
 
-// AfterTealOp mocks the logic.Debugger.AfterTealOp method
-func (d *Debugger) AfterTealOp(cx *logic.EvalContext, evalError error) error {
+// AfterTealOp mocks the logic.EvalTracer.AfterTealOp method
+func (d *Tracer) AfterTealOp(cx *logic.EvalContext, evalError error) {
 	d.Events = append(d.Events, AfterTealOp())
-	return nil
 }
 
-// BeforeInnerTxnGroup mocks the logic.Debugger.BeforeInnerTxnGroup method
-func (d *Debugger) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
+// BeforeInnerTxnGroup mocks the logic.EvalTracer.BeforeInnerTxnGroup method
+func (d *Tracer) BeforeInnerTxnGroup(ep *logic.EvalParams) {
 	d.Events = append(d.Events, BeforeInnerTxnGroup(len(ep.TxnGroup)))
-	return nil
 }
 
-// AfterInnerTxnGroup mocks the logic.Debugger.AfterInnerTxnGroup method
-func (d *Debugger) AfterInnerTxnGroup(ep *logic.EvalParams) error {
+// AfterInnerTxnGroup mocks the logic.EvalTracer.AfterInnerTxnGroup method
+func (d *Tracer) AfterInnerTxnGroup(ep *logic.EvalParams) {
 	d.Events = append(d.Events, AfterInnerTxnGroup(len(ep.TxnGroup)))
-	return nil
 }

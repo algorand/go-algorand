@@ -18,17 +18,17 @@ package logic
 
 import "github.com/algorand/go-algorand/data/transactions"
 
-// DebuggerHook functions are called by eval function during TEAL program execution, if a debugger
+// EvalTracer functions are called by eval function during AVM program execution, if a tracer
 // is provided.
 //
 // Refer to the lifecycle graph below for the sequence in which hooks are called.
 //
-// NOTE: Arguments given to Debugger hooks (EvalParams and EvalContext) are passed by reference,
-// they are not copies. It is therefore the responsibility of the debugger hooks to NOT modify the
-// state of the structs passed to them. Additionally, hooks are responsible for copying the information
-// they need from the argument structs. No guarantees are made that the referenced state will not
-// change between hook calls. This decision was made in an effort to reduce the performance
-// impact of the debugger hooks.
+// NOTE: Arguments given to Tracer hooks (EvalParams and EvalContext) are passed by reference,
+// they are not copies. It is therefore the responsibility of the tracer implementation to NOT
+// modify the state of the structs passed to them. Additionally, hooks are responsible for copying
+// the information they need from the argument structs. No guarantees are made that the referenced
+// state will not change between hook calls. This decision was made in an effort to reduce the
+// performance impact of tracers.
 //
 //   LOGICSIG LIFECYCLE GRAPH
 //   ┌─────────────────────────┐
@@ -86,75 +86,59 @@ import "github.com/algorand/go-algorand/data/transactions"
 //   │                                                │
 //   │ > AfterTxn                                     │
 //   └────────────────────────────────────────────────┘
-type DebuggerHook interface {
+type EvalTracer interface {
 	// BeforeTxn is called before a transaction is executed.
 	// groupIndex refers to the index of the transaction in the transaction group that was just executed.
-	BeforeTxn(ep *EvalParams, groupIndex int) error
+	BeforeTxn(ep *EvalParams, groupIndex int)
 
 	// AfterTxn is called after a transaction has been executed.
 	// groupIndex refers to the index of the transaction in the transaction group that was just executed.
-	AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) error
+	AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData)
 
 	// BeforeLogicEval is called before an app or LogicSig is evaluated.
-	BeforeLogicEval(cx *EvalContext) error
+	BeforeLogicEval(cx *EvalContext)
 
 	// AfterLogicEval is called after an app or LogicSig is evaluated.
-	AfterLogicEval(cx *EvalContext, evalError error) error
+	AfterLogicEval(cx *EvalContext, evalError error)
 
 	// BeforeTealOp is called before the op is evaluated
-	BeforeTealOp(cx *EvalContext) error
+	BeforeTealOp(cx *EvalContext)
 
 	// AfterTealOp is called after the op has been evaluated
-	AfterTealOp(cx *EvalContext, evalError error) error
+	AfterTealOp(cx *EvalContext, evalError error)
 
 	// BeforeInnerTxnGroup is called before an inner transaction group is executed.
 	// Each inner transaction within the group calls BeforeTxn and subsequent hooks, as described
 	// in the lifecycle diagram.
-	BeforeInnerTxnGroup(ep *EvalParams) error
+	BeforeInnerTxnGroup(ep *EvalParams)
 
 	// AfterInnerTxnGroup is called after an inner transaction group has been executed.
-	AfterInnerTxnGroup(ep *EvalParams) error
+	AfterInnerTxnGroup(ep *EvalParams)
 }
 
-// NullDebuggerHook implements DebuggerHook, but all of its hook methods do nothing
-type NullDebuggerHook struct{}
+// NullEvalTracer implements EvalTracer, but all of its hook methods do nothing
+type NullEvalTracer struct{}
 
 // BeforeTxn does nothing
-func (null NullDebuggerHook) BeforeTxn(ep *EvalParams, groupIndex int) error {
-	return nil
-}
+func (n NullEvalTracer) BeforeTxn(ep *EvalParams, groupIndex int) {}
 
 // AfterTxn does nothing
-func (null NullDebuggerHook) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) error {
-	return nil
-}
+func (n NullEvalTracer) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) {}
 
 // BeforeLogicEval does nothing
-func (null NullDebuggerHook) BeforeLogicEval(cx *EvalContext) error {
-	return nil
-}
+func (n NullEvalTracer) BeforeLogicEval(cx *EvalContext) {}
 
 // AfterLogicEval does nothing
-func (null NullDebuggerHook) AfterLogicEval(cx *EvalContext, evalError error) error {
-	return nil
-}
+func (n NullEvalTracer) AfterLogicEval(cx *EvalContext, evalError error) {}
 
 // BeforeTealOp does nothing
-func (null NullDebuggerHook) BeforeTealOp(cx *EvalContext) error {
-	return nil
-}
+func (null NullEvalTracer) BeforeTealOp(cx *EvalContext) {}
 
 // AfterTealOp does nothing
-func (null NullDebuggerHook) AfterTealOp(cx *EvalContext, evalError error) error {
-	return nil
-}
+func (n NullEvalTracer) AfterTealOp(cx *EvalContext, evalError error) {}
 
 // BeforeInnerTxnGroup does nothing
-func (null NullDebuggerHook) BeforeInnerTxnGroup(ep *EvalParams) error {
-	return nil
-}
+func (n NullEvalTracer) BeforeInnerTxnGroup(ep *EvalParams) {}
 
 // AfterInnerTxnGroup does nothing
-func (null NullDebuggerHook) AfterInnerTxnGroup(ep *EvalParams) error {
-	return nil
-}
+func (n NullEvalTracer) AfterInnerTxnGroup(ep *EvalParams) {}

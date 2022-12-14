@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/data/transactions/logic/mockdebugger"
+	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -370,7 +370,7 @@ func TestDecodeNil(t *testing.T) {
 	}
 }
 
-func TestTxnGroupWithDebugger(t *testing.T) {
+func TestTxnGroupWithTracer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -445,22 +445,22 @@ func TestTxnGroupWithDebugger(t *testing.T) {
 		lsigAppCall,
 	}
 
-	mockDbg := &mockdebugger.Debugger{}
+	mockTracer := &mocktracer.Tracer{}
 
-	groupCtx, err := TxnGroupWithDebugger(txgroup, blockHeader, nil, logic.NoHeaderLedger{}, mockDbg)
+	groupCtx, err := TxnGroupWithTracer(txgroup, blockHeader, nil, logic.NoHeaderLedger{}, mockTracer)
 	require.NoError(t, err)
-	require.Equal(t, mockDbg, groupCtx.verifierDebugger)
+	require.Equal(t, mockTracer, groupCtx.evalTracer)
 
-	expectedEvents := []mockdebugger.Event{
-		mockdebugger.BeforeLogicEval(logic.ModeSig),             // first txn start
-		mockdebugger.BeforeTealOp(), mockdebugger.AfterTealOp(), // first txn LogicSig: 1 op
-		mockdebugger.AfterLogicEval(logic.ModeSig), // first txn end
+	expectedEvents := []mocktracer.Event{
+		mocktracer.BeforeLogicEval(logic.ModeSig),           // first txn start
+		mocktracer.BeforeTealOp(), mocktracer.AfterTealOp(), // first txn LogicSig: 1 op
+		mocktracer.AfterLogicEval(logic.ModeSig), // first txn end
 		// nothing for second txn (not signed with a LogicSig)
-		mockdebugger.BeforeLogicEval(logic.ModeSig),                                                                                                                               // third txn start
-		mockdebugger.BeforeTealOp(), mockdebugger.AfterTealOp(), mockdebugger.BeforeTealOp(), mockdebugger.AfterTealOp(), mockdebugger.BeforeTealOp(), mockdebugger.AfterTealOp(), // third txn LogicSig: 3 ops
-		mockdebugger.AfterLogicEval(logic.ModeSig), // third txn end
+		mocktracer.BeforeLogicEval(logic.ModeSig),                                                                                                                     // third txn start
+		mocktracer.BeforeTealOp(), mocktracer.AfterTealOp(), mocktracer.BeforeTealOp(), mocktracer.AfterTealOp(), mocktracer.BeforeTealOp(), mocktracer.AfterTealOp(), // third txn LogicSig: 3 ops
+		mocktracer.AfterLogicEval(logic.ModeSig), // third txn end
 	}
-	require.Equal(t, expectedEvents, mockDbg.Events)
+	require.Equal(t, expectedEvents, mockTracer.Events)
 }
 
 func TestPaysetGroups(t *testing.T) {

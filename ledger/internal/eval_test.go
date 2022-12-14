@@ -37,7 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/data/transactions/logic/mockdebugger"
+	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/apply"
@@ -309,18 +309,18 @@ func TestPrivateTransactionGroup(t *testing.T) {
 	require.Error(t, err) // too many
 }
 
-func tealOpLogs(count int) []mockdebugger.Event {
-	var log []mockdebugger.Event
+func tealOpLogs(count int) []mocktracer.Event {
+	var log []mocktracer.Event
 
 	for i := 0; i < count; i++ {
-		log = append(log, mockdebugger.BeforeTealOp(), mockdebugger.AfterTealOp())
+		log = append(log, mocktracer.BeforeTealOp(), mocktracer.AfterTealOp())
 	}
 
 	return log
 }
 
-func flatten(rows [][]mockdebugger.Event) []mockdebugger.Event {
-	var out []mockdebugger.Event
+func flatten(rows [][]mocktracer.Event) []mocktracer.Event {
+	var out []mocktracer.Event
 	for _, row := range rows {
 		out = append(out, row...)
 	}
@@ -359,7 +359,7 @@ itxn_submit
 int 1
 `
 
-func TestTransactionGroupWithDebugger(t *testing.T) {
+func TestTransactionGroupWithTracer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -405,12 +405,6 @@ int 1`
 		Fee:         minFee,
 		GenesisHash: genHash,
 	}.Txn()
-	expectedBasicAppCallAD := transactions.ApplyData{
-		ApplicationID: 1,
-		EvalDelta: transactions.EvalDelta{
-			Logs: []string{"hello"},
-		},
-	}
 
 	// a non-app call txn
 	payTxn := txntest.Txn{
@@ -425,10 +419,6 @@ int 1`
 		Fee:         minFee,
 		GenesisHash: genHash,
 	}.Txn()
-	expectedClosingAmount := balances[addrs[1]].MicroAlgos.Raw - 1_000_000 - payTxn.Fee.Raw
-	expectedPayTxnAD := transactions.ApplyData{
-		ClosingAmount: basics.MicroAlgos{Raw: expectedClosingAmount},
-	}
 
 	// an app call that spawns inner txns
 	innerAppCallTxn := txntest.Txn{
@@ -442,75 +432,6 @@ int 1`
 		Fee:         minFee,
 		GenesisHash: genHash,
 	}.Txn()
-	expectedInner1Txn := txntest.Txn{
-		Type:              protocol.ApplicationCallTx,
-		Sender:            innerAppAddress,
-		ApprovalProgram:   []byte{0x06, 0x81, 0x01},
-		ClearStateProgram: []byte{0x06, 0x81, 0x01},
-
-		FirstValid:  innerAppCallTxn.FirstValid,
-		LastValid:   innerAppCallTxn.LastValid,
-		Fee:         minFee,
-		GenesisHash: innerAppCallTxn.GenesisHash,
-	}.Txn()
-	expectedInner1AD := transactions.ApplyData{
-		ApplicationID: 4,
-	}
-	expectedInner2Txn := txntest.Txn{
-		Type:     protocol.PaymentTx,
-		Sender:   innerAppAddress,
-		Receiver: innerAppAddress,
-		Amount:   1,
-
-		FirstValid:  innerAppCallTxn.FirstValid,
-		LastValid:   innerAppCallTxn.LastValid,
-		Fee:         minFee,
-		GenesisHash: innerAppCallTxn.GenesisHash,
-	}.Txn()
-	expectedInner2AD := transactions.ApplyData{}
-	expectedInner3Txn := txntest.Txn{
-		Type:     protocol.PaymentTx,
-		Sender:   innerAppAddress,
-		Receiver: innerAppAddress,
-		Amount:   2,
-
-		FirstValid:  innerAppCallTxn.FirstValid,
-		LastValid:   innerAppCallTxn.LastValid,
-		Fee:         minFee,
-		GenesisHash: innerAppCallTxn.GenesisHash,
-	}.Txn()
-	expectedInner3AD := transactions.ApplyData{}
-	parentID := innerAppCallTxn.ID()
-	var innerGroup transactions.TxGroup
-	innerGroup.TxGroupHashes = []crypto.Digest{crypto.Digest(expectedInner2Txn.InnerID(parentID, 2)), crypto.Digest(expectedInner3Txn.InnerID(parentID, 3))}
-	innerGroupID := crypto.HashObj(innerGroup)
-	expectedInner2Txn.Group = innerGroupID
-	expectedInner3Txn.Group = innerGroupID
-	expectedInnerCallTxnAD := transactions.ApplyData{
-		ApplicationID: basics.AppIndex(innerAppID),
-		EvalDelta: transactions.EvalDelta{
-			InnerTxns: []transactions.SignedTxnWithAD{
-				{
-					SignedTxn: transactions.SignedTxn{
-						Txn: expectedInner1Txn,
-					},
-					ApplyData: expectedInner1AD,
-				},
-				{
-					SignedTxn: transactions.SignedTxn{
-						Txn: expectedInner2Txn,
-					},
-					ApplyData: expectedInner2AD,
-				},
-				{
-					SignedTxn: transactions.SignedTxn{
-						Txn: expectedInner3Txn,
-					},
-					ApplyData: expectedInner2AD,
-				},
-			},
-		},
-	}
 
 	var group transactions.TxGroup
 	group.TxGroupHashes = []crypto.Digest{crypto.HashObj(basicAppCallTxn), crypto.HashObj(payTxn), crypto.HashObj(innerAppCallTxn)}
@@ -525,56 +446,65 @@ int 1`
 		innerAppCallTxn.Sign(keys[0]),
 	})
 
-	testDbg := &mockdebugger.Debugger{}
-	err = eval.TransactionGroupWithDebugger(txgroup, testDbg)
+	paysetOffset := len(eval.block.Payset)
+
+	tracer := &mocktracer.Tracer{}
+	err = eval.TransactionGroupWithTracer(txgroup, tracer)
 	require.NoError(t, err)
 
-	expectedEvents := flatten([][]mockdebugger.Event{
+	require.Len(t, eval.block.Payset, paysetOffset+len(txgroup))
+
+	expectedADs := make([]transactions.ApplyData, 0, len(txgroup))
+	for _, txn := range eval.block.Payset[paysetOffset:] {
+		expectedADs = append(expectedADs, txn.ApplyData)
+	}
+
+	expectedEvents := flatten([][]mocktracer.Event{
 		{
-			mockdebugger.BeforeTxn(protocol.ApplicationCallTx), // start basicAppCallTxn
-			mockdebugger.BeforeLogicEval(logic.ModeApp),
+			mocktracer.BeforeTxn(protocol.ApplicationCallTx), // start basicAppCallTxn
+			mocktracer.BeforeLogicEval(logic.ModeApp),
 		},
-		tealOpLogs(1),
+		tealOpLogs(3),
 		{
-			mockdebugger.AfterLogicEval(logic.ModeApp),
-			mockdebugger.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD), // end basicAppCallTxn
-			mockdebugger.BeforeTxn(protocol.PaymentTx),                                // start payTxn
-			mockdebugger.AfterTxn(protocol.PaymentTx, expectedPayTxnAD),               // end payTxn
-			mockdebugger.BeforeTxn(protocol.ApplicationCallTx),                        // start innerAppCallTxn
-			mockdebugger.BeforeLogicEval(logic.ModeApp),
+			mocktracer.AfterLogicEval(logic.ModeApp),
+			mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedADs[0]), // end basicAppCallTxn
+			mocktracer.BeforeTxn(protocol.PaymentTx),                        // start payTxn
+			mocktracer.AfterTxn(protocol.PaymentTx, expectedADs[1]),         // end payTxn
+			mocktracer.BeforeTxn(protocol.ApplicationCallTx),                // start innerAppCallTxn
+			mocktracer.BeforeLogicEval(logic.ModeApp),
 		},
 		tealOpLogs(10),
 		{
-			mockdebugger.BeforeTealOp(),
-			mockdebugger.BeforeInnerTxnGroup(1), // start first itxn group
-			mockdebugger.BeforeTxn(protocol.ApplicationCallTx),
-			mockdebugger.BeforeLogicEval(logic.ModeApp),
+			mocktracer.BeforeTealOp(),
+			mocktracer.BeforeInnerTxnGroup(1), // start first itxn group
+			mocktracer.BeforeTxn(protocol.ApplicationCallTx),
+			mocktracer.BeforeLogicEval(logic.ModeApp),
 		},
 		tealOpLogs(1),
 		{
-			mockdebugger.AfterLogicEval(logic.ModeApp),
-			mockdebugger.AfterTxn(protocol.ApplicationCallTx, expectedInner1AD),
-			mockdebugger.AfterInnerTxnGroup(1), // end first itxn group
-			mockdebugger.AfterTealOp(),
+			mocktracer.AfterLogicEval(logic.ModeApp),
+			mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedADs[2].EvalDelta.InnerTxns[0].ApplyData),
+			mocktracer.AfterInnerTxnGroup(1), // end first itxn group
+			mocktracer.AfterTealOp(),
 		},
 		tealOpLogs(14),
 		{
-			mockdebugger.BeforeTealOp(),
-			mockdebugger.BeforeInnerTxnGroup(2), // start second itxn group
-			mockdebugger.BeforeTxn(protocol.PaymentTx),
-			mockdebugger.AfterTxn(protocol.PaymentTx, expectedInner2AD),
-			mockdebugger.BeforeTxn(protocol.PaymentTx),
-			mockdebugger.AfterTxn(protocol.PaymentTx, expectedInner3AD),
-			mockdebugger.AfterInnerTxnGroup(2), // end second itxn group
-			mockdebugger.AfterTealOp(),
+			mocktracer.BeforeTealOp(),
+			mocktracer.BeforeInnerTxnGroup(2), // start second itxn group
+			mocktracer.BeforeTxn(protocol.PaymentTx),
+			mocktracer.AfterTxn(protocol.PaymentTx, expectedADs[2].EvalDelta.InnerTxns[1].ApplyData),
+			mocktracer.BeforeTxn(protocol.PaymentTx),
+			mocktracer.AfterTxn(protocol.PaymentTx, expectedADs[2].EvalDelta.InnerTxns[2].ApplyData),
+			mocktracer.AfterInnerTxnGroup(2), // end second itxn group
+			mocktracer.AfterTealOp(),
 		},
 		tealOpLogs(1),
 		{
-			mockdebugger.AfterLogicEval(logic.ModeApp),
-			mockdebugger.AfterTxn(protocol.ApplicationCallTx, expectedInnerCallTxnAD), // end innerAppCallTxn
+			mocktracer.AfterLogicEval(logic.ModeApp),
+			mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedADs[2]), // end innerAppCallTxn
 		},
 	})
-	require.Equal(t, expectedEvents, testDbg.Events)
+	require.Equal(t, expectedEvents, tracer.Events)
 }
 
 // BlockEvaluator.workaroundOverspentRewards() fixed a couple issues on testnet.

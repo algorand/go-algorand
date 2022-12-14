@@ -33,82 +33,78 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// LegacyDebuggerHook is an interface that supports the first version of TEAL debuggers.
-// It consists of a set of functions called by eval function during TEAL program execution
-type LegacyDebuggerHook interface {
+// DebuggerHook is an interface that supports the first version of AVM debuggers.
+// It consists of a set of functions called by eval function during AVM program execution.
+//
+// Deprecated: This interface does not support non-app call or inner transactions. Use EvalTracer
+// instead.
+type DebuggerHook interface {
 	// Register is fired on program creation
-	Register(state *DebugState) error
+	Register(state *DebugState)
 	// Update is fired on every step
-	Update(state *DebugState) error
+	Update(state *DebugState)
 	// Complete is called when the program exits
-	Complete(state *DebugState) error
+	Complete(state *DebugState)
 }
 
-type legacyDebuggerAdaptor struct {
-	debugger      LegacyDebuggerHook
+type debuggerEvalTracerAdaptor struct {
+	debugger      DebuggerHook
 	innerTxnDepth int
 	debugState    *DebugState
 }
 
-// MakeLegacyDebuggerAdaptor creates an adaptor that externally adheres to the DebuggerHook
-// interface, but drives a LegacyDebuggerHook debugger
-func MakeLegacyDebuggerAdaptor(debugger LegacyDebuggerHook) DebuggerHook {
-	return &legacyDebuggerAdaptor{debugger: debugger}
+// MakeEvalTracerDebuggerAdaptor creates an adaptor that externally adheres to the EvalTracer
+// interface, but drives a DebuggerHook interface
+func MakeEvalTracerDebuggerAdaptor(debugger DebuggerHook) EvalTracer {
+	return &debuggerEvalTracerAdaptor{debugger: debugger}
 }
 
 // BeforeTxn does nothing
-func (adaptor *legacyDebuggerAdaptor) BeforeTxn(ep *EvalParams, groupIndex int) error {
-	return nil
-}
+func (a *debuggerEvalTracerAdaptor) BeforeTxn(ep *EvalParams, groupIndex int) {}
 
 // AfterTxn does nothing
-func (adaptor *legacyDebuggerAdaptor) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) error {
-	return nil
+func (a *debuggerEvalTracerAdaptor) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) {
 }
 
 // BeforeInnerTxnGroup updates inner txn depth
-func (adaptor *legacyDebuggerAdaptor) BeforeInnerTxnGroup(ep *EvalParams) error {
-	adaptor.innerTxnDepth++
-	return nil
+func (a *debuggerEvalTracerAdaptor) BeforeInnerTxnGroup(ep *EvalParams) {
+	a.innerTxnDepth++
 }
 
 // AfterInnerTxnGroup updates inner txn depth
-func (adaptor *legacyDebuggerAdaptor) AfterInnerTxnGroup(ep *EvalParams) error {
-	adaptor.innerTxnDepth--
-	return nil
+func (a *debuggerEvalTracerAdaptor) AfterInnerTxnGroup(ep *EvalParams) {
+	a.innerTxnDepth--
 }
 
 // BeforeLogicEval invokes the legacy debugger's Register hook
-func (adaptor *legacyDebuggerAdaptor) BeforeLogicEval(cx *EvalContext) error {
-	if adaptor.innerTxnDepth > 0 {
+func (a *debuggerEvalTracerAdaptor) BeforeLogicEval(cx *EvalContext) {
+	if a.innerTxnDepth > 0 {
 		// only report updates for top-level transactions, for backwards compatibility
-		return nil
+		return
 	}
-	adaptor.debugState = makeDebugState(cx)
-	return adaptor.debugger.Register(adaptor.refreshDebugState(cx, nil))
+	a.debugState = makeDebugState(cx)
+	a.debugger.Register(a.refreshDebugState(cx, nil))
 }
 
 // BeforeTealOp invokes the legacy debugger's Update hook
-func (adaptor *legacyDebuggerAdaptor) BeforeTealOp(cx *EvalContext) error {
-	if adaptor.innerTxnDepth > 0 {
+func (a *debuggerEvalTracerAdaptor) BeforeTealOp(cx *EvalContext) {
+	if a.innerTxnDepth > 0 {
 		// only report updates for top-level transactions, for backwards compatibility
-		return nil
+		return
 	}
-	return adaptor.debugger.Update(adaptor.refreshDebugState(cx, nil))
+	a.debugger.Update(a.refreshDebugState(cx, nil))
 }
 
 // AfterTealOp does nothing
-func (adaptor *legacyDebuggerAdaptor) AfterTealOp(cx *EvalContext, evalError error) error {
-	return nil
-}
+func (a *debuggerEvalTracerAdaptor) AfterTealOp(cx *EvalContext, evalError error) {}
 
 // AfterLogicEval invokes the legacy debugger's Complete hook
-func (adaptor *legacyDebuggerAdaptor) AfterLogicEval(cx *EvalContext, evalError error) error {
-	if adaptor.innerTxnDepth > 0 {
+func (a *debuggerEvalTracerAdaptor) AfterLogicEval(cx *EvalContext, evalError error) {
+	if a.innerTxnDepth > 0 {
 		// only report updates for top-level transactions, for backwards compatibility
-		return nil
+		return
 	}
-	return adaptor.debugger.Complete(adaptor.refreshDebugState(cx, evalError))
+	a.debugger.Complete(a.refreshDebugState(cx, evalError))
 }
 
 // WebDebuggerHook represents a connection to tealdbg
@@ -288,8 +284,8 @@ func (d *DebugState) parseCallstack(callstack []frame) []CallFrame {
 	return callFrames
 }
 
-func (adaptor *legacyDebuggerAdaptor) refreshDebugState(cx *EvalContext, evalError error) *DebugState {
-	ds := adaptor.debugState
+func (a *debuggerEvalTracerAdaptor) refreshDebugState(cx *EvalContext, evalError error) *DebugState {
+	ds := a.debugState
 
 	// Update pc, line, error, stack, scratch space, callstack,
 	// and opcode budget
@@ -352,7 +348,7 @@ func (dbg *WebDebuggerHook) postState(state *DebugState, endpoint string) error 
 }
 
 // Register sends state to remote debugger
-func (dbg *WebDebuggerHook) Register(state *DebugState) error {
+func (dbg *WebDebuggerHook) Register(state *DebugState) {
 	u, err := url.Parse(dbg.URL)
 	if err != nil {
 		logging.Base().Errorf("Failed to parse url: %s", err.Error())
@@ -362,15 +358,24 @@ func (dbg *WebDebuggerHook) Register(state *DebugState) error {
 	if h != "localhost" && h != "127.0.0.1" && h != "::1" {
 		logging.Base().Warnf("Unsecured communication with non-local debugger: %s", h)
 	}
-	return dbg.postState(state, "exec/register")
+	err = dbg.postState(state, "exec/register")
+	if err != nil {
+		logging.Base().Errorf("Failed to post state to exec/register: %s", err.Error())
+	}
 }
 
 // Update sends state to remote debugger
-func (dbg *WebDebuggerHook) Update(state *DebugState) error {
-	return dbg.postState(state, "exec/update")
+func (dbg *WebDebuggerHook) Update(state *DebugState) {
+	err := dbg.postState(state, "exec/update")
+	if err != nil {
+		logging.Base().Errorf("Failed to post state to exec/update: %s", err.Error())
+	}
 }
 
 // Complete sends state to remote debugger
-func (dbg *WebDebuggerHook) Complete(state *DebugState) error {
-	return dbg.postState(state, "exec/complete")
+func (dbg *WebDebuggerHook) Complete(state *DebugState) {
+	err := dbg.postState(state, "exec/complete")
+	if err != nil {
+		logging.Base().Errorf("Failed to post state to exec/complete: %s", err.Error())
+	}
 }

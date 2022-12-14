@@ -56,7 +56,8 @@ itxn_submit
 int 1
 `
 
-type testDbgHook struct {
+// can't use mocktracer.Tracer because the import would be circular
+type testEvalTracer struct {
 	beforeTxnCalls int
 	afterTxnCalls  int
 
@@ -71,124 +72,116 @@ type testDbgHook struct {
 	afterInnerTxnGroupCalls  int
 }
 
-func (d *testDbgHook) BeforeTxn(ep *EvalParams, groupIndex int) error {
-	d.beforeTxnCalls++
-	return nil
+func (t *testEvalTracer) BeforeTxn(ep *EvalParams, groupIndex int) {
+	t.beforeTxnCalls++
 }
 
-func (d *testDbgHook) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) error {
-	d.afterTxnCalls++
-	return nil
+func (t *testEvalTracer) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) {
+	t.afterTxnCalls++
 }
 
-func (d *testDbgHook) BeforeLogicEval(cx *EvalContext) error {
-	d.beforeLogicEvalCalls++
-	d.logicEvalModes = append(d.logicEvalModes, cx.RunMode())
-	return nil
+func (t *testEvalTracer) BeforeLogicEval(cx *EvalContext) {
+	t.beforeLogicEvalCalls++
+	t.logicEvalModes = append(t.logicEvalModes, cx.RunMode())
 }
 
-func (d *testDbgHook) AfterLogicEval(cx *EvalContext, evalError error) error {
-	d.afterLogicEvalCalls++
-	return nil
+func (t *testEvalTracer) AfterLogicEval(cx *EvalContext, evalError error) {
+	t.afterLogicEvalCalls++
 }
 
-func (d *testDbgHook) BeforeTealOp(cx *EvalContext) error {
-	d.beforeTealOpCalls++
-	return nil
+func (t *testEvalTracer) BeforeTealOp(cx *EvalContext) {
+	t.beforeTealOpCalls++
 }
 
-func (d *testDbgHook) AfterTealOp(cx *EvalContext, evalError error) error {
-	d.afterTealOpCalls++
-	return nil
+func (t *testEvalTracer) AfterTealOp(cx *EvalContext, evalError error) {
+	t.afterTealOpCalls++
 }
 
-func (d *testDbgHook) BeforeInnerTxnGroup(ep *EvalParams) error {
-	d.beforeInnerTxnGroupCalls++
-	return nil
+func (t *testEvalTracer) BeforeInnerTxnGroup(ep *EvalParams) {
+	t.beforeInnerTxnGroupCalls++
 }
 
-func (d *testDbgHook) AfterInnerTxnGroup(ep *EvalParams) error {
-	d.afterInnerTxnGroupCalls++
-	return nil
+func (t *testEvalTracer) AfterInnerTxnGroup(ep *EvalParams) {
+	t.afterInnerTxnGroupCalls++
 }
 
-func TestDebuggerHook(t *testing.T) {
+func TestEvalWithTracer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	t.Run("logicsig", func(t *testing.T) {
 		t.Parallel()
-		testDbg := testDbgHook{}
+		testTracer := testEvalTracer{}
 		ep := defaultEvalParams()
-		ep.Debugger = &testDbg
+		ep.Tracer = &testTracer
 		testLogic(t, legacyDebuggerTestProgram, AssemblerMaxVersion, ep)
 
 		// these should not be called because beforeTxn and afterTxn hooks
 		// are called within ledger evaluation, not logic.
-		require.Zero(t, testDbg.beforeTxnCalls)
-		require.Zero(t, testDbg.afterTxnCalls)
+		require.Zero(t, testTracer.beforeTxnCalls)
+		require.Zero(t, testTracer.afterTxnCalls)
 
-		require.Equal(t, 1, testDbg.beforeLogicEvalCalls)
-		require.Equal(t, 1, testDbg.afterLogicEvalCalls)
-		require.Equal(t, []RunMode{ModeSig}, testDbg.logicEvalModes)
+		require.Equal(t, 1, testTracer.beforeLogicEvalCalls)
+		require.Equal(t, 1, testTracer.afterLogicEvalCalls)
+		require.Equal(t, []RunMode{ModeSig}, testTracer.logicEvalModes)
 
-		require.Equal(t, 35, testDbg.beforeTealOpCalls)
-		require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
+		require.Equal(t, 35, testTracer.beforeTealOpCalls)
+		require.Equal(t, testTracer.beforeTealOpCalls, testTracer.afterTealOpCalls)
 
-		require.Zero(t, testDbg.beforeInnerTxnGroupCalls)
-		require.Zero(t, testDbg.afterInnerTxnGroupCalls)
+		require.Zero(t, testTracer.beforeInnerTxnGroupCalls)
+		require.Zero(t, testTracer.afterInnerTxnGroupCalls)
 	})
 
 	t.Run("simple app", func(t *testing.T) {
 		t.Parallel()
-		testDbg := testDbgHook{}
+		testTracer := testEvalTracer{}
 		ep := defaultEvalParams()
-		ep.Debugger = &testDbg
+		ep.Tracer = &testTracer
 		testApp(t, legacyDebuggerTestProgram, ep)
 
 		// these should not be called because beforeTxn and afterTxn hooks
 		// are called within ledger evaluation, not logic.
-		require.Zero(t, testDbg.beforeTxnCalls)
-		require.Zero(t, testDbg.afterTxnCalls)
+		require.Zero(t, testTracer.beforeTxnCalls)
+		require.Zero(t, testTracer.afterTxnCalls)
 
-		require.Equal(t, 1, testDbg.beforeLogicEvalCalls)
-		require.Equal(t, 1, testDbg.afterLogicEvalCalls)
-		require.Equal(t, []RunMode{ModeApp}, testDbg.logicEvalModes)
+		require.Equal(t, 1, testTracer.beforeLogicEvalCalls)
+		require.Equal(t, 1, testTracer.afterLogicEvalCalls)
+		require.Equal(t, []RunMode{ModeApp}, testTracer.logicEvalModes)
 
-		require.Equal(t, 35, testDbg.beforeTealOpCalls)
-		require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
+		require.Equal(t, 35, testTracer.beforeTealOpCalls)
+		require.Equal(t, testTracer.beforeTealOpCalls, testTracer.afterTealOpCalls)
 
-		require.Zero(t, testDbg.beforeInnerTxnGroupCalls)
-		require.Zero(t, testDbg.afterInnerTxnGroupCalls)
+		require.Zero(t, testTracer.beforeInnerTxnGroupCalls)
+		require.Zero(t, testTracer.afterInnerTxnGroupCalls)
 	})
 
 	t.Run("app with inner txns", func(t *testing.T) {
 		t.Parallel()
-		testDbg := testDbgHook{}
+		testTracer := testEvalTracer{}
 		ep, tx, ledger := MakeSampleEnv()
 
 		// Establish 888 as the app id, and fund it.
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 		ledger.NewAccount(basics.AppIndex(888).Address(), 200000)
 
-		ep.Debugger = &testDbg
+		ep.Tracer = &testTracer
 		testApp(t, innerTxnTestProgram, ep)
 
 		// only called for the inner transaction in this test, not the top-level one
-		require.Equal(t, 3, testDbg.beforeTxnCalls)
-		require.Equal(t, 3, testDbg.afterTxnCalls)
+		require.Equal(t, 3, testTracer.beforeTxnCalls)
+		require.Equal(t, 3, testTracer.afterTxnCalls)
 
-		require.Equal(t, 2, testDbg.beforeLogicEvalCalls)
-		require.Equal(t, 2, testDbg.afterLogicEvalCalls)
-		require.Equal(t, []RunMode{ModeApp, ModeApp}, testDbg.logicEvalModes)
+		require.Equal(t, 2, testTracer.beforeLogicEvalCalls)
+		require.Equal(t, 2, testTracer.afterLogicEvalCalls)
+		require.Equal(t, []RunMode{ModeApp, ModeApp}, testTracer.logicEvalModes)
 
 		appCallTealOps := 27
 		innerAppCallTealOps := 1
-		require.Equal(t, appCallTealOps+innerAppCallTealOps, testDbg.beforeTealOpCalls)
-		require.Equal(t, testDbg.beforeTealOpCalls, testDbg.afterTealOpCalls)
+		require.Equal(t, appCallTealOps+innerAppCallTealOps, testTracer.beforeTealOpCalls)
+		require.Equal(t, testTracer.beforeTealOpCalls, testTracer.afterTealOpCalls)
 
 		// two groups of inner transactions were issued
-		require.Equal(t, 2, testDbg.beforeInnerTxnGroupCalls)
-		require.Equal(t, 2, testDbg.afterInnerTxnGroupCalls)
+		require.Equal(t, 2, testTracer.beforeInnerTxnGroupCalls)
+		require.Equal(t, 2, testTracer.afterInnerTxnGroupCalls)
 	})
 }
