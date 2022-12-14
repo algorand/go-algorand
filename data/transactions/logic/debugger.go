@@ -48,6 +48,8 @@ type DebuggerHook interface {
 }
 
 type debuggerEvalTracerAdaptor struct {
+	NullEvalTracer
+
 	debugger      DebuggerHook
 	innerTxnDepth int
 	debugState    *DebugState
@@ -57,13 +59,6 @@ type debuggerEvalTracerAdaptor struct {
 // interface, but drives a DebuggerHook interface
 func MakeEvalTracerDebuggerAdaptor(debugger DebuggerHook) EvalTracer {
 	return &debuggerEvalTracerAdaptor{debugger: debugger}
-}
-
-// BeforeTxn does nothing
-func (a *debuggerEvalTracerAdaptor) BeforeTxn(ep *EvalParams, groupIndex int) {}
-
-// AfterTxn does nothing
-func (a *debuggerEvalTracerAdaptor) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) {
 }
 
 // BeforeInnerTxnGroup updates inner txn depth
@@ -94,9 +89,6 @@ func (a *debuggerEvalTracerAdaptor) BeforeTealOp(cx *EvalContext) {
 	}
 	a.debugger.Update(a.refreshDebugState(cx, nil))
 }
-
-// AfterTealOp does nothing
-func (a *debuggerEvalTracerAdaptor) AfterTealOp(cx *EvalContext, evalError error) {}
 
 // AfterLogicEval invokes the legacy debugger's Complete hook
 func (a *debuggerEvalTracerAdaptor) AfterLogicEval(cx *EvalContext, evalError error) {
