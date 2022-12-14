@@ -21,9 +21,9 @@ Each API in `algod.oas2.json`, except for some pre-existing `common` APIs, shoul
 `algod.token` token, while the `private` APIs use the admin token, found in `algod.admin.token` within the algod data
 directory.
 2. The type, or group, of API. This is currently `participating`, `nonparticipating`, or `data`, but may expand in the
-future to encompass different sets of APIs such as `experimental` APIs. Additional APIs should be added to one of the
-existing sets of tags based on its use case--unless you intend to create a new group in which case you will need to 
-additionally ensure your new APIs are registered.
+future to encompass different sets of APIs. Additional APIs should be added to one of the existing sets of tags based
+on its use case--unless you intend to create a new group in which case you will need to additionally ensure your new
+APIs are registered.
 
 For backwards compatibility, the default set of APIs registered will always be `participating` and `nonparticipating`
 APIs.
