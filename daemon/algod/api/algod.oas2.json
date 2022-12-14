@@ -1208,7 +1208,7 @@
     "/v2/transactions/simulate": {
       "post": {
         "tags": [
-          "private",
+          "public",
           "experimental"
         ],
         "consumes": [
@@ -1434,7 +1434,7 @@
       "get": {
         "description": "Get ledger deltas for a round.",
         "tags": [
-            "private",
+            "public",
             "data"
         ],
         "produces": [
@@ -1924,7 +1924,7 @@
       "delete": {
         "description": "Unset the ledger sync round.",
         "tags": [
-          "private",
+          "public",
           "data"
         ],
         "schemes": [
@@ -1968,7 +1968,7 @@
       "get": {
         "description": "Gets the minimum sync round for the ledger.",
         "tags": [
-          "private",
+          "public",
           "data"
         ],
         "schemes": [
@@ -2014,7 +2014,7 @@
       "post": {
         "description": "Sets the minimum sync round on the ledger.",
         "tags": [
-          "private",
+          "public",
           "data"
         ],
         "schemes": [
@@ -4194,7 +4194,6 @@
     "SimulationResponse": {
       "description": "Result of a transaction group simulation.",
       "tags": [
-        "private",
         "experimental"
       ],
       "schema": {

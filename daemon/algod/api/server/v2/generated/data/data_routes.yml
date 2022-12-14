@@ -5,10 +5,10 @@ generate:
 output-options:
   include-tags:
   - data
-  - private
+  - public
   exclude-tags:
   - common
-  - public
+  - private
   - participating
   - nonparticipating
   - experimental

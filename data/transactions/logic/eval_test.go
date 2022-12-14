@@ -397,6 +397,46 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	}
 }
 
+func TestBranchEnd(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := testProg(t, `int 1
+b end
+end:
+`, v)
+			var txn transactions.SignedTxn
+			txn.Lsig.Logic = ops.Program
+			ep := defaultEvalParams(txn)
+			err := CheckSignature(0, ep)
+			require.NoError(t, err)
+		})
+	}
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := testProg(t, `int 1
+return
+`, v)
+			var txn transactions.SignedTxn
+			txn.Lsig.Logic = ops.Program
+			ep := defaultEvalParams(txn)
+			err := CheckSignature(0, ep)
+			require.NoError(t, err)
+		})
+	}
+
+	// now craft pushint \x01 + cut program and ensure the checker does not fail
+	// this \x01 varint value forces nextpc=3 with program length=3
+	pushint := OpsByName[LogicVersion]["pushint"]
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = []byte{LogicVersion, pushint.Opcode, 0x01}
+	ep := defaultEvalParams(txn)
+	err := CheckSignature(0, ep)
+	require.NoError(t, err)
+}
+
 const tlhcProgramText = `txn CloseRemainderTo
 addr DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE
 ==

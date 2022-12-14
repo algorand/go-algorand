@@ -9,7 +9,37 @@ The API is defined using [OpenAPI v2](https://swagger.io/specification/v2/) in *
 
 1. Document your changes by editing **algod.oas2.json**
 2. Regenerate the endpoints by running **make generate**.
-3. Update the implementation in **server/v2/handlers.go**. It is sometimes useful to consult **generated/routes.go** to make sure the handler properly implements **ServerInterface**.
+3. Update the implementation in **server/v2/handlers.go**. It is sometimes useful to consult **generated/\*/\*/routes.go** to make sure the handler properly implements **ServerInterface**.
+
+### Adding a new V2 API
+When adding a new endpoint to the V2 APIs, you will need to add `tags` to the path. The tags are a way of separating our
+APIs into groups--the motivation of which is to more easily be able to conditionally enable and/or disable groups of
+endpoints based on the use case for the node.
+
+Each API in `algod.oas2.json`, except for some pre-existing `common` APIs, should have two tags.
+1. Either `public` or `private`. This controls the type of authentication used by the API--the `public` APIs use the
+`algod.token` token, while the `private` APIs use the admin token, found in `algod.admin.token` within the algod data
+directory.
+2. The type, or group, of API. This is currently `participating`, `nonparticipating`, or `data`, but may expand in the
+future to encompass different sets of APIs. Additional APIs should be added to one of the existing sets of tags based
+on its use case--unless you intend to create a new group in which case you will need to additionally ensure your new
+APIs are registered.
+
+For backwards compatibility, the default set of APIs registered will always be `participating` and `nonparticipating`
+APIs.
+
+The current set of API groups and some rough descriptions of how to think about them:
+* `participating`
+  * APIs used in forming blocks/transactions and generally advancing the chain. Things which use the txn pool,
+participation keys, the agreement service, etc.
+* `nonparticipating`
+  * Generally available APIs used to do things such as fetch data. For example, GetGenesis, GetBlock, Catchpoint Catchup, etc.
+* `data`
+  * A special set of APIs which require manipulating the node state in order to provide additional data about the node state
+at some predefined granularity. For example, SetSyncRound and GetLedgerStateDelta used together control and expose StateDelta objects
+containing per-round ledger differences that get compacted when actually written to the ledger DB.
+* `experimental`
+  * APIs which are still in development and not ready to be generally released.
 
 ## What codegen tool is used?
 
