@@ -1210,15 +1210,31 @@ func getDropped() (droppedBacklog, droppedPool uint64) {
 	return
 }
 
-// makeSignedTxnGroups prepares N transaction groups of random (maxGroupSize) sizes with random
-// invalid signatures of a given probability (invalidProb)
-func makeSignedTxnGroups(N, numUsers, maxGroupSize int, invalidProb float32, addresses []basics.Address,
-	secrets []*crypto.SignatureSecrets) (ret [][]transactions.SignedTxn,
-	badTxnGroups map[uint64]interface{}) {
-	badTxnGroups = make(map[uint64]interface{})
+func getTransaction(sender, receiver basics.Address, u int) transactions.Transaction {
+	noteField := make([]byte, binary.MaxVarintLen64)
+	binary.PutUvarint(noteField, uint64(u))
 
+	tx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      sender,
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			GenesisHash: genesisHash,
+			Note:        noteField,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: receiver,
+			Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance + (rand.Uint64() % 10000)},
+		},
+	}
+	return tx
+}
+
+func getTransactionGroups(N, numUsers, maxGroupSize int, addresses []basics.Address) [][]transactions.Transaction {
+	txnGrps := make([][]transactions.Transaction, N)
 	protoMaxGrpSize := proto.MaxTxGroupSize
-	ret = make([][]transactions.SignedTxn, 0, N)
 	for u := 0; u < N; u++ {
 		grpSize := rand.Intn(protoMaxGrpSize-1) + 1
 		if grpSize > maxGroupSize {
@@ -1228,72 +1244,160 @@ func makeSignedTxnGroups(N, numUsers, maxGroupSize int, invalidProb float32, add
 		txns := make([]transactions.Transaction, 0, grpSize)
 		for g := 0; g < grpSize; g++ {
 			// generate transactions
-			noteField := make([]byte, binary.MaxVarintLen64)
-			binary.PutUvarint(noteField, uint64(u))
-			tx := transactions.Transaction{
-				Type: protocol.PaymentTx,
-				Header: transactions.Header{
-					Sender:      addresses[(u+g)%numUsers],
-					Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
-					FirstValid:  0,
-					LastValid:   basics.Round(proto.MaxTxnLife),
-					GenesisHash: genesisHash,
-					Note:        noteField,
-				},
-				PaymentTxnFields: transactions.PaymentTxnFields{
-					Receiver: addresses[(u+g+1)%numUsers],
-					Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance + (rand.Uint64() % 10000)},
-				},
-			}
+			tx := getTransaction(addresses[(u+g)%numUsers], addresses[(u+g+1)%numUsers], u)
 			if grpSize > 1 {
 				txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.Digest(tx.ID()))
 			}
 			txns = append(txns, tx)
 		}
-		groupHash := crypto.HashObj(txGroup)
-		signedTxGroup := make([]transactions.SignedTxn, 0, grpSize)
-		for g, txn := range txns {
-			if grpSize > 1 {
-				txn.Group = groupHash
+		if grpSize > 1 {
+			groupHash := crypto.HashObj(txGroup)
+			for t := range txns {
+				txns[t].Group = groupHash
 			}
-			signedTx := txn.Sign(secrets[(u+g)%numUsers])
-			signedTx.Txn = txn
+		}
+		txnGrps[u] = txns
+	}
+	return txnGrps
+}
+
+func signTransactionGroups(txnGroups [][]transactions.Transaction, secrets []*crypto.SignatureSecrets, invalidProb float32) (
+	ret [][]transactions.SignedTxn, badTxnGroups map[uint64]interface{}) {
+	numUsers := len(secrets)
+	badTxnGroups = make(map[uint64]interface{})
+	for tg := range txnGroups {
+		grpSize := len(txnGroups[tg])
+		signedTxGroup := make([]transactions.SignedTxn, 0, grpSize)
+		for t := range txnGroups[tg] {
+			signedTx := txnGroups[tg][t].Sign(secrets[(tg+t)%numUsers])
+			signedTx.Txn = txnGroups[tg][t]
 			signedTxGroup = append(signedTxGroup, signedTx)
 		}
 		// randomly make bad signatures
 		if rand.Float32() < invalidProb {
 			tinGrp := rand.Intn(grpSize)
 			signedTxGroup[tinGrp].Sig[0] = signedTxGroup[tinGrp].Sig[0] + 1
-			badTxnGroups[uint64(u)] = struct{}{}
+			badTxnGroups[uint64(tg)] = struct{}{}
 		}
 		ret = append(ret, signedTxGroup)
 	}
 	return
 }
 
+func signMSigTransactionGroups(txnGroups [][]transactions.Transaction, secrets []*crypto.SignatureSecrets,
+	invalidProb float32, msigSize int) (ret [][]transactions.SignedTxn, badTxnGroups map[uint64]interface{}, err error) {
+
+	numUsers := len(secrets)
+	badTxnGroups = make(map[uint64]interface{})
+	for tg := range txnGroups {
+		msigVer := uint8(1)
+		msigTHld := uint8(msigSize)
+		pks := make([]crypto.PublicKey, msigSize)
+		for x := 0; x < msigSize; x++ {
+			pks[x] = secrets[(tg+x)%numUsers].SignatureVerifier
+		}
+		multiSigAddr, err := crypto.MultisigAddrGen(msigVer, msigTHld, pks)
+		if err != nil {
+			return ret, badTxnGroups, err
+		}
+		grpSize := len(txnGroups[tg])
+		signedTxGroup := make([]transactions.SignedTxn, grpSize)
+		sigsForTxn := make([]crypto.MultisigSig, msigTHld)
+
+		for t := range txnGroups[tg] {
+			txnGroups[tg][t].Sender = basics.Address(multiSigAddr)
+			for s := range sigsForTxn {
+				sig, err := crypto.MultisigSign(txnGroups[tg][t], crypto.Digest(multiSigAddr), msigVer, msigTHld, pks, *secrets[(tg+s)%numUsers])
+				if err != nil {
+					return ret, badTxnGroups, err
+				}
+				sigsForTxn[s] = sig
+			}
+			msig, err := crypto.MultisigAssemble(sigsForTxn)
+			if err != nil {
+				return ret, badTxnGroups, err
+			}
+			signedTxGroup[t].Txn = txnGroups[tg][t]
+			signedTxGroup[t].Msig = msig
+		}
+		// randomly make bad signatures
+		if rand.Float32() < invalidProb {
+			tinGrp := rand.Intn(grpSize)
+			signedTxGroup[tinGrp].Msig.Threshold = signedTxGroup[tinGrp].Msig.Threshold - 1
+			badTxnGroups[uint64(tg)] = struct{}{}
+		}
+		ret = append(ret, signedTxGroup)
+	}
+	return
+}
+
+// makeSignedTxnGroups prepares N transaction groups of random (maxGroupSize) sizes with random
+// invalid signatures of a given probability (invalidProb)
+func makeSignedTxnGroups(N, numUsers, maxGroupSize int, invalidProb float32, addresses []basics.Address,
+	secrets []*crypto.SignatureSecrets) (ret [][]transactions.SignedTxn,
+	badTxnGroups map[uint64]interface{}) {
+
+	txnGroups := getTransactionGroups(N, numUsers, maxGroupSize, addresses)
+	ret, badTxnGroups = signTransactionGroups(txnGroups, secrets, invalidProb)
+	return
+}
+
+// makeMsigSignedTxnGroups prepares N transaction groups of random (maxGroupSize) sizes with random
+// invalid signatures of a given probability (invalidProb) signed with multisig accounts of given size
+func makeMsigSignedTxnGroups(N, numUsers, msigSize, maxGroupSize int, invalidProb float32, addresses []basics.Address,
+	secrets []*crypto.SignatureSecrets) (ret [][]transactions.SignedTxn,
+	badTxnGroups map[uint64]interface{}, err error) {
+
+	txnGroups := getTransactionGroups(N, numUsers, maxGroupSize, addresses)
+	ret, badTxnGroups, err = signMSigTransactionGroups(txnGroups, secrets, invalidProb, msigSize)
+	return
+}
+
 // BenchmarkHandleTxns sends signed transactions directly to the verifier
 func BenchmarkHandleTxns(b *testing.B) {
 	maxGroupSize := 1
-	tpss := []int{6000000, 600000, 60000, 6000}
 	invalidRates := []float32{0.5, 0.001}
-	for _, tps := range tpss {
-		for _, ivr := range invalidRates {
-			b.Run(fmt.Sprintf("tps_%d_inv_%.3f", tps, ivr), func(b *testing.B) {
-				runHandlerBenchmarkWithBacklog(maxGroupSize, tps, ivr, b, false)
-			})
-		}
+	for _, ivr := range invalidRates {
+		b.Run(fmt.Sprintf("inv_%.3f", ivr), func(b *testing.B) {
+			runHandlerBenchmarkWithBacklog(maxGroupSize, 1, 0, ivr, b, false)
+		})
 	}
 }
 
 // BenchmarkHandleTxnGroups sends signed transaction groups directly to the verifier
 func BenchmarkHandleTxnGroups(b *testing.B) {
 	maxGroupSize := proto.MaxTxGroupSize / 2
-	tpss := []int{6000000, 600000, 60000, 6000}
 	invalidRates := []float32{0.5, 0.001}
-	for _, tps := range tpss {
+	for _, ivr := range invalidRates {
+		b.Run(fmt.Sprintf("inv_%.3f", ivr), func(b *testing.B) {
+			runHandlerBenchmarkWithBacklog(maxGroupSize, 1, 0, ivr, b, false)
+		})
+	}
+}
+
+// BenchmarkHandleTxns sends signed transactions directly to the verifier
+func BenchmarkHandleMsigTxns(b *testing.B) {
+	maxGroupSize := 1
+	msigSizes := []int{255, 64, 16}
+	invalidRates := []float32{0.5, 0.001}
+	for _, msigSize := range msigSizes {
 		for _, ivr := range invalidRates {
-			b.Run(fmt.Sprintf("tps_%d_inv_%.3f", tps, ivr), func(b *testing.B) {
-				runHandlerBenchmarkWithBacklog(maxGroupSize, tps, ivr, b, false)
+			b.Run(fmt.Sprintf("msigSize_%d_inv_%.3f", msigSize, ivr), func(b *testing.B) {
+				runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, 0, ivr, b, false)
+			})
+		}
+	}
+}
+
+// BenchmarkHandleTxnGroups sends signed transaction groups directly to the verifier
+func BenchmarkHandleMsigTxnGroups(b *testing.B) {
+	maxGroupSize := proto.MaxTxGroupSize / 2
+	msigSizes := []int{255, 64, 16}
+	invalidRates := []float32{0.5, 0.001}
+	for _, msigSize := range msigSizes {
+		for _, ivr := range invalidRates {
+			b.Run(fmt.Sprintf("msigSize_%d_inv_%.3f", msigSize, ivr), func(b *testing.B) {
+				runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, 0, ivr, b, false)
 			})
 		}
 	}
@@ -1308,7 +1412,7 @@ func BenchmarkHandleBLWTxns(b *testing.B) {
 	for _, tps := range tpss {
 		for _, ivr := range invalidRates {
 			b.Run(fmt.Sprintf("tps_%d_inv_%.3f", tps, ivr), func(b *testing.B) {
-				runHandlerBenchmarkWithBacklog(maxGroupSize, tps, ivr, b, true)
+				runHandlerBenchmarkWithBacklog(maxGroupSize, 1, tps, ivr, b, true)
 			})
 		}
 	}
@@ -1323,14 +1427,14 @@ func BenchmarkHandleBLWTxnGroups(b *testing.B) {
 	for _, tps := range tpss {
 		for _, ivr := range invalidRates {
 			b.Run(fmt.Sprintf("tps_%d_inv_%.3f", tps, ivr), func(b *testing.B) {
-				runHandlerBenchmarkWithBacklog(maxGroupSize, tps, ivr, b, true)
+				runHandlerBenchmarkWithBacklog(maxGroupSize, 1, tps, ivr, b, true)
 			})
 		}
 	}
 }
 
 // runHandlerBenchmarkWithBacklog benchmarks the number of transactions verfied or dropped
-func runHandlerBenchmarkWithBacklog(maxGroupSize, tps int, invalidRate float32, b *testing.B, useBacklogWorker bool) {
+func runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, tps int, invalidRate float32, b *testing.B, useBacklogWorker bool) {
 	defer func() {
 		// reset the counters
 		transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
@@ -1408,7 +1512,14 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, tps int, invalidRate float32, 
 	}
 
 	// Prepare the transactions
-	signedTransactionGroups, badTxnGroups := makeSignedTxnGroups(b.N, numUsers, maxGroupSize, invalidRate, addresses, secrets)
+	var signedTransactionGroups [][]transactions.SignedTxn
+	var badTxnGroups map[uint64]interface{}
+	if msigSize == 1 {
+		signedTransactionGroups, badTxnGroups = makeSignedTxnGroups(b.N, numUsers, maxGroupSize, invalidRate, addresses, secrets)
+	} else {
+		signedTransactionGroups, badTxnGroups, err = makeMsigSignedTxnGroups(b.N, numUsers, msigSize, maxGroupSize, invalidRate, addresses, secrets)
+		require.NoError(b, err)
+	}
 	var encodedSignedTransactionGroups []network.IncomingMessage
 	if useBacklogWorker {
 		encodedSignedTransactionGroups = make([]network.IncomingMessage, 0, b.N)
@@ -1424,7 +1535,10 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, tps int, invalidRate float32, 
 
 	var tt time.Time
 	// Process the results and make sure they are correct
-	rateAdjuster := time.Second / time.Duration(tps)
+	var rateAdjuster time.Duration
+	if tps > 0 {
+		rateAdjuster = time.Second / time.Duration(tps)
+	}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -1434,7 +1548,9 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, tps int, invalidRate float32, 
 		defer func() {
 			if groupCounter > 1 {
 				droppedBacklog, droppedPool := getDropped()
-				b.Logf("Input T(grp)PS: %d (delay %f microsec)", tps, float64(rateAdjuster)/float64(time.Microsecond))
+				if tps > 0 {
+					b.Logf("Input T(grp)PS: %d (delay %f microsec)", tps, float64(rateAdjuster)/float64(time.Microsecond))
+				}
 				b.Logf("Verified TPS: %d", uint64(txnCounter)*uint64(time.Second)/uint64(time.Since(tt)))
 				b.Logf("Time/txn: %d(microsec)", uint64((time.Since(tt)/time.Microsecond))/txnCounter)
 				b.Logf("processed total: [%d groups (%d invalid)] [%d txns]", groupCounter, invalidCounter, txnCounter)
@@ -1489,7 +1605,6 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, tps int, invalidRate float32, 
 		for _, stxngrp := range signedTransactionGroups {
 			blm := txBacklogMsg{rawmsg: nil, unverifiedTxGroup: stxngrp}
 			handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignature, &blm, nil)
-			time.Sleep(rateAdjuster)
 		}
 	}
 	wg.Wait()
