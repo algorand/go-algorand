@@ -132,7 +132,7 @@ func (n NullEvalTracer) BeforeLogicEval(cx *EvalContext) {}
 func (n NullEvalTracer) AfterLogicEval(cx *EvalContext, evalError error) {}
 
 // BeforeTealOp does nothing
-func (null NullEvalTracer) BeforeTealOp(cx *EvalContext) {}
+func (n NullEvalTracer) BeforeTealOp(cx *EvalContext) {}
 
 // AfterTealOp does nothing
 func (n NullEvalTracer) AfterTealOp(cx *EvalContext, evalError error) {}
