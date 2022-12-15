@@ -483,6 +483,10 @@ type ConsensusParams struct {
 	// the rewardsLevel, but the rewardsLevel has no meaning because the account
 	// has fewer than RewardUnit algos.
 	UnfundedSenders bool
+
+	// EnablePrecheckECDSACurve means that ecdsa_verify opcode will bail early,
+	// returning false, if pubkey is not on the curve.
+	EnablePrecheckECDSACurve bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1249,6 +1253,7 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 9 // When moving this to a release, put a new higher LogicSigVersion here
+	vFuture.EnablePrecheckECDSACurve = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

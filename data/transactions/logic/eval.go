@@ -3421,17 +3421,16 @@ func opEcdsaVerify(cx *EvalContext) error {
 		pubkey := secp256k1.S256().Marshal(x, y)
 		result = secp256k1.VerifySignature(pubkey, msg, signature)
 	} else if fs.field == Secp256r1 {
-		r := new(big.Int).SetBytes(sigR)
-		s := new(big.Int).SetBytes(sigS)
 		curve := elliptic.P256()
 
-		// if not on curve, result remains false
-		if curve.IsOnCurve(x, y) {
+		if !cx.Proto.EnablePrecheckECDSACurve || curve.IsOnCurve(x, y) {
 			pubkey := ecdsa.PublicKey{
 				Curve: curve,
 				X:     x,
 				Y:     y,
 			}
+			r := new(big.Int).SetBytes(sigR)
+			s := new(big.Int).SetBytes(sigS)
 			result = ecdsa.Verify(&pubkey, msg, r, s)
 		}
 	}
