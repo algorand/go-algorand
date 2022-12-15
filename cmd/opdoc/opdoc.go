@@ -245,19 +245,11 @@ type OpRecord struct {
 	ArgEnum      []string `json:",omitempty"`
 	ArgEnumTypes string   `json:",omitempty"`
 
-<<<<<<< HEAD
-	Doc           string
-	DocExtra      string `json:",omitempty"`
-	ImmediateNote string `json:",omitempty"`
-	Version       int
-	Groups        []string
-=======
 	Doc               string
 	DocExtra          string `json:",omitempty"`
 	ImmediateNote     string `json:",omitempty"`
 	IntroducedVersion uint64
 	Groups            []string
->>>>>>> bd64ce81fc43f2648b0083044079b4e4c0145b0a
 }
 
 // LanguageSpec records the ops of the language at some version
