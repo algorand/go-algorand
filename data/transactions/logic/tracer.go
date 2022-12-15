@@ -88,11 +88,15 @@ import "github.com/algorand/go-algorand/data/transactions"
 //   └────────────────────────────────────────────────┘
 type EvalTracer interface {
 	// BeforeTxn is called before a transaction is executed.
-	// groupIndex refers to the index of the transaction in the transaction group that was just executed.
+	//
+	// groupIndex refers to the index of the transaction in the transaction group that will be executed.
 	BeforeTxn(ep *EvalParams, groupIndex int)
 
 	// AfterTxn is called after a transaction has been executed.
+	//
 	// groupIndex refers to the index of the transaction in the transaction group that was just executed.
+	// ad is the ApplyData result of the transaction; prefer using this instead of
+	// ep.TxnGroup[groupIndex].ApplyData, since it may not be populated at this point.
 	AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData)
 
 	// BeforeProgram is called before an app or LogicSig program is evaluated.
@@ -107,12 +111,15 @@ type EvalTracer interface {
 	// AfterOpcode is called after the op has been evaluated
 	AfterOpcode(cx *EvalContext, evalError error)
 
-	// BeforeInnerTxnGroup is called before an inner transaction group is executed.
+	// BeforeInnerTxnGroup is called before an inner transaction group is executed. The argument
+	// ep is the EvalParams object for the inner group.
+	//
 	// Each inner transaction within the group calls BeforeTxn and subsequent hooks, as described
 	// in the lifecycle diagram.
 	BeforeInnerTxnGroup(ep *EvalParams)
 
-	// AfterInnerTxnGroup is called after an inner transaction group has been executed.
+	// AfterInnerTxnGroup is called after an inner transaction group has been executed. The argument
+	// ep is the EvalParams object for the inner group.
 	AfterInnerTxnGroup(ep *EvalParams)
 }
 
