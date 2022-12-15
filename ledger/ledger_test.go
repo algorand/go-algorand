@@ -1721,18 +1721,20 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	_, err = l.Validate(context.Background(), blk, backlogPool)
 	require.ErrorContains(t, err, "state proof crypto error")
 
-	for i := uint64(0); i < proto.StateProofInterval; i++ {
+	// We advance the ledger up to the point it should forget the first votersForRound
+	for i := uint64(0); i < proto.StateProofInterval+cfg.MaxAcctLookback; i++ {
 		addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
 	}
 
-	// This causes the syncer to flush the commit task it generates.
-	for i := uint64(0); i < pendingDeltasFlushThreshold; i++ {
-		addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
-	}
+	// We make the ledger flush tracker data to allow votersTracker to advance lowestRound
+	triggerTrackerFlush(t, addresses, proto, l, initKeys, genesisInitState)
 
+	// We add another block to make the block queue query the voter's tracker lowest round again, which allows it to forget
+	// rounds based on the new lowest round.
+	addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
 	l.WaitForCommit(l.Latest())
 
-	// at this point the ledger would remove the voters block header. However, since
+	// at this point the ledger has removed the voters block header. However, since
 	// the ledger uses the stateproof verification tracker the state proof be validated (or at least fail on the crypto part)
 	blk = createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
 
@@ -2865,6 +2867,13 @@ func verifyVotersContent(t *testing.T, expected map[basics.Round]*ledgercore.Vot
 		require.Equal(t, expected[k].Tree, v.Tree)
 		require.Equal(t, expected[k].Participants, v.Participants)
 	}
+}
+
+func triggerTrackerFlush(t *testing.T, addresses []basics.Address, proto config.ConsensusParams, l *Ledger, initKeys map[basics.Address]*crypto.SignatureSecrets, genesisInitState ledgercore.InitState) {
+	l.trackers.lastFlushTime = time.Time{}
+	addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
+	l.WaitForCommit(l.Latest())
+	l.trackers.waitAccountsWriting()
 }
 
 func TestVotersReloadFromDisk(t *testing.T) {
