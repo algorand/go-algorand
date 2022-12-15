@@ -63,7 +63,7 @@ func (vb ValidatedBlock) CheckDup(currentProto config.ConsensusParams, firstVali
 	if currentProto.SupportTransactionLeases && (txl.Lease != [32]byte{}) {
 		expires, ok := vb.delta.Txleases[txl]
 		if ok && vb.blk.Round() <= expires {
-			return MakeLeaseInLedgerError(txid, txl)
+			return MakeLeaseInLedgerError(txid, txl, false)
 		}
 	}
 	return nil

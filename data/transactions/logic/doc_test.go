@@ -33,7 +33,9 @@ func TestOpDocs(t *testing.T) {
 		opsSeen[op.Name] = false
 	}
 	for name := range opDocByName {
-		assert.Contains(t, opsSeen, name, "opDocByName contains strange opcode %#v", name)
+		if _, ok := opsSeen[name]; !ok { // avoid assert.Contains: printing opsSeen is waste
+			assert.Fail(t, "opDocByName contains strange opcode", "%#v", name)
+		}
 		opsSeen[name] = true
 	}
 	for op, seen := range opsSeen {
@@ -105,14 +107,29 @@ func TestAllImmediatesDocumented(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	for _, op := range OpSpecs {
-		count := len(op.OpDetails.Immediates)
+		count := len(op.Immediates)
 		note := OpImmediateNote(op.Name)
-		if count == 1 && op.OpDetails.Immediates[0].kind >= immBytes {
+		if count == 1 && op.Immediates[0].kind >= immBytes {
 			// More elaborate than can be checked by easy count.
 			assert.NotEmpty(t, note)
 			continue
 		}
 		assert.Equal(t, count, strings.Count(note, "{"), "opcodeImmediateNotes for %s is wrong", op.Name)
+		assert.Equal(t, count, strings.Count(note, "}"), "opcodeImmediateNotes for %s is wrong", op.Name)
+		for _, imm := range op.Immediates {
+			switch imm.kind {
+			case immByte:
+				require.True(t, strings.HasPrefix(note, "{uint8 "), "%v %v", op.Name, note)
+			case immInt8:
+				require.True(t, strings.HasPrefix(note, "{int8 "), "%v %v", op.Name, note)
+			case immLabel:
+				require.True(t, strings.HasPrefix(note, "{int16 "), "%v %v", op.Name, note)
+			case immInt:
+				require.True(t, strings.HasPrefix(note, "{varuint "), "%v %v", op.Name, note)
+			}
+			close := strings.Index(note, "}")
+			note = strings.TrimPrefix(note[close+1:], " ")
+		}
 	}
 }
 

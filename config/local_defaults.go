@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    24,
+	Version:                                    27,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        7,
@@ -31,7 +31,7 @@ var defaultLocal = Local{
 	BaseLoggerDebugLevel:                       4,
 	BlockServiceCustomFallbackEndpoints:        "",
 	BroadcastConnectionsLimit:                  -1,
-	CadaverSizeTarget:                          1073741824,
+	CadaverSizeTarget:                          0,
 	CatchpointFileHistoryLength:                365,
 	CatchpointInterval:                         10000,
 	CatchpointTracking:                         0,
@@ -70,6 +70,7 @@ var defaultLocal = Local{
 	EnableRequestLogger:                        false,
 	EnableRuntimeMetrics:                       false,
 	EnableTopAccountsReporting:                 false,
+	EnableUsageLog:                             false,
 	EnableVerbosedTransactionSyncLogging:       false,
 	EndpointAddress:                            "127.0.0.1:0",
 	FallbackDNSResolverAddress:                 "",
@@ -84,6 +85,7 @@ var defaultLocal = Local{
 	LogArchiveMaxAge:                           "",
 	LogArchiveName:                             "node.archive.log",
 	LogSizeLimit:                               1073741824,
+	MaxAPIBoxPerApplication:                    100000,
 	MaxAPIResourcesPerAccount:                  100000,
 	MaxAcctLookback:                            4,
 	MaxCatchpointDownloadDuration:              7200000000000,
@@ -118,6 +120,7 @@ var defaultLocal = Local{
 	TelemetryToLog:                             true,
 	TransactionSyncDataExchangeRate:            0,
 	TransactionSyncSignificantMessageThreshold: 0,
+	TxIncomingFilteringFlags:                   1,
 	TxPoolExponentialIncreaseFactor:            2,
 	TxPoolSize:                                 75000,
 	TxSyncIntervalSeconds:                      60,

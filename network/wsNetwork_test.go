@@ -17,8 +17,10 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -200,6 +202,47 @@ func newMessageCounter(t testing.TB, target int) *messageCounterHandler {
 	return &messageCounterHandler{target: target, done: make(chan struct{}), t: t}
 }
 
+type messageMatcherHandler struct {
+	lock deadlock.Mutex
+
+	target   [][]byte
+	received [][]byte
+	done     chan struct{}
+}
+
+func (mmh *messageMatcherHandler) Handle(message IncomingMessage) OutgoingMessage {
+	mmh.lock.Lock()
+	defer mmh.lock.Unlock()
+
+	mmh.received = append(mmh.received, message.Data)
+	if len(mmh.target) > 0 && mmh.done != nil && len(mmh.received) >= len(mmh.target) {
+		close(mmh.done)
+		mmh.done = nil
+	}
+
+	return OutgoingMessage{Action: Ignore}
+}
+
+func (mmh *messageMatcherHandler) Match() bool {
+	if len(mmh.target) != len(mmh.received) {
+		return false
+	}
+
+	sort.Slice(mmh.target, func(i, j int) bool { return bytes.Compare(mmh.target[i], mmh.target[j]) == -1 })
+	sort.Slice(mmh.received, func(i, j int) bool { return bytes.Compare(mmh.received[i], mmh.received[j]) == -1 })
+
+	for i := 0; i < len(mmh.target); i++ {
+		if !bytes.Equal(mmh.target[i], mmh.received[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func newMessageMatcher(t testing.TB, target [][]byte) *messageMatcherHandler {
+	return &messageMatcherHandler{target: target, done: make(chan struct{})}
+}
+
 func TestWebsocketNetworkStartStop(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -226,14 +269,17 @@ func netStop(t testing.TB, wn *WebsocketNetwork, name string) {
 	t.Logf("%s done", name)
 }
 
-// Set up two nodes, test that a.Broadcast is received by B
-func TestWebsocketNetworkBasic(t *testing.T) {
-	partitiontest.PartitionTest(t)
+func setupWebsocketNetworkAB(t *testing.T, countTarget int) (*WebsocketNetwork, *WebsocketNetwork, *messageCounterHandler, func()) {
+	success := false
 
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
 	netA.Start()
-	defer netStop(t, netA, "A")
+	defer func() {
+		if !success {
+			netStop(t, netA, "A")
+		}
+	}()
 	netB := makeTestWebsocketNode(t)
 	netB.config.GossipFanout = 1
 	addrA, postListen := netA.Address()
@@ -241,9 +287,12 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	t.Log(addrA)
 	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
 	netB.Start()
-	defer netStop(t, netB, "B")
-	counter := newMessageCounter(t, 2)
-	counterDone := counter.done
+	defer func() {
+		if !success {
+			netStop(t, netB, "B")
+		}
+	}()
+	counter := newMessageCounter(t, countTarget)
 	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
 
 	readyTimeout := time.NewTimer(2 * time.Second)
@@ -252,6 +301,21 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
+	success = true
+	closeFunc := func() {
+		netStop(t, netB, "B")
+		netStop(t, netB, "A")
+	}
+	return netA, netB, counter, closeFunc
+}
+
+// Set up two nodes, test that a.Broadcast is received by B
+func TestWebsocketNetworkBasic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA, _, counter, closeFunc := setupWebsocketNetworkAB(t, 2)
+	defer closeFunc()
+	counterDone := counter.done
 	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"), false, nil)
 	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"), false, nil)
 
@@ -262,31 +326,89 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	}
 }
 
+// Set up two nodes, send proposal
+func TestWebsocketProposalPayloadCompression(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type testDef struct {
+		netASupProto []string
+		netAProto    string
+		netBSupProto []string
+		netBProto    string
+	}
+
+	var tests []testDef = []testDef{
+		// two old nodes
+		{[]string{"2.1"}, "2.1", []string{"2.1"}, "2.1"},
+
+		// two new nodes with overwritten config
+		{[]string{"2.2"}, "2.2", []string{"2.2"}, "2.2"},
+
+		// old node + new node
+		{[]string{"2.1"}, "2.1", []string{"2.2", "2.1"}, "2.2"},
+		{[]string{"2.2", "2.1"}, "2.2", []string{"2.1"}, "2.1"},
+
+		// combinations
+		{[]string{"2.2", "2.1"}, "2.1", []string{"2.2", "2.1"}, "2.1"},
+		{[]string{"2.2", "2.1"}, "2.2", []string{"2.2", "2.1"}, "2.1"},
+		{[]string{"2.2", "2.1"}, "2.1", []string{"2.2", "2.1"}, "2.2"},
+		{[]string{"2.2", "2.1"}, "2.2", []string{"2.2", "2.1"}, "2.2"},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("A_%s(%s)+B_%s(%s)", test.netASupProto, test.netAProto, test.netBSupProto, test.netBProto), func(t *testing.T) {
+			netA := makeTestWebsocketNode(t)
+			netA.config.GossipFanout = 1
+			netA.protocolVersion = test.netAProto
+			netA.supportedProtocolVersions = test.netASupProto
+			netA.Start()
+			defer netStop(t, netA, "A")
+			netB := makeTestWebsocketNode(t)
+			netB.config.GossipFanout = 1
+			netB.protocolVersion = test.netBProto
+			netA.supportedProtocolVersions = test.netBSupProto
+			addrA, postListen := netA.Address()
+			require.True(t, postListen)
+			t.Log(addrA)
+			netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
+			netB.Start()
+			defer netStop(t, netB, "B")
+			messages := [][]byte{
+				[]byte("foo"),
+				[]byte("bar"),
+			}
+			matcher := newMessageMatcher(t, messages)
+			counterDone := matcher.done
+			netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.ProposalPayloadTag, MessageHandler: matcher}})
+
+			readyTimeout := time.NewTimer(2 * time.Second)
+			waitReady(t, netA, readyTimeout.C)
+			t.Log("a ready")
+			waitReady(t, netB, readyTimeout.C)
+			t.Log("b ready")
+
+			for _, msg := range messages {
+				netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, msg, false, nil)
+			}
+
+			select {
+			case <-counterDone:
+			case <-time.After(2 * time.Second):
+				t.Errorf("timeout, count=%d, wanted %d", len(matcher.received), len(messages))
+			}
+
+			require.True(t, matcher.Match())
+		})
+	}
+}
+
 // Repeat basic, but test a unicast
 func TestWebsocketNetworkUnicast(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	netA := makeTestWebsocketNode(t)
-	netA.config.GossipFanout = 1
-	netA.Start()
-	defer netStop(t, netA, "A")
-	netB := makeTestWebsocketNode(t)
-	netB.config.GossipFanout = 1
-	addrA, postListen := netA.Address()
-	require.True(t, postListen)
-	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
-	netB.Start()
-	defer netStop(t, netB, "B")
-	counter := newMessageCounter(t, 2)
+	netA, _, counter, closeFunc := setupWebsocketNetworkAB(t, 2)
+	defer closeFunc()
 	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
-
-	readyTimeout := time.NewTimer(2 * time.Second)
-	waitReady(t, netA, readyTimeout.C)
-	t.Log("a ready")
-	waitReady(t, netB, readyTimeout.C)
-	t.Log("b ready")
 
 	require.Equal(t, 1, len(netA.peers))
 	require.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
@@ -307,26 +429,8 @@ func TestWebsocketNetworkUnicast(t *testing.T) {
 func TestWebsocketPeerData(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	netA := makeTestWebsocketNode(t)
-	netA.config.GossipFanout = 1
-	netA.Start()
-	defer netStop(t, netA, "A")
-	netB := makeTestWebsocketNode(t)
-	netB.config.GossipFanout = 1
-	addrA, postListen := netA.Address()
-	require.True(t, postListen)
-	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
-	netB.Start()
-	defer netStop(t, netB, "B")
-	counter := newMessageCounter(t, 2)
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
-
-	readyTimeout := time.NewTimer(2 * time.Second)
-	waitReady(t, netA, readyTimeout.C)
-	t.Log("a ready")
-	waitReady(t, netB, readyTimeout.C)
-	t.Log("b ready")
+	netA, _, _, closeFunc := setupWebsocketNetworkAB(t, 2)
+	defer closeFunc()
 
 	require.Equal(t, 1, len(netA.peers))
 	require.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
@@ -345,27 +449,9 @@ func TestWebsocketPeerData(t *testing.T) {
 func TestWebsocketNetworkArray(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	netA := makeTestWebsocketNode(t)
-	netA.config.GossipFanout = 1
-	netA.Start()
-	defer netStop(t, netA, "A")
-	netB := makeTestWebsocketNode(t)
-	netB.config.GossipFanout = 1
-	addrA, postListen := netA.Address()
-	require.True(t, postListen)
-	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
-	netB.Start()
-	defer netStop(t, netB, "B")
-	counter := newMessageCounter(t, 3)
+	netA, _, counter, closeFunc := setupWebsocketNetworkAB(t, 3)
+	defer closeFunc()
 	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
-
-	readyTimeout := time.NewTimer(2 * time.Second)
-	waitReady(t, netA, readyTimeout.C)
-	t.Log("a ready")
-	waitReady(t, netB, readyTimeout.C)
-	t.Log("b ready")
 
 	tags := []protocol.Tag{protocol.TxnTag, protocol.TxnTag, protocol.TxnTag}
 	data := [][]byte{[]byte("foo"), []byte("bar"), []byte("algo")}
@@ -382,27 +468,9 @@ func TestWebsocketNetworkArray(t *testing.T) {
 func TestWebsocketNetworkCancel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	netA := makeTestWebsocketNode(t)
-	netA.config.GossipFanout = 1
-	netA.Start()
-	defer netStop(t, netA, "A")
-	netB := makeTestWebsocketNode(t)
-	netB.config.GossipFanout = 1
-	addrA, postListen := netA.Address()
-	require.True(t, postListen)
-	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
-	netB.Start()
-	defer netStop(t, netB, "B")
-	counter := newMessageCounter(t, 100)
+	netA, _, counter, closeFunc := setupWebsocketNetworkAB(t, 100)
+	defer closeFunc()
 	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
-
-	readyTimeout := time.NewTimer(2 * time.Second)
-	waitReady(t, netA, readyTimeout.C)
-	t.Log("a ready")
-	waitReady(t, netB, readyTimeout.C)
-	t.Log("b ready")
 
 	tags := make([]protocol.Tag, 100)
 	data := make([][]byte, 100)
@@ -603,29 +671,15 @@ func TestAddrToGossipAddr(t *testing.T) {
 
 type nopConn struct{}
 
-func (nc *nopConn) RemoteAddr() net.Addr {
-	return nil
-}
-func (nc *nopConn) NextReader() (int, io.Reader, error) {
-	return 0, nil, nil
-}
-func (nc *nopConn) WriteMessage(int, []byte) error {
-	return nil
-}
-func (nc *nopConn) WriteControl(int, []byte, time.Time) error {
-	return nil
-}
-func (nc *nopConn) SetReadLimit(limit int64) {
-}
-func (nc *nopConn) CloseWithoutFlush() error {
-	return nil
-}
-func (nc *nopConn) SetPingHandler(h func(appData string) error) {
-
-}
-func (nc *nopConn) SetPongHandler(h func(appData string) error) {
-
-}
+func (nc *nopConn) RemoteAddr() net.Addr                        { return nil }
+func (nc *nopConn) NextReader() (int, io.Reader, error)         { return 0, nil, nil }
+func (nc *nopConn) WriteMessage(int, []byte) error              { return nil }
+func (nc *nopConn) WriteControl(int, []byte, time.Time) error   { return nil }
+func (nc *nopConn) SetReadLimit(limit int64)                    {}
+func (nc *nopConn) CloseWithoutFlush() error                    { return nil }
+func (nc *nopConn) SetPingHandler(h func(appData string) error) {}
+func (nc *nopConn) SetPongHandler(h func(appData string) error) {}
+func (nc *nopConn) UnderlyingConn() net.Conn                    { return nil }
 
 var nopConnSingleton = nopConn{}
 
@@ -1594,11 +1648,6 @@ func TestSetUserAgentHeader(t *testing.T) {
 func TestCheckProtocolVersionMatch(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// note - this test changes the SupportedProtocolVersions global variable ( SupportedProtocolVersions ) and therefore cannot be parallelized.
-	originalSupportedProtocolVersions := SupportedProtocolVersions
-	defer func() {
-		SupportedProtocolVersions = originalSupportedProtocolVersions
-	}()
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	wn := &WebsocketNetwork{
@@ -1609,8 +1658,7 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 		NetworkID: config.Devtestnet,
 	}
 	wn.setup()
-
-	SupportedProtocolVersions = []string{"2", "1"}
+	wn.supportedProtocolVersions = []string{"2", "1"}
 
 	header1 := make(http.Header)
 	header1.Add(ProtocolAcceptVersionHeader, "1")
@@ -2573,4 +2621,125 @@ func TestParseHostOrURL(t *testing.T) {
 			require.Error(t, err, "url should fail", addr)
 		})
 	}
+}
+
+func TestPreparePeerData(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// no compression
+	req := broadcastRequest{
+		tags: []protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag},
+		data: [][]byte{[]byte("test"), []byte("data")},
+	}
+
+	peers := []*wsPeer{}
+	wn := WebsocketNetwork{}
+	data, comp, digests, seenPrioPPTag := wn.preparePeerData(req, false, peers)
+	require.NotEmpty(t, data)
+	require.Empty(t, comp)
+	require.NotEmpty(t, digests)
+	require.Equal(t, len(req.data), len(digests))
+	require.Equal(t, len(data), len(digests))
+	require.False(t, seenPrioPPTag)
+
+	for i := range data {
+		require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
+	}
+
+	// compression
+	peer1 := wsPeer{
+		features: 0,
+	}
+	peer2 := wsPeer{
+		features: pfCompressedProposal,
+	}
+	peers = []*wsPeer{&peer1, &peer2}
+	data, comp, digests, seenPrioPPTag = wn.preparePeerData(req, true, peers)
+	require.NotEmpty(t, data)
+	require.NotEmpty(t, comp)
+	require.NotEmpty(t, digests)
+	require.Equal(t, len(req.data), len(digests))
+	require.Equal(t, len(data), len(digests))
+	require.Equal(t, len(comp), len(digests))
+	require.True(t, seenPrioPPTag)
+
+	for i := range data {
+		require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
+	}
+
+	for i := range comp {
+		if req.tags[i] != protocol.ProposalPayloadTag {
+			require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), comp[i])
+			require.Equal(t, data[i], comp[i])
+		} else {
+			require.NotEqual(t, data[i], comp[i])
+			require.Equal(t, append([]byte(req.tags[i]), zstdCompressionMagic[:]...), comp[i][:len(req.tags[i])+len(zstdCompressionMagic)])
+		}
+	}
+}
+
+func TestWebsocketNetworkTelemetryTCP(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
+		t.Skip("Flaky on CIRCLECI")
+	}
+
+	// start two networks and send 2 messages from A to B
+	closed := false
+	netA, netB, counter, closeFunc := setupWebsocketNetworkAB(t, 2)
+	defer func() {
+		if !closed {
+			closeFunc()
+		}
+	}()
+	counterDone := counter.done
+	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"), false, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"), false, nil)
+
+	select {
+	case <-counterDone:
+	case <-time.After(2 * time.Second):
+		t.Errorf("timeout, count=%d, wanted 2", counter.count)
+	}
+
+	// get RTT from both ends and assert nonzero
+	var peersA, peersB []*wsPeer
+	peersA, _ = netA.peerSnapshot(peersA)
+	detailsA := netA.getPeerConnectionTelemetryDetails(time.Now(), peersA)
+	peersB, _ = netB.peerSnapshot(peersB)
+	detailsB := netB.getPeerConnectionTelemetryDetails(time.Now(), peersB)
+	require.Len(t, detailsA.IncomingPeers, 1)
+	assert.NotZero(t, detailsA.IncomingPeers[0].TCP.RTT)
+	require.Len(t, detailsB.OutgoingPeers, 1)
+	assert.NotZero(t, detailsB.OutgoingPeers[0].TCP.RTT)
+
+	pcdA, err := json.Marshal(detailsA)
+	assert.NoError(t, err)
+	pcdB, err := json.Marshal(detailsB)
+	assert.NoError(t, err)
+	t.Log("detailsA", string(pcdA))
+	t.Log("detailsB", string(pcdB))
+
+	// close connections
+	closeFunc()
+	closed = true
+	// open more FDs by starting 2 more networks
+	_, _, _, closeFunc2 := setupWebsocketNetworkAB(t, 2)
+	defer closeFunc2()
+	//  use stale peers snapshot from closed networks to get telemetry
+	// *net.OpError "use of closed network connection" err results in 0 rtt values
+	detailsA = netA.getPeerConnectionTelemetryDetails(time.Now(), peersA)
+	detailsB = netB.getPeerConnectionTelemetryDetails(time.Now(), peersB)
+	require.Len(t, detailsA.IncomingPeers, 1)
+	assert.Zero(t, detailsA.IncomingPeers[0].TCP.RTT)
+	require.Len(t, detailsB.OutgoingPeers, 1)
+	assert.Zero(t, detailsB.OutgoingPeers[0].TCP.RTT)
+
+	pcdA, err = json.Marshal(detailsA)
+	assert.NoError(t, err)
+	pcdB, err = json.Marshal(detailsB)
+	assert.NoError(t, err)
+	t.Log("closed detailsA", string(pcdA))
+	t.Log("closed detailsB", string(pcdB))
 }

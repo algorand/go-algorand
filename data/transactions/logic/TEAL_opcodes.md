@@ -242,7 +242,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## intcblock uint ...
 
-- Opcode: 0x20 {varuint length} [{varuint value}, ...]
+- Opcode: 0x20 {varuint count} [{varuint value}, ...]
 - Stack: ... &rarr; ...
 - prepare block of uint64 constants for use by intc
 
@@ -280,7 +280,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## bytecblock bytes ...
 
-- Opcode: 0x26 {varuint length} [({varuint value length} bytes), ...]
+- Opcode: 0x26 {varuint count} [({varuint length} bytes), ...]
 - Stack: ... &rarr; ...
 - prepare block of byte-array constants for use by bytec
 
@@ -318,7 +318,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## arg n
 
-- Opcode: 0x2c {uint8 arg index N}
+- Opcode: 0x2c {uint8 arg index}
 - Stack: ... &rarr; ..., []byte
 - Nth LogicSig argument
 - Mode: Signature
@@ -610,6 +610,27 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - immediately fail unless A is a non-zero number
 - Availability: v3
 
+## bury n
+
+- Opcode: 0x45 {uint8 depth}
+- Stack: ..., A &rarr; ...
+- replace the Nth value from the top of the stack with A. bury 0 fails.
+- Availability: v8
+
+## popn n
+
+- Opcode: 0x46 {uint8 stack depth}
+- Stack: ..., [N items] &rarr; ...
+- remove N values from the top of the stack
+- Availability: v8
+
+## dupn n
+
+- Opcode: 0x47 {uint8 copy count}
+- Stack: ..., A &rarr; ..., A, [N copies of A]
+- duplicate A, N times
+- Availability: v8
+
 ## pop
 
 - Opcode: 0x48
@@ -790,7 +811,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 ## json_ref r
 
-- Opcode: 0x5f {string return type}
+- Opcode: 0x5f {uint8 return type index}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., any
 - key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A
 - **Cost**: 25 + 2 per 7 bytes of A
@@ -813,7 +834,7 @@ Almost all smart contracts should use simpler and smaller methods (such as the [
 
 - Opcode: 0x60
 - Stack: ..., A &rarr; ..., uint64
-- get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.
+- balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. Changes caused by inner transactions are observable immediately following `itxn_submit`
 - Availability: v2
 - Mode: Application
 
@@ -992,18 +1013,27 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 
 `acct_params` Fields:
 
-| Index | Name | Type | Notes |
-| - | ------ | -- | --------- |
-| 0 | AcctBalance | uint64 | Account balance in microalgos |
-| 1 | AcctMinBalance | uint64 | Minimum required blance for account, in microalgos |
-| 2 | AcctAuthAddr | []byte | Address the account is rekeyed to. |
+| Index | Name | Type | In | Notes |
+| - | ------ | -- | - | --------- |
+| 0 | AcctBalance | uint64 |      | Account balance in microalgos |
+| 1 | AcctMinBalance | uint64 |      | Minimum required balance for account, in microalgos |
+| 2 | AcctAuthAddr | []byte |      | Address the account is rekeyed to. |
+| 3 | AcctTotalNumUint | uint64 | v8  | The total number of uint64 values allocated by this account in Global and Local States. |
+| 4 | AcctTotalNumByteSlice | uint64 | v8  | The total number of byte array values allocated by this account in Global and Local States. |
+| 5 | AcctTotalExtraAppPages | uint64 | v8  | The number of extra app code pages used by this account. |
+| 6 | AcctTotalAppsCreated | uint64 | v8  | The number of existing apps created by this account. |
+| 7 | AcctTotalAppsOptedIn | uint64 | v8  | The number of apps this account is opted into. |
+| 8 | AcctTotalAssetsCreated | uint64 | v8  | The number of existing ASAs created by this account. |
+| 9 | AcctTotalAssets | uint64 | v8  | The numbers of ASAs held by this account (including ASAs this account created). |
+| 10 | AcctTotalBoxes | uint64 | v8  | The number of existing boxes created by this account's app. |
+| 11 | AcctTotalBoxBytes | uint64 | v8  | The total number of bytes used by this account's app's box keys and values. |
 
 
 ## min_balance
 
 - Opcode: 0x78
 - Stack: ..., A &rarr; ..., uint64
-- get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.
+- minimum required balance for account A, in microalgos. Required balance is affected by ASA, App, and Box usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. Changes caused by inner transactions or box usage are observable immediately following the opcode effecting the change.
 - Availability: v3
 - Mode: Application
 
@@ -1027,6 +1057,24 @@ pushbytes args are not added to the bytecblock during assembly processes
 
 pushint args are not added to the intcblock during assembly processes
 
+## pushbytess bytes ...
+
+- Opcode: 0x82 {varuint count} [({varuint length} bytes), ...]
+- Stack: ... &rarr; ..., [N items]
+- push sequences of immediate byte arrays to stack (first byte array being deepest)
+- Availability: v8
+
+pushbytess args are not added to the bytecblock during assembly processes
+
+## pushints uint ...
+
+- Opcode: 0x83 {varuint count} [{varuint value}, ...]
+- Stack: ... &rarr; ..., [N items]
+- push sequence of immediate uints to stack in the order they appear (first uint being deepest)
+- Availability: v8
+
+pushints args are not added to the intcblock during assembly processes
+
 ## ed25519verify_bare
 
 - Opcode: 0x84
@@ -1042,7 +1090,7 @@ pushint args are not added to the intcblock during assembly processes
 - branch unconditionally to TARGET, saving the next instruction on the call stack
 - Availability: v4
 
-The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.
+The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it.
 
 ## retsub
 
@@ -1051,7 +1099,46 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - pop the top instruction from the call stack and branch to it
 - Availability: v4
 
-The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.
+If the current frame was prepared by `proto A R`, `retsub` will remove the 'A' arguments from the stack, move the `R` return values down, and pop any stack locations above the relocated return values.
+
+## proto a r
+
+- Opcode: 0x8a {uint8 arguments} {uint8 return values}
+- Stack: ... &rarr; ...
+- Prepare top call frame for a retsub that will assume A args and R return values.
+- Availability: v8
+
+Fails unless the last instruction executed was a `callsub`.
+
+## frame_dig i
+
+- Opcode: 0x8b {int8 frame slot}
+- Stack: ... &rarr; ..., any
+- Nth (signed) value from the frame pointer.
+- Availability: v8
+
+## frame_bury i
+
+- Opcode: 0x8c {int8 frame slot}
+- Stack: ..., A &rarr; ...
+- replace the Nth (signed) value from the frame pointer in the stack with A
+- Availability: v8
+
+## switch target ...
+
+- Opcode: 0x8d {uint8 branch count} [{int16 branch offset, big-endian}, ...]
+- Stack: ..., A: uint64 &rarr; ...
+- branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.
+- Availability: v8
+
+## match target ...
+
+- Opcode: 0x8e {uint8 branch count} [{int16 branch offset, big-endian}, ...]
+- Stack: ..., [A1, A2, ..., AN], B &rarr; ...
+- given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.
+- Availability: v8
+
+`match` consumes N+1 values from the stack. Let the top stack value be B. The following N values represent an ordered list of match cases/constants (A), where the first value (A[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (T). `match` will branch to target T[I], where A[I] = B. If there are no matches then execution continues on to the next instruction.
 
 ## shl
 
@@ -1327,6 +1414,68 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Availability: v6
 - Mode: Application
 
+## box_create
+
+- Opcode: 0xb9
+- Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
+- create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1
+- Availability: v8
+- Mode: Application
+
+Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.
+
+## box_extract
+
+- Opcode: 0xba
+- Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
+- read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.
+- Availability: v8
+- Mode: Application
+
+## box_replace
+
+- Opcode: 0xbb
+- Stack: ..., A: []byte, B: uint64, C: []byte &rarr; ...
+- write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.
+- Availability: v8
+- Mode: Application
+
+## box_del
+
+- Opcode: 0xbc
+- Stack: ..., A: []byte &rarr; ..., uint64
+- delete box named A if it exists. Return 1 if A existed, 0 otherwise
+- Availability: v8
+- Mode: Application
+
+## box_len
+
+- Opcode: 0xbd
+- Stack: ..., A: []byte &rarr; ..., X: uint64, Y: uint64
+- X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.
+- Availability: v8
+- Mode: Application
+
+## box_get
+
+- Opcode: 0xbe
+- Stack: ..., A: []byte &rarr; ..., X: []byte, Y: uint64
+- X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.
+- Availability: v8
+- Mode: Application
+
+For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`
+
+## box_put
+
+- Opcode: 0xbf
+- Stack: ..., A: []byte, B: []byte &rarr; ...
+- replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist
+- Availability: v8
+- Mode: Application
+
+For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`
+
 ## txnas f
 
 - Opcode: 0xc0 {uint8 transaction field index}
@@ -1399,7 +1548,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## block f
 
-- Opcode: 0xd1 {uint8 block field}
+- Opcode: 0xd1 {uint8 block field index}
 - Stack: ..., A: uint64 &rarr; ..., any
 - field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)
 - Availability: v7

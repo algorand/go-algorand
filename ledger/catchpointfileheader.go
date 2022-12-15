@@ -33,6 +33,7 @@ type CatchpointFileHeader struct {
 	Totals            ledgercore.AccountTotals `codec:"accountTotals"`
 	TotalAccounts     uint64                   `codec:"accountsCount"`
 	TotalChunks       uint64                   `codec:"chunksCount"`
+	TotalKVs          uint64                   `codec:"kvsCount"`
 	Catchpoint        string                   `codec:"catchpoint"`
 	BlockHeaderDigest crypto.Digest            `codec:"blockHeaderDigest"`
 }
