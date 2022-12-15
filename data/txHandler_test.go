@@ -1290,8 +1290,8 @@ func signMSigTransactionGroups(txnGroups [][]transactions.Transaction, secrets [
 	numUsers := len(secrets)
 	badTxnGroups = make(map[uint64]interface{})
 	badTxnGroupsMU := sync.Mutex{}
-	// process them using 6 threads
-	workers := make(chan interface{}, 6)
+	// process them using multiple threads
+	workers := make(chan interface{}, runtime.NumCPU()-1)
 	wg := sync.WaitGroup{}
 	errChan := make(chan error, 1)
 	for tg := range txnGroups {
