@@ -81,39 +81,39 @@ func TestWebDebuggerManual(t *testing.T) {
 		tx.SelectionPK[:],
 		tx.Note,
 	}
-	ep.Tracer = MakeEvalTracerDebuggerAdaptor(&WebDebuggerHook{URL: debugURL})
+	ep.Tracer = MakeEvalTracerDebuggerAdaptor(&WebDebugger{URL: debugURL})
 	testLogic(t, debuggerTestProgram, AssemblerMaxVersion, ep)
 }
 
-type testDbgHook struct {
+type testDebugger struct {
 	register int
 	update   int
 	complete int
 	state    *DebugState
 }
 
-func (d *testDbgHook) Register(state *DebugState) {
+func (d *testDebugger) Register(state *DebugState) {
 	d.register++
 	d.state = state
 }
 
-func (d *testDbgHook) Update(state *DebugState) {
+func (d *testDebugger) Update(state *DebugState) {
 	d.update++
 	d.state = state
 }
 
-func (d *testDbgHook) Complete(state *DebugState) {
+func (d *testDebugger) Complete(state *DebugState) {
 	d.complete++
 	d.state = state
 }
 
-func TestDebuggerHook(t *testing.T) {
+func TestDebuggerProgramEval(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	t.Run("logicsig", func(t *testing.T) {
 		t.Parallel()
-		testDbg := testDbgHook{}
+		testDbg := testDebugger{}
 		ep := defaultEvalParams()
 		ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
 		testLogic(t, debuggerTestProgram, AssemblerMaxVersion, ep)
@@ -126,7 +126,7 @@ func TestDebuggerHook(t *testing.T) {
 
 	t.Run("simple app", func(t *testing.T) {
 		t.Parallel()
-		testDbg := testDbgHook{}
+		testDbg := testDebugger{}
 		ep := defaultEvalParams()
 		ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
 		testApp(t, debuggerTestProgram, ep)
@@ -139,7 +139,7 @@ func TestDebuggerHook(t *testing.T) {
 
 	t.Run("app with inner txns", func(t *testing.T) {
 		t.Parallel()
-		testDbg := testDbgHook{}
+		testDbg := testDebugger{}
 		ep, tx, ledger := MakeSampleEnv()
 
 		// Establish 888 as the app id, and fund it.
@@ -259,7 +259,7 @@ func TestCallStackUpdate(t *testing.T) {
 		},
 	}
 
-	testDbg := testDbgHook{}
+	testDbg := testDebugger{}
 	ep := defaultEvalParams()
 	ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
 	testLogic(t, testCallStackProgram, AssemblerMaxVersion, ep)

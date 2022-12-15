@@ -33,12 +33,12 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// DebuggerHook is an interface that supports the first version of AVM debuggers.
+// Debugger is an interface that supports the first version of AVM debuggers.
 // It consists of a set of functions called by eval function during AVM program execution.
 //
 // Deprecated: This interface does not support non-app call or inner transactions. Use EvalTracer
 // instead.
-type DebuggerHook interface {
+type Debugger interface {
 	// Register is fired on program creation
 	Register(state *DebugState)
 	// Update is fired on every step
@@ -50,14 +50,14 @@ type DebuggerHook interface {
 type debuggerEvalTracerAdaptor struct {
 	NullEvalTracer
 
-	debugger      DebuggerHook
+	debugger      Debugger
 	innerTxnDepth int
 	debugState    *DebugState
 }
 
 // MakeEvalTracerDebuggerAdaptor creates an adaptor that externally adheres to the EvalTracer
-// interface, but drives a DebuggerHook interface
-func MakeEvalTracerDebuggerAdaptor(debugger DebuggerHook) EvalTracer {
+// interface, but drives a Debugger interface
+func MakeEvalTracerDebuggerAdaptor(debugger Debugger) EvalTracer {
 	return &debuggerEvalTracerAdaptor{debugger: debugger}
 }
 
@@ -99,8 +99,8 @@ func (a *debuggerEvalTracerAdaptor) AfterProgram(cx *EvalContext, evalError erro
 	a.debugger.Complete(a.refreshDebugState(cx, evalError))
 }
 
-// WebDebuggerHook represents a connection to tealdbg
-type WebDebuggerHook struct {
+// WebDebugger represents a connection to tealdbg
+type WebDebugger struct {
 	URL string
 }
 
@@ -309,7 +309,7 @@ func (a *debuggerEvalTracerAdaptor) refreshDebugState(cx *EvalContext, evalError
 	return ds
 }
 
-func (dbg *WebDebuggerHook) postState(state *DebugState, endpoint string) error {
+func (dbg *WebDebugger) postState(state *DebugState, endpoint string) error {
 	var body bytes.Buffer
 	enc := protocol.NewJSONEncoder(&body)
 	err := enc.Encode(state)
@@ -340,7 +340,7 @@ func (dbg *WebDebuggerHook) postState(state *DebugState, endpoint string) error 
 }
 
 // Register sends state to remote debugger
-func (dbg *WebDebuggerHook) Register(state *DebugState) {
+func (dbg *WebDebugger) Register(state *DebugState) {
 	u, err := url.Parse(dbg.URL)
 	if err != nil {
 		logging.Base().Errorf("Failed to parse url: %s", err.Error())
@@ -357,7 +357,7 @@ func (dbg *WebDebuggerHook) Register(state *DebugState) {
 }
 
 // Update sends state to remote debugger
-func (dbg *WebDebuggerHook) Update(state *DebugState) {
+func (dbg *WebDebugger) Update(state *DebugState) {
 	err := dbg.postState(state, "exec/update")
 	if err != nil {
 		logging.Base().Errorf("Failed to post state to exec/update: %s", err.Error())
@@ -365,7 +365,7 @@ func (dbg *WebDebuggerHook) Update(state *DebugState) {
 }
 
 // Complete sends state to remote debugger
-func (dbg *WebDebuggerHook) Complete(state *DebugState) {
+func (dbg *WebDebugger) Complete(state *DebugState) {
 	err := dbg.postState(state, "exec/complete")
 	if err != nil {
 		logging.Base().Errorf("Failed to post state to exec/complete: %s", err.Error())

@@ -181,20 +181,20 @@ func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) model.Dryr
 	return st
 }
 
-// Register is fired on program creation (DebuggerHook interface)
+// Register is fired on program creation (logic.Debugger interface)
 func (ddr *dryrunDebugReceiver) Register(state *logic.DebugState) {
 	ddr.disassembly = state.Disassembly
 	ddr.lines = strings.Split(state.Disassembly, "\n")
 }
 
-// Update is fired on every step (DebuggerHook interface)
+// Update is fired on every step (logic.Debugger interface)
 func (ddr *dryrunDebugReceiver) Update(state *logic.DebugState) {
 	st := ddr.stateToState(state)
 	ddr.history = append(ddr.history, st)
 	ddr.updateScratch()
 }
 
-// Complete is called when the program exits (DebuggerHook interface)
+// Complete is called when the program exits (logic.Debugger interface)
 func (ddr *dryrunDebugReceiver) Complete(state *logic.DebugState) {
 	ddr.Update(state)
 }

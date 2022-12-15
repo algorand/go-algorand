@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// RemoteHookAdapter provides HTTP transport for WebDebuggerHook
+// RemoteHookAdapter provides HTTP transport for WebDebugger
 type RemoteHookAdapter struct {
 	debugger *Debugger
 }
@@ -38,7 +38,7 @@ func MakeRemoteHook(debugger *Debugger) *RemoteHookAdapter {
 	return r
 }
 
-// Setup adds HTTP handlers for remote WebDebuggerHook
+// Setup adds HTTP handlers for remote WebDebugger
 func (rha *RemoteHookAdapter) Setup(router *mux.Router) {
 	router.HandleFunc("/exec/register", rha.registerHandler).Methods("POST")
 	router.HandleFunc("/exec/update", rha.updateHandler).Methods("POST")
