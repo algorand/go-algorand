@@ -2869,9 +2869,11 @@ func verifyVotersContent(t *testing.T, expected map[basics.Round]*ledgercore.Vot
 	}
 }
 
-func triggerTrackerFlush(t *testing.T, addresses []basics.Address, proto config.ConsensusParams, l *Ledger, initKeys map[basics.Address]*crypto.SignatureSecrets, genesisInitState ledgercore.InitState) {
+func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.InitState) {
 	l.trackers.lastFlushTime = time.Time{}
-	addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
+	newBlock := makeNewEmptyBlock(t, l, t.Name(), genesisInitState.Accounts)
+	err := l.AddBlock(newBlock, agreement.Certificate{})
+	require.NoError(t, err)
 	l.WaitForCommit(l.Latest())
 	l.trackers.waitAccountsWriting()
 }
@@ -3028,25 +3030,21 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	require.True(t, found)
 	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
 
-	for i := uint64(0); i < proto.StateProofInterval; i++ {
+	for i := uint64(0); i < proto.StateProofInterval+cfg.MaxAcctLookback; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += 10
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
 	}
 
-	// Extra blocks committed to accumulate enough deltas to trigger committing blocks to trackerDB, required
-	// to trigger deletion of data by the voters tracker.
-	blocksForCommitFlush := uint64(50)
-	for i := uint64(0); i < blocksForCommitFlush; i++ {
-		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += 10
-		err = l.AddBlock(blk, agreement.Certificate{})
-		require.NoError(t, err)
-	}
+	/// We make the ledger flush tracker data to allow votersTracker to advance lowestRound
+	triggerTrackerFlush(t, l, genesisInitState)
 
-	// the voters tracker should give up on voters for round 512
-	l.WaitForCommit(blk.BlockHeader.Round)
+	// We add another block to make the block queue query the voter's tracker lowest round again, which allows it to forget
+	// rounds based on the new lowest round.
+	addDummyBlock(t, []basics.Address{}, proto, l, map[basics.Address]*crypto.SignatureSecrets{}, genesisInitState)
+	l.WaitForCommit(l.Latest())
+
 	vtSnapshot = l.acctsOnline.voters.votersForRoundCache
 	err = l.reloadLedger()
 	require.NoError(t, err)
