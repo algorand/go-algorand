@@ -1,9 +1,830 @@
 {
   "EvalMaxVersion": 8,
   "LogicSigVersion": 8,
+  "Keywords": {
+    "ECDSA": [
+      {
+        "Name": "Secp256k1",
+        "Type": "_"
+      },
+      {
+        "Name": "Secp256r1",
+        "Type": "_"
+      }
+    ],
+    "acct_params": [
+      {
+        "Name": "AcctBalance",
+        "Type": "U"
+      },
+      {
+        "Name": "AcctMinBalance",
+        "Type": "U"
+      },
+      {
+        "Name": "AcctAuthAddr",
+        "Type": "B"
+      },
+      {
+        "Name": "AcctTotalNumUint",
+        "Type": "U"
+      },
+      {
+        "Name": "AcctTotalNumByteSlice",
+        "Type": "U"
+      },
+      {
+        "Name": "AcctTotalExtraAppPages",
+        "Type": "U"
+      },
+      {
+        "Name": "AcctTotalAppsCreated",
+        "Type": "U"
+      },
+      {
+        "Name": "AcctTotalAppsOptedIn",
+        "Type": "U"
+      },
+      {
+        "Name": "AcctTotalAssetsCreated",
+        "Type": "U"
+      },
+      {
+        "Name": "AcctTotalAssets",
+        "Type": "U"
+      },
+      {
+        "Name": "AcctTotalBoxes",
+        "Type": "U"
+      },
+      {
+        "Name": "AcctTotalBoxBytes",
+        "Type": "U"
+      }
+    ],
+    "app_params": [
+      {
+        "Name": "AppApprovalProgram",
+        "Type": "B"
+      },
+      {
+        "Name": "AppClearStateProgram",
+        "Type": "B"
+      },
+      {
+        "Name": "AppGlobalNumUint",
+        "Type": "U"
+      },
+      {
+        "Name": "AppGlobalNumByteSlice",
+        "Type": "U"
+      },
+      {
+        "Name": "AppLocalNumUint",
+        "Type": "U"
+      },
+      {
+        "Name": "AppLocalNumByteSlice",
+        "Type": "U"
+      },
+      {
+        "Name": "AppExtraProgramPages",
+        "Type": "U"
+      },
+      {
+        "Name": "AppCreator",
+        "Type": "B"
+      },
+      {
+        "Name": "AppAddress",
+        "Type": "B"
+      }
+    ],
+    "asset_holding": [
+      {
+        "Name": "AssetBalance",
+        "Type": "U"
+      },
+      {
+        "Name": "AssetFrozen",
+        "Type": "U"
+      }
+    ],
+    "asset_params": [
+      {
+        "Name": "AssetTotal",
+        "Type": "U"
+      },
+      {
+        "Name": "AssetDecimals",
+        "Type": "U"
+      },
+      {
+        "Name": "AssetDefaultFrozen",
+        "Type": "U"
+      },
+      {
+        "Name": "AssetUnitName",
+        "Type": "B"
+      },
+      {
+        "Name": "AssetName",
+        "Type": "B"
+      },
+      {
+        "Name": "AssetURL",
+        "Type": "B"
+      },
+      {
+        "Name": "AssetMetadataHash",
+        "Type": "B"
+      },
+      {
+        "Name": "AssetManager",
+        "Type": "B"
+      },
+      {
+        "Name": "AssetReserve",
+        "Type": "B"
+      },
+      {
+        "Name": "AssetFreeze",
+        "Type": "B"
+      },
+      {
+        "Name": "AssetClawback",
+        "Type": "B"
+      },
+      {
+        "Name": "AssetCreator",
+        "Type": "B"
+      }
+    ],
+    "base64": [
+      {
+        "Name": "URLEncoding",
+        "Type": "."
+      },
+      {
+        "Name": "StdEncoding",
+        "Type": "."
+      }
+    ],
+    "block": [
+      {
+        "Name": "BlkSeed",
+        "Type": "B"
+      },
+      {
+        "Name": "BlkTimestamp",
+        "Type": "U"
+      }
+    ],
+    "global": [
+      {
+        "Name": "MinTxnFee",
+        "Type": "U"
+      },
+      {
+        "Name": "MinBalance",
+        "Type": "U"
+      },
+      {
+        "Name": "MaxTxnLife",
+        "Type": "U"
+      },
+      {
+        "Name": "ZeroAddress",
+        "Type": "B"
+      },
+      {
+        "Name": "GroupSize",
+        "Type": "U"
+      },
+      {
+        "Name": "LogicSigVersion",
+        "Type": "U"
+      },
+      {
+        "Name": "Round",
+        "Type": "U"
+      },
+      {
+        "Name": "LatestTimestamp",
+        "Type": "U"
+      },
+      {
+        "Name": "CurrentApplicationID",
+        "Type": "U"
+      },
+      {
+        "Name": "CreatorAddress",
+        "Type": "B"
+      },
+      {
+        "Name": "CurrentApplicationAddress",
+        "Type": "B"
+      },
+      {
+        "Name": "GroupID",
+        "Type": "B"
+      },
+      {
+        "Name": "OpcodeBudget",
+        "Type": "U"
+      },
+      {
+        "Name": "CallerApplicationID",
+        "Type": "U"
+      },
+      {
+        "Name": "CallerApplicationAddress",
+        "Type": "B"
+      }
+    ],
+    "itxn_field": [
+      {
+        "Name": "Sender",
+        "Type": "B"
+      },
+      {
+        "Name": "Fee",
+        "Type": "U"
+      },
+      {
+        "Name": "Note",
+        "Type": "B"
+      },
+      {
+        "Name": "Receiver",
+        "Type": "B"
+      },
+      {
+        "Name": "Amount",
+        "Type": "U"
+      },
+      {
+        "Name": "CloseRemainderTo",
+        "Type": "B"
+      },
+      {
+        "Name": "VotePK",
+        "Type": "B"
+      },
+      {
+        "Name": "SelectionPK",
+        "Type": "B"
+      },
+      {
+        "Name": "VoteFirst",
+        "Type": "U"
+      },
+      {
+        "Name": "VoteLast",
+        "Type": "U"
+      },
+      {
+        "Name": "VoteKeyDilution",
+        "Type": "U"
+      },
+      {
+        "Name": "Type",
+        "Type": "B"
+      },
+      {
+        "Name": "TypeEnum",
+        "Type": "U"
+      },
+      {
+        "Name": "XferAsset",
+        "Type": "U"
+      },
+      {
+        "Name": "AssetAmount",
+        "Type": "U"
+      },
+      {
+        "Name": "AssetSender",
+        "Type": "B"
+      },
+      {
+        "Name": "AssetReceiver",
+        "Type": "B"
+      },
+      {
+        "Name": "AssetCloseTo",
+        "Type": "B"
+      },
+      {
+        "Name": "ApplicationID",
+        "Type": "U"
+      },
+      {
+        "Name": "OnCompletion",
+        "Type": "U"
+      },
+      {
+        "Name": "ApplicationArgs",
+        "Type": "B"
+      },
+      {
+        "Name": "Accounts",
+        "Type": "B"
+      },
+      {
+        "Name": "ApprovalProgram",
+        "Type": "B"
+      },
+      {
+        "Name": "ClearStateProgram",
+        "Type": "B"
+      },
+      {
+        "Name": "RekeyTo",
+        "Type": "B"
+      },
+      {
+        "Name": "ConfigAsset",
+        "Type": "U"
+      },
+      {
+        "Name": "ConfigAssetTotal",
+        "Type": "U"
+      },
+      {
+        "Name": "ConfigAssetDecimals",
+        "Type": "U"
+      },
+      {
+        "Name": "ConfigAssetDefaultFrozen",
+        "Type": "U"
+      },
+      {
+        "Name": "ConfigAssetUnitName",
+        "Type": "B"
+      },
+      {
+        "Name": "ConfigAssetName",
+        "Type": "B"
+      },
+      {
+        "Name": "ConfigAssetURL",
+        "Type": "B"
+      },
+      {
+        "Name": "ConfigAssetMetadataHash",
+        "Type": "B"
+      },
+      {
+        "Name": "ConfigAssetManager",
+        "Type": "B"
+      },
+      {
+        "Name": "ConfigAssetReserve",
+        "Type": "B"
+      },
+      {
+        "Name": "ConfigAssetFreeze",
+        "Type": "B"
+      },
+      {
+        "Name": "ConfigAssetClawback",
+        "Type": "B"
+      },
+      {
+        "Name": "FreezeAsset",
+        "Type": "U"
+      },
+      {
+        "Name": "FreezeAssetAccount",
+        "Type": "B"
+      },
+      {
+        "Name": "FreezeAssetFrozen",
+        "Type": "U"
+      },
+      {
+        "Name": "Assets",
+        "Type": "U"
+      },
+      {
+        "Name": "Applications",
+        "Type": "U"
+      },
+      {
+        "Name": "GlobalNumUint",
+        "Type": "U"
+      },
+      {
+        "Name": "GlobalNumByteSlice",
+        "Type": "U"
+      },
+      {
+        "Name": "LocalNumUint",
+        "Type": "U"
+      },
+      {
+        "Name": "LocalNumByteSlice",
+        "Type": "U"
+      },
+      {
+        "Name": "ExtraProgramPages",
+        "Type": "U"
+      },
+      {
+        "Name": "Nonparticipation",
+        "Type": "U"
+      },
+      {
+        "Name": "StateProofPK",
+        "Type": "B"
+      },
+      {
+        "Name": "ApprovalProgramPages",
+        "Type": "B"
+      },
+      {
+        "Name": "ClearStateProgramPages",
+        "Type": "B"
+      }
+    ],
+    "json_ref": [
+      {
+        "Name": "JSONString",
+        "Type": "B"
+      },
+      {
+        "Name": "JSONUint64",
+        "Type": "U"
+      },
+      {
+        "Name": "JSONObject",
+        "Type": "B"
+      }
+    ],
+    "on_complete": [
+      {
+        "Name": "NoOp",
+        "Type": "U"
+      },
+      {
+        "Name": "OptIn",
+        "Type": "U"
+      },
+      {
+        "Name": "CloseOut",
+        "Type": "U"
+      },
+      {
+        "Name": "ClearState",
+        "Type": "U"
+      },
+      {
+        "Name": "UpdateApplication",
+        "Type": "U"
+      },
+      {
+        "Name": "DeleteApplication",
+        "Type": "U"
+      }
+    ],
+    "txn": [
+      {
+        "Name": "Sender",
+        "Type": "B"
+      },
+      {
+        "Name": "Fee",
+        "Type": "U"
+      },
+      {
+        "Name": "FirstValid",
+        "Type": "U"
+      },
+      {
+        "Name": "FirstValidTime",
+        "Type": "U"
+      },
+      {
+        "Name": "LastValid",
+        "Type": "U"
+      },
+      {
+        "Name": "Note",
+        "Type": "B"
+      },
+      {
+        "Name": "Lease",
+        "Type": "B"
+      },
+      {
+        "Name": "Receiver",
+        "Type": "B"
+      },
+      {
+        "Name": "Amount",
+        "Type": "U"
+      },
+      {
+        "Name": "CloseRemainderTo",
+        "Type": "B"
+      },
+      {
+        "Name": "VotePK",
+        "Type": "B"
+      },
+      {
+        "Name": "SelectionPK",
+        "Type": "B"
+      },
+      {
+        "Name": "VoteFirst",
+        "Type": "U"
+      },
+      {
+        "Name": "VoteLast",
+        "Type": "U"
+      },
+      {
+        "Name": "VoteKeyDilution",
+        "Type": "U"
+      },
+      {
+        "Name": "Type",
+        "Type": "B"
+      },
+      {
+        "Name": "TypeEnum",
+        "Type": "U"
+      },
+      {
+        "Name": "XferAsset",
+        "Type": "U"
+      },
+      {
+        "Name": "AssetAmount",
+        "Type": "U"
+      },
+      {
+        "Name": "AssetSender",
+        "Type": "B"
+      },
+      {
+        "Name": "AssetReceiver",
+        "Type": "B"
+      },
+      {
+        "Name": "AssetCloseTo",
+        "Type": "B"
+      },
+      {
+        "Name": "GroupIndex",
+        "Type": "U"
+      },
+      {
+        "Name": "TxID",
+        "Type": "B"
+      },
+      {
+        "Name": "ApplicationID",
+        "Type": "U"
+      },
+      {
+        "Name": "OnCompletion",
+        "Type": "U"
+      },
+      {
+        "Name": "NumAppArgs",
+        "Type": "U"
+      },
+      {
+        "Name": "NumAccounts",
+        "Type": "U"
+      },
+      {
+        "Name": "ApprovalProgram",
+        "Type": "B"
+      },
+      {
+        "Name": "ClearStateProgram",
+        "Type": "B"
+      },
+      {
+        "Name": "RekeyTo",
+        "Type": "B"
+      },
+      {
+        "Name": "ConfigAsset",
+        "Type": "U"
+      },
+      {
+        "Name": "ConfigAssetTotal",
+        "Type": "U"
+      },
+      {
+        "Name": "ConfigAssetDecimals",
+        "Type": "U"
+      },
+      {
+        "Name": "ConfigAssetDefaultFrozen",
+        "Type": "U"
+      },
+      {
+        "Name": "ConfigAssetUnitName",
+        "Type": "B"
+      },
+      {
+        "Name": "ConfigAssetName",
+        "Type": "B"
+      },
+      {
+        "Name": "ConfigAssetURL",
+        "Type": "B"
+      },
+      {
+        "Name": "ConfigAssetMetadataHash",
+        "Type": "B"
+      },
+      {
+        "Name": "ConfigAssetManager",
+        "Type": "B"
+      },
+      {
+        "Name": "ConfigAssetReserve",
+        "Type": "B"
+      },
+      {
+        "Name": "ConfigAssetFreeze",
+        "Type": "B"
+      },
+      {
+        "Name": "ConfigAssetClawback",
+        "Type": "B"
+      },
+      {
+        "Name": "FreezeAsset",
+        "Type": "U"
+      },
+      {
+        "Name": "FreezeAssetAccount",
+        "Type": "B"
+      },
+      {
+        "Name": "FreezeAssetFrozen",
+        "Type": "U"
+      },
+      {
+        "Name": "NumAssets",
+        "Type": "U"
+      },
+      {
+        "Name": "NumApplications",
+        "Type": "U"
+      },
+      {
+        "Name": "GlobalNumUint",
+        "Type": "U"
+      },
+      {
+        "Name": "GlobalNumByteSlice",
+        "Type": "U"
+      },
+      {
+        "Name": "LocalNumUint",
+        "Type": "U"
+      },
+      {
+        "Name": "LocalNumByteSlice",
+        "Type": "U"
+      },
+      {
+        "Name": "ExtraProgramPages",
+        "Type": "U"
+      },
+      {
+        "Name": "Nonparticipation",
+        "Type": "U"
+      },
+      {
+        "Name": "NumLogs",
+        "Type": "U"
+      },
+      {
+        "Name": "CreatedAssetID",
+        "Type": "U"
+      },
+      {
+        "Name": "CreatedApplicationID",
+        "Type": "U"
+      },
+      {
+        "Name": "LastLog",
+        "Type": "B"
+      },
+      {
+        "Name": "StateProofPK",
+        "Type": "B"
+      },
+      {
+        "Name": "NumApprovalProgramPages",
+        "Type": "U"
+      },
+      {
+        "Name": "NumClearStateProgramPages",
+        "Type": "U"
+      }
+    ],
+    "txn_type": [
+      {
+        "Name": "afrz",
+        "Type": "U"
+      },
+      {
+        "Name": "appl",
+        "Type": "U"
+      },
+      {
+        "Name": "unknown",
+        "Type": "U"
+      },
+      {
+        "Name": "pay",
+        "Type": "U"
+      },
+      {
+        "Name": "keyreg",
+        "Type": "U"
+      },
+      {
+        "Name": "acfg",
+        "Type": "U"
+      },
+      {
+        "Name": "axfer",
+        "Type": "U"
+      }
+    ],
+    "txna": [
+      {
+        "Name": "ApplicationArgs",
+        "Type": "B"
+      },
+      {
+        "Name": "Accounts",
+        "Type": "B"
+      },
+      {
+        "Name": "Assets",
+        "Type": "U"
+      },
+      {
+        "Name": "Applications",
+        "Type": "U"
+      },
+      {
+        "Name": "Logs",
+        "Type": "B"
+      },
+      {
+        "Name": "ApprovalProgramPages",
+        "Type": "B"
+      },
+      {
+        "Name": "ClearStateProgramPages",
+        "Type": "B"
+      }
+    ],
+    "vrf_verify": [
+      {
+        "Name": "VrfAlgorand",
+        "Type": "_"
+      }
+    ]
+  },
+  "PseudoOps": [
+    {
+      "Name": "int",
+      "Returns": "U",
+      "Size": 2
+    },
+    {
+      "Name": "byte",
+      "Returns": "B",
+      "Size": 2
+    },
+    {
+      "Name": "addr",
+      "Returns": "B",
+      "Size": 2
+    },
+    {
+      "Name": "method",
+      "Returns": "B",
+      "Size": 2
+    }
+  ],
   "Ops": [
     {
-      "Opcode": 0,
       "Name": "err",
       "Size": 1,
       "Doc": "Fail immediately.",
@@ -67,10 +888,7 @@
       "Args": "BBBBB",
       "Returns": "U",
       "Size": 2,
-      "ArgEnum": [
-        "Secp256k1",
-        "Secp256r1"
-      ],
+      "ArgEnum": "ECDSA",
       "Doc": "for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey =\u003e {0 or 1}",
       "DocExtra": "The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.",
       "ImmediateNote": "{uint8 curve index}",
@@ -85,10 +903,7 @@
       "Args": "B",
       "Returns": "BB",
       "Size": 2,
-      "ArgEnum": [
-        "Secp256k1",
-        "Secp256r1"
-      ],
+      "ArgEnum": "ECDSA",
       "Doc": "decompress pubkey A into components X, Y",
       "DocExtra": "The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.",
       "ImmediateNote": "{uint8 curve index}",
@@ -103,10 +918,7 @@
       "Args": "BUBB",
       "Returns": "BB",
       "Size": 2,
-      "ArgEnum": [
-        "Secp256k1",
-        "Secp256r1"
-      ],
+      "ArgEnum": "ECDSA",
       "Doc": "for (data A, recovery id B, signature C, D) recover a public key",
       "DocExtra": "S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key. All values are big-endian encoded. The signed data must be 32 bytes long.",
       "ImmediateNote": "{uint8 curve index}",
@@ -605,77 +1417,7 @@
       "Name": "txn",
       "Returns": ".",
       "Size": 2,
-      "ArgEnum": [
-        "Sender",
-        "Fee",
-        "FirstValid",
-        "FirstValidTime",
-        "LastValid",
-        "Note",
-        "Lease",
-        "Receiver",
-        "Amount",
-        "CloseRemainderTo",
-        "VotePK",
-        "SelectionPK",
-        "VoteFirst",
-        "VoteLast",
-        "VoteKeyDilution",
-        "Type",
-        "TypeEnum",
-        "XferAsset",
-        "AssetAmount",
-        "AssetSender",
-        "AssetReceiver",
-        "AssetCloseTo",
-        "GroupIndex",
-        "TxID",
-        "ApplicationID",
-        "OnCompletion",
-        "ApplicationArgs",
-        "NumAppArgs",
-        "Accounts",
-        "NumAccounts",
-        "ApprovalProgram",
-        "ClearStateProgram",
-        "RekeyTo",
-        "ConfigAsset",
-        "ConfigAssetTotal",
-        "ConfigAssetDecimals",
-        "ConfigAssetDefaultFrozen",
-        "ConfigAssetUnitName",
-        "ConfigAssetName",
-        "ConfigAssetURL",
-        "ConfigAssetMetadataHash",
-        "ConfigAssetManager",
-        "ConfigAssetReserve",
-        "ConfigAssetFreeze",
-        "ConfigAssetClawback",
-        "FreezeAsset",
-        "FreezeAssetAccount",
-        "FreezeAssetFrozen",
-        "Assets",
-        "NumAssets",
-        "Applications",
-        "NumApplications",
-        "GlobalNumUint",
-        "GlobalNumByteSlice",
-        "LocalNumUint",
-        "LocalNumByteSlice",
-        "ExtraProgramPages",
-        "Nonparticipation",
-        "Logs",
-        "NumLogs",
-        "CreatedAssetID",
-        "CreatedApplicationID",
-        "LastLog",
-        "StateProofPK",
-        "ApprovalProgramPages",
-        "NumApprovalProgramPages",
-        "ClearStateProgramPages",
-        "NumClearStateProgramPages"
-      ],
-      "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBBBUBU",
+      "ArgEnum": "txn",
       "Doc": "field F of current transaction",
       "ImmediateNote": "{uint8 transaction field index}",
       "IntroducedVersion": 1,
@@ -688,24 +1430,7 @@
       "Name": "global",
       "Returns": ".",
       "Size": 2,
-      "ArgEnum": [
-        "MinTxnFee",
-        "MinBalance",
-        "MaxTxnLife",
-        "ZeroAddress",
-        "GroupSize",
-        "LogicSigVersion",
-        "Round",
-        "LatestTimestamp",
-        "CurrentApplicationID",
-        "CreatorAddress",
-        "CurrentApplicationAddress",
-        "GroupID",
-        "OpcodeBudget",
-        "CallerApplicationID",
-        "CallerApplicationAddress"
-      ],
-      "ArgEnumTypes": "UUUBUUUUUBBBUUB",
+      "ArgEnum": "global",
       "Doc": "global field F",
       "ImmediateNote": "{uint8 global field index}",
       "IntroducedVersion": 1,
@@ -718,77 +1443,7 @@
       "Name": "gtxn",
       "Returns": ".",
       "Size": 3,
-      "ArgEnum": [
-        "Sender",
-        "Fee",
-        "FirstValid",
-        "FirstValidTime",
-        "LastValid",
-        "Note",
-        "Lease",
-        "Receiver",
-        "Amount",
-        "CloseRemainderTo",
-        "VotePK",
-        "SelectionPK",
-        "VoteFirst",
-        "VoteLast",
-        "VoteKeyDilution",
-        "Type",
-        "TypeEnum",
-        "XferAsset",
-        "AssetAmount",
-        "AssetSender",
-        "AssetReceiver",
-        "AssetCloseTo",
-        "GroupIndex",
-        "TxID",
-        "ApplicationID",
-        "OnCompletion",
-        "ApplicationArgs",
-        "NumAppArgs",
-        "Accounts",
-        "NumAccounts",
-        "ApprovalProgram",
-        "ClearStateProgram",
-        "RekeyTo",
-        "ConfigAsset",
-        "ConfigAssetTotal",
-        "ConfigAssetDecimals",
-        "ConfigAssetDefaultFrozen",
-        "ConfigAssetUnitName",
-        "ConfigAssetName",
-        "ConfigAssetURL",
-        "ConfigAssetMetadataHash",
-        "ConfigAssetManager",
-        "ConfigAssetReserve",
-        "ConfigAssetFreeze",
-        "ConfigAssetClawback",
-        "FreezeAsset",
-        "FreezeAssetAccount",
-        "FreezeAssetFrozen",
-        "Assets",
-        "NumAssets",
-        "Applications",
-        "NumApplications",
-        "GlobalNumUint",
-        "GlobalNumByteSlice",
-        "LocalNumUint",
-        "LocalNumByteSlice",
-        "ExtraProgramPages",
-        "Nonparticipation",
-        "Logs",
-        "NumLogs",
-        "CreatedAssetID",
-        "CreatedApplicationID",
-        "LastLog",
-        "StateProofPK",
-        "ApprovalProgramPages",
-        "NumApprovalProgramPages",
-        "ClearStateProgramPages",
-        "NumClearStateProgramPages"
-      ],
-      "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBBBUBU",
+      "ArgEnum": "txn",
       "Doc": "field F of the Tth transaction in the current group",
       "DocExtra": "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index}",
@@ -826,16 +1481,7 @@
       "Name": "txna",
       "Returns": ".",
       "Size": 3,
-      "ArgEnum": [
-        "ApplicationArgs",
-        "Accounts",
-        "Assets",
-        "Applications",
-        "Logs",
-        "ApprovalProgramPages",
-        "ClearStateProgramPages"
-      ],
-      "ArgEnumTypes": "BBUUBBB",
+      "ArgEnum": "txna",
       "Doc": "Ith value of the array field F of the current transaction\n`txna` can be called using `txn` with 2 immediates.",
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "IntroducedVersion": 2,
@@ -848,16 +1494,7 @@
       "Name": "gtxna",
       "Returns": ".",
       "Size": 4,
-      "ArgEnum": [
-        "ApplicationArgs",
-        "Accounts",
-        "Assets",
-        "Applications",
-        "Logs",
-        "ApprovalProgramPages",
-        "ClearStateProgramPages"
-      ],
-      "ArgEnumTypes": "BBUUBBB",
+      "ArgEnum": "txna",
       "Doc": "Ith value of the array field F from the Tth transaction in the current group\n`gtxna` can be called using `gtxn` with 3 immediates.",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
       "IntroducedVersion": 2,
@@ -871,77 +1508,7 @@
       "Args": "U",
       "Returns": ".",
       "Size": 2,
-      "ArgEnum": [
-        "Sender",
-        "Fee",
-        "FirstValid",
-        "FirstValidTime",
-        "LastValid",
-        "Note",
-        "Lease",
-        "Receiver",
-        "Amount",
-        "CloseRemainderTo",
-        "VotePK",
-        "SelectionPK",
-        "VoteFirst",
-        "VoteLast",
-        "VoteKeyDilution",
-        "Type",
-        "TypeEnum",
-        "XferAsset",
-        "AssetAmount",
-        "AssetSender",
-        "AssetReceiver",
-        "AssetCloseTo",
-        "GroupIndex",
-        "TxID",
-        "ApplicationID",
-        "OnCompletion",
-        "ApplicationArgs",
-        "NumAppArgs",
-        "Accounts",
-        "NumAccounts",
-        "ApprovalProgram",
-        "ClearStateProgram",
-        "RekeyTo",
-        "ConfigAsset",
-        "ConfigAssetTotal",
-        "ConfigAssetDecimals",
-        "ConfigAssetDefaultFrozen",
-        "ConfigAssetUnitName",
-        "ConfigAssetName",
-        "ConfigAssetURL",
-        "ConfigAssetMetadataHash",
-        "ConfigAssetManager",
-        "ConfigAssetReserve",
-        "ConfigAssetFreeze",
-        "ConfigAssetClawback",
-        "FreezeAsset",
-        "FreezeAssetAccount",
-        "FreezeAssetFrozen",
-        "Assets",
-        "NumAssets",
-        "Applications",
-        "NumApplications",
-        "GlobalNumUint",
-        "GlobalNumByteSlice",
-        "LocalNumUint",
-        "LocalNumByteSlice",
-        "ExtraProgramPages",
-        "Nonparticipation",
-        "Logs",
-        "NumLogs",
-        "CreatedAssetID",
-        "CreatedApplicationID",
-        "LastLog",
-        "StateProofPK",
-        "ApprovalProgramPages",
-        "NumApprovalProgramPages",
-        "ClearStateProgramPages",
-        "NumClearStateProgramPages"
-      ],
-      "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBBBUBU",
+      "ArgEnum": "txn",
       "Doc": "field F of the Ath transaction in the current group",
       "DocExtra": "for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.",
       "ImmediateNote": "{uint8 transaction field index}",
@@ -956,16 +1523,7 @@
       "Args": "U",
       "Returns": ".",
       "Size": 3,
-      "ArgEnum": [
-        "ApplicationArgs",
-        "Accounts",
-        "Assets",
-        "Applications",
-        "Logs",
-        "ApprovalProgramPages",
-        "ClearStateProgramPages"
-      ],
-      "ArgEnumTypes": "BBUUBBB",
+      "ArgEnum": "txna",
       "Doc": "Ith value of the array field F from the Ath transaction in the current group\n`gtxnsa` can be called using `gtxns` with 2 immediates.",
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "IntroducedVersion": 3,
@@ -1422,11 +1980,7 @@
       "Args": "B",
       "Returns": "B",
       "Size": 2,
-      "ArgEnum": [
-        "URLEncoding",
-        "StdEncoding"
-      ],
-      "ArgEnumTypes": "..",
+      "ArgEnum": "base64",
       "Doc": "decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E",
       "DocExtra": "*Warning*: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings.\tThis opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.\n\n Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See [RFC 4648 sections 4 and 5](https://rfc-editor.org/rfc/rfc4648.html#section-4). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
       "ImmediateNote": "{uint8 encoding index}",
@@ -1441,12 +1995,7 @@
       "Args": "BB",
       "Returns": ".",
       "Size": 2,
-      "ArgEnum": [
-        "JSONString",
-        "JSONUint64",
-        "JSONObject"
-      ],
-      "ArgEnumTypes": "BUB",
+      "ArgEnum": "json_ref",
       "Doc": "key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A",
       "DocExtra": "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
       "ImmediateNote": "{uint8 return type index}",
@@ -1586,11 +2135,7 @@
       "Args": ".U",
       "Returns": ".U",
       "Size": 2,
-      "ArgEnum": [
-        "AssetBalance",
-        "AssetFrozen"
-      ],
-      "ArgEnumTypes": "UU",
+      "ArgEnum": "asset_holding",
       "Doc": "X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0",
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
       "ImmediateNote": "{uint8 asset holding field index}",
@@ -1605,21 +2150,7 @@
       "Args": "U",
       "Returns": ".U",
       "Size": 2,
-      "ArgEnum": [
-        "AssetTotal",
-        "AssetDecimals",
-        "AssetDefaultFrozen",
-        "AssetUnitName",
-        "AssetName",
-        "AssetURL",
-        "AssetMetadataHash",
-        "AssetManager",
-        "AssetReserve",
-        "AssetFreeze",
-        "AssetClawback",
-        "AssetCreator"
-      ],
-      "ArgEnumTypes": "UUUBBBBBBBBB",
+      "ArgEnum": "asset_params",
       "Doc": "X is field F from asset A. Y is 1 if A exists, else 0",
       "DocExtra": "params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
       "ImmediateNote": "{uint8 asset params field index}",
@@ -1634,18 +2165,7 @@
       "Args": "U",
       "Returns": ".U",
       "Size": 2,
-      "ArgEnum": [
-        "AppApprovalProgram",
-        "AppClearStateProgram",
-        "AppGlobalNumUint",
-        "AppGlobalNumByteSlice",
-        "AppLocalNumUint",
-        "AppLocalNumByteSlice",
-        "AppExtraProgramPages",
-        "AppCreator",
-        "AppAddress"
-      ],
-      "ArgEnumTypes": "BBUUUUUBB",
+      "ArgEnum": "app_params",
       "Doc": "X is field F from app A. Y is 1 if A exists, else 0",
       "DocExtra": "params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.",
       "ImmediateNote": "{uint8 app params field index}",
@@ -1660,21 +2180,7 @@
       "Args": ".",
       "Returns": ".U",
       "Size": 2,
-      "ArgEnum": [
-        "AcctBalance",
-        "AcctMinBalance",
-        "AcctAuthAddr",
-        "AcctTotalNumUint",
-        "AcctTotalNumByteSlice",
-        "AcctTotalExtraAppPages",
-        "AcctTotalAppsCreated",
-        "AcctTotalAppsOptedIn",
-        "AcctTotalAssetsCreated",
-        "AcctTotalAssets",
-        "AcctTotalBoxes",
-        "AcctTotalBoxBytes"
-      ],
-      "ArgEnumTypes": "UUBUUUUUUUUU",
+      "ArgEnum": "acct_params",
       "Doc": "X is field F from account A. Y is 1 if A owns positive algos, else 0",
       "ImmediateNote": "{uint8 account params field index}",
       "IntroducedVersion": 6,
@@ -2170,60 +2676,7 @@
       "Name": "itxn_field",
       "Args": ".",
       "Size": 2,
-      "ArgEnum": [
-        "Sender",
-        "Fee",
-        "Note",
-        "Receiver",
-        "Amount",
-        "CloseRemainderTo",
-        "VotePK",
-        "SelectionPK",
-        "VoteFirst",
-        "VoteLast",
-        "VoteKeyDilution",
-        "Type",
-        "TypeEnum",
-        "XferAsset",
-        "AssetAmount",
-        "AssetSender",
-        "AssetReceiver",
-        "AssetCloseTo",
-        "ApplicationID",
-        "OnCompletion",
-        "ApplicationArgs",
-        "Accounts",
-        "ApprovalProgram",
-        "ClearStateProgram",
-        "RekeyTo",
-        "ConfigAsset",
-        "ConfigAssetTotal",
-        "ConfigAssetDecimals",
-        "ConfigAssetDefaultFrozen",
-        "ConfigAssetUnitName",
-        "ConfigAssetName",
-        "ConfigAssetURL",
-        "ConfigAssetMetadataHash",
-        "ConfigAssetManager",
-        "ConfigAssetReserve",
-        "ConfigAssetFreeze",
-        "ConfigAssetClawback",
-        "FreezeAsset",
-        "FreezeAssetAccount",
-        "FreezeAssetFrozen",
-        "Assets",
-        "Applications",
-        "GlobalNumUint",
-        "GlobalNumByteSlice",
-        "LocalNumUint",
-        "LocalNumByteSlice",
-        "ExtraProgramPages",
-        "Nonparticipation",
-        "StateProofPK",
-        "ApprovalProgramPages",
-        "ClearStateProgramPages"
-      ],
-      "ArgEnumTypes": "BUBBUBBBUUUBUUUBBBUUBBBBBUUUUBBBBBBBBUBUUUUUUUUUBBB",
+      "ArgEnum": "itxn_field",
       "Doc": "set field F of the current inner transaction to A",
       "DocExtra": "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)",
       "ImmediateNote": "{uint8 transaction field index}",
@@ -2248,77 +2701,7 @@
       "Name": "itxn",
       "Returns": ".",
       "Size": 2,
-      "ArgEnum": [
-        "Sender",
-        "Fee",
-        "FirstValid",
-        "FirstValidTime",
-        "LastValid",
-        "Note",
-        "Lease",
-        "Receiver",
-        "Amount",
-        "CloseRemainderTo",
-        "VotePK",
-        "SelectionPK",
-        "VoteFirst",
-        "VoteLast",
-        "VoteKeyDilution",
-        "Type",
-        "TypeEnum",
-        "XferAsset",
-        "AssetAmount",
-        "AssetSender",
-        "AssetReceiver",
-        "AssetCloseTo",
-        "GroupIndex",
-        "TxID",
-        "ApplicationID",
-        "OnCompletion",
-        "ApplicationArgs",
-        "NumAppArgs",
-        "Accounts",
-        "NumAccounts",
-        "ApprovalProgram",
-        "ClearStateProgram",
-        "RekeyTo",
-        "ConfigAsset",
-        "ConfigAssetTotal",
-        "ConfigAssetDecimals",
-        "ConfigAssetDefaultFrozen",
-        "ConfigAssetUnitName",
-        "ConfigAssetName",
-        "ConfigAssetURL",
-        "ConfigAssetMetadataHash",
-        "ConfigAssetManager",
-        "ConfigAssetReserve",
-        "ConfigAssetFreeze",
-        "ConfigAssetClawback",
-        "FreezeAsset",
-        "FreezeAssetAccount",
-        "FreezeAssetFrozen",
-        "Assets",
-        "NumAssets",
-        "Applications",
-        "NumApplications",
-        "GlobalNumUint",
-        "GlobalNumByteSlice",
-        "LocalNumUint",
-        "LocalNumByteSlice",
-        "ExtraProgramPages",
-        "Nonparticipation",
-        "Logs",
-        "NumLogs",
-        "CreatedAssetID",
-        "CreatedApplicationID",
-        "LastLog",
-        "StateProofPK",
-        "ApprovalProgramPages",
-        "NumApprovalProgramPages",
-        "ClearStateProgramPages",
-        "NumClearStateProgramPages"
-      ],
-      "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBBBUBU",
+      "ArgEnum": "txn",
       "Doc": "field F of the last inner transaction",
       "ImmediateNote": "{uint8 transaction field index}",
       "IntroducedVersion": 5,
@@ -2331,16 +2714,7 @@
       "Name": "itxna",
       "Returns": ".",
       "Size": 3,
-      "ArgEnum": [
-        "ApplicationArgs",
-        "Accounts",
-        "Assets",
-        "Applications",
-        "Logs",
-        "ApprovalProgramPages",
-        "ClearStateProgramPages"
-      ],
-      "ArgEnumTypes": "BBUUBBB",
+      "ArgEnum": "txna",
       "Doc": "Ith value of the array field F of the last inner transaction",
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "IntroducedVersion": 5,
@@ -2364,77 +2738,7 @@
       "Name": "gitxn",
       "Returns": ".",
       "Size": 3,
-      "ArgEnum": [
-        "Sender",
-        "Fee",
-        "FirstValid",
-        "FirstValidTime",
-        "LastValid",
-        "Note",
-        "Lease",
-        "Receiver",
-        "Amount",
-        "CloseRemainderTo",
-        "VotePK",
-        "SelectionPK",
-        "VoteFirst",
-        "VoteLast",
-        "VoteKeyDilution",
-        "Type",
-        "TypeEnum",
-        "XferAsset",
-        "AssetAmount",
-        "AssetSender",
-        "AssetReceiver",
-        "AssetCloseTo",
-        "GroupIndex",
-        "TxID",
-        "ApplicationID",
-        "OnCompletion",
-        "ApplicationArgs",
-        "NumAppArgs",
-        "Accounts",
-        "NumAccounts",
-        "ApprovalProgram",
-        "ClearStateProgram",
-        "RekeyTo",
-        "ConfigAsset",
-        "ConfigAssetTotal",
-        "ConfigAssetDecimals",
-        "ConfigAssetDefaultFrozen",
-        "ConfigAssetUnitName",
-        "ConfigAssetName",
-        "ConfigAssetURL",
-        "ConfigAssetMetadataHash",
-        "ConfigAssetManager",
-        "ConfigAssetReserve",
-        "ConfigAssetFreeze",
-        "ConfigAssetClawback",
-        "FreezeAsset",
-        "FreezeAssetAccount",
-        "FreezeAssetFrozen",
-        "Assets",
-        "NumAssets",
-        "Applications",
-        "NumApplications",
-        "GlobalNumUint",
-        "GlobalNumByteSlice",
-        "LocalNumUint",
-        "LocalNumByteSlice",
-        "ExtraProgramPages",
-        "Nonparticipation",
-        "Logs",
-        "NumLogs",
-        "CreatedAssetID",
-        "CreatedApplicationID",
-        "LastLog",
-        "StateProofPK",
-        "ApprovalProgramPages",
-        "NumApprovalProgramPages",
-        "ClearStateProgramPages",
-        "NumClearStateProgramPages"
-      ],
-      "ArgEnumTypes": "BUUUUBBBUBBBUUUBUUUBBBUBUUBUBUBBBUUUUBBBBBBBBUBUUUUUUUUUUUBUUUBBBUBU",
+      "ArgEnum": "txn",
       "Doc": "field F of the Tth transaction in the last inner group submitted",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index}",
       "IntroducedVersion": 6,
@@ -2447,16 +2751,7 @@
       "Name": "gitxna",
       "Returns": ".",
       "Size": 4,
-      "ArgEnum": [
-        "ApplicationArgs",
-        "Accounts",
-        "Assets",
-        "Applications",
-        "Logs",
-        "ApprovalProgramPages",
-        "ClearStateProgramPages"
-      ],
-      "ArgEnumTypes": "BBUUBBB",
+      "ArgEnum": "txna",
       "Doc": "Ith value of the array field F from the Tth transaction in the last inner group submitted",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
       "IntroducedVersion": 6,
@@ -2555,16 +2850,7 @@
       "Args": "U",
       "Returns": ".",
       "Size": 2,
-      "ArgEnum": [
-        "ApplicationArgs",
-        "Accounts",
-        "Assets",
-        "Applications",
-        "Logs",
-        "ApprovalProgramPages",
-        "ClearStateProgramPages"
-      ],
-      "ArgEnumTypes": "BBUUBBB",
+      "ArgEnum": "txna",
       "Doc": "Ath value of the array field F of the current transaction",
       "ImmediateNote": "{uint8 transaction field index}",
       "IntroducedVersion": 5,
@@ -2578,16 +2864,7 @@
       "Args": "U",
       "Returns": ".",
       "Size": 3,
-      "ArgEnum": [
-        "ApplicationArgs",
-        "Accounts",
-        "Assets",
-        "Applications",
-        "Logs",
-        "ApprovalProgramPages",
-        "ClearStateProgramPages"
-      ],
-      "ArgEnumTypes": "BBUUBBB",
+      "ArgEnum": "txna",
       "Doc": "Ath value of the array field F from the Tth transaction in the current group",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index}",
       "IntroducedVersion": 5,
@@ -2601,16 +2878,7 @@
       "Args": "UU",
       "Returns": ".",
       "Size": 2,
-      "ArgEnum": [
-        "ApplicationArgs",
-        "Accounts",
-        "Assets",
-        "Applications",
-        "Logs",
-        "ApprovalProgramPages",
-        "ClearStateProgramPages"
-      ],
-      "ArgEnumTypes": "BBUUBBB",
+      "ArgEnum": "txna",
       "Doc": "Bth value of the array field F from the Ath transaction in the current group",
       "ImmediateNote": "{uint8 transaction field index}",
       "IntroducedVersion": 5,
@@ -2674,9 +2942,7 @@
       "Args": "BBB",
       "Returns": "BU",
       "Size": 2,
-      "ArgEnum": [
-        "VrfAlgorand"
-      ],
+      "ArgEnum": "vrf_verify",
       "Doc": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
       "DocExtra": "`VrfAlgorand` is the VRF used in Algorand. It is ECVRF-ED25519-SHA512-Elligator2, specified in the IETF internet draft [draft-irtf-cfrg-vrf-03](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/03/).",
       "ImmediateNote": "{uint8 parameters index}",
@@ -2691,11 +2957,7 @@
       "Args": "U",
       "Returns": ".",
       "Size": 2,
-      "ArgEnum": [
-        "BlkSeed",
-        "BlkTimestamp"
-      ],
-      "ArgEnumTypes": "BU",
+      "ArgEnum": "block",
       "Doc": "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
       "ImmediateNote": "{uint8 block field index}",
       "IntroducedVersion": 7,

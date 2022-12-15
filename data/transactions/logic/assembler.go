@@ -1582,12 +1582,12 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 const anyImmediates = -1
 
 var pseudoOps = map[string]map[int]OpSpec{
-	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i"), OpDetails: assembler(asmInt)}},
-	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b"), OpDetails: assembler(asmByte)}},
+	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i"), OpDetails: immediates("i").assembler(asmInt)}},
+	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b"), OpDetails: immediates("b").assembler(asmByte)}},
 	// parse basics.Address, actually just another []byte constant
-	"addr": {anyImmediates: OpSpec{Name: "addr", Proto: proto(":b"), OpDetails: assembler(asmAddr)}},
+	"addr": {anyImmediates: OpSpec{Name: "addr", Proto: proto(":b"), OpDetails: immediates("a").assembler(asmAddr)}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method":  {anyImmediates: OpSpec{Name: "method", Proto: proto(":b"), OpDetails: assembler(asmMethod)}},
+	"method":  {anyImmediates: OpSpec{Name: "method", Proto: proto(":b"), OpDetails: immediates("m").assembler(asmMethod)}},
 	"txn":     {1: OpSpec{Name: "txn"}, 2: OpSpec{Name: "txna"}},
 	"gtxn":    {2: OpSpec{Name: "gtxn"}, 3: OpSpec{Name: "gtxna"}},
 	"gtxns":   {1: OpSpec{Name: "gtxns"}, 2: OpSpec{Name: "gtxnsa"}},
@@ -1622,7 +1622,7 @@ func isFullSpec(spec OpSpec) bool {
 }
 
 // mergeProtos allows us to support typetracking of pseudo-ops which are given an improper number of immediates
-//by creating a new proto that is a combination of all the pseudo-op's possibilities
+// by creating a new proto that is a combination of all the pseudo-op's possibilities
 func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 	var args StackTypes
 	var returns StackTypes

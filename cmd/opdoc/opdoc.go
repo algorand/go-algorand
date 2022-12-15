@@ -236,44 +236,40 @@ func opsToMarkdown(out io.Writer) (err error) {
 
 // OpRecord is a consolidated record of things about an Op
 type OpRecord struct {
-	Opcode  byte
+	Opcode  byte `json:",omitempty"`
 	Name    string
 	Args    string `json:",omitempty"`
 	Returns string `json:",omitempty"`
 	Size    int
 
-	ArgEnum      []string `json:",omitempty"`
-	ArgEnumTypes string   `json:",omitempty"`
+	ArgEnum string `json:",omitempty"`
 
-	Doc               string
-	DocExtra          string `json:",omitempty"`
-	ImmediateNote     string `json:",omitempty"`
-	IntroducedVersion uint64
-	Groups            []string
+	Doc               string   `json:",omitempty"`
+	DocExtra          string   `json:",omitempty"`
+	ImmediateNote     string   `json:",omitempty"`
+	IntroducedVersion uint64   `json:",omitempty"`
+	Groups            []string `json:",omitempty"`
+}
+
+type Keyword struct {
+	Name      string
+	Type      string
+	ValueEnum []string `json:",omitempty"`
 }
 
 // LanguageSpec records the ops of the language at some version
 type LanguageSpec struct {
 	EvalMaxVersion  int
 	LogicSigVersion uint64
+	Keywords        map[string][]Keyword
+	PseudoOps       []OpRecord
 	Ops             []OpRecord
 }
 
 func typeString(types []logic.StackType) string {
 	out := make([]byte, len(types))
 	for i, t := range types {
-		switch t {
-		case logic.StackUint64:
-			out[i] = 'U'
-		case logic.StackBytes:
-			out[i] = 'B'
-		case logic.StackAny:
-			out[i] = '.'
-		case logic.StackNone:
-			out[i] = '_'
-		default:
-			panic("unexpected type in opdoc typeString")
-		}
+		out[i] = typeByte(t)
 	}
 
 	// Cant return None and !None from same op
@@ -287,76 +283,146 @@ func typeString(types []logic.StackType) string {
 	return string(out)
 }
 
-func fieldsAndTypes(group logic.FieldGroup) ([]string, string) {
-	// reminder: group.Names can be "sparse" See: logic.TxnaFields
-	fields := make([]string, 0, len(group.Names))
-	types := make([]logic.StackType, 0, len(group.Names))
-	for _, name := range group.Names {
-		if spec, ok := group.SpecByName(name); ok {
-			fields = append(fields, name)
-			types = append(types, spec.Type())
-		}
+func typeByte(t logic.StackType) byte {
+	switch t {
+	case logic.StackUint64:
+		return 'U'
+	case logic.StackBytes:
+		return 'B'
+	case logic.StackAny:
+		return '.'
+	case logic.StackNone:
+		return '_'
+	default:
+		panic("unexpected type in opdoc typeString")
 	}
-	return fields, typeString(types)
 }
 
-func argEnums(name string) ([]string, string) {
-	// reminder: this needs to be manually updated every time
-	// a new opcode is added with an associated FieldGroup
-	// it'd be nice to have this auto-update
+func groupKeywords(group logic.FieldGroup) []Keyword {
+	keywords := make([]Keyword, 0, len(group.Names))
+	for _, name := range group.Names {
+		if spec, ok := group.SpecByName(name); ok {
+			// TODO: replace tstring with something better
+			keywords = append(keywords, Keyword{Name: name, Type: string(typeByte(spec.Type()))})
+		}
+	}
+	return keywords
+}
+
+func argEnums(name string) string {
 	switch name {
 	case "txn", "gtxn", "gtxns", "itxn", "gitxn":
-		return fieldsAndTypes(logic.TxnFields)
+		return "txn"
 	case "itxn_field":
-		// itxn_field does not *return* a type depending on its immediate. It *takes* it.
-		// but until a consumer cares, ArgEnumTypes will be overloaded for that meaning.
-		return fieldsAndTypes(logic.ItxnSettableFields)
+		return "itxn_field"
 	case "global":
-		return fieldsAndTypes(logic.GlobalFields)
+		return "global"
 	case "txna", "gtxna", "gtxnsa", "txnas", "gtxnas", "gtxnsas", "itxna", "gitxna":
-		return fieldsAndTypes(logic.TxnArrayFields)
+		return "txna"
 	case "asset_holding_get":
-		return fieldsAndTypes(logic.AssetHoldingFields)
+		return "asset_holding"
 	case "asset_params_get":
-		return fieldsAndTypes(logic.AssetParamsFields)
+		return "asset_params"
 	case "app_params_get":
-		return fieldsAndTypes(logic.AppParamsFields)
+		return "app_params"
 	case "acct_params_get":
-		return fieldsAndTypes(logic.AcctParamsFields)
+		return "acct_params"
 	case "block":
-		return fieldsAndTypes(logic.BlockFields)
+		return "block"
 	case "json_ref":
-		return fieldsAndTypes(logic.JSONRefTypes)
+		return "json_ref"
 	case "base64_decode":
-		return fieldsAndTypes(logic.Base64Encodings)
+		return "base64"
 	case "vrf_verify":
-		return fieldsAndTypes(logic.VrfStandards)
+		return "vrf_verify"
 	case "ecdsa_pk_recover", "ecdsa_verify", "ecdsa_pk_decompress":
-		return fieldsAndTypes(logic.EcdsaCurves)
+		return "ECDSA"
 	default:
-		return nil, ""
+		return ""
 	}
+}
+
+func fieldGroups() []logic.FieldGroup {
+	return []logic.FieldGroup{
+		logic.TxnFields,
+		logic.TxnScalarFields,
+		logic.TxnArrayFields,
+		logic.ItxnSettableFields,
+		logic.GlobalFields,
+		logic.AssetHoldingFields,
+		logic.AssetParamsFields,
+		logic.AppParamsFields,
+		logic.AcctParamsFields,
+		logic.BlockFields,
+		logic.JSONRefTypes,
+		logic.Base64Encodings,
+		logic.VrfStandards,
+		logic.EcdsaCurves,
+	}
+
+}
+
+func onCompleteKeywords() []Keyword {
+	var ocs []Keyword
+	for _, ocn := range logic.OnCompletionNames {
+		ocs = append(ocs, Keyword{Name: ocn, Type: "U"})
+	}
+	return ocs
+}
+
+func txnTypeKeywords() []Keyword {
+	var txTypes []Keyword
+	for n, _ := range logic.TypeNameDescriptions {
+		txTypes = append(txTypes, Keyword{Name: n, Type: "U"})
+	}
+	return txTypes
 }
 
 func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
 	records := make([]OpRecord, len(opSpecs))
+
+	keywords := map[string][]Keyword{}
+	for _, fg := range fieldGroups() {
+		keywords[fg.Name] = groupKeywords(fg)
+	}
+
+	keywords["txn_type"] = txnTypeKeywords()
+	keywords["on_complete"] = onCompleteKeywords()
+
 	for i, spec := range opSpecs {
 		records[i].Opcode = spec.Opcode
 		records[i].Name = spec.Name
 		records[i].Args = typeString(spec.Arg.Types)
 		records[i].Returns = typeString(spec.Return.Types)
 		records[i].Size = spec.OpDetails.Size
-		records[i].ArgEnum, records[i].ArgEnumTypes = argEnums(spec.Name)
+		records[i].ArgEnum = argEnums(spec.Name)
 		records[i].Doc = strings.ReplaceAll(logic.OpDoc(spec.Name), "<br />", "\n")
 		records[i].DocExtra = logic.OpDocExtra(spec.Name)
 		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
 		records[i].Groups = opGroups[spec.Name]
 		records[i].IntroducedVersion = spec.Version
 	}
+
+	var pseudoOps = make([]OpRecord, len(logic.PseudoOps))
+	for i, spec := range logic.PseudoOps {
+		pseudoOps[i].Name = spec.Name
+		pseudoOps[i].Args = typeString(spec.Arg.Types)
+		pseudoOps[i].Returns = typeString(spec.Return.Types)
+		pseudoOps[i].Size = spec.OpDetails.Size
+		pseudoOps[i].ArgEnum = argEnums(spec.Name)
+		pseudoOps[i].Doc = strings.ReplaceAll(logic.OpDoc(spec.Name), "<br />", "\n")
+		pseudoOps[i].DocExtra = logic.OpDocExtra(spec.Name)
+		pseudoOps[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
+		pseudoOps[i].Groups = opGroups[spec.Name]
+		pseudoOps[i].IntroducedVersion = spec.Version
+	}
+
 	return &LanguageSpec{
 		EvalMaxVersion:  docVersion,
 		LogicSigVersion: config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion,
+		Keywords:        keywords,
+		PseudoOps:       pseudoOps,
 		Ops:             records,
 	}
 }

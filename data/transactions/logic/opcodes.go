@@ -698,6 +698,8 @@ var opsByOpcode [LogicVersion + 1][256]OpSpec
 // OpsByName map for each version, mapping opcode name to OpSpec
 var OpsByName [LogicVersion + 1]map[string]OpSpec
 
+var PseudoOps []OpSpec
+
 // Migration from v1 to v2.
 // v1 allowed execution of program with version 0.
 // With v2 opcode versions are introduced and they are bound to every opcode.
@@ -740,5 +742,12 @@ func init() {
 				OpsByName[v][oi.Name] = oi
 			}
 		}
+	}
+
+	for _, specs := range pseudoOps {
+		if _, ok := specs[anyImmediates]; !ok || len(specs) != 1 {
+			continue
+		}
+		PseudoOps = append(PseudoOps, specs[anyImmediates])
 	}
 }
