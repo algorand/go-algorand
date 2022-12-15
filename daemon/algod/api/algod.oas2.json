@@ -1220,7 +1220,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network.",
+        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. WARNING: This endpoint is experimental and under active development. There are no guarantees in terms of functionality or future support.",
         "operationId": "SimulateTransaction",
         "parameters": [
           {
