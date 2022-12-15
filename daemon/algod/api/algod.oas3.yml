@@ -3903,7 +3903,7 @@
         },
         "summary": "Get a LedgerStateDelta object for a given round",
         "tags": [
-          "private",
+          "public",
           "data"
         ]
       }
@@ -4019,7 +4019,7 @@
         },
         "summary": "Removes minimum sync round restriction from the ledger.",
         "tags": [
-          "private",
+          "public",
           "data"
         ]
       },
@@ -4093,7 +4093,7 @@
         },
         "summary": "Returns the minimum sync round the ledger is keeping in cache.",
         "tags": [
-          "private",
+          "public",
           "data"
         ]
       }
@@ -4165,7 +4165,7 @@
         },
         "summary": "Given a round, tells the ledger to keep that round in its cache.",
         "tags": [
-          "private",
+          "public",
           "data"
         ]
       }

@@ -280,7 +280,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## bytecblock bytes ...
 
-- Opcode: 0x26 {varuint count} [({varuint value length} bytes), ...]
+- Opcode: 0x26 {varuint count} [({varuint length} bytes), ...]
 - Stack: ... &rarr; ...
 - prepare block of byte-array constants for use by bytec
 
@@ -318,7 +318,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## arg n
 
-- Opcode: 0x2c {uint8 arg index N}
+- Opcode: 0x2c {uint8 arg index}
 - Stack: ... &rarr; ..., []byte
 - Nth LogicSig argument
 - Mode: Signature
@@ -811,7 +811,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 ## json_ref r
 
-- Opcode: 0x5f {uint8 return type}
+- Opcode: 0x5f {uint8 return type index}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., any
 - key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A
 - **Cost**: 25 + 2 per 7 bytes of A
@@ -1059,7 +1059,7 @@ pushint args are not added to the intcblock during assembly processes
 
 ## pushbytess bytes ...
 
-- Opcode: 0x82 {varuint count} [({varuint value length} bytes), ...]
+- Opcode: 0x82 {varuint count} [({varuint length} bytes), ...]
 - Stack: ... &rarr; ..., [N items]
 - push sequences of immediate byte arrays to stack (first byte array being deepest)
 - Availability: v8
@@ -1548,7 +1548,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 
 ## block f
 
-- Opcode: 0xd1 {uint8 block field}
+- Opcode: 0xd1 {uint8 block field index}
 - Stack: ..., A: uint64 &rarr; ..., any
 - field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)
 - Availability: v7
