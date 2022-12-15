@@ -1286,48 +1286,81 @@ func signTransactionGroups(txnGroups [][]transactions.Transaction, secrets []*cr
 
 func signMSigTransactionGroups(txnGroups [][]transactions.Transaction, secrets []*crypto.SignatureSecrets,
 	invalidProb float32, msigSize int) (ret [][]transactions.SignedTxn, badTxnGroups map[uint64]interface{}, err error) {
-
+	ret = make([][]transactions.SignedTxn, len(txnGroups))
 	numUsers := len(secrets)
 	badTxnGroups = make(map[uint64]interface{})
+	badTxnGroupsMU := sync.Mutex{}
+	// process them using 6 threads
+	workers := make(chan interface{}, 6)
+	wg := sync.WaitGroup{}
+	errChan := make(chan error, 1)
 	for tg := range txnGroups {
-		msigVer := uint8(1)
-		msigTHld := uint8(msigSize)
-		pks := make([]crypto.PublicKey, msigSize)
-		for x := 0; x < msigSize; x++ {
-			pks[x] = secrets[(tg+x)%numUsers].SignatureVerifier
-		}
-		multiSigAddr, err := crypto.MultisigAddrGen(msigVer, msigTHld, pks)
-		if err != nil {
-			return ret, badTxnGroups, err
-		}
-		grpSize := len(txnGroups[tg])
-		signedTxGroup := make([]transactions.SignedTxn, grpSize)
-		sigsForTxn := make([]crypto.MultisigSig, msigTHld)
-
-		for t := range txnGroups[tg] {
-			txnGroups[tg][t].Sender = basics.Address(multiSigAddr)
-			for s := range sigsForTxn {
-				sig, err := crypto.MultisigSign(txnGroups[tg][t], crypto.Digest(multiSigAddr), msigVer, msigTHld, pks, *secrets[(tg+s)%numUsers])
-				if err != nil {
-					return ret, badTxnGroups, err
-				}
-				sigsForTxn[s] = sig
+		wg.Add(1)
+		workers <- struct{}{}
+		go func(i int) {
+			defer func() {
+				wg.Done()
+				<-workers
+			}()
+			msigVer := uint8(1)
+			msigTHld := uint8(msigSize)
+			pks := make([]crypto.PublicKey, msigSize)
+			for x := 0; x < msigSize; x++ {
+				pks[x] = secrets[(i+x)%numUsers].SignatureVerifier
 			}
-			msig, err := crypto.MultisigAssemble(sigsForTxn)
+			multiSigAddr, err := crypto.MultisigAddrGen(msigVer, msigTHld, pks)
 			if err != nil {
-				return ret, badTxnGroups, err
+				select {
+				case errChan <- err:
+					return
+				default:
+					return
+				}
 			}
-			signedTxGroup[t].Txn = txnGroups[tg][t]
-			signedTxGroup[t].Msig = msig
-		}
-		// randomly make bad signatures
-		if rand.Float32() < invalidProb {
-			tinGrp := rand.Intn(grpSize)
-			signedTxGroup[tinGrp].Msig.Threshold = signedTxGroup[tinGrp].Msig.Threshold - 1
-			badTxnGroups[uint64(tg)] = struct{}{}
-		}
-		ret = append(ret, signedTxGroup)
+			grpSize := len(txnGroups[i])
+			signedTxGroup := make([]transactions.SignedTxn, grpSize)
+			sigsForTxn := make([]crypto.MultisigSig, msigTHld)
+
+			for t := range txnGroups[i] {
+				txnGroups[i][t].Sender = basics.Address(multiSigAddr)
+				for s := range sigsForTxn {
+					sig, err := crypto.MultisigSign(txnGroups[i][t], crypto.Digest(multiSigAddr), msigVer, msigTHld, pks, *secrets[(i+s)%numUsers])
+					if err != nil {
+						select {
+						case errChan <- err:
+							return
+						default:
+							return
+						}
+					}
+					sigsForTxn[s] = sig
+				}
+				msig, err := crypto.MultisigAssemble(sigsForTxn)
+				if err != nil {
+					select {
+					case errChan <- err:
+						return
+					default:
+						return
+					}
+				}
+				signedTxGroup[t].Txn = txnGroups[i][t]
+				signedTxGroup[t].Msig = msig
+			}
+			// randomly make bad signatures
+			if rand.Float32() < invalidProb {
+				tinGrp := rand.Intn(grpSize)
+				signedTxGroup[tinGrp].Msig.Threshold = signedTxGroup[tinGrp].Msig.Threshold - 1
+				badTxnGroupsMU.Lock()
+				badTxnGroups[uint64(i)] = struct{}{}
+				badTxnGroupsMU.Unlock()
+			}
+			ret[i] = signedTxGroup
+		}(tg)
 	}
+	wg.Wait()
+	close(errChan)
+	err = <-errChan
 	return
 }
 
@@ -1441,7 +1474,7 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, tps int, invalidRate
 		transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
 	}()
 
-	const numUsers = 100
+	const numUsers = 512
 	log := logging.TestingLog(b)
 	log.SetLevel(logging.Warn)
 
@@ -1511,18 +1544,22 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, tps int, invalidRate
 		}()
 	}
 
-	// Prepare the transactions
+	// Prepare 1000 transactions
+	genTCount := 1000
+	if b.N < genTCount {
+		genTCount = b.N
+	}
 	var signedTransactionGroups [][]transactions.SignedTxn
 	var badTxnGroups map[uint64]interface{}
 	if msigSize == 1 {
-		signedTransactionGroups, badTxnGroups = makeSignedTxnGroups(b.N, numUsers, maxGroupSize, invalidRate, addresses, secrets)
+		signedTransactionGroups, badTxnGroups = makeSignedTxnGroups(genTCount, numUsers, maxGroupSize, invalidRate, addresses, secrets)
 	} else {
-		signedTransactionGroups, badTxnGroups, err = makeMsigSignedTxnGroups(b.N, numUsers, msigSize, maxGroupSize, invalidRate, addresses, secrets)
+		signedTransactionGroups, badTxnGroups, err = makeMsigSignedTxnGroups(genTCount, numUsers, msigSize, maxGroupSize, invalidRate, addresses, secrets)
 		require.NoError(b, err)
 	}
 	var encodedSignedTransactionGroups []network.IncomingMessage
 	if useBacklogWorker {
-		encodedSignedTransactionGroups = make([]network.IncomingMessage, 0, b.N)
+		encodedSignedTransactionGroups = make([]network.IncomingMessage, 0, genTCount)
 		for _, stxngrp := range signedTransactionGroups {
 			data := make([]byte, 0)
 			for _, stxn := range stxngrp {
@@ -1547,23 +1584,31 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, tps int, invalidRate
 		invalidCounter := 0
 		defer func() {
 			if groupCounter > 1 {
+				timeSinceStart := time.Since(tt)
 				droppedBacklog, droppedPool := getDropped()
 				if tps > 0 {
 					b.Logf("Input T(grp)PS: %d (delay %f microsec)", tps, float64(rateAdjuster)/float64(time.Microsecond))
 				}
-				b.Logf("Verified TPS: %d", uint64(txnCounter)*uint64(time.Second)/uint64(time.Since(tt)))
-				b.Logf("Time/txn: %d(microsec)", uint64((time.Since(tt)/time.Microsecond))/txnCounter)
+				b.Logf("Verified TPS: %d T(grp)PS: %d", uint64(txnCounter)*uint64(time.Second)/uint64(timeSinceStart),
+					uint64(groupCounter)*uint64(time.Second)/uint64(timeSinceStart))
+				b.Logf("Time/txn: %d(microsec)", uint64(timeSinceStart/time.Microsecond)/txnCounter)
 				b.Logf("processed total: [%d groups (%d invalid)] [%d txns]", groupCounter, invalidCounter, txnCounter)
 				b.Logf("dropped: [%d backlog] [%d pool]\n", droppedBacklog, droppedPool)
 			}
 			handler.Stop() // cancel the handler ctx
 		}()
+		counterMutex := sync.Mutex{}
 		stopChan := make(chan interface{})
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for {
 				time.Sleep(200 * time.Millisecond)
 				droppedBacklog, droppedPool := getDropped()
-				if int(groupCounter+droppedBacklog+droppedPool) == len(signedTransactionGroups) {
+				counterMutex.Lock()
+				counters := groupCounter + droppedBacklog + droppedPool
+				counterMutex.Unlock()
+				if int(counters) == b.N {
 					// all the benchmark txns processed
 					close(stopChan)
 					return
@@ -1575,7 +1620,9 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, tps int, invalidRate
 			select {
 			case wi := <-testResultChan:
 				txnCounter = txnCounter + uint64(len(wi.unverifiedTxGroup))
+				counterMutex.Lock()
 				groupCounter++
+				counterMutex.Unlock()
 				u, _ := binary.Uvarint(wi.unverifiedTxGroup[0].Txn.Note)
 				_, inBad := badTxnGroups[u]
 				if wi.verificationErr == nil {
@@ -1584,7 +1631,7 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, tps int, invalidRate
 					invalidCounter++
 					require.True(b, inBad, "Error for good signature")
 				}
-				if groupCounter == uint64(len(signedTransactionGroups)) {
+				if groupCounter == uint64(b.N) {
 					// all the benchmark txns processed
 					return
 				}
@@ -1594,17 +1641,30 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, tps int, invalidRate
 		}
 	}()
 
+	completed := false
+	c := 0
+	ticker := &time.Ticker{}
+	if rateAdjuster > 0 {
+		ticker = time.NewTicker(rateAdjuster)
+	}
+	defer ticker.Stop()
 	b.ResetTimer()
 	tt = time.Now()
-	if useBacklogWorker {
-		for _, tg := range encodedSignedTransactionGroups {
-			handler.processIncomingTxn(tg)
-			time.Sleep(rateAdjuster)
-		}
-	} else {
-		for _, stxngrp := range signedTransactionGroups {
-			blm := txBacklogMsg{rawmsg: nil, unverifiedTxGroup: stxngrp}
-			handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignature, &blm, nil)
+	for !completed {
+		for i, _ := range signedTransactionGroups {
+			if useBacklogWorker {
+				handler.processIncomingTxn(encodedSignedTransactionGroups[i])
+				<-ticker.C
+			} else {
+				stxngrp := signedTransactionGroups[i]
+				blm := txBacklogMsg{rawmsg: nil, unverifiedTxGroup: stxngrp}
+				handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignature, &blm, nil)
+			}
+			c++
+			if c == b.N {
+				completed = true
+				break
+			}
 		}
 	}
 	wg.Wait()
