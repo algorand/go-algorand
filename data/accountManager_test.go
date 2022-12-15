@@ -43,6 +43,11 @@ import (
 
 func TestAccountManagerKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	if testing.Short() {
+		t.Log("this is a long test and skipping for -short")
+		return
+	}
+
 	registry := &mocks.MockParticipationRegistry{}
 	testAccountManagerKeys(t, registry, false)
 }
@@ -84,22 +89,18 @@ func registryCloseTest(t testing.TB, registry account.ParticipationRegistry, dbf
 }
 
 func TestAccountManagerKeysRegistry(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	if testing.Short() {
 		t.Log("this is a long test and skipping for -short")
 		return
 	}
 
-	partitiontest.PartitionTest(t)
 	registry, dbName := getRegistryImpl(t, false, true)
 	defer registryCloseTest(t, registry, dbName)
 	testAccountManagerKeys(t, registry, true)
 }
 
 func testAccountManagerKeys(t *testing.T, registry account.ParticipationRegistry, flushRegistry bool) {
-	if testing.Short() {
-		t.Log("this is a long test and skipping for -short")
-		return
-	}
 
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Error)

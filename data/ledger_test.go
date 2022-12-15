@@ -325,11 +325,11 @@ func TestLedgerSeed(t *testing.T) {
 }
 
 func TestConsensusVersion(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	if testing.Short() {
 		t.Log("this is a long test and skipping for -short")
 		return
 	}
-	partitiontest.PartitionTest(t)
 
 	// find a consensus protocol that leads to ConsensusCurrentVersion
 	var previousProtocol protocol.ConsensusVersion
