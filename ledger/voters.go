@@ -71,6 +71,7 @@ type votersTracker struct {
 	// + 1 would only appear if the sampled round R is:  interval - lookback < R < interval.
 	// in this case, the tracker would not yet remove the old one but will create a new one for future state proof.
 	votersForRoundCache map[basics.Round]*ledgercore.VotersForRound
+	votersMu            deadlock.RWMutex
 
 	l                     ledgerForTracker
 	onlineAccountsFetcher ledgercore.OnlineAccountsFetcher
@@ -95,8 +96,9 @@ func votersRoundForStateProofRound(stateProofRnd basics.Round, proto *config.Con
 
 func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.OnlineAccountsFetcher, latestDbRound basics.Round) error {
 	vt.l = l
-	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
 	vt.onlineAccountsFetcher = fetcher
+
+	vt.initializeVoters()
 
 	latestRoundInLedger := l.Latest()
 	hdr, err := l.BlockHdr(latestRoundInLedger)
@@ -136,7 +138,7 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.Onl
 func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	r := hdr.Round
 
-	_, ok := vt.votersForRoundCache[r]
+	_, ok := vt.getVoters(r)
 	if ok {
 		// Already loaded.
 		return
@@ -151,7 +153,7 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	tr := ledgercore.MakeVotersForRound()
 	tr.Proto = proto
 
-	vt.votersForRoundCache[r] = tr
+	vt.setVoters(r, tr)
 
 	vt.loadWaitGroup.Add(1)
 	go func() {
@@ -181,12 +183,12 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 	// This might be a block where we snapshot the online participants,
 	// to eventually construct a vector commitment in a later
 	// block.
-	r := uint64(hdr.Round)
-	if (r+proto.StateProofVotersLookback)%proto.StateProofInterval != 0 {
+	r := hdr.Round
+	if (uint64(r)+proto.StateProofVotersLookback)%proto.StateProofInterval != 0 {
 		return
 	}
 
-	_, ok := vt.votersForRoundCache[basics.Round(r)]
+	_, ok := vt.getVoters(r)
 	if ok {
 		vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
 	} else {
@@ -238,6 +240,9 @@ func (vt *votersTracker) postCommit(dcc *deferredCommitContext) {
 func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
 	lowestStateProofRound := stateproof.GetOldestExpectedStateProof(&hdr)
 
+	vt.votersMu.Lock()
+	defer vt.votersMu.Unlock()
+
 	for r, tr := range vt.votersForRoundCache {
 		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
 		stateProofRound := commitRound + basics.Round(tr.Proto.StateProofInterval)
@@ -256,17 +261,22 @@ func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
 // not need any blocks, it returns base.
 func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 	minRound := base
+
+	vt.votersMu.RLock()
+	defer vt.votersMu.RUnlock()
+
 	for r := range vt.votersForRoundCache {
 		if r < minRound {
 			minRound = r
 		}
 	}
+
 	return minRound
 }
 
 // VotersForStateProof returns the top online participants from round r.
 func (vt *votersTracker) VotersForStateProof(r basics.Round) (*ledgercore.VotersForRound, error) {
-	tr, ok := vt.votersForRoundCache[r]
+	tr, ok := vt.getVoters(r)
 	if !ok {
 		// Not tracked: stateproofs not enabled.
 		return nil, nil
@@ -286,4 +296,26 @@ func (vt *votersTracker) registerPrepareCommitListener(commitListener ledgercore
 	defer vt.commitListenerMu.Unlock()
 
 	vt.commitListener = &commitListener
+}
+
+func (vt *votersTracker) initializeVoters() {
+	vt.votersMu.Lock()
+	defer vt.votersMu.Unlock()
+
+	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
+}
+
+func (vt *votersTracker) getVoters(round basics.Round) (*ledgercore.VotersForRound, bool) {
+	vt.votersMu.RLock()
+	defer vt.votersMu.RUnlock()
+
+	tr, ok := vt.votersForRoundCache[round]
+	return tr, ok
+}
+
+func (vt *votersTracker) setVoters(round basics.Round, voters *ledgercore.VotersForRound) {
+	vt.votersMu.Lock()
+	defer vt.votersMu.Unlock()
+
+	vt.votersForRoundCache[round] = voters
 }
