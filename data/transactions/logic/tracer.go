@@ -119,12 +119,26 @@ type EvalTracer interface {
 // NullEvalTracer implements EvalTracer, but all of its hook methods do nothing
 type NullEvalTracer struct{}
 
-//nolint:revive // No need to add a description for these
-func (n NullEvalTracer) BeforeTxn(ep *EvalParams, groupIndex int)                           {}
+// BeforeTxn does nothing
+func (n NullEvalTracer) BeforeTxn(ep *EvalParams, groupIndex int) {}
+
+// AfterTxn does nothing
 func (n NullEvalTracer) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) {}
-func (n NullEvalTracer) BeforeProgram(cx *EvalContext)                                      {}
-func (n NullEvalTracer) AfterProgram(cx *EvalContext, evalError error)                      {}
-func (n NullEvalTracer) BeforeOpcode(cx *EvalContext)                                       {}
-func (n NullEvalTracer) AfterOpcode(cx *EvalContext, evalError error)                       {}
-func (n NullEvalTracer) BeforeInnerTxnGroup(ep *EvalParams)                                 {}
-func (n NullEvalTracer) AfterInnerTxnGroup(ep *EvalParams)                                  {}
+
+// BeforeProgram does nothing
+func (n NullEvalTracer) BeforeProgram(cx *EvalContext) {}
+
+// AfterProgram does nothing
+func (n NullEvalTracer) AfterProgram(cx *EvalContext, evalError error) {}
+
+// BeforeOpcode does nothing
+func (n NullEvalTracer) BeforeOpcode(cx *EvalContext) {}
+
+// AfterOpcode does nothing
+func (n NullEvalTracer) AfterOpcode(cx *EvalContext, evalError error) {}
+
+// BeforeInnerTxnGroup does nothing
+func (n NullEvalTracer) BeforeInnerTxnGroup(ep *EvalParams) {}
+
+// AfterInnerTxnGroup does nothing
+func (n NullEvalTracer) AfterInnerTxnGroup(ep *EvalParams) {}
