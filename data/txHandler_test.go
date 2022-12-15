@@ -1350,7 +1350,8 @@ func signMSigTransactionGroups(txnGroups [][]transactions.Transaction, secrets [
 			// randomly make bad signatures
 			if rand.Float32() < invalidProb {
 				tinGrp := rand.Intn(grpSize)
-				signedTxGroup[tinGrp].Msig.Threshold = signedTxGroup[tinGrp].Msig.Threshold - 1
+				tinMsig := rand.Intn(len(signedTxGroup[tinGrp].Msig.Subsigs))
+				signedTxGroup[tinGrp].Msig.Subsigs[tinMsig].Sig[0] = signedTxGroup[tinGrp].Msig.Subsigs[tinMsig].Sig[0] + 1
 				badTxnGroupsMU.Lock()
 				badTxnGroups[uint64(i)] = struct{}{}
 				badTxnGroupsMU.Unlock()
