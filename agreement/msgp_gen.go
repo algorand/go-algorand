@@ -3555,10 +3555,10 @@ func (z *player) MarshalMsg(b []byte) (o []byte) {
 	// map header, size 8
 	// string "Deadline"
 	o = append(o, 0x88, 0xa8, 0x44, 0x65, 0x61, 0x64, 0x6c, 0x69, 0x6e, 0x65)
-	o = (*z).Deadline.MarshalMsg(o)
+	o = msgp.AppendDuration(o, (*z).Deadline)
 	// string "FastRecoveryDeadline"
 	o = append(o, 0xb4, 0x46, 0x61, 0x73, 0x74, 0x52, 0x65, 0x63, 0x6f, 0x76, 0x65, 0x72, 0x79, 0x44, 0x65, 0x61, 0x64, 0x6c, 0x69, 0x6e, 0x65)
-	o = (*z).FastRecoveryDeadline.MarshalMsg(o)
+	o = msgp.AppendDuration(o, (*z).FastRecoveryDeadline)
 	// string "LastConcluding"
 	o = append(o, 0xae, 0x4c, 0x61, 0x73, 0x74, 0x43, 0x6f, 0x6e, 0x63, 0x6c, 0x75, 0x64, 0x69, 0x6e, 0x67)
 	o = msgp.AppendUint64(o, uint64((*z).LastConcluding))
@@ -3644,7 +3644,7 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Deadline.UnmarshalMsg(bts)
+			(*z).Deadline, bts, err = msgp.ReadDurationBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Deadline")
 				return
@@ -3660,7 +3660,7 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).FastRecoveryDeadline.UnmarshalMsg(bts)
+			(*z).FastRecoveryDeadline, bts, err = msgp.ReadDurationBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FastRecoveryDeadline")
 				return
@@ -3734,7 +3734,7 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).LastConcluding = step(zb0008)
 				}
 			case "Deadline":
-				bts, err = (*z).Deadline.UnmarshalMsg(bts)
+				(*z).Deadline, bts, err = msgp.ReadDurationBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Deadline")
 					return
@@ -3746,7 +3746,7 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "FastRecoveryDeadline":
-				bts, err = (*z).FastRecoveryDeadline.UnmarshalMsg(bts)
+				(*z).FastRecoveryDeadline, bts, err = msgp.ReadDurationBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "FastRecoveryDeadline")
 					return
@@ -3777,13 +3777,13 @@ func (_ *player) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *player) Msgsize() (s int) {
-	s = 1 + 6 + (*z).Round.Msgsize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 15 + msgp.Uint64Size + 9 + (*z).Deadline.Msgsize() + 8 + msgp.BoolSize + 21 + (*z).FastRecoveryDeadline.Msgsize() + 8 + (*z).Pending.Msgsize()
+	s = 1 + 6 + (*z).Round.Msgsize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 15 + msgp.Uint64Size + 9 + msgp.DurationSize + 8 + msgp.BoolSize + 21 + msgp.DurationSize + 8 + (*z).Pending.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *player) MsgIsZero() bool {
-	return ((*z).Round.MsgIsZero()) && ((*z).Period == 0) && ((*z).Step == 0) && ((*z).LastConcluding == 0) && ((*z).Deadline.MsgIsZero()) && ((*z).Napping == false) && ((*z).FastRecoveryDeadline.MsgIsZero()) && ((*z).Pending.MsgIsZero())
+	return ((*z).Round.MsgIsZero()) && ((*z).Period == 0) && ((*z).Step == 0) && ((*z).LastConcluding == 0) && ((*z).Deadline == 0) && ((*z).Napping == false) && ((*z).FastRecoveryDeadline == 0) && ((*z).Pending.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
