@@ -14,36 +14,17 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package transactions
+package encoded
 
 import (
-	"fmt"
-
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/msgp/msgp"
 )
 
-// MinFeeError defines an error type which could be returned from the method WellFormed
-//msgp:ignore MinFeeError
-type MinFeeError string
+// BalanceRecordV5 is the encoded account balance record.
+type BalanceRecordV5 struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-func (err *MinFeeError) Error() string {
-	return string(*err)
-}
-
-func makeMinFeeErrorf(format string, args ...interface{}) *MinFeeError {
-	err := MinFeeError(fmt.Sprintf(format, args...))
-	return &err
-}
-
-// TxnDeadError defines an error type which indicates a transaction is outside of the
-// round validity window.
-type TxnDeadError struct {
-	Round      basics.Round
-	FirstValid basics.Round
-	LastValid  basics.Round
-	Early      bool
-}
-
-func (err *TxnDeadError) Error() string {
-	return fmt.Sprintf("txn dead: round %d outside of %d--%d", err.Round, err.FirstValid, err.LastValid)
+	Address     basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
+	AccountData msgp.Raw       `codec:"ad"` // encoding of basics.AccountData
 }

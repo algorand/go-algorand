@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
@@ -97,7 +98,7 @@ type stagingWriter interface {
 	writeBalances(context.Context, []store.NormalizedAccountBalance) error
 	writeCreatables(context.Context, []store.NormalizedAccountBalance) error
 	writeHashes(context.Context, []store.NormalizedAccountBalance) error
-	writeKVs(context.Context, []encodedKVRecordV6) error
+	writeKVs(context.Context, []encoded.KVRecordV6) error
 	isShared() bool
 }
 
@@ -112,7 +113,7 @@ func (w *stagingWriterImpl) writeBalances(ctx context.Context, balances []store.
 	})
 }
 
-func (w *stagingWriterImpl) writeKVs(ctx context.Context, kvrs []encodedKVRecordV6) error {
+func (w *stagingWriterImpl) writeKVs(ctx context.Context, kvrs []encoded.KVRecordV6) error {
 	return w.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		crw := store.NewCatchpointSQLReaderWriter(tx)
 
@@ -164,6 +165,14 @@ type catchpointCatchupAccessorImpl struct {
 	expectingSpecificAccount bool
 	// next expected balance account, empty address if not expecting specific account
 	nextExpectedAccount basics.Address
+}
+
+// catchpointAccountResourceCounter keeps track of the resources processed for the current account
+type catchpointAccountResourceCounter struct {
+	totalAppParams      uint64
+	totalAppLocalStates uint64
+	totalAssetParams    uint64
+	totalAssets         uint64
 }
 
 // CatchpointCatchupState is the state of the current catchpoint catchup process
@@ -388,7 +397,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 
 	var normalizedAccountBalances []store.NormalizedAccountBalance
 	var expectingMoreEntries []bool
-	var chunkKVs []encodedKVRecordV6
+	var chunkKVs []encoded.KVRecordV6
 
 	switch progress.Version {
 	default:
@@ -659,7 +668,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		defer close(writerQueue)
 
 		err := rdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
-			it := makeCatchpointPendingHashesIterator(trieRebuildAccountChunkSize, tx)
+			it := store.MakeCatchpointPendingHashesIterator(trieRebuildAccountChunkSize, tx)
 			var hashes [][]byte
 			for {
 				hashes, err = it.Next(transactionCtx)
