@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ import (
 )
 
 // LedgerForEvaluator defines the ledger interface needed by the evaluator.
-type LedgerForEvaluator interface {
+type LedgerForEvaluator interface { //nolint:revive //LedgerForEvaluator is a long established but newly leaking-out name, and there really isn't a better name for it despite how lint dislikes ledger.LedgerForEvaluator
 	// Needed for cow.go
 	Block(basics.Round) (bookkeeping.Block, error)
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
@@ -41,8 +41,10 @@ type LedgerForEvaluator interface {
 	StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*internal.BlockEvaluator, error)
 	LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error)
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
+	LookupKv(rnd basics.Round, key string) ([]byte, error)
 	VerifiedTransactionCache() verify.VerifiedTransactionCache
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
+	FlushCaches()
 
 	// Needed for the evaluator
 	GenesisHash() crypto.Digest
@@ -249,4 +251,27 @@ func (v *validatedBlockAsLFE) StartEvaluator(hdr bookkeeping.BlockHeader, payset
 			Validate:            true,
 			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
 		})
+}
+
+// FlushCaches is noop
+func (v *validatedBlockAsLFE) FlushCaches() {
+}
+
+// LookupKv implements LookupKv
+func (v *validatedBlockAsLFE) LookupKv(rnd basics.Round, key string) ([]byte, error) {
+	if rnd == v.vb.Block().Round() {
+		data, ok := v.vb.Delta().KvMods[key]
+		if ok {
+			return data.Data, nil
+		}
+		// fall back to looking up account in ledger, until previous block
+		rnd = v.vb.Block().Round() - 1
+	}
+
+	// account didn't change in last round. Subtract 1 so we can lookup the most recent change in the ledger
+	data, err := v.l.LookupKv(rnd, key)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
 }

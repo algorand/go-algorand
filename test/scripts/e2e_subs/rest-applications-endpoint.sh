@@ -31,5 +31,5 @@ call_and_verify "App parameter parsing error 1." "/v2/applications/-2" 400 "Inva
 call_and_verify "App parameter parsing error 2." "/v2/applications/not-a-number" 400 "Invalid format for parameter application-id"
 
 # Good request, but invalid query parameters
-call_and_verify "App invalid parameter" "/v2/applications/$APPID?this-should-fail=200" 400 'Unknown parameter detected: this-should-fail'
+call_and_verify "App invalid parameter" "/v2/applications/$APPID?this-should-not-fail=200" 200 '"global-state-schema":{"num-byte-slice":0,"num-uint":2}'
 

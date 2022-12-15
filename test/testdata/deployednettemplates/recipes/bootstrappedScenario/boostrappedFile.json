@@ -1,6 +1,6 @@
 {
-	"numRounds": 5000,
-	"roundTransactionsCount": 1000,
+	"numRounds": 1600,
+	"roundTransactionsCount": 20000,
 	"generatedAccountsCount": 30000000,
 	"generatedAssetsCount": 20000,
 	"generatedApplicationCount": 20000,

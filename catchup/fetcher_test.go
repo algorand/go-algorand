@@ -148,7 +148,7 @@ func (b *basicRPCNode) RegisterHandlers(dispatch []network.TaggedMessageHandler)
 
 func (b *basicRPCNode) start() bool {
 	var err error
-	b.listener, err = net.Listen("tcp", "")
+	b.listener, err = net.Listen("tcp", "127.0.0.1:")
 	if err != nil {
 		logging.Base().Error("tcp listen", err)
 		return false

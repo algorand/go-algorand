@@ -23,12 +23,24 @@
 # Graph over time of TPS or 10-round-moving-average-TPS
 
 import base64
+import os
 import statistics
 
 from algosdk.encoding import msgpack
 from matplotlib import pyplot as plt
 
 def process(path, args):
+    minrnd = None
+    maxrnd = None
+    # maybe load first/last round bounds from heapWatch.py emitted rounds.json
+    rounds_json = os.path.join(os.path.dirname(path), 'rounds.json')
+    if os.path.exists(rounds_json):
+        with open(rounds_json) as fin:
+            rounds = json.load(fin)
+        minrnd = rounds['min']
+        maxrnd = rounds['max']
+    minrnd = args.start or minrnd or 0
+    maxrnd = args.stop or maxrnd
     prevtime = None
     prevtc = 0
     prevts = None
@@ -52,6 +64,8 @@ def process(path, args):
             count += 1
             block = row['block']
             rnd = block.get('rnd',0)
+            if (rnd < minrnd) or ((maxrnd is not None) and (rnd > maxrnd)):
+                continue
             tc = block.get('tc', 0)
             ts = block.get('ts', 0) # timestamp recorded at algod, 1s resolution int
             _time = row['_time'] # timestamp recorded at client, 0.000001s resolution float
@@ -66,17 +80,20 @@ def process(path, args):
                         tsv.append(ts)
                     else:
                         tsv.append(_time)
-                dtxn = tc - prevtc
-                tps = dtxn / dt
-                mintxn = min(dtxn,mintxn)
-                maxtxn = max(dtxn,maxtxn)
-                mindt = min(dt,mindt)
-                maxdt = max(dt,maxdt)
-                mintps = min(tps,mintps)
-                maxtps = max(tps,maxtps)
-                tpsv.append(tps)
-                dtv.append(dt)
-                txnv.append(dtxn)
+                if dt > 0.5:
+                    dtxn = tc - prevtc
+                    tps = dtxn / dt
+                    mintxn = min(dtxn,mintxn)
+                    maxtxn = max(dtxn,maxtxn)
+                    mindt = min(dt,mindt)
+                    maxdt = max(dt,maxdt)
+                    mintps = min(tps,mintps)
+                    maxtps = max(tps,maxtps)
+                    tpsv.append(tps)
+                    dtv.append(dt)
+                    txnv.append(dtxn)
+                else:
+                    print('b[{}] - b[{}], dt={}'.format(rnd-1,rnd,dt))
             else:
                 tsv.append(ts)
             prevrnd = rnd
@@ -90,7 +107,7 @@ def process(path, args):
         mintps,maxtps,
     ))
 
-    start = args.start
+    start = 0
     end = len(txnv)-1
     if not args.all:
         # find the real start of the test
@@ -119,8 +136,12 @@ def process(path, args):
     ax1.set_title('round time (seconds)')
     ax1.hist(list(filter(lambda x: x < 9,dtv[start:end])),bins=20)
 
-    ax2.set_title('TPS')
-    ax2.hist(tpsv[start:end],bins=20)
+    if args.rtime:
+        ax2.set_title('round time')
+        ax2.plot(dtv)
+    else:
+        ax2.set_title('TPS')
+        ax2.hist(tpsv[start:end],bins=20)
 
     ax3.set_title('txn/block')
     ax3.hist(txnv[start:end],bins=20)
@@ -133,6 +154,8 @@ def process(path, args):
         tc0 = tcv[i-10]
         tca = tcv[i]
         dt = tsa-ts0
+        if dt == 0:
+            continue
         dtxn = tca-tc0
         tpsv10.append(dtxn/dt)
     if args.tps1:
@@ -152,7 +175,9 @@ def main():
     ap.add_argument('files', nargs='+')
     ap.add_argument('--all', default=False, action='store_true')
     ap.add_argument('--tps1', default=False, action='store_true')
-    ap.add_argument('--start', default=0, type=int, help='start round')
+    ap.add_argument('--rtime',  default=False, action='store_true')
+    ap.add_argument('--start', default=None, type=int, help='start round')
+    ap.add_argument('--stop', default=None, type=int, help='stop round')
     args = ap.parse_args()
 
     for fname in args.files:

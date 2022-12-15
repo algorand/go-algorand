@@ -519,6 +519,8 @@ func (ledger *evalTestLedger) StartEvaluator(hdr bookkeeping.BlockHeader, payset
 		})
 }
 
+func (ledger *evalTestLedger) FlushCaches() {}
+
 // GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
 // look up a creator address, setting ok to false if the query succeeded but no
 // creator was found.
@@ -575,6 +577,10 @@ func (ledger *evalTestLedger) LookupAsset(rnd basics.Round, addr basics.Address,
 		res.AssetHolding = &h
 	}
 	return res, nil
+}
+
+func (ledger *evalTestLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
+	panic("unimplemented")
 }
 
 // GenesisHash returns the genesis hash for this ledger.
@@ -670,7 +676,7 @@ func (ledger *evalTestLedger) CheckDup(currentProto config.ConsensusParams, curr
 			}
 			currentTxid := txn.Txn.ID()
 			if bytes.Equal(txid[:], currentTxid[:]) {
-				return &ledgercore.TransactionInLedgerError{Txid: txid}
+				return &ledgercore.TransactionInLedgerError{Txid: txid, InBlockEvaluator: false}
 			}
 		}
 	}
@@ -766,6 +772,10 @@ func (l *testCowBaseLedger) LookupApplication(rnd basics.Round, addr basics.Addr
 
 func (l *testCowBaseLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
 	return ledgercore.AssetResource{}, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
+	return nil, errors.New("not implemented")
 }
 
 func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {

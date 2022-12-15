@@ -1,4 +1,4 @@
-PARAMS=-w 130 -R 136 -n 130 -H 16 --node-template configs/node.json --relay-template configs/relay.json --non-participating-node-template configs/nonPartNode.json
+PARAMS=-w 130 -R 136 -n 130 --npn-algod-nodes 16 --node-template configs/node.json --relay-template configs/relay.json --non-participating-node-template configs/nonPartNode.json
 
 all: topology.json net.json genesis.json
 

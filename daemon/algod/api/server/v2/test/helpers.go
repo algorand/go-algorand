@@ -22,11 +22,13 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -53,17 +55,20 @@ var cannedStatusReportGolden = node.StatusReport{
 	CatchpointCatchupProcessedAccounts: 0,
 	CatchpointCatchupVerifiedAccounts:  0,
 	CatchpointCatchupTotalAccounts:     0,
+	CatchpointCatchupTotalKVs:          0,
+	CatchpointCatchupProcessedKVs:      0,
+	CatchpointCatchupVerifiedKVs:       0,
 	CatchpointCatchupTotalBlocks:       0,
 	LastCatchpoint:                     "",
 }
 
 var poolAddrRewardBaseGolden = uint64(0)
-var poolAddrAssetsGolden = make([]generatedV2.AssetHolding, 0)
-var poolAddrCreatedAssetsGolden = make([]generatedV2.Asset, 0)
-var appLocalStates = make([]generatedV2.ApplicationLocalState, 0)
-var appsTotalSchema = generatedV2.ApplicationStateSchema{}
-var appCreatedApps = make([]generatedV2.Application, 0)
-var poolAddrResponseGolden = generatedV2.AccountResponse{
+var poolAddrAssetsGolden = make([]model.AssetHolding, 0)
+var poolAddrCreatedAssetsGolden = make([]model.Asset, 0)
+var appLocalStates = make([]model.ApplicationLocalState, 0)
+var appsTotalSchema = model.ApplicationStateSchema{}
+var appCreatedApps = make([]model.Application, 0)
+var poolAddrResponseGolden = model.AccountResponse{
 	Address:                     poolAddr.String(),
 	Amount:                      50000000000,
 	AmountWithoutPendingRewards: 50000000000,
@@ -77,11 +82,40 @@ var poolAddrResponseGolden = generatedV2.AccountResponse{
 	MinBalance:                  100000,
 }
 var txnPoolGolden = make([]transactions.SignedTxn, 2)
+var poolDeltaResponseGolden = model.LedgerStateDelta{
+	Accts: &model.AccountDeltas{
+		Accounts: &[]model.AccountBalanceRecord{
+			{
+				AccountData: model.Account{
+					Address:                     poolAddr.String(),
+					Amount:                      50000000000,
+					AmountWithoutPendingRewards: 50000000000,
+					MinBalance:                  100000,
+					CreatedApps:                 &[]model.Application{},
+					AppsTotalSchema:             &appsTotalSchema,
+					AppsLocalState:              &[]model.ApplicationLocalState{},
+					Status:                      "Not Participating",
+					RewardBase:                  &poolAddrRewardBaseGolden,
+					CreatedAssets:               &[]model.Asset{},
+					Assets:                      &[]model.AssetHolding{},
+				},
+				Address: poolAddr.String(),
+			},
+		},
+	},
+	Totals: &model.AccountTotals{
+		NotParticipating: 100000000000,
+		Offline:          0,
+		Online:           658511,
+		RewardsLevel:     0,
+	},
+}
 
 // ordinarily mockNode would live in `components/mocks`
 // but doing this would create an import cycle, as mockNode needs
 // package `data` and package `node`, which themselves import `mocks`
 type mockNode struct {
+	mock.Mock
 	ledger    v2.LedgerForAPI
 	genesisID string
 	config    config.Local
@@ -91,20 +125,33 @@ type mockNode struct {
 	usertxns  map[basics.Address][]node.TxnWithStatus
 }
 
-func (m mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
+func (m *mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
 	panic("implement me")
 }
 
-func (m mockNode) ListParticipationKeys() ([]account.ParticipationRecord, error) {
+func (m *mockNode) ListParticipationKeys() ([]account.ParticipationRecord, error) {
 	panic("implement me")
 }
 
-func (m mockNode) GetParticipationKey(id account.ParticipationID) (account.ParticipationRecord, error) {
+func (m *mockNode) GetParticipationKey(id account.ParticipationID) (account.ParticipationRecord, error) {
 	panic("implement me")
 }
 
-func (m mockNode) RemoveParticipationKey(id account.ParticipationID) error {
+func (m *mockNode) RemoveParticipationKey(id account.ParticipationID) error {
 	panic("implement me")
+}
+
+func (m *mockNode) SetSyncRound(rnd uint64) error {
+	args := m.Called(rnd)
+	return args.Error(0)
+}
+
+func (m *mockNode) UnsetSyncRound() {
+}
+
+func (m *mockNode) GetSyncRound() uint64 {
+	args := m.Called()
+	return uint64(args.Int(0))
 }
 
 func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error {
@@ -123,53 +170,53 @@ func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error) *mo
 	}
 }
 
-func (m mockNode) LedgerForAPI() v2.LedgerForAPI {
+func (m *mockNode) LedgerForAPI() v2.LedgerForAPI {
 	return m.ledger
 }
 
-func (m mockNode) Status() (s node.StatusReport, err error) {
+func (m *mockNode) Status() (s node.StatusReport, err error) {
 	s = cannedStatusReportGolden
 	return
 }
-func (m mockNode) GenesisID() string {
+func (m *mockNode) GenesisID() string {
 	return m.genesisID
 }
 
-func (m mockNode) GenesisHash() crypto.Digest {
+func (m *mockNode) GenesisHash() crypto.Digest {
 	return m.ledger.(*data.Ledger).GenesisHash()
 }
 
-func (m mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {
+func (m *mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {
 	return m.err
 }
 
-func (m mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {
+func (m *mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {
 	res = node.TxnWithStatus{}
 	found = true
 	return
 }
 
-func (m mockNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
+func (m *mockNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
 	return txnPoolGolden, m.err
 }
 
-func (m mockNode) SuggestedFee() basics.MicroAlgos {
+func (m *mockNode) SuggestedFee() basics.MicroAlgos {
 	return basics.MicroAlgos{Raw: 1}
 }
 
 // unused by handlers:
-func (m mockNode) Config() config.Local {
+func (m *mockNode) Config() config.Local {
 	return m.config
 }
-func (m mockNode) Start() {}
+func (m *mockNode) Start() {}
 
-func (m mockNode) ListeningAddress() (string, bool) {
+func (m *mockNode) ListeningAddress() (string, bool) {
 	return "mock listening addresses not implemented", false
 }
 
-func (m mockNode) Stop() {}
+func (m *mockNode) Stop() {}
 
-func (m mockNode) ListTxns(addr basics.Address, minRound basics.Round, maxRound basics.Round) ([]node.TxnWithStatus, error) {
+func (m *mockNode) ListTxns(addr basics.Address, minRound basics.Round, maxRound basics.Round) ([]node.TxnWithStatus, error) {
 	txns, ok := m.usertxns[addr]
 	if !ok {
 		return nil, fmt.Errorf("no txns for %s", addr)
@@ -178,41 +225,41 @@ func (m mockNode) ListTxns(addr basics.Address, minRound basics.Round, maxRound 
 	return txns, nil
 }
 
-func (m mockNode) GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (node.TxnWithStatus, bool) {
+func (m *mockNode) GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (node.TxnWithStatus, bool) {
 	return node.TxnWithStatus{}, false
 }
 
-func (m mockNode) PoolStats() node.PoolStats {
+func (m *mockNode) PoolStats() node.PoolStats {
 	return node.PoolStats{}
 }
 
-func (m mockNode) IsArchival() bool {
+func (m *mockNode) IsArchival() bool {
 	return false
 }
 
-func (m mockNode) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {}
+func (m *mockNode) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {}
 
-func (m mockNode) Uint64() uint64 {
+func (m *mockNode) Uint64() uint64 {
 	return 1
 }
 
-func (m mockNode) Indexer() (*indexer.Indexer, error) {
+func (m *mockNode) Indexer() (*indexer.Indexer, error) {
 	return nil, fmt.Errorf("indexer not implemented")
 }
 
-func (m mockNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (node.TxnWithStatus, error) {
+func (m *mockNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (node.TxnWithStatus, error) {
 	return node.TxnWithStatus{}, fmt.Errorf("get transaction by id not implemented")
 }
 
-func (m mockNode) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
+func (m *mockNode) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
 	return nil, fmt.Errorf("assemble block not implemented")
 }
 
-func (m mockNode) StartCatchup(catchpoint string) error {
+func (m *mockNode) StartCatchup(catchpoint string) error {
 	return m.err
 }
 
-func (m mockNode) AbortCatchup(catchpoint string) error {
+func (m *mockNode) AbortCatchup(catchpoint string) error {
 	return m.err
 }
 
