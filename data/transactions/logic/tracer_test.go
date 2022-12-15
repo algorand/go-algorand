@@ -185,3 +185,11 @@ func TestEvalWithTracer(t *testing.T) {
 		require.Equal(t, 2, testTracer.afterInnerTxnGroupCalls)
 	})
 }
+
+func TestNullEvalTracerIsEvalTracer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var tracer EvalTracer = NullEvalTracer{}
+	require.NotNil(t, tracer)
+}

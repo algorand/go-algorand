@@ -119,6 +119,7 @@ type EvalTracer interface {
 // NullEvalTracer implements EvalTracer, but all of its hook methods do nothing
 type NullEvalTracer struct{}
 
+//nolint:revive // No need to add a description for these
 func (n NullEvalTracer) BeforeTxn(ep *EvalParams, groupIndex int)                           {}
 func (n NullEvalTracer) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) {}
 func (n NullEvalTracer) BeforeProgram(cx *EvalContext)                                      {}
