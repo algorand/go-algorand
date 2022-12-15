@@ -3552,9 +3552,9 @@ func (z *periodRouter) MsgIsZero() bool {
 // MarshalMsg implements msgp.Marshaler
 func (z *player) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 9
+	// map header, size 11
 	// string "ConsensusVersion"
-	o = append(o, 0x89, 0xb0, 0x43, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
+	o = append(o, 0x8b, 0xb0, 0x43, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
 	o = (*z).ConsensusVersion.MarshalMsg(o)
 	// string "Deadline"
 	o = append(o, 0xa8, 0x44, 0x65, 0x61, 0x64, 0x6c, 0x69, 0x6e, 0x65)
@@ -3577,6 +3577,12 @@ func (z *player) MarshalMsg(b []byte) (o []byte) {
 	// string "Round"
 	o = append(o, 0xa5, 0x52, 0x6f, 0x75, 0x6e, 0x64)
 	o = (*z).Round.MarshalMsg(o)
+	// string "SpeculativeAsmTimeDuration"
+	o = append(o, 0xba, 0x53, 0x70, 0x65, 0x63, 0x75, 0x6c, 0x61, 0x74, 0x69, 0x76, 0x65, 0x41, 0x73, 0x6d, 0x54, 0x69, 0x6d, 0x65, 0x44, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e)
+	o = msgp.AppendDuration(o, (*z).SpeculativeAsmTimeDuration)
+	// string "SpeculativeAssemblyDeadline"
+	o = append(o, 0xbb, 0x53, 0x70, 0x65, 0x63, 0x75, 0x6c, 0x61, 0x74, 0x69, 0x76, 0x65, 0x41, 0x73, 0x73, 0x65, 0x6d, 0x62, 0x6c, 0x79, 0x44, 0x65, 0x61, 0x64, 0x6c, 0x69, 0x6e, 0x65)
+	o = msgp.AppendDuration(o, (*z).SpeculativeAssemblyDeadline)
 	// string "Step"
 	o = append(o, 0xa4, 0x53, 0x74, 0x65, 0x70)
 	o = msgp.AppendUint64(o, uint64((*z).Step))
@@ -3671,6 +3677,14 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
+			(*z).SpeculativeAssemblyDeadline, bts, err = msgp.ReadDurationBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "SpeculativeAssemblyDeadline")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
 			bts, err = (*z).Pending.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Pending")
@@ -3682,6 +3696,14 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			bts, err = (*z).ConsensusVersion.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ConsensusVersion")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).SpeculativeAsmTimeDuration, bts, err = msgp.ReadDurationBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "SpeculativeAsmTimeDuration")
 				return
 			}
 		}
@@ -3762,6 +3784,12 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "FastRecoveryDeadline")
 					return
 				}
+			case "SpeculativeAssemblyDeadline":
+				(*z).SpeculativeAssemblyDeadline, bts, err = msgp.ReadDurationBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "SpeculativeAssemblyDeadline")
+					return
+				}
 			case "Pending":
 				bts, err = (*z).Pending.UnmarshalMsg(bts)
 				if err != nil {
@@ -3772,6 +3800,12 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				bts, err = (*z).ConsensusVersion.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ConsensusVersion")
+					return
+				}
+			case "SpeculativeAsmTimeDuration":
+				(*z).SpeculativeAsmTimeDuration, bts, err = msgp.ReadDurationBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "SpeculativeAsmTimeDuration")
 					return
 				}
 			default:
@@ -3794,13 +3828,13 @@ func (_ *player) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *player) Msgsize() (s int) {
-	s = 1 + 6 + (*z).Round.Msgsize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 15 + msgp.Uint64Size + 9 + msgp.DurationSize + 8 + msgp.BoolSize + 21 + msgp.DurationSize + 8 + (*z).Pending.Msgsize() + 17 + (*z).ConsensusVersion.Msgsize()
+	s = 1 + 6 + (*z).Round.Msgsize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 15 + msgp.Uint64Size + 9 + msgp.DurationSize + 8 + msgp.BoolSize + 21 + msgp.DurationSize + 28 + msgp.DurationSize + 8 + (*z).Pending.Msgsize() + 17 + (*z).ConsensusVersion.Msgsize() + 27 + msgp.DurationSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *player) MsgIsZero() bool {
-	return ((*z).Round.MsgIsZero()) && ((*z).Period == 0) && ((*z).Step == 0) && ((*z).LastConcluding == 0) && ((*z).Deadline == 0) && ((*z).Napping == false) && ((*z).FastRecoveryDeadline == 0) && ((*z).Pending.MsgIsZero()) && ((*z).ConsensusVersion.MsgIsZero())
+	return ((*z).Round.MsgIsZero()) && ((*z).Period == 0) && ((*z).Step == 0) && ((*z).LastConcluding == 0) && ((*z).Deadline == 0) && ((*z).Napping == false) && ((*z).FastRecoveryDeadline == 0) && ((*z).SpeculativeAssemblyDeadline == 0) && ((*z).Pending.MsgIsZero()) && ((*z).ConsensusVersion.MsgIsZero()) && ((*z).SpeculativeAsmTimeDuration == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

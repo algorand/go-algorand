@@ -1614,20 +1614,31 @@ func TestTxHandlerRememberReportErrors(t *testing.T) {
 	require.Equal(t, 1, getMetricCounter(txPoolRememberTagFee))
 }
 
+func makeBlockTicker() *blockTicker {
+	return &blockTicker{
+		waiter: make(chan struct{}, 10),
+	}
+}
+
 type blockTicker struct {
-	cond sync.Cond
+	waiter chan struct{}
 }
 
 func (t *blockTicker) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
-	t.cond.L.Lock()
-	defer t.cond.L.Unlock()
-	t.cond.Broadcast()
+	t.waiter <- struct{}{}
 }
 
 func (t *blockTicker) Wait() {
-	t.cond.L.Lock()
-	defer t.cond.L.Unlock()
-	t.cond.Wait()
+	timer := time.NewTimer(1 * time.Second)
+	defer timer.Stop()
+	for {
+		select {
+		case <-t.waiter:
+			return
+		case <-timer.C:
+			return
+		}
+	}
 }
 
 func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
@@ -1694,14 +1705,6 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	handler.postProcessCheckedTxn(&wi)
 	require.Equal(t, 1, getMetricCounter(txPoolRememberTagTxnDead))
 
-	// trigger max pool capacity metric
-	hdr := bookkeeping.BlockHeader{
-		Round: 1,
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
-		},
-	}
-
 	txn1 := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
@@ -1763,9 +1766,19 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	handler.postProcessCheckedTxn(&wi)
 	require.Equal(t, 1, getMetricCounter(txPoolRememberTagEvalGeneric))
 
-	// trigger TxnDeadErr from the evaluator
+	// trigger TxnDeadErr from the evaluator for "early" case
 	txn2 = txn1
 	txn2.FirstValid = ledger.LastRound() + 10
+	prevTxnEarly := getMetricCounter(txPoolRememberTagTxnEarly)
+	wi.unverifiedTxGroup = []transactions.SignedTxn{txn2.Sign(secrets[0])}
+	handler.postProcessCheckedTxn(&wi)
+	require.Equal(t, prevTxnEarly+1, getMetricCounter(txPoolRememberTagTxnEarly))
+	handler.checkAlreadyCommitted(&wi)
+	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagTxnEarly))
+
+	// trigger TxnDeadErr from the evaluator for "late" case
+	txn2 = txn1
+	txn2.LastValid = 0
 	prevTxnDead := getMetricCounter(txPoolRememberTagTxnDead)
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn2.Sign(secrets[0])}
 	handler.postProcessCheckedTxn(&wi)
@@ -1803,27 +1816,30 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	// require.Equal(t, 1, getMetricCounter(txPoolRememberFee))
 
 	// make an invalid block to fail recompute pool and expose transactionMessageTxGroupRememberNoPendingEval metric
-	blockTicker := &blockTicker{cond: *sync.NewCond(&deadlock.Mutex{})}
+	blockTicker := makeBlockTicker()
 	blockListeners := []realledger.BlockListener{
 		handler.txPool,
 		blockTicker,
 	}
 	ledger.RegisterBlockListeners(blockListeners)
 
-	hdr = bookkeeping.BlockHeader{
-		Round: 1,
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: "test",
-		},
-	}
+	// add few blocks: on ci sometimes blockTicker is not fired in time in case of a single block
+	for i := basics.Round(1); i <= 3; i++ {
+		hdr := bookkeeping.BlockHeader{
+			Round: i,
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: "test",
+			},
+		}
 
-	blk := bookkeeping.Block{
-		BlockHeader: hdr,
-		Payset:      []transactions.SignedTxnInBlock{{}},
+		blk := bookkeeping.Block{
+			BlockHeader: hdr,
+			Payset:      []transactions.SignedTxnInBlock{{}},
+		}
+		vb := ledgercore.MakeValidatedBlock(blk, ledgercore.StateDelta{})
+		err = ledger.AddValidatedBlock(vb, agreement.Certificate{})
+		require.NoError(t, err)
 	}
-	vb := ledgercore.MakeValidatedBlock(blk, ledgercore.StateDelta{})
-	err = ledger.AddValidatedBlock(vb, agreement.Certificate{})
-	require.NoError(t, err)
 	blockTicker.Wait()
 
 	wi.unverifiedTxGroup = []transactions.SignedTxn{}

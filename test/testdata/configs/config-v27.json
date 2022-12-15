@@ -1,5 +1,5 @@
 {
-    "Version": 25,
+    "Version": 27,
     "AccountUpdatesStatsInterval": 5000000000,
     "AccountsRebuildSynchronousMode": 1,
     "AgreementIncomingBundlesQueueLength": 7,
@@ -91,6 +91,7 @@
     "RestReadTimeoutSeconds": 15,
     "RestWriteTimeoutSeconds": 120,
     "RunHosted": false,
+    "SpeculativeAsmTimeOffset": 40000000,
     "SuggestedFeeBlockHistory": 3,
     "SuggestedFeeSlidingWindowSize": 50,
     "TLSCertFile": "",
@@ -98,6 +99,7 @@
     "TelemetryToLog": true,
     "TransactionSyncDataExchangeRate": 0,
     "TransactionSyncSignificantMessageThreshold": 0,
+    "TxIncomingFilteringFlags": 1,
     "TxPoolExponentialIncreaseFactor": 2,
     "TxPoolSize": 75000,
     "TxSyncIntervalSeconds": 60,
