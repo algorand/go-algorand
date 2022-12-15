@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ import (
 )
 
 // LedgerForEvaluator defines the ledger interface needed by the evaluator.
-type LedgerForEvaluator interface {
+type LedgerForEvaluator interface { //nolint:revive //LedgerForEvaluator is a long established but newly leaking-out name, and there really isn't a better name for it despite how lint dislikes ledger.LedgerForEvaluator
 	// Needed for cow.go
 	Block(basics.Round) (bookkeeping.Block, error)
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)

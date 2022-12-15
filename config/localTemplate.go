@@ -467,7 +467,7 @@ type Local struct {
 	// 0x01 (txFilterRawMsg) - check for raw tx message duplicates
 	// 0x02 (txFilterCanonical) - check for canonical tx group duplicates
 	TxIncomingFilteringFlags uint32 `version[26]:"1"`
-	
+
 	// SpeculativeBlockAssemblyGraceTime sets additional time, on top of
 	// ProposalAssemblyTime, that this node allows for speculative block
 	// assembly.
