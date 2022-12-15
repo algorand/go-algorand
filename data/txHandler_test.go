@@ -1651,7 +1651,7 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, tps int, invalidRate
 	b.ResetTimer()
 	tt = time.Now()
 	for !completed {
-		for i, _ := range signedTransactionGroups {
+		for i := range signedTransactionGroups {
 			if useBacklogWorker {
 				handler.processIncomingTxn(encodedSignedTransactionGroups[i])
 				<-ticker.C
