@@ -17,7 +17,6 @@
 package ledger
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
