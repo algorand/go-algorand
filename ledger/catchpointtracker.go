@@ -1360,7 +1360,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 
 	if rootHash.IsZero() {
 		ct.log.Infof("initializeHashes rebuilding merkle trie for round %d", rnd)
-		accountBuilderIt := makeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
+		accountBuilderIt := store.MakeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
 		defer accountBuilderIt.Close(ctx)
 		startTrieBuildTime := time.Now()
 		trieHashCount := 0
@@ -1380,18 +1380,18 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 				trieHashCount += len(accts)
 				pendingTrieHashes += len(accts)
 				for _, acct := range accts {
-					added, err := trie.Add(acct.digest)
+					added, err := trie.Add(acct.Digest)
 					if err != nil {
 						return fmt.Errorf("initializeHashes was unable to add acct to trie: %v", err)
 					}
 					if !added {
 						// we need to translate the "addrid" into actual account address so that
 						// we can report the failure.
-						addr, err := arw.LookupAccountAddressFromAddressID(ctx, acct.addrid)
+						addr, err := arw.LookupAccountAddressFromAddressID(ctx, acct.Addrid)
 						if err != nil {
-							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account id %d : %v", hex.EncodeToString(acct.digest), acct.addrid, err)
+							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account id %d : %v", hex.EncodeToString(acct.Digest), acct.Addrid, err)
 						} else {
-							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account %v", hex.EncodeToString(acct.digest), addr)
+							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account %v", hex.EncodeToString(acct.Digest), addr)
 						}
 					}
 				}
