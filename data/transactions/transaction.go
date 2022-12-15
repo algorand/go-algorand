@@ -239,6 +239,7 @@ func (tx Header) Alive(tc TxnContext) error {
 			Round:      round,
 			FirstValid: tx.FirstValid,
 			LastValid:  tx.LastValid,
+			Early:      round < tx.FirstValid,
 		}
 	}
 
