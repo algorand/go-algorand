@@ -306,7 +306,7 @@ func argEnums(name string) ([]string, string) {
 	// it'd be nice to have this auto-update
 	switch name {
 	case "txn", "gtxn", "gtxns", "itxn", "gitxn":
-		return fieldsAndTypes(logic.TxnFields)
+		return fieldsAndTypes(logic.TxnScalarFields)
 	case "itxn_field":
 		// itxn_field does not *return* a type depending on its immediate. It *takes* it.
 		// but until a consumer cares, ArgEnumTypes will be overloaded for that meaning.
