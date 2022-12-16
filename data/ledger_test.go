@@ -126,7 +126,7 @@ func TestLedgerCirculation(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	log := logging.TestingLog(t)
-	log.SetLevel(logging.Panic)
+	log.SetLevel(logging.Warn)
 	realLedger, err := ledger.OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer realLedger.Close()
