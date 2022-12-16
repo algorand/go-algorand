@@ -79,12 +79,8 @@ func CreateTinyManTxGroup(tb testing.TB, randNote bool) []Txn {
 	return []Txn{fees, *appcall, deposit, withdraw}
 }
 
-// CreateTinyManSignedTxGroup repro this tx group by tinyman
-// https://algoexplorer.io/tx/group/d1bUcqFbNZDMIdcreM9Vw2jzOIZIa2UzDgTTlr2Sl4o%3D
-// which is an algo to USDC swap. The source code below is extracted from
-// algoexplorer, which adds some unusual stuff as comments
-func CreateTinyManSignedTxGroup(tb testing.TB, txns []Txn) ([]transactions.SignedTxn, []*crypto.SignatureSecrets) {
-	lsig := `
+// TmLsig is a tinyman lsig contract used in tests/benchmarks
+const TmLsig = `
 	#pragma version 4
 	intcblock 1 0 0 31566704 3 4 5 6
 	intc_3 // 31566704
@@ -521,7 +517,13 @@ label8:
 	>=
 	return
 `
-	ops, err := logic.AssembleString(lsig)
+
+// CreateTinyManSignedTxGroup repro this tx group by tinyman
+// https://algoexplorer.io/tx/group/d1bUcqFbNZDMIdcreM9Vw2jzOIZIa2UzDgTTlr2Sl4o%3D
+// which is an algo to USDC swap. The source code below is extracted from
+// algoexplorer, which adds some unusual stuff as comments
+func CreateTinyManSignedTxGroup(tb testing.TB, txns []Txn) ([]transactions.SignedTxn, []*crypto.SignatureSecrets) {
+	ops, err := logic.AssembleString(TmLsig)
 	require.NoError(tb, err)
 
 	stxns := SignedTxns(&txns[0], &txns[1], &txns[2], &txns[3])

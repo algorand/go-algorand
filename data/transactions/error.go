@@ -41,6 +41,7 @@ type TxnDeadError struct {
 	Round      basics.Round
 	FirstValid basics.Round
 	LastValid  basics.Round
+	Early      bool
 }
 
 func (err *TxnDeadError) Error() string {
