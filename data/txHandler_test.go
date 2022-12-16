@@ -1699,7 +1699,7 @@ func runHandlerBenchmarkWithBacklog(b *testing.B, txGen txGenIf, tps int, useBac
 	if b.N < genTCount {
 		genTCount = b.N
 	}
-	signedTransactionGroups, badTxnGroups = txGen.createSignedTxGroups(b, genTCount)
+	signedTransactionGroups, badTxnGroups := txGen.createSignedTxGroups(b, genTCount)
 	var encStxns []network.IncomingMessage
 	if useBacklogWorker {
 		encStxns = make([]network.IncomingMessage, 0, genTCount)
