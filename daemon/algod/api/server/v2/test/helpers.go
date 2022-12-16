@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -326,9 +327,9 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 		short := root.Address()
 
 		if offlineAccounts && i > P/2 {
-			genesis[short] = basics.MakeAccountData(basics.Offline, startamt)
+			genesis[short] = basics_testing.MakeAccountData(basics.Offline, startamt)
 		} else {
-			data := basics.MakeAccountData(basics.Online, startamt)
+			data := basics_testing.MakeAccountData(basics.Online, startamt)
 			data.SelectionID = parts[i].VRFSecrets().PK
 			data.VoteID = parts[i].VotingSecrets().OneTimeSignatureVerifier
 			genesis[short] = data
@@ -336,13 +337,13 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 		part.Close()
 	}
 
-	genesis[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
+	genesis[poolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
 
 	program := logic.Program(retOneProgram)
 	lhash := crypto.HashObj(&program)
 	var addr basics.Address
 	copy(addr[:], lhash[:])
-	ad := basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
+	ad := basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
 	ad.AppLocalStates = map[basics.AppIndex]basics.AppLocalState{1: {}}
 	genesis[addr] = ad
 
