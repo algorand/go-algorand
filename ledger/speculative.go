@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Algorand, Inc.
+// Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,6 @@
 package ledger
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -34,6 +33,8 @@ import (
 // LedgerForEvaluator defines the ledger interface needed by the evaluator.
 type LedgerForEvaluator interface { //nolint:revive //LedgerForEvaluator is a long established but newly leaking-out name, and there really isn't a better name for it despite how lint dislikes ledger.LedgerForEvaluator
 	internal.LedgerForEvaluator
+	LookupKv(rnd basics.Round, key string) ([]byte, error)
+	FlushCaches()
 
 	// and a few more Ledger functions
 
@@ -246,10 +247,21 @@ func (v *validatedBlockAsLFE) StartEvaluator(hdr bookkeeping.BlockHeader, payset
 func (v *validatedBlockAsLFE) FlushCaches() {
 }
 
-// ErrNotImplemented "Not implemented"
-var ErrNotImplemented = errors.New("Not implemented")
+// LookupKv implements LookupKv
+func (v *validatedBlockAsLFE) LookupKv(rnd basics.Round, key string) ([]byte, error) {
+	if rnd == v.vb.Block().Round() {
+		data, ok := v.vb.Delta().KvMods[key]
+		if ok {
+			return data.Data, nil
+		}
+		// fall back to looking up account in ledger, until previous block
+		rnd = v.vb.Block().Round() - 1
+	}
 
-// LookupKv is part of ledger/internal.LedgerForEvaluator interface
-func (v *validatedBlockAsLFE) LookupKv(basics.Round, string) ([]byte, error) {
-	return nil, ErrNotImplemented
+	// account didn't change in last round. Subtract 1 so we can lookup the most recent change in the ledger
+	data, err := v.l.LookupKv(rnd, key)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
 }
