@@ -44,6 +44,7 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/data/txntest"
 	realledger "github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -54,7 +55,7 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
-func makeTestGenesisAccounts(tb require.TestingT, numUsers int) ([]basics.Address, []*crypto.SignatureSecrets, map[basics.Address]basics.AccountData) {
+func makeTestGenesisAccounts(tb testing.TB, numUsers int) ([]basics.Address, []*crypto.SignatureSecrets, map[basics.Address]basics.AccountData) {
 	addresses := make([]basics.Address, numUsers)
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
 	genesis := make(map[basics.Address]basics.AccountData)
@@ -432,6 +433,45 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 	finConsume()
 }
 
+// BenchmarkTxHandlerProcessIncomingLogicTxn16 is similar to BenchmarkTxHandlerProcessIncomingTxn16
+// but with logicsig groups of 4 txns
+func BenchmarkTxHandlerProcessIncomingLogicTxn16(b *testing.B) {
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() {
+		deadlock.Opts.Disable = deadlockDisable
+	}()
+
+	const numSendThreads = 16
+	handler := makeTestTxHandlerOrphaned(txBacklogSize)
+
+	// prepare tx groups
+	blobs := make([][]byte, b.N)
+	stxns := make([][]transactions.SignedTxn, b.N)
+	for i := 0; i < b.N; i++ {
+		txns := txntest.CreateTinyManTxGroup(b, true)
+		stxns[i], _ = txntest.CreateTinyManSignedTxGroup(b, txns)
+		var blob []byte
+		for j := range stxns[i] {
+			encoded := protocol.Encode(&stxns[i][j])
+			blob = append(blob, encoded...)
+		}
+		blobs[i] = blob
+	}
+	numTxnsPerGroup := len(stxns[0])
+
+	statsCh := make(chan [4]int, 1)
+	defer close(statsCh)
+	finConsume := benchTxHandlerProcessIncomingTxnConsume(b, handler, numTxnsPerGroup, 0, statsCh)
+
+	// submit tx groups
+	b.ResetTimer()
+	finalizeSubmit := benchTxHandlerProcessIncomingTxnSubmit(b, handler, blobs, numSendThreads)
+
+	finalizeSubmit()
+	finConsume()
+}
+
 // BenchmarkTxHandlerIncDeDup checks txn receiving with duplicates
 // simulating processing delay
 func BenchmarkTxHandlerIncDeDup(b *testing.B) {
@@ -624,7 +664,7 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 	}
 
 	t.Run("single", func(t *testing.T) {
-		handler := makeTestTxHandlerOrphaned(txBacklogSize)
+		handler := makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 0)
 		stxns, blob := makeRandomTransactions(1)
 		stxn := stxns[0]
 		action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
@@ -649,7 +689,7 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 	})
 
 	t.Run("group", func(t *testing.T) {
-		handler := makeTestTxHandlerOrphaned(txBacklogSize)
+		handler := makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 0)
 		num := rand.Intn(config.MaxTxGroupSize-1) + 2 // 2..config.MaxTxGroupSize
 		require.LessOrEqual(t, num, config.MaxTxGroupSize)
 		stxns, blob := makeRandomTransactions(num)
@@ -719,10 +759,10 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 // makeTestTxHandlerOrphaned creates a tx handler without any backlog consumer.
 // It is caller responsibility to run a consumer thread.
 func makeTestTxHandlerOrphaned(backlogSize int) *TxHandler {
-	return makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, txBacklogSize, 0)
+	return makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, txBacklogSize, txHandlerConfig{true, false}, 0)
 }
 
-func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, cacheSize int, refreshInterval time.Duration) *TxHandler {
+func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, cacheSize int, txHandlerConfig txHandlerConfig, refreshInterval time.Duration) *TxHandler {
 	if backlogSize <= 0 {
 		backlogSize = txBacklogSize
 	}
@@ -733,7 +773,7 @@ func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, 
 		backlogQueue:     make(chan *txBacklogMsg, backlogSize),
 		msgCache:         makeSaltedCache(cacheSize),
 		txCanonicalCache: makeDigestCache(cacheSize),
-		cacheConfig:      txHandlerConfig{true, true},
+		cacheConfig:      txHandlerConfig,
 	}
 	handler.msgCache.start(ctx, refreshInterval)
 	return handler
@@ -839,7 +879,7 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 	t.Run("scheduled", func(t *testing.T) {
 		// double enqueue a single txn message, ensure it discarded
 		ctx, cancelFunc := context.WithCancel(context.Background())
-		handler := makeTestTxHandlerOrphanedWithContext(ctx, txBacklogSize, txBacklogSize, 10*time.Millisecond)
+		handler := makeTestTxHandlerOrphanedWithContext(ctx, txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 10*time.Millisecond)
 
 		var action network.OutgoingMessage
 		var msg *txBacklogMsg
@@ -902,7 +942,7 @@ func TestTxHandlerProcessIncomingCacheBacklogDrop(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler := makeTestTxHandlerOrphanedWithContext(context.Background(), 1, 20, 0)
+	handler := makeTestTxHandlerOrphanedWithContext(context.Background(), 1, 20, txHandlerConfig{true, true}, 0)
 
 	stxns1, blob1 := makeRandomTransactions(1)
 	require.Equal(t, 1, len(stxns1))
