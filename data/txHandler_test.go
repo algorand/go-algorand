@@ -1424,7 +1424,7 @@ func BenchmarkHandleTxns(b *testing.B) {
 	invalidRates := []float32{0.5, 0.001}
 	for _, ivr := range invalidRates {
 		b.Run(fmt.Sprintf("inv_%.3f", ivr), func(b *testing.B) {
-			txGen := makeSigGenerator(b, numBenchUsers, maxGroupSize, 0)
+			txGen := makeSigGenerator(b, numBenchUsers, maxGroupSize, ivr)
 			runHandlerBenchmarkWithBacklog(b, txGen, 1, false)
 		})
 	}
