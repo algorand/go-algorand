@@ -1437,7 +1437,7 @@ func BenchmarkHandleTxnGroups(b *testing.B) {
 	for _, ivr := range invalidRates {
 		b.Run(fmt.Sprintf("inv_%.3f", ivr), func(b *testing.B) {
 			txGen := makeSigGenerator(b, numBenchUsers, maxGroupSize, ivr)
-			runHandlerBenchmarkWithBacklog(b, txGen, 1, false)
+			runHandlerBenchmarkWithBacklog(b, txGen, 0, false)
 		})
 	}
 }
