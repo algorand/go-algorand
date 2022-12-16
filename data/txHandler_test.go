@@ -33,6 +33,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/config"
@@ -50,8 +52,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
-
-	"github.com/algorand/go-deadlock"
 )
 
 func makeTestGenesisAccounts(tb require.TestingT, numUsers int) ([]basics.Address, []*crypto.SignatureSecrets, map[basics.Address]basics.AccountData) {
@@ -1289,7 +1289,7 @@ func signMSigTransactionGroups(txnGroups [][]transactions.Transaction, secrets [
 	ret = make([][]transactions.SignedTxn, len(txnGroups))
 	numUsers := len(secrets)
 	badTxnGroups = make(map[uint64]interface{})
-	badTxnGroupsMU := sync.Mutex{}
+	badTxnGroupsMU := deadlock.Mutex{}
 	// process them using multiple threads
 	workers := make(chan interface{}, runtime.NumCPU()-1)
 	wg := sync.WaitGroup{}
@@ -1598,7 +1598,7 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, tps int, invalidRate
 			}
 			handler.Stop() // cancel the handler ctx
 		}()
-		counterMutex := sync.Mutex{}
+		counterMutex := deadlock.Mutex{}
 		stopChan := make(chan interface{})
 		wg.Add(1)
 		go func() {
