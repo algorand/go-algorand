@@ -1524,6 +1524,14 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, tps int, invalidRate
 	require.NoError(b, err)
 	defer handler.txVerificationPool.Shutdown()
 	defer close(handler.streamVerifierDropped)
+
+	// The benchmark generates only 1000 txns, and reuses them. This is done for faster benchmark time and the
+	// ability to have long runs without being limited to the memory. The dedup will block the txns once the same
+	// ones are rotated again. If the purpose is to test dedup, then this can be changed by setting
+	// genTCount = b.N
+	handler.cacheConfig.enableFilteringRawMsg = false
+	handler.cacheConfig.enableFilteringCanonical = false
+
 	// since Start is not called, set the context here
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	defer handler.ctxCancel()
