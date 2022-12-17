@@ -44,6 +44,7 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -53,7 +54,7 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
-func makeTestGenesisAccounts(tb require.TestingT, numUsers int) ([]basics.Address, []*crypto.SignatureSecrets, map[basics.Address]basics.AccountData) {
+func makeTestGenesisAccounts(tb testing.TB, numUsers int) ([]basics.Address, []*crypto.SignatureSecrets, map[basics.Address]basics.AccountData) {
 	addresses := make([]basics.Address, numUsers)
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
 	genesis := make(map[basics.Address]basics.AccountData)
@@ -434,6 +435,45 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 	finConsume()
 }
 
+// BenchmarkTxHandlerProcessIncomingLogicTxn16 is similar to BenchmarkTxHandlerProcessIncomingTxn16
+// but with logicsig groups of 4 txns
+func BenchmarkTxHandlerProcessIncomingLogicTxn16(b *testing.B) {
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() {
+		deadlock.Opts.Disable = deadlockDisable
+	}()
+
+	const numSendThreads = 16
+	handler := makeTestTxHandlerOrphaned(txBacklogSize)
+
+	// prepare tx groups
+	blobs := make([][]byte, b.N)
+	stxns := make([][]transactions.SignedTxn, b.N)
+	for i := 0; i < b.N; i++ {
+		txns := txntest.CreateTinyManTxGroup(b, true)
+		stxns[i], _ = txntest.CreateTinyManSignedTxGroup(b, txns)
+		var blob []byte
+		for j := range stxns[i] {
+			encoded := protocol.Encode(&stxns[i][j])
+			blob = append(blob, encoded...)
+		}
+		blobs[i] = blob
+	}
+	numTxnsPerGroup := len(stxns[0])
+
+	statsCh := make(chan [4]int, 1)
+	defer close(statsCh)
+	finConsume := benchTxHandlerProcessIncomingTxnConsume(b, handler, numTxnsPerGroup, 0, statsCh)
+
+	// submit tx groups
+	b.ResetTimer()
+	finalizeSubmit := benchTxHandlerProcessIncomingTxnSubmit(b, handler, blobs, numSendThreads)
+
+	finalizeSubmit()
+	finConsume()
+}
+
 // BenchmarkTxHandlerIncDeDup checks txn receiving with duplicates
 // simulating processing delay
 func BenchmarkTxHandlerIncDeDup(b *testing.B) {
@@ -626,7 +666,7 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 	}
 
 	t.Run("single", func(t *testing.T) {
-		handler := makeTestTxHandlerOrphaned(txBacklogSize)
+		handler := makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 0)
 		stxns, blob := makeRandomTransactions(1)
 		stxn := stxns[0]
 		action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
@@ -651,7 +691,7 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 	})
 
 	t.Run("group", func(t *testing.T) {
-		handler := makeTestTxHandlerOrphaned(txBacklogSize)
+		handler := makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 0)
 		num := rand.Intn(config.MaxTxGroupSize-1) + 2 // 2..config.MaxTxGroupSize
 		require.LessOrEqual(t, num, config.MaxTxGroupSize)
 		stxns, blob := makeRandomTransactions(num)
@@ -721,10 +761,10 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 // makeTestTxHandlerOrphaned creates a tx handler without any backlog consumer.
 // It is caller responsibility to run a consumer thread.
 func makeTestTxHandlerOrphaned(backlogSize int) *TxHandler {
-	return makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, txBacklogSize, 0)
+	return makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, txBacklogSize, txHandlerConfig{true, false}, 0)
 }
 
-func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, cacheSize int, refreshInterval time.Duration) *TxHandler {
+func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, cacheSize int, txHandlerConfig txHandlerConfig, refreshInterval time.Duration) *TxHandler {
 	if backlogSize <= 0 {
 		backlogSize = txBacklogSize
 	}
@@ -735,7 +775,7 @@ func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, 
 		backlogQueue:     make(chan *txBacklogMsg, backlogSize),
 		msgCache:         makeSaltedCache(cacheSize),
 		txCanonicalCache: makeDigestCache(cacheSize),
-		cacheConfig:      txHandlerConfig{true, true},
+		cacheConfig:      txHandlerConfig,
 	}
 	handler.msgCache.start(ctx, refreshInterval)
 	return handler
@@ -841,7 +881,7 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 	t.Run("scheduled", func(t *testing.T) {
 		// double enqueue a single txn message, ensure it discarded
 		ctx, cancelFunc := context.WithCancel(context.Background())
-		handler := makeTestTxHandlerOrphanedWithContext(ctx, txBacklogSize, txBacklogSize, 10*time.Millisecond)
+		handler := makeTestTxHandlerOrphanedWithContext(ctx, txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 10*time.Millisecond)
 
 		var action network.OutgoingMessage
 		var msg *txBacklogMsg
@@ -903,7 +943,7 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 func TestTxHandlerProcessIncomingCacheBacklogDrop(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	handler := makeTestTxHandlerOrphanedWithContext(context.Background(), 1, 20, 0)
+	handler := makeTestTxHandlerOrphanedWithContext(context.Background(), 1, 20, txHandlerConfig{true, true}, 0)
 
 	stxns1, blob1 := makeRandomTransactions(1)
 	require.Equal(t, 1, len(stxns1))
@@ -1405,16 +1445,7 @@ func makeSignedTxnGroups(N, numUsers, maxGroupSize int, invalidProb float32, add
 	return
 }
 
-// makeMsigSignedTxnGroups prepares N transaction groups of random (maxGroupSize) sizes with random
-// invalid signatures of a given probability (invalidProb) signed with multisig accounts of given size
-func makeMsigSignedTxnGroups(N, numUsers, msigSize, maxGroupSize int, invalidProb float32, addresses []basics.Address,
-	secrets []*crypto.SignatureSecrets) (ret [][]transactions.SignedTxn,
-	badTxnGroups map[uint64]interface{}, err error) {
-
-	txnGroups := getTransactionGroups(N, numUsers, maxGroupSize, addresses)
-	ret, badTxnGroups, err = signMSigTransactionGroups(txnGroups, secrets, invalidProb, msigSize)
-	return
-}
+const numBenchUsers = 512
 
 // BenchmarkHandleTxns sends signed transactions directly to the verifier
 func BenchmarkHandleTxns(b *testing.B) {
@@ -1422,7 +1453,8 @@ func BenchmarkHandleTxns(b *testing.B) {
 	invalidRates := []float32{0.5, 0.001}
 	for _, ivr := range invalidRates {
 		b.Run(fmt.Sprintf("inv_%.3f", ivr), func(b *testing.B) {
-			runHandlerBenchmarkWithBacklog(maxGroupSize, 1, 0, ivr, b, false)
+			txGen := makeSigGenerator(b, numBenchUsers, maxGroupSize, ivr)
+			runHandlerBenchmarkWithBacklog(b, txGen, 0, false)
 		})
 	}
 }
@@ -1433,7 +1465,8 @@ func BenchmarkHandleTxnGroups(b *testing.B) {
 	invalidRates := []float32{0.5, 0.001}
 	for _, ivr := range invalidRates {
 		b.Run(fmt.Sprintf("inv_%.3f", ivr), func(b *testing.B) {
-			runHandlerBenchmarkWithBacklog(maxGroupSize, 1, 0, ivr, b, false)
+			txGen := makeSigGenerator(b, numBenchUsers, maxGroupSize, ivr)
+			runHandlerBenchmarkWithBacklog(b, txGen, 0, false)
 		})
 	}
 }
@@ -1446,7 +1479,8 @@ func BenchmarkHandleMsigTxns(b *testing.B) {
 	for _, msigSize := range msigSizes {
 		for _, ivr := range invalidRates {
 			b.Run(fmt.Sprintf("msigSize_%d_inv_%.3f", msigSize, ivr), func(b *testing.B) {
-				runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, 0, ivr, b, false)
+				txGen := makeMsigGenerator(b, numBenchUsers, maxGroupSize, ivr, msigSize)
+				runHandlerBenchmarkWithBacklog(b, txGen, 0, false)
 			})
 		}
 	}
@@ -1460,7 +1494,8 @@ func BenchmarkHandleMsigTxnGroups(b *testing.B) {
 	for _, msigSize := range msigSizes {
 		for _, ivr := range invalidRates {
 			b.Run(fmt.Sprintf("msigSize_%d_inv_%.3f", msigSize, ivr), func(b *testing.B) {
-				runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, 0, ivr, b, false)
+				txGen := makeMsigGenerator(b, numBenchUsers, maxGroupSize, ivr, msigSize)
+				runHandlerBenchmarkWithBacklog(b, txGen, 0, false)
 			})
 		}
 	}
@@ -1475,7 +1510,8 @@ func BenchmarkHandleBLWTxns(b *testing.B) {
 	for _, tps := range tpss {
 		for _, ivr := range invalidRates {
 			b.Run(fmt.Sprintf("tps_%d_inv_%.3f", tps, ivr), func(b *testing.B) {
-				runHandlerBenchmarkWithBacklog(maxGroupSize, 1, tps, ivr, b, true)
+				txGen := makeSigGenerator(b, numBenchUsers, maxGroupSize, ivr)
+				runHandlerBenchmarkWithBacklog(b, txGen, tps, true)
 			})
 		}
 	}
@@ -1490,37 +1526,142 @@ func BenchmarkHandleBLWTxnGroups(b *testing.B) {
 	for _, tps := range tpss {
 		for _, ivr := range invalidRates {
 			b.Run(fmt.Sprintf("tps_%d_inv_%.3f", tps, ivr), func(b *testing.B) {
-				runHandlerBenchmarkWithBacklog(maxGroupSize, 1, tps, ivr, b, true)
+				txGen := makeSigGenerator(b, numBenchUsers, maxGroupSize, ivr)
+				runHandlerBenchmarkWithBacklog(b, txGen, tps, true)
 			})
 		}
 	}
 }
 
-// runHandlerBenchmarkWithBacklog benchmarks the number of transactions verfied or dropped
-func runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, tps int, invalidRate float32, b *testing.B, useBacklogWorker bool) {
+// BenchmarkHandleTxnGroups sends signed transaction groups directly to the verifier
+func BenchmarkHandleLsigTxnGroups(b *testing.B) {
+	maxGroupSize := proto.MaxTxGroupSize / 2
+	invalidRates := []float32{0.5, 0.001}
+	for _, ivr := range invalidRates {
+		b.Run(fmt.Sprintf("lsig-inv_%.3f", ivr), func(b *testing.B) {
+			txGen := makeLsigGenerator(b, numBenchUsers, maxGroupSize, ivr)
+			runHandlerBenchmarkWithBacklog(b, txGen, 0, false)
+		})
+	}
+}
+
+type txGenIf interface {
+	makeLedger(tb testing.TB, cfg config.Local, log logging.Logger, namePrefix string) *Ledger
+	createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]interface{})
+}
+
+type txGenerator struct {
+	numUsers     int
+	maxGroupSize int
+	invalidRate  float32
+
+	addresses []basics.Address
+	secrets   []*crypto.SignatureSecrets
+	genesis   map[basics.Address]basics.AccountData
+}
+
+type sigGenerator struct {
+	txGenerator
+}
+
+type msigGenerator struct {
+	txGenerator
+	msigSize int
+}
+
+type lsigGenerator struct {
+	txGenerator
+}
+
+func makeTxGenerator(tb testing.TB, numUsers, maxGroupSize int, invalidRate float32) *txGenerator {
+	addresses, secrets, genesis := makeTestGenesisAccounts(tb, numUsers)
+	return &txGenerator{
+		numUsers:     numUsers,
+		maxGroupSize: maxGroupSize,
+		addresses:    addresses,
+		secrets:      secrets,
+		genesis:      genesis,
+	}
+}
+
+func (g *txGenerator) makeLedger(tb testing.TB, cfg config.Local, log logging.Logger, namePrefix string) *Ledger {
+	genBal := bookkeeping.MakeGenesisBalances(g.genesis, sinkAddr, poolAddr)
+	ivrString := strings.IndexAny(fmt.Sprintf("%f", g.invalidRate), "1")
+	ledgerName := fmt.Sprintf("%s-in_mem-w_inv=%d", namePrefix, ivrString)
+	ledgerName = strings.Replace(ledgerName, "#", "-", 1)
+	const inMem = true
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	require.NoError(tb, err)
+	return ledger
+}
+
+func makeSigGenerator(tb testing.TB, numUsers, maxGroupSize int, invalidRate float32) *sigGenerator {
+	return &sigGenerator{
+		txGenerator: *makeTxGenerator(tb, numUsers, maxGroupSize, invalidRate),
+	}
+}
+
+func (g *sigGenerator) createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]interface{}) {
+	return makeSignedTxnGroups(txgCount, g.numUsers, g.maxGroupSize, g.invalidRate, g.addresses, g.secrets)
+}
+
+func makeMsigGenerator(tb testing.TB, numUsers, maxGroupSize int, invalidRate float32, msigSize int) *msigGenerator {
+	return &msigGenerator{
+		txGenerator: *makeTxGenerator(tb, numUsers, maxGroupSize, invalidRate),
+		msigSize:    msigSize,
+	}
+}
+
+func (g *msigGenerator) createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]interface{}) {
+	txnGroups := getTransactionGroups(txgCount, g.numUsers, g.maxGroupSize, g.addresses)
+	signedTransactionGroups, badTxnGroups, err := signMSigTransactionGroups(txnGroups, g.secrets, g.invalidRate, g.msigSize)
+	require.NoError(tb, err)
+	return signedTransactionGroups, badTxnGroups
+}
+
+func makeLsigGenerator(tb testing.TB, numUsers, maxGroupSize int, invalidRate float32) *lsigGenerator {
+	return &lsigGenerator{
+		txGenerator: *makeTxGenerator(tb, numUsers, maxGroupSize, invalidRate),
+	}
+}
+
+func (g *lsigGenerator) createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]interface{}) {
+	stxns := make([][]transactions.SignedTxn, txgCount)
+	badTxnGroups := make(map[uint64]interface{})
+	for i := 0; i < txgCount; i++ {
+		txns := txntest.CreateTinyManTxGroup(tb, true)
+		stxns[i], _ = txntest.CreateTinyManSignedTxGroup(tb, txns)
+
+		// randomly make bad signatures
+		if rand.Float32() < g.invalidRate {
+			tinGrp := rand.Intn(len(txns))
+			if stxns[i][tinGrp].Sig != (crypto.Signature{}) {
+				stxns[i][tinGrp].Sig[0] = stxns[i][tinGrp].Sig[0] + 1
+			} else {
+				stxns[i][tinGrp].Lsig.Logic[0] = 255
+			}
+			badTxnGroups[uint64(i)] = struct{}{}
+		}
+	}
+	return stxns, badTxnGroups
+}
+
+// runHandlerBenchmarkWithBacklog benchmarks the number of transactions verified or dropped
+func runHandlerBenchmarkWithBacklog(b *testing.B, txGen txGenIf, tps int, useBacklogWorker bool) {
 	defer func() {
 		// reset the counters
 		transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
 		transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
 	}()
 
-	const numUsers = 512
 	log := logging.TestingLog(b)
 	log.SetLevel(logging.Warn)
 
-	addresses, secrets, genesis := makeTestGenesisAccounts(b, numUsers)
-	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
-	ivrString := strings.IndexAny(fmt.Sprintf("%f", invalidRate), "1")
-	ledgerName := fmt.Sprintf("%s-mem-%d-%d", b.Name(), b.N, ivrString)
-	ledgerName = strings.Replace(ledgerName, "#", "-", 1)
-	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
-	require.NoError(b, err)
-
-	l := ledger
-	handler, err := makeTestTxHandler(l, cfg)
+	ledger := txGen.makeLedger(b, cfg, log, fmt.Sprintf("%s-%d", b.Name(), b.N))
+	defer ledger.Close()
+	handler, err := makeTestTxHandler(ledger, cfg)
 	require.NoError(b, err)
 	defer handler.txVerificationPool.Shutdown()
 	defer close(handler.streamVerifierDropped)
@@ -1596,24 +1737,16 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, tps int, invalidRate
 	if b.N < genTCount {
 		genTCount = b.N
 	}
-	var signedTransactionGroups [][]transactions.SignedTxn
-	var badTxnGroups map[uint64]interface{}
-	if msigSize == 1 {
-		signedTransactionGroups, badTxnGroups = makeSignedTxnGroups(genTCount, numUsers, maxGroupSize, invalidRate, addresses, secrets)
-	} else {
-		signedTransactionGroups, badTxnGroups, err = makeMsigSignedTxnGroups(genTCount, numUsers, msigSize, maxGroupSize, invalidRate, addresses, secrets)
-		require.NoError(b, err)
-	}
-	var encodedSignedTransactionGroups []network.IncomingMessage
+	signedTransactionGroups, badTxnGroups := txGen.createSignedTxGroups(b, genTCount)
+	var encStxns []network.IncomingMessage
 	if useBacklogWorker {
-		encodedSignedTransactionGroups = make([]network.IncomingMessage, 0, genTCount)
+		encStxns = make([]network.IncomingMessage, 0, genTCount)
 		for _, stxngrp := range signedTransactionGroups {
 			data := make([]byte, 0)
 			for _, stxn := range stxngrp {
 				data = append(data, protocol.Encode(&stxn)...)
 			}
-			encodedSignedTransactionGroups =
-				append(encodedSignedTransactionGroups, network.IncomingMessage{Data: data})
+			encStxns = append(encStxns, network.IncomingMessage{Data: data})
 		}
 	}
 
@@ -1729,7 +1862,7 @@ func runHandlerBenchmarkWithBacklog(maxGroupSize, msigSize, tps int, invalidRate
 	for !completed {
 		for i := range signedTransactionGroups {
 			if useBacklogWorker {
-				handler.processIncomingTxn(encodedSignedTransactionGroups[i])
+				handler.processIncomingTxn(encStxns[i])
 				<-ticker.C
 			} else {
 				stxngrp := signedTransactionGroups[i]
