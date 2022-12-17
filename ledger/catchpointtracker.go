@@ -1431,15 +1431,13 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 
 		// Now add the kvstore hashes
 		pendingTrieHashes = 0
-		kvs, err := tx.QueryContext(ctx, "SELECT key, value FROM kvstore")
+		kvs, err := store.MakeKVsIter(ctx, tx)
 		if err != nil {
 			return err
 		}
 		defer kvs.Close()
 		for kvs.Next() {
-			var k []byte
-			var v []byte
-			err := kvs.Scan(&k, &v)
+			k, v, err := kvs.KeyValue()
 			if err != nil {
 				return err
 			}
