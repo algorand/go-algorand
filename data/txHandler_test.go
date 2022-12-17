@@ -92,12 +92,14 @@ func BenchmarkTxHandlerProcessing(b *testing.B) {
 	cfg.Archival = true
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(b, err)
+	defer ledger.Close()
 
 	l := ledger
 
 	cfg.TxPoolSize = 75000
 	cfg.EnableProcessBlockStats = false
 	txHandler := makeTestTxHandler(l, cfg)
+	defer txHandler.txVerificationPool.Shutdown()
 
 	makeTxns := func(N int) [][]transactions.SignedTxn {
 		ret := make([][]transactions.SignedTxn, 0, N)
@@ -982,9 +984,11 @@ func TestTxHandlerProcessIncomingCacheTxPoolDrop(t *testing.T) {
 	cfg.TxIncomingFilteringFlags = 3 // txFilterRawMsg + txFilterCanonical
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(t, err)
+	defer ledger.Close()
 
 	l := ledger
 	handler := makeTestTxHandler(l, cfg)
+	defer handler.txVerificationPool.Shutdown()
 	handler.postVerificationQueue = make(chan *txBacklogMsg)
 
 	makeTxns := func(sendIdx, recvIdx int) ([]transactions.SignedTxn, []byte) {
@@ -1106,6 +1110,9 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 		transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
 		transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
 	}()
+	// reset the counters
+	transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
+	transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
 
 	const numUsers = 100
 	log := logging.TestingLog(t)
@@ -1119,9 +1126,10 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 	cfg.Archival = true
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(t, err)
+	defer ledger.Close()
 
-	l := ledger
-	handler := makeTestTxHandler(l, cfg)
+	handler := makeTestTxHandler(ledger, cfg)
+	defer handler.txVerificationPool.Shutdown()
 
 	// since Start is not called, set the context here
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
@@ -1442,7 +1450,7 @@ func BenchmarkHandleTxnGroups(b *testing.B) {
 	}
 }
 
-// BenchmarkHandleTxns sends signed transactions directly to the verifier
+// BenchmarkHandleMsigTxns sends signed transactions directly to the verifier
 func BenchmarkHandleMsigTxns(b *testing.B) {
 	maxGroupSize := 1
 	msigSizes := []int{255, 64, 16}
@@ -1624,6 +1632,9 @@ func runHandlerBenchmarkWithBacklog(b *testing.B, txGen txGenIf, tps int, useBac
 		transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
 		transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
 	}()
+	// reset the counters
+	transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
+	transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
 
 	log := logging.TestingLog(b)
 	log.SetLevel(logging.Warn)
@@ -1633,6 +1644,7 @@ func runHandlerBenchmarkWithBacklog(b *testing.B, txGen txGenIf, tps int, useBac
 	ledger := txGen.makeLedger(b, cfg, log, fmt.Sprintf("%s-%d", b.Name(), b.N))
 	defer ledger.Close()
 	handler := makeTestTxHandler(ledger, cfg)
+	defer handler.txVerificationPool.Shutdown()
 
 	// The benchmark generates only 1000 txns, and reuses them. This is done for faster benchmark time and the
 	// ability to have long runs without being limited to the memory. The dedup will block the txns once the same
@@ -1815,7 +1827,22 @@ func runHandlerBenchmarkWithBacklog(b *testing.B, txGen txGenIf, tps int, useBac
 
 func TestTxHandlerPostProcessError(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
+
+	defer func() {
+		transactionMessagesTxnSigVerificationFailed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigVerificationFailed)
+		transactionMessagesAlreadyCommitted = metrics.MakeCounter(metrics.TransactionMessagesAlreadyCommitted)
+		transactionMessagesTxGroupInvalidFee = metrics.MakeCounter(metrics.TransactionMessagesTxGroupInvalidFee)
+		transactionMessagesTxnSigNotWellFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigNotWellFormed)
+		transactionMessagesTxnMsigNotWellFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnMsigNotWellFormed)
+		transactionMessagesTxnLogicSig = metrics.MakeCounter(metrics.TransactionMessagesTxnLogicSig)
+	}()
+
+	transactionMessagesTxnSigVerificationFailed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigVerificationFailed)
+	transactionMessagesAlreadyCommitted = metrics.MakeCounter(metrics.TransactionMessagesAlreadyCommitted)
+	transactionMessagesTxGroupInvalidFee = metrics.MakeCounter(metrics.TransactionMessagesTxGroupInvalidFee)
+	transactionMessagesTxnSigNotWellFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigNotWellFormed)
+	transactionMessagesTxnMsigNotWellFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnMsigNotWellFormed)
+	transactionMessagesTxnLogicSig = metrics.MakeCounter(metrics.TransactionMessagesTxnLogicSig)
 
 	collect := func() map[string]float64 {
 		// collect all specific error reason metrics except TxGroupErrorReasonNotWellFormed,
@@ -1872,7 +1899,11 @@ func TestTxHandlerPostProcessError(t *testing.T) {
 
 func TestTxHandlerPostProcessErrorWithVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
+
+	defer func() {
+		transactionMessagesTxnNotWellFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnNotWellFormed)
+	}()
+	transactionMessagesTxnNotWellFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnNotWellFormed)
 
 	txn := transactions.Transaction{}
 	stxn := transactions.SignedTxn{Txn: txn}
@@ -1899,7 +1930,19 @@ func TestTxHandlerPostProcessErrorWithVerify(t *testing.T) {
 // TestTxHandlerRememberReportErrors checks Is and As statements work as expected
 func TestTxHandlerRememberReportErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
+
+	defer func() {
+		transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
+			"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
+			txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+			txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+		)
+	}()
+	transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
+		"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
+		txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+		txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+	)
 
 	var txh TxHandler
 	result := map[string]float64{}
@@ -1960,7 +2003,28 @@ func (t *blockTicker) Wait() {
 
 func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
+	defer func() {
+		transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
+			"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
+			txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+			txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+		)
+		transactionMessageTxPoolCheckCounter = metrics.NewTagCounter(
+			"algod_transaction_messages_txpool_check_err_{TAG}", "Number of transaction messages that didn't pass check by txpool b/c of {TAG}",
+			txPoolRememberTagTxnNotWellFormed, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+			txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+		)
+	}()
+	transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
+		"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
+		txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+		txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+	)
+	transactionMessageTxPoolCheckCounter = metrics.NewTagCounter(
+		"algod_transaction_messages_txpool_check_err_{TAG}", "Number of transaction messages that didn't pass check by txpool b/c of {TAG}",
+		txPoolRememberTagTxnNotWellFormed, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+		txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+	)
 
 	result := map[string]float64{}
 	checkResult := map[string]float64{}
@@ -2011,8 +2075,10 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	cfg.TxPoolSize = config.MaxTxGroupSize + 1
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(t, err)
+	defer ledger.Close()
 
 	handler := makeTestTxHandler(ledger, cfg)
+	defer handler.txVerificationPool.Shutdown()
 	// since Start is not called, set the context here
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	defer handler.ctxCancel()
