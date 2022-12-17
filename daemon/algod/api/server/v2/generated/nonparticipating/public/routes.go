@@ -63,7 +63,7 @@ type ServerInterface interface {
 	// Gets the current node status.
 	// (GET /v2/status)
 	GetStatus(ctx echo.Context) error
-	// Gets the node status after waiting for the given round.
+	// Gets the node status after waiting for a round after the given round.
 	// (GET /v2/status/wait-for-block-after/{round})
 	WaitForBlock(ctx echo.Context, round uint64) error
 	// Compile TEAL source code to binary, produce its hash
@@ -752,25 +752,25 @@ var swaggerSpec = []string{
 	"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",
-	"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",
+	"1J0KdadC3alQdyrUnQp1ExXqcyWJJJ5f++g6LnjCYU41u4Qqe+SuaMUfKqi6OulepUMl0KhgrgQcoZ6L",
+	"4pOb5ZRooDnigOW2aadQvbU1sIeqEqVMgaQGQsZJkVMjWcFKVwWJmqXufPFN10UVq+dRBU+fkNO/Hvnw",
+	"0IULY2y+e983z1R6ncMDlxVctdrz6cHADdJddjD1CrEvXOTKOLEciDLo/RbfPoZLyI1yZyPPiFFPuwrz",
+	"GdD8pcPNFn250UzNjPbruKGmO7QtaRF0i8a1UkUohhK3eqHNaK76m6HZ8Za0iNUOqli71aSRm7wQ2bp1",
+	"QsyuHeAGNs9GHSTKOJXrSPR350R0SEMLw68cYXVNAR/3HsrcJdoumW2jsJiwI0FFz/EmKo/G8FYb1hnK",
+	"xpHPWnQS7QTaDlwdVQAOCb8y9Oz3hLyz333eLEiEyB2xmpn/bqJWmm9WTAPfNTKYYz1fasqiR3z09OLZ",
+	"HxvCzsoUCNOK+Gjo7dfLeLRKzEhz4IljQMlUZOukwb5GjVsoY4oqBcvp9pso5J+uWqa7fMyTzffU57lG",
+	"joPFbeLJIdGsEseAe7izDeEfxpsrbOGIjj0HGP/ULLqPjYYgEMefYjp5u0fBjkyvnmZ9x/juGF9wGlsS",
+	"AeMue6TNRCafkPHJtSx5P8/7dgVpaYALT/J9NG6iRwNWuuEWymBazudY9bPj4jBLAxyPCf6ZWKFd7lAu",
+	"uBsF2cGrSnA3rU/SHq7LXYJMiftCkrkUZfHAtjfha7QFLwvK195jBoliyzK3OLQ1lfbLaG2CR6y9vbfs",
+	"9RsF33rbX2D6cldt83eLFnJFlWtzDhkpeebi1jtpYCs+vOKoHfpsxWs2vbHmqF1vZHVu3iFXhN9lF2Bd",
+	"eQkLkIlecXugmmWBbbqZPbmTu2qHf45r461tI9TDYLupUzVD2NPtIQO+htdHkP1eJ2I0e7TYDlJ9Ycth",
+	"Krx9c6++987wTRd80L/JupggLwj1pahTwZWWZarPOUUTd7CwSdc97w33/fztpX8l7mWJOEHcUOecYqXi",
+	"yvAd5XMziLi0vgPwbFSV8zkowytDIpkBnHP3FuOk5EbTEjOyZKkUiU2CMmfIyCcT++aSrsmM5uij+Q2k",
+	"IFNzswe7bg3GSrM8d/EAZhoiZuecapIDVZq8ZobLmuF8mZoqEAb0lZAXFRbiydNz4KCYSuLGl+/tU8xP",
+	"dsv3Rj40WNrHdV7h7SYme9hZ1gv5ybGBm2KdhZwpXbuQO7DfmvtwyXgSJbKzBRAXUdOmLXLfMF5PQA9q",
+	"H73b9XNubjgtCHJ1qq9HDm03T+cs2tPRoprGRrS8QX6tg1S8vXAZEmEyd66VP1BaUEAHhsarjcceBu29",
+	"39GNsrEtWuypK1bT85JTEsA/tqcI73izLEhLyfQa/RC0YL9cgPn/+4/vzTN56V0UpcxHh6OF1sXhwQH2",
+	"O1sIpQ9GH8fhM9V6+L5a+QfvbSgku8QKqe8//v8AAAD//59AZYRkPwEA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

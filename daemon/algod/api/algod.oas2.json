@@ -1088,7 +1088,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Gets the node status after waiting for the given round.",
+        "summary": "Gets the node status after waiting for a round after the given round.",
         "operationId": "WaitForBlock",
         "parameters": [
           {
