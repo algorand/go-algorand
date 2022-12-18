@@ -327,6 +327,10 @@ func TestLedgerSeed(t *testing.T) {
 
 func TestConsensusVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	if testing.Short() {
+		t.Log("this is a long test and skipping for -short")
+		return
+	}
 
 	// find a consensus protocol that leads to ConsensusCurrentVersion
 	var previousProtocol protocol.ConsensusVersion
@@ -514,7 +518,7 @@ func TestLedgerErrorValidate(t *testing.T) {
 	defer realLedger.Close()
 
 	l := Ledger{Ledger: realLedger, log: log}
-	l.log.SetLevel(logging.Debug)
+	l.log.SetLevel(logging.Warn)
 	require.NotNil(t, &l)
 
 	totalsRound, _, err := realLedger.LatestTotals()
