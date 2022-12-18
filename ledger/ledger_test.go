@@ -28,9 +28,8 @@ import (
 	"runtime"
 	"sort"
 	"testing"
-
-	"github.com/stretchr/testify/require"
-
+	"time"
+	
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -50,6 +49,7 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-deadlock"
+	"github.com/stretchr/testify/require"
 )
 
 func sign(secrets map[basics.Address]*crypto.SignatureSecrets, t transactions.Transaction) transactions.SignedTxn {
@@ -1727,7 +1727,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	}
 
 	// We make the ledger flush tracker data to allow votersTracker to advance lowestRound
-	triggerTrackerFlush(t, addresses, proto, l, initKeys, genesisInitState)
+	triggerTrackerFlush(t, l, genesisInitState)
 
 	// We add another block to make the block queue query the voter's tracker lowest round again, which allows it to forget
 	// rounds based on the new lowest round.
