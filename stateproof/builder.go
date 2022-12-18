@@ -45,7 +45,7 @@ func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgerco
 	}
 
 	proto := config.Consensus[header.CurrentProtocol]
-	if uint64(rnd)%proto.StateProofInterval != 0 {
+	if proto.StateProofInterval == 0 || uint64(rnd)%proto.StateProofInterval != 0 {
 		return nil
 	}
 
