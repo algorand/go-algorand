@@ -62,14 +62,7 @@ RUN apt-get update && apt-get install -y \
 #  chown -R algorand.algorand /algod
 #USER algorand
 
-# Algod REST API
-EXPOSE $ALGOD_PORT
-
-# Algod Gossip Port
-EXPOSE 4160
-
-# Prometheus Metrics
-EXPOSE 9100
+# Expose Algod REST API, Algod Gossip, and Prometheus Metrics ports
+EXPOSE $ALGOD_PORT 4160 9100
 
 CMD ["/node/run/run.sh"]
-#CMD ["/bin/bash"]

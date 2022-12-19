@@ -21,7 +21,7 @@ jobs:
           images: |
             docker.io/${{ github.repository_owner }}/algod
           tags: |
-            type=sha
+            type=sha,format=long,prefix=
             type=ref,event=tag
             type=ref,event=branch
 
