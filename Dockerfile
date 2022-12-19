@@ -51,7 +51,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && \
     mkdir -p "$ALGORAND_DATA" && \
     \
     groupadd --system algorand && \
-    useradd --no-log-init --system --gid algorand algorand && \
+    useradd --no-log-init --create-home --system --gid algorand algorand && \
     chown -R algorand.algorand /node && \
     chown -R algorand.algorand /algod
 

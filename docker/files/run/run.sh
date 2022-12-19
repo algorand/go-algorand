@@ -22,6 +22,9 @@ function apply_configuration() {
   if [ -f "/etc/algod.admin.token" ]; then
     cp /etc/algod.admin.token algod.admin.token
   fi
+  if [ -f "/etc/logging.config" ]; then
+    cp /etc/logging.config logging.config
+  fi
 
   # check for environment variable overrides.
   if [ "$TOKEN" != "" ]; then
