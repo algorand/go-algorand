@@ -1,14 +1,15 @@
-ARG GO_VERSION=1.17.13
+ARG GO_VERSION="1.17.13"
+
 FROM golang:$GO_VERSION-bullseye as builder
 
-ARG CHANNEL=nightly
-ARG URL=
-ARG BRANCH=
-ARG SHA=
+ARG CHANNEL
+ARG URL
+ARG BRANCH
+ARG SHA
 
 # Basic dependencies.
-ENV HOME /node
-ENV DEBIAN_FRONTEND noninteractive
+ENV HOME="/node"
+ENV DEBIAN_FRONTEND="noninteractive"
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     apt-utils \
