@@ -138,7 +138,6 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 
 	// committing stateproof that confirm the (numOfIntervals - 1)th interval
 	commitStateProofBlock(t, ml, basics.Round((numOfIntervals-1)*intervalForTest))
-	i++
 
 	// the tracker should have 3 entries
 	//  - voters to confirm the numOfIntervals - 1 th interval
@@ -156,8 +155,6 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 func TestLimitVoterTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
-
-	t.Skip() // TODO: Rewrite
 
 	intervalForTest := config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
 	recoveryIntervalForTests := config.Consensus[protocol.ConsensusCurrentVersion].StateProofMaxRecoveryIntervals
@@ -179,24 +176,23 @@ func TestLimitVoterTracker(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
+	// To cause all blocks to be committed, for easier processing by the voters tracker.
+	conf.MaxAcctLookback = 0
 	au, ao := newAcctUpdates(t, ml, conf)
 	defer au.close()
 	defer ao.close()
 
-	_, totals, err := au.LatestTotals()
-	require.NoError(t, err)
-
 	i := uint64(1)
 
 	// since the first state proof is expected to happen on stateproofInterval*2 we would start give-up on state proofs
-	// after intervalForTest*(recoveryIntervalForTests+3)
+	// after intervalForTest*(recoveryIntervalForTests+3) are committed
 
 	// should not give up on any state proof
 	for ; i < intervalForTest*(recoveryIntervalForTests+2); i++ {
-		block := randomBlock(basics.Round(i))
-		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-		addBlockToAccountsUpdate(block.block, ao, totals)
+		addRandomBlock(t, ml)
 	}
+
+	commitAll(t, ml)
 
 	// the votersForRoundCache should contains recoveryIntervalForTests+2 elements:
 	// recoveryIntervalForTests  - since this is the recovery interval
@@ -207,38 +203,38 @@ func TestLimitVoterTracker(t *testing.T) {
 
 	// after adding the round intervalForTest*(recoveryIntervalForTests+3)+1 we expect the voter tracker to remove voters
 	for ; i < intervalForTest*(recoveryIntervalForTests+3)+1; i++ {
-		block := randomBlock(basics.Round(i))
-		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-		addBlockToAccountsUpdate(block.block, ao, totals)
+		addRandomBlock(t, ml)
 	}
+
+	commitAll(t, ml)
 
 	checkVoters(a, ao, recoveryIntervalForTests+2)
 	a.Equal(basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval*2-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	// after adding the round intervalForTest*(recoveryIntervalForTests+3)+1 we expect the voter tracker to remove voters
 	for ; i < intervalForTest*(recoveryIntervalForTests+4)+1; i++ {
-		block := randomBlock(basics.Round(i))
-		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-		addBlockToAccountsUpdate(block.block, ao, totals)
+		addRandomBlock(t, ml)
 	}
+
+	commitAll(t, ml)
 	checkVoters(a, ao, recoveryIntervalForTests+2)
 	a.Equal(basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval*3-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	// if the last round of the intervalForTest has not been added to the ledger the votersTracker would
 	// retain one more element
 	for ; i < intervalForTest*(recoveryIntervalForTests+5); i++ {
-		block := randomBlock(basics.Round(i))
-		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-		addBlockToAccountsUpdate(block.block, ao, totals)
+		addRandomBlock(t, ml)
 	}
+
+	commitAll(t, ml)
 	checkVoters(a, ao, recoveryIntervalForTests+3)
 	a.Equal(basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval*3-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
 	for ; i < intervalForTest*(recoveryIntervalForTests+5)+1; i++ {
-		block := randomBlock(basics.Round(i))
-		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-		addBlockToAccountsUpdate(block.block, ao, totals)
+		addRandomBlock(t, ml)
 	}
+
+	commitAll(t, ml)
 	checkVoters(a, ao, recoveryIntervalForTests+2)
 	a.Equal(basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval*4-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 }
