@@ -54,13 +54,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# TODO: This works fine, but causes problems when mounting a volume
 # Use algorand user instead of root
-#RUN groupadd -r algorand && \
-#  useradd --no-log-init -r -g algorand algorand && \
-#  chown -R algorand.algorand /node && \
-#  chown -R algorand.algorand /algod
-#USER algorand
+RUN groupadd --system algorand && \
+    useradd --no-log-init --system --gid algorand algorand && \
+    chown -R algorand.algorand /node && \
+    chown -R algorand.algorand /algod
+
+USER algorand
 
 # Expose Algod REST API, Algod Gossip, and Prometheus Metrics ports
 EXPOSE $ALGOD_PORT 4160 9100
