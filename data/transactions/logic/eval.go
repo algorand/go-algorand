@@ -3382,6 +3382,8 @@ var ecdsaVerifyCosts = []int{
 	Secp256r1: 2500,
 }
 
+var secp256r1 = elliptic.P256()
+
 func opEcdsaVerify(cx *EvalContext) error {
 	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
 	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
@@ -3421,11 +3423,9 @@ func opEcdsaVerify(cx *EvalContext) error {
 		pubkey := secp256k1.S256().Marshal(x, y)
 		result = secp256k1.VerifySignature(pubkey, msg, signature)
 	} else if fs.field == Secp256r1 {
-		curve := elliptic.P256()
-
-		if !cx.Proto.EnablePrecheckECDSACurve || curve.IsOnCurve(x, y) {
+		if !cx.Proto.EnablePrecheckECDSACurve || secp256r1.IsOnCurve(x, y) {
 			pubkey := ecdsa.PublicKey{
-				Curve: curve,
+				Curve: secp256r1,
 				X:     x,
 				Y:     y,
 			}
