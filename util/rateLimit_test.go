@@ -168,7 +168,7 @@ func TestREDCongestionManagerShouldntDrop(t *testing.T) {
 	red.Consumed(client, time.Now())
 	// drive 10k messages
 	// indicates that the service rate is essentially 100/s (10s rolling window)
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 5000; i++ {
 		red.Served(time.Now())
 	}
 	// the service rate should be 1000/s, and the arrival rate for this client should be 0.1/s
@@ -180,9 +180,9 @@ func TestREDCongestionManagerShouldntDrop(t *testing.T) {
 	time.Sleep(1000 * time.Millisecond)
 	red.Stop()
 	assert.Equal(t, 1, len(*red.consumedByClient[client]))
-	assert.Equal(t, 10000, len(red.serves))
+	assert.Equal(t, 5000, len(red.serves))
 	assert.Equal(t, 0.1, red.arrivalRateFor(red.consumedByClient[client]))
-	assert.Equal(t, float64(1000), red.targetRate)
+	assert.Equal(t, float64(500), red.targetRate)
 }
 
 func TestREDCongestionManagerTargetRate(t *testing.T) {
@@ -209,14 +209,16 @@ func TestREDCongestionManagerPrune(t *testing.T) {
 	red.Consumed(client, time.Now().Add(-11*time.Second))
 	red.Consumed(client, time.Now().Add(-11*time.Second))
 	red.Consumed(client, time.Now().Add(-11*time.Second))
+	red.Consumed(client, time.Now())
 	red.Served(time.Now().Add(-11 * time.Second))
 	red.Served(time.Now().Add(-11 * time.Second))
 	red.Served(time.Now().Add(-11 * time.Second))
+	red.Served(time.Now())
 	// allow the congestion manager to consume and process the given messages
 	time.Sleep(100 * time.Millisecond)
 	red.Stop()
-	assert.Equal(t, 0.0, red.arrivalRateFor(red.consumedByClient[client]))
-	assert.Equal(t, 0.0, red.targetRate)
+	assert.Equal(t, 0.1, red.arrivalRateFor(red.consumedByClient[client]))
+	assert.Equal(t, 0.1, red.targetRate)
 }
 
 func TestREDCongestionManagerStopStart(t *testing.T) {

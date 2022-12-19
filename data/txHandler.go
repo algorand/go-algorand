@@ -163,7 +163,7 @@ func MakeTxHandler(opts TxHandlerOpts) *TxHandler {
 		rateLimiter := util.NewElasticRateLimiter(
 			txBacklogSize,
 			opts.Config.TxBacklogReservedCapacityPerPeer,
-			time.Duration(opts.Config.TxBacklogServiceRateWindowSeconds),
+			time.Duration(opts.Config.TxBacklogServiceRateWindowSeconds)*time.Second,
 			txBacklogDroppedCongestionManagement,
 		)
 		handler.erl = rateLimiter

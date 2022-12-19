@@ -315,7 +315,7 @@ func NewREDCongestionManager(d time.Duration, bsize int) *redCongestionManager {
 		consumed:               make(chan event, bsize),
 		served:                 make(chan event, bsize),
 		shouldDropQueries:      make(chan shouldDropQuery, bsize),
-		targetRateRefreshTicks: bsize,
+		targetRateRefreshTicks: bsize / 10, // have the Congestion Manager refresh its target rates every 10% through the queue
 		consumedByClient:       map[ErlClient]*[]time.Time{},
 		exp:                    4,
 		wg:                     sync.WaitGroup{},
@@ -498,7 +498,7 @@ func prune(ts *[]time.Time, cutoff time.Time) int {
 			return len(*ts)
 		}
 	}
-	//if there are no values after the cutoff, just set to empty and return
+	// if no values are after the cutoff, clear the array and give back a 0
 	*ts = (*ts)[:0]
 	return 0
 }
