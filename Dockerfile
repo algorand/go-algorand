@@ -23,8 +23,6 @@ COPY ./installer/genesis /node/files/run/genesis
 COPY ./cmd/updater/update.sh /node/files/build/update.sh
 COPY ./installer/config.json.example /node/files/build/config.json
 
-RUN find /node/files
-
 # Install algod binaries.
 RUN /node/files/build/install.sh \
     -p "/node/bin" \
