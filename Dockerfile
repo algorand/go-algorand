@@ -47,10 +47,9 @@ WORKDIR /node/data
 # curl is needed to lookup the fast catchup url
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Use algorand user instead of root
-RUN groupadd --system algorand && \
+    && rm -rf /var/lib/apt/lists/* && \
+    \
+    groupadd --system algorand && \
     useradd --no-log-init --system --gid algorand algorand && \
     chown -R algorand.algorand /node && \
     chown -R algorand.algorand /algod
