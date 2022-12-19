@@ -45,9 +45,10 @@ ENV PATH="/node/bin:${PATH}" ALGOD_PORT="8080" ALGORAND_DATA="/algod/data"
 WORKDIR /node/data
 
 # curl is needed to lookup the fast catchup url
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/* && \
+RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    \
+    mkdir -p "$ALGORAND_DATA" && \
     \
     groupadd --system algorand && \
     useradd --no-log-init --system --gid algorand algorand && \
