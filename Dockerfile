@@ -42,11 +42,8 @@ COPY --from=builder "/node/bin/" "/node/bin"
 COPY --from=builder "/node/data/" "/node/dataTemplate"
 COPY --from=builder "/node/files/run" "/node/run"
 
-ENV BIN_DIR="/node/bin"
-ENV PATH="$BIN_DIR:${PATH}"
-ENV ALGOD_PORT=8080
-ENV ALGORAND_DATA="/algod/data"
-RUN mkdir -p "$ALGORAND_DATA"
+ENV PATH="/node/bin:${PATH}" ALGOD_PORT="8080" ALGORAND_DATA="/algod/data"
+
 WORKDIR /node/data
 
 # curl is needed to lookup the fast catchup url
