@@ -1557,6 +1557,7 @@ func makeTxGenerator(tb testing.TB, numUsers, maxGroupSize int, invalidRate floa
 	return &txGenerator{
 		numUsers:     numUsers,
 		maxGroupSize: maxGroupSize,
+		invalidRate:  invalidRate,
 		addresses:    addresses,
 		secrets:      secrets,
 		genesis:      genesis,
