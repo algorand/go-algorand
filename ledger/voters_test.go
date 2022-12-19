@@ -21,6 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -266,14 +267,9 @@ func TestTopNAccountsThatHaveNoMssKeys(t *testing.T) {
 	defer au.close()
 	defer ao.close()
 
-	_, totals, err := au.LatestTotals()
-	require.NoError(t, err)
-
 	i := uint64(1)
 	for ; i < (intervalForTest)+1; i++ {
-		block := randomBlock(basics.Round(i))
-		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-		addBlockToAccountsUpdate(block.block, ao, totals)
+		addRandomBlock(t, ml)
 	}
 
 	top, err := ao.voters.VotersForStateProof(basics.Round(intervalForTest - lookbackForTest))
