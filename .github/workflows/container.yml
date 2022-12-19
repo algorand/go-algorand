@@ -49,4 +49,4 @@ jobs:
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           build-args: |
             SHA=${{ github.sha }}
-            URL=${{ github.repositoryUrl }}
+            URL=${{ github.server_url }}/${{ github.repository }}.git
