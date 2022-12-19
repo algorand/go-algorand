@@ -1779,8 +1779,9 @@ func createBlkWithStateproof(t *testing.T, maxBlocks int, proto config.Consensus
 }
 
 func addDummyBlock(t *testing.T, addresses []basics.Address, proto config.ConsensusParams, l *Ledger, initKeys map[basics.Address]*crypto.SignatureSecrets, genesisInitState ledgercore.InitState) {
-	stxns := make([]transactions.SignedTxn, 2)
-	for j := 0; j < 2; j++ {
+	numOfTransactions := 2
+	stxns := make([]transactions.SignedTxn, numOfTransactions)
+	for j := 0; j < numOfTransactions; j++ {
 		txHeader := transactions.Header{
 			Sender:      addresses[0],
 			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
