@@ -133,6 +133,7 @@ func testAccountManagerKeys(t *testing.T, registry account.ParticipationRegistry
 
 		accessor, err := db.MakeErasableAccessor(partFilename)
 		require.NoError(t, err)
+		defer accessor.Close()
 		accessor.SetLogger(log)
 
 		part, err := account.FillDBWithParticipationKeys(accessor, root.Address(), 0, 100, 10000)
