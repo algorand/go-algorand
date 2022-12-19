@@ -50,3 +50,4 @@ jobs:
           build-args: |
             SHA=${{ github.sha }}
             URL=${{ github.server_url }}/${{ github.repository }}.git
+            BRANCH=${{ github.ref_name }}

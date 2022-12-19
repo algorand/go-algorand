@@ -83,6 +83,5 @@ git log -n 5
 
 ./scripts/configure_dev.sh
 make build
-./scripts/dev_install.sh -p "${BINDIR}" -d "${ALGORAND_DATA}"
 
 "$BINDIR"/algod -v

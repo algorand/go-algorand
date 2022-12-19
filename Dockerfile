@@ -8,7 +8,7 @@ ARG BRANCH
 ARG SHA
 
 # Basic dependencies.
-ENV HOME="/node" DEBIAN_FRONTEND="noninteractive"
+ENV HOME="/node" DEBIAN_FRONTEND="noninteractive" GOPATH="/node"
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     apt-utils \
@@ -19,11 +19,11 @@ RUN apt-get update && \
 COPY ./docker/files/ /node/files
 COPY ./installer/genesis /node/files/run/genesis
 COPY ./cmd/updater/update.sh /node/files/build/update.sh
-COPY ./installer/config.json.example /node/files/build/config.json
+COPY ./installer/config.json.example /node/files/run/config.json.example
 
 # Install algod binaries.
 RUN /node/files/build/install.sh \
-    -p "/node/bin" \
+    -p "${GOPATH}/bin" \
     -d "/node/data" \
     -c "${CHANNEL}" \
     -u "${URL}" \
@@ -34,8 +34,8 @@ RUN /node/files/build/install.sh \
 # TODO: We don't need most of the binaries.
 #       Should we delete everything except goal/algod/algocfg/tealdbg?
 FROM debian:bullseye-slim as final
+
 COPY --from=builder "/node/bin/" "/node/bin"
-COPY --from=builder "/node/data/" "/node/dataTemplate"
 COPY --from=builder "/node/files/run" "/node/run"
 
 ENV PATH="/node/bin:${PATH}" ALGOD_PORT="8080" ALGORAND_DATA="/algod/data"
