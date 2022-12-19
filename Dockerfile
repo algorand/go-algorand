@@ -8,8 +8,7 @@ ARG BRANCH
 ARG SHA
 
 # Basic dependencies.
-ENV HOME="/node"
-ENV DEBIAN_FRONTEND="noninteractive"
+ENV HOME="/node" DEBIAN_FRONTEND="noninteractive"
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     apt-utils \
