@@ -10,7 +10,7 @@ ARG SHA=
 ENV HOME /node
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && \
-    apt-get install -y \
+    apt-get install -y --no-install-recommends \
     apt-utils \
     bsdmainutils \
     curl \
@@ -50,7 +50,7 @@ RUN mkdir -p "$ALGORAND_DATA"
 WORKDIR /node/data
 
 # curl is needed to lookup the fast catchup url
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
