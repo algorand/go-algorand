@@ -21,7 +21,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -31,12 +30,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func addBlockToAccountsUpdate(blk bookkeeping.Block, ao *onlineAccounts, totals ledgercore.AccountTotals) {
+func addBlockToAccountsUpdate(t *testing.T, blk bookkeeping.Block, ao *onlineAccounts, ml *mockLedgerForTracker, totals ledgercore.AccountTotals) {
 	updates := ledgercore.MakeAccountDeltas(1)
 	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 	delta.Accts.MergeAccounts(updates)
 	delta.Totals = totals
-	ao.newBlock(blk, delta)
+	err := ml.addMockBlock(blockEntry{block: blk}, delta)
+	require.NoError(t, err)
+	ml.trackers.newBlock(blk, delta)
+}
+
+func commitStateProofBlock(t *testing.T, ao *onlineAccounts, ml *mockLedgerForTracker, totals ledgercore.AccountTotals, round basics.Round, stateProofNextRound basics.Round) {
+	var stateTracking bookkeeping.StateProofTrackingData
+	block := randomBlock(round)
+	block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
+	stateTracking.StateProofNextRound = stateProofNextRound
+	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
+
+	addBlockToAccountsUpdate(t, block.block, ao, ml, totals)
+	dcc := commitSyncPartial(t, ao, ml, block.block.Round())
+	commitSyncPartialComplete(t, ao, ml, dcc)
 }
 
 func checkVoters(a *require.Assertions, ao *onlineAccounts, expectedSize uint64) {
@@ -75,8 +89,6 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	t.Skip() // TODO: Rewrite
-
 	intervalForTest := config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
 	numOfIntervals := config.Consensus[protocol.ConsensusCurrentVersion].StateProofMaxRecoveryIntervals - 1
 	lookbackForTest := config.Consensus[protocol.ConsensusCurrentVersion].StateProofVotersLookback
@@ -97,6 +109,8 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
+	// To cause all blocks to be committed, for easier processing by the voters tracker.
+	conf.MaxAcctLookback = 0
 	au, ao := newAcctUpdates(t, ml, conf)
 	defer au.close()
 	defer ao.close()
@@ -109,22 +123,15 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	for ; i < (numOfIntervals*intervalForTest)+1; i++ {
 		block := randomBlock(basics.Round(i))
 		block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-		addBlockToAccountsUpdate(block.block, ao, totals)
+		addBlockToAccountsUpdate(t, block.block, ao, ml, totals)
 	}
 
 	checkVoters(a, ao, numOfIntervals)
 	a.Equal(basics.Round(intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
-	block := randomBlock(basics.Round(i))
-	i++
-	block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-
 	// committing stateproof that confirm the (numOfIntervals - 1)th interval
-	var stateTracking bookkeeping.StateProofTrackingData
-	stateTracking.StateProofNextRound = basics.Round((numOfIntervals - 1) * intervalForTest)
-	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
-	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
-	addBlockToAccountsUpdate(block.block, ao, totals)
+	commitStateProofBlock(t, ao, ml, totals, basics.Round(i), basics.Round((numOfIntervals-1)*intervalForTest))
+	i++
 
 	// the tracker should have 3 entries
 	//  - voters to confirm the numOfIntervals - 1 th interval
@@ -133,12 +140,7 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	checkVoters(a, ao, 3)
 	a.Equal(basics.Round((numOfIntervals-2)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
 
-	block = randomBlock(basics.Round(i))
-	block.block.CurrentProtocol = protocol.ConsensusCurrentVersion
-	stateTracking.StateProofNextRound = basics.Round(numOfIntervals * intervalForTest)
-	block.block.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
-	block.block.BlockHeader.StateProofTracking[protocol.StateProofBasic] = stateTracking
-	addBlockToAccountsUpdate(block.block, ao, totals)
+	commitStateProofBlock(t, ao, ml, totals, basics.Round(i), basics.Round(numOfIntervals*intervalForTest))
 
 	checkVoters(a, ao, 2)
 	a.Equal(basics.Round((numOfIntervals-1)*intervalForTest-lookbackForTest), ao.voters.lowestRound(basics.Round(i)))
