@@ -14,9 +14,7 @@ RUN apt-get update && \
     apt-utils \
     bsdmainutils \
     curl \
-    git \
-    git-core \
-    python3
+    git
 
 COPY ./docker/files/ /node/files
 COPY ./installer/genesis /node/files/run/genesis
