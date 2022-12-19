@@ -1,4 +1,4 @@
-ARG GO_VERSION=1.17.5
+ARG GO_VERSION=1.17.13
 FROM golang:$GO_VERSION-bullseye as builder
 
 ARG CHANNEL=nightly
