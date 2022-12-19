@@ -3026,13 +3026,21 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	require.True(t, found)
 	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
 
-	/// We make the ledger flush tracker data to allow votersTracker to advance lowestRound
+	for i := uint64(0); i < proto.StateProofInterval; i++ {
+		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
+	}
+
+	// We make the ledger flush tracker data to allow votersTracker to advance lowestRound
 	triggerTrackerFlush(t, l, genesisInitState)
 
 	// We add another block to make the block queue query the voter's tracker lowest round again, which allows it to forget
 	// rounds based on the new lowest round.
 	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	l.WaitForCommit(l.Latest())
+
+	// round 512 should now be forgotten.
+	_, found = l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
+	require.False(t, found)
 
 	vtSnapshot = l.acctsOnline.voters.votersForRoundCache
 	err = l.reloadLedger()
