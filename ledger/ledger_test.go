@@ -2873,9 +2873,7 @@ func verifyVotersContent(t *testing.T, expected map[basics.Round]*ledgercore.Vot
 
 func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.InitState) {
 	l.trackers.lastFlushTime = time.Time{}
-	newBlock := makeNewEmptyBlock(t, l, t.Name(), genesisInitState.Accounts)
-	err := l.AddBlock(newBlock, agreement.Certificate{})
-	require.NoError(t, err)
+	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	l.WaitForCommit(l.Latest())
 	l.trackers.waitAccountsWriting()
 }
@@ -2990,16 +2988,15 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 
 func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Skip() // TODO: Need to rewrite it considering the new voters tracker behaviour
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState := getInitState()
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
-	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
+	cfg.MaxAcctLookback = 0
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
@@ -3016,10 +3013,7 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	// we push proto.StateProofInterval * (proto.StateProofMaxRecoveryIntervals + 2) block into the ledger
 	// the reason for + 2 is the first state proof is on 2*stateproofinterval.
 	for i := uint64(0); i < (proto.StateProofInterval * (proto.StateProofMaxRecoveryIntervals + 2)); i++ {
-		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += 10
-		err = l.AddBlock(blk, agreement.Certificate{})
-		require.NoError(t, err)
+		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	}
 
 	// the voters tracker should contain all the voters for each stateproof round. nothing should be removed
@@ -3032,19 +3026,12 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	require.True(t, found)
 	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
 
-	for i := uint64(0); i < proto.StateProofInterval+cfg.MaxAcctLookback; i++ {
-		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += 10
-		err = l.AddBlock(blk, agreement.Certificate{})
-		require.NoError(t, err)
-	}
-
 	/// We make the ledger flush tracker data to allow votersTracker to advance lowestRound
 	triggerTrackerFlush(t, l, genesisInitState)
 
 	// We add another block to make the block queue query the voter's tracker lowest round again, which allows it to forget
 	// rounds based on the new lowest round.
-	addDummyBlock(t, []basics.Address{}, proto, l, map[basics.Address]*crypto.SignatureSecrets{}, genesisInitState)
+	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	l.WaitForCommit(l.Latest())
 
 	vtSnapshot = l.acctsOnline.voters.votersForRoundCache
