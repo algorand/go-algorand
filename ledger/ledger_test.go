@@ -2878,6 +2878,17 @@ func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.In
 	l.trackers.waitAccountsWriting()
 }
 
+func triggerDeleteVoters(t *testing.T, l *Ledger, genesisInitState ledgercore.InitState) {
+	// We make the ledger flush tracker data to allow votersTracker to advance lowestRound
+	triggerTrackerFlush(t, l, genesisInitState)
+
+	// We add another block to make the block queue query the voter's tracker lowest round again, which allows it to forget
+	// rounds based on the new lowest round.
+	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
+	l.WaitForCommit(l.Latest())
+	l.trackers.waitAccountsWriting()
+}
+
 func TestVotersReloadFromDisk(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -2931,7 +2942,7 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState := getInitState()
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	const inMem = true
 	cfg := config.GetDefaultLocal()
@@ -2955,7 +2966,6 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 
 	for i := uint64(0); i < (proto.StateProofInterval*3 - proto.StateProofVotersLookback); i++ {
 		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += 10
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
 	}
@@ -2968,12 +2978,11 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 
 	for i := uint64(0); i < proto.StateProofInterval; i++ {
 		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += 10
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
 	}
 
-	l.WaitForCommit(blk.BlockHeader.Round)
+	triggerDeleteVoters(t, l, genesisInitState)
 	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
 
 	// verifying that the tree for round 512 is still in the cache, but the tree for round 256 is evicted.
@@ -3030,13 +3039,7 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	}
 
-	// We make the ledger flush tracker data to allow votersTracker to advance lowestRound
-	triggerTrackerFlush(t, l, genesisInitState)
-
-	// We add another block to make the block queue query the voter's tracker lowest round again, which allows it to forget
-	// rounds based on the new lowest round.
-	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
-	l.WaitForCommit(l.Latest())
+	triggerDeleteVoters(t, l, genesisInitState)
 
 	// round 512 should now be forgotten.
 	_, found = l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
