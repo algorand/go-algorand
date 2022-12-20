@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -57,9 +58,9 @@ func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]
 			last64KIndex = len(encodedAccountChunks)
 		}
 		var chunk catchpointFileChunkV6
-		chunk.Balances = make([]encodedBalanceRecordV6, chunkSize)
+		chunk.Balances = make([]encoded.BalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
-			var randomAccount encodedBalanceRecordV6
+			var randomAccount encoded.BalanceRecordV6
 			accountData := store.BaseAccountData{}
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)
@@ -406,8 +407,8 @@ func TestCatchupAccessorResourceCountMismatch(t *testing.T) {
 	require.NoError(t, err)
 
 	var balances catchpointFileChunkV6
-	balances.Balances = make([]encodedBalanceRecordV6, 1)
-	var randomAccount encodedBalanceRecordV6
+	balances.Balances = make([]encoded.BalanceRecordV6, 1)
+	var randomAccount encoded.BalanceRecordV6
 	accountData := store.BaseAccountData{}
 	accountData.MicroAlgos.Raw = crypto.RandUint63()
 	accountData.TotalAppParams = 1
@@ -435,7 +436,7 @@ func (w *testStagingWriter) writeCreatables(ctx context.Context, balances []stor
 	return nil
 }
 
-func (w *testStagingWriter) writeKVs(ctx context.Context, kvrs []encodedKVRecordV6) error {
+func (w *testStagingWriter) writeKVs(ctx context.Context, kvrs []encoded.KVRecordV6) error {
 	return nil
 }
 
@@ -485,8 +486,8 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 		return accountData
 	}
 
-	encodedBalanceRecordFromBase := func(addr basics.Address, base store.BaseAccountData, resources map[uint64]msgp.Raw, more bool) encodedBalanceRecordV6 {
-		ebr := encodedBalanceRecordV6{
+	encodedBalanceRecordFromBase := func(addr basics.Address, base store.BaseAccountData, resources map[uint64]msgp.Raw, more bool) encoded.BalanceRecordV6 {
+		ebr := encoded.BalanceRecordV6{
 			Address:              addr,
 			AccountData:          protocol.Encode(&base),
 			Resources:            resources,
@@ -530,14 +531,14 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 	// make chunks
 	chunks := []catchpointFileChunkV6{
 		{
-			Balances: []encodedBalanceRecordV6{
+			Balances: []encoded.BalanceRecordV6{
 				encodedBalanceRecordFromBase(ledgertesting.RandomAddress(), acctA, nil, false),
 				encodedBalanceRecordFromBase(ledgertesting.RandomAddress(), acctB, nil, false),
 				encodedBalanceRecordFromBase(addrX, acctX, acctXRes1, true),
 			},
 		},
 		{
-			Balances: []encodedBalanceRecordV6{
+			Balances: []encoded.BalanceRecordV6{
 				encodedBalanceRecordFromBase(addrX, acctX, acctXRes2, false),
 				encodedBalanceRecordFromBase(ledgertesting.RandomAddress(), acctC, nil, false),
 				encodedBalanceRecordFromBase(ledgertesting.RandomAddress(), acctD, nil, false),

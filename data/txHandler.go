@@ -68,9 +68,15 @@ var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGrou
 var transactionGroupTxSyncAlreadyCommitted = metrics.MakeCounter(metrics.TransactionGroupTxSyncAlreadyCommitted)
 
 var transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
-	"algod_transaction_messages_txpool_remember_{TAG}", "Number of transaction messages not remembered by txpool b/c if {TAG}",
-	txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
-	txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagEvalGeneric,
+	"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
+	txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+	txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+)
+
+var transactionMessageTxPoolCheckCounter = metrics.NewTagCounter(
+	"algod_transaction_messages_txpool_check_err_{TAG}", "Number of transaction messages that didn't pass check by txpool b/c of {TAG}",
+	txPoolRememberTagTxnNotWellFormed, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+	txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
 )
 
 const (
@@ -79,11 +85,16 @@ const (
 	txPoolRememberTagNoSpace     = "no_space"
 	txPoolRememberTagFee         = "fee"
 	txPoolRememberTagTxnDead     = "txn_dead"
+	txPoolRememberTagTxnEarly    = "txn_early"
 	txPoolRememberTagTooLarge    = "too_large"
 	txPoolRememberTagGroupID     = "groupid"
 	txPoolRememberTagTxID        = "txid"
 	txPoolRememberTagLease       = "lease"
+	txPoolRememberTagTxIDEval    = "txid_eval"
+	txPoolRememberTagLeaseEval   = "lease_eval"
 	txPoolRememberTagEvalGeneric = "eval"
+
+	txPoolRememberTagTxnNotWellFormed = "not_well"
 )
 
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
@@ -274,6 +285,45 @@ func (handler *TxHandler) postProcessReportErrors(err error) {
 	}
 }
 
+func (handler *TxHandler) checkReportErrors(err error) {
+	switch err := err.(type) {
+	case *ledgercore.TxnNotWellFormedError:
+		transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxnNotWellFormed, 1)
+		return
+	case *transactions.TxnDeadError:
+		if err.Early {
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxnEarly, 1)
+		} else {
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxnDead, 1)
+		}
+		return
+	case *ledgercore.TransactionInLedgerError:
+		if err.InBlockEvaluator {
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxIDEval, 1)
+		} else {
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxID, 1)
+		}
+		return
+	case *ledgercore.LeaseInLedgerError:
+		if err.InBlockEvaluator {
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagLeaseEval, 1)
+		} else {
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagLease, 1)
+		}
+		return
+	case *ledgercore.TxGroupMalformedError:
+		switch err.Reason {
+		case ledgercore.TxGroupMalformedErrorReasonExceedMaxSize:
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTooLarge, 1)
+		default:
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagGroupID, 1)
+		}
+		return
+	}
+
+	transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagEvalGeneric, 1)
+}
+
 func (handler *TxHandler) rememberReportErrors(err error) {
 	if errors.Is(err, pools.ErrPendingQueueReachedMaxCap) {
 		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagCap, 1)
@@ -303,13 +353,25 @@ func (handler *TxHandler) rememberReportErrors(err error) {
 		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagFee, 1)
 		return
 	case *transactions.TxnDeadError:
-		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxnDead, 1)
+		if err.Early {
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxnEarly, 1)
+		} else {
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxnDead, 1)
+		}
 		return
 	case *ledgercore.TransactionInLedgerError:
-		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxID, 1)
+		if err.InBlockEvaluator {
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxIDEval, 1)
+		} else {
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxID, 1)
+		}
 		return
 	case *ledgercore.LeaseInLedgerError:
-		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagLease, 1)
+		if err.InBlockEvaluator {
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagLeaseEval, 1)
+		} else {
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagLease, 1)
+		}
 		return
 	case *ledgercore.TxGroupMalformedError:
 		switch err.Reason {
@@ -552,6 +614,7 @@ func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDon
 	// do a quick test to check that this transaction could potentially be committed, to reject dup pending transactions
 	err := handler.txPool.Test(tx.unverifiedTxGroup)
 	if err != nil {
+		handler.checkReportErrors(err)
 		logging.Base().Debugf("txPool rejected transaction: %v", err)
 		return true
 	}
