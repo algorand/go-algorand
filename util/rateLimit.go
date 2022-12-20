@@ -147,9 +147,6 @@ func (erl *ElasticRateLimiter) Stop() {
 
 // EnableCongestionControl turns on the flag that the ERL uses to check with its CongestionManager
 func (erl *ElasticRateLimiter) EnableCongestionControl() {
-	if erl == nil {
-		return
-	}
 	erl.clientLock.Lock()
 	defer erl.clientLock.Unlock()
 	erl.enableCM = true
