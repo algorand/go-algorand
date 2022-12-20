@@ -80,7 +80,7 @@ type votersTracker struct {
 	// shutdown the tracker without leaving any running go-routines.
 	loadWaitGroup sync.WaitGroup
 
-	commitListener   *ledgercore.VotersCommitListener
+	commitListener   ledgercore.VotersCommitListener
 	commitListenerMu deadlock.RWMutex
 }
 
@@ -205,7 +205,7 @@ func (vt *votersTracker) prepareCommit(dcc *deferredCommitContext) error {
 		return nil
 	}
 
-	commitListener := *vt.commitListener
+	commitListener := vt.commitListener
 	for round := dcc.oldBase; round <= dcc.newBase; round++ {
 		err := commitListener.OnPrepareVoterCommit(round, vt)
 		if err != nil {
@@ -295,7 +295,7 @@ func (vt *votersTracker) registerPrepareCommitListener(commitListener ledgercore
 	vt.commitListenerMu.Lock()
 	defer vt.commitListenerMu.Unlock()
 
-	vt.commitListener = &commitListener
+	vt.commitListener = commitListener
 }
 
 func (vt *votersTracker) initializeVoters() {
