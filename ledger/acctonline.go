@@ -347,6 +347,16 @@ func (ao *onlineAccounts) maxBalLookback() uint64 {
 
 // prepareCommit prepares data to write to the database a "chunk" of rounds, and update the cached dbRound accordingly.
 func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
+	err := ao.prepareCommitInternal(dcc)
+	if err != nil {
+		return err
+	}
+
+	return ao.voters.prepareCommit(dcc)
+}
+
+// prepareCommitInternal preforms preapreCommit's logic without locking the tracker's mutex.
+func (ao *onlineAccounts) prepareCommitInternal(dcc *deferredCommitContext) error {
 	offset := dcc.offset
 
 	ao.accountsMu.RLock()
@@ -394,7 +404,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 		dcc.onlineAccountsForgetBefore = dcc.lowestRound
 	}
 
-	return ao.voters.prepareCommit(dcc)
+	return nil
 }
 
 // commitRound closure is called within the same transaction for all trackers
@@ -499,10 +509,11 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	forgetBefore := (newBase + 1).SubSaturate(basics.Round(ao.maxBalLookback()))
 	ao.onlineAccountsCache.prune(forgetBefore)
 
-	ao.voters.postCommit(dcc)
 	ao.accountsMu.Unlock()
 
 	ao.accountsReadCond.Broadcast()
+
+	ao.voters.postCommit(dcc)
 }
 
 func (ao *onlineAccounts) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
