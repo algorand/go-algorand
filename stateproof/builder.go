@@ -182,7 +182,7 @@ func (spw *Worker) createAndPersistBuilder(rnd basics.Round, votersFetcher ledge
 		return persistBuilder(tx, rnd, &res)
 	})
 	if err != nil {
-		spw.log.Errorf("loadOrCreateBuilder: failed to insert builder into database: %v", err)
+		spw.log.Errorf("loadOrCreateBuilder(%d): failed to insert builder into database: %v", rnd, err)
 	}
 
 	return res, nil
