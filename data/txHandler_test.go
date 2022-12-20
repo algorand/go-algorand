@@ -55,6 +55,8 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
+// txHandler uses config values to determine backlog size. Tests should use a static value
+var txBacklogSize = 26000
 
 // mock sender is used to implement OnClose, since TXHandlers expect to use Senders and ERL Clients
 type mockSender struct{}
@@ -245,7 +247,7 @@ func BenchmarkTxHandlerProcessIncomingTxn(b *testing.B) {
 	}()
 
 	const numTxnsPerGroup = 16
-	handler := makeTestTxHandlerOrphaned(txPerBlock)
+	handler := makeTestTxHandlerOrphaned(txBacklogSize)
 
 	// prepare tx groups
 	blobs := make([][]byte, b.N)
@@ -420,7 +422,7 @@ func BenchmarkTxHandlerProcessIncomingTxn16(b *testing.B) {
 
 	const numSendThreads = 16
 	const numTxnsPerGroup = 16
-	handler := makeTestTxHandlerOrphaned(txPerBlock)
+	handler := makeTestTxHandlerOrphaned(txBacklogSize)
 	// uncomment to benchmark no-dedup version
 	// handler.cacheConfig = txHandlerConfig{}
 
@@ -527,7 +529,7 @@ func BenchmarkTxHandlerIncDeDup(b *testing.B) {
 			dupFactor := test.dupFactor
 			avgDelay := test.workerDelay / time.Duration(numPoolWorkers)
 
-			handler := makeTestTxHandlerOrphaned(txPerBlock)
+			handler := makeTestTxHandlerOrphaned(txBacklogSize)
 			if test.firstLevelOnly {
 				handler.cacheConfig = txHandlerConfig{enableFilteringRawMsg: true, enableFilteringCanonical: false}
 			} else if !test.dedup {
@@ -774,10 +776,10 @@ func makeTestTxHandlerOrphaned(backlogSize int) *TxHandler {
 
 func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, cacheSize int, txHandlerConfig txHandlerConfig, refreshInterval time.Duration) *TxHandler {
 	if backlogSize <= 0 {
-		backlogSize = txPerBlock
+		backlogSize = txBacklogSize
 	}
 	if cacheSize <= 0 {
-		cacheSize = txPerBlock
+		cacheSize = txBacklogSize
 	}
 	handler := &TxHandler{
 		backlogQueue:     make(chan *txBacklogMsg, backlogSize),
@@ -909,7 +911,7 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 
 	t.Run("manual", func(t *testing.T) {
 		// double enqueue a single txn message, ensure it discarded
-		handler := makeTestTxHandlerOrphaned(txPerBlock)
+		handler := makeTestTxHandlerOrphaned(txBacklogSize)
 		var action network.OutgoingMessage
 		var msg *txBacklogMsg
 
@@ -1101,11 +1103,11 @@ func TestTxHandlerIncomingTxHandleDrops(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// use smaller backlog size to test the message drops
-	origValue := txPerBlock
+	origValue := txBacklogSize
 	defer func() {
-		txPerBlock = origValue
+		txBacklogSize = origValue
 	}()
-	txPerBlock = 10
+	txBacklogSize = 10
 
 	numberOfTransactionGroups := 1000
 	incomingTxHandlerProcessing(1, numberOfTransactionGroups, t)
