@@ -211,6 +211,8 @@ func (spw *Worker) initBuilders() {
 		}
 		spw.builders[rnd] = buildr
 	}
+
+	spw.ledger.RegisterVotersCommitListener(spw)
 }
 
 func (spw *Worker) getAllOnlineBuilderRounds() ([]basics.Round, error) {
@@ -399,8 +401,6 @@ func (spw *Worker) builderExistsInDB(rnd basics.Round) (bool, error) {
 }
 
 func (spw *Worker) builder(latest basics.Round) {
-	spw.ledger.RegisterVotersCommitListener(spw)
-
 	// We clock the building of state proofs based on new
 	// blocks.  This is because the acceptable state proof
 	// size grows over time, so that we aim to construct an extremely
