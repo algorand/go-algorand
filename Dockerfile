@@ -14,7 +14,8 @@ RUN apt-get update && \
     apt-utils \
     bsdmainutils \
     curl \
-    git
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY ./docker/files/ /node/files
 COPY ./installer/genesis /node/files/run/genesis
