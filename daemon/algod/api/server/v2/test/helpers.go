@@ -191,6 +191,10 @@ func (m *mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) erro
 	return m.err
 }
 
+func (m *mockNode) Simulate(txgroup []transactions.SignedTxn) (*ledgercore.ValidatedBlock, bool, error) {
+	return nil, false, m.err
+}
+
 func (m *mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {
 	res = node.TxnWithStatus{}
 	found = true
