@@ -138,8 +138,8 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.Onl
 func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	r := hdr.Round
 
-	_, ok := vt.getVoters(r)
-	if ok {
+	_, exists := vt.getVoters(r)
+	if exists {
 		// Already loaded.
 		return
 	}
@@ -188,8 +188,8 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 		return
 	}
 
-	_, ok := vt.getVoters(r)
-	if ok {
+	_, exists := vt.getVoters(r)
+	if exists {
 		vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
 	} else {
 		vt.loadTree(hdr)
@@ -276,8 +276,8 @@ func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 
 // VotersForStateProof returns the top online participants from round r.
 func (vt *votersTracker) VotersForStateProof(r basics.Round) (*ledgercore.VotersForRound, error) {
-	tr, ok := vt.getVoters(r)
-	if !ok {
+	tr, exists := vt.getVoters(r)
+	if !exists {
 		// Not tracked: stateproofs not enabled.
 		return nil, nil
 	}
