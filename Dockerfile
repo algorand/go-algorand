@@ -30,9 +30,6 @@ RUN /node/files/build/install.sh \
     -b "${BRANCH}" \
     -s "${SHA}"
 
-# Copy binaries into a clean image
-# TODO: We don't need most of the binaries.
-#       Should we delete everything except goal/algod/algocfg/tealdbg?
 FROM debian:bullseye-slim as final
 
 COPY --from=builder "/node/bin/" "/node/bin"

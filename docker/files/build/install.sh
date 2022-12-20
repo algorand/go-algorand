@@ -84,4 +84,8 @@ git log -n 5
 ./scripts/configure_dev.sh
 make build
 
+find "${GOPATH}/bin" -type f -print0 |
+  xargs --null grep -E -Z -L "*(algocfg|algod|algoh|algokey|carpenter|catchupsrv|ddconfig.sh|diagcfg|find-nodes\.sh|goal|kmd|msgpacktool|node_exporter|tealcut|tealdbg|update.sh|updater|COPYING)$" |
+  xargs --null rm -v
+
 "$BINDIR"/algod -v
