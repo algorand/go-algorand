@@ -27,6 +27,7 @@ The following environment variables can be supplied. Except when noted, it is po
 | -------- | ----------- |
 | NETWORK       | Leave blank for a private network, otherwise specify one of mainnet, betanet, testnet, or devnet. Only used during a data directory initialization. |
 | FAST_CATCHUP  | If set on a public network, attempt to start fast-catchup during initial config. |
+| CATCHPOINT    | If set, use this specific catchpoint. |
 | TELEMETRY_NAME| If set on a public network, telemetry is reported with this name. |
 | DEV_MODE      | If set on a private network, enable dev mode. Only used during data directory initialization. |
 | NUM_ROUNDS    | If set on a private network, override default of 30000 participation keys. |
@@ -54,6 +55,7 @@ docker run --rm -it \
     -p 4190:8080 \
     -e NETWORK=mainnet \
     -e FAST_CATCHUP=1 \
+    -e CATCHPOINT="25680000#FC44GULKJGKEP5TJEB4DTJEVJKDS5CBTUOOQ2XANGWNPHTLORQBA" \
     -e TELEMETRY_NAME=name \
     -e TOKEN=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
     -v ${PWD}/data:/algod/data/ \
@@ -66,6 +68,7 @@ Explanation of parts:
 * `-p 4190:8080` maps the internal algod REST API to local port 4190
 * `-e NETWORK=` can be set to any of the supported public networks.
 * `-e FAST_CATCHUP=` causes fast catchup to start shortly after launching the network.
+* `-e CATCHPOINT=` causes fast catchup to use a specific catchpoint.
 * `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis.
 * `-e TOKEN=` sets the REST API token to use.
 * `-v ${PWD}/data:/algod/data/` mounts a local volume to the data directory, which can be used to restart and upgrade the deployment.
