@@ -481,6 +481,10 @@ type Local struct {
 	// 0x01 (txFilterRawMsg) - check for raw tx message duplicates
 	// 0x02 (txFilterCanonical) - check for canonical tx group duplicates
 	TxIncomingFilteringFlags uint32 `version[26]:"1"`
+
+	// EnableExperimentalAPI enables experimental API endpoint. Note that these endpoints have no
+	// guarantees in terms of functionality or future support.
+	EnableExperimentalAPI bool `version[26]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
