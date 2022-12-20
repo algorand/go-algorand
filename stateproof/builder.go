@@ -56,7 +56,7 @@ func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgerco
 		return nil
 	}
 
-	_, err = spw.createBuilder(rnd, votersFetcher)
+	_, err = spw.createAndPersistBuilder(rnd, votersFetcher)
 	if err != nil {
 		return fmt.Errorf("OnPrepareVoterCommit(%d): could not create builder: %w", rnd, err)
 	}
@@ -88,7 +88,7 @@ func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 		spw.log.Errorf("loadOrCreateBuilder: error while fetching builder from DB: %v", err)
 	}
 
-	buildr, err = spw.createBuilder(rnd, spw.ledger)
+	buildr, err = spw.createAndPersistBuilder(rnd, spw.ledger)
 	if err != nil {
 		return builder{}, err
 	}
@@ -128,7 +128,7 @@ func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
 	return nil
 }
 
-func (spw *Worker) createBuilder(rnd basics.Round, votersFetcher ledgercore.VotersForRoundFetcher) (builder, error) {
+func (spw *Worker) createAndPersistBuilder(rnd basics.Round, votersFetcher ledgercore.VotersForRoundFetcher) (builder, error) {
 	l := spw.ledger
 	hdr, err := l.BlockHdr(rnd)
 	if err != nil {

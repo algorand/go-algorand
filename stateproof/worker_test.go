@@ -1541,7 +1541,7 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	require.Contains(t, "no such table: sigs", err.Error())
 }
 
-// relays reject signatures when could not createBuilder
+// relays reject signatures when could not createAndPersistBuilder
 func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
