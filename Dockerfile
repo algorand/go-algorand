@@ -33,12 +33,7 @@ RUN /node/files/build/install.sh \
 
 FROM debian:bullseye-slim as final
 
-COPY --from=builder "/node/bin/" "/node/bin"
-COPY --from=builder "/node/files/run" "/node/run"
-
 ENV PATH="/node/bin:${PATH}" ALGOD_PORT="8080" ALGORAND_DATA="/algod/data"
-
-WORKDIR /node/data
 
 # curl is needed to lookup the fast catchup url
 RUN apt-get update && apt-get install -y --no-install-recommends curl && \
@@ -48,10 +43,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && \
     \
     groupadd --system algorand && \
     useradd --no-log-init --create-home --system --gid algorand algorand && \
-    chown -R algorand.algorand /node && \
-    chown -R algorand.algorand /algod
+    chown -R algorand:algorand /algod
 
 USER algorand
+
+COPY --chown=algorand:algorand --from=builder "/node/bin/" "/node/bin/"
+COPY --chown=algorand:algorand --from=builder "/node/files/run/" "/node/run/"
 
 # Expose Algod REST API, Algod Gossip, and Prometheus Metrics ports
 EXPOSE $ALGOD_PORT 4160 9100
