@@ -407,7 +407,8 @@ func (l *Ledger) RegisterBlockListeners(listeners []BlockListener) {
 // RegisterVotersCommitListener registers a listener that will be called when a
 // commit is about to cover a round.
 func (l *Ledger) RegisterVotersCommitListener(listener ledgercore.VotersCommitListener) {
-	// TODO: Do I need to lock the trackerMu?
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
 	l.acctsOnline.voters.registerPrepareCommitListener(listener)
 }
 
