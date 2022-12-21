@@ -17,6 +17,8 @@
 package stateproof
 
 import (
+	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -151,6 +153,10 @@ func (spw *Worker) getStateProofMessage(round basics.Round, proto *config.Consen
 	dbBuilder, err := spw.loadBuilderFromDB(round)
 	if err == nil {
 		return &dbBuilder.Message, nil
+	}
+
+	if !errors.Is(err, sql.ErrNoRows) {
+		spw.log.Errorf("getStateProofMessage(%d): error while fetching builder from DB: %v", round, err)
 	}
 
 	return spw.generateStateProofMessageLedger(round, proto)
