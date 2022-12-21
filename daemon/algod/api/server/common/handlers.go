@@ -92,6 +92,20 @@ func HealthCheck(ctx lib.ReqContext, context echo.Context) {
 // Ready gets if the current node is healthy and fully caught up.
 // (GET /v2/ready)
 func Ready(ctx lib.ReqContext, context echo.Context) {
+	// swagger:operation GET /ready Ready
+	//---
+	//     Summary: Returns OK if healthy and fully caught up.
+	//     Produces:
+	//     - application/json
+	//     Schemes:
+	//     - http
+	//     Responses:
+	//       200:
+	//         description: OK.
+	//       500:
+	//         description: Internal Error.
+	//       default: { description: Unknown Error }
+
 	// how to perform healthcheck?
 	//stat, err := v2.Node.Status()
 	//if err != nil {
