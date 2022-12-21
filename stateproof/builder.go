@@ -57,6 +57,8 @@ func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgerco
 		return
 	}
 
+	// We create and persist the builder without using it. Signer can later use it (specifically the state proof
+	// message embedded in the builder) during catchup.
 	_, err = spw.createAndPersistBuilder(rnd, votersFetcher)
 	if err != nil {
 		spw.log.Warnf("OnPrepareVoterCommit(%d): could not create builder: %w", rnd, err)

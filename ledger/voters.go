@@ -30,6 +30,11 @@ import (
 	"github.com/algorand/go-algorand/stateproof"
 )
 
+// VotersCommitListener represents an object that needs to get notified on commit stages in the voters tracker.
+type VotersCommitListener interface {
+	OnPrepareVoterCommit(rnd basics.Round, voters ledgercore.VotersForRoundFetcher) error
+}
+
 // The votersTracker maintains the vector commitment for the most recent
 // commitments to online accounts for state proofs.
 //
@@ -207,10 +212,7 @@ func (vt *votersTracker) prepareCommit(dcc *deferredCommitContext) error {
 
 	commitListener := vt.commitListener
 	for round := dcc.oldBase; round <= dcc.newBase; round++ {
-		err := commitListener.OnPrepareVoterCommit(round, vt)
-		if err != nil {
-			return err
-		}
+		commitListener.OnPrepareVoterCommit(round, vt)
 	}
 
 	return nil
