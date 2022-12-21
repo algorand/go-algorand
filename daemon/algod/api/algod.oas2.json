@@ -47,6 +47,36 @@
         }
       }
     },
+    "/ready": {
+      "get": {
+        "tags": [
+          "public",
+          "common"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "scheme": [
+          "http"
+        ],
+        "summary": "Returns OK if healthy and fully caught up.",
+        "operationId": "GetReady",
+        "responses": {
+          "200": {
+            "description": "OK."
+          },
+          "400": {
+            "description": "bad request"
+          },
+          "500": {
+            "description": "Internal Error"
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/metrics": {
       "get": {
         "tags": [
@@ -1068,36 +1098,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          "default": {
-            "description": "Unknown Error"
-          }
-        }
-      }
-    },
-    "/v2/ready": {
-      "get": {
-        "tags": [
-          "public",
-          "nonparticipating"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "schemes": [
-          "http"
-        ],
-        "summary": "Returns OK if healthy and fully caught up.",
-        "operationId": "GetReady",
-        "responses": {
-          "200": {
-            "description": "OK."
-          },
-          "400": {
-            "description": "bad request"
-          },
-          "500": {
-            "description": "Internal Error"
           },
           "default": {
             "description": "Unknown Error"

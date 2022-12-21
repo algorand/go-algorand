@@ -89,6 +89,27 @@ func HealthCheck(ctx lib.ReqContext, context echo.Context) {
 	json.NewEncoder(w).Encode(nil)
 }
 
+// Ready gets if the current node is healthy and fully caught up.
+// (GET /v2/ready)
+func Ready(ctx lib.ReqContext, context echo.Context) {
+	// how to perform healthcheck?
+	//stat, err := v2.Node.Status()
+	//if err != nil {
+	//	return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	//}
+	//if stat.StoppedAtUnsupportedRound {
+	//	return badRequest(ctx, err, errRequestedRoundInUnsupportedRound, v2.Log)
+	//}
+	//if stat.Catchpoint != "" {
+	//	// node is currently catching up to the requested catchpoint.
+	//	return serviceUnavailable(ctx, fmt.Errorf("ready failed as the node is catchpoint catching up"), errOperationNotAvailableDuringCatchup, v2.Log)
+	//}
+	//if !algod.IsDBSchemeFinished {
+	//	return serviceUnavailable(ctx, fmt.Errorf("ready failed as the node has not finished ledger reload"), errOperationNotAvailableDuringLedgerReload, v2.Log)
+	//}
+	//return ctx.NoContent(http.StatusOK)
+}
+
 // VersionsHandler is an httpHandler for route GET /versions
 func VersionsHandler(ctx lib.ReqContext, context echo.Context) {
 	// swagger:route GET /versions GetVersion

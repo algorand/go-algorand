@@ -2278,6 +2278,34 @@
         ]
       }
     },
+    "/ready": {
+      "get": {
+        "operationId": "GetReady",
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "OK."
+          },
+          "400": {
+            "content": {},
+            "description": "bad request"
+          },
+          "500": {
+            "content": {},
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Returns OK if healthy and fully caught up.",
+        "tags": [
+          "public",
+          "common"
+        ]
+      }
+    },
     "/swagger.json": {
       "get": {
         "description": "Returns the entire swagger spec in json.",
@@ -4592,34 +4620,6 @@
           "participating"
         ],
         "x-codegen-request-body-name": "keymap"
-      }
-    },
-    "/v2/ready": {
-      "get": {
-        "operationId": "GetReady",
-        "responses": {
-          "200": {
-            "content": {},
-            "description": "OK."
-          },
-          "400": {
-            "content": {},
-            "description": "bad request"
-          },
-          "500": {
-            "content": {},
-            "description": "Internal Error"
-          },
-          "default": {
-            "content": {},
-            "description": "Unknown Error"
-          }
-        },
-        "summary": "Returns OK if healthy and fully caught up.",
-        "tags": [
-          "public",
-          "nonparticipating"
-        ]
       }
     },
     "/v2/shutdown": {

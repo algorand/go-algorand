@@ -22,7 +22,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/daemon/algod"
 	"io"
 	"math"
 	"net/http"
@@ -794,27 +793,6 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 	}
 
 	return ctx.JSON(http.StatusOK, response)
-}
-
-// GetReady gets if the current node is healthy and fully caught up.
-// (GET /v2/ready)
-func (v2 *Handlers) GetReady(ctx echo.Context) error {
-	// how to perform healthcheck?
-	stat, err := v2.Node.Status()
-	if err != nil {
-		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
-	}
-	if stat.StoppedAtUnsupportedRound {
-		return badRequest(ctx, err, errRequestedRoundInUnsupportedRound, v2.Log)
-	}
-	if stat.Catchpoint != "" {
-		// node is currently catching up to the requested catchpoint.
-		return serviceUnavailable(ctx, fmt.Errorf("ready failed as the node is catchpoint catching up"), errOperationNotAvailableDuringCatchup, v2.Log)
-	}
-	if !algod.IsDBSchemeFinished {
-		return serviceUnavailable(ctx, fmt.Errorf("ready failed as the node has not finished ledger reload"), errOperationNotAvailableDuringLedgerReload, v2.Log)
-	}
-	return ctx.NoContent(http.StatusOK)
 }
 
 // WaitForBlock returns the node status after waiting for the given round.
