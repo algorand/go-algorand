@@ -65,9 +65,6 @@
           "200": {
             "description": "OK."
           },
-          "400": {
-            "description": "bad request"
-          },
           "500": {
             "description": "Internal Error"
           },

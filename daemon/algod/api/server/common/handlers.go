@@ -105,23 +105,36 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 	//       500:
 	//         description: Internal Error.
 	//       default: { description: Unknown Error }
+	w := context.Response().Writer
+	w.Header().Set("Content-Type", "application/json")
 
-	// how to perform healthcheck?
-	//stat, err := v2.Node.Status()
-	//if err != nil {
-	//	return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
-	//}
-	//if stat.StoppedAtUnsupportedRound {
-	//	return badRequest(ctx, err, errRequestedRoundInUnsupportedRound, v2.Log)
-	//}
-	//if stat.Catchpoint != "" {
-	//	// node is currently catching up to the requested catchpoint.
-	//	return serviceUnavailable(ctx, fmt.Errorf("ready failed as the node is catchpoint catching up"), errOperationNotAvailableDuringCatchup, v2.Log)
-	//}
+	stat, err := ctx.Node.Status()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(nil)
+		// TODO something bad
+		//	return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+		return
+	}
+	if stat.StoppedAtUnsupportedRound {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(nil)
+		// TODO something bad
+		//	return badRequest(ctx, err, errRequestedRoundInUnsupportedRound, v2.Log)
+		return
+	}
+	if stat.Catchpoint != "" {
+		// TODO something bad
+		//	return serviceUnavailable(ctx, fmt.Errorf("ready failed as the node is catchpoint catching up"), errOperationNotAvailableDuringCatchup, v2.Log)
+		return
+	}
 	//if !algod.IsDBSchemeFinished {
 	//	return serviceUnavailable(ctx, fmt.Errorf("ready failed as the node has not finished ledger reload"), errOperationNotAvailableDuringLedgerReload, v2.Log)
 	//}
 	//return ctx.NoContent(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(nil)
+	return
 }
 
 // VersionsHandler is an httpHandler for route GET /versions
