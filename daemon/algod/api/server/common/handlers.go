@@ -119,15 +119,15 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 
 	stat, err := ctx.Node.Status()
 	if err != nil {
-		returnError(ctx, w, http.StatusInternalServerError, err, "failed retrieving node status")
+		returnError(ctx, w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus)
 		return
 	}
 	if stat.StoppedAtUnsupportedRound {
-		returnError(ctx, w, http.StatusInternalServerError, err, "requested round would reach only after the protocol upgrade which isn't supported")
+		returnError(ctx, w, http.StatusInternalServerError, err, errRequestedRoundInUnsupportedRound)
 		return
 	}
 	if stat.Catchpoint != "" {
-		returnError(ctx, w, http.StatusInternalServerError, fmt.Errorf("ready failed as the node is catchpoint catching up"), "operation not available during catchup")
+		returnError(ctx, w, http.StatusInternalServerError, fmt.Errorf("ready failed as the node is catchpoint catching up"), errOperationNotAvailableDuringCatchup)
 		return
 	}
 
