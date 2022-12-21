@@ -18,6 +18,7 @@ package common
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -25,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 )
 
@@ -89,6 +91,13 @@ func HealthCheck(ctx lib.ReqContext, context echo.Context) {
 	json.NewEncoder(w).Encode(nil)
 }
 
+func returnError(ctx lib.ReqContext, w http.ResponseWriter, code int, internal error, external string) {
+	ctx.Log.Info(internal)
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(model.ErrorResponse{Message: external})
+	return
+}
+
 // Ready gets if the current node is healthy and fully caught up.
 // (GET /v2/ready)
 func Ready(ctx lib.ReqContext, context echo.Context) {
@@ -110,28 +119,23 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 
 	stat, err := ctx.Node.Status()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(nil)
-		// TODO something bad
-		//	return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+		returnError(ctx, w, http.StatusInternalServerError, err, "failed retrieving node status")
 		return
 	}
 	if stat.StoppedAtUnsupportedRound {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(nil)
-		// TODO something bad
-		//	return badRequest(ctx, err, errRequestedRoundInUnsupportedRound, v2.Log)
+		returnError(ctx, w, http.StatusInternalServerError, err, "requested round would reach only after the protocol upgrade which isn't supported")
 		return
 	}
 	if stat.Catchpoint != "" {
-		// TODO something bad
-		//	return serviceUnavailable(ctx, fmt.Errorf("ready failed as the node is catchpoint catching up"), errOperationNotAvailableDuringCatchup, v2.Log)
+		returnError(ctx, w, http.StatusInternalServerError, fmt.Errorf("ready failed as the node is catchpoint catching up"), "operation not available during catchup")
 		return
 	}
+
 	//if !algod.IsDBSchemeFinished {
 	//	return serviceUnavailable(ctx, fmt.Errorf("ready failed as the node has not finished ledger reload"), errOperationNotAvailableDuringLedgerReload, v2.Log)
 	//}
 	//return ctx.NoContent(http.StatusOK)
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(nil)
 	return

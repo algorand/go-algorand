@@ -2286,10 +2286,6 @@
             "content": {},
             "description": "OK."
           },
-          "400": {
-            "content": {},
-            "description": "bad request"
-          },
           "500": {
             "content": {},
             "description": "Internal Error"
