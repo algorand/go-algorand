@@ -68,6 +68,9 @@
           "500": {
             "description": "Internal Error"
           },
+          "503": {
+            "description": "Service Temporarily Unavailable"
+          },
           "default": {
             "description": "Unknown Error"
           }

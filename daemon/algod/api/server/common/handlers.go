@@ -26,7 +26,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 )
 
@@ -91,10 +90,12 @@ func HealthCheck(ctx lib.ReqContext, context echo.Context) {
 	json.NewEncoder(w).Encode(nil)
 }
 
-func returnError(ctx lib.ReqContext, w http.ResponseWriter, code int, internal error, external string) {
-	ctx.Log.Info(internal)
+func returnCode(ctx lib.ReqContext, w http.ResponseWriter, code int, internal error) {
+	if internal != nil {
+		ctx.Log.Info(internal)
+	}
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(model.ErrorResponse{Message: external})
+	json.NewEncoder(w).Encode(nil)
 	return
 }
 
@@ -113,31 +114,32 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 	//         description: OK.
 	//       500:
 	//         description: Internal Error.
+	//       503:
+	//         description: Service Unavailable Error.
 	//       default: { description: Unknown Error }
 	w := context.Response().Writer
 	w.Header().Set("Content-Type", "application/json")
 
 	stat, err := ctx.Node.Status()
 	if err != nil {
-		returnError(ctx, w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus)
+		returnCode(ctx, w, http.StatusInternalServerError, err)
 		return
 	}
 	if stat.StoppedAtUnsupportedRound {
-		returnError(ctx, w, http.StatusInternalServerError, err, errRequestedRoundInUnsupportedRound)
+		returnCode(ctx, w, http.StatusInternalServerError, err)
 		return
 	}
 	if stat.Catchpoint != "" {
-		returnError(ctx, w, http.StatusInternalServerError, fmt.Errorf("ready failed as the node is catchpoint catching up"), errOperationNotAvailableDuringCatchup)
+		returnCode(ctx, w, http.StatusInternalServerError, fmt.Errorf("ready failed as the node is catchpoint catching up"))
 		return
 	}
 
-	//if !algod.IsDBSchemeFinished {
-	//	return serviceUnavailable(ctx, fmt.Errorf("ready failed as the node has not finished ledger reload"), errOperationNotAvailableDuringLedgerReload, v2.Log)
-	//}
-	//return ctx.NoContent(http.StatusOK)
+	if 0 == 1 {
+		returnCode(ctx, w, http.StatusServiceUnavailable, fmt.Errorf("ready failed as the node has not finished ledger reload"))
+		return
+	}
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(nil)
+	returnCode(ctx, w, http.StatusOK, nil)
 	return
 }
 

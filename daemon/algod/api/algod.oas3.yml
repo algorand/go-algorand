@@ -2290,6 +2290,10 @@
             "content": {},
             "description": "Internal Error"
           },
+          "503": {
+            "content": {},
+            "description": "Service Temporarily Unavailable"
+          },
           "default": {
             "content": {},
             "description": "Unknown Error"
