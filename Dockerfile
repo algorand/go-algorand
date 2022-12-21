@@ -35,7 +35,10 @@ FROM debian:bullseye-slim as final
 
 ENV PATH="/node/bin:${PATH}" ALGOD_PORT="8080" ALGORAND_DATA="/algod/data"
 
-RUN mkdir -p "$ALGORAND_DATA" && \
+# curl is needed to lookup the fast catchup url
+RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p "$ALGORAND_DATA" && \
     groupadd --system algorand && \
     useradd --no-log-init --create-home --system --gid algorand algorand && \
     chown -R algorand:algorand /algod
