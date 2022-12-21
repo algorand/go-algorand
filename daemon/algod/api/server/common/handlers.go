@@ -130,7 +130,7 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 	if stat.Catchpoint != "" {
-		returnCode(ctx, w, http.StatusInternalServerError, fmt.Errorf("ready failed as the node is catchpoint catching up"))
+		returnCode(ctx, w, http.StatusInternalServerError, fmt.Errorf("ready failed as the node is catching up"))
 		return
 	}
 
