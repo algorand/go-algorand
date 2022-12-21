@@ -28,13 +28,9 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-
-	"github.com/algorand/go-algorand/util"
-	"github.com/algorand/go-algorand/util/codecs"
 )
 
 const (
@@ -45,9 +41,6 @@ const (
 	s3DefaultReleaseBucket = "algorand-releases"
 	s3DefaultUploadBucket  = "algorand-uploads"
 	s3DefaultRegion        = "us-east-1"
-
-	downloadAction = "download"
-	uploadAction   = "upload"
 )
 
 // Helper encapsulates the s3 session state for interactive with our default S3 bucket with appropriate credentials
@@ -84,20 +77,12 @@ func getS3Region() (region string) {
 
 // MakeS3SessionForUploadWithBucket upload to bucket
 func MakeS3SessionForUploadWithBucket(awsBucket string) (helper Helper, err error) {
-	creds, err := getCredentials(uploadAction, awsBucket)
-	if err != nil {
-		return
-	}
-	return makeS3Session(creds, awsBucket)
+	return makeS3Session(awsBucket)
 }
 
 // MakeS3SessionForDownloadWithBucket download from bucket
 func MakeS3SessionForDownloadWithBucket(awsBucket string) (helper Helper, err error) {
-	creds, err := getCredentials(downloadAction, awsBucket)
-	if err != nil {
-		return
-	}
-	return makeS3Session(creds, awsBucket)
+	return makeS3Session(awsBucket)
 }
 
 // UploadFileStream sends file as stream to s3
@@ -114,58 +99,6 @@ func (helper *Helper) UploadFileStream(targetFile string, reader io.Reader) erro
 	return nil
 }
 
-type s3Keys struct {
-	ID     string
-	Secret string
-}
-
-func getCredentials(action string, awsBucket string) (creds *credentials.Credentials, err error) {
-	awsID, awsKey := getAWSCredentials()
-	credentailsRequired := checkCredentialsRequired(action, awsBucket)
-	if !credentailsRequired && (awsID == "" || awsKey == "") {
-		return credentials.AnonymousCredentials, nil
-	}
-	err = validateS3Credentials(awsID, awsKey)
-	if err != nil {
-		return
-	}
-	creds = credentials.NewStaticCredentials(awsID, awsKey, "")
-	return
-
-}
-
-func loadS3KeysFromFile(keyFile string) (keys s3Keys, err error) {
-	err = codecs.LoadObjectFromFile(keyFile, &keys)
-	return
-}
-
-func getAWSCredentials() (awsID string, awsKey string) {
-	awsID, _ = os.LookupEnv("AWS_ACCESS_KEY_ID")
-	awsKey, _ = os.LookupEnv("AWS_SECRET_ACCESS_KEY")
-
-	// If not in environment, try to load from s3.json file in bin dir
-	if awsID == "" || awsKey == "" {
-		baseDir, err := util.ExeDir()
-		if err == nil {
-			keyFile := filepath.Join(baseDir, "s3.json")
-			keys, err := loadS3KeysFromFile(keyFile)
-			if err == nil {
-				awsID = keys.ID
-				awsKey = keys.Secret
-			}
-		}
-	}
-	return
-}
-
-func validateS3Credentials(awsID string, awsKey string) (err error) {
-	if awsID == "" || awsKey == "" {
-		err = fmt.Errorf("AWS credentials must be specified in environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY")
-		return
-	}
-	return
-}
-
 func validateS3Bucket(awsBucket string) (err error) {
 	if awsBucket == "" {
 		err = fmt.Errorf("bucket name is empty")
@@ -174,21 +107,18 @@ func validateS3Bucket(awsBucket string) (err error) {
 	return
 }
 
-func checkCredentialsRequired(action string, bucketName string) (required bool) {
-	required = true
-	if action == downloadAction && bucketName == s3DefaultReleaseBucket {
-		required = false
-	}
-	return
-}
-
-func makeS3Session(credentials *credentials.Credentials, bucket string) (helper Helper, err error) {
+func makeS3Session(bucket string) (helper Helper, err error) {
 	err = validateS3Bucket(bucket)
 	if err != nil {
 		return
 	}
-	sess, err := session.NewSession(&aws.Config{Region: aws.String(getS3Region()),
-		Credentials: credentials})
+	sess, err := session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+		Config: aws.Config{
+			CredentialsChainVerboseErrors: aws.Bool(true),
+			Region:                        aws.String(getS3Region()),
+		},
+	})
 	if err != nil {
 		return
 	}
@@ -294,7 +224,7 @@ func (helper *Helper) GetPackageFilesVersion(channel string, pkgFiles string, sp
 func GetVersionFromName(name string) (version uint64, err error) {
 	re := regexp.MustCompile(`_(\d*)\.(\d*)\.(\d*)`)
 	submatchAll := re.FindAllStringSubmatch(name, -1)
-	if submatchAll == nil || len(submatchAll) == 0 || len(submatchAll[0]) != 4 {
+	if len(submatchAll) == 0 || len(submatchAll[0]) != 4 {
 		err = errors.New("unable to parse version from filename " + name)
 		return
 	}
