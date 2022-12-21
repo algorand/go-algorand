@@ -41,7 +41,7 @@ func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgerco
 	header, err := spw.ledger.BlockHdr(rnd)
 
 	if err != nil {
-		spw.log.Warnf("OnPrepareVoterCommit(%d): could not fetch round header: %w", rnd, err)
+		spw.log.Warnf("OnPrepareVoterCommit(%d): could not fetch round header: %v", rnd, err)
 		return
 	}
 
@@ -61,7 +61,7 @@ func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgerco
 	// message embedded in the builder) during catchup.
 	_, err = spw.createAndPersistBuilder(rnd, votersFetcher)
 	if err != nil {
-		spw.log.Warnf("OnPrepareVoterCommit(%d): could not create builder: %w", rnd, err)
+		spw.log.Warnf("OnPrepareVoterCommit(%d): could not create builder: %v", rnd, err)
 	}
 }
 
