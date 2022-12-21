@@ -208,8 +208,7 @@ func (s *workerForStateProofMessageTests) notifyPrepareVoterCommit(round basics.
 
 	// It looks the same as s.w.notifyPrepareVoterCommit, but it provides OnPrepareVoterCommit with a different
 	// VotersForStateProof, which is important.
-	err := s.w.commitListener.OnPrepareVoterCommit(round, s)
-	require.NoError(s.w.t, err)
+	s.w.commitListener.OnPrepareVoterCommit(round, s)
 }
 
 func TestStateProofMessage(t *testing.T) {

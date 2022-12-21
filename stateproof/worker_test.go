@@ -110,8 +110,7 @@ func (s *testWorkerStubs) notifyPrepareVoterCommit(round basics.Round) {
 		return
 	}
 
-	err := s.commitListener.OnPrepareVoterCommit(round, s)
-	require.NoError(s.t, err)
+	s.commitListener.OnPrepareVoterCommit(round, s)
 }
 
 func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
