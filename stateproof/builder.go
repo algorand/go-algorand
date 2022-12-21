@@ -294,11 +294,7 @@ func (spw *Worker) meetsBroadcastPolicy(sfa sigFromAddr, latestRound basics.Roun
 	}
 
 	latestStateProofRound := latestRound.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))
-	if sfa.Round == latestStateProofRound {
-		return true
-	}
-
-	return false
+	return sfa.Round == latestStateProofRound
 }
 
 // handleSig adds a signature to the pending in-memory state proof provers (builders). This function is
