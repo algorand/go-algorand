@@ -4476,13 +4476,16 @@ func opAssetParamsGet(cx *EvalContext) error {
 
 	var exist uint64 = 0
 	var value stackValue
-	if params, creator, err := cx.Ledger.AssetParams(asset); err == nil {
+	params, creator, err := cx.Ledger.AssetParams(asset)
+	if err == nil {
 		// params exist, read the value
 		exist = 1
 		value, err = cx.assetParamsToValue(&params, creator, fs)
 		if err != nil {
 			return err
 		}
+	} else {
+		logging.Base().Debugf("asset_params_get err %v", err)
 	}
 
 	cx.stack[last] = value

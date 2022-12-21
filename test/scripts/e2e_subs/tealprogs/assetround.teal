@@ -69,39 +69,47 @@ bz fail
 
 round:
 
-// Check round against arg 6 (arg < global Round, arg + 4 > global Round)
+// Check round against arg 6 // arg <= Round <= arg + 4
+// (arg <= global Round, arg + 4 >= global Round)
 txna ApplicationArgs 6
 btoi
+dup
 
 global Round
-<
+<=
 bz fail
 
-txna ApplicationArgs 6
-btoi
+//txna ApplicationArgs 6 // from dup
+//btoi
 
 int 4
 +
 
-// Check timestamp against arg 7 (arg < global LatestTimestamp + 60, arg + 60 > global LatestTimestamp)
-txna ApplicationArgs 7
-btoi
-
-global LatestTimestamp
-int 60
-+
-
-<
+global Round
+>=
 bz fail
 
+// Check timestamp against arg 7 (arg-60 <= timestamp <= arg+60)
+// (arg <= global LatestTimestamp + 60, arg + 60 >= global LatestTimestamp)
 txna ApplicationArgs 7
 btoi
+dup
+
+global LatestTimestamp
+int 60
++
+
+<=
+bz fail
+
+//txna ApplicationArgs 7 // from dup
+//btoi
 
 int 60
 +
 
 global LatestTimestamp
->
+>=
 bz fail
 
 success:

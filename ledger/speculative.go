@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -43,6 +44,9 @@ type LedgerForEvaluator interface { //nolint:revive //LedgerForEvaluator is a lo
 	VerifiedTransactionCache() verify.VerifiedTransactionCache
 	StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*internal.BlockEvaluator, error)
 }
+
+// ErrRoundTooHigh "round too high" try to get ledger record in the future
+var ErrRoundTooHigh = errors.New("round too high")
 
 // validatedBlockAsLFE presents a LedgerForEvaluator interface on top of
 // a ValidatedBlock.  This makes it possible to construct a BlockEvaluator
@@ -145,8 +149,12 @@ func (v *validatedBlockAsLFE) VotersForStateProof(r basics.Round) (*ledgercore.V
 }
 
 // GetCreatorForRound implements the ledgerForEvaluator interface.
-func (v *validatedBlockAsLFE) GetCreatorForRound(r basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
-	if r == v.vb.Block().Round() {
+func (v *validatedBlockAsLFE) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	vbround := v.vb.Block().Round()
+	if rnd > vbround {
+		return basics.Address{}, false, ErrRoundTooHigh
+	}
+	if rnd == vbround {
 		delta, ok := v.vb.Delta().Creatables[cidx]
 		if ok {
 			if delta.Created && delta.Ctype == ctype {
@@ -154,9 +162,12 @@ func (v *validatedBlockAsLFE) GetCreatorForRound(r basics.Round, cidx basics.Cre
 			}
 			return basics.Address{}, false, nil
 		}
+
+		// no change in this block, so lookup in previous
+		rnd--
 	}
 
-	return v.l.GetCreatorForRound(r, cidx, ctype)
+	return v.l.GetCreatorForRound(rnd, cidx, ctype)
 }
 
 // GenesisProto returns the initial protocol for this ledger.
@@ -166,8 +177,11 @@ func (v *validatedBlockAsLFE) GenesisProto() config.ConsensusParams {
 
 // LookupApplication loads an application resource that matches the request parameters from the ledger.
 func (v *validatedBlockAsLFE) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
-
-	if rnd == v.vb.Block().Round() {
+	vbround := v.vb.Block().Round()
+	if rnd > vbround {
+		return ledgercore.AppResource{}, ErrRoundTooHigh
+	}
+	if rnd == vbround {
 		// Intentionally apply (pending) rewards up to rnd.
 		res, ok := v.vb.Delta().Accts.GetResource(addr, basics.CreatableIndex(aidx), basics.AppCreatable)
 		if ok {
@@ -175,7 +189,7 @@ func (v *validatedBlockAsLFE) LookupApplication(rnd basics.Round, addr basics.Ad
 		}
 
 		// fall back to looking up asset in ledger, until previous block
-		rnd = v.vb.Block().Round() - 1
+		rnd--
 	}
 
 	return v.l.LookupApplication(rnd, addr, aidx)
@@ -183,14 +197,18 @@ func (v *validatedBlockAsLFE) LookupApplication(rnd basics.Round, addr basics.Ad
 
 // LookupAsset loads an asset resource that matches the request parameters from the ledger.
 func (v *validatedBlockAsLFE) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
-	if rnd == v.vb.Block().Round() {
+	vbround := v.vb.Block().Round()
+	if rnd > vbround {
+		return ledgercore.AssetResource{}, ErrRoundTooHigh
+	}
+	if rnd == vbround {
 		// Intentionally apply (pending) rewards up to rnd.
-		res, ok := v.vb.Delta().Accts.GetResource(addr, basics.CreatableIndex(aidx), basics.AppCreatable)
+		res, ok := v.vb.Delta().Accts.GetResource(addr, basics.CreatableIndex(aidx), basics.AssetCreatable)
 		if ok {
 			return ledgercore.AssetResource{AssetParams: res.AssetParams, AssetHolding: res.AssetHolding}, nil
 		}
 		// fall back to looking up asset in ledger, until previous block
-		rnd = v.vb.Block().Round() - 1
+		rnd--
 	}
 
 	return v.l.LookupAsset(rnd, addr, aidx)
@@ -198,13 +216,17 @@ func (v *validatedBlockAsLFE) LookupAsset(rnd basics.Round, addr basics.Address,
 
 // LookupWithoutRewards implements the ledgerForEvaluator interface.
 func (v *validatedBlockAsLFE) LookupWithoutRewards(rnd basics.Round, a basics.Address) (ledgercore.AccountData, basics.Round, error) {
-	if rnd == v.vb.Block().Round() {
+	vbround := v.vb.Block().Round()
+	if rnd > vbround {
+		return ledgercore.AccountData{}, rnd, ErrRoundTooHigh
+	}
+	if rnd == vbround {
 		data, ok := v.vb.Delta().Accts.GetData(a)
 		if ok {
 			return data, rnd, nil
 		}
 		// fall back to looking up account in ledger, until previous block
-		rnd = v.vb.Block().Round() - 1
+		rnd--
 	}
 
 	// account didn't change in last round. Subtract 1 so we can lookup the most recent change in the ledger
@@ -222,7 +244,11 @@ func (v *validatedBlockAsLFE) VerifiedTransactionCache() verify.VerifiedTransact
 
 // VerifiedTransactionCache implements the ledgerForEvaluator interface.
 func (v *validatedBlockAsLFE) BlockHdrCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
-	if rnd == v.vb.Block().Round() {
+	vbround := v.vb.Block().Round()
+	if rnd > vbround {
+		return bookkeeping.BlockHeader{}, ErrRoundTooHigh
+	}
+	if rnd == vbround {
 		return v.vb.Block().BlockHeader, nil
 	}
 	return v.l.BlockHdrCached(rnd)
@@ -249,13 +275,17 @@ func (v *validatedBlockAsLFE) FlushCaches() {
 
 // LookupKv implements LookupKv
 func (v *validatedBlockAsLFE) LookupKv(rnd basics.Round, key string) ([]byte, error) {
-	if rnd == v.vb.Block().Round() {
+	vbround := v.vb.Block().Round()
+	if rnd > vbround {
+		return nil, ErrRoundTooHigh
+	}
+	if rnd == vbround {
 		data, ok := v.vb.Delta().KvMods[key]
 		if ok {
 			return data.Data, nil
 		}
 		// fall back to looking up account in ledger, until previous block
-		rnd = v.vb.Block().Round() - 1
+		rnd--
 	}
 
 	// account didn't change in last round. Subtract 1 so we can lookup the most recent change in the ledger

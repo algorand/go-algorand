@@ -20,10 +20,29 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 ${gcmd} asset create --creator ${ACCOUNT} --name bogocoin --unitname bogo --total 1337
 ASSET_ID=$(${gcmd} asset info --creator $ACCOUNT --unitname bogo|grep 'Asset ID'|awk '{ print $3 }')
 
+#${gcmd} account info -a ${ACCOUNT}
+
 # Create app that reads asset balance and checks asset details and checks round
 ROUND=$(goal node status | grep 'Last committed' | awk '{ print $4 }')
-TIMESTAMP=$(goal ledger block --strict ${ROUND} | jq .block.ts)
-APP_ID=$(${gcmd} app create --creator ${ACCOUNT} --foreign-asset $ASSET_ID --app-arg "int:$ASSET_ID" --app-arg "int:1337" --app-arg "int:0" --app-arg "int:0" --app-arg "int:1337" --app-arg "str:bogo" --app-arg "int:$ROUND" --app-arg "int:$TIMESTAMP" --approval-prog ${DIR}/tealprogs/assetround.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(printf "#pragma version 2\nint 1") | grep Created | awk '{ print $6 }')
+#TIMESTAMP=$(goal ledger block --strict ${ROUND} | jq .block.ts)
+TIMESTAMP=$(date +%s)
+#${gcmd} app create --dryrun-dump -o ${TEMPDIR}/ac.txn --creator ${ACCOUNT} --foreign-asset $ASSET_ID --app-arg "int:$ASSET_ID" --app-arg "int:1337" --app-arg "int:0" --app-arg "int:0" --app-arg "int:1337" --app-arg "str:bogo" --app-arg "int:$ROUND" --app-arg "int:$TIMESTAMP" --approval-prog ${DIR}/tealprogs/assetround.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog ${DIR}/tealprogs/approve-all.teal
+#${gcmd} clerk dryrun-remote -v -D ${TEMPDIR}/ac.txn
+
+set +e
+date '+before %s'
+APP_ID=$(${gcmd} app create --creator ${ACCOUNT} --foreign-asset $ASSET_ID --app-arg "int:$ASSET_ID" --app-arg "int:1337" --app-arg "int:0" --app-arg "int:0" --app-arg "int:1337" --app-arg "str:bogo" --app-arg "int:$ROUND" --app-arg "int:$TIMESTAMP" --approval-prog ${DIR}/tealprogs/assetround.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog ${DIR}/tealprogs/approve-all.teal | grep Created | awk '{ print $6 }')
+date '+after %s'
+
+# if [ "x${APP_ID}x" = "xx" ]; then
+#     set -e
+#     sleep 10
+# date '+before %s'
+# ROUND=$(goal node status | grep 'Last committed' | awk '{ print $4 }')
+# TIMESTAMP=$(date +%s)
+# APP_ID=$(${gcmd} app create --creator ${ACCOUNT} --foreign-asset $ASSET_ID --app-arg "int:$ASSET_ID" --app-arg "int:1337" --app-arg "int:0" --app-arg "int:0" --app-arg "int:1337" --app-arg "str:bogo" --app-arg "int:$ROUND" --app-arg "int:$TIMESTAMP" --approval-prog ${DIR}/tealprogs/assetround.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog ${DIR}/tealprogs/approve-all.teal | grep Created | awk '{ print $6 }')
+# date '+after %s'
+# fi
 
 # Create another account, fund it, send it some asset
 ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')

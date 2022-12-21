@@ -571,6 +571,10 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 // StartSpeculativeBlockAssembly handles creating a speculative block
 func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, vb *ledgercore.ValidatedBlock, blockHash crypto.Digest) {
 
+	if pool.cfg.SpeculativeAssemblyDisable {
+		return
+	}
+
 	if blockHash.IsZero() {
 		blockHash = vb.Block().Digest()
 	}
@@ -923,11 +927,11 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			case *ledgercore.LeaseInLedgerError:
 				asmStats.LeaseErrorCount++
 				stats.RemovedInvalidCount++
-				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
+				pool.log.Infof("Cannot re-add pending transaction to pool (lease): %v", err)
 			case *transactions.MinFeeError:
 				asmStats.MinFeeErrorCount++
 				stats.RemovedInvalidCount++
-				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
+				pool.log.Infof("Cannot re-add pending transaction to pool (fee): %v", err)
 			default:
 				asmStats.InvalidCount++
 				stats.RemovedInvalidCount++
