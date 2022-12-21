@@ -297,7 +297,6 @@ func run() int {
 	}
 
 	err = s.Initialize(cfg, phonebookAddresses, string(genesisText))
-	algod.IsDBSchemeFinished = true
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		log.Error(err)

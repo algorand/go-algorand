@@ -132,9 +132,8 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 		returnCode(ctx, w, http.StatusInternalServerError, fmt.Errorf("ready failed as the node is catching up"))
 		return
 	}
-
-	if 0 == 1 {
-		returnCode(ctx, w, http.StatusServiceUnavailable, fmt.Errorf("ready failed as the node has not finished ledger reload"))
+	if ctx.Node.Ledger().Ledger == nil {
+		returnCode(ctx, w, http.StatusServiceUnavailable, fmt.Errorf("ready failed as the ledger is not yet available"))
 		return
 	}
 
