@@ -95,8 +95,7 @@ func returnCode(ctx lib.ReqContext, w http.ResponseWriter, code int, internal er
 		ctx.Log.Info(internal)
 	}
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(nil)
-	return
+	_ = json.NewEncoder(w).Encode(nil)
 }
 
 // Ready gets if the current node is healthy and fully caught up.
@@ -140,7 +139,6 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 	}
 
 	returnCode(ctx, w, http.StatusOK, nil)
-	return
 }
 
 // VersionsHandler is an httpHandler for route GET /versions
