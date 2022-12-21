@@ -1,21 +1,31 @@
-ARG GO_VERSION="1.17.13"
+FROM ubuntu:18.04 as builder
 
-FROM golang:$GO_VERSION-bullseye as builder
+ARG GO_VERSION="1.17.13"
 
 ARG CHANNEL
 ARG URL
 ARG BRANCH
 ARG SHA
+ARG TARGETARCH
+
+ADD https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz /go.tar.gz
 
 # Basic dependencies.
 ENV HOME="/node" DEBIAN_FRONTEND="noninteractive" GOPATH="/node"
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+    ca-certificates \
     apt-utils \
     bsdmainutils \
     curl \
     git \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* && \
+    \
+    tar -C /usr/local -xzf /go.tar.gz && \
+    rm -rf /go.tar.gz
+
+ENV PATH="/usr/local/go/bin:${PATH}"
 
 COPY ./docker/files/ /node/files
 COPY ./installer/genesis /node/files/run/genesis
