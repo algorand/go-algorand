@@ -144,7 +144,7 @@ func getPendingSigsForRound(tx *sql.Tx, rnd basics.Round) ([]pendingSig, error) 
 	return tmpmap[rnd], nil
 }
 
-func isPendingSigExist(tx *sql.Tx, rnd basics.Round, account Address) (bool, error) {
+func sigExistsInDB(tx *sql.Tx, rnd basics.Round, account Address) (bool, error) {
 	row := tx.QueryRow("SELECT EXISTS ( SELECT 1 FROM sigs WHERE signer=? AND sprnd=?)", account[:], rnd)
 
 	exists := 0
@@ -212,7 +212,7 @@ func getBuilder(tx *sql.Tx, rnd basics.Round) (builder, error) {
 	return bldr, nil
 }
 
-func isBuilderExists(tx *sql.Tx, rnd basics.Round) (bool, error) {
+func builderExistInDB(tx *sql.Tx, rnd basics.Round) (bool, error) {
 	row := tx.QueryRow("SELECT EXISTS ( SELECT 1 FROM builders WHERE round=? )", rnd)
 
 	exists := 0

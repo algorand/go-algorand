@@ -193,7 +193,7 @@ func (spw *Worker) signStateProofMessage(message *stateproofmsg.Message, round b
 			continue
 		}
 
-		exists, err := spw.sigExistsInDB(round, key.Account)
+		exists, err := spw.sigExists(round, key.Account)
 		if err != nil {
 			spw.log.Warnf("spw.signBlock(%d): couldn't figure if sig exists in DB: %v", round, err)
 		} else if exists {

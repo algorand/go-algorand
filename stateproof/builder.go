@@ -37,31 +37,30 @@ import (
 
 // OnPrepareVoterCommit is a function called by the voters tracker when it's preparing to commit rnd. It gives the builder
 // the chance to persist the data it needs.
-func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgercore.VotersForRoundFetcher) error {
+func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgercore.VotersForRoundFetcher) {
 	header, err := spw.ledger.BlockHdr(rnd)
 
 	if err != nil {
-		return fmt.Errorf("OnPrepareVoterCommit(%d): could not fetch round header: %w", rnd, err)
+		spw.log.Warnf("OnPrepareVoterCommit(%d): could not fetch round header: %w", rnd, err)
+		return
 	}
 
 	proto := config.Consensus[header.CurrentProtocol]
 	if proto.StateProofInterval == 0 || uint64(rnd)%proto.StateProofInterval != 0 {
-		return nil
+		return
 	}
 
-	builderExists, err := spw.builderExistsInDB(rnd)
+	builderExists, err := spw.builderExists(rnd)
 	if err != nil {
 		spw.log.Warnf("OnPrepareVoterCommit(%d): could not check builder existence, assuming it doesn't exist: %v\n", rnd, err)
 	} else if builderExists {
-		return nil
+		return
 	}
 
 	_, err = spw.createAndPersistBuilder(rnd, votersFetcher)
 	if err != nil {
-		return fmt.Errorf("OnPrepareVoterCommit(%d): could not create builder: %w", rnd, err)
+		spw.log.Warnf("OnPrepareVoterCommit(%d): could not create builder: %w", rnd, err)
 	}
-
-	return nil
 }
 
 // loadOrCreateBuilderWithSignatures either loads a builder from the DB or creates a new builder.
@@ -389,21 +388,21 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 	return network.Broadcast, nil
 }
 
-func (spw *Worker) sigExistsInDB(round basics.Round, account basics.Address) (bool, error) {
+func (spw *Worker) sigExists(round basics.Round, account basics.Address) (bool, error) {
 	var exists bool
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		res, err := isPendingSigExist(tx, round, account)
+		res, err := sigExistsInDB(tx, round, account)
 		exists = res
 		return err
 	})
 	return exists, err
 }
 
-func (spw *Worker) builderExistsInDB(rnd basics.Round) (bool, error) {
+func (spw *Worker) builderExists(rnd basics.Round) (bool, error) {
 	var exist bool
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err2 error
-		exist, err2 = isBuilderExists(tx, rnd)
+		exist, err2 = builderExistInDB(tx, rnd)
 		return err2
 	})
 
