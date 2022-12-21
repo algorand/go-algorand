@@ -345,7 +345,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		}
 
 		// We want to save the signature in the DB if we know we generated it. However, if the signature's source is
-		// external, we only want to process it if we know for sure it fulfills our broadcast policy.
+		// external, we only want to process it if we know for sure it meets our broadcast policy.
 		if sender != nil && !spw.meetsBroadcastPolicy(sfa, latestHdr.Round, &proto, stateProofNextRound) {
 			return network.Ignore, nil
 		}
