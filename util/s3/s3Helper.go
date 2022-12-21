@@ -28,6 +28,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -112,13 +113,21 @@ func makeS3Session(bucket string) (helper Helper, err error) {
 	if err != nil {
 		return
 	}
+
+	awsConfig := &aws.Config{
+		CredentialsChainVerboseErrors: aws.Bool(true),
+		Region:                        aws.String(getS3Region()),
+	}
+
+	if bucket == s3DefaultReleaseBucket {
+		awsConfig.Credentials = credentials.AnonymousCredentials
+	}
+
 	sess, err := session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
-		Config: aws.Config{
-			CredentialsChainVerboseErrors: aws.Bool(true),
-			Region:                        aws.String(getS3Region()),
-		},
+		Config:            *awsConfig,
 	})
+
 	if err != nil {
 		return
 	}
