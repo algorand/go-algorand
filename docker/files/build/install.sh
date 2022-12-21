@@ -81,6 +81,8 @@ fi
 
 git log -n 5
 
+# make sure the makefile calculates BUILD_NUMBER
+export BUILD_NUMBER=""
 ./scripts/configure_dev.sh
 make build
 
