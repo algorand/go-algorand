@@ -285,6 +285,22 @@ func (spw *Worker) handleSigMessage(msg network.IncomingMessage) network.Outgoin
 	return network.OutgoingMessage{Action: fwd}
 }
 
+// meetsBroadcastPolicy verifies that the signature's round is either under the threshold round or equal to the
+// latest StateProof round.
+// This signature filtering is only relevant when the StateProof chain is stalled and many signatures may be spammed.
+func (spw *Worker) meetsBroadcastPolicy(sfa sigFromAddr, latestRound basics.Round, proto *config.ConsensusParams, stateProofNextRound basics.Round) bool {
+	if sfa.Round <= onlineBuildersThreshold(proto, stateProofNextRound) {
+		return true
+	}
+
+	latestStateProofRound := latestRound.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))
+	if sfa.Round == latestStateProofRound {
+		return true
+	}
+
+	return false
+}
+
 // handleSig adds a signature to the pending in-memory state proof provers (builders). This function is
 // also responsible for making sure that the signature is valid, and not duplicated.
 // if a signature passes all verification it is written into the database.
@@ -329,10 +345,8 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		}
 
 		// We want to save the signature in the DB if we know we generated it. However, if the signature's source is
-		// external, we only want to process it if we know for sure it belongs to one of the builders in our threshold.
-		if sender != nil && (sfa.Round > onlineBuildersThreshold(&proto, stateProofNextRound) && sfa.Round != latestHdr.Round.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))) {
-			// Ignore signatures not under threshold round or equal to the latest StateProof round
-			// (this signature filtering is only relevant when the StateProof chain is stalled and many signatures may be spammed)
+		// external, we only want to process it if we know for sure it fulfills our broadcast policy.
+		if sender != nil && !spw.meetsBroadcastPolicy(sfa, latestHdr.Round, &proto, stateProofNextRound) {
 			return network.Ignore, nil
 		}
 
