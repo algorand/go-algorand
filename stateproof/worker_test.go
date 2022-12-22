@@ -1872,11 +1872,16 @@ func TestWorkerCreatesBuildersOnCommit(t *testing.T) {
 	// We remove the signer's keys to stop it from generating builders.
 	s.keys = []account.Participation{}
 
+	firstBuilderRound := basics.Round(proto.StateProofInterval * 2)
+
+	builderExists, err := w.builderExists(firstBuilderRound)
+	a.NoError(err)
+	a.False(builderExists)
+
 	// We start on round 511, so the callback should be called on the next round.
 	s.advanceRoundsWithoutStateProof(t, 1)
 
-	firstBuilderRound := basics.Round(proto.StateProofInterval * 2)
-	builderExists, err := w.builderExists(firstBuilderRound)
+	builderExists, err = w.builderExists(firstBuilderRound)
 	a.NoError(err)
 	a.True(builderExists)
 }
