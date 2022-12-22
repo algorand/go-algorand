@@ -24,7 +24,7 @@ type ServerInterface interface {
 	// Get a list of unconfirmed transactions currently in the transaction pool by address.
 	// (GET /v2/accounts/{address}/transactions/pending)
 	GetPendingTransactionsByAddress(ctx echo.Context, address string, params GetPendingTransactionsByAddressParams) error
-	// Broadcasts a raw transaction to the network.
+	// Broadcasts a raw transaction or transaction group to the network.
 	// (POST /v2/transactions)
 	RawTransaction(ctx echo.Context) error
 	// Get a list of unconfirmed transactions currently in the transaction pool.
@@ -176,7 +176,6 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
-
 	"H4sIAAAAAAAC/+x9/XPcNpLov4I3d1W2dcOR/JHsWlWpe7KdZHWxHZelZPfO8stiyJ4ZrDgAA4DSTPz8",
 	"v79CAyBBEuRwJMXe7PNPtob4aDQajUZ/fpikYl0IDlyryfGHSUElXYMGiX/RNBUl1wnLzF8ZqFSyQjPB",
 	"J8f+G1FaMr6cTCfM/FpQvZpMJ5yuoW5j+k8nEn4tmYRscqxlCdOJSlewpmZgvS1M62qkTbIUiRvixA5x",

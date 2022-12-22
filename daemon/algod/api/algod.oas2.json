@@ -1088,7 +1088,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Gets the node status after waiting for the given round.",
+        "summary": "Gets the node status after waiting for a round after the given round.",
         "operationId": "WaitForBlock",
         "parameters": [
           {
@@ -1157,7 +1157,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Broadcasts a raw transaction to the network.",
+        "summary": "Broadcasts a raw transaction or transaction group to the network.",
         "operationId": "RawTransaction",
         "parameters": [
           {
@@ -1177,6 +1177,69 @@
           },
           "400": {
             "description": "Bad Request - Malformed Algorand transaction ",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/transactions/simulate": {
+      "post": {
+        "tags": [
+          "public",
+          "experimental"
+        ],
+        "consumes": [
+          "application/x-binary"
+        ],
+        "produces": [
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. WARNING: This endpoint is experimental and under active development. There are no guarantees in terms of functionality or future support.",
+        "operationId": "SimulateTransaction",
+        "parameters": [
+          {
+            "description": "The byte encoded transaction to simulate",
+            "name": "rawtxn",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/SimulationResponse"
+          },
+          "400": {
+            "description": "Bad Request - Malformed Algorand transaction",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -4160,6 +4223,29 @@
           "txId": {
             "description": "encoding of the transaction hash.",
             "type": "string"
+          }
+        }
+      }
+    },
+    "SimulationResponse": {
+      "description": "Result of a transaction group simulation.",
+      "tags": [
+        "experimental"
+      ],
+      "schema": {
+        "type": "object",
+        "required": [
+          "failure-message",
+          "missing-signatures"
+        ],
+        "properties": {
+          "failure-message": {
+            "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+            "type": "string"
+          },
+          "missing-signatures": {
+            "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+            "type": "boolean"
           }
         }
       }

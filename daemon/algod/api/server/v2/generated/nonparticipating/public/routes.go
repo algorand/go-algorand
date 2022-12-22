@@ -63,7 +63,7 @@ type ServerInterface interface {
 	// Gets the current node status.
 	// (GET /v2/status)
 	GetStatus(ctx echo.Context) error
-	// Gets the node status after waiting for the given round.
+	// Gets the node status after waiting for a round after the given round.
 	// (GET /v2/status/wait-for-block-after/{round})
 	WaitForBlock(ctx echo.Context, round uint64) error
 	// Compile TEAL source code to binary, produce its hash
@@ -547,7 +547,6 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
-
 	"H4sIAAAAAAAC/+x9a3PctpLoX0HNbpUfOxz5mT1RVWqvbCc52tiOy1ayj8g3wZA9MzjiADwAKM3E1//9",
 	"FhoACZIghyPJcpzok60hHo1Go9Ho54dJKtaF4MC1mhx+mBRU0jVokPgXTVNRcp2wzPyVgUolKzQTfHLo",
 	"vxGlJePLyXTCzK8F1avJdMLpGuo2pv90IuGfJZOQTQ61LGE6UekK1tQMrLeFaV2NtEmWInFDHNkhjl9M",
@@ -774,6 +773,7 @@ var swaggerSpec = []string{
 	"UU+8a+EyJMJkbo0pf6IQzIAO0B7rNx7rxbT3fk8zymAJythXlxjMN7LHBC9xAzekpWR6i4YGWrBfz8D8",
 	"//3H9+abPPc2iFLmk8PJSuvi8OAAi0euhNIHk4/T8JtqfXxfLe2DNycUkp1juun3H/9/AAAA///999nK",
 	"aEUBAA==",
+
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

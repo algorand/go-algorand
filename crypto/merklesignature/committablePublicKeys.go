@@ -34,7 +34,7 @@ type (
 		keyLifetime uint64
 	}
 
-	// CommittablePublicKey  is used to create a binary representation of public keys in the merkle
+	// CommittablePublicKey is used to create a binary representation of public keys in the merkle
 	// signature scheme.
 	CommittablePublicKey struct {
 		VerifyingKey crypto.FalconVerifier

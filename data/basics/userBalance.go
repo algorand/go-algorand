@@ -414,11 +414,6 @@ func (app AppIndex) Address() Address {
 	return Address(crypto.HashObj(app))
 }
 
-// MakeAccountData returns a UserToken
-func MakeAccountData(status Status, algos MicroAlgos) AccountData {
-	return AccountData{Status: status, MicroAlgos: algos}
-}
-
 // Money returns the amount of MicroAlgos associated with the user's account
 func (u AccountData) Money(proto config.ConsensusParams, rewardsLevel uint64) (money MicroAlgos, rewards MicroAlgos) {
 	e := u.WithUpdatedRewards(proto, rewardsLevel)
