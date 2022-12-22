@@ -2265,7 +2265,6 @@ int 1
 
 func TestEnumFieldErrors(t *testing.T) { // nolint:paralleltest // manipulates globalFieldSpecs
 	partitiontest.PartitionTest(t)
-	// NO! t.Parallel()
 
 	source := `txn Amount`
 	origSpec := txnFieldSpecs[Amount]
