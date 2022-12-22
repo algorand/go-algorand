@@ -443,10 +443,10 @@ func verifyStateProofForRound(r *require.Assertions, fixture *fixtures.RestClien
 	return stateProofMessage, nextStateProofBlock
 }
 
-// TestRecoverFromLaggingStateProofChain simulates a situation where the stateproof chain is lagging after the main chain.
+// TestStateProofRecoveryDuringRecoveryInterval simulates a situation where the stateproof chain is lagging after the main chain.
 // If the missing data is being accepted before  StateProofMaxRecoveryIntervals * StateProofInterval rounds have passed, nodes should
 // be able to produce stateproofs and continue as normal
-func TestRecoverFromLaggingStateProofChain(t *testing.T) {
+func TestStateProofRecoveryDuringRecoveryPeriod(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -542,15 +542,12 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	r.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
 }
 
-// TestUnableToRecoverFromLaggingStateProofChain simulates a situation where the stateproof chain is lagging after the main chain.
-// unlike TestRecoverFromLaggingStateProofChain, in this test the node will start at a later round and the network will not be able to produce stateproofs/
-func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
+// TestStateProofRecovery test that the state proof chain can be recovered even after the StateProofMaxRecoveryIntervals has passed.
+func TestStateProofRecovery(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is difficult for ARM")
-	}
+	// todo skip on short tests and on weak machines
 
 	r := require.New(fixtures.SynchronizedTest(t))
 
@@ -565,8 +562,14 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	// will exceed the MAX_NUMBER_OF_REVEALS and proofs would not get generated
 	// for that reason we need to the decrease the StateProofStrengthTarget creating a "weak cert"
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
+	consensusParams.StateProofInterval = 16
 	consensusParams.StateProofStrengthTarget = 4
-	consensusParams.StateProofMaxRecoveryIntervals = 4
+	consensusParams.StateProofMaxRecoveryIntervals = 2
+	consensusParams.StateProofUseTrackerVerification = true
+	consensusParams.SeedLookback = 2
+	consensusParams.SeedRefreshInterval = 2
+	consensusParams.MaxBalLookback = 2 * consensusParams.SeedLookback * consensusParams.SeedRefreshInterval // 8
+	consensusParams.MaxTxnLife = 13
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
@@ -585,10 +588,13 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	var lastStateProofBlock bookkeeping.Block
 	libgoal := fixture.LibGoalClient
 
-	expectedNumberOfStateProofs := uint64(4)
-	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
-	for rnd := uint64(2); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
-		if rnd == (consensusParams.StateProofMaxRecoveryIntervals+2)*consensusParams.StateProofInterval {
+	var lastStateProofMessage stateproofmsg.Message
+
+	expectedNumberOfStateProofs := uint64(7)
+	numberOfGraceIntervals := uint64(3)
+	rnd := uint64(2)
+	for ; rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs); rnd++ {
+		if rnd == (consensusParams.StateProofMaxRecoveryIntervals+4)*consensusParams.StateProofInterval {
 			t.Logf("at round %d starting node\n", rnd)
 			dir, err = fixture.GetNodeDir("Node4")
 			r.NoError(err)
@@ -622,9 +628,46 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 
 		if lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
 			lastStateProofBlock.Round() != 0 {
-			r.FailNow("found a state proof at round %d", blk.Round())
+			nextStateProofRound := uint64(lastStateProofBlock.Round()) + consensusParams.StateProofInterval
+
+			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
+			// Find the state proof transaction
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
+			lastStateProofMessage = stateProofMessage
+			lastStateProofBlock = nextStateProofBlock
 		}
 	}
+
+	// at this point we expect the state proof chain to be completely caught up. However, In order to avoid flakiness on
+	// heavily loaded machines, we would wait some extra round for the state proofs to catch up
+	for ; rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+numberOfGraceIntervals); rnd++ {
+
+		err = fixture.WaitForRound(rnd, timeoutUntilNextRound)
+		r.NoError(err)
+
+		blk, err := libgoal.BookkeepingBlock(rnd)
+		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
+
+		if lastStateProofBlock.Round() == 0 {
+			lastStateProofBlock = blk
+		}
+
+		if lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
+			lastStateProofBlock.Round() != 0 {
+			nextStateProofRound := uint64(lastStateProofBlock.Round()) + consensusParams.StateProofInterval
+
+			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
+			// Find the state proof transaction
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
+			lastStateProofMessage = stateProofMessage
+			lastStateProofBlock = nextStateProofBlock
+		}
+
+		if int(consensusParams.StateProofInterval*expectedNumberOfStateProofs) <= int(lastStateProofBlock.Round()) {
+			return
+		}
+	}
+	r.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
 }
 
 // installParticipationKey generates a new key for a given account and installs it with the client.
