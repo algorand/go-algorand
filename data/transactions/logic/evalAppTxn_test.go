@@ -1798,8 +1798,10 @@ itxn_submit
 int 1
 `
 
-	for _, unified := range []bool{true, false} { //nolint:paralleltest // NO t.Parallel(). unified variable is actually shared
+	for _, unified := range []bool{true, false} {
+		unified := unified
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
+			t.Parallel()
 			ep, parentTx, ledger := MakeSampleEnv()
 			ep.Proto.UnifyInnerTxIDs = unified
 
@@ -2124,8 +2126,10 @@ log
 int 1
 `
 
-	for _, unified := range []bool{true, false} { //nolint:paralleltest // NO t.Parallel(). unified variable is actually shared
+	for _, unified := range []bool{true, false} {
+		unified := unified
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
+			t.Parallel()
 			ep, parentTx, ledger := MakeSampleEnv()
 			ep.Proto.UnifyInnerTxIDs = unified
 
@@ -2260,8 +2264,10 @@ func TestInnerTxIDCaching(t *testing.T) {
 	parentAppID := basics.AppIndex(888)
 	childAppID := basics.AppIndex(222)
 
-	for _, unified := range []bool{true, false} { //nolint:paralleltest // NO t.Parallel(). unified variable is actually shared
+	for _, unified := range []bool{true, false} {
+		unified := unified
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
+			t.Parallel()
 			ep, parentTx, ledger := MakeSampleEnv()
 			ep.Proto.UnifyInnerTxIDs = unified
 
