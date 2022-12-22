@@ -212,7 +212,10 @@ func (vt *votersTracker) prepareCommit(dcc *deferredCommitContext) error {
 
 	commitListener := vt.commitListener
 	for round := dcc.oldBase; round <= dcc.newBase; round++ {
-		commitListener.OnPrepareVoterCommit(round, vt)
+		err := commitListener.OnPrepareVoterCommit(round, vt)
+		if err != nil {
+			vt.l.trackerLog().Errorf("votersTracker.prepareCommit: listener encountered an error for round %d: %v", round, err)
+		}
 	}
 
 	return nil

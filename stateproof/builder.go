@@ -37,32 +37,33 @@ import (
 
 // OnPrepareVoterCommit is a function called by the voters tracker when it's preparing to commit rnd. It gives the builder
 // the chance to persist the data it needs.
-func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgercore.VotersForRoundFetcher) {
+func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgercore.VotersForRoundFetcher) error {
 	header, err := spw.ledger.BlockHdr(rnd)
 
 	if err != nil {
-		spw.log.Warnf("OnPrepareVoterCommit(%d): could not fetch round header: %v", rnd, err)
-		return
+		return fmt.Errorf("OnPrepareVoterCommit(%d): could not fetch round header: %w", rnd, err)
 	}
 
 	proto := config.Consensus[header.CurrentProtocol]
 	if proto.StateProofInterval == 0 || uint64(rnd)%proto.StateProofInterval != 0 {
-		return
+		return nil
 	}
 
 	builderExists, err := spw.builderExists(rnd)
 	if err != nil {
 		spw.log.Warnf("OnPrepareVoterCommit(%d): could not check builder existence, assuming it doesn't exist: %v\n", rnd, err)
 	} else if builderExists {
-		return
+		return nil
 	}
 
 	// We create and persist the builder without using it. Signer can later use it (specifically the state proof
 	// message embedded in the builder) during catchup.
 	_, err = spw.createAndPersistBuilder(rnd, votersFetcher)
 	if err != nil {
-		spw.log.Warnf("OnPrepareVoterCommit(%d): could not create builder: %v", rnd, err)
+		return fmt.Errorf("OnPrepareVoterCommit(%d): could not create builder: %w", rnd, err)
 	}
+
+	return nil
 }
 
 // loadOrCreateBuilderWithSignatures either loads a builder from the DB or creates a new builder.
