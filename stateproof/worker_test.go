@@ -1859,3 +1859,24 @@ func TestWorkerLoadsBuilderAndSignatureUponMsgRecv(t *testing.T) {
 	_, exists = w.builders[msg.Round]
 	require.False(t, exists)
 }
+
+func TestWorkerCreatesBuildersOnCommit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	_, s, w := createWorkerAndParticipants(t, protocol.ConsensusCurrentVersion, proto)
+	defer w.Shutdown()
+
+	// We remove the signer's keys to stop it from generating builders.
+	s.keys = []account.Participation{}
+
+	// We start on round 511, so the callback should be called on the next round.
+	s.advanceRoundsWithoutStateProof(t, 1)
+
+	firstBuilderRound := basics.Round(proto.StateProofInterval * 2)
+	builderExists, err := w.builderExists(firstBuilderRound)
+	a.NoError(err)
+	a.True(builderExists)
+}
