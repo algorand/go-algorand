@@ -3086,6 +3086,33 @@ func TestVotersCallbackPersistsAfterLedgerReload(t *testing.T) {
 	require.Equal(t, listenerBeforeReload, listenerAfterReload)
 }
 
+type errorCommitListener struct{}
+
+func (l *errorCommitListener) OnPrepareVoterCommit(_ basics.Round, _ ledgercore.VotersForRoundFetcher) error {
+	return fmt.Errorf("this error is expected")
+}
+
+func TestLedgerContinuesOnVotersCallbackFailure(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.MaxAcctLookback = 0
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+
+	commitListener := errorCommitListener{}
+	l.RegisterVotersCommitListener(&commitListener)
+
+	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
+	triggerTrackerFlush(t, l, genesisInitState)
+}
+
 func TestStateProofVerificationTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
