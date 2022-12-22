@@ -357,9 +357,7 @@ func (s *testWorkerStubs) advanceRoundsBeforeFirstStateProof(proto *config.Conse
 	}
 
 	for r := uint64(0); r < proto.StateProofInterval*2-1; r++ {
-		s.mu.Lock()
 		s.addBlock(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
-		s.mu.Unlock()
 	}
 }
 
@@ -983,7 +981,9 @@ func TestWorkersBuildersCacheAndSignatures(t *testing.T) {
 	/*
 		add block that confirm a state proof for interval: expectedStateProofs
 	*/
+	s.mu.Lock()
 	s.addBlock(basics.Round((expectedStateProofs) * config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
+	s.mu.Unlock()
 	s.waitForSignerAndBuilder(t)
 
 	count := expectedNumberOfBuilders(proto.StateProofInterval, s.latest, basics.Round((expectedStateProofs)*config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
@@ -1566,7 +1566,9 @@ func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 	w := newTestWorker(t, s)
 	defer w.Shutdown()
 
+	s.mu.Lock()
 	s.addBlock(basics.Round(proto.StateProofInterval * 2))
+	s.mu.Unlock()
 
 	// remove the first block from the ledger
 	delete(s.blocks, 256)
