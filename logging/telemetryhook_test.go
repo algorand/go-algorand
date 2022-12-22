@@ -250,7 +250,7 @@ func TestAsyncTelemetryHook_SelfReporting(t *testing.T) {
 	for i := 0; i < entryCount; i++ {
 		selfEntry := logrus.Entry{
 			Level:   logrus.ErrorLevel,
-			Data:    logrus.Fields{"file": "telemetryhook.go", "line": "123"},
+			Data:    logrus.Fields{"TelemetryError": true},
 			Message: "Unable to write event",
 		}
 		hook.Fire(&selfEntry)

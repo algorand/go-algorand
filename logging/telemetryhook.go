@@ -88,7 +88,7 @@ func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueD
 					if entry != nil {
 						err := hook.wrappedHook.Fire(entry)
 						if err != nil {
-							Base().Warnf("Unable to write event %#v to telemetry : %v", entry, err)
+							Base().WithFields(Fields{"TelemetryError": true}).Warnf("Unable to write event %#v to telemetry : %v", entry, err)
 						}
 						hook.wg.Done()
 					} else {
@@ -146,7 +146,7 @@ func (hook *asyncTelemetryHook) waitForEventAndReady() bool {
 
 // Fire is required to implement logrus hook interface
 func (hook *asyncTelemetryHook) Fire(entry *logrus.Entry) error {
-	if entry.Data["file"] == "telemetryhook.go" {
+	if _, ok := entry.Data["TelemetryError"]; ok {
 		return nil
 	}
 	hook.wg.Add(1)
