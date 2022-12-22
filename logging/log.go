@@ -155,7 +155,6 @@ type Logger interface {
 	Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{})
 	Event(category telemetryspec.Category, identifier telemetryspec.Event)
 	EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details interface{})
-	StartOperation(category telemetryspec.Category, identifier telemetryspec.Operation) TelemetryOperation
 	GetTelemetrySession() string
 	GetTelemetryGUID() string
 	GetInstanceName() string
@@ -449,13 +448,6 @@ func (l logger) EventWithDetails(category telemetryspec.Category, identifier tel
 	if l.loggerState.telemetry != nil {
 		l.loggerState.telemetry.logEvent(l, category, identifier, details)
 	}
-}
-
-func (l logger) StartOperation(category telemetryspec.Category, identifier telemetryspec.Operation) TelemetryOperation {
-	if l.loggerState.telemetry != nil {
-		return l.loggerState.telemetry.logStartOperation(l, category, identifier)
-	}
-	return TelemetryOperation{}
 }
 
 func (l logger) CloseTelemetry() {
