@@ -3055,6 +3055,37 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	require.Equal(t, beforeRemoveVotersLen, len(l.acctsOnline.voters.votersForRoundCache))
 }
 
+type mockCommitListener struct{}
+
+func (l *mockCommitListener) OnPrepareVoterCommit(_ basics.Round, _ ledgercore.VotersForRoundFetcher) error {
+	return nil
+}
+
+func TestVotersCallbackPersistsAfterLedgerReload(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+
+	commitListener := mockCommitListener{}
+	l.RegisterVotersCommitListener(&commitListener)
+	listenerBeforeReload := l.acctsOnline.voters.commitListener
+
+	require.NotNil(t, listenerBeforeReload)
+	err = l.reloadLedger()
+	require.NoError(t, err)
+
+	listenerAfterReload := l.acctsOnline.voters.commitListener
+	require.Equal(t, listenerBeforeReload, listenerAfterReload)
+}
+
 func TestStateProofVerificationTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
