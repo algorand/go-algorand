@@ -146,6 +146,9 @@ func (hook *asyncTelemetryHook) waitForEventAndReady() bool {
 
 // Fire is required to implement logrus hook interface
 func (hook *asyncTelemetryHook) Fire(entry *logrus.Entry) error {
+	if entry.Data["file"] == "telemetryhook.go" {
+		return nil
+	}
 	hook.wg.Add(1)
 	select {
 	case <-hook.quit:
