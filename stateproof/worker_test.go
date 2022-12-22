@@ -115,7 +115,6 @@ func (s *testWorkerStubs) notifyPrepareVoterCommit(round basics.Round) {
 }
 
 func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
-	s.mu.Lock()
 	s.latest++
 
 	hdr := bookkeeping.BlockHeader{}
@@ -146,9 +145,6 @@ func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 		close(s.waiters[s.latest])
 		s.waiters[s.latest] = nil
 	}
-
-	s.mu.Unlock()
-	s.notifyPrepareVoterCommit(s.latest)
 }
 
 func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateProofSecretsForRound) {
@@ -361,13 +357,17 @@ func (s *testWorkerStubs) advanceRoundsBeforeFirstStateProof(proto *config.Conse
 	}
 
 	for r := uint64(0); r < proto.StateProofInterval*2-1; r++ {
+		s.mu.Lock()
 		s.addBlock(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+		s.mu.Unlock()
 	}
 }
 
 func (s *testWorkerStubs) advanceRoundsWithoutStateProof(t *testing.T, delta uint64) {
 	for r := uint64(0); r < delta; r++ {
+		s.mu.Lock()
 		s.addBlock(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+		s.mu.Unlock()
 		s.waitForSignerAndBuilder(t)
 	}
 }
@@ -383,10 +383,20 @@ func (s *testWorkerStubs) advanceRoundsAndCreateStateProofs(t *testing.T, delta 
 			stateProofNextRound += interval
 		}
 
-		s.mu.Unlock()
 		s.addBlock(stateProofNextRound)
+		s.mu.Unlock()
 		s.waitForSignerAndBuilder(t)
 	}
+}
+
+func (s *testWorkerStubs) mockCommit() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for round := range s.blocks {
+		s.notifyPrepareVoterCommit(round)
+	}
+
+	s.blocks = map[basics.Round]bookkeeping.BlockHeader{}
 }
 
 func (s *testWorkerStubs) waitOnSigWithTimeout(timeout time.Duration) ([]byte, error) {
