@@ -135,8 +135,6 @@ func (s *workerForStateProofMessageTests) BroadcastInternalSignedTxGroup(txns []
 }
 
 func (s *workerForStateProofMessageTests) addBlockWithStateProofHeaders(ccNextRound basics.Round) {
-	s.w.mu.Lock()
-
 	s.w.latest++
 
 	hdr := bookkeeping.BlockHeader{}
@@ -168,8 +166,6 @@ func (s *workerForStateProofMessageTests) addBlockWithStateProofHeaders(ccNextRo
 		close(s.w.waiters[s.w.latest])
 		s.w.waiters[s.w.latest] = nil
 	}
-	s.w.mu.Unlock()
-	s.notifyPrepareVoterCommit(s.w.latest)
 }
 
 func newWorkerForStateProofMessageStubs(keys []account.Participation, totalWeight int) *workerForStateProofMessageTests {
@@ -193,6 +189,9 @@ func newWorkerForStateProofMessageStubs(keys []account.Participation, totalWeigh
 }
 
 func (s *workerForStateProofMessageTests) advanceLatest(delta uint64) {
+	s.w.mu.Lock()
+	defer s.w.mu.Unlock()
+
 	for r := uint64(0); r < delta; r++ {
 		s.addBlockWithStateProofHeaders(s.w.blocks[s.w.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 	}
