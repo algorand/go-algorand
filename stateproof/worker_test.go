@@ -387,29 +387,26 @@ func (s *testWorkerStubs) advanceRoundsAndCreateStateProofs(t *testing.T, delta 
 	}
 }
 
-func (s *testWorkerStubs) mockCommit() {
-	minRound := s.Latest()
-	maxRound := s.Latest()
+func (s *testWorkerStubs) mockCommit(upTo basics.Round) {
+	startRound := upTo
 
 	s.mu.Lock()
 	for round := range s.blocks {
-		if round > maxRound {
-			maxRound = round
-		}
-
-		if round < minRound {
-			minRound = round
+		if round < startRound {
+			startRound = round
 		}
 	}
 	s.mu.Unlock()
 
-	for round := minRound; round <= maxRound; round++ {
+	for round := startRound; round <= upTo; round++ {
 		s.notifyPrepareVoterCommit(round)
 	}
 
-	s.mu.Lock()
-	s.blocks = map[basics.Round]bookkeeping.BlockHeader{}
-	s.mu.Unlock()
+	for round := startRound; round <= upTo; round++ {
+		s.mu.Lock()
+		delete(s.blocks, round)
+		s.mu.Unlock()
+	}
 }
 
 func (s *testWorkerStubs) waitOnSigWithTimeout(timeout time.Duration) ([]byte, error) {
@@ -428,6 +425,20 @@ func (s *testWorkerStubs) waitOnTxnWithTimeout(timeout time.Duration) (transacti
 	case <-time.After(timeout):
 		return transactions.SignedTxn{}, fmt.Errorf("timeout waiting on stateproof txn")
 	}
+}
+
+func (s *testWorkerStubs) isRoundSigned(a *require.Assertions, w *Worker, round basics.Round) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, key := range s.keys {
+		accountSigExists, err := w.sigExists(round, key.Parent)
+		a.NoError(err)
+		if accountSigExists {
+			return true
+		}
+	}
+
+	return false
 }
 
 func newTestWorkerDB(t testing.TB, s *testWorkerStubs, dba db.Accessor) *Worker {
@@ -1901,15 +1912,53 @@ func TestWorkerCreatesBuildersOnCommit(t *testing.T) {
 
 	firstBuilderRound := basics.Round(proto.StateProofInterval * 2)
 
+	// We start on round 511, so the callback should be called when committing the next round.
+	s.advanceRoundsWithoutStateProof(t, 2)
+
 	builderExists, err := w.builderExists(firstBuilderRound)
 	a.NoError(err)
 	a.False(builderExists)
 
-	// We start on round 511, so the callback should be called when committing the next round.
-	s.advanceRoundsWithoutStateProof(t, 1)
-	s.mockCommit()
+	// We leave one round uncommitted to be able to easily discern the stateProofNextRound.
+	s.mockCommit(firstBuilderRound)
 
 	builderExists, err = w.builderExists(firstBuilderRound)
 	a.NoError(err)
 	a.True(builderExists)
+}
+
+func TestSignerUsesPersistedBuilder(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	_, s, w := createWorkerAndParticipants(t, protocol.ConsensusCurrentVersion, proto)
+
+	// We remove the signer's keys to stop it from generating builders and signing.
+	prevKeys := s.keys
+	s.keys = []account.Participation{}
+
+	firstBuilderRound := basics.Round(proto.StateProofInterval * 2)
+
+	// We start on round 511, so the callback should be called on the next round.
+	s.advanceRoundsWithoutStateProof(t, 2)
+	s.mockCommit(firstBuilderRound)
+	s.waitForSignerAndBuilder(t)
+
+	a.False(s.isRoundSigned(a, w, firstBuilderRound))
+
+	s.keys = prevKeys
+	oldDb := w.db
+	w.shutdown()
+	w.wg.Wait()
+	w = newTestWorkerDB(t, s, oldDb)
+	w.Start()
+	defer w.Shutdown()
+
+	// We advance another round to allow us to wait for the signer, allowing it time to finish signing
+	s.advanceRoundsWithoutStateProof(t, 1)
+	s.waitForSignerAndBuilder(t)
+
+	a.True(s.isRoundSigned(a, w, firstBuilderRound))
 }
