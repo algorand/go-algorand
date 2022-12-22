@@ -773,7 +773,6 @@ var swaggerSpec = []string{
 	"UU+8a+EyJMJkbo0pf6IQzIAO0B7rNx7rxbT3fk8zymAJythXlxjMN7LHBC9xAzekpWR6i4YGWrBfz8D8",
 	"//3H9+abPPc2iFLmk8PJSuvi8OAAi0euhNIHk4/T8JtqfXxfLe2DNycUkp1juun3H/9/AAAA///999nK",
 	"aEUBAA==",
-
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

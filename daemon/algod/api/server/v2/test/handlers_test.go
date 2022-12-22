@@ -135,7 +135,7 @@ func TestGetLedgerStateDelta(t *testing.T) {
 	t.Parallel()
 	a := require.New(t)
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
 	defer releasefunc()
 	insertRounds(a, handler, 3)
 
@@ -164,7 +164,7 @@ func TestSyncRound(t *testing.T) {
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
-	mockNode := makeMockNode(mockLedger, t.Name(), nil)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
 	dummyShutdownChan := make(chan struct{})
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -646,7 +646,7 @@ func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTran
 	offlineAccounts := true
 	mockLedger, _, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
 	mockNode.config.EnableExperimentalAPI = enableTransactionSimulator
 	handler = v2.Handlers{
 
