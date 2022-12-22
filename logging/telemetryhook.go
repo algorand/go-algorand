@@ -26,7 +26,8 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
-var telemetryDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_telemetry_drops_total", Description: "telemetry messages not sent to server"})
+var telemetryDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_telemetry_drops_total", Description: "telemetry messages dropped due to full queues"})
+var telemetryErrors = metrics.MakeCounter(metrics.MetricName{Name: "algod_telemetry_errs_total", Description: "telemetry messages dropped due to server error"})
 
 func createAsyncHook(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth int) *asyncTelemetryHook {
 	return createAsyncHookLevels(wrappedHook, channelDepth, maxQueueDepth, makeLevels(logrus.InfoLevel))
@@ -89,6 +90,7 @@ func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueD
 						err := hook.wrappedHook.Fire(entry)
 						if err != nil {
 							Base().WithFields(Fields{"TelemetryError": true}).Warnf("Unable to write event %#v to telemetry : %v", entry, err)
+							telemetryErrors.Inc(nil)
 						}
 						hook.wg.Done()
 					} else {
