@@ -427,11 +427,11 @@ type testStagingWriter struct {
 	hashes map[[4 + crypto.DigestSize]byte]int
 }
 
-func (w *testStagingWriter) writeBalances(ctx context.Context, balances []normalizedAccountBalance) error {
+func (w *testStagingWriter) writeBalances(ctx context.Context, balances []store.NormalizedAccountBalance) error {
 	return nil
 }
 
-func (w *testStagingWriter) writeCreatables(ctx context.Context, balances []normalizedAccountBalance) error {
+func (w *testStagingWriter) writeCreatables(ctx context.Context, balances []store.NormalizedAccountBalance) error {
 	return nil
 }
 
@@ -439,9 +439,9 @@ func (w *testStagingWriter) writeKVs(ctx context.Context, kvrs []encodedKVRecord
 	return nil
 }
 
-func (w *testStagingWriter) writeHashes(ctx context.Context, balances []normalizedAccountBalance) error {
+func (w *testStagingWriter) writeHashes(ctx context.Context, balances []store.NormalizedAccountBalance) error {
 	for _, bal := range balances {
-		for _, hash := range bal.accountHashes {
+		for _, hash := range bal.AccountHashes {
 			var key [4 + crypto.DigestSize]byte
 			require.Len(w.t, hash, 4+crypto.DigestSize)
 			copy(key[:], hash)

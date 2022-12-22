@@ -389,11 +389,52 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 			ep := defaultEvalParams(txn)
 			err := CheckSignature(0, ep)
 			require.NoError(t, err)
-			pass, err := EvalSignature(0, ep)
+			pass, cx, err := EvalSignatureFull(0, ep)
 			require.True(t, pass)
+			require.NoError(t, err)
+			require.Greater(t, cx.Cost(), 0)
+		})
+	}
+}
+
+func TestBranchEnd(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := testProg(t, `int 1
+b end
+end:
+`, v)
+			var txn transactions.SignedTxn
+			txn.Lsig.Logic = ops.Program
+			ep := defaultEvalParams(txn)
+			err := CheckSignature(0, ep)
 			require.NoError(t, err)
 		})
 	}
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := testProg(t, `int 1
+return
+`, v)
+			var txn transactions.SignedTxn
+			txn.Lsig.Logic = ops.Program
+			ep := defaultEvalParams(txn)
+			err := CheckSignature(0, ep)
+			require.NoError(t, err)
+		})
+	}
+
+	// now craft pushint \x01 + cut program and ensure the checker does not fail
+	// this \x01 varint value forces nextpc=3 with program length=3
+	pushint := OpsByName[LogicVersion]["pushint"]
+	var txn transactions.SignedTxn
+	txn.Lsig.Logic = []byte{LogicVersion, pushint.Opcode, 0x01}
+	ep := defaultEvalParams(txn)
+	err := CheckSignature(0, ep)
+	require.NoError(t, err)
 }
 
 const tlhcProgramText = `txn CloseRemainderTo
@@ -454,10 +495,12 @@ func TestTLHC(t *testing.T) {
 				t.Log(ep.Trace.String())
 			}
 			require.NoError(t, err)
-			pass, err := EvalSignature(0, ep)
+			pass, cx, err := EvalSignatureFull(0, ep)
 			if pass {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(ep.Trace.String())
+				require.Greater(t, cx.cost, 0)
+				require.Greater(t, cx.Cost(), 0)
 			}
 			require.False(t, pass)
 			isNotPanic(t, err)

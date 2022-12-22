@@ -65,14 +65,6 @@ import (
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
 //
-// hashKind
-//     |-----> MarshalMsg
-//     |-----> CanMarshalMsg
-//     |-----> (*) UnmarshalMsg
-//     |-----> (*) CanUnmarshalMsg
-//     |-----> Msgsize
-//     |-----> MsgIsZero
-//
 
 // MarshalMsg implements msgp.Marshaler
 func (z CatchpointCatchupState) MarshalMsg(b []byte) (o []byte) {
@@ -1732,50 +1724,4 @@ func (z *encodedKVRecordV6) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *encodedKVRecordV6) MsgIsZero() bool {
 	return (len((*z).Key) == 0) && (len((*z).Value) == 0)
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z hashKind) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendByte(o, byte(z))
-	return
-}
-
-func (_ hashKind) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(hashKind)
-	if !ok {
-		_, ok = (z).(*hashKind)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *hashKind) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 byte
-		zb0001, bts, err = msgp.ReadByteBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = hashKind(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (_ *hashKind) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*hashKind)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z hashKind) Msgsize() (s int) {
-	s = msgp.ByteSize
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z hashKind) MsgIsZero() bool {
-	return z == 0
 }

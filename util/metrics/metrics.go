@@ -100,7 +100,7 @@ var (
 	// TransactionMessagesTxnSigNotWellFormed "Number of transaction messages with bad formed signature"
 	TransactionMessagesTxnSigNotWellFormed = MetricName{Name: "algod_transaction_messages_sig_bad_formed", Description: "Number of transaction messages with bad formed signature"}
 	// TransactionMessagesTxnMsigNotWellFormed "Number of transaction messages with bad formed multisig"
-	TransactionMessagesTxnMsigNotWellFormed = MetricName{Name: "algod_transaction_messages_msig_bas_formed", Description: "Number of transaction messages with bad formed msig"}
+	TransactionMessagesTxnMsigNotWellFormed = MetricName{Name: "algod_transaction_messages_msig_bad_formed", Description: "Number of transaction messages with bad formed msig"}
 	// TransactionMessagesTxnLogicSig "Number of transaction messages with invalid logic sig"
 	TransactionMessagesTxnLogicSig = MetricName{Name: "algod_transaction_messages_logic_sig_failed", Description: "Number of transaction messages with invalid logic sig"}
 	// TransactionMessagesTxnSigVerificationFailed "Number of transaction messages with signature verification failed"
@@ -111,8 +111,12 @@ var (
 	TransactionMessagesRemember = MetricName{Name: "algod_transaction_messages_remember", Description: "Number of transaction messages remembered in TX handler"}
 	// TransactionMessageTxGroupFull "Number of transaction messages with max txns allowed"
 	TransactionMessageTxGroupFull = MetricName{Name: "algod_transaction_messages_txgroup_full", Description: "Number of transaction messages with max txns allowed"}
-	// TransactionMessageTxGroupExcessive "Number of transaction messages with greater than config.MaxTxGroupSize txns"
-	TransactionMessageTxGroupExcessive = MetricName{Name: "algod_transaction_messages_txgroup_excessive", Description: "Number of transaction messages with greater than config.MaxTxGroupSize txns"}
+	// TransactionMessageTxGroupExcessive "Number of transaction messages with greater than max allowed txns"
+	TransactionMessageTxGroupExcessive = MetricName{Name: "algod_transaction_messages_txgroup_excessive", Description: "Number of transaction messages with greater than max allowed txns"}
+	// TransactionMessagesDupRawMsg "Number of dupe raw transaction messages dropped"
+	TransactionMessagesDupRawMsg = MetricName{Name: "algod_transaction_messages_dropped_dup_raw", Description: "Number of dupe raw transaction messages dropped"}
+	// TransactionMessagesDupCanonical "Number of transaction messages dropped after canonical re-encoding"
+	TransactionMessagesDupCanonical = MetricName{Name: "algod_transaction_messages_dropped_dup_canonical", Description: "Number of transaction messages dropped after canonical re-encoding"}
 	// TransactionMessagesBacklogSize "Number of transaction messages in the TX handler backlog queue"
 	TransactionMessagesBacklogSize = MetricName{Name: "algod_transaction_messages_backlog_size", Description: "Number of transaction messages in the TX handler backlog queue"}
 

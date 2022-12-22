@@ -235,7 +235,16 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		blockListeners = append(blockListeners, &accountListener)
 	}
 	node.ledger.RegisterBlockListeners(blockListeners)
-	node.txHandler = data.MakeTxHandler(node.transactionPool, node.ledger, node.net, node.genesisID, node.genesisHash, node.lowPriorityCryptoVerificationPool)
+	txHandlerOpts := data.TxHandlerOpts{
+		TxPool:        node.transactionPool,
+		ExecutionPool: node.lowPriorityCryptoVerificationPool,
+		Ledger:        node.ledger,
+		Net:           node.net,
+		GenesisID:     node.genesisID,
+		GenesisHash:   node.genesisHash,
+		Config:        cfg,
+	}
+	node.txHandler = data.MakeTxHandler(txHandlerOpts)
 
 	// Indexer setup
 	if cfg.IsIndexerActive && cfg.Archival {
@@ -1395,4 +1404,22 @@ func (node *AlgorandFullNode) Record(account basics.Address, round basics.Round,
 func (node *AlgorandFullNode) IsParticipating() bool {
 	round := node.ledger.Latest() + 1
 	return node.accountManager.HasLiveKeys(round, round+10)
+}
+
+// SetSyncRound sets the minimum sync round on the catchup service
+func (node *AlgorandFullNode) SetSyncRound(rnd uint64) error {
+	// Calculate the first round for which we want to disable catchup from the network.
+	// This is based on the size of the cache used in the ledger.
+	disableSyncRound := rnd + node.Config().MaxAcctLookback
+	return node.catchupService.SetDisableSyncRound(disableSyncRound)
+}
+
+// GetSyncRound retrieves the sync round, removes cache offset used during SetSyncRound
+func (node *AlgorandFullNode) GetSyncRound() uint64 {
+	return node.catchupService.GetDisableSyncRound() - node.Config().MaxAcctLookback
+}
+
+// UnsetSyncRound removes the sync round constraint on the catchup service
+func (node *AlgorandFullNode) UnsetSyncRound() {
+	node.catchupService.UnsetDisableSyncRound()
 }
