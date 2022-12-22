@@ -388,13 +388,28 @@ func (s *testWorkerStubs) advanceRoundsAndCreateStateProofs(t *testing.T, delta 
 }
 
 func (s *testWorkerStubs) mockCommit() {
+	minRound := s.Latest()
+	maxRound := s.Latest()
+
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	for round := range s.blocks {
+		if round > maxRound {
+			maxRound = round
+		}
+
+		if round < minRound {
+			minRound = round
+		}
+	}
+	s.mu.Unlock()
+
+	for round := minRound; round <= maxRound; round++ {
 		s.notifyPrepareVoterCommit(round)
 	}
 
+	s.mu.Lock()
 	s.blocks = map[basics.Round]bookkeeping.BlockHeader{}
+	s.mu.Unlock()
 }
 
 func (s *testWorkerStubs) waitOnSigWithTimeout(timeout time.Duration) ([]byte, error) {
@@ -1890,8 +1905,9 @@ func TestWorkerCreatesBuildersOnCommit(t *testing.T) {
 	a.NoError(err)
 	a.False(builderExists)
 
-	// We start on round 511, so the callback should be called on the next round.
+	// We start on round 511, so the callback should be called when committing the next round.
 	s.advanceRoundsWithoutStateProof(t, 1)
+	s.mockCommit()
 
 	builderExists, err = w.builderExists(firstBuilderRound)
 	a.NoError(err)
