@@ -229,3 +229,34 @@ func TestAsyncTelemetryHook_QueueDepth(t *testing.T) {
 	// be one higher then the maxDepth.
 	require.LessOrEqual(t, hookEntries, maxDepth+1)
 }
+
+// Ensure that errors from inside the telemetryhook.go implementation are not reported to telemetry.
+func TestAsyncTelemetryHook_SelfReporting(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const entryCount = 100
+	const maxDepth = 10
+
+	filling := make(chan struct{})
+
+	testHook := makeMockTelemetryHook(logrus.DebugLevel)
+	testHook.cb = func(entry *logrus.Entry) {
+		<-filling // Block while filling
+	}
+
+	hook := createAsyncHook(&testHook, 100, 10)
+	hook.ready = true
+	for i := 0; i < entryCount; i++ {
+		selfEntry := logrus.Entry{
+			Level:   logrus.ErrorLevel,
+			Data:    logrus.Fields{"file": "telemetryhook.go", "line": "123"},
+			Message: "Unable to write event",
+		}
+		hook.Fire(&selfEntry)
+	}
+	close(filling)
+	hook.Close()
+
+	require.Len(t, testHook.entries(), 0)
+}
