@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -119,6 +120,7 @@ func makeS3Session(bucket string) (helper Helper, err error) {
 		Region:                        aws.String(getS3Region()),
 	}
 
+	// s3DefaultReleaseBucket should be public, use AnonymousCredentials
 	if bucket == s3DefaultReleaseBucket {
 		awsConfig.Credentials = credentials.AnonymousCredentials
 	}
@@ -127,10 +129,19 @@ func makeS3Session(bucket string) (helper Helper, err error) {
 		SharedConfigState: session.SharedConfigEnable,
 		Config:            *awsConfig,
 	})
-
 	if err != nil {
 		return
 	}
+
+	// use AnonymousCredentials if none are found
+	if creds, err := sess.Config.Credentials.Get(); err != nil && !reflect.DeepEqual(creds, credentials.AnonymousCredentials) {
+		sess.Config.Credentials = credentials.AnonymousCredentials
+	}
+
+	if reflect.DeepEqual(sess.Config.Credentials, credentials.AnonymousCredentials) {
+		fmt.Println("Using anonymous credentials")
+	}
+
 	helper = Helper{
 		session: sess,
 		bucket:  bucket,
