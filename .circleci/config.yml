@@ -115,6 +115,7 @@ workflows:
       # Separate test for self-hosted runner - no parallelism
       - test_nightly_mac_arm64:
           name: mac_arm64_test_nightly
+          platform: mac_arm64
           requires:
             - mac_arm64_build_nightly
           context: slack-secrets
@@ -171,15 +172,6 @@ workflows:
             <<: *matrix-nightly
           requires:
             - << matrix.platform >>_build_nightly
-          context:
-            - slack-secrets
-            - aws-secrets
-          <<: *slack-fail-post-step
-
-      - e2e_expect_nightly_mac_arm64:
-          name: mac_arm64_e2e_subs_nightly
-          requires:
-            - mac_arm64_build_nightly
           context:
             - slack-secrets
             - aws-secrets
@@ -282,13 +274,16 @@ jobs:
 
   # Remove parallelism in self-hosted runner
   test_nightly_mac_arm64:
-    executor: mac_arm64_medium
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     steps:
       - generic_build
       - generic_test:
-          platform: mac_arm64
-          result_subdir: mac_arm64_test_nightly
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
       - upload_coverage
 
@@ -354,18 +349,6 @@ jobs:
       - generic_integration:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform>>_e2e_expect_nightly
-          no_output_timeout: 45m
-
-  e2e_expect_nightly_mac_arm64:
-    executor: mac_arm64_medium
-    working_directory: << pipeline.parameters.build_dir >>/project
-    environment:
-      E2E_TEST_FILTER: "EXPECT"
-    steps:
-      - generic_build
-      - generic_integration:
-          platform: mac_arm64
-          result_subdir: mac_arm64_e2e_expect_nightly
           no_output_timeout: 45m
 
   e2e_subs:
