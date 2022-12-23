@@ -473,6 +473,9 @@ func (cm *redCongestionManager) arrivalRateFor(arrivals *[]time.Time) float64 {
 }
 
 // shouldDrop ultimately makes the recommendation to drop a given request through some fairness probability.
+// Comparing this behavior with the behavior of a basic Random Early Detection system:
+// A standard RED model will drop any message with chance proportional to its queue's fullness. The more full, the more random dropping is applied to all clients.
+// In this RED model, there is an application of fairness, in which the chance a client's request is dropped is proportional to their individual arrival rate, vs a per-client service rate.
 // A behavior example is as follows:
 // client1 makes 100 requests over a given sliding window (10s for this example)
 // client2 makes 200 requests over the window
