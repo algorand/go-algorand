@@ -1121,16 +1121,9 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 func TestStreamVerifierIdel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	numOfTxns := 10
+	numOfTxns := 1
 	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, protoMaxGroupSize, 0.5)
 
-	origValue := waitForFirstTxnDuration
-	defer func() {
-		waitForFirstTxnDuration = origValue
-	}()
-	// set this value too small to hit the timeout first, then make sure can
-	// resume and process the incoming transactions
-	waitForFirstTxnDuration = 1 * time.Microsecond
 	sv := streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
 	sv.WaitForStop()
 }
