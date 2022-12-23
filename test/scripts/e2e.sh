@@ -78,12 +78,15 @@ echo "RUN_KMD_WITH_UNSAFE_SCRYPT = ${RUN_KMD_WITH_UNSAFE_SCRYPT}"
 
 export BINDIR=${TEMPDIR}/bin
 export DATADIR=${TEMPDIR}/data
+export NETWORKDIR=${TEMPDIR}/net
 
 function reset_dirs() {
     rm -rf ${BINDIR}
     rm -rf ${DATADIR}
+    rm -rf ${NETWORKDIR}
     mkdir -p ${BINDIR}
     mkdir -p ${DATADIR}
+    mkdir -p ${NETWORKDIR}
 }
 
 # $1 - Message
@@ -154,8 +157,15 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
         exit
     fi
 
-    ./timeout 200 ./e2e_basic_start_stop.sh
+    goal network create \
+      -r $NETWORKDIR \
+      -n tbd \
+      -t ../testdata/nettemplates/TwoNodes50EachFuture.json
+
+    ./timeout 200 ./e2e_basic_start_stop.sh $NETWORKDIR
     duration "e2e_basic_start_stop.sh"
+
+    goal network delete -r $NETWORKDIR
 
     KEEP_TEMPS_CMD_STR=""
 
