@@ -385,6 +385,7 @@ func (cm *redCongestionManager) run() {
 	targetRate := float64(0)
 	consumedByClient := map[ErlClient]*[]time.Time{}
 	serves := []time.Time{}
+	lastServiceRateUpdate := time.Now()
 	exit := false
 	for {
 		select {
@@ -416,10 +417,11 @@ func (cm *redCongestionManager) run() {
 			}
 
 		}
-		// only recalculate the service rate every N ticks, because all lists must be pruned, which can be expensive
+		// recalculate the service rate every N ticks, or every 100ms
 		// also calculate if the routine is going to exit
 		tick = (tick + 1) % cm.targetRateRefreshTicks
-		if tick == 0 || exit {
+		if tick == 0 || time.Now().After(lastServiceRateUpdate.Add(100*time.Millisecond)) || exit {
+			lastServiceRateUpdate = time.Now()
 			cutoff := time.Now().Add(-1 * cm.window)
 			prune(&serves, cutoff)
 			for c := range consumedByClient {
@@ -490,7 +492,7 @@ func (cm *redCongestionManager) arrivalRateFor(arrivals *[]time.Time) float64 {
 // When a shouldDrop request is made:
 //   - client1 shouldDrop: 10 / 15 > random float ?
 //   - client2 shouldDrop: 20 / 15 > random float ?
-//   - Additionally, the arrival and service rates are raised to an exponental power, to increase contrast.
+//   - Additionally, the arrival and service rates are raised to an exponential power, to increase contrast.
 //
 // client2 will be throttled because it is making requests in excess of its target rate.
 // client1 will be throttled proportional to its usage of the service rate.
@@ -498,7 +500,7 @@ func (cm *redCongestionManager) arrivalRateFor(arrivals *[]time.Time) float64 {
 // The net effect is that clients who are disproportionately noisy are dropped more often,
 // while quieter ones are are dropped less often.
 // The reason this works is that the serviceRate represents the ability for the given resource to be serviced (ie, the rate at which work is dequeued).
-// When congestion management is requred, the service should attempt a fair distribution of servicing to all clients.
+// When congestion management is required, the service should attempt a fair distribution of servicing to all clients.
 // clients who are making requests in excess of our known ability to fairly service requests should be reduced.
 func (cm *redCongestionManager) shouldDrop(targetRate float64, c ErlClient, arrivals *[]time.Time) bool {
 	// clients who have "never" been seen do not get dropped
