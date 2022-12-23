@@ -72,9 +72,6 @@ const batchSizeBlockLimit = 1024
 // for signature evaluation before waitForNextTxnDuration.
 const waitForNextTxnDuration = 5 * time.Millisecond
 
-// waitForFirstTxnDuration is the time to wait for the first transaction in the batch
-var waitForFirstTxnDuration = 2000 * time.Millisecond
-
 // When the PaysetGroups is generating worksets, it enqueues up to concurrentWorksets entries to the execution pool. This serves several
 // purposes :
 // - if the verification task need to be aborted, there are only concurrentWorksets entries that are currently redundant on the execution pool queue.
@@ -562,8 +559,8 @@ func (w *worksetBuilder) completed() bool {
 }
 
 // UnverifiedElement is the element passed to the Stream verifier
-// BacklogMessage is a reference to the backlog message, which needs to be passed
-// with the result
+// BacklogMessage is a *txBacklogMsg from data/txHandler.go which needs to be
+// passed back to that context
 type UnverifiedElement struct {
 	TxnGroup       []transactions.SignedTxn
 	BacklogMessage interface{}
@@ -698,7 +695,7 @@ func (sv *StreamVerifier) cleanup(pending []*UnverifiedElement) {
 
 func (sv *StreamVerifier) batchingLoop() {
 	defer sv.activeLoopWg.Done()
-	timer := time.NewTicker(waitForFirstTxnDuration)
+	timer := time.NewTicker(waitForNextTxnDuration)
 	defer timer.Stop()
 	var added bool
 	var numberOfSigsInCurrent uint64
@@ -708,7 +705,6 @@ func (sv *StreamVerifier) batchingLoop() {
 	for {
 		select {
 		case stx := <-sv.stxnChan:
-			isFirstInBatch := numberOfSigsInCurrent == 0
 			numberOfBatchableSigsInGroup, err := getNumberOfBatchableSigsInGroup(stx.TxnGroup)
 			if err != nil {
 				// wrong number of signatures
@@ -749,27 +745,16 @@ func (sv *StreamVerifier) batchingLoop() {
 				if added {
 					numberOfSigsInCurrent = 0
 					ue = make([]*UnverifiedElement, 0)
-					// starting a new batch. Can wait long, since nothing is blocked
-					timer.Reset(waitForFirstTxnDuration)
 					numberOfTimerResets = 0
 				} else {
 					// was not added because of the exec pool buffer length
-					timer.Reset(waitForNextTxnDuration)
 					numberOfTimerResets++
-				}
-			} else {
-				if isFirstInBatch {
-					// an element is added and is waiting. shorten the waiting time
-					timer.Reset(waitForNextTxnDuration)
-					numberOfTimerResets = 0
 				}
 			}
 		case <-timer.C:
 			// timer ticked. it is time to send the batch even if it is not full
 			if numberOfSigsInCurrent == 0 {
 				// nothing batched yet... wait some more
-				timer.Reset(waitForFirstTxnDuration)
-				numberOfTimerResets = 0
 				continue
 			}
 			var err error
@@ -788,12 +773,9 @@ func (sv *StreamVerifier) batchingLoop() {
 			if added {
 				numberOfSigsInCurrent = 0
 				ue = make([]*UnverifiedElement, 0)
-				// starting a new batch. Can wait long, since nothing is blocked
-				timer.Reset(waitForFirstTxnDuration)
 				numberOfTimerResets = 0
 			} else {
 				// was not added because of the exec pool buffer length. wait for some more txns
-				timer.Reset(waitForNextTxnDuration)
 				numberOfTimerResets++
 			}
 		case <-sv.ctx.Done():
