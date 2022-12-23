@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"sort"
 	"sync"
 	"time"
 
@@ -520,22 +521,6 @@ func (cm *redCongestionManager) shouldDrop(targetRate float64, c ErlClient, arri
 	return (math.Pow(clientArrivalRate, cm.exp) / math.Pow(targetRate, cm.exp)) > r
 }
 
-// bsearch does a binary search of the times list finding the index which crosses the target cutoff time
-func bsearch(ts *[]time.Time, cutoff time.Time) int {
-	base := 0
-	limit := len(*ts) - 1
-	for base <= limit {
-		target := (base + limit) / 2
-		if (*ts)[target].After(cutoff) {
-			limit = target - 1
-		} else {
-			base = target + 1
-		}
-		fmt.Println(base, target, limit)
-	}
-	return base
-}
-
 func prune(ts *[]time.Time, cutoff time.Time) int {
 	// guard against nil lists
 	if ts == nil {
@@ -552,7 +537,7 @@ func prune(ts *[]time.Time, cutoff time.Time) int {
 	}
 	// optimization: if the list is longer than 50 elements, use a binary search to find the cutoff line
 	if len(*ts) > 50 {
-		i := bsearch(ts, cutoff)
+		i := sort.Search(len(*ts), func(i int) bool { return (*ts)[i].After(cutoff) })
 		*ts = (*ts)[i:]
 		return len(*ts)
 	}

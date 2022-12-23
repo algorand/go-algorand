@@ -275,30 +275,3 @@ func TestREDCongestionManagerStopStart(t *testing.T) {
 	assert.Equal(t, 0.2, red.arrivalRateFor(red.consumedByClient[client]))
 	assert.Equal(t, 0.4, red.targetRate)
 }
-
-func TestBSearch(t *testing.T) {
-	baseTime := time.Now()
-	ts := []time.Time{}
-	// add a set of times, separated by 2s each so we have gaps
-	for i := 0; i < 100; i++ {
-		ts = append(ts, baseTime.Add(time.Duration(i*2)*time.Second))
-	}
-
-	res := bsearch(&ts, baseTime.Add(-1*time.Second))
-	assert.Equal(t, 0, res)
-
-	res = bsearch(&ts, baseTime.Add(1*time.Second))
-	assert.Equal(t, 1, res)
-
-	res = bsearch(&ts, baseTime.Add(49*time.Second))
-	assert.Equal(t, 25, res)
-
-	res = bsearch(&ts, baseTime.Add(199*time.Second))
-	assert.Equal(t, 100, res)
-
-	res = bsearch(&ts, baseTime.Add(200*time.Second))
-	assert.Equal(t, 100, res)
-
-	res = bsearch(&ts, baseTime.Add(300*time.Second))
-	assert.Equal(t, 100, res)
-}
