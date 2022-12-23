@@ -20,7 +20,7 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 # Version 8 clear program
 printf '#pragma version 8\nint 1' > "${TEMPDIR}/clear.teal"
 
-APPID=$(${gcmd} app create --creator "$ACCOUNT" --approval-prog=${TEAL}/boxes.teal --clear-prog "$TEMPDIR/clear.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
+APPID=$(${gcmd} app create --creator "$ACCOUNT" --approval-prog=${TEAL}/boxes.teal --clear-prog "$TEMPDIR/clear.teal" --no-state | grep Created | awk '{ print $6 }')
 
 # Fund the app account 10 algos
 APP_ACCOUNT=$(${gcmd} app info --app-id "$APPID" | grep "Application account" | awk '{print $3}')

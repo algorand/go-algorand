@@ -60,9 +60,13 @@ var (
 
 	localSchemaUints      uint64
 	localSchemaByteSlices uint64
+	noLocalState          bool
 
 	globalSchemaUints      uint64
 	globalSchemaByteSlices uint64
+	noGlobalState          bool
+
+	noAppState bool
 
 	// Cobra only has a slice helper for uint, not uint64, so we'll parse
 	// uint64s from strings for now. 4bn transactions and using a 32-bit
@@ -106,10 +110,13 @@ func init() {
 	appCmd.PersistentFlags().StringVar(&approvalProgRawFile, "approval-prog-raw", "", "Compiled TEAL program filename for approving/rejecting transactions")
 	appCmd.PersistentFlags().StringVar(&clearProgRawFile, "clear-prog-raw", "", "Compiled TEAL program filename for updating application state when a user clears their local state")
 
-	createAppCmd.Flags().Uint64Var(&globalSchemaUints, "global-ints", 0, "Maximum number of integer values that may be stored in the global key/value store. Immutable.")
-	createAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store. Immutable.")
-	createAppCmd.Flags().Uint64Var(&localSchemaUints, "local-ints", 0, "Maximum number of integer values that may be stored in local (per-account) key/value stores for this app. Immutable.")
-	createAppCmd.Flags().Uint64Var(&localSchemaByteSlices, "local-byteslices", 0, "Maximum number of byte slices that may be stored in local (per-account) key/value stores for this app. Immutable.")
+	createAppCmd.Flags().BoolVar(&noGlobalState, "no-global-state", false, "Setting this to true indicates --global-ints=0 and --global-byteslices=0. Mutually exclusive with --no-state, --global-ints, and --global-byteslices.")
+	createAppCmd.Flags().BoolVar(&noLocalState, "no-local-state", false, "Setting this to true indicates --local-ints=0 and --local-byteslices=0. Mutually exclusive with --no-state, --local-ints, and --local-byteslices.")
+	createAppCmd.Flags().BoolVar(&noAppState, "no-state", false, "Setting this to true indicates --no-local-state=true and --no-global-state=true. Mutually exclusive with --no-global-state, --global-ints, --global-byteslices, --no-local-state, --local-ints, and --local-byteslices.")
+	createAppCmd.Flags().Uint64Var(&globalSchemaUints, "global-ints", 0, "Maximum number of integer values that may be stored in the global key/value store. Immutable. Mutually exclusive with --no-global-state and --no-state.")
+	createAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store. Immutable. Mutually exclusive with --no-global-state and --no-state.")
+	createAppCmd.Flags().Uint64Var(&localSchemaUints, "local-ints", 0, "Maximum number of integer values that may be stored in local (per-account) key/value stores for this app. Immutable. Mutually exclusive with --no-local-state and --no-state.")
+	createAppCmd.Flags().Uint64Var(&localSchemaByteSlices, "local-byteslices", 0, "Maximum number of byte slices that may be stored in local (per-account) key/value stores for this app. Immutable. Mutually exclusive with --no-local-state and --no-state.")
 	createAppCmd.Flags().StringVar(&appCreator, "creator", "", "Account to create the application")
 	createAppCmd.Flags().StringVar(&onCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
 	createAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, "Additional program space for supporting larger TEAL assembly program. A maximum of 3 extra pages is allowed. A page is 1024 bytes.")
@@ -127,10 +134,13 @@ func init() {
 	methodAppCmd.Flags().StringArrayVar(&methodArgs, "arg", nil, "Args to pass in for calling a method")
 	methodAppCmd.Flags().StringVar(&onCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
 	methodAppCmd.Flags().BoolVar(&methodCreatesApp, "create", false, "Create an application in this method call")
-	methodAppCmd.Flags().Uint64Var(&globalSchemaUints, "global-ints", 0, "Maximum number of integer values that may be stored in the global key/value store. Immutable, only valid when passed with --create.")
-	methodAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store. Immutable, only valid when passed with --create.")
-	methodAppCmd.Flags().Uint64Var(&localSchemaUints, "local-ints", 0, "Maximum number of integer values that may be stored in local (per-account) key/value stores for this app. Immutable, only valid when passed with --create.")
-	methodAppCmd.Flags().Uint64Var(&localSchemaByteSlices, "local-byteslices", 0, "Maximum number of byte slices that may be stored in local (per-account) key/value stores for this app. Immutable, only valid when passed with --create.")
+	methodAppCmd.Flags().BoolVar(&noGlobalState, "no-global-state", false, "Setting this to true indicates --global-ints=0 and --global-byteslices=0. Mutually exclusive with --no-state, --global-ints, and --global-byteslices. Only valid when passed with --create.")
+	methodAppCmd.Flags().BoolVar(&noLocalState, "no-local-state", false, "Setting this to true indicates --local-ints=0 and --local-byteslices=0. Mutually exclusive with --no-state, --local-ints, and --local-byteslices. Only valid when passed with --create.")
+	methodAppCmd.Flags().BoolVar(&noAppState, "no-state", false, "Setting this to true indicates --no-local-state=true and --no-global-state=true. Mutually exclusive with --no-global-state, --global-ints, --global-byteslices, --no-local-state, --local-ints, and --local-byteslices. Only valid when passed with --create.")
+	methodAppCmd.Flags().Uint64Var(&globalSchemaUints, "global-ints", 0, "Maximum number of integer values that may be stored in the global key/value store. Immutable. Mutually exclusive with --no-global-state and --no-state. Only valid when passed with --create.")
+	methodAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store. Immutable. Mutually exclusive with --no-global-state and --no-state. Only valid when passed with --create.")
+	methodAppCmd.Flags().Uint64Var(&localSchemaUints, "local-ints", 0, "Maximum number of integer values that may be stored in local (per-account) key/value stores for this app. Immutable. Mutually exclusive with --no-local-state and --no-state. Only valid when passed with --create.")
+	methodAppCmd.Flags().Uint64Var(&localSchemaByteSlices, "local-byteslices", 0, "Maximum number of byte slices that may be stored in local (per-account) key/value stores for this app. Immutable. Mutually exclusive with --no-local-state and --no-state. Only valid when passed with --create.")
 	methodAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, "Additional program space for supporting larger TEAL assembly program. A maximum of 3 extra pages is allowed. A page is 1024 bytes. Only valid when passed with --create.")
 
 	// Can't use PersistentFlags on the root because for some reason marking
@@ -161,10 +171,6 @@ func init() {
 	readStateAppCmd.Flags().BoolVar(&guessFormat, "guess-format", false, "Format application state using heuristics to guess data encoding.")
 
 	createAppCmd.MarkFlagRequired("creator")
-	createAppCmd.MarkFlagRequired("global-ints")
-	createAppCmd.MarkFlagRequired("global-byteslices")
-	createAppCmd.MarkFlagRequired("local-ints")
-	createAppCmd.MarkFlagRequired("local-byteslices")
 
 	optInAppCmd.MarkFlagRequired("app-id")
 	optInAppCmd.MarkFlagRequired("from")
@@ -396,6 +402,51 @@ func mustParseOnCompletion(ocString string) (oc transactions.OnCompletion) {
 	}
 }
 
+func getStateSchema(cmd *cobra.Command) basics.StateSchemas {
+	var schema basics.StateSchemas
+
+	noAppStateChanged := cmd.Flags().Changed("no-state")
+	noGlobalStateChanged := cmd.Flags().Changed("no-global-state")
+	noLocalStateChanged := cmd.Flags().Changed("no-local-state")
+	globalSchemaUintsChanged := cmd.Flags().Changed("global-ints")
+	globalSchemaByteSlicesChanged := cmd.Flags().Changed("global-byteslices")
+	localSchemaUintsChanged := cmd.Flags().Changed("local-ints")
+	localSchemaByteSlicesChanged := cmd.Flags().Changed("local-byteslices")
+
+	if noAppStateChanged {
+		if noGlobalStateChanged || globalSchemaUintsChanged || globalSchemaByteSlicesChanged || noLocalStateChanged || localSchemaUintsChanged || localSchemaByteSlicesChanged {
+			reportErrorf("--no-state is mutually exclusive with --no-global-state, --global-ints, --global-byteslices, --no-local-state, --local-ints, and --local-byteslices")
+		}
+		return schema
+	}
+
+	if noGlobalStateChanged {
+		if globalSchemaUintsChanged || globalSchemaByteSlicesChanged {
+			reportErrorf("--no-global-state is mutually exclusive with --global-ints and --global-byteslices")
+		}
+	} else {
+		if !globalSchemaUintsChanged || !globalSchemaByteSlicesChanged {
+			reportErrorf("missing required flags --global-ints and --global-byteslices (or one of --no-global-state or --no-state)")
+		}
+		schema.GlobalStateSchema.NumUint = globalSchemaUints
+		schema.GlobalStateSchema.NumByteSlice = globalSchemaByteSlices
+	}
+
+	if noLocalStateChanged {
+		if localSchemaUintsChanged || localSchemaByteSlicesChanged {
+			reportErrorf("--no-local-state is mutually exclusive with --local-ints and --local-byteslices")
+		}
+	} else {
+		if !localSchemaUintsChanged || !localSchemaByteSlicesChanged {
+			reportErrorf("missing required flags --local-ints and --local-byteslices (or one of --no-local-state or --no-state)")
+		}
+		schema.LocalStateSchema.NumUint = localSchemaUints
+		schema.LocalStateSchema.NumByteSlice = localSchemaByteSlices
+	}
+
+	return schema
+}
+
 func getDataDirAndClient() (dataDir string, client libgoal.Client) {
 	dataDir = ensureSingleDataDir()
 	client = ensureFullClient(dataDir)
@@ -434,16 +485,7 @@ var createAppCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, _ []string) {
 		dataDir, client := getDataDirAndClient()
 
-		// Construct schemas from args
-		localSchema := basics.StateSchema{
-			NumUint:      localSchemaUints,
-			NumByteSlice: localSchemaByteSlices,
-		}
-
-		globalSchema := basics.StateSchema{
-			NumUint:      globalSchemaUints,
-			NumByteSlice: globalSchemaByteSlices,
-		}
+		schema := getStateSchema(cmd)
 
 		// Parse transaction parameters
 		approvalProg, clearProg := mustParseProgArgs()
@@ -455,7 +497,7 @@ var createAppCmd = &cobra.Command{
 			reportWarnf("'--on-completion %s' may be ill-formed for 'goal app create'", onCompletion)
 		}
 
-		tx, err := client.MakeUnsignedAppCreateTx(onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps, foreignAssets, boxes, extraPages)
+		tx, err := client.MakeUnsignedAppCreateTx(onCompletionEnum, approvalProg, clearProg, schema.GlobalStateSchema, schema.LocalStateSchema, appArgs, appAccounts, foreignApps, foreignAssets, boxes, extraPages)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -1257,17 +1299,7 @@ var methodAppCmd = &cobra.Command{
 			reportErrorf("--arg and --app-arg are mutually exclusive, do not use --app-arg")
 		}
 
-		// Construct schemas from args
-		localSchema := basics.StateSchema{
-			NumUint:      localSchemaUints,
-			NumByteSlice: localSchemaByteSlices,
-		}
-
-		globalSchema := basics.StateSchema{
-			NumUint:      globalSchemaUints,
-			NumByteSlice: globalSchemaByteSlices,
-		}
-
+		schema := getStateSchema(cmd)
 		onCompletionEnum := mustParseOnCompletion(onCompletion)
 
 		if methodCreatesApp {
@@ -1284,7 +1316,7 @@ var methodAppCmd = &cobra.Command{
 				reportErrorf("one of --app-id or --create must be provided")
 			}
 
-			if localSchema != (basics.StateSchema{}) || globalSchema != (basics.StateSchema{}) {
+			if schema.LocalStateSchema != (basics.StateSchema{}) || schema.GlobalStateSchema != (basics.StateSchema{}) {
 				reportErrorf("--global-ints, --global-byteslices, --local-ints, and --local-byteslices must only be provided with --create")
 			}
 
@@ -1370,7 +1402,7 @@ var methodAppCmd = &cobra.Command{
 
 		appCallTxn, err := client.MakeUnsignedApplicationCallTx(
 			appIdx, applicationArgs, appAccounts, foreignApps, foreignAssets, boxes,
-			onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema, extraPages)
+			onCompletionEnum, approvalProg, clearProg, schema.GlobalStateSchema, schema.LocalStateSchema, extraPages)
 
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)

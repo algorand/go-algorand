@@ -20,7 +20,7 @@ printf '#pragma version 2\nint 1' > "${TEMPDIR}/simple-v2.teal"
 printf '#pragma version 3\nint 1' > "${TEMPDIR}/simple-v3.teal"
 
 # Create
-RES=$(${gcmd} app method --method "create(uint64)uint64" --arg "1234" --create --approval-prog ${DIR}/tealprogs/app-abi-method-example.teal --clear-prog ${TEMPDIR}/simple-v2.teal --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 --extra-pages 0 --from $ACCOUNT 2>&1 || true)
+RES=$(${gcmd} app method --method "create(uint64)uint64" --arg "1234" --create --approval-prog ${DIR}/tealprogs/app-abi-method-example.teal --clear-prog ${TEMPDIR}/simple-v2.teal --no-global-state --local-byteslices 1 --local-ints 0 --extra-pages 0 --from $ACCOUNT 2>&1 || true)
 EXPECTED="method create(uint64)uint64 succeeded with output: 2468"
 if [[ $RES != *"${EXPECTED}"* ]]; then
     date '+app-abi-method-test FAIL the method call to create(uint64)uint64 should not fail %Y%m%d_%H%M%S'
