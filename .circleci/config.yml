@@ -115,8 +115,7 @@ workflows:
       # Separate test for self-hosted runner - no parallelism
       - test_nightly_mac_arm64:
           name: mac_arm64_test_nightly
-          parameters:
-            platform: "mac_arm64"
+          platform: mac_arm64
           requires:
             - mac_arm64_build_nightly
           context: slack-secrets
