@@ -60,7 +60,7 @@ function start_public_network() {
 
   apply_configuration
 
-  if [ "$FAST_CATCHUP" ]; then
+  if [[ $FAST_CATCHUP ]]; then
     catchup &
   fi
   # redirect output to stdout
