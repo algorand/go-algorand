@@ -472,6 +472,28 @@ func (cm *redCongestionManager) arrivalRateFor(arrivals *[]time.Time) float64 {
 	return clientArrivalRate
 }
 
+// shouldDrop ultimately makes the recommendation to drop a given request through some fairness probability.
+// A behavior example is as follows:
+// client1 makes 100 requests over a given sliding window (10s for this example)
+// client2 makes 200 requests over the window
+// all 300 requests were served over the window
+//
+// This means:
+//   - client1's arrival rate is 100/10 = 10/s
+//   - client2's arrival rate is 200/10 = 20/s
+//   - the service rate is 300/10 = 30/s
+//   - the *target rate* is the service rate per client: 30/2 = 15/s
+//
+// When a shouldDrop request is made:
+//   - client1 shouldDrop: 10 / 15 > random float ?
+//   - client2 shouldDrop: 20 / 15 > random float ?
+//   - Additionally, the arrival and service rates are raised to an exponental power, to increase contrast.
+//
+// client2 will be throttled because it is making requests in excess of its target rate.
+// client1 will be throttled proportional to its usage of the service rate.
+// over time, client2 will fall in line with the appropriate service rate, while other clients will be able to use the newly freed capacity
+// The net effect is that clients who are disproportionately noisy are dropped more often,
+// while quieter ones are are dropped less often.
 func (cm *redCongestionManager) shouldDrop(targetRate float64, c ErlClient, arrivals *[]time.Time) bool {
 	// clients who have "never" been seen do not get dropped
 	clientArrivalRate := cm.arrivalRateFor(arrivals)
