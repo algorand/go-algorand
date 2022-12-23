@@ -34,6 +34,7 @@ import (
 
 func TestNewAppEvalParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	params := []config.ConsensusParams{
 		{Application: true, MaxAppProgramCost: 700},
@@ -78,8 +79,11 @@ func TestNewAppEvalParams(t *testing.T) {
 	}
 
 	for i, param := range params {
+		param := param
 		for j, testCase := range cases {
+			i, j, param, testCase := i, j, param, testCase
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
+				t.Parallel()
 				ep := logic.NewEvalParams(testCase.group, &param, nil)
 				require.NotNil(t, ep)
 				require.Equal(t, ep.TxnGroup, testCase.group)
