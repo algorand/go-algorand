@@ -81,10 +81,9 @@ fi
 
 git log -n 5
 
-# make sure the makefile calculates BUILD_NUMBER
-export BUILD_NUMBER=""
 ./scripts/configure_dev.sh
-make build
+# make sure the makefile uses specific values for BUILD_NUMBER and BRANCH
+BUILD_NUMBER="" BRANCH="$BRANCH" make build
 
 shopt -s extglob
 
