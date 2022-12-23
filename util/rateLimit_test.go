@@ -76,6 +76,31 @@ func TestElasticRateLimiterCongestionControlled(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestReservations(t *testing.T) {
+	client1 := mockClient("client1")
+	client2 := mockClient("client2")
+	erl := NewElasticRateLimiter(4, 1, time.Second, nil)
+
+	_, err := erl.ConsumeCapacity(client1)
+	// because the ERL gives capacity to a reservation, and then asynchronously drains capacity from the share,
+	// wait a moment before testing the size of the sharedCapacity
+	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, 1, len(erl.capacityByClient))
+	assert.NoError(t, err)
+
+	_, err = erl.ConsumeCapacity(client2)
+	// because the ERL gives capacity to a reservation, and then asynchronously drains capacity from the share,
+	// wait a moment before testing the size of the sharedCapacity
+	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, 2, len(erl.capacityByClient))
+	assert.NoError(t, err)
+
+	erl.closeReservation(client1)
+	assert.Equal(t, 1, len(erl.capacityByClient))
+	erl.closeReservation(client2)
+	assert.Equal(t, 0, len(erl.capacityByClient))
+}
+
 func TestConsumeReleaseCapacity(t *testing.T) {
 	client := mockClient("client")
 	erl := NewElasticRateLimiter(4, 3, time.Second, nil)
@@ -249,4 +274,31 @@ func TestREDCongestionManagerStopStart(t *testing.T) {
 	red.Stop()
 	assert.Equal(t, 0.2, red.arrivalRateFor(red.consumedByClient[client]))
 	assert.Equal(t, 0.4, red.targetRate)
+}
+
+func TestBSearch(t *testing.T) {
+	baseTime := time.Now()
+	ts := []time.Time{}
+	// add a set of times, separated by 2s each so we have gaps
+	for i := 0; i < 100; i++ {
+		ts = append(ts, baseTime.Add(time.Duration(i*2)*time.Second))
+	}
+
+	res := bsearch(&ts, baseTime.Add(-1*time.Second))
+	assert.Equal(t, 0, res)
+
+	res = bsearch(&ts, baseTime.Add(1*time.Second))
+	assert.Equal(t, 1, res)
+
+	res = bsearch(&ts, baseTime.Add(49*time.Second))
+	assert.Equal(t, 25, res)
+
+	res = bsearch(&ts, baseTime.Add(199*time.Second))
+	assert.Equal(t, 100, res)
+
+	res = bsearch(&ts, baseTime.Add(200*time.Second))
+	assert.Equal(t, 100, res)
+
+	res = bsearch(&ts, baseTime.Add(300*time.Second))
+	assert.Equal(t, 100, res)
 }

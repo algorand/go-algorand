@@ -18,6 +18,7 @@ package util
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -27,6 +28,11 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-deadlock"
 )
+
+var errConManDropped = errors.New("congestionManager prevented client from consuming capacity")
+var errFailedConsume = errors.New("could not consume capacity from capacityQueue")
+var errERLReservationExists = errors.New("client already has a reservation")
+var errCapacityReturn = errors.New("could not replace capacity to channel")
 
 // ElasticRateLimiter holds and distributes capacity through capacityQueues
 // Capacity consumers are given an error if there is no capacity available for them,
@@ -60,7 +66,7 @@ type capacityQueue chan capacity
 type ErlCapacityGuard struct {
 	client ErlClient
 	cq     capacityQueue
-	cm     *CongestionManager
+	cm     CongestionManager
 }
 
 // Release will put capacity back into the queue attached to this capacity guard
@@ -72,14 +78,14 @@ func (cg *ErlCapacityGuard) Release() error {
 	case cg.cq <- capacity{}:
 		return nil
 	default:
-		return fmt.Errorf("could not replace capacity to channel: %v", cg.cq)
+		return errCapacityReturn
 	}
 }
 
 // Served will notify the CongestionManager that this resource has been served, informing the Service Rate
 func (cg *ErlCapacityGuard) Served() {
-	if *cg.cm != nil {
-		(*cg.cm).Served(time.Now())
+	if cg.cm != nil {
+		cg.cm.Served(time.Now())
 	}
 }
 
@@ -91,7 +97,7 @@ func (q capacityQueue) blockingConsume() {
 	<-q
 }
 
-func (q capacityQueue) consume(cm *CongestionManager) (ErlCapacityGuard, error) {
+func (q capacityQueue) consume(cm CongestionManager) (ErlCapacityGuard, error) {
 	select {
 	case <-q:
 		return ErlCapacityGuard{
@@ -99,7 +105,7 @@ func (q capacityQueue) consume(cm *CongestionManager) (ErlCapacityGuard, error) 
 			cm: cm,
 		}, nil
 	default:
-		return ErlCapacityGuard{}, fmt.Errorf("could not consume capacity from capacityQueue: %v", q)
+		return ErlCapacityGuard{}, errFailedConsume
 	}
 }
 
@@ -183,11 +189,11 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, 
 
 		// if this reservation is newly created, directly (blocking) take a capacity
 		q.blockingConsume()
-		return &ErlCapacityGuard{cq: q, cm: &erl.cm}, nil
+		return &ErlCapacityGuard{cq: q, cm: erl.cm}, nil
 	}
 
 	// Step 1: Attempt consumption from the reserved queue
-	cg, err := q.consume(&erl.cm)
+	cg, err := q.consume(erl.cm)
 	if err == nil {
 		if erl.cm != nil {
 			erl.cm.Consumed(c, time.Now()) // notify the congestion manager that this client consumed from this queue
@@ -201,10 +207,10 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, 
 		if erl.congestionControlCounter != nil {
 			erl.congestionControlCounter.Inc(nil)
 		}
-		return nil, fmt.Errorf("congestionManager prevented client from consuming capacity")
+		return nil, errConManDropped
 	}
 	// Step 3: Attempt consumption from the shared queue
-	cg, err = erl.sharedCapacity.consume(&erl.cm)
+	cg, err = erl.sharedCapacity.consume(erl.cm)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +226,7 @@ func (erl *ElasticRateLimiter) openReservation(c ErlClient) (capacityQueue, erro
 	erl.clientLock.Lock()
 	defer erl.clientLock.Unlock()
 	if _, exists := erl.capacityByClient[c]; exists {
-		return capacityQueue(nil), fmt.Errorf("client already has a reservation")
+		return capacityQueue(nil), errERLReservationExists
 	}
 	// guard against overprovisioning, if there is less than a reservedCapacity amount left
 	remaining := erl.MaxCapacity - (erl.CapacityPerReservation * len(erl.capacityByClient))
@@ -484,9 +490,41 @@ func (cm *redCongestionManager) shouldDrop(targetRate float64, c ErlClient, arri
 	return (math.Pow(clientArrivalRate, cm.exp) / math.Pow(targetRate, cm.exp)) > r
 }
 
+// bsearch does a binary search of the times list finding the index which crosses the target cutoff time
+func bsearch(ts *[]time.Time, cutoff time.Time) int {
+	base := 0
+	limit := len(*ts) - 1
+	for base <= limit {
+		target := (base + limit) / 2
+		if (*ts)[target].After(cutoff) {
+			limit = target - 1
+		} else {
+			base = target + 1
+		}
+		fmt.Println(base, target, limit)
+	}
+	return base
+}
+
 func prune(ts *[]time.Time, cutoff time.Time) int {
+	// guard against nil lists
 	if ts == nil {
 		return 0
+	}
+	// guard against empty lists
+	if len(*ts) == 0 {
+		return 0
+	}
+	// optimization: if the last element falls before the cutoff, prune the whole list without iteration
+	if (*ts)[len(*ts)-1].Before(cutoff) {
+		*ts = (*ts)[:0]
+		return 0
+	}
+	// optimization: if the list is longer than 50 elements, use a binary search to find the cutoff line
+	if len(*ts) > 50 {
+		i := bsearch(ts, cutoff)
+		*ts = (*ts)[i:]
+		return len(*ts)
 	}
 	// find the first inserted timestamp *after* the cutoff, and cut everything behind it off
 	for i, t := range *ts {
