@@ -32,7 +32,7 @@ func TestAddingToCache(t *testing.T) {
 
 	icache := MakeVerifiedTransactionCache(500)
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, secrets, addrs := generateTestObjects(10, 5, 50)
+	_, signedTxn, secrets, addrs := generateTestObjects(10, 5, 0, 50)
 	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 	groupCtx, err := PrepareGroupContext(txnGroups[0], blockHeader, nil)
 	require.NoError(t, err)
@@ -52,7 +52,7 @@ func TestBucketCycling(t *testing.T) {
 	entriesPerBucket := 100
 	icache := MakeVerifiedTransactionCache(entriesPerBucket * (bucketCount - 1))
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, _, _ := generateTestObjects(entriesPerBucket*bucketCount*2, bucketCount, 0)
+	_, signedTxn, _, _ := generateTestObjects(entriesPerBucket*bucketCount*2, bucketCount, 0, 0)
 
 	require.Equal(t, entriesPerBucket*bucketCount*2, len(signedTxn))
 	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{signedTxn[0]}, blockHeader, nil)
@@ -82,7 +82,7 @@ func TestGetUnverifiedTransactionGroups50(t *testing.T) {
 	size := 300
 	icache := MakeVerifiedTransactionCache(size * 2)
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10+size/1000, 0)
+	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10+size/1000, 0, 0)
 	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	expectedUnverifiedGroups := make([][]transactions.SignedTxn, 0, len(txnGroups)/2)
@@ -107,7 +107,7 @@ func BenchmarkGetUnverifiedTransactionGroups50(b *testing.B) {
 	}
 	icache := MakeVerifiedTransactionCache(b.N * 2)
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, secrets, addrs := generateTestObjects(b.N*2, 10+b.N/1000, 0)
+	_, signedTxn, secrets, addrs := generateTestObjects(b.N*2, 10+b.N/1000, 0, 0)
 	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	queryTxnGroups := make([][]transactions.SignedTxn, 0, b.N)
@@ -140,7 +140,7 @@ func TestUpdatePinned(t *testing.T) {
 	size := 100
 	icache := MakeVerifiedTransactionCache(size * 10)
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0)
+	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0, 0)
 	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	// insert some entries.
@@ -169,7 +169,7 @@ func TestPinningTransactions(t *testing.T) {
 	size := 100
 	icache := MakeVerifiedTransactionCache(size)
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0)
+	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0, 0)
 	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	// insert half of the entries.

@@ -170,7 +170,7 @@ func generateAccounts(numAccs int) ([]*crypto.SignatureSecrets, []basics.Address
 	return secrets, addresses, pks
 }
 
-func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transactions.Transaction, []transactions.SignedTxn, []*crypto.SignatureSecrets, []basics.Address) {
+func generateTestObjects(numTxs, numAccs, noteOffset int, blockRound basics.Round) ([]transactions.Transaction, []transactions.SignedTxn, []*crypto.SignatureSecrets, []basics.Address) {
 	txs := make([]transactions.Transaction, numTxs)
 	signed := make([]transactions.SignedTxn, numTxs)
 	secrets, addresses, _ := generateAccounts(numAccs)
@@ -192,7 +192,7 @@ func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transa
 
 		txs[i] = createPayTransaction(f, iss, exp, a, addresses[s], addresses[r])
 		noteField := make([]byte, binary.MaxVarintLen64)
-		binary.PutUvarint(noteField, uint64(i))
+		binary.PutUvarint(noteField, uint64(i+noteOffset))
 		txs[i].Note = noteField
 
 		signed[i] = txs[i].Sign(secrets[s])
@@ -207,7 +207,7 @@ func TestSignedPayment(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	payments, stxns, secrets, addrs := generateTestObjects(1, 1, 0)
+	payments, stxns, secrets, addrs := generateTestObjects(1, 1, 0, 0)
 	payment, stxn, secret, addr := payments[0], stxns[0], secrets[0], addrs[0]
 
 	groupCtx, err := PrepareGroupContext(stxns, blockHeader, nil)
@@ -228,7 +228,7 @@ func TestSignedPayment(t *testing.T) {
 func TestTxnValidationEncodeDecode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	_, signed, _, _ := generateTestObjects(100, 50, 0)
+	_, signed, _, _ := generateTestObjects(100, 50, 0, 0)
 
 	for _, txn := range signed {
 		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil)
@@ -250,7 +250,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 func TestTxnValidationEmptySig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	_, signed, _, _ := generateTestObjects(100, 50, 0)
+	_, signed, _, _ := generateTestObjects(100, 50, 0, 0)
 
 	for _, txn := range signed {
 		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil)
@@ -366,7 +366,7 @@ func TestPaysetGroups(t *testing.T) {
 		return
 	}
 
-	_, signedTxn, secrets, addrs := generateTestObjects(10000, 20, 50)
+	_, signedTxn, secrets, addrs := generateTestObjects(10000, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
 
 	execPool := execpool.MakePool(t)
@@ -393,7 +393,7 @@ func TestPaysetGroups(t *testing.T) {
 	// we define a test that would take 10 seconds to execute, and try to abort at 1.5 seconds.
 	txnCount := len(signedTxn) * 10 * int(time.Second/paysetGroupDuration)
 
-	_, signedTxn, secrets, addrs = generateTestObjects(txnCount, 20, 50)
+	_, signedTxn, secrets, addrs = generateTestObjects(txnCount, 20, 0, 50)
 
 	txnGroups = generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
@@ -436,7 +436,7 @@ func BenchmarkPaysetGroups(b *testing.B) {
 	if b.N < 2000 {
 		b.N = 2000
 	}
-	_, signedTxn, secrets, addrs := generateTestObjects(b.N, 20, 50)
+	_, signedTxn, secrets, addrs := generateTestObjects(b.N, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
 
 	execPool := execpool.MakePool(b)
@@ -455,7 +455,7 @@ func BenchmarkPaysetGroups(b *testing.B) {
 func TestTxnGroupMixedSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	_, signedTxn, secrets, addrs := generateTestObjects(1, 20, 50)
+	_, signedTxn, secrets, addrs := generateTestObjects(1, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
 
 	// add a simple logic that verifies this condition:
@@ -569,7 +569,7 @@ func generateTransactionGroups(maxGroupSize int, signedTxns []transactions.Signe
 func TestTxnGroupCacheUpdate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	_, signedTxn, secrets, addrs := generateTestObjects(100, 20, 50)
+	_, signedTxn, secrets, addrs := generateTestObjects(100, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
 
 	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
@@ -609,7 +609,7 @@ func TestTxnGroupCacheUpdateMultiSig(t *testing.T) {
 func TestTxnGroupCacheUpdateFailLogic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	_, signedTxn, _, _ := generateTestObjects(100, 20, 50)
+	_, signedTxn, _, _ := generateTestObjects(100, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
 
 	// sign the transaction with logic
@@ -652,7 +652,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 func TestTxnGroupCacheUpdateLogicWithSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	_, signedTxn, secrets, addresses := generateTestObjects(100, 20, 50)
+	_, signedTxn, secrets, addresses := generateTestObjects(100, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
 
 	for i := 0; i < len(signedTxn); i++ {
@@ -866,7 +866,7 @@ func BenchmarkTxn(b *testing.B) {
 	if b.N < 2000 {
 		b.N = 2000
 	}
-	_, signedTxn, secrets, addrs := generateTestObjects(b.N, 20, 50)
+	_, signedTxn, secrets, addrs := generateTestObjects(b.N, 20, 0, 50)
 	blk := bookkeeping.Block{BlockHeader: createDummyBlockHeader()}
 	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
@@ -984,9 +984,9 @@ func verifyResults(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64
 	require.Empty(t, badTxnGroups, "unverifiedGroups should have all the transactions with invalid sigs")
 }
 
-func getSignedTransactions(numOfTxns, maxGrpSize int, badTxnProb float32) (txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64]struct{}) {
+func getSignedTransactions(numOfTxns, maxGrpSize, noteOffset int, badTxnProb float32) (txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64]struct{}) {
 
-	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
+	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, noteOffset, 50)
 	txnGroups = generateTransactionGroups(maxGrpSize, signedTxn, secrets, addrs)
 
 	badTxnGroups = make(map[uint64]struct{})
@@ -1009,7 +1009,7 @@ func TestStreamVerifier(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 4000
-	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, protoMaxGroupSize, 0.5)
+	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, protoMaxGroupSize, 0, 0.5)
 
 	sv := streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
 	sv.WaitForStop()
@@ -1020,7 +1020,7 @@ func TestStreamVerifierCases(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 10
-	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0)
+	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0, 0)
 	mod := 1
 
 	// txn with 0 sigs
@@ -1031,7 +1031,7 @@ func TestStreamVerifierCases(t *testing.T) {
 	sv.WaitForStop()
 	mod++
 
-	_, signedTxns, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
+	_, signedTxns, secrets, addrs := generateTestObjects(numOfTxns, 20, 0, 50)
 	txnGroups = generateTransactionGroups(1, signedTxns, secrets, addrs)
 	badTxnGroups = make(map[uint64]struct{})
 
@@ -1046,7 +1046,7 @@ func TestStreamVerifierCases(t *testing.T) {
 	sv.WaitForStop()
 	mod++
 
-	_, signedTxns, secrets, addrs = generateTestObjects(numOfTxns, 20, 50)
+	_, signedTxns, secrets, addrs = generateTestObjects(numOfTxns, 20, 0, 50)
 	txnGroups = generateTransactionGroups(1, signedTxns, secrets, addrs)
 	badTxnGroups = make(map[uint64]struct{})
 
@@ -1068,7 +1068,7 @@ func TestStreamVerifierCases(t *testing.T) {
 	sv.WaitForStop()
 	mod++
 
-	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
+	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 0, 50)
 	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
 	badTxnGroups = make(map[uint64]struct{})
 
@@ -1105,7 +1105,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	sv.WaitForStop()
 	mod++
 
-	_, signedTxn, secrets, addrs = generateTestObjects(numOfTxns, 20, 50)
+	_, signedTxn, secrets, addrs = generateTestObjects(numOfTxns, 20, 0, 50)
 	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
 	badTxnGroups = make(map[uint64]struct{})
 
@@ -1122,7 +1122,7 @@ func TestStreamVerifierIdel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 1
-	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, protoMaxGroupSize, 0.5)
+	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, protoMaxGroupSize, 0, 0.5)
 
 	sv := streamVerifierTestCore(txnGroups, badTxnGroups, nil, t)
 	sv.WaitForStop()
@@ -1132,7 +1132,7 @@ func TestGetNumberOfBatchableSigsInGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 10
-	txnGroups, _ := getSignedTransactions(numOfTxns, 1, 0)
+	txnGroups, _ := getSignedTransactions(numOfTxns, 1, 0, 0)
 	mod := 1
 
 	// txn with 0 sigs
@@ -1141,7 +1141,7 @@ func TestGetNumberOfBatchableSigsInGroup(t *testing.T) {
 	require.Error(t, err, errSignedTxnHasNoSig)
 	mod++
 
-	_, signedTxns, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
+	_, signedTxns, secrets, addrs := generateTestObjects(numOfTxns, 20, 0, 50)
 	txnGroups = generateTransactionGroups(1, signedTxns, secrets, addrs)
 	batchSigs, err = getNumberOfBatchableSigsInGroup(txnGroups[0])
 	require.NoError(t, err)
@@ -1163,7 +1163,7 @@ func TestGetNumberOfBatchableSigsInGroup(t *testing.T) {
 	require.Equal(t, uint64(2), batchSigs)
 	mod++
 
-	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 50)
+	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 0, 50)
 	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
 
 	// logicsig
@@ -1185,7 +1185,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	mod++
 
 	// txn with sig and msig
-	_, signedTxn, secrets, addrs = generateTestObjects(numOfTxns, 20, 50)
+	_, signedTxn, secrets, addrs = generateTestObjects(numOfTxns, 20, 0, 50)
 	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
 	txnGroups[mod][0].Msig = mSigTxn[0].Msig
 	batchSigs, err = getNumberOfBatchableSigsInGroup(txnGroups[mod])
@@ -1199,7 +1199,7 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	// only one transaction should be sufficient for the batch verifier
 	// to realize the pool is terminated and to shut down
 	numOfTxns := 1
-	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, protoMaxGroupSize, 0.5)
+	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, protoMaxGroupSize, 0, 0.5)
 
 	// prepare the stream verifier
 	numOfTxnGroups := len(txnGroups)
@@ -1283,7 +1283,7 @@ func TestStreamVerifierRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 1000
-	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0.5)
+	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0, 0.5)
 
 	// prepare the stream verifier
 	numOfTxnGroups := len(txnGroups)
@@ -1427,7 +1427,7 @@ func TestStreamVerifierCtxCancel(t *testing.T) {
 
 	// send batchSizeBlockLimit after the exec pool buffer is full
 	numOfTxns := 1
-	txnGroups, _ := getSignedTransactions(numOfTxns, 1, 0.5)
+	txnGroups, _ := getSignedTransactions(numOfTxns, 1, 0, 0.5)
 	stxnChan <- &UnverifiedElement{TxnGroup: txnGroups[0], BacklogMessage: nil}
 	// cancel the ctx before the sig is sent to the exec pool
 	cancel()
@@ -1476,7 +1476,7 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
 
 	// send batchSizeBlockLimit after the exec pool buffer is full
 	numOfTxns := 1
-	txnGroups, _ := getSignedTransactions(numOfTxns, 1, 0.5)
+	txnGroups, _ := getSignedTransactions(numOfTxns, 1, 0, 0.5)
 	stxnChan <- &UnverifiedElement{TxnGroup: txnGroups[0], BacklogMessage: nil}
 	// cancel the ctx as the sig is not yet sent to the exec pool
 	// the test might sporadically fail if between sending the txn above
@@ -1529,7 +1529,7 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 	overflow := 3
 	// send txBacklogSizeMod + 3 transactions to overflow the result buffer
 	numOfTxns := txBacklogSizeMod + overflow
-	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0.5)
+	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0, 0.5)
 	numOfTxnGroups := len(txnGroups)
 	for _, tg := range txnGroups {
 		stxnChan <- &UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}
@@ -1562,7 +1562,11 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 
 	wg.Add(1)
 	// make sure the other results are fine
-	txnGroups, badTxnGroups = getSignedTransactions(numOfTxns, 1, 0.5)
+	txnGroups, badTxnGroups2 := getSignedTransactions(numOfTxns, 1, numOfTxns, 0.5)
+	// need to combine these, since left overs from the previous one could still come out
+	for b := range badTxnGroups2 {
+		badTxnGroups[b] = struct{}{}
+	}
 	go processResults(ctx, errChan, resultChan, numOfTxnGroups, badTxnGroups, &badSigResultCounter, &goodSigResultCounter, &wg)
 
 	for _, tg := range txnGroups {
@@ -1587,7 +1591,7 @@ func TestStreamVerifierMakeStreamVerifierErr(t *testing.T) {
 func TestStreamVerifierCancelWhenPooled(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	numOfTxns := 1000
-	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0.5)
+	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0, 0.5)
 
 	// prepare the stream verifier
 	numOfTxnGroups := len(txnGroups)
