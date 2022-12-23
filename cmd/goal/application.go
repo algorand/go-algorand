@@ -1299,7 +1299,8 @@ var methodAppCmd = &cobra.Command{
 			reportErrorf("--arg and --app-arg are mutually exclusive, do not use --app-arg")
 		}
 
-		schema := getStateSchema(cmd)
+		var schema basics.StateSchemas
+
 		onCompletionEnum := mustParseOnCompletion(onCompletion)
 
 		if methodCreatesApp {
@@ -1316,9 +1317,7 @@ var methodAppCmd = &cobra.Command{
 				reportErrorf("one of --app-id or --create must be provided")
 			}
 
-			if schema.LocalStateSchema != (basics.StateSchema{}) || schema.GlobalStateSchema != (basics.StateSchema{}) {
-				reportErrorf("--global-ints, --global-byteslices, --local-ints, and --local-byteslices must only be provided with --create")
-			}
+			schema = getStateSchema(cmd)
 
 			if extraPages != 0 {
 				reportErrorf("--extra-pages must only be provided with --create")
