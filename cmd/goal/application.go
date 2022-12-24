@@ -402,42 +402,68 @@ func mustParseOnCompletion(ocString string) (oc transactions.OnCompletion) {
 	}
 }
 
+type stateSchemaInfo struct {
+	noAppStateSet             bool
+	noGlobalStateSet          bool
+	noLocalStateSet           bool
+	globalSchemaUintsSet      bool
+	globalSchemaByteSlicesSet bool
+	localSchemaUintsSet       bool
+	localSchemaByteSlicesSet  bool
+}
+
+func (info stateSchemaInfo) anySet() bool {
+	return info.noAppStateSet ||
+		info.noGlobalStateSet ||
+		info.noLocalStateSet ||
+		info.globalSchemaUintsSet ||
+		info.globalSchemaByteSlicesSet ||
+		info.localSchemaUintsSet ||
+		info.localSchemaByteSlicesSet
+}
+
+func getStateSchemaInfo(cmd *cobra.Command) stateSchemaInfo {
+	return stateSchemaInfo{
+		noAppStateSet:             cmd.Flags().Changed("no-state"),
+		noGlobalStateSet:          cmd.Flags().Changed("no-global-state"),
+		noLocalStateSet:           cmd.Flags().Changed("no-local-state"),
+		globalSchemaUintsSet:      cmd.Flags().Changed("global-ints"),
+		globalSchemaByteSlicesSet: cmd.Flags().Changed("global-byteslices"),
+		localSchemaUintsSet:       cmd.Flags().Changed("local-ints"),
+		localSchemaByteSlicesSet:  cmd.Flags().Changed("local-byteslices"),
+	}
+}
+
 func getStateSchema(cmd *cobra.Command) basics.StateSchemas {
 	var schema basics.StateSchemas
 
-	noAppStateChanged := cmd.Flags().Changed("no-state")
-	noGlobalStateChanged := cmd.Flags().Changed("no-global-state")
-	noLocalStateChanged := cmd.Flags().Changed("no-local-state")
-	globalSchemaUintsChanged := cmd.Flags().Changed("global-ints")
-	globalSchemaByteSlicesChanged := cmd.Flags().Changed("global-byteslices")
-	localSchemaUintsChanged := cmd.Flags().Changed("local-ints")
-	localSchemaByteSlicesChanged := cmd.Flags().Changed("local-byteslices")
+	info := getStateSchemaInfo(cmd)
 
-	if noAppStateChanged {
-		if noGlobalStateChanged || globalSchemaUintsChanged || globalSchemaByteSlicesChanged || noLocalStateChanged || localSchemaUintsChanged || localSchemaByteSlicesChanged {
+	if info.noAppStateSet {
+		if info.noGlobalStateSet || info.globalSchemaUintsSet || info.globalSchemaByteSlicesSet || info.noLocalStateSet || info.localSchemaUintsSet || info.localSchemaByteSlicesSet {
 			reportErrorf("--no-state is mutually exclusive with --no-global-state, --global-ints, --global-byteslices, --no-local-state, --local-ints, and --local-byteslices")
 		}
 		return schema
 	}
 
-	if noGlobalStateChanged {
-		if globalSchemaUintsChanged || globalSchemaByteSlicesChanged {
+	if info.noGlobalStateSet {
+		if info.globalSchemaUintsSet || info.globalSchemaByteSlicesSet {
 			reportErrorf("--no-global-state is mutually exclusive with --global-ints and --global-byteslices")
 		}
 	} else {
-		if !globalSchemaUintsChanged || !globalSchemaByteSlicesChanged {
+		if !info.globalSchemaUintsSet || !info.globalSchemaByteSlicesSet {
 			reportErrorf("missing required flags --global-ints and --global-byteslices (or one of --no-global-state or --no-state)")
 		}
 		schema.GlobalStateSchema.NumUint = globalSchemaUints
 		schema.GlobalStateSchema.NumByteSlice = globalSchemaByteSlices
 	}
 
-	if noLocalStateChanged {
-		if localSchemaUintsChanged || localSchemaByteSlicesChanged {
+	if info.noLocalStateSet {
+		if info.localSchemaUintsSet || info.localSchemaByteSlicesSet {
 			reportErrorf("--no-local-state is mutually exclusive with --local-ints and --local-byteslices")
 		}
 	} else {
-		if !localSchemaUintsChanged || !localSchemaByteSlicesChanged {
+		if !info.localSchemaUintsSet || !info.localSchemaByteSlicesSet {
 			reportErrorf("missing required flags --local-ints and --local-byteslices (or one of --no-local-state or --no-state)")
 		}
 		schema.LocalStateSchema.NumUint = localSchemaUints
@@ -1308,6 +1334,8 @@ var methodAppCmd = &cobra.Command{
 				reportErrorf("--app-id and --create are mutually exclusive, only provide one")
 			}
 
+			schema = getStateSchema(cmd)
+
 			switch onCompletionEnum {
 			case transactions.CloseOutOC, transactions.ClearStateOC:
 				reportWarnf("'--on-completion %s' may be ill-formed for use with --create", onCompletion)
@@ -1317,7 +1345,9 @@ var methodAppCmd = &cobra.Command{
 				reportErrorf("one of --app-id or --create must be provided")
 			}
 
-			schema = getStateSchema(cmd)
+			if getStateSchemaInfo(cmd).anySet() {
+				reportErrorf("--no-state, --no-global-state, --global-ints, --global-byteslices, --no-local-state, --local-ints, and --local-byteslices must only be provided with --create")
+			}
 
 			if extraPages != 0 {
 				reportErrorf("--extra-pages must only be provided with --create")
