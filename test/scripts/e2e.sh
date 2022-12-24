@@ -124,7 +124,6 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     python3 -m venv "${TEMPDIR}/ve"
     . "${TEMPDIR}/ve/bin/activate"
     "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
-    "${TEMPDIR}/ve/bin/pip3" install --upgrade cryptograpy
 
     # Pin a version of our python SDK's so that breaking changes don't spuriously break our tests.
     # Please update as necessary.
