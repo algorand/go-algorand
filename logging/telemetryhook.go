@@ -222,9 +222,9 @@ func (el elasticClientLogger) Printf(format string, v ...interface{}) {
 	case logrus.InfoLevel:
 		el.logger.Infof(format, v...)
 	case logrus.WarnLevel:
-		el.logger.Warnf(format, v...)
+		el.logger.WithFields(Fields{"TelemetryError": true}).Warnf(format, v...)
 	default:
-		el.logger.Errorf(format, v...)
+		el.logger.WithFields(Fields{"TelemetryError": true}).Errorf(format, v...)
 	}
 }
 
