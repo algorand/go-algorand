@@ -3109,8 +3109,12 @@ func TestLedgerContinuesOnVotersCallbackFailure(t *testing.T) {
 	commitListener := errorCommitListener{}
 	l.RegisterVotersCommitListener(&commitListener)
 
+	expectedCachedDbRound := l.trackers.accts.cachedDBRound + 1
+
 	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	triggerTrackerFlush(t, l, genesisInitState)
+
+	require.Equal(t, expectedCachedDbRound, l.trackers.accts.cachedDBRound)
 }
 
 func TestStateProofVerificationTracker(t *testing.T) {
