@@ -67,21 +67,21 @@ type testWorkerStubs struct {
 	commitListener            ledgercore.VotersCommitListener
 }
 
-func newWorkerStubs(keys []account.Participation, totalWeight int) *testWorkerStubs {
-	return newWorkerStubsWithVersion(keys, protocol.ConsensusCurrentVersion, totalWeight)
+func newWorkerStubs(t *testing.T, keys []account.Participation, totalWeight int) *testWorkerStubs {
+	return newWorkerStubsWithVersion(t, keys, protocol.ConsensusCurrentVersion, totalWeight)
 }
 
-func newWorkerStubsWithChannel(keys []account.Participation, totalWeight int) *testWorkerStubs {
-	worker := newWorkerStubsWithVersion(keys, protocol.ConsensusCurrentVersion, totalWeight)
+func newWorkerStubsWithChannel(t *testing.T, keys []account.Participation, totalWeight int) *testWorkerStubs {
+	worker := newWorkerStubsWithVersion(t, keys, protocol.ConsensusCurrentVersion, totalWeight)
 	worker.sigmsg = make(chan []byte, 1024*1024)
 	worker.txmsg = make(chan transactions.SignedTxn, 1024)
 	return worker
 }
 
-func newWorkerStubsWithVersion(keys []account.Participation, version protocol.ConsensusVersion, totalWeight int) *testWorkerStubs {
+func newWorkerStubsWithVersion(t *testing.T, keys []account.Participation, version protocol.ConsensusVersion, totalWeight int) *testWorkerStubs {
 	proto := config.Consensus[version]
 	s := &testWorkerStubs{
-		t:                         nil,
+		t:                         t,
 		mu:                        deadlock.Mutex{},
 		listenerMu:                deadlock.RWMutex{},
 		latest:                    0,
@@ -499,7 +499,7 @@ func createWorkerAndParticipants(t *testing.T, version protocol.ConsensusVersion
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubsWithVersion(keys, version, 10)
+	s := newWorkerStubsWithVersion(t, keys, version, 10)
 	dbs, _ := dbOpenTest(t, true)
 
 	logger := logging.NewLogger()
@@ -537,7 +537,7 @@ func TestWorkerAllSigs(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubsWithChannel(keys, len(keys))
+	s := newWorkerStubsWithChannel(t, keys, len(keys))
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
@@ -607,7 +607,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubsWithChannel(keys, 10)
+	s := newWorkerStubsWithChannel(t, keys, 10)
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
@@ -674,7 +674,7 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubsWithChannel(keys, 10)
+	s := newWorkerStubsWithChannel(t, keys, 10)
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
@@ -709,7 +709,7 @@ func TestWorkerRestart(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubsWithChannel(keys, 10)
+	s := newWorkerStubsWithChannel(t, keys, 10)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -755,7 +755,7 @@ func TestWorkerHandleSig(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubsWithChannel(keys, 10)
+	s := newWorkerStubsWithChannel(t, keys, 10)
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
@@ -791,7 +791,7 @@ func TestWorkerIgnoresSignatureForNonCacheBuilders(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubs(keys, 10)
+	s := newWorkerStubs(t, keys, 10)
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
@@ -975,7 +975,7 @@ func TestWorkersBuildersCacheAndSignatures(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubs(keys, len(keys))
+	s := newWorkerStubs(t, keys, len(keys))
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
@@ -1054,7 +1054,7 @@ func TestSignatureBroadcastPolicy(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubs(keys, len(keys))
+	s := newWorkerStubs(t, keys, len(keys))
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
@@ -1113,7 +1113,7 @@ func TestWorkerDoesNotLimitBuildersAndSignaturesOnDisk(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubs(keys, len(keys))
+	s := newWorkerStubs(t, keys, len(keys))
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
@@ -1182,7 +1182,7 @@ func getSignaturesInDatabase(t *testing.T, numAddresses int, sigFrom sigOrigin) 
 		signatureBcasted[parent] = 0
 	}
 
-	tns = newWorkerStubsWithChannel(keys, len(keys))
+	tns = newWorkerStubsWithChannel(t, keys, len(keys))
 	spw = newTestWorker(t, tns)
 
 	// Prepare the database
@@ -1298,7 +1298,7 @@ func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubsWithChannel(keys, len(keys))
+	s := newWorkerStubsWithChannel(t, keys, len(keys))
 	w := newTestWorker(t, s)
 	w.Start()
 	defer w.Shutdown()
@@ -1382,7 +1382,7 @@ func setBlocksAndMessage(t *testing.T, sigRound basics.Round) (s *testWorkerStub
 	p := newPartKey(t, address)
 	defer p.Close()
 
-	s = newWorkerStubsWithChannel([]account.Participation{p.Participation}, 10)
+	s = newWorkerStubsWithChannel(t, []account.Participation{p.Participation}, 10)
 	w = newTestWorker(t, s)
 
 	s.addBlock(basics.Round(proto.StateProofInterval * 2))
@@ -1475,7 +1475,7 @@ func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubsWithChannel(keys[0:proto.StateProofTopVoters], 10)
+	s := newWorkerStubsWithChannel(t, keys[0:proto.StateProofTopVoters], 10)
 	w := newTestWorker(t, s)
 	err := makeStateProofDB(w.db)
 	require.NoError(t, err)
@@ -1588,7 +1588,7 @@ func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 	p := newPartKey(t, address)
 	defer p.Close()
 
-	s := newWorkerStubs([]account.Participation{p.Participation}, 10)
+	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
 	w := newTestWorker(t, s)
 	defer w.Shutdown()
 
@@ -1675,7 +1675,7 @@ func TestWorkerHandleSigCorrupt(t *testing.T) {
 	p := newPartKey(t, address)
 	defer p.Close()
 
-	s := newWorkerStubs([]account.Participation{p.Participation}, 10)
+	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
 	w := newTestWorker(t, s)
 
 	msg := sigFromAddr{}
@@ -1720,7 +1720,7 @@ func TestWorkerCacheAndDiskAfterRestart(t *testing.T) {
 
 	dbRand := crypto.RandUint64()
 	dbs, _ := dbOpenTestRand(t, true, dbRand)
-	s := newWorkerStubs(keys, len(keys))
+	s := newWorkerStubs(t, keys, len(keys))
 	w := newTestWorkerDB(t, s, dbs.Wdb)
 	w.Start()
 
@@ -1781,7 +1781,7 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 
 	dbRand := crypto.RandUint64()
 	dbs, _ := dbOpenTestRand(t, true, dbRand)
-	s := newWorkerStubs(keys, len(keys))
+	s := newWorkerStubs(t, keys, len(keys))
 	w := newTestWorkerDB(t, s, dbs.Wdb)
 	w.Start()
 
@@ -1948,6 +1948,7 @@ func TestSignerUsesPersistedBuilder(t *testing.T) {
 
 	a.False(s.isRoundSigned(a, w, firstBuilderRound))
 
+	// We restart the signing process.
 	s.keys = prevKeys
 	oldDb := w.db
 	w.shutdown()
@@ -1956,7 +1957,7 @@ func TestSignerUsesPersistedBuilder(t *testing.T) {
 	w.Start()
 	defer w.Shutdown()
 
-	// We advance another round to allow us to wait for the signer, allowing it time to finish signing
+	// We advance another round to allow us to wait for the signer, allowing it time to finish signing.
 	s.advanceRoundsWithoutStateProof(t, 1)
 	s.waitForSignerAndBuilder(t)
 
