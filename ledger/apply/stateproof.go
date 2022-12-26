@@ -48,28 +48,25 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 			ErrExpectedDifferentStateProofRound, nextStateProofRnd, lastRoundInInterval)
 	}
 
-	atRoundHdr, err := sp.BlockHdr(atRound)
-	if err != nil {
-		return err
-	}
-
-	var verificationContext *ledgercore.StateProofVerificationContext
-	if config.Consensus[atRoundHdr.CurrentProtocol].StateProofUseTrackerVerification {
-		verificationContext, err = sp.StateProofVerificationContext(lastRoundInInterval)
-	} else {
-		verificationContext, err = gatherVerificationContextUsingBlockHeaders(sp, lastRoundInInterval)
-	}
-	if err != nil {
-		return err
-	}
-
 	if validate {
+		var verificationContext *ledgercore.StateProofVerificationContext
+		var err error
+		if sp.ConsensusParams().StateProofUseTrackerVerification {
+			verificationContext, err = sp.StateProofVerificationContext(lastRoundInInterval)
+		} else {
+			verificationContext, err = gatherVerificationContextUsingBlockHeaders(sp, lastRoundInInterval)
+		}
+		if err != nil {
+			return err
+		}
+
 		if err = verify.ValidateStateProof(verificationContext, &tx.StateProof, atRound, &tx.Message); err != nil {
 			return err
 		}
 	}
 
-	sp.SetStateProofNextRound(lastRoundInInterval + basics.Round(config.Consensus[verificationContext.Version].StateProofInterval))
+	// IMPORTANT: this line does not support changing the StateProofInterval consensus param
+	sp.SetStateProofNextRound(lastRoundInInterval + basics.Round(sp.ConsensusParams().StateProofInterval))
 	return nil
 }
 
