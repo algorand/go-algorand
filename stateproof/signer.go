@@ -126,6 +126,8 @@ func (spw *Worker) signStateProof(round basics.Round) {
 func (spw *Worker) getProto(round basics.Round) (*config.ConsensusParams, error) {
 	protoHdr, err := spw.ledger.BlockHdr(round)
 	if err != nil {
+		// IMPORTANT: This doesn't support modification of the state proof interval at the moment. Actually supporting
+		// it will probably require using (and slightly modifying) the stateProofVerificationTracker.
 		return spw.getProtoLatest()
 	}
 
