@@ -81,10 +81,9 @@ func (spw *Worker) nextStateProofRound(latest basics.Round) basics.Round {
 }
 
 func (spw *Worker) signStateProof(round basics.Round) {
-	proto, votersCommitment, err := spw.getProtoVoters(round)
-
+	proto, err := spw.getProto(round)
 	if err != nil {
-		spw.log.Warnf("spw.signStateProof(%d): getProtoVoters: %v", round, err)
+		spw.log.Warnf("spw.signStateProof(%d): getProto: %v", round, err)
 		return
 	}
 
@@ -94,6 +93,12 @@ func (spw *Worker) signStateProof(round basics.Round) {
 
 	// Only sign blocks that are a multiple of StateProofInterval.
 	if round%basics.Round(proto.StateProofInterval) != 0 {
+		return
+	}
+
+	votersCommitment, err := spw.getVotersCommitment(round, proto)
+	if err != nil {
+		spw.log.Warnf("spw.signStateProof(%d): getVotersCommitment: %v", round, err)
 		return
 	}
 
@@ -118,35 +123,44 @@ func (spw *Worker) signStateProof(round basics.Round) {
 	spw.signStateProofMessage(&stateProofMessage, round, keys)
 }
 
-func (spw *Worker) getProtoVoters(round basics.Round) (*config.ConsensusParams, crypto.GenericDigest, error) {
-	// throughout this function, we assume that the protocol version
-	// (specifically for our purposes, the state proof interval) is identical in the last attested round -
-	// which should be the round parameter in this case - and in the voters round.
-
-	signedHeader, err := spw.ledger.BlockHdr(round)
+func (spw *Worker) getProto(round basics.Round) (*config.ConsensusParams, error) {
+	protoHdr, err := spw.ledger.BlockHdr(round)
 	if err != nil {
-		return spw.getProtoVotersFallback(round)
+		return spw.getProtoLatest()
 	}
 
-	proto := config.Consensus[signedHeader.CurrentProtocol]
-	votersRound := round.SubSaturate(basics.Round(proto.StateProofInterval))
-	votersHdr, err := spw.ledger.BlockHdr(votersRound)
-
-	if err != nil {
-		return spw.getProtoVotersFallback(round)
-	}
-
-	return &proto, votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment, nil
+	proto := config.Consensus[protoHdr.CurrentProtocol]
+	return &proto, nil
 }
 
-func (spw *Worker) getProtoVotersFallback(round basics.Round) (*config.ConsensusParams, crypto.GenericDigest, error) {
-	verificationContext, err := spw.ledger.StateProofVerificationContext(round)
+func (spw *Worker) getProtoLatest() (*config.ConsensusParams, error) {
+	latestRound := spw.ledger.Latest()
+	protoHdr, err := spw.ledger.BlockHdr(latestRound)
 	if err != nil {
-		return nil, crypto.GenericDigest{}, err
+		return nil, err
 	}
 
-	proto := config.Consensus[verificationContext.Version]
-	return &proto, verificationContext.VotersCommitment, nil
+	proto := config.Consensus[protoHdr.CurrentProtocol]
+	return &proto, nil
+}
+
+func (spw *Worker) getVotersCommitment(round basics.Round, proto *config.ConsensusParams) (crypto.GenericDigest, error) {
+	votersRound := round.SubSaturate(basics.Round(proto.StateProofInterval))
+	votersHdr, err := spw.ledger.BlockHdr(votersRound)
+	if err != nil {
+		return spw.getVotersCommitmentTracker(round)
+	}
+
+	return votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment, nil
+}
+
+func (spw *Worker) getVotersCommitmentTracker(round basics.Round) (crypto.GenericDigest, error) {
+	verificationContext, err := spw.ledger.StateProofVerificationContext(round)
+	if err != nil {
+		return crypto.GenericDigest{}, err
+	}
+
+	return verificationContext.VotersCommitment, nil
 }
 
 func (spw *Worker) getStateProofMessage(round basics.Round, proto *config.ConsensusParams) (stateproofmsg.Message, error) {
