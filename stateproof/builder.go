@@ -35,6 +35,8 @@ import (
 	"github.com/algorand/go-algorand/stateproof/verify"
 )
 
+var errVotersNotTracked = errors.New("voters not tracked for the given lookback round")
+
 // OnPrepareVoterCommit is a function called by the voters tracker when it's preparing to commit rnd. It gives the builder
 // the chance to persist the data it needs.
 func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgercore.VotersForRoundFetcher) error {
@@ -60,6 +62,11 @@ func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgerco
 	// message embedded in the builder) during catchup.
 	_, err = spw.createAndPersistBuilder(rnd, votersFetcher)
 	if err != nil {
+		if errors.Is(err, errVotersNotTracked) {
+			spw.log.Warnf("OnPrepareVoterCommit(%d): %w", rnd, err)
+			return nil
+		}
+
 		return fmt.Errorf("OnPrepareVoterCommit(%d): could not create builder: %w", rnd, err)
 	}
 
@@ -153,7 +160,7 @@ func (spw *Worker) createAndPersistBuilder(rnd basics.Round, votersFetcher ledge
 	if voters == nil {
 		// Voters not tracked for that round.  Might not be a valid
 		// state proof round; state proofs might not be enabled; etc.
-		return builder{}, fmt.Errorf("voters not tracked for lookback round %d", lookback)
+		return builder{}, fmt.Errorf("lookback round %d: %w", lookback, errVotersNotTracked)
 	}
 
 	msg, err := GenerateStateProofMessage(l, uint64(votersHdr.Round), hdr)
@@ -350,6 +357,9 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 
 		builderForRound, err = spw.loadOrCreateBuilderWithSignatures(sfa.Round)
 		if err != nil {
+			if errors.Is(err, errVotersNotTracked) {
+				spw.log.Warnf("spw.handleSig(%d): %w", sfa.Round, err)
+			}
 			// Should not disconnect this peer, since this is a fault of the relay
 			// The peer could have other signatures what the relay is interested in
 			return network.Ignore, err
