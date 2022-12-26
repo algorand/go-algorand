@@ -2872,9 +2872,21 @@ func verifyVotersContent(t *testing.T, expected map[basics.Round]*ledgercore.Vot
 }
 
 func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.InitState) {
+	prevDbRound := l.trackers.dbRound
+
 	l.trackers.lastFlushTime = time.Time{}
 	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
-	l.WaitForCommit(l.Latest())
+
+	const timeout = 2 * time.Second
+	started := time.Now()
+
+	// We can't truly wait for scheduleCommit to take place, which means without waiting using sleeps
+	// we might beat scheduleCommit's addition to accountsWriting, making our wait on it continue immediately.
+	// The solution is to wait for the advancement of l.trackers.dbRound, which is a side effect postCommit's success.
+	for l.trackers.dbRound == prevDbRound {
+		time.Sleep(50 * time.Microsecond)
+		require.True(t, time.Now().Sub(started) < timeout)
+	}
 	l.trackers.waitAccountsWriting()
 }
 
@@ -2884,9 +2896,7 @@ func triggerDeleteVoters(t *testing.T, l *Ledger, genesisInitState ledgercore.In
 
 	// We add another block to make the block queue query the voter's tracker lowest round again, which allows it to forget
 	// rounds based on the new lowest round.
-	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
-	l.WaitForCommit(l.Latest())
-	l.trackers.waitAccountsWriting()
+	triggerTrackerFlush(t, l, genesisInitState)
 }
 
 func TestVotersReloadFromDisk(t *testing.T) {
@@ -3109,12 +3119,9 @@ func TestLedgerContinuesOnVotersCallbackFailure(t *testing.T) {
 	commitListener := errorCommitListener{}
 	l.RegisterVotersCommitListener(&commitListener)
 
-	expectedCachedDbRound := l.trackers.accts.cachedDBRound + 1
-
-	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
+	previousCachedDbRound := l.trackers.dbRound
 	triggerTrackerFlush(t, l, genesisInitState)
-
-	require.Equal(t, expectedCachedDbRound, l.trackers.accts.cachedDBRound)
+	require.Equal(t, previousCachedDbRound+1, l.trackers.dbRound)
 }
 
 func TestStateProofVerificationTracker(t *testing.T) {
