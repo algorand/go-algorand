@@ -62,7 +62,7 @@ func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgerco
 	_, err = spw.createAndPersistBuilder(rnd, votersFetcher)
 	if err != nil {
 		if errors.Is(err, errVotersNotTracked) {
-			spw.log.Warnf("OnPrepareVoterCommit(%d): %w", rnd, err)
+			spw.log.Warnf("OnPrepareVoterCommit(%d): %v", rnd, err)
 			return nil
 		}
 
