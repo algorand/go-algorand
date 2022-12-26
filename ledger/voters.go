@@ -68,13 +68,16 @@ type votersTracker struct {
 	// Thus, we maintain X in the votersForRoundCache map until we form a stateproof
 	// for round X+StateProofVotersLookback+StateProofInterval.
 	//
-	// In case state proof chain stalls this map would be bounded to StateProofMaxRecoveryIntervals + 3
+	// In case state proof chain stalls this map would be bounded to StateProofMaxRecoveryIntervals + 3 in respect
+	// to the db round.
 	// + 1 - since votersForRoundCache needs to contain an entry for a future state proof
 	// + 1 - since votersForRoundCache needs to contain an entry to verify the earliest state proof
 	// in the recovery interval. i.e. it needs to have an entry for R-StateProofMaxRecoveryIntervals-StateProofInterval
 	// to verify R-StateProofMaxRecoveryIntervals
 	// + 1 would only appear if the sampled round R is:  interval - lookback < R < interval.
 	// in this case, the tracker would not yet remove the old one but will create a new one for future state proof.
+	// Additionally, the tracker would contain an entry for every state proof interval between the latest round in the
+	// ledger and the db round.
 	votersForRoundCache map[basics.Round]*ledgercore.VotersForRound
 	votersMu            deadlock.RWMutex
 
@@ -85,6 +88,8 @@ type votersTracker struct {
 	// shutdown the tracker without leaving any running go-routines.
 	loadWaitGroup sync.WaitGroup
 
+	// commitListener provides a callback to call on each prepare commit. This callback receives access to the voters
+	// cache.
 	commitListener   ledgercore.VotersCommitListener
 	commitListenerMu deadlock.RWMutex
 }
@@ -228,6 +233,8 @@ func (vt *votersTracker) postCommit(dcc *deferredCommitContext) {
 		return
 	}
 
+	// Voters older than lastHeaderCommitted.Round() - StateProofMaxRecoveryIntervals * StateProofInterval are
+	// guaranteed to be removed here.
 	vt.removeOldVoters(lastHeaderCommitted)
 }
 
@@ -235,12 +242,9 @@ func (vt *votersTracker) postCommit(dcc *deferredCommitContext) {
 // voters would be removed if one of the two condition is met
 // 1 - Voters are for a round which was already been confirmed by stateproof
 // 2 - Voters are for a round which is older than the allowed recovery interval.
-// notice that if state proof chain is delayed, votersForRoundCache will not be larger than
-// StateProofMaxRecoveryIntervals + 1
-// ( In order to be able to build and verify X stateproofs back we need X + 1 voters data )
 //
 // It is possible to optimize this function and not to travers votersForRoundCache on every round.
-// Since the map is small (Usually  0 - 2 elements and up to StateProofMaxRecoveryIntervals) we decided to keep the code simple
+// Since the map is small (Usually  0 - 2 elements) we decided to keep the code simple
 // and check for deletion in every round.
 func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
 	lowestStateProofRound := stateproof.GetOldestExpectedStateProof(&hdr)
