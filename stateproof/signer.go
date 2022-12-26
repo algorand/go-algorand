@@ -115,7 +115,7 @@ func (spw *Worker) signStateProof(round basics.Round) {
 		return
 	}
 
-	spw.signStateProofMessage(stateProofMessage, round, keys)
+	spw.signStateProofMessage(&stateProofMessage, round, keys)
 }
 
 func (spw *Worker) getProtoVoters(round basics.Round) (*config.ConsensusParams, crypto.GenericDigest, error) {
@@ -149,10 +149,10 @@ func (spw *Worker) getProtoVotersFallback(round basics.Round) (*config.Consensus
 	return &proto, verificationContext.VotersCommitment, nil
 }
 
-func (spw *Worker) getStateProofMessage(round basics.Round, proto *config.ConsensusParams) (*stateproofmsg.Message, error) {
+func (spw *Worker) getStateProofMessage(round basics.Round, proto *config.ConsensusParams) (stateproofmsg.Message, error) {
 	dbBuilder, err := spw.loadBuilderFromDB(round)
 	if err == nil {
-		return &dbBuilder.Message, nil
+		return dbBuilder.Message, nil
 	}
 
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -162,20 +162,20 @@ func (spw *Worker) getStateProofMessage(round basics.Round, proto *config.Consen
 	return spw.generateStateProofMessageLedger(round, proto)
 }
 
-func (spw *Worker) generateStateProofMessageLedger(round basics.Round, proto *config.ConsensusParams) (*stateproofmsg.Message, error) {
+func (spw *Worker) generateStateProofMessageLedger(round basics.Round, proto *config.ConsensusParams) (stateproofmsg.Message, error) {
 	hdr, err := spw.ledger.BlockHdr(round)
 	if err != nil {
-		return nil, err
+		return stateproofmsg.Message{}, err
 	}
 
 	votersRound := round.SubSaturate(basics.Round(proto.StateProofInterval))
 
 	stateproofMessage, err := GenerateStateProofMessage(spw.ledger, uint64(votersRound), hdr)
 	if err != nil {
-		return nil, err
+		return stateproofmsg.Message{}, err
 	}
 
-	return &stateproofMessage, nil
+	return stateproofMessage, nil
 }
 
 func (spw *Worker) signStateProofMessage(message *stateproofmsg.Message, round basics.Round, keys []account.StateProofSecretsForRound) {
