@@ -357,9 +357,6 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 
 		builderForRound, err = spw.loadOrCreateBuilderWithSignatures(sfa.Round)
 		if err != nil {
-			if errors.Is(err, errVotersNotTracked) {
-				spw.log.Warnf("spw.handleSig(%d): %w", sfa.Round, err)
-			}
 			// Should not disconnect this peer, since this is a fault of the relay
 			// The peer could have other signatures what the relay is interested in
 			return network.Ignore, err
