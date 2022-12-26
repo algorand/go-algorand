@@ -189,6 +189,9 @@ func (spw *Worker) createAndPersistBuilder(rnd basics.Round, votersFetcher ledge
 	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
 		return persistBuilder(tx, rnd, &res)
 	})
+
+	// We ignore persisting errors because we still want to try and use our successfully generated builder,
+	// even if, for some reason, persisting it failed.
 	if err != nil {
 		spw.log.Errorf("loadOrCreateBuilder(%d): failed to insert builder into database: %v", rnd, err)
 	}
