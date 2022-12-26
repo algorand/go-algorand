@@ -41,7 +41,6 @@ var errVotersNotTracked = errors.New("voters not tracked for the given lookback 
 // the chance to persist the data it needs.
 func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgercore.VotersForRoundFetcher) error {
 	header, err := spw.ledger.BlockHdr(rnd)
-
 	if err != nil {
 		return fmt.Errorf("OnPrepareVoterCommit(%d): could not fetch round header: %w", rnd, err)
 	}

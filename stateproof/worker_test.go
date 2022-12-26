@@ -238,6 +238,10 @@ func (s *testWorkerStubs) RegisterVotersCommitListener(listener ledgercore.Voter
 }
 
 func (s *testWorkerStubs) VotersForStateProof(r basics.Round) (*ledgercore.VotersForRound, error) {
+	if r == 0 {
+		return nil, nil
+	}
+
 	if len(s.keysForVoters) == 0 {
 		return nil, errEmptyVoters
 	}
