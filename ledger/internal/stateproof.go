@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package apply
+package internal
 
 import (
 	"errors"
@@ -30,22 +30,22 @@ import (
 
 // Errors for apply stateproof
 var (
-	ErrStateProofTypeNotSupported       = errors.New("state proof type not supported")
-	ErrExpectedDifferentStateProofRound = errors.New("expected different state proof round")
+	errStateProofTypeNotSupported       = errors.New("state proof type not supported")
+	errExpectedDifferentStateProofRound = errors.New("expected different state proof round")
 )
 
-// StateProof applies the StateProof transaction and setting the next StateProof round
-func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp StateProofsApplier, validate bool) error {
+// applyStateProof applies the StateProof transaction and setting the next StateProof round
+func applyStateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp *roundCowState, validate bool) error {
 	spType := tx.StateProofType
 	if spType != protocol.StateProofBasic {
-		return fmt.Errorf("applyStateProof: %w - type %d ", ErrStateProofTypeNotSupported, spType)
+		return fmt.Errorf("applyStateProof: %w - type %d ", errStateProofTypeNotSupported, spType)
 	}
 
 	lastRoundInInterval := basics.Round(tx.Message.LastAttestedRound)
 	nextStateProofRnd := sp.GetStateProofNextRound()
 	if nextStateProofRnd == 0 || nextStateProofRnd != lastRoundInInterval {
 		return fmt.Errorf("applyStateProof: %w - expecting state proof for %d, but new state proof is for %d",
-			ErrExpectedDifferentStateProofRound, nextStateProofRnd, lastRoundInInterval)
+			errExpectedDifferentStateProofRound, nextStateProofRnd, lastRoundInInterval)
 	}
 
 	atRoundHdr, err := sp.BlockHdr(atRound)
@@ -55,7 +55,7 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 
 	var verificationContext *ledgercore.StateProofVerificationContext
 	if config.Consensus[atRoundHdr.CurrentProtocol].StateProofUseTrackerVerification {
-		verificationContext, err = sp.StateProofVerificationContext(lastRoundInInterval)
+		verificationContext, err = sp.lookupParent.getStateProofVerificationContext2(lastRoundInInterval)
 	} else {
 		verificationContext, err = gatherVerificationContextUsingBlockHeaders(sp, lastRoundInInterval)
 	}
@@ -73,7 +73,7 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 	return nil
 }
 
-func gatherVerificationContextUsingBlockHeaders(sp StateProofsApplier, lastRoundInInterval basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+func gatherVerificationContextUsingBlockHeaders(sp *roundCowState, lastRoundInInterval basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	lastRoundHdr, err := sp.BlockHdr(lastRoundInInterval)
 	if err != nil {
 		return nil, err

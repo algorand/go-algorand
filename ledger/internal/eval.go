@@ -47,7 +47,7 @@ type LedgerForCowBase interface {
 	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
 	LookupKv(basics.Round, string) ([]byte, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
-	StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
+	//	StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
 }
 
 // ErrRoundZero is self-explanatory
@@ -338,8 +338,9 @@ func (x *roundCowBase) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 	return x.l.BlockHdr(r)
 }
 
-func (x *roundCowBase) StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	return x.l.StateProofVerificationContext(stateProofLastAttestedRound)
+func (x *roundCowBase) getStateProofVerificationContext2(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	//	return x.l.GetLedgerStateProofVerificationContext(stateProofLastAttestedRound)
+	return nil, nil
 }
 
 func (x *roundCowBase) blockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {
@@ -1182,7 +1183,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 		// be stored in memory. These deltas don't care about the state proofs, and so we can improve the node load time. Additionally, it save us from
 		// performing the validation during catchup, which is another performance boost.
 		if eval.validate || eval.generate {
-			err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, eval.validate)
+			err = applyStateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, eval.validate)
 		}
 
 	default:
@@ -1532,7 +1533,7 @@ func (validator *evalTxValidator) run() {
 // Validate: Eval(ctx, l, blk, true, txcache, executionPool)
 // AddBlock: Eval(context.Background(), l, blk, false, txcache, nil)
 // tracker:  Eval(context.Background(), l, blk, false, txcache, nil)
-func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
+func XEval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
 	// flush the pending writes in the cache to make everything read so far available during eval
 	l.FlushCaches()
 

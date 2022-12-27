@@ -25,12 +25,12 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-// StateProofsApplier allows fetching and updating state-proofs state on the ledger
-type StateProofsApplier interface {
+// stateProofsApplier allows fetching and updating state-proofs state on the ledger
+type stateProofsApplier interface {
 	BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 	GetStateProofNextRound() basics.Round
 	SetStateProofNextRound(rnd basics.Round)
-	StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
+	GetApplyStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
 }
 
 // Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records

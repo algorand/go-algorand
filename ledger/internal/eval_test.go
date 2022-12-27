@@ -38,7 +38,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
@@ -225,30 +224,30 @@ func TestCowStateProofV34(t *testing.T) {
 		StateProof:     stateProof,
 		Message:        msg,
 	}
-	err := apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, apply.ErrStateProofTypeNotSupported)
+	err := applyStateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, errStateProofTypeNotSupported)
 
 	stateProofTx.StateProofType = protocol.StateProofBasic
 	// stateproof txn doesn't confirm the next state proof round. expected is in the past
 	validate = true
 	stateProofTx.Message.LastAttestedRound = uint64(16)
 	c0.SetStateProofNextRound(8)
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
+	err = applyStateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, errExpectedDifferentStateProofRound)
 	c0.SetStateProofNextRound(32)
 
 	// stateproof txn doesn't confirm the next state proof round. expected is in the future
 	validate = true
 	stateProofTx.Message.LastAttestedRound = uint64(16)
 	c0.SetStateProofNextRound(32)
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
+	err = applyStateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, errExpectedDifferentStateProofRound)
 
 	// no atRound block
 	noBlockErr := errors.New("no block")
 	blockErr[atRound] = noBlockErr
 	stateProofTx.Message.LastAttestedRound = 32
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, validate)
 	require.ErrorIs(t, err, noBlockErr)
 	delete(blockErr, atRound)
 
@@ -260,7 +259,7 @@ func TestCowStateProofV34(t *testing.T) {
 	noBlockErr = errors.New("no block")
 	blockErr[32] = noBlockErr
 	stateProofTx.Message.LastAttestedRound = 32
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, validate)
 	require.ErrorIs(t, err, noBlockErr)
 
 	// no votersRnd block
@@ -279,7 +278,7 @@ func TestCowStateProofV34(t *testing.T) {
 	stateProofTx.Message.LastAttestedRound = uint64(spHdr.Round)
 	c0.SetStateProofNextRound(15)
 	blockErr[13] = noBlockErr
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, validate)
 	require.Contains(t, err.Error(), "no block")
 	delete(blockErr, 13)
 
@@ -307,7 +306,7 @@ func TestCowStateProofV34(t *testing.T) {
 	stateProofTx.StateProof.SignedWeight = 100
 	c0.SetStateProofNextRound(basics.Round(2 * config.Consensus[version].StateProofInterval))
 
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, validate)
 	require.Contains(t, err.Error(), "crypto error")
 }
 
@@ -335,24 +334,24 @@ func TestCowStateProof(t *testing.T) {
 		StateProof:     stateProof,
 		Message:        msg,
 	}
-	err := apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, apply.ErrStateProofTypeNotSupported)
+	err := applyStateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, errStateProofTypeNotSupported)
 
 	stateProofTx.StateProofType = protocol.StateProofBasic
 	// stateproof txn doesn't confirm the next state proof round. expected is in the past
 	validate = true
 	stateProofTx.Message.LastAttestedRound = uint64(16)
 	c0.SetStateProofNextRound(8)
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
+	err = applyStateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, errExpectedDifferentStateProofRound)
 	c0.SetStateProofNextRound(32)
 
 	// stateproof txn doesn't confirm the next state proof round. expected is in the future
 	validate = true
 	stateProofTx.Message.LastAttestedRound = uint64(16)
 	c0.SetStateProofNextRound(32)
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
+	err = applyStateProof(stateProofTx, atRound, c0, validate)
+	require.ErrorIs(t, err, errExpectedDifferentStateProofRound)
 
 	atRoundBlock := bookkeeping.BlockHeader{}
 	atRoundBlock.CurrentProtocol = protocol.ConsensusFuture
@@ -363,7 +362,7 @@ func TestCowStateProof(t *testing.T) {
 	noBlockErr := errors.New("no block")
 	blockErr[atRound] = noBlockErr
 	stateProofTx.Message.LastAttestedRound = 32
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, validate)
 	require.ErrorIs(t, err, noBlockErr)
 	delete(blockErr, atRound)
 
@@ -384,11 +383,11 @@ func TestCowStateProof(t *testing.T) {
 
 	// if atRound header is missing the apply should fail
 	blockErr[atRound] = noBlockErr
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, validate)
 	require.ErrorIs(t, err, noBlockErr)
 
 	delete(blockErr, atRound)
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, validate)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "crypto error")
 }
@@ -721,7 +720,7 @@ func (ledger *evalTestLedger) Latest() basics.Round {
 	return basics.Round(len(ledger.blocks)).SubSaturate(1)
 }
 
-func (ledger *evalTestLedger) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+func (ledger *evalTestLedger) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	return nil, fmt.Errorf("evalTestLedger does not implement StateProofVerificationContext")
 }
 
@@ -900,7 +899,7 @@ func (l *testCowBaseLedger) LookupKv(rnd basics.Round, key string) ([]byte, erro
 	return nil, errors.New("not implemented")
 }
 
-func (l *testCowBaseLedger) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+func (l *testCowBaseLedger) GetLedgerStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	return nil, fmt.Errorf("testCowBaseLedger does not implement StateProofVerificationContext")
 }
 

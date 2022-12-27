@@ -76,14 +76,14 @@ type Ledger struct {
 	genesisProtoVersion protocol.ConsensusVersion
 
 	// State-machine trackers
-	accts                  accountUpdates
-	acctsOnline            onlineAccounts
-	catchpoint             catchpointTracker
-	txTail                 txTail
-	bulletin               bulletin
-	notifier               blockNotifier
-	metrics                metricsTracker
-	stateProofVerification stateProofVerificationTracker
+	accts       accountUpdates
+	acctsOnline onlineAccounts
+	catchpoint  catchpointTracker
+	txTail      txTail
+	bulletin    bulletin
+	notifier    blockNotifier
+	metrics     metricsTracker
+	//	stateProofVerification stateProofVerificationTracker
 
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
@@ -207,14 +207,14 @@ func (l *Ledger) reloadLedger() error {
 
 	// set account updates tracker as a driver to calculate tracker db round and committing offsets
 	trackers := []ledgerTracker{
-		&l.accts,                  // update the balances
-		&l.catchpoint,             // catchpoints tracker : update catchpoint labels, create catchpoint files
-		&l.acctsOnline,            // update online account balances history
-		&l.txTail,                 // update the transaction tail, tracking the recent 1000 txn
-		&l.bulletin,               // provide closed channel signaling support for completed rounds
-		&l.notifier,               // send OnNewBlocks to subscribers
-		&l.metrics,                // provides metrics reporting support
-		&l.stateProofVerification, // provides state proof verification support
+		&l.accts,       // update the balances
+		&l.catchpoint,  // catchpoints tracker : update catchpoint labels, create catchpoint files
+		&l.acctsOnline, // update online account balances history
+		&l.txTail,      // update the transaction tail, tracking the recent 1000 txn
+		&l.bulletin,    // provide closed channel signaling support for completed rounds
+		&l.notifier,    // send OnNewBlocks to subscribers
+		&l.metrics,     // provides metrics reporting support
+		//		&l.stateProofVerification, // provides state proof verification support
 	}
 
 	l.accts.initialize(l.cfg)
@@ -464,10 +464,10 @@ func (l *Ledger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRou
 
 // StateProofVerificationContext returns the data required to verify the state proof whose last attested round is
 // stateProofLastAttestedRound.
-func (l *Ledger) StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+func (l *Ledger) GetLedgerStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.stateProofVerification.LookupVerificationContext(stateProofLastAttestedRound)
+	return nil, nil //l.stateProofVerification.LookupVerificationContext(stateProofLastAttestedRound)
 }
 
 // ListAssets takes a maximum asset index and maximum result length, and
@@ -667,7 +667,7 @@ func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreem
 func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
 
-	updates, err := internal.Eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
+	updates, err := internal.XEval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
 	if err != nil {
 		if errNSBE, ok := err.(ledgercore.ErrNonSequentialBlockEval); ok && errNSBE.EvaluatorRound <= errNSBE.LatestRound {
 			return ledgercore.BlockInLedgerError{
@@ -796,7 +796,7 @@ func (l *Ledger) trackerLog() logging.Logger {
 // evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
 func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger internal.LedgerForEvaluator) (ledgercore.StateDelta, error) {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
-	return internal.Eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
+	return internal.XEval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
 }
 
 // IsWritingCatchpointDataFile returns true when a catchpoint file is being generated.
@@ -840,7 +840,7 @@ func (l *Ledger) FlushCaches() {
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
-	delta, err := internal.Eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
+	delta, err := internal.XEval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
 	if err != nil {
 		return nil, err
 	}
