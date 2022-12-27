@@ -70,7 +70,7 @@ const batchSizeBlockLimit = 1024
 // since every relay will go through this wait time before broadcasting the txn.
 // However, when the incoming txn rate is high, the batch will fill up quickly and will send
 // for signature evaluation before waitForNextTxnDuration.
-const waitForNextTxnDuration = 5 * time.Millisecond
+const waitForNextTxnDuration = 2 * time.Millisecond
 
 // When the PaysetGroups is generating worksets, it enqueues up to concurrentWorksets entries to the execution pool. This serves several
 // purposes :
@@ -622,11 +622,11 @@ type batchLoad struct {
 	messagesForTxn        []int
 }
 
-func makeBatchLoad() (bl batchLoad) {
-	bl.txnGroups = make([][]transactions.SignedTxn, 0)
-	bl.groupCtxs = make([]*GroupContext, 0)
-	bl.elementBacklogMessage = make([]interface{}, 0)
-	bl.messagesForTxn = make([]int, 0)
+func makeBatchLoad(l int) (bl batchLoad) {
+	bl.txnGroups = make([][]transactions.SignedTxn, 0, l)
+	bl.groupCtxs = make([]*GroupContext, 0, l)
+	bl.elementBacklogMessage = make([]interface{}, 0, l)
+	bl.messagesForTxn = make([]int, 0, l)
 	return bl
 }
 
@@ -700,7 +700,7 @@ func (sv *StreamVerifier) batchingLoop() {
 	var added bool
 	var numberOfSigsInCurrent uint64
 	var numberOfTimerResets uint64
-	ue := make([]*UnverifiedElement, 0)
+	ue := make([]*UnverifiedElement, 0, 8)
 	defer func() { sv.cleanup(ue) }()
 	for {
 		select {
@@ -744,7 +744,7 @@ func (sv *StreamVerifier) batchingLoop() {
 				}
 				if added {
 					numberOfSigsInCurrent = 0
-					ue = make([]*UnverifiedElement, 0)
+					ue = make([]*UnverifiedElement, 0, 8)
 					numberOfTimerResets = 0
 				} else {
 					// was not added because of the exec pool buffer length
@@ -772,7 +772,7 @@ func (sv *StreamVerifier) batchingLoop() {
 			}
 			if added {
 				numberOfSigsInCurrent = 0
-				ue = make([]*UnverifiedElement, 0)
+				ue = make([]*UnverifiedElement, 0, 8)
 				numberOfTimerResets = 0
 			} else {
 				// was not added because of the exec pool buffer length. wait for some more txns
@@ -830,7 +830,7 @@ func (sv *StreamVerifier) addVerificationTaskToThePoolNow(ue []*UnverifiedElemen
 		ue := arg.([]*UnverifiedElement)
 		batchVerifier := crypto.MakeBatchVerifier()
 
-		bl := makeBatchLoad()
+		bl := makeBatchLoad(len(ue))
 		// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
 		blockHeader := sv.nbw.getBlockHeader()
 		for _, ue := range ue {
