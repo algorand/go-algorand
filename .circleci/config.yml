@@ -439,6 +439,7 @@ commands:
       - run:
           working_directory: /tmp
           command: |
+            sudo rm -rf ${HOME}/node_pkg/*
             sudo rm -rf << parameters.build_dir >>
             sudo mkdir -p << parameters.build_dir >>
             sudo chown -R $USER:$GROUP << parameters.build_dir >>

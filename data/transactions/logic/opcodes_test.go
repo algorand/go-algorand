@@ -58,7 +58,7 @@ func (os *OpSpec) equals(oso *OpSpec) bool {
 	return true
 }
 
-func TestOpcodesByVersionReordered(t *testing.T) {
+func TestOpcodesByVersionReordered(t *testing.T) { // nolint:paralleltest // manipulates global OpSpecs
 	partitiontest.PartitionTest(t)
 
 	// Make a copy to restore to the original
@@ -82,6 +82,7 @@ func TestOpcodesByVersionReordered(t *testing.T) {
 
 func TestOpcodesByVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	testOpcodesByVersion(t)
 }
 
