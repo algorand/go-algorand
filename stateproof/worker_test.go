@@ -1931,7 +1931,7 @@ func TestWorkerCreatesBuildersOnCommit(t *testing.T) {
 	a.True(builderExists)
 }
 
-func TestSignerUsesPersistedBuilder(t *testing.T) {
+func TestSignerUsesPersistedBuilderLatestProto(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
