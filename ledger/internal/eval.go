@@ -1176,7 +1176,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, cow, &ad, gi, evalParams, ctr)
 
 	case protocol.StateProofTx:
-		// Applying the StateProof transaction will deviate the cow's StateProofNextRound field.
+		// Applying the StateProof transaction will advance the cow's StateProofNextRound field.
 		// Validation of the StateProof transaction before applying will only occur in validate mode.
 		err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, eval.validate)
 
