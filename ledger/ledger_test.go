@@ -2872,9 +2872,12 @@ func verifyVotersContent(t *testing.T, expected map[basics.Round]*ledgercore.Vot
 }
 
 func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.InitState) {
-	prevDbRound := l.trackers.dbRound
-
+	l.trackers.mu.RLock()
+	initialDbRound := l.trackers.dbRound
+	currentDbRound := initialDbRound
 	l.trackers.lastFlushTime = time.Time{}
+	l.trackers.mu.RUnlock()
+
 	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 
 	const timeout = 2 * time.Second
@@ -2883,9 +2886,12 @@ func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.In
 	// We can't truly wait for scheduleCommit to take place, which means without waiting using sleeps
 	// we might beat scheduleCommit's addition to accountsWriting, making our wait on it continue immediately.
 	// The solution is to wait for the advancement of l.trackers.dbRound, which is a side effect postCommit's success.
-	for l.trackers.dbRound == prevDbRound {
+	for currentDbRound == initialDbRound {
 		time.Sleep(50 * time.Microsecond)
 		require.True(t, time.Now().Sub(started) < timeout)
+		l.trackers.mu.RLock()
+		currentDbRound = l.trackers.dbRound
+		l.trackers.mu.RUnlock()
 	}
 	l.trackers.waitAccountsWriting()
 }
