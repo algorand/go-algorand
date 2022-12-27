@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -96,18 +95,6 @@ func (spw *Worker) signStateProof(round basics.Round) {
 		return
 	}
 
-	votersCommitment, err := spw.getVotersCommitment(round, proto)
-	if err != nil {
-		spw.log.Warnf("spw.signStateProof(%d): getVotersCommitment: %v", round, err)
-		return
-	}
-
-	if votersCommitment.IsEmpty() {
-		// No voter commitment, perhaps because state proofs were
-		// just enabled.
-		return
-	}
-
 	keys := spw.accts.StateProofKeys(round)
 	if len(keys) == 0 {
 		// No keys, nothing to do.
@@ -144,25 +131,6 @@ func (spw *Worker) getProtoLatest() (*config.ConsensusParams, error) {
 
 	proto := config.Consensus[protoHdr.CurrentProtocol]
 	return &proto, nil
-}
-
-func (spw *Worker) getVotersCommitment(round basics.Round, proto *config.ConsensusParams) (crypto.GenericDigest, error) {
-	votersRound := round.SubSaturate(basics.Round(proto.StateProofInterval))
-	votersHdr, err := spw.ledger.BlockHdr(votersRound)
-	if err != nil {
-		return spw.getVotersCommitmentTracker(round)
-	}
-
-	return votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment, nil
-}
-
-func (spw *Worker) getVotersCommitmentTracker(round basics.Round) (crypto.GenericDigest, error) {
-	verificationContext, err := spw.ledger.StateProofVerificationContext(round)
-	if err != nil {
-		return crypto.GenericDigest{}, err
-	}
-
-	return verificationContext.VotersCommitment, nil
 }
 
 func (spw *Worker) getStateProofMessage(round basics.Round, proto *config.ConsensusParams) (stateproofmsg.Message, error) {
