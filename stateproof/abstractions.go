@@ -40,7 +40,9 @@ type Ledger interface {
 	Wait(basics.Round) chan struct{}
 	GenesisHash() crypto.Digest
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
 	VotersForStateProof(basics.Round) (*ledgercore.VotersForRound, error)
+	RegisterVotersCommitListener(listener ledgercore.VotersCommitListener)
 }
 
 // Network captures the aspects of the gossip network protocol that are

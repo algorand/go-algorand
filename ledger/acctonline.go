@@ -347,6 +347,16 @@ func (ao *onlineAccounts) maxBalLookback() uint64 {
 
 // prepareCommit prepares data to write to the database a "chunk" of rounds, and update the cached dbRound accordingly.
 func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
+	err := ao.prepareCommitInternal(dcc)
+	if err != nil {
+		return err
+	}
+
+	return ao.voters.prepareCommit(dcc)
+}
+
+// prepareCommitInternal preforms preapreCommit's logic without locking the tracker's mutex.
+func (ao *onlineAccounts) prepareCommitInternal(dcc *deferredCommitContext) error {
 	offset := dcc.offset
 
 	ao.accountsMu.RLock()
@@ -360,8 +370,6 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	// Index that corresponds to the oldest round still in deltas
 	startIndex := len(ao.onlineRoundParamsData) - len(ao.deltas) - 1
 	if ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[startIndex+int(offset)].CurrentProtocol {
-		ao.accountsMu.RUnlock()
-
 		// in scheduleCommit, we expect that this function to update the catchpointWriting when
 		// it's on a catchpoint round and the node is configured to generate catchpoints. Doing this in a deferred function
 		// here would prevent us from "forgetting" to update this variable later on.
@@ -504,6 +512,8 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	ao.accountsMu.Unlock()
 
 	ao.accountsReadCond.Broadcast()
+
+	ao.voters.postCommit(dcc)
 }
 
 func (ao *onlineAccounts) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
@@ -539,7 +549,6 @@ func (ao *onlineAccounts) onlineTotalsEx(rnd basics.Round) (basics.MicroAlgos, e
 func (ao *onlineAccounts) onlineTotalsImpl(rnd basics.Round) (basics.MicroAlgos, error) {
 	offset, err := ao.roundParamsOffset(rnd)
 	if err != nil {
-		ao.log.Warnf("onlineAccounts failed to fetch online totals for rnd: %d", rnd)
 		return basics.MicroAlgos{}, err
 	}
 
@@ -551,7 +560,6 @@ func (ao *onlineAccounts) onlineTotalsImpl(rnd basics.Round) (basics.MicroAlgos,
 func (ao *onlineAccounts) LookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
 	oad, err := ao.lookupOnlineAccountData(rnd, addr)
 	if err != nil {
-		ao.log.Warnf("onlineAccounts failed to fetch online account data for rnd: %d, addr: %v", rnd, addr)
 		return
 	}
 

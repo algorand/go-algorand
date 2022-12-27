@@ -24,7 +24,6 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -35,12 +34,12 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -54,112 +53,6 @@ import (
 type decodedCatchpointChunkData struct {
 	headerName string
 	data       []byte
-}
-
-func makeTestEncodedBalanceRecordV5(t *testing.T) encodedBalanceRecordV5 {
-	er := encodedBalanceRecordV5{}
-	hash := crypto.Hash([]byte{1, 2, 3})
-	copy(er.Address[:], hash[:])
-	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
-	vrfSecrets := crypto.GenerateVRFSecrets()
-	var stateProofID merklesignature.Verifier
-	crypto.RandBytes(stateProofID.Commitment[:])
-
-	ad := basics.AccountData{
-		Status:             basics.NotParticipating,
-		MicroAlgos:         basics.MicroAlgos{},
-		RewardsBase:        0x1234123412341234,
-		RewardedMicroAlgos: basics.MicroAlgos{},
-		VoteID:             oneTimeSecrets.OneTimeSignatureVerifier,
-		SelectionID:        vrfSecrets.PK,
-		StateProofID:       stateProofID.Commitment,
-		VoteFirstValid:     basics.Round(0x1234123412341234),
-		VoteLastValid:      basics.Round(0x1234123412341234),
-		VoteKeyDilution:    0x1234123412341234,
-		AssetParams:        make(map[basics.AssetIndex]basics.AssetParams),
-		Assets:             make(map[basics.AssetIndex]basics.AssetHolding),
-		AuthAddr:           basics.Address(crypto.Hash([]byte{1, 2, 3, 4})),
-	}
-	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	maxAssetsPerAccount := currentConsensusParams.MaxAssetsPerAccount
-	// if the number of supported assets is unlimited, create only 1000 for the purpose of this unit test.
-	if maxAssetsPerAccount == 0 {
-		maxAssetsPerAccount = config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount
-	}
-	for assetCreatorAssets := 0; assetCreatorAssets < maxAssetsPerAccount; assetCreatorAssets++ {
-		ap := basics.AssetParams{
-			Total:         0x1234123412341234,
-			Decimals:      0x12341234,
-			DefaultFrozen: true,
-			UnitName:      makeString(currentConsensusParams.MaxAssetUnitNameBytes),
-			AssetName:     makeString(currentConsensusParams.MaxAssetNameBytes),
-			URL:           makeString(currentConsensusParams.MaxAssetURLBytes),
-			Manager:       basics.Address(crypto.Hash([]byte{1, byte(assetCreatorAssets)})),
-			Reserve:       basics.Address(crypto.Hash([]byte{2, byte(assetCreatorAssets)})),
-			Freeze:        basics.Address(crypto.Hash([]byte{3, byte(assetCreatorAssets)})),
-			Clawback:      basics.Address(crypto.Hash([]byte{4, byte(assetCreatorAssets)})),
-		}
-		copy(ap.MetadataHash[:], makeString(32))
-		ad.AssetParams[basics.AssetIndex(0x1234123412341234-assetCreatorAssets)] = ap
-	}
-
-	for assetHolderAssets := 0; assetHolderAssets < maxAssetsPerAccount; assetHolderAssets++ {
-		ah := basics.AssetHolding{
-			Amount: 0x1234123412341234,
-			Frozen: true,
-		}
-		ad.Assets[basics.AssetIndex(0x1234123412341234-assetHolderAssets)] = ah
-	}
-
-	maxApps := currentConsensusParams.MaxAppsCreated
-	maxOptIns := currentConsensusParams.MaxAppsOptedIn
-	if maxApps == 0 {
-		maxApps = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
-	}
-	if maxOptIns == 0 {
-		maxOptIns = config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
-	}
-	maxKeyBytesLen := currentConsensusParams.MaxAppKeyLen
-	maxSumBytesLen := currentConsensusParams.MaxAppSumKeyValueLens
-
-	genKey := func() (string, basics.TealValue) {
-		len := int(crypto.RandUint64() % uint64(maxKeyBytesLen))
-		if len == 0 {
-			return "k", basics.TealValue{Type: basics.TealUintType, Uint: 0}
-		}
-		key := make([]byte, maxSumBytesLen-len)
-		crypto.RandBytes(key)
-		return string(key), basics.TealValue{Type: basics.TealUintType, Bytes: string(key)}
-	}
-	startIndex := crypto.RandUint64() % 100000
-	ad.AppParams = make(map[basics.AppIndex]basics.AppParams, maxApps)
-	for aidx := startIndex; aidx < startIndex+uint64(maxApps); aidx++ {
-		ap := basics.AppParams{}
-		ap.GlobalState = make(basics.TealKeyValue)
-		for i := uint64(0); i < currentConsensusParams.MaxGlobalSchemaEntries/4; i++ {
-			k, v := genKey()
-			ap.GlobalState[k] = v
-		}
-		ad.AppParams[basics.AppIndex(aidx)] = ap
-		optins := maxApps
-		if maxApps > maxOptIns {
-			optins = maxOptIns
-		}
-		ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, optins)
-		keys := currentConsensusParams.MaxLocalSchemaEntries / 4
-		lkv := make(basics.TealKeyValue, keys)
-		for i := 0; i < optins; i++ {
-			for j := uint64(0); j < keys; j++ {
-				k, v := genKey()
-				lkv[k] = v
-			}
-		}
-		ad.AppLocalStates[basics.AppIndex(aidx)] = basics.AppLocalState{KeyValue: lkv}
-	}
-
-	encodedAd := ad.MarshalMsg(nil)
-	er.AccountData = encodedAd
-	return er
 }
 
 func readCatchpointContent(t *testing.T, tarReader *tar.Reader) []decodedCatchpointChunkData {
@@ -285,20 +178,6 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 	}
 }
 
-func TestEncodedBalanceRecordEncoding(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	er := makeTestEncodedBalanceRecordV5(t)
-	encodedBr := er.MarshalMsg(nil)
-
-	var er2 encodedBalanceRecordV5
-	_, err := er2.UnmarshalMsg(encodedBr)
-	require.NoError(t, err)
-
-	require.Equal(t, er, er2)
-}
-
 func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -320,19 +199,19 @@ func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	for i := uint64(0); i < numResources; i++ {
 		resources[i] = encodedResourceData
 	}
-	balance := encodedBalanceRecordV6{
+	balance := encoded.BalanceRecordV6{
 		Address:     ledgertesting.RandomAddress(),
 		AccountData: encodedBaseAD,
 		Resources:   resources,
 	}
-	balances := make([]encodedBalanceRecordV6, numChunkEntries)
-	kv := encodedKVRecordV6{
-		Key:   make([]byte, encodedKVRecordV6MaxKeyLength),
-		Value: make([]byte, encodedKVRecordV6MaxValueLength),
+	balances := make([]encoded.BalanceRecordV6, numChunkEntries)
+	kv := encoded.KVRecordV6{
+		Key:   make([]byte, encoded.KVRecordV6MaxKeyLength),
+		Value: make([]byte, encoded.KVRecordV6MaxValueLength),
 	}
 	crypto.RandBytes(kv.Key[:])
 	crypto.RandBytes(kv.Value[:])
-	kvs := make([]encodedKVRecordV6, numChunkEntries)
+	kvs := make([]encoded.KVRecordV6, numChunkEntries)
 
 	for i := 0; i < numChunkEntries; i++ {
 		balances[i] = balance
@@ -739,7 +618,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, h)
 
-	iter := makeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
+	iter := store.MakeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
 	defer iter.Close(ctx)
 	for {
 		accts, _, err := iter.Next(ctx)
@@ -753,7 +632,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 
 		if len(accts) > 0 {
 			for _, acct := range accts {
-				added, err := trie.Add(acct.digest)
+				added, err := trie.Add(acct.Digest)
 				require.NoError(t, err)
 				require.True(t, added)
 			}
@@ -1088,38 +967,4 @@ func TestCatchpointAfterBoxTxns(t *testing.T) {
 	v, err := l.LookupKv(l.Latest(), logic.MakeBoxKey(boxApp, "xxx"))
 	require.NoError(t, err)
 	require.Equal(t, strings.Repeat("f", 24), string(v))
-}
-
-func TestEncodedKVRecordV6Allocbounds(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	for version, params := range config.Consensus {
-		require.GreaterOrEqualf(t, uint64(encodedKVRecordV6MaxValueLength), params.MaxBoxSize, "Allocbound constant no longer valid as of consensus version %s", version)
-		longestPossibleBoxName := string(make([]byte, params.MaxAppKeyLen))
-		longestPossibleKey := logic.MakeBoxKey(basics.AppIndex(math.MaxUint64), longestPossibleBoxName)
-		require.GreaterOrEqualf(t, encodedKVRecordV6MaxValueLength, len(longestPossibleKey), "Allocbound constant no longer valid as of consensus version %s", version)
-	}
-}
-
-func TestEncodedKVDataSize(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	require.GreaterOrEqual(t, encodedKVRecordV6MaxKeyLength, currentConsensusParams.MaxAppKeyLen)
-	require.GreaterOrEqual(t, uint64(encodedKVRecordV6MaxValueLength), currentConsensusParams.MaxBoxSize)
-
-	kvEntry := encodedKVRecordV6{
-		Key:   make([]byte, encodedKVRecordV6MaxKeyLength),
-		Value: make([]byte, encodedKVRecordV6MaxValueLength),
-	}
-
-	crypto.RandBytes(kvEntry.Key[:])
-	crypto.RandBytes(kvEntry.Value[:])
-
-	encoded := kvEntry.MarshalMsg(nil)
-	require.GreaterOrEqual(t, MaxEncodedKVDataSize, len(encoded))
-
 }

@@ -80,6 +80,17 @@ func (s *workerForStateProofMessageTests) BlockHdr(round basics.Round) (bookkeep
 	return element, nil
 }
 
+func (s *workerForStateProofMessageTests) StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	dummyContext := ledgercore.StateProofVerificationContext{
+		LastAttestedRound: stateProofLastAttestedRound,
+		VotersCommitment:  crypto.GenericDigest{0x1},
+		OnlineTotalWeight: basics.MicroAlgos{},
+		Version:           protocol.ConsensusCurrentVersion,
+	}
+
+	return &dummyContext, nil
+}
+
 func (s *workerForStateProofMessageTests) VotersForStateProof(round basics.Round) (*ledgercore.VotersForRound, error) {
 	voters := &ledgercore.VotersForRound{
 		Proto:     config.Consensus[protocol.ConsensusCurrentVersion],
@@ -107,6 +118,10 @@ func (s *workerForStateProofMessageTests) VotersForStateProof(round basics.Round
 	return voters, nil
 }
 
+func (s *workerForStateProofMessageTests) RegisterVotersCommitListener(listener ledgercore.VotersCommitListener) {
+	s.w.RegisterVotersCommitListener(listener)
+}
+
 func (s *workerForStateProofMessageTests) Broadcast(ctx context.Context, tag protocol.Tag, bytes []byte, b bool, peer network.Peer) error {
 	return s.w.Broadcast(ctx, tag, bytes, b, peer)
 }
@@ -120,7 +135,6 @@ func (s *workerForStateProofMessageTests) BroadcastInternalSignedTxGroup(txns []
 }
 
 func (s *workerForStateProofMessageTests) addBlockWithStateProofHeaders(ccNextRound basics.Round) {
-
 	s.w.latest++
 
 	hdr := bookkeeping.BlockHeader{}
@@ -158,6 +172,7 @@ func newWorkerForStateProofMessageStubs(keys []account.Participation, totalWeigh
 	s := &testWorkerStubs{
 		t:                         nil,
 		mu:                        deadlock.Mutex{},
+		listenerMu:                deadlock.RWMutex{},
 		latest:                    0,
 		waiters:                   make(map[basics.Round]chan struct{}),
 		waitersCount:              make(map[basics.Round]int),
@@ -180,6 +195,20 @@ func (s *workerForStateProofMessageTests) advanceLatest(delta uint64) {
 	for r := uint64(0); r < delta; r++ {
 		s.addBlockWithStateProofHeaders(s.w.blocks[s.w.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 	}
+}
+
+func (s *workerForStateProofMessageTests) notifyPrepareVoterCommit(round basics.Round) {
+	s.w.listenerMu.RLock()
+	defer s.w.listenerMu.RUnlock()
+
+	if s.w.commitListener == nil {
+		return
+	}
+
+	// It looks the same as s.w.notifyPrepareVoterCommit, but it provides OnPrepareVoterCommit with a different
+	// VotersForStateProof, which is important.
+	err := s.w.commitListener.OnPrepareVoterCommit(round, s)
+	require.NoError(s.w.t, err)
 }
 
 func TestStateProofMessage(t *testing.T) {

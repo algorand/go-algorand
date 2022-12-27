@@ -144,7 +144,7 @@ func getPendingSigsForRound(tx *sql.Tx, rnd basics.Round) ([]pendingSig, error) 
 	return tmpmap[rnd], nil
 }
 
-func isPendingSigExist(tx *sql.Tx, rnd basics.Round, account Address) (bool, error) {
+func sigExistsInDB(tx *sql.Tx, rnd basics.Round, account Address) (bool, error) {
 	row := tx.QueryRow("SELECT EXISTS ( SELECT 1 FROM sigs WHERE signer=? AND sprnd=?)", account[:], rnd)
 
 	exists := 0
@@ -210,6 +210,17 @@ func getBuilder(tx *sql.Tx, rnd basics.Round) (builder, error) {
 	bldr.Builder.AllocSigs()
 
 	return bldr, nil
+}
+
+func builderExistInDB(tx *sql.Tx, rnd basics.Round) (bool, error) {
+	row := tx.QueryRow("SELECT EXISTS ( SELECT 1 FROM builders WHERE round=? )", rnd)
+
+	exists := 0
+	if err := row.Scan(&exists); err != nil {
+		return false, err
+	}
+
+	return exists != 0, nil
 }
 
 // deleteBuilders deletes all builders before (but not including) the given rnd

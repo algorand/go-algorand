@@ -1623,10 +1623,12 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 	// catch any suprises.
 	require.LessOrEqual(t, LogicVersion, len(nonsense)) // Allow nonsense for future versions
 	for v, source := range nonsense {
+		v, source := v, source
 		if v > LogicVersion {
 			continue // We allow them to be set, but can't test assembly beyond LogicVersion
 		}
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			t.Parallel()
 			ops := testProg(t, source, v)
 			t2, err := Disassemble(ops.Program)
 			require.NoError(t, err)

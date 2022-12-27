@@ -39,6 +39,17 @@ type OnlineAccountsFetcher interface {
 	TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64, params *config.ConsensusParams, rewardsLevel uint64) (topOnlineAccounts []*OnlineAccount, totalOnlineStake basics.MicroAlgos, err error)
 }
 
+// VotersForRoundFetcher captures the functionality of querying the top voting accounts for a
+// specific round
+type VotersForRoundFetcher interface {
+	VotersForStateProof(rnd basics.Round) (*VotersForRound, error)
+}
+
+// VotersCommitListener represents an object that needs to get notified on commit stages in the voters tracker.
+type VotersCommitListener interface {
+	OnPrepareVoterCommit(rnd basics.Round, voters VotersForRoundFetcher) error
+}
+
 // VotersForRound tracks the top online voting accounts as of a particular
 // round, along with a Merkle tree commitment to those voting accounts.
 type VotersForRound struct {
