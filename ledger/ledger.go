@@ -405,6 +405,14 @@ func (l *Ledger) RegisterBlockListeners(listeners []BlockListener) {
 	l.notifier.register(listeners)
 }
 
+// RegisterVotersCommitListener registers a listener that will be called when a
+// commit is about to cover a round.
+func (l *Ledger) RegisterVotersCommitListener(listener ledgercore.VotersCommitListener) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	l.acctsOnline.voters.registerPrepareCommitListener(listener)
+}
+
 // notifyCommit informs the trackers that all blocks up to r have been
 // written to disk.  Returns the minimum block number that must be kept
 // in the database.
@@ -459,7 +467,7 @@ func (l *Ledger) GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta,
 func (l *Ledger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.acctsOnline.voters.getVoters(rnd)
+	return l.acctsOnline.voters.VotersForStateProof(rnd)
 }
 
 // StateProofVerificationContext returns the data required to verify the state proof whose last attested round is

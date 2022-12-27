@@ -28,6 +28,7 @@ import (
 	"runtime"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -1722,14 +1723,21 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	_, err = l.Validate(context.Background(), blk, backlogPool)
 	require.ErrorContains(t, err, "state proof crypto error")
 
-	for i := uint64(0); i < proto.StateProofInterval; i++ {
+	// We advance the ledger up to the point it should forget the first votersForRound
+	for i := uint64(0); i < proto.StateProofInterval+cfg.MaxAcctLookback; i++ {
 		addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
 	}
 
-	l.WaitForCommit(l.Latest())
-	// at this point the ledger would remove the voters block header. However, since
-	// the ledger uses the stateproof verification tracker the state proof be validated (or at least fail on the crypto part)
+	// We make the ledger flush tracker data to allow votersTracker to advance lowestRound
+	triggerTrackerFlush(t, l, genesisInitState)
 
+	// We add another block to make the block queue query the voter's tracker lowest round again, which allows it to forget
+	// rounds based on the new lowest round.
+	addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
+	l.WaitForCommit(l.Latest())
+
+	// at this point the ledger has removed the voters block header. However, since
+	// the ledger uses the stateproof verification tracker the state proof be validated (or at least fail on the crypto part)
 	blk = createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
 
 	votersRound := basics.Round(proto.StateProofInterval)
@@ -1772,8 +1780,9 @@ func createBlkWithStateproof(t *testing.T, maxBlocks int, proto config.Consensus
 }
 
 func addDummyBlock(t *testing.T, addresses []basics.Address, proto config.ConsensusParams, l *Ledger, initKeys map[basics.Address]*crypto.SignatureSecrets, genesisInitState ledgercore.InitState) {
-	stxns := make([]transactions.SignedTxn, 2)
-	for j := 0; j < 2; j++ {
+	numOfTransactions := 2
+	stxns := make([]transactions.SignedTxn, numOfTransactions)
+	for j := 0; j < numOfTransactions; j++ {
 		txHeader := transactions.Header{
 			Sender:      addresses[0],
 			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
@@ -2833,6 +2842,40 @@ func verifyVotersContent(t *testing.T, expected map[basics.Round]*ledgercore.Vot
 	}
 }
 
+func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.InitState) {
+	l.trackers.mu.RLock()
+	initialDbRound := l.trackers.dbRound
+	currentDbRound := initialDbRound
+	l.trackers.lastFlushTime = time.Time{}
+	l.trackers.mu.RUnlock()
+
+	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
+
+	const timeout = 2 * time.Second
+	started := time.Now()
+
+	// We can't truly wait for scheduleCommit to take place, which means without waiting using sleeps
+	// we might beat scheduleCommit's addition to accountsWriting, making our wait on it continue immediately.
+	// The solution is to wait for the advancement of l.trackers.dbRound, which is a side effect postCommit's success.
+	for currentDbRound == initialDbRound {
+		time.Sleep(50 * time.Microsecond)
+		require.True(t, time.Now().Sub(started) < timeout)
+		l.trackers.mu.RLock()
+		currentDbRound = l.trackers.dbRound
+		l.trackers.mu.RUnlock()
+	}
+	l.trackers.waitAccountsWriting()
+}
+
+func triggerDeleteVoters(t *testing.T, l *Ledger, genesisInitState ledgercore.InitState) {
+	// We make the ledger flush tracker data to allow votersTracker to advance lowestRound
+	triggerTrackerFlush(t, l, genesisInitState)
+
+	// We add another block to make the block queue query the voter's tracker lowest round again, which allows it to forget
+	// rounds based on the new lowest round.
+	triggerTrackerFlush(t, l, genesisInitState)
+}
+
 func TestVotersReloadFromDisk(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -2886,7 +2929,7 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState := getInitState()
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	const inMem = true
 	cfg := config.GetDefaultLocal()
@@ -2910,7 +2953,6 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 
 	for i := uint64(0); i < (proto.StateProofInterval*3 - proto.StateProofVotersLookback); i++ {
 		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += 10
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
 	}
@@ -2923,12 +2965,11 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 
 	for i := uint64(0); i < proto.StateProofInterval; i++ {
 		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += 10
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
 	}
 
-	l.WaitForCommit(blk.BlockHeader.Round)
+	triggerDeleteVoters(t, l, genesisInitState)
 	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
 
 	// verifying that the tree for round 512 is still in the cache, but the tree for round 256 is evicted.
@@ -2946,12 +2987,12 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState := getInitState()
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
-	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
+	cfg.MaxAcctLookback = 0
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
@@ -2968,10 +3009,7 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	// we push proto.StateProofInterval * (proto.StateProofMaxRecoveryIntervals + 2) block into the ledger
 	// the reason for + 2 is the first state proof is on 2*stateproofinterval.
 	for i := uint64(0); i < (proto.StateProofInterval * (proto.StateProofMaxRecoveryIntervals + 2)); i++ {
-		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += 10
-		err = l.AddBlock(blk, agreement.Certificate{})
-		require.NoError(t, err)
+		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	}
 
 	// the voters tracker should contain all the voters for each stateproof round. nothing should be removed
@@ -2985,14 +3023,15 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
 
 	for i := uint64(0); i < proto.StateProofInterval; i++ {
-		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += 10
-		err = l.AddBlock(blk, agreement.Certificate{})
-		require.NoError(t, err)
+		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	}
 
-	// the voters tracker should give up on voters for round 512
-	l.WaitForCommit(blk.BlockHeader.Round)
+	triggerDeleteVoters(t, l, genesisInitState)
+
+	// round 512 should now be forgotten.
+	_, found = l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
+	require.False(t, found)
+
 	vtSnapshot = l.acctsOnline.voters.votersForRoundCache
 	err = l.reloadLedger()
 	require.NoError(t, err)
@@ -3001,6 +3040,65 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	_, found = l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
 	require.False(t, found)
 	require.Equal(t, beforeRemoveVotersLen, len(l.acctsOnline.voters.votersForRoundCache))
+}
+
+type mockCommitListener struct{}
+
+func (l *mockCommitListener) OnPrepareVoterCommit(_ basics.Round, _ ledgercore.VotersForRoundFetcher) error {
+	return nil
+}
+
+func TestVotersCallbackPersistsAfterLedgerReload(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+
+	commitListener := mockCommitListener{}
+	l.RegisterVotersCommitListener(&commitListener)
+	listenerBeforeReload := l.acctsOnline.voters.commitListener
+
+	require.NotNil(t, listenerBeforeReload)
+	err = l.reloadLedger()
+	require.NoError(t, err)
+
+	listenerAfterReload := l.acctsOnline.voters.commitListener
+	require.Equal(t, listenerBeforeReload, listenerAfterReload)
+}
+
+type errorCommitListener struct{}
+
+func (l *errorCommitListener) OnPrepareVoterCommit(_ basics.Round, _ ledgercore.VotersForRoundFetcher) error {
+	return fmt.Errorf("this error is expected")
+}
+
+func TestLedgerContinuesOnVotersCallbackFailure(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.MaxAcctLookback = 0
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+
+	commitListener := errorCommitListener{}
+	l.RegisterVotersCommitListener(&commitListener)
+
+	previousCachedDbRound := l.trackers.dbRound
+	triggerTrackerFlush(t, l, genesisInitState)
+	require.Equal(t, previousCachedDbRound+1, l.trackers.dbRound)
 }
 
 func TestStateProofVerificationTracker(t *testing.T) {

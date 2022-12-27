@@ -22,8 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/go-algorand/stateproof"
-
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
@@ -33,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/stateproof"
 )
 
 const (

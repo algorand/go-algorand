@@ -836,7 +836,7 @@ func (aul *accountUpdatesLedgerEvaluator) GenesisProto() config.ConsensusParams 
 
 // VotersForStateProof returns the top online accounts at round rnd.
 func (aul *accountUpdatesLedgerEvaluator) VotersForStateProof(rnd basics.Round) (voters *ledgercore.VotersForRound, err error) {
-	return aul.ao.voters.getVoters(rnd)
+	return aul.ao.voters.VotersForStateProof(rnd)
 }
 
 func (aul *accountUpdatesLedgerEvaluator) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {

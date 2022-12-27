@@ -28,11 +28,49 @@ import (
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/stateproof/verify"
 )
+
+var errVotersNotTracked = errors.New("voters not tracked for the given lookback round")
+
+// OnPrepareVoterCommit is a function called by the voters tracker when it's preparing to commit rnd. It gives the builder
+// the chance to persist the data it needs.
+func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgercore.VotersForRoundFetcher) error {
+	header, err := spw.ledger.BlockHdr(rnd)
+	if err != nil {
+		return fmt.Errorf("OnPrepareVoterCommit(%d): could not fetch round header: %w", rnd, err)
+	}
+
+	proto := config.Consensus[header.CurrentProtocol]
+	if proto.StateProofInterval == 0 || uint64(rnd)%proto.StateProofInterval != 0 {
+		return nil
+	}
+
+	builderExists, err := spw.builderExists(rnd)
+	if err != nil {
+		spw.log.Warnf("OnPrepareVoterCommit(%d): could not check builder existence, assuming it doesn't exist: %v\n", rnd, err)
+	} else if builderExists {
+		return nil
+	}
+
+	// We create and persist the builder without using it. Signer can later use it (specifically the state proof
+	// message embedded in the builder) during catchup.
+	_, err = spw.createAndPersistBuilder(rnd, votersFetcher)
+	if err != nil {
+		if errors.Is(err, errVotersNotTracked) {
+			spw.log.Warnf("OnPrepareVoterCommit(%d): %v", rnd, err)
+			return nil
+		}
+
+		return fmt.Errorf("OnPrepareVoterCommit(%d): could not create builder: %w", rnd, err)
+	}
+
+	return nil
+}
 
 // loadOrCreateBuilderWithSignatures either loads a builder from the DB or creates a new builder.
 // this function fills the builder with all the available signatures
@@ -58,16 +96,9 @@ func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 		spw.log.Errorf("loadOrCreateBuilder: error while fetching builder from DB: %v", err)
 	}
 
-	buildr, err = spw.createBuilder(rnd)
+	buildr, err = spw.createAndPersistBuilder(rnd, spw.ledger)
 	if err != nil {
 		return builder{}, err
-	}
-
-	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-		return persistBuilder(tx, rnd, &buildr)
-	})
-	if err != nil {
-		spw.log.Errorf("loadOrCreateBuilder: failed to insert builder into database: %v", err)
 	}
 
 	return buildr, nil
@@ -105,7 +136,7 @@ func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
 	return nil
 }
 
-func (spw *Worker) createBuilder(rnd basics.Round) (builder, error) {
+func (spw *Worker) createAndPersistBuilder(rnd basics.Round, votersFetcher ledgercore.VotersForRoundFetcher) (builder, error) {
 	l := spw.ledger
 	hdr, err := l.BlockHdr(rnd)
 	if err != nil {
@@ -120,7 +151,7 @@ func (spw *Worker) createBuilder(rnd basics.Round) (builder, error) {
 	}
 
 	lookback := votersRnd.SubSaturate(basics.Round(hdrProto.StateProofVotersLookback))
-	voters, err := l.VotersForStateProof(lookback)
+	voters, err := votersFetcher.VotersForStateProof(lookback)
 	if err != nil {
 		return builder{}, err
 	}
@@ -128,7 +159,7 @@ func (spw *Worker) createBuilder(rnd basics.Round) (builder, error) {
 	if voters == nil {
 		// Voters not tracked for that round.  Might not be a valid
 		// state proof round; state proofs might not be enabled; etc.
-		return builder{}, fmt.Errorf("voters not tracked for lookback round %d", lookback)
+		return builder{}, fmt.Errorf("lookback round %d: %w", lookback, errVotersNotTracked)
 	}
 
 	msg, err := GenerateStateProofMessage(l, uint64(votersHdr.Round), hdr)
@@ -153,6 +184,16 @@ func (spw *Worker) createBuilder(rnd basics.Round) (builder, error) {
 		config.Consensus[votersHdr.CurrentProtocol].StateProofStrengthTarget)
 	if err != nil {
 		return builder{}, err
+	}
+
+	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		return persistBuilder(tx, rnd, &res)
+	})
+
+	// We ignore persisting errors because we still want to try and use our successfully generated builder,
+	// even if, for some reason, persisting it failed.
+	if err != nil {
+		spw.log.Errorf("loadOrCreateBuilder(%d): failed to insert builder into database: %v", rnd, err)
 	}
 
 	return res, nil
@@ -181,6 +222,8 @@ func (spw *Worker) initBuilders() {
 		}
 		spw.builders[rnd] = buildr
 	}
+
+	spw.ledger.RegisterVotersCommitListener(spw)
 }
 
 func (spw *Worker) getAllOnlineBuilderRounds() ([]basics.Round, error) {
@@ -253,6 +296,18 @@ func (spw *Worker) handleSigMessage(msg network.IncomingMessage) network.Outgoin
 	return network.OutgoingMessage{Action: fwd}
 }
 
+// meetsBroadcastPolicy verifies that the signature's round is either under the threshold round or equal to the
+// latest StateProof round.
+// This signature filtering is only relevant when the StateProof chain is stalled and many signatures may be spammed.
+func (spw *Worker) meetsBroadcastPolicy(sfa sigFromAddr, latestRound basics.Round, proto *config.ConsensusParams, stateProofNextRound basics.Round) bool {
+	if sfa.Round <= onlineBuildersThreshold(proto, stateProofNextRound) {
+		return true
+	}
+
+	latestStateProofRound := latestRound.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))
+	return sfa.Round == latestStateProofRound
+}
+
 // handleSig adds a signature to the pending in-memory state proof provers (builders). This function is
 // also responsible for making sure that the signature is valid, and not duplicated.
 // if a signature passes all verification it is written into the database.
@@ -296,9 +351,9 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			return network.Ignore, fmt.Errorf("handleSig: latest round is smaller than given round %d", sfa.Round)
 		}
 
-		if sfa.Round > onlineBuildersThreshold(&proto, stateProofNextRound) && sfa.Round != latestHdr.Round.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval)) {
-			// Ignore signatures not under threshold round or equal to the latest StateProof round
-			// (this signature filtering is only relevant when the StateProof chain is stalled and many signatures may be spammed)
+		// We want to save the signature in the DB if we know we generated it. However, if the signature's source is
+		// external, we only want to process it if we know for sure it meets our broadcast policy.
+		if sender != nil && !spw.meetsBroadcastPolicy(sfa, latestHdr.Round, &proto, stateProofNextRound) {
 			return network.Ignore, nil
 		}
 
@@ -345,14 +400,25 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 	return network.Broadcast, nil
 }
 
-func (spw *Worker) sigExistsInDB(round basics.Round, account basics.Address) (bool, error) {
+func (spw *Worker) sigExists(round basics.Round, account basics.Address) (bool, error) {
 	var exists bool
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		res, err := isPendingSigExist(tx, round, account)
+		res, err := sigExistsInDB(tx, round, account)
 		exists = res
 		return err
 	})
 	return exists, err
+}
+
+func (spw *Worker) builderExists(rnd basics.Round) (bool, error) {
+	var exist bool
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var err2 error
+		exist, err2 = builderExistInDB(tx, rnd)
+		return err2
+	})
+
+	return exist, err
 }
 
 func (spw *Worker) builder(latest basics.Round) {
@@ -363,28 +429,30 @@ func (spw *Worker) builder(latest basics.Round) {
 	// will settle for a larger proof.  New blocks also tell us
 	// if a state proof has been committed, so that we can stop trying
 	// to build it.
+
+	nextBroadcastRnd := latest
 	for {
 		spw.tryBroadcast()
 
-		nextrnd := latest + 1
 		select {
 		case <-spw.ctx.Done():
 			spw.wg.Done()
 			return
 
-		case <-spw.ledger.Wait(nextrnd):
+		case <-spw.ledger.Wait(nextBroadcastRnd + 1):
 			// Continue on
 		}
 
-		// See if any new state proofs were formed, according to
-		// the new block, which would mean we can clean up some builders.
-		hdr, err := spw.ledger.BlockHdr(nextrnd)
+		newLatest := spw.ledger.Latest()
+		newLatestHdr, err := spw.ledger.BlockHdr(newLatest)
+
 		if err != nil {
-			spw.log.Warnf("spw.builder: BlockHdr(%d): %v", nextrnd, err)
+			spw.log.Warnf("spw.builder: BlockHdr(%d): %v", newLatest, err)
 			continue
 		}
-		proto := config.Consensus[hdr.CurrentProtocol]
-		stateProofNextRound := hdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+
+		proto := config.Consensus[newLatestHdr.CurrentProtocol]
+		stateProofNextRound := newLatestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 
 		spw.deleteBuildData(&proto, stateProofNextRound)
 
@@ -392,13 +460,12 @@ func (spw *Worker) builder(latest basics.Round) {
 		// were agreed upon.  This ensures that, if we send a signature
 		// for block R, nodes will have already verified block R, because
 		// block R+1 has been formed.
-		newLatest := spw.ledger.Latest()
-		for r := latest; r < newLatest; r++ {
+		for r := nextBroadcastRnd; r < newLatest; r++ {
 			// Wait for the signer to catch up; mostly relevant in tests.
 			spw.waitForSignature(r)
 			spw.broadcastSigs(r, stateProofNextRound, proto)
 		}
-		latest = newLatest
+		nextBroadcastRnd = newLatest
 	}
 }
 

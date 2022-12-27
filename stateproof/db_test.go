@@ -181,10 +181,10 @@ func TestSigExistQuery(t *testing.T) {
 		}))
 	}
 
-	// all addresses have signed the message so isPendingSigExist should result with true:
+	// all addresses have signed the message so sigExistsInDB should result with true:
 	for r := basics.Round(0); r < basics.Round(n/2); r++ {
 		require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			exists, err := isPendingSigExist(tx, r, accts[r])
+			exists, err := sigExistsInDB(tx, r, accts[r])
 			require.NoError(t, err)
 			require.True(t, exists)
 			return nil
@@ -197,7 +197,7 @@ func TestSigExistQuery(t *testing.T) {
 		var actCopy basics.Address
 		copy(actCopy[:], wrongAddress[:])
 		actCopy[0]++
-		exists, err := isPendingSigExist(tx, 0, actCopy)
+		exists, err := sigExistsInDB(tx, 0, actCopy)
 		require.NoError(t, err)
 		require.False(t, exists)
 		return nil
@@ -209,7 +209,7 @@ func TestSigExistQuery(t *testing.T) {
 
 	for r := basics.Round(n / 2); r < basics.Round(n); r++ {
 		require.NoError(t, dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			exists, err := isPendingSigExist(tx, r, accts[r])
+			exists, err := sigExistsInDB(tx, r, accts[r])
 			require.NoError(t, err)
 			require.False(t, exists)
 			return nil

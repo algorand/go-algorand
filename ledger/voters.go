@@ -18,15 +18,22 @@ package ledger
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/stateproof"
 	"sync"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/stateproof"
 )
+
+// VotersCommitListener represents an object that needs to get notified on commit stages in the voters tracker.
+type VotersCommitListener interface {
+	OnPrepareVoterCommit(rnd basics.Round, voters ledgercore.VotersForRoundFetcher) error
+}
 
 // The votersTracker maintains the vector commitment for the most recent
 // commitments to online accounts for state proofs.
@@ -61,14 +68,18 @@ type votersTracker struct {
 	// Thus, we maintain X in the votersForRoundCache map until we form a stateproof
 	// for round X+StateProofVotersLookback+StateProofInterval.
 	//
-	// In case state proof chain stalls this map would be bounded to StateProofMaxRecoveryIntervals + 3
+	// In case state proof chain stalls this map would be bounded to StateProofMaxRecoveryIntervals + 3 in respect
+	// to the db round.
 	// + 1 - since votersForRoundCache needs to contain an entry for a future state proof
 	// + 1 - since votersForRoundCache needs to contain an entry to verify the earliest state proof
 	// in the recovery interval. i.e. it needs to have an entry for R-StateProofMaxRecoveryIntervals-StateProofInterval
 	// to verify R-StateProofMaxRecoveryIntervals
 	// + 1 would only appear if the sampled round R is:  interval - lookback < R < interval.
 	// in this case, the tracker would not yet remove the old one but will create a new one for future state proof.
+	// Additionally, the tracker would contain an entry for every state proof interval between the latest round in the
+	// ledger and the db round.
 	votersForRoundCache map[basics.Round]*ledgercore.VotersForRound
+	votersMu            deadlock.RWMutex
 
 	l                     ledgerForTracker
 	onlineAccountsFetcher ledgercore.OnlineAccountsFetcher
@@ -76,6 +87,11 @@ type votersTracker struct {
 	// loadWaitGroup syncronizing the completion of the loadTree call so that we can
 	// shutdown the tracker without leaving any running go-routines.
 	loadWaitGroup sync.WaitGroup
+
+	// commitListener provides a callback to call on each prepare commit. This callback receives access to the voters
+	// cache.
+	commitListener   ledgercore.VotersCommitListener
+	commitListenerMu deadlock.RWMutex
 }
 
 // votersRoundForStateProofRound computes the round number whose voting participants
@@ -90,8 +106,9 @@ func votersRoundForStateProofRound(stateProofRnd basics.Round, proto *config.Con
 
 func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.OnlineAccountsFetcher, latestDbRound basics.Round) error {
 	vt.l = l
-	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
 	vt.onlineAccountsFetcher = fetcher
+
+	vt.initializeVoters()
 
 	latestRoundInLedger := l.Latest()
 	hdr, err := l.BlockHdr(latestRoundInLedger)
@@ -131,8 +148,8 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.Onl
 func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	r := hdr.Round
 
-	_, ok := vt.votersForRoundCache[r]
-	if ok {
+	_, exists := vt.getVoters(r)
+	if exists {
 		// Already loaded.
 		return
 	}
@@ -146,7 +163,7 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	tr := ledgercore.MakeVotersForRound()
 	tr.Proto = proto
 
-	vt.votersForRoundCache[r] = tr
+	vt.setVoters(r, tr)
 
 	vt.loadWaitGroup.Add(1)
 	go func() {
@@ -173,18 +190,16 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 		return
 	}
 
-	vt.removeOldVoters(hdr)
-
 	// This might be a block where we snapshot the online participants,
 	// to eventually construct a vector commitment in a later
 	// block.
-	r := uint64(hdr.Round)
-	if (r+proto.StateProofVotersLookback)%proto.StateProofInterval != 0 {
+	r := hdr.Round
+	if (uint64(r)+proto.StateProofVotersLookback)%proto.StateProofInterval != 0 {
 		return
 	}
 
-	_, ok := vt.votersForRoundCache[basics.Round(r)]
-	if ok {
+	_, exists := vt.getVoters(r)
+	if exists {
 		vt.l.trackerLog().Errorf("votersTracker.newBlock: round %d already present", r)
 	} else {
 		vt.loadTree(hdr)
@@ -192,19 +207,53 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 
 }
 
+func (vt *votersTracker) prepareCommit(dcc *deferredCommitContext) error {
+	vt.commitListenerMu.RLock()
+	defer vt.commitListenerMu.RUnlock()
+
+	if vt.commitListener == nil {
+		return nil
+	}
+
+	commitListener := vt.commitListener
+	for round := dcc.oldBase; round <= dcc.newBase; round++ {
+		err := commitListener.OnPrepareVoterCommit(round, vt)
+		// Having the commit process continue uninterrupted is more important to us than not
+		// having missing builders. To implement this hierarchy we've decided to exclusively log errors
+		// returning from the commitListener.
+		if err != nil {
+			vt.l.trackerLog().Errorf("votersTracker.prepareCommit: listener encountered an error for round %d: %v", round, err)
+		}
+	}
+
+	return nil
+}
+
+func (vt *votersTracker) postCommit(dcc *deferredCommitContext) {
+	lastHeaderCommitted, err := vt.l.BlockHdr(dcc.newBase)
+	if err != nil {
+		vt.l.trackerLog().Errorf("votersTracker.postCommit: could not retrieve header for round %d: %v", dcc.newBase, err)
+		return
+	}
+
+	// Voters older than lastHeaderCommitted.Round() - StateProofMaxRecoveryIntervals * StateProofInterval are
+	// guaranteed to be removed here.
+	vt.removeOldVoters(lastHeaderCommitted)
+}
+
 // removeOldVoters removes voters data form the tracker and allows the database to commit previous rounds.
 // voters would be removed if one of the two condition is met
 // 1 - Voters are for a round which was already been confirmed by stateproof
 // 2 - Voters are for a round which is older than the allowed recovery interval.
-// notice that if state proof chain is delayed, votersForRoundCache will not be larger than
-// StateProofMaxRecoveryIntervals + 1
-// ( In order to be able to build and verify X stateproofs back we need X + 1 voters data )
 //
 // It is possible to optimize this function and not to travers votersForRoundCache on every round.
-// Since the map is small (Usually  0 - 2 elements and up to StateProofMaxRecoveryIntervals) we decided to keep the code simple
+// Since the map is small (Usually  0 - 2 elements) we decided to keep the code simple
 // and check for deletion in every round.
 func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
 	lowestStateProofRound := stateproof.GetOldestExpectedStateProof(&hdr)
+
+	vt.votersMu.Lock()
+	defer vt.votersMu.Unlock()
 
 	for r, tr := range vt.votersForRoundCache {
 		commitRound := r + basics.Round(tr.Proto.StateProofVotersLookback)
@@ -224,18 +273,23 @@ func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
 // not need any blocks, it returns base.
 func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 	minRound := base
+
+	vt.votersMu.RLock()
+	defer vt.votersMu.RUnlock()
+
 	for r := range vt.votersForRoundCache {
 		if r < minRound {
 			minRound = r
 		}
 	}
+
 	return minRound
 }
 
-// getVoters() returns the top online participants from round r.
-func (vt *votersTracker) getVoters(r basics.Round) (*ledgercore.VotersForRound, error) {
-	tr, ok := vt.votersForRoundCache[r]
-	if !ok {
+// VotersForStateProof returns the top online participants from round r.
+func (vt *votersTracker) VotersForStateProof(r basics.Round) (*ledgercore.VotersForRound, error) {
+	tr, exists := vt.getVoters(r)
+	if !exists {
 		// Not tracked: stateproofs not enabled.
 		return nil, nil
 	}
@@ -247,4 +301,33 @@ func (vt *votersTracker) getVoters(r basics.Round) (*ledgercore.VotersForRound, 
 	}
 
 	return tr, nil
+}
+
+func (vt *votersTracker) registerPrepareCommitListener(commitListener ledgercore.VotersCommitListener) {
+	vt.commitListenerMu.Lock()
+	defer vt.commitListenerMu.Unlock()
+
+	vt.commitListener = commitListener
+}
+
+func (vt *votersTracker) initializeVoters() {
+	vt.votersMu.Lock()
+	defer vt.votersMu.Unlock()
+
+	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
+}
+
+func (vt *votersTracker) getVoters(round basics.Round) (*ledgercore.VotersForRound, bool) {
+	vt.votersMu.RLock()
+	defer vt.votersMu.RUnlock()
+
+	tr, ok := vt.votersForRoundCache[round]
+	return tr, ok
+}
+
+func (vt *votersTracker) setVoters(round basics.Round, voters *ledgercore.VotersForRound) {
+	vt.votersMu.Lock()
+	defer vt.votersMu.Unlock()
+
+	vt.votersForRoundCache[round] = voters
 }
