@@ -67,6 +67,13 @@ int crypto_sign_ed25519_verify_detached(const unsigned char *sig,
             __attribute__ ((warn_unused_result));
 
 SODIUM_EXPORT
+int crypto_sign_ed25519_bv_compatible_verify_detached(const unsigned char *sig,
+                                        const unsigned char *m,
+                                        unsigned long long mlen,
+                                        const unsigned char *pk)
+            __attribute__ ((warn_unused_result));
+
+SODIUM_EXPORT
 int crypto_sign_ed25519_keypair(unsigned char *pk, unsigned char *sk)
             __attribute__ ((nonnull));
 
@@ -113,6 +120,12 @@ int crypto_sign_ed25519ph_final_create(crypto_sign_ed25519ph_state *state,
 
 SODIUM_EXPORT
 int crypto_sign_ed25519ph_final_verify(crypto_sign_ed25519ph_state *state,
+                                       const unsigned char *sig,
+                                       const unsigned char *pk)
+            __attribute__ ((warn_unused_result)) __attribute__ ((nonnull));
+
+SODIUM_EXPORT
+int crypto_sign_ed25519ph_final_bv_compatible_verify(crypto_sign_ed25519ph_state *state,
                                        const unsigned char *sig,
                                        const unsigned char *pk)
             __attribute__ ((warn_unused_result)) __attribute__ ((nonnull));

@@ -16,7 +16,6 @@
 
 package crypto
 
-
 import (
 	"errors"
 )
@@ -34,7 +33,6 @@ const minBatchVerifierAlloc = 16
 var (
 	ErrBatchHasFailedSigs = errors.New("At least one signature didn't pass verification")
 )
-
 
 // MakeBatchVerifier creates a BatchVerifier instance.
 func MakeBatchVerifier() *BatchVerifier {
@@ -107,4 +105,3 @@ func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 	}
 	return failed, ErrBatchHasFailedSigs
 }
-

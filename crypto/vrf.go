@@ -16,7 +16,6 @@
 
 package crypto
 
-
 // deprecated names + wrappers -- TODO remove
 
 // VRFVerifier is a deprecated name for VrfPubkey
