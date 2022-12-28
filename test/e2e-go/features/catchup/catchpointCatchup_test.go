@@ -81,6 +81,27 @@ func (ec *nodeExitErrorCollector) Print() {
 	}
 }
 
+func denyRoundRequests(t *testing.T, nodeController *nodecontrol.NodeController, round basics.Round) *fixtures.WebProxy {
+	log := logging.TestingLog(t)
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	primaryListeningAddress, err := nodeController.GetListeningAddress()
+	a.NoError(err)
+
+	wp, err := fixtures.MakeWebProxy(primaryListeningAddress, log, func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
+		// prevent requests for the given block to go through.
+		if request.URL.String() == fmt.Sprintf("/v1/test-v1/block/%d", round) {
+			response.WriteHeader(http.StatusBadRequest)
+			response.Write([]byte(fmt.Sprintf("webProxy prevents block %d from serving", round)))
+			return
+		}
+		next(response, request)
+	})
+	a.NoError(err)
+	log.Infof("web proxy listens at %s\n", wp.GetListenAddress())
+	return wp
+}
+
 func TestBasicCatchpointCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -188,22 +209,9 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	}
 	log.Infof("done building!\n")
 
-	primaryListeningAddress, err := primaryNode.GetListeningAddress()
-	a.NoError(err)
-
-	wp, err := fixtures.MakeWebProxy(primaryListeningAddress, log, func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
-		// prevent requests for block #2 to go through.
-		if request.URL.String() == "/v1/test-v1/block/2" {
-			response.WriteHeader(http.StatusBadRequest)
-			response.Write([]byte("webProxy prevents block 2 from serving"))
-			return
-		}
-		next(response, request)
-	})
-	a.NoError(err)
+	wp := denyRoundRequests(t, &primaryNode, 2)
 	defer wp.Close()
 
-	log.Infof("web proxy listens at %s\n", wp.GetListenAddress())
 	// start the second node
 	_, err = secondNode.StartAlgod(nodecontrol.AlgodStartArgs{
 		PeerAddress:       wp.GetListenAddress(),
