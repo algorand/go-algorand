@@ -187,6 +187,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	a.NoError(err)
 	defer primaryNode.StopAlgod()
 
+	waitTimePerBlock := 5 * time.Second
 	// Let the network make some progress
 	currentRound := uint64(1)
 	// fast catchup downloads some blocks back from catchpoint round - CatchpointLookback
@@ -199,14 +200,8 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	targetRound := uint64(targetCatchpointRound) + 1
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 	log.Infof("Building ledger history..")
-	for {
-		err = fixture.ClientWaitForRound(primaryNodeRestClient, currentRound, 45*time.Second)
-		a.NoError(err)
-		if targetRound <= currentRound {
-			break
-		}
-		currentRound++
-	}
+	err = fixture.ClientWaitForRound(primaryNodeRestClient, targetRound, time.Duration(targetRound)*waitTimePerBlock)
+	a.NoError(err)
 	log.Infof("done building!\n")
 
 	wp := denyRoundRequests(t, &primaryNode, 2)
@@ -227,18 +222,10 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	// wait until node is caught up.
 	secondNodeRestClient := fixture.GetAlgodClientForController(secondNode)
 
-	currentRound = uint64(1)
 	secondNodeTargetRound := uint64(1)
 	log.Infof("Second node catching up to round 1")
-	for {
-		err = fixture.ClientWaitForRound(secondNodeRestClient, currentRound, 10*time.Second)
-		a.NoError(err)
-		if secondNodeTargetRound <= currentRound {
-			break
-		}
-		currentRound++
-
-	}
+	err = fixture.ClientWaitForRound(secondNodeRestClient, secondNodeTargetRound, waitTimePerBlock)
+	a.NoError(err)
 	log.Infof(" - done catching up!\n")
 
 	// ensure the catchpoint is created for targetCatchpointRound
@@ -274,14 +261,9 @@ outer:
 	a.LessOrEqual(targetRound, currentRound)
 	fixtureTargetRound := targetRound + 1
 	log.Infof("Second node catching up to round %v", currentRound)
-	for {
-		err = fixture.ClientWaitForRound(secondNodeRestClient, currentRound, 10*time.Second)
-		a.NoError(err)
-		if fixtureTargetRound <= currentRound {
-			break
-		}
-		currentRound++
-	}
+	// TODO: Multiply?
+	err = fixture.ClientWaitForRound(secondNodeRestClient, fixtureTargetRound, waitTimePerBlock)
+	a.NoError(err)
 	log.Infof("done catching up!\n")
 }
 
