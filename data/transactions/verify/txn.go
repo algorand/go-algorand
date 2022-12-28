@@ -250,43 +250,46 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 	return groupCtx, nil
 }
 
-// stxnCoreChecks runs signatures validity checks and enqueues signature into batchVerifier for verification.
-func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) *TxGroupError {
-	numSigs := 0
-	hasSig := false
-	hasMsig := false
-	hasLogicSig := false
+// checkTxnSigTypeCounts checks the number of signature types and reports an error in case of a violation
+func checkTxnSigTypeCounts(s *transactions.SignedTxn) (isStateProofTxn bool, err *TxGroupError) {
+	numSigCategories := 0
 	if s.Sig != (crypto.Signature{}) {
-		numSigs++
-		hasSig = true
+		numSigCategories++
 	}
 	if !s.Msig.Blank() {
-		numSigs++
-		hasMsig = true
+		numSigCategories++
 	}
 	if !s.Lsig.Blank() {
-		numSigs++
-		hasLogicSig = true
+		numSigCategories++
 	}
-	if numSigs == 0 {
+	if numSigCategories == 0 {
 		// Special case: special sender address can issue special transaction
 		// types (state proof txn) without any signature.  The well-formed
 		// check ensures that this transaction cannot pay any fee, and
 		// cannot have any other interesting fields, except for the state proof payload.
 		if s.Txn.Sender == transactions.StateProofSender && s.Txn.Type == protocol.StateProofTx {
-			return nil
+			return true, nil
 		}
-		return &TxGroupError{err: errTxnSigHasNoSig, Reason: TxGroupErrorReasonHasNoSig}
+		return false, &TxGroupError{err: errTxnSigHasNoSig, Reason: TxGroupErrorReasonHasNoSig}
 	}
-	if numSigs > 1 {
-		return &TxGroupError{err: errTxnSigNotWellFormed, Reason: TxGroupErrorReasonSigNotWellFormed}
+	if numSigCategories > 1 {
+		return false, &TxGroupError{err: errTxnSigNotWellFormed, Reason: TxGroupErrorReasonSigNotWellFormed}
+	}
+	return false, nil
+}
+
+// stxnCoreChecks runs signatures validity checks and enqueues signature into batchVerifier for verification.
+func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) *TxGroupError {
+	isStateProofTxn, err := checkTxnSigTypeCounts(s)
+	if err != nil || isStateProofTxn {
+		return err
 	}
 
-	if hasSig {
+	if s.Sig != (crypto.Signature{}) {
 		batchVerifier.EnqueueSignature(crypto.SignatureVerifier(s.Authorizer()), s.Txn, s.Sig)
 		return nil
 	}
-	if hasMsig {
+	if !s.Msig.Blank() {
 		if err := crypto.MultisigBatchPrep(s.Txn, crypto.Digest(s.Authorizer()), s.Msig, batchVerifier); err != nil {
 			return &TxGroupError{err: fmt.Errorf("multisig validation failed: %w", err), Reason: TxGroupErrorReasonMsigNotWellFormed}
 		}
@@ -305,7 +308,7 @@ func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		}
 		return nil
 	}
-	if hasLogicSig {
+	if !s.Lsig.Blank() {
 		if err := logicSigVerify(s, txnIdx, groupCtx); err != nil {
 			return &TxGroupError{err: err, Reason: TxGroupErrorReasonLogicSigFailed}
 		}
@@ -680,7 +683,7 @@ func (sv *StreamVerifier) Start(ctx context.Context) {
 	go sv.batchingLoop()
 }
 
-// WaitForStop waits until the batching loop terminates afer the ctx is cancled
+// WaitForStop waits until the batching loop terminates afer the ctx is canceled
 func (sv *StreamVerifier) WaitForStop() {
 	sv.activeLoopWg.Wait()
 }
@@ -699,7 +702,7 @@ func (sv *StreamVerifier) batchingLoop() {
 	defer timer.Stop()
 	var added bool
 	var numberOfSigsInCurrent uint64
-	var numberOfTimerResets uint64
+	var numberOfBatchAttempts uint64
 	ue := make([]*UnverifiedElement, 0, 8)
 	defer func() { sv.cleanup(ue) }()
 	for {
@@ -745,10 +748,10 @@ func (sv *StreamVerifier) batchingLoop() {
 				if added {
 					numberOfSigsInCurrent = 0
 					ue = make([]*UnverifiedElement, 0, 8)
-					numberOfTimerResets = 0
+					numberOfBatchAttempts = 0
 				} else {
 					// was not added because of the exec pool buffer length
-					numberOfTimerResets++
+					numberOfBatchAttempts++
 				}
 			}
 		case <-timer.C:
@@ -758,7 +761,7 @@ func (sv *StreamVerifier) batchingLoop() {
 				continue
 			}
 			var err error
-			if numberOfTimerResets > 1 {
+			if numberOfBatchAttempts > 1 {
 				// bypass the exec pool situation and queue anyway
 				// this is to prevent long delays in transaction propagation
 				// at least one transaction here has waited 3 x waitForNextTxnDuration
@@ -773,10 +776,10 @@ func (sv *StreamVerifier) batchingLoop() {
 			if added {
 				numberOfSigsInCurrent = 0
 				ue = make([]*UnverifiedElement, 0, 8)
-				numberOfTimerResets = 0
+				numberOfBatchAttempts = 0
 			} else {
 				// was not added because of the exec pool buffer length. wait for some more txns
-				numberOfTimerResets++
+				numberOfBatchAttempts++
 			}
 		case <-sv.ctx.Done():
 			return
@@ -816,9 +819,9 @@ func (sv *StreamVerifier) tryAddVerificationTaskToThePool(ue []*UnverifiedElemen
 }
 
 func (sv *StreamVerifier) addVerificationTaskToThePoolNow(ue []*UnverifiedElement) error {
-	// if the context is canceled when the task is in the queue, it should be cancled
+	// if the context is canceled when the task is in the queue, it should be canceled
 	// copy the ctx here so that when the StreamVerifier is started again, and a new context
-	// is created, this task still gets cancled due to the ctx at the time of this task
+	// is created, this task still gets canceled due to the ctx at the time of this task
 	taskCtx := sv.ctx
 	function := func(arg interface{}) interface{} {
 		if taskCtx.Err() != nil {
@@ -902,37 +905,17 @@ func getNumberOfBatchableSigsInGroup(stxs []transactions.SignedTxn) (batchSigs u
 }
 
 func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (uint64, error) {
-	var hasSig, hasMsig bool
-	numSigCategories := 0
-	if stx.Sig != (crypto.Signature{}) {
-		numSigCategories++
-		hasSig = true
-	}
-	if !stx.Msig.Blank() {
-		numSigCategories++
-		hasMsig = true
-	}
-	if !stx.Lsig.Blank() {
-		numSigCategories++
-	}
-
-	if numSigCategories == 0 {
-		// Special case: special sender address can issue special transaction
-		// types (state proof txn) without any signature.  The well-formed
-		// check ensures that this transaction cannot pay any fee, and
-		// cannot have any other interesting fields, except for the state proof payload.
-		if stx.Txn.Sender == transactions.StateProofSender && stx.Txn.Type == protocol.StateProofTx {
-			return 0, nil
+	isStateProofTxn, err := checkTxnSigTypeCounts(stx)
+	if err != nil || isStateProofTxn {
+		if err != nil {
+			return 0, err
 		}
-		return 0, errSignedTxnHasNoSig
+		return 0, nil
 	}
-	if numSigCategories != 1 {
-		return 0, errSignedTxnMaxOneSig
-	}
-	if hasSig {
+	if stx.Sig != (crypto.Signature{}) {
 		return 1, nil
 	}
-	if hasMsig {
+	if !stx.Msig.Blank() {
 		sig := stx.Msig
 		batchSigs := uint64(0)
 		for _, subsigi := range sig.Subsigs {

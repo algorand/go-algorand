@@ -944,14 +944,14 @@ func processResults(ctx context.Context, errChan chan<- error, resultChan <-chan
 			u, _ := binary.Uvarint(result.TxnGroup[0].Txn.Note)
 			if _, has := badTxnGroups[u]; has {
 				(*badSigResultCounter)++
-				// we expected an error, but it is not the general crypto error
-				if result.Err != crypto.ErrBatchHasFailedSigs {
-					errChan <- result.Err
-				}
 				if result.Err == nil {
 					err := fmt.Errorf("%dth (%d)transaction varified with a bad sig", x, u)
 					errChan <- err
 					return
+				}
+				// we expected an error, but it is not the general crypto error
+				if result.Err != crypto.ErrBatchHasFailedSigs {
+					errChan <- result.Err
 				}
 			} else {
 				(*goodSigResultCounter)++

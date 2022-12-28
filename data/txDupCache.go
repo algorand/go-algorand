@@ -118,7 +118,7 @@ func makeSaltedCache(size int) *txSaltedCache {
 	}
 }
 
-func (c *txSaltedCache) start(ctx context.Context, refreshInterval time.Duration) {
+func (c *txSaltedCache) Start(ctx context.Context, refreshInterval time.Duration) {
 	c.ctx = ctx
 	if refreshInterval != 0 {
 		c.wg.Add(1)

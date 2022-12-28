@@ -219,7 +219,7 @@ func (handler *TxHandler) droppedTxnWatcher() {
 // Start enables the processing of incoming messages at the transaction handler
 func (handler *TxHandler) Start() {
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
-	handler.msgCache.start(handler.ctx, 60*time.Second)
+	handler.msgCache.Start(handler.ctx, 60*time.Second)
 	handler.net.RegisterHandlers([]network.TaggedMessageHandler{
 		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
 	})
