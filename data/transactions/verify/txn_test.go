@@ -17,6 +17,7 @@
 package verify
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -36,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -1201,6 +1203,12 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	numOfTxns := 1
 	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, protoMaxGroupSize, 0, 0.5)
 
+	// check the logged information
+	var logBuffer bytes.Buffer
+	log := logging.Base()
+	log.SetOutput(&logBuffer)
+	log.SetLevel(logging.Info)
+
 	// prepare the stream verifier
 	numOfTxnGroups := len(txnGroups)
 	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
@@ -1276,6 +1284,7 @@ func TestStreamVerifierPoolShutdown(t *testing.T) {
 	for err := range errChan {
 		require.ErrorIs(t, err, errShuttingDownError)
 	}
+	require.Contains(t, logBuffer.String(), "addVerificationTaskToThePoolNow: EnqueueBacklog returned an error and StreamVerifier will stop: context canceled")
 }
 
 // TestStreamVerifierRestart tests what happens when the context is canceled
@@ -1455,6 +1464,12 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
 	verificationPool, holdTasks, vp := getSaturatedExecPool(t)
 	defer vp.Shutdown()
 
+	// check the logged information
+	var logBuffer bytes.Buffer
+	log := logging.Base()
+	log.SetOutput(&logBuffer)
+	log.SetLevel(logging.Info)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50)
 	stxnChan := make(chan *UnverifiedElement)
@@ -1492,6 +1507,7 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
 
 	wg.Wait()
 	require.ErrorIs(t, result.Err, errShuttingDownError)
+	require.Contains(t, logBuffer.String(), "addVerificationTaskToThePoolNow: EnqueueBacklog returned an error and StreamVerifier will stop: context canceled")
 }
 
 // TestStreamVerifierPostVBlocked tests the behavior when the return channel (result chan) of verified

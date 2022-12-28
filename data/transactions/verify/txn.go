@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -889,6 +890,9 @@ func (sv *StreamVerifier) addVerificationTaskToThePoolNow(ue []*UnverifiedElemen
 
 	// EnqueueBacklog returns an error when the context is canceled
 	err := sv.verificationPool.EnqueueBacklog(sv.ctx, function, ue, nil)
+	if err != nil {
+		logging.Base().Infof("addVerificationTaskToThePoolNow: EnqueueBacklog returned an error and StreamVerifier will stop: %v", err)
+	}
 	return err
 }
 
