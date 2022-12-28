@@ -3068,10 +3068,10 @@ func TestAssembleEmpty(t *testing.T) {
 
 	nonEmpty := "   \n \t   \t \t  int 1   \n   \n \t \t   \n\n"
 
-	for version := 1; version <= AssemblerMaxVersion; version++ {
+	for version := uint64(1); version <= AssemblerMaxVersion; version++ {
 		for _, prog := range emptyPrograms {
-			testProg(t, prog, uint64(version), emptyExpect)
+			testProg(t, prog, version, emptyExpect)
 		}
-		testProg(t, nonEmpty, uint64(version))
+		testProg(t, nonEmpty, version)
 	}
 }
