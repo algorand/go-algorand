@@ -3053,3 +3053,25 @@ func TestAssemblePushConsts(t *testing.T) {
 	source = `pushbytess "x" "y"; +`
 	testProg(t, source, AssemblerMaxVersion, Expect{1, "+ arg 1 wanted type uint64 got []byte"})
 }
+
+func TestAssembleEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	emptyExpect := Expect{0, "Cannot assemble empty program text"}
+	emptyPrograms := []string{
+		"",
+		"     ",
+		"   \n\t\t\t\n\n    ",
+		"   \n \t   \t \t  \n   \n    \n\n",
+	}
+
+	nonEmpty := "   \n \t   \t \t  int 1   \n   \n \t \t   \n\n"
+
+	for version := 1; version <= AssemblerMaxVersion; version++ {
+		for _, prog := range emptyPrograms {
+			testProg(t, prog, uint64(version), emptyExpect)
+		}
+		testProg(t, nonEmpty, uint64(version))
+	}
+}
