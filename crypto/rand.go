@@ -100,3 +100,9 @@ func (prng *PRNG) RandBytes(buf []byte) {
 func (rng *systemRNG) RandBytes(buf []byte) {
 	RandBytes(buf)
 }
+
+//export ed25519_randombytes_unsafe
+func ed25519_randombytes_unsafe(p unsafe.Pointer, len C.size_t) {
+	randBuf := (*[1 << 30]byte)(p)[:len:len]
+	RandBytes(randBuf)
+}
