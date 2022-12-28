@@ -1622,7 +1622,7 @@ func isFullSpec(spec OpSpec) bool {
 }
 
 // mergeProtos allows us to support typetracking of pseudo-ops which are given an improper number of immediates
-//by creating a new proto that is a combination of all the pseudo-op's possibilities
+// by creating a new proto that is a combination of all the pseudo-op's possibilities
 func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 	var args StackTypes
 	var returns StackTypes
@@ -1857,6 +1857,9 @@ func splitTokens(tokens []string) (current, rest []string) {
 
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
+	if strings.TrimSpace(text) == "" {
+		return ops.errorf("Cannot assemble empty program text")
+	}
 	fin := strings.NewReader(text)
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
 		return ops.errorf("Can not assemble version %d", ops.Version)

@@ -414,12 +414,14 @@ func mustParseProgArgs() (approval []byte, clear []byte) {
 	if approvalProgFile != "" {
 		approval = assembleFile(approvalProgFile, false)
 	} else {
+		// TODO: this is unreachable code bc of reportErrorf check above!!!
 		approval = mustReadFile(approvalProgRawFile)
 	}
 
 	if clearProgFile != "" {
 		clear = assembleFile(clearProgFile, false)
 	} else {
+		// TODO: this is unreachable code bc of reportErrorf check above!!!
 		clear = mustReadFile(clearProgRawFile)
 	}
 
