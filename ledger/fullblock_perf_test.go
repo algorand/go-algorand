@@ -144,7 +144,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	addBlock(bc)
 	vc := verify.GetMockedCache(true)
 	for _, blk := range bc.blocks {
-		_, err := internal.Eval(context.Background(), bc.l1, blk, true, vc, nil)
+		_, err := internal.Eval(context.Background(), nil, bc.l1, blk, true, vc, nil)
 		require.NoError(b, err)
 		err = bc.l1.AddBlock(blk, cert)
 		require.NoError(b, err)
@@ -302,7 +302,7 @@ func addNewAccount(bc *benchConfig) (acct basics.Address) {
 }
 
 func addTransaction(bc *benchConfig, stxn transactions.SignedTxn) uint64 {
-	err := bc.eval.Transaction(stxn, transactions.ApplyData{})
+	err := bc.eval.Transaction(stxn, transactions.ApplyData{}, nil)
 	if err == ledgercore.ErrNoSpace {
 		addBlock(bc)
 		addTransaction(bc, stxn)
@@ -424,7 +424,7 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb flo
 	tt := time.Now()
 	b.ResetTimer()
 	for _, blk := range bc.blocks {
-		_, err := internal.Eval(context.Background(), bc.l1, blk, true, vc, nil)
+		_, err := internal.Eval(context.Background(), nil, bc.l1, blk, true, vc, nil)
 		require.NoError(b, err)
 		err = bc.l1.AddBlock(blk, cert)
 		require.NoError(b, err)

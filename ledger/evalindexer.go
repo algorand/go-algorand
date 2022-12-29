@@ -215,13 +215,6 @@ func (l indexerLedgerConnector) VotersForStateProof(_ basics.Round) (*ledgercore
 	return nil, errors.New("VotersForStateProof() not implemented")
 }
 
-/*
-// StateProofVerificationContext is part of LedgerForEvaluator interface.
-func (l indexerLedgerConnector) GetLedgerStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	// This function is not used by evaluator.
-	return nil, errors.New("StateProofVerificationContext() not implemented")
-}
-*/
 func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, genesisProto config.ConsensusParams, latestRound basics.Round, roundResources EvalForIndexerResources) indexerLedgerConnector {
 	return indexerLedgerConnector{
 		il:             il,

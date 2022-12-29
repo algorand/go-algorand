@@ -491,7 +491,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 		if withCrypto {
 			_, err = l2.Validate(context.Background(), validatedBlock.Block(), backlogPool)
 		} else {
-			_, err = internal.Eval(context.Background(), l2, validatedBlock.Block(), false, nil, nil)
+			_, err = internal.Eval(context.Background(), l2, l2, validatedBlock.Block(), false, nil, nil)
 		}
 		require.NoError(b, err)
 	}
@@ -519,7 +519,7 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 		// there are might more transactions than MaxTxnBytesPerBlock allows
 		// so make smaller blocks to fit
 		for i, stxn := range initSignedTxns {
-			err := bev.Transaction(stxn, transactions.ApplyData{})
+			err := bev.Transaction(stxn, transactions.ApplyData{}, nil)
 			require.NoError(b, err)
 			if maxTxnPerBlock > 0 && i%maxTxnPerBlock == 0 || i == len(initSignedTxns)-1 {
 				validatedBlock, err = bev.GenerateBlock()
@@ -558,7 +558,7 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 
 	for i := 0; i < numTxns; i++ {
 		stxn := txnSource.Txn(b, addrs, keys, newBlock.Round(), genHash)
-		err = bev.Transaction(stxn, transactions.ApplyData{})
+		err = bev.Transaction(stxn, transactions.ApplyData{}, nil)
 		require.NoError(b, err)
 	}
 

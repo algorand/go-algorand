@@ -17,7 +17,6 @@
 package internal
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -111,14 +110,6 @@ func (ml *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error
 
 func (ml *mockLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
 	return ml.blockHdrCached(rnd)
-}
-
-func (ml *mockLedger) getStateProofVerificationContext2(rnd basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	element, exists := ml.stateProofVerification[rnd]
-	if !exists {
-		return nil, fmt.Errorf("requested state proof verification data not found")
-	}
-	return element, nil
 }
 
 func checkCowByUpdate(t *testing.T, cow *roundCowState, delta ledgercore.AccountDeltas) {

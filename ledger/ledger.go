@@ -472,7 +472,7 @@ func (l *Ledger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRou
 
 // StateProofVerificationContext returns the data required to verify the state proof whose last attested round is
 // stateProofLastAttestedRound.
-func (l *Ledger) GetStateProofVerificationContext__(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+func (l *Ledger) GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.stateProofVerificationTracker.LookupVerificationContext(stateProofLastAttestedRound)
@@ -675,7 +675,7 @@ func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreem
 func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
 
-	updates, err := internal.XEval(context.Background(), l, l, blk, false, l.verifiedTxnCache, nil)
+	updates, err := internal.Eval(context.Background(), l, l, blk, false, l.verifiedTxnCache, nil)
 	if err != nil {
 		if errNSBE, ok := err.(ledgercore.ErrNonSequentialBlockEval); ok && errNSBE.EvaluatorRound <= errNSBE.LatestRound {
 			return ledgercore.BlockInLedgerError{
@@ -804,7 +804,7 @@ func (l *Ledger) trackerLog() logging.Logger {
 // evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
 func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger internal.LedgerForEvaluator) (ledgercore.StateDelta, error) {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
-	return internal.XEval(context.Background(), l, accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
+	return internal.Eval(context.Background(), l, accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
 }
 
 // IsWritingCatchpointDataFile returns true when a catchpoint file is being generated.
@@ -848,7 +848,7 @@ func (l *Ledger) FlushCaches() {
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
-	delta, err := internal.XEval(ctx, l, l, blk, true, l.verifiedTxnCache, executionPool)
+	delta, err := internal.Eval(ctx, l, l, blk, true, l.verifiedTxnCache, executionPool)
 	if err != nil {
 		return nil, err
 	}

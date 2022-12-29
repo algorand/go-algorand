@@ -47,7 +47,6 @@ type LedgerForCowBase interface {
 	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
 	LookupKv(basics.Round, string) ([]byte, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
-	//	StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
 }
 
 // ErrRoundZero is self-explanatory
@@ -337,10 +336,6 @@ func (x *roundCowBase) GetStateProofNextRound() basics.Round {
 func (x *roundCowBase) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
 	return x.l.BlockHdr(r)
 }
-
-//func (x *roundCowBase) getStateProofVerificationContext2(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-//return x.l.GetLedgerStateProofVerificationContext(stateProofLastAttestedRound)
-//}
 
 func (x *roundCowBase) blockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {
 	return x.l.BlockHdrCached(r)
@@ -1532,7 +1527,7 @@ func (validator *evalTxValidator) run() {
 // Validate: Eval(ctx, l, blk, true, txcache, executionPool)
 // AddBlock: Eval(context.Background(), l, blk, false, txcache, nil)
 // tracker:  Eval(context.Background(), l, blk, false, txcache, nil)
-func XEval(ctx context.Context, spVCgetter ledgercore.StateProofTrackerGetter, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
+func Eval(ctx context.Context, spVCgetter ledgercore.StateProofTrackerGetter, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
 	// flush the pending writes in the cache to make everything read so far available during eval
 	l.FlushCaches()
 

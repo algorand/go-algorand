@@ -251,11 +251,6 @@ func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Ro
 	return nil
 }
 
-/*
-func (dl *dryrunLedger) GetLedgerStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	return nil, fmt.Errorf("dryrunLedger: StateProofVerificationContext is not implemented")
-}
-*/
 func (dl *dryrunLedger) lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
 	// check accounts from debug records uploaded
 	out := basics.AccountData{}

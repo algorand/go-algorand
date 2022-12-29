@@ -40,7 +40,6 @@ type Ledger interface {
 	Wait(basics.Round) chan struct{}
 	GenesisHash() crypto.Digest
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	//	GetLedgerStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
 	VotersForStateProof(basics.Round) (*ledgercore.VotersForRound, error)
 	RegisterVotersCommitListener(listener ledgercore.VotersCommitListener)
 }

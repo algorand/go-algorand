@@ -169,7 +169,7 @@ ok:
 	if err != nil {
 		return eval, addrs[0], err
 	}
-	err = eval.TransactionGroup(g)
+	err = eval.TransactionGroup(g, nil)
 	return eval, addrs[0], err
 }
 
@@ -224,7 +224,7 @@ func TestCowStateProofV34(t *testing.T) {
 		StateProof:     stateProof,
 		Message:        msg,
 	}
-	err := applyStateProof(stateProofTx, atRound, c0, validate)
+	err := applyStateProof(stateProofTx, atRound, c0, nil, validate)
 	require.ErrorIs(t, err, errStateProofTypeNotSupported)
 
 	stateProofTx.StateProofType = protocol.StateProofBasic
@@ -232,7 +232,7 @@ func TestCowStateProofV34(t *testing.T) {
 	validate = true
 	stateProofTx.Message.LastAttestedRound = uint64(16)
 	c0.SetStateProofNextRound(8)
-	err = applyStateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, nil, validate)
 	require.ErrorIs(t, err, errExpectedDifferentStateProofRound)
 	c0.SetStateProofNextRound(32)
 
@@ -240,14 +240,14 @@ func TestCowStateProofV34(t *testing.T) {
 	validate = true
 	stateProofTx.Message.LastAttestedRound = uint64(16)
 	c0.SetStateProofNextRound(32)
-	err = applyStateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, nil, validate)
 	require.ErrorIs(t, err, errExpectedDifferentStateProofRound)
 
 	// no atRound block
 	noBlockErr := errors.New("no block")
 	blockErr[atRound] = noBlockErr
 	stateProofTx.Message.LastAttestedRound = 32
-	err = applyStateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, nil, validate)
 	require.ErrorIs(t, err, noBlockErr)
 	delete(blockErr, atRound)
 
@@ -259,7 +259,7 @@ func TestCowStateProofV34(t *testing.T) {
 	noBlockErr = errors.New("no block")
 	blockErr[32] = noBlockErr
 	stateProofTx.Message.LastAttestedRound = 32
-	err = applyStateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, nil, validate)
 	require.ErrorIs(t, err, noBlockErr)
 
 	// no votersRnd block
@@ -278,7 +278,7 @@ func TestCowStateProofV34(t *testing.T) {
 	stateProofTx.Message.LastAttestedRound = uint64(spHdr.Round)
 	c0.SetStateProofNextRound(15)
 	blockErr[13] = noBlockErr
-	err = applyStateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, nil, validate)
 	require.Contains(t, err.Error(), "no block")
 	delete(blockErr, 13)
 
@@ -306,7 +306,7 @@ func TestCowStateProofV34(t *testing.T) {
 	stateProofTx.StateProof.SignedWeight = 100
 	c0.SetStateProofNextRound(basics.Round(2 * config.Consensus[version].StateProofInterval))
 
-	err = applyStateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, nil, validate)
 	require.Contains(t, err.Error(), "crypto error")
 }
 
@@ -334,7 +334,7 @@ func TestCowStateProof(t *testing.T) {
 		StateProof:     stateProof,
 		Message:        msg,
 	}
-	err := applyStateProof(stateProofTx, atRound, c0, validate)
+	err := applyStateProof(stateProofTx, atRound, c0, nil, validate)
 	require.ErrorIs(t, err, errStateProofTypeNotSupported)
 
 	stateProofTx.StateProofType = protocol.StateProofBasic
@@ -342,7 +342,7 @@ func TestCowStateProof(t *testing.T) {
 	validate = true
 	stateProofTx.Message.LastAttestedRound = uint64(16)
 	c0.SetStateProofNextRound(8)
-	err = applyStateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, nil, validate)
 	require.ErrorIs(t, err, errExpectedDifferentStateProofRound)
 	c0.SetStateProofNextRound(32)
 
@@ -350,7 +350,7 @@ func TestCowStateProof(t *testing.T) {
 	validate = true
 	stateProofTx.Message.LastAttestedRound = uint64(16)
 	c0.SetStateProofNextRound(32)
-	err = applyStateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, nil, validate)
 	require.ErrorIs(t, err, errExpectedDifferentStateProofRound)
 
 	atRoundBlock := bookkeeping.BlockHeader{}
@@ -362,7 +362,7 @@ func TestCowStateProof(t *testing.T) {
 	noBlockErr := errors.New("no block")
 	blockErr[atRound] = noBlockErr
 	stateProofTx.Message.LastAttestedRound = 32
-	err = applyStateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, nil, validate)
 	require.ErrorIs(t, err, noBlockErr)
 	delete(blockErr, atRound)
 
@@ -383,11 +383,11 @@ func TestCowStateProof(t *testing.T) {
 
 	// if atRound header is missing the apply should fail
 	blockErr[atRound] = noBlockErr
-	err = applyStateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, nil, validate)
 	require.ErrorIs(t, err, noBlockErr)
 
 	delete(blockErr, atRound)
-	err = applyStateProof(stateProofTx, atRound, c0, validate)
+	err = applyStateProof(stateProofTx, atRound, c0, nil, validate)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "crypto error")
 }
@@ -415,12 +415,12 @@ func TestPrivateTransactionGroup(t *testing.T) {
 
 	var txgroup []transactions.SignedTxnWithAD
 	eval := BlockEvaluator{}
-	err := eval.TransactionGroup(txgroup)
+	err := eval.TransactionGroup(txgroup, nil)
 	require.NoError(t, err) // nothing to do, no problem
 
 	eval.proto = config.Consensus[protocol.ConsensusCurrentVersion]
 	txgroup = make([]transactions.SignedTxnWithAD, eval.proto.MaxTxGroupSize+1)
-	err = eval.TransactionGroup(txgroup)
+	err = eval.TransactionGroup(txgroup, nil)
 	require.Error(t, err) // too many
 }
 
@@ -506,7 +506,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 		},
 	}
 	st := txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.Transaction(st, transactions.ApplyData{}, nil)
 	require.NoError(t, err)
 
 	poolOld, err := eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
@@ -613,7 +613,7 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 func (ledger *evalTestLedger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
 	verifiedTxnCache := verify.MakeVerifiedTransactionCache(config.GetDefaultLocal().VerifiedTranscationsCacheSize)
 
-	delta, err := Eval(ctx, ledger, blk, true, verifiedTxnCache, executionPool)
+	delta, err := Eval(ctx, nil, ledger, blk, true, verifiedTxnCache, executionPool)
 	if err != nil {
 		return nil, err
 	}
@@ -718,10 +718,6 @@ func (ledger *evalTestLedger) GenesisProtoVersion() protocol.ConsensusVersion {
 // Latest returns the latest known block round added to the ledger.
 func (ledger *evalTestLedger) Latest() basics.Round {
 	return basics.Round(len(ledger.blocks)).SubSaturate(1)
-}
-
-func (ledger *evalTestLedger) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	return nil, fmt.Errorf("evalTestLedger does not implement StateProofVerificationContext")
 }
 
 // AddValidatedBlock adds a new block to the ledger, after the block has
@@ -1023,7 +1019,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	}
 
 	st := txn.Sign(keys[0])
-	err = blkEval.Transaction(st, transactions.ApplyData{})
+	err = blkEval.Transaction(st, transactions.ApplyData{}, nil)
 	require.NoError(t, err)
 
 	// Make sure we validate our block as well
@@ -1032,7 +1028,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	validatedBlock, err := blkEval.GenerateBlock()
 	require.NoError(t, err)
 
-	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil)
+	_, err = Eval(context.Background(), nil, l, validatedBlock.Block(), false, nil, nil)
 	require.NoError(t, err)
 
 	acctData, _ := blkEval.state.lookup(recvAddr)
@@ -1043,7 +1039,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	badBlock := *validatedBlock
 
 	// First validate that bad block is fine if we dont touch it...
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
+	_, err = Eval(context.Background(), nil, l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
 	require.NoError(t, err)
 
 	badBlock = *validatedBlock
@@ -1053,7 +1049,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	badBlockObj.ExpiredParticipationAccounts = append(badBlockObj.ExpiredParticipationAccounts, basics.Address{1})
 	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
+	_, err = Eval(context.Background(), nil, l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
 	require.Error(t, err)
 
 	badBlock = *validatedBlock
@@ -1067,7 +1063,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	}
 	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
+	_, err = Eval(context.Background(), nil, l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
 	require.Error(t, err)
 
 	badBlock = *validatedBlock
@@ -1077,12 +1073,12 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	badBlockObj.ExpiredParticipationAccounts = append(badBlockObj.ExpiredParticipationAccounts, badBlockObj.ExpiredParticipationAccounts[0])
 	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
+	_, err = Eval(context.Background(), nil, l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
 	require.Error(t, err)
 
 	badBlock = *validatedBlock
 	// sanity check that bad block is being actually copied and not just the pointer
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
+	_, err = Eval(context.Background(), nil, l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
 	require.NoError(t, err)
 
 }
@@ -1162,7 +1158,7 @@ func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
 	}
 
 	st := txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.Transaction(st, transactions.ApplyData{}, nil)
 	require.NoError(t, err)
 
 	eval.validate = true
@@ -1262,7 +1258,7 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	}
 
 	st := txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.Transaction(st, transactions.ApplyData{}, nil)
 	require.NoError(t, err)
 
 	// Make sure we validate our block as well

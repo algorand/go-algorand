@@ -23,7 +23,7 @@ import (
 )
 
 type StateProofTrackerGetter interface {
-	GetStateProofVerificationContext__(stateProofLastAttestedRound basics.Round) (*StateProofVerificationContext, error)
+	GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*StateProofVerificationContext, error)
 }
 
 // StateProofVerificationContext represents the context provided by the ledger to verify a state proof transaction.

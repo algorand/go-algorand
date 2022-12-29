@@ -173,13 +173,13 @@ func checkBlock(t *testing.T, checkLedger *Ledger, vb *ledgercore.ValidatedBlock
 		if group == nil || (!stxn.Txn.Group.IsZero() && group[0].Txn.Group == stxn.Txn.Group) {
 			group = append(group, stad)
 		} else if group != nil {
-			err := check.TransactionGroup(group)
+			err := check.TransactionGroup(group, nil)
 			require.NoError(t, err)
 			group = []transactions.SignedTxnWithAD{stad}
 		}
 	}
 	if group != nil {
-		err := check.TransactionGroup(group)
+		err := check.TransactionGroup(group, nil)
 		require.NoError(t, err, "%+v", reconstituted.Payset)
 	}
 	check.SetGenerateForTesting(true)

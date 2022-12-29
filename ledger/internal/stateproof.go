@@ -55,7 +55,7 @@ func applyStateProof(tx transactions.StateProofTxnFields, atRound basics.Round, 
 
 	var verificationContext *ledgercore.StateProofVerificationContext
 	if config.Consensus[atRoundHdr.CurrentProtocol].StateProofUseTrackerVerification {
-		verificationContext, err = spVCgetter.GetStateProofVerificationContext__(lastRoundInInterval)
+		verificationContext, err = spVCgetter.GetStateProofVerificationContext(lastRoundInInterval)
 	} else {
 		verificationContext, err = gatherVerificationContextUsingBlockHeaders(sp, lastRoundInInterval)
 	}
