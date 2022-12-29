@@ -788,7 +788,7 @@ func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, 
 		txCanonicalCache: makeDigestCache(cacheSize),
 		cacheConfig:      txHandlerConfig,
 	}
-	handler.msgCache.start(ctx, refreshInterval)
+	handler.msgCache.Start(ctx, refreshInterval)
 	return handler
 }
 
