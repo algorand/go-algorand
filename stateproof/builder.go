@@ -658,12 +658,18 @@ func (spw *Worker) tryBroadcast() {
 			continue
 		}
 
+		latestHeader, err := spw.ledger.BlockHdr(firstValid)
+		if err != nil {
+			spw.log.Warnf("spw.tryBroadcast: could not fetch block header for round %d failed: %v", firstValid, err)
+			continue
+		}
+
 		spw.log.Infof("spw.tryBroadcast: building state proof transaction for round %d", rnd)
 		var stxn transactions.SignedTxn
 		stxn.Txn.Type = protocol.StateProofTx
 		stxn.Txn.Sender = transactions.StateProofSender
 		stxn.Txn.FirstValid = firstValid
-		stxn.Txn.LastValid = firstValid + basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnLife)
+		stxn.Txn.LastValid = firstValid + basics.Round(config.Consensus[latestHeader.CurrentProtocol].MaxTxnLife)
 		stxn.Txn.GenesisHash = spw.ledger.GenesisHash()
 		stxn.Txn.StateProofTxnFields.StateProofType = protocol.StateProofBasic
 		stxn.Txn.StateProofTxnFields.StateProof = *sp

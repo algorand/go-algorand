@@ -17,7 +17,7 @@
 package internal
 
 import (
-	"fmt"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -32,6 +32,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+var ErrVerificationContextNotFound = errors.New("requested state proof verification data not found")
 
 type mockLedger struct {
 	balanceMap             map[basics.Address]basics.AccountData
@@ -116,7 +118,7 @@ func (ml *mockLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader,
 func (ml *mockLedger) StateProofVerificationContext(rnd basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	element, exists := ml.stateProofVerification[rnd]
 	if !exists {
-		return nil, fmt.Errorf("requested state proof verification data not found")
+		return nil, ErrVerificationContextNotFound
 	}
 	return element, nil
 }

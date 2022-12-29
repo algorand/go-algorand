@@ -3321,3 +3321,55 @@ func TestCatchpointStateProofVerificationTracker(t *testing.T) {
 	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
 		numTrackedDataFirstCatchpoint, proto.StateProofInterval, true, any)
 }
+
+func TestStateProofTrackerAfterReplay(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	a.NoError(err)
+	defer l.Close()
+
+	// Add 1024 empty block without advancing NextStateProofRound
+	firstStateProofRound := basics.Round(proto.StateProofInterval * 2) // 512
+	blk := genesisInitState.Block
+	var sp bookkeeping.StateProofTrackingData
+	sp.StateProofNextRound = firstStateProofRound // 512
+	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+		protocol.StateProofBasic: sp,
+	}
+
+	for i := uint64(0); i < proto.StateProofInterval*4; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += 10
+		err = l.AddBlock(blk, agreement.Certificate{})
+		a.NoError(err)
+	}
+
+	// 1024
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
+	a.Equal(0, len(l.stateProofVerification.trackedDeleteContext))
+
+	// Add StateProof transaction (for round 512) and apply without validating, advancing the NextStateProofRound to 768
+	spblk := createBlkWithStateproof(t, int(blk.BlockHeader.Round), proto, genesisInitState, l, genesisInitState.Accounts)
+	err = l.AddBlock(spblk, agreement.Certificate{})
+	a.NoError(err)
+	a.Equal(1, len(l.stateProofVerification.trackedDeleteContext))
+	// To be deleted, but not yet deleted (waiting for commit)
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
+
+	err = l.reloadLedger()
+	a.NoError(err)
+
+	a.Equal(1, len(l.stateProofVerification.trackedDeleteContext))
+	verifyStateProofVerificationTracking(t, &l.stateProofVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
+}

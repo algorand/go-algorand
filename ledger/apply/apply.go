@@ -31,6 +31,7 @@ type StateProofsApplier interface {
 	GetStateProofNextRound() basics.Round
 	SetStateProofNextRound(rnd basics.Round)
 	StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
+	ConsensusParams() config.ConsensusParams
 }
 
 // Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records
