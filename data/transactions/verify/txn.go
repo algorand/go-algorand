@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -405,13 +406,20 @@ func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *Group
 		MinAvmVersion: &groupCtx.minAvmVersion,
 		SigLedger:     groupCtx.ledger,
 	}
+	ep.Debugger = logic.DebugTealDebugger()
 	pass, cx, err := logic.EvalSignatureFull(groupIndex, &ep)
 	if err != nil {
 		logicErrTotal.Inc(nil)
+		if ep.Debugger != nil {
+			logging.Base().Info(txn.ID(), " LogicSig err trace\n", ep.Debugger)
+		}
 		return fmt.Errorf("transaction %v: rejected by logic err=%v", txn.ID(), err)
 	}
 	if !pass {
 		logicRejTotal.Inc(nil)
+		if ep.Debugger != nil {
+			logging.Base().Info(txn.ID(), " LogicSig rejection trace\n", ep.Debugger)
+		}
 		return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
 	}
 	logicGoodTotal.Inc(nil)

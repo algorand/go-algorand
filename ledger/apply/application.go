@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 )
 
 // getAppParams fetches the creator address and basics.AppParams for the app index,
@@ -442,6 +443,8 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 		}
 	}
 
+	evalParams.Debugger = logic.DebugTealDebugger()
+
 	// Execute the Approval program
 	approved, evalDelta, err := balances.StatefulEval(gi, evalParams, appIdx, params.ApprovalProgram)
 	if err != nil {
@@ -449,6 +452,9 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	}
 
 	if !approved {
+		if evalParams.Debugger != nil {
+			logging.Base().Info("ApprovalProgram rejection trace", evalParams.Debugger)
+		}
 		return fmt.Errorf("transaction rejected by ApprovalProgram")
 	}
 

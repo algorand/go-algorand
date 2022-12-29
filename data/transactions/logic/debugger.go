@@ -307,3 +307,14 @@ func (dbg *WebDebuggerHook) Update(state *DebugState) error {
 func (dbg *WebDebuggerHook) Complete(state *DebugState) error {
 	return dbg.postState(state, "exec/complete")
 }
+
+// optionally set at init() time by code under `debugteal` build flag in debug_receiver.go
+var debugTealDebuggerFactory func() DebuggerHook
+
+// DebugTealDebugger normally returns nil, but if compiled with tag `debugteal` it will return a DebuggerHook that collects a trace which can be printed by the .String() method on it.
+func DebugTealDebugger() DebuggerHook {
+	if debugTealDebuggerFactory == nil {
+		return nil
+	}
+	return debugTealDebuggerFactory()
+}
