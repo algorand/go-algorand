@@ -63,7 +63,7 @@ const (
 	infoNodeSuccessfullyStopped             = "The node was successfully stopped."
 	infoNodeStatus                          = "***Last committed block: %d\nTime since last block: %s\nSync Time: %s\nLast consensus protocol: %s\nNext consensus protocol: %s\nRound for next consensus protocol: %d\nNext consensus protocol supported: %v"
 	infoNodeStatusConsensusUpgradeVoting    = "Consensus upgrate state: Voting\nNext protocol: %s\nYes votes: %d\nNo votes: %d\nVotes remaining: %d\nYes votes required: %d\nVote window close round: %d"
-	infoNodeStatusConsensusUpgradeScheduled = "Consensus upgrade state: Scheduled\nScheduled protocol: %s"
+	infoNodeStatusConsensusUpgradeScheduled = "Consensus upgrade state: Scheduled"
 	catchupStoppedOnUnsupported             = "Last supported block (%d) is committed. The next block consensus protocol is not supported. Catchup service is stopped."
 	infoNodeCatchpointCatchupStatus         = "Last committed block: %d\nSync Time: %s\nCatchpoint: %s"
 	infoNodeCatchpointCatchupAccounts       = "Catchpoint total accounts: %d\nCatchpoint accounts processed: %d\nCatchpoint accounts verified: %d\nCatchpoint total KVs: %d\nCatchpoint KVs processed: %d\nCatchpoint KVs verified: %d"

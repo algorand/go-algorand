@@ -460,11 +460,15 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 			statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
 		}
 
-		if stat.LastVersion != stat.NextVersion {
+		upgradeNextProtocolVoteBefore := uint64(0)
+		if stat.UpgradeNextProtocolVoteBefore != nil {
+			upgradeNextProtocolVoteBefore = *stat.UpgradeNextProtocolVoteBefore
+		}
+
+		if upgradeNextProtocolVoteBefore > stat.LastRound {
 			upgradeVotesRequired := uint64(0)
 			upgradeNoVotes := uint64(0)
 			upgradeYesVotes := uint64(0)
-			upgradeNextProtocolVoteBefore := uint64(0)
 			if stat.UpgradeVotesRequired != nil {
 				upgradeVotesRequired = *stat.UpgradeVotesRequired
 			}
@@ -474,10 +478,6 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 			if stat.UpgradeYesVotes != nil {
 				upgradeYesVotes = *stat.UpgradeYesVotes
 			}
-			if stat.UpgradeNextProtocolVoteBefore != nil {
-				upgradeNextProtocolVoteBefore = *stat.UpgradeNextProtocolVoteBefore
-			}
-
 			statusString = statusString + "\n" + fmt.Sprintf(
 				infoNodeStatusConsensusUpgradeVoting,
 				*stat.UpgradeNextProtocol,
@@ -487,6 +487,8 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 				upgradeVotesRequired,
 				upgradeNextProtocolVoteBefore,
 			)
+		} else if upgradeNextProtocolVoteBefore > 0 {
+			statusString = statusString + "\n" + infoNodeStatusConsensusUpgradeScheduled
 		}
 
 	} else {
