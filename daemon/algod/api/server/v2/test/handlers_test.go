@@ -450,7 +450,6 @@ func TestGetStatusConsensusUpgrade(t *testing.T) {
 	require.NoError(t, err)
 	stat := cannedStatusReportConsensusUpgradeGolden
 	consensus := config.Consensus[protocol.ConsensusCurrentVersion]
-	upgradePropose := string(stat.UpgradePropose)
 	votesToGo := uint64(stat.NextProtocolVoteBefore) - uint64(stat.LastRound)
 	nextProtocolVoteBefore := uint64(stat.NextProtocolVoteBefore)
 	votes := uint64(consensus.UpgradeVoteRounds) - votesToGo
@@ -475,7 +474,6 @@ func TestGetStatusConsensusUpgrade(t *testing.T) {
 		CatchpointTotalKvs:            &stat.CatchpointCatchupTotalKVs,
 		CatchpointProcessedKvs:        &stat.CatchpointCatchupProcessedKVs,
 		CatchpointVerifiedKvs:         &stat.CatchpointCatchupVerifiedKVs,
-		UpgradeNextProtocol:           &upgradePropose,
 		UpgradeVotesRequired:          &consensus.UpgradeThreshold,
 		UpgradeNodeVote:               &stat.UpgradeApprove,
 		UpgradeDelay:                  &stat.UpgradeDelay,

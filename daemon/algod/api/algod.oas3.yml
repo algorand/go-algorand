@@ -618,20 +618,16 @@
                   "description": "Upgrade delay",
                   "type": "integer"
                 },
-                "upgrade-next-protocol": {
-                  "description": "Upgrade next protocol",
-                  "type": "string"
-                },
                 "upgrade-next-protocol-vote-before": {
                   "description": "Next protocol round",
                   "type": "integer"
                 },
                 "upgrade-no-votes": {
-                  "description": "Upgrade no votes",
+                  "description": "No votes cast for consensus upgrade",
                   "type": "integer"
                 },
                 "upgrade-node-vote": {
-                  "description": "Upgrade node vote",
+                  "description": "This node's upgrade vote",
                   "type": "boolean"
                 },
                 "upgrade-vote-rounds": {
@@ -639,15 +635,15 @@
                   "type": "integer"
                 },
                 "upgrade-votes": {
-                  "description": "Upgrade votes",
+                  "description": "Total votes cast for consensus upgrade",
                   "type": "integer"
                 },
                 "upgrade-votes-required": {
-                  "description": "Upgrade yes votes required",
+                  "description": "Yes votes required for consensus upgrade",
                   "type": "integer"
                 },
                 "upgrade-yes-votes": {
-                  "description": "Upgrade yes votes",
+                  "description": "Yes votes cast for consensus upgrade",
                   "type": "integer"
                 }
               },
@@ -4835,20 +4831,16 @@
                       "description": "Upgrade delay",
                       "type": "integer"
                     },
-                    "upgrade-next-protocol": {
-                      "description": "Upgrade next protocol",
-                      "type": "string"
-                    },
                     "upgrade-next-protocol-vote-before": {
                       "description": "Next protocol round",
                       "type": "integer"
                     },
                     "upgrade-no-votes": {
-                      "description": "Upgrade no votes",
+                      "description": "No votes cast for consensus upgrade",
                       "type": "integer"
                     },
                     "upgrade-node-vote": {
-                      "description": "Upgrade node vote",
+                      "description": "This node's upgrade vote",
                       "type": "boolean"
                     },
                     "upgrade-vote-rounds": {
@@ -4856,15 +4848,15 @@
                       "type": "integer"
                     },
                     "upgrade-votes": {
-                      "description": "Upgrade votes",
+                      "description": "Total votes cast for consensus upgrade",
                       "type": "integer"
                     },
                     "upgrade-votes-required": {
-                      "description": "Upgrade yes votes required",
+                      "description": "Yes votes required for consensus upgrade",
                       "type": "integer"
                     },
                     "upgrade-yes-votes": {
-                      "description": "Upgrade yes votes",
+                      "description": "Yes votes cast for consensus upgrade",
                       "type": "integer"
                     }
                   },
@@ -5014,20 +5006,16 @@
                       "description": "Upgrade delay",
                       "type": "integer"
                     },
-                    "upgrade-next-protocol": {
-                      "description": "Upgrade next protocol",
-                      "type": "string"
-                    },
                     "upgrade-next-protocol-vote-before": {
                       "description": "Next protocol round",
                       "type": "integer"
                     },
                     "upgrade-no-votes": {
-                      "description": "Upgrade no votes",
+                      "description": "No votes cast for consensus upgrade",
                       "type": "integer"
                     },
                     "upgrade-node-vote": {
-                      "description": "Upgrade node vote",
+                      "description": "This node's upgrade vote",
                       "type": "boolean"
                     },
                     "upgrade-vote-rounds": {
@@ -5035,15 +5023,15 @@
                       "type": "integer"
                     },
                     "upgrade-votes": {
-                      "description": "Upgrade votes",
+                      "description": "Total votes cast for consensus upgrade",
                       "type": "integer"
                     },
                     "upgrade-votes-required": {
-                      "description": "Upgrade yes votes required",
+                      "description": "Yes votes required for consensus upgrade",
                       "type": "integer"
                     },
                     "upgrade-yes-votes": {
-                      "description": "Upgrade yes votes",
+                      "description": "Yes votes cast for consensus upgrade",
                       "type": "integer"
                     }
                   },

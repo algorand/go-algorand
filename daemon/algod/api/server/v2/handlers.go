@@ -798,31 +798,28 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
 	}
 
-	upgradePropose := string(stat.UpgradePropose)
 	nextProtocolVoteBefore := uint64(stat.NextProtocolVoteBefore)
 	var votesToGo int64 = int64(nextProtocolVoteBefore) - int64(stat.LastRound)
 	if votesToGo < 0 {
 		votesToGo = 0
 	}
-	//if upgradePropose != "" {
-	consensus := config.Consensus[protocol.ConsensusCurrentVersion]
-	upgradeVoteRounds := consensus.UpgradeVoteRounds
-	upgradeThreshold := consensus.UpgradeThreshold
-	votes := uint64(consensus.UpgradeVoteRounds) - uint64(votesToGo)
-	votesYes := stat.NextProtocolApprovals
-	votesNo := votes - votesYes
-	upgradeDelay := uint64(stat.UpgradeDelay)
-	response.UpgradeNextProtocol = &upgradePropose
-	response.UpgradeVotesRequired = &upgradeThreshold
-	response.UpgradeNodeVote = &latestBlkHdr.UpgradeApprove
-	response.UpgradeDelay = &upgradeDelay
-	response.UpgradeVotes = &votes
-	response.UpgradeYesVotes = &votesYes
-	response.UpgradeNoVotes = &votesNo
-	response.UpgradeNextProtocolVoteBefore = &nextProtocolVoteBefore
-	response.UpgradeVoteRounds = &upgradeVoteRounds
-
-	//}
+	if nextProtocolVoteBefore > 0 {
+		consensus := config.Consensus[protocol.ConsensusCurrentVersion]
+		upgradeVoteRounds := consensus.UpgradeVoteRounds
+		upgradeThreshold := consensus.UpgradeThreshold
+		votes := uint64(consensus.UpgradeVoteRounds) - uint64(votesToGo)
+		votesYes := stat.NextProtocolApprovals
+		votesNo := votes - votesYes
+		upgradeDelay := uint64(stat.UpgradeDelay)
+		response.UpgradeVotesRequired = &upgradeThreshold
+		response.UpgradeNodeVote = &latestBlkHdr.UpgradeApprove
+		response.UpgradeDelay = &upgradeDelay
+		response.UpgradeVotes = &votes
+		response.UpgradeYesVotes = &votesYes
+		response.UpgradeNoVotes = &votesNo
+		response.UpgradeNextProtocolVoteBefore = &nextProtocolVoteBefore
+		response.UpgradeVoteRounds = &upgradeVoteRounds
+	}
 
 	return ctx.JSON(http.StatusOK, response)
 }

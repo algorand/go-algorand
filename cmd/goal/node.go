@@ -480,7 +480,6 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 			}
 			statusString = statusString + "\n" + fmt.Sprintf(
 				infoNodeStatusConsensusUpgradeVoting,
-				*stat.UpgradeNextProtocol,
 				upgradeYesVotes,
 				upgradeNoVotes,
 				upgradeNextProtocolVoteBefore-stat.LastRound,

@@ -1049,28 +1049,25 @@ type NodeStatusResponse struct {
 	// UpgradeDelay Upgrade delay
 	UpgradeDelay *uint64 `json:"upgrade-delay,omitempty"`
 
-	// UpgradeNextProtocol Upgrade next protocol
-	UpgradeNextProtocol *string `json:"upgrade-next-protocol,omitempty"`
-
 	// UpgradeNextProtocolVoteBefore Next protocol round
 	UpgradeNextProtocolVoteBefore *uint64 `json:"upgrade-next-protocol-vote-before,omitempty"`
 
-	// UpgradeNoVotes Upgrade no votes
+	// UpgradeNoVotes No votes cast for consensus upgrade
 	UpgradeNoVotes *uint64 `json:"upgrade-no-votes,omitempty"`
 
-	// UpgradeNodeVote Upgrade node vote
+	// UpgradeNodeVote This node's upgrade vote
 	UpgradeNodeVote *bool `json:"upgrade-node-vote,omitempty"`
 
 	// UpgradeVoteRounds Total voting ounds for current upgrade
 	UpgradeVoteRounds *uint64 `json:"upgrade-vote-rounds,omitempty"`
 
-	// UpgradeVotes Upgrade votes
+	// UpgradeVotes Total votes cast for consensus upgrade
 	UpgradeVotes *uint64 `json:"upgrade-votes,omitempty"`
 
-	// UpgradeVotesRequired Upgrade yes votes required
+	// UpgradeVotesRequired Yes votes required for consensus upgrade
 	UpgradeVotesRequired *uint64 `json:"upgrade-votes-required,omitempty"`
 
-	// UpgradeYesVotes Upgrade yes votes
+	// UpgradeYesVotes Yes votes cast for consensus upgrade
 	UpgradeYesVotes *uint64 `json:"upgrade-yes-votes,omitempty"`
 }
 
