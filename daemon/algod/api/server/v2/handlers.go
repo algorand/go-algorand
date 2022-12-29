@@ -818,6 +818,7 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 	response.UpgradeNoVotes = &votesNo
 	response.UpgradeNextProtocolVoteBefore = &nextProtocolVoteBefore
 	response.UpgradeVoteRounds = &upgradeVoteRounds
+
 	//}
 
 	return ctx.JSON(http.StatusOK, response)
