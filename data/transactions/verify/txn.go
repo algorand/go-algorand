@@ -251,17 +251,27 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 	return groupCtx, nil
 }
 
+type sigOrTxnType int
+
+const regularSig sigOrTxnType = 1
+const multiSig sigOrTxnType = 2
+const logicSig sigOrTxnType = 3
+const stateProofTxn sigOrTxnType = 4
+
 // checkTxnSigTypeCounts checks the number of signature types and reports an error in case of a violation
-func checkTxnSigTypeCounts(s *transactions.SignedTxn) (isStateProofTxn bool, err *TxGroupError) {
+func checkTxnSigTypeCounts(s *transactions.SignedTxn) (sigType sigOrTxnType, err *TxGroupError) {
 	numSigCategories := 0
 	if s.Sig != (crypto.Signature{}) {
 		numSigCategories++
+		sigType = regularSig
 	}
 	if !s.Msig.Blank() {
 		numSigCategories++
+		sigType = multiSig
 	}
 	if !s.Lsig.Blank() {
 		numSigCategories++
+		sigType = logicSig
 	}
 	if numSigCategories == 0 {
 		// Special case: special sender address can issue special transaction
@@ -269,28 +279,28 @@ func checkTxnSigTypeCounts(s *transactions.SignedTxn) (isStateProofTxn bool, err
 		// check ensures that this transaction cannot pay any fee, and
 		// cannot have any other interesting fields, except for the state proof payload.
 		if s.Txn.Sender == transactions.StateProofSender && s.Txn.Type == protocol.StateProofTx {
-			return true, nil
+			return stateProofTxn, nil
 		}
-		return false, &TxGroupError{err: errTxnSigHasNoSig, Reason: TxGroupErrorReasonHasNoSig}
+		return 0, &TxGroupError{err: errTxnSigHasNoSig, Reason: TxGroupErrorReasonHasNoSig}
 	}
 	if numSigCategories > 1 {
-		return false, &TxGroupError{err: errTxnSigNotWellFormed, Reason: TxGroupErrorReasonSigNotWellFormed}
+		return 0, &TxGroupError{err: errTxnSigNotWellFormed, Reason: TxGroupErrorReasonSigNotWellFormed}
 	}
-	return false, nil
+	return sigType, nil
 }
 
 // stxnCoreChecks runs signatures validity checks and enqueues signature into batchVerifier for verification.
 func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) *TxGroupError {
-	isStateProofTxn, err := checkTxnSigTypeCounts(s)
-	if err != nil || isStateProofTxn {
+	sigType, err := checkTxnSigTypeCounts(s)
+	if err != nil {
 		return err
 	}
 
-	if s.Sig != (crypto.Signature{}) {
+	switch sigType {
+	case regularSig:
 		batchVerifier.EnqueueSignature(crypto.SignatureVerifier(s.Authorizer()), s.Txn, s.Sig)
 		return nil
-	}
-	if !s.Msig.Blank() {
+	case multiSig:
 		if err := crypto.MultisigBatchPrep(s.Txn, crypto.Digest(s.Authorizer()), s.Msig, batchVerifier); err != nil {
 			return &TxGroupError{err: fmt.Errorf("multisig validation failed: %w", err), Reason: TxGroupErrorReasonMsigNotWellFormed}
 		}
@@ -308,14 +318,19 @@ func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 			msigMore10.Inc(nil)
 		}
 		return nil
-	}
-	if !s.Lsig.Blank() {
+
+	case logicSig:
 		if err := logicSigVerify(s, txnIdx, groupCtx); err != nil {
 			return &TxGroupError{err: err, Reason: TxGroupErrorReasonLogicSigFailed}
 		}
 		return nil
+
+	case stateProofTxn:
+		return nil
+
+	default:
+		return &TxGroupError{err: errUnknownSignature, Reason: TxGroupErrorReasonGeneric}
 	}
-	return &TxGroupError{err: errUnknownSignature, Reason: TxGroupErrorReasonGeneric}
 }
 
 // LogicSigSanityCheck checks that the signature is valid and that the program is basically well formed.
@@ -909,17 +924,14 @@ func getNumberOfBatchableSigsInGroup(stxs []transactions.SignedTxn) (batchSigs u
 }
 
 func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (uint64, error) {
-	isStateProofTxn, err := checkTxnSigTypeCounts(stx)
-	if err != nil || isStateProofTxn {
-		if err != nil {
-			return 0, err
-		}
-		return 0, nil
+	sigType, err := checkTxnSigTypeCounts(stx)
+	if err != nil {
+		return 0, err
 	}
-	if stx.Sig != (crypto.Signature{}) {
+	switch sigType {
+	case regularSig:
 		return 1, nil
-	}
-	if !stx.Msig.Blank() {
+	case multiSig:
 		sig := stx.Msig
 		batchSigs := uint64(0)
 		for _, subsigi := range sig.Subsigs {
@@ -928,7 +940,13 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (uint64, error) 
 			}
 		}
 		return batchSigs, nil
+	case logicSig:
+		// Currently the sigs in here are not batched. Something to consider later.
+		return 0, nil
+	case stateProofTxn:
+		return 0, nil
+	default:
+		// this case is impossible
+		return 0, nil
 	}
-	// This is the Lsig case. Currently the sigs in here are not batched. Something to consider later.
-	return 0, nil
 }
