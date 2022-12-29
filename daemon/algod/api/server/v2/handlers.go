@@ -800,12 +800,15 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 
 	upgradePropose := string(stat.UpgradePropose)
 	nextProtocolVoteBefore := uint64(stat.NextProtocolVoteBefore)
-	votesToGo := nextProtocolVoteBefore - uint64(stat.LastRound)
+	var votesToGo int64 = int64(nextProtocolVoteBefore) - int64(stat.LastRound)
+	if votesToGo < 0 {
+		votesToGo = 0
+	}
 	//if upgradePropose != "" {
 	consensus := config.Consensus[protocol.ConsensusCurrentVersion]
 	upgradeVoteRounds := consensus.UpgradeVoteRounds
 	upgradeThreshold := consensus.UpgradeThreshold
-	votes := uint64(consensus.UpgradeVoteRounds) - votesToGo
+	votes := uint64(consensus.UpgradeVoteRounds) - uint64(votesToGo)
 	votesYes := stat.NextProtocolApprovals
 	votesNo := votes - votesYes
 	upgradeDelay := uint64(stat.UpgradeDelay)
