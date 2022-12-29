@@ -1858,7 +1858,7 @@ func splitTokens(tokens []string) (current, rest []string) {
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
 	if strings.TrimSpace(text) == "" {
-		return ops.errorf("Cannot assemble empty program text")
+		ops.errorf("Cannot assemble empty program text")
 	}
 	fin := strings.NewReader(text)
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
