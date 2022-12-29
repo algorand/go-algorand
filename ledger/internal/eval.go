@@ -338,10 +338,9 @@ func (x *roundCowBase) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 	return x.l.BlockHdr(r)
 }
 
-func (x *roundCowBase) getStateProofVerificationContext2(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	//	return x.l.GetLedgerStateProofVerificationContext(stateProofLastAttestedRound)
-	return nil, nil
-}
+//func (x *roundCowBase) getStateProofVerificationContext2(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+//return x.l.GetLedgerStateProofVerificationContext(stateProofLastAttestedRound)
+//}
 
 func (x *roundCowBase) blockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {
 	return x.l.BlockHdrCached(r)
@@ -919,26 +918,26 @@ func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
 // Transaction tentatively adds a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error {
+func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transactions.ApplyData, spVCgetter ledgercore.StateProofTrackerGetter) error {
 	return eval.TransactionGroup([]transactions.SignedTxnWithAD{
 		{
 			SignedTxn: txn,
 			ApplyData: ad,
 		},
-	})
+	}, spVCgetter)
 }
 
 // TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD) error {
-	return eval.transactionGroup(txads)
+func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD, spVCgetter ledgercore.StateProofTrackerGetter) error {
+	return eval.transactionGroup(txads, spVCgetter)
 }
 
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD) error {
+func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD, spVCgetter ledgercore.StateProofTrackerGetter) error {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -965,7 +964,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, spVCgetter, &txib)
 		if err != nil {
 			return err
 		}
@@ -1065,7 +1064,7 @@ func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, gi int, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, gi int, ad transactions.ApplyData, cow *roundCowState, spVCgetter ledgercore.StateProofTrackerGetter, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	// Only compute the TxID once
@@ -1099,7 +1098,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, gi, cow.Counter())
+	applyData, err := eval.applyTransaction(txn.Txn, cow, spVCgetter, evalParams, gi, cow.Counter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %w", txid, err)
 	}
@@ -1143,7 +1142,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 }
 
 // applyTransaction changes the balances according to this transaction.
-func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *roundCowState, evalParams *logic.EvalParams, gi int, ctr uint64) (ad transactions.ApplyData, err error) {
+func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *roundCowState, spVCgetter ledgercore.StateProofTrackerGetter, evalParams *logic.EvalParams, gi int, ctr uint64) (ad transactions.ApplyData, err error) {
 	params := cow.ConsensusParams()
 
 	// move fee to pool
@@ -1183,7 +1182,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 		// be stored in memory. These deltas don't care about the state proofs, and so we can improve the node load time. Additionally, it save us from
 		// performing the validation during catchup, which is another performance boost.
 		if eval.validate || eval.generate {
-			err = applyStateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, eval.validate)
+			err = applyStateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, spVCgetter, eval.validate)
 		}
 
 	default:
@@ -1533,7 +1532,7 @@ func (validator *evalTxValidator) run() {
 // Validate: Eval(ctx, l, blk, true, txcache, executionPool)
 // AddBlock: Eval(context.Background(), l, blk, false, txcache, nil)
 // tracker:  Eval(context.Background(), l, blk, false, txcache, nil)
-func XEval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
+func XEval(ctx context.Context, spVCgetter ledgercore.StateProofTrackerGetter, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
 	// flush the pending writes in the cache to make everything read so far available during eval
 	l.FlushCaches()
 
@@ -1649,7 +1648,7 @@ transactionGroupLoop:
 					}
 				}
 			}
-			err = eval.TransactionGroup(txgroup.TxnGroup)
+			err = eval.TransactionGroup(txgroup.TxnGroup, spVCgetter)
 			if err != nil {
 				return ledgercore.StateDelta{}, err
 			}

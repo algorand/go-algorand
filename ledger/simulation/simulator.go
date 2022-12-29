@@ -168,7 +168,7 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.Si
 
 	group := transactions.WrapSignedTxnsWithAD(stxns)
 
-	err = eval.TransactionGroup(group)
+	err = eval.TransactionGroup(group, s.ledger)
 	if err != nil {
 		return nil, EvalFailureError{SimulatorError{err}}
 	}

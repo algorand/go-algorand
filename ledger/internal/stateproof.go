@@ -35,7 +35,7 @@ var (
 )
 
 // applyStateProof applies the StateProof transaction and setting the next StateProof round
-func applyStateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp *roundCowState, validate bool) error {
+func applyStateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp *roundCowState, spVCgetter ledgercore.StateProofTrackerGetter, validate bool) error {
 	spType := tx.StateProofType
 	if spType != protocol.StateProofBasic {
 		return fmt.Errorf("applyStateProof: %w - type %d ", errStateProofTypeNotSupported, spType)
@@ -55,7 +55,7 @@ func applyStateProof(tx transactions.StateProofTxnFields, atRound basics.Round, 
 
 	var verificationContext *ledgercore.StateProofVerificationContext
 	if config.Consensus[atRoundHdr.CurrentProtocol].StateProofUseTrackerVerification {
-		verificationContext, err = sp.lookupParent.getStateProofVerificationContext2(lastRoundInInterval)
+		verificationContext, err = spVCgetter.GetStateProofVerificationContext__(lastRoundInInterval)
 	} else {
 		verificationContext, err = gatherVerificationContextUsingBlockHeaders(sp, lastRoundInInterval)
 	}
