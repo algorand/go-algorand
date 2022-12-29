@@ -1029,7 +1029,7 @@ func TestStreamVerifierCases(t *testing.T) {
 	txnGroups[mod][0].Sig = crypto.Signature{}
 	u, _ := binary.Uvarint(txnGroups[mod][0].Txn.Note)
 	badTxnGroups[u] = struct{}{}
-	sv := streamVerifierTestCore(txnGroups, badTxnGroups, errSignedTxnHasNoSig, t)
+	sv := streamVerifierTestCore(txnGroups, badTxnGroups, errTxnSigHasNoSig, t)
 	sv.WaitForStop()
 	mod++
 
@@ -1115,7 +1115,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[mod][0].Msig = mSigTxn[0].Msig
 	u, _ = binary.Uvarint(txnGroups[mod][0].Txn.Note)
 	badTxnGroups[u] = struct{}{}
-	sv = streamVerifierTestCore(txnGroups, badTxnGroups, errSignedTxnMaxOneSig, t)
+	sv = streamVerifierTestCore(txnGroups, badTxnGroups, errTxnSigNotWellFormed, t)
 	sv.WaitForStop()
 }
 
@@ -1140,7 +1140,7 @@ func TestGetNumberOfBatchableSigsInGroup(t *testing.T) {
 	// txn with 0 sigs
 	txnGroups[mod][0].Sig = crypto.Signature{}
 	batchSigs, err := getNumberOfBatchableSigsInGroup(txnGroups[mod])
-	require.Error(t, err, errSignedTxnHasNoSig)
+	require.ErrorIs(t, err, errTxnSigHasNoSig)
 	mod++
 
 	_, signedTxns, secrets, addrs := generateTestObjects(numOfTxns, 20, 0, 50)
@@ -1191,7 +1191,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
 	txnGroups[mod][0].Msig = mSigTxn[0].Msig
 	batchSigs, err = getNumberOfBatchableSigsInGroup(txnGroups[mod])
-	require.Error(t, err, errSignedTxnMaxOneSig)
+	require.ErrorIs(t, err, errTxnSigNotWellFormed)
 }
 
 // TestStreamVerifierPoolShutdown tests what happens when the exec pool shuts down
