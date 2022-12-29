@@ -801,24 +801,24 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 	upgradePropose := string(stat.UpgradePropose)
 	nextProtocolVoteBefore := uint64(stat.NextProtocolVoteBefore)
 	votesToGo := nextProtocolVoteBefore - uint64(stat.LastRound)
-	if upgradePropose != "" {
-		consensus := config.Consensus[protocol.ConsensusCurrentVersion]
-		upgradeVoteRounds := consensus.UpgradeVoteRounds
-		upgradeThreshold := consensus.UpgradeThreshold
-		votes := uint64(consensus.UpgradeVoteRounds) - votesToGo
-		votesYes := stat.NextProtocolApprovals
-		votesNo := votes - votesYes
-		upgradeDelay := uint64(stat.UpgradeDelay)
-		response.UpgradeNextProtocol = &upgradePropose
-		response.UpgradeVotesRequired = &upgradeThreshold
-		response.UpgradeNodeVote = &latestBlkHdr.UpgradeApprove
-		response.UpgradeDelay = &upgradeDelay
-		response.UpgradeVotes = &votes
-		response.UpgradeYesVotes = &votesYes
-		response.UpgradeNoVotes = &votesNo
-		response.UpgradeNextProtocolVoteBefore = &nextProtocolVoteBefore
-		response.UpgradeVoteRounds = &upgradeVoteRounds
-	}
+	//if upgradePropose != "" {
+	consensus := config.Consensus[protocol.ConsensusCurrentVersion]
+	upgradeVoteRounds := consensus.UpgradeVoteRounds
+	upgradeThreshold := consensus.UpgradeThreshold
+	votes := uint64(consensus.UpgradeVoteRounds) - votesToGo
+	votesYes := stat.NextProtocolApprovals
+	votesNo := votes - votesYes
+	upgradeDelay := uint64(stat.UpgradeDelay)
+	response.UpgradeNextProtocol = &upgradePropose
+	response.UpgradeVotesRequired = &upgradeThreshold
+	response.UpgradeNodeVote = &latestBlkHdr.UpgradeApprove
+	response.UpgradeDelay = &upgradeDelay
+	response.UpgradeVotes = &votes
+	response.UpgradeYesVotes = &votesYes
+	response.UpgradeNoVotes = &votesNo
+	response.UpgradeNextProtocolVoteBefore = &nextProtocolVoteBefore
+	response.UpgradeVoteRounds = &upgradeVoteRounds
+	//}
 
 	return ctx.JSON(http.StatusOK, response)
 }
