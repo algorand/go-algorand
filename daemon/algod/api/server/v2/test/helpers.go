@@ -234,10 +234,6 @@ func (m *mockNode) GetTransaction(addr basics.Address, txID transactions.Txid, m
 	return node.TxnWithStatus{}, false
 }
 
-func (m *mockNode) PoolStats() node.PoolStats {
-	return node.PoolStats{}
-}
-
 func (m *mockNode) IsArchival() bool {
 	return false
 }
