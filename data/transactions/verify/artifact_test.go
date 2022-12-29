@@ -77,7 +77,7 @@ func BenchmarkTinyMan(b *testing.B) {
 
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err := TxnGroup(stxnss[i], hdr, nil, &logic.NoHeaderLedger{})
+			_, err := TxnGroup(stxnss[i], &hdr, nil, &logic.NoHeaderLedger{})
 			require.NoError(b, err)
 		}
 	})
@@ -93,7 +93,7 @@ func BenchmarkTinyMan(b *testing.B) {
 
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_, err := TxnGroup(stxns, hdr, nil, &logic.NoHeaderLedger{})
+			_, err := TxnGroup(stxns, &hdr, nil, &logic.NoHeaderLedger{})
 			require.NoError(b, err)
 		}
 	})
