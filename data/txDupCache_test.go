@@ -120,7 +120,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 
 	const size = 20
 	cache := makeSaltedCache(size)
-	cache.start(context.Background(), 0)
+	cache.Start(context.Background(), 0)
 	require.Zero(t, cache.Len())
 
 	// add some unique random
@@ -204,7 +204,7 @@ func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
 	const size = 20
 	updateInterval := 1000 * time.Microsecond
 	cache := makeSaltedCache(size)
-	cache.start(context.Background(), updateInterval)
+	cache.Start(context.Background(), updateInterval)
 	require.Zero(t, cache.Len())
 
 	// add some unique random
@@ -229,7 +229,7 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 
 	const size = 20
 	cache := makeSaltedCache(2 * size)
-	cache.start(context.Background(), 0)
+	cache.Start(context.Background(), 0)
 	require.Zero(t, cache.Len())
 
 	// add some unique random
@@ -294,7 +294,7 @@ func (m digestCacheMaker) make(size int) cachePusher {
 }
 func (m saltedCacheMaker) make(size int) cachePusher {
 	scp := &saltedCachePusher{c: makeSaltedCache(size)}
-	scp.c.start(context.Background(), 0)
+	scp.c.Start(context.Background(), 0)
 	return scp
 }
 

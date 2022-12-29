@@ -399,7 +399,7 @@ func (l *Ledger) Close() {
 
 // RegisterBlockListeners registers listeners that will be called when a
 // new block is added to the ledger.
-func (l *Ledger) RegisterBlockListeners(listeners []BlockListener) {
+func (l *Ledger) RegisterBlockListeners(listeners []ledgercore.BlockListener) {
 	l.notifier.register(listeners)
 }
 

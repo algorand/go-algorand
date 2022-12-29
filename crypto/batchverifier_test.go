@@ -17,6 +17,7 @@
 package crypto
 
 import (
+	"fmt"
 	"math/rand"
 	"runtime"
 	"testing"
@@ -64,7 +65,7 @@ func TestBatchVerifierBulk(t *testing.T) {
 			sig := sigSecrets.Sign(msg)
 			bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
 		}
-		require.Equal(t, n, bv.getNumberOfEnqueuedSignatures())
+		require.Equal(t, n, bv.GetNumberOfEnqueuedSignatures())
 		require.NoError(t, bv.Verify())
 	}
 
@@ -121,6 +122,67 @@ func BenchmarkBatchVerifier(b *testing.B) {
 	require.NoError(b, bv.Verify())
 }
 
+// BenchmarkBatchVerifierBig with b.N over 1000 will report the expected performance
+// gain as the batchsize increases. All sigs are valid.
+func BenchmarkBatchVerifierBig(b *testing.B) {
+	c := makeCurve25519Secret()
+	for batchSize := 1; batchSize <= 96; batchSize++ {
+		bv := MakeBatchVerifierWithHint(batchSize)
+		for i := 0; i < batchSize; i++ {
+			str := randString()
+			bv.EnqueueSignature(c.SignatureVerifier, str, c.Sign(str))
+		}
+		b.Run(fmt.Sprintf("running batchsize %d", batchSize), func(b *testing.B) {
+			totalTransactions := b.N
+			count := totalTransactions / batchSize
+			if count*batchSize < totalTransactions {
+				count++
+			}
+			for x := 0; x < count; x++ {
+				require.NoError(b, bv.Verify())
+			}
+		})
+	}
+}
+
+// BenchmarkBatchVerifierBigWithInvalid builds over BenchmarkBatchVerifierBig by introducing
+// invalid sigs to even numbered batch sizes. This shows the impact of invalid sigs on the
+// performance. Basically, all the gains from batching disappear.
+func BenchmarkBatchVerifierBigWithInvalid(b *testing.B) {
+	c := makeCurve25519Secret()
+	badSig := Signature{}
+	for batchSize := 1; batchSize <= 96; batchSize++ {
+		bv := MakeBatchVerifierWithHint(batchSize)
+		for i := 0; i < batchSize; i++ {
+			str := randString()
+			if batchSize%2 == 0 && (i == 0 || rand.Float32() < 0.1) {
+				bv.EnqueueSignature(c.SignatureVerifier, str, badSig)
+			} else {
+				bv.EnqueueSignature(c.SignatureVerifier, str, c.Sign(str))
+			}
+		}
+		b.Run(fmt.Sprintf("running batchsize %d", batchSize), func(b *testing.B) {
+			totalTransactions := b.N
+			count := totalTransactions / batchSize
+			if count*batchSize < totalTransactions {
+				count++
+			}
+			for x := 0; x < count; x++ {
+				failed, err := bv.VerifyWithFeedback()
+				if err != nil {
+					for i, f := range failed {
+						if bv.signatures[i] == badSig {
+							require.True(b, f)
+						} else {
+							require.False(b, f)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	bv := MakeBatchVerifier()
@@ -155,10 +217,10 @@ func TestBatchVerifierIndividualResults(t *testing.T) {
 			}
 			bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
 		}
-		require.Equal(t, n, bv.getNumberOfEnqueuedSignatures())
+		require.Equal(t, n, bv.GetNumberOfEnqueuedSignatures())
 		failed, err := bv.VerifyWithFeedback()
 		if hasBadSig {
-			require.ErrorIs(t, err, ErrBatchVerificationFailed)
+			require.ErrorIs(t, err, ErrBatchHasFailedSigs)
 		} else {
 			require.NoError(t, err)
 		}
@@ -185,10 +247,10 @@ func TestBatchVerifierIndividualResultsAllValid(t *testing.T) {
 			sig := sigSecrets.Sign(msg)
 			bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
 		}
-		require.Equal(t, n, bv.getNumberOfEnqueuedSignatures())
+		require.Equal(t, n, bv.GetNumberOfEnqueuedSignatures())
 		failed, err := bv.VerifyWithFeedback()
 		require.NoError(t, err)
-		require.Equal(t, bv.getNumberOfEnqueuedSignatures(), len(failed))
+		require.Equal(t, bv.GetNumberOfEnqueuedSignatures(), len(failed))
 		for _, f := range failed {
 			require.False(t, f)
 		}
