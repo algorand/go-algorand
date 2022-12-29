@@ -1171,14 +1171,9 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, cow, &ad, gi, evalParams, ctr)
 
 	case protocol.StateProofTx:
-		// in case of a StateProofTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's StateProofNextRound depending on
-		// whether we're in validate/generate mode or not, however - given that this variable is only being used in these modes, it would be safe.
-		// The reason for making this into an exception is that during initialization time, the accounts update is "converting" the recent 320 blocks into deltas to
-		// be stored in memory. These deltas don't care about the state proofs, and so we can improve the node load time. Additionally, it save us from
-		// performing the validation during catchup, which is another performance boost.
-		if eval.validate || eval.generate {
-			err = applyStateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, spVCgetter, eval.validate)
-		}
+		// Applying the StateProof transaction will advance the cow's StateProofNextRound field.
+		// Validation of the StateProof transaction before applying will only occur in validate mode.
+		err = applyStateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, spVCgetter, eval.validate)
 
 	default:
 		err = fmt.Errorf("unknown transaction type %v", tx.Type)

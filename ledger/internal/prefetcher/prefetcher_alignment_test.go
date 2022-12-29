@@ -26,8 +26,10 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/internal/prefetcher"
@@ -1372,7 +1374,17 @@ func TestEvaluatorPrefetcherAlignmentStateProof(t *testing.T) {
 			Sender:      addr,
 			GenesisHash: genesisHash(),
 		},
-		StateProofTxnFields: transactions.StateProofTxnFields{},
+		StateProofTxnFields: transactions.StateProofTxnFields{
+			StateProofType: 0,
+			StateProof:     stateproof.StateProof{},
+			Message: stateproofmsg.Message{
+				BlockHeadersCommitment: nil,
+				VotersCommitment:       nil,
+				LnProvenWeight:         0,
+				FirstAttestedRound:     257,
+				LastAttestedRound:      512,
+			},
+		},
 	}
 
 	requested, prefetched := run(t, l, txn)
