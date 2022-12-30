@@ -34,6 +34,9 @@ func (fp *expiredExecPool) EnqueueBacklog(enqueueCtx context.Context, t execpool
 	// generate an error, to see if we correctly report that on the verifyVote() call.
 	return context.Canceled
 }
+func (fp *expiredExecPool) BufferSize() (length, capacity int) {
+	return
+}
 
 // Test async vote verifier against a full execution pool.
 func TestVerificationAgainstFullExecutionPool(t *testing.T) {

@@ -60,6 +60,15 @@ func TestFileOutputNewLogger(t *testing.T) {
 
 }
 
+func TestSetGetLevel(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	nl := NewLogger()
+	require.Equal(t, Info, nl.GetLevel())
+	nl.SetLevel(Error)
+	require.Equal(t, Error, nl.GetLevel())
+}
+
 func TestSetLevelNewLogger(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
