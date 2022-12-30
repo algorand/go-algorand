@@ -53,7 +53,7 @@ const minBatchVerifierAlloc = 16
 
 // Batch verifications errors
 var (
-	ErrBatchVerificationFailed = errors.New("At least one signature didn't pass verification")
+	ErrBatchHasFailedSigs = errors.New("At least one signature didn't pass verification")
 )
 
 //export ed25519_randombytes_unsafe
@@ -104,8 +104,8 @@ func (b *BatchVerifier) expand() {
 	b.signatures = signatures
 }
 
-// getNumberOfEnqueuedSignatures returns the number of signatures current enqueue onto the batch verifier object
-func (b *BatchVerifier) getNumberOfEnqueuedSignatures() int {
+// GetNumberOfEnqueuedSignatures returns the number of signatures currently enqueued into the BatchVerifier
+func (b *BatchVerifier) GetNumberOfEnqueuedSignatures() int {
 	return len(b.messages)
 }
 
@@ -120,18 +120,18 @@ func (b *BatchVerifier) Verify() error {
 // if some signatures are invalid, true will be set in failed at the corresponding indexes, and
 // ErrBatchVerificationFailed for err
 func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
-	if b.getNumberOfEnqueuedSignatures() == 0 {
+	if b.GetNumberOfEnqueuedSignatures() == 0 {
 		return nil, nil
 	}
-	var messages = make([][]byte, b.getNumberOfEnqueuedSignatures())
-	for i, m := range b.messages {
-		messages[i] = HashRep(m)
+	var messages = make([][]byte, b.GetNumberOfEnqueuedSignatures())
+	for i := range b.messages {
+		messages[i] = HashRep(b.messages[i])
 	}
 	allValid, failed := batchVerificationImpl(messages, b.publicKeys, b.signatures)
 	if allValid {
 		return failed, nil
 	}
-	return failed, ErrBatchVerificationFailed
+	return failed, ErrBatchHasFailedSigs
 }
 
 // batchVerificationImpl invokes the ed25519 batch verification algorithm.

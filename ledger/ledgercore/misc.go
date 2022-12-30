@@ -28,3 +28,8 @@ type InitState struct {
 	Accounts    map[basics.Address]basics.AccountData
 	GenesisHash crypto.Digest
 }
+
+// BlockListener represents an object that needs to get notified on new blocks.
+type BlockListener interface {
+	OnNewBlock(block bookkeeping.Block, delta StateDelta)
+}
