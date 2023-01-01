@@ -169,7 +169,6 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	catchpointCatchupProtocol.MaxTxnLife = 13
 	catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
 	catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
-	catchpointCatchupProtocol.StateProofUseTrackerVerification = true
 
 	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
 		// amd64 and arm64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
