@@ -18,7 +18,6 @@ package apply
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -64,7 +63,7 @@ func (s *stateProofApplierMock) SetStateProofNextRound(rnd basics.Round) {
 func (s *stateProofApplierMock) StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	element, exists := s.stateProofVerification[stateProofLastAttestedRound]
 	if !exists {
-		return nil, fmt.Errorf("requested state proof verification data not found")
+		return nil, errors.New("requested state proof verification data not found")
 	}
 	return element, nil
 }
