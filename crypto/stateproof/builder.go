@@ -79,8 +79,7 @@ func MakeBuilder(data MessageHash, round uint64, provenWeight uint64, part []bas
 
 		sigs:         make([]sigslot, npart),
 		signedWeight: 0,
-
-		cachedProof: nil,
+		cachedProof:  nil,
 	}
 
 	return b, nil

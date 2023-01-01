@@ -46,7 +46,7 @@ type AccountManager struct {
 }
 
 // DeleteStateProofKey deletes keys related to a ParticipationID. The function removes
-// all keys up to, and not including, a given round the given round.
+// all keys up to, and not including, the given round.
 func (manager *AccountManager) DeleteStateProofKey(id account.ParticipationID, round basics.Round) error {
 	return manager.registry.DeleteStateProofKeys(id, round)
 }
