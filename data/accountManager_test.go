@@ -201,16 +201,6 @@ func TestAccountManagerOverlappingStateProofKeys(t *testing.T) {
 
 	acctManager := MakeAccountManager(log, registry)
 
-	databaseFiles := make([]string, 0)
-	defer func() {
-		for _, fileName := range databaseFiles {
-			os.Remove(fileName)
-			os.Remove(fileName + "-shm")
-			os.Remove(fileName + "-wal")
-			os.Remove(fileName + "-journal")
-		}
-	}()
-
 	// Generate 2 participations under the same account
 	store, err := db.MakeAccessor("stateprooftest", false, true)
 	a.NoError(err)
@@ -273,16 +263,6 @@ func TestAccountManagerRemoveStateProofKeysForExpiredAccounts(t *testing.T) {
 
 	acctManager := MakeAccountManager(log, registry)
 
-	databaseFiles := make([]string, 0)
-	defer func() {
-		for _, fileName := range databaseFiles {
-			os.Remove(fileName)
-			os.Remove(fileName + "-shm")
-			os.Remove(fileName + "-wal")
-			os.Remove(fileName + "-journal")
-		}
-	}()
-
 	store, err := db.MakeAccessor("stateprooftest", false, true)
 	a.NoError(err)
 	root, err := account.GenerateRoot(store)
@@ -331,16 +311,6 @@ func TestGetStateProofKeysDontLogErrorOnNilStateProof(t *testing.T) {
 	log.SetOutput(logbuffer)
 
 	acctManager := MakeAccountManager(log, registry)
-	databaseFiles := make([]string, 0)
-	defer func() {
-		for _, fileName := range databaseFiles {
-			os.Remove(fileName)
-			os.Remove(fileName + "-shm")
-			os.Remove(fileName + "-wal")
-			os.Remove(fileName + "-journal")
-		}
-	}()
-
 	// Generate 2 participations under the same account
 	store, err := db.MakeAccessor("stateprooftest", false, true)
 	a.NoError(err)
