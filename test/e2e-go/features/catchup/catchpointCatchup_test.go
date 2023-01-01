@@ -18,7 +18,6 @@ package catchup
 
 import (
 	"fmt"
-	"net/http"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -30,8 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/client"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -82,57 +79,6 @@ func (ec *nodeExitErrorCollector) Print() {
 	}
 }
 
-func denyRoundRequestsWebProxy(t *testing.T, listeningAddress string, round basics.Round) *fixtures.WebProxy {
-	log := logging.TestingLog(t)
-	a := require.New(fixtures.SynchronizedTest(t))
-
-	log.SetLevel(logging.Info)
-	wp, err := fixtures.MakeWebProxy(listeningAddress, log, func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
-		// prevent requests for the given block to go through.
-		if request.URL.String() == fmt.Sprintf("/v1/test-v1/block/%d", round) {
-			response.WriteHeader(http.StatusBadRequest)
-			response.Write([]byte(fmt.Sprintf("webProxy prevents block %d from serving", round)))
-			return
-		}
-		next(response, request)
-	})
-	a.NoError(err)
-	log.Infof("web proxy listens at %s\n", wp.GetListenAddress())
-	return wp
-}
-
-func waitForCatchpoint(t *testing.T, nodeRestClient *client.RestClient, targetCatchpointRound basics.Round) string {
-	a := require.New(fixtures.SynchronizedTest(t))
-
-	// ensure the catchpoint is created for targetCatchpointRound
-	var status model.NodeStatusResponse
-	var err error
-	timer := time.NewTimer(10 * time.Second)
-outer:
-	for {
-		status, err = nodeRestClient.Status()
-		a.NoError(err)
-
-		var round basics.Round
-		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
-			round, _, err = ledgercore.ParseCatchpointLabel(*status.LastCatchpoint)
-			a.NoError(err)
-			if round >= targetCatchpointRound {
-				break
-			}
-		}
-		select {
-		case <-timer.C:
-			a.Failf("timeout waiting a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
-			break outer
-		default:
-			time.Sleep(250 * time.Millisecond)
-		}
-	}
-
-	return *status.LastCatchpoint
-}
-
 func TestBasicCatchpointCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -161,14 +107,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	catchpointCatchupProtocol.StateProofVotersLookback = 2
 	catchpointCatchupProtocol.StateProofUseTrackerVerification = true
 
-	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
-	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
-	catchpointCatchupProtocol.SeedLookback = 2
-	catchpointCatchupProtocol.SeedRefreshInterval = 2
-	catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 8
-	catchpointCatchupProtocol.MaxTxnLife = 13
-	catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
-	catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
+	ApplyCatchpointConsensusChanges(&catchpointCatchupProtocol)
 
 	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
 		// amd64 and arm64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
@@ -186,27 +125,14 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
 
-	// Get primary node
 	primaryNode, err := fixture.GetNodeController("Primary")
 	a.NoError(err)
-	// Get secondary node
 	secondNode, err := fixture.GetNodeController("Node")
 	a.NoError(err)
 
-	// prepare it's configuration file to set it to generate a catchpoint every 4 rounds.
-	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
-	a.NoError(err)
 	const catchpointInterval = 4
-	cfg.CatchpointInterval = catchpointInterval
-	cfg.MaxAcctLookback = 2
-	cfg.SaveToDisk(primaryNode.GetDataDir())
-	cfg.Archival = false
-	cfg.CatchpointInterval = 0
-	cfg.NetAddress = ""
-	cfg.EnableLedgerService = false
-	cfg.EnableBlockService = false
-	cfg.BaseLoggerDebugLevel = uint32(logging.Debug)
-	cfg.SaveToDisk(secondNode.GetDataDir())
+	ConfigureCatchpointGeneration(t, &primaryNode, catchpointInterval)
+	ConfigureCatchpointHandling(t, &secondNode)
 
 	// start the primary node
 	_, err = primaryNode.StartAlgod(nodecontrol.AlgodStartArgs{
@@ -220,15 +146,9 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	a.NoError(err)
 	defer primaryNode.StopAlgod()
 
-	waitTimePerBlock := 10 * time.Second
-	// fast catchup downloads some blocks back from catchpoint round - CatchpointLookback
-	expectedBlocksToDownload := catchpointCatchupProtocol.MaxTxnLife + catchpointCatchupProtocol.DeeperBlockHeaderHistory
-	const restrictedBlockRound = 2 // block number that is rejected to be downloaded to ensure fast catchup and not regular catchup is running
-	// calculate the target round: this is the next round after catchpoint
-	// that is greater than expectedBlocksToDownload before the restrictedBlock block number
-	minRound := restrictedBlockRound + catchpointCatchupProtocol.CatchpointLookback
-	targetCatchpointRound := (basics.Round(expectedBlocksToDownload+minRound)/catchpointInterval + 1) * catchpointInterval
+	targetCatchpointRound := GetFirstCatchpointRound(&catchpointCatchupProtocol, catchpointInterval)
 	targetRound := targetCatchpointRound + 1
+
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 	log.Infof("Building ledger history..")
 	err = fixture.ClientWaitForRound(primaryNodeRestClient, uint64(targetRound), time.Duration(targetRound)*waitTimePerBlock)
@@ -265,9 +185,8 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	_, err = secondNodeRestClient.Catchup(catchpointLabel)
 	a.NoError(err)
 
-	roundsToCathcup := targetRound - targetCatchpointRound
 	log.Infof("Second node catching up to round %v", targetRound)
-	err = fixture.ClientWaitForRound(secondNodeRestClient, uint64(targetRound), waitTimePerBlock*time.Duration(roundsToCathcup))
+	err = fixture.ClientWaitForRound(secondNodeRestClient, uint64(targetRound), waitTimePerBlock)
 	a.NoError(err)
 	log.Infof("done catching up!\n")
 }
