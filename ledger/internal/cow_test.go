@@ -17,7 +17,7 @@
 package internal
 
 import (
-	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -32,8 +32,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
-
-var ErrVerificationContextNotFound = errors.New("requested state proof verification data not found")
 
 type mockLedger struct {
 	balanceMap map[basics.Address]basics.AccountData

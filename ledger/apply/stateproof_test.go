@@ -33,11 +33,14 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+var ErrVerificationContextNotFound = errors.New("requested state proof verification data not found")
+
 type stateProofApplierMock struct {
 	spNext                 basics.Round
 	blocks                 map[basics.Round]bookkeeping.BlockHeader
 	blockErr               map[basics.Round]error
 	stateProofVerification map[basics.Round]*ledgercore.StateProofVerificationContext
+	version                protocol.ConsensusVersion
 }
 
 func (s *stateProofApplierMock) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
@@ -65,8 +68,13 @@ func (s *stateProofApplierMock) StateProofVerificationContext(stateProofLastAtte
 	return element, nil
 }
 
+func (s *stateProofApplierMock) ConsensusParams() config.ConsensusParams {
+	return config.Consensus[s.version]
+}
+
 func TestCowStateProofV34(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	a := require.New(t)
 
 	var spType protocol.StateProofType
 	var stateProof stateproof.StateProof
@@ -78,11 +86,12 @@ func TestCowStateProofV34(t *testing.T) {
 
 	blocks := make(map[basics.Round]bookkeeping.BlockHeader)
 	blockErr := make(map[basics.Round]error)
-	mockApplier := &stateProofApplierMock{
+	applier := &stateProofApplierMock{
 		spNext:                 0,
 		blocks:                 blocks,
 		blockErr:               blockErr,
 		stateProofVerification: nil,
+		version:                version,
 	}
 
 	spType = protocol.StateProofType(1234) // bad stateproof type
@@ -91,31 +100,32 @@ func TestCowStateProofV34(t *testing.T) {
 		StateProof:     stateProof,
 		Message:        msg,
 	}
-	err := StateProof(stateProofTx, atRound, mockApplier, validate)
-	require.ErrorIs(t, err, ErrStateProofTypeNotSupported)
+	err := StateProof(stateProofTx, atRound, applier, validate)
+	a.ErrorIs(err, ErrStateProofTypeNotSupported)
 
 	stateProofTx.StateProofType = protocol.StateProofBasic
 	// stateproof txn doesn't confirm the next state proof round. expected is in the past
 	validate = true
 	stateProofTx.Message.LastAttestedRound = uint64(16)
-	mockApplier.SetStateProofNextRound(8)
-	err = StateProof(stateProofTx, atRound, mockApplier, validate)
-	require.ErrorIs(t, err, ErrExpectedDifferentStateProofRound)
-	mockApplier.SetStateProofNextRound(32)
+	applier.SetStateProofNextRound(8)
+	err = StateProof(stateProofTx, atRound, applier, validate)
+	a.ErrorIs(err, ErrExpectedDifferentStateProofRound)
+	applier.SetStateProofNextRound(32)
 
 	// stateproof txn doesn't confirm the next state proof round. expected is in the future
 	validate = true
 	stateProofTx.Message.LastAttestedRound = uint64(16)
-	mockApplier.SetStateProofNextRound(32)
-	err = StateProof(stateProofTx, atRound, mockApplier, validate)
-	require.ErrorIs(t, err, ErrExpectedDifferentStateProofRound)
+	applier.SetStateProofNextRound(32)
+	err = StateProof(stateProofTx, atRound, applier, validate)
+	a.ErrorIs(err, ErrExpectedDifferentStateProofRound)
 
-	// no atRound block
+	// no atRound and lastAttested block
+	stateProofTx.Message.LastAttestedRound = 32
 	noBlockErr := errors.New("no block")
 	blockErr[atRound] = noBlockErr
-	stateProofTx.Message.LastAttestedRound = 32
-	err = StateProof(stateProofTx, atRound, mockApplier, validate)
-	require.ErrorIs(t, err, noBlockErr)
+	blockErr[basics.Round(stateProofTx.Message.LastAttestedRound)] = noBlockErr
+	err = StateProof(stateProofTx, atRound, applier, validate)
+	a.ErrorIs(err, noBlockErr)
 	delete(blockErr, atRound)
 
 	atRoundBlock := bookkeeping.BlockHeader{}
@@ -126,8 +136,8 @@ func TestCowStateProofV34(t *testing.T) {
 	noBlockErr = errors.New("no block")
 	blockErr[32] = noBlockErr
 	stateProofTx.Message.LastAttestedRound = 32
-	err = StateProof(stateProofTx, atRound, mockApplier, validate)
-	require.ErrorIs(t, err, noBlockErr)
+	err = StateProof(stateProofTx, atRound, applier, validate)
+	a.ErrorIs(err, noBlockErr)
 
 	// no votersRnd block
 	// this is slightly a mess of things that don't quite line up with likely usage
@@ -143,10 +153,10 @@ func TestCowStateProofV34(t *testing.T) {
 	spHdr.Round = 15
 	blocks[spHdr.Round] = spHdr
 	stateProofTx.Message.LastAttestedRound = uint64(spHdr.Round)
-	mockApplier.SetStateProofNextRound(15)
+	applier.SetStateProofNextRound(15)
 	blockErr[13] = noBlockErr
-	err = StateProof(stateProofTx, atRound, mockApplier, validate)
-	require.Contains(t, err.Error(), "no block")
+	err = StateProof(stateProofTx, atRound, applier, validate)
+	a.Contains(err.Error(), "no block")
 	delete(blockErr, 13)
 
 	// check the happy flow - we should fail only on crypto
@@ -171,14 +181,15 @@ func TestCowStateProofV34(t *testing.T) {
 
 	stateProofTx.Message.LastAttestedRound = 2 * config.Consensus[version].StateProofInterval
 	stateProofTx.StateProof.SignedWeight = 100
-	mockApplier.SetStateProofNextRound(basics.Round(2 * config.Consensus[version].StateProofInterval))
+	applier.SetStateProofNextRound(basics.Round(2 * config.Consensus[version].StateProofInterval))
 
-	err = StateProof(stateProofTx, atRound, mockApplier, validate)
-	require.Contains(t, err.Error(), "crypto error")
+	err = StateProof(stateProofTx, atRound, applier, validate)
+	a.Contains(err.Error(), "crypto error")
 }
 
 func TestCowStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	a := require.New(t)
 
 	var spType protocol.StateProofType
 	var stateProof stateproof.StateProof
@@ -188,13 +199,13 @@ func TestCowStateProof(t *testing.T) {
 
 	blocks := make(map[basics.Round]bookkeeping.BlockHeader)
 	blockErr := make(map[basics.Round]error)
-	spVerification := make(map[basics.Round]*ledgercore.StateProofVerificationContext)
-
-	mockApplier := &stateProofApplierMock{
+	stateProofVerification := make(map[basics.Round]*ledgercore.StateProofVerificationContext)
+	applier := &stateProofApplierMock{
 		spNext:                 0,
 		blocks:                 blocks,
 		blockErr:               blockErr,
-		stateProofVerification: spVerification,
+		stateProofVerification: stateProofVerification,
+		version:                protocol.ConsensusFuture,
 	}
 
 	spType = protocol.StateProofType(1234) // bad stateproof type
@@ -203,60 +214,62 @@ func TestCowStateProof(t *testing.T) {
 		StateProof:     stateProof,
 		Message:        msg,
 	}
-	err := StateProof(stateProofTx, atRound, mockApplier, validate)
-	require.ErrorIs(t, err, ErrStateProofTypeNotSupported)
+	err := StateProof(stateProofTx, atRound, applier, validate)
+	a.ErrorIs(err, ErrStateProofTypeNotSupported)
 
 	stateProofTx.StateProofType = protocol.StateProofBasic
 	// stateproof txn doesn't confirm the next state proof round. expected is in the past
 	validate = true
 	stateProofTx.Message.LastAttestedRound = uint64(16)
-	mockApplier.SetStateProofNextRound(8)
-	err = StateProof(stateProofTx, atRound, mockApplier, validate)
-	require.ErrorIs(t, err, ErrExpectedDifferentStateProofRound)
-	mockApplier.SetStateProofNextRound(32)
+	applier.SetStateProofNextRound(8)
+	err = StateProof(stateProofTx, atRound, applier, validate)
+	a.ErrorIs(err, ErrExpectedDifferentStateProofRound)
+	applier.SetStateProofNextRound(32)
 
 	// stateproof txn doesn't confirm the next state proof round. expected is in the future
 	validate = true
 	stateProofTx.Message.LastAttestedRound = uint64(16)
-	mockApplier.SetStateProofNextRound(32)
-	err = StateProof(stateProofTx, atRound, mockApplier, validate)
-	require.ErrorIs(t, err, ErrExpectedDifferentStateProofRound)
+	applier.SetStateProofNextRound(32)
+	err = StateProof(stateProofTx, atRound, applier, validate)
+	a.ErrorIs(err, ErrExpectedDifferentStateProofRound)
 
 	atRoundBlock := bookkeeping.BlockHeader{}
 	atRoundBlock.CurrentProtocol = protocol.ConsensusFuture
 	blocks[atRound] = atRoundBlock
 
 	validate = true
-	// no atRound block
-	noBlockErr := errors.New("no block")
-	blockErr[atRound] = noBlockErr
+	// no Verification Context for rounds 32
 	stateProofTx.Message.LastAttestedRound = 32
-	err = StateProof(stateProofTx, atRound, mockApplier, validate)
-	require.ErrorIs(t, err, noBlockErr)
+	err = StateProof(stateProofTx, atRound, applier, validate)
+	a.ErrorIs(err, ErrVerificationContextNotFound)
 	delete(blockErr, atRound)
 
-	noBlockErr = errors.New("no block")
+	// the behavior has changed and we no longer require the voters blockheader to verify the transaction
+	// still, this test should assure the error returned is the one expected and not "no block"
+	noBlockErr := errors.New("no block")
 
 	// removing blocks for the ledger so if apply.stateproof uses the tracker it should pass
-	mockApplier.SetStateProofNextRound(512)
+	applier.SetStateProofNextRound(512)
 	blockErr[512] = noBlockErr
 	blockErr[256] = noBlockErr
 	stateProofTx.Message.LastAttestedRound = 512
 	stateProofTx.StateProof.SignedWeight = 100
-	mockApplier.stateProofVerification[basics.Round(stateProofTx.Message.LastAttestedRound)] = &ledgercore.StateProofVerificationContext{
+	stateProofVerification[basics.Round(stateProofTx.Message.LastAttestedRound)] = &ledgercore.StateProofVerificationContext{
 		LastAttestedRound: basics.Round(stateProofTx.Message.LastAttestedRound),
 		VotersCommitment:  []byte{0x1}[:],
 		OnlineTotalWeight: basics.MicroAlgos{Raw: 5},
 		Version:           protocol.ConsensusFuture,
 	}
 
-	// if atRound header is missing the apply should fail
-	blockErr[atRound] = noBlockErr
-	err = StateProof(stateProofTx, atRound, mockApplier, validate)
-	require.ErrorIs(t, err, noBlockErr)
+	// crypto verification should fail since it is not a valid stateproof
+	err = StateProof(stateProofTx, atRound, applier, validate)
+	a.Error(err)
+	a.Contains(err.Error(), "crypto error")
 
-	delete(blockErr, atRound)
-	err = StateProof(stateProofTx, atRound, mockApplier, validate)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "crypto error")
+	a.Equal(basics.Round(512), applier.GetStateProofNextRound())
+	// transaction should be applied without stateproof validation (no context, blockheader or valid stateproof needed as it represents a node catching up)
+	err = StateProof(stateProofTx, atRound, applier, false)
+	a.NoError(err)
+	// make sure that the StateProofNext was updated correctly after applying
+	a.Equal(basics.Round(512+config.Consensus[protocol.ConsensusFuture].StateProofInterval), applier.GetStateProofNextRound())
 }
