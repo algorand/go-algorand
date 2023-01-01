@@ -526,7 +526,7 @@ func (ledger *evalTestLedger) Latest() basics.Round {
 }
 
 func (ledger *evalTestLedger) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	return nil, fmt.Errorf("evalTestLedger does not implement StateProofVerificationContext")
+	return nil, errors.New("evalTestLedger does not implement StateProofVerificationContext")
 }
 
 // AddValidatedBlock adds a new block to the ledger, after the block has
@@ -705,7 +705,7 @@ func (l *testCowBaseLedger) LookupKv(rnd basics.Round, key string) ([]byte, erro
 }
 
 func (l *testCowBaseLedger) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	return nil, fmt.Errorf("testCowBaseLedger does not implement StateProofVerificationContext")
+	return nil, errors.New("testCowBaseLedger does not implement StateProofVerificationContext")
 }
 
 func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
