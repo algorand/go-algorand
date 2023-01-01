@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -81,14 +82,12 @@ func (ec *nodeExitErrorCollector) Print() {
 	}
 }
 
-func denyRoundRequests(t *testing.T, nodeController *nodecontrol.NodeController, round basics.Round) *fixtures.WebProxy {
+func denyRoundRequestsWebProxy(t *testing.T, listeningAddress string, round basics.Round) *fixtures.WebProxy {
 	log := logging.TestingLog(t)
 	a := require.New(fixtures.SynchronizedTest(t))
 
-	primaryListeningAddress, err := nodeController.GetListeningAddress()
-	a.NoError(err)
-
-	wp, err := fixtures.MakeWebProxy(primaryListeningAddress, log, func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
+	log.SetLevel(logging.Info)
+	wp, err := fixtures.MakeWebProxy(listeningAddress, log, func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
 		// prevent requests for the given block to go through.
 		if request.URL.String() == fmt.Sprintf("/v1/test-v1/block/%d", round) {
 			response.WriteHeader(http.StatusBadRequest)
@@ -100,6 +99,38 @@ func denyRoundRequests(t *testing.T, nodeController *nodecontrol.NodeController,
 	a.NoError(err)
 	log.Infof("web proxy listens at %s\n", wp.GetListenAddress())
 	return wp
+}
+
+func waitForCatchpoint(t *testing.T, nodeRestClient *client.RestClient, targetCatchpointRound basics.Round) string {
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	// ensure the catchpoint is created for targetCatchpointRound
+	var status model.NodeStatusResponse
+	var err error
+	timer := time.NewTimer(10 * time.Second)
+outer:
+	for {
+		status, err = nodeRestClient.Status()
+		a.NoError(err)
+
+		var round basics.Round
+		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
+			round, _, err = ledgercore.ParseCatchpointLabel(*status.LastCatchpoint)
+			a.NoError(err)
+			if round >= targetCatchpointRound {
+				break
+			}
+		}
+		select {
+		case <-timer.C:
+			a.Failf("timeout waiting a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
+			break outer
+		default:
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+
+	return *status.LastCatchpoint
 }
 
 func TestBasicCatchpointCatchup(t *testing.T) {
@@ -136,6 +167,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	catchpointCatchupProtocol.MaxTxnLife = 13
 	catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
 	catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
+	catchpointCatchupProtocol.StateProofUseTrackerVerification = true
 
 	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
 		// amd64 and arm64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
@@ -187,9 +219,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	a.NoError(err)
 	defer primaryNode.StopAlgod()
 
-	waitTimePerBlock := 5 * time.Second
-	// Let the network make some progress
-	currentRound := uint64(1)
+	waitTimePerBlock := 10 * time.Second
 	// fast catchup downloads some blocks back from catchpoint round - CatchpointLookback
 	expectedBlocksToDownload := catchpointCatchupProtocol.MaxTxnLife + catchpointCatchupProtocol.DeeperBlockHeaderHistory
 	const restrictedBlockRound = 2 // block number that is rejected to be downloaded to ensure fast catchup and not regular catchup is running
@@ -197,14 +227,20 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	// that is greater than expectedBlocksToDownload before the restrictedBlock block number
 	minRound := restrictedBlockRound + catchpointCatchupProtocol.CatchpointLookback
 	targetCatchpointRound := (basics.Round(expectedBlocksToDownload+minRound)/catchpointInterval + 1) * catchpointInterval
-	targetRound := uint64(targetCatchpointRound) + 1
+	targetRound := targetCatchpointRound + 1
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 	log.Infof("Building ledger history..")
-	err = fixture.ClientWaitForRound(primaryNodeRestClient, targetRound, time.Duration(targetRound)*waitTimePerBlock)
+	err = fixture.ClientWaitForRound(primaryNodeRestClient, uint64(targetRound), time.Duration(targetRound)*waitTimePerBlock)
 	a.NoError(err)
 	log.Infof("done building!\n")
 
-	wp := denyRoundRequests(t, &primaryNode, 2)
+	primaryNodeAddr, err := primaryNode.GetListeningAddress()
+	a.NoError(err)
+
+	catchpointLabel := waitForCatchpoint(t, &primaryNodeRestClient, targetCatchpointRound)
+	log.Infof("primary node catchpoint for round %d - %s!\n", targetCatchpointRound, catchpointLabel)
+
+	wp := denyRoundRequestsWebProxy(t, primaryNodeAddr, 2)
 	defer wp.Close()
 
 	// start the second node
@@ -221,48 +257,16 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 
 	// wait until node is caught up.
 	secondNodeRestClient := fixture.GetAlgodClientForController(secondNode)
-
 	secondNodeTargetRound := uint64(1)
-	log.Infof("Second node catching up to round 1")
 	err = fixture.ClientWaitForRound(secondNodeRestClient, secondNodeTargetRound, waitTimePerBlock)
 	a.NoError(err)
-	log.Infof(" - done catching up!\n")
 
-	// ensure the catchpoint is created for targetCatchpointRound
-	var status model.NodeStatusResponse
-	timer := time.NewTimer(10 * time.Second)
-outer:
-	for {
-		status, err = primaryNodeRestClient.Status()
-		a.NoError(err)
-
-		var round basics.Round
-		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
-			round, _, err = ledgercore.ParseCatchpointLabel(*status.LastCatchpoint)
-			a.NoError(err)
-			if round >= targetCatchpointRound {
-				break
-			}
-		}
-		select {
-		case <-timer.C:
-			a.Failf("timeout waiting a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
-			break outer
-		default:
-			time.Sleep(250 * time.Millisecond)
-		}
-	}
-
-	log.Infof("primary node latest catchpoint - %s!\n", *status.LastCatchpoint)
-	_, err = secondNodeRestClient.Catchup(*status.LastCatchpoint)
+	_, err = secondNodeRestClient.Catchup(catchpointLabel)
 	a.NoError(err)
 
-	currentRound = status.LastRound
-	a.LessOrEqual(targetRound, currentRound)
-	fixtureTargetRound := targetRound + 1
-	log.Infof("Second node catching up to round %v", currentRound)
-	// TODO: Multiply?
-	err = fixture.ClientWaitForRound(secondNodeRestClient, fixtureTargetRound, waitTimePerBlock)
+	roundsToCathcup := targetRound - targetCatchpointRound
+	log.Infof("Second node catching up to round %v", targetRound)
+	err = fixture.ClientWaitForRound(secondNodeRestClient, uint64(targetRound), waitTimePerBlock*time.Duration(roundsToCathcup))
 	a.NoError(err)
 	log.Infof("done catching up!\n")
 }
