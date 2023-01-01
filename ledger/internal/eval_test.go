@@ -202,6 +202,7 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 
 func TestCowStateProofV34(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	a := require.New(t)
 
 	var spType protocol.StateProofType
 	var stateProof stateproof.StateProof
@@ -226,7 +227,7 @@ func TestCowStateProofV34(t *testing.T) {
 		Message:        msg,
 	}
 	err := apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, apply.ErrStateProofTypeNotSupported)
+	a.ErrorIs(err, apply.ErrStateProofTypeNotSupported)
 
 	stateProofTx.StateProofType = protocol.StateProofBasic
 	// stateproof txn doesn't confirm the next state proof round. expected is in the past
@@ -234,7 +235,7 @@ func TestCowStateProofV34(t *testing.T) {
 	stateProofTx.Message.LastAttestedRound = uint64(16)
 	c0.SetStateProofNextRound(8)
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
+	a.ErrorIs(err, apply.ErrExpectedDifferentStateProofRound)
 	c0.SetStateProofNextRound(32)
 
 	// stateproof txn doesn't confirm the next state proof round. expected is in the future
@@ -242,14 +243,15 @@ func TestCowStateProofV34(t *testing.T) {
 	stateProofTx.Message.LastAttestedRound = uint64(16)
 	c0.SetStateProofNextRound(32)
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
+	a.ErrorIs(err, apply.ErrExpectedDifferentStateProofRound)
 
-	// no atRound block
+	// no atRound and lastAttested block
+	stateProofTx.Message.LastAttestedRound = 32
 	noBlockErr := errors.New("no block")
 	blockErr[atRound] = noBlockErr
-	stateProofTx.Message.LastAttestedRound = 32
+	blockErr[basics.Round(stateProofTx.Message.LastAttestedRound)] = noBlockErr
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, noBlockErr)
+	a.ErrorIs(err, noBlockErr)
 	delete(blockErr, atRound)
 
 	atRoundBlock := bookkeeping.BlockHeader{}
@@ -261,7 +263,7 @@ func TestCowStateProofV34(t *testing.T) {
 	blockErr[32] = noBlockErr
 	stateProofTx.Message.LastAttestedRound = 32
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, noBlockErr)
+	a.ErrorIs(err, noBlockErr)
 
 	// no votersRnd block
 	// this is slightly a mess of things that don't quite line up with likely usage
@@ -280,7 +282,7 @@ func TestCowStateProofV34(t *testing.T) {
 	c0.SetStateProofNextRound(15)
 	blockErr[13] = noBlockErr
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.Contains(t, err.Error(), "no block")
+	a.Contains(err.Error(), "no block")
 	delete(blockErr, 13)
 
 	// check the happy flow - we should fail only on crypto
@@ -308,11 +310,12 @@ func TestCowStateProofV34(t *testing.T) {
 	c0.SetStateProofNextRound(basics.Round(2 * config.Consensus[version].StateProofInterval))
 
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.Contains(t, err.Error(), "crypto error")
+	a.Contains(err.Error(), "crypto error")
 }
 
 func TestCowStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	a := require.New(t)
 
 	var spType protocol.StateProofType
 	var stateProof stateproof.StateProof
@@ -336,7 +339,7 @@ func TestCowStateProof(t *testing.T) {
 		Message:        msg,
 	}
 	err := apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, apply.ErrStateProofTypeNotSupported)
+	a.ErrorIs(err, apply.ErrStateProofTypeNotSupported)
 
 	stateProofTx.StateProofType = protocol.StateProofBasic
 	// stateproof txn doesn't confirm the next state proof round. expected is in the past
@@ -344,7 +347,7 @@ func TestCowStateProof(t *testing.T) {
 	stateProofTx.Message.LastAttestedRound = uint64(16)
 	c0.SetStateProofNextRound(8)
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
+	a.ErrorIs(err, apply.ErrExpectedDifferentStateProofRound)
 	c0.SetStateProofNextRound(32)
 
 	// stateproof txn doesn't confirm the next state proof round. expected is in the future
@@ -352,22 +355,22 @@ func TestCowStateProof(t *testing.T) {
 	stateProofTx.Message.LastAttestedRound = uint64(16)
 	c0.SetStateProofNextRound(32)
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
+	a.ErrorIs(err, apply.ErrExpectedDifferentStateProofRound)
 
 	atRoundBlock := bookkeeping.BlockHeader{}
 	atRoundBlock.CurrentProtocol = protocol.ConsensusFuture
 	blocks[atRound] = atRoundBlock
 
 	validate = true
-	// no atRound block
-	noBlockErr := errors.New("no block")
-	blockErr[atRound] = noBlockErr
+	// no Verification Context for rounds 32
 	stateProofTx.Message.LastAttestedRound = 32
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, noBlockErr)
+	a.ErrorIs(err, ErrVerificationContextNotFound)
 	delete(blockErr, atRound)
 
-	noBlockErr = errors.New("no block")
+	// the behavior has changed and we no longer require the voters blockheader to verify the transaction
+	// still, this test should assure the error returned is the one expected and not "no block"
+	noBlockErr := errors.New("no block")
 
 	// removing blocks for the ledger so if apply.stateproof uses the tracker it should pass
 	c0.SetStateProofNextRound(512)
@@ -382,15 +385,17 @@ func TestCowStateProof(t *testing.T) {
 		Version:           protocol.ConsensusFuture,
 	}
 
-	// if atRound header is missing the apply should fail
-	blockErr[atRound] = noBlockErr
+	// crypto verification should fail since it is not a valid stateproof
 	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, noBlockErr)
+	a.Error(err)
+	a.Contains(err.Error(), "crypto error")
 
-	delete(blockErr, atRound)
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "crypto error")
+	a.Equal(basics.Round(512), c0.mods.StateProofNext)
+	// transaction should be applied without stateproof validation (no context, blockheader or valid stateproof needed as it represents a node catching up)
+	err = apply.StateProof(stateProofTx, atRound, c0, false)
+	a.NoError(err)
+	// make sure that the StateProofNext was updated correctly after applying
+	a.Equal(basics.Round(512+config.Consensus[protocol.ConsensusFuture].StateProofInterval), c0.mods.StateProofNext)
 }
 
 // a couple trivial tests that don't need setup
