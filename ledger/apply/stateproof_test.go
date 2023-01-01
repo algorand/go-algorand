@@ -63,7 +63,7 @@ func (s *stateProofApplierMock) SetStateProofNextRound(rnd basics.Round) {
 func (s *stateProofApplierMock) StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	element, exists := s.stateProofVerification[stateProofLastAttestedRound]
 	if !exists {
-		return nil, errors.New("requested state proof verification data not found")
+		return nil, ErrVerificationContextNotFound
 	}
 	return element, nil
 }
