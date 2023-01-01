@@ -19,8 +19,9 @@ package apply
 import (
 	"errors"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
@@ -72,7 +73,7 @@ func (s *stateProofApplierMock) ConsensusParams() config.ConsensusParams {
 	return config.Consensus[s.version]
 }
 
-func TestCowStateProofV34(t *testing.T) {
+func TestApplyStateProofV34(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -187,7 +188,7 @@ func TestCowStateProofV34(t *testing.T) {
 	a.Contains(err.Error(), "crypto error")
 }
 
-func TestCowStateProof(t *testing.T) {
+func TestApplyStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
