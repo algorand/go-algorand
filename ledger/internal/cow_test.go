@@ -36,10 +36,7 @@ import (
 var ErrVerificationContextNotFound = errors.New("requested state proof verification data not found")
 
 type mockLedger struct {
-	balanceMap             map[basics.Address]basics.AccountData
-	blocks                 map[basics.Round]bookkeeping.BlockHeader
-	blockErr               map[basics.Round]error
-	stateProofVerification map[basics.Round]*ledgercore.StateProofVerificationContext
+	balanceMap map[basics.Address]basics.AccountData
 }
 
 func (ml *mockLedger) lookup(addr basics.Address) (ledgercore.AccountData, error) {
@@ -103,12 +100,7 @@ func (ml *mockLedger) GetStateProofNextRound() basics.Round {
 }
 
 func (ml *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
-	err, hit := ml.blockErr[rnd]
-	if hit {
-		return bookkeeping.BlockHeader{}, err
-	}
-	hdr := ml.blocks[rnd] // default struct is fine if nothing found
-	return hdr, nil
+	return bookkeeping.BlockHeader{}, fmt.Errorf("requested blockheader not found")
 }
 
 func (ml *mockLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
@@ -116,11 +108,7 @@ func (ml *mockLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader,
 }
 
 func (ml *mockLedger) StateProofVerificationContext(rnd basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	element, exists := ml.stateProofVerification[rnd]
-	if !exists {
-		return nil, ErrVerificationContextNotFound
-	}
-	return element, nil
+	return nil, fmt.Errorf("requested state proof verification data not found")
 }
 
 func checkCowByUpdate(t *testing.T, cow *roundCowState, delta ledgercore.AccountDeltas) {
