@@ -569,8 +569,7 @@ func TestStateProofRecovery(t *testing.T) {
 	consensusParams.SeedLookback = 2
 	consensusParams.SeedRefreshInterval = 2
 	consensusParams.MaxBalLookback = 2 * consensusParams.SeedLookback * consensusParams.SeedRefreshInterval // 8
-	//todo restore this when builder.tryBroadcast is fixed
-	//consensusParams.MaxTxnLife = 13
+	consensusParams.MaxTxnLife = 13
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
