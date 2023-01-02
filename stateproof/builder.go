@@ -131,7 +131,7 @@ func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
 	}
 
 	for _, sig := range sigs {
-		err = buildr.insertSigToBuilder(&sig)
+		err = buildr.insertSig(&sig)
 		if err != nil {
 			spw.log.Warn(err)
 		}
@@ -255,14 +255,14 @@ func (spw *Worker) getAllOnlineBuilderRounds() ([]basics.Round, error) {
 	return rnds, err
 }
 
-func (builderForRound *builder) insertSigToBuilder(sig *pendingSig) error {
-	rnd := builderForRound.Round
-	pos, ok := builderForRound.AddrToPos[sig.signer]
+func (b *builder) insertSig(sig *pendingSig) error {
+	rnd := b.Round
+	pos, ok := b.AddrToPos[sig.signer]
 	if !ok {
 		return fmt.Errorf("insertSigToBuilder: cannot find %v in round %d", sig.signer, rnd)
 	}
 
-	isPresent, err := builderForRound.Present(pos)
+	isPresent, err := b.Present(pos)
 	if err != nil {
 		return fmt.Errorf("insertSigToBuilder: failed to invoke builderForRound.Present on pos %d - %w", pos, err)
 	}
@@ -270,10 +270,10 @@ func (builderForRound *builder) insertSigToBuilder(sig *pendingSig) error {
 		return fmt.Errorf("insertSigToBuilder: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
 	}
 
-	if err := builderForRound.IsValid(pos, &sig.sig, false); err != nil {
+	if err := b.IsValid(pos, &sig.sig, false); err != nil {
 		return fmt.Errorf("insertSigToBuilder: cannot add %v in round %d: %w", sig.signer, rnd, err)
 	}
-	if err := builderForRound.Add(pos, sig.sig); err != nil {
+	if err := b.Add(pos, sig.sig); err != nil {
 		return fmt.Errorf("insertSigToBuilder: error while adding sig. inner error: %w", err)
 	}
 
