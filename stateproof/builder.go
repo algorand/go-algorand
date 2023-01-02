@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -117,6 +118,21 @@ func (spw *Worker) loadBuilderFromDB(rnd basics.Round) (builder, error) {
 	}
 
 	return buildr, nil
+}
+
+// loadMessageFromDB loads a StateProof Message from disk.
+func (spw *Worker) loadMessageFromDB(rnd basics.Round) (stateproofmsg.Message, error) {
+	var msg stateproofmsg.Message
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var err2 error
+		msg, err2 = getMessage(tx, rnd)
+		return err2
+	})
+	if err != nil {
+		return stateproofmsg.Message{}, err
+	}
+
+	return msg, nil
 }
 
 func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
