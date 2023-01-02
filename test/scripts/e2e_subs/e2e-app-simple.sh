@@ -123,9 +123,24 @@ ${gcmd} app optin --app-id $APPID --from $ACCOUNT
 # Succeed in clearing state for the app
 ${gcmd} app clear --app-id $APPID --from $ACCOUNT
 
-# Fail to create an app because the clear program is empty
+
+# Empty program:
 printf '     ' > "${TEMPDIR}/empty_clear.teal"
-RES=$(${gcmd} app create --creator "${ACCOUNT}" --approval-prog "${TEMPDIR}/simple.teal" --clear-prog "${TEMPDIR}/empty_clear.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
+
+# Fail to compile an empty program
+RES=$(${gcmd} clerk compile "${TEMPDIR}/empty_clear.teal" 2>&1 | tr -d '\n' || true)
+echo "${gcmd} clerk compile ${TEMPDIR}/empty_clear.teal (error RES)=$RES"
+EXPERROR='Cannot assemble empty program text'
+if [[ $RES != *"${EXPERROR}"* ]]; then
+    echo RES="$RES"
+    echo EXPERROR="$EXPERROR"
+    date '+app-create-test FAIL wrong error for compiling empty program %Y%m%d_%H%M%S'
+    false
+fi
+
+# Fail to create an app because the clear program is empty
+RES=$(${gcmd} app create --creator "${ACCOUNT}" --approval-prog "${TEMPDIR}/simple.teal" --clear-prog "${TEMPDIR}/empty_clear.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 | tr -d '\n' || true)
+echo "${gcmd} app create --creator ... --clear-prog ${TEMPDIR}/empty_clear.teal ... (error RES)=$RES"
 EXPERROR='Cannot assemble empty program text'
 if [[ $RES != *"${EXPERROR}"* ]]; then
     echo RES="$RES"

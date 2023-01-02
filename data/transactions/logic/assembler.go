@@ -1857,13 +1857,13 @@ func splitTokens(tokens []string) (current, rest []string) {
 
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
+	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
+		return ops.errorf("Can not assemble version %d", ops.Version)
+	}
 	if strings.TrimSpace(text) == "" {
 		return ops.errorf("Cannot assemble empty program text")
 	}
 	fin := strings.NewReader(text)
-	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
-		return ops.errorf("Can not assemble version %d", ops.Version)
-	}
 	scanner := bufio.NewScanner(fin)
 	for scanner.Scan() {
 		ops.sourceLine++
