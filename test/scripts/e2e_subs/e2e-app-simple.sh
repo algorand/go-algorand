@@ -140,9 +140,9 @@ fi
 
 # Fail to create an app because the clear program is empty
 RES=$(${gcmd} app create --creator "${ACCOUNT}" --approval-prog "${TEMPDIR}/simple.teal" --clear-prog "${TEMPDIR}/empty_clear.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 | tr -d '\n' || true)
-echo "${gcmd} app create --creator ... --clear-prog ${TEMPDIR}/empty_clear.teal ... (error RES)=$RES"
 EXPERROR='Cannot assemble empty program text'
 if [[ $RES != *"${EXPERROR}"* ]]; then
+    echo "${gcmd} app create --creator ... --clear-prog ${TEMPDIR}/empty_clear.teal ..."
     echo RES="$RES"
     echo EXPERROR="$EXPERROR"
     date '+app-create-test FAIL wrong error for creating app with empty clear %Y%m%d_%H%M%S'
