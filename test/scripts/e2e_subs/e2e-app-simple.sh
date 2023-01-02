@@ -129,9 +129,9 @@ printf '     ' > "${TEMPDIR}/empty_clear.teal"
 
 # Fail to compile an empty program
 RES=$(${gcmd} clerk compile "${TEMPDIR}/empty_clear.teal" 2>&1 | tr -d '\n' || true)
-echo "${gcmd} clerk compile ${TEMPDIR}/empty_clear.teal (error RES)=$RES"
 EXPERROR='Cannot assemble empty program text'
 if [[ $RES != *"${EXPERROR}"* ]]; then
+    echo "${gcmd} clerk compile ${TEMPDIR}/empty_clear.teal"
     echo RES="$RES"
     echo EXPERROR="$EXPERROR"
     date '+app-create-test FAIL wrong error for compiling empty program %Y%m%d_%H%M%S'
