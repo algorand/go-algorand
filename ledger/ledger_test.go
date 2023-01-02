@@ -3367,6 +3367,8 @@ func TestStateProofTrackerAfterReplay(t *testing.T) {
 	// To be deleted, but not yet deleted (waiting for commit)
 	verifyStateProofVerificationTracking(t, &l.stateProofVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
 
+	l.WaitForCommit(l.Latest())
+
 	err = l.reloadLedger()
 	a.NoError(err)
 
