@@ -3078,6 +3078,9 @@ func TestAssembleEmpty(t *testing.T) {
 }
 
 func TestMultipleErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	assertWithMsg := func(t *testing.T, expectedOutput string, b bytes.Buffer) {
 		if b.String() != expectedOutput {
 			t.Errorf("Unexpected output: got %q, want %q", b.String(), expectedOutput)
