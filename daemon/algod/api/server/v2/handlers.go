@@ -1499,7 +1499,7 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params model.TealCompileParams
 	ops, err := logic.AssembleString(source)
 	if err != nil {
 		sb := strings.Builder{}
-		ops.ReportProblems("", &sb)
+		ops.MultipleErrors("", &sb)
 		return badRequest(ctx, err, sb.String(), v2.Log)
 	}
 	pd := logic.HashProgram(ops.Program)

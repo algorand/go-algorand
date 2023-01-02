@@ -962,7 +962,7 @@ func assembleFileImpl(fname string, printWarnings bool) *logic.OpStream {
 	}
 	ops, err := logic.AssembleString(string(text))
 	if err != nil {
-		ops.ReportProblems(fname, os.Stderr)
+		ops.MultipleErrors(fname, os.Stderr)
 		reportErrorf("%s: %s", fname, err)
 	}
 	_, params := getProto(protoVersion)

@@ -163,7 +163,7 @@ var signProgramCmd = &cobra.Command{
 			}
 			ops, err := logic.AssembleString(string(text))
 			if err != nil {
-				ops.ReportProblems(programSource, os.Stderr)
+				ops.MultipleErrors(programSource, os.Stderr)
 				reportErrorf("%s: %s", programSource, err)
 			}
 			if outname == "" {

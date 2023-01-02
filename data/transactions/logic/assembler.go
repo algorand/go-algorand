@@ -1858,7 +1858,7 @@ func splitTokens(tokens []string) (current, rest []string) {
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
 	if strings.TrimSpace(text) == "" {
-		ops.errorf("Cannot assemble empty program text")
+		return ops.errorf("Cannot assemble empty program text")
 	}
 	fin := strings.NewReader(text)
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
@@ -2414,8 +2414,18 @@ func (ops *OpStream) warnf(format string, a ...interface{}) error {
 	return ops.warn(fmt.Errorf(format, a...))
 }
 
-// ReportProblems issues accumulated warnings and outputs errors to an io.Writer.
-func (ops *OpStream) ReportProblems(fname string, writer io.Writer) {
+// MultipleErrors issues accumulated warnings and outputs errors to an io.Writer.
+// In the case of exactly 1 error and no warnings, only report the count as it is assumed that
+// the underlying error has been handed off elsewhere for reporting.
+func (ops *OpStream) MultipleErrors(fname string, writer io.Writer) {
+	if len(ops.Errors) == 1 && len(ops.Warnings) == 0 {
+		prefix := ""
+		if fname != "" {
+			prefix = fmt.Sprintf("%s: ", fname)
+		}
+		fmt.Fprintln(writer, prefix+"1 error")
+		return
+	}
 	for i, e := range ops.Errors {
 		if i > 9 {
 			break
