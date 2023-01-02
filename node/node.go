@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -214,7 +214,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
 	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledger.BlockListener{}, cfg)
+	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
 	if err != nil {
 		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
 		return nil, err
@@ -222,7 +222,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log)
 
-	blockListeners := []ledger.BlockListener{
+	blockListeners := []ledgercore.BlockListener{
 		node.transactionPool,
 		node,
 	}
@@ -240,7 +240,11 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		GenesisHash:   node.genesisHash,
 		Config:        cfg,
 	}
-	node.txHandler = data.MakeTxHandler(txHandlerOpts)
+	node.txHandler, err = data.MakeTxHandler(txHandlerOpts)
+	if err != nil {
+		log.Errorf("Cannot initialize TxHandler: %v", err)
+		return nil, err
+	}
 
 	// Indexer setup
 	if cfg.IsIndexerActive && cfg.Archival {
@@ -514,7 +518,7 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 		return err
 	}
 
-	_, err = verify.TxnGroup(txgroup, b, node.ledger.VerifiedTransactionCache(), node.ledger)
+	_, err = verify.TxnGroup(txgroup, &b, node.ledger.VerifiedTransactionCache(), node.ledger)
 	if err != nil {
 		node.log.Warnf("malformed transaction: %v", err)
 		return err
