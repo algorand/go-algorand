@@ -124,7 +124,15 @@ echo "#pragma version 2" | ${gcmd} clerk compile -
 
 set +o pipefail
 # The compile will fail, but this tests against a regression in which compile SEGV'd
-echo "#pragma version 100" | ${gcmd} clerk compile - 2>&1 | grep "unsupported version"
+RES=$(echo '#pragma version 100' | ${gcmd} clerk compile - 2>&1 | tr -d '\n' || true)
+echo "echo '#pragma version 100' | ${gcmd} clerk compile - (error RES)=$RES"
+EXPERROR='unsupported version'
+if [[ $RES != *"${EXPERROR}"* ]]; then
+    echo RES="$RES"
+    echo EXPERROR="$EXPERROR"
+    date '+lsig-compile-test FAIL wrong error for compiling logic sig for version 100 %Y%m%d_%H%M%S'
+    false
+fi
 set -o pipefail
 
 

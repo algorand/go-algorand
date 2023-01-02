@@ -3149,13 +3149,13 @@ warning 2
 	ops = &OpStream{Errors: []lineError{{42, errors.New("super annoying error")}}}
 	b.Reset()
 	ops.MultipleErrors("galaxy.py", &b)
-	expected = "galaxy.py: 1 error\n"
+	expected = "galaxy.py: 1 error: 42: super annoying error\n"
 	assertWithMsg(t, expected, b)
 
 	// exactly 1 error w/o filename
 	ops = &OpStream{Errors: []lineError{{42, errors.New("super annoying error")}}}
 	b.Reset()
 	ops.MultipleErrors("", &b)
-	expected = "1 error\n"
+	expected = "1 error: 42: super annoying error\n"
 	assertWithMsg(t, expected, b)
 }
