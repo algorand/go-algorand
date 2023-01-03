@@ -112,7 +112,7 @@ workflows:
           context: slack-secrets
           <<: *slack-fail-post-step
 
-      # Separate test for self-hosted runner - no parallelism
+      # Separate test for mac_arm64 runner - no parallelism
       - test_nightly_mac_arm64:
           name: mac_arm64_test_nightly
           requires:
@@ -132,9 +132,18 @@ workflows:
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
           matrix:
-            <<: *matrix-nightly
+            parameters:
+              platform: ["amd64", "arm64", "mac_amd64"]
           requires:
             - << matrix.platform >>_build_nightly
+          context: slack-secrets
+          <<: *slack-fail-post-step
+
+      # Separate test for mac_arm64 runner - no parallelism
+      - integration_nightly_mac_arm64:
+          name: mac_arm64_integration_nightly
+          requires:
+            - mac_arm64_build_nightly
           context: slack-secrets
           <<: *slack-fail-post-step
 
@@ -279,7 +288,7 @@ jobs:
           no_output_timeout: 45m
       - upload_coverage
 
-  # Remove parallelism in self-hosted runner
+  # Separate test for mac_arm64 runner - no parallelism
   test_nightly_mac_arm64:
     executor: mac_arm64_medium
     working_directory: << pipeline.parameters.build_dir >>/project
@@ -323,6 +332,19 @@ jobs:
           result_subdir: << parameters.platform >>_integration_nightly
           no_output_timeout: 45m
 
+  # Separate test for mac_arm64 runner - no parallelism
+  integration_nightly_mac_arm64:
+    executor: mac_arm64_large
+    working_directory: << pipeline.parameters.build_dir >>/project
+    environment:
+      E2E_TEST_FILTER: "GO"
+    steps:
+      - generic_build
+      - generic_integration:
+          platform: mac_arm64
+          result_subdir: mac_arm64_integration_nightly
+          no_output_timeout: 45m
+
   e2e_expect:
     parameters:
       platform:
@@ -355,7 +377,7 @@ jobs:
           result_subdir: << parameters.platform>>_e2e_expect_nightly
           no_output_timeout: 45m
 
-  # Remove parallelism in self-hosted runner
+  # Separate test for mac_arm64 runner - no parallelism
   e2e_expect_nightly_mac_arm64:
     executor: mac_arm64_medium
     working_directory: << pipeline.parameters.build_dir >>/project
