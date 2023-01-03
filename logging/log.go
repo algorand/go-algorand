@@ -134,6 +134,9 @@ type Logger interface {
 	// Set the logging version (Info by default)
 	SetLevel(Level)
 
+	// Get the logging version
+	GetLevel() Level
+
 	// Sets the output target
 	SetOutput(io.Writer)
 
@@ -283,6 +286,10 @@ func (l logger) WithFields(fields Fields) Logger {
 		l.source().WithFields(fields),
 		l.loggerState,
 	}
+}
+
+func (l logger) GetLevel() (lvl Level) {
+	return Level(l.entry.Logger.Level)
 }
 
 func (l logger) SetLevel(lvl Level) {

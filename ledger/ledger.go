@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -399,7 +399,7 @@ func (l *Ledger) Close() {
 
 // RegisterBlockListeners registers listeners that will be called when a
 // new block is added to the ledger.
-func (l *Ledger) RegisterBlockListeners(listeners []BlockListener) {
+func (l *Ledger) RegisterBlockListeners(listeners []ledgercore.BlockListener) {
 	l.notifier.register(listeners)
 }
 
