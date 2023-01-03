@@ -147,7 +147,7 @@ func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
 	}
 
 	for _, sig := range sigs {
-		err = buildr.insertSig(&sig)
+		err = buildr.insertSig(&sig, false)
 		if err != nil {
 			spw.log.Warn(err)
 		}
@@ -275,7 +275,7 @@ var errAddressNotInCommittee = errors.New("cannot find address in builder")   //
 var errFailedToAddSigAtPos = errors.New("could not add signature to builder") // Position was out of array bounds or signature already present
 var errSignatureVerification = errors.New("error while verifying signature")  // Signature failed cryptographic verification
 
-func (b *builder) insertSig(s *pendingSig) error {
+func (b *builder) insertSig(s *pendingSig, verify bool) error {
 	rnd := b.Round
 	pos, ok := b.AddrToPos[s.signer]
 	if !ok {
@@ -290,7 +290,7 @@ func (b *builder) insertSig(s *pendingSig) error {
 		return fmt.Errorf("insertSigToBuilder: %w (position %d for round %d already filled by sig of %v)", errFailedToAddSigAtPos, rnd, pos, s.signer)
 	}
 
-	if err := b.IsValid(pos, &s.sig, false); err != nil {
+	if err := b.IsValid(pos, &s.sig, verify); err != nil {
 		return fmt.Errorf("insertSigToBuilder: %w (cannot add %v in round %d: %v)", errSignatureVerification, s.signer, rnd, err)
 	}
 	if err := b.Add(pos, s.sig); err != nil {
@@ -392,11 +392,11 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		sig:          sfa.Sig,
 		fromThisNode: sender == nil,
 	}
-	err := builderForRound.insertSig(&sig)
-	if err == errFailedToAddSigAtPos {
-		return network.Ignore, nil
+	err := builderForRound.insertSig(&sig, true)
+	if errors.Is(err, errFailedToAddSigAtPos) {
+		return network.Ignore, err
 	}
-	if err == errAddressNotInCommittee || err == errSignatureVerification {
+	if errors.Is(err, errAddressNotInCommittee) || errors.Is(err, errSignatureVerification) {
 		return network.Disconnect, err
 	}
 
