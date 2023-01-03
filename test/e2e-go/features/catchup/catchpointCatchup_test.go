@@ -81,6 +81,7 @@ func applyCatchpointConsensusChanges(consensusParams *config.ConsensusParams) {
 		consensusParams.AgreementFilterTimeoutPeriod0 = 1 * time.Second
 		consensusParams.AgreementFilterTimeout = 1 * time.Second
 	}
+	consensusParams.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 }
 
 func configureCatchpointGeneration(a *require.Assertions, nodeController *nodecontrol.NodeController, catchpointInterval uint64) {
@@ -225,7 +226,6 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	consensus := make(config.ConsensusProtocols)
 	const consensusCatchpointCatchupTestProtocol = protocol.ConsensusVersion("catchpointtestingprotocol")
 	catchpointCatchupProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
-	catchpointCatchupProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	applyCatchpointConsensusChanges(&catchpointCatchupProtocol)
 	consensus[consensusCatchpointCatchupTestProtocol] = catchpointCatchupProtocol
 
@@ -261,108 +261,92 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	a.NoError(err)
 }
 
-// TODO: refactor
-//func TestCatchpointLabelGeneration(t *testing.T) {
-//	partitiontest.PartitionTest(t)
-//	defer fixtures.ShutdownSynchronizedTest(t)
-//
-//	if testing.Short() {
-//		t.Skip()
-//	}
-//
-//	testCases := []struct {
-//		catchpointInterval uint64
-//		archival           bool
-//		expectLabels       bool
-//	}{
-//		{4, true, true},
-//		{4, false, true},
-//		{0, true, false},
-//	}
-//
-//	for _, tc := range testCases {
-//		t.Run(fmt.Sprintf("CatchpointInterval_%v/Archival_%v", tc.catchpointInterval, tc.archival), func(t *testing.T) {
-//			a := require.New(fixtures.SynchronizedTest(t))
-//			log := logging.TestingLog(t)
-//
-//			consensus := make(config.ConsensusProtocols)
-//			const consensusCatchpointCatchupTestProtocol = protocol.ConsensusVersion("catchpointtestingprotocol")
-//			catchpointCatchupProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
-//			catchpointCatchupProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-//			// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
-//			// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
-//			catchpointCatchupProtocol.SeedLookback = 2
-//			catchpointCatchupProtocol.SeedRefreshInterval = 2
-//			catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 8
-//			catchpointCatchupProtocol.MaxTxnLife = 13
-//			catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
-//			catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
-//
-//			if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
-//				// amd64 and arm64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
-//				catchpointCatchupProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
-//				catchpointCatchupProtocol.AgreementFilterTimeout = 1 * time.Second
-//			}
-//
-//			consensus[consensusCatchpointCatchupTestProtocol] = catchpointCatchupProtocol
-//
-//			var fixture fixtures.RestClientFixture
-//			fixture.SetConsensus(consensus)
-//
-//			errorsCollector := nodeExitErrorCollector{t: fixtures.SynchronizedTest(t)}
-//			defer errorsCollector.Print()
-//
-//			fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
-//
-//			// Get primary node
-//			primaryNode, err := fixture.GetNodeController("Primary")
-//			a.NoError(err)
-//
-//			cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
-//			a.NoError(err)
-//			cfg.CatchpointInterval = tc.catchpointInterval
-//			cfg.Archival = tc.archival
-//			cfg.MaxAcctLookback = 2
-//			cfg.SaveToDisk(primaryNode.GetDataDir())
-//
-//			// start the primary node
-//			_, err = primaryNode.StartAlgod(nodecontrol.AlgodStartArgs{
-//				PeerAddress:       "",
-//				ListenIP:          "",
-//				RedirectOutput:    true,
-//				RunUnderHost:      false,
-//				TelemetryOverride: "",
-//				ExitErrorCallback: errorsCollector.nodeExitWithError,
-//			})
-//			a.NoError(err)
-//			defer primaryNode.StopAlgod()
-//
-//			// Let the network make some progress
-//			currentRound := uint64(1)
-//			targetRound := uint64(21)
-//			primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
-//			log.Infof("Building ledger history..")
-//			for {
-//				err = fixture.ClientWaitForRound(primaryNodeRestClient, currentRound, 45*time.Second)
-//				a.NoError(err)
-//				if targetRound <= currentRound {
-//					break
-//				}
-//				currentRound++
-//			}
-//			log.Infof("done building!\n")
-//
-//			primaryNodeStatus, err := primaryNodeRestClient.Status()
-//			a.NoError(err)
-//			a.NotNil(primaryNodeStatus.LastCatchpoint)
-//			if tc.expectLabels {
-//				a.NotEmpty(*primaryNodeStatus.LastCatchpoint)
-//			} else {
-//				a.Empty(*primaryNodeStatus.LastCatchpoint)
-//			}
-//		})
-//	}
-//}
+func TestCatchpointLabelGeneration(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	if testing.Short() {
+		t.Skip()
+	}
+
+	testCases := []struct {
+		catchpointInterval uint64
+		archival           bool
+		expectLabels       bool
+	}{
+		{4, true, true},
+		{4, false, true},
+		{0, true, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("CatchpointInterval_%v/Archival_%v", tc.catchpointInterval, tc.archival), func(t *testing.T) {
+			a := require.New(fixtures.SynchronizedTest(t))
+			log := logging.TestingLog(t)
+
+			consensus := make(config.ConsensusProtocols)
+			const consensusCatchpointCatchupTestProtocol = protocol.ConsensusVersion("catchpointtestingprotocol")
+			catchpointCatchupProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
+			applyCatchpointConsensusChanges(&catchpointCatchupProtocol)
+			consensus[consensusCatchpointCatchupTestProtocol] = catchpointCatchupProtocol
+
+			var fixture fixtures.RestClientFixture
+			fixture.SetConsensus(consensus)
+
+			errorsCollector := nodeExitErrorCollector{a: a}
+			defer errorsCollector.Print()
+
+			fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
+
+			// Get primary node
+			primaryNode, err := fixture.GetNodeController("Primary")
+			a.NoError(err)
+
+			cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
+			a.NoError(err)
+			cfg.CatchpointInterval = tc.catchpointInterval
+			cfg.Archival = tc.archival
+			cfg.MaxAcctLookback = 2
+			cfg.SaveToDisk(primaryNode.GetDataDir())
+
+			// start the primary node
+			_, err = primaryNode.StartAlgod(nodecontrol.AlgodStartArgs{
+				PeerAddress:       "",
+				ListenIP:          "",
+				RedirectOutput:    true,
+				RunUnderHost:      false,
+				TelemetryOverride: "",
+				ExitErrorCallback: errorsCollector.nodeExitWithError,
+			})
+			a.NoError(err)
+			defer primaryNode.StopAlgod()
+
+			// Let the network make some progress
+			currentRound := uint64(1)
+			targetRound := uint64(21)
+			primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
+			log.Infof("Building ledger history..")
+			for {
+				err = fixture.ClientWaitForRound(primaryNodeRestClient, currentRound, 45*time.Second)
+				a.NoError(err)
+				if targetRound <= currentRound {
+					break
+				}
+				currentRound++
+			}
+			log.Infof("done building!\n")
+
+			primaryNodeStatus, err := primaryNodeRestClient.Status()
+			a.NoError(err)
+			a.NotNil(primaryNodeStatus.LastCatchpoint)
+			if tc.expectLabels {
+				a.NotEmpty(*primaryNodeStatus.LastCatchpoint)
+			} else {
+				a.Empty(*primaryNodeStatus.LastCatchpoint)
+			}
+		})
+	}
+}
 
 // TestNodeTxHandlerRestart starts a two-node and one relay network
 // Waits until a catchpoint is created
@@ -381,20 +365,8 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	consensus := make(config.ConsensusProtocols)
 	protoVersion := protocol.ConsensusCurrentVersion
 	catchpointCatchupProtocol := config.Consensus[protoVersion]
-	catchpointCatchupProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
-	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
-	catchpointCatchupProtocol.SeedLookback = 2
-	catchpointCatchupProtocol.SeedRefreshInterval = 2
-	catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 8
-	catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
-	catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
+	applyCatchpointConsensusChanges(&catchpointCatchupProtocol)
 	catchpointCatchupProtocol.StateProofInterval = 0
-	if runtime.GOOS == "darwin" || runtime.GOARCH == "amd64" {
-		// amd64/macos platforms are generally quite capable, so accelerate the round times to make the test run faster.
-		catchpointCatchupProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
-		catchpointCatchupProtocol.AgreementFilterTimeout = 1 * time.Second
-	}
 	consensus[protoVersion] = catchpointCatchupProtocol
 
 	var fixture fixtures.RestClientFixture
@@ -520,20 +492,10 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	consensus := make(config.ConsensusProtocols)
 	protoVersion := protocol.ConsensusCurrentVersion
 	catchpointCatchupProtocol := config.Consensus[protoVersion]
-	catchpointCatchupProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
-	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
-	catchpointCatchupProtocol.SeedLookback = 2
-	catchpointCatchupProtocol.SeedRefreshInterval = 2
-	catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval
-	catchpointCatchupProtocol.CatchpointLookback = catchpointCatchupProtocol.MaxBalLookback
-	catchpointCatchupProtocol.EnableOnlineAccountCatchpoints = true
+	prevMaxTxnLife := catchpointCatchupProtocol.MaxTxnLife
+	applyCatchpointConsensusChanges(&catchpointCatchupProtocol)
+	catchpointCatchupProtocol.MaxTxnLife = prevMaxTxnLife
 	catchpointCatchupProtocol.StateProofInterval = 0
-	if runtime.GOOS == "darwin" || runtime.GOARCH == "amd64" {
-		// amd64/macos platforms are generally quite capable, so accelerate the round times to make the test run faster.
-		catchpointCatchupProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
-		catchpointCatchupProtocol.AgreementFilterTimeout = 1 * time.Second
-	}
 	consensus[protoVersion] = catchpointCatchupProtocol
 
 	var fixture fixtures.RestClientFixture
