@@ -418,6 +418,8 @@ func (f *RestClientFixture) AssertValidTxid(txid string) {
 	require.True(f.t, allLettersOrNumbers, "txid should be all letters")
 }
 
+// ClientWaitForCatchpoint takes a client and a traget catchpoint round and waits until a catchpoint is generated for
+// the given round, or until the timeout expires.
 func (f *RestClientFixture) ClientWaitForCatchpoint(client client.RestClient, catchpointRound basics.Round) (string, error) {
 	err := f.ClientWaitForRoundWithTimeout(client, uint64(catchpointRound+1))
 	if err != nil {
