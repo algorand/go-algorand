@@ -46,7 +46,7 @@ FROM debian:bullseye-slim as final
 ENV PATH="/node/bin:${PATH}" ALGOD_PORT="8080" ALGORAND_DATA="/algod/data"
 
 # curl is needed to lookup the fast catchup url
-RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p "$ALGORAND_DATA" && \
     groupadd --system algorand && \
