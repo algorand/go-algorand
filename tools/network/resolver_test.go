@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,8 @@ package network
 import (
 	"context"
 	"net"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +30,10 @@ import (
 
 func TestResolver(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
+		t.Skip("Disabled on CircleCI while investigating Cloudflare DNS resolution issue")
+	}
 
 	// start with a resolver that has no specific DNS address defined.
 	// we want to make sure that it will go to the default DNS server ( 8.8.8.8 )

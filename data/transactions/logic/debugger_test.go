@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -65,6 +65,7 @@ bytec 4
 
 func TestWebDebuggerManual(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	debugURL := os.Getenv("TEAL_DEBUGGER_URL")
 	if len(debugURL) == 0 {
@@ -111,6 +112,7 @@ func (d *testDbgHook) Complete(state *DebugState) error {
 
 func TestDebuggerHook(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	testDbg := testDbgHook{}
 	ep := defaultEvalParams()
@@ -125,6 +127,7 @@ func TestDebuggerHook(t *testing.T) {
 
 func TestLineToPC(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	dState := DebugState{
 		Disassembly: "abc\ndef\nghi",
@@ -162,6 +165,7 @@ func TestLineToPC(t *testing.T) {
 
 func TestValueDeltaToValueDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	vDelta := basics.ValueDelta{
 		Action: basics.SetUintAction,
@@ -186,6 +190,7 @@ intc_0
 
 func TestParseCallstack(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	expectedCallFrames := []CallFrame{
 		{
@@ -210,6 +215,7 @@ func TestParseCallstack(t *testing.T) {
 
 func TestCallStackUpdate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	expectedCallFrames := []CallFrame{
 		{

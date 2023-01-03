@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -275,6 +275,9 @@ type wsPeer struct {
 
 	// clientDataStoreMu synchronizes access to clientDataStore
 	clientDataStoreMu deadlock.Mutex
+
+	// closers is a slice of functions to run when the peer is closed
+	closers []func()
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -294,6 +297,12 @@ type UnicastPeer interface {
 	Version() string
 	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
 	Respond(ctx context.Context, reqMsg IncomingMessage, topics Topics) (e error)
+}
+
+// A PeerCloseRegistrar is an interface for the opaque Peer which can allow for extra execution
+// whena  peer closes.
+type PeerCloseRegistrar interface {
+	OnClose(func())
 }
 
 // Create a wsPeerCore object
@@ -323,7 +332,8 @@ func (wp *wsPeer) Version() string {
 	return wp.version
 }
 
-// 	Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
+//	Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
+//
 // (Implements UnicastPeer)
 func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
 	var err error
@@ -843,6 +853,10 @@ func (wp *wsPeer) Close(deadline time.Time) {
 			wp.net.log.Infof("failed to CloseWithoutFlush to connection for %s", wp.conn.RemoteAddr().String())
 		}
 	}
+	// now call all registered closers
+	for _, f := range wp.closers {
+		f()
+	}
 }
 
 // CloseAndWait internally calls Close() then waits for all peer activity to stop
@@ -961,6 +975,13 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 
 func (wp *wsPeer) pfProposalCompressionSupported() bool {
 	return wp.features&pfCompressedProposal != 0
+}
+
+func (wp *wsPeer) OnClose(f func()) {
+	if wp.closers == nil {
+		wp.closers = []func(){}
+	}
+	wp.closers = append(wp.closers, f)
 }
 
 type peerFeatureFlag int
