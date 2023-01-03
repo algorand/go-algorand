@@ -9,6 +9,7 @@ output-options:
   exclude-tags:
   - public
   - participating
+  - data
   - common
   type-mappings:
     integer: uint64

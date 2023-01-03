@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
 )
 
@@ -93,12 +94,13 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	rdb := l.trackerDB().Rdb
 	t.log = l.trackerLog()
 
-	var roundData []*txTailRound
+	var roundData []*store.TxTailRound
 	var roundTailHashes []crypto.Digest
 	var baseRound basics.Round
 	if dbRound > 0 {
 		err := rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			roundData, roundTailHashes, baseRound, err = loadTxTail(ctx, tx, dbRound)
+			arw := store.NewAccountsSQLReaderWriter(tx)
+			roundData, roundTailHashes, baseRound, err = arw.LoadTxTail(ctx, dbRound)
 			return
 		})
 		if err != nil {
@@ -192,7 +194,7 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 		return
 	}
 
-	var tail txTailRound
+	var tail store.TxTailRound
 	tail.TxnIDs = make([]transactions.Txid, len(delta.Txids))
 	tail.LastValid = make([]basics.Round, len(delta.Txids))
 	tail.Hdr = blk.BlockHeader
@@ -202,14 +204,14 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 		tail.TxnIDs[txnInc.Intra] = txid
 		tail.LastValid[txnInc.Intra] = txnInc.LastValid
 		if blk.Payset[txnInc.Intra].Txn.Lease != [32]byte{} {
-			tail.Leases = append(tail.Leases, txTailRoundLease{
+			tail.Leases = append(tail.Leases, store.TxTailRoundLease{
 				Sender: blk.Payset[txnInc.Intra].Txn.Sender,
 				Lease:  blk.Payset[txnInc.Intra].Txn.Lease,
 				TxnIdx: txnInc.Intra,
 			})
 		}
 	}
-	encodedTail, tailHash := tail.encode()
+	encodedTail, tailHash := tail.Encode()
 
 	t.tailMu.Lock()
 	defer t.tailMu.Unlock()
@@ -269,11 +271,13 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 }
 
 func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) error {
+	arw := store.NewAccountsSQLReaderWriter(tx)
+
 	// determine the round to remove data
 	// the formula is similar to the committedUpTo: rnd + 1 - retain size
 	forgetBeforeRound := (dcc.newBase + 1).SubSaturate(basics.Round(dcc.txTailRetainSize))
 	baseRound := dcc.oldBase + 1
-	if err := txtailNewRound(ctx, tx, baseRound, dcc.txTailDeltas, forgetBeforeRound); err != nil {
+	if err := arw.TxtailNewRound(ctx, baseRound, dcc.txTailDeltas, forgetBeforeRound); err != nil {
 		return fmt.Errorf("txTail: unable to persist new round %d : %w", baseRound, err)
 	}
 	return nil
@@ -339,13 +343,13 @@ func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, fi
 		for rnd := firstChecked; rnd <= lastChecked; rnd++ {
 			expires, ok := t.recent[rnd].txleases[txl]
 			if ok && current <= expires {
-				return ledgercore.MakeLeaseInLedgerError(txid, txl)
+				return ledgercore.MakeLeaseInLedgerError(txid, txl, false)
 			}
 		}
 	}
 
 	if _, confirmed := t.lastValid[lastValid][txid]; confirmed {
-		return &ledgercore.TransactionInLedgerError{Txid: txid}
+		return &ledgercore.TransactionInLedgerError{Txid: txid, InBlockEvaluator: false}
 	}
 	return nil
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,10 +34,13 @@ func TestBoxNewDel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	ep, txn, ledger := logic.MakeSampleEnv()
-
 	for _, size := range []int{24, 0} {
+		size := size
 		t.Run(fmt.Sprintf("box size=%d", size), func(t *testing.T) {
+			t.Parallel()
+
+			ep, txn, ledger := logic.MakeSampleEnv()
+
 			createSelf := fmt.Sprintf(`byte "self"; int %d; box_create;`, size)
 			createOther := fmt.Sprintf(`byte "other"; int %d; box_create;`, size)
 
@@ -218,7 +221,9 @@ func TestBoxUnavailableWithClearState(t *testing.T) {
 	}
 
 	for name, program := range tests {
+		name, program := name, program
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			ep, _, l := logic.MakeSampleEnv()
 			l.NewApp(basics.Address{}, 888, basics.AppParams{})
 			ep.TxnGroup[0].Txn.OnCompletion = transactions.ClearStateOC
@@ -521,18 +526,23 @@ func TestEarlyPanics(t *testing.T) {
 		"box_replace": `byte "%s"; int 0; byte "new"; box_replace`,
 	}
 
-	ep, _, l := logic.MakeSampleEnv()
-	l.NewApp(basics.Address{}, 888, basics.AppParams{})
-
 	for name, program := range tests {
+		name, program := name, program
 		t.Run(name+"/zero", func(t *testing.T) {
+			t.Parallel()
+			ep, _, l := logic.MakeSampleEnv()
+			l.NewApp(basics.Address{}, 888, basics.AppParams{})
 			logic.TestApp(t, fmt.Sprintf(program, ""), ep, "zero length")
 		})
 	}
 
 	big := strings.Repeat("x", 65)
 	for name, program := range tests {
+		name, program := name, program
 		t.Run(name+"/long", func(t *testing.T) {
+			t.Parallel()
+			ep, _, l := logic.MakeSampleEnv()
+			l.NewApp(basics.Address{}, 888, basics.AppParams{})
 			logic.TestApp(t, fmt.Sprintf(program, big), ep, "name too long")
 		})
 	}

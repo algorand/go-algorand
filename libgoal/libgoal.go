@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1019,6 +1019,16 @@ func (c *Client) VerifyParticipationKey(timeout time.Duration, participationID s
 
 		time.Sleep(1 * time.Second)
 	}
+}
+
+// RemoveParticipationKey removes a participation key by its id
+func (c *Client) RemoveParticipationKey(participationID string) error {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return nil
+	}
+
+	return algod.RemoveParticipationKeyByID(participationID)
 }
 
 // AddParticipationKey takes a participation key file and sends it to the node.

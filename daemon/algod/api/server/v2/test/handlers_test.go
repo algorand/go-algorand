@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,9 +30,13 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-codec/codec"
+
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/catchup"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
@@ -51,7 +55,6 @@ import (
 	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
-	"github.com/algorand/go-codec/codec"
 )
 
 const stateProofIntervalForHandlerTests = uint64(256)
@@ -124,6 +127,100 @@ func TestGetBlock(t *testing.T) {
 	getBlockTest(t, 1, "json", 404)
 	getBlockTest(t, 1, "msgpack", 404)
 	getBlockTest(t, 0, "bad format", 400)
+}
+
+func TestGetLedgerStateDelta(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+	insertRounds(a, handler, 3)
+
+	err := handler.GetLedgerStateDelta(c, 2)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+
+	actualResponse := model.LedgerStateDelta{}
+	expectedResponse := poolDeltaResponseGolden
+	(*expectedResponse.Accts.Accounts)[0].AccountData.Round = 2
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResponse)
+	require.NoError(t, err)
+	require.Equal(t, poolDeltaResponseGolden.Accts, actualResponse.Accts)
+	require.Equal(t, poolDeltaResponseGolden.KvMods, actualResponse.KvMods)
+	require.Equal(t, poolDeltaResponseGolden.ModifiedAssets, actualResponse.ModifiedAssets)
+	require.Equal(t, poolDeltaResponseGolden.ModifiedApps, actualResponse.ModifiedApps)
+	require.Equal(t, poolDeltaResponseGolden.TxLeases, actualResponse.TxLeases)
+	require.Equal(t, poolDeltaResponseGolden.Totals, actualResponse.Totals)
+}
+
+func TestSyncRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	numAccounts := 1
+	numTransactions := 1
+	offlineAccounts := true
+	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
+	dummyShutdownChan := make(chan struct{})
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	defer releasefunc()
+
+	// TestSetSyncRound 200
+	mockCall := mockNode.On("SetSyncRound", mock.Anything).Return(nil)
+	err := handler.SetSyncRound(c, 0)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	mockCall.Unset()
+	c, rec = newReq(t)
+	// TestSetSyncRound 400 SyncRoundInvalid
+	mockCall = mockNode.On("SetSyncRound", mock.Anything).Return(catchup.ErrSyncRoundInvalid)
+	err = handler.SetSyncRound(c, 0)
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	mockCall.Unset()
+	c, rec = newReq(t)
+	// TestSetSyncRound 500 InternalError
+	mockCall = mockNode.On("SetSyncRound", mock.Anything).Return(fmt.Errorf("unknown error"))
+	err = handler.SetSyncRound(c, 0)
+	require.NoError(t, err)
+	require.Equal(t, 500, rec.Code)
+	c, rec = newReq(t)
+
+	// TestGetSyncRound 200
+	mockCall = mockNode.On("GetSyncRound").Return(2)
+	err = handler.GetSyncRound(c)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	mockCall.Unset()
+	c, rec = newReq(t)
+	// TestGetSyncRound 404 NotFound
+	mockCall = mockNode.On("GetSyncRound").Return(0)
+	err = handler.GetSyncRound(c)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+	c, rec = newReq(t)
+
+	// TestUnsetSyncRound 200
+	mockCall = mockNode.On("UnsetSyncRound").Return()
+	err = handler.UnsetSyncRound(c)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	mockCall.Unset()
+	c, rec = newReq(t)
+
+	mock.AssertExpectationsForObjects(t, mockNode)
 }
 
 func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, transactions.SignedTxn, func()) {
@@ -332,6 +429,9 @@ func TestGetStatus(t *testing.T) {
 		CatchpointVerifiedAccounts:  &stat.CatchpointCatchupVerifiedAccounts,
 		CatchpointTotalBlocks:       &stat.CatchpointCatchupTotalBlocks,
 		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
+		CatchpointTotalKvs:          &stat.CatchpointCatchupTotalKVs,
+		CatchpointProcessedKvs:      &stat.CatchpointCatchupProcessedKVs,
+		CatchpointVerifiedKvs:       &stat.CatchpointCatchupVerifiedKVs,
 	}
 	actualResult := model.NodeStatusResponse{}
 	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResult)
@@ -488,15 +588,15 @@ func TestPendingTransactionsByAddress(t *testing.T) {
 	pendingTransactionsByAddressTest(t, -1, "json", 400)
 }
 
-func postTransactionTest(t *testing.T, txnToUse, expectedCode int) {
+func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTransactionSimulator bool) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
 	numAccounts := 5
 	numTransactions := 5
 	offlineAccounts := true
 	mockLedger, _, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
-	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil)
-	handler := v2.Handlers{
+	mockNode.config.EnableExperimentalAPI = enableTransactionSimulator
+	handler = v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
 		Shutdown: dummyShutdownChan,
@@ -509,8 +609,14 @@ func postTransactionTest(t *testing.T, txnToUse, expectedCode int) {
 		body = bytes.NewReader(bodyBytes)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/", body)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	rec = httptest.NewRecorder()
+	c = e.NewContext(req, rec)
+	return
+}
+
+func postTransactionTest(t *testing.T, txnToUse, expectedCode int) {
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode, false)
+	defer releasefunc()
 	err := handler.RawTransaction(c)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
@@ -522,6 +628,23 @@ func TestPostTransaction(t *testing.T) {
 
 	postTransactionTest(t, -1, 400)
 	postTransactionTest(t, 0, 200)
+}
+
+func simulateTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTransactionSimulator bool) {
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode, enableTransactionSimulator)
+	defer releasefunc()
+	err := handler.SimulateTransaction(c)
+	require.NoError(t, err)
+	require.Equal(t, expectedCode, rec.Code)
+}
+
+func TestSimulateTransaction(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulateTransactionTest(t, -1, 400, true)
+	simulateTransactionTest(t, 0, 404, false)
+	simulateTransactionTest(t, 0, 200, true)
 }
 
 func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expectedCode int) {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -467,7 +467,8 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 
 		if stat.CatchpointTotalAccounts != nil && (*stat.CatchpointTotalAccounts > 0) && stat.CatchpointProcessedAccounts != nil {
 			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupAccounts, *stat.CatchpointTotalAccounts,
-				*stat.CatchpointProcessedAccounts, *stat.CatchpointVerifiedAccounts)
+				*stat.CatchpointProcessedAccounts, *stat.CatchpointVerifiedAccounts,
+				*stat.CatchpointTotalKvs, *stat.CatchpointProcessedKvs, *stat.CatchpointVerifiedKvs)
 		}
 		if stat.CatchpointAcquiredBlocks != nil && stat.CatchpointTotalBlocks != nil && (*stat.CatchpointAcquiredBlocks+*stat.CatchpointTotalBlocks > 0) {
 			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupBlocks, *stat.CatchpointTotalBlocks,

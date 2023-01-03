@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -64,6 +64,7 @@ var (
 	dumpOutFile        string
 	listAccountInfo    bool
 	onlyShowAssetIds   bool
+	partKeyIDToDelete  string
 )
 
 func init() {
@@ -83,6 +84,7 @@ func init() {
 	accountCmd.AddCommand(importRootKeysCmd)
 	accountCmd.AddCommand(accountMultisigCmd)
 	accountCmd.AddCommand(markNonparticipatingCmd)
+	accountCmd.AddCommand(deletePartKeyCmd)
 
 	accountMultisigCmd.AddCommand(newMultisigCmd)
 	accountMultisigCmd.AddCommand(deleteMultisigCmd)
@@ -211,6 +213,11 @@ func init() {
 	dumpCmd.Flags().StringVarP(&dumpOutFile, "outfile", "o", "", "Save balance record to specified output file")
 	dumpCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
 	balanceCmd.MarkFlagRequired("address")
+
+	// deletePartkeyCmd flags
+	deletePartKeyCmd.Flags().StringVarP(&partKeyIDToDelete, "partkeyid", "", "", "Participation Key ID to delete")
+	rewardsCmd.MarkFlagRequired("partkeyid")
+
 }
 
 func scLeaseBytes(cmd *cobra.Command) (leaseBytes [32]byte) {
@@ -339,6 +346,24 @@ var newCmd = &cobra.Command{
 		}
 
 		reportInfof(infoCreatedNewAccount, genAddr)
+	},
+}
+
+var deletePartKeyCmd = &cobra.Command{
+	Use:   "deletepartkey",
+	Short: "Delete a participation key",
+	Long:  `Delete the indicated participation key.`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		dataDir := ensureSingleDataDir()
+
+		client := ensureAlgodClient(dataDir)
+
+		err := client.RemoveParticipationKey(partKeyIDToDelete)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+
 	},
 }
 

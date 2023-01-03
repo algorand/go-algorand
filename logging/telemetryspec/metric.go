@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -44,6 +44,10 @@ type AssembleBlockStats struct {
 	StartCount                int
 	IncludedCount             int // number of transactions that are included in a block
 	InvalidCount              int // number of transaction groups that are included in a block
+	MinFeeErrorCount          int // number of transactions excluded because the fee is too low
+	ExpiredCount              int // number of transactions removed because of expiration
+	ExpiredLongLivedCount     int // number of expired transactions with non-super short LastValid values
+	LeaseErrorCount           int // number of transactions removed because it has an already used lease
 	MinFee                    uint64
 	MaxFee                    uint64
 	AverageFee                uint64
@@ -100,6 +104,10 @@ func (m AssembleBlockStats) String() string {
 	b.WriteString(fmt.Sprintf("StartCount:%d, ", m.StartCount))
 	b.WriteString(fmt.Sprintf("IncludedCount:%d, ", m.IncludedCount))
 	b.WriteString(fmt.Sprintf("InvalidCount:%d, ", m.InvalidCount))
+	b.WriteString(fmt.Sprintf("MinFeeErrorCount:%d, ", m.MinFeeErrorCount))
+	b.WriteString(fmt.Sprintf("ExpiredCount:%d, ", m.ExpiredCount))
+	b.WriteString(fmt.Sprintf("ExpiredLongLivedCount:%d, ", m.ExpiredLongLivedCount))
+	b.WriteString(fmt.Sprintf("LeaseErrorCount:%d, ", m.LeaseErrorCount))
 	b.WriteString(fmt.Sprintf("MinFee:%d, ", m.MinFee))
 	b.WriteString(fmt.Sprintf("MaxFee:%d, ", m.MaxFee))
 	b.WriteString(fmt.Sprintf("AverageFee:%d, ", m.AverageFee))

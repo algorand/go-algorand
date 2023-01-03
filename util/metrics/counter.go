@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -109,6 +109,11 @@ func (counter *Counter) AddUint64(x uint64, labels map[string]string) {
 // Fastest if labels is nil
 func (counter *Counter) AddMicrosecondsSince(t time.Time, labels map[string]string) {
 	counter.AddUint64(uint64(time.Since(t).Microseconds()), labels)
+}
+
+// GetUint64Value returns the value of the counter.
+func (counter *Counter) GetUint64Value() (x uint64) {
+	return atomic.LoadUint64(&counter.intValue)
 }
 
 func (counter *Counter) fastAddUint64(x uint64) {
