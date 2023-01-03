@@ -18,13 +18,15 @@ package network
 
 import (
 	"context"
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 	"net"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestResolverWithDefaultDNSResolution(t *testing.T) {
