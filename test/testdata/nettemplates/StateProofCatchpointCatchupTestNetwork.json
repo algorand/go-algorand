@@ -1,17 +1,22 @@
 {
   "Genesis": {
-    "NetworkName": "catchpointcatchupnetwork",
+    "NetworkName": "tbd",
     "ConsensusProtocol": "catchpointtestingprotocol",
     "LastPartKeyRound": 3000,
     "Wallets": [
       {
         "Name": "Wallet1",
-        "Stake": 100,
+        "Stake": 80,
         "Online": true
       },
       {
         "Name": "Wallet2",
-        "Stake": 0,
+        "Stake": 10,
+        "Online": true
+      },
+      {
+        "Name": "Wallet3",
+        "Stake": 10,
         "Online": true
       }
     ]
@@ -26,9 +31,16 @@
       ]
     },
     {
-      "Name": "Node",
+      "Name": "Node1",
       "Wallets": [
         { "Name": "Wallet2",
+          "ParticipationOnly": false }
+      ]
+    },
+    {
+      "Name": "Node2",
+      "Wallets": [
+        { "Name": "Wallet3",
           "ParticipationOnly": false }
       ]
     }

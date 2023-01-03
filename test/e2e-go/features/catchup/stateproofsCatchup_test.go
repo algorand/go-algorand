@@ -2,9 +2,7 @@ package catchup
 
 import (
 	"path/filepath"
-	"runtime"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -22,14 +20,12 @@ func applyCatchpointStateProofConsensusChanges(consensusParams *config.Consensus
 	consensusParams.StateProofStrengthTarget = 4
 	consensusParams.StateProofInterval = 8
 	consensusParams.StateProofVotersLookback = 2
-	consensusParams.StateProofStrengthTarget = 256
 	consensusParams.EnableStateProofKeyregCheck = true
 	consensusParams.StateProofUseTrackerVerification = true
 }
 
-func TestReloadLedger(t *testing.T) {
+func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	// TODO: Why?
 	defer fixtures.ShutdownSynchronizedTest(t)
 
 	if testing.Short() {
@@ -40,19 +36,12 @@ func TestReloadLedger(t *testing.T) {
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("catchpointtestingprotocol")
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-
 	applyCatchpointStateProofConsensusChanges(&consensusParams)
 	applyCatchpointConsensusChanges(&consensusParams)
 	// Weight threshold allows creation of state proofs using the primary node and at least one other node.
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 85 / 100
-
-	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
-		// amd64 and arm64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
-		consensusParams.AgreementFilterTimeoutPeriod0 = 1 * time.Second
-		consensusParams.AgreementFilterTimeout = 1 * time.Second
-	}
-
 	configurableConsensus[consensusVersion] = consensusParams
+
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "StateProofCatchpointCatchupTestNetwork.json"))
@@ -86,25 +75,30 @@ func TestReloadLedger(t *testing.T) {
 	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetCatchpointRound)+1)
 	a.NoError(err)
 
-	normalNode.StopAlgod()
+	// We must restart the usingNode to stop it from sending messages to the web proxy, allowing it
+	// to send signatures to the primary node.
 	usingNode.StopAlgod()
-
 	_, err = usingNode.StartAlgod(nodecontrol.AlgodStartArgs{
 		PeerAddress:       primaryNodeAddr,
 		ListenIP:          "",
 		RedirectOutput:    true,
 		RunUnderHost:      false,
 		TelemetryOverride: "",
+		ExitErrorCallback: usingNodeEC.nodeExitWithError,
 	})
 	usingNodeRestClient = fixture.GetAlgodClientForController(usingNode)
 
-	targetRound := targetCatchpointRound + basics.Round(consensusParams.StateProofInterval*4)
+	normalNode.StopAlgod()
+
+	// We wait until we know for sure that we're in a round that contains a state proof signed
+	// by the usingNode.
+	targetRound := targetCatchpointRound + basics.Round(consensusParams.StateProofInterval)
 	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetRound))
 	a.NoError(err)
 
+	expectedStateProofRound := targetRound.RoundDownToMultipleOf(basics.Round(consensusParams.StateProofInterval))
 	client := fixture.GetLibGoalClientForNamedNode("Primary")
 	block, err := client.BookkeepingBlock(uint64(targetRound))
 	a.NoError(err)
-	// TODO: Not hardcoded
-	a.Equal(basics.Round(56), block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+	a.Equal(expectedStateProofRound, block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 }
