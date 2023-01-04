@@ -112,7 +112,7 @@ workflows:
           context: slack-secrets
           <<: *slack-fail-post-step
 
-      # Separate test for mac_arm64 runner - no parallelism
+      # Separate test for mac_arm64 runner - lower parallelism
       - test_nightly_mac_arm64:
           name: mac_arm64_test_nightly
           requires:
@@ -288,10 +288,11 @@ jobs:
           no_output_timeout: 45m
       - upload_coverage
 
-  # Separate test for mac_arm64 runner - no parallelism
+  # Separate test for mac_arm64 runner - lower parallelism
   test_nightly_mac_arm64:
     executor: mac_arm64_medium
     working_directory: << pipeline.parameters.build_dir >>/project
+    parallelism: 2
     steps:
       - generic_build
       - generic_test:
