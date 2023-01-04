@@ -1492,7 +1492,7 @@ func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.In
 
 	// We can't truly wait for scheduleCommit to take place, which means without waiting using sleeps
 	// we might beat scheduleCommit's addition to accountsWriting, making our wait on it continue immediately.
-	// The solution is to wait for the advancement of l.trackers.dbRound, which is a side effect postCommit's success.
+	// The solution is to wait for the advancement of l.trackers.dbRound, which is a side effect of postCommit's success.
 	for currentDbRound == initialDbRound {
 		time.Sleep(50 * time.Microsecond)
 		require.True(t, time.Now().Sub(started) < timeout)
