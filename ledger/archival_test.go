@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -343,6 +344,7 @@ func TestArchivalCreatables(t *testing.T) {
 	deadlockDisable := deadlock.Opts.Disable
 	deadlock.Opts.Disable = true
 	defer func() {
+		time.Sleep(10 * time.Millisecond)
 		deadlock.Opts.Disable = deadlockDisable
 	}()
 
@@ -635,7 +637,11 @@ func TestArchivalCreatables(t *testing.T) {
 	l.Close()
 	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
-	defer l.Close()
+	defer func() {
+		t.Log("l.Close")
+		l.Close()
+		t.Log("l.Close done")
+	}()
 
 	// check that we can fetch creator for all created assets and can't for
 	// deleted assets

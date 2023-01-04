@@ -64,6 +64,13 @@ func (bq *blockQueue) start() error {
 	defer bq.mu.Unlock()
 
 	if !bq.running {
+		if bq.closed != nil {
+			// a previus close() is still waiting on a previous syncer() to finish
+			oldsyncer := bq.closed
+			bq.mu.Unlock()
+			<-oldsyncer
+			bq.mu.Lock()
+		}
 		bq.running = true
 		bq.closed = make(chan struct{})
 		ledgerBlockqInitCount.Inc(nil)
@@ -85,23 +92,20 @@ func (bq *blockQueue) start() error {
 
 func (bq *blockQueue) close() {
 	bq.mu.Lock()
-	defer func() {
-		closechan := bq.closed
-		bq.mu.Unlock()
-		// we want to block here until the sync go routine is done.
-		// it's not (just) for the sake of a complete cleanup, but rather
-		// to ensure that the sync goroutine isn't busy in a notifyCommit
-		// call which might be blocked inside one of the trackers.
-		if closechan != nil {
-			<-closechan
-		}
-	}()
-
+	closechan := bq.closed
 	if bq.running {
 		bq.running = false
 		bq.cond.Broadcast()
 	}
+	bq.mu.Unlock()
 
+	// we want to block here until the sync go routine is done.
+	// it's not (just) for the sake of a complete cleanup, but rather
+	// to ensure that the sync goroutine isn't busy in a notifyCommit
+	// call which might be blocked inside one of the trackers.
+	if closechan != nil {
+		<-closechan
+	}
 }
 
 func (bq *blockQueue) syncer() {
