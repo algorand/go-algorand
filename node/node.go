@@ -741,22 +741,6 @@ func (node *AlgorandFullNode) GenesisHash() crypto.Digest {
 	return node.genesisHash
 }
 
-// PoolStats returns a PoolStatus structure reporting stats about the transaction pool
-func (node *AlgorandFullNode) PoolStats() PoolStats {
-	r := node.ledger.Latest()
-	last, err := node.ledger.Block(r)
-	if err != nil {
-		node.log.Warnf("AlgorandFullNode: could not read ledger's last round: %v", err)
-		return PoolStats{}
-	}
-
-	return PoolStats{
-		NumConfirmed:   uint64(len(last.Payset)),
-		NumOutstanding: uint64(node.transactionPool.PendingCount()),
-		NumExpired:     uint64(node.transactionPool.NumExpired(r)),
-	}
-}
-
 // SuggestedFee returns the suggested fee per byte recommended to ensure a new transaction is processed in a timely fashion.
 // Caller should set fee to max(MinTxnFee, SuggestedFee() * len(encoded SignedTxn))
 func (node *AlgorandFullNode) SuggestedFee() basics.MicroAlgos {
