@@ -1560,7 +1560,7 @@ func TestWaitLedgerReload(t *testing.T) {
 	err = l.ReloadLedger()
 	a.NoError(err)
 	triggerTrackerFlush(t, l, genesisInitState)
-	
+
 	select {
 	case <-waitChannel:
 		return
