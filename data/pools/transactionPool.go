@@ -165,7 +165,7 @@ const (
 	// The following two constants are used by the isAssemblyTimedOut function, and used to estimate the projected
 	// duration it would take to execute the GenerateBlock() function
 	generateBlockBaseDuration        = 2 * time.Millisecond
-	generateBlockTransactionDuration = 2155 * time.Nanosecond
+	generateBlockTransactionDuration = 7000 * time.Nanosecond
 )
 
 // Reset resets the content of the transaction pool
