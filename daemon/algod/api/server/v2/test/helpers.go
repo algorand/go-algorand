@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -232,10 +232,6 @@ func (m *mockNode) ListTxns(addr basics.Address, minRound basics.Round, maxRound
 
 func (m *mockNode) GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (node.TxnWithStatus, bool) {
 	return node.TxnWithStatus{}, false
-}
-
-func (m *mockNode) PoolStats() node.PoolStats {
-	return node.PoolStats{}
 }
 
 func (m *mockNode) IsArchival() bool {
