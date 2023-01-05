@@ -34,7 +34,7 @@ jobs:
         with:
           name: Go Benchmark
           tool: 'customSmallerIsBetter'
-          output-file-path: benchmark_output.txt
+          output-file-path: /tmp/benchstat_time_jq.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
       - name: Evaluate benchmark on PR branch
