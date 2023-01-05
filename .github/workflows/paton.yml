@@ -4,8 +4,9 @@ on:
     branches:
       - master
   pull_request:
-    branches:
-      - master
+# For demonstration purposes, allow paton to run on all PRs.
+#    branches:
+#      - master
 permissions:
   contents: write
   deployments: write
