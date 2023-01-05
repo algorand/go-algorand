@@ -24,7 +24,8 @@ jobs:
           cache: true
       - run: go install golang.org/x/perf/cmd/benchstat@latest
       - run: sudo apt-get update
-      - run: sudo apt-get -y -q install jc jq
+      - run: sudo apt-get -y -q install jq python3-pip
+      - run: pip3 install jc # Use pip to install jc because aptitude is stale (https://repology.org/project/jc/versions)
       - run: ./scripts/configure_dev.sh
         shell: bash
       - run: ./scripts/buildtools/install_buildtools.sh
