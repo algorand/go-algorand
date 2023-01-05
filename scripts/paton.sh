@@ -46,10 +46,10 @@ COMPARE="HEAD"
 COMPARE_COMMIT=$(git rev-parse "$COMPARE")
 
 git -c advice.detachedHead=false checkout "$BASE"
-go test ${GO_TEST_CMD[*]} > /tmp/base.txt
+go test ${GO_TEST_CMD[*]} | tee /tmp/base.txt
 
 git -c advice.detachedHead=false checkout "$COMPARE_COMMIT"
-go test ${GO_TEST_CMD[*]} > /tmp/compare.txt
+go test ${GO_TEST_CMD[*]} | tee /tmp/compare.txt
 
 benchstat -delta-test none /tmp/base.txt /tmp/compare.txt | tee /tmp/benchstat.txt
 
