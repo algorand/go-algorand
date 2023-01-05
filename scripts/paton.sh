@@ -53,13 +53,7 @@ go test ${GO_TEST_CMD[*]} | tee /tmp/compare.txt
 
 benchstat -delta-test none /tmp/base.txt /tmp/compare.txt | tee /tmp/benchstat.txt
 
-cat /tmp/benchstat.txt |
-  awk '/old time\/op/{f=1} /^$/{f=0} f' |
-  jc -p --asciitable |
-  # Remove symbols (+, %) preventing conversion to JavaScript number.
-  sed '/delta/s/+//g' |
-  sed '/delta/s/%//g' |
-  tee /tmp/benchstat_time.json
+cat /tmp/benchstat.txt | awk '/old time\/op/{f=1} /^$/{f=0} f' | jc -p --asciitable | sed '/delta/s/+//g' | sed '/delta/s/%//g' | tee /tmp/benchstat_time.json
 
 cat /tmp/benchstat_time.json |
   jq '.[] | {
