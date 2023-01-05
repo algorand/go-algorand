@@ -34,7 +34,7 @@ var applyRootDir string
 var applyRootNodeDir string
 var applyPublicAddress string
 var nodeConfigBucket string
-var disableDns bool
+var disableDNS bool
 
 func init() {
 	applyCmd.Flags().StringVarP(&applyChannel, "channel", "c", "", "Channel for the nodes we are configuring")
@@ -51,7 +51,7 @@ func init() {
 
 	applyCmd.Flags().StringVarP(&nodeConfigBucket, "bucket", "b", "", "S3 bucket to get node configuration from.")
 
-	applyCmd.Flags().BoolVarP(&disableDns, "disable-dns", "N", false, "disable setting DNS entries")
+	applyCmd.Flags().BoolVarP(&disableDNS, "disable-dns", "N", false, "disable setting DNS entries")
 }
 
 var applyCmd = &cobra.Command{
@@ -125,7 +125,7 @@ func doApply(rootDir string, rootNodeDir, channel string, hostName string, dnsNa
 		return fmt.Errorf("configuration does not include this host: %s", hostName)
 	}
 
-	if hostNeedsDNSName(hostCfg) && dnsName == "" && !disableDns {
+	if hostNeedsDNSName(hostCfg) && dnsName == "" && !disableDNS {
 		return fmt.Errorf("publicaddress is required - Host contains Relays or exposes Metrics")
 	}
 
