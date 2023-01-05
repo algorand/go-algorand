@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -3724,6 +3725,28 @@ main:
 			b.ReportAllocs()
 			benchmarkOperation(b, bench[1], bench[2], bench[3])
 		})
+	}
+}
+
+func BenchmarkControl1(b *testing.B) {
+	var arr []int
+	for i := 0; i < b.N; i++ {
+		time.Sleep(25 * time.Millisecond)
+		arr = make([]int, 25)
+	}
+	if b.N < 0 {
+		fmt.Println(arr)
+	}
+}
+
+func BenchmarkControl2(b *testing.B) {
+	var arr []int
+	for i := 0; i < b.N; i++ {
+		time.Sleep(10 * time.Millisecond)
+		arr = make([]int, 10)
+	}
+	if b.N < 0 {
+		fmt.Println(arr)
 	}
 }
 
