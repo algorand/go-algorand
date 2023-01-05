@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -euf -o pipefail
+set -euxf -o pipefail
 
 # Primarily intended for continuous benchmarking, paton.sh compares Go
 # benchmarks between 2 git commits and outputs the comparison in a format
