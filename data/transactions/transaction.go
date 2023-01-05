@@ -55,10 +55,10 @@ type DevMode struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// IgnoreSignatureCheck disables signature checking.
-	IgnoreSignatureCheck bool `codec:"ignore_signature_check"`
+	SkipValidation bool `codec:"skip_validation"`
 
-	// SetBlockTime is used to set the block header timestamp.
-	SetBlockTime int64 `codec:"set_block_time"`
+	// SetNextBlockTime is used to set the block header timestamp.
+	SetNextBlockTime int64 `codec:"set_next_block_time"`
 }
 
 func (dm DevMode) IsZero() bool {
