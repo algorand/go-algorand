@@ -22,6 +22,12 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
+      - name: Restore libsodium from cache
+        id: cache-libsodium
+        uses: actions/cache@v3
+        with:
+          path: crypto/libs
+          key: libsodium-fork-v1-${{ runner.os }}-${{ hashFiles('crypto/libsodium-fork/**') }}
       - run: go install golang.org/x/perf/cmd/benchstat@latest
       - run: sudo apt-get update
       - run: sudo apt-get -y -q install jq python3-pip
