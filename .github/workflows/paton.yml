@@ -31,7 +31,7 @@ jobs:
       - run: go install golang.org/x/perf/cmd/benchstat@latest
       - run: sudo apt-get update
       - run: sudo apt-get -y -q install jq python3-pip
-      - run: pip3 install jc # Use pip to install jc because aptitude is stale (https://repology.org/project/jc/versions)
+      - run: pip3 install jc # Use pip to install jc because aptitude is stale (https://repology.org/project/jc/versions).
       - run: ./scripts/configure_dev.sh
         shell: bash
       - run: ./scripts/buildtools/install_buildtools.sh
@@ -47,7 +47,7 @@ jobs:
         with:
           files: "/tmp/alerting_benchmarks.json"
       - name: Add PR comment
-        if: steps.check_files.outputs.files_exists == 'true'
+        if: github.event.pull_request.head.repo.full_name == github.repository && steps.check_files.outputs.files_exists == 'true'
         uses: peter-evans/create-or-update-comment@v2
         with:
           issue-number: ${{ github.event.number }}
