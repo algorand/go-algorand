@@ -24,6 +24,38 @@ func applyCatchpointStateProofConsensusChanges(consensusParams *config.Consensus
 	consensusParams.StateProofUseTrackerVerification = true
 }
 
+func TestStateproofInReplayCatchpoint(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	if testing.Short() {
+		t.Skip()
+	}
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	applyCatchpointConsensusChanges(&consensusParams)
+	applyCatchpointStateProofConsensusChanges(&consensusParams)
+	consensusParams.StateProofInterval = 8
+
+	// The small size of the network means we can expect extremely fast state proofs to be generated, which means
+	// they should be generated one round after the proven interval's last attested round.
+	firstExpectedStateProofRound := basics.Round(consensusParams.StateProofInterval*2 + 1)
+	catchpointRound := getFirstCatchpointRound(&consensusParams)
+	
+	dbRoundAfterCatchpoint := catchpointRound - basics.Round(consensusParams.MaxBalLookback)
+	firstReplayRound := dbRoundAfterCatchpoint + 1
+
+	closestCatchpointVoters := catchpointRound.RoundDownToMultipleOf(basics.Round(consensusParams.StateProofInterval))
+	expectedStateProofRound := closestCatchpointVoters + 1
+
+	a.True(expectedStateProofRound >= firstExpectedStateProofRound)
+	a.True(expectedStateProofRound >= firstReplayRound && expectedStateProofRound <= catchpointRound, "No state proof message expected between rounds"+
+		" %d and %d, which define the replay range. Modify the consensus parameters to resolve this.", dbRoundAfterCatchpoint, catchpointRound)
+
+	testBasicCatchpointCatchup(t, &consensusParams)
+}
+
 func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
