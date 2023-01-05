@@ -58,7 +58,11 @@ type DevMode struct {
 	IgnoreSignatureCheck bool `codec:"ignore_signature_check"`
 
 	// SetBlockTime is used to set the block header timestamp.
-	SetBlockTime uint64 `codec:"set_block_time"`
+	SetBlockTime int64 `codec:"set_block_time"`
+}
+
+func (dm DevMode) IsZero() bool {
+	return dm == DevMode{}
 }
 
 // Header captures the fields common to every transaction type.
@@ -315,9 +319,15 @@ var errNoteMustBeEmptyInStateproofTxn = errors.New("note must be empty in state-
 var errGroupMustBeZeroInStateproofTxn = errors.New("group must be zero in state-proof transaction")
 var errRekeyToMustBeZeroInStateproofTxn = errors.New("rekey must be zero in state-proof transaction")
 var errLeaseMustBeZeroInStateproofTxn = errors.New("lease must be zero in state-proof transaction")
+var errNotDevModeNetwork = errors.New("devmode fields cannot be used with this network")
 
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
+	// Prominently check that devmode fields are not being used.
+	if !tx.DevMode.IsZero() && !proto.DevMode {
+		return errNotDevModeNetwork
+	}
+
 	switch tx.Type {
 	case protocol.PaymentTx:
 		// in case that the fee sink is spending, check that this spend is to a valid address

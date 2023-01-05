@@ -1065,7 +1065,14 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	// Only compute the TxID once
 	txid := txn.ID()
 
-	if eval.validate {
+	if eval.validate && txn.Txn.IgnoreSignatureCheck {
+		eval.validate = false
+		defer func() {
+			eval.validate = true
+		}()
+	}
+
+	if eval.validate && txn.Txn.IgnoreSignatureCheck {
 		err = txn.Txn.Alive(eval.block)
 		if err != nil {
 			return err
@@ -1096,6 +1103,10 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, gi, cow.Counter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %w", txid, err)
+	}
+
+	if txn.Txn.DevMode.SetBlockTime != 0 && txn.Txn.DevMode.SetBlockTime > eval.block.BlockHeader.TimeStamp {
+		eval.block.BlockHeader.TimeStamp = txn.Txn.DevMode.SetBlockTime
 	}
 
 	// Validate applyData if we are validating an existing block.

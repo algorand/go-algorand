@@ -186,6 +186,15 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	if node.devMode {
 		cfg.DisableNetworking = true
+		// TODO: Have a real security model. Some ideas:
+		//   * devmode now uses a custom consensus.json file which sets this value.
+		//   * private forks have a one time special block that changes the consensus version.
+		//   * 'devmode' is like 'future'
+		// go ahead and put the "hack" in hackathon.
+		for idx, proto := range config.Consensus {
+			proto.DevMode = true
+			config.Consensus[idx] = proto
+		}
 	}
 	node.config = cfg
 
