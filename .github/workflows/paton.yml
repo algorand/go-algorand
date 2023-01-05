@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-go@v3
         with:
           go-version-file: 'go.mod'
-      - run: go get golang.org/x/perf/cmd/benchstat
+      - run: go install golang.org/x/perf/cmd/benchstat@latest
       - run: sudo apt-get update
       - run: sudo apt-get -y -q install jc jq
       - run: sh scripts/travis/before_build.sh # Installs libsodium.
