@@ -1088,7 +1088,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Gets the node status after waiting for the given round.",
+        "summary": "Gets the node status after waiting for a round after the given round.",
         "operationId": "WaitForBlock",
         "parameters": [
           {
@@ -1157,7 +1157,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Broadcasts a raw transaction to the network.",
+        "summary": "Broadcasts a raw transaction or transaction group to the network.",
         "operationId": "RawTransaction",
         "parameters": [
           {
@@ -1177,6 +1177,69 @@
           },
           "400": {
             "description": "Bad Request - Malformed Algorand transaction ",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/transactions/simulate": {
+      "post": {
+        "tags": [
+          "public",
+          "experimental"
+        ],
+        "consumes": [
+          "application/x-binary"
+        ],
+        "produces": [
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. WARNING: This endpoint is experimental and under active development. There are no guarantees in terms of functionality or future support.",
+        "operationId": "SimulateTransaction",
+        "parameters": [
+          {
+            "description": "The byte encoded transaction to simulate",
+            "name": "rawtxn",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/SimulationResponse"
+          },
+          "400": {
+            "description": "Bad Request - Malformed Algorand transaction",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -1366,6 +1429,71 @@
           "required": true
         }
       ]
+    },
+    "/v2/deltas/{round}": {
+      "get": {
+        "description": "Get ledger deltas for a round.",
+        "tags": [
+            "public",
+            "data"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get a LedgerStateDelta object for a given round",
+        "operationId": "GetLedgerStateDelta",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The round for which the deltas are desired.",
+            "name": "round",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/LedgerStateDeltaResponse"
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Could not find a delta for round",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "408": {
+            "description": "timed out on request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
     },
     "/v2/stateproofs/{round}": {
       "get": {
@@ -1791,6 +1919,152 @@
           "required": true
         }
       ]
+    },
+    "/v2/ledger/sync": {
+      "delete": {
+        "description": "Unset the ledger sync round.",
+        "tags": [
+          "public",
+          "data"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Removes minimum sync round restriction from the ledger.",
+        "operationId": "UnsetSyncRound",
+        "responses": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "description": "Sync round not set.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "get": {
+        "description": "Gets the minimum sync round for the ledger.",
+        "tags": [
+          "public",
+          "data"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Returns the minimum sync round the ledger is keeping in cache.",
+        "operationId": "GetSyncRound",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/GetSyncRoundResponse"
+          },
+          "400": {
+            "description": "Sync round not set.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/ledger/sync/{round}": {
+      "post": {
+        "description": "Sets the minimum sync round on the ledger.",
+        "tags": [
+          "public",
+          "data"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Given a round, tells the ledger to keep that round in its cache.",
+        "operationId": "SetSyncRound",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The round for which the deltas are desired.",
+            "name": "round",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "description": "Can not set sync round to an earlier round than the current round.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
     },
     "/v2/teal/compile": {
       "post": {
@@ -2222,6 +2496,274 @@
           "description": "\\[spend\\] the address against which signing should be checked. If empty, the address of the current account is used. This field can be updated in any transaction by setting the RekeyTo field.",
           "type": "string",
           "x-algorand-format": "Address"
+        }
+      }
+    },
+    "LedgerStateDelta": {
+      "description": "Contains ledger updates.",
+      "type": "object",
+      "required": [
+      ],
+      "properties": {
+        "accts": {
+          "description": "AccountDeltas object",
+          "$ref": "#/definitions/AccountDeltas"
+        },
+        "kv-mods": {
+          "description": "Array of KV Deltas",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/KvDelta"
+          }
+        },
+        "tx-leases": {
+          "description": "List of transaction leases",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TxLease"
+          }
+        },
+        "modified-apps": {
+          "description": "List of modified Apps",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ModifiedApp"
+          }
+        },
+        "modified-assets": {
+          "description": "List of modified Assets",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ModifiedAsset"
+          }
+        },
+        "state-proof-next": {
+          "description": "Next round for which we expect a state proof",
+          "type": "integer"
+        },
+        "prev-timestamp": {
+          "description": "Previous block timestamp",
+          "type": "integer"
+        },
+        "totals": {
+          "description": "Account Totals",
+          "$ref": "#/definitions/AccountTotals"
+        }
+      }
+    },
+    "AccountTotals": {
+      "description": "Total Algos in the system grouped by account status",
+      "type": "object",
+      "required": [
+        "online",
+        "offline",
+        "not-participating",
+        "rewards-level"
+      ],
+      "properties": {
+        "online": {
+          "description": "Amount of stake in online accounts",
+          "type": "integer"
+        },
+        "offline": {
+          "description": "Amount of stake in offline accounts",
+          "type": "integer"
+        },
+        "not-participating": {
+          "description": "Amount of stake in non-participating accounts",
+          "type": "integer"
+        },
+        "rewards-level": {
+          "description": "Total number of algos received per reward unit since genesis",
+          "type": "integer"
+        }
+      }
+    },
+    "AccountDeltas": {
+      "description": "Exposes deltas for account based resources in a single round",
+      "type": "object",
+      "properties": {
+        "accounts": {
+          "description": "Array of Account updates for the round",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AccountBalanceRecord"
+          }
+        },
+        "apps": {
+          "description": "Array of App updates for the round.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AppResourceRecord"
+          }
+        },
+        "assets": {
+          "description": "Array of Asset updates for the round.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AssetResourceRecord"
+          }
+        }
+      }
+    },
+    "TxLease": {
+      "description": "",
+      "type": "object",
+      "required": [
+        "sender",
+        "lease",
+        "expiration"
+      ],
+      "properties": {
+        "sender": {
+          "description": "Address of the lease sender",
+          "type": "string"
+        },
+        "lease": {
+          "description": "Lease data",
+          "type": "string",
+          "format": "byte"
+        },
+        "expiration": {
+          "description": "Round that the lease expires",
+          "type": "integer"
+        }
+      }
+    },
+    "ModifiedAsset": {
+      "description": "Asset which was created or deleted.",
+      "type": "object",
+      "required": [
+        "id",
+        "created",
+        "creator"
+      ],
+      "properties": {
+        "id": {
+          "description": "Asset Id",
+          "type": "integer"
+        },
+        "created": {
+          "description": "Created if true, deleted if false",
+          "type": "boolean"
+        },
+        "creator": {
+          "description": "Address of the creator.",
+          "type": "string"
+        }
+      }
+    },
+    "ModifiedApp": {
+      "description": "App which was created or deleted.",
+      "type": "object",
+      "required": [
+        "id",
+        "created",
+        "creator"
+      ],
+      "properties": {
+        "id": {
+          "description": "App Id",
+          "type": "integer"
+        },
+        "created": {
+          "description": "Created if true, deleted if false",
+          "type": "boolean"
+        },
+        "creator": {
+          "description": "Address of the creator.",
+          "type": "string"
+        }
+      }
+    },
+    "AccountBalanceRecord": {
+      "description": "Account and its address",
+      "type": "object",
+      "required": [
+        "address",
+        "account-data"
+      ],
+      "properties": {
+        "address": {
+          "description": "Address of the updated account.",
+          "type": "string"
+        },
+        "account-data": {
+          "description": "Updated account data.",
+          "$ref": "#/definitions/Account"
+        }
+      }
+    },
+    "AppResourceRecord": {
+      "description": "Represents AppParams and AppLocalStateDelta in deltas",
+      "type": "object",
+      "required": [
+        "app-index",
+        "address",
+        "app-deleted",
+        "app-local-state-deleted"
+      ],
+      "properties": {
+        "app-index": {
+          "description": "App index",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "address": {
+          "description": "App account address",
+          "type": "string"
+        },
+        "app-deleted": {
+          "description": "Whether the app was deleted",
+          "type": "boolean"
+        },
+        "app-local-state-deleted": {
+          "description": "Whether the app local state was deleted",
+          "type": "boolean"
+        },
+        "app-params": {
+          "description": "App params",
+          "$ref": "#/definitions/ApplicationParams"
+        },
+        "app-local-state": {
+          "description": "App local state",
+          "$ref": "#/definitions/ApplicationLocalState"
+        }
+      }
+    },
+    "AssetResourceRecord": {
+      "description": "Represents AssetParams and AssetHolding in deltas",
+      "required": [
+        "asset-index",
+        "address",
+        "asset-deleted",
+        "asset-holding-deleted"
+      ],
+      "properties": {
+        "asset-index": {
+          "description": "Index of the asset",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "address": {
+          "description": "Account address of the asset",
+          "type": "string"
+        },
+        "asset-deleted": {
+          "description": "Whether the asset was deleted",
+          "type": "boolean"
+        },
+        "asset-params": {
+          "description": "Asset params",
+          "$ref": "#/definitions/AssetParams"
+        },
+        "asset-holding-deleted": {
+          "description": "Whether the asset holding was deleted",
+          "type": "boolean"
+        },
+        "asset-holding": {
+          "description": "The asset holding",
+          "$ref": "#/definitions/AssetHolding"
         }
       }
     },
@@ -2744,10 +3286,6 @@
         "budget-consumed": {
           "description": "Budget consumed during execution of app call transaction.",
           "type": "integer"
-        },
-        "cost": {
-          "description": "Net cost of app execution. Field is DEPRECATED and is subject for removal. Instead, use `budget-added` and `budget-consumed.",
-          "type": "integer"
         }
       }
     },
@@ -2877,6 +3415,22 @@
       "properties": {
         "name": {
           "description": "Base64 encoded box name",
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "KvDelta": {
+      "description": "A single Delta containing the key, the previous value and the current value for a single round.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "The key, base64 encoded.",
+          "type": "string",
+          "format": "byte"
+        },
+        "value": {
+          "description": "The new value of the KV store entry, base64 encoded.",
           "type": "string",
           "format": "byte"
         }
@@ -3279,6 +3833,27 @@
     }
   },
   "responses": {
+    "GetSyncRoundResponse": {
+      "description": "Response containing the ledger's minimum sync round",
+      "schema": {
+        "type": "object",
+        "required": [
+          "round"
+        ],
+        "properties": {
+          "round": {
+            "description": "The minimum sync round for the ledger.",
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "LedgerStateDeltaResponse": {
+      "description": "Contains ledger deltas",
+      "schema": {
+        "$ref": "#/definitions/LedgerStateDelta"
+      }
+    },
     "LightBlockHeaderProofResponse": {
       "description": "Proof of a light block header.",
       "schema": {
@@ -3523,12 +4098,56 @@
             "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
             "type": "integer"
           },
+          "catchpoint-total-kvs": {
+            "description": "The total number of key-values (KVs) included in the current catchpoint",
+            "type": "integer"
+          },
+          "catchpoint-processed-kvs": {
+            "description": "The number of key-values (KVs) from the current catchpoint that have been processed so far as part of the catchup",
+            "type": "integer"
+          },
+          "catchpoint-verified-kvs": {
+            "description": "The number of key-values (KVs) from the current catchpoint that have been verified so far as part of the catchup",
+            "type": "integer"
+          },
           "catchpoint-total-blocks": {
             "description": "The total number of blocks that are required to complete the current catchpoint catchup",
             "type": "integer"
           },
           "catchpoint-acquired-blocks": {
             "description": "The number of blocks that have already been obtained by the node as part of the catchup",
+            "type": "integer"
+          },
+          "upgrade-delay": {
+            "description": "Upgrade delay",
+            "type": "integer"
+          },
+          "upgrade-node-vote": {
+            "description": "This node's upgrade vote",
+            "type": "boolean"
+          },
+          "upgrade-votes-required": {
+            "description": "Yes votes required for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-votes": {
+            "description": "Total votes cast for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-yes-votes": {
+            "description": "Yes votes cast for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-no-votes": {
+            "description": "No votes cast for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-next-protocol-vote-before": {
+            "description": "Next protocol round",
+            "type": "integer"
+          },
+          "upgrade-vote-rounds": {
+            "description": "Total voting ounds for current upgrade",
             "type": "integer"
           }
         }
@@ -3604,6 +4223,29 @@
         }
       }
     },
+    "SimulationResponse": {
+      "description": "Result of a transaction group simulation.",
+      "tags": [
+        "experimental"
+      ],
+      "schema": {
+        "type": "object",
+        "required": [
+          "failure-message",
+          "missing-signatures"
+        ],
+        "properties": {
+          "failure-message": {
+            "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+            "type": "string"
+          },
+          "missing-signatures": {
+            "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+            "type": "boolean"
+          }
+        }
+      }
+    },
     "SupplyResponse": {
       "description": "Supply represents the current supply of MicroAlgos in the system.",
       "schema": {
@@ -3669,8 +4311,7 @@
             "description": "The minimum transaction fee (not per byte) required for the\ntxn to validate for the current network protocol.",
             "type": "integer"
           }
-        },
-        "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+        }
       }
     },
     "ApplicationResponse": {

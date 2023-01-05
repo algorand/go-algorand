@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,12 +18,13 @@ package ledger
 
 import (
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
 )
 
 //msgp:ignore cachedResourceData
 type cachedResourceData struct {
-	persistedResourcesData
+	store.PersistedResourcesData
 
 	address basics.Address
 }
@@ -67,11 +68,11 @@ func (m *lruResources) init(log logging.Logger, pendingWrites int, pendingWrites
 
 // read the persistedResourcesData object that the lruResources has for the given address and creatable index.
 // thread locking semantics : read lock
-func (m *lruResources) read(addr basics.Address, aidx basics.CreatableIndex) (data persistedResourcesData, has bool) {
+func (m *lruResources) read(addr basics.Address, aidx basics.CreatableIndex) (data store.PersistedResourcesData, has bool) {
 	if el := m.resources[accountCreatable{address: addr, index: aidx}]; el != nil {
-		return el.Value.persistedResourcesData, true
+		return el.Value.PersistedResourcesData, true
 	}
-	return persistedResourcesData{}, false
+	return store.PersistedResourcesData{}, false
 }
 
 // readNotFound returns whether we have attempted to read this address but it did not exist in the db.
@@ -83,10 +84,10 @@ func (m *lruResources) readNotFound(addr basics.Address, idx basics.CreatableInd
 
 // read the persistedResourcesData object that the lruResources has for the given address.
 // thread locking semantics : read lock
-func (m *lruResources) readAll(addr basics.Address) (ret []persistedResourcesData) {
+func (m *lruResources) readAll(addr basics.Address) (ret []store.PersistedResourcesData) {
 	for ac, pd := range m.resources {
 		if ac.address == addr {
-			ret = append(ret, pd.Value.persistedResourcesData)
+			ret = append(ret, pd.Value.PersistedResourcesData)
 		}
 	}
 	return
@@ -104,7 +105,7 @@ outer:
 	for ; pendingEntriesCount > 0; pendingEntriesCount-- {
 		select {
 		case pendingResourceData := <-m.pendingResources:
-			m.write(pendingResourceData.persistedResourcesData, pendingResourceData.address)
+			m.write(pendingResourceData.PersistedResourcesData, pendingResourceData.address)
 		default:
 			break outer
 		}
@@ -125,9 +126,9 @@ outer2:
 // writePending write a single persistedAccountData entry to the pendingResources buffer.
 // the function doesn't block, and in case of a buffer overflow the entry would not be added.
 // thread locking semantics : no lock is required.
-func (m *lruResources) writePending(acct persistedResourcesData, addr basics.Address) {
+func (m *lruResources) writePending(acct store.PersistedResourcesData, addr basics.Address) {
 	select {
-	case m.pendingResources <- cachedResourceData{persistedResourcesData: acct, address: addr}:
+	case m.pendingResources <- cachedResourceData{PersistedResourcesData: acct, address: addr}:
 	default:
 	}
 }
@@ -147,17 +148,17 @@ func (m *lruResources) writeNotFoundPending(addr basics.Address, idx basics.Crea
 // version of what's already on the cache or not. In all cases, the entry is going
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
-func (m *lruResources) write(resData persistedResourcesData, addr basics.Address) {
-	if el := m.resources[accountCreatable{address: addr, index: resData.aidx}]; el != nil {
+func (m *lruResources) write(resData store.PersistedResourcesData, addr basics.Address) {
+	if el := m.resources[accountCreatable{address: addr, index: resData.Aidx}]; el != nil {
 		// already exists; is it a newer ?
-		if el.Value.before(&resData) {
+		if el.Value.Before(&resData) {
 			// we update with a newer version.
-			el.Value = &cachedResourceData{persistedResourcesData: resData, address: addr}
+			el.Value = &cachedResourceData{PersistedResourcesData: resData, address: addr}
 		}
 		m.resourcesList.moveToFront(el)
 	} else {
 		// new entry.
-		m.resources[accountCreatable{address: addr, index: resData.aidx}] = m.resourcesList.pushFront(&cachedResourceData{persistedResourcesData: resData, address: addr})
+		m.resources[accountCreatable{address: addr, index: resData.Aidx}] = m.resourcesList.pushFront(&cachedResourceData{PersistedResourcesData: resData, address: addr})
 	}
 }
 
@@ -170,7 +171,7 @@ func (m *lruResources) prune(newSize int) (removed int) {
 			break
 		}
 		back := m.resourcesList.back()
-		delete(m.resources, accountCreatable{address: back.Value.address, index: back.Value.aidx})
+		delete(m.resources, accountCreatable{address: back.Value.address, index: back.Value.Aidx})
 		m.resourcesList.remove(back)
 		removed++
 	}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -312,7 +312,7 @@ int 1
 		resp, err := client.GetParsedPendingTransactions(2)
 		a.NoError(err)
 		if resp.TotalTransactions == 1 {
-			a.Equal(resp.TopTransactions[0].Txn.ID(), txid)
+			a.Equal(resp.TopTransactions[0].Txn.ID().String(), txid)
 			continue
 		}
 		a.Equal(uint64(0), resp.TotalTransactions)

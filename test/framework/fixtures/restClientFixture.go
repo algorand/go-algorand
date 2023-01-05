@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
@@ -416,14 +415,4 @@ func (f *RestClientFixture) AssertValidTxid(txid string) {
 		}
 	}
 	require.True(f.t, allLettersOrNumbers, "txid should be all letters")
-}
-
-// AccountListContainsAddress searches the passed account list for the passed account address
-func (f *RestClientFixture) AccountListContainsAddress(searchList []v1.Account, address string) bool {
-	for _, item := range searchList {
-		if item.Address == address {
-			return true
-		}
-	}
-	return false
 }

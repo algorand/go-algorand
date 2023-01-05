@@ -31,10 +31,10 @@ echo "Running check_license..."
 ./scripts/check_license.sh
 
 echo "Rebuild swagger.json files"
-make rebuild_swagger
+make rebuild_kmd_swagger
 
-echo "Regenerate config files"
-go generate ./config
+echo "Regenerate for stringer et el."
+make generate
 
 echo "Running fixcheck"
 GOPATH=$(go env GOPATH)

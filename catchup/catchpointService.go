@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -53,11 +53,15 @@ type CatchpointCatchupStats struct {
 	TotalAccounts      uint64
 	ProcessedAccounts  uint64
 	VerifiedAccounts   uint64
+	TotalKVs           uint64
+	ProcessedKVs       uint64
+	VerifiedKVs        uint64
 	TotalBlocks        uint64
 	AcquiredBlocks     uint64
 	VerifiedBlocks     uint64
 	ProcessedBytes     uint64
 	TotalAccountHashes uint64
+	TotalKVHashes      uint64
 	StartTime          time.Time
 }
 
@@ -303,7 +307,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 		if err == nil {
 			cs.log.Infof("ledger downloaded in %d seconds", time.Since(start)/time.Second)
 			start = time.Now()
-			err = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedAccounts)
+			err = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedCounts)
 			if err == nil {
 				cs.log.Infof("built merkle trie in %d seconds", time.Since(start)/time.Second)
 				break
@@ -335,12 +339,17 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	return nil
 }
 
-// updateVerifiedAccounts update the user's statistics for the given verified accounts
-func (cs *CatchpointCatchupService) updateVerifiedAccounts(addedTrieHashes uint64) {
+// updateVerifiedCounts update the user's statistics for the given verified hashes
+func (cs *CatchpointCatchupService) updateVerifiedCounts(accountCount, kvCount uint64) {
 	cs.statsMu.Lock()
 	defer cs.statsMu.Unlock()
+
 	if cs.stats.TotalAccountHashes > 0 {
-		cs.stats.VerifiedAccounts = cs.stats.TotalAccounts * addedTrieHashes / cs.stats.TotalAccountHashes
+		cs.stats.VerifiedAccounts = cs.stats.TotalAccounts * accountCount / cs.stats.TotalAccountHashes
+	}
+
+	if cs.stats.TotalKVs > 0 {
+		cs.stats.VerifiedKVs = kvCount
 	}
 }
 
@@ -756,6 +765,8 @@ func (cs *CatchpointCatchupService) updateLedgerFetcherProgress(fetcherStats *le
 	defer cs.statsMu.Unlock()
 	cs.stats.TotalAccounts = fetcherStats.TotalAccounts
 	cs.stats.ProcessedAccounts = fetcherStats.ProcessedAccounts
+	cs.stats.TotalKVs = fetcherStats.TotalKVs
+	cs.stats.ProcessedKVs = fetcherStats.ProcessedKVs
 	cs.stats.ProcessedBytes = fetcherStats.ProcessedBytes
 	cs.stats.TotalAccountHashes = fetcherStats.TotalAccountHashes
 }
