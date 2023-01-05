@@ -212,11 +212,10 @@ func startCatchpointNormalNode(a *require.Assertions, fixture *fixtures.RestClie
 func runBasicCatchpointCatchup(t *testing.T, consensusParams *config.ConsensusParams, roundsAfterCatchpoint basics.Round) {
 	// Overview of this function:
 	// Start a two-node network (primary has 100%, secondary has 0%)
-	// Nodes are having a consensus allowing balances history of 8 rounds and transaction history of 13 rounds.
-	// Let it run for 21 rounds.
 	// create a web proxy, have the secondary node use it as a peer, blocking all requests for round #2. ( and allowing everything else )
-	// start the secondary node, and instuct it to catchpoint catchup from the proxy. ( which would be for round 20 )
-	// wait until the clone node cought up, skipping the "impossible" hole of round #2.
+	// Let it run until the first usable catchpoint, as computed in getFirstCatchpointRound, is generated.
+	// instruct the catchpoint using node to catchpoint catchup from the proxy.
+	// wait until the using node is caught up to catchpointRound + roundsAfterCatchpoint, skipping the "impossible" hole of round #2.
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensus := make(config.ConsensusProtocols)
@@ -234,10 +233,10 @@ func runBasicCatchpointCatchup(t *testing.T, consensusParams *config.ConsensusPa
 	primaryNodeAddr, err := primaryNode.GetListeningAddress()
 	a.NoError(err)
 
-	secondaryNode, wp, secondayNodeErrorsCollector := startCatchpointUsingNode(a, &fixture, "Node", primaryNodeAddr)
-	defer secondayNodeErrorsCollector.Print()
+	usingNode, wp, usingNodeErrorsCollector := startCatchpointUsingNode(a, &fixture, "Node", primaryNodeAddr)
+	defer usingNodeErrorsCollector.Print()
 	defer wp.Close()
-	defer secondaryNode.StopAlgod()
+	defer usingNode.StopAlgod()
 
 	targetCatchpointRound := getFirstCatchpointRound(consensusParams)
 
@@ -246,11 +245,11 @@ func runBasicCatchpointCatchup(t *testing.T, consensusParams *config.ConsensusPa
 	a.NoError(err)
 	fmt.Printf("%s\n", catchpointLabel)
 
-	secondNodeRestClient := fixture.GetAlgodClientForController(secondaryNode)
-	_, err = secondNodeRestClient.Catchup(catchpointLabel)
+	usingNodeRestClient := fixture.GetAlgodClientForController(usingNode)
+	_, err = usingNodeRestClient.Catchup(catchpointLabel)
 	a.NoError(err)
 
-	err = fixture.ClientWaitForRoundWithTimeout(secondNodeRestClient, uint64(targetCatchpointRound+roundsAfterCatchpoint))
+	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetCatchpointRound+roundsAfterCatchpoint))
 	a.NoError(err)
 }
 
