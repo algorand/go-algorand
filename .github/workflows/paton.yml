@@ -24,7 +24,11 @@ jobs:
       - run: go install golang.org/x/perf/cmd/benchstat@latest
       - run: sudo apt-get update
       - run: sudo apt-get -y -q install jc jq
-      - run: sh scripts/travis/before_build.sh # Installs libsodium.
+      - run: |
+        scripts/configure_dev.sh
+        scripts/buildtools/install_buildtools.sh
+        scripts/travis/before_build.sh # Installs libsodium.
+        shell: bash
       - name: Run benchmark
         run: ./scripts/paton.sh --test-cmd "-run XXX -benchtime 5s -bench BenchmarkControl ./data/transactions/logic"
         shell: bash
