@@ -4117,6 +4117,38 @@
           "catchpoint-acquired-blocks": {
             "description": "The number of blocks that have already been obtained by the node as part of the catchup",
             "type": "integer"
+          },
+          "upgrade-delay": {
+            "description": "Upgrade delay",
+            "type": "integer"
+          },
+          "upgrade-node-vote": {
+            "description": "This node's upgrade vote",
+            "type": "boolean"
+          },
+          "upgrade-votes-required": {
+            "description": "Yes votes required for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-votes": {
+            "description": "Total votes cast for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-yes-votes": {
+            "description": "Yes votes cast for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-no-votes": {
+            "description": "No votes cast for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-next-protocol-vote-before": {
+            "description": "Next protocol round",
+            "type": "integer"
+          },
+          "upgrade-vote-rounds": {
+            "description": "Total voting ounds for current upgrade",
+            "type": "integer"
           }
         }
       }
