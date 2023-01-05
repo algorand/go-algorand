@@ -21,6 +21,7 @@ jobs:
       - uses: actions/setup-go@v3
         with:
           go-version-file: 'go.mod'
+          cache: true
       - run: go install golang.org/x/perf/cmd/benchstat@latest
       - run: sudo apt-get update
       - run: sudo apt-get -y -q install jc jq
