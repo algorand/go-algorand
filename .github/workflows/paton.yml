@@ -35,25 +35,17 @@ jobs:
       - name: Run benchmark
         run: ./scripts/paton.sh --test-cmd "-run XXX -benchtime 5s -bench BenchmarkControl ./data/transactions/logic"
         shell: bash
-      - name: Push benchmark result to gh-pages branch
-        if: github.event_name == 'push'
-        uses: benchmark-action/github-action-benchmark@v1
+      - name: Check files
+        id: check_files
+        uses: andstor/file-existence-action@v1
         with:
-          name: Go Benchmark
-          tool: 'customSmallerIsBetter'
-          output-file-path: /tmp/benchstat_time_jq.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: true
-      - name: Evaluate benchmark on PR branch
-        if: github.event.pull_request
-        uses: benchmark-action/github-action-benchmark@v1
+          files: "/tmp/alerting_benchmarks.json"
+      - name: Add PR comment
+        if: steps.check_files.outputs.files_exists == 'true'
+        uses: peter-evans/create-or-update-comment@v2
         with:
-          name: Go Benchmark
-          tool: 'customSmallerIsBetter'
-          output-file-path: /tmp/benchstat_time_jq.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          alert-threshold: '10%'
-          comment-on-alert: true
+          issue-number: ${{ github.event.number }}
+          body-file: /tmp/alerting_benchmarks.json
  #     - name: Slack Notification
  #       env:
  #         SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}

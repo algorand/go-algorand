@@ -33,6 +33,11 @@ while [[ $# -gt 0 ]]; do
       shift # past argument
       shift # past value
       ;;
+    -a|--alert-threshold-pct)
+      ALERT_THRESHOLD_PCT="$2"
+      shift # past argument
+      shift # past value
+      ;;
     *)
       echo "Unknown flag"
       exit 1
@@ -63,8 +68,17 @@ cat /tmp/benchstat.txt |
 
 cat /tmp/benchstat_time.json |
   jq '.[] | {
-    name: (.name + "-"),
-    value: .delta | tonumber,
-    unit: "Percent"
+    name: .name,
+    old_time_op: .old_time_op,
+    new_time_op: .new_time_op,
+    delta: .delta | tonumber
     }' |
   jq -s > /tmp/benchstat_time_jq.json
+
+cat /tmp/benchstat_time_jq.json |
+  jq ".[] | select(.delta >= ${ALERT_THRESHOLD_PCT})" |
+  tee /tmp/alerting_benchmarks.json
+
+if [ ! -s /tmp/alerting_benchmarks.json ]; then
+  rm /tmp/alerting_benchmarks.json
+fi
