@@ -36,7 +36,6 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	applyCatchpointConsensusChanges(&consensusParams)
 	applyCatchpointStateProofConsensusChanges(&consensusParams)
-	consensusParams.StateProofInterval = 8
 
 	// The small size of the network means we can expect extremely fast state proofs to be generated, which means
 	// they should be generated one round after the proven interval's last attested round.
@@ -52,6 +51,39 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 	a.True(expectedStateProofRound >= firstExpectedStateProofRound)
 	a.True(expectedStateProofRound >= firstReplayRound && expectedStateProofRound <= catchpointRound, "No state proof message expected between rounds"+
 		" %d and %d, which define the replay range. Modify the consensus parameters to resolve this.", dbRoundAfterCatchpoint, catchpointRound)
+
+	testBasicCatchpointCatchup(t, &consensusParams)
+}
+
+func TestStateProofAfterCatchpoint(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	if testing.Short() {
+		t.Skip()
+	}
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	applyCatchpointConsensusChanges(&consensusParams)
+	applyCatchpointStateProofConsensusChanges(&consensusParams)
+	consensusParams.StateProofInterval = 16
+
+	// The small size of the network means we can expect extremely fast state proofs to be generated, which means
+	// they should be generated one round after the proven interval's last attested round.
+	firstExpectedStateProofRound := basics.Round(consensusParams.StateProofInterval*2 + 1)
+	catchpointRound := getFirstCatchpointRound(&consensusParams)
+
+	dbRoundAfterCatchpoint := catchpointRound - basics.Round(consensusParams.MaxBalLookback)
+	firstReplayRound := dbRoundAfterCatchpoint + 1
+
+	votersBefore := catchpointRound.RoundDownToMultipleOf(basics.Round(consensusParams.StateProofInterval))
+	expectedStateProofRoundAfter := votersBefore + basics.Round(consensusParams.StateProofInterval) + 1
+
+	a.True(expectedStateProofRoundAfter >= firstExpectedStateProofRound)
+	a.True(expectedStateProofRoundAfter >= catchpointRound)
+	a.True(votersBefore < firstReplayRound, "The voters round %d is not lower than the replay round %d, which "+
+		"means that the used tracker data might not come from the catchpoint. Modify the consensus parameters to resolve this.", votersBefore, firstReplayRound)
 
 	testBasicCatchpointCatchup(t, &consensusParams)
 }
