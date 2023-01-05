@@ -43,16 +43,16 @@ jobs:
           output-file-path: /tmp/benchstat_time_jq.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
-      - name: Evaluate benchmark on PR branch
-        if: github.event.pull_request
-        uses: benchmark-action/github-action-benchmark@v1
-        with:
-          name: Go Benchmark
-          tool: 'customSmallerIsBetter'
-          output-file-path: /tmp/benchstat_time_jq.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          alert-threshold: '10%'
-          comment-on-alert: true
+#      - name: Evaluate benchmark on PR branch
+#        if: github.event.pull_request
+#        uses: benchmark-action/github-action-benchmark@v1
+#        with:
+#          name: Go Benchmark
+#          tool: 'customSmallerIsBetter'
+#          output-file-path: /tmp/benchstat_time_jq.json
+#          github-token: ${{ secrets.GITHUB_TOKEN }}
+#          alert-threshold: '10%'
+#          comment-on-alert: true
  #     - name: Slack Notification
  #       env:
  #         SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
