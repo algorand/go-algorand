@@ -90,6 +90,11 @@ type StatusReport struct {
 	CatchpointCatchupVerifiedKVs       uint64
 	CatchpointCatchupTotalBlocks       uint64
 	CatchpointCatchupAcquiredBlocks    uint64
+	UpgradePropose                     protocol.ConsensusVersion
+	UpgradeApprove                     bool
+	UpgradeDelay                       uint64
+	NextProtocolVoteBefore             basics.Round
+	NextProtocolApprovals              uint64
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen
@@ -720,6 +725,13 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 		s.LastCatchpoint = node.ledger.GetLastCatchpointLabel()
 		s.SynchronizingTime = node.catchupService.SynchronizingTime()
 		s.CatchupTime = node.catchupService.SynchronizingTime()
+
+		s.UpgradePropose = b.UpgradeVote.UpgradePropose
+		s.UpgradeApprove = b.UpgradeApprove
+		s.UpgradeDelay = uint64(b.UpgradeVote.UpgradeDelay)
+		s.NextProtocolVoteBefore = b.NextProtocolVoteBefore
+		s.NextProtocolApprovals = b.UpgradeState.NextProtocolApprovals
+
 	}
 
 	return

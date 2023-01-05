@@ -440,6 +440,7 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 	lastRoundTime := fmt.Sprintf("%.1fs", time.Duration(stat.TimeSinceLastRound).Seconds())
 	catchupTime := fmt.Sprintf("%.1fs", time.Duration(stat.CatchupTime).Seconds())
 	var statusString string
+
 	if stat.Catchpoint == nil || (*stat.Catchpoint) == "" {
 		statusString = fmt.Sprintf(
 			infoNodeStatus,
@@ -458,6 +459,37 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 		if stat.StoppedAtUnsupportedRound {
 			statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
 		}
+
+		upgradeNextProtocolVoteBefore := uint64(0)
+		if stat.UpgradeNextProtocolVoteBefore != nil {
+			upgradeNextProtocolVoteBefore = *stat.UpgradeNextProtocolVoteBefore
+		}
+
+		if upgradeNextProtocolVoteBefore > stat.LastRound {
+			upgradeVotesRequired := uint64(0)
+			upgradeNoVotes := uint64(0)
+			upgradeYesVotes := uint64(0)
+			if stat.UpgradeVotesRequired != nil {
+				upgradeVotesRequired = *stat.UpgradeVotesRequired
+			}
+			if stat.UpgradeNoVotes != nil {
+				upgradeNoVotes = *stat.UpgradeNoVotes
+			}
+			if stat.UpgradeYesVotes != nil {
+				upgradeYesVotes = *stat.UpgradeYesVotes
+			}
+			statusString = statusString + "\n" + fmt.Sprintf(
+				infoNodeStatusConsensusUpgradeVoting,
+				upgradeYesVotes,
+				upgradeNoVotes,
+				upgradeNextProtocolVoteBefore-stat.LastRound,
+				upgradeVotesRequired,
+				upgradeNextProtocolVoteBefore,
+			)
+		} else if upgradeNextProtocolVoteBefore > 0 {
+			statusString = statusString + "\n" + infoNodeStatusConsensusUpgradeScheduled
+		}
+
 	} else {
 		statusString = fmt.Sprintf(
 			infoNodeCatchpointCatchupStatus,
