@@ -209,7 +209,7 @@ func startCatchpointNormalNode(a *require.Assertions, fixture *fixtures.RestClie
 	return nodeController, &errorsCollector
 }
 
-func testBasicCatchpointCatchup(t *testing.T, consensusParams *config.ConsensusParams) {
+func runBasicCatchpointCatchup(t *testing.T, consensusParams *config.ConsensusParams, roundsAfterCatchpoint basics.Round) {
 	// Overview of this function:
 	// Start a two-node network (primary has 100%, secondary has 0%)
 	// Nodes are having a consensus allowing balances history of 8 rounds and transaction history of 13 rounds.
@@ -240,7 +240,6 @@ func testBasicCatchpointCatchup(t *testing.T, consensusParams *config.ConsensusP
 	defer secondaryNode.StopAlgod()
 
 	targetCatchpointRound := getFirstCatchpointRound(consensusParams)
-	targetRound := targetCatchpointRound + 1
 
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 	catchpointLabel, err := fixture.ClientWaitForCatchpoint(primaryNodeRestClient, targetCatchpointRound)
@@ -251,8 +250,7 @@ func testBasicCatchpointCatchup(t *testing.T, consensusParams *config.ConsensusP
 	_, err = secondNodeRestClient.Catchup(catchpointLabel)
 	a.NoError(err)
 
-	// TODO: Change
-	err = fixture.ClientWaitForRoundWithTimeout(secondNodeRestClient, uint64(targetRound+20))
+	err = fixture.ClientWaitForRoundWithTimeout(secondNodeRestClient, uint64(targetCatchpointRound+roundsAfterCatchpoint))
 	a.NoError(err)
 }
 
@@ -266,7 +264,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 
 	catchpointCatchupProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
 	applyCatchpointConsensusChanges(&catchpointCatchupProtocol)
-	testBasicCatchpointCatchup(t, &catchpointCatchupProtocol)
+	runBasicCatchpointCatchup(t, &catchpointCatchupProtocol, 1)
 }
 
 func TestCatchpointLabelGeneration(t *testing.T) {

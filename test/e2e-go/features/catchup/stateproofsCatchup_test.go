@@ -52,7 +52,7 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 	a.True(expectedStateProofRound >= firstReplayRound && expectedStateProofRound <= catchpointRound, "No state proof message expected between rounds"+
 		" %d and %d, which define the replay range. Modify the consensus parameters to resolve this.", dbRoundAfterCatchpoint, catchpointRound)
 
-	testBasicCatchpointCatchup(t, &consensusParams)
+	runBasicCatchpointCatchup(t, &consensusParams, 1)
 }
 
 func TestStateProofAfterCatchpoint(t *testing.T) {
@@ -85,7 +85,7 @@ func TestStateProofAfterCatchpoint(t *testing.T) {
 	a.True(votersBefore < firstReplayRound, "The voters round %d is not lower than the replay round %d, which "+
 		"means that the used tracker data might not come from the catchpoint. Modify the consensus parameters to resolve this.", votersBefore, firstReplayRound)
 
-	testBasicCatchpointCatchup(t, &consensusParams)
+	runBasicCatchpointCatchup(t, &consensusParams, expectedStateProofRoundAfter-catchpointRound)
 }
 
 func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
