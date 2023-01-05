@@ -49,6 +49,18 @@ type SpecialAddresses struct {
 	RewardsPool basics.Address
 }
 
+// DevMode contains options which are only available to transactions submitted
+// to networks that have dev mode enabled.
+type DevMode struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	// IgnoreSignatureCheck disables signature checking.
+	IgnoreSignatureCheck bool `codec:"ignore_signature_check"`
+
+	// SetBlockTime is used to set the block header timestamp.
+	SetBlockTime uint64 `codec:"set_block_time"`
+}
+
 // Header captures the fields common to every transaction type.
 type Header struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -86,6 +98,10 @@ type Transaction struct {
 
 	// Type of transaction
 	Type protocol.TxType `codec:"type"`
+
+	// Fields that can be included when dev mode is enabled.
+	// TODO: should this be defined in the header or left here for higher visibility?
+	DevMode
 
 	// Common fields for all types of transactions
 	Header

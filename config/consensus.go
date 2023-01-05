@@ -483,6 +483,9 @@ type ConsensusParams struct {
 	// the rewardsLevel, but the rewardsLevel has no meaning because the account
 	// has fewer than RewardUnit algos.
 	UnfundedSenders bool
+
+	// DevMode is a special consensus parameter that enables developer features.
+	DevMode bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1306,5 +1309,4 @@ func init() {
 	for _, p := range Consensus {
 		checkSetAllocBounds(p)
 	}
-
 }
