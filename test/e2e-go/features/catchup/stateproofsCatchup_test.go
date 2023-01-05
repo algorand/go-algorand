@@ -24,7 +24,7 @@ func applyCatchpointStateProofConsensusChanges(consensusParams *config.Consensus
 	consensusParams.StateProofUseTrackerVerification = true
 }
 
-func TestStateproofInReplayCatchpoint(t *testing.T) {
+func TestStateProofInReplayCatchpoint(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -42,7 +42,7 @@ func TestStateproofInReplayCatchpoint(t *testing.T) {
 	// they should be generated one round after the proven interval's last attested round.
 	firstExpectedStateProofRound := basics.Round(consensusParams.StateProofInterval*2 + 1)
 	catchpointRound := getFirstCatchpointRound(&consensusParams)
-	
+
 	dbRoundAfterCatchpoint := catchpointRound - basics.Round(consensusParams.MaxBalLookback)
 	firstReplayRound := dbRoundAfterCatchpoint + 1
 
@@ -79,7 +79,7 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "StateProofCatchpointCatchupTestNetwork.json"))
 
 	const catchpointInterval = 4
-	primaryNode, primaryEC := startCatchpointGeneratingNode(a, &fixture, "Primary", catchpointInterval)
+	primaryNode, primaryEC := startCatchpointGeneratingNode(a, &fixture, "Primary")
 	defer primaryEC.Print()
 	defer primaryNode.StopAlgod()
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
@@ -96,7 +96,7 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	defer usingNode.StopAlgod()
 	usingNodeRestClient := fixture.GetAlgodClientForController(usingNode)
 
-	targetCatchpointRound := getFirstCatchpointRound(&consensusParams, catchpointInterval)
+	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
 
 	catchpointLabel, err := fixture.ClientWaitForCatchpoint(primaryNodeRestClient, targetCatchpointRound)
 	a.NoError(err)
