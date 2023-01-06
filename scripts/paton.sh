@@ -2,9 +2,8 @@
 
 set -euxf -o pipefail
 
-# Primarily intended for continuous benchmarking, paton.sh compares Go
-# benchmarks between 2 git commits and outputs the comparison in a format
-# compatible with https://github.com/benchmark-action/github-action-benchmark.
+# Primarily intended for continuous benchmarking, paton.sh judges benchmark
+# performance across 2 git commits against a user-provided percent threshold.
 #
 # paton.sh is inspired by https://github.com/knqyf263/cob.  cob minimizes
 # benchmarking variance by running provided benchmarks against 2 commits in 1

@@ -12,22 +12,26 @@ jobs:
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success'
     steps:
-      - id: download-artifact
-        uses: dawidd6/action-download-artifact@v2
-        with: paton.yml
+      - uses: dawidd6/action-download-artifact@v2
+        with: paton-benchmark.yml
         name: alerting_benchmarks.json
         path: /tmp/alerting_benchmarks.json
-      - name: Run benchmark
-        run: if [ ! -s /tmp/alerting_benchmarks.json ]; then rm /tmp/alerting_benchmarks.json
+      - run: if [ ! -s /tmp/alerting_benchmarks.json ]; then rm /tmp/alerting_benchmarks.json
         shell: bash
-      - name: Check files
-        id: check_files
+      - id: check_benchmark
         uses: andstor/file-existence-action@v1
         with:
           files: "/tmp/alerting_benchmarks.json"
+      - uses: dawidd6/action-download-artifact@v2
+        with: paton-benchmark.yml
+        name: pr_number.txt
+        path: /tmp/pr_number.txt
+      - run: echo "pr_number=$(cat /tmp/pr_number.txt)" >> $GITHUB_ENV
+        shell: bash
       - uses: peter-evans/create-or-update-comment@v2
+        if: steps.check_benchmark.outputs.files_exists == 'true'
         with:
-          issue-number: 5 # TODO Provide dynamically
+          issue-number: "{{ env.pr_number }}"
           body-file: /tmp/alerting_benchmarks.json
 
  #     - name: Slack Notification
