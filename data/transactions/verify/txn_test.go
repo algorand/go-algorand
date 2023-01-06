@@ -1389,7 +1389,7 @@ func TestStreamVerifierBlockWatcher(t *testing.T) {
 	}
 }
 
-func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan interface{}, execpool.BacklogPool) {
+func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan interface{}) {
 	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
 	_, buffLen := verificationPool.BufferSize()
 
@@ -1402,7 +1402,7 @@ func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan interface{},
 				return nil
 			}, nil, nil)
 	}
-	return verificationPool, holdTasks, verificationPool
+	return verificationPool, holdTasks
 }
 
 // TestStreamVerifierCtxCancel tests the termination when the ctx is canceled
@@ -1413,8 +1413,8 @@ func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan interface{},
 func TestStreamVerifierCtxCancel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	verificationPool, holdTasks, vp := getSaturatedExecPool(t)
-	defer vp.Shutdown()
+	verificationPool, holdTasks := getSaturatedExecPool(t)
+	defer verificationPool.Shutdown()
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50)
 	stxnChan := make(chan *UnverifiedElement)
@@ -1461,8 +1461,7 @@ func TestStreamVerifierCtxCancel(t *testing.T) {
 func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	verificationPool, holdTasks, vp := getSaturatedExecPool(t)
-	defer vp.Shutdown()
+	verificationPool, holdTasks := getSaturatedExecPool(t)
 
 	// check the logged information
 	var logBuffer bytes.Buffer
@@ -1470,7 +1469,7 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
 	log.SetOutput(&logBuffer)
 	log.SetLevel(logging.Info)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, _ := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50)
 	stxnChan := make(chan *UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
@@ -1497,13 +1496,15 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
 	// the test might sporadically fail if between sending the txn above
 	// and the cancelation, 2 x waitForNextTxnDuration elapses (10ms)
 	time.Sleep(6 * waitForNextTxnDuration)
-	cancel()
+	go func() {
+		// wait a bit before releasing the tasks, so that the verificationPool ctx first gets cancled
+		time.Sleep(20 * time.Millisecond)
+		close(holdTasks)
+	}()
+	verificationPool.Shutdown()
 
 	// the main loop should stop after cancel()
 	sv.WaitForStop()
-
-	// release the tasks
-	close(holdTasks)
 
 	wg.Wait()
 	require.ErrorIs(t, result.Err, errShuttingDownError)
