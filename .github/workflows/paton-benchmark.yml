@@ -33,26 +33,16 @@ jobs:
       - run: ./scripts/travis/before_build.sh # Installs libsodium.
         shell: bash
       - name: Run benchmark
-        run: ./scripts/paton.sh --alert-threshold-pct 10 --test-cmd "-run XXX -benchtime 5s -bench BenchmarkControl ./data/transactions/logic"
+        run: ./scripts/paton.sh --git-repo ${{ github.repository }} --alert-threshold-pct 10 --test-cmd "-run XXX -benchtime 5s -bench BenchmarkControl ./data/transactions/logic"
         shell: bash
       - uses: actions/upload-artifact@v3
         with:
-          name: alerting_benchmarks.json
-          path: /tmp/alerting_benchmarks.json
+          name: failures.md
+          path: /tmp/failures.md
+          if-no-files-found: ignore # Missing file implies no failures.
       - run: echo ${{ github.event.number }} > /tmp/pr_number.txt
         shell: bash
       - uses: actions/upload-artifact@v3
         with:
           name: pr_number.txt
           path: /tmp/pr_number.txt
-#      - name: Check files
-#        id: check_files
-#        uses: andstor/file-existence-action@v1
-#        with:
-#          files: "/tmp/alerting_benchmarks.json"
- #     - name: Slack Notification
- #       env:
- #         SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
- #       run: |
- #         curl -X POST --data-urlencode "payload={\"text\": \"Benchmark workflow failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" $SLACK_WEBHOOK
-  #      if: ${{ failure() && (contains(github.ref_name, 'rel/nightly') || contains(github.ref_name, 'rel/beta') || contains(github.ref_name, 'rel/stable') || contains(github.ref_name, 'master')) }}

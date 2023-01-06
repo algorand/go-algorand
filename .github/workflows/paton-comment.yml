@@ -15,14 +15,13 @@ jobs:
       - uses: dawidd6/action-download-artifact@v2
         with:
           workflow: paton-benchmark.yml
-          name: alerting_benchmarks.json
-          path: /tmp/alerting_benchmarks.json
-      - run: if [ ! -s /tmp/alerting_benchmarks.json/alerting_benchmarks.json ]; then rm /tmp/alerting_benchmarks.json/alerting_benchmarks.json; fi
-        shell: bash
+          name: failures.md
+          path: /tmp/failures.md
+          if_no_artifact_found: ignore # Missing file implies no failures.
       - id: check_benchmark
         uses: andstor/file-existence-action@v1
         with:
-          files: "/tmp/alerting_benchmarks.json/alerting_benchmarks.json"
+          files: "/tmp/failures.md/failures.md"
       - uses: dawidd6/action-download-artifact@v2
         with:
           workflow: paton-benchmark.yml
@@ -34,7 +33,7 @@ jobs:
         if: steps.check_benchmark.outputs.files_exists == 'true'
         with:
           issue-number: ${{ env.pr_number }}
-          body-file: /tmp/alerting_benchmarks.json/alerting_benchmarks.json
+          body-file: /tmp/failures.md/failures.md
 
   #     - name: Slack Notification
   #       env:
