@@ -11,6 +11,7 @@ output-options:
   - private
   - participating
   - nonparticipating
+  - experimental
   type-mappings:
     integer: uint64
   skip-prune: true

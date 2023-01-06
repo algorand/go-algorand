@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -229,6 +229,7 @@ func TestMinAvmVersionParamEvalCheckSignature(t *testing.T) {
 
 func TestTxnFieldToTealValue(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	txn := transactions.Transaction{}
 	groupIndex := 0
@@ -1809,7 +1810,9 @@ func TestTxn(t *testing.T) {
 	clearOps := testProg(t, "int 1", 1)
 
 	for v, source := range tests {
+		v, source := v, source
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			t.Parallel()
 			ops := testProg(t, source, v)
 			txn := makeSampleTxn()
 			if v >= appsEnabledVersion {
@@ -2072,7 +2075,9 @@ gtxn 0 Sender
 	}
 
 	for v, source := range tests {
+		v, source := v, source
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			t.Parallel()
 			txn := makeSampleTxn()
 			// RekeyTo not allowed in v1
 			if v < rekeyingEnabledVersion {
@@ -2726,7 +2731,9 @@ func TestGload(t *testing.T) {
 	}
 
 	for i, testCase := range cases {
+		i, testCase := i, testCase
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			t.Parallel()
 			sources := testCase.tealSources
 
 			// Initialize txgroup
@@ -2772,7 +2779,9 @@ func TestGload(t *testing.T) {
 
 	failCases := []failureCase{nonAppCall, logicSigCall}
 	for j, failCase := range failCases {
+		j, failCase := j, failCase
 		t.Run(fmt.Sprintf("j=%d", j), func(t *testing.T) {
+			t.Parallel()
 
 			appcall := transactions.SignedTxn{
 				Txn: transactions.Transaction{
@@ -3106,7 +3115,9 @@ func TestShortBytecblock2(t *testing.T) {
 		"0026efbfbdefbfbd30",
 	}
 	for _, src := range sources {
+		src := src
 		t.Run(src, func(t *testing.T) {
+			t.Parallel()
 			program, err := hex.DecodeString(src)
 			require.NoError(t, err)
 			testLogicBytes(t, program, defaultEvalParams(), "const bytes list", "const bytes list")
@@ -3125,10 +3136,13 @@ func checkPanic(cx *EvalContext) error {
 
 func TestPanic(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	log := logging.TestingLog(t)
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
+		v := v
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			t.Parallel()
 			ops := testProg(t, `int 1`, v)
 			var hackedOpcode int
 			var oldSpec OpSpec
@@ -3300,7 +3314,9 @@ done:
 intc_1
 `
 	for _, line := range branches {
+		line := line
 		t.Run(fmt.Sprintf("branch=%s", line), func(t *testing.T) {
+			t.Parallel()
 			source := fmt.Sprintf(template, line)
 			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 			require.NoError(t, err)
@@ -4135,7 +4151,9 @@ func TestAnyRekeyToOrApplicationRaisesMinAvmVersion(t *testing.T) {
 	}
 
 	for ci, cse := range cases {
+		ci, cse := ci, cse
 		t.Run(fmt.Sprintf("ci=%d", ci), func(t *testing.T) {
+			t.Parallel()
 			ep := defaultEvalParams(cse.group...)
 
 			// Computed MinAvmVersion should be == validFromVersion
@@ -5036,7 +5054,9 @@ func TestPcDetails(t *testing.T) {
 		{"b end; end:", 4, ""},
 	}
 	for i, test := range tests {
+		i, test := i, test
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			t.Parallel()
 			ops := testProg(t, test.source, LogicVersion)
 			ep, _, _ := makeSampleEnv()
 			ep.Trace = &strings.Builder{}
