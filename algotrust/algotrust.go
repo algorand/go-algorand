@@ -188,8 +188,11 @@ func (at *AlgoTrust) RecordTxnsaction(stxn *transactions.SignedTxn, sender netwo
 }
 
 func getSender(sender network.Peer) (addr string, err error) {
-	s := sender.(getSenderPeer)
-	if s == nil {
+	if sender == nil {
+		return addr, errors.New("peer not supported for obtaining the address")
+	}
+	s, ok := sender.(getSenderPeer)
+	if !ok {
 		// this is unsupported (TODO)
 		return addr, errors.New("peer not supported for obtaining the address")
 	}
