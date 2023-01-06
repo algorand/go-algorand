@@ -79,6 +79,6 @@ cat /tmp/benchstat_time_jq.json |
   jq ".[] | select(.delta >= ${ALERT_THRESHOLD_PCT})" |
   tee /tmp/alerting_benchmarks.json
 
-if [ ! -s /tmp/alerting_benchmarks.json ]; then
-  rm /tmp/alerting_benchmarks.json
-fi
+#if [ ! -s /tmp/alerting_benchmarks.json ]; then
+#  rm /tmp/alerting_benchmarks.json
+#fi

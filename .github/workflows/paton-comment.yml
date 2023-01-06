@@ -1,0 +1,38 @@
+name: "paton comment"
+on:
+  workflow_run:
+    workflows: ["paton benchmark"]
+    types:
+      - completed
+
+jobs:
+  paton-comment:
+    runs-on: ubuntu-latest
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - id: download-artifact
+        uses: dawidd6/action-download-artifact@v2
+        with: paton.yml
+        name: alerting_benchmarks.json
+        path: /tmp/alerting_benchmarks.json
+      - name: Run benchmark
+        run: if [ ! -s /tmp/alerting_benchmarks.json ]; then rm /tmp/alerting_benchmarks.json
+        shell: bash
+      - name: Check files
+        id: check_files
+        uses: andstor/file-existence-action@v1
+        with:
+          files: "/tmp/alerting_benchmarks.json"
+      - uses: peter-evans/create-or-update-comment@v2
+        with:
+          issue-number: ${{ github.event.number }}
+          body-file: /tmp/alerting_benchmarks.json
+
+ #     - name: Slack Notification
+ #       env:
+ #         SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+ #       run: |
+ #         curl -X POST --data-urlencode "payload={\"text\": \"Benchmark workflow failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" $SLACK_WEBHOOK
+  #      if: ${{ failure() && (contains(github.ref_name, 'rel/nightly') || contains(github.ref_name, 'rel/beta') || contains(github.ref_name, 'rel/stable') || contains(github.ref_name, 'master')) }}

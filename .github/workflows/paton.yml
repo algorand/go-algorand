@@ -1,4 +1,4 @@
-name: "Benchmark workflow"
+name: "paton benchmark"
 on:
   push:
     branches:
@@ -41,16 +41,15 @@ jobs:
       - name: Run benchmark
         run: ./scripts/paton.sh --alert-threshold-pct 10 --test-cmd "-run XXX -benchtime 5s -bench BenchmarkControl ./data/transactions/logic"
         shell: bash
-      - name: Check files
-        id: check_files
-        uses: andstor/file-existence-action@v1
+      - uses: actions/upload-artifact@v3
         with:
-          files: "/tmp/alerting_benchmarks.json"
-      - uses: peter-evans/commit-comment@v2
-        if: steps.check_files.outputs.files_exists == 'true'
-        with:
-          body: |
-            Performance degraded!
+          name: alerting_benchmarks.json
+          path: /tmp/alerting_benchmarks.json
+#      - name: Check files
+#        id: check_files
+#        uses: andstor/file-existence-action@v1
+#        with:
+#          files: "/tmp/alerting_benchmarks.json"
  #     - name: Slack Notification
  #       env:
  #         SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
