@@ -3731,7 +3731,7 @@ main:
 func BenchmarkControl1(b *testing.B) {
 	var arr []int
 	for i := 0; i < b.N; i++ {
-		time.Sleep(360 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 		arr = make([]int, 50)
 	}
 	if b.N < 0 {
