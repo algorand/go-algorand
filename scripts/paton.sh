@@ -24,9 +24,16 @@ if [[ $# -lt 1 ]]; then
   exit 1
 fi
 
+MODE="all"
+
 # Argument parsing crafted with help from https://stackoverflow.com/a/14203146.
 while [[ $# -gt 0 ]]; do
   case $1 in
+    -m|--mode)
+      MODE="$2"
+      shift # past argument
+      shift # past value
+      ;;
     -c|--test-cmd)
       GO_TEST_CMD=("$2")
       shift # past argument
@@ -34,6 +41,11 @@ while [[ $# -gt 0 ]]; do
       ;;
     -a|--alert-threshold-pct)
       ALERT_THRESHOLD_PCT="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -r|--git-repo)
+      GIT_REPO="$2"
       shift # past argument
       shift # past value
       ;;
@@ -47,36 +59,69 @@ done
 BASE="HEAD~1"
 COMPARE="HEAD"
 
-COMPARE_COMMIT=$(git rev-parse "$COMPARE")
+function run_benchmark {
+  COMPARE_COMMIT=$(git rev-parse "$COMPARE")
 
-git -c advice.detachedHead=false checkout "$BASE"
-go test ${GO_TEST_CMD[*]} | tee /tmp/base.txt
+  git -c advice.detachedHead=false checkout "$BASE"
+  go test ${GO_TEST_CMD[*]} | tee /tmp/base.txt
 
-git -c advice.detachedHead=false checkout "$COMPARE_COMMIT"
-go test ${GO_TEST_CMD[*]} | tee /tmp/compare.txt
+  git -c advice.detachedHead=false checkout "$COMPARE_COMMIT"
+  go test ${GO_TEST_CMD[*]} | tee /tmp/compare.txt
 
-benchstat -delta-test none /tmp/base.txt /tmp/compare.txt | tee /tmp/benchstat.txt
+  benchstat -delta-test none /tmp/base.txt /tmp/compare.txt | tee /tmp/benchstat.txt
+}
 
-cat /tmp/benchstat.txt |
-  awk '/old time\/op/{f=1} /^$/{f=0} f' |
-  jc -p --asciitable |
-  # Remove symbols (+, %) preventing conversion to JavaScript number.
-  sed '/delta/s/+//g' |
-  sed '/delta/s/%//g' |
-  tee /tmp/benchstat_time.json
+function commit_url {
+  local ref="$1"
 
-cat /tmp/benchstat_time.json |
-  jq '.[] | {
-    name: .name,
-    old_time_op: .old_time_op,
-    new_time_op: .new_time_op,
-    delta: .delta | tonumber
-    }' |
-  jq -s > /tmp/benchstat_time_jq.json
+  local sha="$(git rev-parse $ref)"
+  echo "https://github.com/${GIT_REPO}/commit/${sha}"
+}
 
-cat /tmp/benchstat_time_jq.json |
-  jq ".[] | select(.delta >= ${ALERT_THRESHOLD_PCT})" |
-  tee /tmp/alerting_benchmarks.json
+function evaluate_benchmark {
+  cat /tmp/benchstat.txt |
+    awk -F ' {2,}' 'NR==1 || sub(/\+/, "")' | # Preserve header and enable numeric comparison by removing leading '+' sign.
+    awk -v threshold="$ALERT_THRESHOLD_PCT" -F ' {2,}' '$4 > threshold { print }' |
+    tabulate --format github --header --sep '[\s]{2,}' > /tmp/benchstat-degradations.md
+
+  if [ "$(wc -l /tmp/benchstat-degradations.md | awk '{print $1}')" -gt 2 ]; then
+    echo "# :warning: Benchmark performance degradation detected" > /tmp/failures.md
+    echo "* [old]($(commit_url $BASE))" >> /tmp/failures.md
+    echo "* [new]($(commit_url $COMPARE))" >> /tmp/failures.md
+    echo "" >> /tmp/failures.md
+    cat /tmp/benchstat-degradations.md >> /tmp/failures.md
+    cat /tmp/failures.md
+  fi
+}
+
+if [[ "$MODE" == "all" || "$MODE" == "benchmark" ]]; then
+  run_benchmark
+fi
+
+if [[ "$MODE" == "all" || "$MODE" == "evaluate" ]]; then
+  evaluate_benchmark
+fi
+
+#cat /tmp/benchstat.txt |
+#  awk '/old time\/op/{f=1} /^$/{f=0} f' |
+#  jc -p --asciitable |
+#  # Remove symbols (+, %) preventing conversion to JavaScript number.
+#  sed '/delta/s/+//g' |
+#  sed '/delta/s/%//g' |
+#  tee /tmp/benchstat_time.json
+#
+#cat /tmp/benchstat_time.json |
+#  jq '.[] | {
+#    name: .name,
+#    old_time_op: .old_time_op,
+#    new_time_op: .new_time_op,
+#    delta: .delta | tonumber
+#    }' |
+#  jq -s > /tmp/benchstat_time_jq.json
+#
+# cat /tmp/benchstat_time_jq.json |
+#  jq ".[] | select(.delta >= ${ALERT_THRESHOLD_PCT})" |
+#  tee /tmp/alerting_benchmarks.json
 
 #if [ ! -s /tmp/alerting_benchmarks.json ]; then
 #  rm /tmp/alerting_benchmarks.json
