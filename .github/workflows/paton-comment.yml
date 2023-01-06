@@ -33,7 +33,7 @@ jobs:
       - uses: peter-evans/create-or-update-comment@v2
         if: steps.check_benchmark.outputs.files_exists == 'true'
         with:
-          issue-number: "{{ env.pr_number }}"
+          issue-number: ${{ env.pr_number }}
           body-file: /tmp/alerting_benchmarks.json/alerting_benchmarks.json
 
   #     - name: Slack Notification
