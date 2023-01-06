@@ -45,11 +45,6 @@ jobs:
         with:
           name: pr_number.txt
           path: /tmp/pr_number.txt
-#      - name: Check files
-#        id: check_files
-#        uses: andstor/file-existence-action@v1
-#        with:
-#          files: "/tmp/alerting_benchmarks.json"
  #     - name: Slack Notification
  #       env:
  #         SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
