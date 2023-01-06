@@ -408,7 +408,8 @@ func (node *AlgorandFullNode) startMonitoringRoutines() {
 	go node.oldKeyDeletionThread(node.ctx.Done())
 
 	if node.config.EnableUsageLog {
-		go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
+		node.monitoringRoutinesWaitGroup.Add(1)
+		go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, &node.monitoringRoutinesWaitGroup)
 	}
 }
 
