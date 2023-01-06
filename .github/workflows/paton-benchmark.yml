@@ -38,13 +38,13 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: alerting_benchmarks.json
-          path: /tmp
+          path: /tmp/alerting_benchmarks.json
       - run: echo ${{ github.event.number }} > /tmp/pr_number.txt
         shell: bash
       - uses: actions/upload-artifact@v3
         with:
           name: pr_number.txt
-          path: /tmp
+          path: /tmp/pr_number.txt
 #      - name: Check files
 #        id: check_files
 #        uses: andstor/file-existence-action@v1

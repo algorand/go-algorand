@@ -16,7 +16,7 @@ jobs:
         with:
           workflow: paton-benchmark.yml
           name: alerting_benchmarks.json
-          path: /tmp
+          path: /tmp/alerting_benchmarks.json
       - run: if [ ! -s /tmp/alerting_benchmarks.json ]; then rm /tmp/alerting_benchmarks.json
         shell: bash
       - id: check_benchmark
@@ -27,7 +27,7 @@ jobs:
         with:
           workflow: paton-benchmark.yml
           name: pr_number.txt
-          path: /tmp
+          path: /tmp/pr_number.txt
       - run: echo "pr_number=$(cat /tmp/pr_number.txt)" >> $GITHUB_ENV
         shell: bash
       - uses: peter-evans/create-or-update-comment@v2
