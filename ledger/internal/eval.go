@@ -1065,7 +1065,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	// Only compute the TxID once
 	txid := txn.ID()
 
-	if eval.validate && txn.Txn.SkipValidation {
+	if eval.validate && txn.Txn.DevMode.SkipValidation {
 		eval.validate = false
 		defer func() {
 			eval.validate = true

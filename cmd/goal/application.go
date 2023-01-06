@@ -464,8 +464,8 @@ var createAppCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 		// DevMode fields: the default values would be ignored.
-		tx.SkipValidation = skipValidation
-		tx.SetNextBlockTime = setBlockTime
+		tx.DevMode.SkipValidation = skipValidation
+		tx.DevMode.SetNextBlockTime = setBlockTime
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
@@ -542,8 +542,8 @@ var updateAppCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 		// DevMode fields: the default values would be ignored.
-		tx.SkipValidation = skipValidation
-		tx.SetNextBlockTime = setBlockTime
+		tx.DevMode.SkipValidation = skipValidation
+		tx.DevMode.SetNextBlockTime = setBlockTime
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
@@ -615,8 +615,8 @@ var optInAppCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 		// DevMode fields: the default values would be ignored.
-		tx.SkipValidation = skipValidation
-		tx.SetNextBlockTime = setBlockTime
+		tx.DevMode.SkipValidation = skipValidation
+		tx.DevMode.SetNextBlockTime = setBlockTime
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
@@ -688,8 +688,8 @@ var closeOutAppCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 		// DevMode fields: the default values would be ignored.
-		tx.SkipValidation = skipValidation
-		tx.SetNextBlockTime = setBlockTime
+		tx.DevMode.SkipValidation = skipValidation
+		tx.DevMode.SetNextBlockTime = setBlockTime
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
@@ -761,8 +761,8 @@ var clearAppCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 		// DevMode fields: the default values would be ignored.
-		tx.SkipValidation = skipValidation
-		tx.SetNextBlockTime = setBlockTime
+		tx.DevMode.SkipValidation = skipValidation
+		tx.DevMode.SetNextBlockTime = setBlockTime
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
@@ -834,8 +834,8 @@ var callAppCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 		// DevMode fields: the default values would be ignored.
-		tx.SkipValidation = skipValidation
-		tx.SetNextBlockTime = setBlockTime
+		tx.DevMode.SkipValidation = skipValidation
+		tx.DevMode.SetNextBlockTime = setBlockTime
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
@@ -907,8 +907,8 @@ var deleteAppCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 		// DevMode fields: the default values would be ignored.
-		tx.SkipValidation = skipValidation
-		tx.SetNextBlockTime = setBlockTime
+		tx.DevMode.SkipValidation = skipValidation
+		tx.DevMode.SetNextBlockTime = setBlockTime
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
@@ -1401,8 +1401,8 @@ var methodAppCmd = &cobra.Command{
 		appCallTxn.Note = parseNoteField(cmd)
 		appCallTxn.Lease = parseLease(cmd)
 		// DevMode fields: the default values would be ignored.
-		appCallTxn.SkipValidation = skipValidation
-		appCallTxn.SetNextBlockTime = setBlockTime
+		appCallTxn.DevMode.SkipValidation = skipValidation
+		appCallTxn.DevMode.SetNextBlockTime = setBlockTime
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)

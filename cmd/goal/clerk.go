@@ -407,8 +407,8 @@ var sendCmd = &cobra.Command{
 		}
 
 		// DevMode fields: the default values would be ignored.
-		payment.SkipValidation = skipValidation
-		payment.SetNextBlockTime = setBlockTime
+		payment.DevMode.SkipValidation = skipValidation
+		payment.DevMode.SetNextBlockTime = setBlockTime
 
 		var stx transactions.SignedTxn
 		if lsig.Logic != nil {

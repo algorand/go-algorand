@@ -105,7 +105,7 @@ type Transaction struct {
 
 	// Fields that can be included when dev mode is enabled.
 	// TODO: should this be defined in the header or left here for higher visibility?
-	DevMode
+	DevMode DevMode `codec:"dev_mode_options"`
 
 	// Common fields for all types of transactions
 	Header
