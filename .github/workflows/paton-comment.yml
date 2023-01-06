@@ -17,7 +17,7 @@ jobs:
           workflow: paton-benchmark.yml
           name: alerting_benchmarks.json
           path: /tmp/alerting_benchmarks.json
-      - run: if [ ! -s /tmp/alerting_benchmarks.json/alerting_benchmarks.json ]; then rm /tmp/alerting_benchmarks.json/alerting_benchmarks.json
+      - run: if [ ! -s /tmp/alerting_benchmarks.json/alerting_benchmarks.json ]; then rm /tmp/alerting_benchmarks.json/alerting_benchmarks.json; fi
         shell: bash
       - id: check_benchmark
         uses: andstor/file-existence-action@v1
