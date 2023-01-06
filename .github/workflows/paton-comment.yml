@@ -27,7 +27,7 @@ jobs:
         with:
           workflow: paton-benchmark.yml
           name: pr_number.txt
-          path: /tmp/pr_number.txt/tmp/pr_number.txt
+          path: /tmp/pr_number.txt
       - run: echo "pr_number=$(cat /tmp/pr_number.txt/pr_number.txt)" >> $GITHUB_ENV
         shell: bash
       - uses: peter-evans/create-or-update-comment@v2
