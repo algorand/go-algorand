@@ -45,6 +45,7 @@ COPY --from=builder "/node/files/run" "/node/run"
 ENV BIN_DIR="/node/bin"
 ENV PATH="$BIN_DIR:${PATH}"
 ENV ALGOD_PORT=8080
+ENV KMD_PORT=4002
 ENV ALGORAND_DATA="/algod/data"
 RUN mkdir -p "$ALGORAND_DATA"
 WORKDIR /node/data
@@ -64,6 +65,9 @@ RUN apt-get update && apt-get install -y \
 
 # Algod REST API
 EXPOSE $ALGOD_PORT
+
+# KMD REST API
+EXPOSE $KMD_PORT
 
 # Algod Gossip Port
 EXPOSE 4160

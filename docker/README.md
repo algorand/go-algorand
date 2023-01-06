@@ -33,6 +33,8 @@ The following environment variables can be supplied. Except when noted, it is po
 | NUM_ROUNDS    | If set on a private network, override default of 30000 participation keys. |
 | TOKEN         | If set, overrides the REST API token. |
 | ADMIN_TOKEN   | If set, overrides the REST API admin token. |
+| KMD_TOKEN     | If set, and `START_KMD` is used, overrides the kmd REST API token. |
+| START_KMD     | If set, start kmd service with no timeout. THIS SHOULD NOT BE USED IN PRODUCTION. |
 
 
 ## Special Files
@@ -41,9 +43,10 @@ Configuration can be modified by specifying certian files. These can be changed 
 
 | File | Description |
 | ---- | ----------- |
-| /etc/config.json | Override default configurations by providing your own file. |
+| /etc/config.json | Override default algod configuration. |
 | /etc/algod.token | Override default randomized REST API token. |
 | /etc/algod.admin.token | Override default randomized REST API admin token. |
+| /etc/kmd_config.json | Override default kmd configuration. Only checked when `START_KMD` is used. |
 
 TODO: `/etc/template.json` for overriding the private network topology.
 

@@ -9,8 +9,38 @@ set -ex
 # Helper functions #
 ####################
 
-function apply_configuration() {
+function catchup() {
+  local FAST_CATCHUP_URL="https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/CHANNEL/latest.catchpoint"
+  local CATCHPOINT=$(curl -s ${FAST_CATCHUP_URL/CHANNEL/$NETWORK})
+  if [[ "$(echo $CATCHPOINT | wc -l | tr -d ' ')" != "1" ]]; then
+    echo "Problem starting fast catchup."
+    exit 1
+  fi
+
+  sleep 5
+  goal node catchup "$CATCHPOINT"
+}
+
+function start_public_network() {
+  configure_data_dir
+  start_kmd&
+
+  if [ "$FAST_CATCHUP" ]; then
+    catchup&
+  fi
+  # redirect output to stdout
+  algod -o
+}
+
+# This should be called on every start to support reconfiguring between runs.
+function configure_data_dir() {
   cd "$ALGORAND_DATA"
+  algocfg -d . set -p GossipFanout -v 1
+  algocfg -d . set -p EndpointAddress -v "0.0.0.0:${ALGOD_PORT}"
+  algocfg -d . set -p IncomingConnectionsLimit -v 0
+  algocfg -d . set -p Archival -v false
+  algocfg -d . set -p IsIndexerActive -v false
+  algocfg -d . set -p EnableDeveloperAPI -v true
 
   # check for config file overrides.
   if [ -f "/etc/config.json" ]; then
@@ -38,40 +68,29 @@ function apply_configuration() {
   else
     diagcfg telemetry disable
   fi
-}
 
-function catchup() {
-  local FAST_CATCHUP_URL="https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/CHANNEL/latest.catchpoint"
-  local CATCHPOINT=$(curl -s ${FAST_CATCHUP_URL/CHANNEL/$NETWORK})
-  if [[ "$(echo $CATCHPOINT | wc -l | tr -d ' ')" != "1" ]]; then
-    echo "Problem starting fast catchup."
-    exit 1
+  # when using KMD ,install the configuration.
+  if [ "$START_KMD" ]; then
+    local KMD_DIR="kmd-v0.5"
+    # on first start, this directory wont exist.
+    mkdir -p "${KMD_DIR}"
+    if [ -f "/etc/kmd_config.json" ]; then
+      cp /etc/kmd_config.json "${KMD_DIR}"/kmd_config.json
+    else
+      echo "{{ \"address\":\"0.0.0.0:${KMD_PORT}\",  \"allowed_origins\":[\"*\"] }}" > "${KMD_DIR}"/kmd_config.json
+    fi
+
+    if [ "$KMD_TOKEN" != "" ]; then
+      echo "$ADMIN_TOKEN" > "${KMD_DIR}"/kmd.token
+    fi
   fi
-
-  sleep 5
-  goal node catchup "$CATCHPOINT"
 }
 
-function start_public_network() {
-  cd "$ALGORAND_DATA"
-
-  apply_configuration
-
-  if [ $FAST_CATCHUP ]; then
-    catchup&
+# Optionally start KMD service in the background.
+function start_kmd() {
+  if [ "$START_KMD" ]; then
+    kmd start -d "$ALGORNAD_DATA" -t 0
   fi
-  # redirect output to stdout
-  algod -o
-}
-
-function configure_data_dir() {
-  cd "$ALGORAND_DATA"
-  algocfg -d . set -p GossipFanout -v 1
-  algocfg -d . set -p EndpointAddress -v "0.0.0.0:${ALGOD_PORT}"
-  algocfg -d . set -p IncomingConnectionsLimit -v 0
-  algocfg -d . set -p Archival -v false
-  algocfg -d . set -p IsIndexerActive -v false
-  algocfg -d . set -p EnableDeveloperAPI -v true
 }
 
 function start_new_public_network() {
@@ -89,7 +108,6 @@ function start_new_public_network() {
   cd "$ALGORAND_DATA"
 
   mv config.json.example config.json
-  configure_data_dir
 
   local ID
   case $NETWORK in
@@ -106,7 +124,8 @@ function start_new_public_network() {
 }
 
 function start_private_network() {
-  apply_configuration
+  configure_data_dir
+  start_kmd&
 
   # TODO: Is there a way to properly exec a private network?
   goal network start -r "$ALGORAND_DATA/.."
@@ -121,7 +140,6 @@ function start_new_private_network() {
   fi
   sed -i "s/NUM_ROUNDS/${NUM_ROUNDS:-30000}/" "run/$TEMPLATE"
   goal network create -n dockernet -r "$ALGORAND_DATA/.." -t "run/$TEMPLATE"
-  configure_data_dir
   start_private_network
 }
 
@@ -135,8 +153,10 @@ echo "   NETWORK:       $NETWORK"
 echo "   ALGOD_PORT:    $ALGOD_PORT"
 echo "   FAST_CATCHUP:  $FAST_CATCHUP"
 echo "   DEV_MODE:      $DEV_MODE"
-echo "   TOKEN:         $TOKEN"
+echo "   TOKEN:         ${TOKEN-:Not Set}"
+echo "   KMD_TOKEN:     ${KMD_TOKEN-:Not Set}"
 echo "   TELEMETRY_NAME $TELEMETRY_NAME"
+echo "   START_KMD"
 
 # If data directory is initialized, start existing environment.
 if [ -f "$ALGORAND_DATA/../network.json" ]; then
