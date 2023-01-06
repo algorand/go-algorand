@@ -46,16 +46,11 @@ jobs:
         uses: andstor/file-existence-action@v1
         with:
           files: "/tmp/alerting_benchmarks.json"
-      - uses: actions/github-script@v6
+      - uses: peter-evans/commit-comment@v2
         if: steps.check_files.outputs.files_exists == 'true'
         with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: 'Performance degraded!'
-            })
+          body: |
+            Performance degraded!
  #     - name: Slack Notification
  #       env:
  #         SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
