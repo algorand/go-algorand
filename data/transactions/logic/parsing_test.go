@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/algorand/avm-abi/abi"
+	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-algorand/data/basics"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -37,11 +38,11 @@ func TestNewAppCallBytes(t *testing.T) {
 
 	t.Run("errors", func(t *testing.T) {
 		t.Parallel()
-		_, err := NewAppCallBytes("hello")
+		_, err := apps.NewAppCallBytes("hello")
 		require.Error(t, err)
 
 		for _, v := range []string{":x", "int:-1"} {
-			acb, err := NewAppCallBytes(v)
+			acb, err := apps.NewAppCallBytes(v)
 			_, err = acb.Raw()
 			require.Error(t, err)
 		}
@@ -52,7 +53,7 @@ func TestNewAppCallBytes(t *testing.T) {
 			v, e := v, e
 			t.Run(fmt.Sprintf("encoding=%v,value=%v", e, v), func(t *testing.T) {
 				t.Parallel()
-				acb, err := NewAppCallBytes(fmt.Sprintf("%v:%v", e, v))
+				acb, err := apps.NewAppCallBytes(fmt.Sprintf("%v:%v", e, v))
 				require.NoError(t, err)
 				r, err := acb.Raw()
 				require.NoError(t, err)
@@ -64,7 +65,7 @@ func TestNewAppCallBytes(t *testing.T) {
 			ve := base32.StdEncoding.EncodeToString([]byte(v))
 			e := e
 			t.Run(fmt.Sprintf("encoding=%v,value=%v", e, ve), func(t *testing.T) {
-				acb, err := NewAppCallBytes(fmt.Sprintf("%v:%v", e, ve))
+				acb, err := apps.NewAppCallBytes(fmt.Sprintf("%v:%v", e, ve))
 				require.NoError(t, err)
 				r, err := acb.Raw()
 				require.NoError(t, err)
@@ -77,7 +78,7 @@ func TestNewAppCallBytes(t *testing.T) {
 			e := e
 			t.Run(fmt.Sprintf("encoding=%v,value=%v", e, ve), func(t *testing.T) {
 				t.Parallel()
-				acb, err := NewAppCallBytes(fmt.Sprintf("%v:%v", e, ve))
+				acb, err := apps.NewAppCallBytes(fmt.Sprintf("%v:%v", e, ve))
 				require.NoError(t, err)
 				r, err := acb.Raw()
 				require.NoError(t, err)
@@ -91,7 +92,7 @@ func TestNewAppCallBytes(t *testing.T) {
 			v, e := v, e
 			t.Run(fmt.Sprintf("encoding=%v,value=%v", e, v), func(t *testing.T) {
 				t.Parallel()
-				acb, err := NewAppCallBytes(fmt.Sprintf("%v:%v", e, v))
+				acb, err := apps.NewAppCallBytes(fmt.Sprintf("%v:%v", e, v))
 				require.NoError(t, err)
 				r, err := acb.Raw()
 				require.NoError(t, err)
@@ -105,7 +106,7 @@ func TestNewAppCallBytes(t *testing.T) {
 			v, e := v, e
 			t.Run(fmt.Sprintf("encoding=%v,value=%v", e, v), func(t *testing.T) {
 				t.Parallel()
-				acb, err := NewAppCallBytes(fmt.Sprintf("%v:%v", e, v))
+				acb, err := apps.NewAppCallBytes(fmt.Sprintf("%v:%v", e, v))
 				require.NoError(t, err)
 				r, err := acb.Raw()
 				require.NoError(t, err)
@@ -130,7 +131,7 @@ func TestNewAppCallBytes(t *testing.T) {
 			v, e := v, e
 			t.Run(fmt.Sprintf("encoding=%v,value=%v", e, v), func(t *testing.T) {
 				t.Parallel()
-				acb, err := NewAppCallBytes(fmt.Sprintf(
+				acb, err := apps.NewAppCallBytes(fmt.Sprintf(
 					"%v:%v:%v", e, v.abiType, v.rawValue))
 				require.NoError(t, err)
 				r, err := acb.Raw()

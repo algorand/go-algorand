@@ -30,6 +30,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-codec/codec"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -1382,7 +1383,7 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 	appIdx := basics.AppIndex(applicationID)
 	ledger := v2.Node.LedgerForAPI()
 	lastRound := ledger.Latest()
-	keyPrefix := logic.MakeBoxKey(appIdx, "")
+	keyPrefix := apps.MakeBoxKey(uint64(appIdx), "")
 
 	requestedMax, algodMax := nilToZero(params.Max), v2.Node.Config().MaxAPIBoxPerApplication
 	max := applicationBoxesMaxKeys(requestedMax, algodMax)
@@ -1428,7 +1429,7 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint
 	lastRound := ledger.Latest()
 
 	encodedBoxName := params.Name
-	boxNameBytes, err := logic.NewAppCallBytes(encodedBoxName)
+	boxNameBytes, err := apps.NewAppCallBytes(encodedBoxName)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
@@ -1437,7 +1438,7 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	value, err := ledger.LookupKv(lastRound, logic.MakeBoxKey(appIdx, string(boxName)))
+	value, err := ledger.LookupKv(lastRound, apps.MakeBoxKey(uint64(appIdx), string(boxName)))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}

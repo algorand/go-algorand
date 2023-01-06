@@ -18,6 +18,7 @@ package logic_test
 
 import (
 	"fmt"
+	"github.com/algorand/avm-abi/apps"
 	"strings"
 	"testing"
 
@@ -598,10 +599,10 @@ func TestMakeBoxKey(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		app, name, err := logic.SplitBoxKey(tc.key)
+		app, name, err := apps.SplitBoxKey(tc.key)
 
 		if tc.err == "" {
-			key := logic.MakeBoxKey(tc.app, tc.name)
+			key := apps.MakeBoxKey(uint64(tc.app), tc.name)
 			require.Equal(t, tc.app, app, pp(tc))
 			require.Equal(t, tc.name, name, pp(tc))
 			require.Equal(t, tc.key, key, pp(tc))

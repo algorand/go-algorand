@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/DataDog/zstd v1.5.2
-	github.com/algorand/avm-abi v0.1.1
+	github.com/algorand/avm-abi v0.1.2-0.20230106195215-4c2b1eef2273
 	github.com/algorand/falcon v0.0.0-20220727072124-02a2a64c4414
 	github.com/algorand/go-codec/codec v1.1.8
 	github.com/algorand/go-deadlock v0.2.2
