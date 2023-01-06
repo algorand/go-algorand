@@ -49,6 +49,10 @@ var (
 	noWaitAfterSend    bool
 	dumpForDryrun      bool
 	dumpForDryrunAccts []string
+
+	// devmode txn send options
+	setBlockTime   int64
+	skipValidation bool
 )
 
 var dumpForDryrunFormat cmdutil.CobraStringValue = *cmdutil.MakeCobraStringValue("json", []string{"msgp"})
@@ -68,4 +72,8 @@ func addTxnFlags(cmd *cobra.Command) {
 	cmd.Flags().Var(&dumpForDryrunFormat, "dryrun-dump-format", "Dryrun dump format: "+dumpForDryrunFormat.AllowedString())
 	cmd.Flags().StringSliceVar(&dumpForDryrunAccts, "dryrun-accounts", nil, "additional accounts to include into dryrun request obj")
 	cmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different from transaction \"from\" address due to rekeying")
+
+	// devmode options
+	cmd.Flags().Int64Var(&setBlockTime, "setblocktime", 0, "Add 'set_block_time: <value>' field to the txn.")
+	cmd.Flags().BoolVar(&skipValidation, "skipvalidation", false, "Add 'skip_validation: true' field to the txn.")
 }

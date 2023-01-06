@@ -90,6 +90,7 @@ func init() {
 	sendCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "base64 encoded args to pass to transaction logic")
 	sendCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
 	sendCmd.Flags().StringVar(&msigParams, "msig-params", "", "Multisig preimage parameters - [threshold] [Address 1] [Address 2] ...\nUsed to add the necessary fields in case the account was rekeyed to a multisig account")
+
 	sendCmd.MarkFlagRequired("to")
 	sendCmd.MarkFlagRequired("amount")
 
@@ -404,6 +405,10 @@ var sendCmd = &cobra.Command{
 		if explicitFee {
 			payment.Fee = basics.MicroAlgos{Raw: fee}
 		}
+
+		// DevMode fields: the default values would be ignored.
+		payment.SkipValidation = skipValidation
+		payment.SetNextBlockTime = setBlockTime
 
 		var stx transactions.SignedTxn
 		if lsig.Logic != nil {
