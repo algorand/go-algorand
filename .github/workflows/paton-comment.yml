@@ -13,9 +13,10 @@ jobs:
       github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: dawidd6/action-download-artifact@v2
-        with: paton-benchmark.yml
-        name: alerting_benchmarks.json
-        path: /tmp/alerting_benchmarks.json
+        with:
+          workflow: paton-benchmark.yml
+          name: alerting_benchmarks.json
+          path: /tmp/alerting_benchmarks.json
       - run: if [ ! -s /tmp/alerting_benchmarks.json ]; then rm /tmp/alerting_benchmarks.json
         shell: bash
       - id: check_benchmark
@@ -23,9 +24,10 @@ jobs:
         with:
           files: "/tmp/alerting_benchmarks.json"
       - uses: dawidd6/action-download-artifact@v2
-        with: paton-benchmark.yml
-        name: pr_number.txt
-        path: /tmp/pr_number.txt
+        with:
+          workflow: paton-benchmark.yml
+          name: pr_number.txt
+          path: /tmp/pr_number.txt
       - run: echo "pr_number=$(cat /tmp/pr_number.txt)" >> $GITHUB_ENV
         shell: bash
       - uses: peter-evans/create-or-update-comment@v2
@@ -34,9 +36,9 @@ jobs:
           issue-number: "{{ env.pr_number }}"
           body-file: /tmp/alerting_benchmarks.json
 
- #     - name: Slack Notification
- #       env:
- #         SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
- #       run: |
- #         curl -X POST --data-urlencode "payload={\"text\": \"Benchmark workflow failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" $SLACK_WEBHOOK
+  #     - name: Slack Notification
+  #       env:
+  #         SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+  #       run: |
+  #         curl -X POST --data-urlencode "payload={\"text\": \"Benchmark workflow failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" $SLACK_WEBHOOK
   #      if: ${{ failure() && (contains(github.ref_name, 'rel/nightly') || contains(github.ref_name, 'rel/beta') || contains(github.ref_name, 'rel/stable') || contains(github.ref_name, 'master')) }}
