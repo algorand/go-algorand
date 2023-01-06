@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/algotrust"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -129,6 +130,7 @@ type TxHandler struct {
 	streamVerifierChan    chan *verify.UnverifiedElement
 	streamVerifierDropped chan *verify.UnverifiedElement
 	erl                   *util.ElasticRateLimiter
+	at                    *algotrust.AlgoTrust
 }
 
 // TxHandlerOpts is TxHandler configuration options
@@ -179,6 +181,7 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		cacheConfig:           txHandlerConfig{opts.Config.TxFilterRawMsgEnabled(), opts.Config.TxFilterCanonicalEnabled()},
 		streamVerifierChan:    make(chan *verify.UnverifiedElement),
 		streamVerifierDropped: make(chan *verify.UnverifiedElement),
+		at:                    algotrust.MakeAlgoTrust(opts.Ledger),
 	}
 
 	if opts.Config.EnableTxBacklogRateLimiting {
@@ -557,8 +560,10 @@ func (handler *TxHandler) dedupCanonical(ntx int, unverifiedTxGroup []transactio
 //  - txn groups are cut to MaxTxGroupSize size
 //  - message are checked for duplicates
 //  - transactions are checked for duplicates
-
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
+	if shouldDrop, outMsg := handler.at.PreprocessTxnFiltering(rawmsg); shouldDrop {
+		return outMsg
+	}
 	var msgKey *crypto.Digest
 	var isDup bool
 	if handler.cacheConfig.enableFilteringRawMsg {
@@ -635,7 +640,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 			return network.OutgoingMessage{Action: network.Ignore}
 		}
 	}
-
+	handler.at.RecordTxnsaction(&unverifiedTxGroup[0], rawmsg.Sender)
 	select {
 	case handler.backlogQueue <- &txBacklogMsg{
 		rawmsg:                &rawmsg,

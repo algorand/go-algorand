@@ -602,25 +602,25 @@ type StreamVerifier struct {
 	ctx              context.Context
 	cache            VerifiedTransactionCache
 	activeLoopWg     sync.WaitGroup
-	nbw              *NewBlockWatcher
+	nbw              *newBlockWatcher
 	ledger           logic.LedgerForSignature
 }
 
-// NewBlockWatcher is a struct used to provide a new block header to the
+// newBlockWatcher is a struct used to provide a new block header to the
 // stream verifier
-type NewBlockWatcher struct {
+type newBlockWatcher struct {
 	blkHeader atomic.Value
 }
 
-// MakeNewBlockWatcher construct a new block watcher with the initial blkHdr
-func MakeNewBlockWatcher(blkHdr bookkeeping.BlockHeader) (nbw *NewBlockWatcher) {
-	nbw = &NewBlockWatcher{}
+// makenewBlockWatcher construct a new block watcher with the initial blkHdr
+func makenewBlockWatcher(blkHdr bookkeeping.BlockHeader) (nbw *newBlockWatcher) {
+	nbw = &newBlockWatcher{}
 	nbw.blkHeader.Store(&blkHdr)
 	return nbw
 }
 
 // OnNewBlock implements the interface to subscribe to new block notifications from the ledger
-func (nbw *NewBlockWatcher) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
+func (nbw *newBlockWatcher) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	bh := nbw.blkHeader.Load().(*bookkeeping.BlockHeader)
 	if bh.Round >= block.BlockHeader.Round {
 		return
@@ -628,7 +628,7 @@ func (nbw *NewBlockWatcher) OnNewBlock(block bookkeeping.Block, delta ledgercore
 	nbw.blkHeader.Store(&block.BlockHeader)
 }
 
-func (nbw *NewBlockWatcher) getBlockHeader() (bh *bookkeeping.BlockHeader) {
+func (nbw *newBlockWatcher) getBlockHeader() (bh *bookkeeping.BlockHeader) {
 	return nbw.blkHeader.Load().(*bookkeeping.BlockHeader)
 }
 
@@ -675,7 +675,7 @@ func MakeStreamVerifier(stxnChan <-chan *UnverifiedElement, resultChan chan<- *V
 		return nil, errors.New("MakeStreamVerifier: Could not get header for previous block")
 	}
 
-	nbw := MakeNewBlockWatcher(latestHdr)
+	nbw := makenewBlockWatcher(latestHdr)
 	ledger.RegisterBlockListeners([]ledgercore.BlockListener{nbw})
 
 	return &StreamVerifier{
