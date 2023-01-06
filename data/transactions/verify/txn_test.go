@@ -1497,7 +1497,7 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
 	// and the cancelation, 2 x waitForNextTxnDuration elapses (10ms)
 	time.Sleep(6 * waitForNextTxnDuration)
 	go func() {
-		// wait a bit before releasing the tasks, so that the verificationPool ctx first gets cancled
+		// wait a bit before releasing the tasks, so that the verificationPool ctx first gets canceled
 		time.Sleep(20 * time.Millisecond)
 		close(holdTasks)
 	}()
