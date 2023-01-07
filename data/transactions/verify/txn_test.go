@@ -1469,7 +1469,7 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
 	log.SetOutput(&logBuffer)
 	log.SetLevel(logging.Info)
 
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50)
 	stxnChan := make(chan *UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
@@ -1483,15 +1483,37 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		// no verification tasks should be executed
-		// one result should be returned
-		result = <-resultChan
+		for {
+			result = <-resultChan
+			// at least one errShuttingDownError is expected
+			if result.Err != errShuttingDownError {
+				continue
+			}
+			break
+		}
 	}()
 
 	// send batchSizeBlockLimit after the exec pool buffer is full
 	numOfTxns := 1
 	txnGroups, _ := getSignedTransactions(numOfTxns, 1, 0, 0.5)
-	stxnChan <- &UnverifiedElement{TxnGroup: txnGroups[0], BacklogMessage: nil}
+
+	wg.Add(1)
+	// run in separate goroutine because the exec pool is blocked here, and this will not advance
+	// until holdTasks are closed
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			// Normally, a single txn is sufficient, but the goroutines could be scheduled is such a way that
+			// the single transaction slips through and passes the batch verifier before the exec pool shuts down.
+			// this happens when close(holdTasks) runs and frees the exec pool, and lets the txns get verified, before
+			// verificationPool.Shutdown() executes.
+			case stxnChan <- &UnverifiedElement{TxnGroup: txnGroups[0], BacklogMessage: nil}:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 	// cancel the ctx as the sig is not yet sent to the exec pool
 	// the test might sporadically fail if between sending the txn above
 	// and the cancelation, 2 x waitForNextTxnDuration elapses (10ms)
@@ -1503,8 +1525,9 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
 	}()
 	verificationPool.Shutdown()
 
-	// the main loop should stop after cancel()
+	// the main loop should stop before calling cancel() when the exec pool shuts down and returns an error
 	sv.WaitForStop()
+	cancel()
 
 	wg.Wait()
 	require.ErrorIs(t, result.Err, errShuttingDownError)
