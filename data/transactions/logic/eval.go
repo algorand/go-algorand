@@ -3382,6 +3382,40 @@ var ecdsaVerifyCosts = []int{
 	Secp256r1: 2500,
 }
 
+// ecdsaVerify checks a signature,
+func (cx *EvalContext) ecdsaVerify(curve EcdsaCurve, pkX, pkY []byte, msg []byte, sigR, sigS []byte) (result bool) {
+	// Go 1.19 panics on bad inputs. Catch it so that re can return false cleanly.
+	defer func() {
+		if recover() != nil {
+			result = false
+		}
+	}()
+
+	x := new(big.Int).SetBytes(pkX)
+	y := new(big.Int).SetBytes(pkY)
+
+	switch curve {
+	case Secp256k1:
+		signature := make([]byte, 0, len(sigR)+len(sigS))
+		signature = append(signature, sigR...)
+		signature = append(signature, sigS...)
+
+		pubkey := secp256k1.S256().Marshal(x, y)
+		return secp256k1.VerifySignature(pubkey, msg, signature)
+	case Secp256r1:
+		r := new(big.Int).SetBytes(sigR)
+		s := new(big.Int).SetBytes(sigS)
+
+		pubkey := ecdsa.PublicKey{
+			Curve: elliptic.P256(),
+			X:     x,
+			Y:     y,
+		}
+		return ecdsa.Verify(&pubkey, msg, r, s)
+	}
+	return false
+}
+
 func opEcdsaVerify(cx *EvalContext) error {
 	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
 	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
@@ -3409,30 +3443,7 @@ func opEcdsaVerify(cx *EvalContext) error {
 		return fmt.Errorf("the signed data must be 32 bytes long, not %d", len(msg))
 	}
 
-	x := new(big.Int).SetBytes(pkX)
-	y := new(big.Int).SetBytes(pkY)
-
-	var result bool
-	if fs.field == Secp256k1 {
-		signature := make([]byte, 0, len(sigR)+len(sigS))
-		signature = append(signature, sigR...)
-		signature = append(signature, sigS...)
-
-		pubkey := secp256k1.S256().Marshal(x, y)
-		result = secp256k1.VerifySignature(pubkey, msg, signature)
-	} else if fs.field == Secp256r1 {
-		r := new(big.Int).SetBytes(sigR)
-		s := new(big.Int).SetBytes(sigS)
-
-		pubkey := ecdsa.PublicKey{
-			Curve: elliptic.P256(),
-			X:     x,
-			Y:     y,
-		}
-		result = ecdsa.Verify(&pubkey, msg, r, s)
-	}
-
-	cx.stack[fifth] = boolToSV(result)
+	cx.stack[fifth] = boolToSV(cx.ecdsaVerify(fs.field, pkX, pkY, msg, sigR, sigS))
 	cx.stack = cx.stack[:fourth]
 	return nil
 }
