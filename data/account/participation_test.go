@@ -40,6 +40,7 @@ var partableColumnNames = [...]string{"parent", "vrf", "voting", "stateProof", "
 
 func TestParticipation_NewDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -115,6 +116,7 @@ func getSchemaVersions(db db.Accessor) (versions map[string]int, err error) {
 
 func TestOverlapsInterval(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	const before = basics.Round(95)
 	const start = basics.Round(100)
@@ -189,6 +191,7 @@ func BenchmarkOldKeysDeletion(b *testing.B) {
 
 func TestRetrieveFromDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	a := require.New(t)
 	part, rootDB, partDB, err := setupParticipationKey(t, a)
 	a.NoError(err)
@@ -205,6 +208,7 @@ func TestRetrieveFromDB(t *testing.T) {
 
 func TestRetrieveFromDBAtVersion1(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 	ppart := setupkeyWithNoDBS(t, a)
@@ -227,6 +231,7 @@ func TestRetrieveFromDBAtVersion1(t *testing.T) {
 
 func TestRetrieveFromDBAtVersion2(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -256,6 +261,7 @@ func TestRetrieveFromDBAtVersion2(t *testing.T) {
 
 func TestKeyRegCreation(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -289,6 +295,7 @@ func assertionForRestoringFromDBAtLowVersion(a *require.Assertions, retrivedPart
 
 func TestMigrateFromVersion1(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 	part := setupkeyWithNoDBS(t, a).Participation
@@ -304,6 +311,7 @@ func TestMigrateFromVersion1(t *testing.T) {
 
 func TestMigrationFromVersion2(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 	part := setupkeyWithNoDBS(t, a).Participation
@@ -498,6 +506,7 @@ func createMerkleSignatureSchemeTestDB(a *require.Assertions) *db.Accessor {
 
 func TestKeyregValidityOverLimit(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	a := require.New(t)
 
 	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
@@ -516,6 +525,7 @@ func TestKeyregValidityOverLimit(t *testing.T) {
 
 func TestFillDBWithParticipationKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	a := require.New(t)
 
 	dilution := config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
