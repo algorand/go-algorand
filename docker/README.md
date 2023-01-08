@@ -42,6 +42,7 @@ Configuration can be modified by specifying certain files. These can be changed 
 | /etc/config.json | Override default configurations by providing your own file. |
 | /etc/algod.token | Override default randomized REST API token. |
 | /etc/algod.admin.token | Override default randomized REST API admin token. |
+| /etc/logging.config | Use a custom [logging.config](https://developer.algorand.org/docs/run-a-node/reference/telemetry-config/?from_query=logging.config#configuration) file for configuring telemetry. |
 
 TODO: `/etc/template.json` for overriding the private network topology.
 
@@ -66,13 +67,40 @@ Explanation of parts:
 * `-p 4190:8080` maps the internal algod REST API to local port 4190
 * `-e NETWORK=` can be set to any of the supported public networks.
 * `-e FAST_CATCHUP=` causes fast catchup to start shortly after launching the network.
-* `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis.
+* `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis. The value of this variable takes precedence over the GUID in `/etc/logging.config`.
 * `-e TOKEN=` sets the REST API token to use.
 * `-v ${PWD}/data:/algod/data/` mounts a local volume to the data directory, which can be used to restart and upgrade the deployment.
 
 ## Mounting the Data Directory
 
 The data directory located at `/algod/data`. Mounting a volume at that location will allow you to shutdown and resume the node.
+
+### Dealing with Permission Errors
+
+The container executes in the context of the `algorand` user with it's own UID and GID. If experiencing permission errors when mounting a volume, try one of the following:
+
+1. Using a named volume
+
+    ```bash
+    docker run -it --rm -d -v algod-data:/algod/data algorand/algod
+    ```
+
+2. Specifying UID/GID of the container
+
+    ```bash
+    docker run -it --rm -d -v /srv/data:/algod/data -u $UID:$GID algorand/algod
+    ```
+
+3. Relabeling the contents of the volume
+
+    ```bash
+    docker run -it --rm -d -v /srv/data:/algod/data:Z algorand/algod
+    ```
+
+For more information on volumes or why this may be happening refer to the following:
+
+- https://docs.docker.com/storage/volumes/
+- https://web.archive.org/web/20190728100417/https://www.projectatomic.io/blog/2015/06/using-volumes-with-docker-can-cause-problems-with-selinux/
 
 ### Private Network
 

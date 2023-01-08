@@ -61,4 +61,6 @@ COPY --chown=algorand:algorand --from=builder "/node/files/run/" "/node/run/"
 # Expose Algod REST API, Algod Gossip, and Prometheus Metrics ports
 EXPOSE $ALGOD_PORT 4160 9100
 
+WORKDIR /node/bin
+
 CMD ["/node/run/run.sh"]
