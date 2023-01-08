@@ -135,9 +135,6 @@ issues:
     - path: daemon.*_test\.go
       linters:
         - paralleltest
-    - path: data.*_test\.go
-      linters:
-        - paralleltest
     - path: gen.*_test\.go
       linters:
         - paralleltest
