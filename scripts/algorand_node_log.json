@@ -1,0 +1,49 @@
+{
+    "algorand_node_log" : {
+        "title" : "Algornad Node Log Format",
+        "description" : "Log format for logrus, used by go-algorand.",
+        "url" : "https://github.com/sirupsen/logrus",
+		"file-pattern": "node.log",
+        "level-field" : "level",
+		"timestamp-field" : "time",
+		"json": true,
+		"body-field": "msg",
+		"line-format" : [
+			{ "field" : "time", "timestamp-format": "%b %d %H:%M:%S" },
+			" ",
+			{ "field" : "level", "text-transform": "uppercase", "min-width": 4, "max-width": 4, "overflow": "truncate"},
+			" ",
+			"[", { "field": "file" }, ":", {"field": "line"}, "]",
+			" ",
+			{ "field": "Context" },
+			" ",
+			{ "field" : "msg" },
+			" [", { "field": "function" }, "]"
+		],
+		"hide-extra": true,
+		"level" : {
+			"info"	: "info",
+			"error" : "error",
+			"warning" : "warning",
+			"debug" : "debug"
+		},
+		"value": {
+			"file": {
+				"kind": "string",
+				"identifier": true
+			},
+			"line": {
+				"kind": "integer",
+				"foreign-key": true
+			},
+			"function": {
+				"kind": "string",
+				"identifier": true
+			},
+			"Context": {
+				"kind": "string",
+				"identifier": true
+			}
+		}
+	}
+}
