@@ -81,7 +81,10 @@ func (b *bulletin) Wait(round basics.Round) chan struct{} {
 }
 
 func (b *bulletin) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
-	b.pendingNotificationRequests = make(map[basics.Round]notifier)
+	// We want to keep existing notification requests in memory if this flow is triggered by reloadLedger.
+	if b.pendingNotificationRequests == nil {
+		b.pendingNotificationRequests = make(map[basics.Round]notifier)
+	}
 	b.latestRound = l.Latest()
 	return nil
 }

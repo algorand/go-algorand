@@ -22,6 +22,9 @@ function apply_configuration() {
   if [ -f "/etc/algod.admin.token" ]; then
     cp /etc/algod.admin.token algod.admin.token
   fi
+  if [ -f "/etc/logging.config" ]; then
+    cp /etc/logging.config logging.config
+  fi
 
   # check for environment variable overrides.
   if [ "$TOKEN" != "" ]; then
@@ -57,8 +60,8 @@ function start_public_network() {
 
   apply_configuration
 
-  if [ $FAST_CATCHUP ]; then
-    catchup&
+  if [[ $FAST_CATCHUP ]]; then
+    catchup &
   fi
   # redirect output to stdout
   algod -o
@@ -82,13 +85,12 @@ function start_new_public_network() {
   fi
 
   mkdir -p "$ALGORAND_DATA"
-  mv dataTemplate/* "$ALGORAND_DATA"
-  rm -rf dataTemplate
 
-  cp "run/genesis/$NETWORK/genesis.json" "$ALGORAND_DATA/genesis.json"
   cd "$ALGORAND_DATA"
 
-  mv config.json.example config.json
+  cp "/node/run/genesis/$NETWORK/genesis.json" genesis.json
+  cp /node/run/config.json.example config.json
+
   configure_data_dir
 
   local ID

@@ -17,23 +17,10 @@
 package logging
 
 import (
-	"sync"
-	"time"
-
 	"github.com/algorand/go-deadlock"
 	"github.com/sirupsen/logrus"
-
-	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"sync"
 )
-
-// TelemetryOperation wraps the context for an ongoing telemetry.StartOperation call
-type TelemetryOperation struct {
-	startTime      time.Time
-	category       telemetryspec.Category
-	identifier     telemetryspec.Operation
-	telemetryState *telemetryState
-	pending        int32
-}
 
 type telemetryHook interface {
 	Fire(entry *logrus.Entry) error
