@@ -263,7 +263,7 @@ type Local struct {
 
 	// HeartbeatUpdateInterval defines the interval at which the heartbeat information is being sent to the
 	// telemetry ( when enabled ). Defined in seconds.
-	HeartbeatUpdateInterval int `version[26]:"600"`
+	HeartbeatUpdateInterval int `version[27]:"600"`
 
 	// EnableProfiler enables the go pprof endpoints, should be false if
 	// the algod api will be exposed to untrusted individuals
