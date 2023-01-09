@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEnsureDataDirReturnsWhenDataDirIsProvided(t *testing.T) {
+func TestEnsureDataDirReturnsWhenDataDirIsProvided(t *testing.T) { // nolint:paralleltest // Sets shared OS environment variable.
 	partitiontest.PartitionTest(t)
 	expectedDir := "~/.algorand"
 	os.Setenv("ALGORAND_DATA", expectedDir)
