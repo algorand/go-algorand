@@ -30,6 +30,7 @@ type testValue struct {
 
 func TestIsDefaultValue(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 

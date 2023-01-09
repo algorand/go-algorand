@@ -29,6 +29,8 @@ import (
 
 func TestTimedWaitSignal(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	var m deadlock.Mutex
 	var signal bool
 	c := sync.NewCond(&m)
@@ -54,6 +56,8 @@ func TestTimedWaitSignal(t *testing.T) {
 
 func TestTimedWaitBroadcast(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	var m deadlock.Mutex
 	var signal bool
 	c := sync.NewCond(&m)
@@ -79,6 +83,8 @@ func TestTimedWaitBroadcast(t *testing.T) {
 
 func TestTimedWaitTimeout(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	var m deadlock.Mutex
 	c := sync.NewCond(&m)
 

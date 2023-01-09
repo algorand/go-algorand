@@ -91,7 +91,14 @@ func testVersioning(t *testing.T, inMemory bool) {
 
 func TestVersioning(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	t.Run("InMem", func(t *testing.T) { testVersioning(t, true) })
-	t.Run("OnDisk", func(t *testing.T) { testVersioning(t, false) })
+	t.Run("InMem", func(t *testing.T) {
+		t.Parallel()
+		testVersioning(t, true)
+	})
+	t.Run("OnDisk", func(t *testing.T) {
+		t.Parallel()
+		testVersioning(t, false)
+	})
 }

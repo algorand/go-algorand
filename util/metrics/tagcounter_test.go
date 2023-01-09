@@ -28,6 +28,7 @@ import (
 
 func TestTagCounter(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	tags := make([]string, 17)
 	for i := range tags {

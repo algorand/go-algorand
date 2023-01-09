@@ -26,6 +26,7 @@ import (
 
 func TestWriteAdd(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	// Test AddMetrics and WriteMetrics with a counter
 	counter := MakeCounter(MetricName{Name: "gauge-name", Description: "gauge description"})

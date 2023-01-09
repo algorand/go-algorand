@@ -25,6 +25,7 @@ import (
 
 func TestParseNodeExporterArgs(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	passTestcases := map[string][]string{
 		"./node_exporter":                                                                           {"./node_exporter", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"},                                               // simple case

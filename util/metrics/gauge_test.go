@@ -33,6 +33,7 @@ type GaugeTest struct {
 
 func TestMetricGauge(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	test := &GaugeTest{
 		MetricTest: NewMetricTest(),

@@ -34,6 +34,7 @@ func polled(ch <-chan time.Time) bool {
 
 func TestMonotonicDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var m Monotonic
 	var c Clock
@@ -60,6 +61,7 @@ func TestMonotonicDelta(t *testing.T) {
 
 func TestMonotonicZeroDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var m Monotonic
 	var c Clock
@@ -74,6 +76,7 @@ func TestMonotonicZeroDelta(t *testing.T) {
 
 func TestMonotonicNegativeDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var m Monotonic
 	var c Clock
@@ -88,6 +91,7 @@ func TestMonotonicNegativeDelta(t *testing.T) {
 
 func TestMonotonicZeroTwice(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var m Monotonic
 	var c Clock
@@ -120,6 +124,7 @@ func TestMonotonicZeroTwice(t *testing.T) {
 
 func TestMonotonicEncodeDecode(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	singleTest := func(c Clock, descr string) {
 		data := c.Encode()
