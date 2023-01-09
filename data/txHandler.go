@@ -651,7 +651,6 @@ func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 	}
 
 	// at this point, we really really have the Txid and we can mark it done from the Advertised pool.
-	// TODO: We could go ahead and add it to the Txid cache that lives in front of the pool.
 	// TODO: bring back Transaction non-seriazied cache of Txid
 	txidList := make([]transactions.Txid, len(verifiedTxGroup))
 	for i, stxn := range verifiedTxGroup {
@@ -1052,7 +1051,7 @@ func (handler *TxHandler) retryHandler() {
 		case rawmsg := <-handler.txAdvertiseQueue:
 			handleAdvertise(rawmsg)
 		case txidList := <-handler.txidRequestDone:
-			handler.txidDone(txidList)
+			handler.txidDone(txidList, txidPresenceCache)
 		case txidList := <-handler.txidRequestDelay:
 			handler.txidDelay(txidList, now)
 		case now = <-ticker.C:
@@ -1077,7 +1076,7 @@ func (handler *TxHandler) retryHandler() {
 			case rawmsg := <-handler.txAdvertiseQueue:
 				handleAdvertise(rawmsg)
 			case txidList := <-handler.txidRequestDone:
-				handler.txidDone(txidList)
+				handler.txidDone(txidList, txidPresenceCache)
 			case txidList := <-handler.txidRequestDelay:
 				handler.txidDelay(txidList, now)
 			case now = <-ticker.C:
@@ -1091,9 +1090,10 @@ func (handler *TxHandler) retryHandler() {
 }
 
 // remove requests, totally done, by Txid
-func (handler *TxHandler) txidDone(txidList []transactions.Txid) {
+func (handler *TxHandler) txidDone(txidList []transactions.Txid, txidPCache map[transactions.Txid]bool) {
 	for _, txid := range txidList {
 		handler.txRequests.popByTxid(txid)
+		txidPCache[txid] = true
 	}
 }
 
@@ -1107,43 +1107,6 @@ func (handler *TxHandler) txidDelay(txidList []transactions.Txid, now time.Time)
 		}
 	}
 }
-
-// // retryHandlerTick gets a list of requests to send then Unicast sends them
-// func (handler *TxHandler) retryHandlerTick(now time.Time) {
-// 	toRequest := handler.retryHandlerTickRequestList(now)
-// 	if len(toRequest) == 0 {
-// 		return
-// 	}
-// 	for npeer, request := range toRequest {
-// 		peer, ok := npeer.(network.UnicastPeer)
-// 		if !ok {
-// 			handler.log.Errorf("Ta Sender not UnicastPeer")
-// 			continue
-// 		}
-// 		txRequestRetry.Inc(nil)
-// 		err := peer.Unicast(handler.ctx, request, protocol.TxnRequestTag)
-// 		if err != nil {
-// 			handler.log.Errorf("Ta req err, %v", err)
-// 		}
-// 	}
-// }
-
-// // retryHandlerTickRequestList holds a lock but just long enough to make a list of slow fetches to do later
-// func (handler *TxHandler) retryHandlerTickRequestList(now time.Time) (toRequest map[network.Peer][]byte) {
-// 	if len(handler.txRequests.ar) == 0 {
-// 		return
-// 	}
-// 	timeout := now.Add(-1 * requestExpiration)
-// 	req := handler.txRequests.ar[0]
-// 	for req.requestedAt.Before(timeout) {
-// 		handler.retryOne(now, req)
-// 		if len(handler.txRequests.ar) == 0 {
-// 			break
-// 		}
-// 		req = handler.txRequests.ar[0]
-// 	}
-// 	return
-// }
 
 func (handler *TxHandler) retryOne(now time.Time, req *requestedTxn) {
 	var nextSource network.Peer
@@ -1163,10 +1126,6 @@ func (handler *TxHandler) retryOne(now time.Time, req *requestedTxn) {
 		}
 	}
 	if nextSource != nil {
-		// if toRequest == nil {
-		// 	toRequest = make(map[network.Peer][]byte)
-		// }
-		// toRequest[nextSource] = append(toRequest[nextSource], (req.txid[:])...)
 		peer, ok := nextSource.(network.UnicastPeer)
 		if !ok {
 			handler.log.Errorf("Ta Sender not UnicastPeer")
