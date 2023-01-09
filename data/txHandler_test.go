@@ -2501,6 +2501,9 @@ func rtsValidHeap(a *require.Assertions, rts *requestedTxnSet) {
 }
 
 func TestRequestedTxnSet(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 	var txRequests requestedTxnSet
 	req := new(requestedTxn)

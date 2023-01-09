@@ -1938,7 +1938,6 @@ const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
 // After 2.2 it must be exactly {int}.{int}
-// TODO: data/txHandler.go has code that detects `== "3"` that needs to change if this changes
 var SupportedProtocolVersions = []string{"3.0", "2.2", "2.1"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
