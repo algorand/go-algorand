@@ -29,6 +29,7 @@ import (
 
 func TestStateDeltaValid(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -86,6 +87,7 @@ func TestStateDeltaValid(t *testing.T) {
 
 func TestStateDeltaValidV24(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -109,6 +111,7 @@ func TestStateDeltaValidV24(t *testing.T) {
 
 func TestStateDeltaEqual(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
