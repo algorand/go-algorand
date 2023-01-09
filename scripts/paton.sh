@@ -17,7 +17,7 @@ set -euxf -o pipefail
 # paton.sh requires these dependencies.  No attempt is made to install prerequisites:
 # * https://pkg.go.dev/golang.org/x/perf/cmd/benchstat
 # * https://github.com/stedolan/jq
-# * https://github.com/kellyjonbrazil/jc
+# * https://pypi.org/project/tabulate
 
 if [[ $# -lt 1 ]]; then
   echo "Must provide required flags"
@@ -101,28 +101,3 @@ fi
 if [[ "$MODE" == "all" || "$MODE" == "evaluate" ]]; then
   evaluate_benchmark
 fi
-
-#cat /tmp/benchstat.txt |
-#  awk '/old time\/op/{f=1} /^$/{f=0} f' |
-#  jc -p --asciitable |
-#  # Remove symbols (+, %) preventing conversion to JavaScript number.
-#  sed '/delta/s/+//g' |
-#  sed '/delta/s/%//g' |
-#  tee /tmp/benchstat_time.json
-#
-#cat /tmp/benchstat_time.json |
-#  jq '.[] | {
-#    name: .name,
-#    old_time_op: .old_time_op,
-#    new_time_op: .new_time_op,
-#    delta: .delta | tonumber
-#    }' |
-#  jq -s > /tmp/benchstat_time_jq.json
-#
-# cat /tmp/benchstat_time_jq.json |
-#  jq ".[] | select(.delta >= ${ALERT_THRESHOLD_PCT})" |
-#  tee /tmp/alerting_benchmarks.json
-
-#if [ ! -s /tmp/alerting_benchmarks.json ]; then
-#  rm /tmp/alerting_benchmarks.json
-#fi
