@@ -603,7 +603,7 @@ func TestMakeBoxKey(t *testing.T) {
 
 		if tc.err == "" {
 			key := apps.MakeBoxKey(uint64(tc.app), tc.name)
-			require.Equal(t, tc.app, app, pp(tc))
+			require.Equal(t, uint64(tc.app), app, pp(tc))
 			require.Equal(t, tc.name, name, pp(tc))
 			require.Equal(t, tc.key, key, pp(tc))
 		} else {
