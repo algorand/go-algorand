@@ -39,7 +39,7 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-func TestLoadMultiRootKeyConcurrent(t *testing.T) {
+func TestLoadMultiRootKeyConcurrent(t *testing.T) { //nolint:paralleltest // For unclear reasons, the test is skipped.
 	t.Skip() // skip in auto-test mode
 	a := require.New(t)
 	tempDir := t.TempDir()
@@ -78,7 +78,7 @@ func TestLoadMultiRootKeyConcurrent(t *testing.T) {
 	}
 }
 
-func TestLoadSingleRootKeyConcurrent(t *testing.T) {
+func TestLoadSingleRootKeyConcurrent(t *testing.T) { //nolint:paralleltest // For unclear reasons, the test is skipped.
 	t.Skip() // skip in auto-test mode
 	a := require.New(t)
 	tempDir := t.TempDir()
@@ -108,6 +108,8 @@ func TestLoadSingleRootKeyConcurrent(t *testing.T) {
 
 func TestGenesisRoundoff(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	verbosity := strings.Builder{}
 	genesisData := DefaultGenesis
 	genesisData.NetworkName = "wat"
@@ -237,7 +239,9 @@ func TestGenesisJsonCreation(t *testing.T) {
 		balance(),
 		testnet(),
 	} {
+		tc := tc
 		t.Run(fmt.Sprintf("name=%v", tc.name), func(t *testing.T) {
+			t.Parallel()
 			gd := tc.gd
 			gd.LastPartKeyRound = uint64(quickLastPartKeyRound)
 

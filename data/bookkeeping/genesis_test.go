@@ -29,6 +29,8 @@ import (
 
 func TestGenesis_Balances(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	containsErrorFunc := func(str string) assert.ErrorAssertionFunc {
 		return func(_ assert.TestingT, err error, i ...interface{}) bool {
 			require.ErrorContains(t, err, str)
@@ -141,7 +143,9 @@ func TestGenesis_Balances(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			genesis := Genesis{
 				Allocation:  tt.fields.Allocation,
 				FeeSink:     tt.fields.FeeSink,
