@@ -17,10 +17,10 @@
 package util
 
 import (
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -208,12 +208,16 @@ func TestREDCongestionManagerShouldntDrop(t *testing.T) {
 	// calculate the target rate every request for most accurate results
 	red.targetRateRefreshTicks = 1
 	red.Start()
+
 	// indicate that the arrival rate is essentially 0.1/s!
 	red.Consumed(client, time.Now())
-	// drive 10k messages
-	// indicates that the service rate is essentially 100/s (10s rolling window)
-	for i := 0; i < 5000; i++ {
-		red.Served(time.Now())
+
+	// drive 10k messages, in batches of 500, with 100ms sleeps
+	for i := 0; i < 20; i++ {
+		for j := 0; j < 500; j++ {
+			red.Served(time.Now())
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 	// the service rate should be 1000/s, and the arrival rate for this client should be 0.1/s
 	// for this reason, shouldDrop should almost certainly return false (true only 1/100k times)
@@ -224,9 +228,9 @@ func TestREDCongestionManagerShouldntDrop(t *testing.T) {
 	time.Sleep(1000 * time.Millisecond)
 	red.Stop()
 	assert.Equal(t, 1, len(*red.consumedByClient[client]))
-	assert.Equal(t, 5000, len(red.serves))
+	assert.Equal(t, 10000, len(red.serves))
 	assert.Equal(t, 0.1, red.arrivalRateFor(red.consumedByClient[client]))
-	assert.Equal(t, float64(500), red.targetRate)
+	assert.Equal(t, float64(1000), red.targetRate)
 }
 
 func TestREDCongestionManagerTargetRate(t *testing.T) {

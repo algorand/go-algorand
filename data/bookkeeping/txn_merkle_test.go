@@ -32,6 +32,7 @@ import (
 
 func TestTxnMerkleElemHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var tme txnMerkleElem
 	crypto.RandBytes(tme.stib.SignedTxn.Txn.Header.Sender[:])
@@ -40,6 +41,7 @@ func TestTxnMerkleElemHash(t *testing.T) {
 
 func TestTxnMerkle(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	for ntxn := uint64(0); ntxn < 128; ntxn++ {
 		var b Block
@@ -91,6 +93,7 @@ func TestTxnMerkle(t *testing.T) {
 
 func TestBlock_TxnMerkleTreeSHA256(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	for ntxn := uint64(0); ntxn < 128; ntxn++ {
 		var b Block
