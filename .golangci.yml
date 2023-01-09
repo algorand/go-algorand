@@ -117,7 +117,7 @@ issues:
         - staticcheck
         - typecheck
     # Ignore missing parallel tests in existing packages
-    - path: (agreement|catchup|cmd|config|crypto|daemon|gen|ledger|logging|netdeploy|network|node|protocol|rpcs|shared|stateproof|test|tools|util).*_test\.go
+    - path: (agreement|catchup|cmd|config|crypto|daemon|data|gen|ledger|logging|netdeploy|network|node|protocol|rpcs|stateproof|test|tools|util).*_test\.go
       linters:
         - paralleltest
     # Add all linters here -- Comment this block out for testing linters
