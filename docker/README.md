@@ -1,5 +1,7 @@
 # Algod Container
 
+[![DockerHub](https://img.shields.io/badge/DockerHub-blue)](https://hub.docker.com/r/algorand/algod)
+
 General purpose algod container image.
 
 ## Image Configuration
@@ -42,7 +44,7 @@ Configuration can be modified by specifying certain files. These can be changed 
 | /etc/config.json | Override default configurations by providing your own file. |
 | /etc/algod.token | Override default randomized REST API token. |
 | /etc/algod.admin.token | Override default randomized REST API admin token. |
-| /etc/logging.config | Use a custom [logging.config](https://developer.algorand.org/docs/run-a-node/reference/telemetry-config/?from_query=logging.config#configuration) file for configuring telemetry. |
+| /etc/logging.config | Use a custom [logging.config](https://developer.algorand.org/docs/run-a-node/reference/telemetry-config/#configuration) file for configuring telemetry. |
 
 TODO: `/etc/template.json` for overriding the private network topology.
 
@@ -75,7 +77,7 @@ Explanation of parts:
 
 The data directory located at `/algod/data`. Mounting a volume at that location will allow you to shutdown and resume the node.
 
-### Dealing with Permission Errors
+### Handling Permission Errors
 
 The container executes in the context of the `algorand` user with it's own UID and GID. If experiencing permission errors when mounting a volume, try one of the following:
 
