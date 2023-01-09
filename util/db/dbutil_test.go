@@ -39,6 +39,7 @@ import (
 
 func TestInMemoryDisposal(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	acc, err := MakeAccessor("fn.db", false, true)
 	require.NoError(t, err)
@@ -86,6 +87,7 @@ func TestInMemoryDisposal(t *testing.T) {
 
 func TestInMemoryUniqueDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	acc, err := MakeAccessor("fn.db", false, true)
 	require.NoError(t, err)
@@ -120,6 +122,7 @@ func TestInMemoryUniqueDB(t *testing.T) {
 
 func TestDBConcurrency(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	fn := fmt.Sprintf("/tmp/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
 	defer cleanupSqliteDb(t, fn)
@@ -238,6 +241,8 @@ func cleanupSqliteDb(t *testing.T, path string) {
 
 func TestDBConcurrencyRW(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	if testing.Short() {
 		// Since it is a long operation and can only be affected by the db package, we can skip this test when running short tests only.
 		t.Skip("skipped as part of short test suite")
@@ -362,6 +367,7 @@ func (wlc *WarningLogCounter) With(key string, value interface{}) logging.Logger
 // Test resetting warning notification
 func TestResettingTransactionWarnDeadline(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	t.Run("expectedWarning", func(t *testing.T) {
 		t.Parallel()
@@ -401,6 +407,7 @@ func TestResettingTransactionWarnDeadline(t *testing.T) {
 // Test the SetSynchronousMode function
 func TestSetSynchronousMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	setSynchrounousModeHelper := func(mem bool, ctx context.Context, mode SynchronousMode, fullfsync bool) error {
 		acc, err := MakeAccessor("fn.db", false, mem)
@@ -438,6 +445,7 @@ func TestSetSynchronousMode(t *testing.T) {
 // value.
 func TestReadingWhileWriting(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	writeAcc, err := MakeAccessor("fn.db", false, false)
 	require.NoError(t, err)
@@ -481,11 +489,17 @@ func TestReadingWhileWriting(t *testing.T) {
 
 // using Write-Ahead Logging (WAL)
 func TestLockingTableWhileWritingWAL(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	testLockingTableWhileWriting(t, true)
 }
 
 // using the default Rollback Journal
 func TestLockingTableWhileWritingJournal(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	testLockingTableWhileWriting(t, false)
 }
 
@@ -494,6 +508,8 @@ func TestLockingTableWhileWritingJournal(t *testing.T) {
 // WAL mode instead, locking a specific table is possible, making concurrent reads more performant.
 func testLockingTableWhileWriting(t *testing.T, useWAL bool) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	if testing.Short() {

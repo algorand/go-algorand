@@ -17,6 +17,7 @@
 package util
 
 import (
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"testing"
 	"time"
 
@@ -38,6 +39,9 @@ func (c mockClient) OnClose(func()) {
 }
 
 func TestNewElasticRateLimiter(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	erl := NewElasticRateLimiter(100, 10, time.Second, nil)
 
 	assert.Equal(t, len(erl.sharedCapacity), 100)
@@ -45,6 +49,9 @@ func TestNewElasticRateLimiter(t *testing.T) {
 }
 
 func TestElasticRateLimiterCongestionControlled(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	client := mockClient("client")
 	erl := NewElasticRateLimiter(3, 2, time.Second, nil)
 	// give the ERL a congestion controler with well defined behavior for testing
@@ -77,6 +84,9 @@ func TestElasticRateLimiterCongestionControlled(t *testing.T) {
 }
 
 func TestReservations(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	client1 := mockClient("client1")
 	client2 := mockClient("client2")
 	erl := NewElasticRateLimiter(4, 1, time.Second, nil)
@@ -102,6 +112,9 @@ func TestReservations(t *testing.T) {
 }
 
 func TestConsumeReleaseCapacity(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	client := mockClient("client")
 	erl := NewElasticRateLimiter(4, 3, time.Second, nil)
 
@@ -149,6 +162,9 @@ func TestConsumeReleaseCapacity(t *testing.T) {
 }
 
 func TestREDCongestionManagerShouldDrop(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	client := mockClient("client")
 	other := mockClient("other")
 	red := NewREDCongestionManager(time.Second*10, 10000)
@@ -184,6 +200,9 @@ func TestREDCongestionManagerShouldDrop(t *testing.T) {
 }
 
 func TestREDCongestionManagerShouldntDrop(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	client := mockClient("client")
 	red := NewREDCongestionManager(time.Second*10, 10000)
 	// calculate the target rate every request for most accurate results
@@ -211,6 +230,9 @@ func TestREDCongestionManagerShouldntDrop(t *testing.T) {
 }
 
 func TestREDCongestionManagerTargetRate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	client := mockClient("client")
 	red := NewREDCongestionManager(time.Second*10, 10000)
 	red.Start()
@@ -228,6 +250,9 @@ func TestREDCongestionManagerTargetRate(t *testing.T) {
 }
 
 func TestREDCongestionManagerPrune(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	client := mockClient("client")
 	red := NewREDCongestionManager(time.Second*10, 10000)
 	red.Start()
@@ -247,6 +272,9 @@ func TestREDCongestionManagerPrune(t *testing.T) {
 }
 
 func TestREDCongestionManagerStopStart(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	client := mockClient("client")
 	red := NewREDCongestionManager(time.Second*10, 10000)
 	red.Start()

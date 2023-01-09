@@ -27,6 +27,7 @@ import (
 
 func TestRuntimeMetrics(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	rm := NewRuntimeMetrics()
 	var sb strings.Builder

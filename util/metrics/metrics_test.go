@@ -97,6 +97,7 @@ func (p *MetricTest) testMetricsHandler(w http.ResponseWriter, r *http.Request) 
 
 func TestSanitizeTelemetryName(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	for _, tc := range []struct{ in, out string }{
 		{in: "algod_counter_x", out: "algod_counter_x"},
@@ -110,7 +111,9 @@ func TestSanitizeTelemetryName(t *testing.T) {
 		{in: "-my-metric-name", out: "_my-metric-name"},
 		{in: `label-counter:label="a label value"`, out: "label-counter_label__a_label_value_"},
 	} {
+		tc := tc
 		t.Run(tc.in, func(t *testing.T) {
+			t.Parallel()
 			require.Equal(t, tc.out, sanitizeTelemetryName(tc.in))
 		})
 	}
@@ -118,6 +121,7 @@ func TestSanitizeTelemetryName(t *testing.T) {
 
 func TestSanitizePrometheusName(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	for _, tc := range []struct{ in, out string }{
 		{in: "algod_counter_x", out: "algod_counter_x"},
@@ -136,7 +140,9 @@ func TestSanitizePrometheusName(t *testing.T) {
 		{in: "go/memory/classes/os-stacks:bytes", out: "go_memory_classes_os_stacks_bytes"},
 		{in: "go/memory/classes/heap/free:bytes", out: "go_memory_classes_heap_free_bytes"},
 	} {
+		tc := tc
 		t.Run(tc.in, func(t *testing.T) {
+			t.Parallel()
 			require.Equal(t, tc.out, sanitizePrometheusName(tc.in))
 		})
 	}

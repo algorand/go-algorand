@@ -33,6 +33,7 @@ type CounterTest struct {
 
 func TestMetricCounter(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	test := &CounterTest{
 		MetricTest: NewMetricTest(),
@@ -79,6 +80,7 @@ func TestMetricCounter(t *testing.T) {
 
 func TestMetricCounterFastInts(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	test := &CounterTest{
 		MetricTest: NewMetricTest(),
@@ -126,6 +128,7 @@ func TestMetricCounterFastInts(t *testing.T) {
 
 func TestMetricCounterMixed(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	test := &CounterTest{
 		MetricTest: NewMetricTest(),
@@ -175,6 +178,7 @@ func TestMetricCounterMixed(t *testing.T) {
 
 func TestCounterWriteMetric(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	c := MakeCounter(MetricName{Name: "testname", Description: "testhelp"})
 	c.Deregister(nil)
@@ -201,6 +205,7 @@ testname{host="myhost"} 2.3
 
 func TestGetValue(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	c := MakeCounter(MetricName{Name: "testname", Description: "testhelp"})
 	c.Deregister(nil)

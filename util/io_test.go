@@ -28,6 +28,7 @@ import (
 
 func TestIsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	testPath := path.Join(os.TempDir(), "this", "is", "a", "long", "path")
 	err := os.MkdirAll(testPath, os.ModePerm)
