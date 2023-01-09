@@ -30,6 +30,7 @@ import (
 
 func TestCreateSignedTxBasic(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var networkState netState
 	networkState.nApplications = 2
@@ -87,7 +88,7 @@ func TestCreateSignedTxBasic(t *testing.T) {
 	}
 }
 
-func TestCreateSignedTxAssets(t *testing.T) {
+func TestCreateSignedTxAssets(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies config.Consensus
 	//	assets per account should not exceed limit
 	partitiontest.PartitionTest(t)
 
@@ -125,7 +126,7 @@ func TestCreateSignedTxAssets(t *testing.T) {
 	require.Equal(t, protocol.PaymentTx, networkState.txnState)
 }
 
-func TestAccountsNeeded(t *testing.T) {
+func TestAccountsNeeded(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies config.Consensus
 	partitiontest.PartitionTest(t)
 
 	params := config.Consensus[protocol.ConsensusCurrentVersion]
