@@ -34,6 +34,8 @@ The following environment variables can be supplied. Except when noted, it is po
 | NUM_ROUNDS    | If set on a private network, override default of 30000 participation keys. |
 | TOKEN         | If set, overrides the REST API token. |
 | ADMIN_TOKEN   | If set, overrides the REST API admin token. |
+| KMD_TOKEN | If set along with `START_KMD`, override the KMD REST API token. Otherwise, it's set to `ADMIN_TOKEN`. |
+| START_KMD | If set, start kmd service with no timeout. THIS SHOULD NOT BE USED IN PRODUCTION. |
 
 ### Special Files
 
@@ -55,10 +57,12 @@ The following command launches a container configured with one of the public net
 ```bash
 docker run --rm -it \
     -p 4190:8080 \
+    -p 4191:7833 \
     -e NETWORK=mainnet \
     -e FAST_CATCHUP=1 \
     -e TELEMETRY_NAME=name \
     -e TOKEN=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+    -e START_KMD=1 \
     -v ${PWD}/data:/algod/data/ \
     --name mainnet-container \
     algorand/algod:latest
@@ -66,9 +70,11 @@ docker run --rm -it \
 
 Explanation of parts:
 
-* `-p 4190:8080` maps the internal algod REST API to local port 4190
+* `-p 4190:8080` maps the internal algod REST API to local port 4190.
+* `-o 4191:7833` maps the internal kmd REST API to local port 4191.
 * `-e NETWORK=` can be set to any of the supported public networks.
 * `-e FAST_CATCHUP=` causes fast catchup to start shortly after launching the network.
+* `-e START_KMD=` signals to entrypoint to start the kmd REST API (THIS SHOULD NOT BE USED IN PRODUCTION).
 * `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis. The value of this variable takes precedence over the `name` attribute set in `/etc/algorand/logging.config`.
 * `-e TOKEN=` sets the REST API token to use.
 * `-v ${PWD}/data:/algod/data/` mounts a local volume to the data directory, which can be used to restart and upgrade the deployment.
