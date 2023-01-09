@@ -39,10 +39,9 @@ func TestGetS3UploadBucket(t *testing.T) {
 		{name: "test3", wantBucketName: ""},
 		{name: "test4", getDefault: true, wantBucketName: "algorand-uploads"},
 	}
+	//nolint:paralleltest // Subtests modify global environment variable.
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			if tt.getDefault {
 				os.Unsetenv("S3_UPLOAD_BUCKET")
 			} else {
@@ -69,10 +68,10 @@ func TestGetS3ReleaseBucket(t *testing.T) {
 		{name: "test3", wantBucketName: ""},
 		{name: "test4", getDefault: true, wantBucketName: "algorand-releases"},
 	}
+
+	//nolint:paralleltest // Subtests modify global environment variable.
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			if tt.getDefault {
 				os.Unsetenv("S3_RELEASE_BUCKET")
 			} else {
@@ -99,10 +98,10 @@ func Test_getS3Region(t *testing.T) {
 		{name: "test3", wantRegion: ""},
 		{name: "test3", getDefault: true, wantRegion: "us-east-1"},
 	}
+
+	//nolint:paralleltest // Subtests modify global environment variable.
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			if tt.getDefault {
 				os.Unsetenv("S3_REGION")
 			} else {
@@ -118,7 +117,7 @@ func Test_getS3Region(t *testing.T) {
 func TestMakeS3SessionForUploadWithBucket(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	
+
 	const bucket1 = "test-bucket"
 	const publicUploadBucket = "algorand-uploads"
 	const emptyBucket = ""
@@ -135,10 +134,10 @@ func TestMakeS3SessionForUploadWithBucket(t *testing.T) {
 		{name: "test2", args: args{awsBucket: emptyBucket}, wantHelper: Helper{bucket: emptyBucket}, wantErr: true},
 		{name: "test6", args: args{awsBucket: publicUploadBucket}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: false},
 	}
+
+	//nolint:paralleltest // Subtests modify global environment variable.
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			gotHelper, err := MakeS3SessionForUploadWithBucket(tt.args.awsBucket)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MakeS3SessionForUploadWithBucket() error = %v, wantErr %v", err, tt.wantErr)
@@ -171,10 +170,10 @@ func TestMakeS3SessionForDownloadWithBucket(t *testing.T) {
 		{name: "test2", args: args{awsBucket: emptyBucket}, wantHelper: Helper{bucket: emptyBucket}, wantErr: true},
 		{name: "test6", args: args{awsBucket: publicReleaseBucket}, wantHelper: Helper{bucket: publicReleaseBucket}, wantErr: false},
 	}
+
+	//nolint:paralleltest // Subtests modify global environment variable.
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			gotHelper, err := MakeS3SessionForDownloadWithBucket(tt.args.awsBucket)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MakeS3SessionForDownloadWithBucket() error = %v, wantErr %v", err, tt.wantErr)

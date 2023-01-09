@@ -31,9 +31,8 @@ type GaugeTest struct {
 	MetricTest
 }
 
-func TestMetricGauge(t *testing.T) {
+func TestMetricGauge(t *testing.T) { //nolint:paralleltest // Modifies global metric state.
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	test := &GaugeTest{
 		MetricTest: NewMetricTest(),

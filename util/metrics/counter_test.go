@@ -31,9 +31,8 @@ type CounterTest struct {
 	MetricTest
 }
 
-func TestMetricCounter(t *testing.T) {
+func TestMetricCounter(t *testing.T) { //nolint:paralleltest // Modifies global metric state.
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	test := &CounterTest{
 		MetricTest: NewMetricTest(),
@@ -78,9 +77,8 @@ func TestMetricCounter(t *testing.T) {
 	}
 }
 
-func TestMetricCounterFastInts(t *testing.T) {
+func TestMetricCounterFastInts(t *testing.T) { //nolint:paralleltest // Modifies global metric state.
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	test := &CounterTest{
 		MetricTest: NewMetricTest(),
@@ -97,7 +95,7 @@ func TestMetricCounterFastInts(t *testing.T) {
 	})
 	metricService.Start(context.Background())
 
-	counter := MakeCounter(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
+	counter := MakeCounter(MetricName{Name: "metric_test_name2", Description: "this is the metric test for counter object"})
 
 	for i := 0; i < 20; i++ {
 		counter.Inc(nil)
@@ -126,9 +124,8 @@ func TestMetricCounterFastInts(t *testing.T) {
 	}
 }
 
-func TestMetricCounterMixed(t *testing.T) {
+func TestMetricCounterMixed(t *testing.T) { //nolint:paralleltest // Modifies global metric state.
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	test := &CounterTest{
 		MetricTest: NewMetricTest(),
@@ -145,7 +142,7 @@ func TestMetricCounterMixed(t *testing.T) {
 	})
 	metricService.Start(context.Background())
 
-	counter := MakeCounter(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
+	counter := MakeCounter(MetricName{Name: "metric_test_name3", Description: "this is the metric test for counter object"})
 
 	counter.Add(5.25, nil)
 	counter.Add(8.25, map[string]string{})

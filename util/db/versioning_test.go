@@ -89,16 +89,15 @@ func testVersioning(t *testing.T, inMemory bool) {
 
 }
 
-func TestVersioning(t *testing.T) {
+func TestVersioning(t *testing.T) { //nolint:paralleltest // Modifies global database tables.
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
+	//nolint:paralleltest // Subtests modify shared state.
 	t.Run("InMem", func(t *testing.T) {
-		t.Parallel()
 		testVersioning(t, true)
 	})
+	//nolint:paralleltest // Subtests modify shared state.
 	t.Run("OnDisk", func(t *testing.T) {
-		t.Parallel()
 		testVersioning(t, false)
 	})
 }

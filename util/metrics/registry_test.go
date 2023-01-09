@@ -24,9 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWriteAdd(t *testing.T) {
+func TestWriteAdd(t *testing.T) { //nolint:paralleltest // Modifies shared metrics registry.
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	// Test AddMetrics and WriteMetrics with a counter
 	counter := MakeCounter(MetricName{Name: "gauge-name", Description: "gauge description"})
