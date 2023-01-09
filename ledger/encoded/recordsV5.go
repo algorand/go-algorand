@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,11 +14,17 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package node
+package encoded
 
-// PoolStats represents some statistics about the transaction pool
-type PoolStats struct {
-	NumConfirmed   uint64
-	NumOutstanding uint64
-	NumExpired     uint64
+import (
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/msgp/msgp"
+)
+
+// BalanceRecordV5 is the encoded account balance record.
+type BalanceRecordV5 struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Address     basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
+	AccountData msgp.Raw       `codec:"ad"` // encoding of basics.AccountData
 }
