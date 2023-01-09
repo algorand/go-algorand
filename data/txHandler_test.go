@@ -605,7 +605,8 @@ func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 	for _, check := range checks {
 		t.Run(fmt.Sprintf("%d-%d", check.inputSize, check.numDecoded), func(t *testing.T) {
 			handler := TxHandler{
-				backlogQueue: make(chan *txBacklogMsg, 1),
+				backlogQueue:     make(chan *txBacklogMsg, 1),
+				txidRequestDelay: make(chan []transactions.Txid, 1000),
 			}
 			stxns, blob := makeRandomTransactions(check.inputSize)
 			action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
@@ -788,6 +789,7 @@ func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, 
 		msgCache:         makeSaltedCache(cacheSize),
 		txCanonicalCache: makeDigestCache(cacheSize),
 		cacheConfig:      txHandlerConfig,
+		txidRequestDelay: make(chan []transactions.Txid, 1000),
 	}
 	handler.msgCache.Start(ctx, refreshInterval)
 	return handler

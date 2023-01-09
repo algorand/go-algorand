@@ -136,6 +136,7 @@ type TxHandler struct {
 	postVerificationQueue chan *verify.VerificationResult
 	txAdvertiseQueue      chan network.IncomingMessage
 	txidRequestDone       chan []transactions.Txid
+	txidRequestDelay      chan []transactions.Txid
 	backlogWg             sync.WaitGroup
 	net                   network.GossipNode
 	msgCache              *txSaltedCache
@@ -296,6 +297,7 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		postVerificationQueue: make(chan *verify.VerificationResult, txBacklogSize),
 		txAdvertiseQueue:      make(chan network.IncomingMessage, txBacklogSize),
 		txidRequestDone:       make(chan []transactions.Txid, txBacklogSize),
+		txidRequestDelay:      make(chan []transactions.Txid, txBacklogSize),
 		net:                   opts.Net,
 		relayMessages:         opts.Config.NetAddress != "" || opts.Config.ForceRelayMessages,
 		msgCache:              makeSaltedCache(2 * txBacklogSize),
@@ -648,7 +650,14 @@ func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 		handler.log.Infof("unable to pin transaction: %v", err)
 	}
 
-	// TODO: at this point, we really really have the Txid and we can mark it done from the Advertised pool. We could go ahead and add it to the Txid cache that lives in front of the pool.
+	// at this point, we really really have the Txid and we can mark it done from the Advertised pool.
+	// TODO: We could go ahead and add it to the Txid cache that lives in front of the pool.
+	// TODO: bring back Transaction non-seriazied cache of Txid
+	txidList := make([]transactions.Txid, len(verifiedTxGroup))
+	for i, stxn := range verifiedTxGroup {
+		txidList[i] = stxn.ID()
+	}
+	handler.txidRequestDone <- txidList
 
 	if handler.relayMessages {
 		err = TxnBroadcast(handler.ctx, handler.net, verifiedTxGroup, wi.rawmsg.Sender)
@@ -918,8 +927,8 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		for i, stxn := range unverifiedTxGroup {
 			txidList[i] = stxn.ID()
 		}
-		// TODO: this should only mark the request as _probably_ done and re-warm the timeout (like a watchdog timer). Later when the Txid is added to the pool we can call it really-really done.
-		handler.txidRequestDone <- txidList
+		// the request is only _probably_ done, re-warm the timeout (like a watchdog timer). Later when the Txid is added to the pool we can call it really-really done.
+		handler.txidRequestDelay <- txidList
 	default:
 		// If we failed here we want to increase the
 		// corresponding metric. It might suggest that we want
@@ -952,6 +961,7 @@ func (handler *TxHandler) processIncomingTxnAdvertise(rawmsg network.IncomingMes
 	return network.OutgoingMessage{}
 }
 
+// processIncomingTxnAdvertiseInner() runs in retryHandler() single threaded context
 func (handler *TxHandler) processIncomingTxnAdvertiseInner(rawmsg network.IncomingMessage, txidPCache map[transactions.Txid]bool) {
 	var request []byte
 	var txid transactions.Txid
@@ -1020,92 +1030,164 @@ func (handler *TxHandler) retryHandler() {
 	var prevRound uint64
 	// txidPresenceCache is a local unlocked cache of whether we've seen a txid in txPool (which takes two mutexes to check); replace on block rollover because lots of txPool changes then
 	txidPresenceCache := make(map[transactions.Txid]bool)
+	// this local function makes a select case below fit in one line
+	handleAdvertise := func(rawmsg network.IncomingMessage) {
+		opr := atomic.LoadUint64(&handler.prevRound)
+		if opr != prevRound {
+			prevRound = opr
+			txidPresenceCache = make(map[transactions.Txid]bool)
+		}
+		handler.processIncomingTxnAdvertiseInner(rawmsg, txidPresenceCache)
+	}
 	defer handler.backlogWg.Done()
 	defer ticker.Stop()
+	var timeout time.Time
+	var now time.Time
 	for {
+		// same select as below but without default:
+		// wait for something to happen
 		select {
 		case <-handler.ctx.Done():
 			return
 		case rawmsg := <-handler.txAdvertiseQueue:
-			opr := atomic.LoadUint64(&handler.prevRound)
-			if opr != prevRound {
-				prevRound = opr
-				txidPresenceCache = make(map[transactions.Txid]bool)
-			}
-			handler.processIncomingTxnAdvertiseInner(rawmsg, txidPresenceCache)
+			handleAdvertise(rawmsg)
 		case txidList := <-handler.txidRequestDone:
-			for _, txid := range txidList {
-				handler.txRequests.popByTxid(txid)
-			}
-		case now := <-ticker.C:
-			handler.retryHandlerTick(now)
+			handler.txidDone(txidList)
+		case txidList := <-handler.txidRequestDelay:
+			handler.txidDelay(txidList, now)
+		case now = <-ticker.C:
+			timeout = now.Add(-1 * requestExpiration)
+			// fall through to retry loop
 		}
-	}
-}
-
-// retryHandlerTick gets a list of requests to send then Unicast sends them
-func (handler *TxHandler) retryHandlerTick(now time.Time) {
-	toRequest := handler.retryHandlerTickRequestList(now)
-	if len(toRequest) == 0 {
-		return
-	}
-	for npeer, request := range toRequest {
-		peer, ok := npeer.(network.UnicastPeer)
-		if !ok {
-			handler.log.Errorf("Ta Sender not UnicastPeer")
+		if len(handler.txRequests.ar) == 0 {
 			continue
 		}
-		txRequestRetry.Inc(nil)
-		err := peer.Unicast(handler.ctx, request, protocol.TxnRequestTag)
-		if err != nil {
-			handler.log.Errorf("Ta req err, %v", err)
+
+		req := handler.txRequests.ar[0]
+		for req.requestedAt.Before(timeout) {
+			handler.retryOne(now, req)
+			if len(handler.txRequests.ar) == 0 {
+				break
+			}
+			// same select as above but with default:
+			// work through retry queue that have timed out
+			select {
+			case <-handler.ctx.Done():
+				return
+			case rawmsg := <-handler.txAdvertiseQueue:
+				handleAdvertise(rawmsg)
+			case txidList := <-handler.txidRequestDone:
+				handler.txidDone(txidList)
+			case txidList := <-handler.txidRequestDelay:
+				handler.txidDelay(txidList, now)
+			case now = <-ticker.C:
+				timeout = now.Add(-1 * requestExpiration)
+			default:
+			}
+
+			req = handler.txRequests.ar[0]
 		}
 	}
 }
 
-// retryHandlerTickRequestList holds a lock but just long enough to make a list of slow fetches to do later
-func (handler *TxHandler) retryHandlerTickRequestList(now time.Time) (toRequest map[network.Peer][]byte) {
-	if len(handler.txRequests.ar) == 0 {
-		return
+// remove requests, totally done, by Txid
+func (handler *TxHandler) txidDone(txidList []transactions.Txid) {
+	for _, txid := range txidList {
+		handler.txRequests.popByTxid(txid)
 	}
-	timeout := now.Add(-1 * requestExpiration)
-	req := handler.txRequests.ar[0]
-	for req.requestedAt.Before(timeout) {
-		var nextSource network.Peer
-		// find a peer that has advertised it who we haven't asked yet
-		for _, source := range req.advertisedBy {
-			alreadyAsked := false
-			for _, prevReq := range req.requestedFrom {
-				// skip source we already asked
-				if prevReq == source {
-					alreadyAsked = true
-					break
-				}
-			}
-			if !alreadyAsked {
-				nextSource = source
+}
+
+// postpone expiration of requests, by txid, by two seconds
+func (handler *TxHandler) txidDelay(txidList []transactions.Txid, now time.Time) {
+	for _, txid := range txidList {
+		req, ok := handler.txRequests.getByTxid(txid)
+		if ok {
+			req.requestedAt = now.Add(2 * time.Second)
+			heap.Fix(&handler.txRequests, req.heapPos)
+		}
+	}
+}
+
+// // retryHandlerTick gets a list of requests to send then Unicast sends them
+// func (handler *TxHandler) retryHandlerTick(now time.Time) {
+// 	toRequest := handler.retryHandlerTickRequestList(now)
+// 	if len(toRequest) == 0 {
+// 		return
+// 	}
+// 	for npeer, request := range toRequest {
+// 		peer, ok := npeer.(network.UnicastPeer)
+// 		if !ok {
+// 			handler.log.Errorf("Ta Sender not UnicastPeer")
+// 			continue
+// 		}
+// 		txRequestRetry.Inc(nil)
+// 		err := peer.Unicast(handler.ctx, request, protocol.TxnRequestTag)
+// 		if err != nil {
+// 			handler.log.Errorf("Ta req err, %v", err)
+// 		}
+// 	}
+// }
+
+// // retryHandlerTickRequestList holds a lock but just long enough to make a list of slow fetches to do later
+// func (handler *TxHandler) retryHandlerTickRequestList(now time.Time) (toRequest map[network.Peer][]byte) {
+// 	if len(handler.txRequests.ar) == 0 {
+// 		return
+// 	}
+// 	timeout := now.Add(-1 * requestExpiration)
+// 	req := handler.txRequests.ar[0]
+// 	for req.requestedAt.Before(timeout) {
+// 		handler.retryOne(now, req)
+// 		if len(handler.txRequests.ar) == 0 {
+// 			break
+// 		}
+// 		req = handler.txRequests.ar[0]
+// 	}
+// 	return
+// }
+
+func (handler *TxHandler) retryOne(now time.Time, req *requestedTxn) {
+	var nextSource network.Peer
+	// find a peer that has advertised it who we haven't asked yet
+	for _, source := range req.advertisedBy {
+		alreadyAsked := false
+		for _, prevReq := range req.requestedFrom {
+			// skip source we already asked
+			if prevReq == source {
+				alreadyAsked = true
 				break
 			}
 		}
-		if nextSource != nil {
-			if toRequest == nil {
-				toRequest = make(map[network.Peer][]byte)
-			}
-			toRequest[nextSource] = append(toRequest[nextSource], (req.txid[:])...)
-			req.requestedAt = now
-			req.requestedFrom = append(req.requestedFrom, nextSource)
-			heap.Fix(&handler.txRequests, 0)
-		} else {
-			// no next source, nothing to do, forget this request, a new advertisement will trigger a new request
-			heap.Pop(&handler.txRequests)
-			delete(handler.txRequests.byTxid, req.txid)
-		}
-		if len(handler.txRequests.ar) == 0 {
+		if !alreadyAsked {
+			nextSource = source
 			break
 		}
-		req = handler.txRequests.ar[0]
 	}
-	return
+	if nextSource != nil {
+		// if toRequest == nil {
+		// 	toRequest = make(map[network.Peer][]byte)
+		// }
+		// toRequest[nextSource] = append(toRequest[nextSource], (req.txid[:])...)
+		peer, ok := nextSource.(network.UnicastPeer)
+		if !ok {
+			handler.log.Errorf("Ta Sender not UnicastPeer")
+			// mark it so we don't retry this source
+			req.requestedFrom = append(req.requestedFrom, nextSource)
+			return
+		}
+		txRequestRetry.Inc(nil)
+		err := peer.Unicast(handler.ctx, req.txid[:], protocol.TxnRequestTag)
+		if err != nil {
+			handler.log.Errorf("Ta req err, %v", err)
+		}
+
+		req.requestedAt = now
+		req.requestedFrom = append(req.requestedFrom, nextSource)
+		heap.Fix(&handler.txRequests, 0)
+	} else {
+		// no next source, nothing to do, forget this request, a new advertisement will trigger a new request
+		heap.Pop(&handler.txRequests)
+		delete(handler.txRequests.byTxid, req.txid)
+	}
 }
 
 // getByTxid looks up a transaction first in the pool, then in the previous block
