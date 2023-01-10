@@ -41,25 +41,39 @@ func TestAlgotrust(t *testing.T) {
 	tx, err := honestClient.SendPaymentFromUnencryptedWallet(honestAccount, relayAccount, minFee, 0, nil)
 	require.NoError(t, err)
 
-	for x := 0; x < 1000000; x++ {
-		if x%100 == 0 {
-			fmt.Printf("\r%d / %d", x, 1000000)
-			go func() {
-				endingBalance, _ := honestClient.GetBalance(honestAccount)
-				fmt.Println("xxxxx    ", initialBalance-endingBalance)
-			}()
-		}
-		note := make([]byte, binary.MaxVarintLen64)
-		binary.PutUvarint(note, uint64(x))
+	points := uint64(1)
 
-		tx, err = honestClient.SendPaymentFromUnencryptedWallet(honestAccount, relayAccount, minFee, 0, note)
-		if err != nil {
-			fmt.Println(x, err)
-			time.Sleep(1000 * time.Millisecond)
-			continue
+	tcounter := 0
+	for x := 0; x < 1000000; x++ {
+
+		expPoints := points
+		for points > uint64(0) {
+			note := make([]byte, binary.MaxVarintLen64)
+			binary.PutUvarint(note, uint64(tcounter))
+			tcounter++
+
+			if tcounter%100 == 0 {
+				fmt.Printf("\r%d / %d", tcounter, 1000000)
+				go func() {
+					endingBalance, _ := honestClient.GetBalance(honestAccount)
+					fmt.Println("xxxxx    ", initialBalance-endingBalance)
+				}()
+			}
+
+			tx, err = honestClient.SendPaymentFromUnencryptedWallet(honestAccount, relayAccount, minFee, 0, note)
+			if err != nil {
+				fmt.Println(x, err)
+				time.Sleep(1000 * time.Millisecond)
+				continue
+			}
+			require.NoError(t, err)
+			points = points - 1
 		}
+		status, err := honestClient.Status()
 		require.NoError(t, err)
-		time.Sleep(time.Microsecond / 6000)
+		_, err = fixture.WaitForConfirmedTxn(status.LastRound+20, honestAccount, tx.ID().String())
+		require.NoError(t, err)
+		points = expPoints * 2
 	}
 
 	fixture.WaitForConfirmedTxn(0+20, honestAccount, tx.ID().String())

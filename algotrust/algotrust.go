@@ -14,7 +14,7 @@ import (
 	"github.com/algorand/go-algorand/network"
 )
 
-const coolDown = time.Duration(200 * time.Millisecond)
+const coolDown = time.Duration(100 * time.Millisecond)
 
 type score struct {
 	points      uint64
