@@ -40,11 +40,13 @@ type getSenderPeer interface {
 func MakeAlgoTrust(ledger LedgerForBlockNotification) *AlgoTrust {
 	nbw := makenewBlockWatcher()
 	ledger.RegisterBlockListeners([]ledgercore.BlockListener{nbw})
-	return &AlgoTrust{
+	at := &AlgoTrust{
 		nbw:         nbw,
 		scoreBoard:  make(map[string]*score),
 		txnToSender: make(map[[8]byte][]string),
 	}
+	nbw.at = at
+	return at
 }
 
 func getFirstSigEightBytes(stxn *transactions.SignedTxn) (sig [8]byte, err error) {
@@ -73,7 +75,7 @@ func (at *AlgoTrust) updateCounters(block *bookkeeping.Block) {
 		// delete the list, and give them the credit
 		// if someone else sends the same transaction after this, will not get credit, rightfully, since it is too late
 		delete(at.txnToSender, sig)
-		at.txnMapMu.RUnlock()
+		at.txnMapMu.Unlock()
 		for s := range senders {
 			sc, has := at.scoreBoard[senders[s]]
 			if !has {
@@ -93,6 +95,7 @@ func (at *AlgoTrust) updateCounters(block *bookkeeping.Block) {
 // stream verifier
 type newBlockWatcher struct {
 	blk atomic.Value
+	at  *AlgoTrust
 }
 
 // makenewBlockWatcher construct a new block watcher with the initial blkHdr
@@ -104,6 +107,11 @@ func makenewBlockWatcher() (nbw *newBlockWatcher) {
 // OnNewBlock implements the interface to subscribe to new block notifications from the ledger
 func (nbw *newBlockWatcher) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	nbw.blk.Store(&block)
+	go func() {
+		blk := nbw.blk.Load().(*bookkeeping.Block)
+		nbw.at.updateCounters(blk)
+	}()
+
 }
 
 // PreprocessTxnFiltering returns shouldDrop: true with outMsg if the txn should not be accepted, and shouldDrop: false if the txn should be accepted
@@ -162,8 +170,8 @@ func (at *AlgoTrust) PreprocessTxnFiltering(rawmsg network.IncomingMessage) (sho
 	}
 }
 
-// RecordTxnsactionw ill add the sender's address to the txn map
-// TODO: maybe relas the lock here?
+// RecordTxnsaction will add the sender's address to the txn map
+// TODO: maybe release the lock here?
 func (at *AlgoTrust) RecordTxnsaction(stxn *transactions.SignedTxn, sender network.Peer) {
 	addr, err := getSender(sender)
 	if err != nil {

@@ -465,6 +465,11 @@ func (handler *TxHandler) rememberReportErrors(err error) {
 }
 
 func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
+
+	// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
+	//	anyGroup := wi.unverifiedTxGroup
+	//	handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(anyGroup), false, wi.rawmsg.Sender)
+
 	if wi.verificationErr != nil {
 		// disconnect from peer.
 		handler.postProcessReportErrors(wi.verificationErr)
@@ -561,9 +566,9 @@ func (handler *TxHandler) dedupCanonical(ntx int, unverifiedTxGroup []transactio
 //  - message are checked for duplicates
 //  - transactions are checked for duplicates
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
-	if shouldDrop, outMsg := handler.at.PreprocessTxnFiltering(rawmsg); shouldDrop {
-		return outMsg
-	}
+	//	if shouldDrop, outMsg := handler.at.PreprocessTxnFiltering(rawmsg); shouldDrop {
+	//		return outMsg
+	//	}
 	var msgKey *crypto.Digest
 	var isDup bool
 	if handler.cacheConfig.enableFilteringRawMsg {
@@ -640,7 +645,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 			return network.OutgoingMessage{Action: network.Ignore}
 		}
 	}
-	handler.at.RecordTxnsaction(&unverifiedTxGroup[0], rawmsg.Sender)
+	//	handler.at.RecordTxnsaction(&unverifiedTxGroup[0], rawmsg.Sender)
 	select {
 	case handler.backlogQueue <- &txBacklogMsg{
 		rawmsg:                &rawmsg,
