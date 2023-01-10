@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -81,7 +82,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	creator := basics.Address{}
 	_, err := rand.Read(creator[:])
 	require.NoError(b, err)
-	genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890000000000})
+	genesisInitState.Accounts[creator] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890000000000})
 
 	logger := logging.TestingLog(b)
 	logger.SetLevel(logging.Warn)

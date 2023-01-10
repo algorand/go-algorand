@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/passphrase"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -64,6 +64,7 @@ var (
 	dumpOutFile        string
 	listAccountInfo    bool
 	onlyShowAssetIds   bool
+	partKeyIDToDelete  string
 )
 
 func init() {
@@ -83,6 +84,7 @@ func init() {
 	accountCmd.AddCommand(importRootKeysCmd)
 	accountCmd.AddCommand(accountMultisigCmd)
 	accountCmd.AddCommand(markNonparticipatingCmd)
+	accountCmd.AddCommand(deletePartKeyCmd)
 
 	accountMultisigCmd.AddCommand(newMultisigCmd)
 	accountMultisigCmd.AddCommand(deleteMultisigCmd)
@@ -211,6 +213,11 @@ func init() {
 	dumpCmd.Flags().StringVarP(&dumpOutFile, "outfile", "o", "", "Save balance record to specified output file")
 	dumpCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
 	balanceCmd.MarkFlagRequired("address")
+
+	// deletePartkeyCmd flags
+	deletePartKeyCmd.Flags().StringVarP(&partKeyIDToDelete, "partkeyid", "", "", "Participation Key ID to delete")
+	rewardsCmd.MarkFlagRequired("partkeyid")
+
 }
 
 func scLeaseBytes(cmd *cobra.Command) (leaseBytes [32]byte) {
@@ -339,6 +346,24 @@ var newCmd = &cobra.Command{
 		}
 
 		reportInfof(infoCreatedNewAccount, genAddr)
+	},
+}
+
+var deletePartKeyCmd = &cobra.Command{
+	Use:   "deletepartkey",
+	Short: "Delete a participation key",
+	Long:  `Delete the indicated participation key.`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		dataDir := ensureSingleDataDir()
+
+		client := ensureAlgodClient(dataDir)
+
+		err := client.RemoveParticipationKey(partKeyIDToDelete)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+
 	},
 }
 
@@ -528,37 +553,37 @@ var infoCmd = &cobra.Command{
 	},
 }
 
-func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bool, account generatedV2.Account) bool {
-	var createdAssets []generatedV2.Asset
+func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bool, account model.Account) bool {
+	var createdAssets []model.Asset
 	if account.CreatedAssets != nil {
-		createdAssets = make([]generatedV2.Asset, len(*account.CreatedAssets))
+		createdAssets = make([]model.Asset, len(*account.CreatedAssets))
 		copy(createdAssets, *account.CreatedAssets)
 		sort.Slice(createdAssets, func(i, j int) bool {
 			return createdAssets[i].Index < createdAssets[j].Index
 		})
 	}
 
-	var heldAssets []generatedV2.AssetHolding
+	var heldAssets []model.AssetHolding
 	if account.Assets != nil {
-		heldAssets = make([]generatedV2.AssetHolding, len(*account.Assets))
+		heldAssets = make([]model.AssetHolding, len(*account.Assets))
 		copy(heldAssets, *account.Assets)
 		sort.Slice(heldAssets, func(i, j int) bool {
 			return heldAssets[i].AssetID < heldAssets[j].AssetID
 		})
 	}
 
-	var createdApps []generatedV2.Application
+	var createdApps []model.Application
 	if account.CreatedApps != nil {
-		createdApps = make([]generatedV2.Application, len(*account.CreatedApps))
+		createdApps = make([]model.Application, len(*account.CreatedApps))
 		copy(createdApps, *account.CreatedApps)
 		sort.Slice(createdApps, func(i, j int) bool {
 			return createdApps[i].Id < createdApps[j].Id
 		})
 	}
 
-	var optedInApps []generatedV2.ApplicationLocalState
+	var optedInApps []model.ApplicationLocalState
 	if account.AppsLocalState != nil {
-		optedInApps = make([]generatedV2.ApplicationLocalState, len(*account.AppsLocalState))
+		optedInApps = make([]model.ApplicationLocalState, len(*account.AppsLocalState))
 		copy(optedInApps, *account.AppsLocalState)
 		sort.Slice(optedInApps, func(i, j int) bool {
 			return optedInApps[i].Id < optedInApps[j].Id
@@ -1039,7 +1064,7 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 	if err != nil {
 		return fmt.Errorf(errorRequestFail, err)
 	}
-	renewAccounts := make(map[string]generatedV2.ParticipationKey)
+	renewAccounts := make(map[string]model.ParticipationKey)
 	for _, part := range parts {
 		if existing, has := renewAccounts[part.Address]; has {
 			if existing.Key.VoteFirstValid >= part.Key.VoteLastValid {

@@ -85,7 +85,7 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
-MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./node ./ledger ./ledger/ledgercore ./stateproof ./data/account ./daemon/algod/api/spec/v2
+MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./node ./ledger ./ledger/ledgercore ./ledger/store ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2
 
 default: build
 
@@ -99,7 +99,7 @@ fix: build
 	$(GOPATH1)/bin/algofix */
 
 lint: deps
-	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml 
+	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml
 
 check_shell:
 	find . -type f -name "*.sh" -exec shellcheck {} +
@@ -147,21 +147,6 @@ deps:
 
 # artifacts
 
-# Regenerate algod swagger spec files
-ALGOD_API_SWAGGER_SPEC := daemon/algod/api/swagger.json
-ALGOD_API_FILES := $(shell find daemon/algod/api/server/common daemon/algod/api/server/v1 daemon/algod/api/spec/v1 -type f) \
-	daemon/algod/api/server/router.go
-ALGOD_API_SWAGGER_INJECT := daemon/algod/api/server/lib/bundledSpecInject.go
-
-# Note that swagger.json requires the go-swagger dep.
-$(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
-	cd daemon/algod/api && \
-		PATH=$(GOPATH1)/bin:$$PATH \
-		go generate ./...
-
-$(ALGOD_API_SWAGGER_INJECT): deps $(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated
-	./daemon/algod/api/server/lib/bundle_swagger_json.sh
-
 # Regenerate kmd swagger spec files
 KMD_API_SWAGGER_SPEC := daemon/kmd/api/swagger.json
 KMD_API_FILES := $(shell find daemon/kmd/api/ -type f | grep -v $(KMD_API_SWAGGER_SPEC))
@@ -191,15 +176,13 @@ $(KMD_API_SWAGGER_INJECT): deps $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).
 
 # generated files we should make sure we clean
 GENERATED_FILES := \
-	$(ALGOD_API_SWAGGER_INJECT) \
 	$(KMD_API_SWAGGER_INJECT) \
-	$(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated \
 	$(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
 
-rebuild_swagger: deps
+rebuild_kmd_swagger: deps
 	rm -f $(GENERATED_FILES)
 	# we need to invoke the make here since we want to ensure that the deletion and re-creating are sequential
-	make $(KMD_API_SWAGGER_INJECT) $(ALGOD_API_SWAGGER_INJECT)
+	make $(KMD_API_SWAGGER_INJECT)
 
 # develop
 
@@ -327,7 +310,7 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_swagger
+.PHONY: default fmt lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger
 
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule

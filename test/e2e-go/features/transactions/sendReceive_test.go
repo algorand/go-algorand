@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -126,7 +126,7 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 		expectedPingBalance = expectedPingBalance - transactionFee - amountPingSendsPong + amountPongSendsPing
 		expectedPongBalance = expectedPongBalance - transactionFee - amountPongSendsPing + amountPingSendsPong
 
-		var pongTxInfo, pingTxInfo generatedV2.PendingTransactionResponse
+		var pongTxInfo, pingTxInfo model.PendingTransactionResponse
 		pongTxInfo, err = pongClient.PendingTransactionInformation(pongTx.ID().String())
 		if err == nil {
 			pingTxInfo, err = pingClient.PendingTransactionInformation(pingTx.ID().String())

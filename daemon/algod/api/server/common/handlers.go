@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -112,7 +112,7 @@ func VersionsHandler(ctx lib.ReqContext, context echo.Context) {
 	w.WriteHeader(http.StatusOK)
 	response := VersionsResponse{
 		Body: common.Version{
-			Versions:    []string{"v1", "v2"},
+			Versions:    []string{"v2"},
 			GenesisID:   ctx.Node.GenesisID(),
 			GenesisHash: gh[:],
 			Build: common.BuildVersion{

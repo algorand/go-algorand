@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -114,8 +114,6 @@ func TestMakeS3SessionForUploadWithBucket(t *testing.T) {
 	const emptyBucket = ""
 	type args struct {
 		awsBucket string
-		awsID     string
-		awsSecret string
 	}
 	tests := []struct {
 		name       string
@@ -123,21 +121,12 @@ func TestMakeS3SessionForUploadWithBucket(t *testing.T) {
 		wantHelper Helper
 		wantErr    bool
 	}{
-		{name: "test1", args: args{awsBucket: bucket1, awsID: "AWS_ID", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: bucket1}, wantErr: false},
-		{name: "test2", args: args{awsBucket: emptyBucket, awsID: "AWS_ID", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: emptyBucket}, wantErr: true},
-		{name: "test3", args: args{awsBucket: bucket1, awsID: "", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: bucket1}, wantErr: true},
-		{name: "test4", args: args{awsBucket: bucket1, awsID: "AWS_ID", awsSecret: ""}, wantHelper: Helper{bucket: bucket1}, wantErr: true},
-		{name: "test5", args: args{awsBucket: bucket1, awsID: "", awsSecret: ""}, wantHelper: Helper{bucket: bucket1}, wantErr: true},
-		// public upload bucket requires AWS credentials for uploads
-		{name: "test6", args: args{awsBucket: publicUploadBucket, awsID: "AWS_ID", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: false},
-		{name: "test7", args: args{awsBucket: publicUploadBucket, awsID: "", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: true},
-		{name: "test8", args: args{awsBucket: publicUploadBucket, awsID: "AWS_ID", awsSecret: ""}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: true},
-		{name: "test9", args: args{awsBucket: publicUploadBucket, awsID: "", awsSecret: ""}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: true},
+		{name: "test1", args: args{awsBucket: bucket1}, wantHelper: Helper{bucket: bucket1}, wantErr: false},
+		{name: "test2", args: args{awsBucket: emptyBucket}, wantHelper: Helper{bucket: emptyBucket}, wantErr: true},
+		{name: "test6", args: args{awsBucket: publicUploadBucket}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("AWS_ACCESS_KEY_ID", tt.args.awsID)
-			os.Setenv("AWS_SECRET_ACCESS_KEY", tt.args.awsSecret)
 			gotHelper, err := MakeS3SessionForUploadWithBucket(tt.args.awsBucket)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MakeS3SessionForUploadWithBucket() error = %v, wantErr %v", err, tt.wantErr)
@@ -158,8 +147,6 @@ func TestMakeS3SessionForDownloadWithBucket(t *testing.T) {
 	const emptyBucket = ""
 	type args struct {
 		awsBucket string
-		awsID     string
-		awsSecret string
 	}
 	tests := []struct {
 		name       string
@@ -167,21 +154,12 @@ func TestMakeS3SessionForDownloadWithBucket(t *testing.T) {
 		wantHelper Helper
 		wantErr    bool
 	}{
-		{name: "test1", args: args{awsBucket: bucket1, awsID: "AWS_ID", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: bucket1}, wantErr: false},
-		{name: "test2", args: args{awsBucket: emptyBucket, awsID: "AWS_ID", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: emptyBucket}, wantErr: true},
-		{name: "test3", args: args{awsBucket: bucket1, awsID: "", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: bucket1}, wantErr: true},
-		{name: "test4", args: args{awsBucket: bucket1, awsID: "AWS_ID", awsSecret: ""}, wantHelper: Helper{bucket: bucket1}, wantErr: true},
-		{name: "test5", args: args{awsBucket: bucket1, awsID: "", awsSecret: ""}, wantHelper: Helper{bucket: bucket1}, wantErr: true},
-		// public release bucket does not require AWS credentials for downloads
-		{name: "test6", args: args{awsBucket: publicReleaseBucket, awsID: "AWS_ID", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: publicReleaseBucket}, wantErr: false},
-		{name: "test7", args: args{awsBucket: publicReleaseBucket, awsID: "", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: publicReleaseBucket}, wantErr: false},
-		{name: "test8", args: args{awsBucket: publicReleaseBucket, awsID: "AWS_ID", awsSecret: ""}, wantHelper: Helper{bucket: publicReleaseBucket}, wantErr: false},
-		{name: "test9", args: args{awsBucket: publicReleaseBucket, awsID: "", awsSecret: ""}, wantHelper: Helper{bucket: publicReleaseBucket}, wantErr: false},
+		{name: "test1", args: args{awsBucket: bucket1}, wantHelper: Helper{bucket: bucket1}, wantErr: false},
+		{name: "test2", args: args{awsBucket: emptyBucket}, wantHelper: Helper{bucket: emptyBucket}, wantErr: true},
+		{name: "test6", args: args{awsBucket: publicReleaseBucket}, wantHelper: Helper{bucket: publicReleaseBucket}, wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("AWS_ACCESS_KEY_ID", tt.args.awsID)
-			os.Setenv("AWS_SECRET_ACCESS_KEY", tt.args.awsSecret)
 			gotHelper, err := MakeS3SessionForDownloadWithBucket(tt.args.awsBucket)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MakeS3SessionForDownloadWithBucket() error = %v, wantErr %v", err, tt.wantErr)

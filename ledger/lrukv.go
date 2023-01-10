@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,12 +17,13 @@
 package ledger
 
 import (
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
 )
 
 //msgp:ignore cachedKVData
 type cachedKVData struct {
-	persistedKVData
+	store.PersistedKVData
 
 	// kv key
 	key string
@@ -62,11 +63,11 @@ func (m *lruKV) init(log logging.Logger, pendingWrites int, pendingWritesWarnThr
 
 // read the persistedKVData object that the lruKV has for the given key.
 // thread locking semantics : read lock
-func (m *lruKV) read(key string) (data persistedKVData, has bool) {
+func (m *lruKV) read(key string) (data store.PersistedKVData, has bool) {
 	if el := m.kvs[key]; el != nil {
-		return el.Value.persistedKVData, true
+		return el.Value.PersistedKVData, true
 	}
-	return persistedKVData{}, false
+	return store.PersistedKVData{}, false
 }
 
 // flushPendingWrites flushes the pending writes to the main lruKV cache.
@@ -79,7 +80,7 @@ func (m *lruKV) flushPendingWrites() {
 	for ; pendingEntriesCount > 0; pendingEntriesCount-- {
 		select {
 		case pendingKVData := <-m.pendingKVs:
-			m.write(pendingKVData.persistedKVData, pendingKVData.key)
+			m.write(pendingKVData.PersistedKVData, pendingKVData.key)
 		default:
 			return
 		}
@@ -89,9 +90,9 @@ func (m *lruKV) flushPendingWrites() {
 // writePending write a single persistedKVData entry to the pendingKVs buffer.
 // the function doesn't block, and in case of a buffer overflow the entry would not be added.
 // thread locking semantics : no lock is required.
-func (m *lruKV) writePending(kv persistedKVData, key string) {
+func (m *lruKV) writePending(kv store.PersistedKVData, key string) {
 	select {
-	case m.pendingKVs <- cachedKVData{persistedKVData: kv, key: key}:
+	case m.pendingKVs <- cachedKVData{PersistedKVData: kv, key: key}:
 	default:
 	}
 }
@@ -101,17 +102,17 @@ func (m *lruKV) writePending(kv persistedKVData, key string) {
 // version of what's already on the cache or not. In all cases, the entry is going
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
-func (m *lruKV) write(kvData persistedKVData, key string) {
+func (m *lruKV) write(kvData store.PersistedKVData, key string) {
 	if el := m.kvs[key]; el != nil {
 		// already exists; is it a newer ?
-		if el.Value.before(&kvData) {
+		if el.Value.Before(&kvData) {
 			// we update with a newer version.
-			el.Value = &cachedKVData{persistedKVData: kvData, key: key}
+			el.Value = &cachedKVData{PersistedKVData: kvData, key: key}
 		}
 		m.kvList.moveToFront(el)
 	} else {
 		// new entry.
-		m.kvs[key] = m.kvList.pushFront(&cachedKVData{persistedKVData: kvData, key: key})
+		m.kvs[key] = m.kvList.pushFront(&cachedKVData{PersistedKVData: kvData, key: key})
 	}
 }
 

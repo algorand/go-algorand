@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -16,6 +16,8 @@
 
 package ledger
 
+import "github.com/algorand/go-algorand/ledger/store"
+
 // persistedOnlineAccountDataList represents a doubly linked list.
 // must initiate with newPersistedAccountList.
 type persistedOnlineAccountDataList struct {
@@ -31,7 +33,7 @@ type persistedOnlineAccountDataListNode struct {
 	// element (l.Front()).
 	next, prev *persistedOnlineAccountDataListNode
 
-	Value *persistedOnlineAccountData
+	Value *store.PersistedOnlineAccountData
 }
 
 func newPersistedOnlineAccountList() *persistedOnlineAccountDataList {
@@ -99,7 +101,7 @@ func (l *persistedOnlineAccountDataList) remove(e *persistedOnlineAccountDataLis
 }
 
 // pushFront inserts a new element e with value v at the front of list l and returns e.
-func (l *persistedOnlineAccountDataList) pushFront(v *persistedOnlineAccountData) *persistedOnlineAccountDataListNode {
+func (l *persistedOnlineAccountDataList) pushFront(v *store.PersistedOnlineAccountData) *persistedOnlineAccountDataListNode {
 	newNode := l.getNewNode()
 	newNode.Value = v
 	return l.insertValue(newNode, &l.root)

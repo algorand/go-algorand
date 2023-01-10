@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -676,7 +676,7 @@ func (ledger *evalTestLedger) CheckDup(currentProto config.ConsensusParams, curr
 			}
 			currentTxid := txn.Txn.ID()
 			if bytes.Equal(txid[:], currentTxid[:]) {
-				return &ledgercore.TransactionInLedgerError{Txid: txid}
+				return &ledgercore.TransactionInLedgerError{Txid: txid, InBlockEvaluator: false}
 			}
 		}
 	}

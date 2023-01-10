@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,8 +29,7 @@ import (
 
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
@@ -171,7 +170,7 @@ func (f *RestClientFixture) GetFirstAccount() (account string, err error) {
 }
 
 // GetRichestAccount returns the first account when calling GetWalletsSortedByBalance, which should be the richest account
-func (f *RestClientFixture) GetRichestAccount() (richest generatedV2.Account, err error) {
+func (f *RestClientFixture) GetRichestAccount() (richest model.Account, err error) {
 	list, err := f.GetWalletsSortedByBalance()
 	if len(list) > 0 {
 		richest = list[0]
@@ -196,17 +195,17 @@ func (f *RestClientFixture) GetBalanceAndRound(account string) (balance uint64, 
 
 // GetWalletsSortedByBalance returns the Primary node's accounts sorted DESC by balance
 // the richest account will be at accounts[0]
-func (f *RestClientFixture) GetWalletsSortedByBalance() (accounts []generatedV2.Account, err error) {
+func (f *RestClientFixture) GetWalletsSortedByBalance() (accounts []model.Account, err error) {
 	return f.getNodeWalletsSortedByBalance(f.LibGoalClient)
 }
 
 // GetNodeWalletsSortedByBalance returns the specified node's accounts sorted DESC by balance
 // the richest account will be at accounts[0]
-func (f *RestClientFixture) GetNodeWalletsSortedByBalance(nodeDataDir string) (accounts []generatedV2.Account, err error) {
+func (f *RestClientFixture) GetNodeWalletsSortedByBalance(nodeDataDir string) (accounts []model.Account, err error) {
 	return f.getNodeWalletsSortedByBalance(f.GetLibGoalClientFromDataDir(nodeDataDir))
 }
 
-func (f *RestClientFixture) getNodeWalletsSortedByBalance(client libgoal.Client) (accounts []generatedV2.Account, err error) {
+func (f *RestClientFixture) getNodeWalletsSortedByBalance(client libgoal.Client) (accounts []model.Account, err error) {
 	wh, err := client.GetUnencryptedWalletHandle()
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve wallet handle : %v", err)
@@ -416,14 +415,4 @@ func (f *RestClientFixture) AssertValidTxid(txid string) {
 		}
 	}
 	require.True(f.t, allLettersOrNumbers, "txid should be all letters")
-}
-
-// AccountListContainsAddress searches the passed account list for the passed account address
-func (f *RestClientFixture) AccountListContainsAddress(searchList []v1.Account, address string) bool {
-	for _, item := range searchList {
-		if item.Address == address {
-			return true
-		}
-	}
-	return false
 }

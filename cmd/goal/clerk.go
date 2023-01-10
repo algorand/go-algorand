@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,7 +29,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -155,18 +155,18 @@ var clerkCmd = &cobra.Command{
 	},
 }
 
-func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound uint64) (txn generatedV2.PendingTransactionResponse, err error) {
+func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound uint64) (txn model.PendingTransactionResponse, err error) {
 	// Get current round information
 	stat, err := client.Status()
 	if err != nil {
-		return generatedV2.PendingTransactionResponse{}, fmt.Errorf(errorRequestFail, err)
+		return model.PendingTransactionResponse{}, fmt.Errorf(errorRequestFail, err)
 	}
 
 	for {
 		// Check if we know about the transaction yet
 		txn, err = client.PendingTransactionInformation(txid)
 		if err != nil {
-			return generatedV2.PendingTransactionResponse{}, fmt.Errorf(errorRequestFail, err)
+			return model.PendingTransactionResponse{}, fmt.Errorf(errorRequestFail, err)
 		}
 
 		if txn.ConfirmedRound != nil && *txn.ConfirmedRound > 0 {
@@ -175,21 +175,21 @@ func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound
 		}
 
 		if txn.PoolError != "" {
-			return generatedV2.PendingTransactionResponse{}, fmt.Errorf(txPoolError, txid, txn.PoolError)
+			return model.PendingTransactionResponse{}, fmt.Errorf(txPoolError, txid, txn.PoolError)
 		}
 
 		// check if we've already committed to the block number equals to the transaction's last valid round.
 		// if this is the case, the transaction would not be included in the blockchain, and we can exit right
 		// here.
 		if transactionLastValidRound > 0 && stat.LastRound >= transactionLastValidRound {
-			return generatedV2.PendingTransactionResponse{}, fmt.Errorf(errorTransactionExpired, txid)
+			return model.PendingTransactionResponse{}, fmt.Errorf(errorTransactionExpired, txid)
 		}
 
 		reportInfof(infoTxPending, txid, stat.LastRound)
 		// WaitForRound waits until round "stat.LastRound+1" is committed
 		stat, err = client.WaitForRound(stat.LastRound)
 		if err != nil {
-			return generatedV2.PendingTransactionResponse{}, fmt.Errorf(errorRequestFail, err)
+			return model.PendingTransactionResponse{}, fmt.Errorf(errorRequestFail, err)
 		}
 	}
 	return
@@ -422,7 +422,7 @@ var sendCmd = &cobra.Command{
 					CurrentProtocol: proto,
 				},
 			}
-			groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, blockHeader, nil)
+			groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, &blockHeader, nil)
 			if err == nil {
 				err = verify.LogicSigSanityCheck(&uncheckedTxn, 0, groupCtx)
 			}
@@ -823,7 +823,7 @@ var signCmd = &cobra.Command{
 			}
 			var groupCtx *verify.GroupContext
 			if lsig.Logic != nil {
-				groupCtx, err = verify.PrepareGroupContext(txnGroup, contextHdr, nil)
+				groupCtx, err = verify.PrepareGroupContext(txnGroup, &contextHdr, nil)
 				if err != nil {
 					// this error has to be unsupported protocol
 					reportErrorf("%s: %v", txFilename, err)
@@ -1203,7 +1203,7 @@ var dryrunRemoteCmd = &cobra.Command{
 			return
 		}
 
-		stackToString := func(stack []generatedV2.TealValue) string {
+		stackToString := func(stack []model.TealValue) string {
 			result := make([]string, len(stack))
 			for i, sv := range stack {
 				if sv.Type == uint64(basics.TealBytesType) {
@@ -1217,7 +1217,7 @@ var dryrunRemoteCmd = &cobra.Command{
 		if len(resp.Txns) > 0 {
 			for i, txnResult := range resp.Txns {
 				var msgs []string
-				var trace []generatedV2.DryrunState
+				var trace []model.DryrunState
 				if txnResult.AppCallMessages != nil && len(*txnResult.AppCallMessages) > 0 {
 					msgs = *txnResult.AppCallMessages
 					if txnResult.AppCallTrace != nil {
@@ -1228,9 +1228,6 @@ var dryrunRemoteCmd = &cobra.Command{
 					if txnResult.LogicSigTrace != nil {
 						trace = *txnResult.LogicSigTrace
 					}
-				}
-				if txnResult.Cost != nil {
-					fmt.Fprintf(os.Stdout, "tx[%d] cost: %d\n", i, *txnResult.Cost)
 				}
 				if txnResult.BudgetConsumed != nil {
 					fmt.Fprintf(os.Stdout, "tx[%d] budget consumed: %d\n", i, *txnResult.BudgetConsumed)

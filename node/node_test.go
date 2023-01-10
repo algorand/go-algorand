@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,7 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -95,7 +94,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		rootDirectory := t.TempDir()
 		rootDirs = append(rootDirs, rootDirectory)
 
-		defaultConfig.NetAddress = "127.0.0.1:0"
+		defaultConfig.NetAddress = neighbors[i]
 		defaultConfig.SaveToDisk(rootDirectory)
 
 		// Save empty phonebook - we'll add peers after they've been assigned listening ports
@@ -141,6 +140,10 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		short := root.Address()
 		genesis[short] = data
 	}
+	genesis[poolAddr] = basics.AccountData{
+		Status:     basics.Online,
+		MicroAlgos: basics.MicroAlgos{Raw: uint64(100000)},
+	}
 
 	bootstrap := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 
@@ -158,16 +161,18 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		require.NoError(t, err)
 		cfg.Archival = true
-		_, err = data.LoadLedger(logging.Base().With("name", nodeID), ledgerFilenamePrefix, inMem, g.Proto, bootstrap, "", crypto.Digest{}, nil, cfg)
+		_, err = data.LoadLedger(logging.Base().With("name", nodeID), ledgerFilenamePrefix, inMem, g.Proto, bootstrap, g.ID(), g.Hash(), nil, cfg)
 		require.NoError(t, err)
 	}
 
 	for i := range nodes {
+		var nodeNeighbors []string
+		nodeNeighbors = append(nodeNeighbors, neighbors[:i]...)
+		nodeNeighbors = append(nodeNeighbors, neighbors[i+1:]...)
 		rootDirectory := rootDirs[i]
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		require.NoError(t, err)
-
-		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), rootDirectory, cfg, []string{}, g)
+		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), rootDirectory, cfg, nodeNeighbors, g)
 		nodes[i] = node
 		require.NoError(t, err)
 	}
@@ -178,7 +183,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 func TestSyncingFullNode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	t.Skip("This is failing randomly again - PLEASE FIX!")
+	t.Skip("Flaky in nightly test environment")
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
@@ -236,7 +241,9 @@ func TestSyncingFullNode(t *testing.T) {
 func TestInitialSync(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	t.Skip("flaky TestInitialSync ")
+	if testing.Short() {
+		t.Skip("Test takes ~25 seconds.")
+	}
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
@@ -270,7 +277,7 @@ func TestInitialSync(t *testing.T) {
 func TestSimpleUpgrade(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	t.Skip("Randomly failing: node_test.go:~330 : no block notification for account. Re-enable after agreement bug-fix pass")
+	t.Skip("Flaky in nightly test environment.")
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
@@ -286,6 +293,7 @@ func TestSimpleUpgrade(t *testing.T) {
 	configurableConsensus := make(config.ConsensusProtocols)
 
 	testParams0 := config.Consensus[protocol.ConsensusCurrentVersion]
+	testParams0.MinUpgradeWaitRounds = 0
 	testParams0.SupportGenesisHash = false
 	testParams0.UpgradeVoteRounds = 2
 	testParams0.UpgradeThreshold = 1
@@ -299,6 +307,7 @@ func TestSimpleUpgrade(t *testing.T) {
 	configurableConsensus[consensusTest0] = testParams0
 
 	testParams1 := config.Consensus[protocol.ConsensusCurrentVersion]
+	testParams1.MinUpgradeWaitRounds = 0
 	testParams1.SupportGenesisHash = false
 	testParams1.UpgradeVoteRounds = 10
 	testParams1.UpgradeThreshold = 8
@@ -389,13 +398,7 @@ func startAndConnectNodes(nodes []*AlgorandFullNode, delayStartFirstNode bool) {
 }
 
 func connectPeers(nodes []*AlgorandFullNode) {
-	neighbors := make([]string, 0)
 	for _, node := range nodes {
-		neighbors = append(neighbors, node.config.NetAddress)
-	}
-
-	for _, node := range nodes {
-		//		node.ExtendPeerList(neighbors...)
 		node.net.RequestConnectOutgoing(false, nil)
 	}
 }
@@ -410,11 +413,10 @@ func delayStartNode(node *AlgorandFullNode, peers []*AlgorandFullNode, delay tim
 	}()
 	wg.Wait()
 
-	//	node0Addr := node.config.NetAddress
 	for _, peer := range peers {
-		//		peer.ExtendPeerList(node0Addr)
 		peer.net.RequestConnectOutgoing(false, nil)
 	}
+	node.net.RequestConnectOutgoing(false, nil)
 }
 
 func TestStatusReport_TimeSinceLastRound(t *testing.T) {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,8 +35,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	sp "github.com/algorand/go-algorand/crypto/stateproof"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -629,7 +628,7 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 }
 
 // installParticipationKey generates a new key for a given account and installs it with the client.
-func installParticipationKey(t *testing.T, client libgoal.Client, addr string, firstValid, lastValid uint64) (resp generated.PostParticipationResponse, part account.Participation, err error) {
+func installParticipationKey(t *testing.T, client libgoal.Client, addr string, firstValid, lastValid uint64) (resp model.PostParticipationResponse, part account.Participation, err error) {
 	dir, err := os.MkdirTemp("", "temporary_partkey_dir")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -644,7 +643,7 @@ func installParticipationKey(t *testing.T, client libgoal.Client, addr string, f
 	return
 }
 
-func registerParticipationAndWait(t *testing.T, client libgoal.Client, part account.Participation) generated.NodeStatusResponse {
+func registerParticipationAndWait(t *testing.T, client libgoal.Client, part account.Participation) model.NodeStatusResponse {
 	currentRnd, err := client.CurrentRound()
 	require.NoError(t, err)
 	sAccount := part.Address().String()
@@ -1190,8 +1189,8 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 	var lastStateProofBlock bookkeeping.Block
 	libgoalClient := fixture.LibGoalClient
 
-	var totalSupplyAtRound [100]generatedV2.SupplyResponse
-	var accountSnapshotAtRound [100][]generatedV2.Account
+	var totalSupplyAtRound [100]model.SupplyResponse
+	var accountSnapshotAtRound [100][]model.Account
 
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		if rnd == consensusParams.StateProofInterval+consensusParams.StateProofVotersLookback { // here we register the keys of address 0 so it won't be able the sign a state proof (its stake would be removed for the total)
@@ -1221,7 +1220,7 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 			r.Equal(rnd, totalSupply.CurrentRound, "could not capture total stake at the target round. The machine might be too slow for this test")
 			totalSupplyAtRound[rnd] = totalSupply
 
-			accountSnapshotAtRound[rnd] = make([]generatedV2.Account, pNodes, pNodes)
+			accountSnapshotAtRound[rnd] = make([]model.Account, pNodes, pNodes)
 			for i := 0; i < pNodes; i++ {
 				accountSnapshotAtRound[rnd][i], err = libgoalClient.AccountInformation(accountsAddresses[i], false)
 				r.NoError(err)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	clientApi "github.com/algorand/go-algorand/daemon/algod/api/client"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -115,7 +115,7 @@ func getAccountInformation(
 	expectedCountAssets uint64,
 	address string,
 	context string,
-	log logging.Logger) (info generated.Account, err error) {
+	log logging.Logger) (info model.Account, err error) {
 
 	for x := 0; x < 5; x++ { // retry only 5 times
 		info, err = fixture.AlgodClient.AccountInformation(address, true)
@@ -138,7 +138,7 @@ func getAccountInformation(
 func getAccountApplicationInformation(
 	fixture *fixtures.RestClientFixture,
 	address string,
-	appID uint64) (appInfo generated.AccountApplicationResponse, err error) {
+	appID uint64) (appInfo model.AccountApplicationResponse, err error) {
 
 	appInfo, err = fixture.AlgodClient.AccountApplicationInformation(address, appID)
 	return
@@ -1199,7 +1199,7 @@ func makeOptInAppTransaction(
 // checks and verifies the app params by comparing them against the baseline
 func checkApplicationParams(
 	acTF transactions.ApplicationCallTxnFields,
-	app generated.ApplicationParams,
+	app model.ApplicationParams,
 	creator string,
 	globalStateCheck *[]bool,
 	globalStateCheckMu *deadlock.Mutex) (pass bool) {
