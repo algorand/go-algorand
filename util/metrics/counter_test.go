@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -203,6 +203,8 @@ func TestGetValue(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	c := MakeCounter(MetricName{Name: "testname", Description: "testhelp"})
+	c.Deregister(nil)
+
 	require.Equal(t, uint64(0), c.GetUint64Value())
 	c.Inc(nil)
 	require.Equal(t, uint64(1), c.GetUint64Value())

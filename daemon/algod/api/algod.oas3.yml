@@ -613,6 +613,38 @@
                 "time-since-last-round": {
                   "description": "TimeSinceLastRound in nanoseconds",
                   "type": "integer"
+                },
+                "upgrade-delay": {
+                  "description": "Upgrade delay",
+                  "type": "integer"
+                },
+                "upgrade-next-protocol-vote-before": {
+                  "description": "Next protocol round",
+                  "type": "integer"
+                },
+                "upgrade-no-votes": {
+                  "description": "No votes cast for consensus upgrade",
+                  "type": "integer"
+                },
+                "upgrade-node-vote": {
+                  "description": "This node's upgrade vote",
+                  "type": "boolean"
+                },
+                "upgrade-vote-rounds": {
+                  "description": "Total voting ounds for current upgrade",
+                  "type": "integer"
+                },
+                "upgrade-votes": {
+                  "description": "Total votes cast for consensus upgrade",
+                  "type": "integer"
+                },
+                "upgrade-votes-required": {
+                  "description": "Yes votes required for consensus upgrade",
+                  "type": "integer"
+                },
+                "upgrade-yes-votes": {
+                  "description": "Yes votes cast for consensus upgrade",
+                  "type": "integer"
                 }
               },
               "required": [
@@ -720,6 +752,30 @@
           }
         },
         "description": "Transaction ID of the submission."
+      },
+      "SimulationResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "failure-message": {
+                  "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+                  "type": "string"
+                },
+                "missing-signatures": {
+                  "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "failure-message",
+                "missing-signatures"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Result of a transaction group simulation."
       },
       "StateProofResponse": {
         "content": {
@@ -1632,10 +1688,6 @@
           },
           "budget-consumed": {
             "description": "Budget consumed during execution of app call transaction.",
-            "type": "integer"
-          },
-          "cost": {
-            "description": "Net cost of app execution. Field is DEPRECATED and is subject for removal. Instead, use `budget-added` and `budget-consumed.",
             "type": "integer"
           },
           "disassembly": {
@@ -3907,7 +3959,7 @@
         },
         "summary": "Get a LedgerStateDelta object for a given round",
         "tags": [
-          "private",
+          "public",
           "data"
         ]
       }
@@ -4023,7 +4075,7 @@
         },
         "summary": "Removes minimum sync round restriction from the ledger.",
         "tags": [
-          "private",
+          "public",
           "data"
         ]
       },
@@ -4097,7 +4149,7 @@
         },
         "summary": "Returns the minimum sync round the ledger is keeping in cache.",
         "tags": [
-          "private",
+          "public",
           "data"
         ]
       }
@@ -4169,7 +4221,7 @@
         },
         "summary": "Given a round, tells the ledger to keep that round in its cache.",
         "tags": [
-          "private",
+          "public",
           "data"
         ]
       }
@@ -4774,6 +4826,38 @@
                     "time-since-last-round": {
                       "description": "TimeSinceLastRound in nanoseconds",
                       "type": "integer"
+                    },
+                    "upgrade-delay": {
+                      "description": "Upgrade delay",
+                      "type": "integer"
+                    },
+                    "upgrade-next-protocol-vote-before": {
+                      "description": "Next protocol round",
+                      "type": "integer"
+                    },
+                    "upgrade-no-votes": {
+                      "description": "No votes cast for consensus upgrade",
+                      "type": "integer"
+                    },
+                    "upgrade-node-vote": {
+                      "description": "This node's upgrade vote",
+                      "type": "boolean"
+                    },
+                    "upgrade-vote-rounds": {
+                      "description": "Total voting ounds for current upgrade",
+                      "type": "integer"
+                    },
+                    "upgrade-votes": {
+                      "description": "Total votes cast for consensus upgrade",
+                      "type": "integer"
+                    },
+                    "upgrade-votes-required": {
+                      "description": "Yes votes required for consensus upgrade",
+                      "type": "integer"
+                    },
+                    "upgrade-yes-votes": {
+                      "description": "Yes votes cast for consensus upgrade",
+                      "type": "integer"
                     }
                   },
                   "required": [
@@ -4917,6 +5001,38 @@
                     "time-since-last-round": {
                       "description": "TimeSinceLastRound in nanoseconds",
                       "type": "integer"
+                    },
+                    "upgrade-delay": {
+                      "description": "Upgrade delay",
+                      "type": "integer"
+                    },
+                    "upgrade-next-protocol-vote-before": {
+                      "description": "Next protocol round",
+                      "type": "integer"
+                    },
+                    "upgrade-no-votes": {
+                      "description": "No votes cast for consensus upgrade",
+                      "type": "integer"
+                    },
+                    "upgrade-node-vote": {
+                      "description": "This node's upgrade vote",
+                      "type": "boolean"
+                    },
+                    "upgrade-vote-rounds": {
+                      "description": "Total voting ounds for current upgrade",
+                      "type": "integer"
+                    },
+                    "upgrade-votes": {
+                      "description": "Total votes cast for consensus upgrade",
+                      "type": "integer"
+                    },
+                    "upgrade-votes-required": {
+                      "description": "Yes votes required for consensus upgrade",
+                      "type": "integer"
+                    },
+                    "upgrade-yes-votes": {
+                      "description": "Yes votes cast for consensus upgrade",
+                      "type": "integer"
                     }
                   },
                   "required": [
@@ -4979,7 +5095,7 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Gets the node status after waiting for the given round.",
+        "summary": "Gets the node status after waiting for a round after the given round.",
         "tags": [
           "public",
           "nonparticipating"
@@ -5350,7 +5466,7 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Broadcasts a raw transaction to the network.",
+        "summary": "Broadcasts a raw transaction or transaction group to the network.",
         "tags": [
           "public",
           "participating"
@@ -5689,6 +5805,99 @@
           "public",
           "participating"
         ]
+      }
+    },
+    "/v2/transactions/simulate": {
+      "post": {
+        "operationId": "SimulateTransaction",
+        "requestBody": {
+          "content": {
+            "application/x-binary": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "description": "The byte encoded transaction to simulate",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/msgpack": {
+                "schema": {
+                  "properties": {
+                    "failure-message": {
+                      "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+                      "type": "string"
+                    },
+                    "missing-signatures": {
+                      "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "failure-message",
+                    "missing-signatures"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Result of a transaction group simulation."
+          },
+          "400": {
+            "content": {
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - Malformed Algorand transaction"
+          },
+          "401": {
+            "content": {
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. WARNING: This endpoint is experimental and under active development. There are no guarantees in terms of functionality or future support.",
+        "tags": [
+          "public",
+          "experimental"
+        ],
+        "x-codegen-request-body-name": "rawtxn"
       }
     },
     "/versions": {

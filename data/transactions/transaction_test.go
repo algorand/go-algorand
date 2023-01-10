@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,6 +36,7 @@ import (
 
 func TestTransaction_EstimateEncodedSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
@@ -88,6 +89,7 @@ func generateDummyGoNonparticpatingTransaction(addr basics.Address) (tx Transact
 
 func TestGoOnlineGoNonparticipatingContradiction(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	// addr has no significance here other than being a normal valid address
 	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
@@ -112,6 +114,7 @@ func TestGoOnlineGoNonparticipatingContradiction(t *testing.T) {
 
 func TestGoNonparticipatingWellFormed(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	// addr has no significance here other than being a normal valid address
 	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
@@ -136,6 +139,7 @@ func TestGoNonparticipatingWellFormed(t *testing.T) {
 
 func TestAppCallCreateWellFormed(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	feeSink := basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -252,7 +256,9 @@ func TestAppCallCreateWellFormed(t *testing.T) {
 		},
 	}
 	for i, usecase := range usecases {
+		usecase := usecase
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			t.Parallel()
 			err := usecase.tx.WellFormed(SpecialAddresses{FeeSink: feeSink}, usecase.proto)
 			if usecase.expectedError != "" {
 				require.Error(t, err)
@@ -266,6 +272,7 @@ func TestAppCallCreateWellFormed(t *testing.T) {
 
 func TestWellFormedErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	feeSink := basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 	specialAddr := SpecialAddresses{FeeSink: feeSink}
@@ -576,6 +583,7 @@ func TestWellFormedErrors(t *testing.T) {
 // TestTransactionHash checks that Transaction.ID() is equivalent to the old simpler crypto.HashObj() implementation.
 func TestTransactionHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var txn Transaction
 	txn.Sender[1] = 3
@@ -596,6 +604,7 @@ var generateFlag = flag.Bool("generate", false, "")
 // running test with -generate would generate the matrix used in the test ( without the "correct" errors )
 func TestWellFormedKeyRegistrationTx(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	flag.Parse()
 
@@ -1300,6 +1309,7 @@ func (s *stateproofTxnTestCase) runIsWellFormedForTestCase() error {
 
 func TestWellFormedStateProofTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	// want to create different Txns, run on all of these cases the check, and have an expected result
 	cases := []stateproofTxnTestCase{
 		/* 0 */ {expectedError: errStateProofNotSupported}, // StateProofInterval == 0 leads to error
@@ -1322,6 +1332,7 @@ func TestWellFormedStateProofTxn(t *testing.T) {
 
 func TestStateProofTxnShouldBeZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)

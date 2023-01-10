@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@ import (
 
 func TestSubSaturate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := Round(1)
 	b := Round(2)
@@ -37,6 +38,7 @@ func TestSubSaturate(t *testing.T) {
 
 func TestSubSaturate32(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	require.Equal(t, uint32(0), SubSaturate32(0, 1))
 	require.Equal(t, uint32(0), SubSaturate32(1, 2))
@@ -48,6 +50,7 @@ func TestSubSaturate32(t *testing.T) {
 
 func TestAddSaturate32(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	require.Equal(t, uint32(1), AddSaturate32(0, 1))
 	require.Equal(t, uint32(math.MaxUint32-1), AddSaturate32(math.MaxUint32-2, 1))
@@ -58,6 +61,7 @@ func TestAddSaturate32(t *testing.T) {
 
 func TestRoundUpToMultipleOf(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	r := Round(24)
 	for n := Round(1); n < Round(100); n++ {

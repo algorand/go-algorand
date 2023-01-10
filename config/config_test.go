@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -586,7 +586,7 @@ func TestLocal_TxFiltering(t *testing.T) {
 
 	// ensure the default
 	require.True(t, cfg.TxFilterRawMsgEnabled())
-	require.True(t, cfg.TxFilterCanonicalEnabled())
+	require.False(t, cfg.TxFilterCanonicalEnabled())
 
 	cfg.TxIncomingFilteringFlags = 0
 	require.False(t, cfg.TxFilterRawMsgEnabled())

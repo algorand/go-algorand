@@ -5,12 +5,13 @@ generate:
 output-options:
   include-tags:
   - data
-  - private
+  - public
   exclude-tags:
   - common
-  - public
+  - private
   - participating
   - nonparticipating
+  - experimental
   type-mappings:
     integer: uint64
   skip-prune: true

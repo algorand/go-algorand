@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@ import (
 
 func TestApplicationCallFieldsNotChanged(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	af := ApplicationCallTxnFields{}
 	s := reflect.ValueOf(&af).Elem()
@@ -42,6 +43,7 @@ func TestApplicationCallFieldsNotChanged(t *testing.T) {
 
 func TestApplicationCallFieldsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -103,6 +105,7 @@ func TestApplicationCallFieldsEmpty(t *testing.T) {
 
 func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	// ensure that all the supported protocols have value limits less or
 	// equal to their corresponding codec allocbounds
@@ -127,6 +130,7 @@ func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 
 func TestIDByIndex(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 	ac := ApplicationCallTxnFields{}
@@ -141,6 +145,7 @@ func TestIDByIndex(t *testing.T) {
 
 func TestIndexByID(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 	ac := ApplicationCallTxnFields{}

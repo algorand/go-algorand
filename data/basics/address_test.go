@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ import (
 
 func TestChecksumAddress_Unmarshal(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	address := crypto.Hash([]byte("randomString"))
 	shortAddress := Address(address)
@@ -41,6 +42,7 @@ func TestChecksumAddress_Unmarshal(t *testing.T) {
 
 func TestAddressChecksumMalformedWrongChecksum(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	address := crypto.Hash([]byte("randomString"))
 	shortAddress := Address(address)
@@ -53,6 +55,7 @@ func TestAddressChecksumMalformedWrongChecksum(t *testing.T) {
 
 func TestAddressChecksumShort(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var address string
 	_, err := UnmarshalChecksumAddress(address)
@@ -61,6 +64,7 @@ func TestAddressChecksumShort(t *testing.T) {
 
 func TestAddressChecksumMalformedWrongChecksumSpace(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	address := crypto.Hash([]byte("randomString"))
 	shortAddress := Address(address)
@@ -73,6 +77,7 @@ func TestAddressChecksumMalformedWrongChecksumSpace(t *testing.T) {
 
 func TestAddressChecksumMalformedWrongAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	address := crypto.Hash([]byte("randomString"))
 	shortAddress := Address(address)
@@ -85,6 +90,7 @@ func TestAddressChecksumMalformedWrongAddress(t *testing.T) {
 
 func TestAddressChecksumMalformedWrongAddressSpaces(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	address := crypto.Hash([]byte("randomString"))
 	shortAddress := Address(address)
@@ -97,6 +103,7 @@ func TestAddressChecksumMalformedWrongAddressSpaces(t *testing.T) {
 
 func TestAddressChecksumCanonical(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	addr := "J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU"
 	nonCanonical := "J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELV"
@@ -114,6 +121,7 @@ type TestOb struct {
 
 func TestAddressMarshalUnmarshal(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var addr Address
 	crypto.RandBytes(addr[:])

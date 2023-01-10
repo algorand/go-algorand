@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,11 +29,12 @@ import (
 
 func TestAddingToCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	icache := MakeVerifiedTransactionCache(500)
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, secrets, addrs := generateTestObjects(10, 5, 50)
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	_, signedTxn, secrets, addrs := generateTestObjects(10, 5, 0, 50)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 	groupCtx, err := PrepareGroupContext(txnGroups[0], blockHeader, nil)
 	require.NoError(t, err)
 	impl.Add(txnGroups[0], groupCtx)
@@ -47,12 +48,13 @@ func TestAddingToCache(t *testing.T) {
 
 func TestBucketCycling(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	bucketCount := 3
 	entriesPerBucket := 100
 	icache := MakeVerifiedTransactionCache(entriesPerBucket * (bucketCount - 1))
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, _, _ := generateTestObjects(entriesPerBucket*bucketCount*2, bucketCount, 0)
+	_, signedTxn, _, _ := generateTestObjects(entriesPerBucket*bucketCount*2, bucketCount, 0, 0)
 
 	require.Equal(t, entriesPerBucket*bucketCount*2, len(signedTxn))
 	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{signedTxn[0]}, blockHeader, nil)
@@ -78,12 +80,13 @@ func TestBucketCycling(t *testing.T) {
 
 func TestGetUnverifiedTransactionGroups50(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	size := 300
 	icache := MakeVerifiedTransactionCache(size * 2)
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10+size/1000, 0)
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10+size/1000, 0, 0)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	expectedUnverifiedGroups := make([][]transactions.SignedTxn, 0, len(txnGroups)/2)
 	// add every even transaction to the cache.
@@ -107,8 +110,8 @@ func BenchmarkGetUnverifiedTransactionGroups50(b *testing.B) {
 	}
 	icache := MakeVerifiedTransactionCache(b.N * 2)
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, secrets, addrs := generateTestObjects(b.N*2, 10+b.N/1000, 0)
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	_, signedTxn, secrets, addrs := generateTestObjects(b.N*2, 10+b.N/1000, 0, 0)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	queryTxnGroups := make([][]transactions.SignedTxn, 0, b.N)
 	// add every even transaction to the cache.
@@ -136,12 +139,13 @@ func BenchmarkGetUnverifiedTransactionGroups50(b *testing.B) {
 
 func TestUpdatePinned(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	size := 100
 	icache := MakeVerifiedTransactionCache(size * 10)
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0)
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0, 0)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	// insert some entries.
 	for i := 0; i < len(txnGroups); i++ {
@@ -165,12 +169,13 @@ func TestUpdatePinned(t *testing.T) {
 
 func TestPinningTransactions(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	size := 100
 	icache := MakeVerifiedTransactionCache(size)
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0)
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0, 0)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	// insert half of the entries.
 	for i := 0; i < len(txnGroups)/2; i++ {

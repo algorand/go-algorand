@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,6 +38,7 @@ func BenchmarkSortition(b *testing.B) {
 
 func TestSortitionBasic(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	hitcount := uint64(0)
 	const N = 1000
 	const expectedSize = 20

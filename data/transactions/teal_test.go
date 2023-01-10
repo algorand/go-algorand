@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ import (
 
 func TestEvalDeltaEqual(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -200,6 +201,7 @@ func TestEvalDeltaEqual(t *testing.T) {
 // had better be the case that such messages cannot be emitted in old code.)
 func TestUnchangedAllocBounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	delta := &EvalDelta{}
 	max := 256 // Hardcodes config.MaxEvalDeltaAccounts

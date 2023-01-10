@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -583,12 +583,12 @@ type EvalContext struct {
 	// Set of PC values that branches we've seen so far might
 	// go. So, if checkStep() skips one, that branch is trying to
 	// jump into the middle of a multibyte instruction
-	branchTargets map[int]bool
+	branchTargets []bool
 
 	// Set of PC values that we have begun a checkStep() with. So
 	// if a back jump is going to a value that isn't here, it's
 	// jumping into the middle of multibyte instruction.
-	instructionStarts map[int]bool
+	instructionStarts []bool
 
 	programHashCached crypto.Digest
 
@@ -778,11 +778,12 @@ func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (b
 	return pass, err
 }
 
-// EvalSignature evaluates the logicsig of the ith transaction in params.
+// EvalSignatureFull evaluates the logicsig of the ith transaction in params.
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
-func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
+// It returns EvalContext suitable for obtaining additional info about the execution.
+func EvalSignatureFull(gi int, params *EvalParams) (pass bool, pcx *EvalContext, err error) {
 	if params.SigLedger == nil {
-		return false, errors.New("no sig ledger in signature eval")
+		return false, nil, errors.New("no sig ledger in signature eval")
 	}
 	cx := EvalContext{
 		EvalParams:   params,
@@ -790,7 +791,15 @@ func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
 		groupIndex:   gi,
 		txn:          &params.TxnGroup[gi],
 	}
-	return eval(cx.txn.Lsig.Logic, &cx)
+	pass, err = eval(cx.txn.Lsig.Logic, &cx)
+	return pass, &cx, err
+}
+
+// EvalSignature evaluates the logicsig of the ith transaction in params.
+// A program passes successfully if it finishes with one int element on the stack that is non-zero.
+func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
+	pass, _, err = EvalSignatureFull(gi, params)
+	return pass, err
 }
 
 // eval implementation
@@ -924,8 +933,8 @@ func check(program []byte, params *EvalParams, mode runMode) (err error) {
 	cx.EvalParams = params
 	cx.runModeFlags = mode
 	cx.program = program
-	cx.branchTargets = make(map[int]bool)
-	cx.instructionStarts = make(map[int]bool)
+	cx.branchTargets = make([]bool, len(program)+1) // teal v2 allowed jumping to the end of the prog
+	cx.instructionStarts = make([]bool, len(program)+1)
 
 	maxCost := cx.remainingBudget()
 	staticCost := 0
@@ -995,6 +1004,11 @@ func boolToUint(x bool) uint64 {
 
 func boolToSV(x bool) stackValue {
 	return stackValue{Uint: boolToUint(x)}
+}
+
+// Cost return cost incurred so far
+func (cx *EvalContext) Cost() int {
+	return cx.cost
 }
 
 func (cx *EvalContext) remainingBudget() int {
@@ -1215,7 +1229,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 		fmt.Fprintf(cx.Trace, "%3d %s\n", prevpc, spec.Name)
 	}
 	for pc := prevpc + 1; pc < cx.pc; pc++ {
-		if _, ok := cx.branchTargets[pc]; ok {
+		if pc < len(cx.branchTargets) && cx.branchTargets[pc] {
 			return 0, fmt.Errorf("branch target %d is not an aligned instruction", pc)
 		}
 	}
@@ -2169,7 +2183,7 @@ func checkBranch(cx *EvalContext) error {
 	}
 	if target < cx.pc+3 {
 		// If a branch goes backwards, we should have already noted that an instruction began at that location.
-		if _, ok := cx.instructionStarts[target]; !ok {
+		if ok := cx.instructionStarts[target]; !ok {
 			return fmt.Errorf("back branch target %d is not an aligned instruction", target)
 		}
 	}
@@ -2190,7 +2204,7 @@ func checkSwitch(cx *EvalContext) error {
 
 		if target < eoi {
 			// If a branch goes backwards, we should have already noted that an instruction began at that location.
-			if _, ok := cx.instructionStarts[target]; !ok {
+			if ok := cx.instructionStarts[target]; !ok {
 				return fmt.Errorf("back branch target %d is not an aligned instruction", target)
 			}
 		}
@@ -3368,6 +3382,40 @@ var ecdsaVerifyCosts = []int{
 	Secp256r1: 2500,
 }
 
+// ecdsaVerify checks a signature,
+func (cx *EvalContext) ecdsaVerify(curve EcdsaCurve, pkX, pkY []byte, msg []byte, sigR, sigS []byte) (result bool) {
+	// Go 1.19 panics on bad inputs. Catch it so that re can return false cleanly.
+	defer func() {
+		if recover() != nil {
+			result = false
+		}
+	}()
+
+	x := new(big.Int).SetBytes(pkX)
+	y := new(big.Int).SetBytes(pkY)
+
+	switch curve {
+	case Secp256k1:
+		signature := make([]byte, 0, len(sigR)+len(sigS))
+		signature = append(signature, sigR...)
+		signature = append(signature, sigS...)
+
+		pubkey := secp256k1.S256().Marshal(x, y)
+		return secp256k1.VerifySignature(pubkey, msg, signature)
+	case Secp256r1:
+		r := new(big.Int).SetBytes(sigR)
+		s := new(big.Int).SetBytes(sigS)
+
+		pubkey := ecdsa.PublicKey{
+			Curve: elliptic.P256(),
+			X:     x,
+			Y:     y,
+		}
+		return ecdsa.Verify(&pubkey, msg, r, s)
+	}
+	return false
+}
+
 func opEcdsaVerify(cx *EvalContext) error {
 	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
 	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
@@ -3395,30 +3443,7 @@ func opEcdsaVerify(cx *EvalContext) error {
 		return fmt.Errorf("the signed data must be 32 bytes long, not %d", len(msg))
 	}
 
-	x := new(big.Int).SetBytes(pkX)
-	y := new(big.Int).SetBytes(pkY)
-
-	var result bool
-	if fs.field == Secp256k1 {
-		signature := make([]byte, 0, len(sigR)+len(sigS))
-		signature = append(signature, sigR...)
-		signature = append(signature, sigS...)
-
-		pubkey := secp256k1.S256().Marshal(x, y)
-		result = secp256k1.VerifySignature(pubkey, msg, signature)
-	} else if fs.field == Secp256r1 {
-		r := new(big.Int).SetBytes(sigR)
-		s := new(big.Int).SetBytes(sigS)
-
-		pubkey := ecdsa.PublicKey{
-			Curve: elliptic.P256(),
-			X:     x,
-			Y:     y,
-		}
-		result = ecdsa.Verify(&pubkey, msg, r, s)
-	}
-
-	cx.stack[fifth] = boolToSV(result)
+	cx.stack[fifth] = boolToSV(cx.ecdsaVerify(fs.field, pkX, pkY, msg, sigR, sigS))
 	cx.stack = cx.stack[:fourth]
 	return nil
 }

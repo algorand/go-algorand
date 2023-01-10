@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -270,14 +270,18 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	totalBalances := 0
 	totalResources := 0
 
-	groupsReady := make([]groupTask, len(p.txnGroups))
+	// initialize empty groupTasks for groupsReady
+	groupsReady := make([]*groupTask, len(p.txnGroups))
+	for i := range groupsReady {
+		groupsReady[i] = new(groupTask) // this ensures each allocated groupTask is 64-bit aligned
+	}
 
 	// Add fee sink to the first group
 	if len(p.txnGroups) > 0 {
 		// the feeSinkAddr is known to be non-empty
 		feeSinkPreloader := &preloaderTask{
 			address:           &p.feeSinkAddr,
-			groupTasks:        []*groupTask{&groupsReady[0]},
+			groupTasks:        []*groupTask{groupsReady[0]},
 			groupTasksIndices: []int{0},
 		}
 		groupsReady[0].balancesCount = 1
@@ -288,7 +292,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	// iterate over the transaction groups and add all their account addresses to the list
 	queue := &tasksQueue
 	for i := range p.txnGroups {
-		task := &groupsReady[i]
+		task := groupsReady[i]
 		for j := range p.txnGroups[i] {
 			stxn := &p.txnGroups[i][j]
 			switch stxn.Txn.Type {
@@ -380,7 +384,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	groupDoneCh := make(chan groupTaskDone, len(groupsReady))
 	const dependencyFreeGroup = -int64(^uint64(0)/2) - 1
 	for grpIdx := range groupsReady {
-		gr := &groupsReady[grpIdx]
+		gr := groupsReady[grpIdx]
 		gr.groupTaskIndex = int64(grpIdx)
 		gr.incompleteCount = int64(gr.balancesCount + gr.resourcesCount)
 		gr.balances = allBalances[usedBalances : usedBalances+gr.balancesCount]
