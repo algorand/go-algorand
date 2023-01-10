@@ -30,7 +30,6 @@ import (
 
 func TestConvertSha256Header(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 	a := require.New(t)
 
 	var gh crypto.Digest
@@ -48,7 +47,6 @@ func TestConvertSha256Header(t *testing.T) {
 
 func TestFirstFieldsAreCommitteeSeed(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 	a := require.New(t)
 
 	var gh crypto.Digest

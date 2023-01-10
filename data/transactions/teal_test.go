@@ -28,7 +28,6 @@ import (
 
 func TestEvalDeltaEqual(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	a := require.New(t)
 
@@ -201,7 +200,6 @@ func TestEvalDeltaEqual(t *testing.T) {
 // had better be the case that such messages cannot be emitted in old code.)
 func TestUnchangedAllocBounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	delta := &EvalDelta{}
 	max := 256 // Hardcodes config.MaxEvalDeltaAccounts
