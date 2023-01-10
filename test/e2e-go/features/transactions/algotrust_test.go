@@ -18,8 +18,10 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
-func TestAlgotrust(t *testing.T) {
-	//testAlgoTrust(true, t)
+func TestAlgotrustWith(t *testing.T) {
+	testAlgoTrust(true, t)
+}
+func TestAlgotrustWithOut(t *testing.T) {
 	testAlgoTrust(false, t)
 }
 
