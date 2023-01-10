@@ -258,7 +258,7 @@ func (handler *TxHandler) backlogGaugeThread() {
 	for {
 		select {
 		case <-ticker.C:
-			transactionMessagesBacklogSizeGauge.Set(float64(len(handler.backlogQueue)))
+			transactionMessagesBacklogSizeGauge.Set(uint64(len(handler.backlogQueue)))
 		case <-handler.ctx.Done():
 			return
 		}
@@ -579,6 +579,9 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	var capguard *util.ErlCapacityGuard
 	if handler.erl != nil {
 		// consume a capacity unit
+		// if the elastic rate limiter cannot vend a capacity, the error it returns
+		// is sufficient to indicate that we should enable Congestion Control, because
+		// an issue in vending capacity indicates the underlying resource (TXBacklog) is full
 		capguard, err = handler.erl.ConsumeCapacity(rawmsg.Sender.(util.ErlClient))
 		if err != nil {
 			handler.erl.EnableCongestionControl()

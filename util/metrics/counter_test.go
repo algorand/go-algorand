@@ -144,8 +144,8 @@ func TestMetricCounterMixed(t *testing.T) {
 
 	counter := MakeCounter(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
 
-	counter.Add(5.25, nil)
-	counter.Add(8.25, map[string]string{})
+	counter.AddUint64(5, nil)
+	counter.AddUint64(8, map[string]string{})
 	for i := 0; i < 20; i++ {
 		counter.Inc(nil)
 		// wait half-a cycle
@@ -169,7 +169,7 @@ func TestMetricCounterMixed(t *testing.T) {
 	for k, v := range test.metrics {
 		// we have increased each one of the labels exactly 4 times. See that the counter was counting correctly.
 		// ( counters starts at zero )
-		require.Equal(t, "35.5", v, fmt.Sprintf("The metric '%s' reached value '%s'", k, v))
+		require.Equal(t, "35", v, fmt.Sprintf("The metric '%s' reached value '%s'", k, v))
 	}
 }
 
@@ -188,13 +188,13 @@ testname{host="myhost"} 0
 `
 	require.Equal(t, expected, sbOut.String())
 
-	c.Add(2.3, nil)
+	c.AddUint64(2, nil)
 	// ensure non-zero counters are logged
 	sbOut = strings.Builder{}
 	c.WriteMetric(&sbOut, `host="myhost"`)
 	expected = `# HELP testname testhelp
 # TYPE testname counter
-testname{host="myhost"} 2.3
+testname{host="myhost"} 2
 `
 	require.Equal(t, expected, sbOut.String())
 }

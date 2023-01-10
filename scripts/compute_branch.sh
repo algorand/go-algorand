@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 BRANCH="${BRANCH:-}"
-if [ -n "$BRANCH" ]; then
+if [ -z "$BRANCH" ]; then
     if [[ -n $(git status --porcelain) ]]; then
         # If the branch isn't clean, default to HEAD to match old behavior.
         BRANCH="HEAD"
