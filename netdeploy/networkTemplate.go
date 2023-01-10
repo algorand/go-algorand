@@ -172,6 +172,11 @@ func loadTemplate(templateFile string) (NetworkTemplate, error) {
 }
 
 func loadTemplateFromReader(reader io.Reader, template *NetworkTemplate) error {
+
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		// for arm machines, use smaller key dilution
+		template.Genesis.PartKeyDilution = 100
+	}
 	dec := json.NewDecoder(reader)
 	return dec.Decode(template)
 }

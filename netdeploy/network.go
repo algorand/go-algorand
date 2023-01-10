@@ -19,6 +19,7 @@ package netdeploy
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -57,25 +58,35 @@ type Network struct {
 
 // CreateNetworkFromTemplate uses the specified template to deploy a new private network
 // under the specified root directory.
-func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols, overrideDevMode bool) (Network, error) {
+func CreateNetworkFromTemplate(name, rootDir string, templateReader io.Reader, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols, overrideDevMode bool) (Network, error) {
 	n := Network{
 		rootDir:          rootDir,
 		nodeExitCallback: nodeExitCallback,
 	}
 	n.cfg.Name = name
-	n.cfg.TemplateFile = templateFile
 
-	template, err := loadTemplate(templateFile)
+	var err error
+	var template NetworkTemplate
+
+	err = loadTemplateFromReader(templateReader, &template)
 	if err == nil {
 		if overrideDevMode {
 			template.Genesis.DevMode = true
+			if template.Genesis.NetworkName == "" {
+				template.Genesis.NetworkName = "devmodenet"
+			}
 			if len(template.Nodes) > 0 {
 				template.Nodes[0].IsRelay = false
 			}
+		} else {
+			if template.Genesis.NetworkName == "" {
+				template.Genesis.NetworkName = "private network"
+			}
 		}
-		err = template.Validate()
+	} else {
+		return n, err
 	}
-	if err != nil {
+	if err = template.Validate(); err != nil {
 		return n, err
 	}
 

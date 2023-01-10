@@ -19,6 +19,7 @@ package fixtures
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -96,7 +97,8 @@ func (f *LibGoalFixture) setup(test TestingTB, testName string, templateFile str
 	os.RemoveAll(f.rootDir)
 	templateFile = filepath.Join(f.testDataDir, templateFile)
 	importKeys := false // Don't automatically import root keys when creating folders, we'll import on-demand
-	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, templateFile, f.binDir, importKeys, f.nodeExitWithError, f.consensus, false)
+	var reader io.Reader
+	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, reader, f.binDir, importKeys, f.nodeExitWithError, f.consensus, false)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
 	f.network = network
 
