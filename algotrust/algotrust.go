@@ -14,7 +14,7 @@ import (
 	"github.com/algorand/go-algorand/network"
 )
 
-const coolDown = time.Duration(100 * time.Millisecond)
+const coolDown = time.Duration(1000 * time.Millisecond)
 
 type score struct {
 	points      uint64
@@ -183,8 +183,8 @@ func (at *AlgoTrust) RecordTxnsaction(stxn *transactions.SignedTxn, sender netwo
 		// TODO: handle this case
 		return
 	}
-	at.txnMapMu.RLock()
-	defer at.txnMapMu.RUnlock()
+	at.txnMapMu.Lock()
+	defer at.txnMapMu.Unlock()
 	senders, has := at.txnToSender[sig]
 	if has {
 		at.txnToSender[sig] = append(senders, addr)

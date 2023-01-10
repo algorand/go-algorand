@@ -485,6 +485,9 @@ type Local struct {
 	// EnableExperimentalAPI enables experimental API endpoint. Note that these endpoints have no
 	// guarantees in terms of functionality or future support.
 	EnableExperimentalAPI bool `version[26]:"false"`
+
+	MakeBadNode bool `version[26]:"false"`
+	AlgoTrust   bool `version[26]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

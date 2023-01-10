@@ -131,6 +131,7 @@ type TxHandler struct {
 	streamVerifierDropped chan *verify.UnverifiedElement
 	erl                   *util.ElasticRateLimiter
 	at                    *algotrust.AlgoTrust
+	badNode               bool
 }
 
 // TxHandlerOpts is TxHandler configuration options
@@ -182,6 +183,7 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		streamVerifierChan:    make(chan *verify.UnverifiedElement),
 		streamVerifierDropped: make(chan *verify.UnverifiedElement),
 		at:                    algotrust.MakeAlgoTrust(opts.Ledger),
+		badNode:               opts.Config.MakeBadNode,
 	}
 
 	if opts.Config.EnableTxBacklogRateLimiting {
@@ -465,11 +467,6 @@ func (handler *TxHandler) rememberReportErrors(err error) {
 }
 
 func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
-
-	// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
-	//	anyGroup := wi.unverifiedTxGroup
-	//	handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(anyGroup), false, wi.rawmsg.Sender)
-
 	if wi.verificationErr != nil {
 		// disconnect from peer.
 		handler.postProcessReportErrors(wi.verificationErr)
@@ -566,8 +563,16 @@ func (handler *TxHandler) dedupCanonical(ntx int, unverifiedTxGroup []transactio
 //  - message are checked for duplicates
 //  - transactions are checked for duplicates
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
-	if shouldDrop, outMsg := handler.at.PreprocessTxnFiltering(rawmsg); shouldDrop {
-		return outMsg
+	if handler.badNode {
+		// relay the transaction without checking it
+		handler.net.Relay(handler.ctx, protocol.TxnTag, rawmsg.Data, false, rawmsg.Sender)
+		return network.OutgoingMessage{Action: network.Ignore}
+	}
+
+	if handler.at != nil {
+		if shouldDrop, outMsg := handler.at.PreprocessTxnFiltering(rawmsg); shouldDrop {
+			return outMsg
+		}
 	}
 	var msgKey *crypto.Digest
 	var isDup bool
@@ -645,7 +650,9 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 			return network.OutgoingMessage{Action: network.Ignore}
 		}
 	}
-	handler.at.RecordTxnsaction(&unverifiedTxGroup[0], rawmsg.Sender)
+	if handler.at != nil {
+		handler.at.RecordTxnsaction(&unverifiedTxGroup[0], rawmsg.Sender)
+	}
 	select {
 	case handler.backlogQueue <- &txBacklogMsg{
 		rawmsg:                &rawmsg,

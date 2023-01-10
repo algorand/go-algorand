@@ -132,4 +132,7 @@ var defaultLocal = Local{
 	TxSyncTimeoutSeconds:                       30,
 	UseXForwardedForAddressField:               "",
 	VerifiedTranscationsCacheSize:              150000,
+
+	MakeBadNode: false,
+	AlgoTrust:   false,
 }

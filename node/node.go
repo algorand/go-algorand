@@ -524,17 +524,18 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 		return err
 	}
 
-	err = node.transactionPool.Remember(txgroup)
-	if err != nil {
-		node.log.Infof("rejected by local pool: %v - transaction group was %+v", err, txgroup)
-		return err
-	}
+	if !node.config.MakeBadNode {
+		err = node.transactionPool.Remember(txgroup)
+		if err != nil {
+			node.log.Infof("rejected by local pool: %v - transaction group was %+v", err, txgroup)
+			return err
+		}
 
-	err = node.ledger.VerifiedTransactionCache().Pin(txgroup)
-	if err != nil {
-		logging.Base().Infof("unable to pin transaction: %v", err)
+		err = node.ledger.VerifiedTransactionCache().Pin(txgroup)
+		if err != nil {
+			logging.Base().Infof("unable to pin transaction: %v", err)
+		}
 	}
-
 	var enc []byte
 	var txids []transactions.Txid
 	for _, tx := range txgroup {

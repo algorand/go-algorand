@@ -2,7 +2,7 @@
     "Genesis": {
         "NetworkName": "tbd",
         "ConsensusProtocol": "future",
-        "LastPartKeyRound": 3000,
+        "LastPartKeyRound": 30000,
         "Wallets": [
             {
                 "Name": "Relay",
@@ -15,12 +15,52 @@
                 "Online": false
             },
             {
-                "Name": "BadOne",
+                "Name": "Bad1",
                 "Stake": 0,
                 "Online": false
             },
             {
-                "Name": "BadTwo",
+                "Name": "Bad2",
+                "Stake": 0,
+                "Online": false
+            },
+            {
+                "Name": "Bad3",
+                "Stake": 0,
+                "Online": false
+            },
+            {
+                "Name": "Bad4",
+                "Stake": 0,
+                "Online": false
+            },
+            {
+                "Name": "Bad5",
+                "Stake": 0,
+                "Online": false
+            },
+            {
+                "Name": "Bad6",
+                "Stake": 0,
+                "Online": false
+            },
+            {
+                "Name": "Bad7",
+                "Stake": 0,
+                "Online": false
+            },
+            {
+                "Name": "Bad8",
+                "Stake": 0,
+                "Online": false
+            },
+            {
+                "Name": "Bad9",
+                "Stake": 0,
+                "Online": false
+            },
+            {
+                "Name": "Bad10",
                 "Stake": 0,
                 "Online": false
             }
@@ -43,16 +83,72 @@
             ]
         },
         {
-            "Name": "BadOne",
+            "Name": "Bad1",
             "Wallets": [
-                { "Name": "BadOne",
+                { "Name": "Bad1",
                     "ParticipationOnly": false }
             ]
         },
         {
-            "Name": "BadTwo",
+            "Name": "Bad2",
             "Wallets": [
-                { "Name": "BadTwo",
+                { "Name": "Bad2",
+                    "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Bad3",
+            "Wallets": [
+                { "Name": "Bad3",
+                    "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Bad4",
+            "Wallets": [
+                { "Name": "Bad4",
+                    "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Bad5",
+            "Wallets": [
+                { "Name": "Bad5",
+                    "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Bad6",
+            "Wallets": [
+                { "Name": "Bad6",
+                    "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Bad7",
+            "Wallets": [
+                { "Name": "Bad7",
+                    "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Bad8",
+            "Wallets": [
+                { "Name": "Bad8",
+                    "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Bad9",
+            "Wallets": [
+                { "Name": "Bad9",
+                    "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Bad10",
+            "Wallets": [
+                { "Name": "Bad10",
                     "ParticipationOnly": false }
             ]
         }
