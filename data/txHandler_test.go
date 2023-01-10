@@ -602,9 +602,7 @@ func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 	}
 
 	for _, check := range checks {
-		check := check
 		t.Run(fmt.Sprintf("%d-%d", check.inputSize, check.numDecoded), func(t *testing.T) {
-			t.Parallel()
 			handler := TxHandler{
 				backlogQueue: make(chan *txBacklogMsg, 1),
 			}
@@ -679,7 +677,6 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 	}
 
 	t.Run("single", func(t *testing.T) {
-		t.Parallel()
 		handler := makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 0)
 		stxns, blob := makeRandomTransactions(1)
 		stxn := stxns[0]
@@ -705,7 +702,6 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 	})
 
 	t.Run("group", func(t *testing.T) {
-		t.Parallel()
 		handler := makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 0)
 		num := rand.Intn(config.MaxTxGroupSize-1) + 2 // 2..config.MaxTxGroupSize
 		require.LessOrEqual(t, num, config.MaxTxGroupSize)
@@ -894,7 +890,6 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 	}
 
 	t.Run("scheduled", func(t *testing.T) {
-		t.Parallel()
 		// double enqueue a single txn message, ensure it discarded
 		ctx, cancelFunc := context.WithCancel(context.Background())
 		handler := makeTestTxHandlerOrphanedWithContext(ctx, txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 10*time.Millisecond)
@@ -916,7 +911,6 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 	})
 
 	t.Run("manual", func(t *testing.T) {
-		t.Parallel()
 		// double enqueue a single txn message, ensure it discarded
 		handler := makeTestTxHandlerOrphaned(txBacklogSize)
 		var action network.OutgoingMessage
@@ -959,7 +953,6 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 // TestTxHandlerProcessIncomingCacheBacklogDrop checks if dropped messages are also removed from caches
 func TestTxHandlerProcessIncomingCacheBacklogDrop(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	handler := makeTestTxHandlerOrphanedWithContext(context.Background(), 1, 20, txHandlerConfig{true, true}, 0)
 
@@ -987,7 +980,6 @@ func TestTxHandlerProcessIncomingCacheBacklogDrop(t *testing.T) {
 
 func TestTxHandlerProcessIncomingCacheTxPoolDrop(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	const numUsers = 100
 	log := logging.TestingLog(t)
@@ -1117,7 +1109,7 @@ func BenchmarkTxHandlerDecoderMsgp(b *testing.B) {
 }
 
 // TestTxHandlerIncomingTxHandle checks the correctness with single txns
-func TestTxHandlerIncomingTxHandle(t *testing.T) { //nolint:paralleltest // Not parallel because incomingTxHandlerProcessing mutates global metrics
+func TestTxHandlerIncomingTxHandle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numberOfTransactionGroups := 1000
@@ -1125,7 +1117,7 @@ func TestTxHandlerIncomingTxHandle(t *testing.T) { //nolint:paralleltest // Not 
 }
 
 // TestTxHandlerIncomingTxGroupHandle checks the correctness with txn groups
-func TestTxHandlerIncomingTxGroupHandle(t *testing.T) { //nolint:paralleltest // Not parallel because incomingTxHandlerProcessing mutates global metrics
+func TestTxHandlerIncomingTxGroupHandle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numberOfTransactionGroups := 1000 / proto.MaxTxGroupSize
@@ -1133,7 +1125,7 @@ func TestTxHandlerIncomingTxGroupHandle(t *testing.T) { //nolint:paralleltest //
 }
 
 // TestTxHandlerIncomingTxHandleDrops accounts for the dropped txns when the verifier/exec pool is saturated
-func TestTxHandlerIncomingTxHandleDrops(t *testing.T) { //nolint:paralleltest // Not parallel because it changes the backlog size
+func TestTxHandlerIncomingTxHandleDrops(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// use smaller backlog size to test the message drops
@@ -1911,7 +1903,7 @@ func runHandlerBenchmarkWithBacklog(b *testing.B, txGen txGenIf, tps int, useBac
 	handler.Stop() // cancel the handler ctx
 }
 
-func TestTxHandlerPostProcessError(t *testing.T) { //nolint:paralleltest // Not parallel because it mutates global metrics
+func TestTxHandlerPostProcessError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	defer func() {
@@ -1983,7 +1975,7 @@ func TestTxHandlerPostProcessError(t *testing.T) { //nolint:paralleltest // Not 
 	require.Len(t, result, expected+1)
 }
 
-func TestTxHandlerPostProcessErrorWithVerify(t *testing.T) { //nolint:paralleltest // Not parallel because it mutates global metrics
+func TestTxHandlerPostProcessErrorWithVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	defer func() {
@@ -2014,7 +2006,7 @@ func TestTxHandlerPostProcessErrorWithVerify(t *testing.T) { //nolint:parallelte
 }
 
 // TestTxHandlerRememberReportErrors checks Is and As statements work as expected
-func TestTxHandlerRememberReportErrors(t *testing.T) { //nolint:paralleltest // Not parallel because incomingTxHandlerProcessing mutates global metrics
+func TestTxHandlerRememberReportErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	defer func() {
@@ -2087,7 +2079,7 @@ func (t *blockTicker) Wait() {
 	}
 }
 
-func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:paralleltest // Not parallel because it mutates global metrics
+func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer func() {
 		transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
@@ -2319,9 +2311,6 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 }
 
 func TestMakeTxHandlerErrors(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
 	opts := TxHandlerOpts{
 		nil, nil, nil, &mocks.MockNetwork{}, "", crypto.Digest{}, config.Local{},
 	}
@@ -2341,8 +2330,7 @@ func TestMakeTxHandlerErrors(t *testing.T) {
 // TestTxHandlerRestartWithBacklogAndTxPool starts txHandler, sends transactions,
 // stops, starts in a loop, sends more transactions, and makes sure all the transactions
 // are accounted for. It uses the production backlog worker
-func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) { //nolint:paralleltest // Not parallel because it mutates global metrics
-	partitiontest.PartitionTest(t)
+func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) {
 	transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
 	transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
 	transactionMessagesTxnSigVerificationFailed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigVerificationFailed)

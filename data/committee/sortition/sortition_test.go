@@ -38,7 +38,6 @@ func BenchmarkSortition(b *testing.B) {
 
 func TestSortitionBasic(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 	hitcount := uint64(0)
 	const N = 1000
 	const expectedSize = 20
