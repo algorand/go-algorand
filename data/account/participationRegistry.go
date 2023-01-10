@@ -22,6 +22,7 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -256,6 +257,9 @@ type ParticipationRegistry interface {
 	// HasLiveKeys quickly tests to see if there is a valid participation key over some range of rounds
 	HasLiveKeys(from, to basics.Round) bool
 
+	// NumKeys quickly returns the number of participation keys in the DB.
+	NumKeys() uint32
+
 	// Register updates the EffectiveFirst and EffectiveLast fields. If there are multiple records for the account
 	// then it is possible for multiple records to be updated.
 	Register(id ParticipationID, on basics.Round) error
@@ -403,7 +407,8 @@ func dbSchemaUpgrade0(ctx context.Context, tx *sql.Tx, newDatabase bool) error {
 
 // participationDB provides a concrete implementation of the ParticipationRegistry interface.
 type participationDB struct {
-	cache map[ParticipationID]ParticipationRecord
+	cache   map[ParticipationID]ParticipationRecord
+	numKeys uint32 // atomic uint32 to quickly check if participation DB has any keys in it
 
 	// dirty marked on Record(), DeleteExpired(), cleared on Register(), Delete(), Flush()
 	dirty map[ParticipationID]struct{}
@@ -459,6 +464,7 @@ func (db *participationDB) initializeCache() error {
 	}
 
 	db.cache = cache
+	atomic.StoreUint32(&db.numKeys, uint32(len(db.cache)))
 	db.dirty = make(map[ParticipationID]struct{})
 	return nil
 }
@@ -547,6 +553,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		Voting:            voting,
 		VRF:               vrf,
 	}
+	atomic.StoreUint32(&db.numKeys, uint32(len(db.cache)))
 
 	return
 }
@@ -578,6 +585,7 @@ func (db *participationDB) Delete(id ParticipationID) error {
 	}
 	delete(db.dirty, id)
 	delete(db.cache, id)
+	atomic.StoreUint32(&db.numKeys, uint32(len(db.cache)))
 
 	// do the db part async
 	db.writeQueue <- makeOpRequest(&deleteOp{id})
@@ -613,6 +621,7 @@ func (db *participationDB) DeleteExpired(latestRound basics.Round, agreementProt
 		db.dirty[r.ParticipationID] = struct{}{}
 		db.cache[r.ParticipationID] = r
 	}
+	atomic.StoreUint32(&db.numKeys, uint32(len(db.cache)))
 	db.mutex.Unlock()
 	return nil
 }
@@ -762,6 +771,10 @@ func (db *participationDB) HasLiveKeys(from, to basics.Round) bool {
 		}
 	}
 	return false
+}
+
+func (db *participationDB) NumKeys() uint32 {
+	return atomic.LoadUint32(&db.numKeys)
 }
 
 // GetStateProofSecretsForRound returns the state proof data required to sign the compact certificate for this round
@@ -941,6 +954,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 			delete(db.dirty, id)
 			db.cache[id] = record.ParticipationRecord
 		}
+		atomic.StoreUint32(&db.numKeys, uint32(len(db.cache)))
 		db.mutex.Unlock()
 	}
 
@@ -986,6 +1000,7 @@ func (db *participationDB) Record(account basics.Address, round basics.Round, pa
 
 	db.dirty[record.ParticipationID] = struct{}{}
 	db.cache[record.ParticipationID] = record
+	atomic.StoreUint32(&db.numKeys, uint32(len(db.cache)))
 	return nil
 }
 
