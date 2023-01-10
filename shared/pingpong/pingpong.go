@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,7 +32,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -42,8 +42,8 @@ import (
 
 // CreatablesInfo has information about created assets, apps and opting in
 type CreatablesInfo struct {
-	AssetParams map[uint64]v1.AssetParams
-	AppParams   map[uint64]v1.AppParams
+	AssetParams map[uint64]model.AssetParams
+	AppParams   map[uint64]model.ApplicationParams
 	OptIns      map[uint64][]string
 }
 
@@ -130,9 +130,10 @@ func (ppa *pingPongAccount) String() string {
 
 // WorkerState object holds a running pingpong worker
 type WorkerState struct {
-	cfg      PpConfig
-	accounts map[string]*pingPongAccount
-	cinfo    CreatablesInfo
+	cfg            PpConfig
+	accounts       map[string]*pingPongAccount
+	randomAccounts []string
+	cinfo          CreatablesInfo
 
 	nftStartTime       int64
 	localNftIndex      uint64
@@ -148,6 +149,17 @@ type WorkerState struct {
 	refreshPos   int
 
 	client *libgoal.Client
+}
+
+// returns the number of boxes per app
+func (pps *WorkerState) getNumBoxes() uint32 {
+	// only one of NumBoxUpdate and NumBoxRead should be nonzero. There isn't
+	// currently support for mixed box workloads so these numbers should not be
+	// added together.
+	if pps.cfg.NumBoxUpdate > 0 {
+		return pps.cfg.NumBoxUpdate
+	}
+	return pps.cfg.NumBoxRead
 }
 
 // PrepareAccounts to set up accounts and asset accounts required for Ping Pong run
@@ -267,7 +279,7 @@ func (pps *WorkerState) scheduleAction() bool {
 		pps.refreshPos = 0
 	}
 	addr := pps.refreshAddrs[pps.refreshPos]
-	ai, err := pps.client.AccountInformation(addr)
+	ai, err := pps.client.AccountInformation(addr, true)
 	if err == nil {
 		ppa := pps.accounts[addr]
 
@@ -442,19 +454,19 @@ func (pps *WorkerState) sendPaymentFromSourceAccount(client *libgoal.Client, to 
 }
 
 // waitPendingTransactions waits until all the pending transactions coming from the given
-// accounts map have been cleared out of the transaction pool. A prerequesite for this is that
+// accounts map have been cleared out of the transaction pool. A prerequisite for this is that
 // there is no other source who might be generating transactions that would come from these account
 // addresses.
 func waitPendingTransactions(accounts []string, client *libgoal.Client) error {
 	for _, from := range accounts {
 	repeat:
-		pendingTxns, err := client.GetPendingTransactionsByAddress(from, 0)
+		pendingTxns, err := client.GetParsedPendingTransactionsByAddress(from, 0)
 		if err != nil {
 			fmt.Printf("failed to check pending transaction pool status : %v\n", err)
 			return err
 		}
-		for _, txn := range pendingTxns.TruncatedTxns.Transactions {
-			if txn.From != from {
+		for _, txn := range pendingTxns.TopTransactions {
+			if txn.Txn.Sender.String() != from {
 				// we found a transaction where the receiver was the given account. We don't
 				// care about these.
 				continue
@@ -622,7 +634,11 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac *libgoal.Client) {
 
 // NewPingpong creates a new pingpong WorkerState
 func NewPingpong(cfg PpConfig) *WorkerState {
-	return &WorkerState{cfg: cfg, nftHolders: make(map[string]int)}
+	return &WorkerState{
+		cfg:            cfg,
+		nftHolders:     make(map[string]int),
+		randomAccounts: make([]string, 0, cfg.MaxRandomDst),
+	}
 }
 
 func (pps *WorkerState) randAssetID() (aidx uint64) {
@@ -692,17 +708,27 @@ func (pps *WorkerState) sendFromTo(
 		fee := pps.fee()
 
 		to := toList[i]
-		if pps.cfg.RandomizeDst {
-			var addr basics.Address
-			crypto.RandBytes(addr[:])
-			to = addr.String()
-		} else if len(belowMinBalanceAccounts) > 0 && (crypto.RandUint64()%100 < 50) {
+		if len(belowMinBalanceAccounts) > 0 && (crypto.RandUint64()%100 < 50) {
 			// make 50% of the calls attempt to refund low-balanced accounts.
 			// ( if there is any )
 			// pick the first low balance account
 			for acct := range belowMinBalanceAccounts {
 				to = acct
 				break
+			}
+		} else if pps.cfg.RandomizeDst {
+			// check if we need to create a new random account, or use an existing one
+			if uint64(len(pps.randomAccounts)) >= pps.cfg.MaxRandomDst {
+				// use pre-created random account
+				i := rand.Int63n(int64(len(pps.randomAccounts)))
+				to = pps.randomAccounts[i]
+			} else {
+				// create new random account
+				var addr basics.Address
+				crypto.RandBytes(addr[:])
+				to = addr.String()
+				// push new account
+				pps.randomAccounts = append(pps.randomAccounts, to)
 			}
 		}
 
@@ -959,7 +985,11 @@ type paymentUpdate struct {
 
 func (au *paymentUpdate) apply(pps *WorkerState) {
 	pps.accounts[au.from].balance -= (au.fee + au.amt)
-	pps.accounts[au.to].balance += au.amt
+	// update account balance
+	to := pps.accounts[au.to]
+	if to != nil {
+		to.balance += au.amt
+	}
 }
 
 // return true with probability 1/i
@@ -1099,6 +1129,13 @@ func (pps *WorkerState) constructAppTxn(from, to string, fee uint64, client *lib
 		err = fmt.Errorf("no known apps")
 		return
 	}
+
+	// construct box ref array
+	var boxRefs []transactions.BoxRef
+	for i := uint32(0); i < pps.getNumBoxes(); i++ {
+		boxRefs = append(boxRefs, transactions.BoxRef{Index: 0, Name: []byte{fmt.Sprintf("%d", i)[0]}})
+	}
+
 	appOptIns := pps.cinfo.OptIns[aidx]
 	sender = from
 	if len(appOptIns) > 0 {
@@ -1128,7 +1165,7 @@ func (pps *WorkerState) constructAppTxn(from, to string, fee uint64, client *lib
 		}
 		accounts = accounts[1:]
 	}
-	txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil)
+	txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil, boxRefs)
 	if err != nil {
 		return
 	}

@@ -16,6 +16,7 @@ linters:
     - revive
     - staticcheck
     - typecheck
+    - paralleltest
 
 severity:
   default-severity: error
@@ -33,6 +34,8 @@ linters-settings:
     - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).error
     - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).warnf
     - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).warn
+    # We do this 121 times and never check the error.
+    - (*github.com/spf13/cobra.Command).MarkFlagRequired
   govet:
     settings:
       printf:
@@ -113,6 +116,10 @@ issues:
         # - revive
         - staticcheck
         - typecheck
+    # Ignore missing parallel tests in existing packages
+    - path: (agreement|catchup|cmd|config|crypto|daemon|gen|ledger|logging|netdeploy|network|node|protocol|rpcs|shared|stateproof|test|tools|util).*_test\.go
+      linters:
+        - paralleltest
     # Add all linters here -- Comment this block out for testing linters
     - path: test/linttest/lintissues\.go
       linters:

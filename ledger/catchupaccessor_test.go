@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,7 +32,9 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -55,11 +57,11 @@ func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]
 		if accounts >= accountsCount-64*1024 && last64KIndex == -1 {
 			last64KIndex = len(encodedAccountChunks)
 		}
-		var balances catchpointFileBalancesChunkV6
-		balances.Balances = make([]encodedBalanceRecordV6, chunkSize)
+		var chunk catchpointFileChunkV6
+		chunk.Balances = make([]encoded.BalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
-			var randomAccount encodedBalanceRecordV6
-			accountData := baseAccountData{}
+			var randomAccount encoded.BalanceRecordV6
+			accountData := store.BaseAccountData{}
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)
 			// have the first account be the zero address
@@ -67,9 +69,9 @@ func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]
 				crypto.RandBytes(randomAccount.Address[:])
 			}
 			binary.LittleEndian.PutUint64(randomAccount.Address[:], accounts+i)
-			balances.Balances[i] = randomAccount
+			chunk.Balances[i] = randomAccount
 		}
-		encodedAccountChunks = append(encodedAccountChunks, protocol.Encode(&balances))
+		encodedAccountChunks = append(encodedAccountChunks, protocol.Encode(&chunk))
 		accounts += chunkSize
 	}
 	return
@@ -110,7 +112,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 	}
 	encodedFileHeader := protocol.Encode(&fileHeader)
 	var progress CatchpointCatchupAccessorProgress
-	err = catchpointAccessor.ProgressStagingBalances(context.Background(), "content.msgpack", encodedFileHeader, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(context.Background(), "content.msgpack", encodedFileHeader, &progress)
 	require.NoError(b, err)
 
 	// pre-create all encoded chunks.
@@ -126,7 +128,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 			last64KStart = time.Now()
 		}
 
-		err = catchpointAccessor.ProgressStagingBalances(context.Background(), "balances.XX.msgpack", encodedAccounts, &progress)
+		err = catchpointAccessor.ProcessStagingBalances(context.Background(), "balances.XX.msgpack", encodedAccounts, &progress)
 		require.NoError(b, err)
 		last64KIndex--
 	}
@@ -218,7 +220,7 @@ func TestBuildMerkleTrie(t *testing.T) {
 	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
 
 	progressCallCount := 0
-	progressNop := func(uint64) {
+	progressNop := func(uint64, uint64) {
 		progressCallCount++
 	}
 
@@ -234,22 +236,21 @@ func TestBuildMerkleTrie(t *testing.T) {
 	require.NoError(t, err, "ResetStagingBalances")
 	err = catchpointAccessor.BuildMerkleTrie(ctx, progressNop)
 	require.NoError(t, err)
-	require.True(t, progressCallCount > 0)
+	require.False(t, progressCallCount > 0)
 
 	// process some data...
-	progressCallCount = 0
 	err = catchpointAccessor.ResetStagingBalances(ctx, true)
 	require.NoError(t, err, "ResetStagingBalances")
-	// TODO: catchpointAccessor.ProgressStagingBalances() like in ledgerFetcher.downloadLedger(cs.ctx, peer, round) like catchup/catchpointService.go which is the real usage of BuildMerkleTrie()
+	// TODO: catchpointAccessor.ProcessStagingBalances() like in ledgerFetcher.downloadLedger(cs.ctx, peer, round) like catchup/catchpointService.go which is the real usage of BuildMerkleTrie()
 	var blob []byte = nil // TODO: content!
 	var progress CatchpointCatchupAccessorProgress
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "ignoredContent", blob, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "ignoredContent", blob, &progress)
 	require.NoError(t, err)
 	// this shouldn't work yet
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "balances.FAKE.msgpack", blob, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "balances.FAKE.msgpack", blob, &progress)
 	require.Error(t, err)
 	// this needs content
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "content.msgpack", blob, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", blob, &progress)
 	require.Error(t, err)
 
 	// content.msgpack from this:
@@ -265,14 +266,14 @@ func TestBuildMerkleTrie(t *testing.T) {
 		BlockHeaderDigest: crypto.Digest{},
 	}
 	encodedFileHeader := protocol.Encode(&fileHeader)
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
 	require.NoError(t, err)
 	// shouldn't work a second time
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
 	require.Error(t, err)
 
 	// This should still fail, but slightly different coverage path
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "balances.FAKE.msgpack", blob, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "balances.FAKE.msgpack", blob, &progress)
 	require.Error(t, err)
 
 	// create some catchpoint data
@@ -280,7 +281,7 @@ func TestBuildMerkleTrie(t *testing.T) {
 
 	for _, encodedAccounts := range encodedAccountChunks {
 
-		err = catchpointAccessor.ProgressStagingBalances(context.Background(), "balances.XX.msgpack", encodedAccounts, &progress)
+		err = catchpointAccessor.ProcessStagingBalances(context.Background(), "balances.XX.msgpack", encodedAccounts, &progress)
 		require.NoError(t, err)
 	}
 
@@ -316,13 +317,9 @@ func TestCatchupAccessorBlockdb(t *testing.T) {
 	}()
 	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
 	ctx := context.Background()
-	progressCallCount := 0
-	progressNop := func(uint64) {
-		progressCallCount++
-	}
 
 	// actual testing...
-	err = catchpointAccessor.BuildMerkleTrie(ctx, progressNop)
+	err = catchpointAccessor.BuildMerkleTrie(ctx, func(uint64, uint64) {})
 	require.Error(t, err)
 }
 
@@ -406,13 +403,13 @@ func TestCatchupAccessorResourceCountMismatch(t *testing.T) {
 		BlockHeaderDigest: crypto.Digest{},
 	}
 	encodedFileHeader := protocol.Encode(&fileHeader)
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
 	require.NoError(t, err)
 
-	var balances catchpointFileBalancesChunkV6
-	balances.Balances = make([]encodedBalanceRecordV6, 1)
-	var randomAccount encodedBalanceRecordV6
-	accountData := baseAccountData{}
+	var balances catchpointFileChunkV6
+	balances.Balances = make([]encoded.BalanceRecordV6, 1)
+	var randomAccount encoded.BalanceRecordV6
+	accountData := store.BaseAccountData{}
 	accountData.MicroAlgos.Raw = crypto.RandUint63()
 	accountData.TotalAppParams = 1
 	randomAccount.AccountData = protocol.Encode(&accountData)
@@ -422,7 +419,7 @@ func TestCatchupAccessorResourceCountMismatch(t *testing.T) {
 	encodedAccounts := protocol.Encode(&balances)
 
 	// expect error since there is a resource count mismatch
-	err = catchpointAccessor.ProgressStagingBalances(ctx, "balances.XX.msgpack", encodedAccounts, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, "balances.XX.msgpack", encodedAccounts, &progress)
 	require.Error(t, err)
 }
 
@@ -431,17 +428,21 @@ type testStagingWriter struct {
 	hashes map[[4 + crypto.DigestSize]byte]int
 }
 
-func (w *testStagingWriter) writeBalances(ctx context.Context, balances []normalizedAccountBalance) error {
+func (w *testStagingWriter) writeBalances(ctx context.Context, balances []store.NormalizedAccountBalance) error {
 	return nil
 }
 
-func (w *testStagingWriter) writeCreatables(ctx context.Context, balances []normalizedAccountBalance) error {
+func (w *testStagingWriter) writeCreatables(ctx context.Context, balances []store.NormalizedAccountBalance) error {
 	return nil
 }
 
-func (w *testStagingWriter) writeHashes(ctx context.Context, balances []normalizedAccountBalance) error {
+func (w *testStagingWriter) writeKVs(ctx context.Context, kvrs []encoded.KVRecordV6) error {
+	return nil
+}
+
+func (w *testStagingWriter) writeHashes(ctx context.Context, balances []store.NormalizedAccountBalance) error {
 	for _, bal := range balances {
-		for _, hash := range bal.accountHashes {
+		for _, hash := range bal.AccountHashes {
 			var key [4 + crypto.DigestSize]byte
 			require.Len(w.t, hash, 4+crypto.DigestSize)
 			copy(key[:], hash)
@@ -476,8 +477,8 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 	}
 	catchpointAccessor := makeTestCatchpointCatchupAccessor(&l, log, writer)
 
-	randomSimpleBaseAcct := func() baseAccountData {
-		accountData := baseAccountData{
+	randomSimpleBaseAcct := func() store.BaseAccountData {
+		accountData := store.BaseAccountData{
 			RewardsBase: crypto.RandUint63(),
 			MicroAlgos:  basics.MicroAlgos{Raw: crypto.RandUint63()},
 			AuthAddr:    ledgertesting.RandomAddress(),
@@ -485,8 +486,8 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 		return accountData
 	}
 
-	encodedBalanceRecordFromBase := func(addr basics.Address, base baseAccountData, resources map[uint64]msgp.Raw, more bool) encodedBalanceRecordV6 {
-		ebr := encodedBalanceRecordV6{
+	encodedBalanceRecordFromBase := func(addr basics.Address, base store.BaseAccountData, resources map[uint64]msgp.Raw, more bool) encoded.BalanceRecordV6 {
+		ebr := encoded.BalanceRecordV6{
 			Address:              addr,
 			AccountData:          protocol.Encode(&base),
 			Resources:            resources,
@@ -517,7 +518,7 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 	acctX.TotalAssets = acctXNumRes
 	acctXRes1 := make(map[uint64]msgp.Raw, acctXNumRes/2+1)
 	acctXRes2 := make(map[uint64]msgp.Raw, acctXNumRes/2)
-	emptyRes := resourcesData{ResourceFlags: resourceFlagsEmptyAsset}
+	emptyRes := store.ResourcesData{ResourceFlags: store.ResourceFlagsEmptyAsset}
 	emptyResEnc := protocol.Encode(&emptyRes)
 	for i := 0; i < acctXNumRes; i++ {
 		if i <= acctXNumRes/2 {
@@ -528,16 +529,16 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 	}
 
 	// make chunks
-	chunks := []catchpointFileBalancesChunkV6{
+	chunks := []catchpointFileChunkV6{
 		{
-			Balances: []encodedBalanceRecordV6{
+			Balances: []encoded.BalanceRecordV6{
 				encodedBalanceRecordFromBase(ledgertesting.RandomAddress(), acctA, nil, false),
 				encodedBalanceRecordFromBase(ledgertesting.RandomAddress(), acctB, nil, false),
 				encodedBalanceRecordFromBase(addrX, acctX, acctXRes1, true),
 			},
 		},
 		{
-			Balances: []encodedBalanceRecordV6{
+			Balances: []encoded.BalanceRecordV6{
 				encodedBalanceRecordFromBase(addrX, acctX, acctXRes2, false),
 				encodedBalanceRecordFromBase(ledgertesting.RandomAddress(), acctC, nil, false),
 				encodedBalanceRecordFromBase(ledgertesting.RandomAddress(), acctD, nil, false),

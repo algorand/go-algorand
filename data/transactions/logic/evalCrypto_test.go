@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -41,8 +41,8 @@ import (
 
 func TestKeccak256(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	/*
 		pip install sha3
 		import sha3
@@ -58,8 +58,8 @@ byte 0xc195eca25a6f4c82bfba0287082ddb0d602ae9230f9cf1f1a40b68f8e2c41567
 
 func TestSHA3_256(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	/*
 		pip install hashlib
 		import hashlib
@@ -74,8 +74,8 @@ byte 0xd757297405c5c89f7ceca368ee76c2f1893ee24f654e60032e65fb53b01aae10
 
 func TestSHA512_256(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	/*
 		pip cryptography
 		from cryptography.hazmat.backends import default_backend
@@ -176,8 +176,8 @@ pop								// output`, "int 1"},
 
 func TestEd25519verify(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	var s crypto.Seed
 	crypto.RandBytes(s[:])
 	c := crypto.GenerateSignatureSecrets(s)
@@ -200,26 +200,26 @@ ed25519verify`, pkStr), v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{data[:], sig[:]}
-			testLogicBytes(t, ops.Program, defaultEvalParams(&txn))
+			testLogicBytes(t, ops.Program, defaultEvalParams(txn))
 
 			// short sig will fail
 			txn.Lsig.Args[1] = sig[1:]
-			testLogicBytes(t, ops.Program, defaultEvalParams(&txn), "invalid signature")
+			testLogicBytes(t, ops.Program, defaultEvalParams(txn), "invalid signature")
 
 			// flip a bit and it should not pass
 			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 			data1, err := hex.DecodeString(msg1)
 			require.NoError(t, err)
 			txn.Lsig.Args = [][]byte{data1, sig[:]}
-			testLogicBytes(t, ops.Program, defaultEvalParams(&txn), "REJECT")
+			testLogicBytes(t, ops.Program, defaultEvalParams(txn), "REJECT")
 		})
 	}
 }
 
 func TestEd25519VerifyBare(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	var s crypto.Seed
 	crypto.RandBytes(s[:])
 	c := crypto.GenerateSignatureSecrets(s)
@@ -240,18 +240,18 @@ ed25519verify_bare`, pkStr), v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{data[:], sig[:]}
-			testLogicBytes(t, ops.Program, defaultEvalParams(&txn))
+			testLogicBytes(t, ops.Program, defaultEvalParams(txn))
 
 			// short sig will fail
 			txn.Lsig.Args[1] = sig[1:]
-			testLogicBytes(t, ops.Program, defaultEvalParams(&txn), "invalid signature")
+			testLogicBytes(t, ops.Program, defaultEvalParams(txn), "invalid signature")
 
 			// flip a bit and it should not pass
 			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 			data1, err := hex.DecodeString(msg1)
 			require.NoError(t, err)
 			txn.Lsig.Args = [][]byte{data1, sig[:]}
-			testLogicBytes(t, ops.Program, defaultEvalParams(&txn), "REJECT")
+			testLogicBytes(t, ops.Program, defaultEvalParams(txn), "REJECT")
 		})
 	}
 }
@@ -337,7 +337,9 @@ byte 0x%s
 		{pkTampered2, false},
 	}
 	for i, test := range decompressTests {
+		i, test, source := i, test, source
 		t.Run(fmt.Sprintf("decompress/pass=%v", test.pass), func(t *testing.T) {
+			t.Parallel()
 			t.Log("decompressTests i", i)
 			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
@@ -381,7 +383,9 @@ ecdsa_verify Secp256k1
 		{"testdata1", r, false},
 	}
 	for _, test := range verifyTests {
+		test, source := test, source
 		t.Run(fmt.Sprintf("verify/pass=%v", test.pass), func(t *testing.T) {
+			t.Parallel()
 			src := fmt.Sprintf(source, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, 5)
@@ -428,7 +432,9 @@ load 1
 	pkExpanded := secp256k1.S256().Marshal(key.PublicKey.X, key.PublicKey.Y)
 
 	for i, test := range recoverTests {
+		i, test, source := i, test, source
 		t.Run(fmt.Sprintf("recover/%d", i), func(t *testing.T) {
+			t.Parallel()
 			src := fmt.Sprintf(source, hex.EncodeToString(msg[:]), test.v, hex.EncodeToString(r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y), hex.EncodeToString(pkExpanded))
 			test.checker(t, src, 5)
 		})
@@ -446,7 +452,7 @@ ecdsa_verify Secp256k1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 	ops := testProg(t, source, 5)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = ops.Program
-	pass, err := EvalSignature(0, defaultEvalParamsWithVersion(&txn, 5))
+	pass, err := EvalSignature(0, defaultEvalParamsWithVersion(5, txn))
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -487,7 +493,9 @@ byte 0x%s
 		{pkTampered2, false},
 	}
 	for i, test := range decompressTests {
+		i, test, source := i, test, source
 		t.Run(fmt.Sprintf("decompress/pass=%v", test.pass), func(t *testing.T) {
+			t.Parallel()
 			t.Log("decompressTests i", i)
 			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
@@ -530,7 +538,9 @@ ecdsa_verify Secp256r1
 		{"testdata1", r, false},
 	}
 	for _, test := range verifyTests {
+		test, source := test, source
 		t.Run(fmt.Sprintf("verify/pass=%v", test.pass), func(t *testing.T) {
+			t.Parallel()
 			src := fmt.Sprintf(source, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, fidoVersion)
@@ -552,7 +562,7 @@ ecdsa_verify Secp256r1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 	ops := testProg(t, source, fidoVersion)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = ops.Program
-	pass, err := EvalSignature(0, defaultEvalParamsWithVersion(&txn, fidoVersion))
+	pass, err := EvalSignature(0, defaultEvalParamsWithVersion(fidoVersion, txn))
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -560,6 +570,7 @@ ecdsa_verify Secp256r1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 // test compatibility with ethereum signatures
 func TestEcdsaEthAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	/*
 		pip install eth-keys pycryptodome
@@ -589,6 +600,7 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 
 func TestEcdsaCostVariation(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	// Doesn't matter if the actual verify returns true or false. Just confirm the cost depends on curve.
 	source := `
@@ -689,7 +701,7 @@ ed25519verify`, pkStr), AssemblerMaxVersion)
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = programs[i]
 		txn.Lsig.Args = [][]byte{data[i][:], signatures[i][:]}
-		ep := defaultEvalParams(&txn)
+		ep := defaultEvalParams(txn)
 		pass, err := EvalSignature(0, ep)
 		if !pass {
 			b.Log(hex.EncodeToString(programs[i]))
@@ -774,7 +786,7 @@ func benchmarkEcdsa(b *testing.B, source string, curve EcdsaCurve) {
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = data[i].programs
 		txn.Lsig.Args = [][]byte{data[i].msg[:], data[i].r, data[i].s, data[i].x, data[i].y, data[i].pk, {uint8(data[i].v)}}
-		ep := defaultEvalParams(&txn)
+		ep := defaultEvalParams(txn)
 		pass, err := EvalSignature(0, ep)
 		if !pass {
 			b.Log(hex.EncodeToString(data[i].programs))
@@ -897,7 +909,7 @@ func benchmarkBn256(b *testing.B, source string) {
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = data[i].programs
 		txn.Lsig.Args = [][]byte{data[i].a, data[i].k, data[i].g1, data[i].g2}
-		ep := defaultEvalParams(&txn)
+		ep := defaultEvalParams(txn)
 		pass, err := EvalSignature(0, ep)
 		if !pass {
 			b.Log(hex.EncodeToString(data[i].programs))

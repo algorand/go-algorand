@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,7 @@ import (
 )
 
 // LogicVersion defines default assembler and max eval versions
-const LogicVersion = 8
+const LogicVersion = 9
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
@@ -70,6 +70,9 @@ const fpVersion = 8         // changes for frame pointers and simpler function d
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
 const pairingVersion = 9 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
+
+// Unlimited Global Storage opcodes
+const boxVersion = 8 // box_*
 
 type linearCost struct {
 	baseCost  int
@@ -613,6 +616,15 @@ var OpSpecs = []OpSpec{
 	{0xb6, "itxn_next", opItxnNext, proto(":"), 6, only(modeApp)},
 	{0xb7, "gitxn", opGitxn, proto(":a"), 6, immediates("t", "f").field("f", &TxnFields).only(modeApp).assembler(asmGitxn)},
 	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(modeApp)},
+
+	// Unlimited Global Storage - Boxes
+	{0xb9, "box_create", opBoxCreate, proto("bi:i"), boxVersion, only(modeApp)},
+	{0xba, "box_extract", opBoxExtract, proto("bii:b"), boxVersion, only(modeApp)},
+	{0xbb, "box_replace", opBoxReplace, proto("bib:"), boxVersion, only(modeApp)},
+	{0xbc, "box_del", opBoxDel, proto("b:i"), boxVersion, only(modeApp)},
+	{0xbd, "box_len", opBoxLen, proto("b:ii"), boxVersion, only(modeApp)},
+	{0xbe, "box_get", opBoxGet, proto("b:bi"), boxVersion, only(modeApp)},
+	{0xbf, "box_put", opBoxPut, proto("bb:"), boxVersion, only(modeApp)},
 
 	// Dynamic indexing
 	{0xc0, "txnas", opTxnas, proto("i:a"), 5, field("f", &TxnArrayFields)},

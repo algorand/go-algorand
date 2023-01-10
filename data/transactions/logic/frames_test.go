@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -178,7 +178,7 @@ main:
  +           // This consumes the top arg. We could complain in assembly if checked stack height against pgm.fp
  dup; dup	 // But the dup;dup restores it, so it _evals_ fine.
  retsub
-`, AssemblerMaxVersion)
+`, fpVersion)
 
 }
 

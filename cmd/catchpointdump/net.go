@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -353,10 +353,15 @@ func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitSt
 			return err
 		}
 		defer outFile.Close()
-		err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, excludedFields.GetSlice())
+		err = printAccountsDatabase("./ledger.tracker.sqlite", true, fileHeader, outFile, excludedFields.GetSlice())
 		if err != nil {
 			return err
 		}
+		err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
+		if err != nil {
+			return err
+		}
+
 	}
 	return nil
 }

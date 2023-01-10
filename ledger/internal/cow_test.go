@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package internal
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -85,7 +86,11 @@ func (ml *mockLedger) getKey(addr basics.Address, aidx basics.AppIndex, global b
 	return basics.TealValue{}, false, nil
 }
 
-func (ml *mockLedger) txnCounter() uint64 {
+func (ml *mockLedger) kvGet(key string) ([]byte, bool, error) {
+	return nil, false, nil
+}
+
+func (ml *mockLedger) Counter() uint64 {
 	return 0
 }
 
@@ -185,4 +190,59 @@ func TestCowBalance(t *testing.T) {
 
 	c1.commitToParent()
 	checkCowByUpdate(t, c0, updates2)
+}
+
+func BenchmarkCowChild(b *testing.B) {
+	b.ReportAllocs()
+	cow := makeRoundCowState(nil, bookkeeping.BlockHeader{}, config.ConsensusParams{}, 10000, ledgercore.AccountTotals{}, 16)
+	for i := 0; i < b.N; i++ {
+		cow.child(16)
+		cow.recycle()
+	}
+}
+
+// Ideally we'd be able to randomize the roundCowState but can't do it via reflection
+// since it' can't set unexported fields. This test just makes sure that all of the existing
+// fields are correctly reset but won't be able to catch any new fields added.
+func TestCowChildReset(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	cow := makeRoundCowState(nil, bookkeeping.BlockHeader{}, config.ConsensusParams{}, 10000, ledgercore.AccountTotals{}, 16)
+	calf := cow.child(16)
+	require.NotEmpty(t, calf)
+	calf.compatibilityMode = true
+	calf.reset()
+	// simple fields
+	require.Zero(t, calf.commitParent)
+	require.Zero(t, calf.proto)
+	require.Zero(t, calf.txnCount)
+	require.Zero(t, calf.compatibilityMode)
+	require.Zero(t, calf.prevTotals)
+
+	// alloced map
+	require.NotZero(t, calf.sdeltas)
+	require.Empty(t, calf.sdeltas)
+}
+
+func TestCowChildReflect(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cowFieldNames := map[string]struct{}{
+		"lookupParent":             {},
+		"commitParent":             {},
+		"proto":                    {},
+		"mods":                     {},
+		"txnCount":                 {},
+		"sdeltas":                  {},
+		"compatibilityMode":        {},
+		"compatibilityGetKeyCache": {},
+		"prevTotals":               {},
+	}
+
+	cow := roundCowState{}
+	v := reflect.ValueOf(cow)
+	st := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		reflectedCowName := st.Field(i).Name
+		require.Containsf(t, cowFieldNames, reflectedCowName, "new field:\"%v\" added to roundCowState, please update roundCowState.reset() to handle it before fixing the test", reflectedCowName)
+	}
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ import (
 
 func TestEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	secrets := keypair()
 	zeroPayment := Transaction{Type: protocol.PaymentTx}
@@ -64,6 +65,7 @@ func TestEncoding(t *testing.T) {
 
 func TestDecodeNil(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	// This is a regression test for improper decoding of a nil SignedTxn.
 	// This is a subtle case because decoding a msgpack nil does not run
@@ -80,6 +82,7 @@ func TestDecodeNil(t *testing.T) {
 
 func TestSignedTxnInBlockHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var stib SignedTxnInBlock
 	crypto.RandBytes(stib.Txn.Sender[:])

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1247,8 +1247,8 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	wn.maybeSendMessagesOfInterest(peer, nil)
 
-	peers.Set(float64(wn.NumPeers()))
-	incomingPeers.Set(float64(wn.numIncomingPeers()))
+	peers.Set(uint64(wn.NumPeers()))
+	incomingPeers.Set(uint64(wn.numIncomingPeers()))
 }
 
 func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOfInterestEnc []byte) {
@@ -1505,9 +1505,10 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
 
 // preparePeerData prepares batches of data for sending.
 // It performs optional zstd compression for proposal massages
-func (wn *WebsocketNetwork) preparePeerData(request broadcastRequest, prio bool, peers []*wsPeer) ([][]byte, [][]byte, []crypto.Digest) {
+func (wn *WebsocketNetwork) preparePeerData(request broadcastRequest, prio bool, peers []*wsPeer) ([][]byte, [][]byte, []crypto.Digest, bool) {
 	// determine if there is a payload proposal and peers supporting compressed payloads
 	wantCompression := false
+	containsPrioPPTag := false
 	if prio {
 		wantCompression = checkCanCompress(request, peers)
 	}
@@ -1528,8 +1529,11 @@ func (wn *WebsocketNetwork) preparePeerData(request broadcastRequest, prio bool,
 			digests[i] = crypto.Hash(mbytes)
 		}
 
-		if prio && request.tags[i] == protocol.ProposalPayloadTag {
-			networkPrioPPNonCompressedSize.AddUint64(uint64(len(d)), nil)
+		if prio {
+			if request.tags[i] == protocol.ProposalPayloadTag {
+				networkPrioPPNonCompressedSize.AddUint64(uint64(len(d)), nil)
+				containsPrioPPTag = true
+			}
 		}
 
 		if wantCompression {
@@ -1547,7 +1551,7 @@ func (wn *WebsocketNetwork) preparePeerData(request broadcastRequest, prio bool,
 			}
 		}
 	}
-	return data, dataCompressed, digests
+	return data, dataCompressed, digests, containsPrioPPTag
 }
 
 // prio is set if the broadcast is a high-priority broadcast.
@@ -1564,7 +1568,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 	}
 
 	start := time.Now()
-	data, dataWithCompression, digests := wn.preparePeerData(request, prio, peers)
+	data, dataWithCompression, digests, containsPrioPPTag := wn.preparePeerData(request, prio, peers)
 
 	// first send to all the easy outbound peers who don't block, get them started.
 	sentMessageCount := 0
@@ -1580,12 +1584,16 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 			// if this peer supports compressed proposals and compressed data batch is filled out, use it
 			ok = peer.writeNonBlockMsgs(request.ctx, dataWithCompression, prio, digests, request.enqueueTime)
 			if prio {
-				networkPrioBatchesPPWithCompression.Inc(nil)
+				if containsPrioPPTag {
+					networkPrioBatchesPPWithCompression.Inc(nil)
+				}
 			}
 		} else {
 			ok = peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
 			if prio {
-				networkPrioBatchesPPWithoutCompression.Inc(nil)
+				if containsPrioPPTag {
+					networkPrioBatchesPPWithoutCompression.Inc(nil)
+				}
 			}
 		}
 		if ok {
@@ -1870,21 +1878,46 @@ func (wn *WebsocketNetwork) OnNetworkAdvance() {
 // to the telemetry server. Internally, it's using a timer to ensure that it would only
 // send the information once every hour ( configurable via PeerConnectionsUpdateInterval )
 func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
+	if !wn.log.GetTelemetryEnabled() {
+		return
+	}
 	now := time.Now()
 	if wn.lastPeerConnectionsSent.Add(time.Duration(wn.config.PeerConnectionsUpdateInterval)*time.Second).After(now) || wn.config.PeerConnectionsUpdateInterval <= 0 {
 		// it's not yet time to send the update.
 		return
 	}
 	wn.lastPeerConnectionsSent = now
+
 	var peers []*wsPeer
 	peers, _ = wn.peerSnapshot(peers)
+	connectionDetails := wn.getPeerConnectionTelemetryDetails(now, peers)
+	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
+}
+
+func (wn *WebsocketNetwork) getPeerConnectionTelemetryDetails(now time.Time, peers []*wsPeer) telemetryspec.PeersConnectionDetails {
 	var connectionDetails telemetryspec.PeersConnectionDetails
 	for _, peer := range peers {
 		connDetail := telemetryspec.PeerConnectionDetails{
 			ConnectionDuration:   uint(now.Sub(peer.createTime).Seconds()),
 			TelemetryGUID:        peer.TelemetryGUID,
 			InstanceName:         peer.InstanceName,
-			DuplicateFilterCount: peer.duplicateFilterCount,
+			DuplicateFilterCount: atomic.LoadUint64(&peer.duplicateFilterCount),
+			TXCount:              atomic.LoadUint64(&peer.txMessageCount),
+			MICount:              atomic.LoadUint64(&peer.miMessageCount),
+			AVCount:              atomic.LoadUint64(&peer.avMessageCount),
+			PPCount:              atomic.LoadUint64(&peer.ppMessageCount),
+		}
+		// unwrap websocket.Conn, requestTrackedConnection, rejectingLimitListenerConn
+		var uconn net.Conn = peer.conn.UnderlyingConn()
+		for i := 0; i < 10; i++ {
+			wconn, ok := uconn.(wrappedConn)
+			if !ok {
+				break
+			}
+			uconn = wconn.UnderlyingConn()
+		}
+		if tcpInfo, err := util.GetConnTCPInfo(uconn); err == nil && tcpInfo != nil {
+			connDetail.TCP = *tcpInfo
 		}
 		if peer.outgoing {
 			connDetail.Address = justHost(peer.conn.RemoteAddr().String())
@@ -1896,8 +1929,7 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 			connectionDetails.IncomingPeers = append(connectionDetails.IncomingPeers, connDetail)
 		}
 	}
-
-	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
+	return connectionDetails
 }
 
 // prioWeightRefreshTime controls how often we refresh the weights
@@ -2293,8 +2325,8 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		}
 	}
 
-	peers.Set(float64(wn.NumPeers()))
-	outgoingPeers.Set(float64(wn.numOutgoingPeers()))
+	peers.Set(uint64(wn.NumPeers()))
+	outgoingPeers.Set(uint64(wn.numOutgoingPeers()))
 
 	if wn.prioScheme != nil {
 		// priority challenge
@@ -2406,11 +2438,15 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 		telemetryspec.DisconnectPeerEventDetails{
 			PeerEventDetails: eventDetails,
 			Reason:           string(reason),
+			TXCount:          atomic.LoadUint64(&peer.txMessageCount),
+			MICount:          atomic.LoadUint64(&peer.miMessageCount),
+			AVCount:          atomic.LoadUint64(&peer.avMessageCount),
+			PPCount:          atomic.LoadUint64(&peer.ppMessageCount),
 		})
 
-	peers.Set(float64(wn.NumPeers()))
-	incomingPeers.Set(float64(wn.numIncomingPeers()))
-	outgoingPeers.Set(float64(wn.numOutgoingPeers()))
+	peers.Set(uint64(wn.NumPeers()))
+	incomingPeers.Set(uint64(wn.numIncomingPeers()))
+	outgoingPeers.Set(uint64(wn.numOutgoingPeers()))
 
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
@@ -2479,8 +2515,8 @@ func (wn *WebsocketNetwork) countPeersSetGauges() {
 			numIn++
 		}
 	}
-	networkIncomingConnections.Set(float64(numIn))
-	networkOutgoingConnections.Set(float64(numOut))
+	networkIncomingConnections.Set(uint64(numIn))
+	networkOutgoingConnections.Set(uint64(numOut))
 }
 
 func justHost(hostPort string) string {
@@ -2541,6 +2577,7 @@ func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	atomic.AddUint32(&wn.messagesOfInterestGeneration, 1)
 	var peers []*wsPeer
 	peers, _ = wn.peerSnapshot(peers)
+	wn.log.Infof("updateMessagesOfInterestEnc maybe sending messagesOfInterest %v", wn.messagesOfInterest)
 	for _, peer := range peers {
 		wn.maybeSendMessagesOfInterest(peer, wn.messagesOfInterestEnc)
 	}
@@ -2552,9 +2589,11 @@ func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
 		// if we're not a relay, and not participating, we don't need txn pool
 		wantTXGossip := wn.nodeInfo.IsParticipating()
 		if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
+			wn.log.Infof("postMessagesOfInterestThread: enabling TX gossip")
 			wn.RegisterMessageInterest(protocol.TxnTag)
 			atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipYes)
 		} else if !wantTXGossip && (wn.wantTXGossip != wantTXGossipNo) {
+			wn.log.Infof("postMessagesOfInterestThread: disabling TX gossip")
 			wn.DeregisterMessageInterest(protocol.TxnTag)
 			atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipNo)
 		}

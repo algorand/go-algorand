@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,8 @@ package telemetryspec
 
 import (
 	"time"
+
+	"github.com/algorand/go-algorand/util"
 )
 
 // Telemetry Events
@@ -228,6 +230,8 @@ const DisconnectPeerEvent Event = "DisconnectPeer"
 type DisconnectPeerEventDetails struct {
 	PeerEventDetails
 	Reason string
+	// Received message counters for this peer while it was connected
+	TXCount, MICount, AVCount, PPCount uint64
 }
 
 // ErrorOutputEvent event
@@ -302,6 +306,10 @@ type PeerConnectionDetails struct {
 	MessageDelay int64 `json:",omitempty"`
 	// DuplicateFilterCount is the number of times this peer has sent us a message hash to filter that it had already sent before.
 	DuplicateFilterCount uint64
+	// These message counters count received messages from this peer.
+	TXCount, MICount, AVCount, PPCount uint64
+	// TCPInfo provides connection measurements from TCP.
+	TCP util.TCPInfo `json:",omitempty"`
 }
 
 // CatchpointGenerationEvent event
@@ -321,10 +329,31 @@ type CatchpointGenerationEventDetails struct {
 	BalancesWriteTime uint64
 	// AccountsCount is the number of accounts that were written into the generated catchpoint file
 	AccountsCount uint64
+	// KVsCount is the number of accounts that were written into the generated catchpoint file
+	KVsCount uint64
 	// FileSize is the size of the catchpoint file, in bytes.
 	FileSize uint64
 	// CatchpointLabel is the catchpoint label for which the catchpoint file was generated.
 	CatchpointLabel string
+}
+
+// CatchpointRootUpdateEvent event
+const CatchpointRootUpdateEvent Event = "CatchpointRoot"
+
+// CatchpointRootUpdateEventDetails is generated when the catchpoint merkle trie root is updated, when
+// account updates for rounds are flushed to disk.
+type CatchpointRootUpdateEventDetails struct {
+	Root                        string
+	OldBase                     uint64
+	NewBase                     uint64
+	NewPageCount                int `json:"npc"`
+	NewNodeCount                int `json:"nnc"`
+	UpdatedPageCount            int `json:"upc"`
+	UpdatedNodeCount            int `json:"unc"`
+	DeletedPageCount            int `json:"dpc"`
+	FanoutReallocatedNodeCount  int `json:"frnc"`
+	PackingReallocatedNodeCount int `json:"prnc"`
+	LoadedPages                 int `json:"lp"`
 }
 
 // BalancesAccountVacuumEvent event

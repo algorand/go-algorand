@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,9 +33,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/network"
@@ -437,10 +436,11 @@ func getStatus(dataDir string) {
 	}
 }
 
-func makeStatusString(stat generatedV2.NodeStatusResponse) string {
+func makeStatusString(stat model.NodeStatusResponse) string {
 	lastRoundTime := fmt.Sprintf("%.1fs", time.Duration(stat.TimeSinceLastRound).Seconds())
 	catchupTime := fmt.Sprintf("%.1fs", time.Duration(stat.CatchupTime).Seconds())
 	var statusString string
+
 	if stat.Catchpoint == nil || (*stat.Catchpoint) == "" {
 		statusString = fmt.Sprintf(
 			infoNodeStatus,
@@ -459,6 +459,37 @@ func makeStatusString(stat generatedV2.NodeStatusResponse) string {
 		if stat.StoppedAtUnsupportedRound {
 			statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
 		}
+
+		upgradeNextProtocolVoteBefore := uint64(0)
+		if stat.UpgradeNextProtocolVoteBefore != nil {
+			upgradeNextProtocolVoteBefore = *stat.UpgradeNextProtocolVoteBefore
+		}
+
+		if upgradeNextProtocolVoteBefore > stat.LastRound {
+			upgradeVotesRequired := uint64(0)
+			upgradeNoVotes := uint64(0)
+			upgradeYesVotes := uint64(0)
+			if stat.UpgradeVotesRequired != nil {
+				upgradeVotesRequired = *stat.UpgradeVotesRequired
+			}
+			if stat.UpgradeNoVotes != nil {
+				upgradeNoVotes = *stat.UpgradeNoVotes
+			}
+			if stat.UpgradeYesVotes != nil {
+				upgradeYesVotes = *stat.UpgradeYesVotes
+			}
+			statusString = statusString + "\n" + fmt.Sprintf(
+				infoNodeStatusConsensusUpgradeVoting,
+				upgradeYesVotes,
+				upgradeNoVotes,
+				upgradeNextProtocolVoteBefore-stat.LastRound,
+				upgradeVotesRequired,
+				upgradeNextProtocolVoteBefore,
+			)
+		} else if upgradeNextProtocolVoteBefore > 0 {
+			statusString = statusString + "\n" + infoNodeStatusConsensusUpgradeScheduled
+		}
+
 	} else {
 		statusString = fmt.Sprintf(
 			infoNodeCatchpointCatchupStatus,
@@ -468,7 +499,8 @@ func makeStatusString(stat generatedV2.NodeStatusResponse) string {
 
 		if stat.CatchpointTotalAccounts != nil && (*stat.CatchpointTotalAccounts > 0) && stat.CatchpointProcessedAccounts != nil {
 			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupAccounts, *stat.CatchpointTotalAccounts,
-				*stat.CatchpointProcessedAccounts, *stat.CatchpointVerifiedAccounts)
+				*stat.CatchpointProcessedAccounts, *stat.CatchpointVerifiedAccounts,
+				*stat.CatchpointTotalKvs, *stat.CatchpointProcessedKvs, *stat.CatchpointVerifiedKvs)
 		}
 		if stat.CatchpointAcquiredBlocks != nil && stat.CatchpointTotalBlocks != nil && (*stat.CatchpointAcquiredBlocks+*stat.CatchpointTotalBlocks > 0) {
 			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupBlocks, *stat.CatchpointTotalBlocks,
@@ -525,23 +557,23 @@ var pendingTxnsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, _ []string) {
 		onDataDirs(func(dataDir string) {
 			client := ensureAlgodClient(dataDir)
-			statusTxnPool, err := client.GetPendingTransactions(maxPendingTransactions)
+			statusTxnPool, err := client.GetParsedPendingTransactions(maxPendingTransactions)
 			if err != nil {
 				reportErrorf(errorNodeStatus, err)
 			}
 
-			pendingTxns := statusTxnPool.TruncatedTxns
+			pendingTxns := statusTxnPool.TopTransactions
 
 			// do this inline for now, break it out when we need to reuse a Txn->String function
-			reportInfof(infoNodePendingTxnsDescription, maxPendingTransactions, statusTxnPool.TotalTxns)
-			if pendingTxns.Transactions == nil || len(pendingTxns.Transactions) == 0 {
+			reportInfof(infoNodePendingTxnsDescription, maxPendingTransactions, statusTxnPool.TotalTransactions)
+			if len(statusTxnPool.TopTransactions) == 0 {
 				reportInfof(infoNodeNoPendingTxnsDescription)
 			} else {
-				for _, pendingTxn := range pendingTxns.Transactions {
+				for _, pendingTxn := range pendingTxns {
 					pendingTxnStr, err := json.MarshalIndent(pendingTxn, "", "    ")
 					if err != nil {
 						// json parsing of the txn failed, so let's just skip printing it
-						fmt.Printf("Unparseable Transaction %s\n", pendingTxn.TxID)
+						fmt.Printf("Unparseable Transaction %s\n", pendingTxn.Txn.ID().String())
 						continue
 					}
 					fmt.Printf("%s\n", string(pendingTxnStr))

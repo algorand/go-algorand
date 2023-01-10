@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -259,7 +259,6 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		},
 		{
 			name: "asset config transaction for a non-existing asset",
-			skip: true,
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.AssetConfigTx,
@@ -296,7 +295,6 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		},
 		{
 			name: "asset config transaction for an existing asset",
-			skip: true,
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.AssetConfigTx,
@@ -333,7 +331,6 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		},
 		{
 			name: "asset transfer transaction",
-			skip: true,
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.AssetTransferTx,
@@ -342,6 +339,7 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 					},
 					AssetTransferTxnFields: transactions.AssetTransferTxnFields{
 						XferAsset:     1001,
+						AssetAmount:   1,
 						AssetSender:   makeAddress(2),
 						AssetReceiver: makeAddress(3),
 						AssetCloseTo:  makeAddress(4),
@@ -384,8 +382,52 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 			},
 		},
 		{
+			name: "asset transfer transaction zero amount",
+			signedTxn: transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type: protocol.AssetTransferTx,
+					Header: transactions.Header{
+						Sender: makeAddress(1),
+					},
+					AssetTransferTxnFields: transactions.AssetTransferTxnFields{
+						XferAsset:     1001,
+						AssetSender:   makeAddress(2),
+						AssetReceiver: makeAddress(3),
+						AssetCloseTo:  makeAddress(4),
+					},
+				},
+			},
+			accounts: []prefetcher.LoadedAccountDataEntry{
+				{
+					Address: &feeSinkAddr,
+					Data: &ledgercore.AccountData{
+						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
+					},
+				},
+				{
+					Address: makeAddressPtr(1),
+					Data: &ledgercore.AccountData{
+						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
+					},
+				},
+			},
+			resources: []prefetcher.LoadedResourcesEntry{
+				{
+					Address:        makeAddressPtr(2),
+					CreatableIndex: 1001,
+					CreatableType:  basics.AssetCreatable,
+					Resource:       &ledgercore.AccountResource{},
+				},
+				{
+					Address:        makeAddressPtr(4),
+					CreatableIndex: 1001,
+					CreatableType:  basics.AssetCreatable,
+					Resource:       &ledgercore.AccountResource{},
+				},
+			},
+		},
+		{
 			name: "asset freeze transaction",
-			skip: true,
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.AssetFreezeTx,
@@ -435,7 +477,6 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 		},
 		{
 			name: "application transaction",
-			skip: true,
 			signedTxn: transactions.SignedTxn{
 				Txn: transactions.Transaction{
 					Type: protocol.ApplicationCallTx,
@@ -471,20 +512,23 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
 					},
 				},
-				{
-					Address: makeAddressPtr(4),
-					Data: &ledgercore.AccountData{
-						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
+				/*
+					{
+						Address: makeAddressPtr(4),
+						Data: &ledgercore.AccountData{
+							AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
+						},
 					},
-				},
-				{
-					Address: makeAddressPtr(5),
-					Data: &ledgercore.AccountData{
-						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
+					{
+						Address: makeAddressPtr(5),
+						Data: &ledgercore.AccountData{
+							AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
+						},
 					},
-				},
+				*/
 			},
 			resources: []prefetcher.LoadedResourcesEntry{
+				/* - if we'll decide that we want to prefetch the foreign apps/assets, then this should be enabled
 				{
 					Address:        makeAddressPtr(2),
 					CreatableIndex: 1001,
@@ -503,7 +547,8 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 					CreatableType:  basics.AppCreatable,
 					Resource:       nil,
 				},
-				/* - if we'll decide that we want to perfetch the account local state, then this should be enabled.
+				*/
+				/* - if we'll decide that we want to prefetch the account local state, then this should be enabled.
 				{
 					address:        acctAddrPtr(1),
 					creatableIndex: 10,
@@ -545,7 +590,6 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 
 // Test for error from LookupAsset
 func TestAssetLookupError(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	rnd := basics.Round(5)
@@ -568,10 +612,12 @@ func TestAssetLookupError(t *testing.T) {
 		}
 
 	errorReceived := false
-	groups := make([][]transactions.SignedTxnWithAD, 5)
-	for i := 0; i < 5; i++ {
-		groups[i] = make([]transactions.SignedTxnWithAD, 2)
-		for j := 0; j < 2; j++ {
+	const numGroups = 5
+	const txnPerGroup = 2
+	groups := make([][]transactions.SignedTxnWithAD, numGroups)
+	for i := 0; i < numGroups; i++ {
+		groups[i] = make([]transactions.SignedTxnWithAD, txnPerGroup)
+		for j := 0; j < txnPerGroup; j++ {
 			groups[i][j].SignedTxn = assetTransferTxn
 			if i == 2 {
 				// force error in asset lookup in the second txn group only
@@ -579,8 +625,12 @@ func TestAssetLookupError(t *testing.T) {
 			}
 		}
 	}
+
 	preloadedTxnGroupsCh := prefetcher.PrefetchAccounts(context.Background(), ledger, rnd+100, groups, feeSinkAddr, config.Consensus[proto])
+
+	receivedNumGroups := 0
 	for loadedTxnGroup := range preloadedTxnGroupsCh {
+		receivedNumGroups++
 		if loadedTxnGroup.Err != nil {
 			errorReceived = true
 			require.Equal(t, int64(2), loadedTxnGroup.Err.GroupIdx)
@@ -589,13 +639,14 @@ func TestAssetLookupError(t *testing.T) {
 			require.Equal(t, errorTriggerAssetIndex, int(loadedTxnGroup.Err.CreatableIndex))
 			require.Equal(t, basics.AssetCreatable, loadedTxnGroup.Err.CreatableType)
 		}
+		require.Equal(t, txnPerGroup, len(loadedTxnGroup.TxnGroup))
 	}
 	require.True(t, errorReceived)
+	require.Equal(t, numGroups, receivedNumGroups)
 }
 
 // Test for error from GetCreatorForRound
 func TestGetCreatorForRoundError(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	rnd := basics.Round(5)
@@ -610,23 +661,33 @@ func TestGetCreatorForRoundError(t *testing.T) {
 					Sender: makeAddress(1),
 				},
 				AssetConfigTxnFields: transactions.AssetConfigTxnFields{
-					ConfigAsset: errorTriggerCreatableIndex,
+					ConfigAsset: 101,
 				},
 			},
 		}
+	createAssetFailedTxn := createAssetTxn
+	createAssetFailedTxn.Txn.ConfigAsset = errorTriggerCreatableIndex
 
 	errorReceived := false
 
-	groups := make([][]transactions.SignedTxnWithAD, 5)
-	for i := 0; i < 5; i++ {
-		groups[i] = make([]transactions.SignedTxnWithAD, 10)
-		for j := 0; j < 10; j++ {
+	const numGroups = 5
+	const txnPerGroup = 10
+	groups := make([][]transactions.SignedTxnWithAD, numGroups)
+	for i := 0; i < numGroups; i++ {
+		groups[i] = make([]transactions.SignedTxnWithAD, txnPerGroup)
+		for j := 0; j < txnPerGroup; j++ {
 			groups[i][j].SignedTxn = createAssetTxn
+			// fail only the first txn in the first group
+			if i == 0 && j == 0 {
+				groups[i][j].SignedTxn = createAssetFailedTxn
+			}
 		}
 	}
 	preloadedTxnGroupsCh := prefetcher.PrefetchAccounts(context.Background(), ledger, rnd+100, groups, feeSinkAddr, config.Consensus[proto])
 
+	receivedNumGroups := 0
 	for loadedTxnGroup := range preloadedTxnGroupsCh {
+		receivedNumGroups++
 		if loadedTxnGroup.Err != nil {
 			errorReceived = true
 			require.True(t, errors.Is(loadedTxnGroup.Err, getCreatorError{}))
@@ -634,8 +695,10 @@ func TestGetCreatorForRoundError(t *testing.T) {
 			require.Equal(t, errorTriggerCreatableIndex, int(loadedTxnGroup.Err.CreatableIndex))
 			require.Equal(t, basics.AssetCreatable, loadedTxnGroup.Err.CreatableType)
 		}
+		require.Equal(t, txnPerGroup, len(loadedTxnGroup.TxnGroup))
 	}
 	require.True(t, errorReceived)
+	require.Equal(t, numGroups, receivedNumGroups)
 }
 
 // Test for error from LookupWithoutRewards
@@ -658,29 +721,41 @@ func TestLookupWithoutRewards(t *testing.T) {
 				},
 			},
 		}
+	createAssetFailedTxn := createAssetTxn
+	createAssetFailedTxn.Txn.Sender = makeAddress(10)
 
 	errorReceived := false
 
-	groups := make([][]transactions.SignedTxnWithAD, 5)
-	for i := 0; i < 5; i++ {
-		groups[i] = make([]transactions.SignedTxnWithAD, 10)
-		for j := 0; j < 10; j++ {
+	const numGroups = 5
+	const txnPerGroup = 10
+	groups := make([][]transactions.SignedTxnWithAD, numGroups)
+	for i := 0; i < numGroups; i++ {
+		groups[i] = make([]transactions.SignedTxnWithAD, txnPerGroup)
+		for j := 0; j < txnPerGroup; j++ {
 			groups[i][j].SignedTxn = createAssetTxn
+			// fail only last txn in the first group
+			if i == 0 && j == txnPerGroup-1 {
+				groups[i][j].SignedTxn = createAssetFailedTxn
+			}
 		}
 	}
-	ledger.errorTriggerAddress[createAssetTxn.Txn.Sender] = true
+	ledger.errorTriggerAddress[createAssetFailedTxn.Txn.Sender] = true
 	preloadedTxnGroupsCh := prefetcher.PrefetchAccounts(context.Background(), ledger, rnd+100, groups, feeSinkAddr, config.Consensus[proto])
 
+	receivedNumGroups := 0
 	for loadedTxnGroup := range preloadedTxnGroupsCh {
+		receivedNumGroups++
 		if loadedTxnGroup.Err != nil {
 			errorReceived = true
 			require.True(t, errors.Is(loadedTxnGroup.Err, lookupError{}))
-			require.Equal(t, makeAddress(1), *loadedTxnGroup.Err.Address)
+			require.Equal(t, makeAddress(10), *loadedTxnGroup.Err.Address)
 			require.Equal(t, 0, int(loadedTxnGroup.Err.CreatableIndex))
 			require.Equal(t, basics.AssetCreatable, loadedTxnGroup.Err.CreatableType)
 		}
+		require.Equal(t, txnPerGroup, len(loadedTxnGroup.TxnGroup))
 	}
 	require.True(t, errorReceived)
+	require.Equal(t, numGroups, receivedNumGroups)
 }
 
 func TestEvaluatorPrefetcherQueueExpansion(t *testing.T) {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -42,20 +42,16 @@ const (
 	// These two accounts also have additional Algo transfer restrictions.
 	NotParticipating
 
-	// MaxEncodedAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
-	// this number is verified by the TestEncodedAccountDataSize function.
-	MaxEncodedAccountDataSize = 850000
-
 	// encodedMaxAssetsPerAccount is the decoder limit of number of assets stored per account.
 	// it's being verified by the unit test TestEncodedAccountAllocationBounds to align
 	// with config.Consensus[protocol.ConsensusCurrentVersion].MaxAssetsPerAccount; note that the decoded
 	// parameter is used only for protecting the decoder against malicious encoded account data stream.
-	// protocol-specific constains would be tested once the decoding is complete.
+	// protocol-specific contains would be tested once the decoding is complete.
 	encodedMaxAssetsPerAccount = 1024
 
 	// EncodedMaxAppLocalStates is the decoder limit for number of opted-in apps in a single account.
 	// It is verified in TestEncodedAccountAllocationBounds to align with
-	// config.Consensus[protocol.ConsensusCurrentVersion].MaxppsOptedIn
+	// config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsOptedIn
 	EncodedMaxAppLocalStates = 64
 
 	// EncodedMaxAppParams is the decoder limit for number of created apps in a single account.
@@ -228,6 +224,12 @@ type AccountData struct {
 	// TotalExtraAppPages stores the extra length in pages (MaxAppProgramLen bytes per page)
 	// requested for app program by this account
 	TotalExtraAppPages uint32 `codec:"teap"`
+
+	// Total number of boxes associated with this account, which implies it is an app account.
+	TotalBoxes uint64 `codec:"tbx"`
+
+	// TotalBoxBytes stores the sum of all len(keys) and len(values) of Boxes
+	TotalBoxBytes uint64 `codec:"tbxb"`
 }
 
 // AppLocalState stores the LocalState associated with an application. It also
@@ -412,11 +414,6 @@ func (app AppIndex) Address() Address {
 	return Address(crypto.HashObj(app))
 }
 
-// MakeAccountData returns a UserToken
-func MakeAccountData(status Status, algos MicroAlgos) AccountData {
-	return AccountData{Status: status, MicroAlgos: algos}
-}
-
 // Money returns the amount of MicroAlgos associated with the user's account
 func (u AccountData) Money(proto config.ConsensusParams, rewardsLevel uint64) (money MicroAlgos, rewards MicroAlgos) {
 	e := u.WithUpdatedRewards(proto, rewardsLevel)
@@ -475,6 +472,7 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) 
 		u.TotalAppSchema,
 		uint64(len(u.AppParams)), uint64(len(u.AppLocalStates)),
 		uint64(u.TotalExtraAppPages),
+		u.TotalBoxes, u.TotalBoxBytes,
 	)
 }
 
@@ -487,6 +485,7 @@ func MinBalance(
 	totalAppSchema StateSchema,
 	totalAppParams uint64, totalAppLocalStates uint64,
 	totalExtraAppPages uint64,
+	totalBoxes uint64, totalBoxBytes uint64,
 ) (res MicroAlgos) {
 	var min uint64
 
@@ -513,6 +512,14 @@ func MinBalance(
 	// MinBalance for each extra app program page
 	extraAppProgramLenCost := MulSaturate(proto.AppFlatParamsMinBalance, totalExtraAppPages)
 	min = AddSaturate(min, extraAppProgramLenCost)
+
+	// Base MinBalance for each created box
+	boxBaseCost := MulSaturate(proto.BoxFlatMinBalance, totalBoxes)
+	min = AddSaturate(min, boxBaseCost)
+
+	// Per byte MinBalance for boxes
+	boxByteCost := MulSaturate(proto.BoxByteMinBalance, totalBoxBytes)
+	min = AddSaturate(min, boxByteCost)
 
 	res.Raw = min
 	return res

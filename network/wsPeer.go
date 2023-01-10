@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -125,6 +125,11 @@ type wsPeerWebsocketConn interface {
 	CloseWithoutFlush() error
 	SetPingHandler(h func(appData string) error)
 	SetPongHandler(h func(appData string) error)
+	wrappedConn
+}
+
+type wrappedConn interface {
+	UnderlyingConn() net.Conn
 }
 
 type sendMessage struct {
@@ -185,6 +190,9 @@ type wsPeer struct {
 	// to filter that it had already sent before.
 	// this needs to be 64-bit aligned for use with atomic.AddUint64 on 32-bit platforms.
 	duplicateFilterCount uint64
+
+	// These message counters need to be 64-bit aligned as well.
+	txMessageCount, miMessageCount, ppMessageCount, avMessageCount uint64
 
 	wsPeerCore
 
@@ -272,6 +280,9 @@ type wsPeer struct {
 
 	// clientDataStoreMu synchronizes access to clientDataStore
 	clientDataStoreMu deadlock.Mutex
+
+	// closers is a slice of functions to run when the peer is closed
+	closers []func()
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -496,6 +507,7 @@ func (wp *wsPeer) readLoop() {
 		switch msg.Tag {
 		case protocol.MsgOfInterestTag:
 			// try to decode the message-of-interest
+			atomic.AddUint64(&wp.miMessageCount, 1)
 			if wp.handleMessageOfInterest(msg) {
 				return
 			}
@@ -529,6 +541,12 @@ func (wp *wsPeer) readLoop() {
 			// network maintenance message handled immediately instead of handing off to general handlers
 			wp.handleFilterMessage(msg)
 			continue
+		case protocol.TxnTag:
+			atomic.AddUint64(&wp.txMessageCount, 1)
+		case protocol.AgreementVoteTag:
+			atomic.AddUint64(&wp.avMessageCount, 1)
+		case protocol.ProposalPayloadTag:
+			atomic.AddUint64(&wp.ppMessageCount, 1)
 		}
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {
@@ -833,6 +851,10 @@ func (wp *wsPeer) Close(deadline time.Time) {
 			wp.net.log.Infof("failed to CloseWithoutFlush to connection for %s", wp.conn.RemoteAddr().String())
 		}
 	}
+	// now call all registered closers
+	for _, f := range wp.closers {
+		f()
+	}
 }
 
 // CloseAndWait internally calls Close() then waits for all peer activity to stop
@@ -967,6 +989,13 @@ func (wp *wsPeer) waitForIdentityVerify() {
 
 func (wp *wsPeer) pfProposalCompressionSupported() bool {
 	return wp.features&pfCompressedProposal != 0
+}
+
+func (wp *wsPeer) OnClose(f func()) {
+	if wp.closers == nil {
+		wp.closers = []func(){}
+	}
+	wp.closers = append(wp.closers, f)
 }
 
 type peerFeatureFlag int

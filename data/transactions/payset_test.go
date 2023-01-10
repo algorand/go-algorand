@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,6 +37,7 @@ func preparePayset(txnCount, acctCount int) Payset {
 }
 func TestPaysetCommitsToTxnOrder(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	payset := preparePayset(50, 50)
 	commit1 := payset.CommitFlat()
@@ -47,6 +48,7 @@ func TestPaysetCommitsToTxnOrder(t *testing.T) {
 
 func TestEmptyPaysetCommitment(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	const nilFlatPaysetHash = "WRS2VL2OQ5LPWBYLNBCZV3MEQ4DACSRDES6IUKHGOWYQERJRWC5A"
 	const emptyFlatPaysetHash = "E54GFMNS2LISPG5VUGOQ3B2RR7TRKAHRE24LUM3HOW6TJGQ6PNZQ"

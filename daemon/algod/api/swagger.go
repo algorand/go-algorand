@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -16,9 +16,10 @@
 
 package api
 
-import _ "embed"
+import _ "embed" // for embedding purposes
 
 // SwaggerSpecJSONEmbed is a string that is pulled from algod.oas2.json via go-embed
 // for use with the GET /swagger.json endpoint
+//
 //go:embed algod.oas2.json
 var SwaggerSpecJSONEmbed string

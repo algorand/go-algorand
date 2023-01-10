@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -58,6 +58,7 @@ func makeTypeCheckFunction(t *testing.T, exceptions []reflectionhelpers.TypePath
 
 func TestBlockFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	typeToCheck := reflect.TypeOf(bookkeeping.Block{})
 
@@ -84,6 +85,7 @@ func TestBlockFields(t *testing.T) {
 
 func TestAccountDataFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	typeToCheck := reflect.TypeOf(basics.AccountData{})
 

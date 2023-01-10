@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -76,7 +76,7 @@ type LoadedTransactionGroup struct {
 type accountPrefetcher struct {
 	ledger          Ledger
 	rnd             basics.Round
-	groups          [][]transactions.SignedTxnWithAD
+	txnGroups       [][]transactions.SignedTxnWithAD
 	feeSinkAddr     basics.Address
 	consensusParams config.ConsensusParams
 	outChan         chan LoadedTransactionGroup
@@ -84,14 +84,14 @@ type accountPrefetcher struct {
 
 // PrefetchAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
 // The order of the transaction groups returned by the channel is identical to the one in the input array.
-func PrefetchAccounts(ctx context.Context, l Ledger, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) <-chan LoadedTransactionGroup {
+func PrefetchAccounts(ctx context.Context, l Ledger, rnd basics.Round, txnGroups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) <-chan LoadedTransactionGroup {
 	prefetcher := &accountPrefetcher{
 		ledger:          l,
 		rnd:             rnd,
-		groups:          groups,
+		txnGroups:       txnGroups,
 		feeSinkAddr:     feeSinkAddr,
 		consensusParams: consensusParams,
-		outChan:         make(chan LoadedTransactionGroup, len(groups)),
+		outChan:         make(chan LoadedTransactionGroup, len(txnGroups)),
 	}
 
 	go prefetcher.prefetch(ctx)
@@ -117,6 +117,9 @@ type groupTask struct {
 	resources []LoadedResourcesEntry
 	// resourcesCount is the number of resources that nees to be loaded per transaction group
 	resourcesCount int
+
+	// error while processing this group task
+	err *GroupTaskError
 }
 
 // preloaderTask manage the loading of a single element, whether it's a resource or an account address.
@@ -128,9 +131,9 @@ type preloaderTask struct {
 	// resource type
 	creatableType basics.CreatableType
 	// a list of transaction group tasks that depends on this address or resource
-	groups []*groupTask
+	groupTasks []*groupTask
 	// a list of indices into the groupTask.balances or groupTask.resources where the address would be stored
-	groupIndices []int
+	groupTasksIndices []int
 }
 
 // preloaderTaskQueue is a dynamic linked list of enqueued entries, optimized for non-syncronized insertion and
@@ -198,18 +201,18 @@ func loadAccountsAddAccountTask(addr *basics.Address, wt *groupTask, accountTask
 	}
 	if task, have := accountTasks[*addr]; !have {
 		task := &preloaderTask{
-			address:      addr,
-			groups:       make([]*groupTask, 1, 4),
-			groupIndices: make([]int, 1, 4),
+			address:           addr,
+			groupTasks:        make([]*groupTask, 1, 4),
+			groupTasksIndices: make([]int, 1, 4),
 		}
-		task.groups[0] = wt
-		task.groupIndices[0] = wt.balancesCount
+		task.groupTasks[0] = wt
+		task.groupTasksIndices[0] = wt.balancesCount
 
 		accountTasks[*addr] = task
 		queue.enqueue(task)
 	} else {
-		task.groups = append(task.groups, wt)
-		task.groupIndices = append(task.groupIndices, wt.balancesCount)
+		task.groupTasks = append(task.groupTasks, wt)
+		task.groupTasksIndices = append(task.groupTasksIndices, wt.balancesCount)
 	}
 	wt.balancesCount++
 }
@@ -226,20 +229,20 @@ func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableInde
 	}
 	if task, have := resourceTasks[key]; !have {
 		task := &preloaderTask{
-			address:        addr,
-			groups:         make([]*groupTask, 1, 4),
-			groupIndices:   make([]int, 1, 4),
-			creatableIndex: cidx,
-			creatableType:  ctype,
+			address:           addr,
+			groupTasks:        make([]*groupTask, 1, 4),
+			groupTasksIndices: make([]int, 1, 4),
+			creatableIndex:    cidx,
+			creatableType:     ctype,
 		}
-		task.groups[0] = wt
-		task.groupIndices[0] = wt.resourcesCount
+		task.groupTasks[0] = wt
+		task.groupTasksIndices[0] = wt.resourcesCount
 
 		resourceTasks[key] = task
 		queue.enqueue(task)
 	} else {
-		task.groups = append(task.groups, wt)
-		task.groupIndices = append(task.groupIndices, wt.resourcesCount)
+		task.groupTasks = append(task.groupTasks, wt)
+		task.groupTasksIndices = append(task.groupTasksIndices, wt.resourcesCount)
 	}
 	wt.resourcesCount++
 }
@@ -250,6 +253,7 @@ func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableInde
 func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	defer close(p.outChan)
 	accountTasks := make(map[basics.Address]*preloaderTask)
+	resourceTasks := make(map[accountCreatableKey]*preloaderTask)
 
 	var maxTxnGroupEntries int
 	if p.consensusParams.Application {
@@ -260,21 +264,25 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 		maxTxnGroupEntries = p.consensusParams.MaxTxGroupSize * 8
 	}
 
-	tasksQueue := allocPreloaderQueue(len(p.groups), maxTxnGroupEntries)
+	tasksQueue := allocPreloaderQueue(len(p.txnGroups), maxTxnGroupEntries)
 
 	// totalBalances counts the total number of balances over all the transaction groups
 	totalBalances := 0
 	totalResources := 0
 
-	groupsReady := make([]groupTask, len(p.groups))
+	// initialize empty groupTasks for groupsReady
+	groupsReady := make([]*groupTask, len(p.txnGroups))
+	for i := range groupsReady {
+		groupsReady[i] = new(groupTask) // this ensures each allocated groupTask is 64-bit aligned
+	}
 
 	// Add fee sink to the first group
-	if len(p.groups) > 0 {
+	if len(p.txnGroups) > 0 {
 		// the feeSinkAddr is known to be non-empty
 		feeSinkPreloader := &preloaderTask{
-			address:      &p.feeSinkAddr,
-			groups:       []*groupTask{&groupsReady[0]},
-			groupIndices: []int{0},
+			address:           &p.feeSinkAddr,
+			groupTasks:        []*groupTask{groupsReady[0]},
+			groupTasksIndices: []int{0},
 		}
 		groupsReady[0].balancesCount = 1
 		accountTasks[p.feeSinkAddr] = feeSinkPreloader
@@ -283,21 +291,64 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 
 	// iterate over the transaction groups and add all their account addresses to the list
 	queue := &tasksQueue
-	for i := range p.groups {
-		task := &groupsReady[i]
-		for j := range p.groups[i] {
-			stxn := &p.groups[i][j]
+	for i := range p.txnGroups {
+		task := groupsReady[i]
+		for j := range p.txnGroups[i] {
+			stxn := &p.txnGroups[i][j]
 			switch stxn.Txn.Type {
 			case protocol.PaymentTx:
 				loadAccountsAddAccountTask(&stxn.Txn.Receiver, task, accountTasks, queue)
 				loadAccountsAddAccountTask(&stxn.Txn.CloseRemainderTo, task, accountTasks, queue)
 			case protocol.AssetConfigTx:
+				loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.ConfigAsset), basics.AssetCreatable, task, resourceTasks, queue)
 			case protocol.AssetTransferTx:
+				if !stxn.Txn.AssetSender.IsZero() {
+					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
+					loadAccountsAddResourceTask(&stxn.Txn.AssetSender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
+				} else {
+					if stxn.Txn.AssetAmount == 0 && (stxn.Txn.AssetReceiver == stxn.Txn.Sender) { // opt in
+						loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
+					}
+					if stxn.Txn.AssetAmount != 0 { // zero transfer is noop
+						loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
+					}
+				}
+				if !stxn.Txn.AssetReceiver.IsZero() {
+					if stxn.Txn.AssetAmount != 0 || (stxn.Txn.AssetReceiver == stxn.Txn.Sender) {
+						// if not zero transfer or opt in then prefetch
+						loadAccountsAddResourceTask(&stxn.Txn.AssetReceiver, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
+					}
+				}
+				if !stxn.Txn.AssetCloseTo.IsZero() {
+					loadAccountsAddResourceTask(&stxn.Txn.AssetCloseTo, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
+				}
 			case protocol.AssetFreezeTx:
+				if !stxn.Txn.FreezeAccount.IsZero() {
+					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks, queue)
+					loadAccountsAddResourceTask(&stxn.Txn.FreezeAccount, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks, queue)
+					loadAccountsAddAccountTask(&stxn.Txn.FreezeAccount, task, accountTasks, queue)
+				}
 			case protocol.ApplicationCallTx:
+				if stxn.Txn.ApplicationID != 0 {
+					// load the global - so that we'll have the program
+					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks, queue)
+					// load the local - so that we'll have the local state
+					// TODO: this is something we need to decide if we want to enable, since not
+					// every application call would use local storage.
+					if (stxn.Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC) ||
+						(stxn.Txn.ApplicationCallTxnFields.OnCompletion == transactions.CloseOutOC) ||
+						(stxn.Txn.ApplicationCallTxnFields.OnCompletion == transactions.ClearStateOC) {
+						loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks, queue)
+					}
+				}
+
+				// do not preload Txn.ForeignApps, Txn.ForeignAssets, Txn.Accounts
+				// since they might be non-used arbitrary values
+
 			case protocol.StateProofTx:
 			case protocol.KeyRegistrationTx:
 			}
+
 			// If you add new addresses here, also add them in getTxnAddresses().
 			if !stxn.Txn.Sender.IsZero() {
 				loadAccountsAddAccountTask(&stxn.Txn.Sender, task, accountTasks, queue)
@@ -333,7 +384,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	groupDoneCh := make(chan groupTaskDone, len(groupsReady))
 	const dependencyFreeGroup = -int64(^uint64(0)/2) - 1
 	for grpIdx := range groupsReady {
-		gr := &groupsReady[grpIdx]
+		gr := groupsReady[grpIdx]
 		gr.groupTaskIndex = int64(grpIdx)
 		gr.incompleteCount = int64(gr.balancesCount + gr.resourcesCount)
 		gr.balances = allBalances[usedBalances : usedBalances+gr.balancesCount]
@@ -356,24 +407,20 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 
 	// iterate on the transaction groups tasks. This array retains the original order.
 	completed := make(map[int64]bool)
-	for i := int64(0); i < int64(len(p.groups)); {
+	for i := int64(0); i < int64(len(p.txnGroups)); {
 	wait:
 		incompleteCount := atomic.LoadInt64(&groupsReady[i].incompleteCount)
 		if incompleteCount > 0 || (incompleteCount != dependencyFreeGroup && !completed[i]) {
 			select {
 			case done := <-groupDoneCh:
 				if done.err != nil {
-					// if there is an error, report the error to the output channel.
-					p.outChan <- LoadedTransactionGroup{
-						Err: &GroupTaskError{
-							err:            done.err,
-							GroupIdx:       done.groupIdx,
-							Address:        done.task.address,
-							CreatableIndex: done.task.creatableIndex,
-							CreatableType:  done.task.creatableType,
-						},
+					groupsReady[done.groupIdx].err = &GroupTaskError{
+						err:            done.err,
+						GroupIdx:       done.groupIdx,
+						Address:        done.task.address,
+						CreatableIndex: done.task.creatableIndex,
+						CreatableType:  done.task.creatableType,
 					}
-					return
 				}
 				if done.groupIdx > i {
 					// mark future txn as ready.
@@ -388,7 +435,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 			}
 		}
 		next := i
-		for ; next < int64(len(p.groups)); next++ {
+		for ; next < int64(len(p.txnGroups)); next++ {
 			if !completed[next] {
 				if next > i {
 					i = next
@@ -399,10 +446,11 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 
 			delete(completed, next)
 
-			// if we had no error, write the result to the output channel.
+			// write the result to the output channel.
 			// this write will not block since we preallocated enough space on the channel.
 			p.outChan <- LoadedTransactionGroup{
-				TxnGroup:  p.groups[next],
+				Err:       groupsReady[next].err,
+				TxnGroup:  p.txnGroups[next],
 				Accounts:  groupsReady[next].balances,
 				Resources: groupsReady[next].resources,
 			}
@@ -460,15 +508,19 @@ func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, task
 			// if there was an error..
 			if err != nil {
 				// there was an error loading that entry.
-				break
+				for _, wt := range task.groupTasks {
+					// notify the channel of the error.
+					wt.markCompletionAcctError(err, task, groupDoneCh)
+				}
+				continue
 			}
 			br := LoadedAccountDataEntry{
 				Address: task.address,
 				Data:    &acctData,
 			}
 			// update all the group tasks with the new acquired balance.
-			for i, wt := range task.groups {
-				wt.markCompletionAcct(task.groupIndices[i], br, groupDoneCh)
+			for i, wt := range task.groupTasks {
+				wt.markCompletionAcct(task.groupTasksIndices[i], br, groupDoneCh)
 			}
 			continue
 		}
@@ -479,7 +531,11 @@ func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, task
 			creator, ok, err = p.ledger.GetCreatorForRound(p.rnd, task.creatableIndex, task.creatableType)
 			if err != nil {
 				// there was an error loading that entry.
-				break
+				for _, wt := range task.groupTasks {
+					// notify the channel of the error.
+					wt.markCompletionAcctError(err, task, groupDoneCh)
+				}
+				continue
 			}
 			if !ok {
 				re := LoadedResourcesEntry{
@@ -487,8 +543,8 @@ func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, task
 					CreatableType:  task.creatableType,
 				}
 				// update all the group tasks with the new acquired balance.
-				for i, wt := range task.groups {
-					wt.markCompletionResource(task.groupIndices[i], re, groupDoneCh)
+				for i, wt := range task.groupTasks {
+					wt.markCompletionResource(task.groupTasksIndices[i], re, groupDoneCh)
 				}
 				continue
 			}
@@ -508,7 +564,11 @@ func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, task
 		}
 		if err != nil {
 			// there was an error loading that entry.
-			break
+			for _, wt := range task.groupTasks {
+				// notify the channel of the error.
+				wt.markCompletionAcctError(err, task, groupDoneCh)
+			}
+			continue
 		}
 		re := LoadedResourcesEntry{
 			Resource:       &resource,
@@ -517,14 +577,8 @@ func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, task
 			CreatableType:  task.creatableType,
 		}
 		// update all the group tasks with the new acquired balance.
-		for i, wt := range task.groups {
-			wt.markCompletionResource(task.groupIndices[i], re, groupDoneCh)
+		for i, wt := range task.groupTasks {
+			wt.markCompletionResource(task.groupTasksIndices[i], re, groupDoneCh)
 		}
-	}
-	// if we got here, it means that there was an error.
-	// in every case we get here, the task is gurenteed to be a non-nil.
-	for _, wt := range task.groups {
-		// notify the channel of the error.
-		wt.markCompletionAcctError(err, task, groupDoneCh)
 	}
 }

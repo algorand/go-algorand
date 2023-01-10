@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,6 +36,7 @@ import (
 
 func TestTransaction_EstimateEncodedSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
@@ -88,6 +89,7 @@ func generateDummyGoNonparticpatingTransaction(addr basics.Address) (tx Transact
 
 func TestGoOnlineGoNonparticipatingContradiction(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	// addr has no significance here other than being a normal valid address
 	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
@@ -112,6 +114,7 @@ func TestGoOnlineGoNonparticipatingContradiction(t *testing.T) {
 
 func TestGoNonparticipatingWellFormed(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	// addr has no significance here other than being a normal valid address
 	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
@@ -136,6 +139,7 @@ func TestGoNonparticipatingWellFormed(t *testing.T) {
 
 func TestAppCallCreateWellFormed(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	feeSink := basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -252,7 +256,9 @@ func TestAppCallCreateWellFormed(t *testing.T) {
 		},
 	}
 	for i, usecase := range usecases {
+		usecase := usecase
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			t.Parallel()
 			err := usecase.tx.WellFormed(SpecialAddresses{FeeSink: feeSink}, usecase.proto)
 			if usecase.expectedError != "" {
 				require.Error(t, err)
@@ -266,6 +272,7 @@ func TestAppCallCreateWellFormed(t *testing.T) {
 
 func TestWellFormedErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	feeSink := basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 	specialAddr := SpecialAddresses{FeeSink: feeSink}
@@ -273,6 +280,7 @@ func TestWellFormedErrors(t *testing.T) {
 	futureProto := config.Consensus[protocol.ConsensusFuture]
 	protoV27 := config.Consensus[protocol.ConsensusV27]
 	protoV28 := config.Consensus[protocol.ConsensusV28]
+	protoV32 := config.Consensus[protocol.ConsensusV32]
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
 	v5 := []byte{0x05}
@@ -284,7 +292,6 @@ func TestWellFormedErrors(t *testing.T) {
 	}
 	usecases := []struct {
 		tx            Transaction
-		spec          SpecialAddresses
 		proto         config.ConsensusParams
 		expectedError error
 	}{
@@ -296,7 +303,6 @@ func TestWellFormedErrors(t *testing.T) {
 					Fee:    basics.MicroAlgos{Raw: 100},
 				},
 			},
-			spec:          specialAddr,
 			proto:         protoV27,
 			expectedError: makeMinFeeErrorf("transaction had fee %d, which is less than the minimum %d", 100, curProto.MinTxnFee),
 		},
@@ -308,7 +314,6 @@ func TestWellFormedErrors(t *testing.T) {
 					Fee:    basics.MicroAlgos{Raw: 100},
 				},
 			},
-			spec:  specialAddr,
 			proto: curProto,
 		},
 		{
@@ -321,7 +326,6 @@ func TestWellFormedErrors(t *testing.T) {
 					FirstValid: 105,
 				},
 			},
-			spec:          specialAddr,
 			proto:         curProto,
 			expectedError: fmt.Errorf("transaction invalid range (%d--%d)", 105, 100),
 		},
@@ -339,7 +343,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ExtraProgramPages: 1,
 				},
 			},
-			spec:          specialAddr,
 			proto:         protoV27,
 			expectedError: fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", protoV27.MaxExtraAppProgramPages),
 		},
@@ -353,7 +356,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ClearStateProgram: []byte("Xjunk"),
 				},
 			},
-			spec:          specialAddr,
 			proto:         protoV27,
 			expectedError: fmt.Errorf("approval program too long. max len 1024 bytes"),
 		},
@@ -367,7 +369,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ClearStateProgram: []byte("Xjunk"),
 				},
 			},
-			spec:  specialAddr,
 			proto: futureProto,
 		},
 		{
@@ -380,7 +381,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
 				},
 			},
-			spec:          specialAddr,
 			proto:         futureProto,
 			expectedError: fmt.Errorf("app programs too long. max total len 2048 bytes"),
 		},
@@ -395,7 +395,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ExtraProgramPages: 1,
 				},
 			},
-			spec:  specialAddr,
 			proto: futureProto,
 		},
 		{
@@ -410,7 +409,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ExtraProgramPages: 1,
 				},
 			},
-			spec:          specialAddr,
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx.ExtraProgramPages is immutable"),
 		},
@@ -428,7 +426,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ExtraProgramPages: 4,
 				},
 			},
-			spec:          specialAddr,
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", futureProto.MaxExtraAppProgramPages),
 		},
@@ -441,7 +438,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ForeignApps:   []basics.AppIndex{10, 11},
 				},
 			},
-			spec:  specialAddr,
 			proto: protoV27,
 		},
 		{
@@ -453,7 +449,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ForeignApps:   []basics.AppIndex{10, 11, 12},
 				},
 			},
-			spec:          specialAddr,
 			proto:         protoV27,
 			expectedError: fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is 2"),
 		},
@@ -466,7 +461,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ForeignApps:   []basics.AppIndex{10, 11, 12, 13, 14, 15, 16, 17},
 				},
 			},
-			spec:  specialAddr,
 			proto: futureProto,
 		},
 		{
@@ -478,7 +472,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17, 18, 19, 20, 21, 22},
 				},
 			},
-			spec:          specialAddr,
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is 8"),
 		},
@@ -493,7 +486,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17},
 				},
 			},
-			spec:          specialAddr,
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = 8"),
 		},
@@ -509,7 +501,6 @@ func TestWellFormedErrors(t *testing.T) {
 					OnCompletion:      UpdateApplicationOC,
 				},
 			},
-			spec:          specialAddr,
 			proto:         protoV28,
 			expectedError: fmt.Errorf("app programs too long. max total len %d bytes", curProto.MaxAppProgramLen),
 		},
@@ -525,7 +516,6 @@ func TestWellFormedErrors(t *testing.T) {
 					OnCompletion:      UpdateApplicationOC,
 				},
 			},
-			spec:  specialAddr,
 			proto: futureProto,
 		},
 		{
@@ -543,13 +533,49 @@ func TestWellFormedErrors(t *testing.T) {
 					OnCompletion:      UpdateApplicationOC,
 				},
 			},
-			spec:          specialAddr,
 			proto:         protoV28,
 			expectedError: fmt.Errorf("tx.ExtraProgramPages is immutable"),
 		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.Boxes[0].Index is 1. Exceeds len(tx.ForeignApps)"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
+					ForeignApps:   []basics.AppIndex{1},
+				},
+			},
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
+					ForeignApps:   []basics.AppIndex{1},
+				},
+			},
+			proto:         protoV32,
+			expectedError: fmt.Errorf("tx.Boxes too long, max number of box references is 0"),
+		},
 	}
 	for _, usecase := range usecases {
-		err := usecase.tx.WellFormed(usecase.spec, usecase.proto)
+		err := usecase.tx.WellFormed(specialAddr, usecase.proto)
 		require.Equal(t, usecase.expectedError, err)
 	}
 }
@@ -557,6 +583,7 @@ func TestWellFormedErrors(t *testing.T) {
 // TestTransactionHash checks that Transaction.ID() is equivalent to the old simpler crypto.HashObj() implementation.
 func TestTransactionHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var txn Transaction
 	txn.Sender[1] = 3
@@ -577,6 +604,7 @@ var generateFlag = flag.Bool("generate", false, "")
 // running test with -generate would generate the matrix used in the test ( without the "correct" errors )
 func TestWellFormedKeyRegistrationTx(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	flag.Parse()
 
@@ -1281,6 +1309,7 @@ func (s *stateproofTxnTestCase) runIsWellFormedForTestCase() error {
 
 func TestWellFormedStateProofTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	// want to create different Txns, run on all of these cases the check, and have an expected result
 	cases := []stateproofTxnTestCase{
 		/* 0 */ {expectedError: errStateProofNotSupported}, // StateProofInterval == 0 leads to error
@@ -1303,6 +1332,7 @@ func TestWellFormedStateProofTxn(t *testing.T) {
 
 func TestStateProofTxnShouldBeZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)

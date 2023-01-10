@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -302,7 +302,7 @@ func TestConfigMigrateFromDisk(t *testing.T) {
 		a.NoError(err)
 		modified, err := migrate(c)
 		a.NoError(err)
-		a.Equal(defaultLocal, modified)
+		a.Equal(defaultLocal, modified, "config-v%d.json", configVersion)
 	}
 
 	cNext := Local{Version: getLatestConfigVersion() + 1}
@@ -486,7 +486,7 @@ func TestLocalStructTags(t *testing.T) {
 	localType := reflect.TypeOf(Local{})
 
 	versionField, ok := localType.FieldByName("Version")
-	require.True(t, true, ok)
+	require.True(t, ok)
 	ver := 0
 	versionTags := []string{}
 	for {
@@ -503,7 +503,7 @@ func TestLocalStructTags(t *testing.T) {
 		if field.Tag == "" {
 			require.Failf(t, "Field is missing versioning information", "Field Name: %s", field.Name)
 		}
-		// the field named "Version" is tested separatly in TestLocalVersionField, so we'll be skipping
+		// the field named "Version" is tested separately in TestLocalVersionField, so we'll be skipping
 		// it on this test.
 		if field.Name == "Version" {
 			continue
@@ -579,4 +579,28 @@ func TestGetNonDefaultConfigValues(t *testing.T) {
 
 	// check unmodified defaults
 	assert.Empty(t, GetNonDefaultConfigValues(GetDefaultLocal(), []string{"AgreementIncomingBundlesQueueLength", "TxPoolSize"}))
+}
+
+func TestLocal_TxFiltering(t *testing.T) {
+	cfg := GetDefaultLocal()
+
+	// ensure the default
+	require.True(t, cfg.TxFilterRawMsgEnabled())
+	require.False(t, cfg.TxFilterCanonicalEnabled())
+
+	cfg.TxIncomingFilteringFlags = 0
+	require.False(t, cfg.TxFilterRawMsgEnabled())
+	require.False(t, cfg.TxFilterCanonicalEnabled())
+
+	cfg.TxIncomingFilteringFlags = 1
+	require.True(t, cfg.TxFilterRawMsgEnabled())
+	require.False(t, cfg.TxFilterCanonicalEnabled())
+
+	cfg.TxIncomingFilteringFlags = 2
+	require.False(t, cfg.TxFilterRawMsgEnabled())
+	require.True(t, cfg.TxFilterCanonicalEnabled())
+
+	cfg.TxIncomingFilteringFlags = 3
+	require.True(t, cfg.TxFilterRawMsgEnabled())
+	require.True(t, cfg.TxFilterCanonicalEnabled())
 }

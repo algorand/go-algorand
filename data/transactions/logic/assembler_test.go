@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -369,6 +369,16 @@ pushint 1
 gitxnas 0 Logs
 `
 
+const boxNonsense = `
+  box_create
+  box_extract
+  box_replace
+  box_del
+  box_len
+  box_put
+  box_get
+`
+
 const randomnessNonsense = `
 pushint 0xffff
 block BlkTimestamp
@@ -415,7 +425,7 @@ match_label1:
 pushbytess "1" "2" "1"
 `
 
-const v8Nonsense = v7Nonsense + switchNonsense + frameNonsense + matchNonsense
+const v8Nonsense = v7Nonsense + switchNonsense + frameNonsense + matchNonsense + boxNonsense
 
 const v9Nonsense = v8Nonsense + pairingNonsense
 
@@ -426,12 +436,14 @@ const randomnessCompiled = "81ffff03d101d000"
 const v7Compiled = v6Compiled + "5e005f018120af060180070123456789abcd49490501988003012345494984" +
 	randomnessCompiled + "800243218001775c0280018881015d"
 
+const boxCompiled = "b9babbbcbdbfbe"
+
 const switchCompiled = "81018d02fff800008101"
 const matchCompiled = "83030102018e02fff500008203013101320131"
 
-const v8Compiled = v7Compiled + switchCompiled + frameCompiled + matchCompiled
+const v8Compiled = v7Compiled + switchCompiled + frameCompiled + matchCompiled + boxCompiled
 
-const v9Compiled = v7Compiled + pairingCompiled
+const v9Compiled = v8Compiled + pairingCompiled
 
 var nonsense = map[uint64]string{
 	1: v1Nonsense,
@@ -454,6 +466,7 @@ var compiled = map[uint64]string{
 	6: "06" + v6Compiled,
 	7: "07" + v7Compiled,
 	8: "08" + v8Compiled,
+	9: "09" + v9Compiled,
 }
 
 func pseudoOp(opcode string) bool {
@@ -496,7 +509,9 @@ func TestAssemble(t *testing.T) {
 			// check that compilation is stable over
 			// time. we must assemble to the same bytes
 			// this month that we did last month.
-			expectedBytes, _ := hex.DecodeString(compiled[v])
+			bytecode, ok := compiled[v]
+			require.True(t, ok, "Need v%d bytecode", v)
+			expectedBytes, _ := hex.DecodeString(bytecode)
 			require.NotEmpty(t, expectedBytes)
 			// the hex is for convenience if the program has been changed. the
 			// hex string can be copy pasted back in as a new expected result.
@@ -872,8 +887,8 @@ func TestAssembleBytes(t *testing.T) {
 	expectedOptimizedConsts := "018006616263646566"
 
 	bad := [][]string{
-		{"byte", "...operation needs byte literal argument"},
-		{`byte "john" "doe"`, "...operation with extraneous argument"},
+		{"byte", "...needs byte literal argument"},
+		{`byte "john" "doe"`, "...with extraneous argument"},
 	}
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -1608,10 +1623,12 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 	// catch any suprises.
 	require.LessOrEqual(t, LogicVersion, len(nonsense)) // Allow nonsense for future versions
 	for v, source := range nonsense {
+		v, source := v, source
 		if v > LogicVersion {
 			continue // We allow them to be set, but can't test assembly beyond LogicVersion
 		}
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			t.Parallel()
 			ops := testProg(t, source, v)
 			t2, err := Disassemble(ops.Program)
 			require.NoError(t, err)
@@ -1660,17 +1677,40 @@ func TestConstantArgs(t *testing.T) {
 	t.Parallel()
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		testProg(t, "int", v, Expect{1, "int needs one argument"})
-		testProg(t, "intc", v, Expect{1, "intc operation needs one argument"})
-		testProg(t, "byte", v, Expect{1, "byte operation needs byte literal argument"})
-		testProg(t, "bytec", v, Expect{1, "bytec operation needs one argument"})
-		testProg(t, "addr", v, Expect{1, "addr operation needs one argument"})
+		testProg(t, "int", v, Expect{1, "int needs one immediate argument, was given 0"})
+		testProg(t, "int 1 2", v, Expect{1, "int needs one immediate argument, was given 2"})
+		testProg(t, "intc", v, Expect{1, "intc needs one immediate argument, was given 0"})
+		testProg(t, "intc hi bye", v, Expect{1, "intc needs one immediate argument, was given 2"})
+		testProg(t, "byte", v, Expect{1, "byte needs byte literal argument"})
+		testProg(t, "bytec", v, Expect{1, "bytec needs one immediate argument, was given 0"})
+		testProg(t, "bytec 1 x", v, Expect{1, "bytec needs one immediate argument, was given 2"})
+		testProg(t, "addr", v, Expect{1, "addr needs one immediate argument, was given 0"})
+		testProg(t, "addr x y", v, Expect{1, "addr needs one immediate argument, was given 2"})
 	}
 	for v := uint64(3); v <= AssemblerMaxVersion; v++ {
-		testProg(t, "pushint", v, Expect{1, "pushint needs one argument"})
-		testProg(t, "pushbytes", v, Expect{1, "pushbytes operation needs byte literal argument"})
+		testProg(t, "pushint", v, Expect{1, "pushint needs one immediate argument, was given 0"})
+		testProg(t, "pushint 3 4", v, Expect{1, "pushint needs one immediate argument, was given 2"})
+		testProg(t, "pushbytes", v, Expect{1, "pushbytes needs byte literal argument"})
+	}
+}
+
+func TestBranchArgs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		testProg(t, "b", v, Expect{1, "b needs a single label argument"})
+		testProg(t, "b lab1 lab2", v, Expect{1, "b needs a single label argument"})
+		testProg(t, "int 1; bz", v, Expect{1, "bz needs a single label argument"})
+		testProg(t, "int 1; bz a b", v, Expect{1, "bz needs a single label argument"})
+		testProg(t, "int 1; bnz", v, Expect{1, "bnz needs a single label argument"})
+		testProg(t, "int 1; bnz c d", v, Expect{1, "bnz needs a single label argument"})
 	}
 
+	for v := uint64(4); v <= AssemblerMaxVersion; v++ {
+		testProg(t, "callsub", v, Expect{1, "callsub needs a single label argument"})
+		testProg(t, "callsub one two", v, Expect{1, "callsub needs a single label argument"})
+	}
 }
 
 func TestAssembleDisassembleErrors(t *testing.T) {
@@ -2762,10 +2802,8 @@ func TestGetSpec(t *testing.T) {
 	require.Equal(t, "unknown opcode: nonsense", ops.Errors[1].Err.Error())
 }
 
-func TestAddPseudoDocTags(t *testing.T) {
+func TestAddPseudoDocTags(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies pseudoOps and opDocByName which are global maps
 	partitiontest.PartitionTest(t)
-	// Not parallel because it modifies pseudoOps and opDocByName which are global maps
-	// t.Parallel()
 	defer func() {
 		delete(pseudoOps, "tests")
 		delete(opDocByName, "multiple")
