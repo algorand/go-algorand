@@ -1107,7 +1107,8 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 
 	// Make sure the time is always advancing. If multiple transactions set the time we use the largest timestamp.
 	// TODO: Does that actually matter? It might be useful to go backwards.
-	if txn.Txn.DevMode.SetNextBlockTime != 0 && txn.Txn.DevMode.SetNextBlockTime > eval.block.BlockHeader.TimeStamp {
+	//if txn.Txn.DevMode.SetNextBlockTime != 0 && txn.Txn.DevMode.SetNextBlockTime > eval.block.BlockHeader.TimeStamp {
+	if txn.Txn.DevMode.SetNextBlockTime != 0 {
 		eval.block.BlockHeader.TimeStamp = txn.Txn.DevMode.SetNextBlockTime
 	}
 

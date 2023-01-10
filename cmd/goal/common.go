@@ -74,6 +74,6 @@ func addTxnFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different from transaction \"from\" address due to rekeying")
 
 	// devmode options
-	cmd.Flags().Int64Var(&setBlockTime, "setblocktime", 0, "Add 'set_block_time: <value>' field to the txn.")
-	cmd.Flags().BoolVar(&skipValidation, "skipvalidation", false, "Add 'skip_validation: true' field to the txn.")
+	cmd.Flags().Int64Var(&setBlockTime, "set-block-time", 0, "Add 'set_block_time: <value>' field to the txn.")
+	cmd.Flags().BoolVar(&skipValidation, "skip-validation", false, "Add 'skip_validation: true' field to the txn.")
 }

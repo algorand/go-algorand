@@ -547,6 +547,9 @@ var sendAssetCmd = &cobra.Command{
 
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
+		// DevMode fields: the default values would be ignored.
+		tx.DevMode.SkipValidation = skipValidation
+		tx.DevMode.SetNextBlockTime = setBlockTime
 
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
