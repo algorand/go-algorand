@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -746,7 +746,7 @@ func TestAppCallOptIn(t *testing.T) {
 	prevMaxAppsOptedIn := config.Consensus[protocol.ConsensusV24].MaxAppsOptedIn
 	for _, testProtoVer := range optInCountTest {
 		cparams, ok := config.Consensus[testProtoVer]
-		a.True(ok)
+		a.True(ok, testProtoVer)
 		if cparams.MaxAppsOptedIn > 0 {
 			a.LessOrEqual(prevMaxAppsOptedIn, cparams.MaxAppsOptedIn)
 		}

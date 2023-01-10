@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -41,7 +41,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitely, otherwise, only the most recent blocks
@@ -71,7 +71,7 @@ type Local struct {
 	// Logging
 	BaseLoggerDebugLevel uint32 `version[0]:"1" version[1]:"4"`
 	// if this is 0, do not produce agreement.cadaver
-	CadaverSizeTarget uint64 `version[0]:"1073741824"`
+	CadaverSizeTarget uint64 `version[0]:"1073741824" version[24]:"0"`
 
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
 	// connections. 0 means no connections allowed. Must be non-negative.
@@ -161,6 +161,20 @@ type Local struct {
 
 	SuggestedFeeBlockHistory int `version[0]:"3"`
 
+	// TxBacklogServiceRateWindowSeconds is the window size used to determine the service rate of the txBacklog
+	TxBacklogServiceRateWindowSeconds int `version[27]:"10"`
+
+	// TxBacklogReservedCapacityPerPeer determines how much dedicated serving capacity the TxBacklog gives each peer
+	TxBacklogReservedCapacityPerPeer int `version[27]:"20"`
+
+	// EnableTxBacklogRateLimiting controls if a rate limiter and congestion manager shouild be attached to the tx backlog enqueue process
+	// if enabled, the over-all TXBacklog Size will be larger by MAX_PEERS*TxBacklogReservedCapacityPerPeer
+	EnableTxBacklogRateLimiting bool `version[27]:"false"`
+
+	// TxBacklogSize is the queue size used for receiving transactions. default of 26000 to approximate 1 block of transactions
+	// if EnableTxBacklogRateLimiting enabled, the over-all size will be larger by MAX_PEERS*TxBacklogReservedCapacityPerPeer
+	TxBacklogSize int `version[27]:"26000"`
+
 	// TxPoolSize is the number of transactions that fit in the transaction pool
 	TxPoolSize int `version[0]:"50000" version[5]:"15000" version[23]:"75000"`
 
@@ -246,6 +260,10 @@ type Local struct {
 	// PeerConnectionsUpdateInterval defines the interval at which the peer connections information is being sent to the
 	// telemetry ( when enabled ). Defined in seconds.
 	PeerConnectionsUpdateInterval int `version[5]:"3600"`
+
+	// HeartbeatUpdateInterval defines the interval at which the heartbeat information is being sent to the
+	// telemetry ( when enabled ). Defined in seconds. Minimum value is 60.
+	HeartbeatUpdateInterval int `version[27]:"600"`
 
 	// EnableProfiler enables the go pprof endpoints, should be false if
 	// the algod api will be exposed to untrusted individuals
@@ -452,6 +470,25 @@ type Local struct {
 	// MaxAcctLookback sets the maximum lookback range for account states,
 	// i.e. the ledger can answer account states questions for the range Latest-MaxAcctLookback...Latest
 	MaxAcctLookback uint64 `version[23]:"4"`
+
+	// EnableUsageLog enables 10Hz log of CPU and RAM usage.
+	// Also adds 'algod_ram_usage` (number of bytes in use) to /metrics
+	EnableUsageLog bool `version[24]:"false"`
+
+	// MaxAPIBoxPerApplication defines the maximum total number of boxes per application that will be returned
+	// in GetApplicationBoxes REST API responses.
+	MaxAPIBoxPerApplication uint64 `version[25]:"100000"`
+
+	// TxIncomingFilteringFlags instructs algod filtering incoming tx messages
+	// Flag values:
+	// 0x00 - disabled
+	// 0x01 (txFilterRawMsg) - check for raw tx message duplicates
+	// 0x02 (txFilterCanonical) - check for canonical tx group duplicates
+	TxIncomingFilteringFlags uint32 `version[26]:"1"`
+
+	// EnableExperimentalAPI enables experimental API endpoint. Note that these endpoints have no
+	// guarantees in terms of functionality or future support.
+	EnableExperimentalAPI bool `version[26]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
@@ -539,4 +576,14 @@ func (cfg Local) CatchupVerifyTransactionSignatures() bool {
 // CatchupVerifyApplyData returns true if verifying the ApplyData of the payset needed
 func (cfg Local) CatchupVerifyApplyData() bool {
 	return cfg.CatchupBlockValidateMode&catchupValidationModeVerifyApplyData != 0
+}
+
+// TxFilterRawMsgEnabled returns true if raw tx filtering is enabled
+func (cfg Local) TxFilterRawMsgEnabled() bool {
+	return cfg.TxIncomingFilteringFlags&txFilterRawMsg != 0
+}
+
+// TxFilterCanonicalEnabled returns true if canonical tx group filtering is enabled
+func (cfg Local) TxFilterCanonicalEnabled() bool {
+	return cfg.TxIncomingFilteringFlags&txFilterCanonical != 0
 }

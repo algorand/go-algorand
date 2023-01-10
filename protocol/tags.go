@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -42,3 +42,22 @@ const (
 	//UniCatchupResTag   Tag = "UT" was used for wsfetcherservice
 	VoteBundleTag Tag = "VB"
 )
+
+// TagList is a list of all currently used protocol tags.
+// TODO: generate this and/or have a test that it is complete.
+var TagList = []Tag{
+	UnknownMsgTag,
+	AgreementVoteTag,
+	MsgOfInterestTag,
+	MsgDigestSkipTag,
+	NetPrioResponseTag,
+	PingTag,
+	PingReplyTag,
+	ProposalPayloadTag,
+	StateProofSigTag,
+	TopicMsgRespTag,
+	TxnTag,
+	UniCatchupReqTag,
+	UniEnsBlockReqTag,
+	VoteBundleTag,
+}

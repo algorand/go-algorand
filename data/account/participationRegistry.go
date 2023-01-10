@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -219,6 +219,9 @@ var ErrNoKeyForID = errors.New("no valid key found for the participationID")
 
 // ErrSecretNotFound is used when attempting to lookup secrets for a particular round.
 var ErrSecretNotFound = errors.New("the participation ID did not have secrets for the requested round")
+
+// ErrStateProofVerifierNotFound states that no state proof field was found.
+var ErrStateProofVerifierNotFound = errors.New("record contains no StateProofVerifier")
 
 // ParticipationRegistry contain all functions for interacting with the Participation Registry.
 type ParticipationRegistry interface {
@@ -767,6 +770,10 @@ func (db *participationDB) GetStateProofSecretsForRound(id ParticipationID, roun
 	if err != nil {
 		return StateProofSecretsForRound{}, err
 	}
+	if partRecord.StateProof == nil {
+		return StateProofSecretsForRound{},
+			fmt.Errorf("%w: for participation ID %v", ErrStateProofVerifierNotFound, id)
+	}
 
 	var result StateProofSecretsForRound
 	result.ParticipationRecord = partRecord.ParticipationRecord
@@ -1008,7 +1015,7 @@ func (db *participationDB) Flush(timeout time.Duration) error {
 // Close attempts to flush with db.flushTimeout, then waits for the write queue for another db.flushTimeout.
 func (db *participationDB) Close() {
 	if err := db.Flush(db.flushTimeout); err != nil {
-		db.log.Warnf("participationDB unhandled error during Close/Flush: %w", err)
+		db.log.Warnf("participationDB unhandled error during Close/Flush: %v", err)
 	}
 
 	db.store.Close()

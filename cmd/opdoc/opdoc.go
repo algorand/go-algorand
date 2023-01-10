@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-var docVersion = 7
+var docVersion = 8
 
 func opGroupMarkdownTable(names []string, out io.Writer) {
 	fmt.Fprint(out, `| Opcode | Description |
@@ -245,10 +245,11 @@ type OpRecord struct {
 	ArgEnum      []string `json:",omitempty"`
 	ArgEnumTypes string   `json:",omitempty"`
 
-	Doc           string
-	DocExtra      string `json:",omitempty"`
-	ImmediateNote string `json:",omitempty"`
-	Groups        []string
+	Doc               string
+	DocExtra          string `json:",omitempty"`
+	ImmediateNote     string `json:",omitempty"`
+	IntroducedVersion uint64
+	Groups            []string
 }
 
 // LanguageSpec records the ops of the language at some version
@@ -269,14 +270,20 @@ func typeString(types []logic.StackType) string {
 		case logic.StackAny:
 			out[i] = '.'
 		case logic.StackNone:
-			if i == 0 && len(types) == 1 {
-				return ""
-			}
-			panic("unexpected StackNone in opdoc typeString")
+			out[i] = '_'
 		default:
 			panic("unexpected type in opdoc typeString")
 		}
 	}
+
+	// Cant return None and !None from same op
+	if strings.Contains(string(out), "_") {
+		if strings.ContainsAny(string(out), "UB.") {
+			panic("unexpected StackNone in opdoc typeString")
+		}
+		return ""
+	}
+
 	return string(out)
 }
 
@@ -294,6 +301,9 @@ func fieldsAndTypes(group logic.FieldGroup) ([]string, string) {
 }
 
 func argEnums(name string) ([]string, string) {
+	// reminder: this needs to be manually updated every time
+	// a new opcode is added with an associated FieldGroup
+	// it'd be nice to have this auto-update
 	switch name {
 	case "txn", "gtxn", "gtxns", "itxn", "gitxn":
 		return fieldsAndTypes(logic.TxnFields)
@@ -313,6 +323,16 @@ func argEnums(name string) ([]string, string) {
 		return fieldsAndTypes(logic.AppParamsFields)
 	case "acct_params_get":
 		return fieldsAndTypes(logic.AcctParamsFields)
+	case "block":
+		return fieldsAndTypes(logic.BlockFields)
+	case "json_ref":
+		return fieldsAndTypes(logic.JSONRefTypes)
+	case "base64_decode":
+		return fieldsAndTypes(logic.Base64Encodings)
+	case "vrf_verify":
+		return fieldsAndTypes(logic.VrfStandards)
+	case "ecdsa_pk_recover", "ecdsa_verify", "ecdsa_pk_decompress":
+		return fieldsAndTypes(logic.EcdsaCurves)
 	default:
 		return nil, ""
 	}
@@ -332,6 +352,7 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].DocExtra = logic.OpDocExtra(spec.Name)
 		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
 		records[i].Groups = opGroups[spec.Name]
+		records[i].IntroducedVersion = spec.Version
 	}
 	return &LanguageSpec{
 		EvalMaxVersion:  docVersion,

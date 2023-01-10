@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package data
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -42,6 +43,11 @@ import (
 
 func TestAccountManagerKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	if testing.Short() {
+		t.Log("this is a long test and skipping for -short")
+		return
+	}
+
 	registry := &mocks.MockParticipationRegistry{}
 	testAccountManagerKeys(t, registry, false)
 }
@@ -84,6 +90,11 @@ func registryCloseTest(t testing.TB, registry account.ParticipationRegistry, dbf
 
 func TestAccountManagerKeysRegistry(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	if testing.Short() {
+		t.Log("this is a long test and skipping for -short")
+		return
+	}
+
 	registry, dbName := getRegistryImpl(t, false, true)
 	defer registryCloseTest(t, registry, dbName)
 	testAccountManagerKeys(t, registry, true)
@@ -122,6 +133,7 @@ func testAccountManagerKeys(t *testing.T, registry account.ParticipationRegistry
 
 		accessor, err := db.MakeErasableAccessor(partFilename)
 		require.NoError(t, err)
+		defer accessor.Close()
 		accessor.SetLogger(log)
 
 		part, err := account.FillDBWithParticipationKeys(accessor, root.Address(), 0, 100, 10000)
@@ -247,4 +259,47 @@ func TestAccountManagerOverlappingStateProofKeys(t *testing.T) {
 	a.Equal(2, len(res))
 	res = acctManager.StateProofKeys(basics.Round(merklesignature.KeyLifetimeDefault * 3))
 	a.Equal(1, len(res))
+}
+
+func TestGetStateProofKeysDontLogErrorOnNilStateProof(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+
+	registry, dbName := getRegistryImpl(t, false, true)
+	defer registryCloseTest(t, registry, dbName)
+
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Error)
+	logbuffer := bytes.NewBuffer(nil)
+	log.SetOutput(logbuffer)
+
+	acctManager := MakeAccountManager(log, registry)
+	databaseFiles := make([]string, 0)
+	defer func() {
+		for _, fileName := range databaseFiles {
+			os.Remove(fileName)
+			os.Remove(fileName + "-shm")
+			os.Remove(fileName + "-wal")
+			os.Remove(fileName + "-journal")
+		}
+	}()
+
+	// Generate 2 participations under the same account
+	store, err := db.MakeAccessor("stateprooftest", false, true)
+	a.NoError(err)
+	root, err := account.GenerateRoot(store)
+	a.NoError(err)
+	part1, err := account.FillDBWithParticipationKeys(store, root.Address(), 0, basics.Round(merklesignature.KeyLifetimeDefault*2), 3)
+	a.NoError(err)
+	store.Close()
+
+	part1.StateProofSecrets = nil
+	_, err = registry.Insert(part1.Participation)
+	a.NoError(err)
+
+	logbuffer.Reset()
+	acctManager.StateProofKeys(1)
+	lg := logbuffer.String()
+	a.False(strings.Contains(lg, account.ErrStateProofVerifierNotFound.Error()))
+	a.False(strings.Contains(lg, "level=error"), "expected no error in log:", lg)
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -98,7 +98,7 @@ func (spw *Worker) initBuilders() {
 		return
 	})
 	if err != nil {
-		spw.log.Warnf("initBuilders: getPendingSigs: %w", err)
+		spw.log.Warnf("initBuilders: getPendingSigs: %v", err)
 		return
 	}
 
@@ -128,7 +128,7 @@ func (spw *Worker) addSigsToBuilder(sigs []pendingSig, rnd basics.Round) {
 
 		isPresent, err := builderForRound.Present(pos)
 		if err != nil {
-			spw.log.Warnf("addSigsToBuilder: failed to invoke builderForRound.Present on pos %d - %w ", pos, err)
+			spw.log.Warnf("addSigsToBuilder: failed to invoke builderForRound.Present on pos %d - %v", pos, err)
 			continue
 		}
 		if isPresent {
@@ -141,7 +141,7 @@ func (spw *Worker) addSigsToBuilder(sigs []pendingSig, rnd basics.Round) {
 			continue
 		}
 		if err := builderForRound.Add(pos, sig.sig); err != nil {
-			spw.log.Warnf("addSigsToBuilder: error while adding sig. inner error: %w", err)
+			spw.log.Warnf("addSigsToBuilder: error while adding sig. inner error: %v", err)
 			continue
 		}
 	}
@@ -407,7 +407,7 @@ func (spw *Worker) tryBroadcast() {
 
 		sp, err := b.Build()
 		if err != nil {
-			spw.log.Warnf("spw.tryBroadcast: building state proof for %d failed: %w", rnd, err)
+			spw.log.Warnf("spw.tryBroadcast: building state proof for %d failed: %v", rnd, err)
 			continue
 		}
 

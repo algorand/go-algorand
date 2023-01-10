@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -467,26 +467,32 @@ func TestBackwardCompatAssemble(t *testing.T) {
 	source := "int 1; int 1; bnz done; done:"
 
 	t.Run("v=default", func(t *testing.T) {
+		t.Parallel()
 		testProg(t, source, assemblerNoVersion, Expect{1, "label \"done\" is too far away"})
 	})
 
 	t.Run("v=default", func(t *testing.T) {
+		t.Parallel()
 		testProg(t, source, 0, Expect{1, "label \"done\" is too far away"})
 	})
 
 	t.Run("v=default", func(t *testing.T) {
+		t.Parallel()
 		testProg(t, source, 1, Expect{1, "label \"done\" is too far away"})
 	})
 
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		v := v
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			testLogic(t, source, v, defaultEvalParams(nil))
+			t.Parallel()
+			testLogic(t, source, v, defaultEvalParams())
 		})
 	}
 }
 
 func TestExplicitConstants(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	require.Equal(t, 4096, maxStringSize, "constant changed, make it version dependent")
 	require.Equal(t, 64, maxByteMathSize, "constant changed, move it version dependent")

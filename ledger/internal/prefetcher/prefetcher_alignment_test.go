@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -145,6 +145,9 @@ func (l *prefetcherAlignmentTestLedger) LookupAsset(rnd basics.Round, addr basic
 
 	return l.assets[addr][aidx], nil
 }
+func (l *prefetcherAlignmentTestLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
+	panic("not implemented")
+}
 func (l *prefetcherAlignmentTestLedger) GetCreatorForRound(_ basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	l.mu.Lock()
 	if l.requestedCreators == nil {
@@ -170,6 +173,7 @@ func (l *prefetcherAlignmentTestLedger) LatestTotals() (basics.Round, ledgercore
 func (l *prefetcherAlignmentTestLedger) VotersForStateProof(basics.Round) (*ledgercore.VotersForRound, error) {
 	return nil, nil
 }
+func (l *prefetcherAlignmentTestLedger) FlushCaches() {}
 
 func parseLoadedAccountDataEntries(loadedAccountDataEntries []prefetcher.LoadedAccountDataEntry) map[basics.Address]struct{} {
 	if len(loadedAccountDataEntries) == 0 {
@@ -395,7 +399,6 @@ func TestEvaluatorPrefetcherAlignmentCreateAsset(t *testing.T) {
 }
 
 func TestEvaluatorPrefetcherAlignmentReconfigAsset(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	addr := makeAddress(1)
@@ -448,7 +451,6 @@ func TestEvaluatorPrefetcherAlignmentReconfigAsset(t *testing.T) {
 }
 
 func TestEvaluatorPrefetcherAlignmentAssetOptIn(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	assetID := basics.AssetIndex(5)
@@ -503,8 +505,7 @@ func TestEvaluatorPrefetcherAlignmentAssetOptIn(t *testing.T) {
 	require.Equal(t, requested, prefetched)
 }
 
-func TestEvaluatorPrefetcherAlignmentAssetTransfer(t *testing.T) {
-	t.Skip("disabled")
+func TestEvaluatorPrefetcherAlignmentAssetOptInCloseTo(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	assetID := basics.AssetIndex(5)
@@ -570,8 +571,97 @@ func TestEvaluatorPrefetcherAlignmentAssetTransfer(t *testing.T) {
 	require.Equal(t, requested, prefetched)
 }
 
+func TestEvaluatorPrefetcherAlignmentAssetTransfer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	assetID := basics.AssetIndex(5)
+	l := &prefetcherAlignmentTestLedger{
+		balances: map[basics.Address]ledgercore.AccountData{
+			rewardsPool(): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
+				},
+			},
+			makeAddress(1): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos:       basics.MicroAlgos{Raw: 1000001},
+					TotalAssets:      1,
+					TotalAssetParams: 1,
+				},
+			},
+			makeAddress(2): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 1000002},
+				},
+			},
+			makeAddress(3): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 1000003},
+				},
+			},
+		},
+		assets: map[basics.Address]map[basics.AssetIndex]ledgercore.AssetResource{
+			makeAddress(1): {
+				assetID: {
+					AssetParams:  &basics.AssetParams{},
+					AssetHolding: &basics.AssetHolding{},
+				},
+			},
+			makeAddress(2): {
+				assetID: {
+					AssetHolding: &basics.AssetHolding{Amount: 5},
+				},
+			},
+			makeAddress(3): {
+				assetID: {
+					AssetHolding: &basics.AssetHolding{},
+				},
+			},
+		},
+		creators: map[basics.CreatableIndex]basics.Address{
+			basics.CreatableIndex(assetID): makeAddress(1),
+		},
+	}
+
+	txn := transactions.Transaction{
+		Type: protocol.AssetTransferTx,
+		Header: transactions.Header{
+			Sender:      makeAddress(2),
+			GenesisHash: genesisHash(),
+		},
+		AssetTransferTxnFields: transactions.AssetTransferTxnFields{
+			XferAsset:     assetID,
+			AssetReceiver: makeAddress(3),
+			AssetAmount:   1,
+		},
+	}
+
+	requested, prefetched := run(t, l, txn)
+
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	require.Equal(t, requested, prefetched)
+
+	// zero transfer of any asset
+	txn = transactions.Transaction{
+		Type: protocol.AssetTransferTx,
+		Header: transactions.Header{
+			Sender:      makeAddress(1),
+			GenesisHash: genesisHash(),
+		},
+		AssetTransferTxnFields: transactions.AssetTransferTxnFields{
+			XferAsset:     assetID + 12345,
+			AssetReceiver: makeAddress(2),
+			AssetAmount:   0,
+		},
+	}
+
+	requested, prefetched = run(t, l, txn)
+
+	prefetched.Accounts[rewardsPool()] = struct{}{}
+	require.Equal(t, requested, prefetched)
+}
+
 func TestEvaluatorPrefetcherAlignmentAssetClawback(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	assetID := basics.AssetIndex(5)
@@ -811,7 +901,6 @@ func TestEvaluatorPrefetcherAlignmentCreateApplication(t *testing.T) {
 }
 
 func TestEvaluatorPrefetcherAlignmentDeleteApplication(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	addr := makeAddress(1)
@@ -866,7 +955,6 @@ func TestEvaluatorPrefetcherAlignmentDeleteApplication(t *testing.T) {
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationOptIn(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	appID := basics.AppIndex(5)
@@ -925,7 +1013,6 @@ func TestEvaluatorPrefetcherAlignmentApplicationOptIn(t *testing.T) {
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationCloseOut(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	appID := basics.AppIndex(5)
@@ -990,7 +1077,6 @@ func TestEvaluatorPrefetcherAlignmentApplicationCloseOut(t *testing.T) {
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationClearState(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	appID := basics.AppIndex(5)
@@ -1055,7 +1141,6 @@ func TestEvaluatorPrefetcherAlignmentApplicationClearState(t *testing.T) {
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationCallAccountsDeclaration(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	appID := basics.AppIndex(5)
@@ -1116,15 +1201,14 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallAccountsDeclaration(t *testi
 	requested, prefetched := run(t, l, txn)
 
 	prefetched.Accounts[rewardsPool()] = struct{}{}
-	// Loading accounts depends on the smart contract program. Ignore the addresses
-	// not requested.
-	requested.Accounts[makeAddress(5)] = struct{}{}
-	requested.Accounts[makeAddress(3)] = struct{}{}
+	// Foreign accounts are not loaded, ensure they are not prefetched
+	require.NotContains(t, prefetched.Accounts, makeAddress(5))
+	require.NotContains(t, prefetched.Accounts, makeAddress(3))
+
 	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	appID := basics.AppIndex(5)
@@ -1185,15 +1269,13 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *te
 	requested, prefetched := run(t, l, txn)
 
 	prefetched.Accounts[rewardsPool()] = struct{}{}
-	// Loading foreign apps depends on the smart contract program. Ignore the apps
-	// not requested.
-	requested.Creators[creatable{cindex: 6, ctype: basics.AppCreatable}] = struct{}{}
-	requested.Creators[creatable{cindex: 8, ctype: basics.AppCreatable}] = struct{}{}
+	// Foreign apps are not loaded, ensure they are not prefetched
+	require.NotContains(t, prefetched.Creators, creatable{cindex: 6, ctype: basics.AppCreatable})
+	require.NotContains(t, prefetched.Creators, creatable{cindex: 8, ctype: basics.AppCreatable})
 	require.Equal(t, requested, prefetched)
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAssetsDeclaration(t *testing.T) {
-	t.Skip("disabled")
 	partitiontest.PartitionTest(t)
 
 	appID := basics.AppIndex(5)
@@ -1254,10 +1336,9 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAssetsDeclaration(t *
 	requested, prefetched := run(t, l, txn)
 
 	prefetched.Accounts[rewardsPool()] = struct{}{}
-	// Loading foreign assets depends on the smart contract program. Ignore the assets
-	// not requested.
-	requested.Creators[creatable{cindex: 6, ctype: basics.AssetCreatable}] = struct{}{}
-	requested.Creators[creatable{cindex: 8, ctype: basics.AssetCreatable}] = struct{}{}
+	// Foreign apps are not loaded, ensure they are not prefetched
+	require.NotContains(t, prefetched.Creators, creatable{cindex: 6, ctype: basics.AssetCreatable})
+	require.NotContains(t, prefetched.Creators, creatable{cindex: 8, ctype: basics.AssetCreatable})
 	require.Equal(t, requested, prefetched)
 }
 

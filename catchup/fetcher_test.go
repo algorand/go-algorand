@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -148,7 +148,7 @@ func (b *basicRPCNode) RegisterHandlers(dispatch []network.TaggedMessageHandler)
 
 func (b *basicRPCNode) start() bool {
 	var err error
-	b.listener, err = net.Listen("tcp", "")
+	b.listener, err = net.Listen("tcp", "127.0.0.1:")
 	if err != nil {
 		logging.Base().Error("tcp listen", err)
 		return false

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 )
@@ -66,7 +67,7 @@ func SwaggerJSON(ctx lib.ReqContext, context echo.Context) {
 	w := context.Response().Writer
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(lib.SwaggerSpecJSON))
+	_, _ = w.Write([]byte(api.SwaggerSpecJSONEmbed))
 }
 
 // HealthCheck is an httpHandler for route GET /health
@@ -111,7 +112,7 @@ func VersionsHandler(ctx lib.ReqContext, context echo.Context) {
 	w.WriteHeader(http.StatusOK)
 	response := VersionsResponse{
 		Body: common.Version{
-			Versions:    []string{"v1", "v2"},
+			Versions:    []string{"v2"},
 			GenesisID:   ctx.Node.GenesisID(),
 			GenesisHash: gh[:],
 			Build: common.BuildVersion{

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,6 +30,8 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
+	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -147,31 +149,31 @@ func (t *txTailTestLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.ConsensusVersion) error {
 	// create a corresponding blockdb.
 	inMemory := true
-	t.blockDBs, _ = dbOpenTest(ts, inMemory)
-	t.trackerDBs, _ = dbOpenTest(ts, inMemory)
+	t.blockDBs, _ = storetesting.DbOpenTest(ts, inMemory)
+	t.trackerDBs, _ = storetesting.DbOpenTest(ts, inMemory)
 	t.protoVersion = protoVersion
 
 	tx, err := t.trackerDBs.Wdb.Handle.Begin()
 	require.NoError(ts, err)
 
+	arw := store.NewAccountsSQLReaderWriter(tx)
+
 	accts := ledgertesting.RandomAccounts(20, true)
 	proto := config.Consensus[protoVersion]
-	newDB := accountsInitTest(ts, tx, accts, protoVersion)
+	newDB := store.AccountsInitTest(ts, tx, accts, protoVersion)
 	require.True(ts, newDB)
-	_, err = accountsInit(tx, accts, proto)
-	require.NoError(ts, err)
 
 	roundData := make([][]byte, 0, proto.MaxTxnLife)
 	startRound := t.Latest() - basics.Round(proto.MaxTxnLife) + 1
 	for i := startRound; i <= t.Latest(); i++ {
 		blk, err := t.Block(i)
 		require.NoError(ts, err)
-		tail, err := txTailRoundFromBlock(blk)
+		tail, err := store.TxTailRoundFromBlock(blk)
 		require.NoError(ts, err)
-		encoded, _ := tail.encode()
+		encoded, _ := tail.Encode()
 		roundData = append(roundData, encoded)
 	}
-	err = txtailNewRound(context.Background(), tx, startRound, roundData, 0)
+	err = arw.TxtailNewRound(context.Background(), startRound, roundData, 0)
 	require.NoError(ts, err)
 	tx.Commit()
 	return nil
@@ -216,7 +218,7 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 				txn.Txn.FirstValid, txn.Txn.LastValid, txn.Txn.ID(),
 				txl)
 			if r >= ledger.Latest()-testTxTailValidityRange {
-				require.Equal(t, ledgercore.MakeLeaseInLedgerError(txn.Txn.ID(), txl), dupResult)
+				require.Equal(t, ledgercore.MakeLeaseInLedgerError(txn.Txn.ID(), txl, false), dupResult)
 			} else {
 				require.Equal(t, &errTxTailMissingRound{round: txn.Txn.LastValid}, dupResult)
 			}
@@ -279,7 +281,7 @@ func TestTxTailDeltaTracking(t *testing.T) {
 					LastValid: basics.Round(i + 50),
 					Intra:     0,
 				}
-				deltas.Txleases[ledgercore.Txlease{Sender: blk.Payset[0].Txn.Sender, Lease: blk.Payset[0].Txn.Lease}] = basics.Round(i + 50)
+				deltas.AddTxLease(ledgercore.Txlease{Sender: blk.Payset[0].Txn.Sender, Lease: blk.Payset[0].Txn.Lease}, basics.Round(i+50))
 
 				txtail.newBlock(blk, deltas)
 				txtail.committedUpTo(basics.Round(i))

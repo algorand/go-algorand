@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -90,7 +90,7 @@ func TestTrackerScheduleCommit(t *testing.T) {
 
 	// prepare deltas and versions
 	au.accountsMu.Lock()
-	au.deltas = make([]ledgercore.AccountDeltas, int(blockqRound))
+	au.deltas = make([]ledgercore.StateDelta, int(blockqRound))
 	au.deltasAccum = make([]int, int(blockqRound))
 	au.versions = make([]protocol.ConsensusVersion, int(blockqRound))
 	ao.deltas = make([]ledgercore.AccountDeltas, int(blockqRound))

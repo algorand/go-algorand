@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    23,
+	Version:                                    27,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        7,
@@ -31,7 +31,7 @@ var defaultLocal = Local{
 	BaseLoggerDebugLevel:                       4,
 	BlockServiceCustomFallbackEndpoints:        "",
 	BroadcastConnectionsLimit:                  -1,
-	CadaverSizeTarget:                          1073741824,
+	CadaverSizeTarget:                          0,
 	CatchpointFileHistoryLength:                365,
 	CatchpointInterval:                         10000,
 	CatchpointTracking:                         0,
@@ -59,6 +59,7 @@ var defaultLocal = Local{
 	EnableBlockServiceFallbackToArchiver:       true,
 	EnableCatchupFromArchiveServers:            false,
 	EnableDeveloperAPI:                         false,
+	EnableExperimentalAPI:                      false,
 	EnableGossipBlockService:                   true,
 	EnableIncomingMessageFilter:                false,
 	EnableLedgerService:                        false,
@@ -70,12 +71,15 @@ var defaultLocal = Local{
 	EnableRequestLogger:                        false,
 	EnableRuntimeMetrics:                       false,
 	EnableTopAccountsReporting:                 false,
+	EnableTxBacklogRateLimiting:                false,
+	EnableUsageLog:                             false,
 	EnableVerbosedTransactionSyncLogging:       false,
 	EndpointAddress:                            "127.0.0.1:0",
 	FallbackDNSResolverAddress:                 "",
 	ForceFetchTransactions:                     false,
 	ForceRelayMessages:                         false,
 	GossipFanout:                               4,
+	HeartbeatUpdateInterval:                    600,
 	IncomingConnectionsLimit:                   800,
 	IncomingMessageFilterBucketCount:           5,
 	IncomingMessageFilterBucketSize:            512,
@@ -84,6 +88,7 @@ var defaultLocal = Local{
 	LogArchiveMaxAge:                           "",
 	LogArchiveName:                             "node.archive.log",
 	LogSizeLimit:                               1073741824,
+	MaxAPIBoxPerApplication:                    100000,
 	MaxAPIResourcesPerAccount:                  100000,
 	MaxAcctLookback:                            4,
 	MaxCatchpointDownloadDuration:              7200000000000,
@@ -117,6 +122,10 @@ var defaultLocal = Local{
 	TelemetryToLog:                             true,
 	TransactionSyncDataExchangeRate:            0,
 	TransactionSyncSignificantMessageThreshold: 0,
+	TxBacklogReservedCapacityPerPeer:           20,
+	TxBacklogServiceRateWindowSeconds:          10,
+	TxBacklogSize:                              26000,
+	TxIncomingFilteringFlags:                   1,
 	TxPoolExponentialIncreaseFactor:            2,
 	TxPoolSize:                                 75000,
 	TxSyncIntervalSeconds:                      60,

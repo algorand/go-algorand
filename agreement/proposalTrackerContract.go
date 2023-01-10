@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,8 @@ import (
 )
 
 type proposalTrackerContract struct {
+	_struct struct{} `codec:","`
+
 	SawOneVote       bool
 	Froze            bool
 	SawSoftThreshold bool

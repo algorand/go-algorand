@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -123,7 +123,7 @@ func (c *cadaver) trySetup() bool {
 	if c.out.bytesWritten >= c.fileSizeTarget {
 		err := c.out.Close()
 		if err != nil {
-			logging.Base().Warn("unable to close cadaver file : %v", err)
+			logging.Base().Warnf("unable to close cadaver file : %v", err)
 		}
 		err = os.Rename(c.filename(), c.filename()+".archive")
 		if err != nil {

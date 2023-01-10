@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package remote
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -103,6 +104,8 @@ type netState struct {
 	accounts       []basics.Address
 	txnCount       uint64
 	fundPerAccount basics.MicroAlgos
+
+	log logging.Logger
 }
 
 const program = `#pragma version 2
@@ -382,10 +385,10 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 		}
 
 		accounts[addr] = alloc.State
-
 	}
 
 	//initial state
+	log := logging.NewLogger()
 
 	bootstrappedNet := netState{
 		nAssets:       fileCfgs.GeneratedAssetsCount,
@@ -397,6 +400,7 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 		genesisHash:   genesis.Hash(),
 		poolAddr:      poolAddr,
 		sinkAddr:      sinkAddr,
+		log:           log,
 	}
 
 	var params config.ConsensusParams
@@ -420,8 +424,9 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	max := fileCfgs.BalanceRange[1]
 	bal := rand.Int63n(max-min) + min
 	bootstrappedNet.fundPerAccount = basics.MicroAlgos{Raw: uint64(bal)}
-	totalFunds := accounts[src].MicroAlgos.Raw + bootstrappedNet.fundPerAccount.Raw*bootstrappedNet.nAccounts + bootstrappedNet.roundTxnCnt*fileCfgs.NumRounds
-	accounts[src] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: totalFunds})
+	srcAcct := accounts[src]
+	srcAcct.MicroAlgos.Raw += bootstrappedNet.fundPerAccount.Raw*bootstrappedNet.nAccounts + bootstrappedNet.roundTxnCnt*fileCfgs.NumRounds
+	accounts[src] = srcAcct
 
 	//init block
 	initState, err := generateInitState(accounts, &bootstrappedNet)
@@ -432,7 +437,6 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	localCfg.Archival = true
 	localCfg.CatchpointTracking = -1
 	localCfg.LedgerSynchronousMode = 0
-	log := logging.NewLogger()
 	l, err := ledger.OpenLedger(log, filepath.Join(genesisFolder, "bootstrapped"), false, initState, localCfg)
 	if err != nil {
 		return err
@@ -440,16 +444,17 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 
 	//create accounts, apps and assets
 	prev, _ := l.Block(l.Latest())
-	err = generateAccounts(src, fileCfgs.RoundTransactionsCount, prev, l, &bootstrappedNet, params)
+	err = generateAccounts(src, fileCfgs.RoundTransactionsCount, prev, l, &bootstrappedNet, params, log)
 	if err != nil {
 		return err
 	}
 
+	log.Info("setup done, more txns")
 	//create more transactions
 	prev, _ = l.Block(l.Latest())
 	for i := uint64(bootstrappedNet.round); i < fileCfgs.NumRounds; i++ {
 		bootstrappedNet.round++
-		blk, _ := createBlock(src, prev, fileCfgs.RoundTransactionsCount, &bootstrappedNet, params)
+		blk, _ := createBlock(src, prev, fileCfgs.RoundTransactionsCount, &bootstrappedNet, params, log)
 		err = l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
 		if err != nil {
 			fmt.Printf("Error  %v\n", err)
@@ -516,7 +521,7 @@ func generateInitState(accounts map[basics.Address]basics.AccountData, bootstrap
 	return initState, nil
 }
 
-func createBlock(src basics.Address, prev bookkeeping.Block, roundTxnCnt uint64, bootstrappedNet *netState, csParams config.ConsensusParams) (bookkeeping.Block, error) {
+func createBlock(src basics.Address, prev bookkeeping.Block, roundTxnCnt uint64, bootstrappedNet *netState, csParams config.ConsensusParams, log logging.Logger) (bookkeeping.Block, error) {
 	payset := make([]transactions.SignedTxnInBlock, 0, roundTxnCnt)
 	txibs := make([]transactions.SignedTxnInBlock, 0, roundTxnCnt)
 
@@ -560,15 +565,17 @@ func createBlock(src basics.Address, prev bookkeeping.Block, roundTxnCnt uint64,
 		return bookkeeping.Block{}, err
 	}
 
+	log.Infof("created block[%d] %d txns", block.BlockHeader.Round, len(payset))
+
 	return block, nil
 }
 
-func generateAccounts(src basics.Address, roundTxnCnt uint64, prev bookkeeping.Block, l *ledger.Ledger, bootstrappedNet *netState, csParams config.ConsensusParams) error {
+func generateAccounts(src basics.Address, roundTxnCnt uint64, prev bookkeeping.Block, l *ledger.Ledger, bootstrappedNet *netState, csParams config.ConsensusParams, log logging.Logger) error {
 
 	for !bootstrappedNet.accountsCreated {
 		//create accounts
 		bootstrappedNet.round++
-		blk, _ := createBlock(src, prev, roundTxnCnt, bootstrappedNet, csParams)
+		blk, _ := createBlock(src, prev, roundTxnCnt, bootstrappedNet, csParams, log)
 		err := l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
 		if err != nil {
 			fmt.Printf("Error %v\n", err)
@@ -627,12 +634,15 @@ func accountsNeeded(appsCount uint64, assetCount uint64, params config.Consensus
 func createSignedTx(src basics.Address, round basics.Round, params config.ConsensusParams, bootstrappedNet *netState) ([]transactions.SignedTxn, error) {
 
 	if bootstrappedNet.nApplications == 0 && bootstrappedNet.nAccounts == 0 && bootstrappedNet.nAssets == 0 {
+		if !bootstrappedNet.accountsCreated {
+			bootstrappedNet.log.Infof("done creating accounts, have %d", len(bootstrappedNet.accounts))
+		}
 		bootstrappedNet.accountsCreated = true
 	}
 	var sgtxns []transactions.SignedTxn
 
 	header := transactions.Header{
-		Fee:         basics.MicroAlgos{Raw: 1},
+		Fee:         basics.MicroAlgos{Raw: params.MinTxnFee},
 		FirstValid:  round,
 		LastValid:   round,
 		GenesisID:   bootstrappedNet.genesisID,
@@ -640,7 +650,6 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 	}
 
 	if bootstrappedNet.txnState == protocol.PaymentTx {
-		var accounts []basics.Address
 		bootstrappedNet.appsPerAcct = 0
 		bootstrappedNet.assetPerAcct = 0
 		n := bootstrappedNet.nAccounts
@@ -652,7 +661,7 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 			for i := uint64(0); i < n; i++ {
 				secretDst := keypair()
 				dst := basics.Address(secretDst.SignatureVerifier)
-				accounts = append(accounts, dst)
+				bootstrappedNet.accounts = append(bootstrappedNet.accounts, dst)
 
 				header.Sender = src
 
@@ -668,16 +677,17 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 				sgtxns = append(sgtxns, t)
 			}
 			bootstrappedNet.nAccounts -= uint64(len(sgtxns))
-			bootstrappedNet.accounts = accounts
 			if bootstrappedNet.nAssets > 0 {
+				bootstrappedNet.log.Info("switch to acfg mode")
 				bootstrappedNet.txnState = protocol.AssetConfigTx
 			} else if bootstrappedNet.nApplications > 0 {
+				bootstrappedNet.log.Info("switch to app cfg mode")
 				bootstrappedNet.txnState = protocol.ApplicationCallTx
 			}
 		} else {
 			//send payments to created accounts randomly
-			accti := rand.Intn(len(bootstrappedNet.accounts))
 			for i := uint64(0); i < n; i++ {
+				accti := rand.Intn(len(bootstrappedNet.accounts))
 				header.Sender = src
 				tx := transactions.Transaction{
 					Type:   protocol.PaymentTx,
@@ -687,6 +697,8 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 						Amount:   basics.MicroAlgos{Raw: 0},
 					},
 				}
+				tx.Header.Note = make([]byte, 8)
+				binary.LittleEndian.PutUint64(tx.Header.Note, bootstrappedNet.roundTxnCnt+i)
 				t := transactions.SignedTxn{Txn: tx}
 				sgtxns = append(sgtxns, t)
 			}
@@ -731,8 +743,10 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 		}
 		if bootstrappedNet.nAssets == 0 || bootstrappedNet.assetPerAcct == maxAssets {
 			if bootstrappedNet.nApplications > 0 {
+				bootstrappedNet.log.Info("switch to app cfg mode")
 				bootstrappedNet.txnState = protocol.ApplicationCallTx
 			} else {
+				bootstrappedNet.log.Info("switch to pay mode")
 				bootstrappedNet.txnState = protocol.PaymentTx
 			}
 
@@ -785,6 +799,7 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 			maxApps = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
 		}
 		if bootstrappedNet.nApplications == 0 || bootstrappedNet.appsPerAcct == maxApps {
+			bootstrappedNet.log.Info("switch to pay mode")
 			bootstrappedNet.txnState = protocol.PaymentTx
 		}
 	}
@@ -1047,7 +1062,7 @@ func extractPublicPort(address string) (port int, err error) {
 func computeRootStorage(nodeCount, relayCount int) int {
 	// For now, we'll just use root storage -- assume short-lived instances
 	// 10 per node should be good for a week (add relayCount * 0 so param is used)
-	minGB := 10 + nodeCount*10 + (relayCount * 50)
+	minGB := 20 + (nodeCount * 10) + (relayCount * 50)
 	return minGB
 }
 

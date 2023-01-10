@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -28,9 +29,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 	"golang.org/x/crypto/ssh/terminal"
-
-	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
@@ -381,7 +379,6 @@ func getGoalClient(dataDir string, clientType libgoal.ClientType) (client libgoa
 	if err != nil {
 		return
 	}
-	client.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
 	return
 }
 
@@ -556,11 +553,21 @@ func reportErrorln(args ...interface{}) {
 		}
 		fmt.Fprintln(os.Stderr, line)
 	}
-	os.Exit(1)
+	exit(1)
 }
 
 func reportErrorf(format string, args ...interface{}) {
 	reportErrorln(fmt.Sprintf(format, args...))
+}
+
+func exit(code int) {
+	if flag.Lookup("test.v") == nil {
+		// normal run
+		os.Exit(code)
+	} else {
+		// testing run. panic, so we can require.Panic
+		panic(code)
+	}
 }
 
 // writeFile is a wrapper of os.WriteFile which considers the special

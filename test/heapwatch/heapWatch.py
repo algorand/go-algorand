@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-# Copyright (C) 2019-2022 Algorand, Inc.
+# Copyright (C) 2019-2023 Algorand, Inc.
 # This file is part of go-algorand
 #
 # go-algorand is free software: you can redistribute it and/or modify
@@ -262,6 +262,7 @@ class watcher:
         self.they = []
         self.netseen = set()
         self.latest_round = None
+        self.rounds_seen = set()
         self.bi_hosts = []
         self.netToAd = {}
         os.makedirs(self.args.out, exist_ok=True)
@@ -371,6 +372,7 @@ class watcher:
             biq.put({})
             mrt.join()
             self.latest_round = mr.maxrnd
+            self.rounds_seen.add(self.latest_round)
             logger.debug('blockinfo done')
         if get_cpu:
             cpuSample = durationToSeconds(self.args.cpu_sample) or 90
@@ -393,6 +395,16 @@ class watcher:
                     subprocess.call(['go', 'tool', 'pprof', '-sample_index=alloc_space', '-svg', '-output', snappath + '.alloc_diff.svg', '-diff_base='+prev, snappath])
         self.prevsnapshots = newsnapshots
         logger.debug('end snapshot %s', snapshot_name)
+
+    def summaries(self):
+        if self.args.out and self.rounds_seen:
+            rpath = os.path.join(self.args.out, 'rounds.json')
+            with open(rpath, 'wt') as fout:
+                json.dump({
+                    "min": min(self.rounds_seen),
+                    "max": max(self.rounds_seen),
+                    "all": sorted(self.rounds_seen),
+                }, fout)
 
 def durationToSeconds(rts):
     if rts is None:
@@ -499,6 +511,7 @@ def main():
             if (end_round is not None) and (app.latest_round is not None) and (app.latest_round >= end_round):
                 logger.debug('after end round %d > %d', app.latest_round, end_round)
                 return 0
+    app.summaries()
     return 0
 
 if __name__ == '__main__':
