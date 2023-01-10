@@ -32,7 +32,6 @@ import (
 
 func TestEmptyEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	var ub BalanceRecord
 	require.Equal(t, 1, len(protocol.Encode(&ub)))
@@ -40,7 +39,6 @@ func TestEmptyEncoding(t *testing.T) {
 
 func TestRewards(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	accountAlgos := []MicroAlgos{{Raw: 0}, {Raw: 8000}, {Raw: 13000}, {Raw: 83000}}
@@ -63,11 +61,9 @@ func TestRewards(t *testing.T) {
 
 func TestWithUpdatedRewardsPanics(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	t.Run("AlgoPanic", func(t *testing.T) {
-		t.Parallel()
 		paniced := false
 		func() {
 			defer func() {
@@ -91,7 +87,6 @@ func TestWithUpdatedRewardsPanics(t *testing.T) {
 	})
 
 	t.Run("RewardsOverflow", func(t *testing.T) {
-		t.Parallel()
 		a := AccountData{
 			Status:             Online,
 			MicroAlgos:         MicroAlgos{Raw: 80000000},
@@ -138,7 +133,6 @@ func getSampleAccountData() AccountData {
 
 func TestEncodedAccountAllocationBounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	// ensure that all the supported protocols have value limits less or
 	// equal to their corresponding codec allocbounds
@@ -164,7 +158,6 @@ func TestEncodedAccountAllocationBounds(t *testing.T) {
 
 func TestAppIndexHashing(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	i := AppIndex(12)
 	prefix, buf := i.ToBeHashed()
@@ -184,7 +177,6 @@ func TestAppIndexHashing(t *testing.T) {
 
 func TestOnlineAccountData(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	ad := getSampleAccountData()
 	ad.MicroAlgos.Raw = 1000000

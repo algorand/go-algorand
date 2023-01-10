@@ -149,7 +149,6 @@ const testPoolSize = 1000
 
 func TestMinBalanceOK(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfAccounts := 5
 	// Generate accounts
@@ -193,7 +192,6 @@ func TestMinBalanceOK(t *testing.T) {
 
 func TestSenderGoesBelowMinBalance(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfAccounts := 5
 	// Generate accounts
@@ -237,7 +235,6 @@ func TestSenderGoesBelowMinBalance(t *testing.T) {
 
 func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfAccounts := 5
 	// Generate accounts
@@ -310,7 +307,6 @@ func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
 
 func TestCloseAccount(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfAccounts := 5
 	// Generate accounts
@@ -374,7 +370,6 @@ func TestCloseAccount(t *testing.T) {
 
 func TestCloseAccountWhileTxIsPending(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfAccounts := 5
 	// Generate accounts
@@ -438,7 +433,6 @@ func TestCloseAccountWhileTxIsPending(t *testing.T) {
 
 func TestClosingAccountBelowMinBalance(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfAccounts := 5
 	// Generate accounts
@@ -484,7 +478,6 @@ func TestClosingAccountBelowMinBalance(t *testing.T) {
 
 func TestRecipientGoesBelowMinBalance(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfAccounts := 5
 	// Generate accounts
@@ -528,7 +521,6 @@ func TestRecipientGoesBelowMinBalance(t *testing.T) {
 
 func TestRememberForget(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfAccounts := 5
 	// Generate accounts
@@ -596,7 +588,6 @@ func TestRememberForget(t *testing.T) {
 //	Test that clean up works
 func TestCleanUp(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfAccounts := 10
 	// Generate accounts
@@ -676,7 +667,6 @@ func TestCleanUp(t *testing.T) {
 
 func TestFixOverflowOnNewBlock(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfAccounts := 10
 	// Generate accounts
@@ -773,7 +763,6 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 
 func TestOverspender(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfAccounts := 2
 	// Generate accounts
@@ -837,7 +826,6 @@ func TestOverspender(t *testing.T) {
 
 func TestRemove(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfAccounts := 2
 	// Generate accounts
@@ -881,7 +869,6 @@ func TestRemove(t *testing.T) {
 
 func TestLogicSigOK(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	oparams := config.Consensus[protocol.ConsensusCurrentVersion]
 	params := oparams
@@ -942,7 +929,6 @@ func TestLogicSigOK(t *testing.T) {
 
 func TestTransactionPool_CurrentFeePerByte(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfAccounts := 5
 	// Generate accounts
@@ -1318,7 +1304,6 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 
 func TestTxPoolSizeLimits(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfAccounts := 2
 	// Generate accounts
@@ -1405,7 +1390,6 @@ func TestTxPoolSizeLimits(t *testing.T) {
 
 func TestStateProofLogging(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 

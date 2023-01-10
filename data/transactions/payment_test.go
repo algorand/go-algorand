@@ -36,7 +36,6 @@ func keypair() *crypto.SignatureSecrets {
 
 func TestAlgosEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	var a basics.MicroAlgos
 	var b basics.MicroAlgos
