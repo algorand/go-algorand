@@ -99,7 +99,7 @@ var duplicateNetworkMessageReceivedBytesTotal = metrics.MakeCounter(metrics.Dupl
 var duplicateNetworkFilterReceivedTotal = metrics.MakeCounter(metrics.DuplicateNetworkFilterReceivedTotal)
 var outgoingNetworkMessageFilteredOutTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutTotal)
 var outgoingNetworkMessageFilteredOutBytesTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutBytesTotal)
-var outOfProtocolTagMessagesTotal = metrics.MakeCounter(metrics.OutOfProtocolTagMessagesTotal)
+var unknownProtocolTagMessagesTotal = metrics.MakeCounter(metrics.UnknownProtocolTagMessagesTotal)
 
 // defaultSendMessageTags is the default list of messages which a peer would
 // allow to be sent without receiving any explicit request.
@@ -551,7 +551,7 @@ func (wp *wsPeer) readLoop() {
 		case protocol.NetPrioResponseTag, protocol.PingTag, protocol.PingReplyTag,
 			protocol.StateProofSigTag, protocol.UniCatchupReqTag, protocol.UniEnsBlockReqTag, protocol.VoteBundleTag:
 		default: // unrecognized tag
-			outOfProtocolTagMessagesTotal.Inc(nil)
+			unknownProtocolTagMessagesTotal.Inc(nil)
 			atomic.AddUint64(&wp.unkMessageCount, 1)
 			if !allowCustomTags {
 				continue // drop message, skip adding it to queue
