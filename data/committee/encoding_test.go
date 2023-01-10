@@ -27,6 +27,7 @@ import (
 
 func TestEmptyEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var c Credential
 	require.Equal(t, 1, len(protocol.Encode(&c)))
