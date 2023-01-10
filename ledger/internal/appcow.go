@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 //msgp: ignore storageAction
@@ -458,10 +459,24 @@ func (cb *roundCowState) StatefulEval(gi int, params *logic.EvalParams, aidx bas
 	calf := cb.child(1)
 	defer calf.recycle()
 
+	var cx *logic.EvalContext
+	defer func() {
+		if err != nil {
+			ledgerAppCallErrTotal.Inc(nil)
+		} else if pass {
+			ledgerAppCallGoodTotal.Inc(nil)
+		} else {
+			ledgerAppCallRejTotal.Inc(nil)
+		}
+		if cx != nil {
+			ledgerAppCallCostTotal.AddUint64(uint64(cx.Cost()), nil)
+		}
+	}()
+
 	params.Ledger = calf
 
 	// Eval the program
-	pass, cx, err := logic.EvalContract(program, gi, aidx, params)
+	pass, cx, err = logic.EvalContract(program, gi, aidx, params)
 	if err != nil {
 		var details string
 		if cx != nil {
@@ -748,3 +763,8 @@ func applyStorageDelta(cb *roundCowState, addr basics.Address, aapp storagePtr, 
 	}
 	return nil
 }
+
+var ledgerAppCallGoodTotal = metrics.MakeCounter(metrics.MetricName{Name: "ledger_appcall_ok", Description: "Total app calls accepted"})
+var ledgerAppCallRejTotal = metrics.MakeCounter(metrics.MetricName{Name: "ledger_appcall_rej", Description: "Total app calls rejected"})
+var ledgerAppCallErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "ledger_appcall_err", Description: "Total app calls errored"})
+var ledgerAppCallCostTotal = metrics.MakeCounter(metrics.MetricName{Name: "ledger_appcall_cost", Description: "Total cost of app calls executed"})

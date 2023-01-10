@@ -875,6 +875,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 				stats.AverageFee = totalFees / uint64(stats.IncludedCount)
 			}
 			stats.StateProofNextRound = uint64(assembled.Block().StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+			stats.BlockHash = assembled.Block().Digest().String()
 			var details struct {
 				Round uint64
 			}

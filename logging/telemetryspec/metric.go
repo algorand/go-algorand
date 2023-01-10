@@ -53,8 +53,6 @@ type AssembleBlockStats struct {
 	AverageFee                uint64
 	MinLength                 int
 	MaxLength                 int
-	MinPriority               uint64
-	MaxPriority               uint64
 	CommittedCount            int // number of transaction blocks that are included in a block
 	StopReason                string
 	TotalLength               uint64
@@ -62,6 +60,7 @@ type AssembleBlockStats struct {
 	Nanoseconds               int64
 	ProcessingTime            transactionProcessingTimeDistibution
 	BlockGenerationDuration   uint64
+	BlockHash                 string
 	TransactionsLoopStartTime int64
 	StateProofNextRound       uint64 // next round for which state proof if expected
 	StateProofStats           StateProofStats
@@ -113,8 +112,6 @@ func (m AssembleBlockStats) String() string {
 	b.WriteString(fmt.Sprintf("AverageFee:%d, ", m.AverageFee))
 	b.WriteString(fmt.Sprintf("MinLength:%d, ", m.MinLength))
 	b.WriteString(fmt.Sprintf("MaxLength:%d, ", m.MaxLength))
-	b.WriteString(fmt.Sprintf("MinPriority:%d, ", m.MinPriority))
-	b.WriteString(fmt.Sprintf("MaxPriority:%d, ", m.MaxPriority))
 	b.WriteString(fmt.Sprintf("CommittedCount:%d, ", m.CommittedCount))
 	b.WriteString(fmt.Sprintf("StopReason:%s, ", m.StopReason))
 	b.WriteString(fmt.Sprintf("TotalLength:%d, ", m.TotalLength))
@@ -122,6 +119,7 @@ func (m AssembleBlockStats) String() string {
 	b.WriteString(fmt.Sprintf("Nanoseconds:%d, ", m.Nanoseconds))
 	b.WriteString(fmt.Sprintf("ProcessingTime:%v, ", m.ProcessingTime))
 	b.WriteString(fmt.Sprintf("BlockGenerationDuration:%d, ", m.BlockGenerationDuration))
+	b.WriteString(fmt.Sprintf("BlockHash:%s, ", m.BlockHash))
 	b.WriteString(fmt.Sprintf("TransactionsLoopStartTime:%d, ", m.TransactionsLoopStartTime))
 	b.WriteString(fmt.Sprintf("StateProofNextRound:%d, ", m.StateProofNextRound))
 	emptySPStats := StateProofStats{}
