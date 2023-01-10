@@ -56,7 +56,7 @@ var (
 	// OutgoingNetworkMessageFilteredOutBytesTotal Total number of bytes saved by not sending messages that were asked not to be sent by peer
 	OutgoingNetworkMessageFilteredOutBytesTotal = MetricName{Name: "algod_outgoing_network_message_filtered_out_bytes_total", Description: "Total number of bytes saved by not sending messages that were asked not to be sent by peer"}
 	// OutOfProtocolTagMessages Total number of out-of-protocol tag messages received from the network
-	OutOfProtocolTagMessagesTotal = MetricName{Name: "algod_network_oop_tag_messages_total", Description: "Total number of out-of-protocol tag messages received from the network"}
+	OutOfProtocolTagMessagesTotal = MetricName{Name: "algod_network_unk_tag_messages_total", Description: "Total number of unknown tag messages received from the network"}
 	// CryptoGenSigSecretsTotal Total number of calls to GenerateSignatureSecrets()
 	CryptoGenSigSecretsTotal = MetricName{Name: "algod_crypto_signature_secrets_generate_total", Description: "Total number of calls to GenerateSignatureSecrets"}
 	// CryptoSigSecretsSignTotal Total number of calls to SignatureSecrets.Sign
