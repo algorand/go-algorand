@@ -262,7 +262,7 @@ type Local struct {
 	PeerConnectionsUpdateInterval int `version[5]:"3600"`
 
 	// HeartbeatUpdateInterval defines the interval at which the heartbeat information is being sent to the
-	// telemetry ( when enabled ). Defined in seconds.
+	// telemetry ( when enabled ). Defined in seconds. Minimum value is 60.
 	HeartbeatUpdateInterval int `version[27]:"600"`
 
 	// EnableProfiler enables the go pprof endpoints, should be false if
