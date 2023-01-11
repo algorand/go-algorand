@@ -771,6 +771,12 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
 	}
 
+	ledger := v2.Node.LedgerForAPI()
+	latestBlkHdr, err := ledger.BlockHdr(ledger.Latest())
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingLatestBlockHeaderStatus, v2.Log)
+	}
+
 	response := model.NodeStatusResponse{
 		LastRound:                   uint64(stat.LastRound),
 		LastVersion:                 string(stat.LastVersion),
@@ -790,6 +796,29 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		CatchpointVerifiedKvs:       &stat.CatchpointCatchupVerifiedKVs,
 		CatchpointTotalBlocks:       &stat.CatchpointCatchupTotalBlocks,
 		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
+	}
+
+	nextProtocolVoteBefore := uint64(stat.NextProtocolVoteBefore)
+	var votesToGo int64 = int64(nextProtocolVoteBefore) - int64(stat.LastRound)
+	if votesToGo < 0 {
+		votesToGo = 0
+	}
+	if nextProtocolVoteBefore > 0 {
+		consensus := config.Consensus[protocol.ConsensusCurrentVersion]
+		upgradeVoteRounds := consensus.UpgradeVoteRounds
+		upgradeThreshold := consensus.UpgradeThreshold
+		votes := uint64(consensus.UpgradeVoteRounds) - uint64(votesToGo)
+		votesYes := stat.NextProtocolApprovals
+		votesNo := votes - votesYes
+		upgradeDelay := uint64(stat.UpgradeDelay)
+		response.UpgradeVotesRequired = &upgradeThreshold
+		response.UpgradeNodeVote = &latestBlkHdr.UpgradeApprove
+		response.UpgradeDelay = &upgradeDelay
+		response.UpgradeVotes = &votes
+		response.UpgradeYesVotes = &votesYes
+		response.UpgradeNoVotes = &votesNo
+		response.UpgradeNextProtocolVoteBefore = &nextProtocolVoteBefore
+		response.UpgradeVoteRounds = &upgradeVoteRounds
 	}
 
 	return ctx.JSON(http.StatusOK, response)

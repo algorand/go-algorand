@@ -90,6 +90,11 @@ type StatusReport struct {
 	CatchpointCatchupVerifiedKVs       uint64
 	CatchpointCatchupTotalBlocks       uint64
 	CatchpointCatchupAcquiredBlocks    uint64
+	UpgradePropose                     protocol.ConsensusVersion
+	UpgradeApprove                     bool
+	UpgradeDelay                       uint64
+	NextProtocolVoteBefore             basics.Round
+	NextProtocolApprovals              uint64
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen
@@ -403,7 +408,8 @@ func (node *AlgorandFullNode) startMonitoringRoutines() {
 	go node.oldKeyDeletionThread(node.ctx.Done())
 
 	if node.config.EnableUsageLog {
-		go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
+		node.monitoringRoutinesWaitGroup.Add(1)
+		go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, &node.monitoringRoutinesWaitGroup)
 	}
 }
 
@@ -720,6 +726,13 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 		s.LastCatchpoint = node.ledger.GetLastCatchpointLabel()
 		s.SynchronizingTime = node.catchupService.SynchronizingTime()
 		s.CatchupTime = node.catchupService.SynchronizingTime()
+
+		s.UpgradePropose = b.UpgradeVote.UpgradePropose
+		s.UpgradeApprove = b.UpgradeApprove
+		s.UpgradeDelay = uint64(b.UpgradeVote.UpgradeDelay)
+		s.NextProtocolVoteBefore = b.NextProtocolVoteBefore
+		s.NextProtocolApprovals = b.UpgradeState.NextProtocolApprovals
+
 	}
 
 	return
@@ -739,22 +752,6 @@ func (node *AlgorandFullNode) GenesisHash() crypto.Digest {
 	defer node.mu.Unlock()
 
 	return node.genesisHash
-}
-
-// PoolStats returns a PoolStatus structure reporting stats about the transaction pool
-func (node *AlgorandFullNode) PoolStats() PoolStats {
-	r := node.ledger.Latest()
-	last, err := node.ledger.Block(r)
-	if err != nil {
-		node.log.Warnf("AlgorandFullNode: could not read ledger's last round: %v", err)
-		return PoolStats{}
-	}
-
-	return PoolStats{
-		NumConfirmed:   uint64(len(last.Payset)),
-		NumOutstanding: uint64(node.transactionPool.PendingCount()),
-		NumExpired:     uint64(node.transactionPool.NumExpired(r)),
-	}
 }
 
 // SuggestedFee returns the suggested fee per byte recommended to ensure a new transaction is processed in a timely fashion.
@@ -1021,7 +1018,7 @@ func (node *AlgorandFullNode) txPoolGaugeThread(done <-chan struct{}) {
 	for true {
 		select {
 		case <-ticker.C:
-			txPoolGauge.Set(float64(node.transactionPool.PendingCount()))
+			txPoolGauge.Set(uint64(node.transactionPool.PendingCount()))
 		case <-done:
 			return
 		}

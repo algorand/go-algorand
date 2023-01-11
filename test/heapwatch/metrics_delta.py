@@ -304,6 +304,28 @@ class summary:
         plt.savefig(outpath + '.svg', format='svg')
         plt.savefig(outpath + '.png', format='png')
 
+    def heap_xy(self):
+        # data from algod_go_memory_classes_heap_objects_bytes
+        x = []
+        y = []
+        for nick, ns in self.nodes.items():
+            if not ns.objectBytes:
+                continue
+            for curtime, nbytes in ns.objectBytes:
+                x.append(curtime)
+                y.append(nbytes)
+        return x, y
+
+    def plot_heaps(self, outpath):
+        # data from algod_go_memory_classes_heap_objects_bytes
+        from matplotlib import pyplot as plt
+        x, y = self.heap_xy()
+        if (not x) or (not y):
+            return
+        plt.scatter(x, y)
+        plt.savefig(outpath + '.svg', format='svg')
+        plt.savefig(outpath + '.png', format='png')
+
 def anynickre(nick_re, nicks):
     if not nick_re:
         return True
@@ -343,6 +365,12 @@ def process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args, grsum):
         if anynickre(nretup, (rnick,nick)):
             rsum(process_files(args, nick, paths, grsum), nick)
 
+label_colors = {
+    'relay': (1.0,0,0),
+    'pn': (0,0,1.0),
+    'npn': (.7,.7,0),
+}
+
 def main():
     os.environ['TZ'] = 'UTC'
     time.tzset()
@@ -357,6 +385,7 @@ def main():
     ap.add_argument('--nick-re', action='append', default=[], help='regexp to filter node names, may be repeated')
     ap.add_argument('--nick-lre', action='append', default=[], help='label:regexp to filter node names, may be repeated')
     ap.add_argument('--pool-plot-root', help='write to foo.svg and .png')
+    ap.add_argument('--heap-plot-root', help='write to foo.svg and .png')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
 
@@ -435,6 +464,7 @@ def main():
                 htmlout.write(rsum.html())
         return 0
     if args.nick_lre:
+        heaps_xy_color = []
         for lnre in args.nick_lre:
             label, nre = lnre.split(':', maxsplit=1)
             rsum = summary(label)
@@ -443,7 +473,18 @@ def main():
             print('\n')
             if htmlout:
                 htmlout.write(rsum.html())
+            x, y = rsum.heap_xy()
+            c = label_colors.get(label)
+            heaps_xy_color.append((x, y, c))
+        if args.heap_plot_root:
+            from matplotlib import pyplot as plt
+            for x,y,c in heaps_xy_color:
+                plt.scatter(x, y, color=c)
+                plt.savefig(args.heap_plot_root + '.svg', format='svg')
+                plt.savefig(args.heap_plot_root + '.png', format='png')
         return 0
+    elif args.heap_plot_root:
+        grsum.plot_heaps(args.heap_plot_root)
 
     # no filters, print global result
     print(grsum)
@@ -497,6 +538,8 @@ class nodestats:
         self.times = []
         # algod_tx_pool_count{}
         self.txPool = []
+        # objectBytes = [(curtime, algod_go_memory_classes_heap_objects_bytes), ...]
+        self.objectBytes = []
         # total across all measurements
         self.tps = 0
         self.blockTime = 0
@@ -506,6 +549,8 @@ class nodestats:
 
     def process_files(self, args, nick=None, metrics_files=None, bisource=None):
         "returns self, a nodestats object"
+        if bisource is not None:
+            logger.debug('process_files %r external bisource', nick)
         if bisource is None:
             bisource = {}
         self.args = args
@@ -546,11 +591,15 @@ class nodestats:
                 with open(bijsonpath, 'rt', encoding="utf-8") as fin:
                     bi = json.load(fin)
                     self.biByTime[curtime] = bi
+                    logger.debug('bi r=%d %s', bi.get('block',{}).get('rnd', 0), bijsonpath)
             if bi is None:
                 bi = bisource.get(curtime)
             if bi is None:
                 logger.warning('%s no blockinfo', path)
             self.txPool.append(cur.get('algod_tx_pool_count{}'))
+            objectBytes = cur.get('algod_go_memory_classes_heap_objects_bytes')
+            if objectBytes:
+                self.objectBytes.append((curtime, objectBytes))
             #logger.debug('%s: %r', path, cur)
             verifyGood = cur.get('algod_agreement_proposal_verify_good{}')
             verifyMs = cur.get('algod_agreement_proposal_verify_ms{}')
@@ -562,7 +611,7 @@ class nodestats:
                 dt = curtime - prevtime
                 #print("{} ->\n{}".format(prevPath, path))
                 #print(json.dumps(d, indent=2, sort_keys=True))
-                self.deltas.append((curtime, d))
+                self.deltas.append((curtime, dt, d))
                 tps = None
                 blocktime = None
                 txnCount = 0
@@ -607,8 +656,14 @@ class nodestats:
             prevbi = bi
         if prevbi is None or firstBi is None:
             return self
+        if prevbi is firstBi:
+            logger.warning('only one blockinfo for %s', nick)
+            return self
         txnCount = prevbi.get('block',{}).get('tc',0) - firstBi.get('block',{}).get('tc',0)
         rounds = prevbi.get('block',{}).get('rnd',0) - firstBi.get('block',{}).get('rnd',0)
+        if rounds == 0:
+            logger.warning('no rounds for %s', nick)
+            return self
         totalDt = prevtime - firstTime
         self.tps = txnCount / totalDt
         self.blockTime = totalDt / rounds
@@ -625,7 +680,7 @@ class nodestats:
             reportf.close()
         if self.deltas and args.deltas:
             keys = set()
-            for ct, d in self.deltas:
+            for ct, dt, d in self.deltas:
                 keys.update(set(d.keys()))
             keys = sorted(keys)
             deltapath = args.deltas
@@ -633,9 +688,9 @@ class nodestats:
                 deltapath = deltapath.replace('.csv', '.{}.csv'.format(nick))
             with sopen(deltapath, 'wt') as fout:
                 writer = csv.writer(fout)
-                writer.writerow(['when'] + keys)
+                writer.writerow(['when', 'dt'] + keys)
                 for ct, d in self.deltas:
-                    row = [time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(ct))]
+                    row = [time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(ct)), dt]
                     for k in keys:
                         row.append(d.get(k, None))
                     writer.writerow(row)
