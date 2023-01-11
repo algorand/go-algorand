@@ -71,7 +71,7 @@ docker run --rm -it \
 Explanation of parts:
 
 * `-p 4190:8080` maps the internal algod REST API to local port 4190.
-* `-o 4191:7833` maps the internal kmd REST API to local port 4191.
+* `-p 4191:7833` maps the internal kmd REST API to local port 4191.
 * `-e NETWORK=` can be set to any of the supported public networks.
 * `-e FAST_CATCHUP=` causes fast catchup to start shortly after launching the network.
 * `-e START_KMD=` signals to entrypoint to start the kmd REST API (THIS SHOULD NOT BE USED IN PRODUCTION).
