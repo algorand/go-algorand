@@ -39,7 +39,12 @@ func TestTransactionProcessingTimeDistibutionFormatting(t *testing.T) {
 	processingTime.AddTransaction(2 * time.Millisecond)
 	bytes, err := processingTime.MarshalJSON()
 	require.NoError(t, err)
-	require.Equal(t, []byte("[2,3,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"), bytes)
+	expected := "[2,3,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+	require.Equal(t, []byte(expected), bytes)
+
+	var decPT transactionProcessingTimeDistibution
+	require.NoError(t, json.Unmarshal([]byte(expected), &decPT))
+	require.Equal(t, processingTime, decPT)
 
 	container := struct {
 		ProcessingTime transactionProcessingTimeDistibution
@@ -48,6 +53,13 @@ func TestTransactionProcessingTimeDistibutionFormatting(t *testing.T) {
 	bytes, err = json.Marshal(container)
 	require.NoError(t, err)
 	require.Equal(t, []byte("{\"ProcessingTime\":[2,3,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}"), bytes)
+}
+
+func TestTransactionProcessingTimeDistibutionPrint(t *testing.T) {
+	var decPT transactionProcessingTimeDistibution
+	expected := "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38]"
+	require.NoError(t, json.Unmarshal([]byte(expected), &decPT))
+	t.Log("\n" + decPT.MarshalString())
 }
 
 func TestAssembleBlockStatsString(t *testing.T) {

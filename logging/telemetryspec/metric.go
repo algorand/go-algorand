@@ -18,6 +18,7 @@ package telemetryspec
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -259,4 +260,54 @@ func (t *transactionProcessingTimeDistibution) AddTransaction(duration time.Dura
 	if idx >= 0 && idx <= 37 {
 		t.transactionBuckets[idx]++
 	}
+}
+
+func (t *transactionProcessingTimeDistibution) UnmarshalJSON(data []byte) error {
+	var arr []json.Number
+	if err := json.Unmarshal(data, &arr); err != nil {
+		return err
+	}
+	if len(arr) != len(t.transactionBuckets) {
+		return fmt.Errorf("array has %d buckets, should have %d", len(arr), len(t.transactionBuckets))
+	}
+	for i := range t.transactionBuckets {
+		val, err := arr[i].Int64()
+		if err != nil {
+			return fmt.Errorf("bucket has invalid value %s", arr[i])
+		}
+		t.transactionBuckets[i] = int(val)
+	}
+	return nil
+}
+
+func (t *transactionProcessingTimeDistibution) MarshalString() string {
+	var out strings.Builder
+	var offset int
+	var base, mul time.Duration
+bucketloop:
+	for i, val := range t.transactionBuckets {
+		switch {
+		case i < 10:
+			mul = 100000 * time.Nanosecond
+		case i < 19:
+			mul = time.Millisecond
+			base = mul
+			offset = 10
+		case i < 28:
+			mul = 10 * time.Millisecond
+			base = mul
+			offset = 19
+		case i < 37:
+			mul = 100 * time.Millisecond
+			base = mul
+			offset = 28
+		case i == 37:
+			break bucketloop
+		}
+		start := base + time.Duration(i-offset)*mul
+		end := base + time.Duration(i+1-offset)*mul
+		out.WriteString(fmt.Sprintf("%s - %s: %d\n", start, end, val))
+	}
+	out.WriteString(fmt.Sprintf(">1s: %d\n", t.transactionBuckets[37]))
+	return out.String()
 }
