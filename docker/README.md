@@ -79,7 +79,7 @@ The data directory located at `/algod/data`. Mounting a volume at that location 
 
 ### Volume Permissions
 
-The container executes in the context of the `algorand` user with it's own UID and GID. If experiencing permission errors when mounting a volume, try one of the following:
+The container executes in the context of the `algorand` user with it's own UID and GID which is handled differently depending on your operating system. Here are a few options for how to work with this environment:
 
 1. Using a named volume
 
