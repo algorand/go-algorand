@@ -59,7 +59,7 @@ jobs:
           key: cicd-golangci-lint-cgo-v0.0.1
 
       - name: Build custom golangci-lint with CGO_ENABLED
-        if: steps.cache-golangci-lint.outputs.cache-hit != 'true'
+        # if: steps.cache-golangci-lint.outputs.cache-hit != 'true'
         run: |
           cd cicdtmp/golangci-lint
           git clone https://github.com/golangci/golangci-lint.git .
