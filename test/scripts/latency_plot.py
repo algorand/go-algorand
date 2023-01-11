@@ -8,9 +8,10 @@
 import argparse
 import gzip
 import math
+import os
 import statistics
-
-from matplotlib import pyplot as plt
+import sys
+import tarfile
 
 def mmstdm(data):
     dmin = min(data)
@@ -19,36 +20,75 @@ def mmstdm(data):
     dstd = statistics.pstdev(data)
     return f'[{dmin}/{dmean} ({dstd})/{dmax}]'
 
+class LatencyAnalyzer:
+    def __init__(self):
+        self.data = []
+    def read(self, path):
+        if path.endswith('.gz'):
+            with gzip.open(path, 'rt') as fin:
+                self.rlines(fin)
+        else:
+            with open(path, 'rt') as fin:
+                self.rlines(fin)
+    def rlines(self, linesource):
+        for line in linesource:
+            rec = int(line.strip())/1000000000.0
+            self.data.append(rec)
+    def plot(self, outname):
+        from matplotlib import pyplot as plt
+        plt.plot(self.data)
+        plt.savefig(outname + '.png', format='png')
+        plt.savefig(outname + '.svg', format='svg')
+    def report(self):
+        lines = []
+        lines.append(f'{len(self.data)} points')
+        lines.append('min {:.2f}s'.format(min(self.data)))
+        lines.append('max {:.2f}s'.format(max(self.data)))
+        self.data.sort()
+        some = int(math.log(len(self.data))*4)
+        lowest = self.data[:some]
+        highest = self.data[-some:]
+        lines.append(f'lowest-{some}: {mmstdm(lowest)}')
+        lines.append(f'highest-{some}: {mmstdm(highest)}')
+        return '\n'.join(lines)
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('latency_log')
+    ap.add_argument('latency_log', nargs='*')
+    ap.add_argument('-p', '--plot', help='plot base name for .png .svg')
+    ap.add_argument('--tardir')
     args = ap.parse_args()
 
-    data = []
-    if args.latency_log.endswith('.gz'):
-        fin = gzip.open(args.latency_log, 'rt')
-        outname = args.latency_log.replace('.gz', '')
-    else:
-        fin = open(args.latency_log, 'rt')
-        outname = args.latency_log
-    for line in fin:
-        rec = int(line.strip())/1000000000.0
-        data.append(rec)
-    fin.close()
+    la = LatencyAnalyzer()
+    for path in args.latency_log:
+        la.read(path)
+    if args.tardir:
+        for dirpath, dirnames, filenames in os.walk(args.tardir):
+            for fname in filenames:
+                if fname.endswith('.tar.bz2'):
+                    tarname = os.path.join(dirpath, fname)
+                    tf = tarfile.open(tarname, 'r:bz2')
+                    for tinfo in tf:
+                        if not tinfo.isfile():
+                            continue
+                        if 'latency' in tinfo.name:
+                            rawf = tf.extractfile(tinfo)
+                            if tinfo.name.endswith('.gz'):
+                                fin = gzip.open(rawf, 'rt')
+                            else:
+                                fin = rawf
+                                rawf = None
+                            try:
+                                la.rlines(fin)
+                            except Exception as e:
+                                sys.stderr.write(f'{tarname}/{tinfo.name}: {e}\n')
+                            fin.close()
+                            if rawf is not None:
+                                rawf.close()
 
-    #subd = data[50:-50]
-    subd = data
-    print('min {:.2f}s'.format(min(subd)))
-    print('max {:.2f}s'.format(max(subd)))
-    plt.plot(subd)
-    plt.savefig(outname + '.png', format='png')
-    plt.savefig(outname + '.svg', format='svg')
-    subd.sort()
-    some = int(math.log(len(data))*4)
-    lowest = subd[:some]
-    highest = subd[-some:]
-    print(f'lowest-{some}: {mmstdm(lowest)}')
-    print(f'highest-{some}: {mmstdm(highest)}')
+    if args.plot:
+        la.plot(args.plot)
+    print(la.report())
 
 if __name__ == '__main__':
     main()
