@@ -1860,11 +1860,10 @@ func (ops *OpStream) assemble(text string) error {
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
 		return ops.errorf("Can not assemble version %d", ops.Version)
 	}
-	trimmed := strings.TrimSpace(text)
-	if trimmed == "" {
+	if strings.TrimSpace(text) == "" {
 		return ops.errorf("Cannot assemble empty program text")
 	}
-	fin := strings.NewReader(trimmed)
+	fin := strings.NewReader(text)
 	scanner := bufio.NewScanner(fin)
 	for scanner.Scan() {
 		ops.sourceLine++
