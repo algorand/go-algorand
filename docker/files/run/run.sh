@@ -57,7 +57,7 @@ function configure_data_dir() {
     cp /etc/algorand/logging.config logging.config
   fi
 
-  # check for environment variable overrides.
+  # check for token overrides
   if [ "$TOKEN" != "" ]; then
     echo "$TOKEN" >algod.token
   fi
@@ -73,6 +73,7 @@ function configure_data_dir() {
     diagcfg telemetry disable
   fi
 
+  # start kmd
   if [ "$START_KMD" = "1" ]; then
     local KMD_DIR="kmd-v0.5"
     # on intial bootstrap, this directory won't exist.
@@ -83,10 +84,10 @@ function configure_data_dir() {
       echo "{ \"address\":\"0.0.0.0:${KMD_PORT}\", \"allowed_origins\":[\"*\"] }" >kmd_config.json
     fi
 
-    if [ "$KMD_TOKEN" = "1" ]; then
-      echo "$KMD_TOKEN" >kmd.token
-    else
+    if [ "$KMD_TOKEN" == "" ]; then
       echo "$ADMIN_TOKEN" >kmd.token
+    else
+      echo "$KMD_TOKEN" >kmd.token
     fi
   fi
 }
