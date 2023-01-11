@@ -290,6 +290,9 @@ var createAssetCmd = &cobra.Command{
 
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
+		// DevMode fields: the default values would be ignored.
+		tx.DevMode.SkipValidation = skipValidation
+		tx.DevMode.SetNextBlockTime = setBlockTime
 
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
@@ -369,6 +372,9 @@ var destroyAssetCmd = &cobra.Command{
 
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
+		// DevMode fields: the default values would be ignored.
+		tx.DevMode.SkipValidation = skipValidation
+		tx.DevMode.SetNextBlockTime = setBlockTime
 
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
@@ -462,6 +468,9 @@ var configAssetCmd = &cobra.Command{
 
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
+		// DevMode fields: the default values would be ignored.
+		tx.DevMode.SkipValidation = skipValidation
+		tx.DevMode.SetNextBlockTime = setBlockTime
 
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
@@ -621,6 +630,9 @@ var freezeAssetCmd = &cobra.Command{
 
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
+		// DevMode fields: the default values would be ignored.
+		tx.DevMode.SkipValidation = skipValidation
+		tx.DevMode.SetNextBlockTime = setBlockTime
 
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
@@ -708,6 +720,9 @@ var optinAssetCmd = &cobra.Command{
 
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
+		// DevMode fields: the default values would be ignored.
+		tx.DevMode.SkipValidation = skipValidation
+		tx.DevMode.SetNextBlockTime = setBlockTime
 
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
