@@ -60,7 +60,7 @@ jobs:
   update-repo-description:
     name: Update DockerHub Repository Description
     runs-on: ubuntu-latest
-    if: github.ref == format('refs/heads/{0}', 'master')
+    if: github.ref == format('refs/heads/{0}', 'rel/stable')
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
