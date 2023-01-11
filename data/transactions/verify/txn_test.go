@@ -272,7 +272,7 @@ func TestTxnValidationEmptySig(t *testing.T) {
 
 const spProto = protocol.ConsensusVersion("test-state-proof-enabled")
 
-func TestTxnValidationStateProof(t *testing.T) {
+func TestTxnValidationStateProof(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies config.Consensus
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -1195,7 +1195,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 }
 
 // TestStreamVerifierPoolShutdown tests what happens when the exec pool shuts down
-func TestStreamVerifierPoolShutdown(t *testing.T) {
+func TestStreamVerifierPoolShutdown(t *testing.T) { //nolint:paralleltest // Not parallel because it depends on the default logger
 	partitiontest.PartitionTest(t)
 
 	// only one transaction should be sufficient for the batch verifier
@@ -1350,6 +1350,7 @@ func TestStreamVerifierRestart(t *testing.T) {
 
 // TestBlockWatcher runs multiple goroutines to check the concurency and correctness of the block watcher
 func TestStreamVerifierBlockWatcher(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	blkHdr := createDummyBlockHeader()
 	nbw := MakeNewBlockWatcher(blkHdr)
 	startingRound := blkHdr.Round
@@ -1458,7 +1459,7 @@ func TestStreamVerifierCtxCancel(t *testing.T) {
 // so that the batch is sent to the pool. Since the pool is saturated,
 // the task will be stuck waiting to be queued when the context is canceled
 // everything should be gracefully terminated
-func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
+func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest // Not parallel because it depends on the default logger
 	partitiontest.PartitionTest(t)
 
 	verificationPool, holdTasks := getSaturatedExecPool(t)
@@ -1537,6 +1538,7 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
 // TestStreamVerifierPostVBlocked tests the behavior when the return channel (result chan) of verified
 // transactions is blocked, and checks droppedFromPool counter to confirm the drops
 func TestStreamVerifierPostVBlocked(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	// prepare the stream verifier
 	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
@@ -1622,6 +1624,7 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 }
 
 func TestStreamVerifierMakeStreamVerifierErr(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	_, err := MakeStreamVerifier(nil, nil, nil, &DummyLedgerForSignature{badHdr: true}, nil, nil)
 	require.Error(t, err)
 }
