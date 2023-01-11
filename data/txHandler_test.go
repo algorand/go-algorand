@@ -602,9 +602,7 @@ func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 	}
 
 	for _, check := range checks {
-		check := check
 		t.Run(fmt.Sprintf("%d-%d", check.inputSize, check.numDecoded), func(t *testing.T) {
-			t.Parallel()
 			handler := TxHandler{
 				backlogQueue: make(chan *txBacklogMsg, 1),
 			}
@@ -679,7 +677,6 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 	}
 
 	t.Run("single", func(t *testing.T) {
-		t.Parallel()
 		handler := makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 0)
 		stxns, blob := makeRandomTransactions(1)
 		stxn := stxns[0]
@@ -705,7 +702,6 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 	})
 
 	t.Run("group", func(t *testing.T) {
-		t.Parallel()
 		handler := makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 0)
 		num := rand.Intn(config.MaxTxGroupSize-1) + 2 // 2..config.MaxTxGroupSize
 		require.LessOrEqual(t, num, config.MaxTxGroupSize)
@@ -894,7 +890,6 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 	}
 
 	t.Run("scheduled", func(t *testing.T) {
-		t.Parallel()
 		// double enqueue a single txn message, ensure it discarded
 		ctx, cancelFunc := context.WithCancel(context.Background())
 		handler := makeTestTxHandlerOrphanedWithContext(ctx, txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 10*time.Millisecond)
@@ -916,7 +911,6 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 	})
 
 	t.Run("manual", func(t *testing.T) {
-		t.Parallel()
 		// double enqueue a single txn message, ensure it discarded
 		handler := makeTestTxHandlerOrphaned(txBacklogSize)
 		var action network.OutgoingMessage
@@ -959,7 +953,6 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 // TestTxHandlerProcessIncomingCacheBacklogDrop checks if dropped messages are also removed from caches
 func TestTxHandlerProcessIncomingCacheBacklogDrop(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	handler := makeTestTxHandlerOrphanedWithContext(context.Background(), 1, 20, txHandlerConfig{true, true}, 0)
 
@@ -987,7 +980,6 @@ func TestTxHandlerProcessIncomingCacheBacklogDrop(t *testing.T) {
 
 func TestTxHandlerProcessIncomingCacheTxPoolDrop(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	const numUsers = 100
 	log := logging.TestingLog(t)
@@ -2320,8 +2312,6 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 
 func TestMakeTxHandlerErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
-
 	opts := TxHandlerOpts{
 		nil, nil, nil, &mocks.MockNetwork{}, "", crypto.Digest{}, config.Local{},
 	}

@@ -43,7 +43,6 @@ import (
 
 func TestAccountManagerKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel() // can be parallelized despite file system manipulation because db files have different test names
 	if testing.Short() {
 		t.Log("this is a long test and skipping for -short")
 		return
@@ -91,7 +90,6 @@ func registryCloseTest(t testing.TB, registry account.ParticipationRegistry, dbf
 
 func TestAccountManagerKeysRegistry(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel() // can be parallelized despite file system manipulation because db files have different test names
 	if testing.Short() {
 		t.Log("this is a long test and skipping for -short")
 		return
@@ -193,7 +191,6 @@ func testAccountManagerKeys(t *testing.T, registry account.ParticipationRegistry
 
 func TestAccountManagerOverlappingStateProofKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel() // can be parallelized despite file system manipulation because db files have different test names
 	a := assert.New(t)
 
 	registry, dbName := getRegistryImpl(t, false, true)
@@ -215,8 +212,7 @@ func TestAccountManagerOverlappingStateProofKeys(t *testing.T) {
 	}()
 
 	// Generate 2 participations under the same account
-	dbfilename := t.Name() + "_stateprooftest"
-	store, err := db.MakeAccessor(dbfilename, false, true)
+	store, err := db.MakeAccessor("stateprooftest", false, true)
 	a.NoError(err)
 	root, err := account.GenerateRoot(store)
 	a.NoError(err)
@@ -224,7 +220,7 @@ func TestAccountManagerOverlappingStateProofKeys(t *testing.T) {
 	a.NoError(err)
 	store.Close()
 
-	store, err = db.MakeAccessor(dbfilename, false, true)
+	store, err = db.MakeAccessor("stateprooftest", false, true)
 	a.NoError(err)
 	part2, err := account.FillDBWithParticipationKeys(store, root.Address(), basics.Round(merklesignature.KeyLifetimeDefault), basics.Round(merklesignature.KeyLifetimeDefault*3), 3)
 	a.NoError(err)
@@ -267,7 +263,6 @@ func TestAccountManagerOverlappingStateProofKeys(t *testing.T) {
 
 func TestGetStateProofKeysDontLogErrorOnNilStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel() // can be parallelized despite file system manipulation because db files have different test names
 	a := assert.New(t)
 
 	registry, dbName := getRegistryImpl(t, false, true)
@@ -290,8 +285,7 @@ func TestGetStateProofKeysDontLogErrorOnNilStateProof(t *testing.T) {
 	}()
 
 	// Generate 2 participations under the same account
-	dbfilename := t.Name() + "_stateprooftest"
-	store, err := db.MakeAccessor(dbfilename, false, true)
+	store, err := db.MakeAccessor("stateprooftest", false, true)
 	a.NoError(err)
 	root, err := account.GenerateRoot(store)
 	a.NoError(err)
