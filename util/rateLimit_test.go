@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -38,6 +39,7 @@ func (c mockClient) OnClose(func()) {
 }
 
 func TestNewElasticRateLimiter(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	erl := NewElasticRateLimiter(100, 10, time.Second, nil)
 
 	assert.Equal(t, len(erl.sharedCapacity), 100)
@@ -45,6 +47,7 @@ func TestNewElasticRateLimiter(t *testing.T) {
 }
 
 func TestElasticRateLimiterCongestionControlled(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	client := mockClient("client")
 	erl := NewElasticRateLimiter(3, 2, time.Second, nil)
 	// give the ERL a congestion controler with well defined behavior for testing
@@ -77,6 +80,7 @@ func TestElasticRateLimiterCongestionControlled(t *testing.T) {
 }
 
 func TestReservations(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	client1 := mockClient("client1")
 	client2 := mockClient("client2")
 	erl := NewElasticRateLimiter(4, 1, time.Second, nil)
@@ -102,6 +106,7 @@ func TestReservations(t *testing.T) {
 }
 
 func TestConsumeReleaseCapacity(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	client := mockClient("client")
 	erl := NewElasticRateLimiter(4, 3, time.Second, nil)
 
@@ -149,6 +154,7 @@ func TestConsumeReleaseCapacity(t *testing.T) {
 }
 
 func TestREDCongestionManagerShouldDrop(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	client := mockClient("client")
 	other := mockClient("other")
 	red := NewREDCongestionManager(time.Second*10, 10000)
@@ -184,17 +190,22 @@ func TestREDCongestionManagerShouldDrop(t *testing.T) {
 }
 
 func TestREDCongestionManagerShouldntDrop(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	client := mockClient("client")
 	red := NewREDCongestionManager(time.Second*10, 10000)
 	// calculate the target rate every request for most accurate results
 	red.targetRateRefreshTicks = 1
 	red.Start()
+
 	// indicate that the arrival rate is essentially 0.1/s!
 	red.Consumed(client, time.Now())
-	// drive 10k messages
-	// indicates that the service rate is essentially 100/s (10s rolling window)
-	for i := 0; i < 5000; i++ {
-		red.Served(time.Now())
+
+	// drive 10k messages, in batches of 500, with 100ms sleeps
+	for i := 0; i < 20; i++ {
+		for j := 0; j < 500; j++ {
+			red.Served(time.Now())
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 	// the service rate should be 1000/s, and the arrival rate for this client should be 0.1/s
 	// for this reason, shouldDrop should almost certainly return false (true only 1/100k times)
@@ -205,12 +216,13 @@ func TestREDCongestionManagerShouldntDrop(t *testing.T) {
 	time.Sleep(1000 * time.Millisecond)
 	red.Stop()
 	assert.Equal(t, 1, len(*red.consumedByClient[client]))
-	assert.Equal(t, 5000, len(red.serves))
+	assert.Equal(t, 10000, len(red.serves))
 	assert.Equal(t, 0.1, red.arrivalRateFor(red.consumedByClient[client]))
-	assert.Equal(t, float64(500), red.targetRate)
+	assert.Equal(t, float64(1000), red.targetRate)
 }
 
 func TestREDCongestionManagerTargetRate(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	client := mockClient("client")
 	red := NewREDCongestionManager(time.Second*10, 10000)
 	red.Start()
@@ -228,6 +240,7 @@ func TestREDCongestionManagerTargetRate(t *testing.T) {
 }
 
 func TestREDCongestionManagerPrune(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	client := mockClient("client")
 	red := NewREDCongestionManager(time.Second*10, 10000)
 	red.Start()
@@ -247,6 +260,7 @@ func TestREDCongestionManagerPrune(t *testing.T) {
 }
 
 func TestREDCongestionManagerStopStart(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	client := mockClient("client")
 	red := NewREDCongestionManager(time.Second*10, 10000)
 	red.Start()
