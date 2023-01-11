@@ -1857,13 +1857,14 @@ func splitTokens(tokens []string) (current, rest []string) {
 
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
-	if strings.TrimSpace(text) == "" {
-		return ops.errorf("Cannot assemble empty program text")
-	}
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
 		return ops.errorf("Can not assemble version %d", ops.Version)
 	}
-	fin := strings.NewReader(text)
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return ops.errorf("Cannot assemble empty program text")
+	}
+	fin := strings.NewReader(trimmed)
 	scanner := bufio.NewScanner(fin)
 	for scanner.Scan() {
 		ops.sourceLine++
@@ -2414,11 +2415,11 @@ func (ops *OpStream) warnf(format string, a ...interface{}) error {
 	return ops.warn(fmt.Errorf(format, a...))
 }
 
-// MultipleErrors issues accumulated warnings and outputs errors to an io.Writer.
+// ReportMultipleErrors issues accumulated warnings and outputs errors to an io.Writer.
 // In the case of exactly 1 error and no warnings, a slightly different format is provided
 // to handle the cases when the original error is or isn't reported elsewhere.
 // In the case of > 10 errors, only the first 10 errors will be reported.
-func (ops *OpStream) MultipleErrors(fname string, writer io.Writer) {
+func (ops *OpStream) ReportMultipleErrors(fname string, writer io.Writer) {
 	if len(ops.Errors) == 1 && len(ops.Warnings) == 0 {
 		prefix := ""
 		if fname != "" {

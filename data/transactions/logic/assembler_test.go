@@ -3077,7 +3077,7 @@ func TestAssembleEmpty(t *testing.T) {
 	}
 }
 
-func TestMultipleErrors(t *testing.T) {
+func TestReportMultipleErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -3101,7 +3101,7 @@ func TestMultipleErrors(t *testing.T) {
 
 	// Test the case where fname is not empty
 	var b bytes.Buffer
-	ops.MultipleErrors("test.txt", &b)
+	ops.ReportMultipleErrors("test.txt", &b)
 	expected := `test.txt: 1: error 1
 test.txt: 0: error 2
 test.txt: 3: error 3
@@ -3112,7 +3112,7 @@ test.txt: warning 2
 
 	// Test the case where fname is empty
 	b.Reset()
-	ops.MultipleErrors("", &b)
+	ops.ReportMultipleErrors("", &b)
 	expected = `1: error 1
 0: error 2
 3: error 3
@@ -3124,7 +3124,7 @@ warning 2
 	// no errors or warnings at all
 	ops = &OpStream{}
 	b.Reset()
-	ops.MultipleErrors("blah blah", &b)
+	ops.ReportMultipleErrors("blah blah", &b)
 	expected = ""
 	assertWithMsg(t, expected, b)
 
@@ -3142,20 +3142,20 @@ warning 2
 	expected = strings.Join(expectedStrs, "\n") + "\n"
 	ops = &OpStream{Errors: les}
 	b.Reset()
-	ops.MultipleErrors(file, &b)
+	ops.ReportMultipleErrors(file, &b)
 	assertWithMsg(t, expected, b)
 
 	// exactly 1 error + filename
 	ops = &OpStream{Errors: []lineError{{42, errors.New("super annoying error")}}}
 	b.Reset()
-	ops.MultipleErrors("galaxy.py", &b)
+	ops.ReportMultipleErrors("galaxy.py", &b)
 	expected = "galaxy.py: 1 error: 42: super annoying error\n"
 	assertWithMsg(t, expected, b)
 
 	// exactly 1 error w/o filename
 	ops = &OpStream{Errors: []lineError{{42, errors.New("super annoying error")}}}
 	b.Reset()
-	ops.MultipleErrors("", &b)
+	ops.ReportMultipleErrors("", &b)
 	expected = "1 error: 42: super annoying error\n"
 	assertWithMsg(t, expected, b)
 }
