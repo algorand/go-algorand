@@ -67,7 +67,6 @@ func init() {
 
 func TestUpgradeVote(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	s := UpgradeState{
 		CurrentProtocol: proto1,
@@ -131,7 +130,6 @@ func TestUpgradeVote(t *testing.T) {
 
 func TestUpgradeVariableDelay(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	s := UpgradeState{
 		CurrentProtocol: protoDelay,
@@ -158,7 +156,6 @@ func TestUpgradeVariableDelay(t *testing.T) {
 
 func TestMakeBlockUpgrades(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	var b Block
 	b.BlockHeader.GenesisID = t.Name()
@@ -226,7 +223,6 @@ func TestBlockUnsupported(t *testing.T) { //nolint:paralleltest // Not parallel 
 
 func TestTime(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	var prev Block
 	prev.BlockHeader.GenesisID = t.Name()
@@ -256,7 +252,6 @@ func TestTime(t *testing.T) {
 
 func TestRewardsLevel(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	var buf bytes.Buffer
 	log := logging.NewLogger()
@@ -277,7 +272,6 @@ func TestRewardsLevel(t *testing.T) {
 
 func TestRewardsLevelWithResidue(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	var buf bytes.Buffer
 	log := logging.NewLogger()
@@ -300,7 +294,6 @@ func TestRewardsLevelWithResidue(t *testing.T) {
 
 func TestRewardsLevelNoUnits(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	var buf bytes.Buffer
 	log := logging.NewLogger()
@@ -322,7 +315,6 @@ func TestRewardsLevelNoUnits(t *testing.T) {
 
 func TestTinyLevel(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	var buf bytes.Buffer
 	log := logging.NewLogger()
@@ -343,7 +335,6 @@ func TestTinyLevel(t *testing.T) {
 
 func TestRewardsRate(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	var buf bytes.Buffer
 	log := logging.NewLogger()
@@ -369,7 +360,6 @@ func TestRewardsRate(t *testing.T) {
 
 func TestRewardsRateRefresh(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	var buf bytes.Buffer
 	log := logging.NewLogger()
@@ -395,7 +385,6 @@ func TestRewardsRateRefresh(t *testing.T) {
 
 func TestEncodeDecodeSignedTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	var b Block
 	b.BlockHeader.GenesisID = "foo"
@@ -416,7 +405,6 @@ func TestEncodeDecodeSignedTxn(t *testing.T) {
 
 func TestEncodeMalformedSignedTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	var b Block
 	b.BlockHeader.GenesisID = "foo"
@@ -442,7 +430,6 @@ func TestEncodeMalformedSignedTxn(t *testing.T) {
 
 func TestDecodeMalformedSignedTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	var b Block
 	b.BlockHeader.GenesisID = "foo"
@@ -464,7 +451,6 @@ func TestDecodeMalformedSignedTxn(t *testing.T) {
 // running the rounds in the same way eval() is executing them over RewardsRateRefreshInterval rounds.
 func TestInitialRewardsRateCalculation(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	consensusParams.RewardsCalculationFix = false
@@ -567,7 +553,6 @@ func performRewardsRateCalculation(
 
 func TestNextRewardsRateWithFix(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -596,9 +581,7 @@ func TestNextRewardsRateWithFix(t *testing.T) {
 			proto.MinBalance + 500000000000 /* 5*10^11 */, 1, 1000000, false},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			curRewardsState := RewardsState{
 				RewardsLevel:              test.rewardsLevel,
 				RewardsResidue:            test.rewardsResidue,
@@ -615,7 +598,6 @@ func TestNextRewardsRateWithFix(t *testing.T) {
 
 func TestNextRewardsRateFailsWithoutFix(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -635,7 +617,6 @@ func TestNextRewardsRateFailsWithoutFix(t *testing.T) {
 
 func TestNextRewardsRateWithFixUsesNewRate(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -670,7 +651,6 @@ func TestNextRewardsRateWithFixUsesNewRate(t *testing.T) {
 
 func TestNextRewardsRateWithFixPoolBalanceInsufficient(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -705,7 +685,6 @@ func TestNextRewardsRateWithFixPoolBalanceInsufficient(t *testing.T) {
 
 func TestNextRewardsRateWithFixMaxSpentOverOverflow(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -742,7 +721,6 @@ func TestNextRewardsRateWithFixMaxSpentOverOverflow(t *testing.T) {
 
 func TestNextRewardsRateWithFixRewardsWithResidueOverflow(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -769,7 +747,6 @@ func TestNextRewardsRateWithFixRewardsWithResidueOverflow(t *testing.T) {
 
 func TestNextRewardsRateWithFixNextRewardLevelOverflow(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -796,7 +773,6 @@ func TestNextRewardsRateWithFixNextRewardLevelOverflow(t *testing.T) {
 
 func TestBlock_ContentsMatchHeader(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 	a := require.New(t)
 
 	// Create a block without SHA256 TxnCommitments
@@ -884,7 +860,6 @@ func TestBlock_ContentsMatchHeader(t *testing.T) {
 
 func TestBlockHeader_Serialization(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 	a := require.New(t)
 
 	// This serialized block header was generated from V32 e2e test, using the old BlockHeader struct which contains only TxnCommitments SHA512_256 value
