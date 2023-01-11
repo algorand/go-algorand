@@ -58,7 +58,6 @@ func makeTypeCheckFunction(t *testing.T, exceptions []reflectionhelpers.TypePath
 
 func TestBlockFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	typeToCheck := reflect.TypeOf(bookkeeping.Block{})
 
@@ -85,7 +84,6 @@ func TestBlockFields(t *testing.T) {
 
 func TestAccountDataFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	typeToCheck := reflect.TypeOf(basics.AccountData{})
 

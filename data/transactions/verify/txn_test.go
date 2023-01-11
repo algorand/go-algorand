@@ -206,7 +206,6 @@ func generateTestObjects(numTxs, numAccs, noteOffset int, blockRound basics.Roun
 
 func TestSignedPayment(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -230,7 +229,6 @@ func TestSignedPayment(t *testing.T) {
 
 func TestTxnValidationEncodeDecode(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	_, signed, _, _ := generateTestObjects(100, 50, 0, 0)
 
@@ -253,7 +251,6 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 
 func TestTxnValidationEmptySig(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	_, signed, _, _ := generateTestObjects(100, 50, 0, 0)
 
@@ -347,7 +344,6 @@ func TestTxnValidationStateProof(t *testing.T) { //nolint:paralleltest // Not pa
 
 func TestDecodeNil(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	// This is a regression test for improper decoding of a nil SignedTxn.
 	// This is a subtle case because decoding a msgpack nil does not run
@@ -366,7 +362,6 @@ func TestDecodeNil(t *testing.T) {
 
 func TestPaysetGroups(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	if testing.Short() {
 		t.Log("this is a long test and skipping for -short")
@@ -461,7 +456,6 @@ func BenchmarkPaysetGroups(b *testing.B) {
 
 func TestTxnGroupMixedSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	_, signedTxn, secrets, addrs := generateTestObjects(1, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
@@ -576,7 +570,6 @@ func generateTransactionGroups(maxGroupSize int, signedTxns []transactions.Signe
 
 func TestTxnGroupCacheUpdate(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	_, signedTxn, secrets, addrs := generateTestObjects(100, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
@@ -595,7 +588,6 @@ func TestTxnGroupCacheUpdate(t *testing.T) {
 // is valid (and added to the cache) only if all signatures in the multisig are correct
 func TestTxnGroupCacheUpdateMultiSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	_, signedTxn, _, _ := generateMultiSigTxn(100, 30, 50, t)
 	blkHdr := createDummyBlockHeader()
@@ -618,7 +610,6 @@ func TestTxnGroupCacheUpdateMultiSig(t *testing.T) {
 // is valid (and added to the cache) only if logic passes
 func TestTxnGroupCacheUpdateFailLogic(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	_, signedTxn, _, _ := generateTestObjects(100, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
@@ -662,7 +653,6 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 // for this, we will break the signature and make sure that txn verification fails.
 func TestTxnGroupCacheUpdateLogicWithSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	_, signedTxn, secrets, addresses := generateTestObjects(100, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
@@ -715,7 +705,6 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 // for this, we will break one of the multisig and the logic and make sure that txn verification fails.
 func TestTxnGroupCacheUpdateLogicWithMultiSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	secrets, _, pks, multiAddress := generateMultiSigAccounts(t, 30)
 	blkHdr := createDummyBlockHeader()
@@ -1020,7 +1009,6 @@ func getSignedTransactions(numOfTxns, maxGrpSize, noteOffset int, badTxnProb flo
 // TestStreamVerifier tests the basic functionality
 func TestStreamVerifier(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfTxns := 4000
 	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, protoMaxGroupSize, 0, 0.5)
@@ -1032,7 +1020,6 @@ func TestStreamVerifier(t *testing.T) {
 // TestStreamVerifierCases tests various valid and invalid transaction signature cases
 func TestStreamVerifierCases(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfTxns := 10
 	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0, 0)
@@ -1135,7 +1122,6 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 // TestStreamVerifierIdel starts the verifer and sends nothing, to trigger the timer, then sends a txn
 func TestStreamVerifierIdel(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfTxns := 1
 	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, protoMaxGroupSize, 0, 0.5)
@@ -1146,7 +1132,6 @@ func TestStreamVerifierIdel(t *testing.T) {
 
 func TestGetNumberOfBatchableSigsInGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfTxns := 10
 	txnGroups, _ := getSignedTransactions(numOfTxns, 1, 0, 0)
@@ -1305,7 +1290,6 @@ func TestStreamVerifierPoolShutdown(t *testing.T) { //nolint:paralleltest // Not
 // TestStreamVerifierRestart tests what happens when the context is canceled
 func TestStreamVerifierRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	numOfTxns := 1000
 	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0, 0.5)
@@ -1367,7 +1351,6 @@ func TestStreamVerifierRestart(t *testing.T) {
 // TestBlockWatcher runs multiple goroutines to check the concurency and correctness of the block watcher
 func TestStreamVerifierBlockWatcher(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 	blkHdr := createDummyBlockHeader()
 	nbw := MakeNewBlockWatcher(blkHdr)
 	startingRound := blkHdr.Round
@@ -1430,7 +1413,6 @@ func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan interface{})
 // passed to the exec pool yet, but is in batchingLoop
 func TestStreamVerifierCtxCancel(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	verificationPool, holdTasks := getSaturatedExecPool(t)
 	defer verificationPool.Shutdown()
@@ -1557,7 +1539,6 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest 
 // transactions is blocked, and checks droppedFromPool counter to confirm the drops
 func TestStreamVerifierPostVBlocked(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	// prepare the stream verifier
 	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
@@ -1644,7 +1625,6 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 
 func TestStreamVerifierMakeStreamVerifierErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 	_, err := MakeStreamVerifier(nil, nil, nil, &DummyLedgerForSignature{badHdr: true}, nil, nil)
 	require.Error(t, err)
 }
@@ -1653,7 +1633,6 @@ func TestStreamVerifierMakeStreamVerifierErr(t *testing.T) {
 // task is queued to the exec pool and before the task is executed in the pool
 func TestStreamVerifierCancelWhenPooled(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 	numOfTxns := 1000
 	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0, 0.5)
 

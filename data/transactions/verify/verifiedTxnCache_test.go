@@ -29,7 +29,6 @@ import (
 
 func TestAddingToCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	icache := MakeVerifiedTransactionCache(500)
 	impl := icache.(*verifiedTransactionCache)
@@ -48,7 +47,6 @@ func TestAddingToCache(t *testing.T) {
 
 func TestBucketCycling(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	bucketCount := 3
 	entriesPerBucket := 100
@@ -80,7 +78,6 @@ func TestBucketCycling(t *testing.T) {
 
 func TestGetUnverifiedTransactionGroups50(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	size := 300
 	icache := MakeVerifiedTransactionCache(size * 2)
@@ -139,7 +136,6 @@ func BenchmarkGetUnverifiedTransactionGroups50(b *testing.B) {
 
 func TestUpdatePinned(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	size := 100
 	icache := MakeVerifiedTransactionCache(size * 10)
@@ -169,7 +165,6 @@ func TestUpdatePinned(t *testing.T) {
 
 func TestPinningTransactions(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	size := 100
 	icache := MakeVerifiedTransactionCache(size)
