@@ -19,8 +19,6 @@
 
 package config
 
-const defaultRelayGossipFanout = 8
-
 var defaultLocal = Local{
 	Version:                                    27,
 	AccountUpdatesStatsInterval:                5000000000,

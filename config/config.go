@@ -77,6 +77,10 @@ const ParticipationRegistryFilename = "partregistry.sqlite"
 // built-in supported consensus protocols.
 const ConfigurableConsensusProtocolsFilename = "consensus.json"
 
+// The default gossip fanout setting when configured as a relay (here, as we
+// do not expose in normal config so it is not in code generated local_defaults.go
+const defaultRelayGossipFanout = 8
+
 // LoadConfigFromDisk returns a Local config structure based on merging the defaults
 // with settings loaded from the config file from the custom dir.  If the custom file
 // cannot be loaded, the default config is returned (with the error from loading the
