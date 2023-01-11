@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0 # required for new-from-rev option in .golangci.yml
       - name: Install libraries
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0 # required for new-from-rev option in .golangci.yml
       - name: Install libraries
@@ -46,14 +46,14 @@ jobs:
           echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
           echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
       - name: Install specific golang
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: '1.17.13'
       - name: Create folders for golangci-lint
         run: mkdir -p cicdtmp/golangci-lint
       - name: Check if custom golangci-lint is already built
         id: cache-golangci-lint
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: cicdtmp/golangci-lint/golangci-lint-cgo
           key: cicd-golangci-lint-cgo-v0.0.1
