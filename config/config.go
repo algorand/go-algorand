@@ -124,6 +124,12 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 		source.Archival = true
 		source.EnableLedgerService = true
 		source.EnableBlockService = true
+
+		// If gossip fanout has not been explicitly overridden, use defaultRelayGossipFanout
+		// rather then the default gossip fanout setting from defaultLocal
+		if source.GossipFanout == defaultLocal.GossipFanout {
+			source.GossipFanout = defaultRelayGossipFanout
+		}
 	}
 
 	return source, err
