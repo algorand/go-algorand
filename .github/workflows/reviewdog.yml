@@ -51,12 +51,12 @@ jobs:
           go-version: '1.17.13'
       - name: Create folders for golangci-lint
         run: mkdir -p cicdtmp/golangci-lint
-      - name: Check if custom golangci-lint is already built
-        id: cache-golangci-lint
-        uses: actions/cache@v3
-        with:
-          path: cicdtmp/golangci-lint/golangci-lint-cgo
-          key: cicd-golangci-lint-cgo-v0.0.1
+      # - name: Check if custom golangci-lint is already built
+      #   id: cache-golangci-lint
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: cicdtmp/golangci-lint/golangci-lint-cgo
+      #     key: cicd-golangci-lint-cgo-v0.0.1
 
       - name: Build custom golangci-lint with CGO_ENABLED
         # if: steps.cache-golangci-lint.outputs.cache-hit != 'true'
