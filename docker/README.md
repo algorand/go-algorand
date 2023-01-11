@@ -14,11 +14,7 @@ By default the following config.json overrides are applied:
 
 | Setting | Value |
 | ------- | ----- |
-| GossipFanout | 1 |
 | EndpointAddress | 0.0.0.0:8080 |
-| IncomingConnectionsLimit | 0 |
-| Archival | false |
-| IsIndexerActive | false |
 | EnableDeveloperAPI | true |
 
 ### Environment Variables
@@ -73,9 +69,10 @@ Explanation of parts:
 * `-p 4190:8080` maps the internal algod REST API to local port 4190.
 * `-p 4191:7833` maps the internal kmd REST API to local port 4191.
 * `-e NETWORK=` can be set to any of the supported public networks.
-* `-e FAST_CATCHUP=` causes fast catchup to start shortly after launching the network.
-* `-e START_KMD=` signals to entrypoint to start the kmd REST API (THIS SHOULD NOT BE USED IN PRODUCTION).
 * `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis. The value of this variable takes precedence over the `name` attribute set in `/etc/algorand/logging.config`.
+* `-e FAST_CATCHUP=1` causes fast catchup to start shortly after launching the network.
+* `-e START_KMD=1` signals to entrypoint to start the kmd REST API (THIS SHOULD NOT BE USED IN PRODUCTION).
+* `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis.
 * `-e TOKEN=` sets the REST API token to use.
 * `-v ${PWD}/data:/algod/data/` mounts a local volume to the data directory, which can be used to restart and upgrade the deployment.
 

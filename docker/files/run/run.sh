@@ -27,7 +27,7 @@ function start_public_network() {
   configure_data_dir
   start_kmd &
 
-  if [[ $FAST_CATCHUP ]]; then
+  if [ "$FAST_CATCHUP" = "1" ]; then
     catchup &
   fi
 
@@ -37,12 +37,11 @@ function start_public_network() {
 
 function configure_data_dir() {
   cd "$ALGORAND_DATA"
-  algocfg -d . set -p GossipFanout -v 1
   algocfg -d . set -p EndpointAddress -v "0.0.0.0:${ALGOD_PORT}"
-  algocfg -d . set -p IncomingConnectionsLimit -v 0
-  algocfg -d . set -p Archival -v false
-  algocfg -d . set -p IsIndexerActive -v false
-  algocfg -d . set -p EnableDeveloperAPI -v true
+
+  if [ "$DEV_MODE" = "1" ]; then
+    algocfg -d . set -p EnableDeveloperAPI -v true
+  fi
 
   # check for config file overrides.
   if [ -f "/etc/algorand/config.json" ]; then
@@ -74,7 +73,7 @@ function configure_data_dir() {
     diagcfg telemetry disable
   fi
 
-  if [[ $START_KMD ]]; then
+  if [ "$START_KMD" = "1" ]; then
     local KMD_DIR="kmd-v0.5"
     # on intial bootstrap, this directory won't exist.
     mkdir -p "$KMD_DIR"
@@ -84,7 +83,7 @@ function configure_data_dir() {
       echo "{ \"address\":\"0.0.0.0:${KMD_PORT}\", \"allowed_origins\":[\"*\"] }" >kmd_config.json
     fi
 
-    if [[ $KMD_TOKEN ]]; then
+    if [ "$KMD_TOKEN" = "1" ]; then
       echo "$KMD_TOKEN" >kmd.token
     else
       echo "$ADMIN_TOKEN" >kmd.token
@@ -93,7 +92,7 @@ function configure_data_dir() {
 }
 
 function start_kmd() {
-  if [[ $START_KMD ]]; then
+  if [ "$START_KMD" = "1" ]; then
     kmd start -d "$ALGORAND_DATA" -t 0
   fi
 }
@@ -142,7 +141,7 @@ function start_private_network() {
 
 function start_new_private_network() {
   local TEMPLATE="template.json"
-  if [ "$DEV_MODE" ]; then
+  if [ "$DEV_MODE" = "1" ]; then
     TEMPLATE="devmode_template.json"
   fi
   sed -i "s/NUM_ROUNDS/${NUM_ROUNDS:-30000}/" "/node/run/$TEMPLATE"
