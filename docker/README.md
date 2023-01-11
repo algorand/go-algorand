@@ -77,7 +77,7 @@ Explanation of parts:
 
 The data directory located at `/algod/data`. Mounting a volume at that location will allow you to shutdown and resume the node.
 
-### Handling Permission Errors
+### Volume Permissions
 
 The container executes in the context of the `algorand` user with it's own UID and GID. If experiencing permission errors when mounting a volume, try one of the following:
 
