@@ -478,7 +478,7 @@ func TestCdtSessionStateToEvent(t *testing.T) {
 func TestCdtSessionGetObjects(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)

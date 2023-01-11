@@ -47,7 +47,6 @@ func compact(data []byte) string {
 // TestJsonMarshal ensures that BoxRef names are b64 encoded, since they may not be characters.
 func TestJsonMarshal(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	marshal := protocol.EncodeJSON(transactions.BoxRef{Index: 4, Name: []byte("joe")})
 	require.Equal(t, `{"i":4,"n":"am9l"}`, compact(marshal))
@@ -65,8 +64,6 @@ func TestJsonMarshal(t *testing.T) {
 // TestJsonUnmarshal ensures that BoxRef unmarshaling expects b64 names
 func TestJsonUnmarshal(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
-
 	var br transactions.BoxRef
 
 	decode(t, `{"i":4,"n":"am9l"}`, &br)
@@ -90,7 +87,6 @@ func TestJsonUnmarshal(t *testing.T) {
 // the same for the sake of REST API compatibility.
 func TestTxnJson(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	txn := txntest.Txn{
 		Sender: basics.Address{0x01, 0x02, 0x03},
