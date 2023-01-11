@@ -81,28 +81,32 @@ The data directory located at `/algod/data`. Mounting a volume at that location 
 
 The container executes in the context of the `algorand` user with it's own UID and GID which is handled differently depending on your operating system. Here are a few options for how to work with this environment:
 
-1. Using a named volume
+#### Named Volume
 
-    ```bash
-    docker run -it --rm -d -v algod-data:/algod/data algorand/algod
-    ```
+Using a named volume will work without any specific configuration in most cases:
 
-2. Specifying UID/GID of the container
+```bash
+docker volume create algod-data
+docker run -it --rm -d -v algod-data:/algod/data algorand/algod
+```
 
-    ```bash
-    docker run -it --rm -d -v /srv/data:/algod/data -u $UID:$GID algorand/algod
-    ```
+#### Local Directory without SELinux
 
-3. Relabeling the contents of the volume
+Explicitly set the UID and GID of the container:
 
-    ```bash
-    docker run -it --rm -d -v /srv/data:/algod/data:Z algorand/algod
-    ```
+```bash
+docker run -it --rm -d -v /srv/data:/algod/data -u $UID:$GID algorand/algod
+```
 
-For more information on volumes or why this may be happening refer to the following:
+#### Local Directory with SELinux
 
-- https://docs.docker.com/storage/volumes/
-- https://web.archive.org/web/20190728100417/https://www.projectatomic.io/blog/2015/06/using-volumes-with-docker-can-cause-problems-with-selinux/
+Set the UID and GID of the container while add the `Z` option to the volume definition:
+
+```bash
+docker run -it --rm -d -v /srv/data:/algod/data:Z -u $UID:$GID algorand/algod
+```
+
+> See the documentation on [configuring the selinux label](https://docs.docker.com/storage/bind-mounts/#configure-the-selinux-label).
 
 ### Private Network
 
