@@ -90,6 +90,7 @@ jobs:
           -name="Lint Warnings"
           -reporter=github-check
           -filter-mode=added
+          -fail-on-error=true
           -level=warning
       - name: Slack Notification
         env:
