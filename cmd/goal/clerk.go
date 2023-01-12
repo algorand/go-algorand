@@ -270,6 +270,15 @@ func getProgramArgs() [][]byte {
 	return getB64Args(argB64Strings)
 }
 
+func applyCommonFields(txn *transactions.Transaction, cmd *cobra.Command) {
+	// Parse notes and lease fields
+	txn.Note = parseNoteField(cmd)
+	txn.Lease = parseLease(cmd)
+	// DevMode fields: the default values would be ignored.
+	txn.DevMode.SkipValidation = skipValidation
+	txn.DevMode.SetNextBlockTime = setBlockTime
+}
+
 func parseNoteField(cmd *cobra.Command) []byte {
 	if cmd.Flags().Changed("noteb64") {
 		noteBytes, err := base64.StdEncoding.DecodeString(noteBase64)
@@ -362,10 +371,6 @@ var sendCmd = &cobra.Command{
 		}
 		toAddressResolved := accountList.getAddressByName(toAddress)
 
-		// Parse notes and lease fields
-		noteBytes := parseNoteField(cmd)
-		leaseBytes := parseLease(cmd)
-
 		// If closing an account, resolve that address as well
 		var closeToAddressResolved string
 		if closeToAddress != "" {
@@ -388,8 +393,8 @@ var sendCmd = &cobra.Command{
 			reportErrorf(err.Error())
 		}
 		payment, err := client.ConstructPayment(
-			fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved,
-			leaseBytes, basics.Round(firstValid), basics.Round(lastValid),
+			fromAddressResolved, toAddressResolved, fee, amount, nil, closeToAddressResolved,
+			[32]byte{}, basics.Round(firstValid), basics.Round(lastValid),
 		)
 		if err != nil {
 			reportErrorf(errorConstructingTX, err)
@@ -398,6 +403,9 @@ var sendCmd = &cobra.Command{
 			payment.RekeyTo = rekeyTo
 		}
 
+		// Fill in common fields.
+		applyCommonFields(&payment, cmd)
+
 		// ConstructPayment fills in the suggested fee when fee=0. But if the user actually used --fee=0 on the
 		// commandline, we ought to do what they asked (especially now that zero or low fees make sense in
 		// combination with other txns that cover the groups's fee.
@@ -405,10 +413,6 @@ var sendCmd = &cobra.Command{
 		if explicitFee {
 			payment.Fee = basics.MicroAlgos{Raw: fee}
 		}
-
-		// DevMode fields: the default values would be ignored.
-		payment.DevMode.SkipValidation = skipValidation
-		payment.DevMode.SetNextBlockTime = setBlockTime
 
 		var stx transactions.SignedTxn
 		if lsig.Logic != nil {

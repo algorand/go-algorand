@@ -591,9 +591,8 @@ var appExecuteCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
-		tx.Note = parseNoteField(cmd)
-		tx.Lease = parseLease(cmd)
+		// Fill in common fields.
+		applyCommonFields(&tx, cmd)
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)

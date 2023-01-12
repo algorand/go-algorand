@@ -460,12 +460,8 @@ var createAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
-		tx.Note = parseNoteField(cmd)
-		tx.Lease = parseLease(cmd)
-		// DevMode fields: the default values would be ignored.
-		tx.DevMode.SkipValidation = skipValidation
-		tx.DevMode.SetNextBlockTime = setBlockTime
+		// Fill in common fields.
+		applyCommonFields(&tx, cmd)
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
@@ -538,12 +534,8 @@ var updateAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
-		tx.Note = parseNoteField(cmd)
-		tx.Lease = parseLease(cmd)
-		// DevMode fields: the default values would be ignored.
-		tx.DevMode.SkipValidation = skipValidation
-		tx.DevMode.SetNextBlockTime = setBlockTime
+		// Fill in common fields.
+		applyCommonFields(&tx, cmd)
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
@@ -611,12 +603,8 @@ var optInAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
-		tx.Note = parseNoteField(cmd)
-		tx.Lease = parseLease(cmd)
-		// DevMode fields: the default values would be ignored.
-		tx.DevMode.SkipValidation = skipValidation
-		tx.DevMode.SetNextBlockTime = setBlockTime
+		// Fill in common fields.
+		applyCommonFields(&tx, cmd)
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
@@ -684,12 +672,8 @@ var closeOutAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
-		tx.Note = parseNoteField(cmd)
-		tx.Lease = parseLease(cmd)
-		// DevMode fields: the default values would be ignored.
-		tx.DevMode.SkipValidation = skipValidation
-		tx.DevMode.SetNextBlockTime = setBlockTime
+		// Fill in common fields.
+		applyCommonFields(&tx, cmd)
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
@@ -757,12 +741,8 @@ var clearAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
-		tx.Note = parseNoteField(cmd)
-		tx.Lease = parseLease(cmd)
-		// DevMode fields: the default values would be ignored.
-		tx.DevMode.SkipValidation = skipValidation
-		tx.DevMode.SetNextBlockTime = setBlockTime
+		// Fill in common fields.
+		applyCommonFields(&tx, cmd)
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
@@ -830,12 +810,8 @@ var callAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
-		tx.Note = parseNoteField(cmd)
-		tx.Lease = parseLease(cmd)
-		// DevMode fields: the default values would be ignored.
-		tx.DevMode.SkipValidation = skipValidation
-		tx.DevMode.SetNextBlockTime = setBlockTime
+		// Fill in common fields.
+		applyCommonFields(&tx, cmd)
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
@@ -903,12 +879,8 @@ var deleteAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
-		tx.Note = parseNoteField(cmd)
-		tx.Lease = parseLease(cmd)
-		// DevMode fields: the default values would be ignored.
-		tx.DevMode.SkipValidation = skipValidation
-		tx.DevMode.SetNextBlockTime = setBlockTime
+		// Fill in common fields.
+		applyCommonFields(&tx, cmd)
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
@@ -1397,12 +1369,8 @@ var methodAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
-		appCallTxn.Note = parseNoteField(cmd)
-		appCallTxn.Lease = parseLease(cmd)
-		// DevMode fields: the default values would be ignored.
-		appCallTxn.DevMode.SkipValidation = skipValidation
-		appCallTxn.DevMode.SetNextBlockTime = setBlockTime
+		// Fill in common fields.
+		applyCommonFields(&appCallTxn, cmd)
 
 		// Fill in rounds, fee, etc.
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)

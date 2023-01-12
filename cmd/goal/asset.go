@@ -288,11 +288,8 @@ var createAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		tx.Note = parseNoteField(cmd)
-		tx.Lease = parseLease(cmd)
-		// DevMode fields: the default values would be ignored.
-		tx.DevMode.SkipValidation = skipValidation
-		tx.DevMode.SetNextBlockTime = setBlockTime
+		// Fill in common fields.
+		applyCommonFields(&tx, cmd)
 
 		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
@@ -370,11 +367,8 @@ var destroyAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		tx.Note = parseNoteField(cmd)
-		tx.Lease = parseLease(cmd)
-		// DevMode fields: the default values would be ignored.
-		tx.DevMode.SkipValidation = skipValidation
-		tx.DevMode.SetNextBlockTime = setBlockTime
+		// Fill in common fields.
+		applyCommonFields(&tx, cmd)
 
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
@@ -466,11 +460,8 @@ var configAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		tx.Note = parseNoteField(cmd)
-		tx.Lease = parseLease(cmd)
-		// DevMode fields: the default values would be ignored.
-		tx.DevMode.SkipValidation = skipValidation
-		tx.DevMode.SetNextBlockTime = setBlockTime
+		// Fill in common fields.
+		applyCommonFields(&tx, cmd)
 
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
@@ -554,11 +545,8 @@ var sendAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		tx.Note = parseNoteField(cmd)
-		tx.Lease = parseLease(cmd)
-		// DevMode fields: the default values would be ignored.
-		tx.DevMode.SkipValidation = skipValidation
-		tx.DevMode.SetNextBlockTime = setBlockTime
+		// Fill in common fields.
+		applyCommonFields(&tx, cmd)
 
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
@@ -628,11 +616,8 @@ var freezeAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		tx.Note = parseNoteField(cmd)
-		tx.Lease = parseLease(cmd)
-		// DevMode fields: the default values would be ignored.
-		tx.DevMode.SkipValidation = skipValidation
-		tx.DevMode.SetNextBlockTime = setBlockTime
+		// Fill in common fields.
+		applyCommonFields(&tx, cmd)
 
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
@@ -718,11 +703,8 @@ var optinAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		tx.Note = parseNoteField(cmd)
-		tx.Lease = parseLease(cmd)
-		// DevMode fields: the default values would be ignored.
-		tx.DevMode.SkipValidation = skipValidation
-		tx.DevMode.SetNextBlockTime = setBlockTime
+		// Fill in common fields.
+		applyCommonFields(&tx, cmd)
 
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
