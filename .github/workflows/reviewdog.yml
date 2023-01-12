@@ -74,7 +74,7 @@ jobs:
       - name: Build custom linters
         run: |
           cd cmd/partitiontest_linter/
-          CGO_ENABLED=true go build -buildmode=plugin -trimpath plugin/plugin.go
+          CGO_ENABLED=true go build -buildmode=plugin -gcflags="all=-N -l" -trimpath plugin/plugin.go
           cd ../../
           ls -la cmd/partitiontest_linter/
       - name: Run golangci-lint with reviewdog
