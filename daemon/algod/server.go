@@ -189,7 +189,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	if err != nil {
 		return fmt.Errorf("couldn't initialize the node: %s", err)
 	}
-	s.node = apiServer.ApiNode{AlgorandFullNode: fullNode}
+	s.node = apiServer.APINode{AlgorandFullNode: fullNode}
 
 	return nil
 }

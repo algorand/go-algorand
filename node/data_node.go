@@ -44,6 +44,7 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
+// AlgorandDataNode implements sync mode/ledger delta APIs and disables participation-related methods
 type AlgorandDataNode struct {
 	AlgorandFullNode
 }

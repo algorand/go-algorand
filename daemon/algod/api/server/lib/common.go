@@ -28,6 +28,7 @@ import (
 // GenesisJSONText is initialized when the node starts.
 var GenesisJSONText string
 
+// NodeInterface defines the node's methods required by the common APIs
 type NodeInterface interface {
 	GenesisHash() crypto.Digest
 	GenesisID() string

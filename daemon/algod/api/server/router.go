@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/util/tokens"
 )
 
+// APINodeInterface describes all the node methods required by common and v2 APIs, and the server/router
 type APINodeInterface interface {
 	lib.NodeInterface
 	v2.NodeInterface
@@ -136,9 +137,11 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 // DataNode wraps the AlgorandDataNode to provide v2.NodeInterface.
 type DataNode struct{ *node.AlgorandDataNode }
 
+// LedgerForAPI implements the v2.Handlers interface
 func (n DataNode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }
 
-// ApiNode wraps the AlgorandFullNode to provide v2.NodeInterface.
-type ApiNode struct{ *node.AlgorandFullNode }
+// APINode wraps the AlgorandFullNode to provide v2.NodeInterface.
+type APINode struct{ *node.AlgorandFullNode }
 
-func (n ApiNode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }
+// LedgerForAPI implements the v2.Handlers interface
+func (n APINode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }
