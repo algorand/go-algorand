@@ -57,7 +57,7 @@ type Server struct {
 	netFile              string
 	netListenFile        string
 	log                  logging.Logger
-	node                 *node.AlgorandFullNode
+	node                 apiServer.APINodeInterface
 	metricCollector      *metrics.MetricService
 	metricServiceStarted bool
 	stopping             chan struct{}
@@ -171,13 +171,25 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 			NodeExporterPath:          cfg.NodeExporterPath,
 		})
 
-	s.node, err = node.MakeFull(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
+	if cfg.NodeSyncMode {
+		dataNode, err := node.MakeData(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
+		if os.IsNotExist(err) {
+			return fmt.Errorf("node has not been installed: %s", err)
+		}
+		if err != nil {
+			return fmt.Errorf("couldn't initialize the node: %s", err)
+		}
+		s.node = apiServer.DataNode{AlgorandDataNode: dataNode}
+		return nil
+	}
+	fullNode, err := node.MakeFull(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
 	if os.IsNotExist(err) {
 		return fmt.Errorf("node has not been installed: %s", err)
 	}
 	if err != nil {
 		return fmt.Errorf("couldn't initialize the node: %s", err)
 	}
+	s.node = apiServer.ApiNode{AlgorandFullNode: fullNode}
 
 	return nil
 }

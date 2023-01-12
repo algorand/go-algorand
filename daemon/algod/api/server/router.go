@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib/middlewares"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/data"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/experimental"
 	npprivate "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/nonparticipating/private"
 	nppublic "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/nonparticipating/public"
@@ -39,6 +40,14 @@ import (
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/util/tokens"
 )
+
+type APINodeInterface interface {
+	lib.NodeInterface
+	v2.NodeInterface
+	ListeningAddress() (string, bool)
+	Start()
+	Stop()
+}
 
 const (
 	apiV1Tag = "/v1"
@@ -63,7 +72,7 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 }
 
 // NewRouter builds and returns a new router with our REST handlers registered.
-func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener, numConnectionsLimit uint64) *echo.Echo {
+func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener, numConnectionsLimit uint64) *echo.Echo {
 	if err := tokens.ValidateAPIToken(apiToken); err != nil {
 		logger.Errorf("Invalid apiToken was passed to NewRouter ('%s'): %v", apiToken, err)
 	}
@@ -104,14 +113,18 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 
 	// Registering v2 routes
 	v2Handler := v2.Handlers{
-		Node:     apiNode{node},
+		Node:     node,
 		Log:      logger,
 		Shutdown: shutdown,
 	}
 	nppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
 	npprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
-	ppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
-	pprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
+	if node.Config().NodeSyncMode {
+		data.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+	} else {
+		ppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+		pprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
+	}
 
 	if node.Config().EnableExperimentalAPI {
 		experimental.RegisterHandlers(e, &v2Handler, apiAuthenticator)
@@ -120,7 +133,12 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	return e
 }
 
-// apiNode wraps the AlgorandFullNode to provide v2.NodeInterface.
-type apiNode struct{ *node.AlgorandFullNode }
+// DataNode wraps the AlgorandDataNode to provide v2.NodeInterface.
+type DataNode struct{ *node.AlgorandDataNode }
 
-func (n apiNode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }
+func (n DataNode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }
+
+// ApiNode wraps the AlgorandFullNode to provide v2.NodeInterface.
+type ApiNode struct{ *node.AlgorandFullNode }
+
+func (n ApiNode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }
