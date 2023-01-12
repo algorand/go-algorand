@@ -371,12 +371,18 @@ func TestTxnGroupWithTracer(t *testing.T) {
 	account := keypair()
 	accountAddr := basics.Address(account.SignatureVerifier)
 
-	// `#pragma version 6; int 1;`
-	program1 := []byte{0x06, 0x81, 0x01}
+	ops1, err := logic.AssembleString(`#pragma version 6
+pushint 1`)
+	require.NoError(t, err)
+	program1 := ops1.Program
 	program1Addr := basics.Address(logic.HashProgram(program1))
 
-	// `#pragma version 6; byte "test"; pop; int 1;`
-	program2 := []byte{0x06, 0x80, 0x04, 0x74, 0x65, 0x73, 0x74, 0x48, 0x81, 0x01}
+	ops2, err := logic.AssembleString(`#pragma version 6
+pushbytes "test"
+pop
+pushint 1`)
+	require.NoError(t, err)
+	program2 := ops2.Program
 	program2Addr := basics.Address(logic.HashProgram(program2))
 
 	// this shouldn't be invoked during this test
