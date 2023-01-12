@@ -24,9 +24,9 @@ The following environment variables can be supplied. Except when noted, it is po
 | Variable | Description |
 | -------- | ----------- |
 | NETWORK       | Leave blank for a private network, otherwise specify one of mainnet, betanet, testnet, or devnet. Only used during a data directory initialization. |
-| FAST_CATCHUP  | If set on a public network, attempt to start fast-catchup during initial config. |
+| FAST_CATCHUP  | If set to 1 on a public network, attempt to start fast-catchup during initial config. |
 | TELEMETRY_NAME| If set on a public network, telemetry is reported with this name. |
-| DEV_MODE      | If set on a private network, enable dev mode. Only used during data directory initialization. |
+| DEV_MODE      | If set to 1 on a private network, enable dev mode. Only used during data directory initialization. |
 | NUM_ROUNDS    | If set on a private network, override default of 30000 participation keys. |
 | TOKEN         | If set, overrides the REST API token. |
 | ADMIN_TOKEN   | If set, overrides the REST API admin token. |
