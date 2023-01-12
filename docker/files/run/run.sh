@@ -111,8 +111,8 @@ function start_private_network() {
   apply_configuration
 
   # TODO: Is there a way to properly exec a private network?
-  goal network start -r "$ALGORAND_DATA/.."
-  tail -f "$ALGORAND_DATA/node.log"
+  goal network start -r "${ALGORAND_DATA}/.."
+  tail -f "${ALGORAND_DATA}/node.log"
 }
 
 function start_new_private_network() {
@@ -122,7 +122,8 @@ function start_new_private_network() {
     TEMPLATE="devmode_template.json"
   fi
   sed -i "s/NUM_ROUNDS/${NUM_ROUNDS:-30000}/" "run/$TEMPLATE"
-  goal network create -n dockernet -r "$ALGORAND_DATA/.." -t "run/$TEMPLATE"
+  goal network create --noclean -n dockernet -r "/tmp/dockernet" -t "run/$TEMPLATE"
+  mv -v /tmp/dockernet/* "${ALGORAND_DATA}/.."
   configure_data_dir
   start_private_network
 }
