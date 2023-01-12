@@ -25,13 +25,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// byte 0x068101 is `#pragma version 6; int 1;`
 const innerTxnTestProgram string = `itxn_begin
 int appl
 itxn_field TypeEnum
 int NoOp
 itxn_field OnCompletion
-byte 0x068101
+byte 0x068101 // #pragma version 6; int 1;
 dup
 itxn_field ApprovalProgram
 itxn_field ClearStateProgram

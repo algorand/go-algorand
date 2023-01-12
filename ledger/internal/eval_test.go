@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -327,14 +328,13 @@ func flatten(rows [][]mocktracer.Event) []mocktracer.Event {
 	return out
 }
 
-// byte 0x068101 is `#pragma version 6; int 1;`
 const innerTxnTestProgram string = `#pragma version 6
 itxn_begin
 int appl
 itxn_field TypeEnum
 int NoOp
 itxn_field OnCompletion
-byte 0x068101
+byte 0x068101 // #pragma version 6; int 1;
 dup
 itxn_field ApprovalProgram
 itxn_field ClearStateProgram
@@ -368,7 +368,7 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 	innerAppID := 3
 	innerAppAddress := basics.AppIndex(innerAppID).Address()
 	balances := genesisInitState.Accounts
-	balances[innerAppAddress] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1000000})
+	balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1000000})
 
 	genesisBalances := bookkeeping.GenesisBalances{
 		Balances:    genesisInitState.Accounts,
