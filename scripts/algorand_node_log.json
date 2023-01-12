@@ -3,7 +3,6 @@
         "title" : "Algornad Node Log Format",
         "description" : "Log format for logrus, used by go-algorand.",
         "url" : "https://github.com/sirupsen/logrus",
-		"file-pattern": "node.log",
         "level-field" : "level",
 		"timestamp-field" : "time",
 		"json": true,
@@ -44,6 +43,16 @@
 				"kind": "string",
 				"identifier": true
 			}
-		}
+		},
+		"sample": [
+			{
+				"line": "{\"file\":\"trackerdbV2.go\",\"function\":\"github.com/algorand/go-algorand/ledger/store.(*trackerDBSchemaInitializer).upgradeDatabaseSchema0\",\"level\":\"info\",\"line\":203,\"msg\":\"upgradeDatabaseSchema0 initializing schema\",\"name\":\"\",\"time\":\"2022-12-29T16:26:58.478738+02:00\"}",
+				"level": "info"
+			},
+			{
+				"line": "{\"Context\":\"sync\",\"details\":{\"StartRound\":0},\"file\":\"telemetry.go\",\"function\":\"github.com/algorand/go-algorand/logging.(*telemetryState).logTelemetry\",\"instanceName\":\"iFepr+AcMdoqEg+2\",\"level\":\"info\",\"line\":261,\"msg\":\"/ApplicationState/CatchupStart\",\"name\":\"\",\"session\":\"\",\"time\":\"2022-12-29T16:26:58.763458+02:00\",\"v\":\"3.14.167910\"}",
+				"level": "info"
+			}
+		]
 	}
 }
