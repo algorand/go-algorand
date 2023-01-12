@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -61,7 +61,13 @@ type catchpointWriter struct {
 	accountsIterator     accountsBatchIter
 	maxResourcesPerChunk int
 	accountsDone         bool
-	kvRows               *sql.Rows
+	kvRows               kvIter
+}
+
+type kvIter interface {
+	Next() bool
+	KeyValue() ([]byte, []byte, error)
+	Close()
 }
 
 type accountsBatchIter interface {
@@ -280,7 +286,7 @@ func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) er
 
 	// Create the *Rows iterator JIT
 	if cw.kvRows == nil {
-		rows, err := tx.QueryContext(ctx, "SELECT key, value FROM kvstore")
+		rows, err := store.MakeKVsIter(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -289,9 +295,7 @@ func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) er
 
 	kvrs := make([]encoded.KVRecordV6, 0, BalancesPerCatchpointFileChunk)
 	for cw.kvRows.Next() {
-		var k []byte
-		var v []byte
-		err := cw.kvRows.Scan(&k, &v)
+		k, v, err := cw.kvRows.KeyValue()
 		if err != nil {
 			return err
 		}

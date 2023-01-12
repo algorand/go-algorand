@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -412,11 +412,6 @@ func (app AppIndex) ToBeHashed() (protocol.HashID, []byte) {
 // Address yields the "app address" of the app
 func (app AppIndex) Address() Address {
 	return Address(crypto.HashObj(app))
-}
-
-// MakeAccountData returns a UserToken
-func MakeAccountData(status Status, algos MicroAlgos) AccountData {
-	return AccountData{Status: status, MicroAlgos: algos}
 }
 
 // Money returns the amount of MicroAlgos associated with the user's account

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1431,15 +1431,13 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 
 		// Now add the kvstore hashes
 		pendingTrieHashes = 0
-		kvs, err := tx.QueryContext(ctx, "SELECT key, value FROM kvstore")
+		kvs, err := store.MakeKVsIter(ctx, tx)
 		if err != nil {
 			return err
 		}
 		defer kvs.Close()
 		for kvs.Next() {
-			var k []byte
-			var v []byte
-			err := kvs.Scan(&k, &v)
+			k, v, err := kvs.KeyValue()
 			if err != nil {
 				return err
 			}

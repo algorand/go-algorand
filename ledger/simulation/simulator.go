@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -163,7 +163,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	}
 
 	// Verify the signed transactions are well-formed and have valid signatures
-	_, err = verify.TxnGroupWithTracer(txnsToVerify, hdr, nil, s.ledger, debugger)
+	_, err = verify.TxnGroupWithTracer(txnsToVerify, &hdr, nil, s.ledger, debugger)
 	if err != nil {
 		return false, InvalidTxGroupError{SimulatorError{err}}
 	}
