@@ -41,12 +41,12 @@ Configuration can be modified by specifying certain files. These can be changed 
 
 | File | Description |
 | ---- | ----------- |
-| /etc/config.json | Override default configurations by providing your own file. |
-| /etc/algod.token | Override default randomized REST API token. |
-| /etc/algod.admin.token | Override default randomized REST API admin token. |
-| /etc/logging.config | Use a custom [logging.config](https://developer.algorand.org/docs/run-a-node/reference/telemetry-config/#configuration) file for configuring telemetry. |
+| /algod/config/config.json | Override default configurations by providing your own file. |
+| /algod/config/algod.token | Override default randomized REST API token. |
+| /algod/config/algod.admin.token | Override default randomized REST API admin token. |
+| /algod/config/logging.config | Use a custom [logging.config](https://developer.algorand.org/docs/run-a-node/reference/telemetry-config/#configuration) file for configuring telemetry. |
 
-TODO: `/etc/template.json` for overriding the private network topology.
+TODO: `/algod/config/template.json` for overriding the private network topology.
 
 ## Example Configuration
 

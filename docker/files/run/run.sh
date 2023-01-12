@@ -13,17 +13,17 @@ function apply_configuration() {
   cd "$ALGORAND_DATA"
 
   # check for config file overrides.
-  if [ -f "/etc/config.json" ]; then
-    cp /etc/config.json config.json
+  if [ -f "/algod/config/config.json" ]; then
+    cp /algod/config/config.json config.json
   fi
-  if [ -f "/etc/algod.token" ]; then
-    cp /etc/algod.token algod.token
+  if [ -f "/algod/config/algod.token" ]; then
+    cp /algod/config/algod.token algod.token
   fi
-  if [ -f "/etc/algod.admin.token" ]; then
-    cp /etc/algod.admin.token algod.admin.token
+  if [ -f "/algod/config/algod.admin.token" ]; then
+    cp /algod/config/algod.admin.token algod.admin.token
   fi
-  if [ -f "/etc/logging.config" ]; then
-    cp /etc/logging.config logging.config
+  if [ -f "/algod/config/logging.config" ]; then
+    cp /algod/config/logging.config logging.config
   fi
 
   # check for environment variable overrides.
@@ -78,7 +78,7 @@ function configure_data_dir() {
 }
 
 function start_new_public_network() {
-  cd /node
+  cd /algod
   if [ ! -d "run/genesis/$NETWORK" ]; then
     echo "No genesis file for '$NETWORK' is available."
     exit 1
@@ -88,8 +88,8 @@ function start_new_public_network() {
 
   cd "$ALGORAND_DATA"
 
-  cp "/node/run/genesis/$NETWORK/genesis.json" genesis.json
-  cp /node/run/config.json.example config.json
+  cp "/algod/run/genesis/$NETWORK/genesis.json" genesis.json
+  cp /algod/run/config.json.example config.json
 
   configure_data_dir
 
@@ -116,7 +116,7 @@ function start_private_network() {
 }
 
 function start_new_private_network() {
-  cd /node
+  cd /algod
   local TEMPLATE="template.json"
   if [ "$DEV_MODE" ]; then
     TEMPLATE="devmode_template.json"

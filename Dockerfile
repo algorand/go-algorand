@@ -11,7 +11,7 @@ ARG TARGETARCH
 ADD https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz /go.tar.gz
 
 # Basic dependencies.
-ENV HOME="/node" DEBIAN_FRONTEND="noninteractive" GOPATH="/node"
+ENV HOME="/node" DEBIAN_FRONTEND="noninteractive" GOPATH="/dist"
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -27,15 +27,15 @@ RUN apt-get update && \
 
 ENV PATH="/usr/local/go/bin:${PATH}"
 
-COPY ./docker/files/ /node/files
-COPY ./installer/genesis /node/files/run/genesis
-COPY ./cmd/updater/update.sh /node/files/build/update.sh
-COPY ./installer/config.json.example /node/files/run/config.json.example
+COPY ./docker/files/ /dist/files
+COPY ./installer/genesis /dist/files/run/genesis
+COPY ./cmd/updater/update.sh /dist/files/build/update.sh
+COPY ./installer/config.json.example /dist/files/run/config.json.example
 
 # Install algod binaries.
-RUN /node/files/build/install.sh \
+RUN /dist/files/build/install.sh \
     -p "${GOPATH}/bin" \
-    -d "/node/data" \
+    -d "/algod/data" \
     -c "${CHANNEL}" \
     -u "${URL}" \
     -b "${BRANCH}" \
@@ -43,7 +43,7 @@ RUN /node/files/build/install.sh \
 
 FROM debian:bullseye-slim as final
 
-ENV PATH="/node/bin:${PATH}" ALGOD_PORT="8080" ALGORAND_DATA="/algod/data"
+ENV PATH="/algod/bin:${PATH}" ALGOD_PORT="8080" ALGORAND_DATA="/algod/data"
 
 # curl is needed to lookup the fast catchup url
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && \
@@ -55,12 +55,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 
 USER algorand
 
-COPY --chown=algorand:algorand --from=builder "/node/bin/" "/node/bin/"
-COPY --chown=algorand:algorand --from=builder "/node/files/run/" "/node/run/"
+COPY --chown=algorand:algorand --from=builder "/dist/bin/" "/algod/bin/"
+COPY --chown=algorand:algorand --from=builder "/dist/files/run/" "/algod/run/"
 
 # Expose Algod REST API, Algod Gossip, and Prometheus Metrics ports
 EXPOSE $ALGOD_PORT 4160 9100
 
-WORKDIR /node/bin
+WORKDIR /algod
 
-CMD ["/node/run/run.sh"]
+CMD ["/algod/run/run.sh"]
