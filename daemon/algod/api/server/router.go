@@ -120,11 +120,11 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 	}
 	nppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
 	npprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
+	ppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+	pprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
+
 	if node.Config().NodeSyncMode {
 		data.RegisterHandlers(e, &v2Handler, apiAuthenticator)
-	} else {
-		ppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
-		pprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
 	}
 
 	if node.Config().EnableExperimentalAPI {
