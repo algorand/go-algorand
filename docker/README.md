@@ -69,7 +69,7 @@ Explanation of parts:
 * `-p 4190:8080` maps the internal algod REST API to local port 4190
 * `-e NETWORK=` can be set to any of the supported public networks.
 * `-e FAST_CATCHUP=` causes fast catchup to start shortly after launching the network.
-* `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis. The value of this variable takes precedence over the GUID in `/etc/logging.config`.
+* `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis. The value of this variable takes precedence over the `name` attribute set in `/algod/config/logging.config`.
 * `-e TOKEN=` sets the REST API token to use.
 * `-v ${PWD}/data:/algod/data/` mounts a local volume to the data directory, which can be used to restart and upgrade the deployment.
 
