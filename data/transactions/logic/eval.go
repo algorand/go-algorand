@@ -1822,6 +1822,15 @@ func opBytesSqrt(cx *EvalContext) error {
 	return nil
 }
 
+func nonzero(b []byte) []byte {
+	for i := range b {
+		if b[i] != 0 {
+			return b[i:]
+		}
+	}
+	return nil
+}
+
 func opBytesLt(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
@@ -1866,9 +1875,10 @@ func opBytesEq(cx *EvalContext) error {
 		return errors.New("math attempted on large byte-array")
 	}
 
-	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
-	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
-	cx.stack[prev] = boolToSV(lhs.Cmp(rhs) == 0)
+	rhs := nonzero(cx.stack[last].Bytes)
+	lhs := nonzero(cx.stack[prev].Bytes)
+
+	cx.stack[prev] = boolToSV(bytes.Equal(lhs, rhs))
 	cx.stack = cx.stack[:last]
 	return nil
 }
