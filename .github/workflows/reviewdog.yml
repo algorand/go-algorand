@@ -64,7 +64,7 @@ jobs:
           cd cicdtmp/golangci-lint
           git clone https://github.com/golangci/golangci-lint.git .
           git checkout tags/v1.47.3
-          CGO_ENABLED=true go build -trimpath -o golangci-lint-cgo ./cmd/golangci-lint
+          CGO_ENABLED=true go build -trimpath -gcflags="all=-N -l" -o golangci-lint-cgo ./cmd/golangci-lint
           ./golangci-lint-cgo --version
           cd ../../
       - name: Install reviewdog
