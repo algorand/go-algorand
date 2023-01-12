@@ -39,24 +39,39 @@ class LatencyAnalyzer:
         plt.plot(self.data)
         plt.savefig(outname + '.png', format='png')
         plt.savefig(outname + '.svg', format='svg')
-    def report(self):
-        lines = []
-        lines.append(f'{len(self.data)} points: {mmstdm(self.data)}')
-        lines.append('min {:.3f}s'.format(min(self.data)))
-        lines.append('max {:.3f}s'.format(max(self.data)))
+    def report_data(self):
         self.data.sort()
         some = int(math.log(len(self.data))*4)
         lowest = self.data[:some]
         highest = self.data[-some:]
+        return some, lowest, highest
+    def report(self):
+        lines = []
+        some, lowest, highest = self.report_data()
+        lines.append(f'{len(self.data)} points: {mmstdm(self.data)}')
+        lines.append('min {:.3f}s'.format(min(self.data)))
+        lines.append('max {:.3f}s'.format(max(self.data)))
         lines.append(f'lowest-{some}: {mmstdm(lowest)}')
         lines.append(f'highest-{some}: {mmstdm(highest)}')
         return '\n'.join(lines)
+    def report_html(self):
+        lines = []
+        some, lowest, highest = self.report_data()
+        lines.append('<h2>Latency</h2>')
+        lines.append('<div class="legend">[min/mean (std)/max]</div>')
+        lines.append(f'<div>{len(self.data)} points: {mmstdm(self.data)}</div>')
+        lines.append(f'<div>min {min(self.data):.3f}s</div>')
+        lines.append(f'<div>max {max(self.data):.3f}s</div>')
+        lines.append(f'<div>lowest-{some}: {mmstdm(lowest)}</div>')
+        lines.append(f'<div>highest-{some}: {mmstdm(highest)}</div>')
+        return ''.join(lines)
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('latency_log', nargs='*')
     ap.add_argument('-p', '--plot', help='plot base name for .png .svg')
     ap.add_argument('-a', '--aout', help='report text output path (append)')
+    ap.add_argument('-H', '--ahtml', help='report html output path (append)')
     ap.add_argument('--tardir')
     args = ap.parse_args()
 
@@ -89,10 +104,13 @@ def main():
 
     if args.plot:
         la.plot(args.plot)
+    if args.ahtml:
+        with open(args.ahtml, 'at') as fout:
+            fout.write(la.report_html())
     if args.aout:
         with open(args.aout, 'at') as fout:
             fout.write(la.report())
-    else:
+    if (not args.aout) and (not args.ahtml):
         print(la.report())
 
 if __name__ == '__main__':
