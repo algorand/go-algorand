@@ -18,7 +18,7 @@ def mmstdm(data):
     dmax = max(data)
     dmean = statistics.mean(data)
     dstd = statistics.pstdev(data)
-    return f'[{dmin}/{dmean} ({dstd})/{dmax}]'
+    return f'[{dmin:.3f}/{dmean:.3f} ({dstd:.3f})/{dmax:.3f}]'
 
 class LatencyAnalyzer:
     def __init__(self):
@@ -41,9 +41,9 @@ class LatencyAnalyzer:
         plt.savefig(outname + '.svg', format='svg')
     def report(self):
         lines = []
-        lines.append(f'{len(self.data)} points')
-        lines.append('min {:.2f}s'.format(min(self.data)))
-        lines.append('max {:.2f}s'.format(max(self.data)))
+        lines.append(f'{len(self.data)} points: {mmstdm(self.data)}')
+        lines.append('min {:.3f}s'.format(min(self.data)))
+        lines.append('max {:.3f}s'.format(max(self.data)))
         self.data.sort()
         some = int(math.log(len(self.data))*4)
         lowest = self.data[:some]
@@ -56,6 +56,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('latency_log', nargs='*')
     ap.add_argument('-p', '--plot', help='plot base name for .png .svg')
+    ap.add_argument('-a', '--aout', help='report text output path (append)')
     ap.add_argument('--tardir')
     args = ap.parse_args()
 
@@ -88,7 +89,11 @@ def main():
 
     if args.plot:
         la.plot(args.plot)
-    print(la.report())
+    if args.aout:
+        with open(args.aout, 'at') as fout:
+            fout.write(la.report())
+    else:
+        print(la.report())
 
 if __name__ == '__main__':
     main()
