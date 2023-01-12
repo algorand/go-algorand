@@ -63,9 +63,8 @@ bytec 4
 &&
 `
 
-func TestWebDebuggerManual(t *testing.T) {
+func TestWebDebuggerManual(t *testing.T) { //nolint:paralleltest // Manual test
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	debugURL := os.Getenv("TEAL_DEBUGGER_URL")
 	if len(debugURL) == 0 {
