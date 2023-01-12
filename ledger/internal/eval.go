@@ -1065,7 +1065,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	// Only compute the TxID once
 	txid := txn.ID()
 
-	if eval.validate && txn.Txn.DevMode.SkipValidation {
+	if eval.proto.DevMode && eval.validate && txn.Txn.DevMode.SkipValidation {
 		eval.validate = false
 		defer func() {
 			eval.validate = true
@@ -1105,10 +1105,8 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		return fmt.Errorf("transaction %v: %w", txid, err)
 	}
 
-	// Make sure the time is always advancing. If multiple transactions set the time we use the largest timestamp.
-	// TODO: Does that actually matter? It might be useful to go backwards.
-	//if txn.Txn.DevMode.SetNextBlockTime != 0 && txn.Txn.DevMode.SetNextBlockTime > eval.block.BlockHeader.TimeStamp {
-	if txn.Txn.DevMode.SetNextBlockTime != 0 {
+	// If multiple transactions set the time this logic uses the last one.
+	if eval.proto.DevMode && txn.Txn.DevMode.SetNextBlockTime != 0 {
 		eval.block.BlockHeader.TimeStamp = txn.Txn.DevMode.SetNextBlockTime
 	}
 
