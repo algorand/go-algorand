@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -48,8 +47,6 @@ import (
 type AlgorandDataNode struct {
 	AlgorandFullNode
 }
-
-// TODO how will we no-op the methods we don't want called?
 
 // MakeData sets up an Algorand data node
 func MakeData(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandDataNode, error) {
@@ -101,10 +98,7 @@ func MakeData(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log)
-
 	blockListeners := []ledgercore.BlockListener{
-		node.transactionPool,
 		node,
 	}
 
@@ -119,6 +113,13 @@ func MakeData(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, make(chan catchup.PendingUnmatchedCertificate), node.lowPriorityCryptoVerificationPool)
+
+	// Initialize sync round to the next round so that nothing falls out of the cache on Start
+	err = node.SetSyncRound(uint64(node.Ledger().NextRound()))
+	if err != nil {
+		log.Errorf("unable to set sync round to Ledger.NextRound %v", err)
+		return nil, err
+	}
 
 	catchpointCatchupState, err := node.ledger.GetCatchpointCatchupState(context.Background())
 	if err != nil {
@@ -276,13 +277,12 @@ func (node *AlgorandDataNode) AppendParticipationKeys(_ account.ParticipationID,
 	return fmt.Errorf("cannot append participation keys in sync mode")
 }
 
-// InstallParticipationKey Given a participation key binary stream install the participation key.
+// InstallParticipationKey returns an error in sync mode
 func (node *AlgorandDataNode) InstallParticipationKey(_ []byte) (account.ParticipationID, error) {
 	return account.ParticipationID{}, fmt.Errorf("cannot install participation key in sync mode")
 }
 
 // OnNewBlock implements the BlockListener interface so we're notified after each block is written to the ledger
-//TODO
 func (node *AlgorandDataNode) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	if node.ledger.Latest() > block.Round() {
 		return
