@@ -408,7 +408,8 @@ func (node *AlgorandFullNode) startMonitoringRoutines() {
 	go node.oldKeyDeletionThread(node.ctx.Done())
 
 	if node.config.EnableUsageLog {
-		go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
+		node.monitoringRoutinesWaitGroup.Add(1)
+		go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, &node.monitoringRoutinesWaitGroup)
 	}
 }
 
@@ -1017,7 +1018,7 @@ func (node *AlgorandFullNode) txPoolGaugeThread(done <-chan struct{}) {
 	for true {
 		select {
 		case <-ticker.C:
-			txPoolGauge.Set(float64(node.transactionPool.PendingCount()))
+			txPoolGauge.Set(uint64(node.transactionPool.PendingCount()))
 		case <-done:
 			return
 		}
