@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package data
+package dedup
 
 import (
 	"context"
@@ -30,9 +30,9 @@ import (
 	"golang.org/x/crypto/blake2b"
 )
 
-// digestCache is a rotating cache of size N accepting crypto.Digest as a key
+// DigestCache is a rotating cache of size N accepting crypto.Digest as a key
 // and keeping up to 2*N elements in memory
-type digestCache struct {
+type DigestCache struct {
 	cur  map[crypto.Digest]struct{}
 	prev map[crypto.Digest]struct{}
 
@@ -40,8 +40,8 @@ type digestCache struct {
 	mu      deadlock.RWMutex
 }
 
-func makeDigestCache(size int) *digestCache {
-	c := &digestCache{
+func MakeDigestCache(size int) *DigestCache {
+	c := &DigestCache{
 		cur:     map[crypto.Digest]struct{}{},
 		maxSize: size,
 	}
@@ -50,7 +50,7 @@ func makeDigestCache(size int) *digestCache {
 
 // check if digest d is in a cache.
 // locking semantic: write lock must be taken
-func (c *digestCache) check(d *crypto.Digest) bool {
+func (c *DigestCache) check(d *crypto.Digest) bool {
 	_, found := c.cur[*d]
 	if !found {
 		_, found = c.prev[*d]
@@ -60,22 +60,30 @@ func (c *digestCache) check(d *crypto.Digest) bool {
 
 // swap rotates cache pages.
 // locking semantic: write lock must be taken
-func (c *digestCache) swap() {
+func (c *DigestCache) swap() {
 	c.prev = c.cur
 	c.cur = map[crypto.Digest]struct{}{}
 }
 
 // put adds digest d into a cache.
 // locking semantic: write lock must be taken
-func (c *digestCache) put(d *crypto.Digest) {
+func (c *DigestCache) put(d *crypto.Digest) {
 	if len(c.cur) >= c.maxSize {
 		c.swap()
 	}
 	c.cur[*d] = struct{}{}
 }
 
+// Reset internal data storage
+func (c *DigestCache) Reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.prev = map[crypto.Digest]struct{}{}
+	c.cur = map[crypto.Digest]struct{}{}
+}
+
 // CheckAndPut adds digest d into a cache if not found
-func (c *digestCache) CheckAndPut(d *crypto.Digest) bool {
+func (c *DigestCache) CheckAndPut(d *crypto.Digest) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.check(d) {
@@ -86,7 +94,7 @@ func (c *digestCache) CheckAndPut(d *crypto.Digest) bool {
 }
 
 // Len returns size of a cache
-func (c *digestCache) Len() int {
+func (c *DigestCache) Len() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -94,17 +102,17 @@ func (c *digestCache) Len() int {
 }
 
 // Delete from the cache
-func (c *digestCache) Delete(d *crypto.Digest) {
+func (c *DigestCache) Delete(d *crypto.Digest) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.cur, *d)
 	delete(c.prev, *d)
 }
 
-// txSaltedCache is a digest cache with a rotating salt
+// SaltedCache is a digest cache with a rotating salt
 // uses blake2b hash function
-type txSaltedCache struct {
-	digestCache
+type SaltedCache struct {
+	DigestCache
 
 	curSalt  [4]byte
 	prevSalt [4]byte
@@ -112,13 +120,13 @@ type txSaltedCache struct {
 	wg       sync.WaitGroup
 }
 
-func makeSaltedCache(size int) *txSaltedCache {
-	return &txSaltedCache{
-		digestCache: *makeDigestCache(size),
+func MakeSaltedCache(size int) *SaltedCache {
+	return &SaltedCache{
+		DigestCache: *MakeDigestCache(size),
 	}
 }
 
-func (c *txSaltedCache) Start(ctx context.Context, refreshInterval time.Duration) {
+func (c *SaltedCache) Start(ctx context.Context, refreshInterval time.Duration) {
 	c.ctx = ctx
 	if refreshInterval != 0 {
 		c.wg.Add(1)
@@ -130,12 +138,12 @@ func (c *txSaltedCache) Start(ctx context.Context, refreshInterval time.Duration
 	c.moreSalt()
 }
 
-func (c *txSaltedCache) WaitForStop() {
+func (c *SaltedCache) WaitForStop() {
 	c.wg.Wait()
 }
 
 // salter is a goroutine refreshing the cache by schedule
-func (c *txSaltedCache) salter(refreshInterval time.Duration) {
+func (c *SaltedCache) salter(refreshInterval time.Duration) {
 	ticker := time.NewTicker(refreshInterval)
 	defer c.wg.Done()
 	defer ticker.Stop()
@@ -150,13 +158,13 @@ func (c *txSaltedCache) salter(refreshInterval time.Duration) {
 }
 
 // moreSalt updates salt value used for hashing
-func (c *txSaltedCache) moreSalt() {
+func (c *SaltedCache) moreSalt() {
 	r := uint32(crypto.RandUint64() % math.MaxUint32)
 	binary.LittleEndian.PutUint32(c.curSalt[:], r)
 }
 
 // Remix is a locked version of innerSwap, called on schedule
-func (c *txSaltedCache) Remix() {
+func (c *SaltedCache) Remix() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.innerSwap(true)
@@ -164,7 +172,7 @@ func (c *txSaltedCache) Remix() {
 
 // innerSwap rotates cache pages and update the salt used.
 // locking semantic: write lock must be held
-func (c *txSaltedCache) innerSwap(scheduled bool) {
+func (c *SaltedCache) innerSwap(scheduled bool) {
 	c.prevSalt = c.curSalt
 	c.prev = c.cur
 
@@ -180,7 +188,7 @@ func (c *txSaltedCache) innerSwap(scheduled bool) {
 
 // innerCheck returns true if exists, and the current salted hash if does not.
 // locking semantic: write lock must be held
-func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, bool) {
+func (c *SaltedCache) innerCheck(msg []byte) (*crypto.Digest, bool) {
 	ptr := saltedPool.Get()
 	defer saltedPool.Put(ptr)
 
@@ -208,7 +216,7 @@ func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, bool) {
 
 // CheckAndPut adds msg into a cache if not found
 // returns a hashing key used for insertion if the message not found.
-func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
+func (c *SaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
 	c.mu.RLock()
 	d, found := c.innerCheck(msg)
 	salt := c.curSalt
@@ -249,8 +257,8 @@ func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
 }
 
 // DeleteByKey from the cache by using a key used for insertion
-func (c *txSaltedCache) DeleteByKey(d *crypto.Digest) {
-	c.digestCache.Delete(d)
+func (c *SaltedCache) DeleteByKey(d *crypto.Digest) {
+	c.DigestCache.Delete(d)
 }
 
 var saltedPool = sync.Pool{

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package data
+package dedup
 
 import (
 	"context"
@@ -38,7 +38,7 @@ func TestTxHandlerDigestCache(t *testing.T) {
 	t.Parallel()
 
 	const size = 20
-	cache := makeDigestCache(size)
+	cache := MakeDigestCache(size)
 	require.Zero(t, cache.Len())
 
 	// add some unique random
@@ -108,7 +108,7 @@ func TestTxHandlerDigestCache(t *testing.T) {
 	require.Equal(t, 0, cache.Len())
 }
 
-func (c *txSaltedCache) check(msg []byte) bool {
+func (c *SaltedCache) check(msg []byte) bool {
 	_, found := c.innerCheck(msg)
 	return found
 }
@@ -119,7 +119,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 	t.Parallel()
 
 	const size = 20
-	cache := makeSaltedCache(size)
+	cache := MakeSaltedCache(size)
 	cache.Start(context.Background(), 0)
 	require.Zero(t, cache.Len())
 
@@ -203,7 +203,7 @@ func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
 
 	const size = 20
 	updateInterval := 1000 * time.Microsecond
-	cache := makeSaltedCache(size)
+	cache := MakeSaltedCache(size)
 	cache.Start(context.Background(), updateInterval)
 	require.Zero(t, cache.Len())
 
@@ -228,7 +228,7 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 	t.Parallel()
 
 	const size = 20
-	cache := makeSaltedCache(2 * size)
+	cache := MakeSaltedCache(2 * size)
 	cache.Start(context.Background(), 0)
 	require.Zero(t, cache.Len())
 
@@ -290,19 +290,19 @@ type digestCacheMaker struct{}
 type saltedCacheMaker struct{}
 
 func (m digestCacheMaker) make(size int) cachePusher {
-	return &digestCachePusher{c: makeDigestCache(size)}
+	return &digestCachePusher{c: MakeDigestCache(size)}
 }
 func (m saltedCacheMaker) make(size int) cachePusher {
-	scp := &saltedCachePusher{c: makeSaltedCache(size)}
+	scp := &saltedCachePusher{c: MakeSaltedCache(size)}
 	scp.c.Start(context.Background(), 0)
 	return scp
 }
 
 type digestCachePusher struct {
-	c *digestCache
+	c *DigestCache
 }
 type saltedCachePusher struct {
-	c *txSaltedCache
+	c *SaltedCache
 }
 
 func (p *digestCachePusher) push() {

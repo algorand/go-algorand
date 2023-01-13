@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
+	"github.com/algorand/go-algorand/util/dedup"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -120,8 +121,8 @@ type TxHandler struct {
 	postVerificationQueue chan *verify.VerificationResult
 	backlogWg             sync.WaitGroup
 	net                   network.GossipNode
-	msgCache              *txSaltedCache
-	txCanonicalCache      *digestCache
+	msgCache              *dedup.SaltedCache
+	txCanonicalCache      *dedup.DigestCache
 	cacheConfig           txHandlerConfig
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
@@ -174,8 +175,8 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *verify.VerificationResult, txBacklogSize),
 		net:                   opts.Net,
-		msgCache:              makeSaltedCache(2 * txBacklogSize),
-		txCanonicalCache:      makeDigestCache(2 * txBacklogSize),
+		msgCache:              dedup.MakeSaltedCache(2 * txBacklogSize),
+		txCanonicalCache:      dedup.MakeDigestCache(2 * txBacklogSize),
 		cacheConfig:           txHandlerConfig{opts.Config.TxFilterRawMsgEnabled(), opts.Config.TxFilterCanonicalEnabled()},
 		streamVerifierChan:    make(chan *verify.UnverifiedElement),
 		streamVerifierDropped: make(chan *verify.UnverifiedElement),

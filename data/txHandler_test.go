@@ -50,6 +50,7 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/dedup"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -784,8 +785,8 @@ func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, 
 	}
 	handler := &TxHandler{
 		backlogQueue:     make(chan *txBacklogMsg, backlogSize),
-		msgCache:         makeSaltedCache(cacheSize),
-		txCanonicalCache: makeDigestCache(cacheSize),
+		msgCache:         dedup.MakeSaltedCache(cacheSize),
+		txCanonicalCache: dedup.MakeDigestCache(cacheSize),
 		cacheConfig:      txHandlerConfig,
 	}
 	handler.msgCache.Start(ctx, refreshInterval)
@@ -885,8 +886,7 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 	require.Equal(t, 1, len(stxns1))
 
 	resetCanonical := func(handler *TxHandler) {
-		handler.txCanonicalCache.swap()
-		handler.txCanonicalCache.swap()
+		handler.txCanonicalCache.Reset()
 	}
 
 	t.Run("scheduled", func(t *testing.T) {
