@@ -59,7 +59,7 @@ type Local struct {
 	// what we should tell people to connect to
 	PublicAddress string `version[0]:""`
 
-	MaxConnectionsPerIP int `version[3]:"30"`
+	MaxConnectionsPerIP int `version[3]:"30" version[27]:"15"`
 
 	// 0 == disable
 	PeerPingPeriodSeconds int `version[0]:"0"`
