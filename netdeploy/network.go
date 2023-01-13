@@ -88,7 +88,7 @@ func CreateNetworkFromTemplate(name, rootDir string, templateReader io.Reader, b
 		return n, err
 	}
 
-	if template.Validate() != nil {
+	if err = template.Validate(); err != nil {
 		return n, err
 	}
 
