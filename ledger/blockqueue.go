@@ -52,7 +52,7 @@ type blockQueue struct {
 	closed  chan struct{}
 }
 
-func bqInit(l *Ledger) (*blockQueue, error) {
+func newBlockQueue(l *Ledger) (*blockQueue, error) {
 	bq := &blockQueue{}
 	bq.cond = sync.NewCond(&bq.mu)
 	bq.l = l
@@ -90,7 +90,7 @@ func (bq *blockQueue) start() error {
 	return nil
 }
 
-func (bq *blockQueue) close() {
+func (bq *blockQueue) stop() {
 	bq.mu.Lock()
 	closechan := bq.closed
 	if bq.running {

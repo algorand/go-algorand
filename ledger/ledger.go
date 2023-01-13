@@ -160,7 +160,7 @@ func OpenLedger(
 		l.genesisAccounts = make(map[basics.Address]basics.AccountData)
 	}
 
-	l.blockQ, err = bqInit(l)
+	l.blockQ, err = newBlockQueue(l)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +178,7 @@ func (l *Ledger) reloadLedger() error {
 	// blockQ is having a sync goroutine which indirectly calls other trackers. We want to eliminate that go-routine first,
 	// and follow up by taking the trackers lock.
 	if l.blockQ != nil {
-		l.blockQ.close()
+		l.blockQ.stop()
 	}
 
 	// take the trackers lock. This would ensure that no other goroutine is using the trackers.
@@ -192,7 +192,7 @@ func (l *Ledger) reloadLedger() error {
 	var err error
 	err = l.blockQ.start()
 	if err != nil {
-		err = fmt.Errorf("reloadLedger.bqInit %v", err)
+		err = fmt.Errorf("reloadLedger.blockQ.start %v", err)
 		return err
 	}
 
@@ -379,7 +379,7 @@ func (l *Ledger) Close() {
 	// we shut the the blockqueue first, since it's sync goroutine dispatches calls
 	// back to the trackers.
 	if l.blockQ != nil {
-		l.blockQ.close()
+		l.blockQ.stop()
 	}
 
 	// take the trackers lock. This would ensure that no other goroutine is using the trackers.
