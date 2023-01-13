@@ -80,7 +80,7 @@ var defaultLocal = Local{
 	ForceRelayMessages:                         false,
 	GossipFanout:                               4,
 	HeartbeatUpdateInterval:                    600,
-	IncomingConnectionsLimit:                   800,
+	IncomingConnectionsLimit:                   2400,
 	IncomingMessageFilterBucketCount:           5,
 	IncomingMessageFilterBucketSize:            512,
 	IsIndexerActive:                            false,
