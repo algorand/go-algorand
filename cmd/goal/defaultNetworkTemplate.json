@@ -1,6 +1,7 @@
 {
     "Genesis": {
         "NetworkName": "",
+        "RewardsPoolBalance": 0,
         "FirstPartKeyRound": 0,
         "LastPartKeyRound":  30000,
         "Wallets": [
