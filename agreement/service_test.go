@@ -490,7 +490,7 @@ func (e *testingNetworkEndpoint) Disconnect(h MessageHandle) {
 	e.parent.disconnect(e.id, sourceID)
 }
 
-func (e *testingNetworkEndpoint) Start() {}
+func (e *testingNetworkEndpoint) Start(context.Context) {}
 
 type activityMonitor struct {
 	deadlock.Mutex

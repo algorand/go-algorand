@@ -84,6 +84,8 @@ var (
 	AgreementMessagesHandled = MetricName{Name: "algod_agreement_handled", Description: "Number of agreement messages handled"}
 	// AgreementMessagesDropped "Number of agreement messages dropped"
 	AgreementMessagesDropped = MetricName{Name: "algod_agreement_dropped", Description: "Number of agreement messages dropped"}
+	// AgreementMessagesDropped "Number of duplicate agreement vote messages dropped"
+	AgreementMessagesVoteDup = MetricName{Name: "algod_agreement_vote_dup_dropped", Description: "Number of duplicate agreement vote messages dropped"}
 
 	// TransactionMessagesHandled "Number of transaction messages handled"
 	TransactionMessagesHandled = MetricName{Name: "algod_transaction_messages_handled", Description: "Number of transaction messages handled"}

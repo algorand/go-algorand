@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/messagetracer"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/dedup"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -37,6 +38,7 @@ var messagesHandledByType = metrics.NewTagCounter("algod_agreement_handled_{TAG}
 var messagesDroppedTotal = metrics.MakeCounter(metrics.AgreementMessagesDropped)
 var messagesDroppedByType = metrics.NewTagCounter("algod_agreement_dropped_{TAG}", "Number of agreement {TAG} messages dropped",
 	agreementVoteMessageType, agreementProposalMessageType, agreementBundleMessageType)
+var messagesDupDroppedTotal = metrics.MakeCounter(metrics.AgreementMessagesVoteDup)
 
 const (
 	agreementVoteMessageType     = "vote"
@@ -58,6 +60,9 @@ type networkImpl struct {
 	log logging.Logger
 
 	trace messagetracer.MessageTracer
+
+	enableFilteringRawMsg bool
+	voteDedup             *dedup.SaltedCache
 }
 
 // WrapNetwork adapts a network.GossipNode into an agreement.Network.
@@ -71,6 +76,11 @@ func WrapNetwork(net network.GossipNode, log logging.Logger, cfg config.Local) a
 	i.net = net
 	i.log = log
 
+	i.enableFilteringRawMsg = cfg.TxFilterRawMsgEnabled()
+	if i.enableFilteringRawMsg {
+		i.voteDedup = dedup.MakeSaltedCache(2 * int(cfg.AgreementIncomingVotesQueueLength))
+	}
+
 	return i
 }
 
@@ -80,13 +90,17 @@ func SetTrace(net agreement.Network, trace messagetracer.MessageTracer) {
 	i.trace = trace
 }
 
-func (i *networkImpl) Start() {
+func (i *networkImpl) Start(ctx context.Context) {
 	handlers := []network.TaggedMessageHandler{
 		{Tag: protocol.AgreementVoteTag, MessageHandler: network.HandlerFunc(i.processVoteMessage)},
 		{Tag: protocol.ProposalPayloadTag, MessageHandler: network.HandlerFunc(i.processProposalMessage)},
 		{Tag: protocol.VoteBundleTag, MessageHandler: network.HandlerFunc(i.processBundleMessage)},
 	}
 	i.net.RegisterHandlers(handlers)
+
+	// set the dedup refresh timeout to 2x max round duration
+	refreshInterval := 2 * (config.Consensus[protocol.ConsensusCurrentVersion].AgreementFilterTimeout + agreement.DeadlineTimeout())
+	i.voteDedup.Start(ctx, refreshInterval)
 }
 
 func messageMetadataFromHandle(h agreement.MessageHandle) *messageMetadata {
@@ -97,6 +111,14 @@ func messageMetadataFromHandle(h agreement.MessageHandle) *messageMetadata {
 }
 
 func (i *networkImpl) processVoteMessage(raw network.IncomingMessage) network.OutgoingMessage {
+	var isDup bool
+	if i.enableFilteringRawMsg {
+		if _, isDup = i.voteDedup.CheckAndPut(raw.Data); isDup {
+			messagesDupDroppedTotal.Inc(nil)
+			return network.OutgoingMessage{Action: network.Ignore}
+		}
+	}
+
 	return i.processMessage(raw, i.voteCh, agreementVoteMessageType)
 }
 
@@ -155,7 +177,7 @@ func (i *networkImpl) Broadcast(t protocol.Tag, data []byte) (err error) {
 
 func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []byte) (err error) {
 	metadata := messageMetadataFromHandle(h)
-	if metadata == nil { // synthentic loopback
+	if metadata == nil { // synthetic loopback
 		err = i.net.Broadcast(context.Background(), t, data, false, nil)
 		if err != nil {
 			i.log.Infof("agreement: could not (pseudo)relay message with tag %v: %v", t, err)
@@ -172,7 +194,7 @@ func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []by
 func (i *networkImpl) Disconnect(h agreement.MessageHandle) {
 	metadata := messageMetadataFromHandle(h)
 
-	if metadata == nil { // synthentic loopback
+	if metadata == nil { // synthetic loopback
 		// TODO warn
 		return
 	}

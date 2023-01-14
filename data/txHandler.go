@@ -175,11 +175,16 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *verify.VerificationResult, txBacklogSize),
 		net:                   opts.Net,
-		msgCache:              dedup.MakeSaltedCache(2 * txBacklogSize),
-		txCanonicalCache:      dedup.MakeDigestCache(2 * txBacklogSize),
 		cacheConfig:           txHandlerConfig{opts.Config.TxFilterRawMsgEnabled(), opts.Config.TxFilterCanonicalEnabled()},
 		streamVerifierChan:    make(chan *verify.UnverifiedElement),
 		streamVerifierDropped: make(chan *verify.UnverifiedElement),
+	}
+
+	if handler.cacheConfig.enableFilteringRawMsg {
+		handler.msgCache = dedup.MakeSaltedCache(2 * txBacklogSize)
+	}
+	if handler.cacheConfig.enableFilteringCanonical {
+		handler.txCanonicalCache = dedup.MakeDigestCache(2 * txBacklogSize)
 	}
 
 	if opts.Config.EnableTxBacklogRateLimiting {
@@ -220,10 +225,13 @@ func (handler *TxHandler) droppedTxnWatcher() {
 // Start enables the processing of incoming messages at the transaction handler
 func (handler *TxHandler) Start() {
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
-	handler.msgCache.Start(handler.ctx, 60*time.Second)
 	handler.net.RegisterHandlers([]network.TaggedMessageHandler{
 		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
 	})
+	if handler.msgCache != nil {
+		handler.msgCache.Start(handler.ctx, 60*time.Second)
+	}
+
 	handler.backlogWg.Add(2)
 	go handler.backlogWorker()
 	go handler.backlogGaugeThread()
@@ -241,7 +249,9 @@ func (handler *TxHandler) Stop() {
 	}
 	handler.backlogWg.Wait()
 	handler.streamVerifier.WaitForStop()
-	handler.msgCache.WaitForStop()
+	if handler.msgCache != nil {
+		handler.msgCache.WaitForStop()
+	}
 }
 
 func reencode(stxns []transactions.SignedTxn) []byte {

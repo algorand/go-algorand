@@ -17,6 +17,7 @@
 package gossip
 
 import (
+	"context"
 	"os"
 	"sync"
 	"testing"
@@ -81,7 +82,7 @@ func spinNetwork(t *testing.T, nodesCount int, cfg config.Local) ([]*networkImpl
 	for _, gossipNode := range gossipNodes {
 		networkImpl := WrapNetwork(gossipNode, log, cfg).(*networkImpl)
 		networkImpls = append(networkImpls, networkImpl)
-		networkImpl.Start()
+		networkImpl.Start(context.Background())
 		msgCounter := startMessageCounter(networkImpl)
 		msgCounters = append(msgCounters, msgCounter)
 	}
