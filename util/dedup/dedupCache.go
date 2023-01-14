@@ -40,6 +40,7 @@ type DigestCache struct {
 	mu      deadlock.RWMutex
 }
 
+// MakeDigestCache returns a new DigestCache with internal data storage upper bound of 2x size
 func MakeDigestCache(size int) *DigestCache {
 	c := &DigestCache{
 		cur:     map[crypto.Digest]struct{}{},
@@ -120,12 +121,15 @@ type SaltedCache struct {
 	wg       sync.WaitGroup
 }
 
+// MakeSaltedCache returns a new SaltedCache with internal data storage upper bound of 2x size
 func MakeSaltedCache(size int) *SaltedCache {
 	return &SaltedCache{
 		DigestCache: *MakeDigestCache(size),
 	}
 }
 
+// Start salter goroutine that rotates salt at refreshInterval.
+// Canceling the ctx context signals the goroutine to exit.
 func (c *SaltedCache) Start(ctx context.Context, refreshInterval time.Duration) {
 	c.ctx = ctx
 	if refreshInterval != 0 {
@@ -138,6 +142,7 @@ func (c *SaltedCache) Start(ctx context.Context, refreshInterval time.Duration) 
 	c.moreSalt()
 }
 
+// WaitForStop waits until the salter goroutine exits
 func (c *SaltedCache) WaitForStop() {
 	c.wg.Wait()
 }
