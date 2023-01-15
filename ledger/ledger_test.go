@@ -1480,6 +1480,31 @@ func benchLedgerCache(b *testing.B, startRound basics.Round) {
 	}
 }
 
+func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.InitState) {
+	l.trackers.mu.RLock()
+	initialDbRound := l.trackers.dbRound
+	currentDbRound := initialDbRound
+	l.trackers.lastFlushTime = time.Time{}
+	l.trackers.mu.RUnlock()
+
+	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
+
+	const timeout = 2 * time.Second
+	started := time.Now()
+
+	// We can't truly wait for scheduleCommit to take place, which means without waiting using sleeps
+	// we might beat scheduleCommit's addition to accountsWriting, making our wait on it continue immediately.
+	// The solution is to wait for the advancement of l.trackers.dbRound, which is a side effect of postCommit's success.
+	for currentDbRound == initialDbRound {
+		time.Sleep(50 * time.Microsecond)
+		require.True(t, time.Now().Sub(started) < timeout)
+		l.trackers.mu.RLock()
+		currentDbRound = l.trackers.dbRound
+		l.trackers.mu.RUnlock()
+	}
+	l.trackers.waitAccountsWriting()
+}
+
 func TestLedgerReload(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1513,6 +1538,36 @@ func TestLedgerReload(t *testing.T) {
 		if i%13 == 0 {
 			l.WaitForCommit(blk.Round())
 		}
+	}
+}
+
+func TestWaitLedgerReload(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.MaxAcctLookback = 0
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	waitRound := l.Latest() + 1
+	waitChannel := l.Wait(waitRound)
+
+	err = l.ReloadLedger()
+	a.NoError(err)
+	triggerTrackerFlush(t, l, genesisInitState)
+
+	select {
+	case <-waitChannel:
+		return
+	default:
+		a.Failf("", "Wait channel did not receive an expected signal for round %d", waitRound)
 	}
 }
 
@@ -2840,31 +2895,6 @@ func verifyVotersContent(t *testing.T, expected map[basics.Round]*ledgercore.Vot
 		require.Equal(t, expected[k].Tree, v.Tree)
 		require.Equal(t, expected[k].Participants, v.Participants)
 	}
-}
-
-func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.InitState) {
-	l.trackers.mu.RLock()
-	initialDbRound := l.trackers.dbRound
-	currentDbRound := initialDbRound
-	l.trackers.lastFlushTime = time.Time{}
-	l.trackers.mu.RUnlock()
-
-	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
-
-	const timeout = 2 * time.Second
-	started := time.Now()
-
-	// We can't truly wait for scheduleCommit to take place, which means without waiting using sleeps
-	// we might beat scheduleCommit's addition to accountsWriting, making our wait on it continue immediately.
-	// The solution is to wait for the advancement of l.trackers.dbRound, which is a side effect postCommit's success.
-	for currentDbRound == initialDbRound {
-		time.Sleep(50 * time.Microsecond)
-		require.True(t, time.Now().Sub(started) < timeout)
-		l.trackers.mu.RLock()
-		currentDbRound = l.trackers.dbRound
-		l.trackers.mu.RUnlock()
-	}
-	l.trackers.waitAccountsWriting()
 }
 
 func triggerDeleteVoters(t *testing.T, l *Ledger, genesisInitState ledgercore.InitState) {
