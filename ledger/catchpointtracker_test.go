@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -267,6 +267,20 @@ func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {
 	return numberOfCatchpointFiles, err
 }
 
+func calculateStateProofVerificationHash(t *testing.T, ml *mockLedgerForTracker) crypto.Digest {
+	var digest crypto.Digest
+	err := ml.dbs.Rdb.AtomicContext(context.Background(), func(dbCtx context.Context, tx *sql.Tx) (err error) {
+		rawData, err := store.GetAllStateProofVerification(dbCtx, tx)
+		require.NoError(t, err)
+
+		wrappedData := catchpointStateProofVerificationContext{Data: rawData}
+		digest = crypto.HashObj(wrappedData)
+		return nil
+	})
+	require.NoError(t, err)
+	return digest
+}
+
 // The goal of this test is to check that we are saving at most X catchpoint files.
 // If algod needs to create a new catchpoint file it will delete the oldest.
 // In addition, when deleting old catchpoint files an empty directory should be deleted
@@ -298,9 +312,11 @@ func TestRecordCatchpointFile(t *testing.T) {
 	for _, round := range []basics.Round{2000000, 3000010, 3000015, 3000020} {
 		accountsRound := round - 1
 
-		_, _, _, biggestChunkLen, _, err := ct.generateCatchpointData(
+		_, _, _, biggestChunkLen, stateProofVerificationHash, err := ct.generateCatchpointData(
 			context.Background(), accountsRound, time.Second)
 		require.NoError(t, err)
+
+		require.Equal(t, calculateStateProofVerificationHash(t, ml), stateProofVerificationHash)
 
 		err = ct.createCatchpoint(context.Background(), accountsRound, round, store.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
 		require.NoError(t, err)

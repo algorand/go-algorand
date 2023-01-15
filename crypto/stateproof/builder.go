@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -79,8 +79,7 @@ func MakeBuilder(data MessageHash, round uint64, provenWeight uint64, part []bas
 
 		sigs:         make([]sigslot, npart),
 		signedWeight: 0,
-
-		cachedProof: nil,
+		cachedProof:  nil,
 	}
 
 	return b, nil

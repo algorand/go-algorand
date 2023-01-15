@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,20 +26,17 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-var ErrVerificationContextNotFound = errors.New("requested state proof verification data not found")
-
 type mockLedger struct {
-	balanceMap             map[basics.Address]basics.AccountData
-	blocks                 map[basics.Round]bookkeeping.BlockHeader
-	blockErr               map[basics.Round]error
-	stateProofVerification map[basics.Round]*ledgercore.StateProofVerificationContext
+	balanceMap map[basics.Address]basics.AccountData
 }
 
 func (ml *mockLedger) lookup(addr basics.Address) (ledgercore.AccountData, error) {
@@ -103,12 +100,7 @@ func (ml *mockLedger) GetStateProofNextRound() basics.Round {
 }
 
 func (ml *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
-	err, hit := ml.blockErr[rnd]
-	if hit {
-		return bookkeeping.BlockHeader{}, err
-	}
-	hdr := ml.blocks[rnd] // default struct is fine if nothing found
-	return hdr, nil
+	return bookkeeping.BlockHeader{}, errors.New("requested blockheader not found")
 }
 
 func (ml *mockLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
@@ -116,11 +108,7 @@ func (ml *mockLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader,
 }
 
 func (ml *mockLedger) StateProofVerificationContext(rnd basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	element, exists := ml.stateProofVerification[rnd]
-	if !exists {
-		return nil, ErrVerificationContextNotFound
-	}
-	return element, nil
+	return nil, errors.New("requested state proof verification data not found")
 }
 
 func checkCowByUpdate(t *testing.T, cow *roundCowState, delta ledgercore.AccountDeltas) {
@@ -257,4 +245,38 @@ func TestCowChildReflect(t *testing.T) {
 		reflectedCowName := st.Field(i).Name
 		require.Containsf(t, cowFieldNames, reflectedCowName, "new field:\"%v\" added to roundCowState, please update roundCowState.reset() to handle it before fixing the test", reflectedCowName)
 	}
+}
+
+func TestCowStateProof(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	version := config.Consensus[protocol.ConsensusCurrentVersion]
+	firstStateproof := basics.Round(version.StateProofInterval * 2)
+	accts0 := ledgertesting.RandomAccounts(20, true)
+	ml := mockLedger{balanceMap: accts0}
+	c0 := makeRoundCowState(
+		&ml, bookkeeping.BlockHeader{}, version,
+		0, ledgercore.AccountTotals{}, 0)
+
+	c0.SetStateProofNextRound(firstStateproof)
+	stateproofTxn := transactions.StateProofTxnFields{
+		StateProofType: protocol.StateProofBasic,
+		Message:        stateproofmsg.Message{LastAttestedRound: uint64(firstStateproof) + version.StateProofInterval},
+	}
+
+	// can not apply state proof for 3*version.StateProofInterval when we expect 2*version.StateProofInterval
+	err := apply.StateProof(stateproofTxn, firstStateproof+1, c0, false)
+	a.ErrorIs(err, apply.ErrExpectedDifferentStateProofRound)
+
+	stateproofTxn.Message.LastAttestedRound = uint64(firstStateproof)
+	err = apply.StateProof(stateproofTxn, firstStateproof+1, c0, false)
+	a.NoError(err)
+	a.Equal(3*basics.Round(version.StateProofInterval), c0.GetStateProofNextRound())
+
+	// try to apply the next stateproof 3*version.StateProofInterval
+	stateproofTxn.Message.LastAttestedRound = 3 * version.StateProofInterval
+	err = apply.StateProof(stateproofTxn, firstStateproof+1, c0, false)
+	a.NoError(err)
+	a.Equal(4*basics.Round(version.StateProofInterval), c0.GetStateProofNextRound())
 }

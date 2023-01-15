@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -65,7 +65,7 @@ const (
 	StateProofMessage             HashID = "spm"
 	StateProofPart                HashID = "spp"
 	StateProofSig                 HashID = "sps"
-	StateProofVerificationContext HashID = "spvd"
+	StateProofVerificationContext HashID = "spv"
 
 	TestHashable  HashID = "TE"
 	TxGroup       HashID = "TG"

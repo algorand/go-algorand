@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -46,7 +46,7 @@ type AccountManager struct {
 }
 
 // DeleteStateProofKey deletes keys related to a ParticipationID. The function removes
-// all keys up to, and not including, a given round the given round.
+// all keys up to, and not including, the given round.
 func (manager *AccountManager) DeleteStateProofKey(id account.ParticipationID, round basics.Round) error {
 	return manager.registry.DeleteStateProofKeys(id, round)
 }

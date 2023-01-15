@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -418,7 +418,7 @@ func (s *testWorkerStubs) waitOnSigWithTimeout(timeout time.Duration) ([]byte, e
 	case sig := <-s.sigmsg:
 		return sig, nil
 	case <-time.After(timeout):
-		return nil, fmt.Errorf("timeout waiting on sigmsg")
+		return nil, errors.New("timeout waiting on sigmsg")
 	}
 }
 
@@ -427,7 +427,7 @@ func (s *testWorkerStubs) waitOnTxnWithTimeout(timeout time.Duration) (transacti
 	case signedTx := <-s.txmsg:
 		return signedTx, nil
 	case <-time.After(timeout):
-		return transactions.SignedTxn{}, fmt.Errorf("timeout waiting on stateproof txn")
+		return transactions.SignedTxn{}, errors.New("timeout waiting on stateproof txn")
 	}
 }
 

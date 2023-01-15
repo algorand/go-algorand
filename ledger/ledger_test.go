@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -3366,6 +3366,8 @@ func TestStateProofTrackerAfterReplay(t *testing.T) {
 	a.Equal(1, len(l.stateProofVerification.trackedDeleteContext))
 	// To be deleted, but not yet deleted (waiting for commit)
 	verifyStateProofVerificationTracking(t, &l.stateProofVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
+
+	l.WaitForCommit(l.Latest())
 
 	err = l.reloadLedger()
 	a.NoError(err)
