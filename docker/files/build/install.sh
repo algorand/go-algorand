@@ -82,7 +82,11 @@ fi
 git log -n 5
 
 ./scripts/configure_dev.sh
-make build
-./scripts/dev_install.sh -p "${BINDIR}" -d "${ALGORAND_DATA}"
+# make sure the makefile uses specific values for BUILD_NUMBER and BRANCH
+BUILD_NUMBER="" BRANCH="$BRANCH" make build
+
+shopt -s extglob
+
+cd "$BINDIR" && rm -vrf !(algocfg|algod|algoh|algokey|carpenter|catchupsrv|ddconfig.sh|diagcfg|find-nodes.sh|goal|kmd|msgpacktool|node_exporter|tealcut|tealdbg|update.sh|updater|COPYING)
 
 "$BINDIR"/algod -v

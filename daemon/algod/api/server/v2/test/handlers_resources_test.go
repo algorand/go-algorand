@@ -225,7 +225,7 @@ func setupTestForLargeResources(t *testing.T, acctSize, maxResults int, accountM
 	acctData = accountMaker(acctSize)
 	ml.accounts[fakeAddr] = acctData
 
-	mockNode := makeMockNode(&ml, t.Name(), nil)
+	mockNode := makeMockNode(&ml, t.Name(), nil, false)
 	mockNode.config.MaxAPIResourcesPerAccount = uint64(maxResults)
 	dummyShutdownChan := make(chan struct{})
 	handlers = v2.Handlers{
