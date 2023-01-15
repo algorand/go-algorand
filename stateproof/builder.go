@@ -271,9 +271,10 @@ func (spw *Worker) getAllOnlineBuilderRounds() ([]basics.Round, error) {
 	return rnds, err
 }
 
-var errAddressNotInCommittee = errors.New("cannot find address in builder")   // Address was not a part of Top N accounts in this StateProof's committee
-var errFailedToAddSigAtPos = errors.New("could not add signature to builder") // Position was out of array bounds or signature already present
-var errSignatureVerification = errors.New("error while verifying signature")  // Signature failed cryptographic verification
+var errAddressNotInCommittee = errors.New("cannot find address in builder")              // Address was not a part of Top N accounts in this StateProof's committee
+var errFailedToAddSigAtPos = errors.New("could not add signature to builder")            // Position was out of array bounds or signature already present
+var errSigAlreadyPresentAtPos = errors.New("signature already present at this position") // Signature already present at this position
+var errSignatureVerification = errors.New("error while verifying signature")             // Signature failed cryptographic verification
 
 func (b *builder) insertSig(s *pendingSig, verify bool) error {
 	rnd := b.Round
@@ -287,7 +288,7 @@ func (b *builder) insertSig(s *pendingSig, verify bool) error {
 		return fmt.Errorf("insertSigToBuilder: %w (failed to invoke builderForRound.Present on pos %d - %v)", errFailedToAddSigAtPos, pos, err)
 	}
 	if isPresent {
-		return fmt.Errorf("insertSigToBuilder: %w (position %d for round %d already filled by sig of %v)", errFailedToAddSigAtPos, rnd, pos, s.signer)
+		return errSigAlreadyPresentAtPos
 	}
 
 	if err := b.IsValid(pos, &s.sig, verify); err != nil {
@@ -393,6 +394,10 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		fromThisNode: sender == nil,
 	}
 	err := builderForRound.insertSig(&sig, true)
+	if errors.Is(err, errSigAlreadyPresentAtPos) {
+		// Safe to ignore this error as it means we already have a valid signature for this address
+		return network.Ignore, nil
+	}
 	if errors.Is(err, errFailedToAddSigAtPos) {
 		return network.Ignore, err
 	}

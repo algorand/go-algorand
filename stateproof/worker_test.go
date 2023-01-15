@@ -1533,7 +1533,7 @@ func TestWorkerHandleSigAlreadyIn(t *testing.T) {
 	})
 	require.Equal(t, network.OutgoingMessage{Action: network.Broadcast}, reply)
 
-	// The sig is already there. Shoud get error
+	// The sig is already there. Should get error
 	reply = w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
 	})
