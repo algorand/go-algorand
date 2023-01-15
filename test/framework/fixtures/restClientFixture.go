@@ -31,7 +31,6 @@ import (
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/test/e2e-go/globals"
@@ -416,41 +415,4 @@ func (f *RestClientFixture) AssertValidTxid(txid string) {
 		}
 	}
 	require.True(f.t, allLettersOrNumbers, "txid should be all letters")
-}
-
-// ClientWaitForCatchpoint takes a client and a traget catchpoint round and waits until a catchpoint is generated for
-// the given round, or until the timeout expires.
-func (f *RestClientFixture) ClientWaitForCatchpoint(client client.RestClient, catchpointRound basics.Round) (string, error) {
-	err := f.ClientWaitForRoundWithTimeout(client, uint64(catchpointRound+1))
-	if err != nil {
-		return "", err
-	}
-
-	var status model.NodeStatusResponse
-	timer := time.NewTimer(10 * time.Second)
-	for {
-		status, err = client.Status()
-		if err != nil {
-			return "", err
-		}
-
-		var round basics.Round
-		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
-			round, _, err = ledgercore.ParseCatchpointLabel(*status.LastCatchpoint)
-			if err != nil {
-				return "", err
-			}
-			if round >= catchpointRound {
-				break
-			}
-		}
-		select {
-		case <-timer.C:
-			return "", fmt.Errorf("timeout while waiting for catchpoint, target: %d, got %d", catchpointRound, round)
-		default:
-			time.Sleep(250 * time.Millisecond)
-		}
-	}
-
-	return *status.LastCatchpoint, nil
 }

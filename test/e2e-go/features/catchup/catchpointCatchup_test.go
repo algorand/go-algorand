@@ -29,6 +29,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api/client"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -40,6 +42,41 @@ import (
 )
 
 const basicTestCatchpointInterval = 4
+
+func waitForCatchpoint(fixture *fixtures.RestClientFixture, client client.RestClient, catchpointRound basics.Round) (string, error) {
+	err := fixture.ClientWaitForRoundWithTimeout(client, uint64(catchpointRound+1))
+	if err != nil {
+		return "", err
+	}
+
+	var status model.NodeStatusResponse
+	timer := time.NewTimer(10 * time.Second)
+	for {
+		status, err = client.Status()
+		if err != nil {
+			return "", err
+		}
+
+		var round basics.Round
+		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
+			round, _, err = ledgercore.ParseCatchpointLabel(*status.LastCatchpoint)
+			if err != nil {
+				return "", err
+			}
+			if round >= catchpointRound {
+				break
+			}
+		}
+		select {
+		case <-timer.C:
+			return "", fmt.Errorf("timeout while waiting for catchpoint, target: %d, got %d", catchpointRound, round)
+		default:
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+
+	return *status.LastCatchpoint, nil
+}
 
 func denyRoundRequestsWebProxy(a *require.Assertions, listeningAddress string, round basics.Round) *fixtures.WebProxy {
 	log := logging.NewLogger()
@@ -241,7 +278,7 @@ func runBasicCatchpointCatchup(t *testing.T, consensusParams *config.ConsensusPa
 	targetCatchpointRound := getFirstCatchpointRound(consensusParams)
 
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
-	catchpointLabel, err := fixture.ClientWaitForCatchpoint(primaryNodeRestClient, targetCatchpointRound)
+	catchpointLabel, err := waitForCatchpoint(&fixture, primaryNodeRestClient, targetCatchpointRound)
 	a.NoError(err)
 	fmt.Printf("%s\n", catchpointLabel)
 

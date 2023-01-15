@@ -149,7 +149,7 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 
 	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
 
-	catchpointLabel, err := fixture.ClientWaitForCatchpoint(primaryNodeRestClient, targetCatchpointRound)
+	catchpointLabel, err := waitForCatchpoint(&fixture, primaryNodeRestClient, targetCatchpointRound)
 	a.NoError(err)
 
 	_, err = usingNodeRestClient.Catchup(catchpointLabel)
