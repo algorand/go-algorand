@@ -28,9 +28,10 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	if testing.Short() {
-		t.Skip()
-	}
+	// TODO: Reenable short
+	//if testing.Short() {
+	//	t.Skip()
+	//}
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -59,9 +60,10 @@ func TestStateProofAfterCatchpoint(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	if testing.Short() {
-		t.Skip()
-	}
+	// TODO: Reenable short
+	//if testing.Short() {
+	//	t.Skip()
+	//}
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -92,9 +94,10 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	if testing.Short() {
-		t.Skip()
-	}
+	// TODO: Reenable short
+	//if testing.Short() {
+	//	t.Skip()
+	//}
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	configurableConsensus := make(config.ConsensusProtocols)

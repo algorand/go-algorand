@@ -257,9 +257,10 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	if testing.Short() {
-		t.Skip()
-	}
+	// TODO: Reenable short
+	//if testing.Short() {
+	//	t.Skip()
+	//}
 
 	catchpointCatchupProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
 	applyCatchpointConsensusChanges(&catchpointCatchupProtocol)
