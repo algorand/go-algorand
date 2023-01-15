@@ -129,7 +129,6 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	fixture.SetConsensus(configurableConsensus)
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "StateProofCatchpointCatchupTestNetwork.json"))
 
-	const catchpointInterval = 4
 	primaryNode, primaryEC := startCatchpointGeneratingNode(a, &fixture, "Primary")
 	defer primaryEC.Print()
 	defer primaryNode.StopAlgod()
