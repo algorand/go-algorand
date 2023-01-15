@@ -1499,7 +1499,7 @@ func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
 
 	fwd, err := w.handleSig(msg, msg.SignerAddress)
 	require.Equal(t, network.Disconnect, fwd)
-	require.ErrorIs(t, err, errAddressNotInCommittee)
+	require.ErrorIs(t, err, errAddressNotInVoters)
 }
 
 // Signature already part of the builderForRound, ignore

@@ -271,7 +271,7 @@ func (spw *Worker) getAllOnlineBuilderRounds() ([]basics.Round, error) {
 	return rnds, err
 }
 
-var errAddressNotInCommittee = errors.New("cannot find address in builder")              // Address was not a part of Top N accounts in this StateProof's committee
+var errAddressNotInVoters = errors.New("cannot find address in builder")                 // Address was not a part of the voters for this StateProof (top N accounts)
 var errFailedToAddSigAtPos = errors.New("could not add signature to builder")            // Position was out of array bounds or signature already present
 var errSigAlreadyPresentAtPos = errors.New("signature already present at this position") // Signature already present at this position
 var errSignatureVerification = errors.New("error while verifying signature")             // Signature failed cryptographic verification
@@ -280,22 +280,22 @@ func (b *builder) insertSig(s *pendingSig, verify bool) error {
 	rnd := b.Round
 	pos, ok := b.AddrToPos[s.signer]
 	if !ok {
-		return fmt.Errorf("insertSigToBuilder: %w (%v not in participants for round %d)", errAddressNotInCommittee, s.signer, rnd)
+		return fmt.Errorf("insertSig: %w (%v not in participants for round %d)", errAddressNotInVoters, s.signer, rnd)
 	}
 
 	isPresent, err := b.Present(pos)
 	if err != nil {
-		return fmt.Errorf("insertSigToBuilder: %w (failed to invoke builderForRound.Present on pos %d - %v)", errFailedToAddSigAtPos, pos, err)
+		return fmt.Errorf("insertSig: %w (failed to invoke builderForRound.Present on pos %d - %v)", errFailedToAddSigAtPos, pos, err)
 	}
 	if isPresent {
 		return errSigAlreadyPresentAtPos
 	}
 
-	if err := b.IsValid(pos, &s.sig, verify); err != nil {
-		return fmt.Errorf("insertSigToBuilder: %w (cannot add %v in round %d: %v)", errSignatureVerification, s.signer, rnd, err)
+	if err = b.IsValid(pos, &s.sig, verify); err != nil {
+		return fmt.Errorf("insertSig: %w (cannot add %v in round %d: %v)", errSignatureVerification, s.signer, rnd, err)
 	}
-	if err := b.Add(pos, s.sig); err != nil {
-		return fmt.Errorf("insertSigToBuilder: %w (%v)", errFailedToAddSigAtPos, err)
+	if err = b.Add(pos, s.sig); err != nil {
+		return fmt.Errorf("insertSig: %w (%v)", errFailedToAddSigAtPos, err)
 	}
 
 	return nil
@@ -401,7 +401,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 	if errors.Is(err, errFailedToAddSigAtPos) {
 		return network.Ignore, err
 	}
-	if errors.Is(err, errAddressNotInCommittee) || errors.Is(err, errSignatureVerification) {
+	if errors.Is(err, errAddressNotInVoters) || errors.Is(err, errSignatureVerification) {
 		return network.Disconnect, err
 	}
 
