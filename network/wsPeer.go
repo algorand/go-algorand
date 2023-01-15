@@ -299,12 +299,6 @@ type UnicastPeer interface {
 	Respond(ctx context.Context, reqMsg IncomingMessage, topics Topics) (e error)
 }
 
-// A PeerCloseRegistrar is an interface for the opaque Peer which can allow for extra execution
-// whena  peer closes.
-type PeerCloseRegistrar interface {
-	OnClose(func())
-}
-
 // Create a wsPeerCore object
 func makePeerCore(net *WebsocketNetwork, rootURL string, roundTripper http.RoundTripper, originAddress string) wsPeerCore {
 	return wsPeerCore{

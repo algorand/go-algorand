@@ -168,6 +168,9 @@ func (erl *ElasticRateLimiter) DisableCongestionControl() {
 
 // ConsumeCapacity will dispense one capacity from either the resource's reservedCapacity,
 // and will return a guard who can return capacity when the client is ready
+// Returns an error if the capacity could not be vended, which could be:
+// - there is not sufficient free capacity to assign a reserved capacity block
+// - there is no reserved or shared capacity available for the client
 func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, error) {
 	var q capacityQueue
 	var err error

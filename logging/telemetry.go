@@ -244,12 +244,6 @@ func (t *telemetryState) logEvent(l logger, category telemetryspec.Category, ide
 	t.logTelemetry(l, buildMessage(string(category), string(identifier)), details)
 }
 
-func (t *telemetryState) logStartOperation(l logger, category telemetryspec.Category, identifier telemetryspec.Operation) TelemetryOperation {
-	op := makeTelemetryOperation(t, category, identifier)
-	t.logTelemetry(l, buildMessage(string(category), string(identifier), "Start"), nil)
-	return op
-}
-
 func buildMessage(args ...string) string {
 	message := telemetryPrefix + strings.Join(args, telemetrySeparator)
 	return message
