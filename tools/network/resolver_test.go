@@ -19,8 +19,6 @@ package network
 import (
 	"context"
 	"net"
-	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -47,22 +45,21 @@ func TestResolverWithCloudflareDNSResolution(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
-		t.Skip("Disabled on CircleCI while investigating Cloudflare DNS resolution issue")
-	}
-
 	resolver := Resolver{}
 
-	// specify a specific resolver to work with ( cloudflare DNS server is 1.1.1.1 )
-	cloudFlareIPAddr, _ := net.ResolveIPAddr("ip", "1.1.1.1")
+	// The test previously specified Cloudflare's primary DNS server (1.1.1.1).
+	// However, CircleCI began blocking requests to 1.1.1.1.  In order to
+	// preserve the test's spirit, it now uses Cloudflare's secondary DNS
+	// server (1.0.0.1).
+	cloudflareIPAddr, _ := net.ResolveIPAddr("ip", "1.0.0.1")
 	resolver = Resolver{
-		dnsAddress: *cloudFlareIPAddr,
+		dnsAddress: *cloudflareIPAddr,
 	}
 	cname, addrs, err := resolver.LookupSRV(context.Background(), "telemetry", "tls", "devnet.algodev.network")
 	require.NoError(t, err)
 	require.Equal(t, "_telemetry._tls.devnet.algodev.network.", cname)
 	require.True(t, len(addrs) == 1)
-	require.Equal(t, "1.1.1.1", resolver.EffectiveResolverDNS())
+	require.Equal(t, "1.0.0.1", resolver.EffectiveResolverDNS())
 }
 
 func TestResolverWithInvalidDNSResolution(t *testing.T) {
