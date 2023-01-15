@@ -190,7 +190,8 @@ func (ec *nodeExitErrorCollector) Print() {
 	}
 }
 
-func startCatchpointGeneratingNode(a *require.Assertions, fixture *fixtures.RestClientFixture, nodeName string) (nodecontrol.NodeController, *nodeExitErrorCollector) {
+func startCatchpointGeneratingNode(a *require.Assertions, fixture *fixtures.RestClientFixture, nodeName string) (
+	nodecontrol.NodeController, client.RestClient, *nodeExitErrorCollector) {
 	nodeController, err := fixture.GetNodeController(nodeName)
 	a.NoError(err)
 
@@ -206,10 +207,12 @@ func startCatchpointGeneratingNode(a *require.Assertions, fixture *fixtures.Rest
 		ExitErrorCallback: errorsCollector.nodeExitWithError,
 	})
 	a.NoError(err)
-	return nodeController, &errorsCollector
+
+	return nodeController, fixture.GetAlgodClientForController(nodeController), &errorsCollector
 }
 
-func startCatchpointUsingNode(a *require.Assertions, fixture *fixtures.RestClientFixture, nodeName string, peerAddress string) (nodecontrol.NodeController, *fixtures.WebProxy, *nodeExitErrorCollector) {
+func startCatchpointUsingNode(a *require.Assertions, fixture *fixtures.RestClientFixture, nodeName string, peerAddress string) (
+	nodecontrol.NodeController, client.RestClient, *fixtures.WebProxy, *nodeExitErrorCollector) {
 	nodeController, err := fixture.GetNodeController(nodeName)
 	a.NoError(err)
 
@@ -226,10 +229,17 @@ func startCatchpointUsingNode(a *require.Assertions, fixture *fixtures.RestClien
 		ExitErrorCallback: errorsCollector.nodeExitWithError,
 	})
 	a.NoError(err)
-	return nodeController, wp, &errorsCollector
+
+	restClient := fixture.GetAlgodClientForController(nodeController)
+	// We don't want to start catching up without the node being properly initialized.
+	err = fixture.ClientWaitForRoundWithTimeout(restClient, 1)
+	a.NoError(err)
+
+	return nodeController, restClient, wp, &errorsCollector
 }
 
-func startCatchpointNormalNode(a *require.Assertions, fixture *fixtures.RestClientFixture, nodeName string, peerAddress string) (nodecontrol.NodeController, *nodeExitErrorCollector) {
+func startCatchpointNormalNode(a *require.Assertions, fixture *fixtures.RestClientFixture, nodeName string, peerAddress string) (
+	nodecontrol.NodeController, *nodeExitErrorCollector) {
 	nodeController, err := fixture.GetNodeController(nodeName)
 	a.NoError(err)
 
@@ -243,6 +253,7 @@ func startCatchpointNormalNode(a *require.Assertions, fixture *fixtures.RestClie
 		ExitErrorCallback: errorsCollector.nodeExitWithError,
 	})
 	a.NoError(err)
+
 	return nodeController, &errorsCollector
 }
 
@@ -263,26 +274,24 @@ func runBasicCatchpointCatchup(t *testing.T, consensusParams *config.ConsensusPa
 	fixture.SetConsensus(consensus)
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
 
-	primaryNode, primaryErrorsCollector := startCatchpointGeneratingNode(a, &fixture, "Primary")
+	primaryNode, primaryNodeRestClient, primaryErrorsCollector := startCatchpointGeneratingNode(a, &fixture, "Primary")
 	defer primaryErrorsCollector.Print()
 	defer primaryNode.StopAlgod()
 
 	primaryNodeAddr, err := primaryNode.GetListeningAddress()
 	a.NoError(err)
 
-	usingNode, wp, usingNodeErrorsCollector := startCatchpointUsingNode(a, &fixture, "Node", primaryNodeAddr)
+	usingNode, usingNodeRestClient, wp, usingNodeErrorsCollector := startCatchpointUsingNode(a, &fixture, "Node", primaryNodeAddr)
 	defer usingNodeErrorsCollector.Print()
 	defer wp.Close()
 	defer usingNode.StopAlgod()
 
 	targetCatchpointRound := getFirstCatchpointRound(consensusParams)
 
-	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 	catchpointLabel, err := waitForCatchpoint(&fixture, primaryNodeRestClient, targetCatchpointRound)
 	a.NoError(err)
 	fmt.Printf("%s\n", catchpointLabel)
 
-	usingNodeRestClient := fixture.GetAlgodClientForController(usingNode)
 	_, err = usingNodeRestClient.Catchup(catchpointLabel)
 	a.NoError(err)
 

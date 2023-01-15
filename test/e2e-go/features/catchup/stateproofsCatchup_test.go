@@ -129,10 +129,9 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	fixture.SetConsensus(configurableConsensus)
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "StateProofCatchpointCatchupTestNetwork.json"))
 
-	primaryNode, primaryEC := startCatchpointGeneratingNode(a, &fixture, "Primary")
+	primaryNode, primaryNodeRestClient, primaryEC := startCatchpointGeneratingNode(a, &fixture, "Primary")
 	defer primaryEC.Print()
 	defer primaryNode.StopAlgod()
-	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 	primaryNodeAddr, err := primaryNode.GetListeningAddress()
 	a.NoError(err)
 
@@ -140,11 +139,10 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	defer normalNodeEC.Print()
 	defer normalNode.StopAlgod()
 
-	usingNode, wp, usingNodeEC := startCatchpointUsingNode(a, &fixture, "Node2", primaryNodeAddr)
+	usingNode, usingNodeRestClient, wp, usingNodeEC := startCatchpointUsingNode(a, &fixture, "Node2", primaryNodeAddr)
 	defer usingNodeEC.Print()
 	defer wp.Close()
 	defer usingNode.StopAlgod()
-	usingNodeRestClient := fixture.GetAlgodClientForController(usingNode)
 
 	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
 
