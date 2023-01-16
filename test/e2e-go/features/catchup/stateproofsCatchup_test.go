@@ -99,7 +99,7 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 	primaryLibGoal := fixture.GetLibGoalClientFromNodeController(primaryNode)
 
 	dbRoundAfterCatchpoint := targetCatchpointRound - basics.Round(consensusParams.MaxBalLookback)
-	a.True(getStateProofNextRound(a, &primaryLibGoal, dbRoundAfterCatchpoint) > getStateProofNextRound(a, &primaryLibGoal, targetCatchpointRound),
+	a.True(getStateProofNextRound(a, &primaryLibGoal, dbRoundAfterCatchpoint) < getStateProofNextRound(a, &primaryLibGoal, targetCatchpointRound),
 		"No state proof transaction in replay, rounds were %d to %d", dbRoundAfterCatchpoint+1, targetCatchpointRound)
 }
 
