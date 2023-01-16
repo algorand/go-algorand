@@ -562,15 +562,13 @@ func TestStateProofRecovery(t *testing.T) {
 	// will exceed the MAX_NUMBER_OF_REVEALS and proofs would not get generated
 	// for that reason we need to the decrease the StateProofStrengthTarget creating a "weak cert"
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
-	consensusParams.StateProofInterval = 16
 	consensusParams.StateProofStrengthTarget = 4
 	consensusParams.StateProofMaxRecoveryIntervals = 2
 	consensusParams.StateProofUseTrackerVerification = true
 	consensusParams.SeedLookback = 2
 	consensusParams.SeedRefreshInterval = 2
 	consensusParams.MaxBalLookback = 2 * consensusParams.SeedLookback * consensusParams.SeedRefreshInterval // 8
-	//todo restore this when builder.tryBroadcast is fixed
-	//consensusParams.MaxTxnLife = 13
+	consensusParams.MaxTxnLife = 13
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
