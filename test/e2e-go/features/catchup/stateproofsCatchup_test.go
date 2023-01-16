@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -40,6 +41,12 @@ func applyCatchpointStateProofConsensusChanges(consensusParams *config.Consensus
 	consensusParams.StateProofUseTrackerVerification = true
 }
 
+func getStateProofNextRound(a *require.Assertions, goalClient *libgoal.Client, round basics.Round) basics.Round {
+	block, err := goalClient.BookkeepingBlock(uint64(round))
+	a.NoError(err)
+	return block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
+}
+
 func TestStateProofInReplayCatchpoint(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -54,22 +61,37 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 	applyCatchpointConsensusChanges(&consensusParams)
 	applyCatchpointStateProofConsensusChanges(&consensusParams)
 
-	// The small size of the network means we can expect extremely fast state proofs to be generated, which means
-	// they should be generated one round after the proven interval's last attested round.
-	firstExpectedStateProofRound := basics.Round(consensusParams.StateProofInterval*2 + 1)
-	catchpointRound := getFirstCatchpointRound(&consensusParams)
+	fixture := getFixture(&consensusParams)
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
 
-	dbRoundAfterCatchpoint := catchpointRound - basics.Round(consensusParams.MaxBalLookback)
-	firstReplayRound := dbRoundAfterCatchpoint + 1
+	primaryNode, primaryNodeRestClient, primaryErrorsCollector := startCatchpointGeneratingNode(a, fixture, "Primary")
+	defer primaryErrorsCollector.Print()
+	defer primaryNode.StopAlgod()
 
-	closestCatchpointVoters := catchpointRound.RoundDownToMultipleOf(basics.Round(consensusParams.StateProofInterval))
-	expectedStateProofRound := closestCatchpointVoters + 1
+	primaryNodeAddr, err := primaryNode.GetListeningAddress()
+	a.NoError(err)
 
-	a.True(expectedStateProofRound >= firstExpectedStateProofRound)
-	a.True(expectedStateProofRound >= firstReplayRound && expectedStateProofRound <= catchpointRound, "No state proof message expected between rounds"+
-		" %d and %d, which define the replay range. Modify the consensus parameters to resolve this.", dbRoundAfterCatchpoint, catchpointRound)
+	usingNode, usingNodeRestClient, wp, usingNodeErrorsCollector := startCatchpointUsingNode(a, fixture, "Node", primaryNodeAddr)
+	defer usingNodeErrorsCollector.Print()
+	defer wp.Close()
+	defer usingNode.StopAlgod()
 
-	runBasicCatchpointCatchup(t, &consensusParams, 1)
+	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
+
+	catchpointLabel, err := waitForCatchpointGeneration(fixture, primaryNodeRestClient, targetCatchpointRound)
+	a.NoError(err)
+
+	_, err = usingNodeRestClient.Catchup(catchpointLabel)
+	a.NoError(err)
+
+	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetCatchpointRound+1))
+	a.NoError(err)
+
+	primaryLibGoal := fixture.GetLibGoalClientFromNodeController(primaryNode)
+
+	dbRoundAfterCatchpoint := targetCatchpointRound - basics.Round(consensusParams.MaxBalLookback)
+	a.True(getStateProofNextRound(a, &primaryLibGoal, dbRoundAfterCatchpoint) > getStateProofNextRound(a, &primaryLibGoal, targetCatchpointRound),
+		"No state proof transaction in replay, rounds were %d to %d", dbRoundAfterCatchpoint+1, targetCatchpointRound)
 }
 
 func TestStateProofAfterCatchpoint(t *testing.T) {
@@ -86,24 +108,44 @@ func TestStateProofAfterCatchpoint(t *testing.T) {
 	applyCatchpointConsensusChanges(&consensusParams)
 	applyCatchpointStateProofConsensusChanges(&consensusParams)
 	consensusParams.StateProofInterval = 16
+	fixture := getFixture(&consensusParams)
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
 
-	// The small size of the network means we can expect extremely fast state proofs to be generated, which means
-	// they should be generated one round after the proven interval's last attested round.
-	firstExpectedStateProofRound := basics.Round(consensusParams.StateProofInterval*2 + 1)
-	catchpointRound := getFirstCatchpointRound(&consensusParams)
+	primaryNode, primaryNodeRestClient, primaryErrorsCollector := startCatchpointGeneratingNode(a, fixture, "Primary")
+	defer primaryErrorsCollector.Print()
+	defer primaryNode.StopAlgod()
 
-	dbRoundAfterCatchpoint := catchpointRound - basics.Round(consensusParams.MaxBalLookback)
+	primaryNodeAddr, err := primaryNode.GetListeningAddress()
+	a.NoError(err)
+
+	usingNode, usingNodeRestClient, wp, usingNodeErrorsCollector := startCatchpointUsingNode(a, fixture, "Node", primaryNodeAddr)
+	defer usingNodeErrorsCollector.Print()
+	defer wp.Close()
+	defer usingNode.StopAlgod()
+
+	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
+
+	catchpointLabel, err := waitForCatchpointGeneration(fixture, primaryNodeRestClient, targetCatchpointRound)
+	a.NoError(err)
+
+	_, err = usingNodeRestClient.Catchup(catchpointLabel)
+	a.NoError(err)
+
+	roundAfterSPGeneration := targetCatchpointRound.RoundUpToMultipleOf(basics.Round(consensusParams.StateProofInterval)) +
+		basics.Round(consensusParams.StateProofInterval/2)
+	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(roundAfterSPGeneration))
+	a.NoError(err)
+
+	primaryLibGoal := fixture.GetLibGoalClientFromNodeController(primaryNode)
+
+	dbRoundAfterCatchpoint := targetCatchpointRound - basics.Round(consensusParams.MaxBalLookback)
 	firstReplayRound := dbRoundAfterCatchpoint + 1
+	currentCoveredLastAttestedRound := getStateProofNextRound(a, &primaryLibGoal, roundAfterSPGeneration).SubSaturate(basics.Round(consensusParams.StateProofInterval))
+	votersRound := currentCoveredLastAttestedRound.SubSaturate(basics.Round(consensusParams.StateProofInterval))
 
-	votersBefore := catchpointRound.RoundDownToMultipleOf(basics.Round(consensusParams.StateProofInterval))
-	expectedStateProofRoundAfter := votersBefore + basics.Round(consensusParams.StateProofInterval) + 1
-
-	a.True(expectedStateProofRoundAfter >= firstExpectedStateProofRound)
-	a.True(expectedStateProofRoundAfter >= catchpointRound)
-	a.True(votersBefore < firstReplayRound, "The voters round %d is not lower than the replay round %d, which "+
-		"means that the used tracker data might not come from the catchpoint. Modify the consensus parameters to resolve this.", votersBefore, firstReplayRound)
-
-	runBasicCatchpointCatchup(t, &consensusParams, expectedStateProofRoundAfter-catchpointRound)
+	// We do this to make sure the verification data came from the tracker.
+	a.True(votersRound < firstReplayRound)
+	a.True(currentCoveredLastAttestedRound > targetCatchpointRound)
 }
 
 func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
@@ -146,7 +188,7 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 
 	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
 
-	catchpointLabel, err := waitForCatchpoint(&fixture, primaryNodeRestClient, targetCatchpointRound)
+	catchpointLabel, err := waitForCatchpointGeneration(&fixture, primaryNodeRestClient, targetCatchpointRound)
 	a.NoError(err)
 
 	_, err = usingNodeRestClient.Catchup(catchpointLabel)
@@ -177,7 +219,7 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	a.NoError(err)
 
 	expectedStateProofRound := targetRound.RoundDownToMultipleOf(basics.Round(consensusParams.StateProofInterval))
-	client := fixture.GetLibGoalClientForNamedNode("Primary")
+	client := fixture.GetLibGoalClientFromNodeController(primaryNode)
 	block, err := client.BookkeepingBlock(uint64(targetRound))
 	a.NoError(err)
 	a.Equal(expectedStateProofRound, block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)

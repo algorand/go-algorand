@@ -43,7 +43,7 @@ import (
 
 const basicTestCatchpointInterval = 4
 
-func waitForCatchpoint(fixture *fixtures.RestClientFixture, client client.RestClient, catchpointRound basics.Round) (string, error) {
+func waitForCatchpointGeneration(fixture *fixtures.RestClientFixture, client client.RestClient, catchpointRound basics.Round) (string, error) {
 	err := fixture.ClientWaitForRoundWithTimeout(client, uint64(catchpointRound+1))
 	if err != nil {
 		return "", err
@@ -257,49 +257,23 @@ func startCatchpointNormalNode(a *require.Assertions, fixture *fixtures.RestClie
 	return nodeController, &errorsCollector
 }
 
-func runBasicCatchpointCatchup(t *testing.T, consensusParams *config.ConsensusParams, roundsAfterCatchpoint basics.Round) {
-	// Overview of this function:
-	// Start a two-node network (primary has 100%, secondary has 0%)
-	// create a web proxy, have the secondary node use it as a peer, blocking all requests for round #2. ( and allowing everything else )
-	// Let it run until the first usable catchpoint, as computed in getFirstCatchpointRound, is generated.
-	// instruct the catchpoint using node to catchpoint catchup from the proxy.
-	// wait until the using node is caught up to catchpointRound + roundsAfterCatchpoint, skipping the "impossible" hole of round #2.
-	a := require.New(fixtures.SynchronizedTest(t))
-
+func getFixture(consensusParams *config.ConsensusParams) *fixtures.RestClientFixture {
 	consensus := make(config.ConsensusProtocols)
 	const consensusCatchpointCatchupTestProtocol = protocol.ConsensusVersion("catchpointtestingprotocol")
 	consensus[consensusCatchpointCatchupTestProtocol] = *consensusParams
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
-	fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
-
-	primaryNode, primaryNodeRestClient, primaryErrorsCollector := startCatchpointGeneratingNode(a, &fixture, "Primary")
-	defer primaryErrorsCollector.Print()
-	defer primaryNode.StopAlgod()
-
-	primaryNodeAddr, err := primaryNode.GetListeningAddress()
-	a.NoError(err)
-
-	usingNode, usingNodeRestClient, wp, usingNodeErrorsCollector := startCatchpointUsingNode(a, &fixture, "Node", primaryNodeAddr)
-	defer usingNodeErrorsCollector.Print()
-	defer wp.Close()
-	defer usingNode.StopAlgod()
-
-	targetCatchpointRound := getFirstCatchpointRound(consensusParams)
-
-	catchpointLabel, err := waitForCatchpoint(&fixture, primaryNodeRestClient, targetCatchpointRound)
-	a.NoError(err)
-	fmt.Printf("%s\n", catchpointLabel)
-
-	_, err = usingNodeRestClient.Catchup(catchpointLabel)
-	a.NoError(err)
-
-	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetCatchpointRound+roundsAfterCatchpoint))
-	a.NoError(err)
+	return &fixture
 }
 
 func TestBasicCatchpointCatchup(t *testing.T) {
+	// Overview of this test:
+	// Start a two-node network (primary has 100%, secondary has 0%)
+	// create a web proxy, have the secondary node use it as a peer, blocking all requests for round #2. ( and allowing everything else )
+	// Let it run until the first usable catchpoint, as computed in getFirstCatchpointRound, is generated.
+	// instruct the catchpoint using node to catchpoint catchup from the proxy.
+	// wait until the using node is caught up to catchpointRound + roundsAfterCatchpoint, skipping the "impossible" hole of round #2.
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -308,9 +282,35 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	//	t.Skip()
 	//}
 
-	catchpointCatchupProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
-	applyCatchpointConsensusChanges(&catchpointCatchupProtocol)
-	runBasicCatchpointCatchup(t, &catchpointCatchupProtocol, 1)
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	applyCatchpointConsensusChanges(&consensusParams)
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	fixture := getFixture(&consensusParams)
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
+
+	primaryNode, primaryNodeRestClient, primaryErrorsCollector := startCatchpointGeneratingNode(a, fixture, "Primary")
+	defer primaryErrorsCollector.Print()
+	defer primaryNode.StopAlgod()
+
+	primaryNodeAddr, err := primaryNode.GetListeningAddress()
+	a.NoError(err)
+
+	usingNode, usingNodeRestClient, wp, usingNodeErrorsCollector := startCatchpointUsingNode(a, fixture, "Node", primaryNodeAddr)
+	defer usingNodeErrorsCollector.Print()
+	defer wp.Close()
+	defer usingNode.StopAlgod()
+
+	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
+
+	catchpointLabel, err := waitForCatchpointGeneration(fixture, primaryNodeRestClient, targetCatchpointRound)
+	a.NoError(err)
+
+	_, err = usingNodeRestClient.Catchup(catchpointLabel)
+	a.NoError(err)
+
+	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetCatchpointRound+1))
+	a.NoError(err)
 }
 
 func TestCatchpointLabelGeneration(t *testing.T) {
