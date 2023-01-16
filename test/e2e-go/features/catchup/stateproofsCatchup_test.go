@@ -247,8 +247,6 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetCatchpointRound)+1)
 	a.NoError(err)
 
-	// We must restart the usingNode to stop it from sending messages to the web proxy, allowing it
-
 	normalNode.StopAlgod()
 
 	// We wait until we know for sure that we're in a round that contains a state proof signed
