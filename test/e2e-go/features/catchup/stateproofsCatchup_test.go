@@ -247,18 +247,20 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetCatchpointRound)+1)
 	a.NoError(err)
 
+	lastNormalRound, err := fixture.GetLibGoalClientFromNodeController(normalNode).CurrentRound()
+	a.NoError(err)
 	normalNode.StopAlgod()
 
 	// We wait until we know for sure that we're in a round that contains a state proof signed
 	// by the usingNode. we give the test 2*basics.Round(consensusParams.StateProofInterval) worth of time
-	// to prevent it from being flaky
-	targetRound := targetCatchpointRound + basics.Round(consensusParams.StateProofInterval)*2
+	// to prevent it from being flaky, since receiving signatures from the newly caught up node might take a while.
+	lastNormalNodeSignedRound := basics.Round(lastNormalRound).RoundDownToMultipleOf(basics.Round(consensusParams.StateProofInterval))
+	lastNormalNextStateProofRound := lastNormalNodeSignedRound + basics.Round(consensusParams.StateProofInterval)
+	targetRound := lastNormalNextStateProofRound + basics.Round(consensusParams.StateProofInterval*2)
 	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetRound))
 	a.NoError(err)
 
-	expectedStateProofRound := targetRound.RoundDownToMultipleOf(basics.Round(consensusParams.StateProofInterval))
-	client := fixture.GetLibGoalClientFromNodeController(primaryNode)
-	block, err := client.BookkeepingBlock(uint64(targetRound))
-	a.NoError(err)
-	a.Equal(expectedStateProofRound, block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+	primaryClient := fixture.GetLibGoalClientFromNodeController(primaryNode)
+	spNextRound := getStateProofNextRound(a, &primaryClient, targetRound)
+	a.True(spNextRound > lastNormalNextStateProofRound)
 }
