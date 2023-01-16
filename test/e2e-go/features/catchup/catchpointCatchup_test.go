@@ -208,6 +208,11 @@ func startCatchpointGeneratingNode(a *require.Assertions, fixture *fixtures.Rest
 	})
 	a.NoError(err)
 
+	restClient := fixture.GetAlgodClientForController(nodeController)
+	// We don't want to start using the node without it being properly initialized.
+	err = fixture.ClientWaitForRoundWithTimeout(restClient, 1)
+	a.NoError(err)
+
 	return nodeController, fixture.GetAlgodClientForController(nodeController), &errorsCollector
 }
 
@@ -231,7 +236,7 @@ func startCatchpointUsingNode(a *require.Assertions, fixture *fixtures.RestClien
 	a.NoError(err)
 
 	restClient := fixture.GetAlgodClientForController(nodeController)
-	// We don't want to start catching up without the node being properly initialized.
+	// We don't want to start using the node without it being properly initialized.
 	err = fixture.ClientWaitForRoundWithTimeout(restClient, 1)
 	a.NoError(err)
 
@@ -252,6 +257,11 @@ func startCatchpointNormalNode(a *require.Assertions, fixture *fixtures.RestClie
 		TelemetryOverride: "",
 		ExitErrorCallback: errorsCollector.nodeExitWithError,
 	})
+	a.NoError(err)
+
+	restClient := fixture.GetAlgodClientForController(nodeController)
+	// We don't want to start using the node without it being properly initialized.
+	err = fixture.ClientWaitForRoundWithTimeout(restClient, 1)
 	a.NoError(err)
 
 	return nodeController, &errorsCollector
