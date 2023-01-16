@@ -269,11 +269,12 @@ func getFixture(consensusParams *config.ConsensusParams) *fixtures.RestClientFix
 
 func TestBasicCatchpointCatchup(t *testing.T) {
 	// Overview of this test:
-	// Start a two-node network (primary has 100%, secondary has 0%)
-	// create a web proxy, have the secondary node use it as a peer, blocking all requests for round #2. ( and allowing everything else )
+	// Start a two-node network (primary has 100%, using has 0%)
+	// create a web proxy, have the using node use it as a peer, blocking all requests for round #2. ( and allowing everything else )
 	// Let it run until the first usable catchpoint, as computed in getFirstCatchpointRound, is generated.
-	// instruct the catchpoint using node to catchpoint catchup from the proxy.
-	// wait until the using node is caught up to catchpointRound + roundsAfterCatchpoint, skipping the "impossible" hole of round #2.
+	// instruct the using node to catchpoint catchup from the proxy.
+	// wait until the using node is caught up to catchpointRound+1, skipping the "impossible" hole of round #2 and
+	// participating in consensus.
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 

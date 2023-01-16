@@ -48,6 +48,15 @@ func getStateProofNextRound(a *require.Assertions, goalClient *libgoal.Client, r
 }
 
 func TestStateProofInReplayCatchpoint(t *testing.T) {
+	// Overview of this test:
+	// Configure consensus to generate a state proof in the target catchpoint's replay rounds.
+	// Start a two-node network (primary has 100%, using has 0%)
+	// create a web proxy, have the using node use it as a peer, blocking all requests for round #2. ( and allowing everything else )
+	// Let it run until the first usable catchpoint, as computed in getFirstCatchpointRound, is generated.
+	// instruct the using node to catchpoint catchup from the proxy.
+	// wait until the using node is caught up to catchpointRound+1, skipping the "impossible" hole of round #2 and
+	// participating in consensus.
+	// Verify that the blocks replayed to the using node contained a state proof transaction.
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -95,6 +104,18 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 }
 
 func TestStateProofAfterCatchpoint(t *testing.T) {
+	// Overview of this test:
+	// Configure consensus to generate a state proof transaction after the target catchpoint round, with voters from before
+	// the target state proof round.
+	// Start a two-node network (primary has 100%, using has 0%)
+	// create a web proxy, have the using node use it as a peer, blocking all requests for round #2. ( and allowing everything else )
+	// Let it run until the first usable catchpoint, as computed in getFirstCatchpointRound, is generated.
+	// instruct the using node to catchpoint catchup from the proxy.
+	// wait until the using node is caught up to catchpointRound+1, skipping the "impossible" hole of round #2 and
+	// participating in consensus.
+	// Wait until the next state proof has most likely been generated.
+	// Verify that the state proof's voters data came from the state proof tracker and that the state proof transaction
+	// itself happened after catchpoint catchup was completed.
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -149,6 +170,17 @@ func TestStateProofAfterCatchpoint(t *testing.T) {
 }
 
 func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
+	// Overview of this test:
+	// Start a three-node network (primary has 80%, using has 10% and normal has 10%).
+	// Configure consensus to require the primary node and at least on other node to generate state proofs.
+	// Start the primary node and a normal node.
+	// create a web proxy, have the using node use it as a peer, blocking all requests for round #2. ( and allowing everything else )
+	// Let it run until the first usable catchpoint, as computed in getFirstCatchpointRound, is generated.
+	// instruct the using node to catchpoint catchup from the proxy.
+	// wait until the using node is caught up to catchpointRound+1, skipping the "impossible" hole of round #2 and
+	// participating in consensus.
+	// Stop the normal node.
+	// Verify that a state proof transaction on which the normal node could not have signed is accepted.
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
