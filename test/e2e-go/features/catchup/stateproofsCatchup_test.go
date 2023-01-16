@@ -17,18 +17,19 @@
 package catchup
 
 import (
+	"context"
+	"database/sql"
+	"github.com/stretchr/testify/require"
 	"path/filepath"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
-	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 func applyCatchpointStateProofConsensusChanges(consensusParams *config.ConsensusParams) {
@@ -173,10 +174,10 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	// Overview of this test:
 	// Start a three-node network (primary has 80%, using has 10% and normal has 10%).
 	// Configure consensus to require the primary node and at least on other node to generate state proofs.
-	// Start the primary node and a normal node.
-	// create a web proxy, have the using node use it as a peer, blocking all requests for round #2. ( and allowing everything else )
+	// Start the primary node and a normal node and wait for the network to reach round 3.
+	// We remove block number 2 from primary database, this will prevent node2 from catching up and force it to use fast-catchup
 	// Let it run until the first usable catchpoint, as computed in getFirstCatchpointRound, is generated.
-	// instruct the using node to catchpoint catchup from the proxy.
+	// Run Node2
 	// wait until the using node is caught up to catchpointRound+1, skipping the "impossible" hole of round #2 and
 	// participating in consensus.
 	// Stop the normal node.
@@ -209,20 +210,37 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	primaryNodeAddr, err := primaryNode.GetListeningAddress()
 	a.NoError(err)
 
-	normalNode, normalNodeEC := startCatchpointNormalNode(a, &fixture, "Node1", primaryNodeAddr)
+	err = fixture.ClientWaitForRoundWithTimeout(primaryNodeRestClient, 3)
+	a.NoError(err)
+
+	normalNode, normalNodeRestClient, normalNodeEC := startCatchpointNormalNode(a, &fixture, "Node1", primaryNodeAddr)
 	defer normalNodeEC.Print()
 	defer normalNode.StopAlgod()
 
-	usingNode, usingNodeRestClient, wp, usingNodeEC := startCatchpointUsingNode(a, &fixture, "Node2", primaryNodeAddr)
+	err = fixture.ClientWaitForRoundWithTimeout(normalNodeRestClient, 3)
+	a.NoError(err)
+
+	// at this point PrimaryNode and Node1 would pass round 3. Before running Node2 we remove block 2 from Primary database.
+	// this will force Node2 to use fastcatchup
+	primNodeGenDir, err := primaryNode.GetGenesisDir()
+	a.NoError(err)
+	acc, err := db.MakeAccessor(filepath.Join(primNodeGenDir, "ledger.block.sqlite"), false, false)
+	require.NoError(t, err)
+	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("delete from blocks where rnd =2 ")
+		return err
+	})
+	require.NoError(t, err)
+	acc.Close()
+
+	usingNode, usingNodeRestClient, usingNodeEC := startCatchpointNormalNode(a, &fixture, "Node2", primaryNodeAddr)
 	defer usingNodeEC.Print()
-	defer wp.Close()
 	defer usingNode.StopAlgod()
 
 	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
 
 	catchpointLabel, err := waitForCatchpointGeneration(&fixture, primaryNodeRestClient, targetCatchpointRound)
 	a.NoError(err)
-
 	_, err = usingNodeRestClient.Catchup(catchpointLabel)
 	a.NoError(err)
 
@@ -230,23 +248,13 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	a.NoError(err)
 
 	// We must restart the usingNode to stop it from sending messages to the web proxy, allowing it
-	// to send signatures to the primary node.
-	usingNode.StopAlgod()
-	_, err = usingNode.StartAlgod(nodecontrol.AlgodStartArgs{
-		PeerAddress:       primaryNodeAddr,
-		ListenIP:          "",
-		RedirectOutput:    true,
-		RunUnderHost:      false,
-		TelemetryOverride: "",
-		ExitErrorCallback: usingNodeEC.nodeExitWithError,
-	})
-	usingNodeRestClient = fixture.GetAlgodClientForController(usingNode)
 
 	normalNode.StopAlgod()
 
 	// We wait until we know for sure that we're in a round that contains a state proof signed
-	// by the usingNode.
-	targetRound := targetCatchpointRound + basics.Round(consensusParams.StateProofInterval)
+	// by the usingNode. we give the test 2*basics.Round(consensusParams.StateProofInterval) worth of time
+	// to prevent it from being flaky
+	targetRound := targetCatchpointRound + basics.Round(consensusParams.StateProofInterval)*2
 	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetRound))
 	a.NoError(err)
 

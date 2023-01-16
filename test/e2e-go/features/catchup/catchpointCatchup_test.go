@@ -213,7 +213,7 @@ func startCatchpointGeneratingNode(a *require.Assertions, fixture *fixtures.Rest
 	err = fixture.ClientWaitForRoundWithTimeout(restClient, 1)
 	a.NoError(err)
 
-	return nodeController, fixture.GetAlgodClientForController(nodeController), &errorsCollector
+	return nodeController, restClient, &errorsCollector
 }
 
 func startCatchpointUsingNode(a *require.Assertions, fixture *fixtures.RestClientFixture, nodeName string, peerAddress string) (
@@ -244,7 +244,7 @@ func startCatchpointUsingNode(a *require.Assertions, fixture *fixtures.RestClien
 }
 
 func startCatchpointNormalNode(a *require.Assertions, fixture *fixtures.RestClientFixture, nodeName string, peerAddress string) (
-	nodecontrol.NodeController, *nodeExitErrorCollector) {
+	nodecontrol.NodeController, client.RestClient, *nodeExitErrorCollector) {
 	nodeController, err := fixture.GetNodeController(nodeName)
 	a.NoError(err)
 
@@ -264,7 +264,7 @@ func startCatchpointNormalNode(a *require.Assertions, fixture *fixtures.RestClie
 	err = fixture.ClientWaitForRoundWithTimeout(restClient, 1)
 	a.NoError(err)
 
-	return nodeController, &errorsCollector
+	return nodeController, restClient, &errorsCollector
 }
 
 func getFixture(consensusParams *config.ConsensusParams) *fixtures.RestClientFixture {
