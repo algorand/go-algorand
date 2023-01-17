@@ -13,25 +13,25 @@ function apply_configuration() {
   cd "$ALGORAND_DATA"
 
   # check for config file overrides.
-  if [ -f "/algod/config/config.json" ]; then
-    cp /algod/config/config.json config.json
+  if [ -f "/etc/algorand/config.json" ]; then
+    cp /etc/algorand/config.json config.json
   fi
-  if [ -f "/algod/config/algod.token" ]; then
-    cp /algod/config/algod.token algod.token
+  if [ -f "/etc/algorand/algod.token" ]; then
+    cp /etc/algorand/algod.token algod.token
   fi
-  if [ -f "/algod/config/algod.admin.token" ]; then
-    cp /algod/config/algod.admin.token algod.admin.token
+  if [ -f "/etc/algorand/algod.admin.token" ]; then
+    cp /etc/algorand/algod.admin.token algod.admin.token
   fi
-  if [ -f "/algod/config/logging.config" ]; then
-    cp /algod/config/logging.config logging.config
+  if [ -f "/etc/algorand/logging.config" ]; then
+    cp /etc/algorand/logging.config logging.config
   fi
 
   # check for environment variable overrides.
   if [ "$TOKEN" != "" ]; then
-    echo "$TOKEN" > algod.token
+    echo "$TOKEN" >algod.token
   fi
   if [ "$ADMIN_TOKEN" != "" ]; then
-    echo "$ADMIN_TOKEN" > algod.admin.token
+    echo "$ADMIN_TOKEN" >algod.admin.token
   fi
 
   # configure telemetry
@@ -79,7 +79,7 @@ function configure_data_dir() {
 
 function start_new_public_network() {
   cd /algod
-  if [ ! -d "run/genesis/$NETWORK" ]; then
+  if [ ! -d "/node/run/genesis/${NETWORK}" ]; then
     echo "No genesis file for '$NETWORK' is available."
     exit 1
   fi
@@ -88,8 +88,8 @@ function start_new_public_network() {
 
   cd "$ALGORAND_DATA"
 
-  cp "/algod/run/genesis/$NETWORK/genesis.json" genesis.json
-  cp /algod/run/config.json.example config.json
+  cp "/node/run/genesis/${NETWORK}/genesis.json" genesis.json
+  cp /node/run/config.json.example config.json
 
   configure_data_dir
 
@@ -116,14 +116,12 @@ function start_private_network() {
 }
 
 function start_new_private_network() {
-  cd /algod
   local TEMPLATE="template.json"
   if [ "$DEV_MODE" ]; then
     TEMPLATE="devmode_template.json"
   fi
-  sed -i "s/NUM_ROUNDS/${NUM_ROUNDS:-30000}/" "run/$TEMPLATE"
-  goal network create --noclean -n dockernet -r "/tmp/dockernet" -t "run/$TEMPLATE"
-  mv -v /tmp/dockernet/* "${ALGORAND_DATA}/.."
+  sed -i "s/NUM_ROUNDS/${NUM_ROUNDS:-30000}/" "/node/run/$TEMPLATE"
+  goal network create --noclean -n dockernet -r "${ALGORAND_DATA}/.." -t "/node/run/$TEMPLATE"
   configure_data_dir
   start_private_network
 }

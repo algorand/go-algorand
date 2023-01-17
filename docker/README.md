@@ -41,12 +41,12 @@ Configuration can be modified by specifying certain files. These can be changed 
 
 | File | Description |
 | ---- | ----------- |
-| /algod/config/config.json | Override default configurations by providing your own file. |
-| /algod/config/algod.token | Override default randomized REST API token. |
-| /algod/config/algod.admin.token | Override default randomized REST API admin token. |
-| /algod/config/logging.config | Use a custom [logging.config](https://developer.algorand.org/docs/run-a-node/reference/telemetry-config/#configuration) file for configuring telemetry. |
+| /etc/algorand/config.json | Override default configurations by providing your own file. |
+| /etc/algorand/algod.token | Override default randomized REST API token. |
+| /etc/algorand/algod.admin.token | Override default randomized REST API admin token. |
+| /etc/algorand/logging.config | Use a custom [logging.config](https://developer.algorand.org/docs/run-a-node/reference/telemetry-config/#configuration) file for configuring telemetry. |
 
-TODO: `/algod/config/template.json` for overriding the private network topology.
+TODO: `/etc/algorand/template.json` for overriding the private network topology.
 
 ## Example Configuration
 
@@ -69,7 +69,7 @@ Explanation of parts:
 * `-p 4190:8080` maps the internal algod REST API to local port 4190
 * `-e NETWORK=` can be set to any of the supported public networks.
 * `-e FAST_CATCHUP=` causes fast catchup to start shortly after launching the network.
-* `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis. The value of this variable takes precedence over the `name` attribute set in `/algod/config/logging.config`.
+* `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis. The value of this variable takes precedence over the `name` attribute set in `/etc/algorand/logging.config`.
 * `-e TOKEN=` sets the REST API token to use.
 * `-v ${PWD}/data:/algod/data/` mounts a local volume to the data directory, which can be used to restart and upgrade the deployment.
 
