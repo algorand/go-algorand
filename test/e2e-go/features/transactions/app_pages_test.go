@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ func TestExtraProgramPages(t *testing.T) {
 	walletHandle, err := client.GetUnencryptedWalletHandle()
 	a.NoError(err)
 
-	accountInfo, err := client.AccountInformationV2(baseAcct, false)
+	accountInfo, err := client.AccountInformation(baseAcct, false)
 	a.NoError(err)
 	if accountInfo.AppsTotalExtraPages != nil {
 		a.Equal(*accountInfo.AppsTotalExtraPages, uint64(0))
@@ -98,13 +98,13 @@ return
 	_, err = fixture.WaitForConfirmedTxn(status.LastRound+5, baseAcct, txid)
 	a.NoError(err)
 
-	app1CreateTxn, err := client.PendingTransactionInformationV2(txid)
+	app1CreateTxn, err := client.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(app1CreateTxn.ConfirmedRound)
 	a.NotNil(app1CreateTxn.ApplicationIndex)
 	app1ID := *app1CreateTxn.ApplicationIndex
 
-	accountInfo, err = client.AccountInformationV2(baseAcct, false)
+	accountInfo, err = client.AccountInformation(baseAcct, false)
 	a.NoError(err)
 	a.NotNil(accountInfo.AppsTotalExtraPages)
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app1ExtraPages))
@@ -119,11 +119,11 @@ return
 	_, err = fixture.WaitForConfirmedTxn(*app1CreateTxn.ConfirmedRound+5, baseAcct, txid)
 	a.NoError(err)
 
-	app1UpdateTxn, err := client.PendingTransactionInformationV2(txid)
+	app1UpdateTxn, err := client.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(app1CreateTxn.ConfirmedRound)
 
-	accountInfo, err = client.AccountInformationV2(baseAcct, false)
+	accountInfo, err = client.AccountInformation(baseAcct, false)
 	a.NoError(err)
 	a.NotNil(accountInfo.AppsTotalExtraPages)
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app1ExtraPages))
@@ -139,13 +139,13 @@ return
 	_, err = fixture.WaitForConfirmedTxn(*app1UpdateTxn.ConfirmedRound+5, baseAcct, txid)
 	a.NoError(err)
 
-	app2CreateTxn, err := client.PendingTransactionInformationV2(txid)
+	app2CreateTxn, err := client.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(app2CreateTxn.ConfirmedRound)
 	a.NotNil(app2CreateTxn.ApplicationIndex)
 	app2ID := *app2CreateTxn.ApplicationIndex
 
-	accountInfo, err = client.AccountInformationV2(baseAcct, false)
+	accountInfo, err = client.AccountInformation(baseAcct, false)
 	a.NoError(err)
 	a.NotNil(accountInfo.AppsTotalExtraPages)
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app1ExtraPages+app2ExtraPages))
@@ -160,11 +160,11 @@ return
 	_, err = fixture.WaitForConfirmedTxn(*app2CreateTxn.ConfirmedRound+5, baseAcct, txid)
 	a.NoError(err)
 
-	app1DeleteTxn, err := client.PendingTransactionInformationV2(txid)
+	app1DeleteTxn, err := client.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(app1DeleteTxn.ConfirmedRound)
 
-	accountInfo, err = client.AccountInformationV2(baseAcct, false)
+	accountInfo, err = client.AccountInformation(baseAcct, false)
 	a.NoError(err)
 	a.NotNil(accountInfo.AppsTotalExtraPages)
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app2ExtraPages))
@@ -179,7 +179,7 @@ return
 	_, err = fixture.WaitForConfirmedTxn(*app1DeleteTxn.ConfirmedRound+5, baseAcct, txid)
 	a.NoError(err)
 
-	accountInfo, err = client.AccountInformationV2(baseAcct, false)
+	accountInfo, err = client.AccountInformation(baseAcct, false)
 	a.NoError(err)
 	if accountInfo.AppsTotalExtraPages != nil {
 		a.Equal(*accountInfo.AppsTotalExtraPages, uint64(0))

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -579,4 +579,28 @@ func TestGetNonDefaultConfigValues(t *testing.T) {
 
 	// check unmodified defaults
 	assert.Empty(t, GetNonDefaultConfigValues(GetDefaultLocal(), []string{"AgreementIncomingBundlesQueueLength", "TxPoolSize"}))
+}
+
+func TestLocal_TxFiltering(t *testing.T) {
+	cfg := GetDefaultLocal()
+
+	// ensure the default
+	require.True(t, cfg.TxFilterRawMsgEnabled())
+	require.False(t, cfg.TxFilterCanonicalEnabled())
+
+	cfg.TxIncomingFilteringFlags = 0
+	require.False(t, cfg.TxFilterRawMsgEnabled())
+	require.False(t, cfg.TxFilterCanonicalEnabled())
+
+	cfg.TxIncomingFilteringFlags = 1
+	require.True(t, cfg.TxFilterRawMsgEnabled())
+	require.False(t, cfg.TxFilterCanonicalEnabled())
+
+	cfg.TxIncomingFilteringFlags = 2
+	require.False(t, cfg.TxFilterRawMsgEnabled())
+	require.True(t, cfg.TxFilterCanonicalEnabled())
+
+	cfg.TxIncomingFilteringFlags = 3
+	require.True(t, cfg.TxFilterRawMsgEnabled())
+	require.True(t, cfg.TxFilterCanonicalEnabled())
 }

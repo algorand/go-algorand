@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -37,11 +38,11 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 	accountsNum := 50
 	// write 50 accounts
 	for i := 0; i < accountsNum; i++ {
-		acct := persistedOnlineAccountData{
-			addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
-			round:       basics.Round(i),
-			rowid:       int64(i),
-			accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+		acct := store.PersistedOnlineAccountData{
+			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
+			Round:       basics.Round(i),
+			Rowid:       int64(i),
+			AccountData: store.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 		baseOnlineAcct.write(acct)
 	}
@@ -51,10 +52,10 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseOnlineAcct.read(addr)
 		require.True(t, has)
-		require.Equal(t, basics.Round(i), acct.round)
-		require.Equal(t, addr, acct.addr)
-		require.Equal(t, uint64(i), acct.accountData.MicroAlgos.Raw)
-		require.Equal(t, int64(i), acct.rowid)
+		require.Equal(t, basics.Round(i), acct.Round)
+		require.Equal(t, addr, acct.Addr)
+		require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
+		require.Equal(t, int64(i), acct.Rowid)
 	}
 
 	// verify expected missing entries
@@ -62,7 +63,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseOnlineAcct.read(addr)
 		require.False(t, has)
-		require.Equal(t, persistedOnlineAccountData{}, acct)
+		require.Equal(t, store.PersistedOnlineAccountData{}, acct)
 	}
 
 	baseOnlineAcct.prune(accountsNum / 2)
@@ -75,13 +76,13 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 		if i >= accountsNum/2 && i < accountsNum {
 			// expected to have it.
 			require.True(t, has)
-			require.Equal(t, basics.Round(i), acct.round)
-			require.Equal(t, addr, acct.addr)
-			require.Equal(t, uint64(i), acct.accountData.MicroAlgos.Raw)
-			require.Equal(t, int64(i), acct.rowid)
+			require.Equal(t, basics.Round(i), acct.Round)
+			require.Equal(t, addr, acct.Addr)
+			require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
+			require.Equal(t, int64(i), acct.Rowid)
 		} else {
 			require.False(t, has)
-			require.Equal(t, persistedOnlineAccountData{}, acct)
+			require.Equal(t, store.PersistedOnlineAccountData{}, acct)
 		}
 	}
 }
@@ -96,11 +97,11 @@ func TestLRUOnlineAccountsPendingWrites(t *testing.T) {
 	for i := 0; i < accountsNum; i++ {
 		go func(i int) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
-			acct := persistedOnlineAccountData{
-				addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
-				round:       basics.Round(i),
-				rowid:       int64(i),
-				accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+			acct := store.PersistedOnlineAccountData{
+				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
+				Round:       basics.Round(i),
+				Rowid:       int64(i),
+				AccountData: store.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 			}
 			baseOnlineAcct.writePending(acct)
 		}(i)
@@ -138,11 +139,11 @@ func TestLRUOnlineAccountsPendingWritesWarning(t *testing.T) {
 	baseOnlineAcct.init(log, pendingWritesBuffer, pendingWritesThreshold)
 	for j := 0; j < 50; j++ {
 		for i := 0; i < j; i++ {
-			acct := persistedOnlineAccountData{
-				addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
-				round:       basics.Round(i),
-				rowid:       int64(i),
-				accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+			acct := store.PersistedOnlineAccountData{
+				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
+				Round:       basics.Round(i),
+				Rowid:       int64(i),
+				AccountData: store.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 			}
 			baseOnlineAcct.writePending(acct)
 		}
@@ -164,11 +165,11 @@ func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 	baseOnlineAcct.init(log, pendingWritesBuffer, pendingWritesThreshold)
 
 	for i := 0; i < pendingWritesBuffer*2; i++ {
-		acct := persistedOnlineAccountData{
-			addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
-			round:       basics.Round(i),
-			rowid:       int64(i),
-			accountData: baseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+		acct := store.PersistedOnlineAccountData{
+			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
+			Round:       basics.Round(i),
+			Rowid:       int64(i),
+			AccountData: store.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 		baseOnlineAcct.writePending(acct)
 	}
@@ -180,10 +181,10 @@ func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseOnlineAcct.read(addr)
 		require.True(t, has)
-		require.Equal(t, basics.Round(i), acct.round)
-		require.Equal(t, addr, acct.addr)
-		require.Equal(t, uint64(i), acct.accountData.MicroAlgos.Raw)
-		require.Equal(t, int64(i), acct.rowid)
+		require.Equal(t, basics.Round(i), acct.Round)
+		require.Equal(t, addr, acct.Addr)
+		require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
+		require.Equal(t, int64(i), acct.Rowid)
 	}
 
 	// verify expected missing entries
@@ -191,6 +192,6 @@ func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseOnlineAcct.read(addr)
 		require.False(t, has)
-		require.Equal(t, persistedOnlineAccountData{}, acct)
+		require.Equal(t, store.PersistedOnlineAccountData{}, acct)
 	}
 }

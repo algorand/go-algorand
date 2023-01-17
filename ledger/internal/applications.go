@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -197,12 +197,12 @@ func (cb *roundCowBase) kvGet(key string) ([]byte, bool, error) {
 }
 
 func (cs *roundCowState) kvPut(key string, value []byte) error {
-	cs.mods.KvMods[key] = ledgercore.KvValueDelta{Data: value}
+	cs.mods.AddKvMod(key, ledgercore.KvValueDelta{Data: value})
 	return nil
 }
 
 func (cs *roundCowState) kvDel(key string) error {
-	cs.mods.KvMods[key] = ledgercore.KvValueDelta{Data: nil}
+	cs.mods.AddKvMod(key, ledgercore.KvValueDelta{Data: nil})
 	return nil
 }
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -119,7 +119,7 @@ func getCow(creatables []modsData) *roundCowState {
 		proto: config.Consensus[protocol.ConsensusCurrentVersion],
 	}
 	for _, e := range creatables {
-		cs.mods.Creatables[e.cidx] = ledgercore.ModifiedCreatable{Ctype: e.ctype, Creator: e.addr, Created: true}
+		cs.mods.AddCreatable(e.cidx, ledgercore.ModifiedCreatable{Ctype: e.ctype, Creator: e.addr, Created: true})
 	}
 	return cs
 }
