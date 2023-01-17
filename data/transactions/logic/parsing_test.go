@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,6 +36,7 @@ func TestNewAppCallBytes(t *testing.T) {
 	t.Parallel()
 
 	t.Run("errors", func(t *testing.T) {
+		t.Parallel()
 		_, err := NewAppCallBytes("hello")
 		require.Error(t, err)
 
@@ -48,7 +49,9 @@ func TestNewAppCallBytes(t *testing.T) {
 
 	for _, v := range []string{"hello", "1:2"} {
 		for _, e := range []string{"str", "string"} {
+			v, e := v, e
 			t.Run(fmt.Sprintf("encoding=%v,value=%v", e, v), func(t *testing.T) {
+				t.Parallel()
 				acb, err := NewAppCallBytes(fmt.Sprintf("%v:%v", e, v))
 				require.NoError(t, err)
 				r, err := acb.Raw()
@@ -59,6 +62,7 @@ func TestNewAppCallBytes(t *testing.T) {
 
 		for _, e := range []string{"b32", "base32", "byte base32"} {
 			ve := base32.StdEncoding.EncodeToString([]byte(v))
+			e := e
 			t.Run(fmt.Sprintf("encoding=%v,value=%v", e, ve), func(t *testing.T) {
 				acb, err := NewAppCallBytes(fmt.Sprintf("%v:%v", e, ve))
 				require.NoError(t, err)
@@ -70,7 +74,9 @@ func TestNewAppCallBytes(t *testing.T) {
 
 		for _, e := range []string{"b64", "base64", "byte base64"} {
 			ve := base64.StdEncoding.EncodeToString([]byte(v))
+			e := e
 			t.Run(fmt.Sprintf("encoding=%v,value=%v", e, ve), func(t *testing.T) {
+				t.Parallel()
 				acb, err := NewAppCallBytes(fmt.Sprintf("%v:%v", e, ve))
 				require.NoError(t, err)
 				r, err := acb.Raw()
@@ -82,7 +88,9 @@ func TestNewAppCallBytes(t *testing.T) {
 
 	for _, v := range []uint64{1, 0, math.MaxUint64} {
 		for _, e := range []string{"int", "integer"} {
+			v, e := v, e
 			t.Run(fmt.Sprintf("encoding=%v,value=%v", e, v), func(t *testing.T) {
+				t.Parallel()
 				acb, err := NewAppCallBytes(fmt.Sprintf("%v:%v", e, v))
 				require.NoError(t, err)
 				r, err := acb.Raw()
@@ -94,7 +102,9 @@ func TestNewAppCallBytes(t *testing.T) {
 
 	for _, v := range []string{"737777777777777777777777777777777777777777777777777UFEJ2CI"} {
 		for _, e := range []string{"addr", "address"} {
+			v, e := v, e
 			t.Run(fmt.Sprintf("encoding=%v,value=%v", e, v), func(t *testing.T) {
+				t.Parallel()
 				acb, err := NewAppCallBytes(fmt.Sprintf("%v:%v", e, v))
 				require.NoError(t, err)
 				r, err := acb.Raw()
@@ -117,7 +127,9 @@ func TestNewAppCallBytes(t *testing.T) {
 			`[399,"should pass",[true,false,false,true]]`,
 		}} {
 		for _, e := range []string{"abi"} {
+			v, e := v, e
 			t.Run(fmt.Sprintf("encoding=%v,value=%v", e, v), func(t *testing.T) {
+				t.Parallel()
 				acb, err := NewAppCallBytes(fmt.Sprintf(
 					"%v:%v:%v", e, v.abiType, v.rawValue))
 				require.NoError(t, err)

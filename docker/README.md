@@ -1,13 +1,12 @@
 # Algod Container
 
-General purpose algod docker container.
+General purpose algod container image.
 
-
-# Image Configuration
+## Image Configuration
 
 There are a number of special files and environment variables used to control how a container is started.
 
-## Default Configuration
+### Default Configuration
 
 By default the following config.json overrides are applied:
 
@@ -20,7 +19,7 @@ By default the following config.json overrides are applied:
 | IsIndexerActive | false |
 | EnableDeveloperAPI | true |
 
-## Environment Variables
+### Environment Variables
 
 The following environment variables can be supplied. Except when noted, it is possible to reconfigure deployments even after the data directory has been initialized.
 
@@ -34,10 +33,9 @@ The following environment variables can be supplied. Except when noted, it is po
 | TOKEN         | If set, overrides the REST API token. |
 | ADMIN_TOKEN   | If set, overrides the REST API admin token. |
 
+### Special Files
 
-## Special Files
-
-Configuration can be modified by specifying certian files. These can be changed each time you start the container if the data directory is a mounted volume.
+Configuration can be modified by specifying certain files. These can be changed each time you start the container if the data directory is a mounted volume.
 
 | File | Description |
 | ---- | ----------- |
@@ -47,10 +45,11 @@ Configuration can be modified by specifying certian files. These can be changed 
 
 TODO: `/etc/template.json` for overriding the private network topology.
 
-# Example Configuration
+## Example Configuration
 
 The following command launches a container configured with one of the public networks:
-```
+
+```bash
 docker run --rm -it \
     -p 4190:8080 \
     -e NETWORK=mainnet \
@@ -63,21 +62,20 @@ docker run --rm -it \
 ```
 
 Explanation of parts:
+
 * `-p 4190:8080` maps the internal algod REST API to local port 4190
 * `-e NETWORK=` can be set to any of the supported public networks.
 * `-e FAST_CATCHUP=` causes fast catchup to start shortly after launching the network.
 * `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis.
 * `-e TOKEN=` sets the REST API token to use.
-* `-v ${PWD}/data:/algod/data/` mounts a local volume to the data directory, which can be used to restart and upgrad the deployment.
+* `-v ${PWD}/data:/algod/data/` mounts a local volume to the data directory, which can be used to restart and upgrade the deployment.
 
-
-# Mounting the Data Directory
+## Mounting the Data Directory
 
 The data directory located at `/algod/data`. Mounting a volume at that location will allow you to shutdown and resume the node.
 
-## Private Network
+### Private Network
 
 Private networks work a little bit differently. They are configured with, potentially, several data directories. The default topology supplied with this container is installed to `/algod/`, and has a single node named `data`. This means the private network has a data directory at `/algod/data`, matching the production configuration.
 
 Because the root directory contains some metadata, if persistence of the private network is required, you should mount the volume `/algod/` instead of `/algod/data`. This will ensure the extra metadata is included when changing images.
-
