@@ -5157,7 +5157,7 @@ func opItxnSubmit(cx *EvalContext) error {
 	ep := NewInnerEvalParams(cx.subtxns, cx)
 
 	if ep.Tracer != nil {
-		ep.Tracer.BeforeInnerTxnGroup(ep)
+		ep.Tracer.BeforeTxnGroup(ep)
 	}
 
 	for i := range ep.TxnGroup {
@@ -5183,7 +5183,7 @@ func opItxnSubmit(cx *EvalContext) error {
 	cx.innerTxidCache = nil
 
 	if ep.Tracer != nil {
-		ep.Tracer.AfterInnerTxnGroup(ep)
+		ep.Tracer.AfterTxnGroup(ep)
 	}
 
 	return nil

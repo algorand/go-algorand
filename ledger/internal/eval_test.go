@@ -444,7 +444,8 @@ int 1`
 	require.Len(t, eval.block.Payset, 0)
 
 	tracer := &mocktracer.Tracer{}
-	err = eval.TransactionGroupWithTracer(txgroup, tracer)
+	eval.Tracer = tracer
+	err = eval.TransactionGroup(txgroup)
 	require.NoError(t, err)
 
 	require.Len(t, eval.block.Payset, len(txgroup))
@@ -456,6 +457,7 @@ int 1`
 
 	expectedEvents := flatten([][]mocktracer.Event{
 		{
+			mocktracer.BeforeTxnGroup(3),
 			mocktracer.BeforeTxn(protocol.ApplicationCallTx), // start basicAppCallTxn
 			mocktracer.BeforeProgram(logic.ModeApp),
 		},
@@ -471,7 +473,7 @@ int 1`
 		tealOpLogs(10),
 		{
 			mocktracer.BeforeOpcode(),
-			mocktracer.BeforeInnerTxnGroup(1), // start first itxn group
+			mocktracer.BeforeTxnGroup(1), // start first itxn group
 			mocktracer.BeforeTxn(protocol.ApplicationCallTx),
 			mocktracer.BeforeProgram(logic.ModeApp),
 		},
@@ -479,24 +481,25 @@ int 1`
 		{
 			mocktracer.AfterProgram(logic.ModeApp),
 			mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedADs[2].EvalDelta.InnerTxns[0].ApplyData),
-			mocktracer.AfterInnerTxnGroup(1), // end first itxn group
+			mocktracer.AfterTxnGroup(1), // end first itxn group
 			mocktracer.AfterOpcode(),
 		},
 		tealOpLogs(14),
 		{
 			mocktracer.BeforeOpcode(),
-			mocktracer.BeforeInnerTxnGroup(2), // start second itxn group
+			mocktracer.BeforeTxnGroup(2), // start second itxn group
 			mocktracer.BeforeTxn(protocol.PaymentTx),
 			mocktracer.AfterTxn(protocol.PaymentTx, expectedADs[2].EvalDelta.InnerTxns[1].ApplyData),
 			mocktracer.BeforeTxn(protocol.PaymentTx),
 			mocktracer.AfterTxn(protocol.PaymentTx, expectedADs[2].EvalDelta.InnerTxns[2].ApplyData),
-			mocktracer.AfterInnerTxnGroup(2), // end second itxn group
+			mocktracer.AfterTxnGroup(2), // end second itxn group
 			mocktracer.AfterOpcode(),
 		},
 		tealOpLogs(1),
 		{
 			mocktracer.AfterProgram(logic.ModeApp),
 			mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedADs[2]), // end innerAppCallTxn
+			mocktracer.AfterTxnGroup(3),
 		},
 	})
 	require.Equal(t, expectedEvents, tracer.Events)

@@ -57,6 +57,9 @@ int 1
 
 // can't use mocktracer.Tracer because the import would be circular
 type testEvalTracer struct {
+	beforeTxnGroupCalls int
+	afterTxnGroupCalls  int
+
 	beforeTxnCalls int
 	afterTxnCalls  int
 
@@ -66,9 +69,14 @@ type testEvalTracer struct {
 
 	beforeOpcodeCalls int
 	afterOpcodeCalls  int
+}
 
-	beforeInnerTxnGroupCalls int
-	afterInnerTxnGroupCalls  int
+func (t *testEvalTracer) BeforeTxnGroup(ep *EvalParams) {
+	t.beforeTxnGroupCalls++
+}
+
+func (t *testEvalTracer) AfterTxnGroup(ep *EvalParams) {
+	t.afterTxnGroupCalls++
 }
 
 func (t *testEvalTracer) BeforeTxn(ep *EvalParams, groupIndex int) {
@@ -96,14 +104,6 @@ func (t *testEvalTracer) AfterOpcode(cx *EvalContext, evalError error) {
 	t.afterOpcodeCalls++
 }
 
-func (t *testEvalTracer) BeforeInnerTxnGroup(ep *EvalParams) {
-	t.beforeInnerTxnGroupCalls++
-}
-
-func (t *testEvalTracer) AfterInnerTxnGroup(ep *EvalParams) {
-	t.afterInnerTxnGroupCalls++
-}
-
 func TestEvalWithTracer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -115,8 +115,10 @@ func TestEvalWithTracer(t *testing.T) {
 		ep.Tracer = &testTracer
 		testLogic(t, debuggerTestProgram, AssemblerMaxVersion, ep)
 
-		// these should not be called because beforeTxn and afterTxn hooks
-		// are called within ledger evaluation, not logic.
+		// BeforeTxnGroup/AfterTxnGroup/BeforeTxn/AfterTxn are only called for the inner txns in
+		// this test, not the top-level ones
+		require.Zero(t, testTracer.beforeTxnGroupCalls)
+		require.Zero(t, testTracer.afterTxnGroupCalls)
 		require.Zero(t, testTracer.beforeTxnCalls)
 		require.Zero(t, testTracer.afterTxnCalls)
 
@@ -126,9 +128,6 @@ func TestEvalWithTracer(t *testing.T) {
 
 		require.Equal(t, 35, testTracer.beforeOpcodeCalls)
 		require.Equal(t, testTracer.beforeOpcodeCalls, testTracer.afterOpcodeCalls)
-
-		require.Zero(t, testTracer.beforeInnerTxnGroupCalls)
-		require.Zero(t, testTracer.afterInnerTxnGroupCalls)
 	})
 
 	t.Run("simple app", func(t *testing.T) {
@@ -138,8 +137,10 @@ func TestEvalWithTracer(t *testing.T) {
 		ep.Tracer = &testTracer
 		testApp(t, debuggerTestProgram, ep)
 
-		// these should not be called because beforeTxn and afterTxn hooks
-		// are called within ledger evaluation, not logic.
+		// BeforeTxnGroup/AfterTxnGroup/BeforeTxn/AfterTxn are only called for the inner txns in
+		// this test, not the top-level ones
+		require.Zero(t, testTracer.beforeTxnGroupCalls)
+		require.Zero(t, testTracer.afterTxnGroupCalls)
 		require.Zero(t, testTracer.beforeTxnCalls)
 		require.Zero(t, testTracer.afterTxnCalls)
 
@@ -149,9 +150,6 @@ func TestEvalWithTracer(t *testing.T) {
 
 		require.Equal(t, 35, testTracer.beforeOpcodeCalls)
 		require.Equal(t, testTracer.beforeOpcodeCalls, testTracer.afterOpcodeCalls)
-
-		require.Zero(t, testTracer.beforeInnerTxnGroupCalls)
-		require.Zero(t, testTracer.afterInnerTxnGroupCalls)
 	})
 
 	t.Run("app with inner txns", func(t *testing.T) {
@@ -166,7 +164,14 @@ func TestEvalWithTracer(t *testing.T) {
 		ep.Tracer = &testTracer
 		testApp(t, innerTxnTestProgram, ep)
 
-		// only called for the inner transaction in this test, not the top-level one
+		// BeforeTxnGroup/AfterTxnGroup/BeforeTxn/AfterTxn are only called for the inner txns in
+		// this test, not the top-level ones
+
+		// two groups of inner txns were issued
+		require.Equal(t, 2, testTracer.beforeTxnGroupCalls)
+		require.Equal(t, 2, testTracer.afterTxnGroupCalls)
+
+		// three total inner txns were issued
 		require.Equal(t, 3, testTracer.beforeTxnCalls)
 		require.Equal(t, 3, testTracer.afterTxnCalls)
 
@@ -178,10 +183,6 @@ func TestEvalWithTracer(t *testing.T) {
 		innerAppCallTealOps := 1
 		require.Equal(t, appCallTealOps+innerAppCallTealOps, testTracer.beforeOpcodeCalls)
 		require.Equal(t, testTracer.beforeOpcodeCalls, testTracer.afterOpcodeCalls)
-
-		// two groups of inner transactions were issued
-		require.Equal(t, 2, testTracer.beforeInnerTxnGroupCalls)
-		require.Equal(t, 2, testTracer.afterInnerTxnGroupCalls)
 	})
 }
 

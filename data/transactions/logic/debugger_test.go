@@ -145,7 +145,11 @@ func TestDebuggerProgramEval(t *testing.T) {
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 		ledger.NewAccount(basics.AppIndex(888).Address(), 200000)
 
-		ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
+		adaptor := MakeEvalTracerDebuggerAdaptor(&testDbg)
+		// The adaptor uses BeforeTxnGroup to figure out if it's in an inner txn or not, so we need
+		// to trigger it for the top-level group, which otherwise wouldn't happen at this level.
+		adaptor.BeforeTxnGroup(nil)
+		ep.Tracer = adaptor
 		testApp(t, innerTxnTestProgram, ep)
 
 		require.Equal(t, 1, testDbg.register)

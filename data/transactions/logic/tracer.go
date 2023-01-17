@@ -49,44 +49,64 @@ import "github.com/algorand/go-algorand/data/transactions"
 //   └─────────────────────────┘
 //
 //   APP LIFECYCLE GRAPH
-//   ┌────────────────────────────────────────────────┐
-//   │ Transaction Evaluation                         │
-//   ├────────────────────────────────────────────────┤
-//   │ > BeforeTxn                                    │
-//   │                                                │
-//   │  ┌──────────────────────────────────────────┐  │
-//   │  │ ? App Call                               │  │
-//   │  ├──────────────────────────────────────────┤  │
-//   │  │ > BeforeProgram                          │  │
-//   │  │                                          │  │
-//   │  │  ┌────────────────────────────────────┐  │  │
-//   │  │  │ Teal Operation                     │  │  │
-//   │  │  ├────────────────────────────────────┤  │  │
-//   │  │  │ > BeforeOpcode                     │  │  │
-//   │  │  │  ┌──────────────────────────────┐  │  │  │
-//   │  │  │  │ ? Inner Transaction Group    │  │  │  │
-//   │  │  │  ├──────────────────────────────┤  │  │  │
-//   │  │  │  │ > BeforeInnerTxnGroup        │  │  │  │
-//   │  │  │  │  ┌────────────────────────┐  │  │  │  │
-//   │  │  │  │  │ Transaction Evaluation │  │  │  │  │
-//   │  │  │  │  ├────────────────────────┤  │  │  │  │
-//   │  │  │  │  │ ...                    │  │  │  │  │
-//   │  │  │  │  └────────────────────────┘  │  │  │  │
-//   │  │  │  │    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │  │  │  │
-//   │  │  │  │                              │  │  │  │
-//   │  │  │  │ > AfterInnerTxnGroup         │  │  │  │
-//   │  │  │  └──────────────────────────────┘  │  │  │
-//   │  │  │ > AfterOpcode                      │  │  │
-//   │  │  └────────────────────────────────────┘  │  │
-//   │  │    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │  │
-//   │  │                                          │  │
-//   │  │ > AfterProgram                           │  │
-//   │  └──────────────────────────────────────────┘  │
-//   |    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │
-//   │                                                │
-//   │ > AfterTxn                                     │
-//   └────────────────────────────────────────────────┘
+//   ┌──────────────────────────────────────────────────────┐
+//   │ Transaction Evaluation                               │
+//   ├──────────────────────────────────────────────────────┤
+//   │ > BeforeTxnGroup                                     │
+//   │                                                      │
+//   │  ┌────────────────────────────────────────────────┐  │
+//   │  │ > BeforeTxn                                    │  │
+//   │  │                                                │  │
+//   │  │  ┌──────────────────────────────────────────┐  │  │
+//   │  │  │ ? App Call                               │  │  │
+//   │  │  ├──────────────────────────────────────────┤  │  │
+//   │  │  │ > BeforeProgram                          │  │  │
+//   │  │  │                                          │  │  │
+//   │  │  │  ┌────────────────────────────────────┐  │  │  │
+//   │  │  │  │ Teal Operation                     │  │  │  │
+//   │  │  │  ├────────────────────────────────────┤  │  │  │
+//   │  │  │  │ > BeforeOpcode                     │  │  │  │
+//   │  │  │  │  ┌──────────────────────────────┐  │  │  │  │
+//   │  │  │  │  │ ? Inner Transaction Group    │  │  │  │  │
+//   │  │  │  │  ├──────────────────────────────┤  │  │  │  │
+//   │  │  │  │  │ > BeforeTxnGroup             │  │  │  │  │
+//   │  │  │  │  │  ┌────────────────────────┐  │  │  │  │  │
+//   │  │  │  │  │  │ Transaction Evaluation │  │  │  │  │  │
+//   │  │  │  │  │  ├────────────────────────┤  │  │  │  │  │
+//   │  │  │  │  │  │ ...                    │  │  │  │  │  │
+//   │  │  │  │  │  └────────────────────────┘  │  │  │  │  │
+//   │  │  │  │  │    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │  │  │  │  │
+//   │  │  │  │  │                              │  │  │  │  │
+//   │  │  │  │  │ > AfterTxnGroup              │  │  │  │  │
+//   │  │  │  │  └──────────────────────────────┘  │  │  │  │
+//   │  │  │  │ > AfterOpcode                      │  │  │  │
+//   │  │  │  └────────────────────────────────────┘  │  │  │
+//   │  │  │    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │  │  │
+//   │  │  │                                          │  │  │
+//   │  │  │ > AfterProgram                           │  │  │
+//   │  │  └──────────────────────────────────────────┘  │  │
+//   |  |    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    │  |
+//   │  │                                                │  │
+//   │  │ > AfterTxn                                     │  │
+//   │  └────────────────────────────────────────────────┘  │
+//   |    ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞  ⁞    |
+//   │                                                      │
+//   │ > AfterTxnGroup                                      │
+//   └──────────────────────────────────────────────────────┘
 type EvalTracer interface {
+	// BeforeTxnGroup is called before a transaction group is executed. This includes both top-level
+	// and inner transaction groups. The argument ep is the EvalParams object for the group; if the
+	// group is an inner group, this is the EvalParams object for the inner group.
+	//
+	// Each transaction within the group calls BeforeTxn and subsequent hooks, as described in the
+	// lifecycle diagram.
+	BeforeTxnGroup(ep *EvalParams)
+
+	// AfterTxnGroup is called after a transaction group has been executed. This includes both
+	// top-level and inner transaction groups. The argument ep is the EvalParams object for the
+	// group; if the group is an inner group, this is the EvalParams object for the inner group.
+	AfterTxnGroup(ep *EvalParams)
+
 	// BeforeTxn is called before a transaction is executed.
 	//
 	// groupIndex refers to the index of the transaction in the transaction group that will be executed.
@@ -110,21 +130,16 @@ type EvalTracer interface {
 
 	// AfterOpcode is called after the op has been evaluated
 	AfterOpcode(cx *EvalContext, evalError error)
-
-	// BeforeInnerTxnGroup is called before an inner transaction group is executed. The argument
-	// ep is the EvalParams object for the inner group.
-	//
-	// Each inner transaction within the group calls BeforeTxn and subsequent hooks, as described
-	// in the lifecycle diagram.
-	BeforeInnerTxnGroup(ep *EvalParams)
-
-	// AfterInnerTxnGroup is called after an inner transaction group has been executed. The argument
-	// ep is the EvalParams object for the inner group.
-	AfterInnerTxnGroup(ep *EvalParams)
 }
 
 // NullEvalTracer implements EvalTracer, but all of its hook methods do nothing
 type NullEvalTracer struct{}
+
+// BeforeTxnGroup does nothing
+func (n NullEvalTracer) BeforeTxnGroup(ep *EvalParams) {}
+
+// AfterTxnGroup does nothing
+func (n NullEvalTracer) AfterTxnGroup(ep *EvalParams) {}
 
 // BeforeTxn does nothing
 func (n NullEvalTracer) BeforeTxn(ep *EvalParams, groupIndex int) {}
@@ -143,9 +158,3 @@ func (n NullEvalTracer) BeforeOpcode(cx *EvalContext) {}
 
 // AfterOpcode does nothing
 func (n NullEvalTracer) AfterOpcode(cx *EvalContext, evalError error) {}
-
-// BeforeInnerTxnGroup does nothing
-func (n NullEvalTracer) BeforeInnerTxnGroup(ep *EvalParams) {}
-
-// AfterInnerTxnGroup does nothing
-func (n NullEvalTracer) AfterInnerTxnGroup(ep *EvalParams) {}

@@ -178,10 +178,11 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.Si
 	if err != nil {
 		return nil, err
 	}
+	eval.Tracer = tracer
 
 	group := transactions.WrapSignedTxnsWithAD(stxns)
 
-	err = eval.TransactionGroupWithTracer(group, tracer)
+	err = eval.TransactionGroup(group)
 	if err != nil {
 		return nil, EvalFailureError{SimulatorError{err}}
 	}

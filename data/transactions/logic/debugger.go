@@ -50,9 +50,9 @@ type Debugger interface {
 type debuggerEvalTracerAdaptor struct {
 	NullEvalTracer
 
-	debugger      Debugger
-	innerTxnDepth int
-	debugState    *DebugState
+	debugger   Debugger
+	txnDepth   int
+	debugState *DebugState
 }
 
 // MakeEvalTracerDebuggerAdaptor creates an adaptor that externally adheres to the EvalTracer
@@ -61,19 +61,19 @@ func MakeEvalTracerDebuggerAdaptor(debugger Debugger) EvalTracer {
 	return &debuggerEvalTracerAdaptor{debugger: debugger}
 }
 
-// BeforeInnerTxnGroup updates inner txn depth
-func (a *debuggerEvalTracerAdaptor) BeforeInnerTxnGroup(ep *EvalParams) {
-	a.innerTxnDepth++
+// BeforeTxnGroup updates inner txn depth
+func (a *debuggerEvalTracerAdaptor) BeforeTxnGroup(ep *EvalParams) {
+	a.txnDepth++
 }
 
-// AfterInnerTxnGroup updates inner txn depth
-func (a *debuggerEvalTracerAdaptor) AfterInnerTxnGroup(ep *EvalParams) {
-	a.innerTxnDepth--
+// AfterTxnGroup updates inner txn depth
+func (a *debuggerEvalTracerAdaptor) AfterTxnGroup(ep *EvalParams) {
+	a.txnDepth--
 }
 
 // BeforeProgram invokes the debugger's Register hook
 func (a *debuggerEvalTracerAdaptor) BeforeProgram(cx *EvalContext) {
-	if a.innerTxnDepth > 0 {
+	if a.txnDepth > 1 {
 		// only report updates for top-level transactions, for backwards compatibility
 		return
 	}
@@ -83,7 +83,7 @@ func (a *debuggerEvalTracerAdaptor) BeforeProgram(cx *EvalContext) {
 
 // BeforeOpcode invokes the debugger's Update hook
 func (a *debuggerEvalTracerAdaptor) BeforeOpcode(cx *EvalContext) {
-	if a.innerTxnDepth > 0 {
+	if a.txnDepth > 1 {
 		// only report updates for top-level transactions, for backwards compatibility
 		return
 	}
@@ -92,7 +92,7 @@ func (a *debuggerEvalTracerAdaptor) BeforeOpcode(cx *EvalContext) {
 
 // AfterProgram invokes the debugger's Complete hook
 func (a *debuggerEvalTracerAdaptor) AfterProgram(cx *EvalContext, evalError error) {
-	if a.innerTxnDepth > 0 {
+	if a.txnDepth > 1 {
 		// only report updates for top-level transactions, for backwards compatibility
 		return
 	}
