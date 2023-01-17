@@ -18,8 +18,8 @@ package internal
 
 import (
 	"fmt"
-	"github.com/algorand/avm-abi/apps"
 
+	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions/logic"
