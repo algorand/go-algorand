@@ -46,6 +46,14 @@ const (
 	agreementBundleMessageType   = "bundle"
 )
 
+// AgreementGossipNode is a subset of network.GossipNode with only methods needed by agreement
+type AgreementGossipNode interface {
+	Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error
+	Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error
+	Disconnect(badnode network.Peer)
+	RegisterHandlers(dispatch []network.TaggedMessageHandler)
+}
+
 type messageMetadata struct {
 	raw network.IncomingMessage
 }
@@ -56,7 +64,7 @@ type networkImpl struct {
 	proposalCh chan agreement.Message
 	bundleCh   chan agreement.Message
 
-	net network.GossipNode
+	net AgreementGossipNode
 	log logging.Logger
 
 	trace messagetracer.MessageTracer
@@ -66,7 +74,7 @@ type networkImpl struct {
 }
 
 // WrapNetwork adapts a network.GossipNode into an agreement.Network.
-func WrapNetwork(net network.GossipNode, log logging.Logger, cfg config.Local) agreement.Network {
+func WrapNetwork(net AgreementGossipNode, log logging.Logger, cfg config.Local) agreement.Network {
 	i := new(networkImpl)
 
 	i.voteCh = make(chan agreement.Message, cfg.AgreementIncomingVotesQueueLength)
@@ -78,7 +86,8 @@ func WrapNetwork(net network.GossipNode, log logging.Logger, cfg config.Local) a
 
 	i.enableFilteringRawMsg = cfg.TxFilterRawMsgEnabled()
 	if i.enableFilteringRawMsg {
-		i.voteDedup = dedup.MakeSaltedCache(2 * int(cfg.AgreementIncomingVotesQueueLength))
+		dedupMapCardinalNum := 2 * int(cfg.AgreementIncomingVotesQueueLength)
+		i.voteDedup = dedup.MakeSaltedCache(dedupMapCardinalNum)
 	}
 
 	return i

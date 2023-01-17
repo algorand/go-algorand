@@ -116,7 +116,7 @@ func shutdownNetwork(nets []*networkImpl, counters []*messageCounter) {
 			defer wg.Done()
 			net.ClearHandlers()
 			net.Stop()
-		}(net.net)
+		}(net.net.(network.GossipNode))
 	}
 	for _, counter := range counters {
 		counter.stop()
@@ -348,10 +348,10 @@ func testNetworkImplRebroadcast(t *testing.T, nodesCount int, cfg config.Local) 
 }
 
 func writeDetailedErrorInfo(t *testing.T, i int, nets []*networkImpl) {
-	address, _ := nets[i].net.Address()
+	address, _ := nets[i].net.(network.GossipNode).Address()
 	t.Errorf("failed on i=%d address %+v\n", i, address)
 	for _, n := range nets {
-		address, _ := n.net.Address()
+		address, _ := n.net.(network.GossipNode).Address()
 		t.Errorf("node %v\n", address)
 	}
 }

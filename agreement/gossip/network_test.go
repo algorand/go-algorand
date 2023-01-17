@@ -18,8 +18,6 @@ package gossip
 
 import (
 	"context"
-	"net"
-	"net/http"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -52,13 +50,15 @@ type whiteholeDomain struct {
 }
 
 type whiteholeNetwork struct {
-	network.GossipNode
+	AgreementGossipNode
 	peer         uint32
 	lastMsgRead  uint32
 	mux          *network.Multiplexer
 	quit         chan struct{}
 	domain       *whiteholeDomain
 	disconnected map[uint32]bool
+	ctx          context.Context
+	cancel       context.CancelFunc
 	log          logging.Logger
 }
 
@@ -116,7 +116,6 @@ func (w *whiteholeNetwork) innerBroadcast(tag network.Tag, data []byte) {
 		Sender: w.peer,
 	}
 	w.placeMsg(msg)
-	return
 }
 
 func (w *whiteholeNetwork) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
@@ -136,28 +135,8 @@ func (w *whiteholeNetwork) Relay(ctx context.Context, tag protocol.Tag, data []b
 func (w *whiteholeNetwork) BroadcastSimple(tag protocol.Tag, data []byte) error {
 	return w.Broadcast(context.Background(), tag, data, true, nil)
 }
+
 func (w *whiteholeNetwork) Disconnect(badnode network.Peer) {
-	return
-}
-func (w *whiteholeNetwork) DisconnectPeers() {
-	return
-}
-func (w *whiteholeNetwork) Ready() chan struct{} {
-	return make(chan struct{})
-}
-func (w *whiteholeNetwork) RegisterRPCName(name string, rcvr interface{}) {
-	return
-}
-func (w *whiteholeNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {
-	return
-}
-func (w *whiteholeNetwork) GetPeers(options ...network.PeerOption) []network.Peer {
-	return nil
-}
-func (w *whiteholeNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
-}
-func (w *whiteholeNetwork) GetHTTPRequestConnection(request *http.Request) (conn net.Conn) {
-	return nil
 }
 
 func (w *whiteholeNetwork) Start() {
