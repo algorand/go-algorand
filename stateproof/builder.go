@@ -398,11 +398,11 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		// Safe to ignore this error as it means we already have a valid signature for this address
 		return network.Ignore, nil
 	}
-	if errors.Is(err, errFailedToAddSigAtPos) {
-		return network.Ignore, err
-	}
 	if errors.Is(err, errAddressNotInVoters) || errors.Is(err, errSignatureVerification) {
 		return network.Disconnect, err
+	}
+	if err != nil { // errFailedToAddSigAtPos and fallback in case of unknown error
+		return network.Ignore, err
 	}
 
 	err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
