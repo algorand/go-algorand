@@ -195,15 +195,13 @@ func (w *whiteholeNetwork) Start() {
 			atomic.AddUint32(&w.lastMsgRead, 1)
 		}
 	}(w)
-	return
-}
-func (w *whiteholeNetwork) getMux() *network.Multiplexer {
-	return w.mux
 }
 
 func (w *whiteholeNetwork) Stop() {
 	close(w.quit)
 	w.domain.messagesCond.Broadcast()
+	w.ClearHandlers()
+	w.cancel()
 }
 
 type messageCounter struct {
@@ -306,6 +304,7 @@ func makewhiteholeNetwork(domain *whiteholeDomain) *whiteholeNetwork {
 		domain:       domain,
 		disconnected: make(map[uint32]bool),
 	}
+	w.ctx, w.cancel = context.WithCancel(context.Background())
 	return w
 }
 
@@ -381,5 +380,40 @@ func TestNetworkImpl(t *testing.T) {
 	counter2.verify(t, 0, 0, 1)
 	counter3.verify(t, 0, 0, 1)
 	domain.reconnectNetwork(net1, net2, net3)
+
+}
+
+func TestNetworkAVDedup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+
+	domain := &whiteholeDomain{
+		messages: make([]sentMessage, 0),
+		peerIdx:  uint32(0),
+		log:      logging.TestingLog(t),
+	}
+	domain.messagesCond = sync.NewCond(&domain.messagesMu)
+
+	net1, counter1 := spinNetworkImpl(domain)
+	net2, counter2 := spinNetworkImpl(domain)
+	defer counter1.stop()
+	defer counter2.stop()
+	defer net1.Stop()
+	defer net2.Stop()
+
+	net1.BroadcastSimple(protocol.AgreementVoteTag, []byte{1})
+	net1.BroadcastSimple(protocol.AgreementVoteTag, []byte{1})
+	domain.syncNetwork(net1, net2)
+	counter1.verify(t, 0, 0, 0)
+	counter2.verify(t, 1, 0, 0)
+	domain.reconnectNetwork(net1, net2)
+
+	net1.BroadcastSimple(protocol.AgreementVoteTag, []byte{2})
+	net1.BroadcastSimple(protocol.AgreementVoteTag, []byte{3})
+	domain.syncNetwork(net1, net2)
+	counter1.verify(t, 0, 0, 0)
+	counter2.verify(t, 2, 0, 0)
+	domain.reconnectNetwork(net1, net2)
 
 }
