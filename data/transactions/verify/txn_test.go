@@ -68,7 +68,7 @@ var spec = transactions.SpecialAddresses{
 func verifyTxn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 	batchVerifier := crypto.MakeBatchVerifier()
 
-	if err := txnBatchPrep(s, txnIdx, groupCtx, batchVerifier); err != nil {
+	if err := txnBatchPrep(s, txnIdx, groupCtx, batchVerifier, nil); err != nil {
 		return err
 	}
 	return batchVerifier.Verify()
@@ -430,10 +430,8 @@ pushint 1`)
 	}
 
 	mockTracer := &mocktracer.Tracer{}
-
-	groupCtx, err := TxnGroupWithTracer(txgroup, blockHeader, nil, logic.NoHeaderLedger{}, mockTracer)
+	_, err = TxnGroupWithTracer(txgroup, blockHeader, nil, logic.NoHeaderLedger{}, mockTracer)
 	require.NoError(t, err)
-	require.Equal(t, mockTracer, groupCtx.evalTracer)
 
 	expectedEvents := []mocktracer.Event{
 		mocktracer.BeforeProgram(logic.ModeSig),             // first txn start
