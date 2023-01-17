@@ -57,6 +57,12 @@ type debuggerEvalTracerAdaptor struct {
 
 // MakeEvalTracerDebuggerAdaptor creates an adaptor that externally adheres to the EvalTracer
 // interface, but drives a Debugger interface
+//
+// Warning: The output EvalTracer is specifically designed to be invoked under the exact same
+// circumstances that the previous Debugger interface was invoked. This means that it will only work
+// properly if you attach it directly to a logic.EvalParams and execute a program. If you attempt to
+// run this EvalTracer under a different entry point (such as by attaching it to a BlockEvaluator),
+// it WILL NOT work properly.
 func MakeEvalTracerDebuggerAdaptor(debugger Debugger) EvalTracer {
 	return &debuggerEvalTracerAdaptor{debugger: debugger}
 }
@@ -73,7 +79,7 @@ func (a *debuggerEvalTracerAdaptor) AfterTxnGroup(ep *EvalParams) {
 
 // BeforeProgram invokes the debugger's Register hook
 func (a *debuggerEvalTracerAdaptor) BeforeProgram(cx *EvalContext) {
-	if a.txnDepth > 1 {
+	if a.txnDepth > 0 {
 		// only report updates for top-level transactions, for backwards compatibility
 		return
 	}
@@ -83,7 +89,7 @@ func (a *debuggerEvalTracerAdaptor) BeforeProgram(cx *EvalContext) {
 
 // BeforeOpcode invokes the debugger's Update hook
 func (a *debuggerEvalTracerAdaptor) BeforeOpcode(cx *EvalContext) {
-	if a.txnDepth > 1 {
+	if a.txnDepth > 0 {
 		// only report updates for top-level transactions, for backwards compatibility
 		return
 	}
@@ -92,7 +98,7 @@ func (a *debuggerEvalTracerAdaptor) BeforeOpcode(cx *EvalContext) {
 
 // AfterProgram invokes the debugger's Complete hook
 func (a *debuggerEvalTracerAdaptor) AfterProgram(cx *EvalContext, evalError error) {
-	if a.txnDepth > 1 {
+	if a.txnDepth > 0 {
 		// only report updates for top-level transactions, for backwards compatibility
 		return
 	}
