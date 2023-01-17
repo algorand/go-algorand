@@ -531,7 +531,7 @@ func TestFillDBWithParticipationKeys(t *testing.T) {
 	a.NoError(err)
 }
 
-func TestKeyregValidityPeriod(t *testing.T) {
+func TestKeyregValidityPeriod(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies config.Consensus
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
