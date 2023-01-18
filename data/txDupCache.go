@@ -244,6 +244,13 @@ func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
 		d = &dn
 	}
 
+	if _, found := c.cur[*d]; found {
+		return nil, true
+	}
+	if _, found := c.prev[*d]; found {
+		return nil, true
+	}
+
 	c.cur[*d] = struct{}{}
 	return d, false
 }
