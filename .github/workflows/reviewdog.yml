@@ -86,6 +86,7 @@ jobs:
           ./cicdtmp/golangci-lint/golangci-lint-cgo run \
           --out-format line-number \
           -c .golangci-warnings.yml \
+          --issues-exit-code 0 \
           --allow-parallel-runners > temp_golangci-lint-cgo.txt
 
           cat temp_golangci-lint-cgo.txt | reviewdog \
