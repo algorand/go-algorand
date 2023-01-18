@@ -162,6 +162,7 @@ const disconnectLeastPerformingPeer disconnectReason = "LeastPerformingPeer"
 const disconnectCliqueResolve disconnectReason = "CliqueResolving"
 const disconnectRequestReceived disconnectReason = "DisconnectRequest"
 const disconnectStaleWrite disconnectReason = "DisconnectStaleWrite"
+const disconnectUnverified disconnectReason = "DisconnectUnverified"
 
 // Response is the structure holding the response from the server
 type Response struct {
@@ -230,8 +231,10 @@ type wsPeer struct {
 	// is present in wn.peers.
 	peerIndex int
 
-	identity          crypto.PublicKey
-	identityVerified  uint32
+	// the peer's identity key which it uses for identityChallenge exchanges
+	identity         crypto.PublicKey
+	identityVerified uint32
+	// the identityChallenge is recorded to the peer so it may verify its identity at a later time
 	identityChallenge [32]byte
 
 	// Challenge sent to the peer on an incoming connection
@@ -973,18 +976,6 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 
 func (wp *wsPeer) IdentityVerified() {
 	atomic.StoreUint32(&wp.identityVerified, 1)
-}
-
-// waitForIdentityVerify starts a goroutine to wait and check that the
-// identity verification bit has been set for the peer.
-// if it is not verified in time, the peer closes itself.
-func (wp *wsPeer) waitForIdentityVerify() {
-	go func() {
-		time.Sleep(5 * time.Second)
-		if atomic.LoadUint32(&wp.identityVerified) != 1 {
-			wp.Close(time.Now())
-		}
-	}()
 }
 
 func (wp *wsPeer) pfProposalCompressionSupported() bool {

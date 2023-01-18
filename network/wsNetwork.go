@@ -341,10 +341,13 @@ type WebsocketNetwork struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	peersLock          deadlock.RWMutex
-	peers              []*wsPeer
-	peersByID          map[crypto.PublicKey]*wsPeer // peersByID maps a Public Identification Key to a given peer
-	peersChangeCounter int32                        // peersChangeCounter is an atomic variable that increases on each change to the peers. It helps avoiding taking the peersLock when checking if the peers list was modified.
+	peersLock deadlock.RWMutex
+	peers     []*wsPeer
+	// peersByID is a 1:1 mapping from a PublicKey to a Peer who has verified ownership of the key
+	peersByID map[crypto.PublicKey]*wsPeer
+	// unverifiedPeersByID is a 1:N mapping from a PublicKey to Peers who have not yet verified ownership of the key
+	unverifiedPeersByID map[crypto.PublicKey][]*wsPeer
+	peersChangeCounter  int32 // peersChangeCounter is an atomic variable that increases on each change to the peers. It helps avoiding taking the peersLock when checking if the peers list was modified.
 
 	broadcastQueueHighPrio chan broadcastRequest
 	broadcastQueueBulk     chan broadcastRequest
@@ -598,6 +601,42 @@ func (wn *WebsocketNetwork) disconnect(badnode Peer, reason disconnectReason) {
 func closeWaiter(wg *sync.WaitGroup, peer *wsPeer, deadline time.Time) {
 	defer wg.Done()
 	peer.CloseAndWait(deadline)
+}
+
+// MarkVerified will ensure that a peer hasn't already been verified,
+// will attempt to add the peer to the peersByID map,
+// and will disconnect the peer if it is discovered that the Identity is already in use
+func (wn *WebsocketNetwork) MarkVerified(p *wsPeer) {
+	// if this peer is already verified, it means MarkVerified has already run for this peer
+	if atomic.LoadUint32(&p.identityVerified) == 1 {
+		return
+	}
+	p.IdentityVerified()
+
+	// attempt to set this identity as in-use by the peer
+	// if the peer can't be set at this ID, it means it is already in-use
+	// 	and this peer should be disconnected
+	if err := wn.setPeersByID(p); err != nil {
+		wn.Disconnect(p)
+	}
+}
+
+// setPeersByID will attempt to store a peer at its identity.
+// if a different peer already exists at that identity, it returns an error.
+func (wn *WebsocketNetwork) setPeersByID(p *wsPeer) error {
+	wn.peersLock.Lock()
+	defer wn.peersLock.Unlock()
+	existingPeer, exists := wn.peersByID[p.identity]
+	// if there is already a peer in the map by this identity and it is not this peer, disconnect this peer for being duplicate
+	if exists {
+		if existingPeer != p {
+			return fmt.Errorf("peer identity (%s) already in use", p.identity)
+		}
+	} else {
+		// if it is available, load this peer into peersByID at this identity, which will be used to deduplicate connections
+		wn.peersByID[p.identity] = p
+	}
+	return nil
 }
 
 // DisconnectPeers shuts down all connections
@@ -1171,34 +1210,14 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	var peerPublicKey crypto.PublicKey
 	var peerIDChallenge [32]byte
-	if shouldSupportIdentityChallenge(matchingVersion) {
-		idChalB64 := request.Header.Get(ProtocolConectionIdentityChallengeHeader)
-		if idChalB64 == "" {
-			wn.log.Warnf("ws connect no identification challenge")
-			return
-		}
+	// if the caller supplied an identity challenge, inspect it and possibly attach a response
+	idChalB64 := request.Header.Get(ProtocolConectionIdentityChallengeHeader)
+	if idChalB64 != "" {
 		idChal := IdentityChallengeFromB64(idChalB64)
-		// if the identification challenge response is not correctly signed, do not proceed
-		if err := idChal.verify(); err != nil {
-			wn.log.Warnf("ws connect failed identification challenge signature: err=%v", err.Error())
-			return
-		}
-		peerPublicKey = idChal.Key
-		// if we already have a verified peer using this key, do not proceed
-		wn.peersLock.RLock()
-		existingPeer := wn.peersByID[peerPublicKey]
-		wn.peersLock.RUnlock()
-		if existingPeer != nil &&
-			atomic.LoadUint32(&existingPeer.identityVerified) == 1 {
-			wn.log.Warnf("already connected to peer with verified public key (%s)", peerPublicKey)
-			response.WriteHeader(http.StatusPreconditionFailed)
-			n, err := response.Write([]byte("already connected"))
-			if err != nil {
-				wn.log.Warnf("ws failed to write already connected response: n = %d err = %v", n, err)
-			}
-			return
-		}
-		challengeResponse, idChalRespHeader := SignedEncodedB64IdentityChallengeResponse(wn.identityKeys, idChal)
+		// confirm the signature verifies
+		// confirm the address matches what's in the config
+		// if these don't check out, break
+		challengeResponse, idChalRespHeader := NewIdentityResponseChallengeAndHeader(wn.identityKeys, idChal)
 		peerIDChallenge = challengeResponse
 		responseHeader.Set(ProtocolConectionIdentityChallengeHeader, idChalRespHeader)
 	}
@@ -1232,9 +1251,6 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
-	if shouldSupportIdentityChallenge(matchingVersion) {
-		peer.waitForIdentityVerify()
-	}
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.otherPublicAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
@@ -2187,7 +2203,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		requestHeader.Add(ProtocolAcceptVersionHeader, supportedProtocolVersion)
 	}
 
-	idChallenge, idChallengeHeader := SignedEncodedB64IdentityChallenge(wn.identityKeys)
+	idChallenge, idChallengeHeader := NewIdentityChallengeAndHeader(wn.identityKeys, gossipAddr)
 	requestHeader.Add(ProtocolConectionIdentityChallengeHeader, idChallengeHeader)
 
 	// for backward compatibility, include the ProtocolVersion header as well.
@@ -2251,34 +2267,24 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 
 	var peerPublicKey crypto.PublicKey
 	var idChalResp identityChallengeResponse
-	if shouldSupportIdentityChallenge(matchingVersion) {
-		idChalRespB64 := response.Header.Get(ProtocolConectionIdentityChallengeHeader)
-		if idChalRespB64 == "" {
-			wn.log.Warnf("ws connect(%s) no identification challenge", gossipAddr)
-			return
+	identityVerified := uint32(0) // identityVerified will be used as the atomic Int for the peer we add
+	idChalRespB64 := response.Header.Get(ProtocolConectionIdentityChallengeHeader)
+	if idChalRespB64 != "" {
+		idChalResp := IdentityChallengeResponseFromB64(idChalRespB64)
+		if idChalResp.Challenge == idChallenge && idChalResp.Verify() == nil {
+			identityVerified = 1
 		}
-		idChalResp = IdentityChallengeResponseFromB64(idChalRespB64)
-		// if the identification challenge response is not correctly signed, do not proceed
-		if err = idChalResp.verify(); err != nil {
-			wn.log.Warnf("ws connect(%s) failed identification challenge signature: %s", gossipAddr, err.Error())
-			return
-		}
-		// if the signed challenge does not return our original challenge, do not proceed
-		if idChalResp.Challenge != idChallenge {
-			wn.log.Warnf("ws connect(%s) failed identification challenge match: %s", gossipAddr, idChallenge)
-			return
-		}
-		// now that we have validated the identity challenge, we can proceed and treat this peer as validated
-		peerPublicKey = idChalResp.Key
-		// if we already have a verified peer using this key, do not proceed
+	}
+
+	// if we are certain this peer fits this identity, potentially deduplicate the connection
+	// if a connection exists from that identity already
+	if identityVerified == 1 {
 		wn.peersLock.RLock()
-		existingPeer := wn.peersByID[peerPublicKey]
-		wn.peersLock.RUnlock()
-		if existingPeer != nil &&
-			atomic.LoadUint32(&existingPeer.identityVerified) == 1 {
-			wn.log.Warnf("ws connect(%s) already connected", gossipAddr)
+		if _, exists := wn.peersByID[peerPublicKey]; exists {
+			wn.log.Warnf("peer connection (%s) deduplicated because the identity is already known: %s", gossipAddr, peerPublicKey)
 			return
 		}
+		wn.peersLock.RUnlock()
 	}
 
 	throttledConnection := false
@@ -2298,7 +2304,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		throttledOutgoingConnection: throttledConnection,
 		version:                     matchingVersion,
 		identity:                    peerPublicKey,
-		identityVerified:            0,
+		identityVerified:            identityVerified,
 		features:                    decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
@@ -2317,7 +2323,9 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 
 	wn.maybeSendMessagesOfInterest(peer, nil)
 
-	if shouldSupportIdentityChallenge(matchingVersion) {
+	// if the peer's response contained a verified identity challenge response, send identity verification to the peer
+	// this peer has not yet seen a round-trip of a challenge, so we sign and send the challenge from the response once WS connection is up
+	if identityVerified == 1 {
 		sig := wn.identityKeys.SignBytes(idChalResp.ResponseChallenge[:])
 		err = SendIdentityChallengeVerification(peer, sig)
 		if err != nil {
@@ -2453,7 +2461,10 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 	if peer.peerIndex < len(wn.peers) && wn.peers[peer.peerIndex] == peer {
 		heap.Remove(peersHeap{wn}, peer.peerIndex)
 		wn.prioTracker.removePeer(peer)
-		delete(wn.peersByID, peer.identity)
+		// remove this peer from the identity map if it is there
+		if wn.peersByID[peer.identity] == peer {
+			delete(wn.peersByID, peer.identity)
+		}
 		if peer.throttledOutgoingConnection {
 			atomic.AddInt32(&wn.throttledOutgoingConnections, int32(1))
 		}
@@ -2465,17 +2476,21 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
+	// simple duplicate *pointer* check. should never trigger given the callers to addPeer
+	// TODO: remove this after making sure it is safe to do so
 	for _, p := range wn.peers {
 		if p == peer {
 			wn.log.Errorf("dup peer added %#v", peer)
 			return
 		}
 	}
-	heap.Push(peersHeap{wn}, peer)
-	wn.prioTracker.setPriority(peer, peer.prioAddress, peer.prioWeight)
-	if peer.identity != [32]byte{} {
+
+	// if the peer has an identity and is verified, load it into the peersByID map
+	if peer.identity != [32]byte{} && atomic.LoadUint32(&peer.identityVerified) == 1 {
 		wn.peersByID[peer.identity] = peer
 	}
+	heap.Push(peersHeap{wn}, peer)
+	wn.prioTracker.setPriority(peer, peer.prioAddress, peer.prioWeight)
 	atomic.AddInt32(&wn.peersChangeCounter, 1)
 	wn.countPeersSetGauges()
 	if len(wn.peers) >= wn.config.GossipFanout {

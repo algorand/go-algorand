@@ -30,46 +30,37 @@ import (
 // ProtocolConectionIdentityChallengeHeader is used to exchange IdentityChallenges
 const ProtocolConectionIdentityChallengeHeader = "X-Algorand-IdentityChallenge"
 
-// minimumProtocolVersion is used to evaluate if a peer's supported protocol
-// should include identityChallenge exchange. {2, 3} represents version 2.3
-var minimumProtocolVersion = [2]int64{2, 3}
-
-func shouldSupportIdentityChallenge(v string) bool {
-	maj, min, err := versionToMajorMinor(v)
-	if err != nil {
-		return false
-	}
-	if maj < minimumProtocolVersion[0] {
-		return false
-	}
-	if maj > minimumProtocolVersion[0] {
-		return true
-	}
-	if min < minimumProtocolVersion[1] {
-		return false
-	}
-	return true
-}
-
 type identityChallenge struct {
 	Key       crypto.PublicKey `codec:"pk"`
 	Challenge [32]byte         `codec:"c"`
+	Address   string           `codec:"a"`
 	Signature crypto.Signature `codec:"s"`
 }
 
 type identityChallengeResponse struct {
-	identityChallenge
-	ResponseChallenge [32]byte `codec:"rc"`
+	Key               crypto.PublicKey `codec:"pk"`
+	Challenge         [32]byte         `codec:"c"`
+	ResponseChallenge [32]byte         `codec:"rc"`
+	Signature         crypto.Signature `codec:"s"`
 }
 
-// NewIdentityChallenge creates an IdentityChallenge with randomized 32byte Challenge
-func NewIdentityChallenge(p crypto.PublicKey) identityChallenge {
+// NewIdentityChallengeAndHeader will create an identityChallenge, and will return the underlying 32 byte challenge itself,
+// and the Signed and B64 encoded header of the challenge object
+func NewIdentityChallengeAndHeader(keys *crypto.SignatureSecrets, addr string) ([32]byte, string) {
 	c := identityChallenge{
-		Key:       p,
+		Key:       keys.SignatureVerifier,
 		Challenge: [32]byte{},
+		Address:   addr,
 	}
 	crypto.RandBytes(c.Challenge[:])
-	return c
+	return c.Challenge, c.signAndEncodeB64(keys)
+}
+
+func (i *identityChallenge) signAndEncodeB64(s *crypto.SignatureSecrets) string {
+	i.Signature = s.SignBytes(i.signableBytes())
+	enc := protocol.EncodeReflect(i)
+	b64enc := base64.StdEncoding.EncodeToString(enc)
+	return b64enc
 }
 
 func (i identityChallenge) signableBytes() []byte {
@@ -77,33 +68,12 @@ func (i identityChallenge) signableBytes() []byte {
 		[]byte("IC"),
 		i.Challenge[:],
 		i.Key[:],
+		[]byte(i.Address),
 	},
 		[]byte(":"))
 }
 
-func (i identityChallenge) sign(s *crypto.SignatureSecrets) crypto.Signature {
-	return s.SignBytes(i.signableBytes())
-}
-
-func (i identityChallenge) verify() error {
-	b := i.signableBytes()
-	verified := i.Key.VerifyBytes(b, i.Signature)
-	if !verified {
-		return fmt.Errorf("included signature does not verify identity challenge")
-	}
-	return nil
-}
-
-// SignAndEncodeB64 signs the identityChallenge, attaches a signature, and converts
-// the structure to a b64 and msgpk'd string to be included as a header
-func (i *identityChallenge) SignAndEncodeB64(s *crypto.SignatureSecrets) string {
-	i.Signature = i.sign(s)
-	enc := protocol.EncodeReflect(i)
-	b64enc := base64.StdEncoding.EncodeToString(enc)
-	return b64enc
-}
-
-// IdentityChallengeFromB64 will return an Identity Challenge from the B64 header string
+// IdentityChallengeFromB64 will decode a B64 string (from a HTTP request header) and will build an IdentityChallenge from it
 func IdentityChallengeFromB64(i string) identityChallenge {
 	msg, err := base64.StdEncoding.DecodeString(i)
 	if err != nil {
@@ -117,25 +87,32 @@ func IdentityChallengeFromB64(i string) identityChallenge {
 	return ret
 }
 
-// SignedEncodedB64IdentityChallenge creates an encoded header string for identityChallenges,
-// provided signing keys. It simply wraps the process of creating and encoding the object.
-// Also returns the challenge generated
-func SignedEncodedB64IdentityChallenge(keys *crypto.SignatureSecrets) ([32]byte, string) {
-	c := NewIdentityChallenge(keys.SignatureVerifier)
-	return c.Challenge, c.SignAndEncodeB64(keys)
+// Verify checks that the signature included in the identityChallenge was indeed created by the included Key
+func (i identityChallenge) Verify() error {
+	verified := i.Key.VerifyBytes(i.signableBytes(), i.Signature)
+	if !verified {
+		return fmt.Errorf("include signature does not verify identity challenge")
+	}
+	return nil
 }
 
-// NewIdentityChallengeResponse creates an IdentityChallengeResponse from a received identityChallenge
-func NewIdentityChallengeResponse(p crypto.PublicKey, id identityChallenge) identityChallengeResponse {
-	c := identityChallengeResponse{
-		identityChallenge: identityChallenge{
-			Key:       p,
-			Challenge: id.Challenge,
-		},
+// NewIdentityResponseChallengeAndHeader will generate an Identity Challenge Response from the given Identity Challenge,
+// and will return the "Response Challenge" (a novel challenge) and the signed and b64 encoded header for response
+func NewIdentityResponseChallengeAndHeader(keys *crypto.SignatureSecrets, c identityChallenge) ([32]byte, string) {
+	r := identityChallengeResponse{
+		Key:               keys.SignatureVerifier,
+		Challenge:         c.Challenge,
 		ResponseChallenge: [32]byte{},
 	}
-	crypto.RandBytes(c.ResponseChallenge[:])
-	return c
+	crypto.RandBytes(r.ResponseChallenge[:])
+	return r.ResponseChallenge, r.signAndEncodeB64(keys)
+}
+
+func (i *identityChallengeResponse) signAndEncodeB64(s *crypto.SignatureSecrets) string {
+	i.Signature = s.SignBytes(i.signableBytes())
+	enc := protocol.EncodeReflect(i)
+	b64enc := base64.StdEncoding.EncodeToString(enc)
+	return b64enc
 }
 
 func (i identityChallengeResponse) signableBytes() []byte {
@@ -146,19 +123,6 @@ func (i identityChallengeResponse) signableBytes() []byte {
 		i.Key[:],
 	},
 		[]byte(":"))
-}
-
-func (i identityChallengeResponse) sign(s *crypto.SignatureSecrets) crypto.Signature {
-	return s.SignBytes(i.signableBytes())
-}
-
-func (i identityChallengeResponse) verify() error {
-	b := i.signableBytes()
-	verified := i.Key.VerifyBytes(b, i.Signature)
-	if !verified {
-		return fmt.Errorf("included signature does not verify identity challenge")
-	}
-	return nil
 }
 
 // IdentityChallengeResponseFromB64 will return an Identity Challenge Response from the B64 header string
@@ -175,22 +139,19 @@ func IdentityChallengeResponseFromB64(i string) identityChallengeResponse {
 	return ret
 }
 
-func (i *identityChallengeResponse) SignAndEncodeB64(s *crypto.SignatureSecrets) string {
-	i.Signature = i.sign(s)
-	enc := protocol.EncodeReflect(i)
-	b64enc := base64.StdEncoding.EncodeToString(enc)
-	return b64enc
+// Verify checks that the signature included in the identityChallengeResponse was indeed created by the included Key
+func (i identityChallengeResponse) Verify() error {
+	b := i.signableBytes()
+	verified := i.Key.VerifyBytes(b, i.Signature)
+	if !verified {
+		return fmt.Errorf("included signature does not verify identity challenge")
+	}
+	return nil
 }
 
-// SignedEncodedB64IdentityChallengeResponse will create a new IdentityChallengeResponse,
-// and will sign and encode to B64 for header inclusion. The challenge generated is also returned
-func SignedEncodedB64IdentityChallengeResponse(keys *crypto.SignatureSecrets, c identityChallenge) ([32]byte, string) {
-	r := NewIdentityChallengeResponse(keys.SignatureVerifier, c)
-	return r.ResponseChallenge, r.SignAndEncodeB64(keys)
-}
-
-// SendIdentityChallengeVerification will send a signaturure of a challenge which was assigned
-// by the wsPeer
+// SendIdentityChallengeVerification sends the 3rd (final) message for signature handshake between two peers.
+// it simply sends across a signature of a challenge which the potential peer has given it to sign.
+// at this stage in the peering process, the peer hasn't had an opportunity to verify our supposed identity
 func SendIdentityChallengeVerification(wp *wsPeer, sig crypto.Signature) error {
 	mbytes := append([]byte(protocol.NetIDVerificationTag), sig[:]...)
 	sent := wp.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, time.Now())
@@ -200,16 +161,15 @@ func SendIdentityChallengeVerification(wp *wsPeer, sig crypto.Signature) error {
 	return nil
 }
 
-// identityVerificationHandler processes identity challenge verification messages,
-// which are websocket messages containing a signed signature which should match with the
-// peer's assigned challenge
+// identityVerificationHandler recieves a signature over websocket, and confirms it matches the
+// sender's identity and the challenge that was assigned to it. If it verifies, the network will mark it verified,
+// and will do any related record keeping it needs
 func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	peer := message.Sender.(*wsPeer)
 	sig := crypto.Signature{}
 	copy(sig[:], message.Data[:64])
-	verified := peer.identity.VerifyBytes(peer.identityChallenge[:], sig)
-	if verified {
-		peer.IdentityVerified()
+	if peer.identity.VerifyBytes(peer.identityChallenge[:], sig) {
+		peer.net.MarkVerified(peer)
 	}
 	return OutgoingMessage{}
 }
