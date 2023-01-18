@@ -624,7 +624,6 @@ func (wn *WebsocketNetwork) setPeersByID(p *wsPeer) error {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
 	existingPeer, exists := wn.peersByID[p.identity]
-	// if there is already a peer in the map by this identity and it is not this peer, disconnect this peer for being duplicate
 	if exists {
 		if existingPeer != p {
 			return fmt.Errorf("peer identity (%s) already in use", p.identity)
