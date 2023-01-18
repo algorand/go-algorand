@@ -134,9 +134,9 @@ func (spw *Worker) getProtoLatest() (*config.ConsensusParams, error) {
 }
 
 func (spw *Worker) getStateProofMessage(round basics.Round, proto *config.ConsensusParams) (stateproofmsg.Message, error) {
-	dbBuilder, err := spw.loadBuilderFromDB(round)
+	msg, err := spw.loadMessageFromDB(round)
 	if err == nil {
-		return dbBuilder.Message, nil
+		return msg, nil
 	}
 
 	if !errors.Is(err, sql.ErrNoRows) {

@@ -1454,10 +1454,7 @@ func TestWorkerHandleSigWrongSignature(t *testing.T) {
 
 	fwd, err := w.handleSig(msg, msg.SignerAddress)
 	require.Equal(t, network.Disconnect, fwd)
-	expected2 := fmt.Errorf("%w: %v",
-		merklesignature.ErrSignatureSchemeVerificationFailed,
-		merklearray.ErrRootMismatch)
-	require.Equal(t, expected2, err)
+	require.ErrorIs(t, err, errSignatureVerification)
 }
 
 // relays reject signatures for address not in top N
@@ -1502,9 +1499,7 @@ func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
 
 	fwd, err := w.handleSig(msg, msg.SignerAddress)
 	require.Equal(t, network.Disconnect, fwd)
-	expected3 := fmt.Errorf("handleSig: %v not in participants for %d",
-		msg.SignerAddress, msg.Round)
-	require.Equal(t, expected3, err)
+	require.ErrorIs(t, err, errAddressNotInVoters)
 }
 
 // Signature already part of the builderForRound, ignore
@@ -1538,7 +1533,7 @@ func TestWorkerHandleSigAlreadyIn(t *testing.T) {
 	})
 	require.Equal(t, network.OutgoingMessage{Action: network.Broadcast}, reply)
 
-	// The sig is already there. Shoud get error
+	// The sig is already there. Should get error
 	reply = w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
 	})

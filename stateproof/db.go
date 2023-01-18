@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -210,6 +211,24 @@ func getBuilder(tx *sql.Tx, rnd basics.Round) (builder, error) {
 	bldr.Builder.AllocSigs()
 
 	return bldr, nil
+}
+
+// This function is used to fetch only the StateProof Message from within the builder stored on disk.
+// In the future, StateProof messages should perhaps be stored in their own table and this implementation will change.
+func getMessage(tx *sql.Tx, rnd basics.Round) (stateproofmsg.Message, error) {
+	row := tx.QueryRow(selectBuilderForRound, rnd)
+	var rawBuilder []byte
+	err := row.Scan(&rawBuilder)
+	if err != nil {
+		return stateproofmsg.Message{}, fmt.Errorf("getMessage: builder for round %d not found in the database: %w", rnd, err)
+	}
+	var bldr builder
+	err = protocol.Decode(rawBuilder, &bldr)
+	if err != nil {
+		return stateproofmsg.Message{}, fmt.Errorf("getMessage: builder for round %d failed to decode: %w", rnd, err)
+	}
+
+	return bldr.Message, nil
 }
 
 func builderExistInDB(tx *sql.Tx, rnd basics.Round) (bool, error) {

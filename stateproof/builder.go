@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -119,6 +120,21 @@ func (spw *Worker) loadBuilderFromDB(rnd basics.Round) (builder, error) {
 	return buildr, nil
 }
 
+// loadMessageFromDB loads a StateProof Message from disk.
+func (spw *Worker) loadMessageFromDB(rnd basics.Round) (stateproofmsg.Message, error) {
+	var msg stateproofmsg.Message
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var err2 error
+		msg, err2 = getMessage(tx, rnd)
+		return err2
+	})
+	if err != nil {
+		return stateproofmsg.Message{}, err
+	}
+
+	return msg, nil
+}
+
 func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
 	var sigs []pendingSig
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -131,7 +147,10 @@ func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
 	}
 
 	for _, sig := range sigs {
-		spw.insertSigToBuilder(buildr, &sig)
+		err = buildr.insertSig(&sig, false)
+		if err != nil {
+			spw.log.Warn(err)
+		}
 	}
 	return nil
 }
@@ -252,32 +271,34 @@ func (spw *Worker) getAllOnlineBuilderRounds() ([]basics.Round, error) {
 	return rnds, err
 }
 
-func (spw *Worker) insertSigToBuilder(builderForRound *builder, sig *pendingSig) {
-	rnd := builderForRound.Round
-	pos, ok := builderForRound.AddrToPos[sig.signer]
+var errAddressNotInVoters = errors.New("cannot find address in builder")                 // Address was not a part of the voters for this StateProof (top N accounts)
+var errFailedToAddSigAtPos = errors.New("could not add signature to builder")            // Position was out of array bounds or signature already present
+var errSigAlreadyPresentAtPos = errors.New("signature already present at this position") // Signature already present at this position
+var errSignatureVerification = errors.New("error while verifying signature")             // Signature failed cryptographic verification
+
+func (b *builder) insertSig(s *pendingSig, verify bool) error {
+	rnd := b.Round
+	pos, ok := b.AddrToPos[s.signer]
 	if !ok {
-		spw.log.Warnf("insertSigToBuilder: cannot find %v in round %d", sig.signer, rnd)
-		return
+		return fmt.Errorf("insertSig: %w (%v not in participants for round %d)", errAddressNotInVoters, s.signer, rnd)
 	}
 
-	isPresent, err := builderForRound.Present(pos)
+	isPresent, err := b.Present(pos)
 	if err != nil {
-		spw.log.Warnf("insertSigToBuilder: failed to invoke builderForRound.Present on pos %d - %v", pos, err)
-		return
+		return fmt.Errorf("insertSig: %w (failed to invoke builderForRound.Present on pos %d - %v)", errFailedToAddSigAtPos, pos, err)
 	}
 	if isPresent {
-		spw.log.Warnf("insertSigToBuilder: cannot add %v in round %d: position %d already added", sig.signer, rnd, pos)
-		return
+		return errSigAlreadyPresentAtPos
 	}
 
-	if err := builderForRound.IsValid(pos, &sig.sig, false); err != nil {
-		spw.log.Warnf("insertSigToBuilder: cannot add %v in round %d: %v", sig.signer, rnd, err)
-		return
+	if err = b.IsValid(pos, &s.sig, verify); err != nil {
+		return fmt.Errorf("insertSig: %w (cannot add %v in round %d: %v)", errSignatureVerification, s.signer, rnd, err)
 	}
-	if err := builderForRound.Add(pos, sig.sig); err != nil {
-		spw.log.Warnf("insertSigToBuilder: error while adding sig. inner error: %v", err)
-		return
+	if err = b.Add(pos, s.sig); err != nil {
+		return fmt.Errorf("insertSig: %w (%v)", errFailedToAddSigAtPos, err)
 	}
+
+	return nil
 }
 
 func (spw *Worker) handleSigMessage(msg network.IncomingMessage) network.OutgoingMessage {
@@ -367,36 +388,30 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		spw.log.Infof("spw.handleSig: starts gathering signatures for round %d", sfa.Round)
 	}
 
-	pos, ok := builderForRound.AddrToPos[sfa.SignerAddress]
-	if !ok {
-		return network.Disconnect, fmt.Errorf("handleSig: %v not in participants for %d", sfa.SignerAddress, sfa.Round)
+	sig := pendingSig{
+		signer:       sfa.SignerAddress,
+		sig:          sfa.Sig,
+		fromThisNode: sender == nil,
 	}
-
-	if isPresent, err := builderForRound.Present(pos); err != nil || isPresent {
-		// Signature already part of the builderForRound, ignore.
+	err := builderForRound.insertSig(&sig, true)
+	if errors.Is(err, errSigAlreadyPresentAtPos) {
+		// Safe to ignore this error as it means we already have a valid signature for this address
 		return network.Ignore, nil
 	}
-
-	if err := builderForRound.IsValid(pos, &sfa.Sig, true); err != nil {
+	if errors.Is(err, errAddressNotInVoters) || errors.Is(err, errSignatureVerification) {
 		return network.Disconnect, err
 	}
+	if err != nil { // errFailedToAddSigAtPos and fallback in case of unknown error
+		return network.Ignore, err
+	}
 
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return addPendingSig(tx, sfa.Round, pendingSig{
-			signer:       sfa.SignerAddress,
-			sig:          sfa.Sig,
-			fromThisNode: sender == nil,
-		})
+	err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		return addPendingSig(tx, sfa.Round, sig)
 	})
 	if err != nil {
 		return network.Ignore, err
 	}
-	// validated that we can add the sig previously.
-	if err := builderForRound.Add(pos, sfa.Sig); err != nil {
-		// only Present called from Add returns an error which is already
-		// passed in the call above.
-		return network.Ignore, err
-	}
+
 	return network.Broadcast, nil
 }
 
