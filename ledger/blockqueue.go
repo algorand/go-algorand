@@ -63,30 +63,33 @@ func (bq *blockQueue) start() error {
 	bq.mu.Lock()
 	defer bq.mu.Unlock()
 
-	if !bq.running {
-		if bq.closed != nil {
-			// a previus close() is still waiting on a previous syncer() to finish
-			oldsyncer := bq.closed
-			bq.mu.Unlock()
-			<-oldsyncer
-			bq.mu.Lock()
-		}
-		bq.running = true
-		bq.closed = make(chan struct{})
-		ledgerBlockqInitCount.Inc(nil)
-		start := time.Now()
-		err := bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			var err0 error
-			bq.lastCommitted, err0 = blockdb.BlockLatest(tx)
-			return err0
-		})
-		ledgerBlockqInitMicros.AddMicrosecondsSince(start, nil)
-		if err != nil {
-			return err
-		}
-
-		go bq.syncer()
+	if bq.running {
+		// this should be harmless, but it should also be impossible
+		bq.l.log.Warn("blockQueue.start() already started")
+		return nil
 	}
+	if bq.closed != nil {
+		// a previus close() is still waiting on a previous syncer() to finish
+		oldsyncer := bq.closed
+		bq.mu.Unlock()
+		<-oldsyncer
+		bq.mu.Lock()
+	}
+	bq.running = true
+	bq.closed = make(chan struct{})
+	ledgerBlockqInitCount.Inc(nil)
+	start := time.Now()
+	err := bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var err0 error
+		bq.lastCommitted, err0 = blockdb.BlockLatest(tx)
+		return err0
+	})
+	ledgerBlockqInitMicros.AddMicrosecondsSince(start, nil)
+	if err != nil {
+		return err
+	}
+
+	go bq.syncer()
 	return nil
 }
 
