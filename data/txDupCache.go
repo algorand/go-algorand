@@ -244,11 +244,13 @@ func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
 		d = &dn
 	}
 
+	// Do a final check to see if another copy of the transaction got to the write lock at the same time.
+	// No need to rehash since we have it already
 	if _, found := c.cur[*d]; found {
-		return nil, true
+		return d, true
 	}
 	if _, found := c.prev[*d]; found {
-		return nil, true
+		return d, true
 	}
 
 	c.cur[*d] = struct{}{}
