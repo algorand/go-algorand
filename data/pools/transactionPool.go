@@ -576,6 +576,7 @@ func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, 
 	}
 
 	if blockHash.IsZero() {
+		// if we don't already have a block hash, calculate it now
 		blockHash = vb.Block().Digest()
 	}
 
