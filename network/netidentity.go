@@ -37,6 +37,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -101,12 +102,8 @@ func IdentityChallengeFromB64(i string) identityChallenge {
 }
 
 // Verify checks that the signature included in the identityChallenge was indeed created by the included Key
-func (i identityChallenge) Verify() error {
-	verified := i.Key.VerifyBytes(i.signableBytes(), i.Signature)
-	if !verified {
-		return fmt.Errorf("include signature does not verify identity challenge")
-	}
-	return nil
+func (i identityChallenge) Verify() bool {
+	return i.Key.VerifyBytes(i.signableBytes(), i.Signature)
 }
 
 // NewIdentityResponseChallengeAndHeader will generate an Identity Challenge Response from the given Identity Challenge,
@@ -153,13 +150,8 @@ func IdentityChallengeResponseFromB64(i string) identityChallengeResponse {
 }
 
 // Verify checks that the signature included in the identityChallengeResponse was indeed created by the included Key
-func (i identityChallengeResponse) Verify() error {
-	b := i.signableBytes()
-	verified := i.Key.VerifyBytes(b, i.Signature)
-	if !verified {
-		return fmt.Errorf("included signature does not verify identity challenge")
-	}
-	return nil
+func (i identityChallengeResponse) Verify() bool {
+	return i.Key.VerifyBytes(i.signableBytes(), i.Signature)
 }
 
 // SendIdentityChallengeVerification sends the 3rd (final) message for signature handshake between two peers.
@@ -179,9 +171,14 @@ func SendIdentityChallengeVerification(wp *wsPeer, sig crypto.Signature) error {
 // and will do any related record keeping it needs
 func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	peer := message.Sender.(*wsPeer)
+	// avoid doing work (crypto and potentially taking a lock) if the peer is already verified
+	if atomic.LoadUint32(&peer.identityVerified) == 1 {
+		return OutgoingMessage{}
+	}
 	sig := crypto.Signature{}
 	copy(sig[:], message.Data[:64])
 	if peer.identity.VerifyBytes(peer.identityChallenge[:], sig) {
+		peer.IdentityVerified()
 		peer.net.MarkVerified(peer)
 	}
 	return OutgoingMessage{}

@@ -600,39 +600,35 @@ func closeWaiter(wg *sync.WaitGroup, peer *wsPeer, deadline time.Time) {
 	peer.CloseAndWait(deadline)
 }
 
-// MarkVerified will ensure that a peer hasn't already been verified,
+// MarkVerified will confirm that a peer is verified,
 // will attempt to add the peer to the peersByID map,
 // and will disconnect the peer if it is discovered that the Identity is already in use
 func (wn *WebsocketNetwork) MarkVerified(p *wsPeer) {
-	// if this peer is already verified, it means MarkVerified has already run for this peer
-	if atomic.LoadUint32(&p.identityVerified) == 1 {
+	// guard against marking verified any peer who is not *actually* verified according to the identityVerified flag
+	if atomic.LoadUint32(&p.identityVerified) != 1 {
 		return
 	}
-	p.IdentityVerified()
-
-	// attempt to set this identity as in-use by the peer
-	// if the peer can't be set at this ID, it means it is already in-use
-	// and this peer should be disconnected
-	if err := wn.setPeersByID(p); err != nil {
+	// if the identity could not be claimed by this peer, it means the identity is in use
+	if !wn.setPeersByID(p) {
 		wn.Disconnect(p)
 	}
 }
 
 // setPeersByID will attempt to store a peer at its identity.
-// if a different peer already exists at that identity, it returns an error.
-func (wn *WebsocketNetwork) setPeersByID(p *wsPeer) error {
+// returns false if it was unable to load the peer into the given identity
+// or true otherwise (if the peer was already there, or if it was added)
+func (wn *WebsocketNetwork) setPeersByID(p *wsPeer) bool {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
 	existingPeer, exists := wn.peersByID[p.identity]
-	if exists {
-		if existingPeer != p {
-			return fmt.Errorf("peer identity (%s) already in use", p.identity)
-		}
-	} else {
-		// now that we know that the identity is unused, mark this peer as having this identity
+	if !exists {
+		// the identity is not occupied, so set it and return true
 		wn.peersByID[p.identity] = p
+		return true
 	}
-	return nil
+	// the identity is occupied, so return false if it is occupied by some *other* peer
+	// or true if it is occupied by this peer
+	return existingPeer == p
 }
 
 // DisconnectPeers shuts down all connections
@@ -1208,12 +1204,14 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	var peerPublicKey crypto.PublicKey
 	var peerIDChallenge [32]byte
-	// if the caller supplied an identity challenge, inspect it and attach a response if it is valid and meant for us
-	idChalB64 := request.Header.Get(ProtocolConectionIdentityChallengeHeader)
-	if idChalB64 != "" {
+	// if this host is set up for Connection Deduplication, attempt to participate in identity challenge exchange
+	if wn.config.ConnectionDeduplicationName != "" {
+		idChalB64 := request.Header.Get(ProtocolConectionIdentityChallengeHeader)
 		idChal := IdentityChallengeFromB64(idChalB64)
-		if idChal.Verify() == nil && idChal.Address == wn.config.ConnectionDeduplicationName {
+		// if the challenge is correctly signed, and is addressed to this host, construct an identity response and attach
+		if idChal.Address == wn.config.ConnectionDeduplicationName && idChal.Verify() {
 			challengeResponse, idChalRespHeader := NewIdentityResponseChallengeAndHeader(wn.identityKeys, idChal)
+			peerPublicKey = idChal.Key
 			peerIDChallenge = challengeResponse
 			responseHeader.Set(ProtocolConectionIdentityChallengeHeader, idChalRespHeader)
 		}
@@ -2275,8 +2273,9 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	identityVerified := uint32(0) // identityVerified will be used as the atomic Int for the peer we add
 	idChalRespB64 := response.Header.Get(ProtocolConectionIdentityChallengeHeader)
 	if idChalRespB64 != "" {
-		idChalResp := IdentityChallengeResponseFromB64(idChalRespB64)
-		if idChalResp.Challenge == idChallenge && idChalResp.Verify() == nil {
+		idChalResp = IdentityChallengeResponseFromB64(idChalRespB64)
+		if idChalResp.Challenge == idChallenge && idChalResp.Verify() {
+			peerPublicKey = idChalResp.Key
 			identityVerified = 1
 		}
 	}
