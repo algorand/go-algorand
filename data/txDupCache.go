@@ -230,6 +230,12 @@ func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
 		}
 	}
 
+	// Do another check to see if another copy of the transaction won the race to write it to the cache
+	// Only check current to save a lookup since swaps are rare and no need to re-hash
+	if _, found := c.cur[*d]; found {
+		return d, found
+	}
+
 	if len(c.cur) >= c.maxSize {
 		c.innerSwap(false)
 		ptr := saltedPool.Get()
@@ -242,15 +248,6 @@ func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
 
 		dn := crypto.Digest(blake2b.Sum256(toBeHashed))
 		d = &dn
-	}
-
-	// Do a final check to see if another copy of the transaction got to the write lock at the same time.
-	// No need to rehash since we have it already
-	if _, found := c.cur[*d]; found {
-		return d, true
-	}
-	if _, found := c.prev[*d]; found {
-		return d, true
 	}
 
 	c.cur[*d] = struct{}{}
