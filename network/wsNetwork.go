@@ -2285,11 +2285,12 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	// if a connection exists from that identity already
 	if identityVerified == 1 {
 		wn.peersLock.RLock()
-		if _, exists := wn.peersByID[peerPublicKey]; exists {
+		_, exists := wn.peersByID[peerPublicKey]
+		wn.peersLock.RUnlock()
+		if exists {
 			wn.log.Warnf("peer connection (%s) deduplicated because the identity is already known: %s", gossipAddr, peerPublicKey)
 			return
 		}
-		wn.peersLock.RUnlock()
 	}
 
 	throttledConnection := false
