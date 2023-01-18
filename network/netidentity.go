@@ -175,7 +175,7 @@ func SendIdentityChallengeVerification(wp *wsPeer, sig crypto.Signature) error {
 }
 
 // identityVerificationHandler recieves a signature over websocket, and confirms it matches the
-// sender's identity and the challenge that was assigned to it. If it verifies, the network will mark it verified,
+// sender's claimed identity and the challenge that was assigned to it. If it verifies, the network will mark it verified,
 // and will do any related record keeping it needs
 func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	peer := message.Sender.(*wsPeer)
