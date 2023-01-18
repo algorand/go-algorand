@@ -80,17 +80,20 @@ jobs:
       - name: Run golangci-lint with reviewdog
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: >
-          ./cicdtmp/golangci-lint/golangci-lint-cgo run
-          --out-format line-number
-          -c .golangci-warnings.yml
-          --allow-parallel-runners
-          | reviewdog
-          -f=golangci-lint
-          -name="Lint Warnings"
-          -reporter=github-check
-          -filter-mode=added
-          -fail-on-error=true
+        run: |
+          set -e
+
+          ./cicdtmp/golangci-lint/golangci-lint-cgo run \
+          --out-format line-number \
+          -c .golangci-warnings.yml \
+          --allow-parallel-runners > temp_golangci-lint-cgo.txt
+
+          cat temp_golangci-lint-cgo.txt | reviewdog \
+          -f=golangci-lint \
+          -name="Lint Warnings" \
+          -reporter=github-check \
+          -filter-mode=added \
+          -fail-on-error=true \
           -level=warning
       - name: Slack Notification
         env:

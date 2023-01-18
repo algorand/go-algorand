@@ -124,7 +124,7 @@ func doesParameterNameMatch(call *ast.CallExpr, fn *ast.FuncDecl) bool {
 	for _, oneArg := range call.Args {
 
 		if realArg, ok := oneArg.(*ast.Ident); ok {
-			if realArg != nil && realArg.Obj != nil && realArg.Obj.Name == fn.Type.Params.List[0].Names[0].Obj.Name {
+			if realArg.Obj.Name == fn.Type.Params.List[0].Names[0].Obj.Name {
 				return true
 			}
 		}
