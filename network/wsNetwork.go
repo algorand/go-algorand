@@ -790,6 +790,7 @@ func (wn *WebsocketNetwork) setup() {
 	if wn.slowWritingPeerMonitorInterval == 0 {
 		wn.slowWritingPeerMonitorInterval = slowWritingPeerMonitorInterval
 	}
+
 	readBufferLen := wn.config.IncomingConnectionsLimit + wn.config.GossipFanout
 	if readBufferLen < 100 {
 		readBufferLen = 100
@@ -809,6 +810,7 @@ func (wn *WebsocketNetwork) setup() {
 	wn.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag})
 	wn.lastNetworkAdvance = time.Now().UTC()
 	wn.handlers.log = wn.log
+
 	// set our supported versions
 	if wn.config.NetworkProtocolVersion != "" {
 		wn.supportedProtocolVersions = []string{wn.config.NetworkProtocolVersion}
@@ -2203,6 +2205,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 
 	idChallenge := [32]byte{}
 	idChallengeHeader := ""
+	// only attach connection deduplication headers if configured with a deduplication name
 	if wn.config.ConnectionDeduplicationName != "" {
 		idChallenge, idChallengeHeader = NewIdentityChallengeAndHeader(wn.identityKeys, gossipAddr)
 		requestHeader.Add(ProtocolConectionIdentityChallengeHeader, idChallengeHeader)
