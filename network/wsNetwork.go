@@ -2342,7 +2342,6 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	outgoingPeers.Set(uint64(wn.numOutgoingPeers()))
 
 	if wn.prioScheme != nil {
-		// priority challenge
 		challenge := response.Header.Get(PriorityChallengeHeader)
 		if challenge != "" {
 			resp := wn.prioScheme.MakePrioResponse(challenge)
