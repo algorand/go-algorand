@@ -52,7 +52,11 @@ func (spw *Worker) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Rou
 			continue
 		}
 
-		builderExists, err := spw.builderExists(rnd)
+		var builderExists bool
+		err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			builderExists, err = builderExistInDB(tx, rnd)
+			return err
+		})
 		if err != nil {
 			spw.log.Warnf("OnPrepareVoterCommit(%d): could not check builder existence, assuming it doesn't exist: %v\n", rnd, err)
 		} else if builderExists {
@@ -398,27 +402,6 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 	}
 
 	return network.Broadcast, nil
-}
-
-func (spw *Worker) sigExists(round basics.Round, account basics.Address) (bool, error) {
-	var exists bool
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		res, err := sigExistsInDB(tx, round, account)
-		exists = res
-		return err
-	})
-	return exists, err
-}
-
-func (spw *Worker) builderExists(rnd basics.Round) (bool, error) {
-	var exist bool
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		var err2 error
-		exist, err2 = builderExistInDB(tx, rnd)
-		return err2
-	})
-
-	return exist, err
 }
 
 func (spw *Worker) builder(latest basics.Round) {

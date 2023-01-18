@@ -431,7 +431,11 @@ func (s *testWorkerStubs) isRoundSigned(a *require.Assertions, w *Worker, round 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, key := range s.keys {
-		accountSigExists, err := w.sigExists(round, key.Parent)
+		var accountSigExists bool
+		err := w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			accountSigExists, err = sigExistsInDB(tx, round, key.Parent)
+			return err
+		})
 		a.NoError(err)
 		if accountSigExists {
 			return true
@@ -1890,14 +1894,22 @@ func TestWorkerCreatesBuildersOnCommit(t *testing.T) {
 	// We start on round 511, so the callback should be called when committing the next round.
 	s.advanceRoundsWithoutStateProof(t, 2)
 
-	builderExists, err := w.builderExists(firstBuilderRound)
+	var builderExists bool
+	err := w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		builderExists, err = builderExistInDB(tx, firstBuilderRound)
+		return err
+	})
 	a.NoError(err)
 	a.False(builderExists)
 
 	// We leave one round uncommitted to be able to easily discern the stateProofNextRound.
 	s.mockCommit(firstBuilderRound)
 
-	builderExists, err = w.builderExists(firstBuilderRound)
+	builderExists = false
+	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		builderExists, err = builderExistInDB(tx, firstBuilderRound)
+		return err
+	})
 	a.NoError(err)
 	a.True(builderExists)
 }
