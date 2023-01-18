@@ -37,10 +37,12 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestIdentityChallengeEncodeDecodeVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var seed crypto.Seed
 	crypto.RandBytes(seed[:])
 	secrets := crypto.GenerateSignatureSecrets(seed)
@@ -65,6 +67,7 @@ func TestIdentityChallengeEncodeDecodeVerify(t *testing.T) {
 }
 
 func TestIdentityChallengeFailedDecode(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	idChal := IdentityChallengeFromB64("NOT VALID BASE-64!")
 	assert.Equal(t, identityChallenge{}, idChal)
 	// confirm the empty returned challenge can't Verify
@@ -72,6 +75,7 @@ func TestIdentityChallengeFailedDecode(t *testing.T) {
 }
 
 func TestIdentityChallengeResponseEncodeDecodeVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var seed crypto.Seed
 	crypto.RandBytes(seed[:])
 	secrets := crypto.GenerateSignatureSecrets(seed)
@@ -99,6 +103,7 @@ func TestIdentityChallengeResponseEncodeDecodeVerify(t *testing.T) {
 }
 
 func TestIdentityChallengeResponseFailedDecode(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	idChalResp := IdentityChallengeResponseFromB64("NOT VALID BASE-64!")
 	assert.Equal(t, identityChallengeResponse{}, idChalResp)
 	// confirm the empty returned challenge can't Verify
@@ -106,6 +111,7 @@ func TestIdentityChallengeResponseFailedDecode(t *testing.T) {
 }
 
 func TestIdentityVerificationHandler(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var seed crypto.Seed
 	crypto.RandBytes(seed[:])
 	chalSecrets := crypto.GenerateSignatureSecrets(seed)
