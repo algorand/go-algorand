@@ -1210,16 +1210,15 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	var peerPublicKey crypto.PublicKey
 	var peerIDChallenge [32]byte
-	// if the caller supplied an identity challenge, inspect it and possibly attach a response
+	// if the caller supplied an identity challenge, inspect it and attach a response if it is valid and meant for us
 	idChalB64 := request.Header.Get(ProtocolConectionIdentityChallengeHeader)
 	if idChalB64 != "" {
 		idChal := IdentityChallengeFromB64(idChalB64)
-		// confirm the signature verifies
-		// confirm the address matches what's in the config
-		// if these don't check out, break
-		challengeResponse, idChalRespHeader := NewIdentityResponseChallengeAndHeader(wn.identityKeys, idChal)
-		peerIDChallenge = challengeResponse
-		responseHeader.Set(ProtocolConectionIdentityChallengeHeader, idChalRespHeader)
+		if idChal.Verify() == nil && idChal.Address == wn.config.ConnectionDeduplicationName {
+			challengeResponse, idChalRespHeader := NewIdentityResponseChallengeAndHeader(wn.identityKeys, idChal)
+			peerIDChallenge = challengeResponse
+			responseHeader.Set(ProtocolConectionIdentityChallengeHeader, idChalRespHeader)
+		}
 	}
 
 	conn, err := wn.upgrader.Upgrade(response, request, responseHeader)
@@ -2046,6 +2045,9 @@ const InstanceNameHeader = "X-Algorand-InstanceName"
 // PriorityChallengeHeader HTTP header informs a client about the challenge it should sign to increase network priority.
 const PriorityChallengeHeader = "X-Algorand-PriorityChallenge"
 
+// ProtocolConectionIdentityChallengeHeader is used to exchange IdentityChallenges
+const ProtocolConectionIdentityChallengeHeader = "X-Algorand-IdentityChallenge"
+
 // TooManyRequestsRetryAfterHeader HTTP header let the client know when to make the next connection attempt
 const TooManyRequestsRetryAfterHeader = "Retry-After"
 
@@ -2203,8 +2205,12 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		requestHeader.Add(ProtocolAcceptVersionHeader, supportedProtocolVersion)
 	}
 
-	idChallenge, idChallengeHeader := NewIdentityChallengeAndHeader(wn.identityKeys, gossipAddr)
-	requestHeader.Add(ProtocolConectionIdentityChallengeHeader, idChallengeHeader)
+	idChallenge := [32]byte{}
+	idChallengeHeader := ""
+	if wn.config.ConnectionDeduplicationName != "" {
+		idChallenge, idChallengeHeader = NewIdentityChallengeAndHeader(wn.identityKeys, gossipAddr)
+		requestHeader.Add(ProtocolConectionIdentityChallengeHeader, idChallengeHeader)
+	}
 
 	// for backward compatibility, include the ProtocolVersion header as well.
 	requestHeader.Set(ProtocolVersionHeader, wn.protocolVersion)
@@ -2276,7 +2282,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		}
 	}
 
-	// if we are certain this peer fits this identity, potentially deduplicate the connection
+	// if we are certain this peer is this identity, potentially deduplicate the connection
 	// if a connection exists from that identity already
 	if identityVerified == 1 {
 		wn.peersLock.RLock()

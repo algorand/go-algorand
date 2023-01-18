@@ -53,6 +53,11 @@ type Local struct {
 	GossipFanout int    `version[0]:"4"`
 	NetAddress   string `version[0]:""`
 
+	// wsNetwork.go
+	// if set, the node will use Identity based Connection Deduplication,
+	// and will use this name to ensure identities sent to it are meant for this node
+	ConnectionDeduplicationName string `version[0]:""`
+
 	// 1 * time.Minute = 60000000000 ns
 	ReconnectTime time.Duration `version[0]:"60" version[1]:"60000000000"`
 

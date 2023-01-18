@@ -42,6 +42,7 @@ var defaultLocal = Local{
 	CatchupHTTPBlockFetchTimeoutSec:            4,
 	CatchupLedgerDownloadRetryAttempts:         50,
 	CatchupParallelBlocks:                      16,
+	ConnectionDeduplicationName:                "",
 	ConnectionsRateLimitingCount:               60,
 	ConnectionsRateLimitingWindowSeconds:       1,
 	DNSBootstrapID:                             "<network>.algorand.network",

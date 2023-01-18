@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2023 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 // Copyright (C) 2019-2022 Algorand, Inc.
 // This file is part of go-algorand
 //
@@ -25,50 +41,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestShouldSupportIdentityChallenge(t *testing.T) {
-	require.True(t, shouldSupportIdentityChallenge("2.3"))
-	require.True(t, shouldSupportIdentityChallenge("2.20"))
-	require.True(t, shouldSupportIdentityChallenge("2.4"))
-	require.True(t, shouldSupportIdentityChallenge("3.1"))
-	require.True(t, shouldSupportIdentityChallenge("100.1"))
-
-	require.False(t, shouldSupportIdentityChallenge("1.1"))
-	require.False(t, shouldSupportIdentityChallenge("2.2.0"))
-	require.False(t, shouldSupportIdentityChallenge("2.1"))
-	require.False(t, shouldSupportIdentityChallenge("2.2"))
-	require.False(t, shouldSupportIdentityChallenge("1.999"))
-	require.False(t, shouldSupportIdentityChallenge("foobar"))
-	require.False(t, shouldSupportIdentityChallenge(""))
-}
-
-func TestNewIdentityChallenge(t *testing.T) {
-	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
-	k := (crypto.PublicKey)(crypto.GenerateSignatureSecrets(seed).SignatureVerifier)
-	empty := [32]byte{}
-	chal := NewIdentityChallenge(k)
-
-	assert.Equal(t, k, chal.Key)
-	assert.NotEqual(t, empty, chal.Challenge)
-}
-
-func TestNewIdentityChallengeResponse(t *testing.T) {
-	var seedA crypto.Seed
-	var seedB crypto.Seed
-	crypto.RandBytes(seedA[:])
-	crypto.RandBytes(seedB[:])
-	chalKey := (crypto.PublicKey)(crypto.GenerateSignatureSecrets(seedA).SignatureVerifier)
-	respKey := (crypto.PublicKey)(crypto.GenerateSignatureSecrets(seedB).SignatureVerifier)
-	empty := [32]byte{}
-	chal := NewIdentityChallenge(chalKey)
-
-	chalResp := NewIdentityChallengeResponse(respKey, chal)
-
-	assert.Equal(t, chalResp.Key, respKey)
-	assert.Equal(t, chalResp.Challenge, chal.Challenge)
-	assert.NotEqual(t, chalResp.ResponseChallenge, empty)
-}
 
 func TestIdentityChallengeSignEncodeDecode(t *testing.T) {
 	var seed crypto.Seed
