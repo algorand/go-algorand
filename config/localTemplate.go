@@ -459,13 +459,13 @@ type Local struct {
 	MaxAPIResourcesPerAccount uint64 `version[21]:"100000"`
 
 	// AgreementIncomingVotesQueueLength sets the size of the buffer holding incoming votes.
-	AgreementIncomingVotesQueueLength uint64 `version[21]:"10000"`
+	AgreementIncomingVotesQueueLength uint64 `version[21]:"10000" version[27]:"20000"`
 
 	// AgreementIncomingProposalsQueueLength sets the size of the buffer holding incoming proposals.
-	AgreementIncomingProposalsQueueLength uint64 `version[21]:"25"`
+	AgreementIncomingProposalsQueueLength uint64 `version[21]:"25" version[27]:"50"`
 
 	// AgreementIncomingBundlesQueueLength sets the size of the buffer holding incoming bundles.
-	AgreementIncomingBundlesQueueLength uint64 `version[21]:"7"`
+	AgreementIncomingBundlesQueueLength uint64 `version[21]:"7" version[27]:"15"`
 
 	// MaxAcctLookback sets the maximum lookback range for account states,
 	// i.e. the ledger can answer account states questions for the range Latest-MaxAcctLookback...Latest
