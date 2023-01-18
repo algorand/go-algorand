@@ -251,6 +251,30 @@ func TestWebsocketNetworkStartStop(t *testing.T) {
 	netA.Stop()
 }
 
+func TestWebsocketNetworkSetPeersByID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t)
+	netA.Start()
+
+	id := crypto.PublicKey{}
+	p := wsPeer{identity: id}
+
+	// Ensure the first attempt to insert populates the map
+	_, exists := netA.peersByID[p.identity]
+	require.False(t, exists)
+	require.True(t, netA.setPeersByID(&p))
+	_, exists = netA.peersByID[p.identity]
+	require.True(t, exists)
+
+	// Ensure the next attempt to insert also returns true
+	require.True(t, netA.setPeersByID(&p))
+
+	// Ensure a different peer cannot take the map entry
+	otherP := wsPeer{identity: id}
+	require.False(t, netA.setPeersByID(&otherP))
+}
+
 func waitReady(t testing.TB, wn *WebsocketNetwork, timeout <-chan time.Time) bool {
 	select {
 	case <-wn.Ready():

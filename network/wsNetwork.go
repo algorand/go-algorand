@@ -859,25 +859,13 @@ func (wn *WebsocketNetwork) Start() {
 		wn.scheme = "http"
 	}
 
-	// identityHandlers are internal to the WS Network itself, and can be set without condition
-	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
-	wn.identityKeys = crypto.GenerateSignatureSecrets(seed)
 	wn.peersByID = map[crypto.PublicKey]*wsPeer{}
-	// guard against registering the handler on starup when it's already been configured
-	// (for example, unit tests like TestWebsocketNetworkTXMessageOfInterestRelay will attach handlers to all tags)
-	shouldAttachIdentityHandlers := true
-	var idTag protocol.Tag
-	for _, handler := range identityHandlers {
-		if _, exists := wn.handlers.getHandler(handler.Tag); exists {
-			shouldAttachIdentityHandlers = false
-			idTag = handler.Tag
-		}
-	}
-	if shouldAttachIdentityHandlers {
+	// if we are set up for connection deduplication, attach the handlers for ID Verification
+	if wn.config.ConnectionDeduplicationName != "" {
 		wn.RegisterHandlers(identityHandlers)
-	} else {
-		wn.log.Warnf("wsNetwork tried to register identity challenge handlers, but the required tag was already registered: %v", idTag)
+		var seed crypto.Seed
+		crypto.RandBytes(seed[:])
+		wn.identityKeys = crypto.GenerateSignatureSecrets(seed)
 	}
 
 	wn.meshUpdateRequests <- meshRequest{false, nil}

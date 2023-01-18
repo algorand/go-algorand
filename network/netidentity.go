@@ -179,7 +179,9 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	copy(sig[:], message.Data[:64])
 	if peer.identity.VerifyBytes(peer.identityChallenge[:], sig) {
 		peer.IdentityVerified()
-		peer.net.MarkVerified(peer)
+		if peer.net != nil {
+			peer.net.MarkVerified(peer)
+		}
 	}
 	return OutgoingMessage{}
 }

@@ -33,90 +33,76 @@
 package network
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-func TestIdentityChallengeSignEncodeDecode(t *testing.T) {
+func TestIdentityChallengeEncodeDecodeVerify(t *testing.T) {
 	var seed crypto.Seed
 	crypto.RandBytes(seed[:])
 	secrets := crypto.GenerateSignatureSecrets(seed)
 	k := (crypto.PublicKey)(secrets.SignatureVerifier)
-	chal := NewIdentityChallenge(k)
+	addr := "test address"
 
-	chalEncoded := chal.SignAndEncodeB64(secrets)
-	assert.NotEmpty(t, chalEncoded)
+	c, header := NewIdentityChallengeAndHeader(secrets, addr)
+	assert.NotEmpty(t, header)
+	assert.NotEmpty(t, c)
 
-	chal2 := IdentityChallengeFromB64(chalEncoded)
-	assert.Equal(t, chal.Challenge, chal2.Challenge)
-	assert.Equal(t, chal.Key, chal2.Key)
+	// confirm the same challenge that was returned and included in the struct
+	idChal := IdentityChallengeFromB64(header)
+	assert.Equal(t, addr, idChal.Address)
+	assert.Equal(t, k, idChal.Key)
+	assert.Equal(t, c, idChal.Challenge)
+	assert.NotEmpty(t, idChal.Signature)
+	assert.True(t, idChal.Verify())
 
-	// sign this ourselves to confirm signing is as expected,
-	// and because the object is not signed until encoding
-	chalSignature := secrets.SignBytes(chal.signableBytes())
-	assert.Equal(t, chalSignature, chal2.Signature)
+	// if the signature does not match the data, it should not Verify
+	idChal.Address = "changed bytes"
+	assert.False(t, idChal.Verify())
 }
 
-func TestIdentityChallengeResponseSignEncodeDecode(t *testing.T) {
-	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
-	chalSecrets := crypto.GenerateSignatureSecrets(seed)
-	chal := NewIdentityChallenge((crypto.PublicKey)(chalSecrets.SignatureVerifier))
-
-	crypto.RandBytes(seed[:])
-	respSecrets := crypto.GenerateSignatureSecrets(seed)
-	chalResp := NewIdentityChallengeResponse((crypto.PublicKey)(chalSecrets.SignatureVerifier), chal)
-
-	chalRespEncoded := chalResp.SignAndEncodeB64(respSecrets)
-	assert.NotEmpty(t, chalRespEncoded)
-
-	chalResp2 := IdentityChallengeResponseFromB64(chalRespEncoded)
-	assert.Equal(t, chalResp.Challenge, chalResp2.Challenge)
-	assert.Equal(t, chalResp.ResponseChallenge, chalResp2.ResponseChallenge)
-	assert.Equal(t, chalResp.Key, chalResp2.Key)
-
-	respSignature := respSecrets.SignBytes(chalResp.signableBytes())
-	assert.Equal(t, respSignature, chalResp2.Signature)
+func TestIdentityChallengeFailedDecode(t *testing.T) {
+	idChal := IdentityChallengeFromB64("NOT VALID BASE-64!")
+	assert.Equal(t, identityChallenge{}, idChal)
+	// confirm the empty returned challenge can't Verify
+	assert.False(t, idChal.Verify())
 }
 
-func TestIdentityChallengeVerify(t *testing.T) {
+func TestIdentityChallengeResponseEncodeDecodeVerify(t *testing.T) {
 	var seed crypto.Seed
 	crypto.RandBytes(seed[:])
 	secrets := crypto.GenerateSignatureSecrets(seed)
-	k := (crypto.PublicKey)(secrets.SignatureVerifier)
-	chal := NewIdentityChallenge(k)
+	respSecrets := crypto.GenerateSignatureSecrets(seed)
+	k := (crypto.PublicKey)(respSecrets.SignatureVerifier)
+	addr := "test address"
 
-	// Should fail to verify if the signature is not correct
-	crypto.RandBytes(chal.Signature[:])
-	require.Error(t, chal.verify())
+	c, header := NewIdentityChallengeAndHeader(secrets, addr)
+	idChal := IdentityChallengeFromB64(header)
 
-	// Should verify by signing the signableBytes of the object
-	chal.Signature = secrets.SignBytes(chal.signableBytes())
-	require.NoError(t, chal.verify())
+	rc, respHeader := NewIdentityResponseChallengeAndHeader(respSecrets, idChal)
+	assert.NotEmpty(t, rc)
+	assert.NotEmpty(t, respHeader)
+	idChalResp := IdentityChallengeResponseFromB64(respHeader)
+	assert.Equal(t, k, idChalResp.Key)
+	assert.Equal(t, c, idChalResp.Challenge)
+	assert.Equal(t, rc, idChalResp.ResponseChallenge)
+	assert.NotEmpty(t, idChalResp.Signature)
+	assert.True(t, idChalResp.Verify())
+
+	// make some bogus challenge to invalidate the struct and confirm it does not verify
+	wrongChallenge, _ := NewIdentityChallengeAndHeader(secrets, addr)
+	idChalResp.ResponseChallenge = wrongChallenge
+	assert.False(t, idChalResp.Verify())
 }
 
-func TestIdentityChallengeResponseVerify(t *testing.T) {
-	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
-	chalSecrets := crypto.GenerateSignatureSecrets(seed)
-	chal := NewIdentityChallenge((crypto.PublicKey)(chalSecrets.SignatureVerifier))
-
-	crypto.RandBytes(seed[:])
-	respSecrets := crypto.GenerateSignatureSecrets(seed)
-	chalResp := NewIdentityChallengeResponse((crypto.PublicKey)(respSecrets.SignatureVerifier), chal)
-
-	crypto.RandBytes(chalResp.Signature[:])
-	require.Error(t, chalResp.verify())
-
-	chalResp.Signature = respSecrets.SignBytes(chalResp.signableBytes())
-	fmt.Println(chalResp.Signature)
-	fmt.Println(chalResp.Key)
-	require.NoError(t, chalResp.verify())
+func TestIdentityChallengeResponseFailedDecode(t *testing.T) {
+	idChalResp := IdentityChallengeResponseFromB64("NOT VALID BASE-64!")
+	assert.Equal(t, identityChallengeResponse{}, idChalResp)
+	// confirm the empty returned challenge can't Verify
+	assert.False(t, idChalResp.Verify())
 }
 
 func TestIdentityVerificationHandler(t *testing.T) {
