@@ -341,13 +341,10 @@ type WebsocketNetwork struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	peersLock deadlock.RWMutex
-	peers     []*wsPeer
-	// peersByID is a 1:1 mapping from a PublicKey to a Peer who has verified ownership of the key
-	peersByID map[crypto.PublicKey]*wsPeer
-	// unverifiedPeersByID is a 1:N mapping from a PublicKey to Peers who have not yet verified ownership of the key
-	unverifiedPeersByID map[crypto.PublicKey][]*wsPeer
-	peersChangeCounter  int32 // peersChangeCounter is an atomic variable that increases on each change to the peers. It helps avoiding taking the peersLock when checking if the peers list was modified.
+	peersLock          deadlock.RWMutex
+	peers              []*wsPeer
+	peersByID          map[crypto.PublicKey]*wsPeer
+	peersChangeCounter int32 // peersChangeCounter is an atomic variable that increases on each change to the peers. It helps avoiding taking the peersLock when checking if the peers list was modified.
 
 	broadcastQueueHighPrio chan broadcastRequest
 	broadcastQueueBulk     chan broadcastRequest
