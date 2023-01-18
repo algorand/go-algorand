@@ -51,8 +51,8 @@ type ReqContext struct {
 	Shutdown <-chan struct{}
 }
 
-// ErrorResponse sets the specified status code (should != 200), and fills in the
-// a human readable error.
+// ErrorResponse sets the specified status code (should != 200), and fills in
+// a human-readable error.
 func ErrorResponse(w http.ResponseWriter, status int, internalErr error, publicErr string, logger logging.Logger) {
 	logger.Info(internalErr)
 
