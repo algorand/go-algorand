@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	apiServer "github.com/algorand/go-algorand/daemon/algod/api/server"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
@@ -49,6 +50,15 @@ import (
 
 var server http.Server
 
+// ServerNode is the required methods for any node the server fronts
+type ServerNode interface {
+	lib.NodeInterface
+	v2.NodeInterface
+	ListeningAddress() (string, bool)
+	Start()
+	Stop()
+}
+
 // Server represents an instance of the REST API HTTP server
 type Server struct {
 	RootPath             string
@@ -57,7 +67,7 @@ type Server struct {
 	netFile              string
 	netListenFile        string
 	log                  logging.Logger
-	node                 apiServer.APINodeInterface
+	node                 ServerNode
 	metricCollector      *metrics.MetricService
 	metricServiceStarted bool
 	stopping             chan struct{}
@@ -171,26 +181,23 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 			NodeExporterPath:          cfg.NodeExporterPath,
 		})
 
+	var serverNode ServerNode
 	if cfg.NodeSyncMode {
-		dataNode, err := node.MakeData(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
-		if os.IsNotExist(err) {
-			return fmt.Errorf("node has not been installed: %s", err)
-		}
-		if err != nil {
-			return fmt.Errorf("couldn't initialize the node: %s", err)
-		}
-		s.node = apiServer.DataNode{AlgorandDataNode: dataNode}
-		return nil
+		var dataNode *node.AlgorandDataNode
+		dataNode, err = node.MakeData(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
+		serverNode = apiServer.DataNode{AlgorandDataNode: dataNode}
+	} else {
+		var fullNode *node.AlgorandFullNode
+		fullNode, err = node.MakeFull(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
+		serverNode = apiServer.APINode{AlgorandFullNode: fullNode}
 	}
-	fullNode, err := node.MakeFull(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
 	if os.IsNotExist(err) {
 		return fmt.Errorf("node has not been installed: %s", err)
 	}
 	if err != nil {
 		return fmt.Errorf("couldn't initialize the node: %s", err)
 	}
-	s.node = apiServer.APINode{AlgorandFullNode: fullNode}
-
+	s.node = serverNode
 	return nil
 }
 

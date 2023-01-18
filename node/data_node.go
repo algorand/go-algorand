@@ -36,7 +36,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
-	"github.com/algorand/go-algorand/network/messagetracer"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/util/db"
@@ -68,10 +68,9 @@ func MakeData(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		log.Errorf("could not create websocket node: %v", err)
 		return nil, err
 	}
-	p2pNode.SetPrioScheme(node)
+	p2pNode.DeregisterMessageInterest(protocol.AgreementVoteTag)
+	p2pNode.DeregisterMessageInterest(protocol.ProposalPayloadTag)
 	node.net = p2pNode
-
-	accountListener := makeTopAccountListener(log)
 
 	// load stored data
 	genesisDir := filepath.Join(rootDir, genesis.ID())
@@ -102,14 +101,9 @@ func MakeData(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		node,
 	}
 
-	if node.config.EnableTopAccountsReporting {
-		blockListeners = append(blockListeners, &accountListener)
-	}
 	node.ledger.RegisterBlockListeners(blockListeners)
 
 	node.blockService = rpcs.MakeBlockService(node.log, cfg, node.ledger, p2pNode, node.genesisID)
-	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
-	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, make(chan catchup.PendingUnmatchedCertificate), node.lowPriorityCryptoVerificationPool)
@@ -135,8 +129,6 @@ func MakeData(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		}
 		node.log.Infof("resuming catchpoint catchup from state %d", catchpointCatchupState)
 	}
-
-	node.tracer = messagetracer.NewTracer(log).Init(cfg)
 
 	stateProofPathname := filepath.Join(genesisDir, config.StateProofFileName)
 	stateProofAccess, err := db.MakeAccessor(stateProofPathname, false, false)
@@ -174,7 +166,6 @@ func (node *AlgorandDataNode) Start() {
 	} else {
 		node.catchupService.Start()
 		node.blockService.Start()
-		node.ledgerService.Start()
 		node.stateProofWorker.Start()
 		startNetwork()
 
@@ -216,7 +207,6 @@ func (node *AlgorandDataNode) Stop() {
 	} else {
 		node.catchupService.Stop()
 		node.blockService.Stop()
-		node.ledgerService.Stop()
 	}
 	node.catchupBlockAuth.Quit()
 	node.highPriorityCryptoVerificationPool.Shutdown()

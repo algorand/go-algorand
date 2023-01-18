@@ -45,9 +45,6 @@ import (
 type APINodeInterface interface {
 	lib.NodeInterface
 	v2.NodeInterface
-	ListeningAddress() (string, bool)
-	Start()
-	Stop()
 }
 
 const (
