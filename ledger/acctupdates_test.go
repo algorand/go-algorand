@@ -51,7 +51,7 @@ var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
 var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
 
 type mockLedgerForTracker struct {
-	dbs              db.Pair
+	dbs              store.TrackerStore
 	blocks           []blockEntry
 	deltas           []ledgercore.StateDelta
 	log              logging.Logger
@@ -94,9 +94,8 @@ func setupAccts(niter int) []map[basics.Address]basics.AccountData {
 }
 
 func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, l logging.Logger) *mockLedgerForTracker {
-	dbs, fileName := storetesting.DbOpenTest(t, inMemory)
-	dbs.Rdb.SetLogger(l)
-	dbs.Wdb.SetLogger(l)
+	dbs, fileName := store.DbOpenTrackerTest(t, inMemory)
+	dbs.SetLogger(l)
 
 	blocks := randomInitChain(consensusVersion, initialBlocksCount)
 	deltas := make([]ledgercore.StateDelta, initialBlocksCount)
@@ -154,7 +153,7 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 	copy(newLedgerTracker.deltas, ml.deltas)
 
 	// calling Vacuum implies flushing the database content to disk..
-	ml.dbs.Wdb.Vacuum(context.Background())
+	ml.dbs.Vacuum(context.Background())
 	// copy the database files.
 	for _, ext := range []string{"", "-shm", "-wal"} {
 		bytes, err := os.ReadFile(ml.filename + ext)
@@ -167,7 +166,7 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 	dbs.Rdb.SetLogger(dblogger)
 	dbs.Wdb.SetLogger(dblogger)
 
-	newLedgerTracker.dbs = dbs
+	newLedgerTracker.dbs = store.CreateTrackerSQLStore(dbs)
 	return newLedgerTracker
 }
 
@@ -220,7 +219,7 @@ func (ml *mockLedgerForTracker) BlockHdr(rnd basics.Round) (bookkeeping.BlockHea
 	return ml.blocks[int(rnd)].block.BlockHeader, nil
 }
 
-func (ml *mockLedgerForTracker) trackerDB() db.Pair {
+func (ml *mockLedgerForTracker) trackerDB() store.TrackerStore {
 	return ml.dbs
 }
 
@@ -264,7 +263,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 		return
 	}
 
-	err = au.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = au.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		bals, err0 = accountsAll(tx)
 		return err0
@@ -572,7 +571,7 @@ func TestAcctUpdates(t *testing.T) {
 
 			// check the account totals.
 			var dbRound basics.Round
-			err := ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			err := ml.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
 				arw := store.NewAccountsSQLReaderWriter(tx)
 				dbRound, err = arw.AccountsRound()
 				return
@@ -586,7 +585,7 @@ func TestAcctUpdates(t *testing.T) {
 
 			expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardsLevels[dbRound], proto, nil, ledgercore.AccountTotals{})
 			var actualTotals ledgercore.AccountTotals
-			err = ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			err = ml.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
 				arw := store.NewAccountsSQLReaderWriter(tx)
 				actualTotals, err = arw.AccountsTotals(ctx, false)
 				return
@@ -1578,14 +1577,14 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 			i++
 		}
 
-		err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		err := ml.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
 			_, _, _, err = accountsNewRound(tx, updates, compactResourcesDeltas{}, nil, nil, proto, basics.Round(1))
 			return
 		})
 		require.NoError(b, err)
 	}
 
-	err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := ml.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
 		arw := store.NewAccountsSQLReaderWriter(tx)
 		return arw.UpdateAccountsHashRound(ctx, 1)
 	})
@@ -2352,7 +2351,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 
 				err := au.prepareCommit(dcc)
 				require.NoError(t, err)
-				err = ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+				err = ml.trackers.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
 					arw := store.NewAccountsSQLReaderWriter(tx)
 					err = au.commitRound(ctx, tx, dcc)
 					if err != nil {
@@ -2636,7 +2635,7 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 
 			err := au.prepareCommit(dcc)
 			require.NoError(t, err)
-			err = ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			err = ml.trackers.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
 				arw := store.NewAccountsSQLReaderWriter(tx)
 				err = au.commitRound(ctx, tx, dcc)
 				if err != nil {

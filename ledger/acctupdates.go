@@ -154,9 +154,9 @@ type modifiedKvValue struct {
 
 type accountUpdates struct {
 	// Connection to the database.
-	dbs db.Pair
+	dbs store.TrackerStore
 
-	// Prepared SQL statements for fast accounts DB lookups.
+	// Optimized reader for fast accounts DB lookups.
 	accountsq store.AccountsReader
 
 	// cachedDBRound is always exactly tracker DB round (and therefore, accountsRound()),
@@ -928,7 +928,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
-	err = au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = au.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) error {
 		arw := store.NewAccountsSQLReaderWriter(tx)
 		totals, err0 := arw.AccountsTotals(ctx, false)
 		if err0 != nil {
@@ -944,7 +944,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
-	au.accountsq, err = store.AccountsInitDbQueries(au.dbs.Rdb.Handle)
+	au.accountsq, err = au.dbs.CreateAccountsReader()
 	if err != nil {
 		return
 	}
@@ -1962,7 +1962,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 	}()
 
 	ledgerVacuumCount.Inc(nil)
-	vacuumStats, err := au.dbs.Wdb.Vacuum(ctx)
+	vacuumStats, err := au.dbs.Vacuum(ctx)
 	close(vacuumExitCh)
 	vacuumLoggingAbort.Wait()
 
