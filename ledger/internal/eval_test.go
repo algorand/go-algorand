@@ -346,7 +346,7 @@ func (d *testDbgHook) AfterLogicEval(cx *logic.EvalContext, evalError error) err
 	return nil
 }
 
-func (d *testDbgHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
+func (d *testDbgHook) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData) error {
 	d.log = append(d.log, fmt.Sprintf("afterTxn %s", ep.TxnGroup[groupIndex].Txn.Type))
 	return nil
 }

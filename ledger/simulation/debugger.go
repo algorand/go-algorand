@@ -41,7 +41,7 @@ func (cdbg *cursorDebuggerHook) BeforeTxn(ep *logic.EvalParams, groupIndex int) 
 	return nil
 }
 
-func (cdbg *cursorDebuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
+func (cdbg *cursorDebuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData) error {
 	cdbg.previousInnerTxns = cdbg.previousInnerTxns[:len(cdbg.previousInnerTxns)-1]
 	return nil
 }
@@ -139,13 +139,13 @@ func (dh *debuggerHook) saveApplyData(applyData transactions.ApplyData) error {
 	return nil
 }
 
-func (dh *debuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
+func (dh *debuggerHook) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData) error {
 	// Update ApplyData if not an inner transaction
-	err := dh.saveApplyData(ep.TxnGroup[groupIndex].ApplyData)
+	err := dh.saveApplyData(ad)
 	if err != nil {
 		return err
 	}
-	return dh.cursorDebuggerHook.AfterTxn(ep, groupIndex)
+	return dh.cursorDebuggerHook.AfterTxn(ep, groupIndex, ad)
 }
 
 func (dh *debuggerHook) saveEvalDelta(evalDelta transactions.EvalDelta) error {

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -229,7 +230,7 @@ func TestCursorDebuggerHooks(t *testing.T) {
 				case BeforeTxn:
 					hook.BeforeTxn(&ep, groupIndex)
 				case AfterTxn:
-					hook.AfterTxn(&ep, groupIndex)
+					hook.AfterTxn(&ep, groupIndex, transactions.ApplyData{})
 				case BeforeInnerTxnGroup:
 					hook.BeforeInnerTxnGroup(&ep)
 				case AfterInnerTxnGroup:

@@ -62,7 +62,7 @@ func (adaptor *legacyDebuggerAdaptor) BeforeTxn(ep *EvalParams, groupIndex int) 
 }
 
 // AfterTxn does nothing
-func (adaptor *legacyDebuggerAdaptor) AfterTxn(ep *EvalParams, groupIndex int) error {
+func (adaptor *legacyDebuggerAdaptor) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) error {
 	return nil
 }
 

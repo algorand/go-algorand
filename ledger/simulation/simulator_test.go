@@ -19,9 +19,9 @@ package simulation
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/txntest"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -44,7 +44,7 @@ func (d *simpleDebugger) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
 	d.beforeTxnCalls++
 	return nil
 }
-func (d *simpleDebugger) AfterTxn(ep *logic.EvalParams, groupIndex int) error {
+func (d *simpleDebugger) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData) error {
 	d.afterTxnCalls++
 	return nil
 }
@@ -64,7 +64,7 @@ func TestSimulateWithDebugger(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, makeTxnHeader := simulationtesting.PrepareSimulatorTest(t)
+	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
 	defer l.Close()
 	s := MakeSimulator(l)
 	sender := accounts[0].Addr
@@ -72,16 +72,12 @@ func TestSimulateWithDebugger(t *testing.T) {
 	amount := senderBalance.Raw - 10000
 
 	txgroup := []transactions.SignedTxn{
-		{
-			Txn: transactions.Transaction{
-				Type:   protocol.PaymentTx,
-				Header: makeTxnHeader(sender),
-				PaymentTxnFields: transactions.PaymentTxnFields{
-					Receiver: sender,
-					Amount:   basics.MicroAlgos{Raw: amount},
-				},
-			},
-		},
+		txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender,
+			Receiver: sender,
+			Amount:   amount,
+		}).SignedTxn(),
 	}
 
 	debugger := simpleDebugger{}

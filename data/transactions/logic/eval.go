@@ -5186,7 +5186,7 @@ func opItxnSubmit(cx *EvalContext) error {
 		ep.RecordAD(i, ep.TxnGroup[i].ApplyData)
 
 		if ep.Debugger != nil {
-			err = ep.Debugger.AfterTxn(ep, i)
+			err = ep.Debugger.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData)
 			if err != nil {
 				return fmt.Errorf("error while running debugger AfterTxn hook: %w", err)
 			}

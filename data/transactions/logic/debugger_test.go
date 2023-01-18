@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -75,7 +76,7 @@ func (d *testDbgHook) BeforeTxn(ep *EvalParams, groupIndex int) error {
 	return nil
 }
 
-func (d *testDbgHook) AfterTxn(ep *EvalParams, groupIndex int) error {
+func (d *testDbgHook) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) error {
 	d.afterTxnCalls++
 	return nil
 }

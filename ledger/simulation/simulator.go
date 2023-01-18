@@ -18,6 +18,7 @@ package simulation
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
@@ -203,7 +204,7 @@ func (s Simulator) simulateWithDebugger(txgroup []transactions.SignedTxn, debugg
 
 func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
 	simulatorDebugger := makeDebuggerHook(txgroup)
-	_, missingSigIndexes, err := s.simulateWithDebugger(txgroup, &simulatorDebugger)
+	block, missingSigIndexes, err := s.simulateWithDebugger(txgroup, &simulatorDebugger)
 	if err != nil {
 		// if there was a non-evaluation error, return it
 		if !errors.As(err, &EvalFailureError{}) {
@@ -216,6 +217,11 @@ func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
 
 		// and set WouldSucceed to false
 		simulatorDebugger.result.WouldSucceed = false
+	} else {
+		err = validateResultAgainstBlock(simulatorDebugger.result, block)
+		if err != nil {
+			return Result{}, fmt.Errorf("failed to validate simulated block against result: %w", err)
+		}
 	}
 
 	// mark whether signatures are missing
@@ -225,4 +231,30 @@ func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
 	}
 
 	return *simulatorDebugger.result, nil
+}
+
+func validateResultAgainstBlock(result *Result, block *ledgercore.ValidatedBlock) error {
+	blockGroups, err := block.Block().DecodePaysetGroups()
+	if err != nil {
+		return err
+	}
+
+	if len(result.TxnGroups) != len(blockGroups) {
+		return fmt.Errorf("number of txn groups in simulation result does not match block: %d != %d", len(result.TxnGroups), len(blockGroups))
+	}
+
+	for i, groupResult := range result.TxnGroups {
+		blockGroup := blockGroups[i]
+		if len(groupResult.Txns) != len(blockGroup) {
+			return fmt.Errorf("number of txns in group %d in simulation result does not match block: %d != %d", i, len(groupResult.Txns), len(blockGroup))
+		}
+
+		for j, txnResult := range groupResult.Txns {
+			blockTxn := blockGroup[j]
+			if !txnResult.Txn.ApplyData.Equal(blockTxn.ApplyData) {
+				return fmt.Errorf("transaction %d of group %d has a simulation ApplyData that does not match what appears in a block: %#v != %#v", j, i, txnResult.Txn.ApplyData, blockTxn.ApplyData)
+			}
+		}
+	}
+	return nil
 }

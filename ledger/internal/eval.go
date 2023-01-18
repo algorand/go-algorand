@@ -962,7 +962,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		}
 
 		if debugger != nil {
-			err = debugger.AfterTxn(evalParams, gi)
+			err = debugger.AfterTxn(evalParams, gi, txib.ApplyData)
 			if err != nil {
 				return fmt.Errorf("error while running debugger AfterTxn hook: %w", err)
 			}

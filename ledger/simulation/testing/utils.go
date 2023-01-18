@@ -23,7 +23,8 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -41,7 +42,19 @@ type Account struct {
 	AcctData basics.AccountData
 }
 
-func PrepareSimulatorTest(t *testing.T) (l *data.Ledger, accounts []Account, makeTxnHeader func(sender basics.Address) transactions.Header) {
+type TxnInfo struct {
+	LatestHeader bookkeeping.BlockHeader
+}
+
+func (info TxnInfo) NewTxn(txn txntest.Txn) txntest.Txn {
+	txn.FirstValid = info.LatestHeader.Round
+	txn.GenesisID = info.LatestHeader.GenesisID
+	txn.GenesisHash = info.LatestHeader.GenesisHash
+	txn.FillDefaults(config.Consensus[info.LatestHeader.CurrentProtocol])
+	return txn
+}
+
+func PrepareSimulatorTest(t *testing.T) (l *data.Ledger, accounts []Account, txnInfo TxnInfo) {
 	genesisInitState, keys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 
 	// Prepare ledger
@@ -73,20 +86,9 @@ func PrepareSimulatorTest(t *testing.T) (l *data.Ledger, accounts []Account, mak
 		i++
 	}
 
-	// txn header generator
 	hdr, err := l.BlockHdr(l.Latest())
 	require.NoError(t, err)
-	makeTxnHeader = func(sender basics.Address) transactions.Header {
-		return transactions.Header{
-			Fee:         basics.MicroAlgos{Raw: 1000},
-			FirstValid:  hdr.Round,
-			GenesisID:   hdr.GenesisID,
-			GenesisHash: hdr.GenesisHash,
-			LastValid:   hdr.Round + basics.Round(1000),
-			Note:        []byte{240, 134, 38, 55, 197, 14, 142, 132},
-			Sender:      sender,
-		}
-	}
+	txnInfo = TxnInfo{hdr}
 
 	return
 }
