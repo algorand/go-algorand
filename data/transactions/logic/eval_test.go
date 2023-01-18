@@ -168,12 +168,9 @@ func (ep *EvalParams) reset() {
 		ep.TxnGroup[i].ApplyData = transactions.ApplyData{}
 	}
 	if ep.available != nil {
-		ep.available.apps = nil
-		ep.available.asas = nil
-		// reinitialize boxes because evaluation can add box refs for app creates.
 		available := NewEvalParams(ep.TxnGroup, ep.Proto, ep.Specials).available
 		if available != nil {
-			ep.available.boxes = available.boxes
+			ep.available = available
 		}
 		ep.available.dirtyBytes = 0
 	}

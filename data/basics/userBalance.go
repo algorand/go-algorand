@@ -343,6 +343,20 @@ type CreatableLocator struct {
 	Index   CreatableIndex
 }
 
+// HoldingLocator stores enough information to name a "Holding" the balance of
+// an ASA for a particular account.
+type HoldingLocator struct {
+	Address Address
+	Index   AssetIndex
+}
+
+// LocalsLocator stores enough information to find the Local State that an
+// account has with a particular app.
+type LocalsLocator struct {
+	Address Address
+	Index   AppIndex
+}
+
 // AssetHolding describes an asset held by an account.
 type AssetHolding struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`

@@ -70,6 +70,50 @@ func makeOldAndNewEnv(version uint64) (*EvalParams, *EvalParams, *Ledger) {
 	return old, new, sharedLedger
 }
 
+func (r *resources) String() string {
+	sb := strings.Builder{}
+	if len(r.createdAsas) > 0 {
+		fmt.Fprintf(&sb, "createdAsas: %v\n", r.createdAsas)
+	}
+	if len(r.createdApps) > 0 {
+		fmt.Fprintf(&sb, "createdApps: %v\n", r.createdApps)
+	}
+
+	if len(r.sharedAccounts) > 0 {
+		fmt.Fprintf(&sb, "sharedAccts:\n")
+		for addr := range r.sharedAccounts {
+			fmt.Fprintf(&sb, " %s\n", addr)
+		}
+	}
+	if len(r.sharedAsas) > 0 {
+		fmt.Fprintf(&sb, "sharedAsas:\n")
+		for id := range r.sharedAsas {
+			fmt.Fprintf(&sb, " %d\n", id)
+		}
+	}
+	if len(r.sharedApps) > 0 {
+		fmt.Fprintf(&sb, "sharedApps:\n")
+		for id := range r.sharedApps {
+			fmt.Fprintf(&sb, " %d\n", id)
+		}
+	}
+
+	if len(r.sharedHoldings) > 0 {
+		fmt.Fprintf(&sb, "sharedHoldings:\n")
+		for hl := range r.sharedHoldings {
+			fmt.Fprintf(&sb, " %s x %d\n", hl.Address, hl.Index)
+		}
+	}
+	if len(r.sharedLocals) > 0 {
+		fmt.Fprintf(&sb, "sharedLocals:\n")
+		for hl := range r.sharedLocals {
+			fmt.Fprintf(&sb, " %s x %d\n", hl.Address, hl.Index)
+		}
+	}
+
+	return sb.String()
+}
+
 func TestEvalModes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -618,7 +662,7 @@ byte 0x414c474f
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 2", -1), pre, "is not opted into")
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 9", -1), now, "invalid App reference 9")
 	testApp(t, strings.Replace(text, "int 1  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now,
-		"no such address")
+		"no account")
 
 	// opt into 123, and try again
 	ledger.NewApp(now.TxnGroup[0].Txn.Receiver, 123, basics.AppParams{})
@@ -729,7 +773,7 @@ byte 0x414c474f
 
 	now.TxnGroup[0].Txn.ApplicationID = 100
 	now.TxnGroup[0].Txn.ForeignApps = []basics.AppIndex{now.TxnGroup[0].Txn.ApplicationID}
-	testApp(t, text, now, "no such app")
+	testApp(t, text, now, "no app 100")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
 	ledger.NewApp(now.TxnGroup[0].Txn.Sender, 100, basics.AppParams{})
@@ -1645,7 +1689,7 @@ int 1
 
 			ep, txn, ledger := makeSampleEnv()
 			txn.ApplicationID = basics.AppIndex(100)
-			testAppBytes(t, ops.Program, ep, "no such app")
+			testAppBytes(t, ops.Program, ep, "no app 100")
 
 			ledger.NewApp(txn.Sender, 100, makeApp(0, 0, 1, 0))
 
@@ -1873,7 +1917,7 @@ byte "myval"
 	ledger.NewAccount(txn.Sender, 1)
 	ledger.NewApp(txn.Sender, 100, basics.AppParams{})
 
-	delta := testApp(t, source, ep, "no such app")
+	delta := testApp(t, source, ep, "no app 101")
 	require.Empty(t, delta.GlobalDelta)
 	require.Empty(t, delta.LocalDeltas)
 
@@ -2791,7 +2835,7 @@ app_local_del
 `
 	testApp(t, source, ep, "invalid Account reference for mutation")
 
-	/* But let's just check normal access is working properly. */
+	/* But let's just check read access is working properly. */
 	source = `
 global CurrentApplicationAddress
 byte "hey"

@@ -242,25 +242,6 @@ type LedgerForLogic interface {
 	Counter() uint64
 }
 
-// resources contains a catalog of available resources. It's used to track the
-// apps, assets, and boxes that are available to a transaction, outside the
-// direct foreign array mechanism.
-type resources struct {
-	asas []basics.AssetIndex
-	apps []basics.AppIndex
-
-	// boxes are all of the top-level box refs from the txgroup. Most are added
-	// during NewEvalParams(). refs using 0 on an appl create are resolved and
-	// added when the appl executes. The boolean value indicates the "dirtiness"
-	// of the box - has it been modified in this txngroup? If yes, the size of
-	// the box counts against the group writeBudget. So delete is NOT a dirtying
-	// operation.
-	boxes map[boxRef]bool
-
-	// dirtyBytes maintains a running count of the number of dirty bytes in `boxes`
-	dirtyBytes uint64
-}
-
 // boxRef is the "hydrated" form of a BoxRef - it has the actual app id, not an index
 type boxRef struct {
 	app  basics.AppIndex
@@ -349,30 +330,9 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 // NewEvalParams creates an EvalParams to use while evaluating a top-level txgroup
 func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
 	apps := 0
-	var allBoxes map[boxRef]bool
 	for _, tx := range txgroup {
 		if tx.Txn.Type == protocol.ApplicationCallTx {
 			apps++
-			if allBoxes == nil && len(tx.Txn.Boxes) > 0 {
-				allBoxes = make(map[boxRef]bool)
-			}
-			for _, br := range tx.Txn.Boxes {
-				var app basics.AppIndex
-				if br.Index == 0 {
-					// "current app": Ignore if this is a create, else use ApplicationID
-					if tx.Txn.ApplicationID == 0 {
-						// When the create actually happens, and we learn the appID, we'll add it.
-						continue
-					}
-					app = tx.Txn.ApplicationID
-				} else {
-					// Bounds check will already have been done by
-					// WellFormed. For testing purposes, it's better to panic
-					// now than after returning a nil.
-					app = tx.Txn.ForeignApps[br.Index-1] // shift for the 0=this convention
-				}
-				allBoxes[boxRef{app, string(br.Name)}] = false
-			}
 		}
 	}
 
@@ -392,17 +352,17 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 
 	credit := feeCredit(txgroup, proto.MinTxnFee)
 
-	if proto.EnableAppCostPooling && apps > 0 {
+	if proto.EnableAppCostPooling {
 		pooledApplicationBudget = new(int)
 		*pooledApplicationBudget = apps * proto.MaxAppProgramCost
 	}
 
-	if proto.EnableInnerTransactionPooling && apps > 0 {
+	if proto.EnableInnerTransactionPooling {
 		pooledAllowedInners = new(int)
 		*pooledAllowedInners = proto.MaxTxGroupSize * proto.MaxInnerTransactions
 	}
 
-	return &EvalParams{
+	ep := &EvalParams{
 		TxnGroup:                copyWithClearAD(txgroup),
 		Proto:                   proto,
 		Specials:                specials,
@@ -411,9 +371,44 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		FeeCredit:               &credit,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
-		available:               &resources{boxes: allBoxes},
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),
 	}
+	// resources are computed after ep is constructed because app addresses are
+	// calculated there, and we'd like to use the caching mechanism built into
+	// the EvalParams. Perhaps we can make the computation even lazier, so it is
+	// only computed if needed (some program actually refers to a resource that
+	// isn't available in the old way).
+	ep.available = ep.computeAvailability()
+	return ep
+}
+
+func (ep *EvalParams) computeAvailability() *resources {
+	available := &resources{
+		sharedAccounts: make(map[basics.Address]struct{}),
+		sharedAsas:     make(map[basics.AssetIndex]struct{}),
+		sharedApps:     make(map[basics.AppIndex]struct{}),
+		sharedHoldings: make(map[basics.HoldingLocator]struct{}),
+		sharedLocals:   make(map[basics.LocalsLocator]struct{}),
+		boxes:          make(map[boxRef]bool),
+	}
+	for i := range ep.TxnGroup {
+		tx := &ep.TxnGroup[i]
+		switch tx.Txn.Type {
+		case protocol.PaymentTx:
+			available.fillPayment(&tx.Txn.Header, &tx.Txn.PaymentTxnFields)
+		case protocol.KeyRegistrationTx:
+			available.fillKeyRegistration(&tx.Txn.Header)
+		case protocol.AssetConfigTx:
+			available.fillAssetConfig(&tx.Txn.Header, &tx.Txn.AssetConfigTxnFields)
+		case protocol.AssetTransferTx:
+			available.fillAssetTransfer(&tx.Txn.Header, &tx.Txn.AssetTransferTxnFields)
+		case protocol.AssetFreezeTx:
+			available.fillAssetFreeze(&tx.Txn.Header, &tx.Txn.AssetFreezeTxnFields)
+		case protocol.ApplicationCallTx:
+			available.fillApplicationCall(ep, &tx.Txn.Header, &tx.Txn.ApplicationCallTxnFields)
+		}
+	}
+	return available
 }
 
 // feeCredit returns the extra fee supplied in this top-level txgroup compared
@@ -531,10 +526,10 @@ func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
 	}
 	ep.TxnGroup[gi].ApplyData = ad
 	if aid := ad.ConfigAsset; aid != 0 {
-		ep.available.asas = append(ep.available.asas, aid)
+		ep.available.createdAsas = append(ep.available.createdAsas, aid)
 	}
 	if aid := ad.ApplicationID; aid != 0 {
-		ep.available.apps = append(ep.available.apps, aid)
+		ep.available.createdApps = append(ep.available.createdApps, aid)
 	}
 }
 
@@ -3256,14 +3251,14 @@ func (cx *EvalContext) getLatestTimestamp() (uint64, error) {
 }
 
 // getApplicationAddress memoizes app.Address() across a tx group's evaluation
-func (cx *EvalContext) getApplicationAddress(app basics.AppIndex) basics.Address {
+func (ep *EvalParams) getApplicationAddress(app basics.AppIndex) basics.Address {
 	/* Do not instantiate the cache here, that would mask a programming error.
 	   The cache must be instantiated at EvalParams construction time, so that
 	   proper sharing with inner EvalParams can work. */
-	appAddr, ok := cx.appAddrCache[app]
+	appAddr, ok := ep.appAddrCache[app]
 	if !ok {
 		appAddr = app.Address()
-		cx.appAddrCache[app] = appAddr
+		ep.appAddrCache[app] = appAddr
 	}
 
 	return appAddr
@@ -4005,11 +4000,12 @@ func opExtract64Bits(cx *EvalContext) error {
 
 // accountReference yields the address and Accounts offset designated by a
 // stackValue. If the stackValue is the app account, an account of an app in
-// created.apps, or an account of an app in foreignApps, and it is not in the
-// Accounts array, then len(Accounts) + 1 is returned as the index. This would
-// let us catch the mistake if the index is used for set/del. If the txn somehow
-// "psychically" predicted the address, and therefore it IS in txn.Accounts,
-// then happy day, we can set/del it. Return the proper index.
+// created.apps, an account of an app in foreignApps, or an account made
+// available by another txn, and it is not in the Accounts array, then
+// len(Accounts) + 1 is returned as the index. This would let us catch the
+// mistake if the index is used for set/del. If the txn somehow "psychically"
+// predicted the address, and therefore it IS in txn.Accounts, then happy day,
+// we can set/del it. Return the proper index.
 
 // If we ever want apps to be able to change local state on these accounts
 // (which includes this app's own account!), we will need a change to
@@ -4030,11 +4026,18 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 	invalidIndex := uint64(len(cx.txn.Txn.Accounts) + 1)
 	// Allow an address for an app that was created in group
 	if err != nil && cx.version >= createdResourcesVersion {
-		for _, appID := range cx.available.apps {
+		for _, appID := range cx.available.createdApps {
 			createdAddress := cx.getApplicationAddress(appID)
 			if addr == createdAddress {
 				return addr, invalidIndex, nil
 			}
+		}
+	}
+
+	// or some other txn mentioned it
+	if err != nil && cx.version >= resourceSharingVersion {
+		if _, ok := cx.available.sharedAccounts[addr]; ok {
+			return addr, invalidIndex, nil
 		}
 	}
 
@@ -4174,6 +4177,11 @@ func opAppLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValu
 
 	app, err := appReference(cx, appID, false)
 	if err != nil {
+		return
+	}
+
+	if !cx.availableLocals(addr, app) {
+		err = fmt.Errorf("invalid Local State access %s x %d", addr, app)
 		return
 	}
 
@@ -4410,10 +4418,16 @@ func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, e
 		}
 		// or was created in group
 		if cx.version >= createdResourcesVersion {
-			for _, appID := range cx.available.apps {
+			for _, appID := range cx.available.createdApps {
 				if appID == basics.AppIndex(ref) {
 					return appID, nil
 				}
+			}
+		}
+		// or some other txn mentioned it
+		if cx.version >= resourceSharingVersion {
+			if _, ok := cx.available.sharedApps[basics.AppIndex(ref)]; ok {
+				return basics.AppIndex(ref), nil
 			}
 		}
 		// Allow use of indexes, but this comes last so that clear advice can be
@@ -4449,12 +4463,19 @@ func asaReference(cx *EvalContext, ref uint64, foreign bool) (basics.AssetIndex,
 		}
 		// or was created in group
 		if cx.version >= createdResourcesVersion {
-			for _, assetID := range cx.available.asas {
+			for _, assetID := range cx.available.createdAsas {
 				if assetID == basics.AssetIndex(ref) {
 					return assetID, nil
 				}
 			}
 		}
+		// or some other txn mentioned it
+		if cx.version >= resourceSharingVersion {
+			if _, ok := cx.available.sharedAsas[basics.AssetIndex(ref)]; ok {
+				return basics.AssetIndex(ref), nil
+			}
+		}
+
 		// Allow use of indexes, but this comes last so that clear advice can be
 		// given to anyone who cares about semantics in the first few rounds of
 		// a new network - don't use indexes for references, use the asa ID.
@@ -4497,16 +4518,22 @@ func opAssetHoldingGet(cx *EvalContext) error {
 		return err
 	}
 
+	if !cx.availableHolding(addr, asset) {
+		return fmt.Errorf("invalid Holding access %s x %d", addr, asset)
+	}
+
+	fmt.Printf("> %s %d\n", addr, asset)
 	var exist uint64 = 0
 	var value stackValue
 	if holding, err := cx.Ledger.AssetHolding(addr, asset); err == nil {
-		// the holding exist, read the value
+		// the holding exists, read the value
 		exist = 1
 		value, err = cx.assetHoldingToValue(&holding, fs)
 		if err != nil {
 			return err
 		}
 	}
+	fmt.Printf("err=%v\n", err)
 
 	cx.stack[prev] = value
 	cx.stack[last].Uint = exist
@@ -4756,10 +4783,17 @@ func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) 
 	}
 	// or was created in group
 	if cx.version >= createdResourcesVersion {
-		for _, assetID := range cx.available.asas {
+		for _, assetID := range cx.available.createdAsas {
 			if assetID == aid {
 				return aid, nil
 			}
+		}
+	}
+
+	// or some other txn mentioned it
+	if cx.version >= resourceSharingVersion {
+		if _, ok := cx.available.sharedAsas[aid]; ok {
+			return aid, nil
 		}
 	}
 
@@ -4784,7 +4818,7 @@ func (cx *EvalContext) availableApp(sv stackValue) (basics.AppIndex, error) {
 	}
 	// or was created in group
 	if cx.version >= createdResourcesVersion {
-		for _, appID := range cx.available.apps {
+		for _, appID := range cx.available.createdApps {
 			if appID == aid {
 				return aid, nil
 			}
@@ -4795,7 +4829,54 @@ func (cx *EvalContext) availableApp(sv stackValue) (basics.AppIndex, error) {
 		return aid, nil
 	}
 
+	// or some other txn mentioned it
+	if cx.version >= resourceSharingVersion {
+		if _, ok := cx.available.sharedApps[aid]; ok {
+			return aid, nil
+		}
+	}
+
 	return 0, fmt.Errorf("invalid App reference %d", aid)
+}
+
+// availableHolding is an additional check, required since
+// resourceSharingVersion. It will work in previous versions too, since
+// cx.available will be populated to make it work. But it must protect for <
+// directRefEnabledVersion, because unnamed holdings could be read then.
+func (cx *EvalContext) availableHolding(addr basics.Address, ai basics.AssetIndex) bool {
+	if cx.version < directRefEnabledVersion {
+		return true
+	}
+	if _, ok := cx.available.sharedHoldings[basics.HoldingLocator{Address: addr, Index: ai}]; ok {
+		return true
+	}
+	// All holdings of created assets are available
+	for _, created := range cx.available.createdAsas {
+		if created == ai {
+			return true
+		}
+	}
+	return false
+}
+
+// availableLocals is an additional check, required since
+// resourceSharingVersion. It will work in previous versions too, since
+// cx.available will be populated to make it work. But it must protect for <
+// directRefEnabledVersion, because unnamed holdings could be read then.
+func (cx *EvalContext) availableLocals(addr basics.Address, ai basics.AppIndex) bool {
+	if cx.version < directRefEnabledVersion {
+		return true
+	}
+	if _, ok := cx.available.sharedLocals[basics.LocalsLocator{Address: addr, Index: ai}]; ok {
+		return true
+	}
+	// All locals of created apps are available
+	for _, created := range cx.available.createdApps {
+		if created == ai {
+			return true
+		}
+	}
+	return false
 }
 
 func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *transactions.Transaction) (err error) {

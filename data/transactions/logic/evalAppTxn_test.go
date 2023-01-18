@@ -1153,7 +1153,7 @@ int 5000; app_params_get AppGlobalNumByteSlice; !; assert; !; assert; int 1
 `, ep)
 
 	// Can't call it either
-	TestApp(t, call, ep, "no such app 5000")
+	TestApp(t, call, ep, "no app 5000")
 
 }
 
