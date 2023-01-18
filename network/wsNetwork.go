@@ -629,7 +629,7 @@ func (wn *WebsocketNetwork) setPeersByID(p *wsPeer) error {
 			return fmt.Errorf("peer identity (%s) already in use", p.identity)
 		}
 	} else {
-		// if it is available, load this peer into peersByID at this identity, which will be used to deduplicate connections
+		// now that we know that the identity is unused, mark this peer as having this identity
 		wn.peersByID[p.identity] = p
 	}
 	return nil
