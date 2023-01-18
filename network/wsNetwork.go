@@ -612,7 +612,7 @@ func (wn *WebsocketNetwork) MarkVerified(p *wsPeer) {
 
 	// attempt to set this identity as in-use by the peer
 	// if the peer can't be set at this ID, it means it is already in-use
-	// 	and this peer should be disconnected
+	// and this peer should be disconnected
 	if err := wn.setPeersByID(p); err != nil {
 		wn.Disconnect(p)
 	}
