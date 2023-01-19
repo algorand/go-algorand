@@ -59,7 +59,7 @@ type Local struct {
 	// example: ws://r-XX.algorand-mainnet.network:4160/v1/mainnet-v1.0/gossip
 	// received Identity Challenges which do not correctly specify this Address will be ignored.
 	// the peering will go forward without any further participation in identification.
-	ConnectionDeduplicationName string `version[0]:""`
+	ConnectionDeduplicationName string `version[27]:""`
 
 	// 1 * time.Minute = 60000000000 ns
 	ReconnectTime time.Duration `version[0]:"60" version[1]:"60000000000"`

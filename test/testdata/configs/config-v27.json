@@ -22,6 +22,7 @@
     "CatchupLedgerDownloadRetryAttempts": 50,
     "CatchupParallelBlocks": 16,
     "ConnectionsRateLimitingCount": 60,
+    "ConnectionDeduplicationName": "",
     "ConnectionsRateLimitingWindowSeconds": 1,
     "DNSBootstrapID": "<network>.algorand.network",
     "DNSSecurityFlags": 1,
