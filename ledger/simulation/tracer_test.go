@@ -233,7 +233,7 @@ func TestCursorEvalTracer(t *testing.T) {
 			t.Parallel()
 			var tracer cursorEvalTracer
 
-			// These don't matter so they can be nil
+			// These don't matter so they can be anything
 			ep := logic.EvalParams{}
 			groupIndex := 0
 
@@ -255,7 +255,7 @@ func TestCursorEvalTracer(t *testing.T) {
 					case mocktracer.BeforeTxnGroupEvent, mocktracer.AfterTxnGroupEvent:
 						t.Fatalf("Path is unspecified for hook: %v", step.action)
 					}
-					require.Equalf(t, step.expectedPath, tracer.absolutePath(), "step index %d (action %v), hook: %#v", i, step.action, tracer)
+					require.Equalf(t, step.expectedPath, tracer.absolutePath(), "step index %d (action %v), tracer: %#v", i, step.action, tracer)
 				}
 			}
 

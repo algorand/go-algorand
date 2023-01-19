@@ -121,7 +121,9 @@ func TestPayTxn(t *testing.T) {
 	t.Run("simple", func(t *testing.T) {
 		t.Parallel()
 		for _, signed := range []bool{true, false} {
+			signed := signed
 			t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+				t.Parallel()
 				simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
 					sender := accounts[0]
 					receiver := accounts[1]
@@ -161,7 +163,9 @@ func TestPayTxn(t *testing.T) {
 	t.Run("close to", func(t *testing.T) {
 		t.Parallel()
 		for _, signed := range []bool{true, false} {
+			signed := signed
 			t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+				t.Parallel()
 				simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
 					sender := accounts[0]
 					receiver := accounts[1]
@@ -212,7 +216,9 @@ func TestPayTxn(t *testing.T) {
 	t.Run("overspend", func(t *testing.T) {
 		t.Parallel()
 		for _, signed := range []bool{true, false} {
+			signed := signed
 			t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+				t.Parallel()
 				simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
 					sender := accounts[0]
 					receiver := accounts[1]
@@ -258,7 +264,9 @@ func TestAuthAddrTxn(t *testing.T) {
 	t.Parallel()
 
 	for _, signed := range []bool{true, false} {
+		signed := signed
 		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+			t.Parallel()
 			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
 				sender := accounts[0]
 				authority := accounts[1]
@@ -384,42 +392,96 @@ func TestSimpleGroupTxn(t *testing.T) {
 	require.Equal(t, sender2Balance, sender2Data.MicroAlgos)
 }
 
-const trivialAVMProgram = `#pragma version 6
-int 1`
-const rejectAVMProgram = `#pragma version 6
-int 0`
-
 func TestSimpleAppCall(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
-	sender := accounts[0].Addr
+	for _, signed := range []bool{true, false} {
+		signed := signed
+		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+				sender := accounts[0]
 
-	// Create program and call it
-	futureAppID := 1
-	txgroup := []transactions.SignedTxn{
-		txnInfo.NewTxn(txntest.Txn{
-			Type:              protocol.ApplicationCallTx,
-			Sender:            sender,
-			ApplicationID:     0,
-			ApprovalProgram:   trivialAVMProgram,
-			ClearStateProgram: trivialAVMProgram,
-		}).SignedTxn(),
-		txnInfo.NewTxn(txntest.Txn{
-			Type:          protocol.ApplicationCallTx,
-			Sender:        sender,
-			ApplicationID: basics.AppIndex(futureAppID),
-		}).SignedTxn(),
+				// Create program and call it
+				futureAppID := basics.AppIndex(1)
+				createTxn := txnInfo.NewTxn(txntest.Txn{
+					Type:          protocol.ApplicationCallTx,
+					Sender:        sender.Addr,
+					ApplicationID: 0,
+					ApprovalProgram: `#pragma version 6
+txn ApplicationID
+bz create
+byte "app call"
+log
+b end
+create:
+byte "app creation"
+log
+end:
+int 1
+`,
+					ClearStateProgram: `#pragma version 6
+int 0
+`,
+				})
+				callTxn := txnInfo.NewTxn(txntest.Txn{
+					Type:          protocol.ApplicationCallTx,
+					Sender:        sender.Addr,
+					ApplicationID: futureAppID,
+				})
+
+				txntest.Group(&createTxn, &callTxn)
+
+				signedCreateTxn := createTxn.SignedTxn()
+				signedCallTxn := callTxn.SignedTxn()
+
+				if signed {
+					signedCreateTxn = signedCreateTxn.Txn.Sign(sender.Sk)
+					signedCallTxn = signedCallTxn.Txn.Sign(sender.Sk)
+				}
+
+				return simulationTestCase{
+					input: []transactions.SignedTxn{signedCreateTxn, signedCallTxn},
+					expected: simulation.Result{
+						Version: 1,
+						TxnGroups: []simulation.TxnGroupResult{
+							{
+								Txns: []simulation.TxnResult{
+									{
+										Txn: transactions.SignedTxnWithAD{
+											ApplyData: transactions.ApplyData{
+												ApplicationID: futureAppID,
+												EvalDelta: transactions.EvalDelta{
+													GlobalDelta: basics.StateDelta{},
+													LocalDeltas: map[uint64]basics.StateDelta{},
+													Logs:        []string{"app creation"},
+												},
+											},
+										},
+										MissingSignature: !signed,
+									},
+									{
+										Txn: transactions.SignedTxnWithAD{
+											ApplyData: transactions.ApplyData{
+												EvalDelta: transactions.EvalDelta{
+													GlobalDelta: basics.StateDelta{},
+													LocalDeltas: map[uint64]basics.StateDelta{},
+													Logs:        []string{"app call"},
+												},
+											},
+										},
+										MissingSignature: !signed,
+									},
+								},
+							},
+						},
+						WouldSucceed: signed,
+					},
+				}
+			})
+		})
 	}
-
-	err := attachGroupID(txgroup)
-	require.NoError(t, err)
-
-	_, err = s.Simulate(txgroup)
-	require.NoError(t, err)
 }
 
 // func TestRejectAppCall(t *testing.T) {
