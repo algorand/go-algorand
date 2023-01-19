@@ -2293,14 +2293,14 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	if identityVerified == 1 {
 		// take the peersLock to check the peersByID map and call addPeerLockless if the identity is available
 		// we hold the lock on behalf of addPeerLockless so that the peersByID check is consistent
-		wn.peersLock.RLock()
+		wn.peersLock.Lock()
 		_, exists := wn.peersByID[peerPublicKey]
 		if !exists {
 			peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 			peer.init(wn.config, wn.outgoingMessagesBufferSize)
 			wn.addPeerLockless(peer)
 		}
-		wn.peersLock.RUnlock()
+		wn.peersLock.Unlock()
 		if exists {
 			wn.log.Warnf("peer connection (%s) deduplicated because the identity is already known: %s", gossipAddr, peerPublicKey)
 			return
