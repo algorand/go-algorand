@@ -1353,7 +1353,7 @@ func (pps *WorkerState) startTxLatency(ctx context.Context, ac *libgoal.Client) 
 		bw := bufio.NewWriter(fout)
 		pps.latencyOuts = append(pps.latencyOuts, bw)
 	}
-	pps.sentTxid = make(chan txidSendTime, 20)
+	pps.sentTxid = make(chan txidSendTime, 1000)
 	pps.latencyBlocks = make(chan bookkeeping.Block, 1)
 	go pps.txidLatency(ctx)
 	go pps.txidLatencyBlockWaiter(ctx, ac)
@@ -1368,7 +1368,6 @@ const txidLatencySampleSize = 10000
 
 // thread which handles measuring total send-to-commit latency
 func (pps *WorkerState) txidLatency(ctx context.Context) {
-	done := ctx.Done()
 	byTxid := make(map[string]txidSendTimeIndexed, txidLatencySampleSize)
 	txidList := make([]string, 0, txidLatencySampleSize)
 	out := pps.latencyOuts[len(pps.latencyOuts)-1]
@@ -1407,7 +1406,7 @@ func (pps *WorkerState) txidLatency(ctx context.Context) {
 					fmt.Fprintf(out, "%d\n", dt.Nanoseconds())
 				}
 			}
-		case <-done:
+		case <-ctx.Done():
 			return
 		}
 	}
@@ -1438,57 +1437,50 @@ func (pps *WorkerState) txidLatencyDone() {
 const errRestartTime = time.Second
 
 func (pps *WorkerState) txidLatencyBlockWaiter(ctx context.Context, ac *libgoal.Client) {
+	defer close(pps.latencyBlocks)
 	done := ctx.Done()
+	isDone := func(err error) bool {
+		select {
+		case <-done:
+			return true
+		default:
+		}
+		fmt.Fprintf(os.Stderr, "block waiter st : %v", err)
+		time.Sleep(errRestartTime)
+		return false
+	}
 restart:
-	// I wish Go had macros
 	select {
 	case <-done:
-		close(pps.latencyBlocks)
 		return
 	default:
 	}
 	st, err := ac.Status()
 	if err != nil {
-		select {
-		case <-done:
-			close(pps.latencyBlocks)
+		if isDone(err) {
 			return
-		default:
 		}
-		fmt.Fprintf(os.Stderr, "block waiter st : %v", err)
-		time.Sleep(errRestartTime)
 		goto restart
 	}
 	nextRound := st.LastRound
 	for {
 		select {
 		case <-done:
-			close(pps.latencyBlocks)
 			return
 		default:
 		}
 		st, err = ac.WaitForRound(nextRound)
 		if err != nil {
-			select {
-			case <-done:
-				close(pps.latencyBlocks)
+			if isDone(err) {
 				return
-			default:
 			}
-			fmt.Fprintf(os.Stderr, "block waiter w: %v", err)
-			time.Sleep(errRestartTime)
 			goto restart
 		}
 		bb, err := ac.BookkeepingBlock(st.LastRound)
 		if err != nil {
-			select {
-			case <-done:
-				close(pps.latencyBlocks)
+			if isDone(err) {
 				return
-			default:
 			}
-			fmt.Fprintf(os.Stderr, "block waiter bb: %v", err)
-			time.Sleep(errRestartTime)
 			goto restart
 		}
 		pps.latencyBlocks <- bb
