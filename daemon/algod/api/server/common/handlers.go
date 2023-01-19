@@ -98,8 +98,8 @@ func returnCode(ctx lib.ReqContext, w http.ResponseWriter, code int, internal er
 	_ = json.NewEncoder(w).Encode(nil)
 }
 
-// Ready gets if the current node is healthy and fully caught up.
-// (GET /v2/ready)
+// Ready is a httpHandler for route GET /ready
+// it serves as a "readiness" endpoint that tells if the current node is healthy and fully caught-up.
 func Ready(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /ready Ready
 	//---
@@ -120,24 +120,22 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 	w.Header().Set("Content-Type", "application/json")
 
 	stat, err := ctx.Node.Status()
+	code := http.StatusOK
+
 	if err != nil {
-		returnCode(ctx, w, http.StatusInternalServerError, err)
-		return
-	}
-	if stat.StoppedAtUnsupportedRound {
-		returnCode(ctx, w, http.StatusInternalServerError, err)
-		return
-	}
-	if stat.Catchpoint != "" {
-		returnCode(ctx, w, http.StatusInternalServerError, fmt.Errorf("ready failed as the node is catching up"))
-		return
-	}
-	if ctx.Node.Ledger().Ledger == nil {
-		returnCode(ctx, w, http.StatusServiceUnavailable, fmt.Errorf("ready failed as the ledger is not yet available"))
-		return
+		code = http.StatusInternalServerError
+	} else if stat.StoppedAtUnsupportedRound {
+		code = http.StatusInternalServerError
+		err = fmt.Errorf("stopped at an unsupported round")
+	} else if stat.Catchpoint != "" {
+		code = http.StatusInternalServerError
+		err = fmt.Errorf("ready failed as the node is catching up")
+	} else if ctx.Node.Ledger().Ledger == nil {
+		code = http.StatusServiceUnavailable
+		err = fmt.Errorf("ready failed as the ledger is not yet available")
 	}
 
-	returnCode(ctx, w, http.StatusOK, nil)
+	returnCode(ctx, w, code, err)
 }
 
 // VersionsHandler is an httpHandler for route GET /versions
