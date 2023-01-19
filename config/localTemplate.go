@@ -470,7 +470,7 @@ type Local struct {
 
 	// SpeculativeAsmTimeOffset defines when speculative block assembly first starts, nanoseconds before consensus AgreementFilterTimeoutPeriod0 or AgreementFilterTimeout
 	// A huge value (greater than either AgreementFilterTimeout) disables this event.
-	SpeculativeAsmTimeOffset time.Duration `version[27]:"40000000"`
+	SpeculativeAsmTimeOffset time.Duration `version[27]:"400000000"`
 
 	SpeculativeAssemblyDisable bool `version[27]:"false"`
 }

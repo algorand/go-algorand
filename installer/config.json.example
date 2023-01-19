@@ -91,7 +91,7 @@
     "RestReadTimeoutSeconds": 15,
     "RestWriteTimeoutSeconds": 120,
     "RunHosted": false,
-    "SpeculativeAsmTimeOffset": 40000000,
+    "SpeculativeAsmTimeOffset": 400000000,
     "SpeculativeAssemblyDisable": false,
     "SuggestedFeeBlockHistory": 3,
     "SuggestedFeeSlidingWindowSize": 50,

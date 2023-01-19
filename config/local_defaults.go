@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -112,7 +112,7 @@ var defaultLocal = Local{
 	RestReadTimeoutSeconds:                     15,
 	RestWriteTimeoutSeconds:                    120,
 	RunHosted:                                  false,
-	SpeculativeAsmTimeOffset:                   40000000,
+	SpeculativeAsmTimeOffset:                   400000000,
 	SpeculativeAssemblyDisable:                 false,
 	SuggestedFeeBlockHistory:                   3,
 	SuggestedFeeSlidingWindowSize:              50,
