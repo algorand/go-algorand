@@ -38,8 +38,6 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
-	"github.com/algorand/go-algorand/stateproof"
-	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -102,9 +100,7 @@ func MakeData(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 
 	node.ledger.RegisterBlockListeners(blockListeners)
-
 	node.blockService = rpcs.MakeBlockService(node.log, cfg, node.ledger, p2pNode, node.genesisID)
-
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, make(chan catchup.PendingUnmatchedCertificate), node.lowPriorityCryptoVerificationPool)
 
@@ -129,14 +125,6 @@ func MakeData(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		}
 		node.log.Infof("resuming catchpoint catchup from state %d", catchpointCatchupState)
 	}
-
-	stateProofPathname := filepath.Join(genesisDir, config.StateProofFileName)
-	stateProofAccess, err := db.MakeAccessor(stateProofPathname, false, false)
-	if err != nil {
-		log.Errorf("Cannot load state proof data: %v", err)
-		return nil, err
-	}
-	node.stateProofWorker = stateproof.NewWorker(stateProofAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 
 	return node, err
 }
@@ -166,7 +154,6 @@ func (node *AlgorandDataNode) Start() {
 	} else {
 		node.catchupService.Start()
 		node.blockService.Start()
-		node.stateProofWorker.Start()
 		startNetwork()
 
 		node.startMonitoringRoutines()
@@ -194,8 +181,6 @@ func (node *AlgorandDataNode) Stop() {
 	defer func() {
 		node.mu.Unlock()
 		node.waitMonitoringRoutines()
-		node.stateProofWorker.Shutdown()
-		node.stateProofWorker = nil
 	}()
 
 	node.net.ClearHandlers()
@@ -291,6 +276,88 @@ func (node *AlgorandDataNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 
 func (node *AlgorandDataNode) oldKeyDeletionThread(_ <-chan struct{}) {
 	node.monitoringRoutinesWaitGroup.Done()
+}
+
+// StartCatchup starts the catchpoint mode and attempt to get to the provided catchpoint
+// this function is intended to be called externally via the REST api interface.
+func (node *AlgorandDataNode) StartCatchup(catchpoint string) error {
+	node.mu.Lock()
+	defer node.mu.Unlock()
+	if node.catchpointCatchupService != nil {
+		stats := node.catchpointCatchupService.GetStatistics()
+		// No need to return an error
+		if catchpoint == stats.CatchpointLabel {
+			return MakeCatchpointAlreadyInProgressError(catchpoint)
+		}
+		return MakeCatchpointUnableToStartError(stats.CatchpointLabel, catchpoint)
+	}
+	var err error
+	accessor := ledger.MakeCatchpointCatchupAccessor(node.ledger.Ledger, node.log)
+	node.catchpointCatchupService, err = catchup.MakeNewCatchpointCatchupService(catchpoint, node, node.log, node.net, accessor, node.config)
+	if err != nil {
+		node.log.Warnf("unable to create catchpoint catchup service : %v", err)
+		return err
+	}
+	node.catchpointCatchupService.Start(node.ctx)
+	node.log.Infof("starting catching up toward catchpoint %s", catchpoint)
+	return nil
+}
+
+// SetCatchpointCatchupMode change the node's operational mode from catchpoint catchup mode and back, it returns a
+// channel which contains the updated node context. This function need to work asynchronously so that the caller could
+// detect and handle the use case where the node is being shut down while we're switching to/from catchup mode without
+// deadlocking on the shared node mutex.
+func (node *AlgorandDataNode) SetCatchpointCatchupMode(catchpointCatchupMode bool) (outCtxCh <-chan context.Context) {
+	// create a non-buffered channel to return the newly created context. The fact that it's non-buffered here
+	// is important, as it allows us to synchronize the "receiving" of the new context before canceling of the previous
+	// one.
+	ctxCh := make(chan context.Context)
+	outCtxCh = ctxCh
+	go func() {
+		node.mu.Lock()
+		// check that the node wasn't canceled. If it have been canceled, it means that the node.Stop() was called, in which case
+		// we should close the channel.
+		if node.ctx.Err() == context.Canceled {
+			close(ctxCh)
+			node.mu.Unlock()
+			return
+		}
+		if catchpointCatchupMode {
+			// stop..
+			defer func() {
+				node.mu.Unlock()
+				node.waitMonitoringRoutines()
+			}()
+			node.net.ClearHandlers()
+			node.catchupService.Stop()
+			node.blockService.Stop()
+
+			prevNodeCancelFunc := node.cancelCtx
+
+			// Set up a context we can use to cancel goroutines on Stop()
+			node.ctx, node.cancelCtx = context.WithCancel(context.Background())
+			ctxCh <- node.ctx
+
+			prevNodeCancelFunc()
+			return
+		}
+		defer node.mu.Unlock()
+		// start
+		node.catchupService.Start()
+		node.blockService.Start()
+
+		// Set up a context we can use to cancel goroutines on Stop()
+		node.ctx, node.cancelCtx = context.WithCancel(context.Background())
+
+		node.startMonitoringRoutines()
+
+		// at this point, the catchpoint catchup is done ( either successfully or not.. )
+		node.catchpointCatchupService = nil
+
+		ctxCh <- node.ctx
+	}()
+	return
+
 }
 
 // AssembleBlock returns an error in sync mode

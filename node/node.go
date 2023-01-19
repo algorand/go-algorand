@@ -1411,9 +1411,9 @@ func (node *AlgorandFullNode) SetSyncRound(rnd uint64) error {
 	return node.catchupService.SetDisableSyncRound(disableSyncRound)
 }
 
-// GetSyncRound retrieves the sync round, removes cache offset used during SetSyncRound
+// GetSyncRound returns 0 (not set) in the base node implementation
 func (node *AlgorandFullNode) GetSyncRound() uint64 {
-	return node.catchupService.GetDisableSyncRound() - node.Config().MaxAcctLookback
+	return 0
 }
 
 // UnsetSyncRound removes the sync round constraint on the catchup service
