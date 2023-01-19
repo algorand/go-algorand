@@ -2268,18 +2268,6 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		}
 	}
 
-	// if we are certain this peer is this identity, potentially deduplicate the connection
-	// if a connection exists from that identity already
-	if identityVerified == 1 {
-		wn.peersLock.RLock()
-		_, exists := wn.peersByID[peerPublicKey]
-		wn.peersLock.RUnlock()
-		if exists {
-			wn.log.Warnf("peer connection (%s) deduplicated because the identity is already known: %s", gossipAddr, peerPublicKey)
-			return
-		}
-	}
-
 	throttledConnection := false
 	if atomic.AddInt32(&wn.throttledOutgoingConnections, int32(-1)) >= 0 {
 		throttledConnection = true
@@ -2300,9 +2288,30 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		identityVerified:            identityVerified,
 		features:                    decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
 	}
-	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
-	peer.init(wn.config, wn.outgoingMessagesBufferSize)
-	wn.addPeer(peer)
+
+	// if the identity is verified, check for an existing connection before initializing and adding
+	if identityVerified == 1 {
+		// take the peersLock to check the peersByID map and call addPeerLockless if the identity is available
+		// we hold the lock on behalf of addPeerLockless so that the peersByID check is consistent
+		wn.peersLock.RLock()
+		_, exists := wn.peersByID[peerPublicKey]
+		if !exists {
+			peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
+			peer.init(wn.config, wn.outgoingMessagesBufferSize)
+			wn.addPeerLockless(peer)
+		}
+		wn.peersLock.RUnlock()
+		if exists {
+			wn.log.Warnf("peer connection (%s) deduplicated because the identity is already known: %s", gossipAddr, peerPublicKey)
+			return
+		}
+		// if the peer doesn't have a verifiable identity, just call the regular addPeers,
+		// which manages the lock for us
+	} else {
+		peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
+		peer.init(wn.config, wn.outgoingMessagesBufferSize)
+		wn.addPeer(peer)
+	}
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedOut").With("remote", addr).With("local", localAddr).Infof("Made outgoing connection to peer %v", addr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
@@ -2468,6 +2477,12 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
+	wn.addPeerLockless(peer)
+}
+
+// addPeerLockless does the work of addPer, but assumes no locks.
+// callers should use addPeer instead or should take the wn.peersLock before calling
+func (wn *WebsocketNetwork) addPeerLockless(peer *wsPeer) {
 	// simple duplicate *pointer* check. should never trigger given the callers to addPeer
 	// TODO: remove this after making sure it is safe to do so
 	for _, p := range wn.peers {
