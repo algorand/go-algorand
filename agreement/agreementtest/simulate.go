@@ -170,7 +170,10 @@ func Simulate(dbname string, n basics.Round, roundDeadline time.Duration, ledger
 	}
 	_ = accessor
 
-	service := agreement.MakeService(parameters)
+	service, err := agreement.MakeService(parameters)
+	if err != nil {
+		return err
+	}
 	service.Start()
 	defer service.Shutdown()
 	defer stopwatch.shutdown()
