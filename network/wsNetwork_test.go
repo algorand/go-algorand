@@ -1145,6 +1145,8 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
+		// let the tryConnect go forward
+		time.Sleep(500 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
@@ -1165,6 +1167,8 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
 		netB.wg.Add(1)
 		netB.tryConnect(addrA, gossipA)
+		// let the tryConnect go forward
+		time.Sleep(500 * time.Millisecond)
 	}
 	// netB should have noticed it already knows this verified identity,
 	// and should not have proceeded with connection, while leaving the original
@@ -1192,6 +1196,8 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok || true {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
+		// let the tryConnect go forward
+		time.Sleep(500 * time.Millisecond)
 	}
 	// As mentioned above, we see a new peer on the reciever, but no peers elsewhere,
 	// and no new entries in peersByID. TCP would close this
@@ -1248,6 +1254,8 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
+		// let the tryConnect go forward
+		time.Sleep(500 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
@@ -1260,6 +1268,8 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
 		netB.wg.Add(1)
 		netB.tryConnect(addrA, gossipA)
+		// let the tryConnect go forward
+		time.Sleep(500 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
@@ -1311,6 +1321,8 @@ func TestPeeringBadIdentityChallenge(t *testing.T) {
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
+		// let the tryConnect go forward
+		time.Sleep(500 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
@@ -1324,6 +1336,8 @@ func TestPeeringBadIdentityChallenge(t *testing.T) {
 	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
 		netB.wg.Add(1)
 		netB.tryConnect(addrA, gossipA)
+		// let the tryConnect go forward
+		time.Sleep(500 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
@@ -1380,6 +1394,8 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
+		// let the tryConnect go forward
+		time.Sleep(500 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
@@ -1393,6 +1409,8 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
 		netB.wg.Add(1)
 		netB.tryConnect(addrA, gossipA)
+		// let the tryConnect go forward
+		time.Sleep(500 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
