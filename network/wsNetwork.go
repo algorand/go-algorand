@@ -675,6 +675,17 @@ func (wn *WebsocketNetwork) RequestConnectOutgoing(replace bool, quit <-chan str
 	}
 }
 
+// GetPeersByID returns a snapshot of our Peers by ID map
+func (wn *WebsocketNetwork) GetPeersByID() map[crypto.PublicKey]*wsPeer {
+	pbid := map[crypto.PublicKey]*wsPeer{}
+	wn.peersLock.RLock()
+	for k, v := range wn.peersByID {
+		pbid[k] = v
+	}
+	wn.peersLock.RUnlock()
+	return pbid
+}
+
 // GetPeers returns a snapshot of our Peer list, according to the specified options.
 // Peers may be duplicated and refer to the same underlying node.
 func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
@@ -1765,7 +1776,7 @@ func (wn *WebsocketNetwork) checkNewConnectionsNeeded() bool {
 	newAddrs := wn.phonebook.GetAddresses(desired+numOutgoingTotal, PhoneBookEntryRelayRole)
 	for _, na := range newAddrs {
 		if na == wn.config.PublicAddress {
-			// filter out self-public address, so we won't try to connect to outselves.
+			// filter out self-public address, so we won't try to connect to ourselves.
 			continue
 		}
 		gossipAddr, ok := wn.tryConnectReserveAddr(na)

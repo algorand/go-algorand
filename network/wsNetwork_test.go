@@ -273,6 +273,9 @@ func TestWebsocketNetworkSetPeersByID(t *testing.T) {
 	// Ensure a different peer cannot take the map entry
 	otherP := wsPeer{identity: id}
 	require.False(t, netA.setPeersByID(&otherP))
+
+	// Ensure the entry in the map wasn't changed
+	require.Equal(t, netA.peersByID[p.identity], &p)
 }
 
 func waitReady(t testing.TB, wn *WebsocketNetwork, timeout <-chan time.Time) bool {
@@ -1094,6 +1097,268 @@ func TestGetPeers(t *testing.T) {
 	expectAddrs := []string{addrA, "a", "b", "c"}
 	sort.Strings(expectAddrs)
 	assert.Equal(t, expectAddrs, peerAddrs)
+}
+
+// TestPeeringWithIdentityChallenge tests the happy path of connecting with identity challenge:
+// - both peers have correctly set ConnectionDeduplicationName
+// - both should exchange identities and verify
+// - both peers should be able to deduplicate connections
+func TestPeeringWithIdentityChallenge(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	deadlock.Opts.Disable = true
+
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	// set ConnectionDeduplicationName to ensure handlers are set when it starts,
+	// but we won't know the actual gossip address until this test starts the network
+	netA.config.ConnectionDeduplicationName = "something"
+
+	netB := makeTestWebsocketNode(t)
+	netB.config.GossipFanout = 1
+	netB.config.ConnectionDeduplicationName = "something"
+
+	netA.Start()
+	defer netA.Stop()
+	netB.Start()
+	defer netB.Stop()
+
+	addrA, _ := netA.Address()
+	gossipA, _ := netA.addrToGossipAddr(addrA)
+	netA.peersLock.Lock()
+	netA.config.ConnectionDeduplicationName = gossipA
+	netA.peersLock.Unlock()
+	addrB, _ := netB.Address()
+	gossipB, _ := netB.addrToGossipAddr(addrB)
+	netB.peersLock.Lock()
+	netB.config.ConnectionDeduplicationName = gossipB
+	netB.peersLock.Unlock()
+
+	// first connection should work just fine
+	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
+		netA.wg.Add(1)
+		netA.tryConnect(addrB, gossipB)
+	}
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+
+	// confirm identity maps are filled out
+	// netA was able to add theirs before finishing tryConnect
+	assert.Equal(t, 1, len(netA.peersByID))
+	// with only one entry in the peersByID map, save it to check later
+	var verifiedPeer Peer
+	for _, v := range netA.peersByID {
+		verifiedPeer = v
+	}
+	// netB has to wait for a final verification message over WS Handler, so pause a moment
+	time.Sleep(500 * time.Millisecond)
+	assert.Equal(t, 1, len(netB.GetPeersByID()))
+
+	// bi-directional connection from B should not proceed
+	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
+		netB.wg.Add(1)
+		netB.tryConnect(addrA, gossipA)
+	}
+	// netB should have noticed it already knows this verified identity,
+	// and should not have proceeded with connection, while leaving the original
+
+	// netA should have added this peer without a verified identity,
+	// and would drop this peer once it notices the connection is not in use.
+	// it seems these debug connections don't do that, but standard TCP would.
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netA.GetPeersByID()))
+	// Since there's still jut one entry in the peersByID map, make sure it hasn't changed
+	for _, v := range netA.peersByID {
+		assert.Equal(t, verifiedPeer, v)
+	}
+
+	// Also confirm the new inbound connection to netA is unverified
+	unverifiedConn := netA.GetPeers(PeersConnectedIn)[0].(*wsPeer)
+	assert.Equal(t, uint32(0), unverifiedConn.identityVerified)
+
+	// Check deduplication again, this time from A
+	// the "ok" from tryConnectReserveAddr is overloaded here because isConnectedTo
+	// will prevent this connection from attempting in the first place
+	// in the real world, that isConnectedTo doesn't always trigger, if the hosts are behind
+	// a load balancer or other NAT
+	if _, ok := netA.tryConnectReserveAddr(addrB); ok || true {
+		netA.wg.Add(1)
+		netA.tryConnect(addrB, gossipB)
+	}
+	// As mentioned above, we see a new peer on the reciever, but no peers elsewhere,
+	// and no new entries in peersByID. TCP would close this
+	assert.Equal(t, 2, len(netB.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeersByID()))
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netA.GetPeersByID()))
+}
+
+// TestPeeringReceiverIdentityChallengeOnly will confirm that if only the Receiver
+// Uses Identity, no identity exchange happens in the connection
+func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	// don't set netB's ConnectionDeduplicationName, meaning it wont' exchange identity
+	//netA.config.ConnectionDeduplicationName = "something"
+
+	netB := makeTestWebsocketNode(t)
+	netB.config.GossipFanout = 1
+	// set ConnectionDeduplicationName to ensure handlers are set when it starts,
+	// but we won't know the actual gossip address until this test starts the network
+	netB.config.ConnectionDeduplicationName = "something"
+
+	netA.Start()
+	defer netA.Stop()
+	netB.Start()
+	defer netB.Stop()
+
+	addrA, _ := netA.Address()
+	gossipA, _ := netA.addrToGossipAddr(addrA)
+	addrB, _ := netB.Address()
+	gossipB, _ := netB.addrToGossipAddr(addrB)
+	netB.peersLock.Lock()
+	netB.config.ConnectionDeduplicationName = gossipB
+	netB.peersLock.Unlock()
+
+	// first connection should work just fine
+	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
+		netA.wg.Add(1)
+		netA.tryConnect(addrB, gossipB)
+	}
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+
+	// confirm identity map was not added to for either host
+	assert.Equal(t, 0, len(netA.peersByID))
+	assert.Equal(t, 0, len(netB.peersByID))
+
+	// bi-directional connection should also work
+	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
+		netB.wg.Add(1)
+		netB.tryConnect(addrA, gossipA)
+	}
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 0, len(netA.peersByID))
+	assert.Equal(t, 0, len(netB.peersByID))
+}
+
+// TestPeeringBadIdentityChallenge will confirm that if the reciever can't match
+// the Address in the challenge to its ConnectionDeduplicationName, identities aren't exchanged
+func TestPeeringBadIdentityChallenge(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	netA.config.ConnectionDeduplicationName = "something"
+
+	netB := makeTestWebsocketNode(t)
+	netB.config.GossipFanout = 1
+	netB.config.ConnectionDeduplicationName = "DOESNT MATCH"
+
+	netA.Start()
+	defer netA.Stop()
+	netB.Start()
+	defer netB.Stop()
+
+	// Overload the deduplication name to use the gossip address
+	// netA will have a "correct" ConnectionDeduplicationName
+	// netB won't be updated, so the value won't ever match
+	addrA, _ := netA.Address()
+	gossipA, _ := netA.addrToGossipAddr(addrA)
+	netA.peersLock.Lock()
+	netA.config.ConnectionDeduplicationName = gossipA
+	netA.peersLock.Unlock()
+	addrB, _ := netB.Address()
+	gossipB, _ := netB.addrToGossipAddr(addrB)
+
+	// first connection should work just fine
+	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
+		netA.wg.Add(1)
+		netA.tryConnect(addrB, gossipB)
+	}
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+
+	// confirm identity map was not added to for either host
+	assert.Equal(t, 0, len(netA.peersByID))
+	assert.Equal(t, 0, len(netB.peersByID))
+
+	// bi-directional connection should also work
+	// this second connection should set identities, because the reciever address matches now
+	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
+		netB.wg.Add(1)
+		netB.tryConnect(addrA, gossipA)
+	}
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedOut)))
+	// netA has to wait for a final verification message over WS Handler, so pause a moment
+	time.Sleep(500 * time.Millisecond)
+	assert.Equal(t, 1, len(netA.GetPeersByID()))
+	assert.Equal(t, 1, len(netB.GetPeersByID()))
+}
+
+// TestPeeringSenderIdentityChallengeOnly will confirm that if only the Sender
+// Uses Identity, no identity exchange happens in the connection
+func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	// set ConnectionDeduplicationName to ensure handlers are set when it starts,
+	// but we won't know the actual gossip address until this test starts the network
+	netA.config.ConnectionDeduplicationName = "something"
+
+	netB := makeTestWebsocketNode(t)
+	netB.config.GossipFanout = 1
+	// don't set netB's ConnectionDeduplicationName, meaning it wont' exchange identity
+	//netB.config.ConnectionDeduplicationName = "something"
+
+	netA.Start()
+	defer netA.Stop()
+	netB.Start()
+	defer netB.Stop()
+
+	addrA, _ := netA.Address()
+	gossipA, _ := netA.addrToGossipAddr(addrA)
+	netA.peersLock.Lock()
+	netA.config.ConnectionDeduplicationName = gossipA
+	netA.peersLock.Unlock()
+	addrB, _ := netB.Address()
+	gossipB, _ := netB.addrToGossipAddr(addrB)
+
+	// first connection should work just fine
+	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
+		netA.wg.Add(1)
+		netA.tryConnect(addrB, gossipB)
+	}
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+
+	// confirm identity map was not added to for either host
+	// netA was able to add theirs before finishing tryConnect
+	assert.Equal(t, 0, len(netA.peersByID))
+	assert.Equal(t, 0, len(netB.peersByID))
+
+	// bi-directional connection should also work
+	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
+		netB.wg.Add(1)
+		netB.tryConnect(addrA, gossipA)
+	}
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 0, len(netA.peersByID))
+	assert.Equal(t, 0, len(netB.peersByID))
 }
 
 type benchmarkHandler struct {
