@@ -2318,6 +2318,10 @@
             "content": {},
             "description": "OK."
           },
+          "400": {
+            "content": {},
+            "description": "Node not ready yet"
+          },
           "500": {
             "content": {},
             "description": "Internal Error"

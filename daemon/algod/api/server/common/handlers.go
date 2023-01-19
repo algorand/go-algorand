@@ -126,10 +126,12 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 		code = http.StatusInternalServerError
 		err = fmt.Errorf("stopped at an unsupported round")
 	} else if stat.Catchpoint != "" {
-		code = http.StatusInternalServerError
+		code = http.StatusBadRequest
 		err = fmt.Errorf("ready failed as the node is catching up")
 	}
 
+	// question is that: how can we test when ctx lib.ReqContext need a full node?
+	// do we want to separate out the logic and test the logic
 	returnCode(ctx, w, code, err)
 }
 
