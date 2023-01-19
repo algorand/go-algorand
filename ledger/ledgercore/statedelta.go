@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -85,20 +85,26 @@ type KvValueDelta struct {
 }
 
 // StateDelta describes the delta between a given round to the previous round
+// If adding a new field not explicitly allocated by PopulateStateDelta, make sure to reset
+// it in .ReuseStateDelta to avoid dirty memory errors.
+// If adding fields make sure to add them to the .Reset() method to avoid dirty state
 type StateDelta struct {
 	// modified new accounts
 	Accts AccountDeltas
 
 	// modified kv pairs (nil == delete)
+	// not preallocated use .AddKvMod to insert instead of direct assignment
 	KvMods map[string]KvValueDelta
 
 	// new Txids for the txtail and TxnCounter, mapped to txn.LastValid
 	Txids map[transactions.Txid]IncludedTransactions
 
 	// new txleases for the txtail mapped to expiration
+	// not pre-allocated so use .AddTxLease to insert instead of direct assignment
 	Txleases map[Txlease]basics.Round
 
 	// new creatables creator lookup table
+	// not pre-allocated so use .AddCreatable to insert instead of direct assignment
 	Creatables map[basics.CreatableIndex]ModifiedCreatable
 
 	// new block header; read-only
@@ -112,7 +118,7 @@ type StateDelta struct {
 	PrevTimestamp int64
 
 	// initial hint for allocating data structures for StateDelta
-	initialTransactionsCount int
+	initialHint int
 
 	// The account totals reflecting the changes in this StateDelta object.
 	Totals AccountTotals
@@ -170,6 +176,7 @@ type AssetResourceRecord struct {
 // do that, each of the arrays here is constructed as a pair of (slice, map).
 // The map would point the address/address+creatable id onto the index of the
 // element within the slice.
+// If adding fields make sure to add them to the .reset() method to avoid dirty state
 type AccountDeltas struct {
 	// Actual data. If an account is deleted, `Accts` contains the BalanceRecord
 	// with an empty `AccountData` and a populated `Addr`.
@@ -180,39 +187,92 @@ type AccountDeltas struct {
 	// AppResources deltas. If app params or local state is deleted, there is a nil value in AppResources.Params or AppResources.State and Deleted flag set
 	AppResources []AppResourceRecord
 	// caches for {addr, app id} to app params delta resolution
+	// not preallocated - use UpsertAppResource instead of inserting directly
 	appResourcesCache map[AccountApp]int
 
-	AssetResources      []AssetResourceRecord
+	AssetResources []AssetResourceRecord
+	// not preallocated - use UpsertAssertResource instead of inserting directly
 	assetResourcesCache map[AccountAsset]int
 }
 
-// MakeStateDelta creates a new instance of StateDelta.
+// MakeStateDelta creates a new instance of StateDelta
 // hint is amount of transactions for evaluation, 2 * hint is for sender and receiver balance records.
 // This does not play well for AssetConfig and ApplicationCall transactions on scale
-func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, stateProofNext basics.Round) StateDelta {
-	return StateDelta{
-		Accts:    MakeAccountDeltas(hint),
-		KvMods:   make(map[string]KvValueDelta),
-		Txids:    make(map[transactions.Txid]IncludedTransactions, hint),
-		Txleases: make(map[Txlease]basics.Round),
-		// asset or application creation are considered as rare events so do not pre-allocate space for them
-		Creatables:               make(map[basics.CreatableIndex]ModifiedCreatable),
-		Hdr:                      hdr,
-		StateProofNext:           stateProofNext,
-		PrevTimestamp:            prevTimestamp,
-		initialTransactionsCount: hint,
+func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, stateProofNext basics.Round) (sd StateDelta) {
+	sd.PopulateStateDelta(hdr, prevTimestamp, hint, stateProofNext)
+	return
+}
+
+// PopulateStateDelta populates an existing StateDelta struct.
+// Used as a helper for MakeStateDelta as well as for re-using already allocated structs from sync.Pool
+func (sd *StateDelta) PopulateStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, stateProofNext basics.Round) {
+	if sd.Txids == nil {
+		sd.Txids = make(map[transactions.Txid]IncludedTransactions, hint)
 	}
+	if sd.Accts.notAllocated() {
+		sd.Accts = MakeAccountDeltas(hint)
+		sd.initialHint = hint
+	}
+	sd.Hdr = hdr
+	sd.StateProofNext = stateProofNext
+	sd.PrevTimestamp = prevTimestamp
 }
 
 // MakeAccountDeltas creates account delta
+// if adding new fields make sure to add them to the .reset() and .isEmpty() methods
 func MakeAccountDeltas(hint int) AccountDeltas {
 	return AccountDeltas{
 		Accts:      make([]BalanceRecord, 0, hint*2),
 		acctsCache: make(map[basics.Address]int, hint*2),
-
-		appResourcesCache:   make(map[AccountApp]int),
-		assetResourcesCache: make(map[AccountAsset]int),
 	}
+}
+
+// Reset resets the StateDelta for re-use with sync.Pool
+func (sd *StateDelta) Reset() {
+	sd.Accts.reset()
+	for txid := range sd.Txids {
+		delete(sd.Txids, txid)
+	}
+	for txLease := range sd.Txleases {
+		delete(sd.Txleases, txLease)
+	}
+	for creatableIndex := range sd.Creatables {
+		delete(sd.Creatables, creatableIndex)
+	}
+	for key := range sd.KvMods {
+		delete(sd.KvMods, key)
+	}
+	sd.Totals = AccountTotals{}
+
+	// these fields are going to be populated on next use but resetting them anyway for safety.
+	// we are not resetting sd.initialHint since it should only be reset if reallocating AccountDeltas
+	sd.Hdr = nil
+	sd.StateProofNext = basics.Round(0)
+	sd.PrevTimestamp = 0
+}
+
+// reset clears out allocated slices from AccountDeltas struct for reuse with sync.Pool
+func (ad *AccountDeltas) reset() {
+	// reset the slices
+	ad.Accts = ad.Accts[:0]
+	ad.AppResources = ad.AppResources[:0]
+	ad.AssetResources = ad.AssetResources[:0]
+
+	// reset the maps
+	for address := range ad.acctsCache {
+		delete(ad.acctsCache, address)
+	}
+	for aApp := range ad.appResourcesCache {
+		delete(ad.appResourcesCache, aApp)
+	}
+	for aAsset := range ad.assetResourcesCache {
+		delete(ad.assetResourcesCache, aAsset)
+	}
+}
+
+// notAllocated returns true if any of the fields allocated by MakeAccountDeltas is nil
+func (ad *AccountDeltas) notAllocated() bool {
+	return ad.Accts == nil || ad.acctsCache == nil
 }
 
 // GetData lookups AccountData by address
@@ -403,6 +463,30 @@ func (ad *AccountDeltas) UpsertAssetResource(addr basics.Address, aidx basics.As
 	ad.assetResourcesCache[key] = last
 }
 
+// AddTxLease adds a new TxLease to the StateDelta
+func (sd *StateDelta) AddTxLease(txLease Txlease, expired basics.Round) {
+	if sd.Txleases == nil {
+		sd.Txleases = make(map[Txlease]basics.Round)
+	}
+	sd.Txleases[txLease] = expired
+}
+
+// AddCreatable adds a new Creatable to the StateDelta
+func (sd *StateDelta) AddCreatable(idx basics.CreatableIndex, creatable ModifiedCreatable) {
+	if sd.Creatables == nil {
+		sd.Creatables = make(map[basics.CreatableIndex]ModifiedCreatable)
+	}
+	sd.Creatables[idx] = creatable
+}
+
+// AddKvMod adds a new KvMod to the StateDelta
+func (sd *StateDelta) AddKvMod(key string, delta KvValueDelta) {
+	if sd.KvMods == nil {
+		sd.KvMods = make(map[string]KvValueDelta)
+	}
+	sd.KvMods[key] = delta
+}
+
 // OptimizeAllocatedMemory by reallocating maps to needed capacity
 // For each data structure, reallocate if it would save us at least 50MB aggregate
 // If provided maxBalLookback or maxTxnLife are zero, dependent optimizations will not occur.
@@ -416,8 +500,8 @@ func (sd *StateDelta) OptimizeAllocatedMemory(maxBalLookback uint64) {
 
 	// acctsCache takes up 64 bytes per entry, and is saved for 320 rounds
 	// realloc if original allocation capacity greater than length of data, and space difference is significant
-	if 2*sd.initialTransactionsCount > len(sd.Accts.acctsCache) &&
-		uint64(2*sd.initialTransactionsCount-len(sd.Accts.acctsCache))*accountMapCacheEntrySize*maxBalLookback > stateDeltaTargetOptimizationThreshold {
+	if 2*sd.initialHint > len(sd.Accts.acctsCache) &&
+		uint64(2*sd.initialHint-len(sd.Accts.acctsCache))*accountMapCacheEntrySize*maxBalLookback > stateDeltaTargetOptimizationThreshold {
 		acctsCache := make(map[basics.Address]int, len(sd.Accts.acctsCache))
 		for k, v := range sd.Accts.acctsCache {
 			acctsCache[k] = v

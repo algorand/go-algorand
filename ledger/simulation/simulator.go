@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -117,7 +117,7 @@ var proxySigner = crypto.PrivateKey{
 // check verifies that the transaction is well-formed and has valid or missing signatures.
 // An invalid transaction group error is returned if the transaction is not well-formed or there are invalid signatures.
 // To make things easier, we support submitting unsigned transactions and will respond whether signatures are missing.
-func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn, debugger logic.DebuggerHook) ([]int, error) {
+func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn, debugger logic.EvalTracer) ([]int, error) {
 	proxySignerSecrets, err := crypto.SecretKeyToSignatureSecrets(proxySigner)
 	if err != nil {
 		return nil, err
@@ -152,7 +152,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	}
 
 	// Verify the signed transactions are well-formed and have valid signatures
-	_, err = verify.TxnGroupWithDebugger(txnsToVerify, hdr, nil, s.ledger, debugger)
+	_, err = verify.TxnGroupWithTracer(txnsToVerify, &hdr, nil, s.ledger, debugger)
 	if err != nil {
 		return nil, InvalidTxGroupError{SimulatorError{err}}
 	}
@@ -160,17 +160,18 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	return missingSigs, nil
 }
 
-func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.SignedTxn, debugger logic.DebuggerHook) (*ledgercore.ValidatedBlock, error) {
+func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.SignedTxn, tracer logic.EvalTracer) (*ledgercore.ValidatedBlock, error) {
 	// s.ledger has 'StartEvaluator' because *data.Ledger is embedded in the simulatorLedger
 	// and data.Ledger embeds *ledger.Ledger
 	eval, err := s.ledger.StartEvaluator(hdr, len(stxns), 0)
 	if err != nil {
 		return nil, err
 	}
+	eval.Tracer = tracer
 
 	group := transactions.WrapSignedTxnsWithAD(stxns)
 
-	err = eval.TransactionGroupWithDebugger(group, debugger)
+	err = eval.TransactionGroup(group)
 	if err != nil {
 		return nil, EvalFailureError{SimulatorError{err}}
 	}
@@ -184,7 +185,7 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.Si
 	return vb, nil
 }
 
-func (s Simulator) simulateWithDebugger(txgroup []transactions.SignedTxn, debugger logic.DebuggerHook) (*ledgercore.ValidatedBlock, []int, error) {
+func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer logic.EvalTracer) (*ledgercore.ValidatedBlock, []int, error) {
 	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)
 	if err != nil {
 		return nil, nil, err
@@ -193,18 +194,18 @@ func (s Simulator) simulateWithDebugger(txgroup []transactions.SignedTxn, debugg
 	hdr := nextBlock.BlockHeader
 
 	// check that the transaction is well-formed and mark whether signatures are missing
-	missingSignatures, err := s.check(hdr, txgroup, debugger)
+	missingSignatures, err := s.check(hdr, txgroup, tracer)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	vb, err := s.evaluate(hdr, txgroup, debugger)
+	vb, err := s.evaluate(hdr, txgroup, tracer)
 	return vb, missingSignatures, err
 }
 
 func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
-	simulatorDebugger := makeDebuggerHook(txgroup)
-	block, missingSigIndexes, err := s.simulateWithDebugger(txgroup, &simulatorDebugger)
+	simulatorTracer := makeEvalTracer(txgroup)
+	block, missingSigIndexes, err := s.simulateWithTracer(txgroup, simulatorTracer)
 	if err != nil {
 		// if there was a non-evaluation error, return it
 		if !errors.As(err, &EvalFailureError{}) {
@@ -212,13 +213,13 @@ func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
 		}
 
 		// otherwise add the failure message and location to the result
-		simulatorDebugger.result.TxnGroups[0].FailureMessage = err.Error()
-		simulatorDebugger.result.TxnGroups[0].FailedAt = simulatorDebugger.absolutePath()
+		simulatorTracer.result.TxnGroups[0].FailureMessage = err.Error()
+		simulatorTracer.result.TxnGroups[0].FailedAt = simulatorTracer.absolutePath()
 
 		// and set WouldSucceed to false
-		simulatorDebugger.result.WouldSucceed = false
+		simulatorTracer.result.WouldSucceed = false
 	} else {
-		err = validateResultAgainstBlock(simulatorDebugger.result, block)
+		err = validateResultAgainstBlock(simulatorTracer.result, block)
 		if err != nil {
 			return Result{}, fmt.Errorf("failed to validate simulated block against result: %w", err)
 		}
@@ -226,11 +227,11 @@ func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
 
 	// mark whether signatures are missing
 	for _, index := range missingSigIndexes {
-		simulatorDebugger.result.TxnGroups[0].Txns[index].MissingSignature = true
-		simulatorDebugger.result.WouldSucceed = false
+		simulatorTracer.result.TxnGroups[0].Txns[index].MissingSignature = true
+		simulatorTracer.result.WouldSucceed = false
 	}
 
-	return *simulatorDebugger.result, nil
+	return *simulatorTracer.result, nil
 }
 
 func validateResultAgainstBlock(result *Result, block *ledgercore.ValidatedBlock) error {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/util/db"
@@ -31,7 +31,7 @@ import (
 
 // chooseParticipation chooses which participation keys to use for going online
 // based on the address, round number, and available participation databases
-func (c *Client) chooseParticipation(address basics.Address, round basics.Round) (part generated.ParticipationKey, err error) {
+func (c *Client) chooseParticipation(address basics.Address, round basics.Round) (part model.ParticipationKey, err error) {
 	parts, err := c.ListParticipationKeys()
 	if err != nil {
 		return
@@ -140,7 +140,7 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 
 // ListParticipationKeys returns the available participation keys,
 // as a response object.
-func (c *Client) ListParticipationKeys() (partKeyFiles generated.ParticipationKeysResponse, err error) {
+func (c *Client) ListParticipationKeys() (partKeyFiles model.ParticipationKeysResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		partKeyFiles, err = algod.GetParticipationKeys()

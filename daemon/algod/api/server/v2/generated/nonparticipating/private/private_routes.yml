@@ -1,0 +1,20 @@
+package: private
+generate:
+  echo-server: true
+  embedded-spec: true
+output-options:
+  include-tags:
+  - nonparticipating
+  - private
+  exclude-tags:
+  - public
+  - participating
+  - data
+  - common
+  type-mappings:
+    integer: uint64
+  skip-prune: true
+additional-imports:
+  - alias: "."
+    package: "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
+output: ./server/v2/generated/nonparticipating/private/routes.go

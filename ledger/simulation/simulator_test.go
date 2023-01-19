@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/txntest"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	"github.com/algorand/go-algorand/protocol"
@@ -28,39 +28,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// > Simulate With Debugger
-
-type simpleDebugger struct {
-	logic.NullDebuggerHook
-
-	beforeTxnCalls int
-	afterTxnCalls  int
-
-	beforeInnerTxnGroupCalls   int
-	afterInnerTxnTxnGroupCalls int
-}
-
-func (d *simpleDebugger) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
-	d.beforeTxnCalls++
-	return nil
-}
-func (d *simpleDebugger) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData) error {
-	d.afterTxnCalls++
-	return nil
-}
-
-func (d *simpleDebugger) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
-	d.beforeInnerTxnGroupCalls++
-	return nil
-}
-func (d *simpleDebugger) AfterInnerTxnGroup(ep *logic.EvalParams) error {
-	d.afterInnerTxnTxnGroupCalls++
-	return nil
-}
-
-// TestSimulateWithDebugger is a simple test to ensure that the debugger hooks are called. More
-// complicated tests are in the logic/debugger_test.go file.
-func TestSimulateWithDebugger(t *testing.T) {
+// TestSimulateWithTrace is a simple test to ensure that the debugger hooks are called. More
+// complicated tests are in the logic/tracer_test.go file.
+func TestSimulateWithTrace(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -80,11 +50,18 @@ func TestSimulateWithDebugger(t *testing.T) {
 		}).SignedTxn(),
 	}
 
-	debugger := simpleDebugger{}
-	_, _, err := s.simulateWithDebugger(txgroup, &debugger)
+	mockTracer := &mocktracer.Tracer{}
+	block, _, err := s.simulateWithTracer(txgroup, mockTracer)
 	require.NoError(t, err)
-	require.Equal(t, 1, debugger.beforeTxnCalls)
-	require.Equal(t, 1, debugger.afterTxnCalls)
-	require.Zero(t, debugger.beforeInnerTxnGroupCalls)
-	require.Zero(t, debugger.afterInnerTxnTxnGroupCalls)
+
+	payset := block.Block().Payset
+	require.Len(t, payset, 1)
+
+	expectedEvents := []mocktracer.Event{
+		mocktracer.BeforeTxnGroup(1),
+		mocktracer.BeforeTxn(protocol.PaymentTx),
+		mocktracer.AfterTxn(protocol.PaymentTx, payset[0].ApplyData),
+		mocktracer.AfterTxnGroup(1),
+	}
+	require.Equal(t, expectedEvents, mockTracer.Events)
 }

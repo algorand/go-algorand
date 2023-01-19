@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -85,8 +85,16 @@ type StatusReport struct {
 	CatchpointCatchupTotalAccounts     uint64
 	CatchpointCatchupProcessedAccounts uint64
 	CatchpointCatchupVerifiedAccounts  uint64
+	CatchpointCatchupTotalKVs          uint64
+	CatchpointCatchupProcessedKVs      uint64
+	CatchpointCatchupVerifiedKVs       uint64
 	CatchpointCatchupTotalBlocks       uint64
 	CatchpointCatchupAcquiredBlocks    uint64
+	UpgradePropose                     protocol.ConsensusVersion
+	UpgradeApprove                     bool
+	UpgradeDelay                       uint64
+	NextProtocolVoteBefore             basics.Round
+	NextProtocolApprovals              uint64
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen
@@ -211,7 +219,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
 	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledger.BlockListener{}, cfg)
+	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
 	if err != nil {
 		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
 		return nil, err
@@ -219,7 +227,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log)
 
-	blockListeners := []ledger.BlockListener{
+	blockListeners := []ledgercore.BlockListener{
 		node.transactionPool,
 		node,
 	}
@@ -228,7 +236,20 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		blockListeners = append(blockListeners, &accountListener)
 	}
 	node.ledger.RegisterBlockListeners(blockListeners)
-	node.txHandler = data.MakeTxHandler(node.transactionPool, node.ledger, node.net, node.genesisID, node.genesisHash, node.lowPriorityCryptoVerificationPool)
+	txHandlerOpts := data.TxHandlerOpts{
+		TxPool:        node.transactionPool,
+		ExecutionPool: node.lowPriorityCryptoVerificationPool,
+		Ledger:        node.ledger,
+		Net:           node.net,
+		GenesisID:     node.genesisID,
+		GenesisHash:   node.genesisHash,
+		Config:        cfg,
+	}
+	node.txHandler, err = data.MakeTxHandler(txHandlerOpts)
+	if err != nil {
+		log.Errorf("Cannot initialize TxHandler: %v", err)
+		return nil, err
+	}
 
 	// Indexer setup
 	if cfg.IsIndexerActive && cfg.Archival {
@@ -387,7 +408,8 @@ func (node *AlgorandFullNode) startMonitoringRoutines() {
 	go node.oldKeyDeletionThread(node.ctx.Done())
 
 	if node.config.EnableUsageLog {
-		go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
+		node.monitoringRoutinesWaitGroup.Add(1)
+		go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, &node.monitoringRoutinesWaitGroup)
 	}
 }
 
@@ -502,7 +524,7 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 		return err
 	}
 
-	_, err = verify.TxnGroup(txgroup, b, node.ledger.VerifiedTransactionCache(), node.ledger)
+	_, err = verify.TxnGroup(txgroup, &b, node.ledger.VerifiedTransactionCache(), node.ledger)
 	if err != nil {
 		node.log.Warnf("malformed transaction: %v", err)
 		return err
@@ -683,6 +705,9 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 		s.CatchpointCatchupTotalAccounts = stats.TotalAccounts
 		s.CatchpointCatchupProcessedAccounts = stats.ProcessedAccounts
 		s.CatchpointCatchupVerifiedAccounts = stats.VerifiedAccounts
+		s.CatchpointCatchupTotalKVs = stats.TotalKVs
+		s.CatchpointCatchupProcessedKVs = stats.ProcessedKVs
+		s.CatchpointCatchupVerifiedKVs = stats.VerifiedKVs
 		s.CatchpointCatchupTotalBlocks = stats.TotalBlocks
 		s.CatchpointCatchupAcquiredBlocks = stats.AcquiredBlocks
 		s.CatchupTime = time.Now().Sub(stats.StartTime)
@@ -701,6 +726,13 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 		s.LastCatchpoint = node.ledger.GetLastCatchpointLabel()
 		s.SynchronizingTime = node.catchupService.SynchronizingTime()
 		s.CatchupTime = node.catchupService.SynchronizingTime()
+
+		s.UpgradePropose = b.UpgradeVote.UpgradePropose
+		s.UpgradeApprove = b.UpgradeApprove
+		s.UpgradeDelay = uint64(b.UpgradeVote.UpgradeDelay)
+		s.NextProtocolVoteBefore = b.NextProtocolVoteBefore
+		s.NextProtocolApprovals = b.UpgradeState.NextProtocolApprovals
+
 	}
 
 	return
@@ -720,22 +752,6 @@ func (node *AlgorandFullNode) GenesisHash() crypto.Digest {
 	defer node.mu.Unlock()
 
 	return node.genesisHash
-}
-
-// PoolStats returns a PoolStatus structure reporting stats about the transaction pool
-func (node *AlgorandFullNode) PoolStats() PoolStats {
-	r := node.ledger.Latest()
-	last, err := node.ledger.Block(r)
-	if err != nil {
-		node.log.Warnf("AlgorandFullNode: could not read ledger's last round: %v", err)
-		return PoolStats{}
-	}
-
-	return PoolStats{
-		NumConfirmed:   uint64(len(last.Payset)),
-		NumOutstanding: uint64(node.transactionPool.PendingCount()),
-		NumExpired:     uint64(node.transactionPool.NumExpired(r)),
-	}
 }
 
 // SuggestedFee returns the suggested fee per byte recommended to ensure a new transaction is processed in a timely fashion.
@@ -1002,7 +1018,7 @@ func (node *AlgorandFullNode) txPoolGaugeThread(done <-chan struct{}) {
 	for true {
 		select {
 		case <-ticker.C:
-			txPoolGauge.Set(float64(node.transactionPool.PendingCount()))
+			txPoolGauge.Set(uint64(node.transactionPool.PendingCount()))
 		case <-done:
 			return
 		}
@@ -1385,4 +1401,22 @@ func (node *AlgorandFullNode) Record(account basics.Address, round basics.Round,
 func (node *AlgorandFullNode) IsParticipating() bool {
 	round := node.ledger.Latest() + 1
 	return node.accountManager.HasLiveKeys(round, round+10)
+}
+
+// SetSyncRound sets the minimum sync round on the catchup service
+func (node *AlgorandFullNode) SetSyncRound(rnd uint64) error {
+	// Calculate the first round for which we want to disable catchup from the network.
+	// This is based on the size of the cache used in the ledger.
+	disableSyncRound := rnd + node.Config().MaxAcctLookback
+	return node.catchupService.SetDisableSyncRound(disableSyncRound)
+}
+
+// GetSyncRound retrieves the sync round, removes cache offset used during SetSyncRound
+func (node *AlgorandFullNode) GetSyncRound() uint64 {
+	return node.catchupService.GetDisableSyncRound() - node.Config().MaxAcctLookback
+}
+
+// UnsetSyncRound removes the sync round constraint on the catchup service
+func (node *AlgorandFullNode) UnsetSyncRound() {
+	node.catchupService.UnsetDisableSyncRound()
 }

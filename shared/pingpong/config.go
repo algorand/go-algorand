@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,6 +36,7 @@ type PpConfig struct {
 	RandomizeFee    bool
 	RandomizeAmt    bool
 	RandomizeDst    bool
+	MaxRandomDst    uint64
 	MaxFee          uint64
 	MinFee          uint64
 	MaxAmt          uint64
@@ -98,6 +99,7 @@ var DefaultConfig = PpConfig{
 	RandomizeFee:    false,
 	RandomizeAmt:    false,
 	RandomizeDst:    false,
+	MaxRandomDst:    200000,
 	MaxFee:          10000,
 	MinFee:          1000,
 	MaxAmt:          1000,

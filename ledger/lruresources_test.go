@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -39,11 +40,11 @@ func TestLRUBasicResources(t *testing.T) {
 	// write 50 resources
 	for i := 0; i < resourcesNum; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-		res := persistedResourcesData{
-			addrid: int64(i),
-			aidx:   basics.CreatableIndex(i),
-			round:  basics.Round(i),
-			data:   resourcesData{Total: uint64(i)},
+		res := store.PersistedResourcesData{
+			Addrid: int64(i),
+			Aidx:   basics.CreatableIndex(i),
+			Round:  basics.Round(i),
+			Data:   store.ResourcesData{Total: uint64(i)},
 		}
 		baseRes.write(res, addr)
 	}
@@ -53,10 +54,10 @@ func TestLRUBasicResources(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		res, has := baseRes.read(addr, basics.CreatableIndex(i))
 		require.True(t, has)
-		require.Equal(t, basics.Round(i), res.round)
-		require.Equal(t, int64(i), res.addrid)
-		require.Equal(t, uint64(i), res.data.Total)
-		require.Equal(t, basics.CreatableIndex(i), res.aidx)
+		require.Equal(t, basics.Round(i), res.Round)
+		require.Equal(t, int64(i), res.Addrid)
+		require.Equal(t, uint64(i), res.Data.Total)
+		require.Equal(t, basics.CreatableIndex(i), res.Aidx)
 	}
 
 	// verify expected missing entries
@@ -64,7 +65,7 @@ func TestLRUBasicResources(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		res, has := baseRes.read(addr, basics.CreatableIndex(i%resourcesNum))
 		require.False(t, has)
-		require.Equal(t, persistedResourcesData{}, res)
+		require.Equal(t, store.PersistedResourcesData{}, res)
 	}
 
 	baseRes.prune(resourcesNum / 2)
@@ -77,13 +78,13 @@ func TestLRUBasicResources(t *testing.T) {
 		if i >= resourcesNum/2 && i < resourcesNum {
 			// expected to have it.
 			require.True(t, has)
-			require.Equal(t, basics.Round(i), res.round)
-			require.Equal(t, int64(i), res.addrid)
-			require.Equal(t, uint64(i), res.data.Total)
-			require.Equal(t, basics.CreatableIndex(i), res.aidx)
+			require.Equal(t, basics.Round(i), res.Round)
+			require.Equal(t, int64(i), res.Addrid)
+			require.Equal(t, uint64(i), res.Data.Total)
+			require.Equal(t, basics.CreatableIndex(i), res.Aidx)
 		} else {
 			require.False(t, has)
-			require.Equal(t, persistedResourcesData{}, res)
+			require.Equal(t, store.PersistedResourcesData{}, res)
 		}
 	}
 }
@@ -99,11 +100,11 @@ func TestLRUResourcesPendingWrites(t *testing.T) {
 		go func(i int) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
 			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-			res := persistedResourcesData{
-				addrid: int64(i),
-				aidx:   basics.CreatableIndex(i),
-				round:  basics.Round(i),
-				data:   resourcesData{Total: uint64(i)},
+			res := store.PersistedResourcesData{
+				Addrid: int64(i),
+				Aidx:   basics.CreatableIndex(i),
+				Round:  basics.Round(i),
+				Data:   store.ResourcesData{Total: uint64(i)},
 			}
 			baseRes.writePending(res, addr)
 		}(i)
@@ -152,11 +153,11 @@ func TestLRUResourcesPendingWritesWarning(t *testing.T) {
 	for j := 0; j < 50; j++ {
 		for i := 0; i < j; i++ {
 			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-			res := persistedResourcesData{
-				addrid: int64(i),
-				aidx:   basics.CreatableIndex(i),
-				round:  basics.Round(i),
-				data:   resourcesData{Total: uint64(i)},
+			res := store.PersistedResourcesData{
+				Addrid: int64(i),
+				Aidx:   basics.CreatableIndex(i),
+				Round:  basics.Round(i),
+				Data:   store.ResourcesData{Total: uint64(i)},
 			}
 			baseRes.writePending(res, addr)
 		}
@@ -179,11 +180,11 @@ func TestLRUResourcesOmittedPendingWrites(t *testing.T) {
 
 	for i := 0; i < pendingWritesBuffer*2; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-		res := persistedResourcesData{
-			addrid: int64(i),
-			aidx:   basics.CreatableIndex(i),
-			round:  basics.Round(i),
-			data:   resourcesData{Total: uint64(i)},
+		res := store.PersistedResourcesData{
+			Addrid: int64(i),
+			Aidx:   basics.CreatableIndex(i),
+			Round:  basics.Round(i),
+			Data:   store.ResourcesData{Total: uint64(i)},
 		}
 		baseRes.writePending(res, addr)
 	}
@@ -195,10 +196,10 @@ func TestLRUResourcesOmittedPendingWrites(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		res, has := baseRes.read(addr, basics.CreatableIndex(i))
 		require.True(t, has)
-		require.Equal(t, basics.Round(i), res.round)
-		require.Equal(t, int64(i), res.addrid)
-		require.Equal(t, uint64(i), res.data.Total)
-		require.Equal(t, basics.CreatableIndex(i), res.aidx)
+		require.Equal(t, basics.Round(i), res.Round)
+		require.Equal(t, int64(i), res.Addrid)
+		require.Equal(t, uint64(i), res.Data.Total)
+		require.Equal(t, basics.CreatableIndex(i), res.Aidx)
 	}
 
 	// verify expected missing entries
@@ -206,7 +207,7 @@ func TestLRUResourcesOmittedPendingWrites(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		res, has := baseRes.read(addr, basics.CreatableIndex(i))
 		require.False(t, has)
-		require.Equal(t, persistedResourcesData{}, res)
+		require.Equal(t, store.PersistedResourcesData{}, res)
 	}
 }
 
@@ -237,7 +238,7 @@ func benchLruWriteResources(b *testing.B, fillerAccounts []cachedResourceData, a
 
 func fillLRUResources(baseRes lruResources, fillerAccounts []cachedResourceData) lruResources {
 	for _, entry := range fillerAccounts {
-		baseRes.write(entry.persistedResourcesData, entry.address)
+		baseRes.write(entry.PersistedResourcesData, entry.address)
 	}
 	return baseRes
 }
@@ -251,11 +252,11 @@ func generatePersistedResourcesData(startRound, endRound int) []cachedResourceDa
 		digest := crypto.Hash(buffer)
 
 		accounts[i-startRound] = cachedResourceData{
-			persistedResourcesData: persistedResourcesData{
-				addrid: int64(i),
-				aidx:   basics.CreatableIndex(i),
-				round:  basics.Round(i + startRound),
-				data:   resourcesData{Total: uint64(i)},
+			PersistedResourcesData: store.PersistedResourcesData{
+				Addrid: int64(i),
+				Aidx:   basics.CreatableIndex(i),
+				Round:  basics.Round(i + startRound),
+				Data:   store.ResourcesData{Total: uint64(i)},
 			},
 			address: basics.Address(digest),
 		}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -216,6 +216,9 @@ const ConsensusVAlpha3 = ConsensusVersion("alpha3")
 
 // ConsensusVAlpha4 uses the same parameters as ConsensusV34.
 const ConsensusVAlpha4 = ConsensusVersion("alpha4")
+
+// ConsensusVAlpha5 uses the same parameters as ConsensusV36.
+const ConsensusVAlpha5 = ConsensusVersion("alpha5")
 
 // !!! ********************* !!!
 // !!! *** Please update ConsensusCurrentVersion when adding new protocol versions *** !!!

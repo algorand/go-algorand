@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,22 +23,28 @@ import (
 
 func (cs *roundCowState) AllocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error {
 	if global {
-		cs.mods.Creatables[basics.CreatableIndex(index)] = ledgercore.ModifiedCreatable{
-			Ctype:   basics.AssetCreatable,
-			Creator: addr,
-			Created: true,
-		}
+		cs.mods.AddCreatable(
+			basics.CreatableIndex(index),
+			ledgercore.ModifiedCreatable{
+				Ctype:   basics.AssetCreatable,
+				Creator: addr,
+				Created: true,
+			},
+		)
 	}
 	return nil
 }
 
 func (cs *roundCowState) DeallocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error {
 	if global {
-		cs.mods.Creatables[basics.CreatableIndex(index)] = ledgercore.ModifiedCreatable{
-			Ctype:   basics.AssetCreatable,
-			Creator: addr,
-			Created: false,
-		}
+		cs.mods.AddCreatable(
+			basics.CreatableIndex(index),
+			ledgercore.ModifiedCreatable{
+				Ctype:   basics.AssetCreatable,
+				Creator: addr,
+				Created: false,
+			},
+		)
 	}
 	return nil
 }

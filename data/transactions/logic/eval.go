@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -282,8 +282,8 @@ type EvalParams struct {
 	SigLedger LedgerForSignature
 	Ledger    LedgerForLogic
 
-	// optional debugger
-	Debugger DebuggerHook
+	// optional tracer
+	Tracer EvalTracer
 
 	// MinAvmVersion is the minimum allowed AVM version of this program.
 	// The program must reject if its version is less than this version. If
@@ -459,7 +459,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		logger:                  caller.logger,
 		SigLedger:               caller.SigLedger,
 		Ledger:                  caller.Ledger,
-		Debugger:                caller.Debugger,
+		Tracer:                  caller.Tracer,
 		MinAvmVersion:           &minAvmVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
@@ -590,12 +590,12 @@ type EvalContext struct {
 	// Set of PC values that branches we've seen so far might
 	// go. So, if checkStep() skips one, that branch is trying to
 	// jump into the middle of a multibyte instruction
-	branchTargets map[int]bool
+	branchTargets []bool
 
 	// Set of PC values that we have begun a checkStep() with. So
 	// if a back jump is going to a value that isn't here, it's
 	// jumping into the middle of multibyte instruction.
-	instructionStarts map[int]bool
+	instructionStarts []bool
 
 	programHashCached crypto.Digest
 }
@@ -791,11 +791,12 @@ func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (b
 	return pass, err
 }
 
-// EvalSignature evaluates the logicsig of the ith transaction in params.
+// EvalSignatureFull evaluates the logicsig of the ith transaction in params.
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
-func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
+// It returns EvalContext suitable for obtaining additional info about the execution.
+func EvalSignatureFull(gi int, params *EvalParams) (pass bool, pcx *EvalContext, err error) {
 	if params.SigLedger == nil {
-		return false, errors.New("no sig ledger in signature eval")
+		return false, nil, errors.New("no sig ledger in signature eval")
 	}
 	cx := EvalContext{
 		EvalParams:   params,
@@ -803,7 +804,15 @@ func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
 		groupIndex:   gi,
 		txn:          &params.TxnGroup[gi],
 	}
-	return eval(cx.txn.Lsig.Logic, &cx)
+	pass, err = eval(cx.txn.Lsig.Logic, &cx)
+	return pass, &cx, err
+}
+
+// EvalSignature evaluates the logicsig of the ith transaction in params.
+// A program passes successfully if it finishes with one int element on the stack that is non-zero.
+func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
+	pass, _, err = EvalSignatureFull(gi, params)
+	return pass, err
 }
 
 // eval implementation
@@ -838,17 +847,11 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	cx.txn.EvalDelta.GlobalDelta = basics.StateDelta{}
 	cx.txn.EvalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
 
-	if cx.Debugger != nil {
-		err = cx.Debugger.BeforeLogicEval(cx)
-		if err != nil {
-			return false, fmt.Errorf("error while running debugger BeforeLogicEval hook: %w", err)
-		}
+	if cx.Tracer != nil {
+		cx.Tracer.BeforeProgram(cx)
 		defer func() {
-			// Ensure we update the debugger before exiting
-			derr := cx.Debugger.AfterLogicEval(cx, err)
-			if err == nil && derr != nil {
-				err = fmt.Errorf("error while running debugger AfterLogicEval hook: %w", derr)
-			}
+			// Ensure we update the tracer before exiting
+			cx.Tracer.AfterProgram(cx, err)
 		}()
 	}
 
@@ -863,20 +866,14 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	}
 
 	for (err == nil) && (cx.pc < len(cx.program)) {
-		if cx.Debugger != nil {
-			err = cx.Debugger.BeforeTealOp(cx)
-			if err != nil {
-				return false, fmt.Errorf("error while running debugger BeforeTealOp hook: %w", err)
-			}
+		if cx.Tracer != nil {
+			cx.Tracer.BeforeOpcode(cx)
 		}
 
 		err = cx.step()
 
-		if cx.Debugger != nil {
-			derr := cx.Debugger.AfterTealOp(cx, err)
-			if err == nil && derr != nil {
-				return false, fmt.Errorf("error while running debugger AfterTealOp hook: %w", derr)
-			}
+		if cx.Tracer != nil {
+			cx.Tracer.AfterOpcode(cx, err)
 		}
 	}
 	if err != nil {
@@ -945,8 +942,8 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 	cx.EvalParams = params
 	cx.runModeFlags = mode
 	cx.program = program
-	cx.branchTargets = make(map[int]bool)
-	cx.instructionStarts = make(map[int]bool)
+	cx.branchTargets = make([]bool, len(program)+1) // teal v2 allowed jumping to the end of the prog
+	cx.instructionStarts = make([]bool, len(program)+1)
 
 	maxCost := cx.remainingBudget()
 	staticCost := 0
@@ -1016,6 +1013,11 @@ func boolToUint(x bool) uint64 {
 
 func boolToSV(x bool) stackValue {
 	return stackValue{Uint: boolToUint(x)}
+}
+
+// Cost return cost incurred so far
+func (cx *EvalContext) Cost() int {
+	return cx.cost
 }
 
 func (cx *EvalContext) remainingBudget() int {
@@ -1236,7 +1238,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 		fmt.Fprintf(cx.Trace, "%3d %s\n", prevpc, spec.Name)
 	}
 	for pc := prevpc + 1; pc < cx.pc; pc++ {
-		if _, ok := cx.branchTargets[pc]; ok {
+		if pc < len(cx.branchTargets) && cx.branchTargets[pc] {
 			return 0, fmt.Errorf("branch target %d is not an aligned instruction", pc)
 		}
 	}
@@ -2190,7 +2192,7 @@ func checkBranch(cx *EvalContext) error {
 	}
 	if target < cx.pc+3 {
 		// If a branch goes backwards, we should have already noted that an instruction began at that location.
-		if _, ok := cx.instructionStarts[target]; !ok {
+		if ok := cx.instructionStarts[target]; !ok {
 			return fmt.Errorf("back branch target %d is not an aligned instruction", target)
 		}
 	}
@@ -2211,7 +2213,7 @@ func checkSwitch(cx *EvalContext) error {
 
 		if target < eoi {
 			// If a branch goes backwards, we should have already noted that an instruction began at that location.
-			if _, ok := cx.instructionStarts[target]; !ok {
+			if ok := cx.instructionStarts[target]; !ok {
 				return fmt.Errorf("back branch target %d is not an aligned instruction", target)
 			}
 		}
@@ -5162,19 +5164,13 @@ func opItxnSubmit(cx *EvalContext) error {
 
 	ep := NewInnerEvalParams(cx.subtxns, cx)
 
-	if ep.Debugger != nil {
-		err := ep.Debugger.BeforeInnerTxnGroup(ep)
-		if err != nil {
-			return fmt.Errorf("error while running debugger BeforeInnerTxnGroup hook: %w", err)
-		}
+	if ep.Tracer != nil {
+		ep.Tracer.BeforeTxnGroup(ep)
 	}
 
 	for i := range ep.TxnGroup {
-		if ep.Debugger != nil {
-			err := ep.Debugger.BeforeTxn(ep, i)
-			if err != nil {
-				return fmt.Errorf("error while running debugger BeforeTxn hook: %w", err)
-			}
+		if ep.Tracer != nil {
+			ep.Tracer.BeforeTxn(ep, i)
 		}
 
 		err := cx.Ledger.Perform(i, ep)
@@ -5185,11 +5181,8 @@ func opItxnSubmit(cx *EvalContext) error {
 		// RecordAD has some further responsibilities.
 		ep.RecordAD(i, ep.TxnGroup[i].ApplyData)
 
-		if ep.Debugger != nil {
-			err = ep.Debugger.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData)
-			if err != nil {
-				return fmt.Errorf("error while running debugger AfterTxn hook: %w", err)
-			}
+		if ep.Tracer != nil {
+			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData)
 		}
 	}
 	cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
@@ -5197,11 +5190,8 @@ func opItxnSubmit(cx *EvalContext) error {
 	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group
 	cx.innerTxidCache = nil
 
-	if ep.Debugger != nil {
-		err := ep.Debugger.AfterInnerTxnGroup(ep)
-		if err != nil {
-			return fmt.Errorf("error while running debugger AfterInnerTxnGroup hook: %w", err)
-		}
+	if ep.Tracer != nil {
+		ep.Tracer.AfterTxnGroup(ep)
 	}
 
 	return nil

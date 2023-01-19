@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,7 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -37,7 +37,7 @@ import (
 )
 
 // installParticipationKey generates a new key for a given account and installs it with the client.
-func installParticipationKey(t *testing.T, client libgoal.Client, addr string, firstValid, lastValid uint64) (resp generated.PostParticipationResponse, part account.Participation, err error) {
+func installParticipationKey(t *testing.T, client libgoal.Client, addr string, firstValid, lastValid uint64) (resp model.PostParticipationResponse, part account.Participation, err error) {
 	// Install overlapping participation keys...
 	part, filePath, err := client.GenParticipationKeysTo(addr, firstValid, lastValid, 100, t.TempDir())
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func installParticipationKey(t *testing.T, client libgoal.Client, addr string, f
 	return
 }
 
-func registerParticipationAndWait(t *testing.T, client libgoal.Client, part account.Participation) generated.NodeStatusResponse {
+func registerParticipationAndWait(t *testing.T, client libgoal.Client, part account.Participation) model.NodeStatusResponse {
 	txParams, err := client.SuggestedParams()
 	require.NoError(t, err)
 	sAccount := part.Address().String()
@@ -74,7 +74,7 @@ func TestKeyRegistration(t *testing.T) {
 		t.Skip()
 	}
 
-	checkKey := func(key generated.ParticipationKey, firstValid, lastValid, lastProposal uint64, msg string) {
+	checkKey := func(key model.ParticipationKey, firstValid, lastValid, lastProposal uint64, msg string) {
 		require.NotNil(t, key.EffectiveFirstValid, fmt.Sprintf("%s.EffectiveFirstValid", msg))
 		require.NotNil(t, key.EffectiveLastValid, fmt.Sprintf("%s.EffectiveLastValid", msg))
 		require.NotNil(t, key.LastBlockProposal, fmt.Sprintf("%s.LastBlockProposal", msg))

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -341,7 +341,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	defer func(evalParams *logic.EvalParams) {
 		// If we are returning a non-nil error, then don't return a
 		// non-empty EvalDelta unless we are debugging. Not required for correctness.
-		if err != nil && ad != nil && evalParams.Debugger == nil {
+		if err != nil && ad != nil && evalParams.Trace == nil {
 			ad.EvalDelta = transactions.EvalDelta{}
 		}
 	}(evalParams)

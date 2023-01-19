@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,7 +27,7 @@ import (
 	"github.com/algorand/go-codec/codec"
 	"github.com/labstack/echo/v4"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/simulation"
@@ -39,7 +39,7 @@ import (
 // returnError logs an internal message while returning the encoded response.
 func returnError(ctx echo.Context, code int, internal error, external string, logger logging.Logger) error {
 	logger.Info(internal)
-	return ctx.JSON(code, generated.ErrorResponse{Message: external})
+	return ctx.JSON(code, model.ErrorResponse{Message: external})
 }
 
 func badRequest(ctx echo.Context, internal error, external string, log logging.Logger) error {
@@ -207,16 +207,16 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 }
 
 // getCodecHandle converts a format string into the encoder + content type
-func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
-	format := "json"
+func getCodecHandle(formatPtr *model.Format) (codec.Handle, string, error) {
+	format := model.Json
 	if formatPtr != nil {
-		format = strings.ToLower(*formatPtr)
+		format = model.PendingTransactionInformationParamsFormat(strings.ToLower(string(*formatPtr)))
 	}
 
 	switch format {
-	case "json":
+	case model.Json:
 		return protocol.JSONStrictHandle, "application/json", nil
-	case "msgpack":
+	case model.Msgpack:
 		fallthrough
 	case "msgp":
 		return protocol.CodecHandle, "application/msgpack", nil
@@ -246,16 +246,16 @@ func decode(handle codec.Handle, data []byte, v interface{}) error {
 	return nil
 }
 
-// Helper to convert basics.StateDelta -> *generated.StateDelta
-func stateDeltaToStateDelta(d basics.StateDelta) *generated.StateDelta {
+// Helper to convert basics.StateDelta -> *model.StateDelta
+func stateDeltaToStateDelta(d basics.StateDelta) *model.StateDelta {
 	if len(d) == 0 {
 		return nil
 	}
-	var delta generated.StateDelta
+	var delta model.StateDelta
 	for k, v := range d {
-		delta = append(delta, generated.EvalDeltaKeyValue{
+		delta = append(delta, model.EvalDeltaKeyValue{
 			Key: base64.StdEncoding.EncodeToString([]byte(k)),
-			Value: generated.EvalDelta{
+			Value: model.EvalDelta{
 				Action: uint64(v.Action),
 				Bytes:  strOrNil(base64.StdEncoding.EncodeToString([]byte(v.Bytes))),
 				Uint:   numOrNil(v.Uint),
@@ -265,10 +265,10 @@ func stateDeltaToStateDelta(d basics.StateDelta) *generated.StateDelta {
 	return &delta
 }
 
-func convertToDeltas(txn node.TxnWithStatus) (*[]generated.AccountStateDelta, *generated.StateDelta) {
-	var localStateDelta *[]generated.AccountStateDelta
+func convertToDeltas(txn node.TxnWithStatus) (*[]model.AccountStateDelta, *model.StateDelta) {
+	var localStateDelta *[]model.AccountStateDelta
 	if len(txn.ApplyData.EvalDelta.LocalDeltas) > 0 {
-		d := make([]generated.AccountStateDelta, 0)
+		d := make([]model.AccountStateDelta, 0)
 		accounts := txn.Txn.Txn.Accounts
 
 		for k, v := range txn.ApplyData.EvalDelta.LocalDeltas {
@@ -283,7 +283,7 @@ func convertToDeltas(txn node.TxnWithStatus) (*[]generated.AccountStateDelta, *g
 					addr = fmt.Sprintf("Invalid Address Index: %d", k-1)
 				}
 			}
-			d = append(d, generated.AccountStateDelta{
+			d = append(d, model.AccountStateDelta{
 				Address: addr,
 				Delta:   *(stateDeltaToStateDelta(v)),
 			})
@@ -309,20 +309,20 @@ func convertLogs(txn node.TxnWithStatus) *[][]byte {
 	return logItems
 }
 
-func convertInners(txn *node.TxnWithStatus) *[]preEncodedTxInfo {
-	inner := make([]preEncodedTxInfo, len(txn.ApplyData.EvalDelta.InnerTxns))
+func convertInners(txn *node.TxnWithStatus) *[]PreEncodedTxInfo {
+	inner := make([]PreEncodedTxInfo, len(txn.ApplyData.EvalDelta.InnerTxns))
 	for i, itxn := range txn.ApplyData.EvalDelta.InnerTxns {
 		inner[i] = convertInnerTxn(&itxn)
 	}
 	return &inner
 }
 
-func convertInnerTxn(txn *transactions.SignedTxnWithAD) preEncodedTxInfo {
+func convertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	// This copies from handlers.PendingTransactionInformation, with
 	// simplifications because we have a SignedTxnWithAD rather than
 	// TxnWithStatus, and we know this txn has committed.
 
-	response := preEncodedTxInfo{Txn: txn.SignedTxn}
+	response := PreEncodedTxInfo{Txn: txn.SignedTxn}
 
 	response.ClosingAmount = &txn.ApplyData.ClosingAmount.Raw
 	response.AssetClosingAmount = &txn.ApplyData.AssetClosingAmount

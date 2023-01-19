@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,11 +33,14 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -307,75 +310,31 @@ func TestPrivateTransactionGroup(t *testing.T) {
 	require.Error(t, err) // too many
 }
 
-type testDbgHook struct {
-	log []string
-}
-
-func (d *testDbgHook) BeforeTxn(ep *logic.EvalParams, groupIndex int) error {
-	d.log = append(d.log, fmt.Sprintf("beforeTxn %s", ep.TxnGroup[groupIndex].Txn.Type))
-	return nil
-}
-
-func (d *testDbgHook) BeforeLogicEval(cx *logic.EvalContext) error {
-	d.log = append(d.log, fmt.Sprintf("beforeLogicEval %s", cx.RunMode()))
-	return nil
-}
-
-func (d *testDbgHook) BeforeTealOp(cx *logic.EvalContext) error {
-	d.log = append(d.log, "beforeTealOp")
-	return nil
-}
-
-func (d *testDbgHook) BeforeInnerTxnGroup(ep *logic.EvalParams) error {
-	d.log = append(d.log, fmt.Sprintf("beforeInnerTxnGroup %d", len(ep.TxnGroup)))
-	return nil
-}
-
-func (d *testDbgHook) AfterInnerTxnGroup(ep *logic.EvalParams) error {
-	d.log = append(d.log, fmt.Sprintf("afterInnerTxnGroup %d", len(ep.TxnGroup)))
-	return nil
-}
-
-func (d *testDbgHook) AfterTealOp(cx *logic.EvalContext, evalError error) error {
-	d.log = append(d.log, "afterTealOp")
-	return nil
-}
-
-func (d *testDbgHook) AfterLogicEval(cx *logic.EvalContext, evalError error) error {
-	d.log = append(d.log, fmt.Sprintf("afterLogicEval %s", cx.RunMode()))
-	return nil
-}
-
-func (d *testDbgHook) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData) error {
-	d.log = append(d.log, fmt.Sprintf("afterTxn %s", ep.TxnGroup[groupIndex].Txn.Type))
-	return nil
-}
-
-func tealOpLogs(count int) []string {
-	var log []string
+func tealOpLogs(count int) []mocktracer.Event {
+	var log []mocktracer.Event
 
 	for i := 0; i < count; i++ {
-		log = append(log, "beforeTealOp", "afterTealOp")
+		log = append(log, mocktracer.BeforeOpcode(), mocktracer.AfterOpcode())
 	}
 
 	return log
 }
 
-func flatten(rows [][]string) []string {
-	var out []string
+func flatten(rows [][]mocktracer.Event) []mocktracer.Event {
+	var out []mocktracer.Event
 	for _, row := range rows {
 		out = append(out, row...)
 	}
 	return out
 }
 
-// byte 0x068101 is `#pragma version 6; int 1;`
-var innerTxnTestProgram string = `itxn_begin
+const innerTxnTestProgram string = `#pragma version 6
+itxn_begin
 int appl
 itxn_field TypeEnum
 int NoOp
 itxn_field OnCompletion
-byte 0x068101
+byte 0x068101 // #pragma version 6; int 1;
 dup
 itxn_field ApprovalProgram
 itxn_field ClearStateProgram
@@ -400,7 +359,7 @@ itxn_submit
 int 1
 `
 
-func TestTransactionGroupWithDebugger(t *testing.T) {
+func TestTransactionGroupWithTracer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -409,7 +368,7 @@ func TestTransactionGroupWithDebugger(t *testing.T) {
 	innerAppID := 3
 	innerAppAddress := basics.AppIndex(innerAppID).Address()
 	balances := genesisInitState.Accounts
-	balances[innerAppAddress] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1000000})
+	balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1000000})
 
 	genesisBalances := bookkeeping.GenesisBalances{
 		Balances:    genesisInitState.Accounts,
@@ -427,118 +386,127 @@ func TestTransactionGroupWithDebugger(t *testing.T) {
 	eval.validate = true
 	eval.generate = true
 
-	ops, err := logic.AssembleStringWithVersion(innerTxnTestProgram, uint64(6))
-	require.NoError(t, err, ops.Errors)
-	prog := ops.Program
-
-	// `#pragma version 6; int 1;`
-	basicProgram := []byte{0x06, 0x81, 0x01}
+	basicProgram := `#pragma version 6
+byte "hello"
+log
+int 1`
 
 	genHash := l.GenesisHash()
-	header := transactions.Header{
-		Sender:      addrs[0],
-		Fee:         minFee,
+
+	// a basic app call
+	basicAppCallTxn := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            addrs[0],
+		ApprovalProgram:   basicProgram,
+		ClearStateProgram: basicProgram,
+
 		FirstValid:  newBlock.Round(),
-		LastValid:   newBlock.Round(),
+		LastValid:   newBlock.Round() + 1000,
+		Fee:         minFee,
 		GenesisHash: genHash,
 	}
 
-	// a basic app call
-	basicAppCallTxn := transactions.Transaction{
-		Type:   protocol.ApplicationCallTx,
-		Header: header,
-		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-			ApprovalProgram:   basicProgram,
-			ClearStateProgram: basicProgram,
-		},
-	}
-
 	// a non-app call txn
-	payTxn := transactions.Transaction{
-		Type:   protocol.PaymentTx,
-		Header: header,
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: addrs[0],
-		},
+	payTxn := txntest.Txn{
+		Type:             protocol.PaymentTx,
+		Sender:           addrs[1],
+		Receiver:         addrs[2],
+		CloseRemainderTo: addrs[3],
+		Amount:           1_000_000,
+
+		FirstValid:  newBlock.Round(),
+		LastValid:   newBlock.Round() + 1000,
+		Fee:         minFee,
+		GenesisHash: genHash,
 	}
 
 	// an app call that spawns inner txns
-	innerAppCallTxn := transactions.Transaction{
-		Type:   protocol.ApplicationCallTx,
-		Header: header,
-		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-			ApprovalProgram:   prog,
-			ClearStateProgram: prog,
-		},
+	innerAppCallTxn := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            addrs[0],
+		ApprovalProgram:   innerTxnTestProgram,
+		ClearStateProgram: basicProgram,
+
+		FirstValid:  newBlock.Round(),
+		LastValid:   newBlock.Round() + 1000,
+		Fee:         minFee,
+		GenesisHash: genHash,
 	}
 
-	var group transactions.TxGroup
-	group.TxGroupHashes = []crypto.Digest{crypto.HashObj(basicAppCallTxn), crypto.HashObj(payTxn), crypto.HashObj(innerAppCallTxn)}
-	groupID := crypto.HashObj(group)
-	basicAppCallTxn.Group = groupID
-	payTxn.Group = groupID
-	innerAppCallTxn.Group = groupID
+	txntest.Group(&basicAppCallTxn, &payTxn, &innerAppCallTxn)
 
 	txgroup := transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
-		basicAppCallTxn.Sign(keys[0]),
-		payTxn.Sign(keys[0]),
-		innerAppCallTxn.Sign(keys[0]),
+		basicAppCallTxn.Txn().Sign(keys[0]),
+		payTxn.Txn().Sign(keys[1]),
+		innerAppCallTxn.Txn().Sign(keys[0]),
 	})
 
-	testDbg := &testDbgHook{}
-	err = eval.TransactionGroupWithDebugger(txgroup, testDbg)
+	require.Len(t, eval.block.Payset, 0)
+
+	tracer := &mocktracer.Tracer{}
+	eval.Tracer = tracer
+	err = eval.TransactionGroup(txgroup)
 	require.NoError(t, err)
 
-	expectedLog := flatten([][]string{
+	require.Len(t, eval.block.Payset, len(txgroup))
+
+	expectedADs := make([]transactions.ApplyData, len(txgroup))
+	for i, txn := range eval.block.Payset {
+		expectedADs[i] = txn.ApplyData
+	}
+
+	expectedEvents := flatten([][]mocktracer.Event{
 		{
-			"beforeTxn appl", // start basicAppCallTxn
-			"beforeLogicEval Application",
+			mocktracer.BeforeTxnGroup(3),
+			mocktracer.BeforeTxn(protocol.ApplicationCallTx), // start basicAppCallTxn
+			mocktracer.BeforeProgram(logic.ModeApp),
 		},
-		tealOpLogs(1),
+		tealOpLogs(3),
 		{
-			"afterLogicEval Application",
-			"afterTxn appl",  // end basicAppCallTxn
-			"beforeTxn pay",  // start payTxn
-			"afterTxn pay",   // end payTxn
-			"beforeTxn appl", // start innerAppCallTxn
-			"beforeLogicEval Application",
+			mocktracer.AfterProgram(logic.ModeApp),
+			mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedADs[0]), // end basicAppCallTxn
+			mocktracer.BeforeTxn(protocol.PaymentTx),                        // start payTxn
+			mocktracer.AfterTxn(protocol.PaymentTx, expectedADs[1]),         // end payTxn
+			mocktracer.BeforeTxn(protocol.ApplicationCallTx),                // start innerAppCallTxn
+			mocktracer.BeforeProgram(logic.ModeApp),
 		},
 		tealOpLogs(10),
 		{
-			"beforeTealOp",
-			"beforeInnerTxnGroup 1", // start first itxn group
-			"beforeTxn appl",
-			"beforeLogicEval Application",
+			mocktracer.BeforeOpcode(),
+			mocktracer.BeforeTxnGroup(1), // start first itxn group
+			mocktracer.BeforeTxn(protocol.ApplicationCallTx),
+			mocktracer.BeforeProgram(logic.ModeApp),
 		},
 		tealOpLogs(1),
 		{
-			"afterLogicEval Application",
-			"afterTxn appl",
-			"afterInnerTxnGroup 1", // end first itxn group
-			"afterTealOp",
+			mocktracer.AfterProgram(logic.ModeApp),
+			mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedADs[2].EvalDelta.InnerTxns[0].ApplyData),
+			mocktracer.AfterTxnGroup(1), // end first itxn group
+			mocktracer.AfterOpcode(),
 		},
 		tealOpLogs(14),
 		{
-			"beforeTealOp",
-			"beforeInnerTxnGroup 2", // start second itxn group
-			"beforeTxn pay",
-			"afterTxn pay",
-			"beforeTxn pay",
-			"afterTxn pay",
-			"afterInnerTxnGroup 2", // end second itxn group
-			"afterTealOp",
+			mocktracer.BeforeOpcode(),
+			mocktracer.BeforeTxnGroup(2), // start second itxn group
+			mocktracer.BeforeTxn(protocol.PaymentTx),
+			mocktracer.AfterTxn(protocol.PaymentTx, expectedADs[2].EvalDelta.InnerTxns[1].ApplyData),
+			mocktracer.BeforeTxn(protocol.PaymentTx),
+			mocktracer.AfterTxn(protocol.PaymentTx, expectedADs[2].EvalDelta.InnerTxns[2].ApplyData),
+			mocktracer.AfterTxnGroup(2), // end second itxn group
+			mocktracer.AfterOpcode(),
 		},
 		tealOpLogs(1),
 		{
-			"afterLogicEval Application",
-			"afterTxn appl", // end innerAppCallTxn
+			mocktracer.AfterProgram(logic.ModeApp),
+			mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedADs[2]), // end innerAppCallTxn
+			mocktracer.AfterTxnGroup(3),
 		},
 	})
-	require.Equal(t, expectedLog, testDbg.log)
+	require.Equal(t, expectedEvents, tracer.Events)
 }
 
 // BlockEvaluator.workaroundOverspentRewards() fixed a couple issues on testnet.
-// This is now part of history and has to be re-created when running catchup on testnet. So, test to ensure it keeps happenning.
+// This is now part of history and has to be re-created when running catchup on testnet. So, test to ensure it keeps happening.
 func TestTestnetFixup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -749,6 +717,8 @@ func (ledger *evalTestLedger) StartEvaluator(hdr bookkeeping.BlockHeader, payset
 		})
 }
 
+func (ledger *evalTestLedger) FlushCaches() {}
+
 // GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
 // look up a creator address, setting ok to false if the query succeeded but no
 // creator was found.
@@ -904,7 +874,7 @@ func (ledger *evalTestLedger) CheckDup(currentProto config.ConsensusParams, curr
 			}
 			currentTxid := txn.Txn.ID()
 			if bytes.Equal(txid[:], currentTxid[:]) {
-				return &ledgercore.TransactionInLedgerError{Txid: txid}
+				return &ledgercore.TransactionInLedgerError{Txid: txid, InBlockEvaluator: false}
 			}
 		}
 	}
