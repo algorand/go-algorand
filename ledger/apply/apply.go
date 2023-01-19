@@ -30,7 +30,7 @@ type StateProofsApplier interface {
 	BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 	GetStateProofNextRound() basics.Round
 	SetStateProofNextRound(rnd basics.Round)
-	StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
+	GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
 	ConsensusParams() config.ConsensusParams
 }
 

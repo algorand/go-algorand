@@ -839,9 +839,9 @@ func (aul *accountUpdatesLedgerEvaluator) VotersForStateProof(rnd basics.Round) 
 	return aul.ao.voters.VotersForStateProof(rnd)
 }
 
-func (aul *accountUpdatesLedgerEvaluator) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	// this function should not be used by accountUpdatesLedgerEvaluator
-	return nil, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to get spVerification data during accountUpdates initialization ")
+func (aul *accountUpdatesLedgerEvaluator) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	// Since state proof transaction is not being verified (we only apply the change) during replay, we don't need to implement this function at the moment.
+	return nil, fmt.Errorf("accountUpdatesLedgerEvaluator: GetStateProofVerificationContext, needed for state proof verification, is not implemented in accountUpdatesLedgerEvaluator")
 }
 
 // BlockHdr returns the header of the given round. When the evaluator is running, it's only referring to the previous header, which is what we

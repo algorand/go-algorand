@@ -61,11 +61,11 @@ const (
 	SpecialAddr                      HashID = "SpecialAddr"
 	SignedTxnInBlock                 HashID = "STIB"
 
-	StateProofCoin                HashID = "spc"
-	StateProofMessage             HashID = "spm"
-	StateProofPart                HashID = "spp"
-	StateProofSig                 HashID = "sps"
-	StateProofVerificationContext HashID = "spv"
+	StateProofCoin    HashID = "spc"
+	StateProofMessage HashID = "spm"
+	StateProofPart    HashID = "spp"
+	StateProofSig     HashID = "sps"
+	StateProofVerCtx  HashID = "spv"
 
 	TestHashable  HashID = "TE"
 	TxGroup       HashID = "TG"

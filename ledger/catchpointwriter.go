@@ -105,7 +105,7 @@ type catchpointStateProofVerificationContext struct {
 }
 
 func (data catchpointStateProofVerificationContext) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.StateProofVerificationContext, protocol.Encode(&data)
+	return protocol.StateProofVerCtx, protocol.Encode(&data)
 }
 
 func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxResourcesPerChunk int) (*catchpointWriter, error) {
@@ -159,7 +159,7 @@ func (cw *catchpointWriter) Abort() error {
 }
 
 func (cw *catchpointWriter) WriteStateProofVerificationContext() (crypto.Digest, error) {
-	rawData, err := store.GetAllStateProofVerification(cw.ctx, cw.tx)
+	rawData, err := store.GetAllStateProofVerificationContexts(cw.ctx, cw.tx)
 	if err != nil {
 		return crypto.Digest{}, err
 	}
