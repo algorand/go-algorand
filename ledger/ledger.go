@@ -160,6 +160,11 @@ func OpenLedger(
 		l.genesisAccounts = make(map[basics.Address]basics.AccountData)
 	}
 
+	l.blockQ, err = newBlockQueue(l)
+	if err != nil {
+		return nil, err
+	}
+
 	err = l.reloadLedger()
 	if err != nil {
 		return nil, err
@@ -168,19 +173,12 @@ func OpenLedger(
 	return l, nil
 }
 
-// ReloadLedger is exported for the benefit of tests in the internal
-// package. Revisit this when we rename / restructure that thing
-func (l *Ledger) ReloadLedger() error {
-	return l.reloadLedger()
-}
-
 func (l *Ledger) reloadLedger() error {
 	// similar to the Close function, we want to start by closing the blockQ first. The
 	// blockQ is having a sync goroutine which indirectly calls other trackers. We want to eliminate that go-routine first,
 	// and follow up by taking the trackers lock.
 	if l.blockQ != nil {
-		l.blockQ.close()
-		l.blockQ = nil
+		l.blockQ.stop()
 	}
 
 	// take the trackers lock. This would ensure that no other goroutine is using the trackers.
@@ -192,9 +190,9 @@ func (l *Ledger) reloadLedger() error {
 
 	// init block queue
 	var err error
-	l.blockQ, err = bqInit(l)
+	err = l.blockQ.start()
 	if err != nil {
-		err = fmt.Errorf("reloadLedger.bqInit %v", err)
+		err = fmt.Errorf("reloadLedger.blockQ.start %v", err)
 		return err
 	}
 
@@ -381,8 +379,7 @@ func (l *Ledger) Close() {
 	// we shut the the blockqueue first, since it's sync goroutine dispatches calls
 	// back to the trackers.
 	if l.blockQ != nil {
-		l.blockQ.close()
-		l.blockQ = nil
+		l.blockQ.stop()
 	}
 
 	// take the trackers lock. This would ensure that no other goroutine is using the trackers.
