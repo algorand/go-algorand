@@ -64,7 +64,7 @@ type roundCowParent interface {
 	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
 	getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
 	kvGet(key string) ([]byte, bool, error)
-	StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
+	GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
 }
 
 // When adding new fields make sure to clear them in the roundCowState.recycle() as well to avoid dirty state
@@ -245,8 +245,8 @@ func (cb *roundCowState) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, erro
 	return cb.lookupParent.BlockHdr(r)
 }
 
-func (cb *roundCowState) StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	return cb.lookupParent.StateProofVerificationContext(stateProofLastAttestedRound)
+func (cb *roundCowState) GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return cb.lookupParent.GetStateProofVerificationContext(stateProofLastAttestedRound)
 }
 
 func (cb *roundCowState) blockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {

@@ -470,9 +470,9 @@ func (l *Ledger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRou
 	return l.acctsOnline.voters.VotersForStateProof(rnd)
 }
 
-// StateProofVerificationContext returns the data required to verify the state proof whose last attested round is
+// GetStateProofVerificationContext returns the data required to verify the state proof whose last attested round is
 // stateProofLastAttestedRound.
-func (l *Ledger) StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+func (l *Ledger) GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.stateProofVerification.LookupVerificationContext(stateProofLastAttestedRound)

@@ -60,7 +60,7 @@ func (s *stateProofApplierMock) SetStateProofNextRound(rnd basics.Round) {
 	s.spNext = rnd
 }
 
-func (s *stateProofApplierMock) StateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+func (s *stateProofApplierMock) GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	element, exists := s.stateProofVerification[stateProofLastAttestedRound]
 	if !exists {
 		return nil, ErrVerificationContextNotFound

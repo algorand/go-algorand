@@ -251,8 +251,8 @@ func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Ro
 	return nil
 }
 
-func (dl *dryrunLedger) StateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	return nil, fmt.Errorf("dryrunLedger: StateProofVerificationContext is not implemented")
+func (dl *dryrunLedger) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("dryrunLedger: GetStateProofVerificationContext, needed for state proof verification, is not implemented in dryrun")
 }
 
 func (dl *dryrunLedger) lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {

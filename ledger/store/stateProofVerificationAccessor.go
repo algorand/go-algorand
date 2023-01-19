@@ -119,8 +119,8 @@ func stateProofVerificationTable(ctx context.Context, tx *sql.Tx, tableName stri
 	return result, err
 }
 
-// GetAllStateProofVerification returns all state proof verification data from the stateProofVerification table.
-func GetAllStateProofVerification(ctx context.Context, tx *sql.Tx) ([]ledgercore.StateProofVerificationContext, error) {
+// GetAllStateProofVerificationContexts returns all contexts needed to verify state proofs.
+func GetAllStateProofVerificationContexts(ctx context.Context, tx *sql.Tx) ([]ledgercore.StateProofVerificationContext, error) {
 	return stateProofVerificationTable(ctx, tx, "stateProofVerification")
 }
 
