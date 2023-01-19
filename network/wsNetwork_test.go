@@ -1122,10 +1122,10 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	var gossipA string
 	netB.messagesOfInterestMu.Lock()
 	if ok := netA.startListener(); ok {
-		netA.startRoutines()
 		addrA, _ = netA.Address()
 		gossipA, _ = netA.addrToGossipAddr(addrA)
 		netA.config.ConnectionDeduplicationName = gossipA
+		netA.startRoutines()
 		defer netA.Stop()
 	}
 	netB.messagesOfInterestMu.Unlock()
@@ -1133,10 +1133,10 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	var gossipB string
 	netB.messagesOfInterestMu.Lock()
 	if ok := netB.startListener(); ok {
-		netB.startRoutines()
 		addrB, _ = netB.Address()
 		gossipB, _ = netB.addrToGossipAddr(addrB)
 		netB.config.ConnectionDeduplicationName = gossipB
+		netB.startRoutines()
 		defer netB.Stop()
 	}
 	netB.messagesOfInterestMu.Unlock()
@@ -1224,11 +1224,11 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	var gossipA string
 	netB.messagesOfInterestMu.Lock()
 	if ok := netA.startListener(); ok {
-		netA.startRoutines()
 		addrA, _ = netA.Address()
 		gossipA, _ = netA.addrToGossipAddr(addrA)
 		// don't set netA's ConnectionDeduplicationName, meaning it wont' exchange identity
 		//netA.config.ConnectionDeduplicationName = gossipA
+		netA.startRoutines()
 		defer netA.Stop()
 	}
 	netB.messagesOfInterestMu.Unlock()
@@ -1236,10 +1236,10 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	var gossipB string
 	netB.messagesOfInterestMu.Lock()
 	if ok := netB.startListener(); ok {
-		netB.startRoutines()
 		addrB, _ = netB.Address()
 		gossipB, _ = netB.addrToGossipAddr(addrB)
 		netB.config.ConnectionDeduplicationName = gossipB
+		netB.startRoutines()
 		defer netB.Stop()
 	}
 	netB.messagesOfInterestMu.Unlock()
@@ -1287,10 +1287,10 @@ func TestPeeringBadIdentityChallenge(t *testing.T) {
 	var gossipA string
 	netB.messagesOfInterestMu.Lock()
 	if ok := netA.startListener(); ok {
-		netA.startRoutines()
 		addrA, _ = netA.Address()
 		gossipA, _ = netA.addrToGossipAddr(addrA)
 		netA.config.ConnectionDeduplicationName = gossipA
+		netA.startRoutines()
 		defer netA.Stop()
 	}
 	netB.messagesOfInterestMu.Unlock()
@@ -1298,11 +1298,11 @@ func TestPeeringBadIdentityChallenge(t *testing.T) {
 	var gossipB string
 	netB.messagesOfInterestMu.Lock()
 	if ok := netB.startListener(); ok {
-		netB.startRoutines()
 		addrB, _ = netB.Address()
 		gossipB, _ = netB.addrToGossipAddr(addrB)
 		// leave the ConnectionDeduplicationName as the non-matcher
 		// netB.config.ConnectionDeduplicationName = gossipB
+		netB.startRoutines()
 		defer netB.Stop()
 	}
 	netB.messagesOfInterestMu.Unlock()
@@ -1356,10 +1356,10 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	var gossipA string
 	netB.messagesOfInterestMu.Lock()
 	if ok := netA.startListener(); ok {
-		netA.startRoutines()
 		addrA, _ = netA.Address()
 		gossipA, _ = netA.addrToGossipAddr(addrA)
 		netA.config.ConnectionDeduplicationName = gossipA
+		netA.startRoutines()
 		defer netA.Stop()
 	}
 	netB.messagesOfInterestMu.Unlock()
@@ -1367,11 +1367,11 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	var gossipB string
 	netB.messagesOfInterestMu.Lock()
 	if ok := netB.startListener(); ok {
-		netB.startRoutines()
 		addrB, _ = netB.Address()
 		gossipB, _ = netB.addrToGossipAddr(addrB)
 		// still don't set B's ConnectionDeduplicationName
 		// netB.config.ConnectionDeduplicationName = gossipB
+		netB.startRoutines()
 		defer netB.Stop()
 	}
 	netB.messagesOfInterestMu.Unlock()
