@@ -113,8 +113,6 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 	//         description: OK.
 	//       500:
 	//         description: Internal Error.
-	//       503:
-	//         description: Service Unavailable Error.
 	//       default: { description: Unknown Error }
 	w := context.Response().Writer
 	w.Header().Set("Content-Type", "application/json")
@@ -130,9 +128,6 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 	} else if stat.Catchpoint != "" {
 		code = http.StatusInternalServerError
 		err = fmt.Errorf("ready failed as the node is catching up")
-	} else if ctx.Node.Ledger().Ledger == nil {
-		code = http.StatusServiceUnavailable
-		err = fmt.Errorf("ready failed as the ledger is not yet available")
 	}
 
 	returnCode(ctx, w, code, err)
