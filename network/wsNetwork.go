@@ -839,6 +839,18 @@ func (wn *WebsocketNetwork) setup() {
 func (wn *WebsocketNetwork) Start() {
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
+	if ok := wn.startListener(); !ok {
+		return
+	}
+	wn.startRoutines()
+}
+
+// startListener starts the wsNetwork up to the point where it is ready to start its threads
+// will return true if it was able to fully setup listeners and handlers
+// or false if it does not finish
+// this function assumes the wn.messagesOfInterestMu Lock is held when calling
+// Start() will manage the lock and call startListener and startRoutines
+func (wn *WebsocketNetwork) startListener() bool {
 	wn.messagesOfInterestEncoded = true
 	if wn.messagesOfInterest != nil {
 		wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
@@ -848,7 +860,7 @@ func (wn *WebsocketNetwork) Start() {
 		listener, err := net.Listen("tcp", wn.config.NetAddress)
 		if err != nil {
 			wn.log.Errorf("network could not listen %v: %s", wn.config.NetAddress, err)
-			return
+			return false
 		}
 		// wrap the original listener with a limited connection listener
 		listener = limitlistener.RejectingLimitListener(
@@ -883,6 +895,13 @@ func (wn *WebsocketNetwork) Start() {
 	if wn.prioScheme != nil {
 		wn.RegisterHandlers(prioHandlers)
 	}
+	return true
+}
+
+// startRoutines will launch the Go Routines for this wsNetwork
+// this function assumes the wn.messagesOfInterestMu Lock is held when calling
+// Start() will manage the lock and call startListener and startRoutines
+func (wn *WebsocketNetwork) startRoutines() {
 	if wn.listener != nil {
 		wn.wg.Add(1)
 		go wn.httpdThread()

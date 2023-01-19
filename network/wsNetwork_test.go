@@ -1117,21 +1117,29 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	netB.config.GossipFanout = 1
 	netB.config.ConnectionDeduplicationName = "something"
 
-	netA.Start()
-	defer netA.Stop()
-	netB.Start()
-	defer netB.Stop()
-
-	addrA, _ := netA.Address()
-	gossipA, _ := netA.addrToGossipAddr(addrA)
-	netA.peersLock.Lock()
-	netA.config.ConnectionDeduplicationName = gossipA
-	netA.peersLock.Unlock()
-	addrB, _ := netB.Address()
-	gossipB, _ := netB.addrToGossipAddr(addrB)
-	netB.peersLock.Lock()
-	netB.config.ConnectionDeduplicationName = gossipB
-	netB.peersLock.Unlock()
+	// start networks in 2 steps to overload the config values before routines start
+	var addrA string
+	var gossipA string
+	netB.messagesOfInterestMu.Lock()
+	if ok := netA.startListener(); ok {
+		netA.startRoutines()
+		addrA, _ = netA.Address()
+		gossipA, _ = netA.addrToGossipAddr(addrA)
+		netA.config.ConnectionDeduplicationName = gossipA
+		defer netA.Stop()
+	}
+	netB.messagesOfInterestMu.Unlock()
+	var addrB string
+	var gossipB string
+	netB.messagesOfInterestMu.Lock()
+	if ok := netB.startListener(); ok {
+		netB.startRoutines()
+		addrB, _ = netB.Address()
+		gossipB, _ = netB.addrToGossipAddr(addrB)
+		netB.config.ConnectionDeduplicationName = gossipB
+		defer netB.Stop()
+	}
+	netB.messagesOfInterestMu.Unlock()
 
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
@@ -1202,7 +1210,7 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
-	// don't set netB's ConnectionDeduplicationName, meaning it wont' exchange identity
+	// don't set netA's ConnectionDeduplicationName, meaning it wont' exchange identity
 	//netA.config.ConnectionDeduplicationName = "something"
 
 	netB := makeTestWebsocketNode(t)
@@ -1211,18 +1219,30 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	// but we won't know the actual gossip address until this test starts the network
 	netB.config.ConnectionDeduplicationName = "something"
 
-	netA.Start()
-	defer netA.Stop()
-	netB.Start()
-	defer netB.Stop()
-
-	addrA, _ := netA.Address()
-	gossipA, _ := netA.addrToGossipAddr(addrA)
-	addrB, _ := netB.Address()
-	gossipB, _ := netB.addrToGossipAddr(addrB)
-	netB.peersLock.Lock()
-	netB.config.ConnectionDeduplicationName = gossipB
-	netB.peersLock.Unlock()
+	// start networks in 2 steps to overload the config values before routines start
+	var addrA string
+	var gossipA string
+	netB.messagesOfInterestMu.Lock()
+	if ok := netA.startListener(); ok {
+		netA.startRoutines()
+		addrA, _ = netA.Address()
+		gossipA, _ = netA.addrToGossipAddr(addrA)
+		// don't set netA's ConnectionDeduplicationName, meaning it wont' exchange identity
+		//netA.config.ConnectionDeduplicationName = gossipA
+		defer netA.Stop()
+	}
+	netB.messagesOfInterestMu.Unlock()
+	var addrB string
+	var gossipB string
+	netB.messagesOfInterestMu.Lock()
+	if ok := netB.startListener(); ok {
+		netB.startRoutines()
+		addrB, _ = netB.Address()
+		gossipB, _ = netB.addrToGossipAddr(addrB)
+		netB.config.ConnectionDeduplicationName = gossipB
+		defer netB.Stop()
+	}
+	netB.messagesOfInterestMu.Unlock()
 
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
@@ -1262,21 +1282,30 @@ func TestPeeringBadIdentityChallenge(t *testing.T) {
 	netB.config.GossipFanout = 1
 	netB.config.ConnectionDeduplicationName = "DOESNT MATCH"
 
-	netA.Start()
-	defer netA.Stop()
-	netB.Start()
-	defer netB.Stop()
-
-	// Overload the deduplication name to use the gossip address
-	// netA will have a "correct" ConnectionDeduplicationName
-	// netB won't be updated, so the value won't ever match
-	addrA, _ := netA.Address()
-	gossipA, _ := netA.addrToGossipAddr(addrA)
-	netA.peersLock.Lock()
-	netA.config.ConnectionDeduplicationName = gossipA
-	netA.peersLock.Unlock()
-	addrB, _ := netB.Address()
-	gossipB, _ := netB.addrToGossipAddr(addrB)
+	// start networks in 2 steps to overload the config values before routines start
+	var addrA string
+	var gossipA string
+	netB.messagesOfInterestMu.Lock()
+	if ok := netA.startListener(); ok {
+		netA.startRoutines()
+		addrA, _ = netA.Address()
+		gossipA, _ = netA.addrToGossipAddr(addrA)
+		netA.config.ConnectionDeduplicationName = gossipA
+		defer netA.Stop()
+	}
+	netB.messagesOfInterestMu.Unlock()
+	var addrB string
+	var gossipB string
+	netB.messagesOfInterestMu.Lock()
+	if ok := netB.startListener(); ok {
+		netB.startRoutines()
+		addrB, _ = netB.Address()
+		gossipB, _ = netB.addrToGossipAddr(addrB)
+		// leave the ConnectionDeduplicationName as the non-matcher
+		// netB.config.ConnectionDeduplicationName = gossipB
+		defer netB.Stop()
+	}
+	netB.messagesOfInterestMu.Unlock()
 
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
@@ -1322,18 +1351,30 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	// don't set netB's ConnectionDeduplicationName, meaning it wont' exchange identity
 	//netB.config.ConnectionDeduplicationName = "something"
 
-	netA.Start()
-	defer netA.Stop()
-	netB.Start()
-	defer netB.Stop()
-
-	addrA, _ := netA.Address()
-	gossipA, _ := netA.addrToGossipAddr(addrA)
-	netA.peersLock.Lock()
-	netA.config.ConnectionDeduplicationName = gossipA
-	netA.peersLock.Unlock()
-	addrB, _ := netB.Address()
-	gossipB, _ := netB.addrToGossipAddr(addrB)
+	// start networks in 2 steps to overload the config values before routines start
+	var addrA string
+	var gossipA string
+	netB.messagesOfInterestMu.Lock()
+	if ok := netA.startListener(); ok {
+		netA.startRoutines()
+		addrA, _ = netA.Address()
+		gossipA, _ = netA.addrToGossipAddr(addrA)
+		netA.config.ConnectionDeduplicationName = gossipA
+		defer netA.Stop()
+	}
+	netB.messagesOfInterestMu.Unlock()
+	var addrB string
+	var gossipB string
+	netB.messagesOfInterestMu.Lock()
+	if ok := netB.startListener(); ok {
+		netB.startRoutines()
+		addrB, _ = netB.Address()
+		gossipB, _ = netB.addrToGossipAddr(addrB)
+		// still don't set B's ConnectionDeduplicationName
+		// netB.config.ConnectionDeduplicationName = gossipB
+		defer netB.Stop()
+	}
+	netB.messagesOfInterestMu.Unlock()
 
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
