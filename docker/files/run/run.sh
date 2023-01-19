@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
-set -ex
+set -e
+
+if [ "$DEBUG" = "1" ]; then
+  set -x
+fi
 
 # Script to configure or resume a network. Based on environment settings the
 # node will be setup with a private network or connect to a public network.
@@ -84,7 +88,7 @@ function configure_data_dir() {
       echo "{ \"address\":\"0.0.0.0:${KMD_PORT}\", \"allowed_origins\":[\"*\"] }" >kmd_config.json
     fi
 
-    if [ "$KMD_TOKEN" == "" ]; then
+    if [ "$KMD_TOKEN" = "" ] && [ "$ADMIN_TOKEN" != "" ]; then
       echo "$ADMIN_TOKEN" >kmd.token
     else
       echo "$KMD_TOKEN" >kmd.token
