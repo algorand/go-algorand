@@ -43,10 +43,6 @@ function configure_data_dir() {
   cd "$ALGORAND_DATA"
   algocfg -d . set -p EndpointAddress -v "0.0.0.0:${ALGOD_PORT}"
 
-  if [ "$DEV_MODE" = "1" ]; then
-    algocfg -d . set -p EnableDeveloperAPI -v true
-  fi
-
   # check for config file overrides.
   if [ -f "/etc/algorand/config.json" ]; then
     cp /etc/algorand/config.json config.json

@@ -15,7 +15,6 @@ By default the following config.json overrides are applied:
 | Setting | Value |
 | ------- | ----- |
 | EndpointAddress | 0.0.0.0:8080 |
-| EnableDeveloperAPI | true |
 
 ### Environment Variables
 
