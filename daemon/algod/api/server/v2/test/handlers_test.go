@@ -747,8 +747,8 @@ func TestSimulateTransaction(t *testing.T) {
 	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 0, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil)
-	mockNode.config.EnableTransactionSimulator = true
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode.config.EnableExperimentalAPI = true
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
