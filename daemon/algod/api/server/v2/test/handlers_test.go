@@ -698,7 +698,7 @@ func TestSimulateTransaction(t *testing.T) {
 	simulateTransactionTest(t, 0, 200, true)
 }
 
-func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expectedCode int) {
+func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expectedCode int, syncRound int) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
@@ -706,11 +706,8 @@ func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expected
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nodeError, false)
-	handler := v2.Handlers{
-		Node:     mockNode,
-		Log:      logging.Base(),
-		Shutdown: dummyShutdownChan,
-	}
+	mockNode.On("GetSyncRound").Return(syncRound)
+	handler := v2.Handlers{Node: mockNode, Log: logging.Base(), Shutdown: dummyShutdownChan}
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
@@ -725,18 +722,20 @@ func TestStartCatchup(t *testing.T) {
 	t.Parallel()
 
 	goodCatchPoint := "5894690#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA"
-	startCatchupTest(t, goodCatchPoint, nil, 201)
+	startCatchupTest(t, goodCatchPoint, nil, 201, 0)
 
 	inProgressError := node.MakeCatchpointAlreadyInProgressError("catchpoint")
-	startCatchupTest(t, goodCatchPoint, inProgressError, 200)
+	startCatchupTest(t, goodCatchPoint, inProgressError, 200, 0)
 
 	unableToStartError := node.MakeCatchpointUnableToStartError("running", "requested")
-	startCatchupTest(t, goodCatchPoint, unableToStartError, 400)
+	startCatchupTest(t, goodCatchPoint, unableToStartError, 400, 0)
 
-	startCatchupTest(t, goodCatchPoint, errors.New("anothing else is internal"), 500)
+	startCatchupTest(t, goodCatchPoint, errors.New("anothing else is internal"), 500, 0)
 
 	badCatchPoint := "bad catchpoint"
-	startCatchupTest(t, badCatchPoint, nil, 400)
+	startCatchupTest(t, badCatchPoint, nil, 400, 0)
+
+	startCatchupTest(t, goodCatchPoint, nil, 400, 1)
 }
 
 func abortCatchupTest(t *testing.T, catchpoint string, expectedCode int) {
