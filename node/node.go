@@ -198,8 +198,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	p2pNode.SetPrioScheme(node)
 	node.net = p2pNode
 
-	accountListener := makeTopAccountListener(log)
-
 	// load stored data
 	genesisDir := filepath.Join(rootDir, genesis.ID())
 	ledgerPathnamePrefix := filepath.Join(genesisDir, config.LedgerFilenamePrefix)
@@ -232,9 +230,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		node,
 	}
 
-	if node.config.EnableTopAccountsReporting {
-		blockListeners = append(blockListeners, &accountListener)
-	}
 	node.ledger.RegisterBlockListeners(blockListeners)
 	txHandlerOpts := data.TxHandlerOpts{
 		TxPool:        node.transactionPool,
