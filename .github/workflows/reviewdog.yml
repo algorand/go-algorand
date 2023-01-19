@@ -93,7 +93,7 @@ jobs:
           -f=golangci-lint \
           -name="Lint Warnings" \
           -reporter=github-check \
-          -filter-mode=added \
+          -filter-mode=nofilter \
           -fail-on-error=true \
           -level=warning
       - name: Slack Notification
