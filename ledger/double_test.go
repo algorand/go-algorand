@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -152,8 +152,8 @@ func (dl *DoubleLedger) fundedApp(sender basics.Address, amount uint64, source s
 }
 
 func (dl *DoubleLedger) reloadLedgers() {
-	require.NoError(dl.t, dl.generator.ReloadLedger())
-	require.NoError(dl.t, dl.validator.ReloadLedger())
+	require.NoError(dl.t, dl.generator.reloadLedger())
+	require.NoError(dl.t, dl.validator.reloadLedger())
 }
 
 func checkBlock(t *testing.T, checkLedger *Ledger, vb *ledgercore.ValidatedBlock) {

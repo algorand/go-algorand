@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -58,7 +58,7 @@ func (os *OpSpec) equals(oso *OpSpec) bool {
 	return true
 }
 
-func TestOpcodesByVersionReordered(t *testing.T) {
+func TestOpcodesByVersionReordered(t *testing.T) { // nolint:paralleltest // manipulates global OpSpecs
 	partitiontest.PartitionTest(t)
 
 	// Make a copy to restore to the original
@@ -82,6 +82,7 @@ func TestOpcodesByVersionReordered(t *testing.T) {
 
 func TestOpcodesByVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	testOpcodesByVersion(t)
 }
 

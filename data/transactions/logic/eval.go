@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -583,12 +583,12 @@ type EvalContext struct {
 	// Set of PC values that branches we've seen so far might
 	// go. So, if checkStep() skips one, that branch is trying to
 	// jump into the middle of a multibyte instruction
-	branchTargets map[int]bool
+	branchTargets []bool
 
 	// Set of PC values that we have begun a checkStep() with. So
 	// if a back jump is going to a value that isn't here, it's
 	// jumping into the middle of multibyte instruction.
-	instructionStarts map[int]bool
+	instructionStarts []bool
 
 	programHashCached crypto.Digest
 
@@ -778,11 +778,12 @@ func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (b
 	return pass, err
 }
 
-// EvalSignature evaluates the logicsig of the ith transaction in params.
+// EvalSignatureFull evaluates the logicsig of the ith transaction in params.
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
-func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
+// It returns EvalContext suitable for obtaining additional info about the execution.
+func EvalSignatureFull(gi int, params *EvalParams) (pass bool, pcx *EvalContext, err error) {
 	if params.SigLedger == nil {
-		return false, errors.New("no sig ledger in signature eval")
+		return false, nil, errors.New("no sig ledger in signature eval")
 	}
 	cx := EvalContext{
 		EvalParams:   params,
@@ -790,7 +791,15 @@ func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
 		groupIndex:   gi,
 		txn:          &params.TxnGroup[gi],
 	}
-	return eval(cx.txn.Lsig.Logic, &cx)
+	pass, err = eval(cx.txn.Lsig.Logic, &cx)
+	return pass, &cx, err
+}
+
+// EvalSignature evaluates the logicsig of the ith transaction in params.
+// A program passes successfully if it finishes with one int element on the stack that is non-zero.
+func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
+	pass, _, err = EvalSignatureFull(gi, params)
+	return pass, err
 }
 
 // eval implementation
@@ -924,8 +933,8 @@ func check(program []byte, params *EvalParams, mode runMode) (err error) {
 	cx.EvalParams = params
 	cx.runModeFlags = mode
 	cx.program = program
-	cx.branchTargets = make(map[int]bool)
-	cx.instructionStarts = make(map[int]bool)
+	cx.branchTargets = make([]bool, len(program)+1) // teal v2 allowed jumping to the end of the prog
+	cx.instructionStarts = make([]bool, len(program)+1)
 
 	maxCost := cx.remainingBudget()
 	staticCost := 0
@@ -995,6 +1004,11 @@ func boolToUint(x bool) uint64 {
 
 func boolToSV(x bool) stackValue {
 	return stackValue{Uint: boolToUint(x)}
+}
+
+// Cost return cost incurred so far
+func (cx *EvalContext) Cost() int {
+	return cx.cost
 }
 
 func (cx *EvalContext) remainingBudget() int {
@@ -1215,7 +1229,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 		fmt.Fprintf(cx.Trace, "%3d %s\n", prevpc, spec.Name)
 	}
 	for pc := prevpc + 1; pc < cx.pc; pc++ {
-		if _, ok := cx.branchTargets[pc]; ok {
+		if pc < len(cx.branchTargets) && cx.branchTargets[pc] {
 			return 0, fmt.Errorf("branch target %d is not an aligned instruction", pc)
 		}
 	}
@@ -1808,6 +1822,15 @@ func opBytesSqrt(cx *EvalContext) error {
 	return nil
 }
 
+func nonzero(b []byte) []byte {
+	for i := range b {
+		if b[i] != 0 {
+			return b[i:]
+		}
+	}
+	return nil
+}
+
 func opBytesLt(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
@@ -1816,9 +1839,11 @@ func opBytesLt(cx *EvalContext) error {
 		return errors.New("math attempted on large byte-array")
 	}
 
-	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
-	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
-	cx.stack[prev] = boolToSV(lhs.Cmp(rhs) < 0)
+	rhs := nonzero(cx.stack[last].Bytes)
+	lhs := nonzero(cx.stack[prev].Bytes)
+
+	cx.stack[prev] = boolToSV(len(lhs) < len(rhs) || bytes.Compare(lhs, rhs) < 0)
+
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -1852,9 +1877,10 @@ func opBytesEq(cx *EvalContext) error {
 		return errors.New("math attempted on large byte-array")
 	}
 
-	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
-	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
-	cx.stack[prev] = boolToSV(lhs.Cmp(rhs) == 0)
+	rhs := nonzero(cx.stack[last].Bytes)
+	lhs := nonzero(cx.stack[prev].Bytes)
+
+	cx.stack[prev] = boolToSV(bytes.Equal(lhs, rhs))
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -2169,7 +2195,7 @@ func checkBranch(cx *EvalContext) error {
 	}
 	if target < cx.pc+3 {
 		// If a branch goes backwards, we should have already noted that an instruction began at that location.
-		if _, ok := cx.instructionStarts[target]; !ok {
+		if ok := cx.instructionStarts[target]; !ok {
 			return fmt.Errorf("back branch target %d is not an aligned instruction", target)
 		}
 	}
@@ -2190,7 +2216,7 @@ func checkSwitch(cx *EvalContext) error {
 
 		if target < eoi {
 			// If a branch goes backwards, we should have already noted that an instruction began at that location.
-			if _, ok := cx.instructionStarts[target]; !ok {
+			if ok := cx.instructionStarts[target]; !ok {
 				return fmt.Errorf("back branch target %d is not an aligned instruction", target)
 			}
 		}

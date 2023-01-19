@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -224,12 +224,12 @@ var opcodeImmediateNotes = map[string]string{
 	"intc":       "{uint8 int constant index}",
 	"pushint":    "{varuint int}",
 	"pushints":   "{varuint count} [{varuint value}, ...]",
-	"bytecblock": "{varuint count} [({varuint value length} bytes), ...]",
+	"bytecblock": "{varuint count} [({varuint length} bytes), ...]",
 	"bytec":      "{uint8 byte constant index}",
 	"pushbytes":  "{varuint length} {bytes}",
-	"pushbytess": "{varuint count} [({varuint value length} bytes), ...]",
+	"pushbytess": "{varuint count} [({varuint length} bytes), ...]",
 
-	"arg":    "{uint8 arg index N}",
+	"arg":    "{uint8 arg index}",
 	"global": "{uint8 global field index}",
 
 	"txn":     "{uint8 transaction field index}",
@@ -279,10 +279,10 @@ var opcodeImmediateNotes = map[string]string{
 	"ecdsa_pk_recover":    "{uint8 curve index}",
 
 	"base64_decode": "{uint8 encoding index}",
-	"json_ref":      "{uint8 return type}",
+	"json_ref":      "{uint8 return type index}",
 
 	"vrf_verify": "{uint8 parameters index}",
-	"block":      "{uint8 block field}",
+	"block":      "{uint8 block field index}",
 
 	"switch": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
 	"match":  "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -65,7 +65,7 @@ var appBoxInfoCmd = &cobra.Command{
 		// Get box info
 		box, err := client.GetApplicationBoxByName(appIdx, boxName)
 		if err != nil {
-			if strings.Contains(err.Error(), `{"message":"box not found"}`) {
+			if strings.Contains(err.Error(), "box not found") {
 				reportErrorf("No box found for appid %d with name %s", appIdx, boxName)
 			}
 			reportErrorf(errorRequestFail, err)

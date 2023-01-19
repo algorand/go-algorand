@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -108,7 +108,7 @@ func UnmarshallTopics(buffer []byte) (ts Topics, err error) {
 
 		// read the data length
 		dataLen, nr := binary.Uvarint(buffer[idx:])
-		if nr <= 0 {
+		if nr <= 0 || dataLen > maxMessageLength {
 			return nil, fmt.Errorf("UnmarshallTopics: could not read the data length")
 		}
 		idx += nr

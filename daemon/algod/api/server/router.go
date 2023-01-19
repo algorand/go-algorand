@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -15,48 +15,6 @@
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
 // Package server Algod REST API.
-//
-// API Endpoint for AlgoD Operations.
-//
-//
-//     Schemes: http
-//     Host: localhost
-//     BasePath: /
-//     Version: 0.0.1
-//     License:
-//     Contact: contact@algorand.com
-//
-//     Consumes:
-//     - application/json
-//
-//     Produces:
-//     - application/json
-//
-//     Security:
-//     - api_key:
-//
-//     SecurityDefinitions:
-//     api_key:
-//       type: apiKey
-//       name: X-Algo-API-Token
-//       in: header
-//       description: >-
-//         Generated header parameter. This token can be generated using the Goal command line tool. Example value
-//         ='b7e384d0317b8050ce45900a94a1931e28540e1f69b2d242b424659c341b4697'
-//       required: true
-//       x-example: b7e384d0317b8050ce45900a94a1931e28540e1f69b2d242b424659c341b4697
-//
-// swagger:meta
-//---
-// Currently, server implementation annotations serve as the API ground truth. From that,
-// we use go-swagger to generate a swagger spec.
-//
-// Autogenerate the swagger json - automatically run by the 'make build' step.
-// Base path must be a fully specified package name (else, it seems that swagger feeds a relative path to
-// loader.Config.Import(), and that breaks the vendor directory if the source is symlinked from elsewhere)
-//go:generate swagger generate spec -o="../swagger.json"
-//go:generate swagger validate ../swagger.json --stop-on-error
-//go:generate sh ./lib/bundle_swagger_json.sh
 package server
 
 import (
@@ -72,8 +30,11 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib/middlewares"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/experimental"
+	npprivate "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/nonparticipating/private"
+	nppublic "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/nonparticipating/public"
+	pprivate "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/participating/private"
+	ppublic "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/participating/public"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/util/tokens"
@@ -147,8 +108,14 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 		Log:      logger,
 		Shutdown: shutdown,
 	}
-	generated.RegisterHandlers(e, &v2Handler, apiAuthenticator)
-	private.RegisterHandlers(e, &v2Handler, adminAuthenticator)
+	nppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+	npprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
+	ppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+	pprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
+
+	if node.Config().EnableExperimentalAPI {
+		experimental.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+	}
 
 	return e
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package ledger
 import (
 	"bytes"
 	"encoding/binary"
+	"strings"
 	"testing"
 	"time"
 
@@ -156,9 +157,21 @@ func TestBoxCreate(t *testing.T) {
 		adam := call.Args("create", "adam")
 		dl.txn(adam, "invalid Box reference adam")
 		adam.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("adam")}}
+
+		dl.beginBlock()
 		dl.txn(adam)
+		vb := dl.endBlock()
+
+		// confirm the deltas has the creation
+		require.Len(t, vb.Delta().KvMods, 1)
+		for _, kvDelta := range vb.Delta().KvMods { // There's only one
+			require.Nil(t, kvDelta.OldData) // A creation has nil OldData
+			require.Len(t, kvDelta.Data, 24)
+		}
+
 		dl.txn(adam.Args("check", "adam", "\x00\x00"))
 		dl.txgroup("box_create\nassert", adam.Noted("one"), adam.Noted("two"))
+
 		bobo := call.Args("create", "bobo")
 		dl.txn(bobo, "invalid Box reference bobo")
 		bobo.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("bobo")}}
@@ -354,6 +367,7 @@ func TestBoxRW(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+		t.Parallel()
 		dl := NewDoubleLedger(t, genBalances, cv)
 		defer dl.Close()
 
@@ -369,8 +383,19 @@ func TestBoxRW(t *testing.T) {
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
 		}
 
-		dl.txn(call.Args("create", "x", "\x10"))    // 16
+		dl.txn(call.Args("create", "x", "\x10")) // 16
+		dl.beginBlock()
 		dl.txn(call.Args("set", "x", "ABCDEFGHIJ")) // 10 long
+		vb := dl.endBlock()
+		// confirm the deltas has the change, including the old value
+		require.Len(t, vb.Delta().KvMods, 1)
+		for _, kvDelta := range vb.Delta().KvMods { // There's only one
+			require.Equal(t, kvDelta.OldData,
+				[]byte(strings.Repeat("\x00", 16)))
+			require.Equal(t, kvDelta.Data,
+				[]byte("ABCDEFGHIJ\x00\x00\x00\x00\x00\x00"))
+		}
+
 		dl.txn(call.Args("check", "x", "ABCDE"))
 		dl.txn(call.Args("check", "x", "ABCDEFGHIJ"))
 		dl.txn(call.Args("check", "x", "ABCDEFGHIJ\x00"))
