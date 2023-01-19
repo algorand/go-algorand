@@ -498,7 +498,7 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 	arw := store.NewAccountsSQLReaderWriter(tx)
 
 	if ct.catchpointEnabled() {
-		var mc *store.MerkleCommitter
+		var mc store.MerkleCommitter
 		mc, err = store.MakeMerkleCommitter(tx, false)
 		if err != nil {
 			return

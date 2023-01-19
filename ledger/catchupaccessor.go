@@ -107,15 +107,21 @@ type stagingWriterImpl struct {
 }
 
 func (w *stagingWriterImpl) writeBalances(ctx context.Context, balances []store.NormalizedAccountBalance) error {
-	return w.wdb.Transaction(func(ctx context.Context, tx *sql.Tx) (err error) {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
+	return w.wdb.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		crw, err := tx.CreateCatchpointReaderWriter()
+		if err != nil {
+			return err
+		}
 		return crw.WriteCatchpointStagingBalances(ctx, balances)
 	})
 }
 
 func (w *stagingWriterImpl) writeKVs(ctx context.Context, kvrs []encoded.KVRecordV6) error {
-	return w.wdb.Transaction(func(ctx context.Context, tx *sql.Tx) (err error) {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
+	return w.wdb.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		crw, err := tx.CreateCatchpointReaderWriter()
+		if err != nil {
+			return err
+		}
 
 		keys := make([][]byte, len(kvrs))
 		values := make([][]byte, len(kvrs))
@@ -131,17 +137,24 @@ func (w *stagingWriterImpl) writeKVs(ctx context.Context, kvrs []encoded.KVRecor
 }
 
 func (w *stagingWriterImpl) writeCreatables(ctx context.Context, balances []store.NormalizedAccountBalance) error {
-	return w.wdb.Transaction(func(ctx context.Context, tx *sql.Tx) error {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
+	return w.wdb.Transaction(func(ctx context.Context, tx store.TransactionScope) error {
+		crw, err := tx.CreateCatchpointReaderWriter()
+		if err != nil {
+			return err
+		}
+
 		return crw.WriteCatchpointStagingCreatable(ctx, balances)
 	})
 }
 
 func (w *stagingWriterImpl) writeHashes(ctx context.Context, balances []store.NormalizedAccountBalance) error {
-	return w.wdb.Transaction(func(ctx context.Context, tx *sql.Tx) error {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
-		err := crw.WriteCatchpointStagingHashes(ctx, balances)
-		return err
+	return w.wdb.Transaction(func(ctx context.Context, tx store.TransactionScope) error {
+		crw, err := tx.CreateCatchpointReaderWriter()
+		if err != nil {
+			return err
+		}
+
+		return crw.WriteCatchpointStagingHashes(ctx, balances)
 	})
 }
 
@@ -701,7 +714,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		uncommitedHashesCount := 0
 		keepWriting := true
 		accountHashesWritten, kvHashesWritten := uint64(0), uint64(0)
-		var mc *store.MerkleCommitter
+		var mc store.MerkleCommitter
 
 		err := trackerdb.Batch(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
 			// create the merkle trie for the balances

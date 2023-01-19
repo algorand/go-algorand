@@ -460,11 +460,14 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	// no errors on read, hashes match
 	ctx := context.Background()
 	// tx, err := l.trackerDBs.Wdb.Handle.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
-	err = l.trackerDBs.TransactionContext(ctx, func(ctx context.Context, tx *sql.Tx) (err error) {
-		arw := store.NewAccountsSQLReaderWriter(tx)
+	err = l.trackerDBs.TransactionContext(ctx, func(ctx context.Context, tx store.TransactionScope) (err error) {
+		arw, err := tx.CreateAccountsReaderWriter()
+		if err != nil {
+			return nil
+		}
 
 		// save the existing hash
-		committer, err := store.MakeMerkleCommitter(tx, false)
+		committer, err := tx.CreateMerkleCommitter(false)
 		require.NoError(t, err)
 		trie, err := merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
 		require.NoError(t, err)
@@ -478,7 +481,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 		require.NoError(t, err)
 
 		// rebuild the MT
-		committer, err = store.MakeMerkleCommitter(tx, false)
+		committer, err = tx.CreateMerkleCommitter(false)
 		require.NoError(t, err)
 		trie, err = merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
 		require.NoError(t, err)
@@ -487,7 +490,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 		require.NoError(t, err)
 		require.Zero(t, h)
 
-		iter := store.MakeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
+		iter := tx.CreateOrderedAccountsIter(trieRebuildAccountChunkSize)
 		defer iter.Close(ctx)
 		for {
 			accts, _, err := iter.Next(ctx)
@@ -581,8 +584,8 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess store.
 
 	balanceTrieStats := func(db store.TrackerStore) merkletrie.Stats {
 		var stats merkletrie.Stats
-		err = db.Transaction(func(ctx context.Context, tx *sql.Tx) (err error) {
-			committer, err := store.MakeMerkleCommitter(tx, false)
+		err = db.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+			committer, err := tx.CreateMerkleCommitter(false)
 			if err != nil {
 				return err
 			}

@@ -154,7 +154,7 @@ func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.Conse
 	t.trackerDBs, _ = store.DbOpenTrackerTest(ts, inMemory)
 	t.protoVersion = protoVersion
 
-	err := t.trackerDBs.Transaction(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
+	err := t.trackerDBs.Batch(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
 		arw := store.NewAccountsSQLReaderWriter(tx)
 
 		accts := ledgertesting.RandomAccounts(20, true)
@@ -299,7 +299,7 @@ func TestTxTailDeltaTracking(t *testing.T) {
 				err = txtail.prepareCommit(dcc)
 				require.NoError(t, err)
 
-				err := ledger.trackerDBs.Transaction(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
+				err := ledger.trackerDBs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
 					err = txtail.commitRound(context.Background(), tx, dcc)
 					require.NoError(t, err)
 					return nil
