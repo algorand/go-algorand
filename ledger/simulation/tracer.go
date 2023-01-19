@@ -30,13 +30,13 @@ type cursorEvalTracer struct {
 	previousInnerTxns []int
 }
 
+func (tracer *cursorEvalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
+	tracer.relativeCursor = append(tracer.relativeCursor, -1) // will go to 0 in BeforeTxn
+}
+
 func (tracer *cursorEvalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 	top := len(tracer.relativeCursor) - 1
-	if top < 0 {
-		tracer.relativeCursor = []int{0}
-	} else {
-		tracer.relativeCursor[top]++
-	}
+	tracer.relativeCursor[top]++
 	tracer.previousInnerTxns = append(tracer.previousInnerTxns, 0)
 }
 
@@ -44,16 +44,11 @@ func (tracer *cursorEvalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, a
 	tracer.previousInnerTxns = tracer.previousInnerTxns[:len(tracer.previousInnerTxns)-1]
 }
 
-// Copy the inner transaction group to the ApplyData.EvalDelta.InnerTxns of the calling transaction
-func (tracer *cursorEvalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
-	// TODO: this also gets called for top-level group now
-	tracer.relativeCursor = append(tracer.relativeCursor, -1) // will go to 0 in BeforeTxn
-}
-
 func (tracer *cursorEvalTracer) AfterTxnGroup(ep *logic.EvalParams) {
-	// TODO: this also gets called for top-level group now
 	top := len(tracer.relativeCursor) - 1
-	tracer.previousInnerTxns[len(tracer.previousInnerTxns)-1] += tracer.relativeCursor[top] + 1
+	if len(tracer.previousInnerTxns) != 0 {
+		tracer.previousInnerTxns[len(tracer.previousInnerTxns)-1] += tracer.relativeCursor[top] + 1
+	}
 	tracer.relativeCursor = tracer.relativeCursor[:top]
 }
 
@@ -124,8 +119,10 @@ func (tracer *evalTracer) populateInnerTransactions(txgroup []transactions.Signe
 }
 
 func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
-	// TODO: this also gets called for top-level group now
-	tracer.populateInnerTransactions(ep.TxnGroup)
+	if ep.GetCaller() != nil {
+		// if this is an inner txn group, save the txns
+		tracer.populateInnerTransactions(ep.TxnGroup)
+	}
 	tracer.cursorEvalTracer.BeforeTxnGroup(ep)
 }
 
