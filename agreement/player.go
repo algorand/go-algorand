@@ -620,6 +620,13 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			actions = append(actions, a)
 		}
 
+		// StartSpeculativeBlockAssembly every time we validate a proposal
+		// TODO: maybe only do this if after speculation has started; interrupt speculation on a block when we get a better block
+		// TODO: maybe don't do this at all and just delete it?
+		if ef.t() == payloadAccepted {
+			actions = p.startSpeculativeBlockAsm(r, actions)
+		}
+
 		// If the payload is valid, check it against any received cert threshold.
 		// Of course, this should only trigger for payloadVerified case.
 		// This allows us to handle late payloads (relative to cert-bundles, i.e., certificates) without resorting to catchup.
