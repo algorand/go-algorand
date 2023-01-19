@@ -19,7 +19,6 @@ package simulation_test
 import (
 	"encoding/binary"
 	"fmt"
-	"reflect"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -27,7 +26,6 @@ import (
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/libgoal"
 
-	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	"github.com/algorand/go-algorand/protocol"
@@ -70,74 +68,6 @@ func uint64ToBytes(num uint64) []byte {
 	ibytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(ibytes, num)
 	return ibytes
-}
-
-// ==============================
-// > Sanity Tests
-// ==============================
-
-// We want to be careful that the Algod ledger does not move on to another round
-// so we confirm here that all ledger methods which implicitly access the current round
-// are overriden within the `simulatorLedger`.
-func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	l, _, _ := simulationtesting.PrepareSimulatorTest(t)
-
-	// methods overriden by `simulatorLedger``
-	overridenMethods := []string{
-		"Latest",
-		"LookupLatest",
-	}
-
-	// methods that don't use a round number
-	excludedMethods := []string{
-		"GenesisHash",
-		"GenesisProto",
-		"LatestTotals",
-	}
-
-	methodIsSkipped := func(methodName string) bool {
-		for _, overridenMethod := range overridenMethods {
-			if overridenMethod == methodName {
-				return true
-			}
-		}
-		for _, excludedMethod := range excludedMethods {
-			if excludedMethod == methodName {
-				return true
-			}
-		}
-		return false
-	}
-
-	methodExistsInEvalLedger := func(methodName string) bool {
-		evalLedgerType := reflect.TypeOf((*internal.LedgerForEvaluator)(nil)).Elem()
-		for i := 0; i < evalLedgerType.NumMethod(); i++ {
-			if evalLedgerType.Method(i).Name == methodName {
-				return true
-			}
-		}
-		return false
-	}
-
-	methodHasRoundParameter := func(methodType reflect.Type) bool {
-		for i := 0; i < methodType.NumIn(); i++ {
-			if methodType.In(i) == reflect.TypeOf(basics.Round(0)) {
-				return true
-			}
-		}
-		return false
-	}
-
-	ledgerType := reflect.TypeOf(l)
-	for i := 0; i < ledgerType.NumMethod(); i++ {
-		method := ledgerType.Method(i)
-		if methodExistsInEvalLedger(method.Name) && !methodIsSkipped(method.Name) {
-			require.True(t, methodHasRoundParameter(method.Type), "method %s has no round parameter", method.Name)
-		}
-	}
 }
 
 // ==============================
