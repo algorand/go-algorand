@@ -37,7 +37,10 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/condvar"
+	"github.com/algorand/go-algorand/util/metrics"
 )
+
+var speculativeAssemblyDiscarded = metrics.NewCounter("algod_speculative_assembly_discarded", "started speculative block assembly but a different block won later")
 
 // A TransactionPool prepares valid blocks for proposal and caches
 // validated transaction groups.
@@ -588,7 +591,9 @@ func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, 
 			return
 		}
 		// cancel prior speculative block assembly based on different block
+		speculativeAssemblyDiscarded.Inc(nil)
 		pool.cancelSpeculativeAssembly()
+		pool.specActive = false
 	}
 	pool.log.Infof("StartSpeculativeBlockAssembly %s", blockHash.String())
 	pool.specActive = true
@@ -633,6 +638,7 @@ func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHas
 			specPool.assemblyMu.Unlock()
 			return assembled, err
 		}
+		speculativeAssemblyDiscarded.Inc(nil)
 		pool.cancelSpeculativeAssembly()
 		pool.specActive = false
 	}
@@ -645,6 +651,7 @@ func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHas
 func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	pool.specBlockMu.Lock()
 	if pool.specActive && block.Digest() != pool.specBlockDigest {
+		speculativeAssemblyDiscarded.Inc(nil)
 		pool.cancelSpeculativeAssembly()
 		pool.specActive = false
 		// cancel speculative assembly, fall through to starting normal assembly
