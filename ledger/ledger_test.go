@@ -1557,7 +1557,7 @@ func TestWaitLedgerReload(t *testing.T) {
 	waitRound := l.Latest() + 1
 	waitChannel := l.Wait(waitRound)
 
-	err = l.ReloadLedger()
+	err = l.reloadLedger()
 	a.NoError(err)
 	triggerTrackerFlush(t, l, genesisInitState)
 

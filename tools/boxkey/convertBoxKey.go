@@ -22,8 +22,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/avm-abi/apps"
 )
 
 func main() {
@@ -43,7 +42,7 @@ func main() {
 		fmt.Println("invalid key value")
 		return
 	}
-	key := logic.MakeBoxKey(basics.AppIndex(appIdx), string(nameBytes))
+	key := apps.MakeBoxKey(appIdx, string(nameBytes))
 	fmt.Println(base64.StdEncoding.EncodeToString([]byte(key)))
 	fmt.Println(hex.EncodeToString([]byte(key)))
 }
