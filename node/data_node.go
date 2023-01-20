@@ -68,6 +68,8 @@ func MakeData(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 	p2pNode.DeregisterMessageInterest(protocol.AgreementVoteTag)
 	p2pNode.DeregisterMessageInterest(protocol.ProposalPayloadTag)
+	p2pNode.DeregisterMessageInterest(protocol.VoteBundleTag)
+	p2pNode.DeregisterMessageInterest(protocol.StateProofSigTag)
 	node.net = p2pNode
 
 	// load stored data
@@ -266,16 +268,6 @@ func (node *AlgorandDataNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 	node.lastRoundTimestamp = time.Now()
 	node.hasSyncedSinceStartup = true
 	node.syncStatusMu.Unlock()
-
-	// Wake up oldKeyDeletionThread(), non-blocking.
-	select {
-	case node.oldKeyDeletionNotify <- struct{}{}:
-	default:
-	}
-}
-
-func (node *AlgorandDataNode) oldKeyDeletionThread(_ <-chan struct{}) {
-	node.monitoringRoutinesWaitGroup.Done()
 }
 
 // StartCatchup starts the catchpoint mode and attempt to get to the provided catchpoint
