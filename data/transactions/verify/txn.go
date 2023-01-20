@@ -21,9 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -32,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/streamv"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -612,11 +609,12 @@ type batchLoad struct {
 }
 
 func makeBatchLoad(l int) (bl *batchLoad) {
-	bl.txnGroups = make([][]transactions.SignedTxn, 0, l)
-	bl.groupCtxs = make([]*GroupContext, 0, l)
-	bl.elementBacklogMessage = make([]interface{}, 0, l)
-	bl.messagesForTxn = make([]int, 0, l)
-	return bl
+	return &batchLoad{
+		txnGroups:             make([][]transactions.SignedTxn, 0, l),
+		groupCtxs:             make([]*GroupContext, 0, l),
+		elementBacklogMessage: make([]interface{}, 0, l),
+		messagesForTxn:        make([]int, 0, l),
+	}
 }
 
 func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext, backlogMsg interface{}, numBatchableSigs int) {
@@ -643,15 +641,30 @@ type LedgerForStreamVerifier interface {
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 }
 
-func (svh *streamVerifierHelper) cleanup(pending []*UnverifiedElement, err error) {
+func (svh *streamVerifierHelper) Cleanup(pending []streamv.UnverifiedElement, err error) {
 	// report an error for the unchecked txns
 	// drop the messages without reporting if the receiver does not consume
 	for _, uel := range pending {
-		svh.SendResult(uel.TxnGroup, uel.BacklogMessage, err)
+		svh.SendResult(uel, err)
 	}
 }
 
-func (svh streamVerifierHelper) SendResult(veTxnGroup []transactions.SignedTxn, veBacklogMessage interface{}, err error) {
+func (svh streamVerifierHelper) SendResult(ue streamv.UnverifiedElement, err error) {
+	uelt := ue.(*UnverifiedElement)
+	// send the txn result out the pipe
+	select {
+	case svh.resultChan <- &VerificationResult{
+		TxnGroup:       uelt.TxnGroup,
+		BacklogMessage: uelt.BacklogMessage,
+		Err:            err,
+	}:
+	default:
+		// we failed to write to the output queue, since the queue was full.
+		svh.droppedChan <- &UnverifiedElement{uelt.TxnGroup, uelt.BacklogMessage}
+	}
+}
+
+func (svh streamVerifierHelper) sendResult(veTxnGroup []transactions.SignedTxn, veBacklogMessage interface{}, err error) {
 	// send the txn result out the pipe
 	select {
 	case svh.resultChan <- &VerificationResult{
@@ -692,11 +705,11 @@ func (svh *streamVerifierHelper) PreProcessUnverifiedElements(uelts []streamv.Un
 	blockHeader := svh.nbw.getBlockHeader()
 
 	for _, uelt := range uelts {
-		ue := uelt.(UnverifiedElement)
+		ue := uelt.(*UnverifiedElement)
 		groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, blockHeader, svh.ledger, batchVerifier)
 		if err != nil {
 			// verification failed, no need to add the sig to the batch, report the error
-			svh.SendResult(ue.TxnGroup, ue.BacklogMessage, err)
+			svh.sendResult(ue.TxnGroup, ue.BacklogMessage, err)
 			continue
 		}
 		totalBatchCount := batchVerifier.GetNumberOfEnqueuedSignatures()
@@ -749,7 +762,7 @@ func (svh *streamVerifierHelper) PostProcessVerifiedElements(ctx interface{}, fa
 	bl := ctx.(*batchLoad)
 	if err == nil { // success, all signatures verified
 		for i := range bl.txnGroups {
-			svh.SendResult(bl.txnGroups[i], bl.elementBacklogMessage[i], nil)
+			svh.sendResult(bl.txnGroups[i], bl.elementBacklogMessage[i], nil)
 		}
 		svh.cache.AddPayset(bl.txnGroups, bl.groupCtxs)
 		return
@@ -778,7 +791,7 @@ func (svh *streamVerifierHelper) PostProcessVerifiedElements(ctx interface{}, fa
 		} else {
 			result = err
 		}
-		svh.SendResult(bl.txnGroups[txgIdx], bl.elementBacklogMessage[txgIdx], result)
+		svh.sendResult(bl.txnGroups[txgIdx], bl.elementBacklogMessage[txgIdx], result)
 	}
 	// loading them all at once by locking the cache once
 	svh.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)

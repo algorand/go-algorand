@@ -27,16 +27,16 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-var errShuttingDownError = errors.New("not verified, verifier is shutting down")
+var ErrShuttingDownError = errors.New("not verified, verifier is shutting down")
 
-// waitForNextTxnDuration is the time to wait before sending the batch to the exec pool
+// WaitForNextTxnDuration is the time to wait before sending the batch to the exec pool
 // If the incoming txn rate is low, a txn in the batch may  wait no less than
-// waitForNextTxnDuration before it is set for verification.
+// WaitForNextTxnDuration before it is set for verification.
 // This can introduce a latency to the propagation of a transaction in the network,
 // since every relay will go through this wait time before broadcasting the txn.
 // However, when the incoming txn rate is high, the batch will fill up quickly and will send
-// for signature evaluation before waitForNextTxnDuration.
-const waitForNextTxnDuration = 2 * time.Millisecond
+// for signature evaluation before WaitForNextTxnDuration.
+const WaitForNextTxnDuration = 2 * time.Millisecond
 
 // The PaysetGroups is taking large set of transaction groups and attempt to verify their validity using multiple go-routines.
 // When doing so, it attempts to break these into smaller "worksets" where each workset takes about 2ms of execution time in order
@@ -57,7 +57,7 @@ type Helper interface {
 	PreProcessUnverifiedElements(uelts []UnverifiedElement) (batchVerifier *crypto.BatchVerifier, ctx interface{})
 	PostProcessVerifiedElements(ctx interface{}, failed []bool, err error)
 	SendResult(ue UnverifiedElement, err error)
-	cleanup(ue []UnverifiedElement, err error)
+	Cleanup(ue []UnverifiedElement, err error)
 }
 
 // StreamVerifier verifies txn groups received through the stxnChan channel, and returns the
@@ -97,13 +97,13 @@ func (sv *StreamVerifier) WaitForStop() {
 
 func (sv *StreamVerifier) batchingLoop() {
 	defer sv.activeLoopWg.Done()
-	timer := time.NewTicker(waitForNextTxnDuration)
+	timer := time.NewTicker(WaitForNextTxnDuration)
 	defer timer.Stop()
 	var added bool
 	var numberOfSigsInCurrent uint64
 	var numberOfBatchAttempts uint64
 	uelts := make([]UnverifiedElement, 0, 8)
-	defer func() { sv.helper.cleanup(uelts, errShuttingDownError) }()
+	defer func() { sv.helper.Cleanup(uelts, ErrShuttingDownError) }()
 	for {
 		select {
 		case stx := <-sv.stxnChan:
@@ -163,7 +163,7 @@ func (sv *StreamVerifier) batchingLoop() {
 			if numberOfBatchAttempts > 1 {
 				// bypass the exec pool situation and queue anyway
 				// this is to prevent long delays in transaction propagation
-				// at least one transaction here has waited 3 x waitForNextTxnDuration
+				// at least one transaction here has waited 3 x WaitForNextTxnDuration
 				err = sv.addVerificationTaskToThePoolNow(uelts)
 				added = true
 			} else {
@@ -212,7 +212,7 @@ func (sv *StreamVerifier) addVerificationTaskToThePoolNow(unvrifiedElts []Unveri
 		uelts := arg.([]UnverifiedElement)
 		if taskCtx.Err() != nil {
 			// ctx is canceled. the results will be returned
-			sv.helper.cleanup(uelts, errShuttingDownError)
+			sv.helper.Cleanup(uelts, ErrShuttingDownError)
 			return nil
 		}
 
