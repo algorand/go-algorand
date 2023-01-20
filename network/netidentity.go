@@ -42,6 +42,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-deadlock"
 )
 
 type identityChallenge struct {
@@ -188,4 +189,51 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 
 var identityHandlers = []TaggedMessageHandler{
 	{protocol.NetIDVerificationTag, HandlerFunc(identityVerificationHandler)},
+}
+
+// identityTracker is used by wsNetwork to manage peer identities for connection deduplication
+type identityTracker interface {
+	removeIdentity(p *wsPeer)
+	setIdentity(p *wsPeer) bool
+}
+
+// publicKeyIdentTracker implements identityTracker by
+// mapping from PublicKeys exchanged in identity challenges to a peer
+type publicKeyIdentTracker struct {
+	peersByID map[crypto.PublicKey]*wsPeer
+	lock      deadlock.RWMutex
+}
+
+// NewIdentityTracker returns a new publicKeyIdentTracker
+func NewIdentityTracker() *publicKeyIdentTracker {
+	return &publicKeyIdentTracker{
+		peersByID: make(map[crypto.PublicKey]*wsPeer),
+	}
+}
+
+// setIdentity attempts to store a peer at its identity.
+// returns false if it was unable to load the peer into the given identity
+// or true otherwise (if the peer was already there, or if it was added)
+func (t *publicKeyIdentTracker) setIdentity(p *wsPeer) bool {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	existingPeer, exists := t.peersByID[p.identity]
+	if !exists {
+		// the identity is not occupied, so set it and return true
+		t.peersByID[p.identity] = p
+		return true
+	}
+	// the identity is occupied, so return false if it is occupied by some *other* peer
+	// or true if it is occupied by this peer
+	return existingPeer == p
+}
+
+// removeIdentity removes the entry in the peersByID map if it exists
+// and is occupied by the given peer
+func (t *publicKeyIdentTracker) removeIdentity(p *wsPeer) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	if t.peersByID[p.identity] == p {
+		delete(t.peersByID, p.identity)
+	}
 }

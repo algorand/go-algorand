@@ -251,33 +251,6 @@ func TestWebsocketNetworkStartStop(t *testing.T) {
 	netA.Stop()
 }
 
-func TestWebsocketNetworkSetPeersByID(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	netA := makeTestWebsocketNode(t)
-	netA.Start()
-
-	id := crypto.PublicKey{}
-	p := wsPeer{identity: id}
-
-	// Ensure the first attempt to insert populates the map
-	_, exists := netA.peersByID[p.identity]
-	require.False(t, exists)
-	require.True(t, netA.setPeersByID(&p))
-	_, exists = netA.peersByID[p.identity]
-	require.True(t, exists)
-
-	// Ensure the next attempt to insert also returns true
-	require.True(t, netA.setPeersByID(&p))
-
-	// Ensure a different peer cannot take the map entry
-	otherP := wsPeer{identity: id}
-	require.False(t, netA.setPeersByID(&otherP))
-
-	// Ensure the entry in the map wasn't changed
-	require.Equal(t, netA.peersByID[p.identity], &p)
-}
-
 func waitReady(t testing.TB, wn *WebsocketNetwork, timeout <-chan time.Time) bool {
 	select {
 	case <-wn.Ready():
@@ -1099,47 +1072,88 @@ func TestGetPeers(t *testing.T) {
 	assert.Equal(t, expectAddrs, peerAddrs)
 }
 
+// mock an identityTracker
+type dummyIdentityTracker struct {
+	shouldInsert bool
+	setCount     int
+	insertCount  int
+	removeCount  int
+	lock         deadlock.Mutex
+}
+
+func newDummyIdentTracker() *dummyIdentityTracker {
+	return &dummyIdentityTracker{
+		shouldInsert: true,
+		setCount:     0,
+		insertCount:  0,
+		removeCount:  0,
+	}
+}
+
+func (d *dummyIdentityTracker) setShouldInsert(b bool) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	d.shouldInsert = b
+}
+func (d *dummyIdentityTracker) removeIdentity(p *wsPeer) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	d.removeCount++
+}
+func (d *dummyIdentityTracker) getInsertCount() int {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	return d.insertCount
+}
+func (d *dummyIdentityTracker) getRemoveCount() int {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	return d.removeCount
+}
+func (d *dummyIdentityTracker) getSetCount() int {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	return d.setCount
+}
+func (d *dummyIdentityTracker) setIdentity(p *wsPeer) bool {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	d.setCount++
+	if d.shouldInsert {
+		d.insertCount++
+	}
+	return d.shouldInsert
+}
+
 // TestPeeringWithIdentityChallenge tests the happy path of connecting with identity challenge:
 // - both peers have correctly set ConnectionDeduplicationName
 // - both should exchange identities and verify
 // - both peers should be able to deduplicate connections
 func TestPeeringWithIdentityChallenge(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	deadlock.Opts.Disable = true
 
 	netA := makeTestWebsocketNode(t)
+	netA.identTracker = newDummyIdentTracker()
+	addrA := "127.0.0.1:8901"
 	netA.config.GossipFanout = 1
-	// set ConnectionDeduplicationName to ensure handlers are set when it starts,
-	// but we won't know the actual gossip address until this test starts the network
-	netA.config.ConnectionDeduplicationName = "something"
+	netA.config.NetAddress = addrA
+	gossipA, err := netA.addrToGossipAddr(netA.config.NetAddress)
+	require.NoError(t, err)
+	netA.config.ConnectionDeduplicationName = gossipA
 
 	netB := makeTestWebsocketNode(t)
+	netB.identTracker = newDummyIdentTracker()
+	addrB := "127.0.0.1:8902"
 	netB.config.GossipFanout = 1
-	netB.config.ConnectionDeduplicationName = "something"
+	netB.config.NetAddress = addrB
+	gossipB, err := netB.addrToGossipAddr(netB.config.NetAddress)
+	require.NoError(t, err)
+	netB.config.ConnectionDeduplicationName = gossipB
 
-	// start networks in 2 steps to overload the config values before routines start
-	var addrA string
-	var gossipA string
-	netB.messagesOfInterestMu.Lock()
-	if ok := netA.startListener(); ok {
-		addrA, _ = netA.Address()
-		gossipA, _ = netA.addrToGossipAddr(addrA)
-		netA.config.ConnectionDeduplicationName = gossipA
-		netA.startRoutines()
-		defer netA.Stop()
-	}
-	netB.messagesOfInterestMu.Unlock()
-	var addrB string
-	var gossipB string
-	netB.messagesOfInterestMu.Lock()
-	if ok := netB.startListener(); ok {
-		addrB, _ = netB.Address()
-		gossipB, _ = netB.addrToGossipAddr(addrB)
-		netB.config.ConnectionDeduplicationName = gossipB
-		netB.startRoutines()
-		defer netB.Stop()
-	}
-	netB.messagesOfInterestMu.Unlock()
+	netA.Start()
+	defer netA.Stop()
+	netB.Start()
+	defer netB.Stop()
 
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
@@ -1151,17 +1165,18 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
 
-	// confirm identity maps are filled out
-	// netA was able to add theirs before finishing tryConnect
-	assert.Equal(t, 1, len(netA.peersByID))
-	// with only one entry in the peersByID map, save it to check later
-	var verifiedPeer Peer
-	for _, v := range netA.peersByID {
-		verifiedPeer = v
-	}
+	// confirm identity map was added to for both hosts
+	assert.Equal(t, 1, netA.identTracker.(*dummyIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netA.identTracker.(*dummyIdentityTracker).getInsertCount())
+
 	// netB has to wait for a final verification message over WS Handler, so pause a moment
 	time.Sleep(500 * time.Millisecond)
-	assert.Equal(t, 1, len(netB.GetPeersByID()))
+	assert.Equal(t, 1, netB.identTracker.(*dummyIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netB.identTracker.(*dummyIdentityTracker).getInsertCount())
+
+	// tell the dummy identity tracker that new identies should fail to insert
+	netA.identTracker.(*dummyIdentityTracker).setShouldInsert(false)
+	netB.identTracker.(*dummyIdentityTracker).setShouldInsert(false)
 
 	// bi-directional connection from B should not proceed
 	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
@@ -1170,23 +1185,22 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 		// let the tryConnect go forward
 		time.Sleep(500 * time.Millisecond)
 	}
-	// netB should have noticed it already knows this verified identity,
-	// and should not have proceeded with connection, while leaving the original
 
 	// netA should have added this peer without a verified identity,
 	// and would drop this peer once it notices the connection is not in use.
 	// it seems these debug connections don't do that, but standard TCP would.
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
-	assert.Equal(t, 1, len(netA.GetPeersByID()))
-	// Since there's still jut one entry in the peersByID map, make sure it hasn't changed
-	for _, v := range netA.peersByID {
-		assert.Equal(t, verifiedPeer, v)
-	}
-
 	// Also confirm the new inbound connection to netA is unverified
 	unverifiedConn := netA.GetPeers(PeersConnectedIn)[0].(*wsPeer)
 	assert.Equal(t, uint32(0), unverifiedConn.identityVerified)
+
+	// netA never attempts to set identity as it never sees a verified identity
+	assert.Equal(t, 1, netA.identTracker.(*dummyIdentityTracker).getSetCount())
+	// netB would attempt to add the identity to the tracker
+	// but it would not end up being added
+	assert.Equal(t, 2, netB.identTracker.(*dummyIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netB.identTracker.(*dummyIdentityTracker).getInsertCount())
 
 	// Check deduplication again, this time from A
 	// the "ok" from tryConnectReserveAddr is overloaded here because isConnectedTo
@@ -1199,14 +1213,19 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 		// let the tryConnect go forward
 		time.Sleep(500 * time.Millisecond)
 	}
-	// As mentioned above, we see a new peer on the reciever, but no peers elsewhere,
-	// and no new entries in peersByID. TCP would close this
+	// As mentioned above, we see a new peer on the reciever (which TCP would close for being abandoned)
+	// but no peers elsewhere
 	assert.Equal(t, 2, len(netB.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
-	assert.Equal(t, 1, len(netB.GetPeersByID()))
+	// netB never tries to add a new identity, since the connection gets abandoned before it is verified
+	assert.Equal(t, 2, netB.identTracker.(*dummyIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netB.identTracker.(*dummyIdentityTracker).getInsertCount())
+	// netA has not gained new connections, and we see the set count incremented,
+	// meaning it tried to add an identity
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
-	assert.Equal(t, 1, len(netA.GetPeersByID()))
+	assert.Equal(t, 2, netA.identTracker.(*dummyIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netA.identTracker.(*dummyIdentityTracker).getInsertCount())
 }
 
 // TestPeeringReceiverIdentityChallengeOnly will confirm that if only the Receiver
@@ -1215,40 +1234,27 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
+	netA.identTracker = newDummyIdentTracker()
+	addrA := "127.0.0.1:8901"
 	netA.config.GossipFanout = 1
-	// don't set netA's ConnectionDeduplicationName, meaning it wont' exchange identity
-	//netA.config.ConnectionDeduplicationName = "something"
+	netA.config.NetAddress = addrA
+	gossipA, err := netA.addrToGossipAddr(netA.config.NetAddress)
+	require.NoError(t, err)
+	//netA.config.ConnectionDeduplicationName = gossipA
 
 	netB := makeTestWebsocketNode(t)
+	netB.identTracker = newDummyIdentTracker()
+	addrB := "127.0.0.1:8902"
 	netB.config.GossipFanout = 1
-	// set ConnectionDeduplicationName to ensure handlers are set when it starts,
-	// but we won't know the actual gossip address until this test starts the network
-	netB.config.ConnectionDeduplicationName = "something"
+	netB.config.NetAddress = addrB
+	gossipB, err := netB.addrToGossipAddr(netB.config.NetAddress)
+	require.NoError(t, err)
+	netB.config.ConnectionDeduplicationName = gossipB
 
-	// start networks in 2 steps to overload the config values before routines start
-	var addrA string
-	var gossipA string
-	netB.messagesOfInterestMu.Lock()
-	if ok := netA.startListener(); ok {
-		addrA, _ = netA.Address()
-		gossipA, _ = netA.addrToGossipAddr(addrA)
-		// don't set netA's ConnectionDeduplicationName, meaning it wont' exchange identity
-		//netA.config.ConnectionDeduplicationName = gossipA
-		netA.startRoutines()
-		defer netA.Stop()
-	}
-	netB.messagesOfInterestMu.Unlock()
-	var addrB string
-	var gossipB string
-	netB.messagesOfInterestMu.Lock()
-	if ok := netB.startListener(); ok {
-		addrB, _ = netB.Address()
-		gossipB, _ = netB.addrToGossipAddr(addrB)
-		netB.config.ConnectionDeduplicationName = gossipB
-		netB.startRoutines()
-		defer netB.Stop()
-	}
-	netB.messagesOfInterestMu.Unlock()
+	netA.Start()
+	defer netA.Stop()
+	netB.Start()
+	defer netB.Stop()
 
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
@@ -1261,8 +1267,8 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
 
 	// confirm identity map was not added to for either host
-	assert.Equal(t, 0, len(netA.peersByID))
-	assert.Equal(t, 0, len(netB.peersByID))
+	assert.Equal(t, 0, netA.identTracker.(*dummyIdentityTracker).getSetCount())
+	assert.Equal(t, 0, netB.identTracker.(*dummyIdentityTracker).getSetCount())
 
 	// bi-directional connection should also work
 	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
@@ -1275,8 +1281,9 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedOut)))
-	assert.Equal(t, 0, len(netA.peersByID))
-	assert.Equal(t, 0, len(netB.peersByID))
+	// confirm identity map was not added to for either host
+	assert.Equal(t, 0, netA.identTracker.(*dummyIdentityTracker).getSetCount())
+	assert.Equal(t, 0, netB.identTracker.(*dummyIdentityTracker).getSetCount())
 }
 
 // TestPeeringBadIdentityChallenge will confirm that if the reciever can't match
@@ -1285,37 +1292,27 @@ func TestPeeringBadIdentityChallenge(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
+	netA.identTracker = newDummyIdentTracker()
+	addrA := "127.0.0.1:8901"
 	netA.config.GossipFanout = 1
-	netA.config.ConnectionDeduplicationName = "something"
+	netA.config.NetAddress = addrA
+	gossipA, err := netA.addrToGossipAddr(netA.config.NetAddress)
+	require.NoError(t, err)
+	netA.config.ConnectionDeduplicationName = gossipA
 
 	netB := makeTestWebsocketNode(t)
+	netB.identTracker = newDummyIdentTracker()
+	addrB := "127.0.0.1:8902"
 	netB.config.GossipFanout = 1
-	netB.config.ConnectionDeduplicationName = "DOESNT MATCH"
+	netB.config.NetAddress = addrB
+	gossipB, err := netB.addrToGossipAddr(netB.config.NetAddress)
+	require.NoError(t, err)
+	netB.config.ConnectionDeduplicationName = "Not meant for me!"
 
-	// start networks in 2 steps to overload the config values before routines start
-	var addrA string
-	var gossipA string
-	netB.messagesOfInterestMu.Lock()
-	if ok := netA.startListener(); ok {
-		addrA, _ = netA.Address()
-		gossipA, _ = netA.addrToGossipAddr(addrA)
-		netA.config.ConnectionDeduplicationName = gossipA
-		netA.startRoutines()
-		defer netA.Stop()
-	}
-	netB.messagesOfInterestMu.Unlock()
-	var addrB string
-	var gossipB string
-	netB.messagesOfInterestMu.Lock()
-	if ok := netB.startListener(); ok {
-		addrB, _ = netB.Address()
-		gossipB, _ = netB.addrToGossipAddr(addrB)
-		// leave the ConnectionDeduplicationName as the non-matcher
-		// netB.config.ConnectionDeduplicationName = gossipB
-		netB.startRoutines()
-		defer netB.Stop()
-	}
-	netB.messagesOfInterestMu.Unlock()
+	netA.Start()
+	defer netA.Stop()
+	netB.Start()
+	defer netB.Stop()
 
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
@@ -1328,8 +1325,9 @@ func TestPeeringBadIdentityChallenge(t *testing.T) {
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
 
 	// confirm identity map was not added to for either host
-	assert.Equal(t, 0, len(netA.peersByID))
-	assert.Equal(t, 0, len(netB.peersByID))
+	// nor was "set" called at all
+	assert.Equal(t, 0, netA.identTracker.(*dummyIdentityTracker).getSetCount())
+	assert.Equal(t, 0, netB.identTracker.(*dummyIdentityTracker).getSetCount())
 
 	// bi-directional connection should also work
 	// this second connection should set identities, because the reciever address matches now
@@ -1339,14 +1337,16 @@ func TestPeeringBadIdentityChallenge(t *testing.T) {
 		// let the tryConnect go forward
 		time.Sleep(500 * time.Millisecond)
 	}
+	// confirm that at this point the identTracker was called once per network
+	//	and inserted once per network
+	assert.Equal(t, 1, netA.identTracker.(*dummyIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netB.identTracker.(*dummyIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netA.identTracker.(*dummyIdentityTracker).getInsertCount())
+	assert.Equal(t, 1, netB.identTracker.(*dummyIdentityTracker).getInsertCount())
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedOut)))
-	// netA has to wait for a final verification message over WS Handler, so pause a moment
-	time.Sleep(500 * time.Millisecond)
-	assert.Equal(t, 1, len(netA.GetPeersByID()))
-	assert.Equal(t, 1, len(netB.GetPeersByID()))
 }
 
 // TestPeeringSenderIdentityChallengeOnly will confirm that if only the Sender
@@ -1355,40 +1355,27 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
+	netA.identTracker = newDummyIdentTracker()
+	addrA := "127.0.0.1:8901"
 	netA.config.GossipFanout = 1
-	// set ConnectionDeduplicationName to ensure handlers are set when it starts,
-	// but we won't know the actual gossip address until this test starts the network
-	netA.config.ConnectionDeduplicationName = "something"
+	netA.config.NetAddress = addrA
+	gossipA, err := netA.addrToGossipAddr(netA.config.NetAddress)
+	require.NoError(t, err)
+	netA.config.ConnectionDeduplicationName = gossipA
 
 	netB := makeTestWebsocketNode(t)
+	netB.identTracker = newDummyIdentTracker()
+	addrB := "127.0.0.1:8902"
 	netB.config.GossipFanout = 1
-	// don't set netB's ConnectionDeduplicationName, meaning it wont' exchange identity
-	//netB.config.ConnectionDeduplicationName = "something"
+	netB.config.NetAddress = addrB
+	gossipB, err := netB.addrToGossipAddr(netB.config.NetAddress)
+	require.NoError(t, err)
+	//netB.config.ConnectionDeduplicationName = gossipB
 
-	// start networks in 2 steps to overload the config values before routines start
-	var addrA string
-	var gossipA string
-	netB.messagesOfInterestMu.Lock()
-	if ok := netA.startListener(); ok {
-		addrA, _ = netA.Address()
-		gossipA, _ = netA.addrToGossipAddr(addrA)
-		netA.config.ConnectionDeduplicationName = gossipA
-		netA.startRoutines()
-		defer netA.Stop()
-	}
-	netB.messagesOfInterestMu.Unlock()
-	var addrB string
-	var gossipB string
-	netB.messagesOfInterestMu.Lock()
-	if ok := netB.startListener(); ok {
-		addrB, _ = netB.Address()
-		gossipB, _ = netB.addrToGossipAddr(addrB)
-		// still don't set B's ConnectionDeduplicationName
-		// netB.config.ConnectionDeduplicationName = gossipB
-		netB.startRoutines()
-		defer netB.Stop()
-	}
-	netB.messagesOfInterestMu.Unlock()
+	netA.Start()
+	defer netA.Stop()
+	netB.Start()
+	defer netB.Stop()
 
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
@@ -1401,9 +1388,8 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
 
 	// confirm identity map was not added to for either host
-	// netA was able to add theirs before finishing tryConnect
-	assert.Equal(t, 0, len(netA.peersByID))
-	assert.Equal(t, 0, len(netB.peersByID))
+	assert.Equal(t, 0, netA.identTracker.(*dummyIdentityTracker).getSetCount())
+	assert.Equal(t, 0, netB.identTracker.(*dummyIdentityTracker).getSetCount())
 
 	// bi-directional connection should also work
 	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
@@ -1416,8 +1402,9 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedOut)))
-	assert.Equal(t, 0, len(netA.peersByID))
-	assert.Equal(t, 0, len(netB.peersByID))
+	// confirm identity map was not added to for either host
+	assert.Equal(t, 0, netA.identTracker.(*dummyIdentityTracker).getSetCount())
+	assert.Equal(t, 0, netB.identTracker.(*dummyIdentityTracker).getSetCount())
 }
 
 type benchmarkHandler struct {
