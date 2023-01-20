@@ -137,7 +137,7 @@ func (p *player) handleSpeculationTimeout(r routerHandle, e timeoutEvent) []acti
 		return nil
 	}
 
-	return p.startSpeculativeBlockAsm(r, nil)
+	return p.startSpeculativeBlockAsm(r, nil, false)
 }
 
 func (p *player) handleFastTimeout(r routerHandle, e timeoutEvent) []action {
@@ -192,7 +192,7 @@ func (p *player) issueSoftVote(r routerHandle) (actions []action) {
 		if nextStatus.Proposal != bottom && nextStatus.Proposal == a.Proposal {
 			// TODO: double check this speculative block assembly, we're going with the same action as below, so it's okay?
 			actions = append(actions, a)
-			actions = p.startSpeculativeBlockAsm(r, actions)
+			actions = p.startSpeculativeBlockAsm(r, actions, false)
 			return actions
 		}
 		return nil
@@ -200,7 +200,7 @@ func (p *player) issueSoftVote(r routerHandle) (actions []action) {
 
 	// original proposal: vote for it, maybe build
 	actions = append(actions, a)
-	actions = p.startSpeculativeBlockAsm(r, actions)
+	actions = p.startSpeculativeBlockAsm(r, actions, false)
 	return actions
 }
 
@@ -240,14 +240,19 @@ func (p *player) issueNextVote(r routerHandle) []action {
 	return actions
 }
 
-func (p *player) startSpeculativeBlockAsm(r routerHandle, actions []action) []action {
+func (p *player) startSpeculativeBlockAsm(r routerHandle, actions []action, onlyIfStarted bool) []action {
 	// get the best proposal we have
 	re := readLowestEvent{T: readLowestPayload, Round: p.Round, Period: p.Period}
 	re = r.dispatch(*p, re, proposalMachineRound, p.Round, p.Period, 0).(readLowestEvent)
 
 	// if we have its payload and its been validated already, start speculating on top of it
 	if re.PayloadOK && re.Payload.ve != nil {
-		return append(actions, pseudonodeAction{T: speculativeAssembly, Round: p.Round, Period: p.Period, ValidatedBlock: re.Payload.ve, Proposal: re.Proposal})
+		a := pseudonodeAction{T: speculativeAssembly, Round: p.Round, Period: p.Period, ValidatedBlock: re.Payload.ve, Proposal: re.Proposal}
+		if onlyIfStarted {
+			// only re-start speculation if we had already started it but got a better block
+			a.T = speculativeAssemblyIfStarted
+		}
+		return append(actions, a)
 	}
 	return actions
 }
@@ -624,7 +629,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		// TODO: maybe only do this if after speculation has started; interrupt speculation on a block when we get a better block
 		// TODO: maybe don't do this at all and just delete it?
 		if ef.t() == payloadAccepted {
-			actions = p.startSpeculativeBlockAsm(r, actions)
+			actions = p.startSpeculativeBlockAsm(r, actions, true)
 		}
 
 		// If the payload is valid, check it against any received cert threshold.

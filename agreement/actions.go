@@ -55,6 +55,7 @@ const (
 	assemble
 	repropose
 	speculativeAssembly
+	speculativeAssemblyIfStarted
 
 	// disk
 	checkpoint
@@ -310,7 +311,7 @@ func (a rezeroAction) do(ctx context.Context, s *Service) {
 }
 
 type pseudonodeAction struct {
-	// assemble, repropose, attest, speculativeAssembly
+	// assemble, repropose, attest, speculativeAssembly, speculativeAssemblyIfStarted
 	T actionType
 
 	Round          round
@@ -349,7 +350,9 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 			s.log.Errorf("pseudonode.MakeProposals call failed %v", err)
 		}
 	case speculativeAssembly:
-		s.loopback.StartSpeculativeBlockAssembly(ctx, a.ValidatedBlock, a.Proposal.BlockDigest)
+		s.loopback.StartSpeculativeBlockAssembly(ctx, a.ValidatedBlock, a.Proposal.BlockDigest, false)
+	case speculativeAssemblyIfStarted:
+		s.loopback.StartSpeculativeBlockAssembly(ctx, a.ValidatedBlock, a.Proposal.BlockDigest, true)
 
 	case repropose:
 		logEvent := logspec.AgreementEvent{
@@ -469,7 +472,7 @@ func zeroAction(t actionType) action {
 		return ensureAction{}
 	case rezero:
 		return rezeroAction{}
-	case attest, assemble, repropose, speculativeAssembly:
+	case attest, assemble, repropose, speculativeAssembly, speculativeAssemblyIfStarted:
 		return pseudonodeAction{}
 	case checkpoint:
 		return checkpointAction{}

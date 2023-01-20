@@ -1700,7 +1700,7 @@ func TestSpeculativeBlockAssembly(t *testing.T) {
 	t.Logf("prev block digest %s", block.Block().Digest().String())
 	t.Logf("prev block   hash %s", block.Block().Hash().String())
 
-	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{})
+	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{}, false)
 	//<-transactionPool.specAsmDone
 
 	// add the block
@@ -1782,7 +1782,7 @@ func TestSpeculativeBlockAssemblyWithOverlappingBlock(t *testing.T) {
 	block, err := blockEval.GenerateBlock()
 	require.NoError(t, err)
 
-	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{})
+	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{}, false)
 	//<-transactionPool.specAsmDone
 	var stats telemetryspec.AssembleBlockMetrics
 	specBlock, specErr := transactionPool.tryReadSpeculativeBlock(block.Block().Hash(), block.Block().Round()+1, time.Now().Add(time.Second), &stats)
@@ -1866,7 +1866,7 @@ func TestSpeculativeBlockAssemblyDataRace(t *testing.T) {
 	block, err := blockEval.GenerateBlock()
 	require.NoError(t, err)
 
-	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{})
+	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{}, false)
 	newSavedTransactions := 0
 	var wg sync.WaitGroup
 	wg.Add(1)

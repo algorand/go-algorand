@@ -572,7 +572,7 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 }
 
 // StartSpeculativeBlockAssembly handles creating a speculative block
-func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, vb *ledgercore.ValidatedBlock, blockHash crypto.Digest) {
+func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, vb *ledgercore.ValidatedBlock, blockHash crypto.Digest, onlyIfStarted bool) {
 
 	if pool.cfg.SpeculativeAssemblyDisable {
 		return
@@ -594,6 +594,9 @@ func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, 
 		speculativeAssemblyDiscarded.Inc(nil)
 		pool.cancelSpeculativeAssembly()
 		pool.specActive = false
+	} else if onlyIfStarted {
+		// not already started, don't start one
+		return
 	}
 	pool.log.Infof("StartSpeculativeBlockAssembly %s", blockHash.String())
 	pool.specActive = true
