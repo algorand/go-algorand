@@ -58,6 +58,7 @@ type identityChallengeScheme struct {
 	identityKeys *crypto.SignatureSecrets
 }
 
+// NewIdentityChallengeScheme will create a default ID Scheme (identityChallengeScheme)
 func NewIdentityChallengeScheme(dn string) *identityChallengeScheme {
 	var seed crypto.Seed
 	crypto.RandBytes(seed[:])
