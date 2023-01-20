@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package verify
+package streamv
 
 import (
 	"bytes"
@@ -39,7 +39,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/streamv"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -888,7 +887,7 @@ func BenchmarkTxn(b *testing.B) {
 var droppedFromPool = metrics.MakeCounter(metrics.MetricName{Name: "test_streamVerifierTestCore_messages_dropped_pool", Description: "Test streamVerifierTestCore messages dropped from pool"})
 
 func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64]struct{},
-	expectedError error, t *testing.T) (sv *streamv.StreamVerifier) {
+	expectedError error, t *testing.T) (sv *StreamVerifier) {
 
 	numOfTxnGroups := len(txnGroups)
 	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
@@ -899,12 +898,10 @@ func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups m
 
 	defer cancel()
 
-	stxnChan := make(chan streamv.UnverifiedElement)
+	stxnChan := make(chan *UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
 	droppedChan := make(chan *UnverifiedElement)
-	helper, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
-	require.NoError(t, err)
-	sv = streamv.MakeStreamVerifier(stxnChan, verificationPool, helper)
+	sv, err := MakeStreamVerifier(stxnChan, resultChan, droppedChan, &DummyLedgerForSignature{}, verificationPool, cache)
 	require.NoError(t, err)
 	sv.Start(ctx)
 
