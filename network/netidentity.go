@@ -58,7 +58,18 @@ type identityChallengeScheme struct {
 	identityKeys *crypto.SignatureSecrets
 }
 
-// NewIdentityChallengeScheme will create a default ID Scheme (identityChallengeScheme)
+// NewIdentityChallengeScheme will create a default Identification Scheme
+// IdentityChallengeScheme participates in two parts of a three way handshake
+// with the goal of exchanging Public Keys with a peer, using random 32-byte challenges
+// exchanged in both directions
+// it is resposible for:
+// * attaching an initial identity challenge to headers
+// * verifying identity challenges from headers and attaching challenge responses
+// * verifying challenge responses from headers
+// if the challenge response is verified, wsNetwork will send a final message
+// in the form of a websocket "network identification" message to complete the exchange
+// wsNetwork uses this scheme in conjunction with identityTracker to prevent
+// duplicate connections between peers
 func NewIdentityChallengeScheme(dn string) *identityChallengeScheme {
 	var seed crypto.Seed
 	crypto.RandBytes(seed[:])
