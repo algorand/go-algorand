@@ -230,11 +230,22 @@ func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Roun
 	proto := t.recent[rnd].proto
 	maxlife := basics.Round(proto.MaxTxnLife)
 
-	for r := range t.recent {
-		if r+maxlife < rnd {
-			delete(t.recent, r)
+	// TXTailRecentsFix corrects the logic of trimming `recent` to result in 1000 items remaining
+	// the previous implementation was off-by-one, leaving 1001 items
+	if proto.TXTailRecentsFix {
+		for r := range t.recent {
+			if r+maxlife <= rnd {
+				delete(t.recent, r)
+			}
+		}
+	} else {
+		for r := range t.recent {
+			if r+maxlife < rnd {
+				delete(t.recent, r)
+			}
 		}
 	}
+
 	for ; t.lowWaterMark < rnd; t.lowWaterMark++ {
 		delete(t.lastValid, t.lowWaterMark)
 	}

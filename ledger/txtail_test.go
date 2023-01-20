@@ -295,6 +295,12 @@ func TestTxTailDeltaTracking(t *testing.T) {
 				}
 				err = txtail.prepareCommit(dcc)
 				require.NoError(t, err)
+				proto := config.Consensus[protoVersion]
+				if proto.TXTailRecentsFix {
+					require.Equal(t, 1000, len(txtail.recent))
+				} else {
+					require.Equal(t, 1001, len(txtail.recent))
+				}
 
 				tx, err := ledger.trackerDBs.Wdb.Handle.Begin()
 				require.NoError(t, err)
@@ -302,7 +308,6 @@ func TestTxTailDeltaTracking(t *testing.T) {
 				err = txtail.commitRound(context.Background(), tx, dcc)
 				require.NoError(t, err)
 				tx.Commit()
-				proto := config.Consensus[protoVersion]
 				retainSize := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
 				if uint64(i) > proto.MaxTxnLife*2 {
 					// validate internal storage length.
