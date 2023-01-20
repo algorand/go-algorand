@@ -138,10 +138,6 @@ func makeS3Session(bucket string) (helper Helper, err error) {
 		sess.Config.Credentials = credentials.AnonymousCredentials
 	}
 
-	if reflect.DeepEqual(sess.Config.Credentials, credentials.AnonymousCredentials) {
-		fmt.Println("Using anonymous credentials")
-	}
-
 	helper = Helper{
 		session: sess,
 		bucket:  bucket,
