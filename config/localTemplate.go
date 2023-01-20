@@ -55,8 +55,8 @@ type Local struct {
 
 	// wsNetwork.go
 	// if set, the node will use Identity based Connection Deduplication.
-	// Identity Challenges are initiated with an Address field which must match the intended recipient's gossip address
-	// example: ws://r-XX.algorand-mainnet.network:4160/v1/mainnet-v1.0/gossip
+	// Identity Challenges are initiated with an Address field which must match the intended recipient's address
+	// this should be the host:port of this algod
 	// received Identity Challenges which do not correctly specify this Address will be ignored.
 	// the peering will go forward without any further participation in identification.
 	ConnectionDeduplicationName string `version[27]:""`

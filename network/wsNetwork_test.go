@@ -1139,7 +1139,7 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	netA.config.NetAddress = addrA
 	gossipA, err := netA.addrToGossipAddr(netA.config.NetAddress)
 	require.NoError(t, err)
-	netA.config.ConnectionDeduplicationName = gossipA
+	netA.config.ConnectionDeduplicationName = addrA
 
 	netB := makeTestWebsocketNode(t)
 	netB.identTracker = newDummyIdentTracker()
@@ -1148,7 +1148,7 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	netB.config.NetAddress = addrB
 	gossipB, err := netB.addrToGossipAddr(netB.config.NetAddress)
 	require.NoError(t, err)
-	netB.config.ConnectionDeduplicationName = gossipB
+	netB.config.ConnectionDeduplicationName = addrB
 
 	netA.Start()
 	defer netA.Stop()
@@ -1240,7 +1240,7 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	netA.config.NetAddress = addrA
 	gossipA, err := netA.addrToGossipAddr(netA.config.NetAddress)
 	require.NoError(t, err)
-	//netA.config.ConnectionDeduplicationName = gossipA
+	//netA.config.ConnectionDeduplicationName = addrA
 
 	netB := makeTestWebsocketNode(t)
 	netB.identTracker = newDummyIdentTracker()
@@ -1249,7 +1249,7 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	netB.config.NetAddress = addrB
 	gossipB, err := netB.addrToGossipAddr(netB.config.NetAddress)
 	require.NoError(t, err)
-	netB.config.ConnectionDeduplicationName = gossipB
+	netB.config.ConnectionDeduplicationName = addrB
 
 	netA.Start()
 	defer netA.Stop()
@@ -1298,7 +1298,7 @@ func TestPeeringBadIdentityChallenge(t *testing.T) {
 	netA.config.NetAddress = addrA
 	gossipA, err := netA.addrToGossipAddr(netA.config.NetAddress)
 	require.NoError(t, err)
-	netA.config.ConnectionDeduplicationName = gossipA
+	netA.config.ConnectionDeduplicationName = addrA
 
 	netB := makeTestWebsocketNode(t)
 	netB.identTracker = newDummyIdentTracker()
@@ -1361,7 +1361,7 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	netA.config.NetAddress = addrA
 	gossipA, err := netA.addrToGossipAddr(netA.config.NetAddress)
 	require.NoError(t, err)
-	netA.config.ConnectionDeduplicationName = gossipA
+	netA.config.ConnectionDeduplicationName = addrA
 
 	netB := makeTestWebsocketNode(t)
 	netB.identTracker = newDummyIdentTracker()
@@ -1370,7 +1370,7 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	netB.config.NetAddress = addrB
 	gossipB, err := netB.addrToGossipAddr(netB.config.NetAddress)
 	require.NoError(t, err)
-	//netB.config.ConnectionDeduplicationName = gossipB
+	//netB.config.ConnectionDeduplicationName = addrB
 
 	netA.Start()
 	defer netA.Stop()

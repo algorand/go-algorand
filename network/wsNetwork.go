@@ -2184,7 +2184,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	idChallengeHeader := ""
 	// only attach connection deduplication headers if configured with a deduplication name
 	if wn.config.ConnectionDeduplicationName != "" {
-		idChallenge, idChallengeHeader = NewIdentityChallengeAndHeader(wn.identityKeys, gossipAddr)
+		idChallenge, idChallengeHeader = NewIdentityChallengeAndHeader(wn.identityKeys, addr)
 		requestHeader.Add(IdentityChallengeHeader, idChallengeHeader)
 	}
 
