@@ -1188,12 +1188,8 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 
 	// netA should have added this peer without a verified identity,
 	// and would drop this peer once it notices the connection is not in use.
-	// it seems these debug connections don't do that, but standard TCP would.
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
-	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
-	// Also confirm the new inbound connection to netA is unverified
-	unverifiedConn := netA.GetPeers(PeersConnectedIn)[0].(*wsPeer)
-	assert.Equal(t, uint32(0), unverifiedConn.identityVerified)
+	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
 
 	// netA never attempts to set identity as it never sees a verified identity
 	assert.Equal(t, 1, netA.identTracker.(*dummyIdentityTracker).getSetCount())
@@ -1213,9 +1209,7 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 		// let the tryConnect go forward
 		time.Sleep(500 * time.Millisecond)
 	}
-	// As mentioned above, we see a new peer on the reciever (which TCP would close for being abandoned)
-	// but no peers elsewhere
-	assert.Equal(t, 2, len(netB.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
 	// netB never tries to add a new identity, since the connection gets abandoned before it is verified
 	assert.Equal(t, 2, netB.identTracker.(*dummyIdentityTracker).getSetCount())
@@ -1223,7 +1217,7 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	// netA has not gained new connections, and we see the set count incremented,
 	// meaning it tried to add an identity
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
-	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 2, netA.identTracker.(*dummyIdentityTracker).getSetCount())
 	assert.Equal(t, 1, netA.identTracker.(*dummyIdentityTracker).getInsertCount())
 }

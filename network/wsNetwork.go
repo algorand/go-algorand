@@ -2281,11 +2281,13 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 
+	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	// Attempt to add the peer to wsNetwork peers list and trackers
+	// if adding the peer fails, close the peer and underlying routines
 	if !wn.addPeer(peer) {
+		peer.Close(time.Now().Add(peerDisconnectionAckDuration))
 		return
 	}
-	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedOut").With("remote", addr).With("local", localAddr).Infof("Made outgoing connection to peer %v", addr)
