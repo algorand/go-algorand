@@ -19,6 +19,7 @@ package internal
 import (
 	"fmt"
 
+	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -222,7 +223,7 @@ func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, value []byte
 		return fmt.Errorf("box size too large: %d, maximum is %d", size, cs.proto.MaxBoxSize)
 	}
 
-	fullKey := logic.MakeBoxKey(appIdx, key)
+	fullKey := apps.MakeBoxKey(uint64(appIdx), key)
 	_, exists, err := cs.kvGet(fullKey)
 	if err != nil {
 		return err
@@ -246,12 +247,12 @@ func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, value []byte
 }
 
 func (cs *roundCowState) GetBox(appIdx basics.AppIndex, key string) ([]byte, bool, error) {
-	fullKey := logic.MakeBoxKey(appIdx, key)
+	fullKey := apps.MakeBoxKey(uint64(appIdx), key)
 	return cs.kvGet(fullKey)
 }
 
 func (cs *roundCowState) SetBox(appIdx basics.AppIndex, key string, value []byte) error {
-	fullKey := logic.MakeBoxKey(appIdx, key)
+	fullKey := apps.MakeBoxKey(uint64(appIdx), key)
 	old, ok, err := cs.kvGet(fullKey)
 	if err != nil {
 		return err
@@ -267,7 +268,7 @@ func (cs *roundCowState) SetBox(appIdx basics.AppIndex, key string, value []byte
 }
 
 func (cs *roundCowState) DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) (bool, error) {
-	fullKey := logic.MakeBoxKey(appIdx, key)
+	fullKey := apps.MakeBoxKey(uint64(appIdx), key)
 
 	value, ok, err := cs.kvGet(fullKey)
 	if err != nil {
