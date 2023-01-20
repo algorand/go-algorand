@@ -32,15 +32,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/encoded"
-
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
 	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
@@ -1181,12 +1180,12 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 			crypto.RandBytes(nameBuffer)
 			crypto.RandBytes(valueBuffer)
 			appID := basics.AppIndex(crypto.RandUint64())
-			boxKey := logic.MakeBoxKey(appID, string(nameBuffer))
+			boxKey := apps.MakeBoxKey(uint64(appID), string(nameBuffer))
 			err = writer.UpsertKvPair(boxKey, valueBuffer)
 			require.NoError(b, err)
 
 			if i == 0 {
-				prefix = logic.MakeBoxKey(appID, "")
+				prefix = apps.MakeBoxKey(uint64(appID), "")
 			}
 		}
 		err = tx.Commit()

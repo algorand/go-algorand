@@ -162,9 +162,6 @@ issues:
     - path: rpcs.*_test\.go
       linters:
         - paralleltest
-    - path: shared.*_test\.go
-      linters:
-        - paralleltest
     - path: stateproof.*_test\.go
       linters:
         - paralleltest

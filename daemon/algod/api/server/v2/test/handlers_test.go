@@ -1008,7 +1008,7 @@ func TestTealCompile(t *testing.T) {
 	t.Parallel()
 
 	params := model.TealCompileParams{}
-	tealCompileTest(t, nil, 200, true, params, nil) // nil program should work
+	tealCompileTest(t, nil, 400, true, params, nil) // nil program should NOT work
 
 	goodProgram := fmt.Sprintf(`#pragma version %d
 int 1
