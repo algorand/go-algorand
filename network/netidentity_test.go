@@ -33,128 +33,132 @@
 package network
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
-func TestIdentityChallengeEncodeDecodeVerify(t *testing.T) {
+// if the scheme has a dedup name, attach to headers. otherwise, don't
+func TestIdentityChallengeSchemeAttachIfEnabled(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
-	secrets := crypto.GenerateSignatureSecrets(seed)
-	k := (crypto.PublicKey)(secrets.SignatureVerifier)
-	addr := "test address"
 
-	c, header := NewIdentityChallengeAndHeader(secrets, addr)
-	require.NotEmpty(t, header)
-	require.NotEmpty(t, c)
+	h := http.Header{}
+	i := NewIdentityChallengeScheme("")
+	chal := i.AttachNewIdentityChallenge(h, "other")
+	require.Empty(t, h.Get(IdentityChallengeHeader))
+	require.Empty(t, chal)
 
-	// confirm the same challenge that was returned and included in the struct
-	idChal := IdentityChallengeFromB64(header)
-	require.Equal(t, addr, idChal.Address)
-	require.Equal(t, k, idChal.Key)
-	require.Equal(t, c, idChal.Challenge)
-	require.NotEmpty(t, idChal.Signature)
-	require.True(t, idChal.Verify())
-
-	// if the signature does not match the data, it should not Verify
-	idChal.Address = "changed bytes"
-	require.False(t, idChal.Verify())
+	j := NewIdentityChallengeScheme("yes")
+	chal = j.AttachNewIdentityChallenge(h, "other")
+	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
+	require.NotEmpty(t, chal)
 }
 
-func TestIdentityChallengeFailedDecode(t *testing.T) {
+// TestIdentityChallengeSchemeVerifyAndAttachResponce will confirm that the scheme
+// attaches responses only if dedup name is set and the provided challenge verifies
+func TestIdentityChallengeSchemeVerifyAndAttachResponce(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	idChal := IdentityChallengeFromB64("NOT VALID BASE-64!")
-	require.Equal(t, identityChallenge{}, idChal)
-	// confirm the empty returned challenge can't Verify
-	require.False(t, idChal.Verify())
+
+	i := NewIdentityChallengeScheme("i1")
+	// author a challenge to the other scheme
+	h := http.Header{}
+	i.AttachNewIdentityChallenge(h, "i2")
+	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
+
+	// without a dedup name, no response
+	h = http.Header{}
+	i.AttachNewIdentityChallenge(h, "i2")
+	r := http.Header{}
+	i2 := NewIdentityChallengeScheme("")
+	chal, key := i2.VerifyAndAttachResponse(r, h)
+	require.Empty(t, r.Get(IdentityChallengeHeader))
+	require.Empty(t, chal)
+	require.Empty(t, key)
+
+	// if dedup name doesn't match, no response
+	h = http.Header{}
+	i.AttachNewIdentityChallenge(h, "i2")
+	r = http.Header{}
+	i2 = NewIdentityChallengeScheme("not i2")
+	chal, key = i2.VerifyAndAttachResponse(r, h)
+	require.Empty(t, r.Get(IdentityChallengeHeader))
+	require.Empty(t, chal)
+	require.Empty(t, key)
+
+	// if the challenge can't be decoded or verified, no response
+	h = http.Header{}
+	h.Add("garbage", IdentityChallengeHeader)
+	r = http.Header{}
+	i2 = NewIdentityChallengeScheme("i2")
+	chal, key = i2.VerifyAndAttachResponse(r, h)
+	require.Empty(t, r.Get(IdentityChallengeHeader))
+	require.Empty(t, chal)
+	require.Empty(t, key)
+
+	// happy path: response should be attached here
+	h = http.Header{}
+	i.AttachNewIdentityChallenge(h, "i2")
+	r = http.Header{}
+	i2 = NewIdentityChallengeScheme("i2")
+	chal, key = i2.VerifyAndAttachResponse(r, h)
+	require.NotEmpty(t, r.Get(IdentityChallengeHeader))
+	require.NotEmpty(t, chal)
+	require.NotEmpty(t, key)
 }
 
-func TestIdentityChallengeResponseEncodeDecodeVerify(t *testing.T) {
+// TestIdentityChallengeSchemeVerifyResponse confirms the scheme will
+// attach responses only if dedup name is set and the provided challenge verifies
+func TestIdentityChallengeSchemeVerifyResponse(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
-	secrets := crypto.GenerateSignatureSecrets(seed)
-	respSecrets := crypto.GenerateSignatureSecrets(seed)
-	k := (crypto.PublicKey)(respSecrets.SignatureVerifier)
-	addr := "test address"
 
-	c, header := NewIdentityChallengeAndHeader(secrets, addr)
-	idChal := IdentityChallengeFromB64(header)
+	h := http.Header{}
+	i := NewIdentityChallengeScheme("i1")
+	// author a challenge to ourselves
+	origChal := i.AttachNewIdentityChallenge(h, "i1")
+	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
+	require.NotEmpty(t, origChal)
+	r := http.Header{}
 
-	rc, respHeader := NewIdentityResponseChallengeAndHeader(respSecrets, idChal)
-	require.NotEmpty(t, rc)
-	require.NotEmpty(t, respHeader)
-	idChalResp := IdentityChallengeResponseFromB64(respHeader)
-	require.Equal(t, k, idChalResp.Key)
-	require.Equal(t, c, idChalResp.Challenge)
-	require.Equal(t, rc, idChalResp.ResponseChallenge)
-	require.NotEmpty(t, idChalResp.Signature)
-	require.True(t, idChalResp.Verify())
+	respChal, key := i.VerifyAndAttachResponse(r, h)
+	require.NotEmpty(t, r.Get(IdentityChallengeHeader))
+	require.NotEmpty(t, respChal)
+	require.NotEmpty(t, key)
 
-	// make some bogus challenge to invalidate the struct and confirm it does not verify
-	wrongChallenge, _ := NewIdentityChallengeAndHeader(secrets, addr)
-	idChalResp.ResponseChallenge = wrongChallenge
-	require.False(t, idChalResp.Verify())
+	// respChal2 should match respChal as it is being passed back to the original peer
+	// while origChal will be used for verification
+	respChal2, key2, ok := i.VerifyResponse(r, origChal)
+	require.Equal(t, respChal, respChal2)
+	require.Equal(t, uint32(1), ok)
+	// because we sent this to ourselves, we can confirm the keys match
+	require.NotEmpty(t, key, key2)
 }
 
-func TestIdentityChallengeResponseFailedDecode(t *testing.T) {
+// TestIdentityChallengeSchemeBadVerify confirms the scheme will
+// return "0" if the challenge can't be verified
+func TestIdentityChallengeSchemeBadVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	idChalResp := IdentityChallengeResponseFromB64("NOT VALID BASE-64!")
-	require.Equal(t, identityChallengeResponse{}, idChalResp)
-	// confirm the empty returned challenge can't Verify
-	require.False(t, idChalResp.Verify())
-}
 
-func TestIdentityVerificationHandler(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
-	chalSecrets := crypto.GenerateSignatureSecrets(seed)
-	chal := [32]byte{}
-	crypto.RandBytes(chal[:])
-	sig := chalSecrets.SignBytes(chal[:])
-	p := wsPeer{
-		identity:          (crypto.PublicKey)(chalSecrets.SignatureVerifier),
-		identityChallenge: chal,
-		identityVerified:  0,
-	}
+	h := http.Header{}
+	i := NewIdentityChallengeScheme("i1")
+	// author a challenge to ourselves
+	origChal := i.AttachNewIdentityChallenge(h, "i1")
+	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
+	require.NotEmpty(t, origChal)
+	r := http.Header{}
 
-	i := IncomingMessage{
-		Sender: &p,
-		Tag:    protocol.NetIDVerificationTag,
-		Data:   sig[:],
-	}
-	identityVerificationHandler(i)
-	require.Equal(t, uint32(1), p.identityVerified)
-}
+	respChal, key := i.VerifyAndAttachResponse(r, h)
+	require.NotEmpty(t, r.Get(IdentityChallengeHeader))
+	require.NotEmpty(t, respChal)
+	require.NotEmpty(t, key)
 
-func TestIdentityVerificationHandlerBadSignature(t *testing.T) {
-	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
-	chalSecrets := crypto.GenerateSignatureSecrets(seed)
-	chal := [32]byte{}
-	crypto.RandBytes(chal[:])
-	sig := chalSecrets.SignBytes(chal[:])
-	// Reset the challenge to force the signature to be wrong
-	crypto.RandBytes(chal[:])
-	p := wsPeer{
-		identity:          (crypto.PublicKey)(chalSecrets.SignatureVerifier),
-		identityChallenge: chal,
-		identityVerified:  0,
-	}
-
-	i := IncomingMessage{
-		Sender: &p,
-		Tag:    protocol.NetIDVerificationTag,
-		Data:   sig[:],
-	}
-	identityVerificationHandler(i)
-	require.Equal(t, uint32(0), p.identityVerified)
+	// Attempt to verify against the wrong challenge
+	respChal2, key2, ok := i.VerifyResponse(r, newIdentityChallengeBytes())
+	require.Empty(t, respChal2)
+	require.Equal(t, uint32(0), ok)
+	require.Empty(t, key2)
 }
 
 func TestNewIdentityTracker(t *testing.T) {

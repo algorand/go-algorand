@@ -380,9 +380,9 @@ type WebsocketNetwork struct {
 	prioTracker      *prioTracker
 	prioResponseChan chan *wsPeer
 
-	// identityKeys is the keypair used for identity challenges
-	identityKeys *crypto.SignatureSecrets
-	identTracker identityTracker
+	// identity challenge scheme for creating challenges and responding
+	identityScheme  *identityChallengeScheme
+	identityTracker identityTracker
 
 	// outgoingMessagesBufferSize is the size used for outgoing messages.
 	outgoingMessagesBufferSize int
@@ -604,23 +604,6 @@ func closeWaiter(wg *sync.WaitGroup, peer *wsPeer, deadline time.Time) {
 	peer.CloseAndWait(deadline)
 }
 
-// MarkVerified will confirm that a peer is verified,
-// will attempt to add the peer to the identity tracker
-// and will disconnect the peer if it is discovered that the Identity is already in use
-func (wn *WebsocketNetwork) MarkVerified(p *wsPeer) {
-	// count the number of times MarkVerified is called (to establish a ratio for how often it calls disconnect)
-	markVerifiedCalled.Inc(nil)
-	// guard against marking verified any peer who is not *actually* verified according to the identityVerified flag
-	if atomic.LoadUint32(&p.identityVerified) != 1 {
-		return
-	}
-	// if the identity could not be claimed by this peer, it means the identity is in use
-	if !wn.identTracker.setIdentity(p) {
-		networkPeerDisconnectDupeIdentity.Inc(nil)
-		wn.Disconnect(p)
-	}
-}
-
 // DisconnectPeers shuts down all connections
 func (wn *WebsocketNetwork) DisconnectPeers() {
 	wn.peersLock.Lock()
@@ -766,7 +749,7 @@ func (wn *WebsocketNetwork) setup() {
 				config.Consensus[protocol.ConsensusCurrentVersion].DownCommitteeSize),
 	)
 
-	wn.identTracker = NewIdentityTracker()
+	wn.identityTracker = NewIdentityTracker()
 
 	wn.broadcastQueueHighPrio = make(chan broadcastRequest, wn.outgoingMessagesBufferSize)
 	wn.broadcastQueueBulk = make(chan broadcastRequest, 100)
@@ -854,10 +837,8 @@ func (wn *WebsocketNetwork) Start() {
 	// if we are set up for connection deduplication, attach the handlers for ID Verification
 	if wn.config.ConnectionDeduplicationName != "" {
 		wn.RegisterHandlers(identityHandlers)
-		var seed crypto.Seed
-		crypto.RandBytes(seed[:])
-		wn.identityKeys = crypto.GenerateSignatureSecrets(seed)
 	}
+	wn.identityScheme = NewIdentityChallengeScheme(wn.config.ConnectionDeduplicationName)
 
 	wn.meshUpdateRequests <- meshRequest{false, nil}
 	if wn.prioScheme != nil {
@@ -1181,20 +1162,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		responseHeader.Set(PriorityChallengeHeader, challenge)
 	}
 
-	var peerPublicKey crypto.PublicKey
-	var peerIDChallenge [32]byte
-	// if this host is set up for Connection Deduplication, attempt to participate in identity challenge exchange
-	if wn.config.ConnectionDeduplicationName != "" {
-		idChalB64 := request.Header.Get(IdentityChallengeHeader)
-		idChal := IdentityChallengeFromB64(idChalB64)
-		// if the challenge is correctly signed, and is addressed to this host, construct an identity response and attach
-		if idChal.Address == wn.config.ConnectionDeduplicationName && idChal.Verify() {
-			challengeResponse, idChalRespHeader := NewIdentityResponseChallengeAndHeader(wn.identityKeys, idChal)
-			peerPublicKey = idChal.Key
-			peerIDChallenge = challengeResponse
-			responseHeader.Set(IdentityChallengeHeader, idChalRespHeader)
-		}
-	}
+	peerIDChallenge, peerID := wn.identityScheme.VerifyAndAttachResponse(responseHeader, request.Header)
 
 	conn, err := wn.upgrader.Upgrade(response, request, responseHeader)
 	if err != nil {
@@ -1217,7 +1185,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		prioChallenge:     challenge,
 		createTime:        trackedRequest.created,
 		version:           matchingVersion,
-		identity:          peerPublicKey,
+		identity:          peerID,
 		identityChallenge: peerIDChallenge,
 		identityVerified:  0,
 		features:          decodePeerFeatures(matchingVersion, request.Header.Get(PeerFeaturesHeader)),
@@ -2180,13 +2148,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		requestHeader.Add(ProtocolAcceptVersionHeader, supportedProtocolVersion)
 	}
 
-	idChallenge := [32]byte{}
-	idChallengeHeader := ""
-	// only attach connection deduplication headers if configured with a deduplication name
-	if wn.config.ConnectionDeduplicationName != "" {
-		idChallenge, idChallengeHeader = NewIdentityChallengeAndHeader(wn.identityKeys, addr)
-		requestHeader.Add(IdentityChallengeHeader, idChallengeHeader)
-	}
+	idChallenge := wn.identityScheme.AttachNewIdentityChallenge(requestHeader, addr)
 
 	// for backward compatibility, include the ProtocolVersion header as well.
 	requestHeader.Set(ProtocolVersionHeader, wn.protocolVersion)
@@ -2247,17 +2209,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		return
 	}
 
-	var peerPublicKey crypto.PublicKey
-	var idChalResp identityChallengeResponse
-	identityVerified := uint32(0) // identityVerified will be used as the atomic Int for the peer we add
-	idChalRespB64 := response.Header.Get(IdentityChallengeHeader)
-	if idChalRespB64 != "" {
-		idChalResp = IdentityChallengeResponseFromB64(idChalRespB64)
-		if idChalResp.Challenge == idChallenge && idChalResp.Verify() {
-			peerPublicKey = idChalResp.Key
-			identityVerified = 1
-		}
-	}
+	responseChallenge, peerID, identityVerified := wn.identityScheme.VerifyResponse(response.Header, idChallenge)
 
 	throttledConnection := false
 	if atomic.AddInt32(&wn.throttledOutgoingConnections, int32(-1)) >= 0 {
@@ -2275,19 +2227,26 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		connMonitor:                 wn.connPerfMonitor,
 		throttledOutgoingConnection: throttledConnection,
 		version:                     matchingVersion,
-		identity:                    peerPublicKey,
+		identity:                    peerID,
 		identityVerified:            identityVerified,
 		features:                    decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 
-	peer.init(wn.config, wn.outgoingMessagesBufferSize)
-	// Attempt to add the peer to wsNetwork peers list and trackers
-	// if adding the peer fails, close the peer and underlying routines
-	if !wn.addPeer(peer) {
-		peer.Close(time.Now().Add(peerDisconnectionAckDuration))
-		return
+	// if the peer has an identity and is verified, attempt to load it into the identityTracker
+	// if that fails, return without adding the peer
+	if identityVerified == 1 {
+		wn.peersLock.Lock()
+		ok := wn.identityTracker.setIdentity(peer)
+		wn.peersLock.Unlock()
+		if !ok {
+			networkPeeringStopDupeIdentity.Inc(nil)
+			wn.log.Warnf("peer deduplicated at addPeer because the identity is already known: %s", peer.identity)
+			return
+		}
 	}
+	peer.init(wn.config, wn.outgoingMessagesBufferSize)
+	wn.addPeer(peer)
 
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedOut").With("remote", addr).With("local", localAddr).Infof("Made outgoing connection to peer %v", addr)
@@ -2305,8 +2264,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	// if the peer's response contained a verified identity challenge response, send identity verification to the peer
 	// this peer has not yet seen a round-trip of a challenge, so we sign and send the challenge from the response once WS connection is up
 	if identityVerified == 1 {
-		sig := wn.identityKeys.SignBytes(idChalResp.ResponseChallenge[:])
-		err = SendIdentityChallengeVerification(peer, sig)
+		err = wn.identityScheme.SendIdentityChallengeVerification(peer, responseChallenge)
 		if err != nil {
 			wn.log.With("remote", addr).With("local", localAddr).Warnf(err.Error())
 		}
@@ -2439,7 +2397,7 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 	if peer.peerIndex < len(wn.peers) && wn.peers[peer.peerIndex] == peer {
 		heap.Remove(peersHeap{wn}, peer.peerIndex)
 		wn.prioTracker.removePeer(peer)
-		wn.identTracker.removeIdentity(peer)
+		wn.identityTracker.removeIdentity(peer)
 		if peer.throttledOutgoingConnection {
 			atomic.AddInt32(&wn.throttledOutgoingConnections, int32(1))
 		}
@@ -2448,7 +2406,7 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 	wn.countPeersSetGauges()
 }
 
-func (wn *WebsocketNetwork) addPeer(peer *wsPeer) bool {
+func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
 	// simple duplicate *pointer* check. should never trigger given the callers to addPeer
@@ -2456,16 +2414,7 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) bool {
 	for _, p := range wn.peers {
 		if p == peer {
 			wn.log.Errorf("dup peer added %#v", peer)
-			return false
-		}
-	}
-	// if the peer has an identity and is verified, attempt to load it into the identityTracker
-	// if that fails, return false
-	if peer.identity != [32]byte{} && atomic.LoadUint32(&peer.identityVerified) == 1 {
-		if ok := wn.identTracker.setIdentity(peer); !ok {
-			networkPeeringStopDupeIdentity.Inc(nil)
-			wn.log.Warnf("peer deduplicated at addPeer because the identity is already known: %s", peer.identity)
-			return false
+			return
 		}
 	}
 	heap.Push(peersHeap{wn}, peer)
@@ -2483,7 +2432,7 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) bool {
 		wn.wg.Add(1)
 		go wn.eventualReady()
 	}
-	return true
+	return
 }
 
 func (wn *WebsocketNetwork) eventualReady() {

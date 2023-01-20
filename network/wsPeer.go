@@ -973,10 +973,6 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 	}
 }
 
-func (wp *wsPeer) IdentityVerified() {
-	atomic.StoreUint32(&wp.identityVerified, 1)
-}
-
 func (wp *wsPeer) pfProposalCompressionSupported() bool {
 	return wp.features&pfCompressedProposal != 0
 }
