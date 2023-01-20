@@ -115,6 +115,7 @@ var networkPeerBroadcastDropped = metrics.MakeCounter(metrics.MetricName{Name: "
 
 var networkPeerDisconnectDupeIdentity = metrics.MakeCounter(metrics.MetricName{Name: "algod_peer_disconnect_duplicate_identity", Description: "number of times identity challenge cause us to disconnect a peer"})
 var networkPeeringStopDupeIdentity = metrics.MakeCounter(metrics.MetricName{Name: "algod_peering_stop_duplicate_identity", Description: "number of times identity challenge cause us to stop the peering process"})
+var markVerifiedCalled = metrics.MakeCounter(metrics.MetricName{Name: "algod_peer_mark_verify", Description: "number of times the MarkVerified function is called"})
 
 var networkSlowPeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_slow_drops_total", Description: "number of peers dropped for being slow to send to"})
 var networkIdlePeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_idle_drops_total", Description: "number of peers dropped due to idle connection"})
@@ -607,6 +608,8 @@ func closeWaiter(wg *sync.WaitGroup, peer *wsPeer, deadline time.Time) {
 // will attempt to add the peer to the peersByID map,
 // and will disconnect the peer if it is discovered that the Identity is already in use
 func (wn *WebsocketNetwork) MarkVerified(p *wsPeer) {
+	// count the number of times MarkVerified is called (to establish a ratio for how often it calls disconnect)
+	markVerifiedCalled.Inc(nil)
 	// guard against marking verified any peer who is not *actually* verified according to the identityVerified flag
 	if atomic.LoadUint32(&p.identityVerified) != 1 {
 		return
@@ -1228,14 +1231,14 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	var peerIDChallenge [32]byte
 	// if this host is set up for Connection Deduplication, attempt to participate in identity challenge exchange
 	if wn.config.ConnectionDeduplicationName != "" {
-		idChalB64 := request.Header.Get(ProtocolConectionIdentityChallengeHeader)
+		idChalB64 := request.Header.Get(IdentityChallengeHeader)
 		idChal := IdentityChallengeFromB64(idChalB64)
 		// if the challenge is correctly signed, and is addressed to this host, construct an identity response and attach
 		if idChal.Address == wn.config.ConnectionDeduplicationName && idChal.Verify() {
 			challengeResponse, idChalRespHeader := NewIdentityResponseChallengeAndHeader(wn.identityKeys, idChal)
 			peerPublicKey = idChal.Key
 			peerIDChallenge = challengeResponse
-			responseHeader.Set(ProtocolConectionIdentityChallengeHeader, idChalRespHeader)
+			responseHeader.Set(IdentityChallengeHeader, idChalRespHeader)
 		}
 	}
 
@@ -2063,8 +2066,8 @@ const InstanceNameHeader = "X-Algorand-InstanceName"
 // PriorityChallengeHeader HTTP header informs a client about the challenge it should sign to increase network priority.
 const PriorityChallengeHeader = "X-Algorand-PriorityChallenge"
 
-// ProtocolConectionIdentityChallengeHeader is used to exchange IdentityChallenges
-const ProtocolConectionIdentityChallengeHeader = "X-Algorand-IdentityChallenge"
+// IdentityChallengeHeader is used to exchange IdentityChallenges
+const IdentityChallengeHeader = "X-Algorand-IdentityChallenge"
 
 // TooManyRequestsRetryAfterHeader HTTP header let the client know when to make the next connection attempt
 const TooManyRequestsRetryAfterHeader = "Retry-After"
@@ -2228,7 +2231,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	// only attach connection deduplication headers if configured with a deduplication name
 	if wn.config.ConnectionDeduplicationName != "" {
 		idChallenge, idChallengeHeader = NewIdentityChallengeAndHeader(wn.identityKeys, gossipAddr)
-		requestHeader.Add(ProtocolConectionIdentityChallengeHeader, idChallengeHeader)
+		requestHeader.Add(IdentityChallengeHeader, idChallengeHeader)
 	}
 
 	// for backward compatibility, include the ProtocolVersion header as well.
@@ -2293,7 +2296,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	var peerPublicKey crypto.PublicKey
 	var idChalResp identityChallengeResponse
 	identityVerified := uint32(0) // identityVerified will be used as the atomic Int for the peer we add
-	idChalRespB64 := response.Header.Get(ProtocolConectionIdentityChallengeHeader)
+	idChalRespB64 := response.Header.Get(IdentityChallengeHeader)
 	if idChalRespB64 != "" {
 		idChalResp = IdentityChallengeResponseFromB64(idChalRespB64)
 		if idChalResp.Challenge == idChallenge && idChalResp.Verify() {
