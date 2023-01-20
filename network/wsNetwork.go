@@ -113,6 +113,9 @@ var networkBroadcastSendMicros = metrics.MakeCounter(metrics.MetricName{Name: "a
 var networkBroadcastsDropped = metrics.MakeCounter(metrics.MetricName{Name: "algod_broadcasts_dropped_total", Description: "number of broadcast messages not sent to any peer"})
 var networkPeerBroadcastDropped = metrics.MakeCounter(metrics.MetricName{Name: "algod_peer_broadcast_dropped_total", Description: "number of broadcast messages not sent to some peer"})
 
+var networkPeerDisconnectDupeIdentity = metrics.MakeCounter(metrics.MetricName{Name: "algod_peer_disconnect_duplicate_identity", Description: "number of times identity challenge cause us to disconnect a peer"})
+var networkPeeringStopDupeIdentity = metrics.MakeCounter(metrics.MetricName{Name: "algod_peering_stop_duplicate_identity", Description: "number of times identity challenge cause us to stop the peering process"})
+
 var networkSlowPeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_slow_drops_total", Description: "number of peers dropped for being slow to send to"})
 var networkIdlePeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_idle_drops_total", Description: "number of peers dropped due to idle connection"})
 var networkBroadcastQueueFull = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_broadcast_queue_full_total", Description: "number of messages that were drops due to full broadcast queue"})
@@ -610,6 +613,7 @@ func (wn *WebsocketNetwork) MarkVerified(p *wsPeer) {
 	}
 	// if the identity could not be claimed by this peer, it means the identity is in use
 	if !wn.setPeersByID(p) {
+		networkPeerDisconnectDupeIdentity.Inc(nil)
 		wn.Disconnect(p)
 	}
 }
@@ -2332,6 +2336,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		}
 		wn.peersLock.Unlock()
 		if exists {
+			networkPeeringStopDupeIdentity.Inc(nil)
 			wn.log.Warnf("peer connection (%s) deduplicated because the identity is already known: %s", gossipAddr, peerPublicKey)
 			return
 		}
