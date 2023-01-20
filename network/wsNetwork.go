@@ -2432,7 +2432,6 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 		wn.wg.Add(1)
 		go wn.eventualReady()
 	}
-	return
 }
 
 func (wn *WebsocketNetwork) eventualReady() {
