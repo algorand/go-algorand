@@ -138,11 +138,11 @@ func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad tran
 	tracer.cursorEvalTracer.AfterTxn(ep, groupIndex, ad)
 }
 
-func (tracer *evalTracer) saveEvalDelta(evalDelta transactions.EvalDelta, appID basics.AppIndex) {
+func (tracer *evalTracer) saveEvalDelta(evalDelta transactions.EvalDelta, appIDToSave basics.AppIndex) {
 	applyDataOfCurrentTxn := tracer.mustGetApplyDataAtPath(tracer.absolutePath())
 	applyDataOfCurrentTxn.EvalDelta = evalDelta // TODO: deep copy?
-	if applyDataOfCurrentTxn.ApplicationID == 0 {
-		applyDataOfCurrentTxn.ApplicationID = appID
+	if applyDataOfCurrentTxn.ApplicationID == 0 && appIDToSave != 0 {
+		applyDataOfCurrentTxn.ApplicationID = appIDToSave
 	}
 }
 
@@ -152,5 +152,10 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		return
 	}
 	groupIndex := tracer.relativeGroupIndex()
-	tracer.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta, cx.AppID())
+	var appIDToSave basics.AppIndex
+	if cx.TxnGroup[groupIndex].ApplicationID == 0 {
+		// app creation
+		appIDToSave = cx.AppID()
+	}
+	tracer.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta, appIDToSave)
 }

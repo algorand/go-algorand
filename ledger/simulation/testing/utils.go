@@ -46,11 +46,15 @@ type TxnInfo struct {
 	LatestHeader bookkeeping.BlockHeader
 }
 
+func (info TxnInfo) CurrentProtocolParams() config.ConsensusParams {
+	return config.Consensus[info.LatestHeader.CurrentProtocol]
+}
+
 func (info TxnInfo) NewTxn(txn txntest.Txn) txntest.Txn {
 	txn.FirstValid = info.LatestHeader.Round
 	txn.GenesisID = info.LatestHeader.GenesisID
 	txn.GenesisHash = info.LatestHeader.GenesisHash
-	txn.FillDefaults(config.Consensus[info.LatestHeader.CurrentProtocol])
+	txn.FillDefaults(info.CurrentProtocolParams())
 	return txn
 }
 

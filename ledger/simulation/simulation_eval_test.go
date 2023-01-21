@@ -28,6 +28,7 @@ import (
 
 	"github.com/algorand/go-algorand/ledger/simulation"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -538,193 +539,195 @@ int 0
 	})
 }
 
-// func TestSignatureCheck(t *testing.T) {
-// 	partitiontest.PartitionTest(t)
-// 	t.Parallel()
+func TestSignatureCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-// 	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-// 	defer l.Close()
-// 	s := simulation.MakeSimulator(l)
-// 	sender := accounts[0].Addr
+	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
+	defer l.Close()
+	s := simulation.MakeSimulator(l)
+	sender := accounts[0].Addr
 
-// 	txgroup := []transactions.SignedTxn{
-// 		{
-// 			Txn: transactions.Transaction{
-// 				Type:   protocol.PaymentTx,
-// 				Header: makeTxnHeader(sender),
-// 				PaymentTxnFields: transactions.PaymentTxnFields{
-// 					Receiver: sender,
-// 					Amount:   basics.MicroAlgos{Raw: 0},
-// 				},
-// 			},
-// 		},
-// 	}
+	txgroup := []transactions.SignedTxn{
+		txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender,
+			Receiver: sender,
+			Amount:   0,
+		}).SignedTxn(),
+	}
 
-// 	// should catch missing signature
-// 	result, err := s.Simulate(txgroup)
-// 	require.NoError(t, err)
-// 	require.False(t, result.WouldSucceed)
-// 	require.Len(t, result.TxnGroups, 1)
-// 	require.Len(t, result.TxnGroups[0].Txns, 1)
-// 	require.True(t, result.TxnGroups[0].Txns[0].MissingSignature)
-// 	require.Zero(t, result.TxnGroups[0].FailureMessage)
+	// should catch missing signature
+	result, err := s.Simulate(txgroup)
+	require.NoError(t, err)
+	require.False(t, result.WouldSucceed)
+	require.Len(t, result.TxnGroups, 1)
+	require.Len(t, result.TxnGroups[0].Txns, 1)
+	require.True(t, result.TxnGroups[0].Txns[0].MissingSignature)
+	require.Zero(t, result.TxnGroups[0].FailureMessage)
 
-// 	// add signature
-// 	signatureSecrets := accounts[0].Sk
-// 	txgroup[0] = txgroup[0].Txn.Sign(signatureSecrets)
+	// add signature
+	signatureSecrets := accounts[0].Sk
+	txgroup[0] = txgroup[0].Txn.Sign(signatureSecrets)
 
-// 	// should not error now that we have a signature
-// 	result, err = s.Simulate(txgroup)
-// 	require.NoError(t, err)
-// 	require.True(t, result.WouldSucceed)
-// 	require.Len(t, result.TxnGroups, 1)
-// 	require.Len(t, result.TxnGroups[0].Txns, 1)
-// 	require.False(t, result.TxnGroups[0].Txns[0].MissingSignature)
-// 	require.Zero(t, result.TxnGroups[0].FailureMessage)
+	// should not error now that we have a signature
+	result, err = s.Simulate(txgroup)
+	require.NoError(t, err)
+	require.True(t, result.WouldSucceed)
+	require.Len(t, result.TxnGroups, 1)
+	require.Len(t, result.TxnGroups[0].Txns, 1)
+	require.False(t, result.TxnGroups[0].Txns[0].MissingSignature)
+	require.Zero(t, result.TxnGroups[0].FailureMessage)
 
-// 	// should error with invalid signature
-// 	txgroup[0].Sig[0] += byte(1) // will wrap if > 255
-// 	result, err = s.Simulate(txgroup)
-// 	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
-// 	require.ErrorContains(t, err, "one signature didn't pass")
-// }
+	// should error with invalid signature
+	txgroup[0].Sig[0] += byte(1) // will wrap if > 255
+	result, err = s.Simulate(txgroup)
+	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
+	require.ErrorContains(t, err, "one signature didn't pass")
+}
 
-// // TestInvalidTxGroup tests that a transaction group with invalid transactions
-// // is rejected by the simulator as an InvalidTxGroupError instead of a EvalFailureError.
-// func TestInvalidTxGroup(t *testing.T) {
-// 	partitiontest.PartitionTest(t)
-// 	t.Parallel()
+// TestInvalidTxGroup tests that a transaction group with invalid transactions
+// is rejected by the simulator as an InvalidTxGroupError instead of a EvalFailureError.
+func TestInvalidTxGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-// 	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-// 	defer l.Close()
-// 	s := simulation.MakeSimulator(l)
-// 	receiver := accounts[0].Addr
+	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
+	defer l.Close()
+	s := simulation.MakeSimulator(l)
+	receiver := accounts[0].Addr
 
-// 	txgroup := []transactions.SignedTxn{
-// 		{
-// 			Txn: transactions.Transaction{
-// 				Type: protocol.PaymentTx,
-// 				// invalid sender
-// 				Header: makeTxnHeader(ledgertesting.PoolAddr()),
-// 				PaymentTxnFields: transactions.PaymentTxnFields{
-// 					Receiver: receiver,
-// 					Amount:   basics.MicroAlgos{Raw: 0},
-// 				},
-// 			},
-// 		},
-// 	}
+	txgroup := []transactions.SignedTxn{
+		txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   ledgertesting.PoolAddr(),
+			Receiver: receiver,
+			Amount:   0,
+		}).SignedTxn(),
+	}
 
-// 	// should error with invalid transaction group error
-// 	_, err := s.Simulate(txgroup)
-// 	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
-// 	require.ErrorContains(t, err, "transaction from incentive pool is invalid")
-// }
+	// should error with invalid transaction group error
+	_, err := s.Simulate(txgroup)
+	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
+	require.ErrorContains(t, err, "transaction from incentive pool is invalid")
+}
 
-// const accountBalanceCheckProgram = `#pragma version 6
-//   txn ApplicationID      // [appId]
-// 	bz end                 // []
-//   int 1                  // [1]
-//   balance                // [bal[1]]
-//   itob                   // [itob(bal[1])]
-//   txn ApplicationArgs 0  // [itob(bal[1]), args[0]]
-//   ==                     // [itob(bal[1])=?=args[0]]
-// 	assert
-// 	b end
-// end:
-//   int 1                  // [1]
-// `
+// TestBalanceChangesWithApp sends a payment transaction to a new account and confirms its balance
+// within a subsequent app call
+func TestBalanceChangesWithApp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-// func TestBalanceChangesWithApp(t *testing.T) {
-// 	// Send a payment transaction to a new account and confirm its balance within an app call
-// 	partitiontest.PartitionTest(t)
-// 	t.Parallel()
+	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+		sender := accounts[0]
+		senderBalance := sender.AcctData.MicroAlgos.Raw
+		sendAmount := senderBalance - 500_000 // Leave 0.5 Algos in the sender account
+		receiver := accounts[1]
+		receiverBalance := receiver.AcctData.MicroAlgos.Raw
 
-// 	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-// 	defer l.Close()
-// 	s := simulation.MakeSimulator(l)
-// 	sender := accounts[0].Addr
-// 	senderBalance := accounts[0].AcctData.MicroAlgos.Raw
-// 	sendAmount := senderBalance - 500000
-// 	receiver := accounts[1].Addr
-// 	receiverBalance := accounts[1].AcctData.MicroAlgos.Raw
+		futureAppID := basics.AppIndex(1)
+		createTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:   protocol.ApplicationCallTx,
+			Sender: sender.Addr,
+			ApprovalProgram: `#pragma version 6
+txn ApplicationID      // [appId]
+	bz end                 // []
+int 1                  // [1]
+balance                // [bal[1]]
+itob                   // [itob(bal[1])]
+txn ApplicationArgs 0  // [itob(bal[1]), args[0]]
+==                     // [itob(bal[1])=?=args[0]]
+	assert
+	b end
+end:
+int 1                  // [1]
+`,
+			ClearStateProgram: `#pragma version 6
+int 1`,
+		})
+		checkStartingBalanceTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   futureAppID,
+			Accounts:        []basics.Address{receiver.Addr},
+			ApplicationArgs: [][]byte{uint64ToBytes(receiverBalance)},
+		})
+		paymentTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: receiver.Addr,
+			Amount:   sendAmount,
+		})
+		checkEndingBalanceTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+			Accounts:      []basics.Address{receiver.Addr},
+			// Receiver's balance should have increased by sendAmount
+			ApplicationArgs: [][]byte{uint64ToBytes(receiverBalance + sendAmount)},
+		})
 
-// 	// Compile approval program
-// 	ops, err := logic.AssembleString(accountBalanceCheckProgram)
-// 	require.NoError(t, err, ops.Errors)
-// 	approvalProg := ops.Program
+		txntest.Group(&createTxn, &checkStartingBalanceTxn, &paymentTxn, &checkEndingBalanceTxn)
 
-// 	// Compile clear program
-// 	ops, err = logic.AssembleString(trivialAVMProgram)
-// 	require.NoError(t, err, ops.Errors)
-// 	clearStateProg := ops.Program
+		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+		signedCheckStartingBalanceTxn := checkStartingBalanceTxn.Txn().Sign(sender.Sk)
+		signedPaymentTxn := paymentTxn.Txn().Sign(sender.Sk)
+		signedCheckEndingBalanceTxn := checkEndingBalanceTxn.Txn().Sign(sender.Sk)
 
-// 	futureAppID := 1
-// 	txgroup := []transactions.SignedTxn{
-// 		// create app
-// 		{
-// 			Txn: transactions.Transaction{
-// 				Type:   protocol.ApplicationCallTx,
-// 				Header: makeTxnHeader(sender),
-// 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-// 					ApplicationID:     0,
-// 					ApprovalProgram:   approvalProg,
-// 					ClearStateProgram: clearStateProg,
-// 					LocalStateSchema: basics.StateSchema{
-// 						NumUint:      0,
-// 						NumByteSlice: 0,
-// 					},
-// 					GlobalStateSchema: basics.StateSchema{
-// 						NumUint:      0,
-// 						NumByteSlice: 0,
-// 					},
-// 				},
-// 			},
-// 		},
-// 		// check balance
-// 		{
-// 			Txn: transactions.Transaction{
-// 				Type:   protocol.ApplicationCallTx,
-// 				Header: makeTxnHeader(sender),
-// 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-// 					ApplicationID:   basics.AppIndex(futureAppID),
-// 					Accounts:        []basics.Address{receiver},
-// 					ApplicationArgs: [][]byte{uint64ToBytes(receiverBalance)},
-// 				},
-// 			},
-// 		},
-// 		// send payment
-// 		{
-// 			Txn: transactions.Transaction{
-// 				Type:   protocol.PaymentTx,
-// 				Header: makeTxnHeader(sender),
-// 				PaymentTxnFields: transactions.PaymentTxnFields{
-// 					Receiver: receiver,
-// 					Amount:   basics.MicroAlgos{Raw: sendAmount},
-// 				},
-// 			},
-// 		},
-// 		// check balance changed
-// 		{
-// 			Txn: transactions.Transaction{
-// 				Type:   protocol.ApplicationCallTx,
-// 				Header: makeTxnHeader(sender),
-// 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-// 					ApplicationID:   basics.AppIndex(futureAppID),
-// 					Accounts:        []basics.Address{receiver},
-// 					ApplicationArgs: [][]byte{uint64ToBytes(receiverBalance + sendAmount)},
-// 				},
-// 			},
-// 		},
-// 	}
+		return simulationTestCase{
+			input: []transactions.SignedTxn{
+				signedCreateTxn,
+				signedCheckStartingBalanceTxn,
+				signedPaymentTxn,
+				signedCheckEndingBalanceTxn,
+			},
+			expected: simulation.Result{
+				Version: 1,
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{},
+											LocalDeltas: map[uint64]basics.StateDelta{},
+										},
+									},
+								},
+							},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{},
+											LocalDeltas: map[uint64]basics.StateDelta{},
+										},
+									},
+								},
+							},
+							{},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{},
+											LocalDeltas: map[uint64]basics.StateDelta{},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				WouldSucceed: true,
+			},
+		}
+	})
+}
 
-// 	err = attachGroupID(txgroup)
-// 	require.NoError(t, err)
-
-// 	_, err = s.Simulate(txgroup)
-// 	require.NoError(t, err)
-// }
-
-// // TestBalanceChangesWithApp tests that the simulator's transaction group checks
+// // TestPooledFeesAcrossSignedAndUnsigned tests that the simulator's transaction group checks
 // // allow for pooled fees across a mix of signed and unsigned transactions.
 // // Transaction 1 is a signed transaction with not enough fees paid on its own.
 // // Transaction 2 is an unsigned transaction with enough fees paid to cover transaction 1.
