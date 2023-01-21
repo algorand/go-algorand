@@ -484,54 +484,59 @@ int 0
 	}
 }
 
-// func TestRejectAppCall(t *testing.T) {
-// 	partitiontest.PartitionTest(t)
-// 	t.Parallel()
+func TestRejectAppCall(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-// 	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-// 	defer l.Close()
-// 	s := simulation.MakeSimulator(l)
-// 	sender := accounts[0].Addr
+	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+		sender := accounts[0]
 
-// 	// Compile AVM program
-// 	ops, err := logic.AssembleString(rejectAVMProgram)
-// 	require.NoError(t, err, ops.Errors)
-// 	prog := ops.Program
+		// Create program and call it
+		futureAppID := basics.AppIndex(1)
+		createTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: 0,
+			ApprovalProgram: `#pragma version 6
+byte "app creation"
+log
+int 0
+			`,
+			ClearStateProgram: `#pragma version 6
+int 0
+`,
+		})
+		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
 
-// 	// Create program and call it
-// 	txgroup := []transactions.SignedTxn{
-// 		{
-// 			Txn: transactions.Transaction{
-// 				Type:   protocol.ApplicationCallTx,
-// 				Header: makeTxnHeader(sender),
-// 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-// 					ApplicationID:     0,
-// 					ApprovalProgram:   prog,
-// 					ClearStateProgram: prog,
-// 					LocalStateSchema: basics.StateSchema{
-// 						NumUint:      0,
-// 						NumByteSlice: 0,
-// 					},
-// 					GlobalStateSchema: basics.StateSchema{
-// 						NumUint:      0,
-// 						NumByteSlice: 0,
-// 					},
-// 				},
-// 			},
-// 		},
-// 	}
-
-// 	err = attachGroupID(txgroup)
-// 	require.NoError(t, err)
-
-// 	result, err := s.Simulate(txgroup)
-// 	require.NoError(t, err)
-// 	require.False(t, result.WouldSucceed)
-// 	require.Len(t, result.TxnGroups, 1)
-// 	require.Len(t, result.TxnGroups[0].Txns, 1)
-// 	require.True(t, result.TxnGroups[0].Txns[0].MissingSignature)
-// 	require.Contains(t, result.TxnGroups[0].FailureMessage, "transaction rejected by ApprovalProgram")
-// }
+		return simulationTestCase{
+			input:         []transactions.SignedTxn{signedCreateTxn},
+			expectedError: "transaction rejected by ApprovalProgram",
+			expected: simulation.Result{
+				Version: 1,
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{},
+											LocalDeltas: map[uint64]basics.StateDelta{},
+											Logs:        []string{"app creation"},
+										},
+									},
+								},
+							},
+						},
+						FailedAt: simulation.TxnPath{0},
+					},
+				},
+				WouldSucceed: false,
+			},
+		}
+	})
+}
 
 // func TestSignatureCheck(t *testing.T) {
 // 	partitiontest.PartitionTest(t)

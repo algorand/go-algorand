@@ -1020,6 +1020,10 @@ func (cx *EvalContext) Cost() int {
 	return cx.cost
 }
 
+func (cx *EvalContext) AppID() basics.AppIndex {
+	return cx.appID
+}
+
 func (cx *EvalContext) remainingBudget() int {
 	if cx.runModeFlags == ModeSig {
 		return int(cx.Proto.LogicSigMaxCost) - cx.cost

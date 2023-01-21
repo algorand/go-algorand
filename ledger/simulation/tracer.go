@@ -19,6 +19,7 @@ package simulation
 import (
 	"fmt"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
@@ -137,17 +138,19 @@ func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad tran
 	tracer.cursorEvalTracer.AfterTxn(ep, groupIndex, ad)
 }
 
-func (tracer *evalTracer) saveEvalDelta(evalDelta transactions.EvalDelta) {
+func (tracer *evalTracer) saveEvalDelta(evalDelta transactions.EvalDelta, appID basics.AppIndex) {
 	applyDataOfCurrentTxn := tracer.mustGetApplyDataAtPath(tracer.absolutePath())
 	applyDataOfCurrentTxn.EvalDelta = evalDelta // TODO: deep copy?
+	if applyDataOfCurrentTxn.ApplicationID == 0 {
+		applyDataOfCurrentTxn.ApplicationID = appID
+	}
 }
 
-func (tracer *evalTracer) BeforeTealOp(cx *logic.EvalContext) {
+func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 	if cx.RunMode() != logic.ModeApp {
 		// do nothing for LogicSig ops
 		return
 	}
-
 	groupIndex := tracer.relativeGroupIndex()
-	tracer.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta)
+	tracer.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta, cx.AppID())
 }
