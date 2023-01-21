@@ -66,7 +66,7 @@ func CreateNetworkFromTemplate(name, rootDir string, templateReader io.Reader, b
 	n.cfg.Name = name
 
 	var err error
-	var template NetworkTemplate
+	template := defaultNetworkTemplate
 
 	err = loadTemplateFromReader(templateReader, &template)
 
