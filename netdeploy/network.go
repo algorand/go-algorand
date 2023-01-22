@@ -73,6 +73,9 @@ func CreateNetworkFromTemplate(name, rootDir string, templateReader io.Reader, b
 	if err == nil {
 		if overrideDevMode {
 			template.Genesis.DevMode = true
+			if template.Genesis.NetworkName == "" {
+				template.Genesis.NetworkName = "development network"
+			}
 			if len(template.Nodes) > 0 {
 				template.Nodes[0].IsRelay = false
 			}
