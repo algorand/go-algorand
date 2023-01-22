@@ -76,6 +76,10 @@ func CreateNetworkFromTemplate(name, rootDir string, templateReader io.Reader, b
 			if len(template.Nodes) > 0 {
 				template.Nodes[0].IsRelay = false
 			}
+		} else {
+			if template.Genesis.NetworkName == "" {
+				template.Genesis.NetworkName = "private network"
+			}
 		}
 	} else {
 		return n, err
