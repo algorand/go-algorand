@@ -182,10 +182,10 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		})
 
 	var serverNode ServerNode
-	if cfg.NodeSyncMode {
-		var dataNode *node.AlgorandDataNode
-		dataNode, err = node.MakeData(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
-		serverNode = apiServer.DataNode{AlgorandDataNode: dataNode}
+	if cfg.NodeFollowerMode {
+		var followerNode *node.AlgorandFollowerNode
+		followerNode, err = node.MakeFollower(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
+		serverNode = apiServer.DataNode{AlgorandFollowerNode: followerNode}
 	} else {
 		var fullNode *node.AlgorandFullNode
 		fullNode, err = node.MakeFull(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)

@@ -31,11 +31,11 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func setupDataNode(t *testing.T) *AlgorandDataNode {
+func setupDataNode(t *testing.T) *AlgorandFollowerNode {
 	cfg := config.GetDefaultLocal()
 	cfg.NodeSyncMode = true
 	genesis := bookkeeping.Genesis{
-		SchemaID:    "go-test-data-node-genesis",
+		SchemaID:    "go-test-follower-node-genesis",
 		Proto:       protocol.ConsensusCurrentVersion,
 		Network:     config.Devtestnet,
 		FeeSink:     sinkAddr.String(),
@@ -49,7 +49,7 @@ func setupDataNode(t *testing.T) *AlgorandDataNode {
 			},
 		},
 	}
-	node, err := MakeData(logging.Base(), t.TempDir(), cfg, []string{}, genesis)
+	node, err := MakeFollower(logging.Base(), t.TempDir(), cfg, []string{}, genesis)
 	require.NoError(t, err)
 	return node
 }

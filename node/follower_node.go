@@ -41,14 +41,14 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-// AlgorandDataNode implements sync mode/ledger delta APIs and disables participation-related methods
-type AlgorandDataNode struct {
+// AlgorandFollowerNode implements follower mode/ledger delta APIs and disables participation-related methods
+type AlgorandFollowerNode struct {
 	AlgorandFullNode
 }
 
-// MakeData sets up an Algorand data node
-func MakeData(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandDataNode, error) {
-	node := new(AlgorandDataNode)
+// MakeFollower sets up an Algorand data node
+func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFollowerNode, error) {
+	node := new(AlgorandFollowerNode)
 	node.rootDir = rootDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
@@ -132,7 +132,7 @@ func MakeData(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 }
 
 // Start the node: connect to peers while obtaining a lock. Doesn't wait for initial sync.
-func (node *AlgorandDataNode) Start() {
+func (node *AlgorandFollowerNode) Start() {
 	node.mu.Lock()
 	defer node.mu.Unlock()
 
@@ -164,7 +164,7 @@ func (node *AlgorandDataNode) Start() {
 }
 
 // startMonitoringRoutines starts the internal monitoring routines used by the node.
-func (node *AlgorandDataNode) startMonitoringRoutines() {
+func (node *AlgorandFollowerNode) startMonitoringRoutines() {
 	if node.config.EnableUsageLog {
 		node.monitoringRoutinesWaitGroup.Add(1)
 		go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
@@ -173,12 +173,12 @@ func (node *AlgorandDataNode) startMonitoringRoutines() {
 
 // waitMonitoringRoutines waits for all the monitoring routines to exit. Note that
 // the node.mu must not be taken, and that the node's context should have been canceled.
-func (node *AlgorandDataNode) waitMonitoringRoutines() {
+func (node *AlgorandFollowerNode) waitMonitoringRoutines() {
 	node.monitoringRoutinesWaitGroup.Wait()
 }
 
 // Stop stops running the node. Once a node is closed, it can never start again.
-func (node *AlgorandDataNode) Stop() {
+func (node *AlgorandFollowerNode) Stop() {
 	node.mu.Lock()
 	defer func() {
 		node.mu.Unlock()
@@ -202,65 +202,65 @@ func (node *AlgorandDataNode) Stop() {
 	node.cancelCtx()
 }
 
-// BroadcastSignedTxGroup errors in sync mode
-func (node *AlgorandDataNode) BroadcastSignedTxGroup(_ []transactions.SignedTxn) (err error) {
+// BroadcastSignedTxGroup errors in follower mode
+func (node *AlgorandFollowerNode) BroadcastSignedTxGroup(_ []transactions.SignedTxn) (err error) {
 	return fmt.Errorf("cannot broadcast txns in sync mode")
 }
 
-// BroadcastInternalSignedTxGroup errors in sync mode
-func (node *AlgorandDataNode) BroadcastInternalSignedTxGroup(_ []transactions.SignedTxn) (err error) {
+// BroadcastInternalSignedTxGroup errors in follower mode
+func (node *AlgorandFollowerNode) BroadcastInternalSignedTxGroup(_ []transactions.SignedTxn) (err error) {
 	return fmt.Errorf("cannot broadcast internal signed txn group in sync mode")
 }
 
 // Simulate speculatively runs a transaction group against the current
 // blockchain state and returns the effects and/or errors that would result.
-func (node *AlgorandDataNode) Simulate(_ []transactions.SignedTxn) (vb *ledgercore.ValidatedBlock, missingSignatures bool, err error) {
+func (node *AlgorandFollowerNode) Simulate(_ []transactions.SignedTxn) (vb *ledgercore.ValidatedBlock, missingSignatures bool, err error) {
 	err = fmt.Errorf("cannot simulate in data mode")
 	return
 }
 
-// GetPendingTransaction no-ops in sync mode
-func (node *AlgorandDataNode) GetPendingTransaction(_ transactions.Txid) (res TxnWithStatus, found bool) {
+// GetPendingTransaction no-ops in follower mode
+func (node *AlgorandFollowerNode) GetPendingTransaction(_ transactions.Txid) (res TxnWithStatus, found bool) {
 	return
 }
 
-// SuggestedFee no-ops in sync mode
-func (node *AlgorandDataNode) SuggestedFee() basics.MicroAlgos {
+// SuggestedFee no-ops in follower mode
+func (node *AlgorandFollowerNode) SuggestedFee() basics.MicroAlgos {
 	return basics.MicroAlgos{}
 }
 
-// GetPendingTxnsFromPool returns an empty array in sync mode.
-func (node *AlgorandDataNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
+// GetPendingTxnsFromPool returns an empty array in follower mode.
+func (node *AlgorandFollowerNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
 	return []transactions.SignedTxn{}, nil
 }
 
-// ListParticipationKeys returns an empty list in sync mode
-func (node *AlgorandDataNode) ListParticipationKeys() (partKeys []account.ParticipationRecord, err error) {
+// ListParticipationKeys returns an empty list in follower mode
+func (node *AlgorandFollowerNode) ListParticipationKeys() (partKeys []account.ParticipationRecord, err error) {
 	return []account.ParticipationRecord{}, nil
 }
 
-// GetParticipationKey returns an error in sync mode
-func (node *AlgorandDataNode) GetParticipationKey(_ account.ParticipationID) (account.ParticipationRecord, error) {
-	return account.ParticipationRecord{}, fmt.Errorf("cannot get participation key in sync mode")
+// GetParticipationKey returns an error in follower mode
+func (node *AlgorandFollowerNode) GetParticipationKey(_ account.ParticipationID) (account.ParticipationRecord, error) {
+	return account.ParticipationRecord{}, fmt.Errorf("cannot get participation key in follower mode")
 }
 
-// RemoveParticipationKey returns an error in sync mode
-func (node *AlgorandDataNode) RemoveParticipationKey(_ account.ParticipationID) error {
-	return fmt.Errorf("cannot remove participation key in sync mode")
+// RemoveParticipationKey returns an error in follower mode
+func (node *AlgorandFollowerNode) RemoveParticipationKey(_ account.ParticipationID) error {
+	return fmt.Errorf("cannot remove participation key in follower mode")
 }
 
-// AppendParticipationKeys returns an error in sync mode
-func (node *AlgorandDataNode) AppendParticipationKeys(_ account.ParticipationID, keys account.StateProofKeys) error {
-	return fmt.Errorf("cannot append participation keys in sync mode")
+// AppendParticipationKeys returns an error in follower mode
+func (node *AlgorandFollowerNode) AppendParticipationKeys(_ account.ParticipationID, keys account.StateProofKeys) error {
+	return fmt.Errorf("cannot append participation keys in follower mode")
 }
 
-// InstallParticipationKey returns an error in sync mode
-func (node *AlgorandDataNode) InstallParticipationKey(_ []byte) (account.ParticipationID, error) {
-	return account.ParticipationID{}, fmt.Errorf("cannot install participation key in sync mode")
+// InstallParticipationKey returns an error in follower mode
+func (node *AlgorandFollowerNode) InstallParticipationKey(_ []byte) (account.ParticipationID, error) {
+	return account.ParticipationID{}, fmt.Errorf("cannot install participation key in follower mode")
 }
 
 // OnNewBlock implements the BlockListener interface so we're notified after each block is written to the ledger
-func (node *AlgorandDataNode) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
+func (node *AlgorandFollowerNode) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	if node.ledger.Latest() > block.Round() {
 		return
 	}
@@ -272,7 +272,7 @@ func (node *AlgorandDataNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 
 // StartCatchup starts the catchpoint mode and attempt to get to the provided catchpoint
 // this function is intended to be called externally via the REST api interface.
-func (node *AlgorandDataNode) StartCatchup(catchpoint string) error {
+func (node *AlgorandFollowerNode) StartCatchup(catchpoint string) error {
 	node.mu.Lock()
 	defer node.mu.Unlock()
 	if node.catchpointCatchupService != nil {
@@ -299,7 +299,7 @@ func (node *AlgorandDataNode) StartCatchup(catchpoint string) error {
 // channel which contains the updated node context. This function need to work asynchronously so that the caller could
 // detect and handle the use case where the node is being shut down while we're switching to/from catchup mode without
 // deadlocking on the shared node mutex.
-func (node *AlgorandDataNode) SetCatchpointCatchupMode(catchpointCatchupMode bool) (outCtxCh <-chan context.Context) {
+func (node *AlgorandFollowerNode) SetCatchpointCatchupMode(catchpointCatchupMode bool) (outCtxCh <-chan context.Context) {
 	// create a non-buffered channel to return the newly created context. The fact that it's non-buffered here
 	// is important, as it allows us to synchronize the "receiving" of the new context before canceling of the previous
 	// one.
@@ -352,27 +352,27 @@ func (node *AlgorandDataNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 
 }
 
-// AssembleBlock returns an error in sync mode
-func (node *AlgorandDataNode) AssembleBlock(_ basics.Round) (agreement.ValidatedBlock, error) {
-	return validatedBlock{}, fmt.Errorf("cannot run AssembleBlock in sync mode")
+// AssembleBlock returns an error in follower mode
+func (node *AlgorandFollowerNode) AssembleBlock(_ basics.Round) (agreement.ValidatedBlock, error) {
+	return validatedBlock{}, fmt.Errorf("cannot run AssembleBlock in follower mode")
 }
 
-// VotingKeys no-ops in sync mode
-func (node *AlgorandDataNode) VotingKeys(_, _ basics.Round) []account.ParticipationRecordForRound {
+// VotingKeys no-ops in follower mode
+func (node *AlgorandFollowerNode) VotingKeys(_, _ basics.Round) []account.ParticipationRecordForRound {
 	return []account.ParticipationRecordForRound{}
 }
 
-// Record no-ops in sync mode.
-func (node *AlgorandDataNode) Record(_ basics.Address, _ basics.Round, _ account.ParticipationAction) {
+// Record no-ops in follower mode.
+func (node *AlgorandFollowerNode) Record(_ basics.Address, _ basics.Round, _ account.ParticipationAction) {
 }
 
 // IsParticipating implements network.NodeInfo
-func (node *AlgorandDataNode) IsParticipating() bool {
+func (node *AlgorandFollowerNode) IsParticipating() bool {
 	return false
 }
 
 // SetSyncRound sets the minimum sync round on the catchup service
-func (node *AlgorandDataNode) SetSyncRound(rnd uint64) error {
+func (node *AlgorandFollowerNode) SetSyncRound(rnd uint64) error {
 	// Calculate the first round for which we want to disable catchup from the network.
 	// This is based on the size of the cache used in the ledger.
 	disableSyncRound := rnd + node.Config().MaxAcctLookback
@@ -380,11 +380,11 @@ func (node *AlgorandDataNode) SetSyncRound(rnd uint64) error {
 }
 
 // GetSyncRound retrieves the sync round, removes cache offset used during SetSyncRound
-func (node *AlgorandDataNode) GetSyncRound() uint64 {
+func (node *AlgorandFollowerNode) GetSyncRound() uint64 {
 	return basics.SubSaturate(node.catchupService.GetDisableSyncRound(), node.Config().MaxAcctLookback)
 }
 
 // UnsetSyncRound removes the sync round constraint on the catchup service
-func (node *AlgorandDataNode) UnsetSyncRound() {
+func (node *AlgorandFollowerNode) UnsetSyncRound() {
 	node.catchupService.UnsetDisableSyncRound()
 }

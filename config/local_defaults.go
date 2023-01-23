@@ -99,7 +99,7 @@ var defaultLocal = Local{
 	NetworkProtocolVersion:                     "",
 	NodeExporterListenAddress:                  ":9100",
 	NodeExporterPath:                           "./node_exporter",
-	NodeSyncMode:                               false,
+	NodeFollowerMode:                           false,
 	OptimizeAccountsDatabaseOnStartup:          false,
 	OutgoingMessageFilterBucketCount:           3,
 	OutgoingMessageFilterBucketSize:            128,

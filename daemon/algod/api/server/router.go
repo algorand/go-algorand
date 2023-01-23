@@ -120,7 +120,7 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 	ppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
 	pprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
 
-	if node.Config().NodeSyncMode {
+	if node.Config().NodeFollowerMode {
 		data.RegisterHandlers(e, &v2Handler, apiAuthenticator)
 	}
 
@@ -131,11 +131,11 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 	return e
 }
 
-// DataNode wraps the AlgorandDataNode to provide v2.NodeInterface.
-type DataNode struct{ *node.AlgorandDataNode }
+// FollowerNode wraps the AlgorandFollowerNode to provide v2.NodeInterface.
+type FollowerNode struct{ *node.AlgorandFollowerNode }
 
 // LedgerForAPI implements the v2.Handlers interface
-func (n DataNode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }
+func (n FollowerNode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }
 
 // APINode wraps the AlgorandFullNode to provide v2.NodeInterface.
 type APINode struct{ *node.AlgorandFullNode }

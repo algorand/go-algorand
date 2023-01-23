@@ -490,10 +490,10 @@ type Local struct {
 	// guarantees in terms of functionality or future support.
 	EnableExperimentalAPI bool `version[26]:"false"`
 
-	// NodeSyncMode launches the node in "sync" or "data" mode. This turns off agreement service,
-	// and APIs related to broadcasting transactions, and enables APIs which retrieve detailed information
-	// from ledger caches.
-	NodeSyncMode bool `version[27]:"false"`
+	// NodeFollowerMode launches the node in "follower" mode. This turns off the agreement service,
+	// and APIs related to broadcasting transactions, and enables APIs which can retrieve detailed information
+	// from ledger caches and can control the ledger round.
+	NodeFollowerMode bool `version[27]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
