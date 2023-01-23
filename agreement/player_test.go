@@ -3244,8 +3244,6 @@ func TestPlayerRetainsReceivedValidatedAt(t *testing.T) {
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
 	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
 
-	t.Log("pP", pP.Digest().String())
-
 	// send a payload
 	// store an arbitrary proposal/payload
 	vVote := helper.MakeVerifiedVote(t, 0, r-1, p, propose, *pV)

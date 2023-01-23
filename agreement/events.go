@@ -947,6 +947,6 @@ func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
 }
 
 func (e messageEvent) AttachReceivedAt(d time.Duration) messageEvent {
-	e.Input.Proposal.receivedAt = d
+	e.Input.UnauthenticatedProposal.receivedAt = d
 	return e
 }
