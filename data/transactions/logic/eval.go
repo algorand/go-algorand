@@ -600,6 +600,7 @@ type EvalContext struct {
 	programHashCached crypto.Digest
 }
 
+// GroupIndex returns the group index of the transaction being evaluated
 func (cx *EvalContext) GroupIndex() int {
 	return cx.groupIndex
 }
