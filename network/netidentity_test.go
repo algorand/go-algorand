@@ -33,10 +33,12 @@
 package network
 
 import (
+	"encoding/base64"
 	"net/http"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -133,12 +135,38 @@ func TestIdentityChallengeSchemeVerifyResponse(t *testing.T) {
 	require.Equal(t, respChal, respChal2)
 	require.Equal(t, uint32(1), ok)
 	// because we sent this to ourselves, we can confirm the keys match
-	require.NotEmpty(t, key, key2)
+	require.Equal(t, key, key2)
 }
 
-// TestIdentityChallengeSchemeBadVerify confirms the scheme will
-// return "0" if the challenge can't be verified
-func TestIdentityChallengeSchemeBadVerify(t *testing.T) {
+// TestIdentityChallengeSchemeBadSignature tests that the  scheme will
+// fail to verify and attach if the challenge is incorrectly signed
+func TestIdentityChallengeSchemeBadSignature(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	h := http.Header{}
+	i := NewIdentityChallengeScheme("i1")
+	// Copy the logic of attaching the header and signing so we can sign it wrong
+	c := identityChallenge{
+		Key:       i.identityKeys.SignatureVerifier,
+		Challenge: newIdentityChallengeBytes(),
+		Address:   "i1",
+	}
+	c.Signature = i.identityKeys.SignBytes([]byte("WRONG BYTES SIGNED"))
+	enc := protocol.EncodeReflect(i)
+	b64enc := base64.StdEncoding.EncodeToString(enc)
+	h.Add(IdentityChallengeHeader, b64enc)
+
+	// observe that VerifyAndAttachResponse won't do anything on bad signature
+	r := http.Header{}
+	respChal, key := i.VerifyAndAttachResponse(r, h)
+	require.Empty(t, r.Get(IdentityChallengeHeader))
+	require.Empty(t, respChal)
+	require.Empty(t, key)
+}
+
+// TestIdentityChallengeSchemeBadResponseSignature tests that the  scheme will
+// fail to verify if the challenge response is incorrectly signed
+func TestIdentityChallengeSchemeBadResponseSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	h := http.Header{}
@@ -147,8 +175,38 @@ func TestIdentityChallengeSchemeBadVerify(t *testing.T) {
 	origChal := i.AttachNewIdentityChallenge(h, "i1")
 	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
 	require.NotEmpty(t, origChal)
-	r := http.Header{}
 
+	// use the code to sign and encode responses so we can sign incorrectly
+	r := http.Header{}
+	resp := identityChallengeResponse{
+		Key:               i.identityKeys.SignatureVerifier,
+		Challenge:         origChal,
+		ResponseChallenge: newIdentityChallengeBytes(),
+	}
+	resp.Signature = i.identityKeys.SignBytes([]byte("BAD BYTES FOR SIGNING"))
+	enc := protocol.EncodeReflect(i)
+	b64enc := base64.StdEncoding.EncodeToString(enc)
+	r.Add(IdentityChallengeHeader, b64enc)
+
+	respChal2, key2, ok := i.VerifyResponse(r, origChal)
+	require.Empty(t, respChal2)
+	require.Empty(t, key2)
+	require.Equal(t, uint32(0), ok)
+}
+
+// TestIdentityChallengeSchemeWrongChallenge the scheme will
+// return "0" if the challenge does not match upon return
+func TestIdentityChallengeSchemeWrongChallenge(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	h := http.Header{}
+	i := NewIdentityChallengeScheme("i1")
+	// author a challenge to ourselves
+	origChal := i.AttachNewIdentityChallenge(h, "i1")
+	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
+	require.NotEmpty(t, origChal)
+
+	r := http.Header{}
 	respChal, key := i.VerifyAndAttachResponse(r, h)
 	require.NotEmpty(t, r.Get(IdentityChallengeHeader))
 	require.NotEmpty(t, respChal)
@@ -175,10 +233,19 @@ func TestIdentityTrackerRemoveIdentity(t *testing.T) {
 	id := crypto.PublicKey{}
 	p := wsPeer{identity: id}
 
+	id2 := crypto.PublicKey{}
+	p2 := wsPeer{identity: id2}
+
 	// Ensure the first attempt to insert populates the map
 	_, exists := tracker.peersByID[p.identity]
 	require.False(t, exists)
 	require.True(t, tracker.setIdentity(&p))
+	_, exists = tracker.peersByID[p.identity]
+	require.True(t, exists)
+
+	// check that removing a peer who does not exist in the map (but whos identity does)
+	// not not result in the wrong peer being removed
+	tracker.removeIdentity(&p2)
 	_, exists = tracker.peersByID[p.identity]
 	require.True(t, exists)
 
