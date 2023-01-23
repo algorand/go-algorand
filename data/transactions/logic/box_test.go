@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,17 +27,19 @@ import (
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 func TestBoxNewDel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	ep, txn, ledger := logic.MakeSampleEnv()
-
 	for _, size := range []int{24, 0} {
+		size := size
 		t.Run(fmt.Sprintf("box size=%d", size), func(t *testing.T) {
+			t.Parallel()
+
+			ep, txn, ledger := logic.MakeSampleEnv()
+
 			createSelf := fmt.Sprintf(`byte "self"; int %d; box_create;`, size)
 			createOther := fmt.Sprintf(`byte "other"; int %d; box_create;`, size)
 
@@ -218,7 +220,9 @@ func TestBoxUnavailableWithClearState(t *testing.T) {
 	}
 
 	for name, program := range tests {
+		name, program := name, program
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			ep, _, l := logic.MakeSampleEnv()
 			l.NewApp(basics.Address{}, 888, basics.AppParams{})
 			ep.TxnGroup[0].Txn.OnCompletion = transactions.ClearStateOC
@@ -521,18 +525,23 @@ func TestEarlyPanics(t *testing.T) {
 		"box_replace": `byte "%s"; int 0; byte "new"; box_replace`,
 	}
 
-	ep, _, l := logic.MakeSampleEnv()
-	l.NewApp(basics.Address{}, 888, basics.AppParams{})
-
 	for name, program := range tests {
+		name, program := name, program
 		t.Run(name+"/zero", func(t *testing.T) {
+			t.Parallel()
+			ep, _, l := logic.MakeSampleEnv()
+			l.NewApp(basics.Address{}, 888, basics.AppParams{})
 			logic.TestApp(t, fmt.Sprintf(program, ""), ep, "zero length")
 		})
 	}
 
 	big := strings.Repeat("x", 65)
 	for name, program := range tests {
+		name, program := name, program
 		t.Run(name+"/long", func(t *testing.T) {
+			t.Parallel()
+			ep, _, l := logic.MakeSampleEnv()
+			l.NewApp(basics.Address{}, 888, basics.AppParams{})
 			logic.TestApp(t, fmt.Sprintf(program, big), ep, "name too long")
 		})
 	}
@@ -557,46 +566,4 @@ func TestBoxTotals(t *testing.T) {
 	                  acct_params_get AcctTotalBoxes; pop; int 1; ==`, ep)
 	logic.TestApp(t, `int 888; app_params_get AppAddress; assert;
 	                  acct_params_get AcctTotalBoxBytes; pop; int 35; ==`, ep)
-}
-
-func TestMakeBoxKey(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	type testCase struct {
-		description string
-		name        string
-		app         basics.AppIndex
-		key         string
-		err         string
-	}
-
-	pp := func(tc testCase) string {
-		return fmt.Sprintf("<<<%s>>> (name, app) = (%#v, %d) --should--> key = %#v (err = [%s])", tc.description, tc.name, tc.app, tc.key, tc.err)
-	}
-
-	var testCases = []testCase{
-		// COPACETIC:
-		{"zero appid", "stranger", 0, "bx:\x00\x00\x00\x00\x00\x00\x00\x00stranger", ""},
-		{"typical", "348-8uj", 131231, "bx:\x00\x00\x00\x00\x00\x02\x00\x9f348-8uj", ""},
-		{"empty box name", "", 42, "bx:\x00\x00\x00\x00\x00\x00\x00*", ""},
-		{"random byteslice", "{\xbb\x04\a\xd1\xe2\xc6I\x81{", 13475904583033571713, "bx:\xbb\x04\a\xd1\xe2\xc6I\x81{\xbb\x04\a\xd1\xe2\xc6I\x81{", ""},
-
-		// ERRORS:
-		{"too short", "", 0, "stranger", "SplitBoxKey() cannot extract AppIndex as key (stranger) too short (length=8)"},
-		{"wrong prefix", "", 0, "strangersINTHEdark", "SplitBoxKey() illegal app box prefix in key (strangersINTHEdark). Expected prefix 'bx:'"},
-	}
-
-	for _, tc := range testCases {
-		app, name, err := logic.SplitBoxKey(tc.key)
-
-		if tc.err == "" {
-			key := logic.MakeBoxKey(tc.app, tc.name)
-			require.Equal(t, tc.app, app, pp(tc))
-			require.Equal(t, tc.name, name, pp(tc))
-			require.Equal(t, tc.key, key, pp(tc))
-		} else {
-			require.EqualError(t, err, tc.err, pp(tc))
-		}
-	}
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1622,7 +1622,7 @@ func isFullSpec(spec OpSpec) bool {
 }
 
 // mergeProtos allows us to support typetracking of pseudo-ops which are given an improper number of immediates
-//by creating a new proto that is a combination of all the pseudo-op's possibilities
+// by creating a new proto that is a combination of all the pseudo-op's possibilities
 func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 	var args StackTypes
 	var returns StackTypes
@@ -1857,10 +1857,13 @@ func splitTokens(tokens []string) (current, rest []string) {
 
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
-	fin := strings.NewReader(text)
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
 		return ops.errorf("Can not assemble version %d", ops.Version)
 	}
+	if strings.TrimSpace(text) == "" {
+		return ops.errorf("Cannot assemble empty program text")
+	}
+	fin := strings.NewReader(text)
 	scanner := bufio.NewScanner(fin)
 	for scanner.Scan() {
 		ops.sourceLine++
@@ -2411,8 +2414,19 @@ func (ops *OpStream) warnf(format string, a ...interface{}) error {
 	return ops.warn(fmt.Errorf(format, a...))
 }
 
-// ReportProblems issues accumulated warnings and outputs errors to an io.Writer.
-func (ops *OpStream) ReportProblems(fname string, writer io.Writer) {
+// ReportMultipleErrors issues accumulated warnings and outputs errors to an io.Writer.
+// In the case of exactly 1 error and no warnings, a slightly different format is provided
+// to handle the cases when the original error is or isn't reported elsewhere.
+// In the case of > 10 errors, only the first 10 errors will be reported.
+func (ops *OpStream) ReportMultipleErrors(fname string, writer io.Writer) {
+	if len(ops.Errors) == 1 && len(ops.Warnings) == 0 {
+		prefix := ""
+		if fname != "" {
+			prefix = fmt.Sprintf("%s: ", fname)
+		}
+		fmt.Fprintf(writer, "%s1 error: %s\n", prefix, ops.Errors[0])
+		return
+	}
 	for i, e := range ops.Errors {
 		if i > 9 {
 			break

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -222,9 +222,9 @@ func (el elasticClientLogger) Printf(format string, v ...interface{}) {
 	case logrus.InfoLevel:
 		el.logger.Infof(format, v...)
 	case logrus.WarnLevel:
-		el.logger.Warnf(format, v...)
+		el.logger.WithFields(Fields{"TelemetryError": true}).Warnf(format, v...)
 	default:
-		el.logger.Errorf(format, v...)
+		el.logger.WithFields(Fields{"TelemetryError": true}).Errorf(format, v...)
 	}
 }
 

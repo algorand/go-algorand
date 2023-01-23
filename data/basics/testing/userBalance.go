@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,10 +14,18 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package telemetryspec
+package testing
 
-// Telemetry operations
+import (
+	"github.com/algorand/go-algorand/data/basics"
+)
 
-// Operation is the type used to identify strings used for telemetry operation identifiers.
-// We want these to be stable and easy to find / document so we can create queries against them.
-type Operation string
+// MakeAccountData returns a AccountData with non-empty voting fields for online accounts
+func MakeAccountData(status basics.Status, algos basics.MicroAlgos) basics.AccountData {
+	ad := basics.AccountData{Status: status, MicroAlgos: algos}
+	if status == basics.Online {
+		ad.VoteFirstValid = 1
+		ad.VoteLastValid = 100_000
+	}
+	return ad
+}
