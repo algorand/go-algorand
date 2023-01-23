@@ -33,7 +33,7 @@ import (
 
 func setupDataNode(t *testing.T) *AlgorandFollowerNode {
 	cfg := config.GetDefaultLocal()
-	cfg.NodeSyncMode = true
+	cfg.NodeFollowerMode = true
 	genesis := bookkeeping.Genesis{
 		SchemaID:    "go-test-follower-node-genesis",
 		Proto:       protocol.ConsensusCurrentVersion,
