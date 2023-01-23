@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/rpcs"
@@ -40,7 +41,7 @@ var errNoLedgerForRound = errors.New("no ledger available for given round")
 
 const (
 	// maxCatchpointFileChunkSize is a rough estimate for the worst-case scenario we're going to have of all the accounts data per a single catchpoint file chunk and one account with max resources.
-	maxCatchpointFileChunkSize = ledger.BalancesPerCatchpointFileChunk*(ledger.MaxEncodedBaseAccountDataSize+ledger.MaxEncodedKVDataSize) + ledger.ResourcesPerCatchpointFileChunk*ledger.MaxEncodedBaseResourceDataSize
+	maxCatchpointFileChunkSize = ledger.BalancesPerCatchpointFileChunk*(ledger.MaxEncodedBaseAccountDataSize+encoded.MaxEncodedKVDataSize) + ledger.ResourcesPerCatchpointFileChunk*ledger.MaxEncodedBaseResourceDataSize
 	// defaultMinCatchpointFileDownloadBytesPerSecond defines the worst-case scenario download speed we expect to get while downloading a catchpoint file
 	defaultMinCatchpointFileDownloadBytesPerSecond = 20 * 1024
 	// catchpointFileStreamReadSize defines the number of bytes we would attempt to read at each iteration from the incoming http data stream

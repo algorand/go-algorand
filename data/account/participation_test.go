@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -531,7 +531,7 @@ func TestFillDBWithParticipationKeys(t *testing.T) {
 	a.NoError(err)
 }
 
-func TestKeyregValidityPeriod(t *testing.T) {
+func TestKeyregValidityPeriod(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies config.Consensus
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 

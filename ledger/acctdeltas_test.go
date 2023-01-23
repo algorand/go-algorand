@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,14 +32,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/data/transactions/logic"
-
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
 	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
@@ -905,9 +905,9 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 			last64KAccountCreationTime = time.Duration(0)
 		}
 		var chunk catchpointFileChunkV6
-		chunk.Balances = make([]encodedBalanceRecordV6, chunkSize)
+		chunk.Balances = make([]encoded.BalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
-			var randomAccount encodedBalanceRecordV6
+			var randomAccount encoded.BalanceRecordV6
 			accountData := store.BaseAccountData{RewardsBase: accountsLoaded + i}
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)
@@ -1180,12 +1180,12 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 			crypto.RandBytes(nameBuffer)
 			crypto.RandBytes(valueBuffer)
 			appID := basics.AppIndex(crypto.RandUint64())
-			boxKey := logic.MakeBoxKey(appID, string(nameBuffer))
+			boxKey := apps.MakeBoxKey(uint64(appID), string(nameBuffer))
 			err = writer.UpsertKvPair(boxKey, valueBuffer)
 			require.NoError(b, err)
 
 			if i == 0 {
-				prefix = logic.MakeBoxKey(appID, "")
+				prefix = apps.MakeBoxKey(uint64(appID), "")
 			}
 		}
 		err = tx.Commit()
