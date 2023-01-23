@@ -138,9 +138,19 @@ func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad tran
 	tracer.cursorEvalTracer.AfterTxn(ep, groupIndex, ad)
 }
 
+func copyEvalDelta(delta transactions.EvalDelta) transactions.EvalDelta {
+	deltaCopy := delta
+	if delta.InnerTxns != nil {
+		// copy the inner txn array, all else is a shallow copy
+		deltaCopy.InnerTxns = make([]transactions.SignedTxnWithAD, len(delta.InnerTxns))
+		copy(deltaCopy.InnerTxns, delta.InnerTxns)
+	}
+	return deltaCopy
+}
+
 func (tracer *evalTracer) saveEvalDelta(evalDelta transactions.EvalDelta, appIDToSave basics.AppIndex) {
 	applyDataOfCurrentTxn := tracer.mustGetApplyDataAtPath(tracer.absolutePath())
-	applyDataOfCurrentTxn.EvalDelta = evalDelta // TODO: deep copy?
+	applyDataOfCurrentTxn.EvalDelta = copyEvalDelta(evalDelta) // TODO: is this necessary?
 	if applyDataOfCurrentTxn.ApplicationID == 0 && appIDToSave != 0 {
 		applyDataOfCurrentTxn.ApplicationID = appIDToSave
 	}
@@ -153,7 +163,7 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 	}
 	groupIndex := tracer.relativeGroupIndex()
 	var appIDToSave basics.AppIndex
-	if cx.TxnGroup[groupIndex].ApplicationID == 0 {
+	if cx.TxnGroup[groupIndex].SignedTxn.Txn.ApplicationID == 0 {
 		// app creation
 		appIDToSave = cx.AppID()
 	}

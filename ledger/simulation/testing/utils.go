@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -56,6 +57,35 @@ func (info TxnInfo) NewTxn(txn txntest.Txn) txntest.Txn {
 	txn.GenesisHash = info.LatestHeader.GenesisHash
 	txn.FillDefaults(info.CurrentProtocolParams())
 	return txn
+}
+
+func (info TxnInfo) InnerTxn(parent transactions.SignedTxn, inner txntest.Txn) txntest.Txn {
+	inner.FirstValid = parent.Txn.FirstValid
+	inner.LastValid = parent.Txn.LastValid
+	inner.FillDefaults(info.CurrentProtocolParams())
+	return inner
+}
+
+// InnerTxnGroup calculates and assigns the GroupID to the passed in transactions. GroupID
+// calculation assumes the consensus parameter UnifyInnerTxIDs is true.
+func InnerTxnGroup(parent transactions.Txid, offset int, inners ...*txntest.Txn) []transactions.SignedTxn {
+	if len(inners) == 1 {
+		return []transactions.SignedTxn{inners[0].SignedTxn()}
+	}
+
+	var group transactions.TxGroup
+	for i, inner := range inners {
+		innerID := inner.Txn().InnerID(parent, offset+i)
+		group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(innerID))
+	}
+
+	groupID := crypto.HashObj(group)
+	stxns := make([]transactions.SignedTxn, len(inners))
+	for i := range inners {
+		inners[i].Group = groupID
+		stxns[i] = inners[i].SignedTxn()
+	}
+	return stxns
 }
 
 func PrepareSimulatorTest(t *testing.T) (l *data.Ledger, accounts []Account, txnInfo TxnInfo) {

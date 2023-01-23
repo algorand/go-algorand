@@ -727,227 +727,179 @@ int 1`,
 	})
 }
 
-// // TestPooledFeesAcrossSignedAndUnsigned tests that the simulator's transaction group checks
-// // allow for pooled fees across a mix of signed and unsigned transactions.
-// // Transaction 1 is a signed transaction with not enough fees paid on its own.
-// // Transaction 2 is an unsigned transaction with enough fees paid to cover transaction 1.
-// func TestPooledFeesAcrossSignedAndUnsigned(t *testing.T) {
-// 	partitiontest.PartitionTest(t)
-// 	t.Parallel()
+// TestPooledFeesAcrossSignedAndUnsigned tests that the simulator's transaction group checks
+// allow for pooled fees across a mix of signed and unsigned transactions.
+// Transaction 1 is a signed transaction with not enough fees paid on its own.
+// Transaction 2 is an unsigned transaction with enough fees paid to cover transaction 1.
+func TestPooledFeesAcrossSignedAndUnsigned(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-// 	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-// 	defer l.Close()
-// 	s := simulation.MakeSimulator(l)
-// 	sender1 := accounts[0].Addr
-// 	sender2 := accounts[1].Addr
+	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+		sender1 := accounts[0]
+		sender2 := accounts[1]
 
-// 	txnHeader1 := makeTxnHeader(sender1)
-// 	txnHeader2 := makeTxnHeader(sender2)
-// 	txnHeader1.Fee = basics.MicroAlgos{Raw: txnHeader1.Fee.Raw - 100}
-// 	txnHeader2.Fee = basics.MicroAlgos{Raw: txnHeader2.Fee.Raw + 100}
+		pay1 := txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender1.Addr,
+			Receiver: sender2.Addr,
+			Amount:   1_000_000,
+			Fee:      txnInfo.CurrentProtocolParams().MinTxnFee - 100,
+		})
+		pay2 := txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender2.Addr,
+			Receiver: sender1.Addr,
+			Amount:   0,
+			Fee:      txnInfo.CurrentProtocolParams().MinTxnFee + 100,
+		})
 
-// 	// Send money back and forth
-// 	txgroup := []transactions.SignedTxn{
-// 		{
-// 			Txn: transactions.Transaction{
-// 				Type:   protocol.PaymentTx,
-// 				Header: txnHeader1,
-// 				PaymentTxnFields: transactions.PaymentTxnFields{
-// 					Receiver: sender2,
-// 					Amount:   basics.MicroAlgos{Raw: 1000000},
-// 				},
-// 			},
-// 		},
-// 		{
-// 			Txn: transactions.Transaction{
-// 				Type:   protocol.PaymentTx,
-// 				Header: txnHeader2,
-// 				PaymentTxnFields: transactions.PaymentTxnFields{
-// 					Receiver: sender1,
-// 					Amount:   basics.MicroAlgos{Raw: 0},
-// 				},
-// 			},
-// 		},
-// 	}
+		txntest.Group(&pay1, &pay2)
 
-// 	err := attachGroupID(txgroup)
-// 	require.NoError(t, err)
+		// sign pay1 only
+		signedPay1 := pay1.Txn().Sign(sender1.Sk)
+		signedPay2 := pay2.SignedTxn()
 
-// 	// add signature to txn 1
-// 	signatureSecrets := accounts[0].Sk
-// 	txgroup[0] = txgroup[0].Txn.Sign(signatureSecrets)
+		return simulationTestCase{
+			input: []transactions.SignedTxn{signedPay1, signedPay2},
+			expected: simulation.Result{
+				Version: 1,
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{}, {
+								MissingSignature: true,
+							},
+						},
+					},
+				},
+				WouldSucceed: false,
+			},
+		}
+	})
+}
 
-// 	_, err = s.Simulate(txgroup)
-// 	require.NoError(t, err)
-// }
+func TestSimulateFailureInformation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-// // > Detailed Simulate
+	// Test FailedAt for each program failure
+	for i := 0; i < 3; i++ {
+		i := i
+		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+				sender := accounts[0]
 
-// const logProgram = `#pragma version 6
-// byte "message"
-// log
-// int 1`
+				// The loop variable i indicates which inner transaction will fail.
+				// TODO: explain the setup for this test more
+				// TODO: additional failure conditions would be in the top-level app call before/between/after inners
 
-// func TestSimulateResultLogs(t *testing.T) {
-// 	partitiontest.PartitionTest(t)
-// 	t.Parallel()
+				futureAppID := basics.AppIndex(2)
+				fundApp := txnInfo.NewTxn(txntest.Txn{
+					Type:     protocol.PaymentTx,
+					Sender:   sender.Addr,
+					Receiver: futureAppID.Address(),
+					Amount:   403_000, // 400_000 min balance plus 3_000 for 3 txns
+				})
+				createApp := txnInfo.NewTxn(txntest.Txn{
+					Type:            protocol.ApplicationCallTx,
+					Sender:          sender.Addr,
+					ApplicationID:   0,
+					ApplicationArgs: [][]byte{uint64ToBytes(uint64(3 - i))},
+					ApprovalProgram: `#pragma version 6
+int 3                             // [index(3)]
+prepare_txn:
+	itxn_begin                    // [index]
+	int appl                      // [index, appl]
+	itxn_field TypeEnum           // [index]
+	int NoOp                      // [index, NoOp]
+	itxn_field OnCompletion       // [index]
+	byte 0x068101                 // [index, 0x068101]
+	itxn_field ClearStateProgram  // [index]
+app_arg_check:
+    // #pragma version 6; int 1;
+	byte 0x068101                 // [index, 0x068101]
+	// #pragma version 6; int 0;
+	byte 0x068100                 // [index, 0x068101, 0x068100]
+	dig 2                         // [index, 0x068101, 0x068100, index]
+	txn ApplicationArgs 0         // [index, 0x068101, 0x068100, index, args[0]]
+	btoi                          // [index, 0x068101, 0x068100, index, btoi(args[0])]
+	==                            // [index, 0x068101, 0x068100, index=?=btoi(args[0])]
+	select                        // [index, index==btoi(args[0]) ? 0x068100 : 0x068101]
+	itxn_field ApprovalProgram    // [index]
+	itxn_submit                   // [index]
+decrement_and_loop:
+	int 1                         // [index, 1]
+	-                             // [index - 1]
+	dup                           // [index - 1, index - 1]
+	bnz prepare_txn               // [index - 1]
+pop                               // []
+int 1                             // [1]
+`,
+					ClearStateProgram: `#pragma version 6
+int 1`,
+				})
 
-// 	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-// 	defer l.Close()
-// 	s := simulation.MakeSimulator(l)
-// 	sender := accounts[0].Addr
+				txntest.Group(&fundApp, &createApp)
 
-// 	// Compile approval program
-// 	ops, err := logic.AssembleString(logProgram)
-// 	require.NoError(t, err, ops.Errors)
-// 	approvalProg := ops.Program
+				signedFundApp := fundApp.Txn().Sign(sender.Sk)
+				signedCreateApp := createApp.Txn().Sign(sender.Sk)
 
-// 	// Compile clear program
-// 	ops, err = logic.AssembleString(trivialAVMProgram)
-// 	require.NoError(t, err, ops.Errors)
-// 	clearStateProg := ops.Program
+				var expectedInnerTxns []transactions.SignedTxnWithAD
+				for innerIndex := 0; innerIndex <= i; innerIndex++ {
+					innerTxn := transactions.SignedTxnWithAD{
+						SignedTxn: txnInfo.InnerTxn(signedFundApp, txntest.Txn{
+							Type:              protocol.ApplicationCallTx,
+							Sender:            futureAppID.Address(),
+							ApprovalProgram:   []byte{0x06, 0x81, 0x01},
+							ClearStateProgram: []byte{0x06, 0x81, 0x01},
+						}).SignedTxn(),
+						ApplyData: transactions.ApplyData{
+							ApplicationID: futureAppID + basics.AppIndex(innerIndex+1),
+							EvalDelta: transactions.EvalDelta{
+								GlobalDelta: basics.StateDelta{},
+								LocalDeltas: map[uint64]basics.StateDelta{},
+							},
+						},
+					}
+					if innerIndex == i {
+						innerTxn.SignedTxn.Txn.ApprovalProgram = []byte{0x06, 0x81, 0x00}
+					}
+					expectedInnerTxns = append(expectedInnerTxns, innerTxn)
+				}
 
-// 	txgroup := []transactions.SignedTxn{
-// 		// create app
-// 		{
-// 			Txn: transactions.Transaction{
-// 				Type:   protocol.ApplicationCallTx,
-// 				Header: makeTxnHeader(sender),
-// 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-// 					ApplicationID:     0,
-// 					ApprovalProgram:   approvalProg,
-// 					ClearStateProgram: clearStateProg,
-// 					LocalStateSchema: basics.StateSchema{
-// 						NumUint:      0,
-// 						NumByteSlice: 0,
-// 					},
-// 					GlobalStateSchema: basics.StateSchema{
-// 						NumUint:      0,
-// 						NumByteSlice: 0,
-// 					},
-// 				},
-// 			},
-// 		},
-// 	}
-
-// 	txgroup[0] = txgroup[0].Txn.Sign(accounts[0].Sk)
-
-// 	result, err := s.Simulate(txgroup)
-// 	require.NoError(t, err)
-// 	require.True(t, result.WouldSucceed)
-// 	require.Equal(t, 1, len(result.TxnGroups))
-// 	require.Equal(t, 1, len(result.TxnGroups[0].Txns))
-
-// 	actualTxnWithAD := result.TxnGroups[0].Txns[0].Txn
-// 	require.Equal(t, protocol.ApplicationCallTx, actualTxnWithAD.Txn.Type)
-// 	require.NotEmpty(t, actualTxnWithAD.ApplyData)
-// 	require.Len(t, actualTxnWithAD.ApplyData.EvalDelta.Logs, 1)
-// 	require.Equal(t, "message", actualTxnWithAD.ApplyData.EvalDelta.Logs[0])
-// }
-
-// const plannedFailureProgram = `#pragma version 6
-// int 3                           // [index(3)]
-// prepare_txn:
-// 	itxn_begin                    // [index]
-// 	int appl                      // [index, appl]
-// 	itxn_field TypeEnum           // [index]
-// 	int NoOp                      // [index, NoOp]
-// 	itxn_field OnCompletion       // [index]
-// 	byte 0x068101                 // [index, 0x068101]
-// 	itxn_field ClearStateProgram  // [index]
-// app_arg_check:
-// 	dup													  // [index, index]
-// 	txn ApplicationArgs 0         // [index, index, args[0]]
-// 	btoi                          // [index, index, btoi(args[0])]
-// 	==                            // [index, index=?=btoi(args[0])]
-// 	bnz reject_approval_program   // [index]
-// pass_approval_program:
-// 	byte 0x068101                 // [index, 0x068101]. 0x068101 is #pragma version 6; int 1;
-// 	b submit_and_loop             // [index, 0x068101]
-// reject_approval_program:
-// 	byte 0x068100                 // [index, 0x068100]. 0x068100 is #pragma version 6; int 0;
-// 	b submit_and_loop             // [index, 0x068100]
-// submit_and_loop:
-// 	itxn_field ApprovalProgram    // [index]
-// 	itxn_submit                   // [index]
-// decrement_and_loop:
-// 	int 1                         // [index, 1]
-// 	-                             // [index - 1]
-// 	dup                           // [index - 1, index - 1]
-// 	bnz prepare_txn               // [index - 1]
-// pop                             // []
-// int 1                           // [1]
-// `
-
-// func TestSimulateFailureInformation(t *testing.T) {
-// 	partitiontest.PartitionTest(t)
-// 	t.Parallel()
-
-// 	// Set up simulator
-// 	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-// 	defer l.Close()
-// 	s := simulation.MakeSimulator(l)
-// 	sender := accounts[0].Addr
-
-// 	// Compile approval program
-// 	ops, err := logic.AssembleString(plannedFailureProgram)
-// 	require.NoError(t, err, ops.Errors)
-// 	approvalProg := ops.Program
-
-// 	// Compile clear program
-// 	ops, err = logic.AssembleString(trivialAVMProgram)
-// 	require.NoError(t, err, ops.Errors)
-// 	clearStateProg := ops.Program
-
-// 	// Test FailedAt for each program failure
-// 	for i := 0; i < 3; i++ {
-// 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-// 			txgroup := []transactions.SignedTxn{
-// 				// fund app
-// 				{
-// 					Txn: transactions.Transaction{
-// 						Type:   protocol.PaymentTx,
-// 						Header: makeTxnHeader(sender),
-// 						PaymentTxnFields: transactions.PaymentTxnFields{
-// 							Receiver: basics.AppIndex(2).Address(),
-// 							Amount:   basics.MicroAlgos{Raw: 403000}, // 400000 min balance plus 3000 for 3 txns
-// 						},
-// 					},
-// 				},
-// 				// create app
-// 				{
-// 					Txn: transactions.Transaction{
-// 						Type:   protocol.ApplicationCallTx,
-// 						Header: makeTxnHeader(sender),
-// 						ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-// 							ApplicationID:     0,
-// 							ApplicationArgs:   [][]byte{uint64ToBytes(uint64(3 - i))},
-// 							ApprovalProgram:   approvalProg,
-// 							ClearStateProgram: clearStateProg,
-// 							LocalStateSchema: basics.StateSchema{
-// 								NumUint:      0,
-// 								NumByteSlice: 0,
-// 							},
-// 							GlobalStateSchema: basics.StateSchema{
-// 								NumUint:      0,
-// 								NumByteSlice: 0,
-// 							},
-// 						},
-// 					},
-// 				},
-// 			}
-
-// 			err = attachGroupID(txgroup)
-// 			require.NoError(t, err)
-
-// 			result, err := s.Simulate(txgroup)
-// 			require.NoError(t, err)
-// 			require.False(t, result.WouldSucceed)
-// 			require.Contains(t, result.TxnGroups[0].FailureMessage, "rejected by ApprovalProgram")
-// 			require.Equal(t, simulation.TxnPath{1, uint64(i)}, result.TxnGroups[0].FailedAt)
-// 		})
-// 	}
-// }
+				return simulationTestCase{
+					input:         []transactions.SignedTxn{signedFundApp, signedCreateApp},
+					expectedError: "rejected by ApprovalProgram",
+					expected: simulation.Result{
+						Version: 1,
+						TxnGroups: []simulation.TxnGroupResult{
+							{
+								Txns: []simulation.TxnResult{
+									{}, {
+										Txn: transactions.SignedTxnWithAD{
+											ApplyData: transactions.ApplyData{
+												ApplicationID: futureAppID,
+												EvalDelta: transactions.EvalDelta{
+													GlobalDelta: basics.StateDelta{},
+													LocalDeltas: map[uint64]basics.StateDelta{},
+													InnerTxns:   expectedInnerTxns,
+												},
+											},
+										},
+									},
+								},
+								FailedAt: simulation.TxnPath{1, uint64(i)},
+							},
+						},
+						WouldSucceed: false,
+					},
+				}
+			})
+		})
+	}
+}
 
 // func TestSimulateMissingSignatures(t *testing.T) {
 // 	partitiontest.PartitionTest(t)
