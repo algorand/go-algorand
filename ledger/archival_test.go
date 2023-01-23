@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,12 +29,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-deadlock"
-
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -111,8 +110,8 @@ func getInitState() (genesisInitState ledgercore.InitState) {
 	blk.FeeSink = testSinkAddr
 
 	accts := make(map[basics.Address]basics.AccountData)
-	accts[testPoolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890})
-	accts[testSinkAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890})
+	accts[testPoolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890})
+	accts[testSinkAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890})
 
 	genesisInitState.Accounts = accts
 	genesisInitState.Block = blk
@@ -190,13 +189,6 @@ func TestArchivalRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Start in archival mode, add 2K blocks, restart, ensure all blocks are there
-
-	// disable deadlock checking code
-	deadlockDisable := deadlock.Opts.Disable
-	deadlock.Opts.Disable = true
-	defer func() {
-		deadlock.Opts.Disable = deadlockDisable
-	}()
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	dbPrefix := filepath.Join(t.TempDir(), dbName)
@@ -338,13 +330,6 @@ func TestArchivalCreatables(t *testing.T) {
 	// restart, ensure all assets are there in index unless they were
 	// deleted
 
-	// disable deadlock checking code
-	deadlockDisable := deadlock.Opts.Disable
-	deadlock.Opts.Disable = true
-	defer func() {
-		deadlock.Opts.Disable = deadlockDisable
-	}()
-
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	dbPrefix := filepath.Join(t.TempDir(), dbName)
 
@@ -377,7 +362,7 @@ func TestArchivalCreatables(t *testing.T) {
 		_, err := rand.Read(creator[:])
 		require.NoError(t, err)
 		creators = append(creators, creator)
-		genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
+		genesisInitState.Accounts[creator] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
 	}
 
 	// open ledger
@@ -690,11 +675,6 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
-	deadlockDisable := deadlock.Opts.Disable
-	deadlock.Opts.Disable = true
-	defer func() {
-		deadlock.Opts.Disable = deadlockDisable
-	}()
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	dbPrefix := filepath.Join(t.TempDir(), dbName)
@@ -712,7 +692,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 		addr := basics.Address{}
 		_, err := rand.Read(addr[:])
 		require.NoError(t, err)
-		br := basics.BalanceRecord{AccountData: basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890}), Addr: addr}
+		br := basics.BalanceRecord{AccountData: basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890}), Addr: addr}
 		genesisInitState.Accounts[addr] = br.AccountData
 		balanceRecords = append(balanceRecords, br)
 	}

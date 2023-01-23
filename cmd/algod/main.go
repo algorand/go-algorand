@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -344,7 +344,17 @@ func run() int {
 
 		// Send a heartbeat event every 10 minutes as a sign of life
 		go func() {
-			ticker := time.NewTicker(10 * time.Minute)
+			var interval time.Duration
+			defaultIntervalSecs := config.GetDefaultLocal().HeartbeatUpdateInterval
+			switch {
+			case cfg.HeartbeatUpdateInterval <= 0: // use default
+				interval = time.Second * time.Duration(defaultIntervalSecs)
+			case cfg.HeartbeatUpdateInterval < 60: // min frequency 1 minute
+				interval = time.Minute
+			default:
+				interval = time.Second * time.Duration(cfg.HeartbeatUpdateInterval)
+			}
+			ticker := time.NewTicker(interval)
 			defer ticker.Stop()
 
 			sendHeartbeat := func() {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,11 +28,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-// BlockListener represents an object that needs to get notified on new blocks.
-type BlockListener interface {
-	OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta)
-}
-
 type blockDeltaPair struct {
 	block bookkeeping.Block
 	delta ledgercore.StateDelta
@@ -41,7 +36,7 @@ type blockDeltaPair struct {
 type blockNotifier struct {
 	mu            deadlock.Mutex
 	cond          *sync.Cond
-	listeners     []BlockListener
+	listeners     []ledgercore.BlockListener
 	pendingBlocks []blockDeltaPair
 	running       bool
 	// closing is the waitgroup used to synchronize closing the worker goroutine. It's being increased during loadFromDisk, and the worker is responsible to call Done on it once it's aborting it's goroutine. The close function waits on this to complete.
@@ -96,7 +91,7 @@ func (bn *blockNotifier) loadFromDisk(l ledgerForTracker, _ basics.Round) error 
 	return nil
 }
 
-func (bn *blockNotifier) register(listeners []BlockListener) {
+func (bn *blockNotifier) register(listeners []ledgercore.BlockListener) {
 	bn.mu.Lock()
 	defer bn.mu.Unlock()
 
