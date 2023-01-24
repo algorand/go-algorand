@@ -29,6 +29,7 @@ import (
 
 func TestLoadConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -42,6 +43,7 @@ func TestLoadConfig(t *testing.T) {
 
 func TestLoadMissingConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -53,6 +55,7 @@ func TestLoadMissingConfig(t *testing.T) {
 
 func TestGenerateGenesis(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -72,6 +75,7 @@ func TestGenerateGenesis(t *testing.T) {
 
 func TestValidate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
