@@ -88,9 +88,10 @@ func TestCreateSignedTxBasic(t *testing.T) {
 	}
 }
 
-func TestCreateSignedTxAssets(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies config.Consensus
+func TestCreateSignedTxAssets(t *testing.T) {
 	//	assets per account should not exceed limit
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	params := config.Consensus[protocol.ConsensusCurrentVersion]
 	secretDst := keypair()
@@ -126,8 +127,9 @@ func TestCreateSignedTxAssets(t *testing.T) { //nolint:paralleltest // Not paral
 	require.Equal(t, protocol.PaymentTx, networkState.txnState)
 }
 
-func TestAccountsNeeded(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies config.Consensus
+func TestAccountsNeeded(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	params := config.Consensus[protocol.ConsensusCurrentVersion]
 	params.MaxAppsCreated = 10
