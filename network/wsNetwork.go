@@ -834,11 +834,11 @@ func (wn *WebsocketNetwork) Start() {
 		wn.scheme = "http"
 	}
 
-	// if we are set up for connection deduplication, attach the handlers for ID Verification
-	if wn.config.ConnectionDeduplicationName != "" {
+	// if the network has a public address, use that as the name for connection deduplication
+	if wn.config.PublicAddress != "" {
 		wn.RegisterHandlers(identityHandlers)
 	}
-	wn.identityScheme = NewIdentityChallengeScheme(wn.config.ConnectionDeduplicationName)
+	wn.identityScheme = NewIdentityChallengeScheme(wn.config.PublicAddress)
 
 	wn.meshUpdateRequests <- meshRequest{false, nil}
 	if wn.prioScheme != nil {

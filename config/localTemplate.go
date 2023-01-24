@@ -53,18 +53,14 @@ type Local struct {
 	GossipFanout int    `version[0]:"4"`
 	NetAddress   string `version[0]:""`
 
-	// wsNetwork.go
-	// if set, the node will use Identity based Connection Deduplication.
-	// Identity Challenges are initiated with an Address field which must match the intended recipient's address
-	// this should be the host:port of this algod
-	// received Identity Challenges which do not correctly specify this Address will be ignored.
-	// the peering will go forward without any further participation in identification.
-	ConnectionDeduplicationName string `version[27]:""`
-
 	// 1 * time.Minute = 60000000000 ns
 	ReconnectTime time.Duration `version[0]:"60" version[1]:"60000000000"`
 
-	// what we should tell people to connect to
+	// The public address to connect to that is advertised to other nodes.
+	// For MainNet relays, make sure this entry includes the full SRV host name
+	// plus the publicly-accessible port number.
+	// A valid entry will avoid "self-gossip" and is used for identity exchange
+	// to deduplicate redundant connections
 	PublicAddress string `version[0]:""`
 
 	MaxConnectionsPerIP int `version[3]:"30"`

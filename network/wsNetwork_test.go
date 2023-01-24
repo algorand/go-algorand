@@ -1144,7 +1144,7 @@ func freeHostAndPort() string {
 }
 
 // TestPeeringWithIdentityChallenge tests the happy path of connecting with identity challenge:
-// - both peers have correctly set ConnectionDeduplicationName
+// - both peers have correctly set PublicAddress
 // - both should exchange identities and verify
 // - both peers should be able to deduplicate connections
 func TestPeeringWithIdentityChallenge(t *testing.T) {
@@ -1157,7 +1157,7 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	netA.config.NetAddress = addrA
 	gossipA, err := netA.addrToGossipAddr(netA.config.NetAddress)
 	require.NoError(t, err)
-	netA.config.ConnectionDeduplicationName = addrA
+	netA.config.PublicAddress = addrA
 
 	netB := makeTestWebsocketNode(t)
 	netB.identityTracker = newDummyIdentTracker()
@@ -1166,7 +1166,7 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	netB.config.NetAddress = addrB
 	gossipB, err := netB.addrToGossipAddr(netB.config.NetAddress)
 	require.NoError(t, err)
-	netB.config.ConnectionDeduplicationName = addrB
+	netB.config.PublicAddress = addrB
 
 	netA.Start()
 	defer netA.Stop()
@@ -1254,7 +1254,7 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	netA.config.NetAddress = addrA
 	gossipA, err := netA.addrToGossipAddr(netA.config.NetAddress)
 	require.NoError(t, err)
-	//netA.config.ConnectionDeduplicationName = addrA
+	//netA.config.PublicAddress = addrA
 
 	netB := makeTestWebsocketNode(t)
 	netB.identityTracker = newDummyIdentTracker()
@@ -1263,7 +1263,7 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	netB.config.NetAddress = addrB
 	gossipB, err := netB.addrToGossipAddr(netB.config.NetAddress)
 	require.NoError(t, err)
-	netB.config.ConnectionDeduplicationName = addrB
+	netB.config.PublicAddress = addrB
 
 	netA.Start()
 	defer netA.Stop()
@@ -1301,7 +1301,7 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 }
 
 // TestPeeringBadIdentityChallenge will confirm that if the reciever can't match
-// the Address in the challenge to its ConnectionDeduplicationName, identities aren't exchanged
+// the Address in the challenge to its PublicAddress, identities aren't exchanged
 func TestPeeringBadIdentityChallenge(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1312,7 +1312,7 @@ func TestPeeringBadIdentityChallenge(t *testing.T) {
 	netA.config.NetAddress = addrA
 	gossipA, err := netA.addrToGossipAddr(netA.config.NetAddress)
 	require.NoError(t, err)
-	netA.config.ConnectionDeduplicationName = addrA
+	netA.config.PublicAddress = addrA
 
 	netB := makeTestWebsocketNode(t)
 	netB.identityTracker = newDummyIdentTracker()
@@ -1321,7 +1321,7 @@ func TestPeeringBadIdentityChallenge(t *testing.T) {
 	netB.config.NetAddress = addrB
 	gossipB, err := netB.addrToGossipAddr(netB.config.NetAddress)
 	require.NoError(t, err)
-	netB.config.ConnectionDeduplicationName = "Not meant for me!"
+	netB.config.PublicAddress = "Not meant for me!"
 
 	netA.Start()
 	defer netA.Stop()
@@ -1375,7 +1375,7 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	netA.config.NetAddress = addrA
 	gossipA, err := netA.addrToGossipAddr(netA.config.NetAddress)
 	require.NoError(t, err)
-	netA.config.ConnectionDeduplicationName = addrA
+	netA.config.PublicAddress = addrA
 
 	netB := makeTestWebsocketNode(t)
 	netB.identityTracker = newDummyIdentTracker()
@@ -1384,7 +1384,7 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	netB.config.NetAddress = addrB
 	gossipB, err := netB.addrToGossipAddr(netB.config.NetAddress)
 	require.NoError(t, err)
-	//netB.config.ConnectionDeduplicationName = addrB
+	//netB.config.PublicAddress = addrB
 
 	netA.Start()
 	defer netA.Stop()
