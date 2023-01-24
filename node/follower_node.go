@@ -65,9 +65,6 @@ type AlgorandFollowerNode struct {
 
 	log logging.Logger
 
-	// syncStatusMu used for locking lastRoundTimestamp and hasSyncedSinceStartup
-	// syncStatusMu added so OnNewBlock wouldn't be blocked by oldKeyDeletionThread during catchup
-	syncStatusMu          deadlock.Mutex
 	lastRoundTimestamp    time.Time
 	hasSyncedSinceStartup bool
 
@@ -91,7 +88,7 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	node.config = cfg
 
 	// tie network, block fetcher, and agreement services together
-	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node)
+	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, nil)
 	if err != nil {
 		log.Errorf("could not create websocket node: %v", err)
 		return nil, err
@@ -99,7 +96,6 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	p2pNode.DeregisterMessageInterest(protocol.AgreementVoteTag)
 	p2pNode.DeregisterMessageInterest(protocol.ProposalPayloadTag)
 	p2pNode.DeregisterMessageInterest(protocol.VoteBundleTag)
-	p2pNode.DeregisterMessageInterest(protocol.StateProofSigTag)
 	node.net = p2pNode
 
 	// load stored data
@@ -254,77 +250,24 @@ func (node *AlgorandFollowerNode) GetPendingTransaction(_ transactions.Txid) (re
 
 // Status returns a StatusReport structure reporting our status as Active and with our ledger's LastRound
 func (node *AlgorandFollowerNode) Status() (s StatusReport, err error) {
-	node.syncStatusMu.Lock()
 	s.LastRoundTimestamp = node.lastRoundTimestamp
 	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
-	node.syncStatusMu.Unlock()
 
 	node.mu.Lock()
 	defer node.mu.Unlock()
 	if node.catchpointCatchupService != nil {
-		// we're in catchpoint catchup mode.
-		lastBlockHeader := node.catchpointCatchupService.GetLatestBlockHeader()
-		s.LastRound = lastBlockHeader.Round
-		s.LastVersion = lastBlockHeader.CurrentProtocol
-		s.NextVersion, s.NextVersionRound, s.NextVersionSupported = lastBlockHeader.NextVersionInfo()
-		s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
-
-		// for now, I'm leaving this commented out. Once we refactor some of the ledger locking mechanisms, we
-		// should be able to make this call work.
-		//s.LastCatchpoint = node.ledger.GetLastCatchpointLabel()
-
-		// report back the catchpoint catchup progress statistics
-		stats := node.catchpointCatchupService.GetStatistics()
-		s.Catchpoint = stats.CatchpointLabel
-		s.CatchpointCatchupTotalAccounts = stats.TotalAccounts
-		s.CatchpointCatchupProcessedAccounts = stats.ProcessedAccounts
-		s.CatchpointCatchupVerifiedAccounts = stats.VerifiedAccounts
-		s.CatchpointCatchupTotalKVs = stats.TotalKVs
-		s.CatchpointCatchupProcessedKVs = stats.ProcessedKVs
-		s.CatchpointCatchupVerifiedKVs = stats.VerifiedKVs
-		s.CatchpointCatchupTotalBlocks = stats.TotalBlocks
-		s.CatchpointCatchupAcquiredBlocks = stats.AcquiredBlocks
-		s.CatchupTime = time.Since(stats.StartTime)
-	} else {
-		// we're not in catchpoint catchup mode
-		var b bookkeeping.BlockHeader
-		s.LastRound = node.ledger.Latest()
-		b, err = node.ledger.BlockHdr(s.LastRound)
-		if err != nil {
-			return
-		}
-		s.LastVersion = b.CurrentProtocol
-		s.NextVersion, s.NextVersionRound, s.NextVersionSupported = b.NextVersionInfo()
-
-		s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
-		s.LastCatchpoint = node.ledger.GetLastCatchpointLabel()
-		s.SynchronizingTime = node.catchupService.SynchronizingTime()
-		s.CatchupTime = node.catchupService.SynchronizingTime()
-
-		s.UpgradePropose = b.UpgradeVote.UpgradePropose
-		s.UpgradeApprove = b.UpgradeApprove
-		s.UpgradeDelay = uint64(b.UpgradeVote.UpgradeDelay)
-		s.NextProtocolVoteBefore = b.NextProtocolVoteBefore
-		s.NextProtocolApprovals = b.UpgradeState.NextProtocolApprovals
-
+		return catchpointCatchupStatus(node.catchpointCatchupService.GetLatestBlockHeader(), node.catchpointCatchupService.GetStatistics()), nil
 	}
-
-	return
+	return latestBlockStatus(node.ledger, node.catchupService)
 }
 
 // GenesisID returns the ID of the genesis node.
 func (node *AlgorandFollowerNode) GenesisID() string {
-	node.mu.Lock()
-	defer node.mu.Unlock()
-
 	return node.genesisID
 }
 
 // GenesisHash returns the hash of the genesis configuration.
 func (node *AlgorandFollowerNode) GenesisHash() crypto.Digest {
-	node.mu.Lock()
-	defer node.mu.Unlock()
-
 	return node.genesisHash
 }
 
@@ -368,10 +311,8 @@ func (node *AlgorandFollowerNode) OnNewBlock(block bookkeeping.Block, _ ledgerco
 	if node.ledger.Latest() > block.Round() {
 		return
 	}
-	node.syncStatusMu.Lock()
 	node.lastRoundTimestamp = time.Now()
 	node.hasSyncedSinceStartup = true
-	node.syncStatusMu.Unlock()
 }
 
 // StartCatchup starts the catchpoint mode and attempt to get to the provided catchpoint
@@ -467,25 +408,6 @@ func (node *AlgorandFollowerNode) SetCatchpointCatchupMode(catchpointCatchupMode
 	}()
 	return
 
-}
-
-// AssembleBlock returns an error in follower mode
-func (node *AlgorandFollowerNode) AssembleBlock(_ basics.Round) (agreement.ValidatedBlock, error) {
-	return validatedBlock{}, fmt.Errorf("cannot run AssembleBlock in follower mode")
-}
-
-// VotingKeys no-ops in follower mode
-func (node *AlgorandFollowerNode) VotingKeys(_, _ basics.Round) []account.ParticipationRecordForRound {
-	return []account.ParticipationRecordForRound{}
-}
-
-// Record no-ops in follower mode.
-func (node *AlgorandFollowerNode) Record(_ basics.Address, _ basics.Round, _ account.ParticipationAction) {
-}
-
-// IsParticipating implements network.NodeInfo
-func (node *AlgorandFollowerNode) IsParticipating() bool {
-	return false
 }
 
 // SetSyncRound sets the minimum sync round on the catchup service

@@ -89,6 +89,4 @@ func TestErrors(t *testing.T) {
 	require.Error(t, node.AppendParticipationKeys(account.ParticipationID{}, account.StateProofKeys{}))
 	_, err = node.InstallParticipationKey([]byte{})
 	require.Error(t, err)
-	_, err = node.AssembleBlock(basics.Round(0))
-	require.Error(t, err)
 }
