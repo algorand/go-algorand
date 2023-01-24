@@ -111,6 +111,8 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 	//     Responses:
 	//       200:
 	//         description: OK.
+	//       400:
+	//         description: Node not ready yet.
 	//       500:
 	//         description: Internal Error.
 	//       default: { description: Unknown Error }
