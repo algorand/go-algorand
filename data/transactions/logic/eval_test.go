@@ -4918,6 +4918,9 @@ func TestBytesCompare(t *testing.T) {
 	testPanics(t, "byte 0x10; int 65; bzero; b>", 4)
 	testAccepts(t, "byte 0x1010; byte 0x10; b<; !", 4)
 
+	testAccepts(t, "byte 0x2000; byte 0x70; b<; !", 4)
+	testAccepts(t, "byte 0x7000; byte 0x20; b<; !", 4)
+
 	// All zero input are interesting, because they lead to bytes.Compare being
 	// called with nils.  Show that is correct.
 	testAccepts(t, "byte 0x10; byte 0x00; b<; !", 4)
