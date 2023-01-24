@@ -27,12 +27,13 @@ import (
 )
 
 func testVersioning(t *testing.T, inMemory bool) {
-	acc, err := MakeAccessor("fn.db", false, inMemory)
+	fn := t.Name() + "fn.db"
+	acc, err := MakeAccessor(fn, false, inMemory)
 	require.NoError(t, err)
 	if !inMemory {
-		defer os.Remove("fn.db")
-		defer os.Remove("fn.db-shm")
-		defer os.Remove("fn.db-wal")
+		defer os.Remove(fn)
+		defer os.Remove(fn + "-shm")
+		defer os.Remove(fn + "-wal")
 	}
 
 	conn, err := acc.Handle.Conn(context.Background())
@@ -89,15 +90,16 @@ func testVersioning(t *testing.T, inMemory bool) {
 
 }
 
-func TestVersioning(t *testing.T) { //nolint:paralleltest // Modifies global database tables.
+func TestVersioning(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	//nolint:paralleltest // Subtests modify shared state.
 	t.Run("InMem", func(t *testing.T) {
+		t.Parallel()
 		testVersioning(t, true)
 	})
-	//nolint:paralleltest // Subtests modify shared state.
 	t.Run("OnDisk", func(t *testing.T) {
+		t.Parallel()
 		testVersioning(t, false)
 	})
 }
