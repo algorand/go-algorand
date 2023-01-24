@@ -1130,6 +1130,9 @@ func (pool *TransactionPool) waitForBlockAssembly(round basics.Round, deadline t
 		pool.assemblyMu.Lock()
 
 		if pool.assemblyResults.roundStartedEvaluating > round {
+			// this case is expected to happen only if the transaction pool was able to construct *two* rounds during the time we were trying to assemble the empty block.
+			// while this is extremely unlikely, we need to handle this. the handling it quite straight-forward :
+			// since the network is already ahead of us, there is no issue here in not generating a block ( since the block would get discarded anyway )
 			pool.log.Infof("AssembleBlock: requested round is behind transaction pool round after timing out %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
 			return nil, ErrStaleBlockAssemblyRequest
 		}
@@ -1156,6 +1159,9 @@ func (pool *TransactionPool) waitForBlockAssembly(round basics.Round, deadline t
 		return nil, fmt.Errorf("AssemblyBlock: encountered error for round %d: %v", round, pool.assemblyResults.err)
 	}
 	if pool.assemblyResults.roundStartedEvaluating > round {
+		// this scenario should not happen unless the txpool is receiving the new blocks via OnNewBlock
+		// with "jumps" between consecutive blocks ( which is why it's a warning )
+		// The "normal" use case is evaluated on the top of the function.
 		pool.log.Warnf("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
 		return nil, ErrStaleBlockAssemblyRequest
 	} else if pool.assemblyResults.roundStartedEvaluating == round.SubSaturate(1) {

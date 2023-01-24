@@ -190,10 +190,7 @@ func (p *player) issueSoftVote(r routerHandle) (actions []action) {
 	if p.Period > a.Proposal.OriginalPeriod {
 		// leader sent reproposal: vote if we saw a quorum for that hash, even if we saw nextStatus.Bottom
 		if nextStatus.Proposal != bottom && nextStatus.Proposal == a.Proposal {
-			// TODO: double check this speculative block assembly, we're going with the same action as below, so it's okay?
-			actions = append(actions, a)
-			actions = p.startSpeculativeBlockAsm(r, actions, false)
-			return actions
+			return append(actions, a)
 		}
 		return nil
 	}
@@ -241,6 +238,10 @@ func (p *player) issueNextVote(r routerHandle) []action {
 }
 
 func (p *player) startSpeculativeBlockAsm(r routerHandle, actions []action, onlyIfStarted bool) []action {
+	if p.Period != 0 {
+		// If not period 0, cautiously do a simpler protocol.
+		return actions
+	}
 	// get the best proposal we have
 	re := readLowestEvent{T: readLowestPayload, Round: p.Round, Period: p.Period}
 	re = r.dispatch(*p, re, proposalMachineRound, p.Round, p.Period, 0).(readLowestEvent)

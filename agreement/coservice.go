@@ -82,13 +82,9 @@ func (m *coserviceMonitor) dec(t coserviceType) {
 		m.c = make(map[coserviceType]uint)
 	}
 	if m.c[t] == 0 {
-		for i := 1; i < 10; i++ {
-			_, file, line, ok := runtime.Caller(i)
-			if !ok {
-				break
-			}
-			m.t.Logf("from %s:%d", file, line)
-		}
+		var stack [1000]byte
+		sl := runtime.Stack(stack[:], false)
+		m.t.Log(string(stack[:sl]))
 		m.t.Fatalf("%d: tried to decrement empty coservice queue %v", m.id, t)
 	}
 	m.c[t]--
