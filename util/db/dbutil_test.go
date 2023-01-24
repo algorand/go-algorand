@@ -37,10 +37,11 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestInMemoryDisposal(t *testing.T) { //nolint:paralleltest // Modifies global database tables.
+func TestInMemoryDisposal(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	acc, err := MakeAccessor("fn.db", false, true)
+	acc, err := MakeAccessor(t.Name()+"_fn.db", false, true)
 	require.NoError(t, err)
 	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("create table Service (data blob)")
@@ -55,7 +56,7 @@ func TestInMemoryDisposal(t *testing.T) { //nolint:paralleltest // Modifies glob
 	})
 	require.NoError(t, err)
 
-	anotherAcc, err := MakeAccessor("fn.db", false, true)
+	anotherAcc, err := MakeAccessor(t.Name()+"_fn.db", false, true)
 	require.NoError(t, err)
 	err = anotherAcc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var nrows int
@@ -68,7 +69,7 @@ func TestInMemoryDisposal(t *testing.T) { //nolint:paralleltest // Modifies glob
 
 	acc.Close()
 
-	acc, err = MakeAccessor("fn.db", false, true)
+	acc, err = MakeAccessor(t.Name()+"_fn.db", false, true)
 	require.NoError(t, err)
 	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var nrows int
@@ -84,10 +85,11 @@ func TestInMemoryDisposal(t *testing.T) { //nolint:paralleltest // Modifies glob
 	acc.Close()
 }
 
-func TestInMemoryUniqueDB(t *testing.T) { //nolint:paralleltest // Modifies global database tables.
+func TestInMemoryUniqueDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	acc, err := MakeAccessor("fn.db", false, true)
+	acc, err := MakeAccessor(t.Name()+"_fn.db", false, true)
 	require.NoError(t, err)
 	defer acc.Close()
 	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -103,7 +105,7 @@ func TestInMemoryUniqueDB(t *testing.T) { //nolint:paralleltest // Modifies glob
 	})
 	require.NoError(t, err)
 
-	anotherAcc, err := MakeAccessor("fn2.db", false, true)
+	anotherAcc, err := MakeAccessor(t.Name()+"_fn2.db", false, true)
 	require.NoError(t, err)
 	defer anotherAcc.Close()
 	err = anotherAcc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -118,8 +120,9 @@ func TestInMemoryUniqueDB(t *testing.T) { //nolint:paralleltest // Modifies glob
 	require.NoError(t, err)
 }
 
-func TestDBConcurrency(t *testing.T) { //nolint:paralleltest // Modifies global database tables.
+func TestDBConcurrency(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	fn := fmt.Sprintf("/tmp/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
 	defer cleanupSqliteDb(t, fn)
@@ -236,8 +239,9 @@ func cleanupSqliteDb(t *testing.T, path string) {
 	}
 }
 
-func TestDBConcurrencyRW(t *testing.T) { //nolint:paralleltest // Modifies global database tables.
+func TestDBConcurrencyRW(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	if testing.Short() {
 		// Since it is a long operation and can only be affected by the db package, we can skip this test when running short tests only.
@@ -361,8 +365,9 @@ func (wlc *WarningLogCounter) With(key string, value interface{}) logging.Logger
 }
 
 // Test resetting warning notification
-func TestResettingTransactionWarnDeadline(t *testing.T) { //nolint:paralleltest // Modifies global database tables.
+func TestResettingTransactionWarnDeadline(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	t.Run("expectedWarning", func(t *testing.T) {
 		t.Parallel()
@@ -400,16 +405,18 @@ func TestResettingTransactionWarnDeadline(t *testing.T) { //nolint:paralleltest 
 }
 
 // Test the SetSynchronousMode function
-func TestSetSynchronousMode(t *testing.T) { //nolint:paralleltest // Modifies global database tables.
+func TestSetSynchronousMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	setSynchrounousModeHelper := func(mem bool, ctx context.Context, mode SynchronousMode, fullfsync bool) error {
-		acc, err := MakeAccessor("fn.db", false, mem)
+		fn := t.Name() + "_fn.db"
+		acc, err := MakeAccessor(fn, false, mem)
 		require.NoError(t, err)
 		if !mem {
-			defer os.Remove("fn.db")
-			defer os.Remove("fn.db-shm")
-			defer os.Remove("fn.db-wal")
+			defer os.Remove(fn)
+			defer os.Remove(fn + "-shm")
+			defer os.Remove(fn + "-wal")
 		}
 		defer acc.Close()
 		return acc.SetSynchronousMode(ctx, mode, fullfsync)
@@ -437,16 +444,18 @@ func TestSetSynchronousMode(t *testing.T) { //nolint:paralleltest // Modifies gl
 // TestReadingWhileWriting tests the SQLite behaviour when we're using two transactions, writing with one and reading from the other.
 // it demonstrates that at any time before we're calling Commit, the database content can be read, and it's containing it's pre-transaction
 // value.
-func TestReadingWhileWriting(t *testing.T) { //nolint:paralleltest // Modifies global database tables.
+func TestReadingWhileWriting(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	writeAcc, err := MakeAccessor("fn.db", false, false)
+	fn := t.Name() + "_fn.db"
+	writeAcc, err := MakeAccessor(fn, false, false)
 	require.NoError(t, err)
-	defer os.Remove("fn.db")
-	defer os.Remove("fn.db-shm")
-	defer os.Remove("fn.db-wal")
+	defer os.Remove(fn)
+	defer os.Remove(fn + "-shm")
+	defer os.Remove(fn + "-wal")
 	defer writeAcc.Close()
-	readAcc, err := MakeAccessor("fn.db", true, false)
+	readAcc, err := MakeAccessor(fn, true, false)
 	require.NoError(t, err)
 	defer readAcc.Close()
 	_, err = writeAcc.Handle.Exec("CREATE TABLE foo (a INTEGER, b INTEGER)")
@@ -481,15 +490,17 @@ func TestReadingWhileWriting(t *testing.T) { //nolint:paralleltest // Modifies g
 }
 
 // using Write-Ahead Logging (WAL)
-func TestLockingTableWhileWritingWAL(t *testing.T) { //nolint:paralleltest // Modifies global database tables.
+func TestLockingTableWhileWritingWAL(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	testLockingTableWhileWriting(t, true)
 }
 
 // using the default Rollback Journal
-func TestLockingTableWhileWritingJournal(t *testing.T) { //nolint:paralleltest // Modifies global database tables.
+func TestLockingTableWhileWritingJournal(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	testLockingTableWhileWriting(t, false)
 }
