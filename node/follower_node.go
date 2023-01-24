@@ -65,6 +65,9 @@ type AlgorandFollowerNode struct {
 
 	log logging.Logger
 
+	// syncStatusMu used for locking lastRoundTimestamp and hasSyncedSinceStartup
+	// syncStatusMu added so OnNewBlock wouldn't be blocked by oldKeyDeletionThread during catchup
+	syncStatusMu          deadlock.Mutex
 	lastRoundTimestamp    time.Time
 	hasSyncedSinceStartup bool
 
@@ -250,8 +253,10 @@ func (node *AlgorandFollowerNode) GetPendingTransaction(_ transactions.Txid) (re
 
 // Status returns a StatusReport structure reporting our status as Active and with our ledger's LastRound
 func (node *AlgorandFollowerNode) Status() (s StatusReport, err error) {
+	node.syncStatusMu.Lock()
 	s.LastRoundTimestamp = node.lastRoundTimestamp
 	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
+	node.syncStatusMu.Unlock()
 
 	node.mu.Lock()
 	defer node.mu.Unlock()
@@ -311,8 +316,10 @@ func (node *AlgorandFollowerNode) OnNewBlock(block bookkeeping.Block, _ ledgerco
 	if node.ledger.Latest() > block.Round() {
 		return
 	}
+	node.syncStatusMu.Lock()
 	node.lastRoundTimestamp = time.Now()
 	node.hasSyncedSinceStartup = true
+	node.syncStatusMu.Unlock()
 }
 
 // StartCatchup starts the catchpoint mode and attempt to get to the provided catchpoint
