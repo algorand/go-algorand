@@ -118,5 +118,8 @@ func main() {
 	command.MarkFlagRequired("input")
 	command.MarkFlagRequired("output")
 
-	command.Execute()
+	if err := command.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "An error occurred while running vbconvert: %s.\n", err)
+		os.Exit(1)
+	}
 }
