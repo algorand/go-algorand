@@ -96,6 +96,8 @@ type TransactionPool struct {
 	// stateproofOverflowed indicates that a stateproof transaction was allowed to
 	// exceed the txPoolMaxSize. This flag is reset to false OnNewBlock
 	stateproofOverflowed bool
+
+	isParticipating isParticipating
 }
 
 // BlockEvaluator defines the block evaluator interface exposed by the ledger package.
@@ -109,8 +111,12 @@ type BlockEvaluator interface {
 	ResetTxnBytes()
 }
 
+type isParticipating interface {
+	IsParticipating() bool
+}
+
 // MakeTransactionPool makes a transaction pool.
-func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Logger) *TransactionPool {
+func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Logger, isParticipating isParticipating) *TransactionPool {
 	if cfg.TxPoolExponentialIncreaseFactor < 1 {
 		cfg.TxPoolExponentialIncreaseFactor = 1
 	}
@@ -126,6 +132,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 		txPoolMaxSize:        cfg.TxPoolSize,
 		proposalAssemblyTime: cfg.ProposalAssemblyTime,
 		log:                  log,
+		isParticipating:      isParticipating,
 	}
 	pool.cond.L = &pool.mu
 	pool.assemblyCond.L = &pool.assemblyMu
@@ -591,6 +598,18 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 	}
 
 	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
+
+	// if this node is not participating, then we know AssembleBlock is not needed,
+	// and there is no need to generate and broadcast a block
+	if pool.isParticipating != nil {
+		isPart := pool.isParticipating.IsParticipating()
+		if !isPart {
+			// recomputing is true if we are running in OnNewBlock, and in this
+			// method is used to control whether to build assemblyResults and call
+			// assemblyCond.Broadcast()
+			recomputing = false
+		}
+	}
 
 	transactionGroupStartsTime := time.Time{}
 	if recomputing {

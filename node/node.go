@@ -220,7 +220,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log)
+	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log, node)
 
 	blockListeners := []ledger.BlockListener{
 		node.transactionPool,

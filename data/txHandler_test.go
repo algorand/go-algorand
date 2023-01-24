@@ -782,7 +782,7 @@ func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, 
 }
 
 func makeTestTxHandler(dl *Ledger, cfg config.Local) *TxHandler {
-	tp := pools.MakeTransactionPool(dl.Ledger, cfg, logging.Base())
+	tp := pools.MakeTransactionPool(dl.Ledger, cfg, logging.Base(), nil)
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	opts := TxHandlerOpts{
 		tp, backlogPool, dl, &mocks.MockNetwork{}, "", crypto.Digest{}, cfg,
