@@ -376,8 +376,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 	// resources are computed after ep is constructed because app addresses are
 	// calculated there, and we'd like to use the caching mechanism built into
 	// the EvalParams. Perhaps we can make the computation even lazier, so it is
-	// only computed if needed (some program actually refers to a resource that
-	// isn't available in the old way).
+	// only computed if needed.
 	ep.available = ep.computeAvailability()
 	return ep
 }
@@ -4067,8 +4066,6 @@ func (cx *EvalContext) mutableAccountReference(account stackValue) (basics.Addre
 	if err == nil && accountIdx > uint64(len(cx.txn.Txn.Accounts)) {
 		// There was no error, but accountReference has signaled that accountIdx
 		// is not for mutable ops (because it can't encode it in EvalDelta)
-		// This also tells us that account.address() will work.
-		addr, _ := account.address()
 		err = fmt.Errorf("invalid Account reference for mutation %s", addr)
 	}
 	return addr, accountIdx, err
@@ -4119,7 +4116,7 @@ func opAppOptedIn(cx *EvalContext) error {
 		return err
 	}
 
-	app, err := appReference(cx, cx.stack[last].Uint, false)
+	app, err := cx.appReference(cx.stack[last].Uint, false)
 	if err != nil {
 		return err
 	}
@@ -4175,7 +4172,7 @@ func opAppLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValu
 		return
 	}
 
-	app, err := appReference(cx, appID, false)
+	app, err := cx.appReference(appID, false)
 	if err != nil {
 		return
 	}
@@ -4197,7 +4194,7 @@ func opAppLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValu
 }
 
 func opAppGetGlobalStateImpl(cx *EvalContext, appIndex uint64, key []byte) (result stackValue, ok bool, err error) {
-	app, err := appReference(cx, appIndex, true)
+	app, err := cx.appReference(appIndex, true)
 	if err != nil {
 		return
 	}
@@ -4406,30 +4403,16 @@ func opAppGlobalDel(cx *EvalContext) error {
 // more than 2 or so, and was often called an "index".  But it was not a
 // basics.AssetIndex or basics.ApplicationIndex.
 
-func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, error) {
+func (cx *EvalContext) appReference(ref uint64, foreign bool) (basics.AppIndex, error) {
 	if cx.version >= directRefEnabledVersion {
 		if ref == 0 || ref == uint64(cx.appID) {
 			return cx.appID, nil
 		}
-		for _, appID := range cx.txn.Txn.ForeignApps {
-			if appID == basics.AppIndex(ref) {
-				return appID, nil
-			}
+		aid := basics.AppIndex(ref)
+		if cx.availableApp(aid) {
+			return aid, nil
 		}
-		// or was created in group
-		if cx.version >= createdResourcesVersion {
-			for _, appID := range cx.available.createdApps {
-				if appID == basics.AppIndex(ref) {
-					return appID, nil
-				}
-			}
-		}
-		// or some other txn mentioned it
-		if cx.version >= resourceSharingVersion {
-			if _, ok := cx.available.sharedApps[basics.AppIndex(ref)]; ok {
-				return basics.AppIndex(ref), nil
-			}
-		}
+
 		// Allow use of indexes, but this comes last so that clear advice can be
 		// given to anyone who cares about semantics in the first few rounds of
 		// a new network - don't use indexes for references, use the App ID
@@ -4454,26 +4437,11 @@ func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, e
 	return basics.AppIndex(0), fmt.Errorf("invalid App reference %d", ref)
 }
 
-func asaReference(cx *EvalContext, ref uint64, foreign bool) (basics.AssetIndex, error) {
+func (cx *EvalContext) assetReference(ref uint64, foreign bool) (basics.AssetIndex, error) {
 	if cx.version >= directRefEnabledVersion {
-		for _, assetID := range cx.txn.Txn.ForeignAssets {
-			if assetID == basics.AssetIndex(ref) {
-				return assetID, nil
-			}
-		}
-		// or was created in group
-		if cx.version >= createdResourcesVersion {
-			for _, assetID := range cx.available.createdAsas {
-				if assetID == basics.AssetIndex(ref) {
-					return assetID, nil
-				}
-			}
-		}
-		// or some other txn mentioned it
-		if cx.version >= resourceSharingVersion {
-			if _, ok := cx.available.sharedAsas[basics.AssetIndex(ref)]; ok {
-				return basics.AssetIndex(ref), nil
-			}
+		aid := basics.AssetIndex(ref)
+		if cx.availableAsset(aid) {
+			return aid, nil
 		}
 
 		// Allow use of indexes, but this comes last so that clear advice can be
@@ -4498,6 +4466,24 @@ func asaReference(cx *EvalContext, ref uint64, foreign bool) (basics.AssetIndex,
 
 }
 
+func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (addr basics.Address, asset basics.AssetIndex, err error) {
+	addr, _, err = cx.accountReference(account)
+	if err != nil {
+		return
+	}
+	asset, err = cx.assetReference(ref, false)
+	if err != nil {
+		return
+	}
+
+	if !cx.availableHolding(addr, asset) {
+		err = fmt.Errorf("invalid Holding access %s x %d", addr, asset)
+		return
+	}
+
+	return
+}
+
 func opAssetHoldingGet(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // asset
 	prev := last - 1          // account
@@ -4508,21 +4494,11 @@ func opAssetHoldingGet(cx *EvalContext) error {
 		return fmt.Errorf("invalid asset_holding_get field %d", holdingField)
 	}
 
-	addr, _, err := cx.accountReference(cx.stack[prev])
+	addr, asset, err := cx.holdingReference(cx.stack[prev], cx.stack[last].Uint)
 	if err != nil {
 		return err
 	}
 
-	asset, err := asaReference(cx, cx.stack[last].Uint, false)
-	if err != nil {
-		return err
-	}
-
-	if !cx.availableHolding(addr, asset) {
-		return fmt.Errorf("invalid Holding access %s x %d", addr, asset)
-	}
-
-	fmt.Printf("> %s %d\n", addr, asset)
 	var exist uint64 = 0
 	var value stackValue
 	if holding, err := cx.Ledger.AssetHolding(addr, asset); err == nil {
@@ -4549,7 +4525,7 @@ func opAssetParamsGet(cx *EvalContext) error {
 		return fmt.Errorf("invalid asset_params_get field %d", paramField)
 	}
 
-	asset, err := asaReference(cx, cx.stack[last].Uint, true)
+	asset, err := cx.assetReference(cx.stack[last].Uint, true)
 	if err != nil {
 		return err
 	}
@@ -4579,7 +4555,7 @@ func opAppParamsGet(cx *EvalContext) error {
 		return fmt.Errorf("invalid app_params_get field %d", paramField)
 	}
 
-	app, err := appReference(cx, cx.stack[last].Uint, true)
+	app, err := cx.appReference(cx.stack[last].Uint, true)
 	if err != nil {
 		return err
 	}
@@ -4753,39 +4729,53 @@ func opItxnNext(cx *EvalContext) error {
 	return addInnerTxn(cx)
 }
 
-// availableAccount is used instead of accountReference for more recent opcodes
-// that don't need (or want!) to allow low numbers to represent the account at
-// that index in Accounts array.
-func (cx *EvalContext) availableAccount(sv stackValue) (basics.Address, error) {
-	if sv.argType() != StackBytes || len(sv.Bytes) != crypto.DigestSize {
-		return basics.Address{}, fmt.Errorf("not an address")
+// assignAccount is used to convert a stackValue into a 32-byte account value,
+// enforcing any "availability" restrictions in force.
+func (cx *EvalContext) assignAccount(sv stackValue) (basics.Address, error) {
+	addr, err := sv.address()
+	if err != nil {
+		return basics.Address{}, err
 	}
 
-	addr, _, err := cx.accountReference(sv)
+	addr, _, err = cx.accountReference(sv)
 	return addr, err
 }
 
-// availableAsset is used instead of asaReference for more recent opcodes that
-// don't need (or want!) to allow low numbers to represent the asset at that
-// index in ForeignAssets array.
-func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) {
+// assignAsset is used to convert a stackValue to a uint64 assetIndex, reporting
+// any errors due to availablity rules or type checking.
+func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 	uint, err := sv.uint()
 	if err != nil {
 		return basics.AssetIndex(0), err
 	}
 	aid := basics.AssetIndex(uint)
 
+	if cx.availableAsset(aid) {
+		return aid, nil
+	}
+
+	return basics.AssetIndex(0), fmt.Errorf("invalid Asset reference %d", aid)
+}
+
+// availableAsset determines whether an asset is "available". Before
+// resourceSharingVersion, an asset had to be available for for asset param
+// lookups, asset holding lookups, and asset id assignments to inner
+// transactions. After resourceSharingVersion, the distinction must be more fine
+// grained. It must be available for asset param lookups, or use in an asset
+// transaction (axfer,acfg,afrz), but not for holding lookups or assignments to
+// an inner static array.
+func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
 	// Ensure that aid is in Foreign Assets
 	for _, assetID := range cx.txn.Txn.ForeignAssets {
 		if assetID == aid {
-			return aid, nil
+			return true
 		}
 	}
 	// or was created in group
 	if cx.version >= createdResourcesVersion {
 		for _, assetID := range cx.available.createdAsas {
 			if assetID == aid {
-				return aid, nil
+				return true
 			}
 		}
 	}
@@ -4793,50 +4783,57 @@ func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) 
 	// or some other txn mentioned it
 	if cx.version >= resourceSharingVersion {
 		if _, ok := cx.available.sharedAsas[aid]; ok {
-			return aid, nil
+			return true
 		}
 	}
 
-	return basics.AssetIndex(0), fmt.Errorf("invalid Asset reference %d", aid)
+	return false
 }
 
-// availableApp is used instead of appReference for more recent (stateful)
-// opcodes that don't need (or want!) to allow low numbers to represent the app
-// at that index in ForeignApps array.
-func (cx *EvalContext) availableApp(sv stackValue) (basics.AppIndex, error) {
+// assignApp is used to convert a stackValue to a uint64 appIndex, reporting
+// any errors due to availablity rules or type checking.
+func (cx *EvalContext) assignApp(sv stackValue) (basics.AppIndex, error) {
 	uint, err := sv.uint()
 	if err != nil {
 		return basics.AppIndex(0), err
 	}
 	aid := basics.AppIndex(uint)
 
+	if cx.availableApp(aid) {
+		return aid, nil
+	}
+
+	return 0, fmt.Errorf("invalid App reference %d", aid)
+}
+
+func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
 	// Ensure that aid is in Foreign Apps
 	for _, appID := range cx.txn.Txn.ForeignApps {
 		if appID == aid {
-			return aid, nil
+			return true
 		}
 	}
 	// or was created in group
 	if cx.version >= createdResourcesVersion {
 		for _, appID := range cx.available.createdApps {
 			if appID == aid {
-				return aid, nil
+				return true
 			}
 		}
 	}
 	// Or, it can be the current app
 	if cx.appID == aid {
-		return aid, nil
+		return true
 	}
 
 	// or some other txn mentioned it
 	if cx.version >= resourceSharingVersion {
 		if _, ok := cx.available.sharedApps[aid]; ok {
-			return aid, nil
+			return true
 		}
 	}
 
-	return 0, fmt.Errorf("invalid App reference %d", aid)
+	return false
 }
 
 // availableHolding is an additional check, required since
@@ -4910,7 +4907,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 			return fmt.Errorf("%d is not a valid TypeEnum", i)
 		}
 	case Sender:
-		txn.Sender, err = cx.availableAccount(sv)
+		txn.Sender, err = cx.assignAccount(sv)
 	case Fee:
 		txn.Fee.Raw, err = sv.uint()
 	// FirstValid, LastValid unsettable: little motivation (maybe a app call
@@ -4960,25 +4957,25 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 
 	// Payment
 	case Receiver:
-		txn.Receiver, err = cx.availableAccount(sv)
+		txn.Receiver, err = cx.assignAccount(sv)
 	case Amount:
 		txn.Amount.Raw, err = sv.uint()
 	case CloseRemainderTo:
-		txn.CloseRemainderTo, err = cx.availableAccount(sv)
+		txn.CloseRemainderTo, err = cx.assignAccount(sv)
 	// AssetTransfer
 	case XferAsset:
-		txn.XferAsset, err = cx.availableAsset(sv)
+		txn.XferAsset, err = cx.assignAsset(sv)
 	case AssetAmount:
 		txn.AssetAmount, err = sv.uint()
 	case AssetSender:
-		txn.AssetSender, err = cx.availableAccount(sv)
+		txn.AssetSender, err = cx.assignAccount(sv)
 	case AssetReceiver:
-		txn.AssetReceiver, err = cx.availableAccount(sv)
+		txn.AssetReceiver, err = cx.assignAccount(sv)
 	case AssetCloseTo:
-		txn.AssetCloseTo, err = cx.availableAccount(sv)
+		txn.AssetCloseTo, err = cx.assignAccount(sv)
 	// AssetConfig
 	case ConfigAsset:
-		txn.ConfigAsset, err = cx.availableAsset(sv)
+		txn.ConfigAsset, err = cx.assignAsset(sv)
 	case ConfigAssetTotal:
 		txn.AssetParams.Total, err = sv.uint()
 	case ConfigAssetDecimals:
@@ -5014,15 +5011,15 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		txn.AssetParams.Clawback, err = sv.address()
 	// Freeze
 	case FreezeAsset:
-		txn.FreezeAsset, err = cx.availableAsset(sv)
+		txn.FreezeAsset, err = cx.assignAsset(sv)
 	case FreezeAssetAccount:
-		txn.FreezeAccount, err = cx.availableAccount(sv)
+		txn.FreezeAccount, err = cx.assignAccount(sv)
 	case FreezeAssetFrozen:
 		txn.AssetFrozen, err = sv.bool()
 
 	// ApplicationCall
 	case ApplicationID:
-		txn.ApplicationID, err = cx.availableApp(sv)
+		txn.ApplicationID, err = cx.assignApp(sv)
 	case OnCompletion:
 		var onc uint64
 		onc, err = sv.uintMaxed(uint64(transactions.DeleteApplicationOC))
@@ -5046,7 +5043,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		txn.ApplicationArgs = append(txn.ApplicationArgs, new)
 	case Accounts:
 		var new basics.Address
-		new, err = cx.availableAccount(sv)
+		new, err = cx.assignAccount(sv)
 		if err != nil {
 			return err
 		}
@@ -5082,7 +5079,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		}
 	case Assets:
 		var new basics.AssetIndex
-		new, err = cx.availableAsset(sv)
+		new, err = cx.assignAsset(sv)
 		if err != nil {
 			return err
 		}
@@ -5092,7 +5089,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		txn.ForeignAssets = append(txn.ForeignAssets, new)
 	case Applications:
 		var new basics.AppIndex
-		new, err = cx.availableApp(sv)
+		new, err = cx.assignApp(sv)
 		if err != nil {
 			return err
 		}

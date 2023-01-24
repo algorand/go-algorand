@@ -230,8 +230,7 @@ func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender bas
 	// An index > 0 corresponds to an offset into txn.Accounts. Check to
 	// make sure the index is valid.
 	if accountIdx > uint64(len(ac.Accounts)) {
-		err := fmt.Errorf("invalid Account reference %d", accountIdx)
-		return basics.Address{}, err
+		return basics.Address{}, fmt.Errorf("invalid Account reference %d", accountIdx)
 	}
 
 	// accountIdx must be in [1, len(ac.Accounts)]

@@ -220,3 +220,125 @@ pop; pop; int 1
 	// foreign-asset is not repeated in appl2.
 	logic.TestApps(t, sources, txntest.SignedTxns(&appl0, &appl2), 9, nil)
 }
+
+// TestOtherTxSharing tests resource sharing across other kinds of transactions besides appl.
+func TestOtherTxSharing(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	_, _, ledger := logic.MakeSampleEnv()
+
+	senderAcct := basics.Address{1, 2, 3, 4, 5, 6, 1}
+	ledger.NewAccount(senderAcct, 2001)
+	senderBalance := "txn ApplicationArgs 0; balance; int 2001; =="
+
+	receiverAcct := basics.Address{1, 2, 3, 4, 5, 6, 2}
+	ledger.NewAccount(receiverAcct, 2002)
+	receiverBalance := "txn ApplicationArgs 0; balance; int 2002; =="
+
+	otherAcct := basics.Address{1, 2, 3, 4, 5, 6, 3}
+	ledger.NewAccount(otherAcct, 2003)
+	otherBalance := "txn ApplicationArgs 0; balance; int 2003; =="
+
+	appl := txntest.Txn{
+		Type:            protocol.ApplicationCallTx,
+		ApplicationArgs: [][]byte{senderAcct[:]},
+	}
+
+	keyreg := txntest.Txn{
+		Type:   protocol.KeyRegistrationTx,
+		Sender: senderAcct,
+	}
+	pay := txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   senderAcct,
+		Receiver: receiverAcct,
+	}
+	acfg := txntest.Txn{
+		Type:   protocol.AssetConfigTx,
+		Sender: senderAcct,
+	}
+	axfer := txntest.Txn{
+		Type:          protocol.AssetTransferTx,
+		XferAsset:     100, // must be < 256, later code assumes it fits in a byte
+		Sender:        senderAcct,
+		AssetReceiver: receiverAcct,
+		AssetSender:   otherAcct,
+	}
+	afrz := txntest.Txn{
+		Type:          protocol.AssetFreezeTx,
+		Sender:        senderAcct,
+		FreezeAccount: otherAcct,
+	}
+
+	sources := []string{"", senderBalance}
+	rsources := []string{senderBalance, ""}
+	for _, send := range []txntest.Txn{keyreg, pay, acfg, axfer, afrz} {
+		logic.TestApps(t, sources, txntest.SignedTxns(&send, &appl), 9, ledger)
+		logic.TestApps(t, rsources, txntest.SignedTxns(&appl, &send), 9, ledger)
+
+		logic.TestApps(t, sources, txntest.SignedTxns(&send, &appl), 8, ledger,
+			logic.NewExpect(1, "invalid Account reference"))
+		logic.TestApps(t, rsources, txntest.SignedTxns(&appl, &send), 8, ledger,
+			logic.NewExpect(0, "invalid Account reference"))
+	}
+
+	holdingAccess := `
+	txn ApplicationArgs 0
+	txn ApplicationArgs 1; btoi
+	asset_holding_get AssetBalance
+	pop; pop
+`
+	sources = []string{"", holdingAccess}
+	rsources = []string{holdingAccess, ""}
+
+	t.Run("keyreg", func(t *testing.T) {
+		appl.ApplicationArgs = [][]byte{senderAcct[:], {200}}
+		logic.TestApps(t, sources, txntest.SignedTxns(&keyreg, &appl), 9, ledger,
+			logic.NewExpect(1, "invalid Asset reference 200"))
+		withRef := appl
+		withRef.ForeignAssets = []basics.AssetIndex{200}
+		logic.TestApps(t, sources, txntest.SignedTxns(&keyreg, &withRef), 9, ledger,
+			logic.NewExpect(1, "invalid Holding access "+senderAcct.String()))
+	})
+	t.Run("pay", func(t *testing.T) {
+		// The receiver is available for algo balance reading
+		appl.ApplicationArgs = [][]byte{receiverAcct[:]}
+		logic.TestApps(t, []string{"", receiverBalance}, txntest.SignedTxns(&pay, &appl), 9, ledger)
+
+		// The other account is not (it's not even in the pay txn)
+		appl.ApplicationArgs = [][]byte{otherAcct[:]}
+		logic.TestApps(t, []string{"", otherBalance}, txntest.SignedTxns(&pay, &appl), 9, ledger,
+			logic.NewExpect(1, "invalid Account reference "+otherAcct.String()))
+
+		// The other account becomes accessible because used in CloseRemainderTo
+		withClose := pay
+		withClose.CloseRemainderTo = otherAcct
+		logic.TestApps(t, []string{"", otherBalance}, txntest.SignedTxns(&withClose, &appl), 9, ledger)
+	})
+
+	t.Run("acfg", func(t *testing.T) {
+	})
+
+	t.Run("axfer", func(t *testing.T) {
+		// The receiver is NOT available for algo balance reading (only the holding for the asa)
+		appl.ApplicationArgs = [][]byte{receiverAcct[:]}
+		logic.TestApps(t, []string{"", receiverBalance}, txntest.SignedTxns(&axfer, &appl), 9, ledger,
+			logic.NewExpect(1, "invalid Account reference "+receiverAcct.String()))
+
+		appl.ApplicationArgs = [][]byte{receiverAcct[:], {byte(axfer.XferAsset)}}
+		/*
+			logic.TestApps(t, []string{"", holdingAccess}, txntest.SignedTxns(&axfer, &appl), 9, ledger)
+
+			// The other account becomes accessible because used in CloseRemainderTo (for asa, not algo)
+			withClose := axfer
+			withClose.AssetCloseTo = otherAcct
+			logic.TestApps(t, []string{"", otherBalance}, txntest.SignedTxns(&withClose, &appl), 9, ledger,
+				logic.NewExpect(1, "bad"))
+			logic.TestApps(t, []string{"", holdingAccess}, txntest.SignedTxns(&withClose, &appl), 9, ledger)
+		*/
+	})
+
+	t.Run("afrz", func(t *testing.T) {
+	})
+}
