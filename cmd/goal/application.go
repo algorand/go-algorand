@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,6 +31,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/avm-abi/abi"
+	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-algorand/crypto"
 	apiclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/data/basics"
@@ -198,8 +199,8 @@ func panicIfErr(err error) {
 	}
 }
 
-func newAppCallBytes(arg string) logic.AppCallBytes {
-	appBytes, err := logic.NewAppCallBytes(arg)
+func newAppCallBytes(arg string) apps.AppCallBytes {
+	appBytes, err := apps.NewAppCallBytes(arg)
 	if err != nil {
 		reportErrorf(err.Error())
 	}
@@ -207,16 +208,16 @@ func newAppCallBytes(arg string) logic.AppCallBytes {
 }
 
 type appCallInputs struct {
-	Accounts      []string             `codec:"accounts"`
-	ForeignApps   []uint64             `codec:"foreignapps"`
-	ForeignAssets []uint64             `codec:"foreignassets"`
-	Boxes         []boxRef             `codec:"boxes"`
-	Args          []logic.AppCallBytes `codec:"args"`
+	Accounts      []string            `codec:"accounts"`
+	ForeignApps   []uint64            `codec:"foreignapps"`
+	ForeignAssets []uint64            `codec:"foreignassets"`
+	Boxes         []boxRef            `codec:"boxes"`
+	Args          []apps.AppCallBytes `codec:"args"`
 }
 
 type boxRef struct {
-	appID uint64             `codec:"app"`
-	name  logic.AppCallBytes `codec:"name"`
+	appID uint64            `codec:"app"`
+	name  apps.AppCallBytes `codec:"name"`
 }
 
 // newBoxRef parses a command-line box ref, which is an optional appId, a comma,
@@ -335,7 +336,7 @@ func processAppInputFile() (args [][]byte, accounts []string, foreignApps []uint
 	return parseAppInputs(inputs)
 }
 
-func getAppInputs() (args [][]byte, accounts []string, apps []uint64, assets []uint64, boxes []transactions.BoxRef) {
+func getAppInputs() (args [][]byte, accounts []string, _ []uint64, assets []uint64, boxes []transactions.BoxRef) {
 	if appInputFilename != "" {
 		if appArgs != nil || appStrAccounts != nil || foreignApps != nil || foreignAssets != nil {
 			reportErrorf("Cannot specify both command-line arguments/resources and JSON input filename")
@@ -348,7 +349,7 @@ func getAppInputs() (args [][]byte, accounts []string, apps []uint64, assets []u
 	// on it. appArgs became `StringArrayVar` in order to support abi arguments
 	// which contain commas.
 
-	var encodedArgs []logic.AppCallBytes
+	var encodedArgs []apps.AppCallBytes
 	for _, arg := range appArgs {
 		if len(arg) > 0 {
 			encodedArgs = append(encodedArgs, newAppCallBytes(arg))

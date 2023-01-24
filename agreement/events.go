@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -947,6 +947,6 @@ func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
 }
 
 func (e messageEvent) AttachReceivedAt(d time.Duration) messageEvent {
-	e.Input.Proposal.receivedAt = d
+	e.Input.UnauthenticatedProposal.receivedAt = d
 	return e
 }

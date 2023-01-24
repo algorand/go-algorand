@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,6 +30,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-codec/codec"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -771,6 +772,12 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
 	}
 
+	ledger := v2.Node.LedgerForAPI()
+	latestBlkHdr, err := ledger.BlockHdr(ledger.Latest())
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingLatestBlockHeaderStatus, v2.Log)
+	}
+
 	response := model.NodeStatusResponse{
 		LastRound:                   uint64(stat.LastRound),
 		LastVersion:                 string(stat.LastVersion),
@@ -790,6 +797,29 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		CatchpointVerifiedKvs:       &stat.CatchpointCatchupVerifiedKVs,
 		CatchpointTotalBlocks:       &stat.CatchpointCatchupTotalBlocks,
 		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
+	}
+
+	nextProtocolVoteBefore := uint64(stat.NextProtocolVoteBefore)
+	var votesToGo int64 = int64(nextProtocolVoteBefore) - int64(stat.LastRound)
+	if votesToGo < 0 {
+		votesToGo = 0
+	}
+	if nextProtocolVoteBefore > 0 {
+		consensus := config.Consensus[protocol.ConsensusCurrentVersion]
+		upgradeVoteRounds := consensus.UpgradeVoteRounds
+		upgradeThreshold := consensus.UpgradeThreshold
+		votes := uint64(consensus.UpgradeVoteRounds) - uint64(votesToGo)
+		votesYes := stat.NextProtocolApprovals
+		votesNo := votes - votesYes
+		upgradeDelay := uint64(stat.UpgradeDelay)
+		response.UpgradeVotesRequired = &upgradeThreshold
+		response.UpgradeNodeVote = &latestBlkHdr.UpgradeApprove
+		response.UpgradeDelay = &upgradeDelay
+		response.UpgradeVotes = &votes
+		response.UpgradeYesVotes = &votesYes
+		response.UpgradeNoVotes = &votesNo
+		response.UpgradeNextProtocolVoteBefore = &nextProtocolVoteBefore
+		response.UpgradeVoteRounds = &upgradeVoteRounds
 	}
 
 	return ctx.JSON(http.StatusOK, response)
@@ -1353,7 +1383,7 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 	appIdx := basics.AppIndex(applicationID)
 	ledger := v2.Node.LedgerForAPI()
 	lastRound := ledger.Latest()
-	keyPrefix := logic.MakeBoxKey(appIdx, "")
+	keyPrefix := apps.MakeBoxKey(uint64(appIdx), "")
 
 	requestedMax, algodMax := nilToZero(params.Max), v2.Node.Config().MaxAPIBoxPerApplication
 	max := applicationBoxesMaxKeys(requestedMax, algodMax)
@@ -1399,7 +1429,7 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint
 	lastRound := ledger.Latest()
 
 	encodedBoxName := params.Name
-	boxNameBytes, err := logic.NewAppCallBytes(encodedBoxName)
+	boxNameBytes, err := apps.NewAppCallBytes(encodedBoxName)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
@@ -1408,7 +1438,7 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	value, err := ledger.LookupKv(lastRound, logic.MakeBoxKey(appIdx, string(boxName)))
+	value, err := ledger.LookupKv(lastRound, apps.MakeBoxKey(uint64(appIdx), string(boxName)))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -1499,7 +1529,7 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params model.TealCompileParams
 	ops, err := logic.AssembleString(source)
 	if err != nil {
 		sb := strings.Builder{}
-		ops.ReportProblems("", &sb)
+		ops.ReportMultipleErrors("", &sb)
 		return badRequest(ctx, err, sb.String(), v2.Log)
 	}
 	pd := logic.HashProgram(ops.Program)

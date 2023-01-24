@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,12 +32,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -779,7 +779,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	values, err = l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
 	require.NoError(t, err)
 	require.Len(t, values, 1)
-	v, err := l.LookupKv(l.Latest(), logic.MakeBoxKey(boxApp, "xxx"))
+	v, err := l.LookupKv(l.Latest(), apps.MakeBoxKey(uint64(boxApp), "xxx"))
 	require.NoError(t, err)
 	require.Equal(t, strings.Repeat("\x00", 24), string(v))
 
@@ -869,7 +869,7 @@ func TestCatchpointAfterBoxTxns(t *testing.T) {
 	values, err := l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
 	require.NoError(t, err)
 	require.Len(t, values, 1)
-	v, err := l.LookupKv(l.Latest(), logic.MakeBoxKey(boxApp, "xxx"))
+	v, err := l.LookupKv(l.Latest(), apps.MakeBoxKey(uint64(boxApp), "xxx"))
 	require.NoError(t, err)
 	require.Equal(t, strings.Repeat("f", 24), string(v))
 }

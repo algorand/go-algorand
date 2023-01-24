@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,8 +28,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -192,13 +190,6 @@ func TestArchivalRestart(t *testing.T) {
 
 	// Start in archival mode, add 2K blocks, restart, ensure all blocks are there
 
-	// disable deadlock checking code
-	deadlockDisable := deadlock.Opts.Disable
-	deadlock.Opts.Disable = true
-	defer func() {
-		deadlock.Opts.Disable = deadlockDisable
-	}()
-
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	dbPrefix := filepath.Join(t.TempDir(), dbName)
 
@@ -338,13 +329,6 @@ func TestArchivalCreatables(t *testing.T) {
 	// Start in archival mode, add 2K blocks with asset + app txns
 	// restart, ensure all assets are there in index unless they were
 	// deleted
-
-	// disable deadlock checking code
-	deadlockDisable := deadlock.Opts.Disable
-	deadlock.Opts.Disable = true
-	defer func() {
-		deadlock.Opts.Disable = deadlockDisable
-	}()
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	dbPrefix := filepath.Join(t.TempDir(), dbName)
@@ -691,11 +675,6 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
-	deadlockDisable := deadlock.Opts.Disable
-	deadlock.Opts.Disable = true
-	defer func() {
-		deadlock.Opts.Disable = deadlockDisable
-	}()
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	dbPrefix := filepath.Join(t.TempDir(), dbName)
