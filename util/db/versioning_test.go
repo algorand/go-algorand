@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -27,7 +28,7 @@ import (
 )
 
 func testVersioning(t *testing.T, inMemory bool) {
-	fn := t.Name() + "fn.db"
+	fn := strings.Replace(t.Name(), "/", "_", -1) + "fn.db"
 	acc, err := MakeAccessor(fn, false, inMemory)
 	require.NoError(t, err)
 	if !inMemory {
