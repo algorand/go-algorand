@@ -1,6 +1,6 @@
 {
     "Genesis": {
-        "NetworkName": "",
+        "NetworkName": "Default Network Template",
         "RewardsPoolBalance": 0,
         "FirstPartKeyRound": 0,
         "LastPartKeyRound":  30000,
