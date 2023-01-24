@@ -67,6 +67,10 @@ func run(args arguments) {
 	// Convert
 	consensusParams := config.Consensus[algodType.Delta.Hdr.CurrentProtocol]
 	modelDelta, err := v2.StateDeltaToLedgerDelta(algodType.Delta, consensusParams)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to convert ledgercore.StateDelta from input file '%s': %s\n", args.inputFile, err)
+		os.Exit(1)
+	}
 
 	// Write
 	outputFile, err := os.Create(args.outputFile)
