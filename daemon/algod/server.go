@@ -36,7 +36,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	apiServer "github.com/algorand/go-algorand/daemon/algod/api/server"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
@@ -52,8 +51,7 @@ var server http.Server
 
 // ServerNode is the required methods for any node the server fronts
 type ServerNode interface {
-	lib.NodeInterface
-	v2.NodeInterface
+	apiServer.APINodeInterface
 	ListeningAddress() (string, bool)
 	Start()
 	Stop()
