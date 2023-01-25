@@ -735,6 +735,7 @@ func TestStartCatchup(t *testing.T) {
 	badCatchPoint := "bad catchpoint"
 	startCatchupTest(t, badCatchPoint, nil, 400, 0)
 
+	// Test that a catchup fails w/ 400 when the catchpoint round is > syncRound (while syncRound is set)
 	startCatchupTest(t, goodCatchPoint, nil, 400, 1)
 }
 
