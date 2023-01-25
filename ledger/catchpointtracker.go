@@ -465,6 +465,8 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 	dcr.enableGeneratingCatchpointFiles = ct.enableGeneratingCatchpointFiles
 
 	min := dcr.oldBase + 1
+	// adjust calculateCatchpointRounds arguments to make it consistent with the task consumer side
+	// also, we do know there is no catchpoint rounds in between [0, catchpointLookback)
 	if dcr.catchpointLookback+1 > uint64(min) {
 		min = basics.Round(dcr.catchpointLookback) + 1
 	}
@@ -821,11 +823,13 @@ func (ct *catchpointTracker) finishCatchpoint(ctx context.Context, round basics.
 // non-zero.
 func calculateCatchpointRounds(min basics.Round, max basics.Round, catchpointInterval uint64) []basics.Round {
 
-	// The smallest integer i such that i * ct.catchpointInterval >= first.
+	// The smallest integer i such that i * ct.catchpointInterval >= min.
 	l := (uint64(min) + catchpointInterval - 1) / catchpointInterval
-	// The largest integer i such that i * ct.catchpointInterval <= last.
+	// The largest integer i such that i * ct.catchpointInterval <= max.
 	r := uint64(max) / catchpointInterval
 
+	// handle situations when max - min < catchpointInterval,
+	// for example min=11, max=19, catchpointInterval = 10
 	if l > r {
 		return nil
 	}
