@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -668,4 +669,31 @@ func getEmptyBlock(afterRound basics.Round, l *ledger.Ledger, genesisID string, 
 		return
 	}
 	return
+}
+
+func TestLedgerOpenClose(t *testing.T) {
+	util.SetFdSoftLimit(50)
+	proto := protocol.ConsensusCurrentVersion
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "go-test-node-genesis",
+		Proto:       proto,
+		Network:     config.Devtestnet,
+		FeeSink:     testSinkAddr.String(),
+		RewardsPool: testPoolAddr.String(),
+	}
+
+	genalloc, err := genesis.Balances()
+	require.NoError(t, err)
+
+	gid := genesis.ID()
+	ghash := genesis.Hash()
+
+	log := logging.Base()
+	ledgerPathnamePrefix := t.TempDir()
+	cfg := config.GetDefaultLocal()
+	for x := 0; x < 5; x++ {
+		ledger, err := LoadLedger(log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, gid, ghash, []ledgercore.BlockListener{}, cfg)
+		require.NoError(t, err)
+		ledger.Close()
+	}
 }

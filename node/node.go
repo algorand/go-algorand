@@ -179,7 +179,7 @@ type TxnWithStatus struct {
 func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
 	node := new(AlgorandFullNode)
 	node.rootDir = rootDir
-	node.log = log.With("name", cfg.NetAddress)
+	/*x*/ node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
@@ -217,7 +217,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
 	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
+	/*0*/ node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
 	if err != nil {
 		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
 		return nil, err
@@ -260,7 +260,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
 	crashPathname := filepath.Join(genesisDir, config.CrashFilename)
-	crashAccess, err := db.MakeAccessor(crashPathname, false, false)
+	/*x1*/ crashAccess, err := db.MakeAccessor(crashPathname, false, false)
 	if err != nil {
 		log.Errorf("Cannot load crash data: %v", err)
 		return nil, err
@@ -297,14 +297,14 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
-	registry, err := ensureParticipationDB(genesisDir, node.log)
+	registry, err := ensureParticipationDB(genesisDir, node.log) /*x1*/
 	if err != nil {
 		log.Errorf("unable to initialize the participation registry database: %v", err)
 		return nil, err
 	}
 	node.accountManager = data.MakeAccountManager(log, registry)
 
-	err = node.loadParticipationKeys()
+	err = node.loadParticipationKeys() /*x1 inside*/
 	if err != nil {
 		log.Errorf("Cannot load participation keys: %v", err)
 		return nil, err
@@ -335,7 +335,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	os.Remove(oldCompactCertPath)
 
 	stateProofPathname := filepath.Join(genesisDir, config.StateProofFileName)
-	stateProofAccess, err := db.MakeAccessor(stateProofPathname, false, false)
+	stateProofAccess, err := db.MakeAccessor(stateProofPathname, false, false) /*x1 already colosed*/
 	if err != nil {
 		log.Errorf("Cannot load state proof data: %v", err)
 		return nil, err
@@ -458,6 +458,11 @@ func (node *AlgorandFullNode) Stop() {
 	if node.indexer != nil {
 		node.indexer.Shutdown()
 	}
+}
+
+func (node *AlgorandFullNode) Shutdown() {
+	node.accountManager.Registry().Close()
+	node.agreementService.Accessor.Close()
 }
 
 // note: unlike the other two functions, this accepts a whole filename
@@ -988,6 +993,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 				return err
 			}
 		}
+		part.Close()
 	}
 
 	return nil
