@@ -80,6 +80,41 @@ func TestLRUBasicKV(t *testing.T) {
 	}
 }
 
+func TestLRUKVSize0(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var baseKV lruKV
+	baseKV.init(logging.TestingLog(t), 0, 0)
+
+	kvNum := 5
+
+	for i := 1; i <= kvNum; i++ {
+		go func(i int) {
+			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
+			kvValue := fmt.Sprintf("kv %d value", i)
+			kv := store.PersistedKVData{
+				Value: []byte(kvValue),
+				Round: basics.Round(i),
+			}
+			baseKV.writePending(kv, fmt.Sprintf("key%d", i))
+		}(i)
+	}
+	require.Empty(t, baseKV.pendingKVs)
+	baseKV.flushPendingWrites()
+	require.Empty(t, baseKV.kvs)
+
+	for i := 0; i < kvNum; i++ {
+		kvValue := fmt.Sprintf("kv %d value", i)
+		kv := store.PersistedKVData{
+			Value: []byte(kvValue),
+			Round: basics.Round(i),
+		}
+		baseKV.write(kv, fmt.Sprintf("key%d", i))
+	}
+
+	fmt.Println(baseKV.kvs)
+}
+
 func TestLRUKVPendingWrites(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
