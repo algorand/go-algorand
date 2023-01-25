@@ -89,9 +89,9 @@ func registryCloseTest(t testing.TB, registry account.ParticipationRegistry, dbf
 	}
 }
 
-func TestAccountManagerKeysRegistry(t *testing.T) {
+func TestAccountManagerKeysRegistry(t *testing.T) { //nolint:paralleltest // Too heavy to parallelize
 	partitiontest.PartitionTest(t)
-	t.Parallel() // can be parallelized despite file system manipulation because db files have different test names
+
 	if testing.Short() {
 		t.Log("this is a long test and skipping for -short")
 		return
