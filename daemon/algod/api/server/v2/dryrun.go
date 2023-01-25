@@ -181,24 +181,22 @@ func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) model.Dryr
 	return st
 }
 
-// Register is fired on program creation (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) Register(state *logic.DebugState) error {
+// Register is fired on program creation (logic.Debugger interface)
+func (ddr *dryrunDebugReceiver) Register(state *logic.DebugState) {
 	ddr.disassembly = state.Disassembly
 	ddr.lines = strings.Split(state.Disassembly, "\n")
-	return nil
 }
 
-// Update is fired on every step (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) Update(state *logic.DebugState) error {
+// Update is fired on every step (logic.Debugger interface)
+func (ddr *dryrunDebugReceiver) Update(state *logic.DebugState) {
 	st := ddr.stateToState(state)
 	ddr.history = append(ddr.history, st)
 	ddr.updateScratch()
-	return nil
 }
 
-// Complete is called when the program exits (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) Complete(state *logic.DebugState) error {
-	return ddr.Update(state)
+// Complete is called when the program exits (logic.Debugger interface)
+func (ddr *dryrunDebugReceiver) Complete(state *logic.DebugState) {
+	ddr.Update(state)
 }
 
 type dryrunLedger struct {
@@ -421,7 +419,7 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 		var result model.DryrunTxnResult
 		if len(stxn.Lsig.Logic) > 0 {
 			var debug dryrunDebugReceiver
-			ep.Debugger = &debug
+			ep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(&debug)
 			ep.SigLedger = &dl
 			pass, err := logic.EvalSignature(ti, ep)
 			var messages []string
@@ -505,7 +503,7 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 				messages[0] = fmt.Sprintf("uploaded state did not include app id %d referenced in txn[%d]", appIdx, ti)
 			} else {
 				var debug dryrunDebugReceiver
-				ep.Debugger = &debug
+				ep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(&debug)
 				var program []byte
 				messages = make([]string, 1)
 				if stxn.Txn.OnCompletion == transactions.ClearStateOC {
