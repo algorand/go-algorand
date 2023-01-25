@@ -2440,6 +2440,57 @@ func opUncover(cx *EvalContext) error {
 	return nil
 }
 
+func decodeMap(m []byte) map[string][]byte {
+	// msgpack decode bytes to map
+	return map[string][]byte{}
+}
+func encodeMap(m map[string][]byte) []byte {
+	// msgpack encode map to bytes
+	return []byte{}
+}
+
+func opMapDelete(cx *EvalContext) error {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	decodedMap := decodeMap(cx.stack[prev].Bytes)
+	key := cx.stack[last].Bytes
+
+	delete(decodedMap, string(key))
+
+	encodedMap := encodeMap(decodedMap)
+	cx.stack[prev].Bytes = encodedMap
+	cx.stack = cx.stack[:last]
+	return nil
+}
+
+func opMapPut(cx *EvalContext) error {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	pprev := prev - 1
+	decodedMap := decodeMap(cx.stack[pprev].Bytes)
+	key := cx.stack[prev].Bytes
+	value := cx.stack[last].Bytes
+
+	decodedMap[string(key)] = value
+
+	encodedMap := encodeMap(decodedMap)
+	cx.stack[pprev].Bytes = encodedMap
+	cx.stack = cx.stack[:prev]
+	return nil
+}
+
+func opMapGet(cx *EvalContext) error {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	decodedMap := decodeMap(cx.stack[prev].Bytes)
+	key := cx.stack[last].Bytes
+
+	cx.stack[prev].Bytes = decodedMap[string(key)]
+	cx.stack = cx.stack[:last]
+	return nil
+}
+
 func (cx *EvalContext) assetHoldingToValue(holding *basics.AssetHolding, fs assetHoldingFieldSpec) (sv stackValue, err error) {
 	switch fs.field {
 	case AssetBalance:

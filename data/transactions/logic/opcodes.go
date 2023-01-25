@@ -74,6 +74,8 @@ const pairingVersion = 9 // bn256 opcodes. will add bls12-381, and unify the ava
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
 
+const nativeTypeVersion = 8
+
 type linearCost struct {
 	baseCost  int
 	chunkCost int
@@ -638,6 +640,11 @@ var OpSpecs = []OpSpec{
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bi"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
+
+	// native types support
+	{0xe0, "map_put", opMapPut, proto("bbb:"), nativeTypeVersion, detDefault()},
+	{0xe0, "map_get", opMapGet, proto("bb:b"), nativeTypeVersion, detDefault()},
+	{0xe0, "map_delete", opMapDelete, proto("bb:"), nativeTypeVersion, detDefault()},
 }
 
 type sortByOpcode []OpSpec
