@@ -1843,7 +1843,14 @@ func opBytesLt(cx *EvalContext) error {
 	rhs := nonzero(cx.stack[last].Bytes)
 	lhs := nonzero(cx.stack[prev].Bytes)
 
-	cx.stack[prev] = boolToSV(len(lhs) < len(rhs) || bytes.Compare(lhs, rhs) < 0)
+	switch {
+	case len(lhs) < len(rhs):
+		cx.stack[prev] = boolToSV(true)
+	case len(lhs) > len(rhs):
+		cx.stack[prev] = boolToSV(false)
+	default:
+		cx.stack[prev] = boolToSV(bytes.Compare(lhs, rhs) < 0)
+	}
 
 	cx.stack = cx.stack[:last]
 	return nil
