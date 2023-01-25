@@ -879,9 +879,8 @@ func TestRemove(t *testing.T) {
 	require.Equal(t, transactionPool.PendingTxGroups(), [][]transactions.SignedTxn{{signedTx}})
 }
 
-func TestLogicSigOK(t *testing.T) {
+func TestLogicSigOK(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies config.Consensus
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	oparams := config.Consensus[protocol.ConsensusCurrentVersion]
 	params := oparams

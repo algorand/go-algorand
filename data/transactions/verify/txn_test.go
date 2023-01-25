@@ -449,9 +449,8 @@ pushint 1`)
 	require.Equal(t, expectedEvents, mockTracer.Events)
 }
 
-func TestPaysetGroups(t *testing.T) {
+func TestPaysetGroups(t *testing.T) { //nolint:paralleltest // Not parallel because it reads `config.Consensus` within the execution pool, causing a race condition with `TestTxnValidationStateProof`
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	if testing.Short() {
 		t.Log("this is a long test and skipping for -short")
