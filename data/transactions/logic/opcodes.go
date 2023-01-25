@@ -642,9 +642,9 @@ var OpSpecs = []OpSpec{
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
 
 	// native types support
-	{0xe0, "map_put", opMapPut, proto("bbb:"), nativeTypeVersion, detDefault()},
-	{0xe0, "map_get", opMapGet, proto("bb:b"), nativeTypeVersion, detDefault()},
-	{0xe0, "map_delete", opMapDelete, proto("bb:"), nativeTypeVersion, detDefault()},
+	{0xe0, "map_put", opMapPut, proto("bbb:b"), nativeTypeVersion, detDefault()},
+	{0xe1, "map_get", opMapGet, proto("bb:b"), nativeTypeVersion, detDefault()},
+	{0xe2, "map_delete", opMapDelete, proto("bb:b"), nativeTypeVersion, detDefault()},
 }
 
 type sortByOpcode []OpSpec

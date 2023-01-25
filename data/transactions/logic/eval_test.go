@@ -3009,6 +3009,28 @@ func TestEqMismatch(t *testing.T) {
 	}
 }
 
+func TestMapOps(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+
+	origMap := map[string][]byte{"lol": []byte("lmao")}
+	b, err := json.Marshal(origMap)
+	if err != nil {
+		t.Fail()
+	}
+
+	origMap[string([]byte{0x01})] = []byte{0x02}
+	b2, err := json.Marshal(origMap)
+	if err != nil {
+		t.Fail()
+	}
+
+	testAccepts(t, fmt.Sprintf(`byte 0x%x; byte 0x01; byte 0x02; map_put; byte 0x%x; ==`, b, b2), 8)
+	testAccepts(t, fmt.Sprintf(`byte 0x%x; byte 0x01; map_get; byte 0x02; ==`, b2), 8)
+	testAccepts(t, fmt.Sprintf(`byte 0x%x; byte 0x01; map_delete; byte 0x%x; ==`, b2, b), 8)
+}
+
 func TestNeqMismatch(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -3332,10 +3354,11 @@ intc_1
 import random
 
 def foo():
-    for i in range(64):
-        print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
-    for i in range(63):
-        print('+')
+
+	for i in range(64):
+	    print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+	for i in range(63):
+	    print('+')
 */
 const addBenchmarkSource = `int 20472989571761113
 int 80135167795737348
@@ -3470,10 +3493,11 @@ int 28939890412103745
 import random
 
 def foo():
-    print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
-    for i in range(63):
-        print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
-        print('+')
+
+	print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+	for i in range(63):
+	    print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+	    print('+')
 */
 const addBenchmark2Source = `int 8371863094338737
 int 29595196041051360

@@ -2440,24 +2440,34 @@ func opUncover(cx *EvalContext) error {
 	return nil
 }
 
-func decodeMap(m []byte) map[string][]byte {
+func decodeMap(m []byte) (map[string][]byte, error) {
 	// msgpack decode bytes to map
-	return map[string][]byte{}
+	mp := map[string][]byte{}
+	err := json.Unmarshal(m, &mp)
+	return mp, err
 }
-func encodeMap(m map[string][]byte) []byte {
+
+func encodeMap(m map[string][]byte) ([]byte, error) {
 	// msgpack encode map to bytes
-	return []byte{}
+	return json.Marshal(m)
 }
 
 func opMapDelete(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
-	decodedMap := decodeMap(cx.stack[prev].Bytes)
+	decodedMap, err := decodeMap(cx.stack[prev].Bytes)
+	if err != nil {
+		return err
+	}
+
 	key := cx.stack[last].Bytes
 
 	delete(decodedMap, string(key))
 
-	encodedMap := encodeMap(decodedMap)
+	encodedMap, err := encodeMap(decodedMap)
+	if err != nil {
+		return err
+	}
 	cx.stack[prev].Bytes = encodedMap
 	cx.stack = cx.stack[:last]
 	return nil
@@ -2467,13 +2477,19 @@ func opMapPut(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	pprev := prev - 1
-	decodedMap := decodeMap(cx.stack[pprev].Bytes)
+	decodedMap, err := decodeMap(cx.stack[pprev].Bytes)
+	if err != nil {
+		return err
+	}
 	key := cx.stack[prev].Bytes
 	value := cx.stack[last].Bytes
 
 	decodedMap[string(key)] = value
 
-	encodedMap := encodeMap(decodedMap)
+	encodedMap, err := encodeMap(decodedMap)
+	if err != nil {
+		return err
+	}
 	cx.stack[pprev].Bytes = encodedMap
 	cx.stack = cx.stack[:prev]
 	return nil
@@ -2483,7 +2499,10 @@ func opMapGet(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
 
-	decodedMap := decodeMap(cx.stack[prev].Bytes)
+	decodedMap, err := decodeMap(cx.stack[prev].Bytes)
+	if err != nil {
+		return err
+	}
 	key := cx.stack[last].Bytes
 
 	cx.stack[prev].Bytes = decodedMap[string(key)]
