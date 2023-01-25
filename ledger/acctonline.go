@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -360,8 +360,6 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	// Index that corresponds to the oldest round still in deltas
 	startIndex := len(ao.onlineRoundParamsData) - len(ao.deltas) - 1
 	if ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[startIndex+int(offset)].CurrentProtocol {
-		ao.accountsMu.RUnlock()
-
 		// in scheduleCommit, we expect that this function to update the catchpointWriting when
 		// it's on a catchpoint round and the node is configured to generate catchpoints. Doing this in a deferred function
 		// here would prevent us from "forgetting" to update this variable later on.
@@ -539,7 +537,6 @@ func (ao *onlineAccounts) onlineTotalsEx(rnd basics.Round) (basics.MicroAlgos, e
 func (ao *onlineAccounts) onlineTotalsImpl(rnd basics.Round) (basics.MicroAlgos, error) {
 	offset, err := ao.roundParamsOffset(rnd)
 	if err != nil {
-		ao.log.Warnf("onlineAccounts failed to fetch online totals for rnd: %d", rnd)
 		return basics.MicroAlgos{}, err
 	}
 
@@ -551,7 +548,6 @@ func (ao *onlineAccounts) onlineTotalsImpl(rnd basics.Round) (basics.MicroAlgos,
 func (ao *onlineAccounts) LookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
 	oad, err := ao.lookupOnlineAccountData(rnd, addr)
 	if err != nil {
-		ao.log.Warnf("onlineAccounts failed to fetch online account data for rnd: %d, addr: %v", rnd, addr)
 		return
 	}
 

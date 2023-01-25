@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -585,6 +585,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 				Round:      r,
 				FirstValid: tx.Txn.FirstValid,
 				LastValid:  tx.Txn.LastValid,
+				Early:      false,
 			}
 		}
 	}

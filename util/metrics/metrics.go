@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -95,12 +95,14 @@ var (
 	TransactionMessagesAlreadyCommitted = MetricName{Name: "algod_transaction_messages_err_or_committed", Description: "Number of duplicate or error transaction messages after TX handler backlog"}
 	// TransactionMessagesTxGroupInvalidFee "Number of transaction messages with invalid txgroup fee"
 	TransactionMessagesTxGroupInvalidFee = MetricName{Name: "algod_transaction_messages_txgroup_invalid_fee", Description: "Number of transaction messages with invalid txgroup fee"}
+	// TransactionMessagesTxnDroppedCongestionManagement "Number of transaction messages dropped because the tx backlog is under congestion management"
+	TransactionMessagesTxnDroppedCongestionManagement = MetricName{Name: "algod_transaction_messages_txn_dropped_congestion_ctrl", Description: "Number of transaction messages dropped because the tx backlog is under congestion management"}
 	// TransactionMessagesTxnNotWellFormed "Number of transaction messages not well formed"
 	TransactionMessagesTxnNotWellFormed = MetricName{Name: "algod_transaction_messages_txn_notwell_formed", Description: "Number of transaction messages not well formed"}
 	// TransactionMessagesTxnSigNotWellFormed "Number of transaction messages with bad formed signature"
 	TransactionMessagesTxnSigNotWellFormed = MetricName{Name: "algod_transaction_messages_sig_bad_formed", Description: "Number of transaction messages with bad formed signature"}
 	// TransactionMessagesTxnMsigNotWellFormed "Number of transaction messages with bad formed multisig"
-	TransactionMessagesTxnMsigNotWellFormed = MetricName{Name: "algod_transaction_messages_msig_bas_formed", Description: "Number of transaction messages with bad formed msig"}
+	TransactionMessagesTxnMsigNotWellFormed = MetricName{Name: "algod_transaction_messages_msig_bad_formed", Description: "Number of transaction messages with bad formed msig"}
 	// TransactionMessagesTxnLogicSig "Number of transaction messages with invalid logic sig"
 	TransactionMessagesTxnLogicSig = MetricName{Name: "algod_transaction_messages_logic_sig_failed", Description: "Number of transaction messages with invalid logic sig"}
 	// TransactionMessagesTxnSigVerificationFailed "Number of transaction messages with signature verification failed"

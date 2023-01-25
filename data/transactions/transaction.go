@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -239,6 +239,7 @@ func (tx Header) Alive(tc TxnContext) error {
 			Round:      round,
 			FirstValid: tx.FirstValid,
 			LastValid:  tx.LastValid,
+			Early:      round < tx.FirstValid,
 		}
 	}
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -41,6 +41,7 @@ type TxnDeadError struct {
 	Round      basics.Round
 	FirstValid basics.Round
 	LastValid  basics.Round
+	Early      bool
 }
 
 func (err *TxnDeadError) Error() string {

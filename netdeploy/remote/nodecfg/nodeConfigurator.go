@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -87,7 +87,7 @@ func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error)
 
 	for _, nodeDir := range nodeDirs {
 		nodeDir.delaySave = true
-		err = nodeDir.configure(nc.dnsName)
+		err = nodeDir.configure()
 		if err != nil {
 			break
 		}
@@ -96,7 +96,7 @@ func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error)
 		nodeDir.saveConfig()
 	}
 
-	if err == nil {
+	if err == nil && nc.dnsName != "" {
 		fmt.Fprint(os.Stdout, "... registering DNS / SRV records\n")
 		err = nc.registerDNSRecords()
 	}

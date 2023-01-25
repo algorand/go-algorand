@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2019-2022 Algorand, Inc.
+# Copyright (C) 2019-2023 Algorand, Inc.
 # This file is part of go-algorand
 #
 # go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@
 # pip install py-algorand-sdk
 
 import argparse
+import atexit
 import base64
 import logging
 import os
@@ -231,6 +232,7 @@ def main():
     ap.add_argument('-t', '--token', default=None, help='algod API access token')
     ap.add_argument('--header', dest='headers', nargs='*', help='"Name: value" HTTP header (repeatable)')
     ap.add_argument('--all', default=False, action='store_true', help='fetch all blocks from 0')
+    ap.add_argument('--pid')
     ap.add_argument('--verbose', default=False, action='store_true')
     ap.add_argument('-o', '--out', default=None, help='file to append json lines to')
     args = ap.parse_args()
@@ -239,6 +241,11 @@ def main():
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
+
+    if args.pid:
+        with open(args.pid, 'w') as fout:
+            fout.write('{}'.format(os.getpid()))
+        atexit.register(os.remove, args.pid)
 
     algorand_data = args.algod or os.getenv('ALGORAND_DATA')
     if not algorand_data and not ((args.token or args.headers) and args.addr):

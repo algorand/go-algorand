@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2019-2022 Algorand, Inc.
+# Copyright (C) 2019-2023 Algorand, Inc.
 # This file is part of go-algorand
 #
 # go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@
 import base64
 import os
 import statistics
+import sys
 
 from algosdk.encoding import msgpack
 from matplotlib import pyplot as plt
@@ -65,7 +66,10 @@ def process(path, args):
             block = row['block']
             rnd = block.get('rnd',0)
             if (rnd < minrnd) or ((maxrnd is not None) and (rnd > maxrnd)):
+                sys.stderr.write(f'skip rnd {rnd}\n')
                 continue
+            if (prevrnd is not None) and (rnd <= prevrnd):
+                sys.stderr.write(f'wat rnd {rnd}, prevrnd {prevrnd}, line {count}\n')
             tc = block.get('tc', 0)
             ts = block.get('ts', 0) # timestamp recorded at algod, 1s resolution int
             _time = row['_time'] # timestamp recorded at client, 0.000001s resolution float
@@ -82,6 +86,8 @@ def process(path, args):
                         tsv.append(_time)
                 if dt > 0.5:
                     dtxn = tc - prevtc
+                    if dtxn < 0:
+                        sys.stderr.write(f'{path}:{count} tc {tc}, prevtc {prevtc}, rnd {rnd}, prevrnd {prevrnd}\n')
                     tps = dtxn / dt
                     mintxn = min(dtxn,mintxn)
                     maxtxn = max(dtxn,maxtxn)
@@ -93,7 +99,7 @@ def process(path, args):
                     dtv.append(dt)
                     txnv.append(dtxn)
                 else:
-                    print('b[{}] - b[{}], dt={}'.format(rnd-1,rnd,dt))
+                    sys.stderr.write('b[{}] - b[{}], dt={}\n'.format(rnd-1,rnd,dt))
             else:
                 tsv.append(ts)
             prevrnd = rnd
