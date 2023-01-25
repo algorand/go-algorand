@@ -85,6 +85,7 @@ func TestLRUKVSize0(t *testing.T) {
 
 	var baseKV lruKV
 	baseKV.init(logging.TestingLog(t), 0, 0)
+	require.True(t, baseKV.disableWriteKV)
 
 	kvNum := 5
 
@@ -112,7 +113,7 @@ func TestLRUKVSize0(t *testing.T) {
 		baseKV.write(kv, fmt.Sprintf("key%d", i))
 	}
 
-	fmt.Println(baseKV.kvs)
+	require.Empty(t, baseKV.kvs)
 }
 
 func TestLRUKVPendingWrites(t *testing.T) {
