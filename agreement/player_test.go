@@ -113,13 +113,28 @@ func simulateProposalPayloads(t *testing.T, router *rootRouter, player *player, 
 	}
 }
 
+// most player code returns a fixed number of actions, but some player code sometimes adds an exctra speculative block assembly action that we filter out to make tests simpler
+func ignoreSpeculativeAssembly(a []action) []action {
+	var out []action
+	for _, ia := range a {
+		switch ia.t() {
+		case speculativeAssembly, speculativeAssemblyIfStarted:
+			// do not copy out
+		default:
+			out = append(out, ia)
+		}
+	}
+	return out
+}
+
 func simulateProposals(t *testing.T, router *rootRouter, player *player, voteBatch []event, payloadBatch []event) {
 	for i, e := range voteBatch {
 		var res []action
 		*player, res = router.submitTop(&playerTracer, *player, e)
 
-		earlier := res
+		earlier := ignoreSpeculativeAssembly(res)
 		*player, res = router.submitTop(&playerTracer, *player, payloadBatch[i])
+		res = ignoreSpeculativeAssembly(res)
 		if len(res) != len(earlier) {
 			panic("proposal action mismatch")
 		}
