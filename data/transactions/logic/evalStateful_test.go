@@ -197,9 +197,9 @@ pop
 bytec_0
 log
 `
-	tests := map[runMode]string{
-		modeSig: opcodesRunModeAny + opcodesRunModeSignature,
-		modeApp: opcodesRunModeAny + opcodesRunModeApplication,
+	tests := map[RunMode]string{
+		ModeSig: opcodesRunModeAny + opcodesRunModeSignature,
+		ModeApp: opcodesRunModeAny + opcodesRunModeApplication,
 	}
 
 	for mode, test := range tests {
@@ -237,7 +237,7 @@ log
 			ledger.NewLocal(tx.Sender, 100, "ALGO", algoValue)
 			ledger.NewAsset(tx.Sender, 5, params)
 
-			if mode == modeSig {
+			if mode == ModeSig {
 				testLogic(t, test, AssemblerMaxVersion, ep)
 			} else {
 				testApp(t, test, ep)
@@ -303,9 +303,9 @@ log
 			"not allowed in current mode", "not allowed in current mode")
 	}
 
-	require.Equal(t, runMode(1), modeSig)
-	require.Equal(t, runMode(2), modeApp)
-	require.True(t, modeAny == modeSig|modeApp)
+	require.Equal(t, RunMode(1), ModeSig)
+	require.Equal(t, RunMode(2), ModeApp)
+	require.True(t, modeAny == ModeSig|ModeApp)
 	require.True(t, modeAny.Any())
 }
 
@@ -2442,7 +2442,7 @@ func TestReturnTypes(t *testing.T) {
 	}
 
 	byName := OpsByName[LogicVersion]
-	for _, m := range []runMode{modeSig, modeApp} {
+	for _, m := range []RunMode{ModeSig, ModeApp} {
 		for name, spec := range byName {
 			// Only try an opcode in its modes
 			if (m & spec.Modes) == 0 {
