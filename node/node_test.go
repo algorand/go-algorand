@@ -182,9 +182,8 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 	return nodes, wallets
 }
 
-func TestSyncingFullNode(t *testing.T) {
+func TestSyncingFullNode(t *testing.T) { //nolint:paralleltest // Too heavy to parallelize
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	t.Skip("Flaky in nightly test environment")
 
