@@ -29,7 +29,6 @@ import (
 
 func TestEmptyEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	var b Block
 	require.Equal(t, 1, len(protocol.Encode(&b)))
@@ -40,7 +39,6 @@ func TestEmptyEncoding(t *testing.T) {
 
 func TestBlockWithTxnEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	txn := transactions.Transaction{
 		Type: protocol.PaymentTx,

@@ -72,6 +72,7 @@ func TestNewBoxRef(t *testing.T) {
 }
 
 func TestStringsToBoxRefs(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	brs := stringsToBoxRefs([]string{"77,str:hello", "55,int:6", "int:88"})
 	require.EqualValues(t, 77, brs[0].appID)
 	require.EqualValues(t, 55, brs[1].appID)

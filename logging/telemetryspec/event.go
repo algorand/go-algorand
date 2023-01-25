@@ -99,17 +99,6 @@ type BlockAcceptedEventDetails struct {
 	VoteBufLen   uint64
 }
 
-// TopAccountsEvent event
-const TopAccountsEvent Event = "TopAccounts"
-
-// TopAccountEventDetails contains details for the BlockAcceptedEvent
-type TopAccountEventDetails struct {
-	Round              uint64
-	OnlineAccounts     []map[string]interface{}
-	OnlineCirculation  uint64
-	OfflineCirculation uint64
-}
-
 // AccountRegisteredEvent event
 const AccountRegisteredEvent Event = "AccountRegistered"
 
