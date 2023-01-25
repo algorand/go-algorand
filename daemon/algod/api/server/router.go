@@ -120,7 +120,7 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 	ppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
 	pprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
 
-	if node.Config().NodeFollowerMode {
+	if node.Config().EnableFollowMode {
 		data.RegisterHandlers(e, &v2Handler, apiAuthenticator)
 	}
 

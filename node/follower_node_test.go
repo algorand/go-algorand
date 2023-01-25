@@ -31,9 +31,9 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func setupDataNode(t *testing.T) *AlgorandFollowerNode {
+func setupFollowNode(t *testing.T) *AlgorandFollowerNode {
 	cfg := config.GetDefaultLocal()
-	cfg.NodeFollowerMode = true
+	cfg.EnableFollowMode = true
 	genesis := bookkeeping.Genesis{
 		SchemaID:    "go-test-follower-node-genesis",
 		Proto:       protocol.ConsensusCurrentVersion,
@@ -55,7 +55,7 @@ func setupDataNode(t *testing.T) *AlgorandFollowerNode {
 }
 
 func TestSyncRound(t *testing.T) {
-	node := setupDataNode(t)
+	node := setupFollowNode(t)
 	b := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
 			Round: 1,
@@ -78,7 +78,7 @@ func TestSyncRound(t *testing.T) {
 
 func TestErrors(t *testing.T) {
 	// Validates that expected functions are disabled
-	node := setupDataNode(t)
+	node := setupFollowNode(t)
 	require.Error(t, node.BroadcastSignedTxGroup([]transactions.SignedTxn{}))
 	require.Error(t, node.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{}))
 	_, _, err := node.Simulate([]transactions.SignedTxn{})

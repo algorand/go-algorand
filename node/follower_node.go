@@ -333,7 +333,14 @@ func (node *AlgorandFollowerNode) StartCatchup(catchpoint string) error {
 		}
 		return MakeCatchpointUnableToStartError(stats.CatchpointLabel, catchpoint)
 	}
-	var err error
+	cpRound, _, err := ledgercore.ParseCatchpointLabel(catchpoint)
+	if err != nil {
+		return err
+	}
+	sRound := node.GetSyncRound()
+	if sRound > 0 && uint64(cpRound) > sRound {
+		return MakeCatchpointSyncRoundFailure(catchpoint, sRound)
+	}
 	accessor := ledger.MakeCatchpointCatchupAccessor(node.ledger.Ledger, node.log)
 	node.catchpointCatchupService, err = catchup.MakeNewCatchpointCatchupService(catchpoint, node, node.log, node.net, accessor, node.config)
 	if err != nil {

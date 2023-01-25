@@ -180,7 +180,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		})
 
 	var serverNode ServerNode
-	if cfg.NodeFollowerMode {
+	if cfg.EnableFollowMode {
 		var followerNode *node.AlgorandFollowerNode
 		followerNode, err = node.MakeFollower(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
 		serverNode = apiServer.FollowerNode{AlgorandFollowerNode: followerNode}
