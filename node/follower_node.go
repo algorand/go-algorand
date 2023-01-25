@@ -414,7 +414,6 @@ func (node *AlgorandFollowerNode) SetCatchpointCatchupMode(catchpointCatchupMode
 		ctxCh <- node.ctx
 	}()
 	return
-
 }
 
 // SetSyncRound sets the minimum sync round on the catchup service
