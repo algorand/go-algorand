@@ -26,6 +26,7 @@ import (
 
 func TestStopAlgodErrorNotRunning(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	nodeController := MakeNodeController("", ".")
 	err := nodeController.StopAlgod()
@@ -35,6 +36,7 @@ func TestStopAlgodErrorNotRunning(t *testing.T) {
 
 func TestStopAlgodErrorInvalidDirectory(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	nodeController := MakeNodeController("", "[][]")
 	err := nodeController.StopAlgod()

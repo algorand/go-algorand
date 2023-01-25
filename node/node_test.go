@@ -184,6 +184,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 
 func TestSyncingFullNode(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	t.Skip("Flaky in nightly test environment")
 
@@ -240,7 +241,7 @@ func TestSyncingFullNode(t *testing.T) {
 	}
 }
 
-func TestInitialSync(t *testing.T) {
+func TestInitialSync(t *testing.T) { //nolint:paralleltest // Too heavy to parallelize
 	partitiontest.PartitionTest(t)
 
 	if testing.Short() {
@@ -281,7 +282,7 @@ func TestInitialSync(t *testing.T) {
 	}
 }
 
-func TestSimpleUpgrade(t *testing.T) {
+func TestSimpleUpgrade(t *testing.T) { //nolint:paralleltest // The test is skipped.
 	partitiontest.PartitionTest(t)
 
 	t.Skip("Flaky in nightly test environment.")
@@ -428,6 +429,7 @@ func delayStartNode(node *AlgorandFullNode, peers []*AlgorandFullNode, delay tim
 
 func TestStatusReport_TimeSinceLastRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	type fields struct {
 		LastRoundTimestamp time.Time
@@ -458,7 +460,9 @@ func TestStatusReport_TimeSinceLastRound(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			status := StatusReport{
 				LastRoundTimestamp: tt.fields.LastRoundTimestamp,
 			}
@@ -486,6 +490,7 @@ func (m mismatchingDirectroyPermissionsLog) Errorf(fmts string, args ...interfac
 // TestMismatchingGenesisDirectoryPermissions tests to see that the os.MkDir check we have in MakeFull works as expected. It tests both the return error as well as the logged error.
 func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	testDirectroy := t.TempDir()
 
@@ -514,6 +519,7 @@ func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
 // TestOfflineOnlineClosedBitStatus a test that validates that the correct bits are being set
 func TestOfflineOnlineClosedBitStatus(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	tests := []struct {
 		name        string
@@ -534,7 +540,9 @@ func TestOfflineOnlineClosedBitStatus(t *testing.T) {
 			MicroAlgosWithRewards: basics.MicroAlgos{Raw: 0}}, 0 | bitAccountOffline | bitAccountIsClosed},
 	}
 	for _, test := range tests {
+		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			require.Equal(t, test.expectedInt, getOfflineClosedStatus(test.acctData))
 		})
 	}

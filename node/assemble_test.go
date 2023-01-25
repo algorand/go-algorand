@@ -174,6 +174,7 @@ func (cl callbackLogger) Warnf(s string, args ...interface{}) {
 
 func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	const numUsers = 100
 	expectingLog := false

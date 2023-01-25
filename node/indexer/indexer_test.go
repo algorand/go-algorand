@@ -160,6 +160,7 @@ func (s *IndexSuite) TestIndexer_Asset() {
 
 func TestExampleTestSuite(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	suite.Run(t, new(IndexSuite))
 }
