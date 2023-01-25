@@ -38,6 +38,8 @@ type lruOnlineAccounts struct {
 	log logging.Logger
 	// pendingWritesWarnThreshold is the threshold beyond we would write a warning for exceeding the number of pendingAccounts entries
 	pendingWritesWarnThreshold int
+	// disableWriteAccounts is the boolean indicator that disables write into accounts
+	disableWriteAccounts bool
 }
 
 // init initializes the lruAccounts for use.
@@ -48,6 +50,7 @@ func (m *lruOnlineAccounts) init(log logging.Logger, pendingWrites int, pendingW
 	m.pendingAccounts = make(chan store.PersistedOnlineAccountData, pendingWrites)
 	m.log = log
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
+	m.disableWriteAccounts = pendingWrites == 0
 }
 
 // read the persistedAccountData object that the lruAccounts has for the given address.
@@ -92,6 +95,9 @@ func (m *lruOnlineAccounts) writePending(acct store.PersistedOnlineAccountData) 
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
 func (m *lruOnlineAccounts) write(acctData store.PersistedOnlineAccountData) {
+	if m.disableWriteAccounts {
+		return
+	}
 	if el := m.accounts[acctData.Addr]; el != nil {
 		// already exists; is it a newer ?
 		if el.Value.Before(&acctData) {

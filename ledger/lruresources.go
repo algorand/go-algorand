@@ -50,6 +50,9 @@ type lruResources struct {
 	// pendingWritesWarnThreshold is the threshold beyond we would write a warning for exceeding the number of pendingResources entries
 	pendingWritesWarnThreshold int
 
+	// disableWriteResources is the boolean indicator that disables write into resources
+	disableWriteResources bool
+
 	pendingNotFound chan accountCreatable
 	notFound        map[accountCreatable]struct{}
 }
@@ -64,6 +67,7 @@ func (m *lruResources) init(log logging.Logger, pendingWrites int, pendingWrites
 	m.pendingNotFound = make(chan accountCreatable, pendingWrites)
 	m.log = log
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
+	m.disableWriteResources = pendingWrites == 0
 }
 
 // read the persistedResourcesData object that the lruResources has for the given address and creatable index.
@@ -149,6 +153,9 @@ func (m *lruResources) writeNotFoundPending(addr basics.Address, idx basics.Crea
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
 func (m *lruResources) write(resData store.PersistedResourcesData, addr basics.Address) {
+	if m.disableWriteResources {
+		return
+	}
 	if el := m.resources[accountCreatable{address: addr, index: resData.Aidx}]; el != nil {
 		// already exists; is it a newer ?
 		if el.Value.Before(&resData) {

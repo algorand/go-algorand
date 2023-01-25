@@ -49,6 +49,9 @@ type lruKV struct {
 
 	// pendingWritesWarnThreshold is the threshold beyond we would write a warning for exceeding the number of pendingKVs entries
 	pendingWritesWarnThreshold int
+
+	// disableWriteKV is the boolean indicator that disables write into kvs
+	disableWriteKV bool
 }
 
 // init initializes the lruKV for use.
@@ -59,6 +62,7 @@ func (m *lruKV) init(log logging.Logger, pendingWrites int, pendingWritesWarnThr
 	m.pendingKVs = make(chan cachedKVData, pendingWrites)
 	m.log = log
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
+	m.disableWriteKV = pendingWrites == 0
 }
 
 // read the persistedKVData object that the lruKV has for the given key.
@@ -103,6 +107,9 @@ func (m *lruKV) writePending(kv store.PersistedKVData, key string) {
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
 func (m *lruKV) write(kvData store.PersistedKVData, key string) {
+	if m.disableWriteKV {
+		return
+	}
 	if el := m.kvs[key]; el != nil {
 		// already exists; is it a newer ?
 		if el.Value.Before(&kvData) {
