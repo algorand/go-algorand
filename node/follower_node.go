@@ -190,9 +190,7 @@ func (node *AlgorandFollowerNode) Start() {
 		node.catchupService.Start()
 		node.blockService.Start()
 		startNetwork()
-
 	}
-
 }
 
 // ListeningAddress retrieves the node's current listening address, if any.
