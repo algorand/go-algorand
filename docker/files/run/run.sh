@@ -94,7 +94,7 @@ function configure_data_dir() {
 
 function start_kmd() {
   if [ "$START_KMD" = "1" ]; then
-    kmd start -d "$ALGORAND_DATA" -t 0
+    goal kmd start -d "$ALGORAND_DATA"
   fi
 }
 
