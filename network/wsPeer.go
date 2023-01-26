@@ -562,10 +562,8 @@ func (wp *wsPeer) readLoop() {
 				//wp.net.log.Debugf("dropped incoming duplicate %s(%d)", msg.Tag, len(msg.Data))
 				duplicateNetworkMessageReceivedTotal.Inc(nil)
 				duplicateNetworkMessageReceivedBytesTotal.AddUint64(uint64(len(msg.Data)+len(msg.Tag)), nil)
-				if !allowCustomTags {
-					// drop message, skip adding it to queue
-					continue
-				}
+				// drop message, skip adding it to queue
+				continue
 			}
 		}
 		//wp.net.log.Debugf("got msg %d bytes from %s", len(msg.Data), wp.conn.RemoteAddr().String())
