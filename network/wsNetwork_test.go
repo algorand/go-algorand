@@ -1506,7 +1506,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 		{
 			name: "not msgp decodable",
 			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
-				attach.Add(IdentityChallengeHeader, "bm8gZ29vZCB2ZXJ5IGJhZCB0ZXh0LiBub3QgYSBzdHJ1Y3QgZXZlbiBpZiBpdCB0cmllZA")
+				attach.Add(IdentityChallengeHeader, base64.StdEncoding.EncodeToString([]byte("Bad!Data!")))
 				return newIdentityChallengeValue()
 			},
 			totalInA:  0,
@@ -1637,7 +1637,7 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 		{
 			name: "not msgp decodable",
 			verifyAndAttachResponse: func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
-				attach.Add(IdentityChallengeHeader, "YmFkIGRhdGE=")
+				attach.Add(IdentityChallengeHeader, base64.StdEncoding.EncodeToString([]byte("Bad!Data!")))
 				return identityChallengeValue{}, crypto.PublicKey{}, nil
 			},
 			totalInA:  0,
@@ -1677,7 +1677,7 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 				msg, _ := base64.StdEncoding.DecodeString(h.Get(IdentityChallengeHeader))
 				idChal := identityChallenge{}
 				protocol.Decode(msg, &idChal)
-				// make the response object, with an incorrect challenge encode it and attach it to the header
+				// make the response object, then change the signature and encode and attach
 				r := identityChallengeResponse{
 					Key:               s.identityKeys.SignatureVerifier,
 					Challenge:         newIdentityChallengeValue(),
