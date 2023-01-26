@@ -80,7 +80,7 @@ func TestLRUBasicKV(t *testing.T) {
 	}
 }
 
-func TestLRUKVSize0(t *testing.T) {
+func TestLRUKVDisable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var baseKV lruKV
