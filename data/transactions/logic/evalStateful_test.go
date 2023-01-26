@@ -101,13 +101,13 @@ func (r *resources) String() string {
 	if len(r.sharedHoldings) > 0 {
 		fmt.Fprintf(&sb, "sharedHoldings:\n")
 		for hl := range r.sharedHoldings {
-			fmt.Fprintf(&sb, " %s x %d\n", hl.Address, hl.Index)
+			fmt.Fprintf(&sb, " %s x %d\n", hl.Address, hl.Asset)
 		}
 	}
 	if len(r.sharedLocals) > 0 {
 		fmt.Fprintf(&sb, "sharedLocals:\n")
 		for hl := range r.sharedLocals {
-			fmt.Fprintf(&sb, " %s x %d\n", hl.Address, hl.Index)
+			fmt.Fprintf(&sb, " %s x %d\n", hl.Address, hl.App)
 		}
 	}
 
@@ -412,18 +412,22 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 
 func testAppsBytes(t *testing.T, programs [][]byte, ep *EvalParams, expected ...Expect) {
 	t.Helper()
-	require.Equal(t, len(programs), len(ep.TxnGroup))
+	require.LessOrEqual(t, len(programs), len(ep.TxnGroup))
 	for i := range ep.TxnGroup {
-		if programs[i] != nil {
+		program := ep.TxnGroup[i].Txn.ApprovalProgram
+		if len(programs) > i && programs[i] != nil {
+			program = programs[i]
+		}
+		if program != nil {
 			appID := ep.TxnGroup[i].Txn.ApplicationID
 			if appID == 0 {
 				appID = basics.AppIndex(888)
 			}
 			if len(expected) > 0 && expected[0].l == i {
-				testAppFull(t, programs[i], i, appID, ep, expected[0].s)
+				testAppFull(t, program, i, appID, ep, expected[0].s)
 				break // Stop after first failure
 			} else {
-				testAppFull(t, programs[i], i, appID, ep)
+				testAppFull(t, program, i, appID, ep)
 			}
 		}
 	}

@@ -386,26 +386,12 @@ func (ep *EvalParams) computeAvailability() *resources {
 		sharedAccounts: make(map[basics.Address]struct{}),
 		sharedAsas:     make(map[basics.AssetIndex]struct{}),
 		sharedApps:     make(map[basics.AppIndex]struct{}),
-		sharedHoldings: make(map[basics.HoldingLocator]struct{}),
-		sharedLocals:   make(map[basics.LocalsLocator]struct{}),
+		sharedHoldings: make(map[ledgercore.AccountAsset]struct{}),
+		sharedLocals:   make(map[ledgercore.AccountApp]struct{}),
 		boxes:          make(map[boxRef]bool),
 	}
 	for i := range ep.TxnGroup {
-		tx := &ep.TxnGroup[i]
-		switch tx.Txn.Type {
-		case protocol.PaymentTx:
-			available.fillPayment(&tx.Txn.Header, &tx.Txn.PaymentTxnFields)
-		case protocol.KeyRegistrationTx:
-			available.fillKeyRegistration(&tx.Txn.Header)
-		case protocol.AssetConfigTx:
-			available.fillAssetConfig(&tx.Txn.Header, &tx.Txn.AssetConfigTxnFields)
-		case protocol.AssetTransferTx:
-			available.fillAssetTransfer(&tx.Txn.Header, &tx.Txn.AssetTransferTxnFields)
-		case protocol.AssetFreezeTx:
-			available.fillAssetFreeze(&tx.Txn.Header, &tx.Txn.AssetFreezeTxnFields)
-		case protocol.ApplicationCallTx:
-			available.fillApplicationCall(ep, &tx.Txn.Header, &tx.Txn.ApplicationCallTxnFields)
-		}
+		available.fill(&ep.TxnGroup[i].Txn, ep)
 	}
 	return available
 }
@@ -4466,22 +4452,59 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (basics.AssetInd
 
 }
 
-func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (addr basics.Address, asset basics.AssetIndex, err error) {
-	addr, _, err = cx.accountReference(account)
-	if err != nil {
-		return
-	}
-	asset, err = cx.assetReference(ref, false)
-	if err != nil {
-		return
+func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.Address, basics.AssetIndex, error) {
+	if cx.version >= resourceSharingVersion {
+		var addr basics.Address
+		var err error
+		if account.Bytes != nil {
+			addr, err = account.address()
+		} else {
+			addr, err = cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
+		}
+		if err != nil {
+			return basics.Address{}, basics.AssetIndex(0), err
+		}
+		aid := basics.AssetIndex(ref)
+		if cx.availableHolding(addr, aid) {
+			return addr, aid, nil
+		}
+		if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
+			aid := cx.txn.Txn.ForeignAssets[ref]
+			if cx.availableHolding(addr, aid) {
+				return addr, aid, nil
+			}
+		}
+
+		// Do some extra lookups to give a more concise err. Whenever a holding
+		// is available, its account and asset must be as well (but not vice
+		// versa, anymore). So, if (only) one of them is not available, yell
+		// about it, specifically.
+
+		_, _, acctErr := cx.accountReference(account)
+		_, assetErr := cx.assetReference(ref, false)
+		switch {
+		case acctErr != nil && assetErr == nil:
+			err = acctErr
+		case acctErr == nil && assetErr != nil:
+			err = assetErr
+		default:
+			err = fmt.Errorf("invalid Holding access %s x %d", addr, aid)
+		}
+
+		return basics.Address{}, basics.AssetIndex(0), err
 	}
 
-	if !cx.availableHolding(addr, asset) {
-		err = fmt.Errorf("invalid Holding access %s x %d", addr, asset)
-		return
+	// Pre group resource sharing, the rule is just that account and asset are
+	// each available.
+	addr, _, err := cx.accountReference(account)
+	if err != nil {
+		return basics.Address{}, basics.AssetIndex(0), err
 	}
-
-	return
+	asset, err := cx.assetReference(ref, false)
+	if err != nil {
+		return basics.Address{}, basics.AssetIndex(0), err
+	}
+	return addr, asset, nil
 }
 
 func opAssetHoldingGet(cx *EvalContext) error {
@@ -4836,15 +4859,9 @@ func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
 	return false
 }
 
-// availableHolding is an additional check, required since
-// resourceSharingVersion. It will work in previous versions too, since
-// cx.available will be populated to make it work. But it must protect for <
-// directRefEnabledVersion, because unnamed holdings could be read then.
+// availableHolding checks if a holding is available under the txgroup sharing rules
 func (cx *EvalContext) availableHolding(addr basics.Address, ai basics.AssetIndex) bool {
-	if cx.version < directRefEnabledVersion {
-		return true
-	}
-	if _, ok := cx.available.sharedHoldings[basics.HoldingLocator{Address: addr, Index: ai}]; ok {
+	if _, ok := cx.available.sharedHoldings[ledgercore.AccountAsset{Address: addr, Asset: ai}]; ok {
 		return true
 	}
 	// All holdings of created assets are available
@@ -4864,7 +4881,7 @@ func (cx *EvalContext) availableLocals(addr basics.Address, ai basics.AppIndex) 
 	if cx.version < directRefEnabledVersion {
 		return true
 	}
-	if _, ok := cx.available.sharedLocals[basics.LocalsLocator{Address: addr, Index: ai}]; ok {
+	if _, ok := cx.available.sharedLocals[ledgercore.AccountApp{Address: addr, App: ai}]; ok {
 		return true
 	}
 	// All locals of created apps are available

@@ -19,6 +19,8 @@ package logic
 import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // resources contains a catalog of available resources. It's used to track the
@@ -40,8 +42,8 @@ type resources struct {
 	// We need to carefully track the "cross-product" availability, because if
 	// tx0 mentions an account A, and tx1 mentions an ASA X, that does _not_
 	// make the holding AX available
-	sharedHoldings map[basics.HoldingLocator]struct{}
-	sharedLocals   map[basics.LocalsLocator]struct{}
+	sharedHoldings map[ledgercore.AccountAsset]struct{}
+	sharedLocals   map[ledgercore.AccountApp]struct{}
 
 	// boxes are all of the top-level box refs from the txgroup. Most are added
 	// during NewEvalParams(). refs using 0 on an appl create are resolved and
@@ -56,16 +58,40 @@ type resources struct {
 }
 
 func (r *resources) shareHolding(addr basics.Address, id basics.AssetIndex) {
-	r.sharedHoldings[basics.HoldingLocator{Address: addr, Index: id}] = struct{}{}
+	r.sharedHoldings[ledgercore.AccountAsset{Address: addr, Asset: id}] = struct{}{}
+}
+
+func (r *resources) shareAccountAndHolding(addr basics.Address, id basics.AssetIndex) {
+	r.sharedAccounts[addr] = struct{}{}
+	if id != 0 {
+		r.sharedHoldings[ledgercore.AccountAsset{Address: addr, Asset: id}] = struct{}{}
+	}
 }
 
 func (r *resources) shareLocal(addr basics.Address, id basics.AppIndex) {
-	r.sharedLocals[basics.LocalsLocator{Address: addr, Index: id}] = struct{}{}
+	r.sharedLocals[ledgercore.AccountApp{Address: addr, App: id}] = struct{}{}
 }
 
-// In the fill routines, we pass the header and the fields in separately, even
+// In the fill* routines, we pass the header and the fields in separately, even
 // though they are pointers into the same structure. That prevents dumb attempts
 // to use other fields from the transaction.
+
+func (r *resources) fill(tx *transactions.Transaction, ep *EvalParams) {
+	switch tx.Type {
+	case protocol.PaymentTx:
+		r.fillPayment(&tx.Header, &tx.PaymentTxnFields)
+	case protocol.KeyRegistrationTx:
+		r.fillKeyRegistration(&tx.Header)
+	case protocol.AssetConfigTx:
+		r.fillAssetConfig(&tx.Header, &tx.AssetConfigTxnFields)
+	case protocol.AssetTransferTx:
+		r.fillAssetTransfer(&tx.Header, &tx.AssetTransferTxnFields)
+	case protocol.AssetFreezeTx:
+		r.fillAssetFreeze(&tx.Header, &tx.AssetFreezeTxnFields)
+	case protocol.ApplicationCallTx:
+		r.fillApplicationCall(ep, &tx.Header, &tx.ApplicationCallTxnFields)
+	}
+}
 
 func (r *resources) fillKeyRegistration(hdr *transactions.Header) {
 	r.sharedAccounts[hdr.Sender] = struct{}{}
@@ -80,26 +106,25 @@ func (r *resources) fillPayment(hdr *transactions.Header, tx *transactions.Payme
 }
 
 func (r *resources) fillAssetConfig(hdr *transactions.Header, tx *transactions.AssetConfigTxnFields) {
-	r.sharedAccounts[hdr.Sender] = struct{}{}
+	r.shareAccountAndHolding(hdr.Sender, tx.ConfigAsset)
 	if id := tx.ConfigAsset; id != 0 {
 		r.sharedAsas[id] = struct{}{}
-		r.shareHolding(hdr.Sender, id)
 	}
 	// We don't need to read the special addresses, so they don't go in.
 }
 
 func (r *resources) fillAssetTransfer(hdr *transactions.Header, tx *transactions.AssetTransferTxnFields) {
-	r.sharedAccounts[hdr.Sender] = struct{}{}
 	id := tx.XferAsset
 	r.sharedAsas[id] = struct{}{}
-	r.shareHolding(hdr.Sender, id)
+	r.shareAccountAndHolding(hdr.Sender, id)
+	r.shareAccountAndHolding(tx.AssetReceiver, id)
 
 	if !tx.AssetSender.IsZero() {
-		r.shareHolding(tx.AssetSender, id)
+		r.shareAccountAndHolding(tx.AssetSender, id)
 	}
-	r.shareHolding(tx.AssetReceiver, id)
+
 	if !tx.AssetCloseTo.IsZero() {
-		r.shareHolding(tx.AssetCloseTo, id)
+		r.shareAccountAndHolding(tx.AssetCloseTo, id)
 	}
 }
 
@@ -107,7 +132,7 @@ func (r *resources) fillAssetFreeze(hdr *transactions.Header, tx *transactions.A
 	r.sharedAccounts[hdr.Sender] = struct{}{}
 	id := tx.FreezeAsset
 	r.sharedAsas[id] = struct{}{}
-	r.shareHolding(tx.FreezeAccount, id)
+	r.shareAccountAndHolding(tx.FreezeAccount, id)
 }
 
 func (r *resources) fillApplicationCall(ep *EvalParams, hdr *transactions.Header, tx *transactions.ApplicationCallTxnFields) {
