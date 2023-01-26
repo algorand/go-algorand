@@ -856,7 +856,7 @@ func TestRegisterUpdatedEvent(t *testing.T) {
 		required:            false,
 	}
 
-	registry.writeQueue <- makeOpRequest(&registerOp{updates})
+	registry.queueOpRequest(&registerOp{updates})
 
 	a.NoError(registry.Flush(defaultTimeout))
 
@@ -866,7 +866,7 @@ func TestRegisterUpdatedEvent(t *testing.T) {
 		required:            true,
 	}
 
-	registry.writeQueue <- makeOpRequest(&registerOp{updates})
+	registry.queueOpRequest(&registerOp{updates})
 
 	err = registry.Flush(defaultTimeout)
 	a.Contains(err.Error(), "unable to disable old key when registering")
@@ -1412,4 +1412,42 @@ func BenchmarkDeleteExpired(b *testing.B) {
 			a.NoError(err)
 		})
 	}
+}
+
+func TestCountNumStateproofKeys(t *testing.T) {
+
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
+
+	access, err := db.MakeAccessor(t.Name()+"_stateprooftest", false, true)
+	if err != nil {
+		panic(err)
+	}
+	root, err := GenerateRoot(access)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(stateProofIntervalForTests*2), 3)
+	access.Close()
+	a.NoError(err)
+
+	// Install a key for testing
+	id, err := registry.Insert(p.Participation)
+	a.NoError(err)
+
+	a.NoError(registry.Flush(defaultTimeout))
+
+	// Append keys
+	keys := make(StateProofKeys, 5)
+	for i := 0; i < 5; i++ {
+		keys[i] = merklesignature.KeyRoundPair{Round: stateProofIntervalForTests + uint64(i), Key: p.StateProofSecrets.GetKey(stateProofIntervalForTests)}
+	}
+
+	err = registry.AppendKeys(id, keys)
+	a.NoError(err)
+
+	a.NoError(registry.Flush(defaultTimeout))
+
+	count, err := registry.countStateproofKeys(p.ID())
+	a.NoError(err)
+	a.Equal(count, 5)
 }
