@@ -1753,7 +1753,16 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 	}
 
 	testCases := []testCase{
-		// when identityChallenge is not generated/sent, peer is disconnected after 5 seconds
+		// in a totally unmodified scenario, the two peers stay connected even after the verification timeout
+		{
+			name:            "happy path",
+			totalInA:        0,
+			totalOutA:       1,
+			totalInB:        1,
+			totalOutB:       0,
+			additionalSleep: 6 * time.Second,
+		},
+		// if the peer does not send an identityVerification before the timeout, the peer is disconnected
 		{
 			name: "not included",
 			verifyResponse: func(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
