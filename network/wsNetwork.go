@@ -388,7 +388,7 @@ type WebsocketNetwork struct {
 	prioResponseChan chan *wsPeer
 
 	// identity challenge scheme for creating challenges and responding
-	identityScheme  *identityChallengeScheme
+	identityScheme  identityChallengeScheme
 	identityTracker identityTracker
 
 	// outgoingMessagesBufferSize is the size used for outgoing messages.
@@ -2162,7 +2162,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		requestHeader.Add(ProtocolAcceptVersionHeader, supportedProtocolVersion)
 	}
 
-	idChallenge := wn.identityScheme.AttachNewIdentityChallenge(requestHeader, addr)
+	idChallenge := wn.identityScheme.AttachChallenge(requestHeader, addr)
 
 	// for backward compatibility, include the ProtocolVersion header as well.
 	requestHeader.Set(ProtocolVersionHeader, wn.protocolVersion)
@@ -2223,7 +2223,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		return
 	}
 
-	responseChallenge, peerID, identityVerified := wn.identityScheme.VerifyResponse(response.Header, idChallenge)
+	peerID, idVerificationMessage := wn.identityScheme.VerifyResponse(response.Header, idChallenge)
 
 	throttledConnection := false
 	if atomic.AddInt32(&wn.throttledOutgoingConnections, int32(-1)) >= 0 {
@@ -2242,14 +2242,14 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		throttledOutgoingConnection: throttledConnection,
 		version:                     matchingVersion,
 		identity:                    peerID,
-		identityVerified:            identityVerified,
 		features:                    decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 
-	// if the peer has an identity and is verified, attempt to load it into the identityTracker
-	// if that fails, return without adding the peer
-	if identityVerified == 1 {
+	// if there is a final verification message to send, it means this peer has a verified identity,
+	// attempt to set the peer and identityTracker
+	if idVerificationMessage != nil {
+		atomic.StoreUint32(&peer.identityVerified, uint32(1))
 		wn.peersLock.Lock()
 		ok := wn.identityTracker.setIdentity(peer)
 		wn.peersLock.Unlock()
@@ -2275,11 +2275,9 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 
 	wn.maybeSendMessagesOfInterest(peer, nil)
 
-	// if the peer's response contained a verified identity challenge response, send identity verification to the peer
-	// this peer has not yet seen a round-trip of a challenge, so we sign and send the challenge from the response once WS connection is up
-	if identityVerified == 1 {
-		mbytes := wn.identityScheme.IdentityVerificationMessage(responseChallenge)
-		sent := peer.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, time.Now())
+	// if there is a final identification verification message to send, send it to the peer
+	if idVerificationMessage != nil {
+		sent := peer.writeNonBlock(context.Background(), idVerificationMessage, true, crypto.Digest{}, time.Now())
 		if !sent {
 			wn.log.With("remote", addr).With("local", localAddr).Warnf("could not send identity challenge verification to %v", addr)
 		}

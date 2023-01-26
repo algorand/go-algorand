@@ -49,12 +49,12 @@ func TestIdentityChallengeSchemeAttachIfEnabled(t *testing.T) {
 
 	h := http.Header{}
 	i := NewIdentityChallengeScheme("")
-	chal := i.AttachNewIdentityChallenge(h, "other")
+	chal := i.AttachChallenge(h, "other")
 	require.Empty(t, h.Get(IdentityChallengeHeader))
 	require.Empty(t, chal)
 
 	j := NewIdentityChallengeScheme("yes")
-	chal = j.AttachNewIdentityChallenge(h, "other")
+	chal = j.AttachChallenge(h, "other")
 	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
 	require.NotEmpty(t, chal)
 }
@@ -67,12 +67,12 @@ func TestIdentityChallengeSchemeVerifyAndAttachResponce(t *testing.T) {
 	i := NewIdentityChallengeScheme("i1")
 	// author a challenge to the other scheme
 	h := http.Header{}
-	i.AttachNewIdentityChallenge(h, "i2")
+	i.AttachChallenge(h, "i2")
 	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
 
 	// without a dedup name, no response
 	h = http.Header{}
-	i.AttachNewIdentityChallenge(h, "i2")
+	i.AttachChallenge(h, "i2")
 	r := http.Header{}
 	i2 := NewIdentityChallengeScheme("")
 	chal, key := i2.VerifyAndAttachResponse(r, h)
@@ -82,7 +82,7 @@ func TestIdentityChallengeSchemeVerifyAndAttachResponce(t *testing.T) {
 
 	// if dedup name doesn't match, no response
 	h = http.Header{}
-	i.AttachNewIdentityChallenge(h, "i2")
+	i.AttachChallenge(h, "i2")
 	r = http.Header{}
 	i2 = NewIdentityChallengeScheme("not i2")
 	chal, key = i2.VerifyAndAttachResponse(r, h)
@@ -102,7 +102,7 @@ func TestIdentityChallengeSchemeVerifyAndAttachResponce(t *testing.T) {
 
 	// happy path: response should be attached here
 	h = http.Header{}
-	i.AttachNewIdentityChallenge(h, "i2")
+	i.AttachChallenge(h, "i2")
 	r = http.Header{}
 	i2 = NewIdentityChallengeScheme("i2")
 	chal, key = i2.VerifyAndAttachResponse(r, h)
@@ -119,7 +119,7 @@ func TestIdentityChallengeSchemeVerifyResponse(t *testing.T) {
 	h := http.Header{}
 	i := NewIdentityChallengeScheme("i1")
 	// author a challenge to ourselves
-	origChal := i.AttachNewIdentityChallenge(h, "i1")
+	origChal := i.AttachChallenge(h, "i1")
 	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
 	require.NotEmpty(t, origChal)
 	r := http.Header{}
@@ -131,9 +131,8 @@ func TestIdentityChallengeSchemeVerifyResponse(t *testing.T) {
 
 	// respChal2 should match respChal as it is being passed back to the original peer
 	// while origChal will be used for verification
-	respChal2, key2, ok := i.VerifyResponse(r, origChal)
-	require.Equal(t, respChal, respChal2)
-	require.Equal(t, uint32(1), ok)
+	key2, verificationMsg := i.VerifyResponse(r, origChal)
+	require.NotEmpty(t, verificationMsg)
 	// because we sent this to ourselves, we can confirm the keys match
 	require.Equal(t, key, key2)
 }
@@ -189,7 +188,7 @@ func TestIdentityChallengeSchemeBadResponseSignature(t *testing.T) {
 	h := http.Header{}
 	i := NewIdentityChallengeScheme("i1")
 	// author a challenge to ourselves
-	origChal := i.AttachNewIdentityChallenge(h, "i1")
+	origChal := i.AttachChallenge(h, "i1")
 	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
 	require.NotEmpty(t, origChal)
 
@@ -205,10 +204,9 @@ func TestIdentityChallengeSchemeBadResponseSignature(t *testing.T) {
 	b64enc := base64.StdEncoding.EncodeToString(enc)
 	r.Add(IdentityChallengeHeader, b64enc)
 
-	respChal2, key2, ok := i.VerifyResponse(r, origChal)
-	require.Empty(t, respChal2)
+	key2, verificationMsg := i.VerifyResponse(r, origChal)
 	require.Empty(t, key2)
-	require.Equal(t, uint32(0), ok)
+	require.Empty(t, verificationMsg)
 }
 
 // TestIdentityChallengeSchemeBadResponsePayload tests that the  scheme will
@@ -219,7 +217,7 @@ func TestIdentityChallengeSchemeBadResponsePayload(t *testing.T) {
 	h := http.Header{}
 	i := NewIdentityChallengeScheme("i1")
 	// author a challenge to ourselves
-	origChal := i.AttachNewIdentityChallenge(h, "i1")
+	origChal := i.AttachChallenge(h, "i1")
 	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
 	require.NotEmpty(t, origChal)
 
@@ -227,10 +225,9 @@ func TestIdentityChallengeSchemeBadResponsePayload(t *testing.T) {
 	r := http.Header{}
 	r.Add(IdentityChallengeHeader, "BAD B64 ENCODING :)")
 
-	respChal2, key2, ok := i.VerifyResponse(r, origChal)
-	require.Empty(t, respChal2)
+	key2, verificationMsg := i.VerifyResponse(r, origChal)
 	require.Empty(t, key2)
-	require.Equal(t, uint32(0), ok)
+	require.Empty(t, verificationMsg)
 }
 
 // TestIdentityChallengeSchemeWrongChallenge the scheme will
@@ -241,7 +238,7 @@ func TestIdentityChallengeSchemeWrongChallenge(t *testing.T) {
 	h := http.Header{}
 	i := NewIdentityChallengeScheme("i1")
 	// author a challenge to ourselves
-	origChal := i.AttachNewIdentityChallenge(h, "i1")
+	origChal := i.AttachChallenge(h, "i1")
 	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
 	require.NotEmpty(t, origChal)
 
@@ -252,10 +249,9 @@ func TestIdentityChallengeSchemeWrongChallenge(t *testing.T) {
 	require.NotEmpty(t, key)
 
 	// Attempt to verify against the wrong challenge
-	respChal2, key2, ok := i.VerifyResponse(r, newIdentityChallengeValue())
-	require.Empty(t, respChal2)
-	require.Equal(t, uint32(0), ok)
+	key2, verificationMsg := i.VerifyResponse(r, origChal)
 	require.Empty(t, key2)
+	require.Empty(t, verificationMsg)
 }
 
 func TestNewIdentityTracker(t *testing.T) {

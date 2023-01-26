@@ -56,38 +56,35 @@ func newIdentityChallengeValue() identityChallengeValue {
 	return ret
 }
 
-// identityChallengeScheme participates in two parts of a three way handshake
-// with the goal of exchanging Public Keys with a peer, using random 32-byte challenges
-// exchanged in both directions
-// it is resposible for:
-// * attaching an initial identity challenge to headers
-// * verifying identity challenges from headers and attaching challenge responses
-// * verifying challenge responses from headers
-// if the challenge response is verified, wsNetwork will send a final message
-// in the form of a websocket "network identification" message to complete the exchange
-// wsNetwork uses this scheme in conjunction with identityTracker to prevent
-// duplicate connections between peers
-type identityChallengeScheme struct {
+type identityChallengeScheme interface {
+	AttachChallenge(attach http.Header, addr string) identityChallengeValue
+	VerifyAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey)
+	VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte)
+}
+
+// identityChallengePublicKeyScheme implements IdentityChallengeScheme by
+// exchanging and verifying public key challenges
+type identityChallengePublicKeyScheme struct {
 	dedupName    string
 	identityKeys *crypto.SignatureSecrets
 }
 
 // NewIdentityChallengeScheme will create a default Identification Scheme
-func NewIdentityChallengeScheme(dn string) *identityChallengeScheme {
+func NewIdentityChallengeScheme(dn string) *identityChallengePublicKeyScheme {
 	var seed crypto.Seed
 	crypto.RandBytes(seed[:])
 
-	return &identityChallengeScheme{
+	return &identityChallengePublicKeyScheme{
 		dedupName:    dn,
 		identityKeys: crypto.GenerateSignatureSecrets(seed),
 	}
 }
 
-// AttachNewIdentityChallenge will generate a new identity challenge
+// AttachChallenge will generate a new identity challenge
 // and will encode and attach the challenge as a header.
 // returns the identityChallengeValue used for this challenge so the network can confirm it later
 // or returns an empty challenge if dedupName is not set
-func (i identityChallengeScheme) AttachNewIdentityChallenge(attach http.Header, addr string) identityChallengeValue {
+func (i identityChallengePublicKeyScheme) AttachChallenge(attach http.Header, addr string) identityChallengeValue {
 	if i.dedupName == "" {
 		return identityChallengeValue{}
 	}
@@ -108,7 +105,7 @@ func (i identityChallengeScheme) AttachNewIdentityChallenge(attach http.Header, 
 // once verified, it will attach the header to the "attach" header
 // and will return the challenge and identity of the peer for recording
 // or returns empty values if the header did not end up getting set
-func (i identityChallengeScheme) VerifyAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey) {
+func (i identityChallengePublicKeyScheme) VerifyAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey) {
 	if i.dedupName == "" {
 		return identityChallengeValue{}, crypto.PublicKey{}
 	}
@@ -138,27 +135,28 @@ func (i identityChallengeScheme) VerifyAndAttachResponse(attach http.Header, h h
 
 // VerifyResponse will decode the identity challenge header and confirm it self-verifies,
 // and that the provided challenge matches the encoded one
-// returns the response challenge and claimed key of the peer, and if it can be verified
-func (i identityChallengeScheme) VerifyResponse(h http.Header, c identityChallengeValue) (identityChallengeValue, crypto.PublicKey, uint32) {
+// if the response can be verified, it returns the identity of the peer and a final Verification Message to send to the peer
+// otherwise, returns empty values
+func (i identityChallengePublicKeyScheme) VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte) {
 	msg, err := base64.StdEncoding.DecodeString(h.Get(IdentityChallengeHeader))
 	if err != nil {
-		return identityChallengeValue{}, crypto.PublicKey{}, 0
+		return crypto.PublicKey{}, []byte{}
 	}
 	resp := identityChallengeResponse{}
 	err = protocol.Decode(msg, &resp)
 	if err != nil {
-		return identityChallengeValue{}, crypto.PublicKey{}, 0
+		return crypto.PublicKey{}, []byte{}
 	}
 	if resp.Challenge == c && resp.Verify() {
-		return resp.ResponseChallenge, resp.Key, 1
+		return resp.Key, i.identityVerificationMessage(resp.ResponseChallenge)
 	}
-	return identityChallengeValue{}, crypto.PublicKey{}, 0
+	return crypto.PublicKey{}, []byte{}
 }
 
 // IdentityVerificationMessage generates the 3rd message of the challenge exchange,
 // which a wsNetwork can then send to a peer in order to verify their own identity.
 // It is prefixed with the ID Verification tag and returned ready-to-send
-func (i *identityChallengeScheme) IdentityVerificationMessage(c identityChallengeValue) []byte {
+func (i *identityChallengePublicKeyScheme) identityVerificationMessage(c identityChallengeValue) []byte {
 	msg := identityVerificationMessage{
 		Signature: i.identityKeys.SignBytes(c[:]),
 	}
