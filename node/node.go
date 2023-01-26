@@ -1283,13 +1283,13 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.Valid
 	return validatedBlock{vb: lvb}, nil
 }
 
-// OnNewSpeculativeBlock handles creating a speculative block
-func (node *AlgorandFullNode) OnNewSpeculativeBlock(ctx context.Context, avb agreement.ValidatedBlock) {
+// StartSpeculativeBlockAssembly handles creating a speculative block
+func (node *AlgorandFullNode) StartSpeculativeBlockAssembly(ctx context.Context, avb agreement.ValidatedBlock, blockHash crypto.Digest, onlyIfStarted bool) {
 	vb, ok := avb.(validatedBlock)
 	if ok {
-		node.transactionPool.OnNewSpeculativeBlock(ctx, vb.vb)
+		node.transactionPool.StartSpeculativeBlockAssembly(ctx, vb.vb, blockHash, onlyIfStarted)
 	} else {
-		node.log.Errorf("cannot convert agreement ValidatedBlock to ValidateBlock")
+		node.log.Panicf("cannot convert agreement ValidatedBlock to ValidateBlock, got %T", avb)
 	}
 }
 

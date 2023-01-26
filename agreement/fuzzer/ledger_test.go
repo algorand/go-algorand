@@ -112,7 +112,8 @@ func (f testBlockFactory) AssembleBlock(r basics.Round) (agreement.ValidatedBloc
 	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
 }
 
-func (f testBlockFactory) OnNewSpeculativeBlock(context.Context, agreement.ValidatedBlock) {}
+func (f testBlockFactory) StartSpeculativeBlockAssembly(context.Context, agreement.ValidatedBlock, crypto.Digest, bool) {
+}
 
 type testLedgerSyncFunc func(l *testLedger, r basics.Round, c agreement.Certificate) bool
 

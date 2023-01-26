@@ -86,7 +86,7 @@ type BlockFactory interface {
 	// lose liveness.
 	AssembleBlock(basics.Round) (ValidatedBlock, error)
 
-	OnNewSpeculativeBlock(context.Context, ValidatedBlock)
+	StartSpeculativeBlockAssembly(context.Context, ValidatedBlock, crypto.Digest, bool)
 }
 
 // A Ledger represents the sequence of Entries agreed upon by the protocol.

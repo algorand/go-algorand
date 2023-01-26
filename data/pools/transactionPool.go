@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -36,7 +37,10 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/condvar"
+	"github.com/algorand/go-algorand/util/metrics"
 )
+
+var speculativeAssemblyDiscarded = metrics.NewTagCounter("algod_speculative_assembly_discarded", "started speculative block assembly but a different block won later")
 
 // A TransactionPool prepares valid blocks for proposal and caches
 // validated transaction groups.
@@ -95,15 +99,20 @@ type TransactionPool struct {
 	// proposalAssemblyTime is the ProposalAssemblyTime configured for this node.
 	proposalAssemblyTime time.Duration
 
-	ctx                       context.Context
-	cancelSpeculativeAssembly context.CancelFunc
+	ctx context.Context
 
-	// specBlockCh has an assembled speculative block
-	specBlockCh chan *ledgercore.ValidatedBlock
-	// specBlockMu protects setting/getting specBlockCh only
+	// specBlockMu protects speculative block assembly vars below:
 	specBlockMu deadlock.Mutex
+	specActive  bool
+	// specBlockDigest ValidatedBlock.Block().Digest()
+	specBlockDigest           crypto.Digest
+	cancelSpeculativeAssembly context.CancelFunc
+	speculativePool           *TransactionPool
+	// specBlockCh has an assembled speculative block
+	//specBlockCh chan *ledgercore.ValidatedBlock
 	// specAsmDone channel is closed when there is no speculative assembly
-	specAsmDone <-chan struct{}
+	//specAsmDone <-chan struct{}
+	// TODO: feed into assemblyMu & assemblyCond above!
 
 	cfg config.Local
 	// stateproofOverflowed indicates that a stateproof transaction was allowed to
@@ -149,10 +158,11 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	return &pool
 }
 
-func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(ctx context.Context, vb *ledgercore.ValidatedBlock) (*TransactionPool, chan<- *ledgercore.ValidatedBlock, chan<- struct{}, error) {
+// TODO: this needs a careful read for lock/shallow-copy issues
+func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(ctx context.Context, vb *ledgercore.ValidatedBlock) (*TransactionPool, context.CancelFunc, error) {
 	specLedger, err := ledger.MakeValidatedBlockAsLFE(vb, pool.ledger)
 	if err != nil {
-		return nil, nil, make(chan struct{}), err
+		return nil, nil, err
 	}
 
 	copyPoolctx, cancel := context.WithCancel(ctx)
@@ -174,19 +184,18 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(ctx context.Conte
 		cfg:                  pool.cfg,
 		ctx:                  copyPoolctx,
 	}
+	// TODO: make an 'assembly context struct' with a subset of TransactionPool fields?
 	copy.cond.L = &copy.mu
 	copy.assemblyCond.L = &copy.assemblyMu
 
-	pool.cancelSpeculativeAssembly = cancel
-	specDoneCh := make(chan struct{})
-	pool.specAsmDone = specDoneCh
+	//pool.cancelSpeculativeAssembly = cancel
 
-	specBlockCh := make(chan *ledgercore.ValidatedBlock, 1)
-	pool.specBlockMu.Lock()
-	pool.specBlockCh = specBlockCh
-	pool.specBlockMu.Unlock()
+	// specBlockCh := make(chan *ledgercore.ValidatedBlock, 1)
+	// pool.specBlockMu.Lock()
+	// pool.specBlockCh = specBlockCh
+	// pool.specBlockMu.Unlock()
 
-	return &copy, specBlockCh, specDoneCh, nil
+	return &copy, cancel, nil
 }
 
 // poolAsmResults is used to syncronize the state of the block assembly process.
@@ -242,11 +251,11 @@ func (pool *TransactionPool) Reset() {
 	pool.recomputeBlockEvaluator(nil, 0, false)
 
 	// cancel speculative assembly and clear its result
+	pool.specBlockMu.Lock()
 	if pool.cancelSpeculativeAssembly != nil {
 		pool.cancelSpeculativeAssembly()
-		<-pool.specAsmDone
 	}
-	pool.specBlockCh = nil
+	pool.specBlockMu.Unlock()
 }
 
 // NumExpired returns the number of transactions that expired at the
@@ -562,64 +571,96 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	return pool.statusCache.check(txid)
 }
 
-// OnNewSpeculativeBlock handles creating a speculative block
-func (pool *TransactionPool) OnNewSpeculativeBlock(ctx context.Context, vb *ledgercore.ValidatedBlock) {
+// StartSpeculativeBlockAssembly handles creating a speculative block
+func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, vb *ledgercore.ValidatedBlock, blockHash crypto.Digest, onlyIfStarted bool) {
+
+	if pool.cfg.SpeculativeAssemblyDisable {
+		return
+	}
+
+	if blockHash.IsZero() {
+		// if we don't already have a block hash, calculate it now
+		blockHash = vb.Block().Digest()
+	}
+
+	pool.specBlockMu.Lock()
+	defer pool.specBlockMu.Unlock()
+	if pool.specActive {
+		if blockHash == pool.specBlockDigest {
+			pool.log.Infof("StartSpeculativeBlockAssembly %s already running", blockHash.String())
+			return
+		}
+		// cancel prior speculative block assembly based on different block
+		speculativeAssemblyDiscarded.Add("start", 1)
+		pool.cancelSpeculativeAssembly()
+		pool.specActive = false
+	} else if onlyIfStarted {
+		// not already started, don't start one
+		return
+	}
+	pool.log.Infof("StartSpeculativeBlockAssembly %s", blockHash.String())
+	pool.specActive = true
+	pool.specBlockDigest = blockHash
 
 	pool.mu.Lock()
-	// cancel any pending speculative assembly
-	if pool.cancelSpeculativeAssembly != nil {
-		pool.cancelSpeculativeAssembly()
-		<-pool.specAsmDone
-	}
 
 	// move remembered txns to pending
 	pool.rememberCommit(false)
 
 	// create shallow pool copy, close the done channel when we're done with
 	// speculative block assembly.
-	speculativePool, outchan, specAsmDoneCh, err := pool.copyTransactionPoolOverSpecLedger(ctx, vb)
-	defer close(specAsmDoneCh)
+	speculativePool, cancel, err := pool.copyTransactionPoolOverSpecLedger(ctx, vb)
+	pool.cancelSpeculativeAssembly = cancel
+	pool.speculativePool = speculativePool
+
 	pool.mu.Unlock()
 
 	if err != nil {
-		pool.log.Warnf("OnNewSpeculativeBlock: %v", err)
+		pool.specActive = false
+		pool.log.Warnf("StartSpeculativeBlockAssembly: %v", err)
 		return
 	}
 
 	// process txns only until one block is full
-	speculativePool.onNewBlock(vb.Block(), vb.Delta(), true)
-
-	if speculativePool.assemblyResults.err != nil {
-		return
-	}
-
-	select {
-	case outchan <- speculativePool.assemblyResults.blk:
-	default:
-		speculativePool.log.Errorf("failed writing speculative block to channel, channel already has a block")
-	}
+	// action on subordinate pool continues asynchronously, to be picked up in tryReadSpeculativeBlock
+	go speculativePool.onNewBlock(vb.Block(), vb.Delta(), true)
 }
 
-func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHash) (*ledgercore.ValidatedBlock, error) {
+func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHash, round basics.Round, deadline time.Time, stats *telemetryspec.AssembleBlockMetrics) (*ledgercore.ValidatedBlock, error) {
+	// assumes pool.assemblyMu is held
 	pool.specBlockMu.Lock()
-	defer pool.specBlockMu.Unlock()
 
-	select {
-	case vb := <-pool.specBlockCh:
-		if vb == nil {
-			return nil, fmt.Errorf("speculation block is nil")
+	if pool.specActive {
+		if pool.specBlockDigest == crypto.Digest(branch) {
+			pool.log.Infof("update speculative deadline: %s", deadline.String())
+			specPool := pool.speculativePool
+			pool.specBlockMu.Unlock()
+			// TODO: is continuing to hold outer pool.assemblyMu here a bad thing?
+			specPool.assemblyMu.Lock()
+			assembled, err := specPool.waitForBlockAssembly(round, deadline, stats)
+			specPool.assemblyMu.Unlock()
+			return assembled, err
 		}
-		if vb.Block().Branch != branch {
-			return nil, fmt.Errorf("misspeculated block: branch = %x vs. latest hash = %x", vb.Block().Branch, branch)
-		}
-		return vb, nil
-	default:
-		return nil, fmt.Errorf("speculation block not ready")
+		speculativeAssemblyDiscarded.Add("read", 1)
+		pool.cancelSpeculativeAssembly()
+		pool.specActive = false
 	}
+	pool.specBlockMu.Unlock()
+	// nope, nothing
+	return nil, nil
 }
 
 // OnNewBlock callback calls the internal implementation, onNewBlock with the ``false'' parameter to process all transactions.
 func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
+	pool.specBlockMu.Lock()
+	if pool.specActive && block.Digest() != pool.specBlockDigest {
+		speculativeAssemblyDiscarded.Add("ONB", 1)
+		pool.cancelSpeculativeAssembly()
+		pool.specActive = false
+		// cancel speculative assembly, fall through to starting normal assembly
+	}
+	// TODO: make core onNewBlock() _wait_ until speculative block is done, merge state from that result
+	pool.specBlockMu.Unlock()
 	pool.onNewBlock(block, delta, false)
 }
 
@@ -645,10 +686,6 @@ func (pool *TransactionPool) onNewBlock(block bookkeeping.Block, delta ledgercor
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 	defer pool.cond.Broadcast()
-
-	if !stopReprocessingAtFirstAsmBlock && pool.cancelSpeculativeAssembly != nil {
-		pool.cancelSpeculativeAssembly()
-	}
 
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
 		// Adjust the pool fee threshold.  The rules are:
@@ -797,7 +834,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator). Expects that the pool.mu mutex would be already taken.
-func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint, speculativeAsm bool) (stats telemetryspec.ProcessBlockMetrics) {
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint, stopAtFirstBlock bool) (stats telemetryspec.ProcessBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
@@ -881,7 +918,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			continue
 		}
 
-		hasBlock, err := pool.add(txgroup, &asmStats, speculativeAsm)
+		hasBlock, err := pool.add(txgroup, &asmStats, stopAtFirstBlock)
 		if err != nil {
 			for _, tx := range txgroup {
 				pool.statusCache.put(tx, err.Error())
@@ -901,11 +938,11 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			case *ledgercore.LeaseInLedgerError:
 				asmStats.LeaseErrorCount++
 				stats.RemovedInvalidCount++
-				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
+				pool.log.Infof("Cannot re-add pending transaction to pool (lease): %v", err)
 			case *transactions.MinFeeError:
 				asmStats.MinFeeErrorCount++
 				stats.RemovedInvalidCount++
-				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
+				pool.log.Infof("Cannot re-add pending transaction to pool (fee): %v", err)
 			default:
 				asmStats.InvalidCount++
 				stats.RemovedInvalidCount++
@@ -942,7 +979,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	pool.assemblyMu.Unlock()
 
 	// remember the changes made to the tx pool if we're not in speculative assembly
-	if !speculativeAsm {
+	if !stopAtFirstBlock {
 		pool.rememberCommit(true)
 	}
 	return
@@ -1060,15 +1097,22 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	}
 
 	// Maybe we have a block already assembled
+	// TODO: this needs to be changed if a speculative block is in flight and if it is valid. If it is not valid, cancel it, if it is valid, wait for it.
 	prev, err := pool.ledger.Block(round.SubSaturate(1))
 	if err == nil {
-		validatedBlock, err := pool.tryReadSpeculativeBlock(prev.Hash())
-		if err == nil {
-			assembled = validatedBlock
-			return assembled, nil
+		specBlock, specErr := pool.tryReadSpeculativeBlock(prev.Hash(), round, deadline, &stats)
+		if specBlock != nil || specErr != nil {
+			pool.log.Infof("got spec block for %s, specErr %v", prev.Hash().String(), specErr)
+			return specBlock, specErr
 		}
 	}
 
+	assembled, err = pool.waitForBlockAssembly(round, deadline, &stats)
+	return
+}
+
+// should be called with assemblyMu held
+func (pool *TransactionPool) waitForBlockAssembly(round basics.Round, deadline time.Time, stats *telemetryspec.AssembleBlockMetrics) (assembled *ledgercore.ValidatedBlock, err error) {
 	pool.assemblyDeadline = deadline
 	pool.assemblyRound = round
 	for time.Now().Before(deadline) && (!pool.assemblyResults.ok || pool.assemblyResults.roundStartedEvaluating != round) {
@@ -1086,13 +1130,9 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		pool.assemblyMu.Lock()
 
 		if pool.assemblyResults.roundStartedEvaluating > round {
-			// this case is expected to happen only if the transaction pool was
-			// able to construct *two* rounds during the time we were trying to
-			// assemble the empty block. while this is extreamly unlikely, we
-			// need to handle this. the handling it quite straight-forward :
-			// since the network is already ahead of us, there is no issue here
-			// in not generating a block ( since the block would get discarded
-			// anyway )
+			// this case is expected to happen only if the transaction pool was able to construct *two* rounds during the time we were trying to assemble the empty block.
+			// while this is extremely unlikely, we need to handle this. the handling it quite straight-forward :
+			// since the network is already ahead of us, there is no issue here in not generating a block ( since the block would get discarded anyway )
 			pool.log.Infof("AssembleBlock: requested round is behind transaction pool round after timing out %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
 			return nil, ErrStaleBlockAssemblyRequest
 		}
@@ -1119,10 +1159,9 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		return nil, fmt.Errorf("AssemblyBlock: encountered error for round %d: %v", round, pool.assemblyResults.err)
 	}
 	if pool.assemblyResults.roundStartedEvaluating > round {
-		// this scenario should not happen unless the txpool is receiving the
-		// new blocks via OnNewBlock with "jumps" between consecutive blocks (
-		// which is why it's a warning ) The "normal" usecase is evaluated on
-		// the top of the function.
+		// this scenario should not happen unless the txpool is receiving the new blocks via OnNewBlock
+		// with "jumps" between consecutive blocks ( which is why it's a warning )
+		// The "normal" use case is evaluated on the top of the function.
 		pool.log.Warnf("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
 		return nil, ErrStaleBlockAssemblyRequest
 	} else if pool.assemblyResults.roundStartedEvaluating == round.SubSaturate(1) {
@@ -1134,7 +1173,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 			pool.assemblyResults.roundStartedEvaluating, round)
 	}
 
-	stats = pool.assemblyResults.stats
+	*stats = pool.assemblyResults.stats
 	return pool.assemblyResults.blk, nil
 }
 

@@ -46,6 +46,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/stateproof/verify"
@@ -1634,7 +1635,8 @@ func TestSpeculativeBlockAssembly(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(mockLedger, cfg, logging.Base())
+	log := logging.TestingLog(t)
+	transactionPool := MakeTransactionPool(mockLedger, cfg, log)
 
 	savedTransactions := 0
 	for i, sender := range addresses {
@@ -1695,8 +1697,11 @@ func TestSpeculativeBlockAssembly(t *testing.T) {
 	block, err := blockEval.GenerateBlock()
 	require.NoError(t, err)
 
-	transactionPool.OnNewSpeculativeBlock(context.Background(), block)
-	<-transactionPool.specAsmDone
+	t.Logf("prev block digest %s", block.Block().Digest().String())
+	t.Logf("prev block   hash %s", block.Block().Hash().String())
+
+	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{}, false)
+	//<-transactionPool.specAsmDone
 
 	// add the block
 	mockLedger.AddBlock(block.Block(), agreement.Certificate{})
@@ -1706,9 +1711,9 @@ func TestSpeculativeBlockAssembly(t *testing.T) {
 	transactionPool.pendingTxGroups = nil
 
 	// check that we still assemble the block
-	specBlock, err := transactionPool.AssembleBlock(block.Block().Round()+1, time.Now().Add(10*time.Millisecond))
+	specBlock, err := transactionPool.AssembleBlock(block.Block().Round()+1, time.Now().Add(time.Second))
 	require.NoError(t, err)
-	require.Equal(t, specBlock.Block().Branch, block.Block().Hash())
+	require.Equal(t, specBlock.Block().Branch, block.Block().Hash(), "spec.Branch %s", specBlock.Block().Branch.String())
 	require.NotNil(t, specBlock)
 	require.Len(t, specBlock.Block().Payset, savedTransactions)
 }
@@ -1777,10 +1782,11 @@ func TestSpeculativeBlockAssemblyWithOverlappingBlock(t *testing.T) {
 	block, err := blockEval.GenerateBlock()
 	require.NoError(t, err)
 
-	transactionPool.OnNewSpeculativeBlock(context.Background(), block)
-	<-transactionPool.specAsmDone
-	specBlock, err := transactionPool.tryReadSpeculativeBlock(block.Block().Hash())
-	require.NoError(t, err)
+	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{}, false)
+	//<-transactionPool.specAsmDone
+	var stats telemetryspec.AssembleBlockMetrics
+	specBlock, specErr := transactionPool.tryReadSpeculativeBlock(block.Block().Hash(), block.Block().Round()+1, time.Now().Add(time.Second), &stats)
+	require.NoError(t, specErr)
 	require.NotNil(t, specBlock)
 	// assembled block doesn't have txn in the speculated block
 	require.Len(t, specBlock.Block().Payset, savedTransactions-1)
@@ -1847,6 +1853,7 @@ func TestSpeculativeBlockAssemblyDataRace(t *testing.T) {
 			}
 		}
 	}
+	t.Logf("savedTransactions=%d", savedTransactions)
 	pending := transactionPool.PendingTxGroups()
 	require.Len(t, pending, savedTransactions)
 	require.Len(t, pendingTxIDSet, savedTransactions)
@@ -1859,6 +1866,7 @@ func TestSpeculativeBlockAssemblyDataRace(t *testing.T) {
 	block, err := blockEval.GenerateBlock()
 	require.NoError(t, err)
 
+	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{}, false)
 	newSavedTransactions := 0
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -1893,17 +1901,18 @@ func TestSpeculativeBlockAssemblyDataRace(t *testing.T) {
 			}
 		}
 	}()
-	transactionPool.OnNewSpeculativeBlock(context.Background(), block)
 	wg.Wait()
-	<-transactionPool.specAsmDone
-	specBlock, err := transactionPool.tryReadSpeculativeBlock(block.Block().Hash())
-	require.NoError(t, err)
-	require.NotNil(t, specBlock)
-	// assembled block doesn't have txn in the speculated block
-	require.Len(t, specBlock.Block().Payset, savedTransactions-1)
+	t.Logf("newSavedTransactions=%d", newSavedTransactions)
 
 	// tx pool should have old txns and new txns
 	require.Len(t, transactionPool.PendingTxIDs(), savedTransactions+newSavedTransactions)
+
+	var stats telemetryspec.AssembleBlockMetrics
+	specBlock, specErr := transactionPool.tryReadSpeculativeBlock(block.Block().Hash(), block.Block().Round()+1, time.Now().Add(time.Second), &stats)
+	require.NoError(t, specErr)
+	require.NotNil(t, specBlock)
+	// assembled block doesn't have txn in the speculated block
+	require.Len(t, specBlock.Block().Payset, savedTransactions-1, "len(Payset)=%d, savedTransactions=%d", len(specBlock.Block().Payset), savedTransactions)
 
 	for _, txn := range specBlock.Block().Payset {
 		require.NotEqual(t, txn.SignedTxn.Sig, pendingTxn.Sig)

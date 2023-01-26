@@ -60,10 +60,13 @@ type demux struct {
 
 	queue             []<-chan externalEvent
 	processingMonitor EventsProcessingMonitor
-	monitor           *coserviceMonitor
 	cancelTokenizers  context.CancelFunc
 
 	log logging.Logger
+
+	// coserviceMonitor is unit test instrumentation.
+	// should be fast no-op if monitor == nil
+	monitor *coserviceMonitor
 }
 
 // demuxParams contains the parameters required to initliaze a new demux object
@@ -74,7 +77,10 @@ type demuxParams struct {
 	voteVerifier      *AsyncVoteVerifier
 	processingMonitor EventsProcessingMonitor
 	log               logging.Logger
-	monitor           *coserviceMonitor
+
+	// coserviceMonitor is unit test instrumentation.
+	// should be fast no-op if monitor == nil
+	monitor *coserviceMonitor
 }
 
 // makeDemux initializes the goroutines needed to process external events, setting up the appropriate channels.
@@ -253,11 +259,13 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 	deadlineCh := s.Clock.TimeoutAt(deadline)
 	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline)
 
-	speculationDeadlineCh := s.Clock.TimeoutAt(speculationDeadline)
+	var speculationDeadlineCh <-chan time.Time
 	// zero timeout means we don't have enough time to speculate on block assembly
-	if speculationDeadline == 0 {
-		speculationDeadlineCh = nil
+	if speculationDeadline != 0 {
+		speculationDeadlineCh = s.Clock.TimeoutAt(speculationDeadline)
 	}
+
+	//d.log.Infof("demux deadline %d, fastD %d, specD %d, d.monitor %v", deadline, fastDeadline, speculationDeadline, d.monitor) // not threadsafe in some tests
 
 	d.UpdateEventsQueue(eventQueueDemux, 0)
 	d.monitor.dec(demuxCoserviceType)
@@ -369,6 +377,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 }
 
 // setupCompoundMessage processes compound messages: distinct messages which are delivered together
+// TODO: does this ever really see something other than empty .Vote?
 func setupCompoundMessage(l LedgerReader, m message) (res externalEvent) {
 	compound := m.CompoundMessage
 	if compound.Vote == (unauthenticatedVote{}) {
