@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib/middlewares"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/experimental"
 	npprivate "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/nonparticipating/private"
 	nppublic "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/nonparticipating/public"
 	pprivate "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/participating/private"
@@ -111,6 +112,10 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	npprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
 	ppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
 	pprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
+
+	if node.Config().EnableExperimentalAPI {
+		experimental.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+	}
 
 	return e
 }

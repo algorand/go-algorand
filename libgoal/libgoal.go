@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -765,7 +765,7 @@ func (c *Client) ApplicationBoxes(appID uint64, maxBoxNum uint64) (resp model.Bo
 }
 
 // GetApplicationBoxByName takes an app's index and box name and returns its value.
-// The box name should be of the form `encoding:value`. See logic.AppCallBytes for more information.
+// The box name should be of the form `encoding:value`. See apps.AppCallBytes for more information.
 func (c *Client) GetApplicationBoxByName(index uint64, name string) (resp model.BoxResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {

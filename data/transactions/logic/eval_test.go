@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -229,6 +229,7 @@ func TestMinAvmVersionParamEvalCheckSignature(t *testing.T) {
 
 func TestTxnFieldToTealValue(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	txn := transactions.Transaction{}
 	groupIndex := 0
@@ -1809,7 +1810,9 @@ func TestTxn(t *testing.T) {
 	clearOps := testProg(t, "int 1", 1)
 
 	for v, source := range tests {
+		v, source := v, source
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			t.Parallel()
 			ops := testProg(t, source, v)
 			txn := makeSampleTxn()
 			if v >= appsEnabledVersion {
@@ -2072,7 +2075,9 @@ gtxn 0 Sender
 	}
 
 	for v, source := range tests {
+		v, source := v, source
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			t.Parallel()
 			txn := makeSampleTxn()
 			// RekeyTo not allowed in v1
 			if v < rekeyingEnabledVersion {
@@ -2726,7 +2731,9 @@ func TestGload(t *testing.T) {
 	}
 
 	for i, testCase := range cases {
+		i, testCase := i, testCase
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			t.Parallel()
 			sources := testCase.tealSources
 
 			// Initialize txgroup
@@ -2746,7 +2753,7 @@ func TestGload(t *testing.T) {
 	// for more complex group transaction cases
 	type failureCase struct {
 		firstTxn    transactions.SignedTxn
-		runMode     runMode
+		runMode     RunMode
 		errContains string
 	}
 
@@ -2756,7 +2763,7 @@ func TestGload(t *testing.T) {
 				Type: protocol.PaymentTx,
 			},
 		},
-		runMode:     modeApp,
+		runMode:     ModeApp,
 		errContains: "can't use gload on non-app call txn with index 0",
 	}
 
@@ -2766,13 +2773,15 @@ func TestGload(t *testing.T) {
 				Type: protocol.ApplicationCallTx,
 			},
 		},
-		runMode:     modeSig,
+		runMode:     ModeSig,
 		errContains: "gload not allowed in current mode",
 	}
 
 	failCases := []failureCase{nonAppCall, logicSigCall}
 	for j, failCase := range failCases {
+		j, failCase := j, failCase
 		t.Run(fmt.Sprintf("j=%d", j), func(t *testing.T) {
+			t.Parallel()
 
 			appcall := transactions.SignedTxn{
 				Txn: transactions.Transaction{
@@ -2785,7 +2794,7 @@ func TestGload(t *testing.T) {
 
 			program := testProg(t, "gload 0 0", AssemblerMaxVersion).Program
 			switch failCase.runMode {
-			case modeApp:
+			case ModeApp:
 				testAppBytes(t, program, ep, failCase.errContains)
 			default:
 				testLogicBytes(t, program, ep, failCase.errContains, failCase.errContains)
@@ -3106,7 +3115,9 @@ func TestShortBytecblock2(t *testing.T) {
 		"0026efbfbdefbfbd30",
 	}
 	for _, src := range sources {
+		src := src
 		t.Run(src, func(t *testing.T) {
+			t.Parallel()
 			program, err := hex.DecodeString(src)
 			require.NoError(t, err)
 			testLogicBytes(t, program, defaultEvalParams(), "const bytes list", "const bytes list")
@@ -3125,10 +3136,13 @@ func checkPanic(cx *EvalContext) error {
 
 func TestPanic(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	log := logging.TestingLog(t)
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
+		v := v
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			t.Parallel()
 			ops := testProg(t, `int 1`, v)
 			var hackedOpcode int
 			var oldSpec OpSpec
@@ -3300,7 +3314,9 @@ done:
 intc_1
 `
 	for _, line := range branches {
+		line := line
 		t.Run(fmt.Sprintf("branch=%s", line), func(t *testing.T) {
+			t.Parallel()
 			source := fmt.Sprintf(template, line)
 			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 			require.NoError(t, err)
@@ -3712,27 +3728,37 @@ main:
 }
 
 func BenchmarkByteLogic(b *testing.B) {
-	benches := [][]string{
-		{"b&", "", "byte 0x012345678901feab; byte 0x01ffffffffffffff; b&; pop", "int 1"},
-		{"b|", "", "byte 0x0ffff1234576abef; byte 0x1202120212021202; b|; pop", "int 1"},
-		{"b^", "", "byte 0x0ffff1234576abef; byte 0x1202120212021202; b^; pop", "int 1"},
-		{"b~", "byte 0x0123457673624736", "b~", "pop; int 1"},
+	e64 := "byte 0x8090a0b0c0d0e0f0;"
+	o64 := "byte 0x1020304050607080;"
+	hex128e := "90a0b0c0d0e0f0001020304050607080"
+	hex128o := "102030405060708090a0b0c0d0e0f000"
+	e128 := "byte 0x" + strings.Repeat(hex128e, 1) + ";"
+	o128 := "byte 0x" + strings.Repeat(hex128o, 1) + ";"
+	e256 := "byte 0x" + strings.Repeat(hex128e, 2) + ";"
+	o256 := "byte 0x" + strings.Repeat(hex128o, 2) + ";"
+	e512 := "byte 0x" + strings.Repeat(hex128e, 4) + ";"
+	o512 := "byte 0x" + strings.Repeat(hex128o, 4) + ";"
 
-		{"b&big",
-			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
-			"byte 0x01ffffffffffffff01ffffffffffffff01234576012345760123457601234576; b&",
-			"pop; int 1"},
-		{"b|big",
-			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
-			"byte           0xffffff01ffffffffffffff01234576012345760123457601234576; b|",
-			"pop; int 1"},
-		{"b^big", "", // u256^u256
-			`byte 0x123457601234576012345760123457601234576012345760123457601234576a
-			 byte 0xf123457601234576012345760123457601234576012345760123457601234576; b^; pop`,
-			"int 1"},
-		{"b~big", "byte 0xa123457601234576012345760123457601234576012345760123457601234576",
-			"b~",
-			"pop; int 1"},
+	benches := [][]string{
+		{"b& 8", "", e64 + o64 + "b&; pop", "int 1"},
+		{"b| 8", "", e64 + o64 + "b|; pop", "int 1"},
+		{"b^ 8", "", e64 + o64 + "b^; pop", "int 1"},
+		{"b~ 8", e64, "b~", "pop; int 1"},
+
+		{"b& 16", "", e128 + o128 + "b&; pop", "int 1"},
+		{"b| 16", "", e128 + o128 + "b|; pop", "int 1"},
+		{"b^ 16", "", e128 + o128 + "b^; pop", "int 1"},
+		{"b~ 16", e128, "b~", "pop; int 1"},
+
+		{"b& 32", "", e256 + o256 + "b&; pop", "int 1"},
+		{"b| 32", "", e256 + o256 + "b|; pop", "int 1"},
+		{"b^ 32", "", e256 + o256 + "b^; pop", "int 1"},
+		{"b~ 32", e256, "b~", "pop; int 1"},
+
+		{"b& 64", "", e512 + o512 + "b&; pop", "int 1"},
+		{"b| 64", "", e512 + o512 + "b|; pop", "int 1"},
+		{"b^ 64", "", e512 + o512 + "b^; pop", "int 1"},
+		{"b~ 64", e512, "b~", "pop; int 1"},
 	}
 	for _, bench := range benches {
 		b.Run(bench[0], func(b *testing.B) {
@@ -3743,44 +3769,79 @@ func BenchmarkByteLogic(b *testing.B) {
 }
 
 func BenchmarkByteMath(b *testing.B) {
+	u64 := "byte 0x8090a0b0c0d0e0f0;"
+	hex128 := "102030405060708090a0b0c0d0e0f000"
+	u128 := "byte 0x" + strings.Repeat(hex128, 1) + ";"
+	u256 := "byte 0x" + strings.Repeat(hex128, 2) + ";"
+	u512 := "byte 0x" + strings.Repeat(hex128, 4) + ";"
+
 	benches := [][]string{
-		{"bpop", "", "byte 0x01ffffffffffffff; pop", "int 1"},
+		{"bytec", u128 + "pop"},
 
-		{"b+", "byte 0x01234576", "byte 0x01ffffffffffffff; b+", "pop; int 1"},
-		{"b-", "byte 0x0ffff1234576", "byte 0x1202; b-", "pop; int 1"},
-		{"b*", "", "byte 0x01234576; byte 0x0223627389; b*; pop", "int 1"},
-		{"b/", "", "byte 0x0123457673624736; byte 0x0223627389; b/; pop", "int 1"},
-		{"b%", "", "byte 0x0123457673624736; byte 0x0223627389; b/; pop", "int 1"},
-		{"bsqrt", "", "byte 0x0123457673624736; bsqrt; pop", "int 1"},
+		{"b+ 128", u128 + u128 + "b+; pop"},
+		{"b- 128", u128 + u128 + "b-; pop"},
+		{"b* 128", u128 + u128 + "b*; pop"},
+		// half sized divisor seems pessimal for / and %
+		{"b/ 128", u128 + u64 + "b/; pop"},
+		{"b% 128", u128 + u64 + "b%; pop"},
+		{"bsqrt 128", u128 + "bsqrt; pop"},
 
-		{"b+big", // u256 + u256
-			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
-			"byte 0x01ffffffffffffff01ffffffffffffff01234576012345760123457601234576; b+",
-			"pop; int 1"},
-		{"b-big", // second is a bit small, so we can subtract it over and over
-			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
-			"byte           0xffffff01ffffffffffffff01234576012345760123457601234576; b-",
-			"pop; int 1"},
-		{"b*big", "", // u256*u256
-			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
-			 byte 0xf123457601234576012345760123457601234576012345760123457601234576; b*; pop`,
-			"int 1"},
-		{"b/big", "", // u256 / u128 (half sized divisor seems pessimal)
-			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
-			 byte 0x34576012345760123457601234576312; b/; pop`,
-			"int 1"},
-		{"b%big", "", // u256 / u128 (half sized divisor seems pessimal)
-			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
-			 byte 0x34576012345760123457601234576312; b/; pop`,
-			"int 1"},
-		{"bsqrt-big", "",
-			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
-			 bsqrt; pop`,
-			"int 1"},
+		{"b+ 256", u256 + u256 + "b+; pop"},
+		{"b- 256", u256 + u256 + "b-; pop"},
+		{"b* 256", u256 + u256 + "b*; pop"},
+		{"b/ 256", u256 + u128 + "b/; pop"},
+		{"b% 256", u256 + u128 + "b%; pop"},
+		{"bsqrt 256", u256 + "bsqrt; pop"},
+
+		{"b+ 512", u512 + u512 + "b+; pop"},
+		{"b- 512", u512 + u512 + "b-; pop"},
+		{"b* 512", u512 + u512 + "b*; pop"},
+		{"b/ 512", u512 + u256 + "b/; pop"},
+		{"b% 512", u512 + u256 + "b%; pop"},
+		{"bsqrt 512", u512 + "bsqrt; pop"},
+
+		{"bytec recheck", u128 + "pop"},
 	}
 	for _, bench := range benches {
 		b.Run(bench[0], func(b *testing.B) {
-			benchmarkOperation(b, bench[1], bench[2], bench[3])
+			b.ReportAllocs()
+			benchmarkOperation(b, "", bench[1], "int 1")
+		})
+	}
+}
+
+func BenchmarkByteCompare(b *testing.B) {
+	u64 := "byte 0x8090a0b0c0d0e0f0;"
+	hex128 := "102030405060708090a0b0c0d0e0f000"
+	u128 := "byte 0x" + strings.Repeat(hex128, 1) + ";"
+	u256 := "byte 0x" + strings.Repeat(hex128, 2) + ";"
+	u512 := "byte 0x" + strings.Repeat(hex128, 4) + ";"
+	//u4k := "byte 0x" + strings.Repeat(hex128, 256) + ";"
+
+	benches := [][]string{
+		{"b== 64", u64 + u64 + "b==; pop"},
+		{"b< 64", u64 + u64 + "b<; pop"},
+		{"b<= 64", u64 + u64 + "b<=; pop"},
+		{"b== 128", u128 + u128 + "b==; pop"},
+		{"b< 128", u128 + u128 + "b<; pop"},
+		{"b<= 128", u128 + u128 + "b<=; pop"},
+		{"b== 256", u256 + u256 + "b==; pop"},
+		{"b< 256", u256 + u256 + "b<; pop"},
+		{"b<= 256", u256 + u256 + "b<=; pop"},
+		{"b== 512", u512 + u512 + "b==; pop"},
+		{"b< 512", u512 + u512 + "b<; pop"},
+		{"b<= 512", u512 + u512 + "b<=; pop"},
+		// These can only be run with the maxByteMathSize check removed. They
+		// show that we can remove that check in a later AVM version, as there
+		// is no appreciable cost to even a 4k compare.
+		// {"b== 4k", u4k + u4k + "b==; pop"},
+		// {"b< 4k", u4k + u4k + "b<; pop"},
+		// {"b<= 4k", u4k + u4k + "b<=; pop"},
+	}
+	for _, bench := range benches {
+		b.Run(bench[0], func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, "", bench[1], "int 1")
 		})
 	}
 }
@@ -4135,7 +4196,9 @@ func TestAnyRekeyToOrApplicationRaisesMinAvmVersion(t *testing.T) {
 	}
 
 	for ci, cse := range cases {
+		ci, cse := ci, cse
 		t.Run(fmt.Sprintf("ci=%d", ci), func(t *testing.T) {
+			t.Parallel()
 			ep := defaultEvalParams(cse.group...)
 
 			// Computed MinAvmVersion should be == validFromVersion
@@ -4853,9 +4916,23 @@ func TestBytesCompare(t *testing.T) {
 	testPanics(t, "byte 0x10; int 65; bzero; b<=", 4)
 	testAccepts(t, "byte 0x10; int 64; bzero; b>", 4)
 	testPanics(t, "byte 0x10; int 65; bzero; b>", 4)
+	testAccepts(t, "byte 0x1010; byte 0x10; b<; !", 4)
+
+	testAccepts(t, "byte 0x2000; byte 0x70; b<; !", 4)
+	testAccepts(t, "byte 0x7000; byte 0x20; b<; !", 4)
+
+	// All zero input are interesting, because they lead to bytes.Compare being
+	// called with nils.  Show that is correct.
+	testAccepts(t, "byte 0x10; byte 0x00; b<; !", 4)
+	testAccepts(t, "byte 0x10; byte 0x0000; b<; !", 4)
+	testAccepts(t, "byte 0x00; byte 0x10; b<", 4)
+	testAccepts(t, "byte 0x0000; byte 0x10; b<", 4)
+	testAccepts(t, "byte 0x0000; byte 0x00; b<; !", 4)
+	testAccepts(t, "byte 0x; byte 0x00; b==", 4)
 
 	testAccepts(t, "byte 0x11; byte 0x10; b>", 4)
 	testAccepts(t, "byte 0x11; byte 0x0010; b>", 4)
+	testAccepts(t, "byte 0x1010; byte 0x11; b>", 4)
 
 	testAccepts(t, "byte 0x11; byte 0x10; b>=", 4)
 	testAccepts(t, "byte 0x11; byte 0x0011; b>=", 4)
@@ -4964,7 +5041,7 @@ func TestLog(t *testing.T) {
 	msg := strings.Repeat("a", 400)
 	failCases := []struct {
 		source      string
-		runMode     runMode
+		runMode     RunMode
 		errContains string
 		// For cases where assembly errors, we manually put in the bytes
 		assembledBytes []byte
@@ -4972,44 +5049,44 @@ func TestLog(t *testing.T) {
 		{
 			source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", maxLogSize+1)),
 			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
-			runMode:     modeApp,
+			runMode:     ModeApp,
 		},
 		{
 			source:      fmt.Sprintf(`byte  "%s"; log; byte  "%s"; log; byte  "%s"; log; int 1`, msg, msg, msg),
 			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
-			runMode:     modeApp,
+			runMode:     ModeApp,
 		},
 		{
 			source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log; `, maxLogCalls+1)),
 			errContains: "too many log calls",
-			runMode:     modeApp,
+			runMode:     ModeApp,
 		},
 		{
 			source:      `int 1; loop: byte "a"; log; int 1; +; dup; int 35; <; bnz loop;`,
 			errContains: "too many log calls",
-			runMode:     modeApp,
+			runMode:     ModeApp,
 		},
 		{
 			source:      fmt.Sprintf(`int 1; loop: byte "%s"; log; int 1; +; dup; int 6; <; bnz loop;`, strings.Repeat(`a`, 400)),
 			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
-			runMode:     modeApp,
+			runMode:     ModeApp,
 		},
 		{
 			source:         `load 0; log`,
 			errContains:    "log arg 0 wanted []byte but got uint64",
-			runMode:        modeApp,
+			runMode:        ModeApp,
 			assembledBytes: []byte{byte(ep.Proto.LogicSigVersion), 0x34, 0x00, 0xb0},
 		},
 		{
 			source:      `byte  "a logging message"; log; int 1`,
 			errContains: "log not allowed in current mode",
-			runMode:     modeSig,
+			runMode:     ModeSig,
 		},
 	}
 
 	for _, c := range failCases {
 		switch c.runMode {
-		case modeApp:
+		case ModeApp:
 			if c.assembledBytes == nil {
 				testApp(t, c.source, ep, c.errContains)
 			} else {
@@ -5036,7 +5113,9 @@ func TestPcDetails(t *testing.T) {
 		{"b end; end:", 4, ""},
 	}
 	for i, test := range tests {
+		i, test := i, test
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			t.Parallel()
 			ops := testProg(t, test.source, LogicVersion)
 			ep, _, _ := makeSampleEnv()
 			ep.Trace = &strings.Builder{}

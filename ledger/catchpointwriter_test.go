@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,6 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -33,13 +32,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -71,19 +71,19 @@ func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	for i := uint64(0); i < numResources; i++ {
 		resources[i] = encodedResourceData
 	}
-	balance := encodedBalanceRecordV6{
+	balance := encoded.BalanceRecordV6{
 		Address:     ledgertesting.RandomAddress(),
 		AccountData: encodedBaseAD,
 		Resources:   resources,
 	}
-	balances := make([]encodedBalanceRecordV6, numChunkEntries)
-	kv := encodedKVRecordV6{
-		Key:   make([]byte, encodedKVRecordV6MaxKeyLength),
-		Value: make([]byte, encodedKVRecordV6MaxValueLength),
+	balances := make([]encoded.BalanceRecordV6, numChunkEntries)
+	kv := encoded.KVRecordV6{
+		Key:   make([]byte, encoded.KVRecordV6MaxKeyLength),
+		Value: make([]byte, encoded.KVRecordV6MaxValueLength),
 	}
 	crypto.RandBytes(kv.Key[:])
 	crypto.RandBytes(kv.Value[:])
-	kvs := make([]encodedKVRecordV6, numChunkEntries)
+	kvs := make([]encoded.KVRecordV6, numChunkEntries)
 
 	for i := 0; i < numChunkEntries; i++ {
 		balances[i] = balance
@@ -493,7 +493,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, h)
 
-	iter := makeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
+	iter := store.MakeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
 	defer iter.Close(ctx)
 	for {
 		accts, _, err := iter.Next(ctx)
@@ -507,7 +507,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 
 		if len(accts) > 0 {
 			for _, acct := range accts {
-				added, err := trie.Add(acct.digest)
+				added, err := trie.Add(acct.Digest)
 				require.NoError(t, err)
 				require.True(t, added)
 			}
@@ -779,7 +779,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	values, err = l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
 	require.NoError(t, err)
 	require.Len(t, values, 1)
-	v, err := l.LookupKv(l.Latest(), logic.MakeBoxKey(boxApp, "xxx"))
+	v, err := l.LookupKv(l.Latest(), apps.MakeBoxKey(uint64(boxApp), "xxx"))
 	require.NoError(t, err)
 	require.Equal(t, strings.Repeat("\x00", 24), string(v))
 
@@ -869,41 +869,7 @@ func TestCatchpointAfterBoxTxns(t *testing.T) {
 	values, err := l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
 	require.NoError(t, err)
 	require.Len(t, values, 1)
-	v, err := l.LookupKv(l.Latest(), logic.MakeBoxKey(boxApp, "xxx"))
+	v, err := l.LookupKv(l.Latest(), apps.MakeBoxKey(uint64(boxApp), "xxx"))
 	require.NoError(t, err)
 	require.Equal(t, strings.Repeat("f", 24), string(v))
-}
-
-func TestEncodedKVRecordV6Allocbounds(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	for version, params := range config.Consensus {
-		require.GreaterOrEqualf(t, uint64(encodedKVRecordV6MaxValueLength), params.MaxBoxSize, "Allocbound constant no longer valid as of consensus version %s", version)
-		longestPossibleBoxName := string(make([]byte, params.MaxAppKeyLen))
-		longestPossibleKey := logic.MakeBoxKey(basics.AppIndex(math.MaxUint64), longestPossibleBoxName)
-		require.GreaterOrEqualf(t, encodedKVRecordV6MaxValueLength, len(longestPossibleKey), "Allocbound constant no longer valid as of consensus version %s", version)
-	}
-}
-
-func TestEncodedKVDataSize(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	require.GreaterOrEqual(t, encodedKVRecordV6MaxKeyLength, currentConsensusParams.MaxAppKeyLen)
-	require.GreaterOrEqual(t, uint64(encodedKVRecordV6MaxValueLength), currentConsensusParams.MaxBoxSize)
-
-	kvEntry := encodedKVRecordV6{
-		Key:   make([]byte, encodedKVRecordV6MaxKeyLength),
-		Value: make([]byte, encodedKVRecordV6MaxValueLength),
-	}
-
-	crypto.RandBytes(kvEntry.Key[:])
-	crypto.RandBytes(kvEntry.Value[:])
-
-	encoded := kvEntry.MarshalMsg(nil)
-	require.GreaterOrEqual(t, MaxEncodedKVDataSize, len(encoded))
-
 }

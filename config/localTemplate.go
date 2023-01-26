@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,7 +59,7 @@ type Local struct {
 	// what we should tell people to connect to
 	PublicAddress string `version[0]:""`
 
-	MaxConnectionsPerIP int `version[3]:"30"`
+	MaxConnectionsPerIP int `version[3]:"30" version[27]:"15"`
 
 	// 0 == disable
 	PeerPingPeriodSeconds int `version[0]:"0"`
@@ -72,11 +72,12 @@ type Local struct {
 	BaseLoggerDebugLevel uint32 `version[0]:"1" version[1]:"4"`
 	// if this is 0, do not produce agreement.cadaver
 	CadaverSizeTarget uint64 `version[0]:"1073741824" version[24]:"0"`
+	CadaverDirectory  string `version[27]:""`
 
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
 	// connections. 0 means no connections allowed. Must be non-negative.
-	// Estimating 5MB per incoming connection, 5MB*800 = 4GB
-	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000" version[17]:"800"`
+	// Estimating 1.5MB per incoming connection, 1.5MB*2400 = 3.6GB
+	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000" version[17]:"800" version[27]:"2400"`
 
 	// BroadcastConnectionsLimit specifies the number of connections that
 	// will receive broadcast (gossip) messages from this node.  If the
@@ -160,6 +161,20 @@ type Local struct {
 	TxPoolExponentialIncreaseFactor uint64 `version[0]:"2"`
 
 	SuggestedFeeBlockHistory int `version[0]:"3"`
+
+	// TxBacklogServiceRateWindowSeconds is the window size used to determine the service rate of the txBacklog
+	TxBacklogServiceRateWindowSeconds int `version[27]:"10"`
+
+	// TxBacklogReservedCapacityPerPeer determines how much dedicated serving capacity the TxBacklog gives each peer
+	TxBacklogReservedCapacityPerPeer int `version[27]:"20"`
+
+	// EnableTxBacklogRateLimiting controls if a rate limiter and congestion manager shouild be attached to the tx backlog enqueue process
+	// if enabled, the over-all TXBacklog Size will be larger by MAX_PEERS*TxBacklogReservedCapacityPerPeer
+	EnableTxBacklogRateLimiting bool `version[27]:"false"`
+
+	// TxBacklogSize is the queue size used for receiving transactions. default of 26000 to approximate 1 block of transactions
+	// if EnableTxBacklogRateLimiting enabled, the over-all size will be larger by MAX_PEERS*TxBacklogReservedCapacityPerPeer
+	TxBacklogSize int `version[27]:"26000"`
 
 	// TxPoolSize is the number of transactions that fit in the transaction pool
 	TxPoolSize int `version[0]:"50000" version[5]:"15000" version[23]:"75000"`
@@ -246,6 +261,10 @@ type Local struct {
 	// PeerConnectionsUpdateInterval defines the interval at which the peer connections information is being sent to the
 	// telemetry ( when enabled ). Defined in seconds.
 	PeerConnectionsUpdateInterval int `version[5]:"3600"`
+
+	// HeartbeatUpdateInterval defines the interval at which the heartbeat information is being sent to the
+	// telemetry ( when enabled ). Defined in seconds. Minimum value is 60.
+	HeartbeatUpdateInterval int `version[27]:"600"`
 
 	// EnableProfiler enables the go pprof endpoints, should be false if
 	// the algod api will be exposed to untrusted individuals
@@ -441,13 +460,13 @@ type Local struct {
 	MaxAPIResourcesPerAccount uint64 `version[21]:"100000"`
 
 	// AgreementIncomingVotesQueueLength sets the size of the buffer holding incoming votes.
-	AgreementIncomingVotesQueueLength uint64 `version[21]:"10000"`
+	AgreementIncomingVotesQueueLength uint64 `version[21]:"10000" version[27]:"20000"`
 
 	// AgreementIncomingProposalsQueueLength sets the size of the buffer holding incoming proposals.
-	AgreementIncomingProposalsQueueLength uint64 `version[21]:"25"`
+	AgreementIncomingProposalsQueueLength uint64 `version[21]:"25" version[27]:"50"`
 
 	// AgreementIncomingBundlesQueueLength sets the size of the buffer holding incoming bundles.
-	AgreementIncomingBundlesQueueLength uint64 `version[21]:"7"`
+	AgreementIncomingBundlesQueueLength uint64 `version[21]:"7" version[27]:"15"`
 
 	// MaxAcctLookback sets the maximum lookback range for account states,
 	// i.e. the ledger can answer account states questions for the range Latest-MaxAcctLookback...Latest
@@ -467,6 +486,10 @@ type Local struct {
 	// 0x01 (txFilterRawMsg) - check for raw tx message duplicates
 	// 0x02 (txFilterCanonical) - check for canonical tx group duplicates
 	TxIncomingFilteringFlags uint32 `version[26]:"1"`
+
+	// EnableExperimentalAPI enables experimental API endpoint. Note that these endpoints have no
+	// guarantees in terms of functionality or future support.
+	EnableExperimentalAPI bool `version[26]:"false"`
 
 	// SpeculativeAsmTimeOffset defines when speculative block assembly first starts, nanoseconds before consensus AgreementFilterTimeoutPeriod0 or AgreementFilterTimeout
 	// A huge value (greater than either AgreementFilterTimeout) disables this event.
