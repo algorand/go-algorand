@@ -4765,7 +4765,7 @@ func (cx *EvalContext) assignAccount(sv stackValue) (basics.Address, error) {
 }
 
 // assignAsset is used to convert a stackValue to a uint64 assetIndex, reporting
-// any errors due to availablity rules or type checking.
+// any errors due to availability rules or type checking.
 func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 	uint, err := sv.uint()
 	if err != nil {
@@ -4814,7 +4814,7 @@ func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
 }
 
 // assignApp is used to convert a stackValue to a uint64 appIndex, reporting
-// any errors due to availablity rules or type checking.
+// any errors due to availability rules or type checking.
 func (cx *EvalContext) assignApp(sv stackValue) (basics.AppIndex, error) {
 	uint, err := sv.uint()
 	if err != nil {
