@@ -1765,23 +1765,11 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 			totalOutB:       0,
 			additionalSleep: 6 * time.Second,
 		},
-		// when the identityChallenge can't be decoded, peer is disconnected
-		{
-			name: "not b64 decodable",
-			verifyResponse: func(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
-				message := append([]byte(protocol.NetIDVerificationTag), []byte("Bad Data!")[:]...)
-				return crypto.PublicKey{}, message, nil
-			},
-			totalInA:  0,
-			totalOutA: 0,
-			totalInB:  0,
-			totalOutB: 0,
-		},
-		// when the identityChallenge can't be unmarshalled, peer is disconnected
+		// when the identityVerification can't be unmarshalled, peer is disconnected
 		{
 			name: "not msgp decodable",
 			verifyResponse: func(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
-				message := append([]byte(protocol.NetIDVerificationTag), []byte("YmFkIGRhdGE=")[:]...)
+				message := append([]byte(protocol.NetIDVerificationTag), []byte("Bad!Data!")[:]...)
 				return crypto.PublicKey{}, message, nil
 			},
 			totalInA:  0,
