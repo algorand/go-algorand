@@ -179,6 +179,16 @@ func (z *identityChallenge) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
+			var zb0004 int
+			zb0004, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Address")
+				return
+			}
+			if zb0004 > maxAddressLen {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(maxAddressLen))
+				return
+			}
 			(*z).Address, bts, err = msgp.ReadBytesBytes(bts, (*z).Address)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Address")
@@ -229,6 +239,16 @@ func (z *identityChallenge) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "a":
+				var zb0005 int
+				zb0005, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Address")
+					return
+				}
+				if zb0005 > maxAddressLen {
+					err = msgp.ErrOverflow(uint64(zb0005), uint64(maxAddressLen))
+					return
+				}
 				(*z).Address, bts, err = msgp.ReadBytesBytes(bts, (*z).Address)
 				if err != nil {
 					err = msgp.WrapError(err, "Address")
