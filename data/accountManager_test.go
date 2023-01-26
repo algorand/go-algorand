@@ -330,3 +330,33 @@ func TestGetStateProofKeysDontLogErrorOnNilStateProof(t *testing.T) {
 	a.False(strings.Contains(lg, account.ErrStateProofVerifierNotFound.Error()))
 	a.False(strings.Contains(lg, "level=error"), "expected no error in log:", lg)
 }
+
+func TestIgnoreExpiredKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+
+	registry, dbName := getRegistryImpl(t, false, true)
+	defer registryCloseTest(t, registry, dbName)
+
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Error)
+
+	acctManager := MakeAccountManager(log, registry)
+	_ = acctManager
+
+	store, err := db.MakeAccessor(t.Name()+"parts.sql", false, true)
+	a.NoError(err)
+
+	root, err := account.GenerateRoot(store)
+	a.NoError(err)
+
+	part1, err := account.FillDBWithParticipationKeys(store, root.Address(), 0, 10, 3)
+	a.NoError(err)
+
+	store.Close()
+
+	acctManager.AddParticipation(part1, false)
+
+	out := acctManager.Keys(11)
+	a.Zero(len(out))
+}
