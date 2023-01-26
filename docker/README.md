@@ -67,11 +67,11 @@ Explanation of parts:
 
 * `-p 4190:8080` maps the internal algod REST API to local port 4190.
 * `-p 4191:7833` maps the internal kmd REST API to local port 4191.
-* `-e NETWORK=` can be set to any of the supported public networks.
-* `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis. The value of this variable takes precedence over the `name` attribute set in `/etc/algorand/logging.config`.
+* `-e NETWORK=mainnet` can be set to any of the supported public networks.
+* `-e TELEMETRY_NAME=name` enables telemetry reporting to Algorand for network health analysis. The value of this variable takes precedence over the `name` attribute set in `/etc/algorand/logging.config`.
 * `-e FAST_CATCHUP=1` causes fast catchup to start shortly after launching the network.
 * `-e START_KMD=1` signals to entrypoint to start the kmd REST API (THIS SHOULD NOT BE USED IN PRODUCTION).
-* `-e TOKEN=` sets the REST API token to use.
+* `-e TOKEN=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` sets the REST API token to use.
 * `-v ${PWD}/data:/algod/data/` mounts a local volume to the data directory, which can be used to restart and upgrade the deployment.
 
 ## Mounting the Data Directory
