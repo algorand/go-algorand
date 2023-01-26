@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -594,6 +594,8 @@ type BlockEvaluator struct {
 	l LedgerForEvaluator
 
 	maxTxnBytesPerBlock int
+
+	Tracer logic.EvalTracer
 }
 
 // LedgerForEvaluator defines the ledger interface needed by the evaluator.
@@ -925,14 +927,7 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transacti
 // TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD) error {
-	return eval.transactionGroup(txads)
-}
-
-// transactionGroup tentatively executes a group of transactions as part of this block evaluation.
-// If the transaction group cannot be added to the block without violating some constraints,
-// an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD) error {
+func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWithAD) error {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -953,15 +948,28 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	defer cow.recycle()
 
 	evalParams := logic.NewEvalParams(txgroup, &eval.proto, &eval.specials)
+	evalParams.Tracer = eval.Tracer
+
+	if eval.Tracer != nil {
+		eval.Tracer.BeforeTxnGroup(evalParams)
+	}
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
+		if eval.Tracer != nil {
+			eval.Tracer.BeforeTxn(evalParams, gi)
+		}
+
 		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err
+		}
+
+		if eval.Tracer != nil {
+			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData)
 		}
 
 		txibs = append(txibs, txib)
@@ -1009,6 +1017,10 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	eval.block.Payset = append(eval.block.Payset, txibs...)
 	eval.blockTxBytes += groupTxBytes
 	cow.commitToParent()
+
+	if eval.Tracer != nil {
+		eval.Tracer.AfterTxnGroup(evalParams)
+	}
 
 	return nil
 }

@@ -13,22 +13,25 @@ function apply_configuration() {
   cd "$ALGORAND_DATA"
 
   # check for config file overrides.
-  if [ -f "/etc/config.json" ]; then
-    cp /etc/config.json config.json
+  if [ -f "/etc/algorand/config.json" ]; then
+    cp /etc/algorand/config.json config.json
   fi
-  if [ -f "/etc/algod.token" ]; then
-    cp /etc/algod.token algod.token
+  if [ -f "/etc/algorand/algod.token" ]; then
+    cp /etc/algorand/algod.token algod.token
   fi
-  if [ -f "/etc/algod.admin.token" ]; then
-    cp /etc/algod.admin.token algod.admin.token
+  if [ -f "/etc/algorand/algod.admin.token" ]; then
+    cp /etc/algorand/algod.admin.token algod.admin.token
+  fi
+  if [ -f "/etc/algorand/logging.config" ]; then
+    cp /etc/algorand/logging.config logging.config
   fi
 
   # check for environment variable overrides.
   if [ "$TOKEN" != "" ]; then
-    echo "$TOKEN" > algod.token
+    echo "$TOKEN" >algod.token
   fi
   if [ "$ADMIN_TOKEN" != "" ]; then
-    echo "$ADMIN_TOKEN" > algod.admin.token
+    echo "$ADMIN_TOKEN" >algod.admin.token
   fi
 
   # configure telemetry
@@ -57,8 +60,8 @@ function start_public_network() {
 
   apply_configuration
 
-  if [ $FAST_CATCHUP ]; then
-    catchup&
+  if [[ $FAST_CATCHUP ]]; then
+    catchup &
   fi
   # redirect output to stdout
   algod -o
@@ -75,20 +78,19 @@ function configure_data_dir() {
 }
 
 function start_new_public_network() {
-  cd /node
-  if [ ! -d "run/genesis/$NETWORK" ]; then
+  cd /algod
+  if [ ! -d "/node/run/genesis/${NETWORK}" ]; then
     echo "No genesis file for '$NETWORK' is available."
     exit 1
   fi
 
   mkdir -p "$ALGORAND_DATA"
-  mv dataTemplate/* "$ALGORAND_DATA"
-  rm -rf dataTemplate
 
-  cp "run/genesis/$NETWORK/genesis.json" "$ALGORAND_DATA/genesis.json"
   cd "$ALGORAND_DATA"
 
-  mv config.json.example config.json
+  cp "/node/run/genesis/${NETWORK}/genesis.json" genesis.json
+  cp /node/run/config.json.example config.json
+
   configure_data_dir
 
   local ID
@@ -109,18 +111,17 @@ function start_private_network() {
   apply_configuration
 
   # TODO: Is there a way to properly exec a private network?
-  goal network start -r "$ALGORAND_DATA/.."
-  tail -f "$ALGORAND_DATA/node.log"
+  goal network start -r "${ALGORAND_DATA}/.."
+  tail -f "${ALGORAND_DATA}/node.log"
 }
 
 function start_new_private_network() {
-  cd /node
   local TEMPLATE="template.json"
   if [ "$DEV_MODE" ]; then
     TEMPLATE="devmode_template.json"
   fi
-  sed -i "s/NUM_ROUNDS/${NUM_ROUNDS:-30000}/" "run/$TEMPLATE"
-  goal network create -n dockernet -r "$ALGORAND_DATA/.." -t "run/$TEMPLATE"
+  sed -i "s/NUM_ROUNDS/${NUM_ROUNDS:-30000}/" "/node/run/$TEMPLATE"
+  goal network create --noclean -n dockernet -r "${ALGORAND_DATA}/.." -t "/node/run/$TEMPLATE"
   configure_data_dir
   start_private_network
 }
