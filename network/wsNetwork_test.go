@@ -1072,6 +1072,28 @@ func TestGetPeers(t *testing.T) {
 	assert.Equal(t, expectAddrs, peerAddrs)
 }
 
+// confirms that if the config PublicAddress is set to "auto",
+// PublicAddress is loaded when possible with the value of Address()
+func TestAutoPublicAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	netA := makeTestWebsocketNode(t)
+	netA.identityTracker = newDummyIdentTracker()
+	netA.config.PublicAddress = "auto"
+	netA.config.GossipFanout = 1
+
+	netA.Start()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// check that "auto" has been overloaded
+	addr, ok := netA.Address()
+	require.True(t, ok)
+	require.NotEqual(t, "auto", netA.PublicAddress())
+	require.Equal(t, addr, netA.PublicAddress())
+}
+
 // mock an identityTracker
 type dummyIdentityTracker struct {
 	shouldInsert bool
@@ -1125,24 +1147,6 @@ func (d *dummyIdentityTracker) setIdentity(p *wsPeer) bool {
 	return d.shouldInsert
 }
 
-// getFreePort asks the kernel for a free open port that is ready to use.
-func getFreePort() int {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		return 0
-	}
-
-	l, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		return 0
-	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port
-}
-func freeHostAndPort() string {
-	return fmt.Sprintf("%s:%d", "127.0.0.1", getFreePort())
-}
-
 // TestPeeringWithIdentityChallenge tests the happy path of connecting with identity challenge:
 // - both peers have correctly set PublicAddress
 // - both should exchange identities and verify
@@ -1152,26 +1156,28 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 
 	netA := makeTestWebsocketNode(t)
 	netA.identityTracker = newDummyIdentTracker()
-	addrA := freeHostAndPort()
+	netA.config.PublicAddress = "auto"
 	netA.config.GossipFanout = 1
-	netA.config.NetAddress = addrA
-	gossipA, err := netA.addrToGossipAddr(netA.config.NetAddress)
-	require.NoError(t, err)
-	netA.config.PublicAddress = addrA
 
 	netB := makeTestWebsocketNode(t)
 	netB.identityTracker = newDummyIdentTracker()
-	addrB := freeHostAndPort()
+	netB.config.PublicAddress = "auto"
 	netB.config.GossipFanout = 1
-	netB.config.NetAddress = addrB
-	gossipB, err := netB.addrToGossipAddr(netB.config.NetAddress)
-	require.NoError(t, err)
-	netB.config.PublicAddress = addrB
 
 	netA.Start()
 	defer netA.Stop()
 	netB.Start()
 	defer netB.Stop()
+
+	addrA, ok := netA.Address()
+	require.True(t, ok)
+	gossipA, err := netA.addrToGossipAddr(addrA)
+	require.NoError(t, err)
+
+	addrB, ok := netB.Address()
+	require.True(t, ok)
+	gossipB, err := netB.addrToGossipAddr(addrB)
+	require.NoError(t, err)
 
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
@@ -1249,26 +1255,28 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 
 	netA := makeTestWebsocketNode(t)
 	netA.identityTracker = newDummyIdentTracker()
-	addrA := freeHostAndPort()
+	//netA.config.PublicAddress = "auto"
 	netA.config.GossipFanout = 1
-	netA.config.NetAddress = addrA
-	gossipA, err := netA.addrToGossipAddr(netA.config.NetAddress)
-	require.NoError(t, err)
-	//netA.config.PublicAddress = addrA
 
 	netB := makeTestWebsocketNode(t)
 	netB.identityTracker = newDummyIdentTracker()
-	addrB := freeHostAndPort()
+	netB.config.PublicAddress = "auto"
 	netB.config.GossipFanout = 1
-	netB.config.NetAddress = addrB
-	gossipB, err := netB.addrToGossipAddr(netB.config.NetAddress)
-	require.NoError(t, err)
-	netB.config.PublicAddress = addrB
 
 	netA.Start()
 	defer netA.Stop()
 	netB.Start()
 	defer netB.Stop()
+
+	addrA, ok := netA.Address()
+	require.True(t, ok)
+	gossipA, err := netA.addrToGossipAddr(addrA)
+	require.NoError(t, err)
+
+	addrB, ok := netB.Address()
+	require.True(t, ok)
+	gossipB, err := netB.addrToGossipAddr(addrB)
+	require.NoError(t, err)
 
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
@@ -1307,26 +1315,28 @@ func TestPeeringBadIdentityChallenge(t *testing.T) {
 
 	netA := makeTestWebsocketNode(t)
 	netA.identityTracker = newDummyIdentTracker()
-	addrA := freeHostAndPort()
+	netA.config.PublicAddress = "auto"
 	netA.config.GossipFanout = 1
-	netA.config.NetAddress = addrA
-	gossipA, err := netA.addrToGossipAddr(netA.config.NetAddress)
-	require.NoError(t, err)
-	netA.config.PublicAddress = addrA
 
 	netB := makeTestWebsocketNode(t)
 	netB.identityTracker = newDummyIdentTracker()
-	addrB := freeHostAndPort()
+	netB.config.PublicAddress = "no:3333"
 	netB.config.GossipFanout = 1
-	netB.config.NetAddress = addrB
-	gossipB, err := netB.addrToGossipAddr(netB.config.NetAddress)
-	require.NoError(t, err)
-	netB.config.PublicAddress = "Not meant for me!"
 
 	netA.Start()
 	defer netA.Stop()
 	netB.Start()
 	defer netB.Stop()
+
+	addrA, ok := netA.Address()
+	require.True(t, ok)
+	gossipA, err := netA.addrToGossipAddr(addrA)
+	require.NoError(t, err)
+
+	addrB, ok := netB.Address()
+	require.True(t, ok)
+	gossipB, err := netB.addrToGossipAddr(addrB)
+	require.NoError(t, err)
 
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
@@ -1370,26 +1380,28 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 
 	netA := makeTestWebsocketNode(t)
 	netA.identityTracker = newDummyIdentTracker()
-	addrA := freeHostAndPort()
+	netA.config.PublicAddress = "auto"
 	netA.config.GossipFanout = 1
-	netA.config.NetAddress = addrA
-	gossipA, err := netA.addrToGossipAddr(netA.config.NetAddress)
-	require.NoError(t, err)
-	netA.config.PublicAddress = addrA
 
 	netB := makeTestWebsocketNode(t)
 	netB.identityTracker = newDummyIdentTracker()
-	addrB := freeHostAndPort()
+	//netB.config.PublicAddress = "auto"
 	netB.config.GossipFanout = 1
-	netB.config.NetAddress = addrB
-	gossipB, err := netB.addrToGossipAddr(netB.config.NetAddress)
-	require.NoError(t, err)
-	//netB.config.PublicAddress = addrB
 
 	netA.Start()
 	defer netA.Stop()
 	netB.Start()
 	defer netB.Stop()
+
+	addrA, ok := netA.Address()
+	require.True(t, ok)
+	gossipA, err := netA.addrToGossipAddr(addrA)
+	require.NoError(t, err)
+
+	addrB, ok := netB.Address()
+	require.True(t, ok)
+	gossipB, err := netB.addrToGossipAddr(addrB)
+	require.NoError(t, err)
 
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {

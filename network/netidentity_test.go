@@ -148,13 +148,30 @@ func TestIdentityChallengeSchemeBadSignature(t *testing.T) {
 	// Copy the logic of attaching the header and signing so we can sign it wrong
 	c := identityChallenge{
 		Key:       i.identityKeys.SignatureVerifier,
-		Challenge: newIdentityChallengeBytes(),
-		Address:   "i1",
+		Challenge: newIdentityChallengeValue(),
+		Address:   []byte("i1"),
 	}
 	c.Signature = i.identityKeys.SignBytes([]byte("WRONG BYTES SIGNED"))
 	enc := protocol.EncodeReflect(i)
 	b64enc := base64.StdEncoding.EncodeToString(enc)
 	h.Add(IdentityChallengeHeader, b64enc)
+
+	// observe that VerifyAndAttachResponse won't do anything on bad signature
+	r := http.Header{}
+	respChal, key := i.VerifyAndAttachResponse(r, h)
+	require.Empty(t, r.Get(IdentityChallengeHeader))
+	require.Empty(t, respChal)
+	require.Empty(t, key)
+}
+
+// TestIdentityChallengeSchemeBadPayload tests that the  scheme will
+// fail to verify if the challenge can't be B64 decoded
+func TestIdentityChallengeSchemeBadPayload(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	h := http.Header{}
+	i := NewIdentityChallengeScheme("i1")
+	h.Add(IdentityChallengeHeader, "NOT VALID BASE 64! :)")
 
 	// observe that VerifyAndAttachResponse won't do anything on bad signature
 	r := http.Header{}
@@ -181,12 +198,34 @@ func TestIdentityChallengeSchemeBadResponseSignature(t *testing.T) {
 	resp := identityChallengeResponse{
 		Key:               i.identityKeys.SignatureVerifier,
 		Challenge:         origChal,
-		ResponseChallenge: newIdentityChallengeBytes(),
+		ResponseChallenge: newIdentityChallengeValue(),
 	}
 	resp.Signature = i.identityKeys.SignBytes([]byte("BAD BYTES FOR SIGNING"))
 	enc := protocol.EncodeReflect(i)
 	b64enc := base64.StdEncoding.EncodeToString(enc)
 	r.Add(IdentityChallengeHeader, b64enc)
+
+	respChal2, key2, ok := i.VerifyResponse(r, origChal)
+	require.Empty(t, respChal2)
+	require.Empty(t, key2)
+	require.Equal(t, uint32(0), ok)
+}
+
+// TestIdentityChallengeSchemeBadResponsePayload tests that the  scheme will
+// fail to verify if the challenge response can't be B64 decoded
+func TestIdentityChallengeSchemeBadResponsePayload(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	h := http.Header{}
+	i := NewIdentityChallengeScheme("i1")
+	// author a challenge to ourselves
+	origChal := i.AttachNewIdentityChallenge(h, "i1")
+	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
+	require.NotEmpty(t, origChal)
+
+	// generate a bad payload that should not decode
+	r := http.Header{}
+	r.Add(IdentityChallengeHeader, "BAD B64 ENCODING :)")
 
 	respChal2, key2, ok := i.VerifyResponse(r, origChal)
 	require.Empty(t, respChal2)
@@ -213,7 +252,7 @@ func TestIdentityChallengeSchemeWrongChallenge(t *testing.T) {
 	require.NotEmpty(t, key)
 
 	// Attempt to verify against the wrong challenge
-	respChal2, key2, ok := i.VerifyResponse(r, newIdentityChallengeBytes())
+	respChal2, key2, ok := i.VerifyResponse(r, newIdentityChallengeValue())
 	require.Empty(t, respChal2)
 	require.Equal(t, uint32(0), ok)
 	require.Empty(t, key2)

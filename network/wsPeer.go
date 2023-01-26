@@ -984,6 +984,7 @@ func (wp *wsPeer) OnClose(f func()) {
 	wp.closers = append(wp.closers, f)
 }
 
+//msgp:ignore peerFeatureFlag
 type peerFeatureFlag int
 
 const pfCompressedProposal peerFeatureFlag = 1

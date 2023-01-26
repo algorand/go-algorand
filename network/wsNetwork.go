@@ -101,6 +101,9 @@ const slowWritingPeerMonitorInterval = 5 * time.Second
 // to the log file. Note that the log file itself would also json-encode these before placing them in the log file.
 const unprintableCharacterGlyph = "▯"
 
+// match config.PublicAddress to this string to automatically set PublicAddress from Address()
+const autoconfigPublicAddress = "auto"
+
 var networkIncomingConnections = metrics.MakeGauge(metrics.NetworkIncomingConnections)
 var networkOutgoingConnections = metrics.MakeGauge(metrics.NetworkOutgoingConnections)
 
@@ -145,6 +148,8 @@ const peerShutdownDisconnectionAckDuration = 50 * time.Millisecond
 type Peer interface{}
 
 // PeerOption allows users to specify a subset of peers to query
+//
+//msgp:ignore PeerOption
 type PeerOption int
 
 const (
@@ -262,6 +267,8 @@ type OutgoingMessage struct {
 }
 
 // ForwardingPolicy is an enum indicating to whom we should send a message
+//
+//msgp:ignore ForwardingPolicy
 type ForwardingPolicy int
 
 const (
@@ -834,6 +841,13 @@ func (wn *WebsocketNetwork) Start() {
 		wn.scheme = "http"
 	}
 
+	// if PublicAddress set to automatic, pull the name from Address()
+	if wn.config.PublicAddress == autoconfigPublicAddress {
+		addr, ok := wn.Address()
+		if ok {
+			wn.config.PublicAddress = addr
+		}
+	}
 	// if the network has a public address, use that as the name for connection deduplication
 	if wn.config.PublicAddress != "" {
 		wn.RegisterHandlers(identityHandlers)
@@ -2264,9 +2278,10 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	// if the peer's response contained a verified identity challenge response, send identity verification to the peer
 	// this peer has not yet seen a round-trip of a challenge, so we sign and send the challenge from the response once WS connection is up
 	if identityVerified == 1 {
-		err = wn.identityScheme.SendIdentityChallengeVerification(peer, responseChallenge)
-		if err != nil {
-			wn.log.With("remote", addr).With("local", localAddr).Warnf(err.Error())
+		mbytes := wn.identityScheme.IdentityVerificationMessage(responseChallenge)
+		sent := peer.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, time.Now())
+		if !sent {
+			wn.log.With("remote", addr).With("local", localAddr).Warnf("could not send identity challenge verification to %v", addr)
 		}
 	}
 
