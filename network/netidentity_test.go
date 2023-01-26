@@ -75,40 +75,44 @@ func TestIdentityChallengeSchemeVerifyAndAttachResponce(t *testing.T) {
 	i.AttachChallenge(h, "i2")
 	r := http.Header{}
 	i2 := NewIdentityChallengeScheme("")
-	chal, key := i2.VerifyAndAttachResponse(r, h)
+	chal, key, err := i2.VerifyAndAttachResponse(r, h)
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, chal)
 	require.Empty(t, key)
+	require.Error(t, err)
 
 	// if dedup name doesn't match, no response
 	h = http.Header{}
 	i.AttachChallenge(h, "i2")
 	r = http.Header{}
 	i2 = NewIdentityChallengeScheme("not i2")
-	chal, key = i2.VerifyAndAttachResponse(r, h)
+	chal, key, err = i2.VerifyAndAttachResponse(r, h)
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, chal)
 	require.Empty(t, key)
+	require.Error(t, err)
 
 	// if the challenge can't be decoded or verified, no response
 	h = http.Header{}
 	h.Add("garbage", IdentityChallengeHeader)
 	r = http.Header{}
 	i2 = NewIdentityChallengeScheme("i2")
-	chal, key = i2.VerifyAndAttachResponse(r, h)
+	chal, key, err = i2.VerifyAndAttachResponse(r, h)
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, chal)
 	require.Empty(t, key)
+	require.Error(t, err)
 
 	// happy path: response should be attached here
 	h = http.Header{}
 	i.AttachChallenge(h, "i2")
 	r = http.Header{}
 	i2 = NewIdentityChallengeScheme("i2")
-	chal, key = i2.VerifyAndAttachResponse(r, h)
+	chal, key, err = i2.VerifyAndAttachResponse(r, h)
 	require.NotEmpty(t, r.Get(IdentityChallengeHeader))
 	require.NotEmpty(t, chal)
 	require.NotEmpty(t, key)
+	require.NoError(t, err)
 }
 
 // TestIdentityChallengeSchemeVerifyResponse confirms the scheme will
@@ -124,15 +128,17 @@ func TestIdentityChallengeSchemeVerifyResponse(t *testing.T) {
 	require.NotEmpty(t, origChal)
 	r := http.Header{}
 
-	respChal, key := i.VerifyAndAttachResponse(r, h)
+	respChal, key, err := i.VerifyAndAttachResponse(r, h)
 	require.NotEmpty(t, r.Get(IdentityChallengeHeader))
 	require.NotEmpty(t, respChal)
 	require.NotEmpty(t, key)
+	require.NoError(t, err)
 
 	// respChal2 should match respChal as it is being passed back to the original peer
 	// while origChal will be used for verification
-	key2, verificationMsg := i.VerifyResponse(r, origChal)
+	key2, verificationMsg, err := i.VerifyResponse(r, origChal)
 	require.NotEmpty(t, verificationMsg)
+	require.NoError(t, err)
 	// because we sent this to ourselves, we can confirm the keys match
 	require.Equal(t, key, key2)
 }
@@ -157,10 +163,11 @@ func TestIdentityChallengeSchemeBadSignature(t *testing.T) {
 
 	// observe that VerifyAndAttachResponse won't do anything on bad signature
 	r := http.Header{}
-	respChal, key := i.VerifyAndAttachResponse(r, h)
+	respChal, key, err := i.VerifyAndAttachResponse(r, h)
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, respChal)
 	require.Empty(t, key)
+	require.Error(t, err)
 }
 
 // TestIdentityChallengeSchemeBadPayload tests that the  scheme will
@@ -174,10 +181,11 @@ func TestIdentityChallengeSchemeBadPayload(t *testing.T) {
 
 	// observe that VerifyAndAttachResponse won't do anything on bad signature
 	r := http.Header{}
-	respChal, key := i.VerifyAndAttachResponse(r, h)
+	respChal, key, err := i.VerifyAndAttachResponse(r, h)
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, respChal)
 	require.Empty(t, key)
+	require.Error(t, err)
 }
 
 // TestIdentityChallengeSchemeBadResponseSignature tests that the  scheme will
@@ -204,9 +212,10 @@ func TestIdentityChallengeSchemeBadResponseSignature(t *testing.T) {
 	b64enc := base64.StdEncoding.EncodeToString(enc)
 	r.Add(IdentityChallengeHeader, b64enc)
 
-	key2, verificationMsg := i.VerifyResponse(r, origChal)
+	key2, verificationMsg, err := i.VerifyResponse(r, origChal)
 	require.Empty(t, key2)
 	require.Empty(t, verificationMsg)
+	require.Error(t, err)
 }
 
 // TestIdentityChallengeSchemeBadResponsePayload tests that the  scheme will
@@ -225,9 +234,10 @@ func TestIdentityChallengeSchemeBadResponsePayload(t *testing.T) {
 	r := http.Header{}
 	r.Add(IdentityChallengeHeader, "BAD B64 ENCODING :)")
 
-	key2, verificationMsg := i.VerifyResponse(r, origChal)
+	key2, verificationMsg, err := i.VerifyResponse(r, origChal)
 	require.Empty(t, key2)
 	require.Empty(t, verificationMsg)
+	require.Error(t, err)
 }
 
 // TestIdentityChallengeSchemeWrongChallenge the scheme will
@@ -243,15 +253,17 @@ func TestIdentityChallengeSchemeWrongChallenge(t *testing.T) {
 	require.NotEmpty(t, origChal)
 
 	r := http.Header{}
-	respChal, key := i.VerifyAndAttachResponse(r, h)
+	respChal, key, err := i.VerifyAndAttachResponse(r, h)
 	require.NotEmpty(t, r.Get(IdentityChallengeHeader))
 	require.NotEmpty(t, respChal)
 	require.NotEmpty(t, key)
+	require.NoError(t, err)
 
 	// Attempt to verify against the wrong challenge
-	key2, verificationMsg := i.VerifyResponse(r, origChal)
+	key2, verificationMsg, err := i.VerifyResponse(r, newIdentityChallengeValue())
 	require.Empty(t, key2)
 	require.Empty(t, verificationMsg)
+	require.Error(t, err)
 }
 
 func TestNewIdentityTracker(t *testing.T) {

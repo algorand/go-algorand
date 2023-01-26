@@ -1176,7 +1176,10 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		responseHeader.Set(PriorityChallengeHeader, challenge)
 	}
 
-	peerIDChallenge, peerID := wn.identityScheme.VerifyAndAttachResponse(responseHeader, request.Header)
+	peerIDChallenge, peerID, err := wn.identityScheme.VerifyAndAttachResponse(responseHeader, request.Header)
+	if err != nil {
+		wn.log.Info("peer identity challenge did not verify", err)
+	}
 
 	conn, err := wn.upgrader.Upgrade(response, request, responseHeader)
 	if err != nil {
@@ -2223,7 +2226,11 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		return
 	}
 
-	peerID, idVerificationMessage := wn.identityScheme.VerifyResponse(response.Header, idChallenge)
+	// if the peer responded with an identity challenge response, but it can't be verified, don't proceed with peering
+	peerID, idVerificationMessage, err := wn.identityScheme.VerifyResponse(response.Header, idChallenge)
+	if err != nil {
+		return
+	}
 
 	throttledConnection := false
 	if atomic.AddInt32(&wn.throttledOutgoingConnections, int32(-1)) >= 0 {
@@ -2248,7 +2255,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 
 	// if there is a final verification message to send, it means this peer has a verified identity,
 	// attempt to set the peer and identityTracker
-	if idVerificationMessage != nil {
+	if len(idVerificationMessage) > 0 {
 		atomic.StoreUint32(&peer.identityVerified, uint32(1))
 		wn.peersLock.Lock()
 		ok := wn.identityTracker.setIdentity(peer)
@@ -2276,7 +2283,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	wn.maybeSendMessagesOfInterest(peer, nil)
 
 	// if there is a final identification verification message to send, send it to the peer
-	if idVerificationMessage != nil {
+	if len(idVerificationMessage) > 0 {
 		sent := peer.writeNonBlock(context.Background(), idVerificationMessage, true, crypto.Digest{}, time.Now())
 		if !sent {
 			wn.log.With("remote", addr).With("local", localAddr).Warnf("could not send identity challenge verification to %v", addr)

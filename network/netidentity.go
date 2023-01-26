@@ -35,6 +35,7 @@ package network
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"sync/atomic"
 
@@ -58,8 +59,8 @@ func newIdentityChallengeValue() identityChallengeValue {
 
 type identityChallengeScheme interface {
 	AttachChallenge(attach http.Header, addr string) identityChallengeValue
-	VerifyAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey)
-	VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte)
+	VerifyAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error)
+	VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error)
 }
 
 // identityChallengePublicKeyScheme implements IdentityChallengeScheme by
@@ -105,23 +106,28 @@ func (i identityChallengePublicKeyScheme) AttachChallenge(attach http.Header, ad
 // once verified, it will attach the header to the "attach" header
 // and will return the challenge and identity of the peer for recording
 // or returns empty values if the header did not end up getting set
-func (i identityChallengePublicKeyScheme) VerifyAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey) {
+func (i identityChallengePublicKeyScheme) VerifyAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
 	if i.dedupName == "" {
-		return identityChallengeValue{}, crypto.PublicKey{}
+		return identityChallengeValue{}, crypto.PublicKey{}, nil
 	}
 	// decode the header to an identityChallenge
 	msg, err := base64.StdEncoding.DecodeString(h.Get(IdentityChallengeHeader))
 	if err != nil {
-		return identityChallengeValue{}, crypto.PublicKey{}
+		return identityChallengeValue{}, crypto.PublicKey{}, err
 	}
 	idChal := identityChallenge{}
 	err = protocol.Decode(msg, &idChal)
 	if err != nil {
-		return identityChallengeValue{}, crypto.PublicKey{}
+		return identityChallengeValue{}, crypto.PublicKey{}, err
 	}
-	// confirm the Address matches, and the challenge verifies
-	if string(idChal.Address) != i.dedupName || !idChal.Verify() {
-		return identityChallengeValue{}, crypto.PublicKey{}
+	// if the address is not meant for this host, return without attaching headers,
+	// but also do not emit an error. This is because if an operator were to incorrectly
+	// specify their dedupName, it could result in inappropriate disconnections from valid peers
+	if string(idChal.Address) != i.dedupName {
+		return identityChallengeValue{}, crypto.PublicKey{}, nil
+	}
+	if !idChal.Verify() {
+		return identityChallengeValue{}, crypto.PublicKey{}, fmt.Errorf("identity challenge incorrectly signed")
 	}
 	// make the response object, encode it and attach it to the header
 	r := identityChallengeResponse{
@@ -130,27 +136,30 @@ func (i identityChallengePublicKeyScheme) VerifyAndAttachResponse(attach http.He
 		ResponseChallenge: newIdentityChallengeValue(),
 	}
 	attach.Add(IdentityChallengeHeader, r.signAndEncodeB64(i.identityKeys))
-	return r.ResponseChallenge, idChal.Key
+	return r.ResponseChallenge, idChal.Key, nil
 }
 
 // VerifyResponse will decode the identity challenge header and confirm it self-verifies,
 // and that the provided challenge matches the encoded one
 // if the response can be verified, it returns the identity of the peer and a final Verification Message to send to the peer
 // otherwise, returns empty values
-func (i identityChallengePublicKeyScheme) VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte) {
+func (i identityChallengePublicKeyScheme) VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
 	msg, err := base64.StdEncoding.DecodeString(h.Get(IdentityChallengeHeader))
 	if err != nil {
-		return crypto.PublicKey{}, []byte{}
+		return crypto.PublicKey{}, []byte{}, err
 	}
 	resp := identityChallengeResponse{}
 	err = protocol.Decode(msg, &resp)
 	if err != nil {
-		return crypto.PublicKey{}, []byte{}
+		return crypto.PublicKey{}, []byte{}, err
 	}
-	if resp.Challenge == c && resp.Verify() {
-		return resp.Key, i.identityVerificationMessage(resp.ResponseChallenge)
+	if resp.Challenge != c {
+		return crypto.PublicKey{}, []byte{}, fmt.Errorf("challenge response did not contain originally issued challenge value")
 	}
-	return crypto.PublicKey{}, []byte{}
+	if !resp.Verify() {
+		return crypto.PublicKey{}, []byte{}, fmt.Errorf("challenge response incorrectly signed ")
+	}
+	return resp.Key, i.identityVerificationMessage(resp.ResponseChallenge), nil
 }
 
 // IdentityVerificationMessage generates the 3rd message of the challenge exchange,
