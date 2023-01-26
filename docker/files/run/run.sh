@@ -84,9 +84,7 @@ function configure_data_dir() {
       echo "{ \"address\":\"0.0.0.0:${KMD_PORT}\", \"allowed_origins\":[\"*\"] }" >kmd_config.json
     fi
 
-    if [ "$KMD_TOKEN" = "" ] && [ "$ADMIN_TOKEN" != "" ]; then
-      echo "$ADMIN_TOKEN" >kmd.token
-    else
+    if [ "$KMD_TOKEN" != "" ]; then
       echo "$KMD_TOKEN" >kmd.token
     fi
   fi

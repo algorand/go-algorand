@@ -29,7 +29,7 @@ The following environment variables can be supplied. Except when noted, it is po
 | NUM_ROUNDS    | If set on a private network, override default of 30000 participation keys. |
 | TOKEN         | If set, overrides the REST API token. |
 | ADMIN_TOKEN   | If set, overrides the REST API admin token. |
-| KMD_TOKEN | If set along with `START_KMD`, override the KMD REST API token. Otherwise, it's set to `ADMIN_TOKEN`. |
+| KMD_TOKEN | If set along with `START_KMD`, override the KMD REST API token. |
 | START_KMD | When set to 1, start kmd service with no timeout. THIS SHOULD NOT BE USED IN PRODUCTION. |
 
 ### Special Files
