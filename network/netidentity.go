@@ -43,10 +43,54 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-const maxAddressLen = 256 + 32 // Max DNS (255) + margin for port specification
-
 // netidentity holds the functionality to participate in "Identity Challenge Exchange"
-// with the purpose of identitfying redundant and bidirectional connections to avoid
+// with the purpose of identitfying redundant and bidirectional connections and prevent them.
+// the identity challenge exchange protocol is a 3 way handshake that exchanges signed messages.
+// Message 1 (Identity Challenge): when a peering request is made, an identityChallenge is attached with:
+// - a 32 byte random challenge
+// - the requester's "identity" PublicKey
+// - the PublicAddress of the intended recipient
+// - a Nonce "IC"
+// - Signature of the above by the requester's PublicKey
+// Message 2 (Identity Challenge Response): when responding to a peering request,
+// if the identity challenge is correct, an identityChallengeResponse is attached with:
+// - the original 32 byte random challenge
+// - a new "response" 32 byte random challenge
+// - the responder's "identity" PublicKey
+// - a Nonce "ICR"
+// - Signature of the above by the responder's PublicKey
+// Message 3 (Identity Verification): if the identityChallengeResponse is correct,
+// the requester sends a message "NI" over websocket to verify its identity PublicKey, with:
+// - Signature of the resposne challenge by the requester's PublicKey
+//
+// Upon receipt of Message 2, the requester has enough data to consider the peer's Identity "verified"
+// Upon receipt of Message 3, the responder has enough data to consider the peer's Identity "verified"
+// at each of these steps, if the peer's identity is verified, wsNetwork will attempt to add it to the
+// identityTracker, which maintains a single peer per identity PublicKey. If the identity is already in use
+// by another peer, we know this connection is duplicate and can be closed or disconnected
+//
+// Protocol Enablement:
+// Identity Challenge Exchange is optional for peers, and is enabled by setting PublicAddress in the node's config
+// to either the address used in Foundation DNS, or to "auto" to attempt to load the PublicAddress after the listener starts.
+//
+// Protocol Error Handling:
+// Message 1
+// - If the Message is not included, assume the peer does not use identity exchange, and peer without attaching an identityChallengeResponse
+// - If the Address included in the challenge is not this node's PublicAddress, peering continues without identity exchange.
+//   this is so that if an operator misconfigures PublicAddress, it does not decline well meaning peering attempts
+// - If the Message is malformed or cannot be decoded, the peering attempt is stopped
+// - If the Signature in the challenge does not verify to the included key, the peering attempt is stopped
+// Message 2
+// - If the Message is not included, assume the peer does not use identity exchange, and do not send Message 3
+// - If the Message is malformed or cannot be decoded, the peering attempt is stopped
+// - If the original 32 Byte challenge does not match the one sent in Message 1, the peering attempt is stopped
+// - If the Signature in the challenge does not verify to the included key, the peering attempt is stopped
+// Message 3
+// - If the Message is malformed or cannot be decoded, the peer is disconnected
+// - If the Signature in the challenge does not verify peer's assumed PublicKey and assigned Challenge Bytes, the peer is disconnected
+// - If the Message is expected (if the requester used identity challenge), wsNetwork will check that the peer verified within 5 seconds, or will disconnect
+
+const maxAddressLen = 256 + 32 // Max DNS (255) + margin for port specification
 
 // identityChallengeValue is 32 random bytes used for identity challenge exchange
 type identityChallengeValue [32]byte
@@ -64,7 +108,8 @@ type identityChallengeScheme interface {
 }
 
 // identityChallengePublicKeyScheme implements IdentityChallengeScheme by
-// exchanging and verifying public key challenges
+// exchanging and verifying public key challenges and attaching them to headers,
+// or returning the message payload to be sent
 type identityChallengePublicKeyScheme struct {
 	dedupName    string
 	identityKeys *crypto.SignatureSecrets
@@ -107,11 +152,17 @@ func (i identityChallengePublicKeyScheme) AttachChallenge(attach http.Header, ad
 // and will return the challenge and identity of the peer for recording
 // or returns empty values if the header did not end up getting set
 func (i identityChallengePublicKeyScheme) VerifyAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
+	// if dedupName is not set, this scheme is not configured to exchange identity
 	if i.dedupName == "" {
 		return identityChallengeValue{}, crypto.PublicKey{}, nil
 	}
+	// if the headerString is not populated, the peer isn't participating in identity exchange
+	headerString := h.Get(IdentityChallengeHeader)
+	if headerString == "" {
+		return identityChallengeValue{}, crypto.PublicKey{}, nil
+	}
 	// decode the header to an identityChallenge
-	msg, err := base64.StdEncoding.DecodeString(h.Get(IdentityChallengeHeader))
+	msg, err := base64.StdEncoding.DecodeString(headerString)
 	if err != nil {
 		return identityChallengeValue{}, crypto.PublicKey{}, err
 	}
@@ -120,14 +171,14 @@ func (i identityChallengePublicKeyScheme) VerifyAndAttachResponse(attach http.He
 	if err != nil {
 		return identityChallengeValue{}, crypto.PublicKey{}, err
 	}
+	if !idChal.Verify() {
+		return identityChallengeValue{}, crypto.PublicKey{}, fmt.Errorf("identity challenge incorrectly signed")
+	}
 	// if the address is not meant for this host, return without attaching headers,
 	// but also do not emit an error. This is because if an operator were to incorrectly
 	// specify their dedupName, it could result in inappropriate disconnections from valid peers
 	if string(idChal.Address) != i.dedupName {
 		return identityChallengeValue{}, crypto.PublicKey{}, nil
-	}
-	if !idChal.Verify() {
-		return identityChallengeValue{}, crypto.PublicKey{}, fmt.Errorf("identity challenge incorrectly signed")
 	}
 	// make the response object, encode it and attach it to the header
 	r := identityChallengeResponse{
@@ -144,7 +195,12 @@ func (i identityChallengePublicKeyScheme) VerifyAndAttachResponse(attach http.He
 // if the response can be verified, it returns the identity of the peer and a final Verification Message to send to the peer
 // otherwise, returns empty values
 func (i identityChallengePublicKeyScheme) VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
-	msg, err := base64.StdEncoding.DecodeString(h.Get(IdentityChallengeHeader))
+	headerString := h.Get(IdentityChallengeHeader)
+	// if the header is not populated, assume the peer is not participating in identity exchange
+	if headerString == "" {
+		return crypto.PublicKey{}, []byte{}, nil
+	}
+	msg, err := base64.StdEncoding.DecodeString(headerString)
 	if err != nil {
 		return crypto.PublicKey{}, []byte{}, err
 	}
@@ -178,7 +234,7 @@ type identityChallenge struct {
 	_struct   struct{}               `codec:",omitempty,omitemptyarray"`
 	Key       crypto.PublicKey       `codec:"pk"`
 	Challenge identityChallengeValue `codec:"c"`
-	Address   []byte                 `codec:"a",allocbound=maxAddressLen`
+	Address   []byte                 `codec:"a,allocbound=maxAddressLen"`
 	Signature crypto.Signature       `codec:"s"`
 }
 
@@ -251,9 +307,11 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	msg := identityVerificationMessage{}
 	err := protocol.Decode(message.Data, &msg)
 	if err != nil {
+		peer.net.Disconnect(peer)
 		return OutgoingMessage{}
 	}
 	if !peer.identity.VerifyBytes(peer.identityChallenge[:], msg.Signature) {
+		peer.net.Disconnect(peer)
 		return OutgoingMessage{}
 	}
 	atomic.StoreUint32(&peer.identityVerified, 1)

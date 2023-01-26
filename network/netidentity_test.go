@@ -59,9 +59,9 @@ func TestIdentityChallengeSchemeAttachIfEnabled(t *testing.T) {
 	require.NotEmpty(t, chal)
 }
 
-// TestIdentityChallengeSchemeVerifyAndAttachResponce will confirm that the scheme
+// TestIdentityChallengeSchemeVerifyAndAttachResponse will confirm that the scheme
 // attaches responses only if dedup name is set and the provided challenge verifies
-func TestIdentityChallengeSchemeVerifyAndAttachResponce(t *testing.T) {
+func TestIdentityChallengeSchemeVerifyAndAttachResponse(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	i := NewIdentityChallengeScheme("i1")
@@ -70,7 +70,7 @@ func TestIdentityChallengeSchemeVerifyAndAttachResponce(t *testing.T) {
 	i.AttachChallenge(h, "i2")
 	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
 
-	// without a dedup name, no response
+	// without a dedup name, no response and no error
 	h = http.Header{}
 	i.AttachChallenge(h, "i2")
 	r := http.Header{}
@@ -79,9 +79,9 @@ func TestIdentityChallengeSchemeVerifyAndAttachResponce(t *testing.T) {
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, chal)
 	require.Empty(t, key)
-	require.Error(t, err)
+	require.NoError(t, err)
 
-	// if dedup name doesn't match, no response
+	// if dedup name doesn't match, no response and no error
 	h = http.Header{}
 	i.AttachChallenge(h, "i2")
 	r = http.Header{}
@@ -90,11 +90,11 @@ func TestIdentityChallengeSchemeVerifyAndAttachResponce(t *testing.T) {
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, chal)
 	require.Empty(t, key)
-	require.Error(t, err)
+	require.NoError(t, err)
 
-	// if the challenge can't be decoded or verified, no response
+	// if the challenge can't be decoded or verified, error
 	h = http.Header{}
-	h.Add("garbage", IdentityChallengeHeader)
+	h.Add(IdentityChallengeHeader, "garbage")
 	r = http.Header{}
 	i2 = NewIdentityChallengeScheme("i2")
 	chal, key, err = i2.VerifyAndAttachResponse(r, h)
@@ -157,11 +157,11 @@ func TestIdentityChallengeSchemeBadSignature(t *testing.T) {
 		Address:   []byte("i1"),
 	}
 	c.Signature = i.identityKeys.SignBytes([]byte("WRONG BYTES SIGNED"))
-	enc := protocol.EncodeReflect(i)
+	enc := protocol.Encode(&c)
 	b64enc := base64.StdEncoding.EncodeToString(enc)
 	h.Add(IdentityChallengeHeader, b64enc)
 
-	// observe that VerifyAndAttachResponse won't do anything on bad signature
+	// observe that VerifyAndAttachResponse returns error on bad signature
 	r := http.Header{}
 	respChal, key, err := i.VerifyAndAttachResponse(r, h)
 	require.Empty(t, r.Get(IdentityChallengeHeader))
@@ -208,7 +208,7 @@ func TestIdentityChallengeSchemeBadResponseSignature(t *testing.T) {
 		ResponseChallenge: newIdentityChallengeValue(),
 	}
 	resp.Signature = i.identityKeys.SignBytes([]byte("BAD BYTES FOR SIGNING"))
-	enc := protocol.EncodeReflect(i)
+	enc := protocol.Encode(&resp)
 	b64enc := base64.StdEncoding.EncodeToString(enc)
 	r.Add(IdentityChallengeHeader, b64enc)
 

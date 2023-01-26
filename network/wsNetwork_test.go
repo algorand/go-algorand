@@ -19,6 +19,7 @@ package network
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -1184,7 +1185,7 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
 		// let the tryConnect go forward
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
@@ -1194,11 +1195,11 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getInsertCount())
 
 	// netB has to wait for a final verification message over WS Handler, so pause a moment
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getInsertCount())
 
-	// tell the dummy identity tracker that new identies should fail to insert
+	// tell the mock identity tracker that new identies should fail to insert
 	netA.identityTracker.(*mockIdentityTracker).setShouldInsert(false)
 	netB.identityTracker.(*mockIdentityTracker).setShouldInsert(false)
 
@@ -1207,7 +1208,7 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 		netB.wg.Add(1)
 		netB.tryConnect(addrA, gossipA)
 		// let the tryConnect go forward
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	// netA should have added this peer without a verified identity,
@@ -1232,7 +1233,7 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
 		// let the tryConnect go forward
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	// because the connection is simply dropped, the debug connection stays open. TCP would close this
 	assert.Equal(t, 2, len(netB.GetPeers(PeersConnectedIn)))
@@ -1283,7 +1284,7 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
 		// let the tryConnect go forward
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
@@ -1297,7 +1298,7 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 		netB.wg.Add(1)
 		netB.tryConnect(addrA, gossipA)
 		// let the tryConnect go forward
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
@@ -1343,7 +1344,7 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
 		// let the tryConnect go forward
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
@@ -1357,7 +1358,7 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 		netB.wg.Add(1)
 		netB.tryConnect(addrA, gossipA)
 		// let the tryConnect go forward
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
@@ -1368,9 +1369,9 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	assert.Equal(t, 0, netB.identityTracker.(*mockIdentityTracker).getSetCount())
 }
 
-// TestPeeringBadIdentityChallenge will confirm that if the reciever can't match
-// the Address in the challenge to its PublicAddress, identities aren't exchanged
-func TestPeeringBadIdentityChallenge(t *testing.T) {
+// TestPeeringIncorrectDeduplicationName  confirm that if the reciever can't match
+// the Address in the challenge to its PublicAddress, identities aren't exchanged, but peering continues
+func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
@@ -1403,7 +1404,7 @@ func TestPeeringBadIdentityChallenge(t *testing.T) {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
 		// let the tryConnect go forward
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
@@ -1419,7 +1420,7 @@ func TestPeeringBadIdentityChallenge(t *testing.T) {
 		netB.wg.Add(1)
 		netB.tryConnect(addrA, gossipA)
 		// let the tryConnect go forward
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	// confirm that at this point the identityTracker was called once per network
 	//	and inserted once per network
@@ -1434,6 +1435,7 @@ func TestPeeringBadIdentityChallenge(t *testing.T) {
 }
 
 // make a mockIdentityScheme which can accept overloaded behavior
+// use this over the next few tests to check that when one peer misbehaves, peering continues/halts as expected
 type mockIdentityScheme struct {
 	realScheme              *identityChallengePublicKeyScheme
 	attachChallenge         func(attach http.Header, addr string) identityChallengeValue
@@ -1446,7 +1448,6 @@ func newMockIdentityScheme() *mockIdentityScheme {
 		realScheme: NewIdentityChallengeScheme("any"),
 	}
 }
-
 func (i mockIdentityScheme) AttachChallenge(attach http.Header, addr string) identityChallengeValue {
 	if i.attachChallenge != nil {
 		return i.attachChallenge(attach, addr)
@@ -1464,6 +1465,378 @@ func (i mockIdentityScheme) VerifyResponse(h http.Header, c identityChallengeVal
 		return i.verifyResponse(h, c)
 	}
 	return i.realScheme.VerifyResponse(h, c)
+}
+
+// when the identity challenge is misconstructed in various ways, peering should behave as expected
+func TestPeeringWithBadIdentityChallenge(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type testCase struct {
+		name            string
+		attachChallenge func(attach http.Header, addr string) identityChallengeValue
+		totalInA        int
+		totalOutA       int
+		totalInB        int
+		totalOutB       int
+	}
+
+	testCases := []testCase{
+		// when identityChallenge is not included, peering continues as normal
+		{
+			name:            "not included",
+			attachChallenge: func(attach http.Header, addr string) identityChallengeValue { return identityChallengeValue{} },
+			totalInA:        0,
+			totalOutA:       1,
+			totalInB:        1,
+			totalOutB:       0,
+		},
+		// when the identityChallenge is malformed B64, peering halts
+		{
+			name: "malformed b64",
+			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
+				attach.Add(IdentityChallengeHeader, "this does not decode!")
+				return newIdentityChallengeValue()
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
+		// when the identityChallenge can't be unmarshalled, peering halts
+		{
+			name: "not msgp decodable",
+			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
+				attach.Add(IdentityChallengeHeader, "bm8gZ29vZCB2ZXJ5IGJhZCB0ZXh0LiBub3QgYSBzdHJ1Y3QgZXZlbiBpZiBpdCB0cmllZA")
+				return newIdentityChallengeValue()
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
+		// when the incorrect address is used, peering continues
+		{
+			name: "incorrect address",
+			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
+				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
+				c := identityChallenge{
+					Key:       s.identityKeys.SignatureVerifier,
+					Challenge: newIdentityChallengeValue(),
+					Address:   []byte("incorrect address!"),
+				}
+				attach.Add(IdentityChallengeHeader, c.signAndEncodeB64(s.identityKeys))
+				return c.Challenge
+			},
+			totalInA:  0,
+			totalOutA: 1,
+			totalInB:  1,
+			totalOutB: 0,
+		},
+		// when the challenge is incorrectly signed, peering halts
+		{
+			name: "bad signature",
+			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
+				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
+				c := identityChallenge{
+					Key:       s.identityKeys.SignatureVerifier,
+					Challenge: newIdentityChallengeValue(),
+					Address:   []byte("incorrect address!"),
+				}
+				c.Signature = s.identityKeys.SignBytes(c.signableBytes())
+				c.Challenge = newIdentityChallengeValue() // change the underlying value of the challenge so the signature fails
+				enc := protocol.Encode(&c)
+				b64enc := base64.StdEncoding.EncodeToString(enc)
+				attach.Add(IdentityChallengeHeader, b64enc)
+				return c.Challenge
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Logf("Running Peering with Identity Challenge Test: %s", tc.name)
+		netA := makeTestWebsocketNode(t)
+		netA.identityTracker = newDummyIdentTracker()
+		netA.config.PublicAddress = "auto"
+		netA.config.GossipFanout = 1
+
+		scheme := newMockIdentityScheme()
+		scheme.attachChallenge = tc.attachChallenge
+		netA.identityScheme = scheme
+
+		netB := makeTestWebsocketNode(t)
+		netB.identityTracker = newDummyIdentTracker()
+		netB.config.PublicAddress = "auto"
+		netB.config.GossipFanout = 1
+
+		netA.Start()
+		defer netA.Stop()
+		netB.Start()
+		defer netB.Stop()
+
+		addrB, ok := netB.Address()
+		require.True(t, ok)
+		gossipB, err := netB.addrToGossipAddr(addrB)
+		require.NoError(t, err)
+
+		if _, ok := netA.tryConnectReserveAddr(addrB); ok {
+			netA.wg.Add(1)
+			netA.tryConnect(addrB, gossipB)
+			// let the tryConnect go forward
+			time.Sleep(100 * time.Millisecond)
+		}
+		assert.Equal(t, tc.totalInA, len(netA.GetPeers(PeersConnectedIn)))
+		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
+		assert.Equal(t, tc.totalInB, len(netB.GetPeers(PeersConnectedIn)))
+		assert.Equal(t, tc.totalOutB, len(netB.GetPeers(PeersConnectedOut)))
+	}
+
+}
+
+// when the identity challenge response is misconstructed in various way, confirm peering behaves as expected
+func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type testCase struct {
+		name                    string
+		verifyAndAttachResponse func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error)
+		totalInA                int
+		totalOutA               int
+		totalInB                int
+		totalOutB               int
+	}
+
+	testCases := []testCase{
+		// when there is no response to the identity challenge, peering should continue without ID
+		{
+			name: "not included",
+			verifyAndAttachResponse: func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
+				return identityChallengeValue{}, crypto.PublicKey{}, nil
+			},
+			totalInA:  0,
+			totalOutA: 1,
+			totalInB:  1,
+			totalOutB: 0,
+		},
+		// when the response is malformed, do not peer
+		{
+			name: "malformed b64",
+			verifyAndAttachResponse: func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
+				attach.Add(IdentityChallengeHeader, "this does not decode!")
+				return identityChallengeValue{}, crypto.PublicKey{}, nil
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  1, // NetB won't notice this connection is dropped
+			totalOutB: 0,
+		},
+		// when the response is malformed, do not peer
+		{
+			name: "not msgp decodable",
+			verifyAndAttachResponse: func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
+				attach.Add(IdentityChallengeHeader, "bm8gZ29vZCB2ZXJ5IGJhZCB0ZXh0LiBub3QgYSBzdHJ1Y3QgZXZlbiBpZiBpdCB0cmllZA")
+				return identityChallengeValue{}, crypto.PublicKey{}, nil
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  1, // NetB won't notice this connection is dropped
+			totalOutB: 0,
+		},
+		// when the original challenge isn't included, do not peer
+		{
+			name: "incorrect original challenge",
+			verifyAndAttachResponse: func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
+				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
+				// decode the header to an identityChallenge
+				msg, _ := base64.StdEncoding.DecodeString(h.Get(IdentityChallengeHeader))
+				idChal := identityChallenge{}
+				protocol.Decode(msg, &idChal)
+				// make the response object, with an incorrect challenge encode it and attach it to the header
+				r := identityChallengeResponse{
+					Key:               s.identityKeys.SignatureVerifier,
+					Challenge:         newIdentityChallengeValue(),
+					ResponseChallenge: newIdentityChallengeValue(),
+				}
+				attach.Add(IdentityChallengeHeader, r.signAndEncodeB64(s.identityKeys))
+				return r.ResponseChallenge, idChal.Key, nil
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  1, // NetB won't notice this connection is dropped
+			totalOutB: 0,
+		},
+		// when the message is incorrectly signed, do not peer
+		{
+			name: "bad signature",
+			verifyAndAttachResponse: func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
+				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
+				// decode the header to an identityChallenge
+				msg, _ := base64.StdEncoding.DecodeString(h.Get(IdentityChallengeHeader))
+				idChal := identityChallenge{}
+				protocol.Decode(msg, &idChal)
+				// make the response object, with an incorrect challenge encode it and attach it to the header
+				r := identityChallengeResponse{
+					Key:               s.identityKeys.SignatureVerifier,
+					Challenge:         newIdentityChallengeValue(),
+					ResponseChallenge: newIdentityChallengeValue(),
+				}
+				r.Signature = s.identityKeys.SignBytes(r.signableBytes())
+				r.ResponseChallenge = newIdentityChallengeValue() // change the challenge after signing
+				enc := protocol.Encode(&r)
+				b64enc := base64.StdEncoding.EncodeToString(enc)
+				attach.Add(IdentityChallengeHeader, b64enc)
+				return r.ResponseChallenge, idChal.Key, nil
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  1, // NetB won't notice this connection is dropped
+			totalOutB: 0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Logf("Running Peering with Identity Challenge Response Test: %s", tc.name)
+		netA := makeTestWebsocketNode(t)
+		netA.identityTracker = newDummyIdentTracker()
+		netA.config.PublicAddress = "auto"
+		netA.config.GossipFanout = 1
+
+		netB := makeTestWebsocketNode(t)
+		netB.identityTracker = newDummyIdentTracker()
+		netB.config.PublicAddress = "auto"
+		netB.config.GossipFanout = 1
+
+		scheme := newMockIdentityScheme()
+		scheme.verifyAndAttachResponse = tc.verifyAndAttachResponse
+		netB.identityScheme = scheme
+
+		netA.Start()
+		defer netA.Stop()
+		netB.Start()
+		defer netB.Stop()
+
+		addrB, ok := netB.Address()
+		require.True(t, ok)
+		gossipB, err := netB.addrToGossipAddr(addrB)
+		require.NoError(t, err)
+
+		if _, ok := netA.tryConnectReserveAddr(addrB); ok {
+			netA.wg.Add(1)
+			netA.tryConnect(addrB, gossipB)
+			// let the tryConnect go forward
+			time.Sleep(100 * time.Millisecond)
+		}
+		assert.Equal(t, tc.totalInA, len(netA.GetPeers(PeersConnectedIn)))
+		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
+		assert.Equal(t, tc.totalInB, len(netB.GetPeers(PeersConnectedIn)))
+		assert.Equal(t, tc.totalOutB, len(netB.GetPeers(PeersConnectedOut)))
+	}
+
+}
+
+// when the identity challenge verification is misconstructed in various ways, peering should behave as expected
+func TestPeeringWithBadIdentityVerification(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type testCase struct {
+		name            string
+		verifyResponse  func(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error)
+		totalInA        int
+		totalOutA       int
+		totalInB        int
+		totalOutB       int
+		additionalSleep time.Duration
+	}
+
+	testCases := []testCase{
+		// when identityChallenge is not generated/sent, peer is disconnected after 5 seconds
+		{
+			name: "not included",
+			verifyResponse: func(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
+				return crypto.PublicKey{}, []byte{}, nil
+			},
+			totalInA:        0,
+			totalOutA:       0,
+			totalInB:        0,
+			totalOutB:       0,
+			additionalSleep: 6 * time.Second,
+		},
+		// when the identityChallenge can't be unmarshalled, peer is disconnected
+		{
+			name: "not msgp decodable",
+			verifyResponse: func(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
+				message := append([]byte(protocol.NetIDVerificationTag), []byte("Bad Data!")[:]...)
+				return crypto.PublicKey{}, message, nil
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
+		{
+			// when the verification signature doesn't match the peer's expectation (the previously exchanged identity), peer is disconnected
+			name: "bad signature",
+			verifyResponse: func(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
+				s := NewIdentityChallengeScheme("does not matter") // make a
+				ver := identityVerificationMessage{
+					Signature: s.identityKeys.SignBytes([]byte("bad bytes for signing")),
+				}
+				message := append([]byte(protocol.NetIDVerificationTag), protocol.Encode(&ver)[:]...)
+				return crypto.PublicKey{}, message, nil
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Logf("Running Peering with Identity Verification Test: %s", tc.name)
+		if testing.Short() && tc.additionalSleep > 5*time.Second {
+			t.Log("this is a long test; skipping for -short")
+			continue
+		}
+		netA := makeTestWebsocketNode(t)
+		netA.identityTracker = newDummyIdentTracker()
+		netA.config.PublicAddress = "auto"
+		netA.config.GossipFanout = 1
+
+		scheme := newMockIdentityScheme()
+		scheme.verifyResponse = tc.verifyResponse
+		netA.identityScheme = scheme
+
+		netB := makeTestWebsocketNode(t)
+		netB.identityTracker = newDummyIdentTracker()
+		netB.config.PublicAddress = "auto"
+		netB.config.GossipFanout = 1
+
+		netA.Start()
+		defer netA.Stop()
+		netB.Start()
+		defer netB.Stop()
+
+		addrB, ok := netB.Address()
+		require.True(t, ok)
+		gossipB, err := netB.addrToGossipAddr(addrB)
+		require.NoError(t, err)
+
+		if _, ok := netA.tryConnectReserveAddr(addrB); ok {
+			netA.wg.Add(1)
+			netA.tryConnect(addrB, gossipB)
+			// let the tryConnect go forward
+			time.Sleep(100 * time.Millisecond)
+		}
+		// allow for the identification verification to time out
+		time.Sleep(tc.additionalSleep)
+		assert.Equal(t, tc.totalInA, len(netA.GetPeers(PeersConnectedIn)))
+		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
+		assert.Equal(t, tc.totalInB, len(netB.GetPeers(PeersConnectedIn)))
+		assert.Equal(t, tc.totalOutB, len(netB.GetPeers(PeersConnectedOut)))
+	}
 }
 
 type benchmarkHandler struct {
