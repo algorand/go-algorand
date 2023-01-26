@@ -71,7 +71,6 @@ Explanation of parts:
 * `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis. The value of this variable takes precedence over the `name` attribute set in `/etc/algorand/logging.config`.
 * `-e FAST_CATCHUP=1` causes fast catchup to start shortly after launching the network.
 * `-e START_KMD=1` signals to entrypoint to start the kmd REST API (THIS SHOULD NOT BE USED IN PRODUCTION).
-* `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis.
 * `-e TOKEN=` sets the REST API token to use.
 * `-v ${PWD}/data:/algod/data/` mounts a local volume to the data directory, which can be used to restart and upgrade the deployment.
 
