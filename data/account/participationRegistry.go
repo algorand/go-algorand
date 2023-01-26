@@ -592,11 +592,13 @@ func (db *participationDB) DeleteExpired(latestRound basics.Round, agreementProt
 	var updated []ParticipationRecord
 
 	for _, v := range db.GetAll() {
-		if v.LastValid < latestRound { // this participation key is no longer valid; delete it
+		count, err := db.countStateproofKeys(v.ParticipationID)
+		if err != nil {
+			return err
+		}
 
-			// TODO: check whether stateproof keys are still stored.
-			//db.noStateproofKeys(v.ParticipationID)
-
+		// delete iff key no longer valid and no stateproof keys in DB.
+		if v.LastValid < latestRound && count == 0 {
 			// This could be optimized to delete everything with one query.
 			err := db.Delete(v.ParticipationID)
 			if err != nil {
