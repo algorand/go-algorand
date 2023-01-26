@@ -1080,7 +1080,7 @@ func TestAutoPublicAddress(t *testing.T) {
 	t.Parallel()
 
 	netA := makeTestWebsocketNode(t)
-	netA.identityTracker = newDummyIdentTracker()
+	netA.identityTracker = newMockIdentityTracker()
 	netA.config.PublicAddress = "auto"
 	netA.config.GossipFanout = 1
 
@@ -1104,7 +1104,7 @@ type mockIdentityTracker struct {
 	lock         deadlock.Mutex
 }
 
-func newDummyIdentTracker() *mockIdentityTracker {
+func newMockIdentityTracker() *mockIdentityTracker {
 	return &mockIdentityTracker{
 		shouldInsert: true,
 		setCount:     0,
@@ -1156,12 +1156,12 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
-	netA.identityTracker = newDummyIdentTracker()
+	netA.identityTracker = newMockIdentityTracker()
 	netA.config.PublicAddress = "auto"
 	netA.config.GossipFanout = 1
 
 	netB := makeTestWebsocketNode(t)
-	netB.identityTracker = newDummyIdentTracker()
+	netB.identityTracker = newMockIdentityTracker()
 	netB.config.PublicAddress = "auto"
 	netB.config.GossipFanout = 1
 
@@ -1255,12 +1255,12 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
-	netA.identityTracker = newDummyIdentTracker()
+	netA.identityTracker = newMockIdentityTracker()
 	netA.config.PublicAddress = "auto"
 	netA.config.GossipFanout = 1
 
 	netB := makeTestWebsocketNode(t)
-	netB.identityTracker = newDummyIdentTracker()
+	netB.identityTracker = newMockIdentityTracker()
 	//netB.config.PublicAddress = "auto"
 	netB.config.GossipFanout = 1
 
@@ -1315,12 +1315,12 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
-	netA.identityTracker = newDummyIdentTracker()
+	netA.identityTracker = newMockIdentityTracker()
 	//netA.config.PublicAddress = "auto"
 	netA.config.GossipFanout = 1
 
 	netB := makeTestWebsocketNode(t)
-	netB.identityTracker = newDummyIdentTracker()
+	netB.identityTracker = newMockIdentityTracker()
 	netB.config.PublicAddress = "auto"
 	netB.config.GossipFanout = 1
 
@@ -1375,12 +1375,12 @@ func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
-	netA.identityTracker = newDummyIdentTracker()
+	netA.identityTracker = newMockIdentityTracker()
 	netA.config.PublicAddress = "auto"
 	netA.config.GossipFanout = 1
 
 	netB := makeTestWebsocketNode(t)
-	netB.identityTracker = newDummyIdentTracker()
+	netB.identityTracker = newMockIdentityTracker()
 	netB.config.PublicAddress = "no:3333"
 	netB.config.GossipFanout = 1
 
@@ -1559,7 +1559,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 	for _, tc := range testCases {
 		t.Logf("Running Peering with Identity Challenge Test: %s", tc.name)
 		netA := makeTestWebsocketNode(t)
-		netA.identityTracker = newDummyIdentTracker()
+		netA.identityTracker = newMockIdentityTracker()
 		netA.config.PublicAddress = "auto"
 		netA.config.GossipFanout = 1
 
@@ -1568,7 +1568,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 		netA.identityScheme = scheme
 
 		netB := makeTestWebsocketNode(t)
-		netB.identityTracker = newDummyIdentTracker()
+		netB.identityTracker = newMockIdentityTracker()
 		netB.config.PublicAddress = "auto"
 		netB.config.GossipFanout = 1
 
@@ -1637,7 +1637,7 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 		{
 			name: "not msgp decodable",
 			verifyAndAttachResponse: func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
-				attach.Add(IdentityChallengeHeader, "bm8gZ29vZCB2ZXJ5IGJhZCB0ZXh0LiBub3QgYSBzdHJ1Y3QgZXZlbiBpZiBpdCB0cmllZA")
+				attach.Add(IdentityChallengeHeader, "YmFkIGRhdGE=")
 				return identityChallengeValue{}, crypto.PublicKey{}, nil
 			},
 			totalInA:  0,
@@ -1700,12 +1700,12 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 	for _, tc := range testCases {
 		t.Logf("Running Peering with Identity Challenge Response Test: %s", tc.name)
 		netA := makeTestWebsocketNode(t)
-		netA.identityTracker = newDummyIdentTracker()
+		netA.identityTracker = newMockIdentityTracker()
 		netA.config.PublicAddress = "auto"
 		netA.config.GossipFanout = 1
 
 		netB := makeTestWebsocketNode(t)
-		netB.identityTracker = newDummyIdentTracker()
+		netB.identityTracker = newMockIdentityTracker()
 		netB.config.PublicAddress = "auto"
 		netB.config.GossipFanout = 1
 
@@ -1749,6 +1749,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 		totalInB        int
 		totalOutB       int
 		additionalSleep time.Duration
+		occupied        bool
 	}
 
 	testCases := []testCase{
@@ -1764,11 +1765,23 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 			totalOutB:       0,
 			additionalSleep: 6 * time.Second,
 		},
+		// when the identityChallenge can't be decoded, peer is disconnected
+		{
+			name: "not b64 decodable",
+			verifyResponse: func(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
+				message := append([]byte(protocol.NetIDVerificationTag), []byte("Bad Data!")[:]...)
+				return crypto.PublicKey{}, message, nil
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
 		// when the identityChallenge can't be unmarshalled, peer is disconnected
 		{
 			name: "not msgp decodable",
 			verifyResponse: func(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
-				message := append([]byte(protocol.NetIDVerificationTag), []byte("Bad Data!")[:]...)
+				message := append([]byte(protocol.NetIDVerificationTag), []byte("YmFkIGRhdGE=")[:]...)
 				return crypto.PublicKey{}, message, nil
 			},
 			totalInA:  0,
@@ -1792,6 +1805,16 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 			totalInB:  0,
 			totalOutB: 0,
 		},
+		{
+			// when the identity is already in use, peer is disconnected
+			name:           "identity occupied",
+			verifyResponse: nil,
+			totalInA:       0,
+			totalOutA:      0,
+			totalInB:       0,
+			totalOutB:      0,
+			occupied:       true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1801,7 +1824,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 			continue
 		}
 		netA := makeTestWebsocketNode(t)
-		netA.identityTracker = newDummyIdentTracker()
+		netA.identityTracker = newMockIdentityTracker()
 		netA.config.PublicAddress = "auto"
 		netA.config.GossipFanout = 1
 
@@ -1810,9 +1833,14 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 		netA.identityScheme = scheme
 
 		netB := makeTestWebsocketNode(t)
-		netB.identityTracker = newDummyIdentTracker()
+		netB.identityTracker = newMockIdentityTracker()
 		netB.config.PublicAddress = "auto"
 		netB.config.GossipFanout = 1
+		// if the key is occupied, make the tracker fail to insert the peer
+		if tc.occupied {
+			netB.identityTracker = newMockIdentityTracker()
+			netB.identityTracker.(*mockIdentityTracker).setShouldInsert(false)
+		}
 
 		netA.Start()
 		defer netA.Stop()

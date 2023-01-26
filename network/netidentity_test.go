@@ -325,3 +325,12 @@ func TestIdentityTrackerSetIdentity(t *testing.T) {
 	// Ensure the entry in the map wasn't changed
 	require.Equal(t, tracker.peersByID[p.identity], &p)
 }
+
+// Just tests that if a peer is already verified, it just returns OutgoingMessage{}
+func TestHandlerGuard(t *testing.T) {
+	p := wsPeer{identityVerified: uint32(1)}
+	msg := IncomingMessage{
+		Sender: &p,
+	}
+	require.Equal(t, OutgoingMessage{}, identityVerificationHandler(msg))
+}
