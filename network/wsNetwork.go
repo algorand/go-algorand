@@ -104,9 +104,6 @@ const unprintableCharacterGlyph = "▯"
 // match config.PublicAddress to this string to automatically set PublicAddress from Address()
 const autoconfigPublicAddress = "auto"
 
-// the amount of time we'll wait before disconnecting a peer who supposedly supports identity, but who has not verified
-const identityVerificationTimeout = 5 * time.Second
-
 var networkIncomingConnections = metrics.MakeGauge(metrics.NetworkIncomingConnections)
 var networkOutgoingConnections = metrics.MakeGauge(metrics.NetworkOutgoingConnections)
 
@@ -1216,19 +1213,6 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
-	// if the peer sent a valid identification challenge,
-	// asynchronously wait and check for identity verification after we are done connecting
-	// or else disconnect if it has not been provided
-	if peerID != (crypto.PublicKey{}) {
-		defer func() {
-			go func() {
-				time.Sleep(identityVerificationTimeout)
-				if atomic.LoadUint32(&peer.identityVerified) == 0 {
-					wn.Disconnect(peer)
-				}
-			}()
-		}()
-	}
 	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.otherPublicAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,

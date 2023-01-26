@@ -1755,24 +1755,22 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 	testCases := []testCase{
 		// in a totally unmodified scenario, the two peers stay connected even after the verification timeout
 		{
-			name:            "happy path",
-			totalInA:        0,
-			totalOutA:       1,
-			totalInB:        1,
-			totalOutB:       0,
-			additionalSleep: 6 * time.Second,
+			name:      "happy path",
+			totalInA:  0,
+			totalOutA: 1,
+			totalInB:  1,
+			totalOutB: 0,
 		},
-		// if the peer does not send an identityVerification before the timeout, the peer is disconnected
+		// if the peer does not send a final message, the peers stay connected
 		{
 			name: "not included",
 			verifyResponse: func(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
 				return crypto.PublicKey{}, []byte{}, nil
 			},
-			totalInA:        0,
-			totalOutA:       0,
-			totalInB:        0,
-			totalOutB:       0,
-			additionalSleep: 6 * time.Second,
+			totalInA:  0,
+			totalOutA: 1,
+			totalInB:  1,
+			totalOutB: 0,
 		},
 		// when the identityVerification can't be unmarshalled, peer is disconnected
 		{
@@ -1816,10 +1814,6 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Logf("Running Peering with Identity Verification Test: %s", tc.name)
-		if testing.Short() && tc.additionalSleep > 5*time.Second {
-			t.Log("this is a long test; skipping for -short")
-			continue
-		}
 		netA := makeTestWebsocketNode(t)
 		netA.identityTracker = newMockIdentityTracker()
 		netA.config.PublicAddress = "auto"
@@ -1855,8 +1849,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 			// let the tryConnect go forward
 			time.Sleep(100 * time.Millisecond)
 		}
-		// allow for the identification verification to time out
-		time.Sleep(tc.additionalSleep)
+
 		assert.Equal(t, tc.totalInA, len(netA.GetPeers(PeersConnectedIn)))
 		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
 		assert.Equal(t, tc.totalInB, len(netB.GetPeers(PeersConnectedIn)))
