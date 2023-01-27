@@ -257,22 +257,18 @@ func getProtocolTags(t *testing.T) []string {
 	fset := token.NewFileSet()
 	f, _ := parser.ParseFile(fset, file, nil, parser.ParseComments)
 
+	// look for const declarations in protocol/tags.go
 	var declaredTags []string
 	for _, d := range f.Decls {
 		genDecl, ok := d.(*ast.GenDecl)
-		if !ok {
-			continue
-		}
-		if genDecl.Tok != token.CONST {
+		if !ok || genDecl.Tok != token.CONST {
 			continue
 		}
 		for _, spec := range genDecl.Specs {
-			valueSpec, ok := spec.(*ast.ValueSpec)
-			if !ok {
-				continue
-			}
-			for _, n := range valueSpec.Names {
-				declaredTags = append(declaredTags, n.Name)
+			if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+				for _, n := range valueSpec.Names {
+					declaredTags = append(declaredTags, n.Name)
+				}
 			}
 		}
 	}

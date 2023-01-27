@@ -43,7 +43,6 @@ const (
 )
 
 // TagList is a list of all currently used protocol tags.
-// TODO: generate this and/or have a test that it is complete.
 var TagList = []Tag{
 	AgreementVoteTag,
 	MsgOfInterestTag,
