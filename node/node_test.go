@@ -21,7 +21,9 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -242,6 +244,11 @@ func TestInitialSync(t *testing.T) {
 
 	if testing.Short() {
 		t.Skip("Test takes ~25 seconds.")
+	}
+
+	if (runtime.GOARCH == "arm" || runtime.GOARCH == "arm64") &&
+		strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
+		t.Skip("Test is too heavy for amd64 builder running in parallel with other packages")
 	}
 
 	nodes, wallets, f := setupFullNodes(t, protocol.ConsensusCurrentVersion, nil)

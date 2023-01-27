@@ -582,6 +582,7 @@ func TestGetNonDefaultConfigValues(t *testing.T) {
 }
 
 func TestLocal_TxFiltering(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	cfg := GetDefaultLocal()
 
 	// ensure the default
