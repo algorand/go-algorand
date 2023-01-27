@@ -31,3 +31,47 @@ func TestEnsureDataDirReturnsWhenDataDirIsProvided(t *testing.T) {
 	actualDir := ensureFirstDataDir()
 	require.Equal(t, expectedDir, actualDir)
 }
+
+func TestEnsureDataDirReturnsWhenWorkDirIsProvided(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	expectedDir, err := os.Getwd()
+	if err != nil {
+		reportErrorf("Error getting work dir: %s", err)
+	}
+	dataDirs[0] = "."
+	actualDir := ensureFirstDataDir()
+	require.Equal(t, expectedDir, actualDir)
+}
+
+func TestEnsureDataDirReturnsWhenRelPath1IsProvided(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	expectedDir, err := os.Getwd()
+	if err != nil {
+		reportErrorf("Error getting work dir: %s", err)
+	}
+	dataDirs[0] = "./../goal"
+	actualDir := ensureFirstDataDir()
+	require.Equal(t, expectedDir, actualDir)
+}
+
+func TestEnsureDataDirReturnsWhenRelPath2IsProvided(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	expectedDir, err := os.Getwd()
+	if err != nil {
+		reportErrorf("Error getting work dir: %s", err)
+	}
+	dataDirs[0] = "../goal"
+	actualDir := ensureFirstDataDir()
+	require.Equal(t, expectedDir, actualDir)
+}
+
+func TestEnsureDataDirReturnsWhenRelPath3IsProvided(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	expectedDir, err := os.Getwd()
+	if err != nil {
+		reportErrorf("Error getting work dir: %s", err)
+	}
+	dataDirs[0] = "../../cmd/goal"
+	actualDir := ensureFirstDataDir()
+	require.Equal(t, expectedDir, actualDir)
+}
