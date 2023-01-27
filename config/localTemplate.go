@@ -588,3 +588,9 @@ func (cfg Local) TxFilterRawMsgEnabled() bool {
 func (cfg Local) TxFilterCanonicalEnabled() bool {
 	return cfg.TxIncomingFilteringFlags&txFilterCanonical != 0
 }
+
+// IsGossipServer returns true if NetAddress is set and this node supposed
+// to start websocket server
+func (cfg Local) IsGossipServer() bool {
+	return cfg.NetAddress != ""
+}

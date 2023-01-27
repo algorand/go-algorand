@@ -605,3 +605,14 @@ func TestLocal_TxFiltering(t *testing.T) {
 	require.True(t, cfg.TxFilterRawMsgEnabled())
 	require.True(t, cfg.TxFilterCanonicalEnabled())
 }
+
+func TestLocal_IsGossipServer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := GetDefaultLocal()
+	require.False(t, cfg.IsGossipServer())
+
+	cfg.NetAddress = ":4160"
+	require.True(t, cfg.IsGossipServer())
+}
