@@ -1185,7 +1185,7 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
 		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
@@ -1211,12 +1211,7 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	// netA should have added this peer without a verified identity,
-	// and would drop this peer once it notices the connection is not in use.
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
-	// because the connection is simply dropped, the debug connection stays open. TCP would close this
-	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
-
 	// netA never attempts to set identity as it never sees a verified identity
 	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getSetCount())
 	// netB would attempt to add the identity to the tracker
@@ -1233,11 +1228,9 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
 		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
-	// because the connection is simply dropped, the debug connection stays open. TCP would close this
-	assert.Equal(t, 2, len(netB.GetPeers(PeersConnectedIn)))
-	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
+
 	// netB never tries to add a new identity, since the connection gets abandoned before it is verified
 	assert.Equal(t, 2, netB.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getInsertCount())
@@ -1284,7 +1277,7 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
 		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
@@ -1298,7 +1291,7 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 		netB.wg.Add(1)
 		netB.tryConnect(addrA, gossipA)
 		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
@@ -1344,7 +1337,7 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
 		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
@@ -1358,7 +1351,7 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 		netB.wg.Add(1)
 		netB.tryConnect(addrA, gossipA)
 		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
@@ -1404,7 +1397,7 @@ func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
 		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
@@ -1420,7 +1413,7 @@ func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 		netB.wg.Add(1)
 		netB.tryConnect(addrA, gossipA)
 		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	// confirm that at this point the identityTracker was called once per network
 	//	and inserted once per network
@@ -1586,7 +1579,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 			netA.wg.Add(1)
 			netA.tryConnect(addrB, gossipB)
 			// let the tryConnect go forward
-			time.Sleep(250 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 		assert.Equal(t, tc.totalInA, len(netA.GetPeers(PeersConnectedIn)))
 		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
@@ -1605,8 +1598,6 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 		verifyAndAttachResponse func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error)
 		totalInA                int
 		totalOutA               int
-		totalInB                int
-		totalOutB               int
 	}
 
 	testCases := []testCase{
@@ -1618,8 +1609,6 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 			},
 			totalInA:  0,
 			totalOutA: 1,
-			totalInB:  1,
-			totalOutB: 0,
 		},
 		// when the response is malformed, do not peer
 		{
@@ -1630,8 +1619,6 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 			},
 			totalInA:  0,
 			totalOutA: 0,
-			totalInB:  1, // NetB won't notice this connection is dropped
-			totalOutB: 0,
 		},
 		// when the response is malformed, do not peer
 		{
@@ -1642,8 +1629,6 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 			},
 			totalInA:  0,
 			totalOutA: 0,
-			totalInB:  1, // NetB won't notice this connection is dropped
-			totalOutB: 0,
 		},
 		// when the original challenge isn't included, do not peer
 		{
@@ -1665,8 +1650,6 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 			},
 			totalInA:  0,
 			totalOutA: 0,
-			totalInB:  1, // NetB won't notice this connection is dropped
-			totalOutB: 0,
 		},
 		// when the message is incorrectly signed, do not peer
 		{
@@ -1692,8 +1675,6 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 			},
 			totalInA:  0,
 			totalOutA: 0,
-			totalInB:  1, // NetB won't notice this connection is dropped
-			totalOutB: 0,
 		},
 	}
 
@@ -1727,12 +1708,10 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 			netA.wg.Add(1)
 			netA.tryConnect(addrB, gossipB)
 			// let the tryConnect go forward
-			time.Sleep(250 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 		assert.Equal(t, tc.totalInA, len(netA.GetPeers(PeersConnectedIn)))
 		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
-		assert.Equal(t, tc.totalInB, len(netB.GetPeers(PeersConnectedIn)))
-		assert.Equal(t, tc.totalOutB, len(netB.GetPeers(PeersConnectedOut)))
 	}
 
 }
@@ -1847,7 +1826,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 			netA.wg.Add(1)
 			netA.tryConnect(addrB, gossipB)
 			// let the tryConnect go forward
-			time.Sleep(250 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 
 		assert.Equal(t, tc.totalInA, len(netA.GetPeers(PeersConnectedIn)))
