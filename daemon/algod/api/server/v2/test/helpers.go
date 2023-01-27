@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -63,6 +63,30 @@ var cannedStatusReportGolden = node.StatusReport{
 	LastCatchpoint:                     "",
 }
 
+var cannedStatusReportConsensusUpgradeGolden = node.StatusReport{
+	LastRound:                          basics.Round(97000),
+	LastVersion:                        protocol.ConsensusCurrentVersion,
+	NextVersion:                        protocol.ConsensusCurrentVersion,
+	NextVersionRound:                   200000,
+	NextVersionSupported:               true,
+	StoppedAtUnsupportedRound:          true,
+	Catchpoint:                         "",
+	CatchpointCatchupAcquiredBlocks:    0,
+	CatchpointCatchupProcessedAccounts: 0,
+	CatchpointCatchupVerifiedAccounts:  0,
+	CatchpointCatchupTotalAccounts:     0,
+	CatchpointCatchupTotalKVs:          0,
+	CatchpointCatchupProcessedKVs:      0,
+	CatchpointCatchupVerifiedKVs:       0,
+	CatchpointCatchupTotalBlocks:       0,
+	LastCatchpoint:                     "",
+	UpgradePropose:                     "upgradePropose",
+	UpgradeApprove:                     false,
+	UpgradeDelay:                       0,
+	NextProtocolVoteBefore:             100000,
+	NextProtocolApprovals:              5000,
+}
+
 var poolAddrRewardBaseGolden = uint64(0)
 var poolAddrAssetsGolden = make([]model.AssetHolding, 0)
 var poolAddrCreatedAssetsGolden = make([]model.Asset, 0)
@@ -117,13 +141,14 @@ var poolDeltaResponseGolden = model.LedgerStateDelta{
 // package `data` and package `node`, which themselves import `mocks`
 type mockNode struct {
 	mock.Mock
-	ledger    v2.LedgerForAPI
-	genesisID string
-	config    config.Local
-	err       error
-	id        account.ParticipationID
-	keys      account.StateProofKeys
-	usertxns  map[basics.Address][]node.TxnWithStatus
+	ledger           v2.LedgerForAPI
+	genesisID        string
+	config           config.Local
+	err              error
+	id               account.ParticipationID
+	keys             account.StateProofKeys
+	usertxns         map[basics.Address][]node.TxnWithStatus
+	consensusUpgrade bool
 }
 
 func (m *mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
@@ -161,13 +186,14 @@ func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys acco
 	return m.err
 }
 
-func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error) *mockNode {
+func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error, consensusUpgrade bool) *mockNode {
 	return &mockNode{
-		ledger:    ledger,
-		genesisID: genesisID,
-		config:    config.GetDefaultLocal(),
-		err:       nodeError,
-		usertxns:  map[basics.Address][]node.TxnWithStatus{},
+		ledger:           ledger,
+		genesisID:        genesisID,
+		config:           config.GetDefaultLocal(),
+		err:              nodeError,
+		usertxns:         map[basics.Address][]node.TxnWithStatus{},
+		consensusUpgrade: consensusUpgrade,
 	}
 }
 
@@ -175,8 +201,12 @@ func (m *mockNode) LedgerForAPI() v2.LedgerForAPI {
 	return m.ledger
 }
 
-func (m *mockNode) Status() (s node.StatusReport, err error) {
-	s = cannedStatusReportGolden
+func (m mockNode) Status() (s node.StatusReport, err error) {
+	if m.consensusUpgrade {
+		s = cannedStatusReportConsensusUpgradeGolden
+	} else {
+		s = cannedStatusReportGolden
+	}
 	return
 }
 func (m *mockNode) GenesisID() string {
@@ -232,10 +262,6 @@ func (m *mockNode) ListTxns(addr basics.Address, minRound basics.Round, maxRound
 
 func (m *mockNode) GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (node.TxnWithStatus, bool) {
 	return node.TxnWithStatus{}, false
-}
-
-func (m *mockNode) PoolStats() node.PoolStats {
-	return node.PoolStats{}
 }
 
 func (m *mockNode) IsArchival() bool {

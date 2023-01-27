@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -297,12 +297,6 @@ type UnicastPeer interface {
 	Version() string
 	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
 	Respond(ctx context.Context, reqMsg IncomingMessage, topics Topics) (e error)
-}
-
-// A PeerCloseRegistrar is an interface for the opaque Peer which can allow for extra execution
-// whena  peer closes.
-type PeerCloseRegistrar interface {
-	OnClose(func())
 }
 
 // Create a wsPeerCore object

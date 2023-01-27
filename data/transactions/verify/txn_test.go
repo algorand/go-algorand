@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,6 +36,8 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -66,7 +68,7 @@ var spec = transactions.SpecialAddresses{
 func verifyTxn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 	batchVerifier := crypto.MakeBatchVerifier()
 
-	if err := txnBatchPrep(s, txnIdx, groupCtx, batchVerifier); err != nil {
+	if err := txnBatchPrep(s, txnIdx, groupCtx, batchVerifier, nil); err != nil {
 		return err
 	}
 	return batchVerifier.Verify()
@@ -272,7 +274,7 @@ func TestTxnValidationEmptySig(t *testing.T) {
 
 const spProto = protocol.ConsensusVersion("test-state-proof-enabled")
 
-func TestTxnValidationStateProof(t *testing.T) {
+func TestTxnValidationStateProof(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies config.Consensus
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -358,6 +360,89 @@ func TestDecodeNil(t *testing.T) {
 		require.NoError(t, err)
 		verifyTxn(&st, 0, groupCtx)
 	}
+}
+
+func TestTxnGroupWithTracer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	account := keypair()
+	accountAddr := basics.Address(account.SignatureVerifier)
+
+	ops1, err := logic.AssembleString(`#pragma version 6
+pushint 1`)
+	require.NoError(t, err)
+	program1 := ops1.Program
+	program1Addr := basics.Address(logic.HashProgram(program1))
+
+	ops2, err := logic.AssembleString(`#pragma version 6
+pushbytes "test"
+pop
+pushint 1`)
+	require.NoError(t, err)
+	program2 := ops2.Program
+	program2Addr := basics.Address(logic.HashProgram(program2))
+
+	// this shouldn't be invoked during this test
+	appProgram := "err"
+
+	lsigPay := txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   program1Addr,
+		Receiver: accountAddr,
+		Fee:      proto.MinTxnFee,
+	}
+
+	normalSigAppCall := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            accountAddr,
+		ApprovalProgram:   appProgram,
+		ClearStateProgram: appProgram,
+		Fee:               proto.MinTxnFee,
+	}
+
+	lsigAppCall := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            program2Addr,
+		ApprovalProgram:   appProgram,
+		ClearStateProgram: appProgram,
+		Fee:               proto.MinTxnFee,
+	}
+
+	txntest.Group(&lsigPay, &normalSigAppCall, &lsigAppCall)
+
+	txgroup := []transactions.SignedTxn{
+		{
+			Lsig: transactions.LogicSig{
+				Logic: program1,
+			},
+			Txn: lsigPay.Txn(),
+		},
+		normalSigAppCall.Txn().Sign(account),
+		{
+			Lsig: transactions.LogicSig{
+				Logic: program2,
+			},
+			Txn: lsigAppCall.Txn(),
+		},
+	}
+
+	mockTracer := &mocktracer.Tracer{}
+	_, err = TxnGroupWithTracer(txgroup, blockHeader, nil, logic.NoHeaderLedger{}, mockTracer)
+	require.NoError(t, err)
+
+	expectedEvents := []mocktracer.Event{
+		mocktracer.BeforeProgram(logic.ModeSig),             // first txn start
+		mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(), // first txn LogicSig: 1 op
+		mocktracer.AfterProgram(logic.ModeSig), // first txn end
+		// nothing for second txn (not signed with a LogicSig)
+		mocktracer.BeforeProgram(logic.ModeSig),                                                                                                                       // third txn start
+		mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(), mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(), mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(), // third txn LogicSig: 3 ops
+		mocktracer.AfterProgram(logic.ModeSig), // third txn end
+	}
+	require.Equal(t, expectedEvents, mockTracer.Events)
 }
 
 func TestPaysetGroups(t *testing.T) {
@@ -1195,7 +1280,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 }
 
 // TestStreamVerifierPoolShutdown tests what happens when the exec pool shuts down
-func TestStreamVerifierPoolShutdown(t *testing.T) {
+func TestStreamVerifierPoolShutdown(t *testing.T) { //nolint:paralleltest // Not parallel because it depends on the default logger
 	partitiontest.PartitionTest(t)
 
 	// only one transaction should be sufficient for the batch verifier
@@ -1350,6 +1435,7 @@ func TestStreamVerifierRestart(t *testing.T) {
 
 // TestBlockWatcher runs multiple goroutines to check the concurency and correctness of the block watcher
 func TestStreamVerifierBlockWatcher(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	blkHdr := createDummyBlockHeader()
 	nbw := MakeNewBlockWatcher(blkHdr)
 	startingRound := blkHdr.Round
@@ -1389,7 +1475,7 @@ func TestStreamVerifierBlockWatcher(t *testing.T) {
 	}
 }
 
-func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan interface{}, execpool.BacklogPool) {
+func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan interface{}) {
 	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
 	_, buffLen := verificationPool.BufferSize()
 
@@ -1402,7 +1488,7 @@ func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan interface{},
 				return nil
 			}, nil, nil)
 	}
-	return verificationPool, holdTasks, verificationPool
+	return verificationPool, holdTasks
 }
 
 // TestStreamVerifierCtxCancel tests the termination when the ctx is canceled
@@ -1413,8 +1499,8 @@ func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan interface{},
 func TestStreamVerifierCtxCancel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	verificationPool, holdTasks, vp := getSaturatedExecPool(t)
-	defer vp.Shutdown()
+	verificationPool, holdTasks := getSaturatedExecPool(t)
+	defer verificationPool.Shutdown()
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50)
 	stxnChan := make(chan *UnverifiedElement)
@@ -1458,11 +1544,10 @@ func TestStreamVerifierCtxCancel(t *testing.T) {
 // so that the batch is sent to the pool. Since the pool is saturated,
 // the task will be stuck waiting to be queued when the context is canceled
 // everything should be gracefully terminated
-func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
+func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest // Not parallel because it depends on the default logger
 	partitiontest.PartitionTest(t)
 
-	verificationPool, holdTasks, vp := getSaturatedExecPool(t)
-	defer vp.Shutdown()
+	verificationPool, holdTasks := getSaturatedExecPool(t)
 
 	// check the logged information
 	var logBuffer bytes.Buffer
@@ -1484,26 +1569,51 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		// no verification tasks should be executed
-		// one result should be returned
-		result = <-resultChan
+		for {
+			result = <-resultChan
+			// at least one errShuttingDownError is expected
+			if result.Err != errShuttingDownError {
+				continue
+			}
+			break
+		}
 	}()
 
 	// send batchSizeBlockLimit after the exec pool buffer is full
 	numOfTxns := 1
 	txnGroups, _ := getSignedTransactions(numOfTxns, 1, 0, 0.5)
-	stxnChan <- &UnverifiedElement{TxnGroup: txnGroups[0], BacklogMessage: nil}
+
+	wg.Add(1)
+	// run in separate goroutine because the exec pool is blocked here, and this will not advance
+	// until holdTasks are closed
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			// Normally, a single txn is sufficient, but the goroutines could be scheduled is such a way that
+			// the single transaction slips through and passes the batch verifier before the exec pool shuts down.
+			// this happens when close(holdTasks) runs and frees the exec pool, and lets the txns get verified, before
+			// verificationPool.Shutdown() executes.
+			case stxnChan <- &UnverifiedElement{TxnGroup: txnGroups[0], BacklogMessage: nil}:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 	// cancel the ctx as the sig is not yet sent to the exec pool
 	// the test might sporadically fail if between sending the txn above
 	// and the cancelation, 2 x waitForNextTxnDuration elapses (10ms)
 	time.Sleep(6 * waitForNextTxnDuration)
-	cancel()
+	go func() {
+		// wait a bit before releasing the tasks, so that the verificationPool ctx first gets canceled
+		time.Sleep(20 * time.Millisecond)
+		close(holdTasks)
+	}()
+	verificationPool.Shutdown()
 
-	// the main loop should stop after cancel()
+	// the main loop should stop before calling cancel() when the exec pool shuts down and returns an error
 	sv.WaitForStop()
-
-	// release the tasks
-	close(holdTasks)
+	cancel()
 
 	wg.Wait()
 	require.ErrorIs(t, result.Err, errShuttingDownError)
@@ -1513,6 +1623,7 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) {
 // TestStreamVerifierPostVBlocked tests the behavior when the return channel (result chan) of verified
 // transactions is blocked, and checks droppedFromPool counter to confirm the drops
 func TestStreamVerifierPostVBlocked(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	// prepare the stream verifier
 	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
@@ -1598,6 +1709,7 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 }
 
 func TestStreamVerifierMakeStreamVerifierErr(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	_, err := MakeStreamVerifier(nil, nil, nil, &DummyLedgerForSignature{badHdr: true}, nil, nil)
 	require.Error(t, err)
 }

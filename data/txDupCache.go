@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -226,6 +226,12 @@ func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
 		d, found = c.innerCheck(msg)
 		if found {
 			// already added to cache between RUnlock() and Lock(), return
+			return d, found
+		}
+	} else {
+		// Do another check to see if another copy of the transaction won the race to write it to the cache
+		// Only check current to save a lookup since swaps are rare and no need to re-hash
+		if _, found := c.cur[*d]; found {
 			return d, found
 		}
 	}

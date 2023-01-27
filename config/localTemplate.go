@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,7 +59,7 @@ type Local struct {
 	// what we should tell people to connect to
 	PublicAddress string `version[0]:""`
 
-	MaxConnectionsPerIP int `version[3]:"30"`
+	MaxConnectionsPerIP int `version[3]:"30" version[27]:"15"`
 
 	// 0 == disable
 	PeerPingPeriodSeconds int `version[0]:"0"`
@@ -72,11 +72,12 @@ type Local struct {
 	BaseLoggerDebugLevel uint32 `version[0]:"1" version[1]:"4"`
 	// if this is 0, do not produce agreement.cadaver
 	CadaverSizeTarget uint64 `version[0]:"1073741824" version[24]:"0"`
+	CadaverDirectory  string `version[27]:""`
 
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
 	// connections. 0 means no connections allowed. Must be non-negative.
-	// Estimating 5MB per incoming connection, 5MB*800 = 4GB
-	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000" version[17]:"800"`
+	// Estimating 1.5MB per incoming connection, 1.5MB*2400 = 3.6GB
+	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000" version[17]:"800" version[27]:"2400"`
 
 	// BroadcastConnectionsLimit specifies the number of connections that
 	// will receive broadcast (gossip) messages from this node.  If the
@@ -260,6 +261,10 @@ type Local struct {
 	// PeerConnectionsUpdateInterval defines the interval at which the peer connections information is being sent to the
 	// telemetry ( when enabled ). Defined in seconds.
 	PeerConnectionsUpdateInterval int `version[5]:"3600"`
+
+	// HeartbeatUpdateInterval defines the interval at which the heartbeat information is being sent to the
+	// telemetry ( when enabled ). Defined in seconds. Minimum value is 60.
+	HeartbeatUpdateInterval int `version[27]:"600"`
 
 	// EnableProfiler enables the go pprof endpoints, should be false if
 	// the algod api will be exposed to untrusted individuals
@@ -455,13 +460,13 @@ type Local struct {
 	MaxAPIResourcesPerAccount uint64 `version[21]:"100000"`
 
 	// AgreementIncomingVotesQueueLength sets the size of the buffer holding incoming votes.
-	AgreementIncomingVotesQueueLength uint64 `version[21]:"10000"`
+	AgreementIncomingVotesQueueLength uint64 `version[21]:"10000" version[27]:"20000"`
 
 	// AgreementIncomingProposalsQueueLength sets the size of the buffer holding incoming proposals.
-	AgreementIncomingProposalsQueueLength uint64 `version[21]:"25"`
+	AgreementIncomingProposalsQueueLength uint64 `version[21]:"25" version[27]:"50"`
 
 	// AgreementIncomingBundlesQueueLength sets the size of the buffer holding incoming bundles.
-	AgreementIncomingBundlesQueueLength uint64 `version[21]:"7"`
+	AgreementIncomingBundlesQueueLength uint64 `version[21]:"7" version[27]:"15"`
 
 	// MaxAcctLookback sets the maximum lookback range for account states,
 	// i.e. the ledger can answer account states questions for the range Latest-MaxAcctLookback...Latest

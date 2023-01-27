@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -65,9 +65,8 @@ type capacityQueue chan capacity
 // ErlCapacityGuard is the structure returned to clients so they can release the capacity when needed
 // they also inform the congestion manager of events
 type ErlCapacityGuard struct {
-	client ErlClient
-	cq     capacityQueue
-	cm     CongestionManager
+	cq capacityQueue
+	cm CongestionManager
 }
 
 // Release will put capacity back into the queue attached to this capacity guard
@@ -168,6 +167,9 @@ func (erl *ElasticRateLimiter) DisableCongestionControl() {
 
 // ConsumeCapacity will dispense one capacity from either the resource's reservedCapacity,
 // and will return a guard who can return capacity when the client is ready
+// Returns an error if the capacity could not be vended, which could be:
+// - there is not sufficient free capacity to assign a reserved capacity block
+// - there is no reserved or shared capacity available for the client
 func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, error) {
 	var q capacityQueue
 	var err error

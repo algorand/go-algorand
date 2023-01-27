@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -80,7 +80,7 @@ func AccountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
-	qs.lookupKvPairStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
+	qs.lookupKvPairStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key, kvstore.value FROM acctrounds LEFT JOIN kvstore ON key = ? WHERE id='acctbase';")
 	if err != nil {
 		return nil, err
 	}
@@ -253,9 +253,10 @@ func (qs *accountsDbQueries) ListCreatables(maxIdx basics.CreatableIndex, maxRes
 // LookupKeyValue returns the application boxed value associated with the key.
 func (qs *accountsDbQueries) LookupKeyValue(key string) (pv PersistedKVData, err error) {
 	err = db.Retry(func() error {
+		var rawkey []byte
 		var val []byte
 		// Cast to []byte to avoid interpretation as character string, see note in upsertKvPair
-		err := qs.lookupKvPairStmt.QueryRow([]byte(key)).Scan(&pv.Round, &val)
+		err := qs.lookupKvPairStmt.QueryRow([]byte(key)).Scan(&pv.Round, &rawkey, &val)
 		if err != nil {
 			// this should never happen; it indicates that we don't have a current round in the acctrounds table.
 			if err == sql.ErrNoRows {
@@ -264,7 +265,10 @@ func (qs *accountsDbQueries) LookupKeyValue(key string) (pv PersistedKVData, err
 			}
 			return err
 		}
-		if val != nil { // We got a non-null value, so it exists
+		if rawkey != nil { // We got a non-null key, so it exists
+			if val == nil {
+				val = []byte{}
+			}
 			pv.Value = val
 			return nil
 		}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,14 +23,15 @@ var defaultLocal = Local{
 	Version:                                    27,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
-	AgreementIncomingBundlesQueueLength:        7,
-	AgreementIncomingProposalsQueueLength:      25,
-	AgreementIncomingVotesQueueLength:          10000,
+	AgreementIncomingBundlesQueueLength:        15,
+	AgreementIncomingProposalsQueueLength:      50,
+	AgreementIncomingVotesQueueLength:          20000,
 	AnnounceParticipationKey:                   true,
 	Archival:                                   false,
 	BaseLoggerDebugLevel:                       4,
 	BlockServiceCustomFallbackEndpoints:        "",
 	BroadcastConnectionsLimit:                  -1,
+	CadaverDirectory:                           "",
 	CadaverSizeTarget:                          0,
 	CatchpointFileHistoryLength:                365,
 	CatchpointInterval:                         10000,
@@ -79,7 +80,8 @@ var defaultLocal = Local{
 	ForceFetchTransactions:                     false,
 	ForceRelayMessages:                         false,
 	GossipFanout:                               4,
-	IncomingConnectionsLimit:                   800,
+	HeartbeatUpdateInterval:                    600,
+	IncomingConnectionsLimit:                   2400,
 	IncomingMessageFilterBucketCount:           5,
 	IncomingMessageFilterBucketSize:            512,
 	IsIndexerActive:                            false,
@@ -91,7 +93,7 @@ var defaultLocal = Local{
 	MaxAPIResourcesPerAccount:                  100000,
 	MaxAcctLookback:                            4,
 	MaxCatchpointDownloadDuration:              7200000000000,
-	MaxConnectionsPerIP:                        30,
+	MaxConnectionsPerIP:                        15,
 	MinCatchpointFileDownloadBytesPerSecond:    20480,
 	NetAddress:                                 "",
 	NetworkMessageTraceServer:                  "",
