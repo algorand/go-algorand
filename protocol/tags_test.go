@@ -62,13 +62,16 @@ func TestTagList(t *testing.T) {
 	}
 	require.NotEmpty(t, TagList)
 	require.Len(t, TagList, len(constTags), "TagList is not complete")
-	tagMap := make(map[Tag]bool)
+	tagListMap := make(map[Tag]bool)
 	for _, tag := range TagList {
-		tagMap[tag] = true
+		tagListMap[tag] = true
 	}
-	for _, tag := range constTags {
-		if !tagMap[tag] {
-			t.Errorf("Tag %s is not in TagList", tag)
+	for _, constTag := range constTags {
+		if tagListMap[constTag] {
+			delete(tagListMap, constTag) // check off as seen
+		} else {
+			require.Fail(t, "const Tag %s is not in TagList", constTag)
 		}
 	}
+	require.Empty(t, tagListMap, "Unseen tags remain in TagList")
 }
