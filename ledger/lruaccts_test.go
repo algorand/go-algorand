@@ -92,7 +92,7 @@ func TestLRUAccountsDisable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var baseAcct lruAccounts
-	baseAcct.init(logging.TestingLog(t), 0, 0)
+	baseAcct.init(logging.TestingLog(t), 0, 1)
 
 	accountsNum := 5
 

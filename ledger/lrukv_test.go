@@ -84,7 +84,7 @@ func TestLRUKVDisable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var baseKV lruKV
-	baseKV.init(logging.TestingLog(t), 0, 0)
+	baseKV.init(logging.TestingLog(t), 0, 1)
 	require.True(t, baseKV.disableWriteKV)
 
 	kvNum := 5

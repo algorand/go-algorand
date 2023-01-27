@@ -91,7 +91,7 @@ func TestLRUOnlineAccountsDisable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var baseOnlineAcct lruOnlineAccounts
-	baseOnlineAcct.init(logging.TestingLog(t), 0, 0)
+	baseOnlineAcct.init(logging.TestingLog(t), 0, 1)
 
 	accountsNum := 5
 

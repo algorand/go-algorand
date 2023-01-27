@@ -93,7 +93,7 @@ func TestLRUResourcesDisable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var baseRes lruResources
-	baseRes.init(logging.TestingLog(t), 0, 0)
+	baseRes.init(logging.TestingLog(t), 0, 1)
 
 	resourceNum := 5
 
