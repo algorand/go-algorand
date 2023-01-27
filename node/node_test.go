@@ -55,7 +55,7 @@ var defaultConfig = config.Local{
 
 func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion,
 	customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string, *os.File) {
-	util.SetFdSoftLimit(1000)
+	util.SetFdSoftLimit(400)
 	f, _ := os.Create(t.Name() + ".log")
 	logging.Base().SetJSONFormatter()
 	logging.Base().SetOutput(f)
