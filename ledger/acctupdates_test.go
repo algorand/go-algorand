@@ -594,7 +594,7 @@ func TestAcctUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	conf := config.GetDefaultLocal()
-	withOrWithoutLRUCache(t, conf, testAcctUpdates)
+	withAndWithoutLRUCache(t, conf, testAcctUpdates)
 }
 
 // testAcctUpdatesFastUpdates tests catchpoint label writing datarace
@@ -669,7 +669,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
-	withOrWithoutLRUCache(t, conf, testAcctUpdatesFastUpdates)
+	withAndWithoutLRUCache(t, conf, testAcctUpdatesFastUpdates)
 }
 
 func BenchmarkBalancesChanges(b *testing.B) {

@@ -197,7 +197,7 @@ func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.A
 	return l.AddBlock(blk, agreement.Certificate{})
 }
 
-func withOrWithoutLRUCache(t *testing.T, cfg config.Local, test func(t *testing.T, cfg config.Local)) {
+func withAndWithoutLRUCache(t *testing.T, cfg config.Local, test func(t *testing.T, cfg config.Local)) {
 	cfg.DisableLedgerLRUCache = false
 	t.Run(fmt.Sprintf("test with lru cache"), func(t *testing.T) {
 		test(t, cfg)
@@ -222,7 +222,7 @@ func TestLedgerBasic(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 
-	withOrWithoutLRUCache(t, cfg, testLedgerBasic)
+	withAndWithoutLRUCache(t, cfg, testLedgerBasic)
 }
 
 func TestLedgerBlockHeaders(t *testing.T) {
@@ -1554,7 +1554,7 @@ func TestLedgerReload(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	withOrWithoutLRUCache(t, cfg, testLedgerReload)
+	withAndWithoutLRUCache(t, cfg, testLedgerReload)
 }
 
 func TestWaitLedgerReload(t *testing.T) {
@@ -2954,7 +2954,7 @@ func TestVotersReloadFromDisk(t *testing.T) {
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
 
-	withOrWithoutLRUCache(t, cfg, testVotersReloadFromDisk)
+	withAndWithoutLRUCache(t, cfg, testVotersReloadFromDisk)
 }
 
 func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg config.Local) {
@@ -3022,7 +3022,7 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
 
-	withOrWithoutLRUCache(t, cfg, testVotersReloadFromDiskAfterOneStateProofCommitted)
+	withAndWithoutLRUCache(t, cfg, testVotersReloadFromDiskAfterOneStateProofCommitted)
 }
 
 func testVotersReloadFromDiskPassRecoveryPeriod(t *testing.T, cfg config.Local) {
@@ -3093,5 +3093,5 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
 
-	withOrWithoutLRUCache(t, cfg, testVotersReloadFromDiskPassRecoveryPeriod)
+	withAndWithoutLRUCache(t, cfg, testVotersReloadFromDiskPassRecoveryPeriod)
 }
