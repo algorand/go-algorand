@@ -493,7 +493,7 @@ type Local struct {
 
 	// DisableLedgerLRUCache disables LRU caches in ledger for testing purpose.
 	// Note that we turn it on for only testing purpose, not supposed to use it in real production environment.
-	DisableLedgerLRUCache bool `version[28]:"false"`
+	DisableLedgerLRUCache bool `version[28]:"true"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
