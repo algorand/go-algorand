@@ -475,12 +475,10 @@ func checkOnlineAcctUpdatesConsistency(t *testing.T, ao *onlineAccounts, rnd bas
 	}
 }
 
-func TestAcctUpdates(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
-	}
+func testAcctUpdates(t *testing.T, conf config.Local) {
+	//if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+	//	t.Skip("This test is too slow on ARM and causes travis builds to time out")
+	//}
 
 	// The next operations are heavy on the memory.
 	// Garbage collection helps prevent trashing
@@ -488,7 +486,6 @@ func TestAcctUpdates(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	conf := config.GetDefaultLocal()
 	for _, lookback := range []uint64{conf.MaxAcctLookback, proto.MaxBalLookback} {
 		t.Run(fmt.Sprintf("lookback=%d", lookback), func(t *testing.T) {
 
@@ -597,20 +594,24 @@ func TestAcctUpdates(t *testing.T) {
 	}
 }
 
-// TestAcctUpdatesFastUpdates tests catchpoint label writing datarace
-func TestAcctUpdatesFastUpdates(t *testing.T) {
+func TestAcctUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
-	}
+	conf := config.GetDefaultLocal()
+	withOrWithoutLRUCache(t, conf, testAcctUpdates)
+}
+
+// testAcctUpdatesFastUpdates tests catchpoint label writing datarace
+func testAcctUpdatesFastUpdates(t *testing.T, conf config.Local) {
+
+	//if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+	//	t.Skip("This test is too slow on ARM and causes travis builds to time out")
+	//}
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := setupAccts(20)
 	rewardsLevels := []uint64{0}
 
-	conf := config.GetDefaultLocal()
-	conf.CatchpointInterval = 1
 	initialBlocksCount := int(conf.MaxAcctLookback)
 	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
@@ -650,9 +651,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		newAccts := applyPartialDeltas(accts[i-1], updates)
 
 		blk := bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
-			},
+			BlockHeader: bookkeeping.BlockHeader{Round: i},
 		}
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
@@ -671,6 +670,14 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	}
 	ml.trackers.waitAccountsWriting()
 	wg.Wait()
+}
+
+func TestAcctUpdatesFastUpdates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	withOrWithoutLRUCache(t, conf, testAcctUpdatesFastUpdates)
 }
 
 func BenchmarkBalancesChanges(b *testing.B) {
@@ -876,7 +883,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 // The TestAcctUpdatesUpdatesCorrectness conduct a correctless test for the accounts update in the following way -
 // Each account is initialized with 100 algos.
 // On every round, each account move variable amount of funds to an accumulating account.
-// The deltas for each accounts are picked by using the lookup method.
+// The deltas for each account are picked by using the lookup method.
 // At the end of the test, we verify that each account has the expected amount of algos.
 // In addition, throughout the test, we check ( using lookup ) that the historical balances, *beyond* the
 // lookback are generating either an error, or returning the correct amount.
