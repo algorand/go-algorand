@@ -331,6 +331,40 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	}
 }
 
+// Set up two nodes, test that B drops invalid tags when A ends them.
+func TestWebsocketNetworkBasicInvalidTags(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	// disallow custom tags for this test
+	allowCustomTags = false
+	defaultSendMessageTags["XX"] = true
+	defer func() {
+		allowCustomTags = true
+		delete(defaultSendMessageTags, "XX")
+	}()
+
+	netA, netB, counter, closeFunc := setupWebsocketNetworkAB(t, 2)
+	defer closeFunc()
+	counterDone := counter.done
+	// register a handler that should never get called, because the message will
+	// be dropped before it gets to the handlers if allowCustomTags = false
+	netB.RegisterHandlers([]TaggedMessageHandler{
+		{Tag: "XX", MessageHandler: HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
+			require.Fail(t, "MessageHandler for out-of-protocol tag should not be called")
+			return OutgoingMessage{}
+		})}})
+	// send 2 valid and 2 invalid tags
+	netA.Broadcast(context.Background(), "TX", []byte("foo"), false, nil)
+	netA.Broadcast(context.Background(), "XX", []byte("foo"), false, nil)
+	netA.Broadcast(context.Background(), "TX", []byte("bar"), false, nil)
+	netA.Broadcast(context.Background(), "XX", []byte("bar"), false, nil)
+
+	select {
+	case <-counterDone:
+	case <-time.After(2 * time.Second):
+		t.Errorf("timeout, count=%d, wanted 2", counter.count)
+	}
+}
+
 // Set up two nodes, send proposal
 func TestWebsocketProposalPayloadCompression(t *testing.T) {
 	partitiontest.PartitionTest(t)
