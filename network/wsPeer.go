@@ -113,7 +113,6 @@ var defaultSendMessageTags = map[protocol.Tag]bool{
 	protocol.TopicMsgRespTag:    true,
 	protocol.MsgOfInterestTag:   true,
 	protocol.TxnTag:             true,
-	protocol.UniCatchupReqTag:   true,
 	protocol.UniEnsBlockReqTag:  true,
 	protocol.VoteBundleTag:      true,
 }
@@ -549,7 +548,7 @@ func (wp *wsPeer) readLoop() {
 			atomic.AddUint64(&wp.ppMessageCount, 1)
 		// the remaining valid tags: no special handling here
 		case protocol.NetPrioResponseTag, protocol.PingTag, protocol.PingReplyTag,
-			protocol.StateProofSigTag, protocol.UniCatchupReqTag, protocol.UniEnsBlockReqTag, protocol.VoteBundleTag:
+			protocol.StateProofSigTag, protocol.UniEnsBlockReqTag, protocol.VoteBundleTag:
 		default: // unrecognized tag
 			unknownProtocolTagMessagesTotal.Inc(nil)
 			atomic.AddUint64(&wp.unkMessageCount, 1)
