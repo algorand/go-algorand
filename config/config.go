@@ -109,6 +109,10 @@ func GetDefaultLocal() Local {
 	return defaultLocal
 }
 
+func GetRelayLocal() Local {
+	return relayLocal
+}
+
 func mergeConfigFromDir(root string, source Local) (Local, error) {
 	return mergeConfigFromFile(filepath.Join(root, ConfigFilename), source)
 }

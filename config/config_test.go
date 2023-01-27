@@ -266,7 +266,7 @@ func TestLocal_ConfigMigrate(t *testing.T) {
 	a.Equal(defaultLocal, c0)
 	a.Equal(defaultLocal, cLatest)
 
-	cLatest.Version = getLatestConfigVersion() + 1
+	cLatest.Version = getLatestConfigVersion(Local{}) + 1
 	_, err = migrate(cLatest)
 	a.Error(err)
 
@@ -287,7 +287,7 @@ func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
 	a.NoError(err)
 	configsPath := filepath.Join(ourPath, "../test/testdata/configs")
 
-	for configVersion := uint32(0); configVersion <= getLatestConfigVersion(); configVersion++ {
+	for configVersion := uint32(0); configVersion <= getLatestConfigVersion(Local{}); configVersion++ {
 		c, err := loadConfigFromFile(filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion)))
 		a.NoError(err)
 		modified, err := migrate(c)
@@ -295,7 +295,7 @@ func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
 		a.Equal(defaultLocal, modified, "config-v%d.json", configVersion)
 	}
 
-	cNext := Local{Version: getLatestConfigVersion() + 1}
+	cNext := Local{Version: getLatestConfigVersion(Local{}) + 1}
 	_, err = migrate(cNext)
 	a.Error(err)
 }
@@ -310,11 +310,25 @@ func TestLocal_ConfigInvariant(t *testing.T) {
 	a.NoError(err)
 	configsPath := filepath.Join(ourPath, "../test/testdata/configs")
 
-	for configVersion := uint32(0); configVersion <= getLatestConfigVersion(); configVersion++ {
+	for configVersion := uint32(0); configVersion <= getLatestConfigVersion(Local{}); configVersion++ {
 		c := Local{}
 		err = codecs.LoadObjectFromFile(filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion)), &c)
 		a.NoError(err)
 		a.Equal(getVersionedDefaultLocalConfig(configVersion), c)
+	}
+
+	for configVersion := uint32(0); configVersion <= getLatestConfigVersion(Relay{}); configVersion++ {
+		c := Local{}
+		err = codecs.LoadObjectFromFile(filepath.Join(configsPath, fmt.Sprintf("config-relay-v%d.json", configVersion)), &c)
+		a.NoError(err)
+		r := getVersionedDefaultRelayConfig(configVersion)
+		for f := 0; f < reflect.TypeOf(r).NumField(); f++ {
+			// Since we're comparing Local and Relay, jsut assert the subset of overriden fields are equal
+			a.Equal(r.Archival, c.Archival)
+			a.Equal(r.EnableBlockService, c.EnableBlockService)
+			a.Equal(r.EnableLedgerService, c.EnableLedgerService)
+			a.Equal(r.NetAddress, c.NetAddress)
+		}
 	}
 }
 
@@ -325,7 +339,7 @@ func TestLocal_ConfigLatestVersion(t *testing.T) {
 	a := require.New(t)
 
 	// Make sure current version is correct for the assigned defaultLocal
-	a.Equal(getLatestConfigVersion(), defaultLocal.Version)
+	a.Equal(getLatestConfigVersion(Local{}), defaultLocal.Version)
 }
 
 func TestConsensusUpgrades(t *testing.T) {
@@ -521,7 +535,7 @@ func TestLocal_GetVersionedDefaultLocalConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	for i := uint32(0); i < getLatestConfigVersion(); i++ {
+	for i := uint32(0); i < getLatestConfigVersion(Local{}); i++ {
 		localVersion := getVersionedDefaultLocalConfig(i)
 		require.Equal(t, uint32(i), localVersion.Version)
 	}
