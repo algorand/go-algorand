@@ -20,6 +20,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"strconv"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -53,7 +54,9 @@ func TestTagList(t *testing.T) {
 				if !ok {
 					continue
 				}
-				constTags = append(constTags, Tag(val.Value))
+				tagVal, err := strconv.Unquote(val.Value)
+				require.NoError(t, err)
+				constTags = append(constTags, Tag(tagVal))
 			}
 		}
 	}
