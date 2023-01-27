@@ -29,6 +29,11 @@ func SetFdSoftLimit(_ uint64) error {
 	return nil
 }
 
+// SetFdSoftLimit sets a new file descriptors soft limit.
+func GetFdSoftLimit() (uint64, error) {
+	return 0, nil
+}
+
 // Getrusage gets file descriptors usage statistics
 func Getrusage(who int, rusage *syscall.Rusage) (err error) {
 	if rusage != nil {

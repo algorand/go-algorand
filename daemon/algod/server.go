@@ -109,13 +109,10 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	// Set large enough soft file descriptors limit.
 	var ot basics.OverflowTracker
-	fdRequired := ot.Add(
-		cfg.ReservedFDs,
-		ot.Add(uint64(cfg.IncomingConnectionsLimit), cfg.RestConnectionsHardLimit))
+	fdRequired := ot.Add(cfg.ReservedFDs, cfg.RestConnectionsHardLimit)
 	if ot.Overflowed {
 		return errors.New(
-			"Initialize() overflowed when adding up ReservedFDs, IncomingConnectionsLimit " +
-				"RestConnectionsHardLimit; decrease them")
+			"Initialize() overflowed when adding up ReservedFDs and RestConnectionsHardLimit; decrease them")
 	}
 	err = util.SetFdSoftLimit(fdRequired)
 	if err != nil {
