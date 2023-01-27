@@ -78,6 +78,7 @@ function configure_data_dir() {
     local KMD_DIR="kmd-v0.5"
     # on intial bootstrap, this directory won't exist.
     mkdir -p "$KMD_DIR"
+    cd "$KMD_DIR"
     if [ -f "/etc/kmd_config.json" ]; then
       cp /etc/kmd_config.json kmd_config.json
     else
