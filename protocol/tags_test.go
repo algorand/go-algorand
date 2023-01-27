@@ -22,6 +22,7 @@ import (
 	"go/token"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,6 +30,7 @@ import (
 // all the constant Tag variables declared in tags.go.
 func TestTagList(t *testing.T) {
 	t.Parallel()
+	partitiontest.PartitionTest(t)
 
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, "tags.go", nil, 0)
