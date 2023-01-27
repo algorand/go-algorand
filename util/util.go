@@ -26,6 +26,7 @@ import (
 
 /* misc */
 
+// GetFdSoftLimit returns a current value for file descriptors soft limit.
 func GetFdSoftLimit() (uint64, error) {
 	var rLimit syscall.Rlimit
 	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
