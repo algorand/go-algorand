@@ -476,10 +476,6 @@ func checkOnlineAcctUpdatesConsistency(t *testing.T, ao *onlineAccounts, rnd bas
 }
 
 func testAcctUpdates(t *testing.T, conf config.Local) {
-	//if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-	//	t.Skip("This test is too slow on ARM and causes travis builds to time out")
-	//}
-
 	// The next operations are heavy on the memory.
 	// Garbage collection helps prevent trashing
 	runtime.GC()
@@ -603,10 +599,6 @@ func TestAcctUpdates(t *testing.T) {
 
 // testAcctUpdatesFastUpdates tests catchpoint label writing datarace
 func testAcctUpdatesFastUpdates(t *testing.T, conf config.Local) {
-
-	//if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-	//	t.Skip("This test is too slow on ARM and causes travis builds to time out")
-	//}
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := setupAccts(20)
@@ -799,9 +791,6 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Skip("TODO: move to catchpointtracker_test and add catchpoint tracker into trackers list")
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
-	}
 
 	// The next operations are heavy on the memory.
 	// Garbage collection helps prevent trashing
@@ -889,10 +878,6 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 // lookback are generating either an error, or returning the correct amount.
 func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
-	}
 
 	// create new protocol version, which has lower look back.
 	testProtocolVersion := protocol.ConsensusCurrentVersion
