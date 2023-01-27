@@ -328,6 +328,7 @@ func TestIdentityTrackerSetIdentity(t *testing.T) {
 
 // Just tests that if a peer is already verified, it just returns OutgoingMessage{}
 func TestHandlerGuard(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	p := wsPeer{identityVerified: uint32(1)}
 	msg := IncomingMessage{
 		Sender: &p,

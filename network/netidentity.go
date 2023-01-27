@@ -88,7 +88,7 @@ import (
 // Message 3
 // - If the Message is malformed or cannot be decoded, the peer is disconnected
 // - If the Signature in the challenge does not verify peer's assumed PublicKey and assigned Challenge Bytes, the peer is disconnected
-// - If the Message is not recieved, no action is taken to disconnect the peer.
+// - If the Message is not received, no action is taken to disconnect the peer.
 
 const maxAddressLen = 256 + 32 // Max DNS (255) + margin for port specification
 
