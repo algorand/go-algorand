@@ -259,11 +259,14 @@ func getProtocolTags(t *testing.T) []string {
 
 	// look for const declarations in protocol/tags.go
 	var declaredTags []string
+	// Iterate through the declarations in the file
 	for _, d := range f.Decls {
 		genDecl, ok := d.(*ast.GenDecl)
+		// Check if the declaration is a constant and if not, continue
 		if !ok || genDecl.Tok != token.CONST {
 			continue
 		}
+		// Iterate through the specs (specifications) in the declaration
 		for _, spec := range genDecl.Specs {
 			if valueSpec, ok := spec.(*ast.ValueSpec); ok {
 				for _, n := range valueSpec.Names {
