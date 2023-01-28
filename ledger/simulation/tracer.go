@@ -41,11 +41,11 @@ func (tracer *cursorEvalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) 
 	tracer.previousInnerTxns = append(tracer.previousInnerTxns, 0)
 }
 
-func (tracer *cursorEvalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData) {
+func (tracer *cursorEvalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
 	tracer.previousInnerTxns = tracer.previousInnerTxns[:len(tracer.previousInnerTxns)-1]
 }
 
-func (tracer *cursorEvalTracer) AfterTxnGroup(ep *logic.EvalParams) {
+func (tracer *cursorEvalTracer) AfterTxnGroup(ep *logic.EvalParams, evalError error) {
 	top := len(tracer.relativeCursor) - 1
 	if len(tracer.previousInnerTxns) != 0 {
 		tracer.previousInnerTxns[len(tracer.previousInnerTxns)-1] += tracer.relativeCursor[top] + 1
@@ -80,11 +80,18 @@ type evalTracer struct {
 	isAppRunning      bool
 	result            *Result
 	evalDeltaSnapshot transactions.EvalDelta
+	failedAt          TxnPath
 }
 
 func makeEvalTracer(txgroup []transactions.SignedTxn) *evalTracer {
 	result := MakeSimulationResult([][]transactions.SignedTxn{txgroup})
 	return &evalTracer{result: &result}
+}
+
+func (tracer *evalTracer) handleError(evalError error) {
+	if evalError != nil && tracer.failedAt == nil {
+		tracer.failedAt = tracer.absolutePath()
+	}
 }
 
 func (tracer *evalTracer) getApplyDataAtPath(path TxnPath) (*transactions.ApplyData, error) {
@@ -121,38 +128,42 @@ func (tracer *evalTracer) populateInnerTransactions(txgroup []transactions.Signe
 
 func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	if ep.GetCaller() != nil {
-		// if this is an inner txn group, save the txns
+		// If this is an inner txn group, save the txns
 		tracer.populateInnerTransactions(ep.TxnGroup)
 	}
 	tracer.cursorEvalTracer.BeforeTxnGroup(ep)
 }
 
+func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, evalError error) {
+	tracer.handleError(evalError)
+	tracer.cursorEvalTracer.AfterTxnGroup(ep, evalError)
+}
+
 func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
 	applyDataOfCurrentTxn := tracer.mustGetApplyDataAtPath(tracer.absolutePath())
-	*applyDataOfCurrentTxn = applyData // TODO: deep copy?
+	// Copy everything except the EvalDelta, since that has been kept up-to-date after every op
+	evalDelta := applyDataOfCurrentTxn.EvalDelta
+	*applyDataOfCurrentTxn = applyData
+	applyDataOfCurrentTxn.EvalDelta = evalDelta
 }
 
-func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData) {
-	// Update ApplyData if not an inner transaction
+func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
+	tracer.handleError(evalError)
 	tracer.saveApplyData(ad)
-	tracer.cursorEvalTracer.AfterTxn(ep, groupIndex, ad)
-}
-
-func copyEvalDelta(delta transactions.EvalDelta) transactions.EvalDelta {
-	deltaCopy := delta
-	if delta.InnerTxns != nil {
-		// copy the inner txn array, all else is a shallow copy
-		deltaCopy.InnerTxns = make([]transactions.SignedTxnWithAD, len(delta.InnerTxns))
-		copy(deltaCopy.InnerTxns, delta.InnerTxns)
-	}
-	return deltaCopy
+	tracer.cursorEvalTracer.AfterTxn(ep, groupIndex, ad, evalError)
 }
 
 func (tracer *evalTracer) saveEvalDelta(evalDelta transactions.EvalDelta, appIDToSave basics.AppIndex) {
 	applyDataOfCurrentTxn := tracer.mustGetApplyDataAtPath(tracer.absolutePath())
-	applyDataOfCurrentTxn.EvalDelta = copyEvalDelta(evalDelta) // TODO: is this necessary?
-	if applyDataOfCurrentTxn.ApplicationID == 0 && appIDToSave != 0 {
-		applyDataOfCurrentTxn.ApplicationID = appIDToSave
+	// Copy everything except the inner transactions, since those have been kept up-to-date when we
+	// traced those transactions.
+	inners := applyDataOfCurrentTxn.EvalDelta.InnerTxns
+	applyDataOfCurrentTxn.EvalDelta = evalDelta
+	applyDataOfCurrentTxn.EvalDelta.InnerTxns = inners
+
+	// TODO: remove
+	if len(inners) != len(evalDelta.InnerTxns) {
+		panic("inner lengths differ")
 	}
 }
 
@@ -168,4 +179,14 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		appIDToSave = cx.AppID()
 	}
 	tracer.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta, appIDToSave)
+}
+
+func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
+	tracer.handleError(evalError)
+	tracer.cursorEvalTracer.AfterOpcode(cx, evalError)
+}
+
+func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
+	tracer.handleError(evalError)
+	tracer.cursorEvalTracer.AfterProgram(cx, evalError)
 }

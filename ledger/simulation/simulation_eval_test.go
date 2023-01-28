@@ -492,7 +492,6 @@ func TestRejectAppCall(t *testing.T) {
 	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
 		sender := accounts[0]
 
-		// Create program and call it
 		futureAppID := basics.AppIndex(1)
 		createTxn := txnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
@@ -512,6 +511,59 @@ int 0
 		return simulationTestCase{
 			input:         []transactions.SignedTxn{signedCreateTxn},
 			expectedError: "transaction rejected by ApprovalProgram",
+			expected: simulation.Result{
+				Version: 1,
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{},
+											LocalDeltas: map[uint64]basics.StateDelta{},
+											Logs:        []string{"app creation"},
+										},
+									},
+								},
+							},
+						},
+						FailedAt: simulation.TxnPath{0},
+					},
+				},
+				WouldSucceed: false,
+			},
+		}
+	})
+}
+
+func TestErrorAppCall(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+		sender := accounts[0]
+
+		futureAppID := basics.AppIndex(1)
+		createTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: 0,
+			ApprovalProgram: `#pragma version 6
+byte "app creation"
+log
+err
+			`,
+			ClearStateProgram: `#pragma version 6
+int 0
+`,
+		})
+		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input:         []transactions.SignedTxn{signedCreateTxn},
+			expectedError: "err opcode executed",
 			expected: simulation.Result{
 				Version: 1,
 				TxnGroups: []simulation.TxnGroupResult{

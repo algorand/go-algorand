@@ -44,6 +44,7 @@ func (l *Ledger) DelBoxes(app basics.AppIndex, names ...string) {
 	}
 }
 
+var DefaultEvalParams = defaultEvalParams
 var MakeSampleEnv = makeSampleEnv
 var MakeSampleEnvWithVersion = makeSampleEnvWithVersion
 var MakeSampleTxn = makeSampleTxn
@@ -51,9 +52,13 @@ var MakeSampleTxnGroup = makeSampleTxnGroup
 var MakeTestProto = makeTestProto
 var MakeTestProtoV = makeTestProtoV
 var NoTrack = notrack
+var TestLogic = testLogic
 var TestApp = testApp
 var TestAppBytes = testAppBytes
 var TestApps = testApps
 var TestProg = testProg
 
 const CreatedResourcesVersion = createdResourcesVersion
+const AssemblerNoVersion = assemblerNoVersion
+const FirstTestID = firstTestID
+const TestCallStackProgram = testCallStackProgram

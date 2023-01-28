@@ -5035,7 +5035,7 @@ func opItxnField(cx *EvalContext) error {
 	return err
 }
 
-func opItxnSubmit(cx *EvalContext) error {
+func opItxnSubmit(cx *EvalContext) (returnErr error) {
 	// Should rarely trigger, since itxn_next checks these too. (but that check
 	// must be imperfect, see its comment) In contrast to that check, subtxns is
 	// already populated here.
@@ -5183,6 +5183,10 @@ func opItxnSubmit(cx *EvalContext) error {
 
 	if ep.Tracer != nil {
 		ep.Tracer.BeforeTxnGroup(ep)
+		// Ensure we update the tracer before exiting
+		defer func() {
+			ep.Tracer.AfterTxnGroup(ep, returnErr)
+		}()
 	}
 
 	for i := range ep.TxnGroup {
@@ -5191,25 +5195,23 @@ func opItxnSubmit(cx *EvalContext) error {
 		}
 
 		err := cx.Ledger.Perform(i, ep)
+
+		if ep.Tracer != nil {
+			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData, err)
+		}
+
 		if err != nil {
 			return err
 		}
+
 		// This is mostly a no-op, because Perform does its work "in-place", but
 		// RecordAD has some further responsibilities.
 		ep.RecordAD(i, ep.TxnGroup[i].ApplyData)
-
-		if ep.Tracer != nil {
-			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData)
-		}
 	}
 	cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
 	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group
 	cx.innerTxidCache = nil
-
-	if ep.Tracer != nil {
-		ep.Tracer.AfterTxnGroup(ep)
-	}
 
 	return nil
 }

@@ -128,8 +128,8 @@ func TestSimulateWithTrace(t *testing.T) {
 	expectedEvents := []mocktracer.Event{
 		mocktracer.BeforeTxnGroup(1),
 		mocktracer.BeforeTxn(protocol.PaymentTx),
-		mocktracer.AfterTxn(protocol.PaymentTx, payset[0].ApplyData),
-		mocktracer.AfterTxnGroup(1),
+		mocktracer.AfterTxn(protocol.PaymentTx, payset[0].ApplyData, false),
+		mocktracer.AfterTxnGroup(1, false),
 	}
 	require.Equal(t, expectedEvents, mockTracer.Events)
 }

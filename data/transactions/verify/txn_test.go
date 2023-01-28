@@ -366,83 +366,197 @@ func TestTxnGroupWithTracer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	// In all cases, a group of three transactions is tested. They are:
+	//   1. A payment transaction from a LogicSig (program1)
+	//   2. An app call from a normal account
+	//   3. An app call from a LogicSig (program2)
 
-	account := keypair()
-	accountAddr := basics.Address(account.SignatureVerifier)
-
-	ops1, err := logic.AssembleString(`#pragma version 6
-pushint 1`)
-	require.NoError(t, err)
-	program1 := ops1.Program
-	program1Addr := basics.Address(logic.HashProgram(program1))
-
-	ops2, err := logic.AssembleString(`#pragma version 6
+	testCases := []struct {
+		name           string
+		program1       string
+		program2       string
+		expectedError  string
+		expectedEvents []mocktracer.Event
+	}{
+		{
+			name: "both approve",
+			program1: `#pragma version 6
+pushint 1`,
+			program2: `#pragma version 6
 pushbytes "test"
 pop
-pushint 1`)
-	require.NoError(t, err)
-	program2 := ops2.Program
-	program2Addr := basics.Address(logic.HashProgram(program2))
-
-	// this shouldn't be invoked during this test
-	appProgram := "err"
-
-	lsigPay := txntest.Txn{
-		Type:     protocol.PaymentTx,
-		Sender:   program1Addr,
-		Receiver: accountAddr,
-		Fee:      proto.MinTxnFee,
-	}
-
-	normalSigAppCall := txntest.Txn{
-		Type:              protocol.ApplicationCallTx,
-		Sender:            accountAddr,
-		ApprovalProgram:   appProgram,
-		ClearStateProgram: appProgram,
-		Fee:               proto.MinTxnFee,
-	}
-
-	lsigAppCall := txntest.Txn{
-		Type:              protocol.ApplicationCallTx,
-		Sender:            program2Addr,
-		ApprovalProgram:   appProgram,
-		ClearStateProgram: appProgram,
-		Fee:               proto.MinTxnFee,
-	}
-
-	txntest.Group(&lsigPay, &normalSigAppCall, &lsigAppCall)
-
-	txgroup := []transactions.SignedTxn{
-		{
-			Lsig: transactions.LogicSig{
-				Logic: program1,
-			},
-			Txn: lsigPay.Txn(),
+pushint 1`,
+			expectedEvents: mocktracer.FlattenEvents([][]mocktracer.Event{
+				{
+					mocktracer.BeforeProgram(logic.ModeSig),                  // first txn start
+					mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(false), // first txn LogicSig: 1 op
+					mocktracer.AfterProgram(logic.ModeSig, false), // first txn end
+					// nothing for second txn (not signed with a LogicSig)
+					mocktracer.BeforeProgram(logic.ModeSig), // third txn start
+				},
+				mocktracer.OpcodeEvents(3, false), // third txn LogicSig: 3 ops
+				{
+					mocktracer.AfterProgram(logic.ModeSig, false), // third txn end
+				},
+			}),
 		},
-		normalSigAppCall.Txn().Sign(account),
 		{
-			Lsig: transactions.LogicSig{
-				Logic: program2,
+			name: "approve then reject",
+			program1: `#pragma version 6
+pushint 1`,
+			program2: `#pragma version 6
+pushbytes "test"
+pop
+pushint 0`,
+			expectedError: "rejected by logic",
+			expectedEvents: mocktracer.FlattenEvents([][]mocktracer.Event{
+				{
+					mocktracer.BeforeProgram(logic.ModeSig),                  // first txn start
+					mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(false), // first txn LogicSig: 1 op
+					mocktracer.AfterProgram(logic.ModeSig, false), // first txn end
+					// nothing for second txn (not signed with a LogicSig)
+					mocktracer.BeforeProgram(logic.ModeSig), // third txn start
+				},
+				mocktracer.OpcodeEvents(3, false), // third txn LogicSig: 3 ops
+				{
+					mocktracer.AfterProgram(logic.ModeSig, false), // third txn end
+				},
+			}),
+		},
+		{
+			name: "approve then error",
+			program1: `#pragma version 6
+pushint 1`,
+			program2: `#pragma version 6
+pushbytes "test"
+pop
+err
+pushbytes "test2"
+pop`,
+			expectedError: "rejected by logic err=err opcode executed",
+			expectedEvents: mocktracer.FlattenEvents([][]mocktracer.Event{
+				{
+					mocktracer.BeforeProgram(logic.ModeSig),                  // first txn start
+					mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(false), // first txn LogicSig: 1 op
+					mocktracer.AfterProgram(logic.ModeSig, false), // first txn end
+					// nothing for second txn (not signed with a LogicSig)
+					mocktracer.BeforeProgram(logic.ModeSig), // third txn start
+				},
+				mocktracer.OpcodeEvents(3, true), // third txn LogicSig: 3 ops
+				{
+					mocktracer.AfterProgram(logic.ModeSig, true), // third txn end
+				},
+			}),
+		},
+		{
+			name: "reject then approve",
+			program1: `#pragma version 6
+pushint 0`,
+			program2: `#pragma version 6
+pushbytes "test"
+pop
+pushint 1`,
+			expectedError: "rejected by logic",
+			expectedEvents: []mocktracer.Event{
+				mocktracer.BeforeProgram(logic.ModeSig),                  // first txn start
+				mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(false), // first txn LogicSig: 1 op
+				mocktracer.AfterProgram(logic.ModeSig, false), // first txn end
+				// execution stops at rejection
 			},
-			Txn: lsigAppCall.Txn(),
+		},
+		{
+			name: "error then approve",
+			program1: `#pragma version 6
+err`,
+			program2: `#pragma version 6
+pushbytes "test"
+pop
+pushint 1`,
+			expectedError: "rejected by logic err=err opcode executed",
+			expectedEvents: []mocktracer.Event{
+				mocktracer.BeforeProgram(logic.ModeSig),                 // first txn start
+				mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(true), // first txn LogicSig: 1 op
+				mocktracer.AfterProgram(logic.ModeSig, true), // first txn end
+				// execution stops at error
+			},
 		},
 	}
 
-	mockTracer := &mocktracer.Tracer{}
-	_, err = TxnGroupWithTracer(txgroup, blockHeader, nil, logic.NoHeaderLedger{}, mockTracer)
-	require.NoError(t, err)
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	expectedEvents := []mocktracer.Event{
-		mocktracer.BeforeProgram(logic.ModeSig),             // first txn start
-		mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(), // first txn LogicSig: 1 op
-		mocktracer.AfterProgram(logic.ModeSig), // first txn end
-		// nothing for second txn (not signed with a LogicSig)
-		mocktracer.BeforeProgram(logic.ModeSig),                                                                                                                       // third txn start
-		mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(), mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(), mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(), // third txn LogicSig: 3 ops
-		mocktracer.AfterProgram(logic.ModeSig), // third txn end
+			account := keypair()
+			accountAddr := basics.Address(account.SignatureVerifier)
+
+			ops1, err := logic.AssembleString(testCase.program1)
+			require.NoError(t, err)
+			program1Bytes := ops1.Program
+			program1Addr := basics.Address(logic.HashProgram(program1Bytes))
+
+			ops2, err := logic.AssembleString(testCase.program2)
+			require.NoError(t, err)
+			program2Bytes := ops2.Program
+			program2Addr := basics.Address(logic.HashProgram(program2Bytes))
+
+			// This app program shouldn't be invoked during this test
+			appProgram := "err"
+
+			lsigPay := txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   program1Addr,
+				Receiver: accountAddr,
+				Fee:      proto.MinTxnFee,
+			}
+
+			normalSigAppCall := txntest.Txn{
+				Type:              protocol.ApplicationCallTx,
+				Sender:            accountAddr,
+				ApprovalProgram:   appProgram,
+				ClearStateProgram: appProgram,
+				Fee:               proto.MinTxnFee,
+			}
+
+			lsigAppCall := txntest.Txn{
+				Type:              protocol.ApplicationCallTx,
+				Sender:            program2Addr,
+				ApprovalProgram:   appProgram,
+				ClearStateProgram: appProgram,
+				Fee:               proto.MinTxnFee,
+			}
+
+			txntest.Group(&lsigPay, &normalSigAppCall, &lsigAppCall)
+
+			txgroup := []transactions.SignedTxn{
+				{
+					Lsig: transactions.LogicSig{
+						Logic: program1Bytes,
+					},
+					Txn: lsigPay.Txn(),
+				},
+				normalSigAppCall.Txn().Sign(account),
+				{
+					Lsig: transactions.LogicSig{
+						Logic: program2Bytes,
+					},
+					Txn: lsigAppCall.Txn(),
+				},
+			}
+
+			mockTracer := &mocktracer.Tracer{}
+			_, err = TxnGroupWithTracer(txgroup, blockHeader, nil, logic.NoHeaderLedger{}, mockTracer)
+
+			if len(testCase.expectedError) != 0 {
+				require.ErrorContains(t, err, testCase.expectedError)
+			} else {
+				require.NoError(t, err)
+			}
+
+			require.Equal(t, testCase.expectedEvents, mockTracer.Events)
+		})
 	}
-	require.Equal(t, expectedEvents, mockTracer.Events)
 }
 
 func TestPaysetGroups(t *testing.T) {

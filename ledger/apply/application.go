@@ -338,13 +338,13 @@ func checkPrograms(ac *transactions.ApplicationCallTxnFields, evalParams *logic.
 
 // ApplicationCall evaluates ApplicationCall transaction
 func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactions.Header, balances Balances, ad *transactions.ApplyData, gi int, evalParams *logic.EvalParams, txnCounter uint64) (err error) {
-	defer func(evalParams *logic.EvalParams) {
+	defer func() {
 		// If we are returning a non-nil error, then don't return a
-		// non-empty EvalDelta unless we are debugging. Not required for correctness.
-		if err != nil && ad != nil && evalParams.Trace == nil {
+		// non-empty EvalDelta. Not required for correctness.
+		if err != nil && ad != nil {
 			ad.EvalDelta = transactions.EvalDelta{}
 		}
-	}(evalParams)
+	}()
 
 	// Ensure we are always passed a non-nil ApplyData
 	if ad == nil {

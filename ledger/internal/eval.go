@@ -927,7 +927,7 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transacti
 // TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWithAD) error {
+func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWithAD) (returnErr error) {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -952,6 +952,10 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 
 	if eval.Tracer != nil {
 		eval.Tracer.BeforeTxnGroup(evalParams)
+		// Ensure we update the tracer before exiting
+		defer func() {
+			eval.Tracer.AfterTxnGroup(evalParams, returnErr)
+		}()
 	}
 
 	// Evaluate each transaction in the group
@@ -964,12 +968,13 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		}
 
 		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
-		if err != nil {
-			return err
-		}
 
 		if eval.Tracer != nil {
-			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData)
+			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData, err)
+		}
+
+		if err != nil {
+			return err
 		}
 
 		txibs = append(txibs, txib)
@@ -1017,10 +1022,6 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 	eval.block.Payset = append(eval.block.Payset, txibs...)
 	eval.blockTxBytes += groupTxBytes
 	cow.commitToParent()
-
-	if eval.Tracer != nil {
-		eval.Tracer.AfterTxnGroup(evalParams)
-	}
 
 	return nil
 }
@@ -1107,6 +1108,10 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	// Apply the transaction, updating the cow balances
 	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, gi, cow.Counter())
 	if err != nil {
+		if eval.Tracer != nil {
+			// If there is a tracer, save the ApplyData so that it's viewable by the tracer
+			txib.ApplyData = applyData
+		}
 		return fmt.Errorf("transaction %v: %w", txid, err)
 	}
 

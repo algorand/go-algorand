@@ -242,11 +242,11 @@ func TestCursorEvalTracer(t *testing.T) {
 				case mocktracer.BeforeTxnEvent:
 					tracer.BeforeTxn(&ep, groupIndex)
 				case mocktracer.AfterTxnEvent:
-					tracer.AfterTxn(&ep, groupIndex, transactions.ApplyData{})
+					tracer.AfterTxn(&ep, groupIndex, transactions.ApplyData{}, nil)
 				case mocktracer.BeforeTxnGroupEvent:
 					tracer.BeforeTxnGroup(&ep)
 				case mocktracer.AfterTxnGroupEvent:
-					tracer.AfterTxnGroup(&ep)
+					tracer.AfterTxnGroup(&ep, nil)
 				default:
 					t.Fatalf("unexpected timeline hook: %v", step.action)
 				}
