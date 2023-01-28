@@ -278,8 +278,13 @@ func resolveDataDir() string {
 	// Figure out what data directory to tell algod to use.
 	// If not specified on cmdline with '-d', look for default in environment.
 	var dir string
-	if len(dataDirs) > 0 {
-		dir = dataDirs[0]
+	if (len(dataDirs) > 0) && (dataDirs[0] != "") {
+		// calculate absolute path, see https://github.com/algorand/go-algorand/issues/589
+		absDir, err := filepath.Abs(dataDirs[0])
+		if err != nil {
+			reportErrorf("Absolute path conversion error: %s", err)
+		}
+		dir = absDir
 	}
 	if dir == "" {
 		dir = os.Getenv("ALGORAND_DATA")
