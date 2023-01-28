@@ -14,94 +14,69 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package logic
+package logic_test
 
 import (
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions"
+	. "github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
-const innerTxnTestProgram string = `itxn_begin
-int appl
-itxn_field TypeEnum
-int NoOp
-itxn_field OnCompletion
-byte 0x068101 // #pragma version 6; int 1;
-dup
-itxn_field ApprovalProgram
-itxn_field ClearStateProgram
-itxn_submit
-
-itxn_begin
-int pay
-itxn_field TypeEnum
-int 1
-itxn_field Amount
-global CurrentApplicationAddress
-itxn_field Receiver
-itxn_next
-int pay
-itxn_field TypeEnum
-int 2
-itxn_field Amount
-global CurrentApplicationAddress
-itxn_field Receiver
-itxn_submit
-
-int 1
-`
-
-// can't use mocktracer.Tracer because the import would be circular
-type testEvalTracer struct {
-	beforeTxnGroupCalls int
-	afterTxnGroupCalls  int
-
-	beforeTxnCalls int
-	afterTxnCalls  int
-
-	beforeProgramCalls int
-	afterProgramCalls  int
-	programModes       []RunMode
-
-	beforeOpcodeCalls int
-	afterOpcodeCalls  int
+type tracerTestCase struct {
+	name           string
+	program        string
+	evalProblems   []string
+	expectedEvents []mocktracer.Event
 }
 
-func (t *testEvalTracer) BeforeTxnGroup(ep *EvalParams) {
-	t.beforeTxnGroupCalls++
-}
-
-func (t *testEvalTracer) AfterTxnGroup(ep *EvalParams) {
-	t.afterTxnGroupCalls++
-}
-
-func (t *testEvalTracer) BeforeTxn(ep *EvalParams, groupIndex int) {
-	t.beforeTxnCalls++
-}
-
-func (t *testEvalTracer) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) {
-	t.afterTxnCalls++
-}
-
-func (t *testEvalTracer) BeforeProgram(cx *EvalContext) {
-	t.beforeProgramCalls++
-	t.programModes = append(t.programModes, cx.RunMode())
-}
-
-func (t *testEvalTracer) AfterProgram(cx *EvalContext, evalError error) {
-	t.afterProgramCalls++
-}
-
-func (t *testEvalTracer) BeforeOpcode(cx *EvalContext) {
-	t.beforeOpcodeCalls++
-}
-
-func (t *testEvalTracer) AfterOpcode(cx *EvalContext, evalError error) {
-	t.afterOpcodeCalls++
+func getSimpleTracerTestCases(mode RunMode) []tracerTestCase {
+	return []tracerTestCase{
+		{
+			name:    "approve",
+			program: debuggerTestProgramApprove,
+			expectedEvents: mocktracer.FlattenEvents([][]mocktracer.Event{
+				{
+					mocktracer.BeforeProgram(mode),
+				},
+				mocktracer.OpcodeEvents(35, false),
+				{
+					mocktracer.AfterProgram(mode, false),
+				},
+			}),
+		},
+		{
+			name:         "reject",
+			program:      debuggerTestProgramReject,
+			evalProblems: []string{"REJECT"},
+			expectedEvents: mocktracer.FlattenEvents([][]mocktracer.Event{
+				{
+					mocktracer.BeforeProgram(mode),
+				},
+				mocktracer.OpcodeEvents(36, false),
+				{
+					mocktracer.AfterProgram(mode, false),
+				},
+			}),
+		},
+		{
+			name:         "error",
+			program:      debuggerTestProgramError,
+			evalProblems: []string{"err opcode executed"},
+			expectedEvents: mocktracer.FlattenEvents([][]mocktracer.Event{
+				{
+					mocktracer.BeforeProgram(mode),
+				},
+				mocktracer.OpcodeEvents(36, true),
+				{
+					mocktracer.AfterProgram(mode, true),
+				},
+			}),
+		},
+	}
 }
 
 func TestEvalWithTracer(t *testing.T) {
@@ -110,86 +85,89 @@ func TestEvalWithTracer(t *testing.T) {
 
 	t.Run("logicsig", func(t *testing.T) {
 		t.Parallel()
-		testTracer := testEvalTracer{}
-		ep := defaultEvalParams()
+		testCases := getSimpleTracerTestCases(ModeSig)
+		for _, testCase := range testCases {
+			testCase := testCase
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+				mock := mocktracer.Tracer{}
+				ep := DefaultEvalParams()
+				ep.Tracer = &mock
+				TestLogic(t, testCase.program, AssemblerMaxVersion, ep, testCase.evalProblems...)
+
+				require.Equal(t, testCase.expectedEvents, mock.Events)
+			})
+		}
+
+		testTracer := mocktracer.Tracer{}
+		ep := DefaultEvalParams()
 		ep.Tracer = &testTracer
-		testLogic(t, debuggerTestProgram, AssemblerMaxVersion, ep)
-
-		// BeforeTxnGroup/AfterTxnGroup/BeforeTxn/AfterTxn are only called for the inner txns in
-		// this test, not the top-level ones
-		require.Zero(t, testTracer.beforeTxnGroupCalls)
-		require.Zero(t, testTracer.afterTxnGroupCalls)
-		require.Zero(t, testTracer.beforeTxnCalls)
-		require.Zero(t, testTracer.afterTxnCalls)
-
-		require.Equal(t, 1, testTracer.beforeProgramCalls)
-		require.Equal(t, 1, testTracer.afterProgramCalls)
-		require.Equal(t, []RunMode{ModeSig}, testTracer.programModes)
-
-		require.Equal(t, 35, testTracer.beforeOpcodeCalls)
-		require.Equal(t, testTracer.beforeOpcodeCalls, testTracer.afterOpcodeCalls)
+		TestLogic(t, debuggerTestProgramApprove, AssemblerMaxVersion, ep)
 	})
 
 	t.Run("simple app", func(t *testing.T) {
 		t.Parallel()
-		testTracer := testEvalTracer{}
-		ep := defaultEvalParams()
-		ep.Tracer = &testTracer
-		testApp(t, debuggerTestProgram, ep)
+		testCases := getSimpleTracerTestCases(ModeApp)
+		for _, testCase := range testCases {
+			testCase := testCase
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+				mock := mocktracer.Tracer{}
+				ep := DefaultEvalParams()
+				ep.Tracer = &mock
+				TestApp(t, testCase.program, ep, testCase.evalProblems...)
 
-		// BeforeTxnGroup/AfterTxnGroup/BeforeTxn/AfterTxn are only called for the inner txns in
-		// this test, not the top-level ones
-		require.Zero(t, testTracer.beforeTxnGroupCalls)
-		require.Zero(t, testTracer.afterTxnGroupCalls)
-		require.Zero(t, testTracer.beforeTxnCalls)
-		require.Zero(t, testTracer.afterTxnCalls)
-
-		require.Equal(t, 1, testTracer.beforeProgramCalls)
-		require.Equal(t, 1, testTracer.afterProgramCalls)
-		require.Equal(t, []RunMode{ModeApp}, testTracer.programModes)
-
-		require.Equal(t, 35, testTracer.beforeOpcodeCalls)
-		require.Equal(t, testTracer.beforeOpcodeCalls, testTracer.afterOpcodeCalls)
+				require.Equal(t, testCase.expectedEvents, mock.Events)
+			})
+		}
 	})
 
 	t.Run("app with inner txns", func(t *testing.T) {
 		t.Parallel()
-		testTracer := testEvalTracer{}
-		ep, tx, ledger := MakeSampleEnv()
+		scenarios := mocktracer.GetTestScenarios()
+		for name, makeScenario := range scenarios {
+			makeScenario := makeScenario
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				mock := mocktracer.Tracer{}
+				ep, tx, ledger := MakeSampleEnv()
+				ep.Tracer = &mock
 
-		// Establish 888 as the app id, and fund it.
-		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-		ledger.NewAccount(basics.AppIndex(888).Address(), 200000)
+				// Establish FirstTestID as the app id, and fund it. We do this so that the created
+				// inner app will get a sequential ID, which is what the mocktracer scenarios expect
+				createdAppIndex := basics.AppIndex(FirstTestID)
+				ledger.NewApp(tx.Receiver, createdAppIndex, basics.AppParams{})
+				ledger.NewAccount(createdAppIndex.Address(), 200_000)
+				tx.ApplicationID = createdAppIndex
 
-		ep.Tracer = &testTracer
-		testApp(t, innerTxnTestProgram, ep)
+				scenario := makeScenario(mocktracer.TestScenarioInfo{
+					CallingTxn:   *tx,
+					CreatedAppID: createdAppIndex,
+				})
 
-		// BeforeTxnGroup/AfterTxnGroup/BeforeTxn/AfterTxn are only called for the inner txns in
-		// this test, not the top-level ones
+				var evalProblems []string
+				switch scenario.Outcome {
+				case mocktracer.RejectionOutcome:
+					evalProblems = []string{"REJECT"}
+				case mocktracer.ErrorOutcome:
+					if scenario.ExpectedError == "overspend" {
+						// the logic test ledger uses this error instead
+						evalProblems = []string{"insufficient balance"}
+					} else {
+						evalProblems = []string{scenario.ExpectedError}
+					}
+				}
 
-		// two groups of inner txns were issued
-		require.Equal(t, 2, testTracer.beforeTxnGroupCalls)
-		require.Equal(t, 2, testTracer.afterTxnGroupCalls)
+				ops := TestProg(t, scenario.Program, AssemblerNoVersion)
+				TestAppBytes(t, ops.Program, ep, evalProblems...)
 
-		// three total inner txns were issued
-		require.Equal(t, 3, testTracer.beforeTxnCalls)
-		require.Equal(t, 3, testTracer.afterTxnCalls)
-
-		require.Equal(t, 2, testTracer.beforeProgramCalls)
-		require.Equal(t, 2, testTracer.afterProgramCalls)
-		require.Equal(t, []RunMode{ModeApp, ModeApp}, testTracer.programModes)
-
-		appCallTealOps := 27
-		innerAppCallTealOps := 1
-		require.Equal(t, appCallTealOps+innerAppCallTealOps, testTracer.beforeOpcodeCalls)
-		require.Equal(t, testTracer.beforeOpcodeCalls, testTracer.afterOpcodeCalls)
+				// trim BeforeTxn and AfterTxn events from scenario.ExpectedEvents, since they are
+				// not emitted from TestAppBytes
+				require.Equal(t, scenario.ExpectedEvents[0].Type, mocktracer.BeforeTxnEvent)
+				require.Equal(t, scenario.ExpectedEvents[len(scenario.ExpectedEvents)-1].Type, mocktracer.AfterTxnEvent)
+				trimmedExpectedEvents := scenario.ExpectedEvents[1 : len(scenario.ExpectedEvents)-1]
+				require.Equal(t, trimmedExpectedEvents, mock.Events)
+			})
+		}
 	})
-}
-
-func TestNullEvalTracerIsEvalTracer(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	var tracer EvalTracer = NullEvalTracer{}
-	require.NotNil(t, tracer)
 }

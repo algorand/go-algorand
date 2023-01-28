@@ -826,9 +826,11 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 	}
 	pass, cx, err := EvalContract(params.ApprovalProgram, gi, aid, ep)
 	if err != nil {
+		ad.EvalDelta = transactions.EvalDelta{}
 		return err
 	}
 	if !pass {
+		ad.EvalDelta = transactions.EvalDelta{}
 		return errors.New("Approval program failed")
 	}
 	ad.EvalDelta = cx.txn.EvalDelta
