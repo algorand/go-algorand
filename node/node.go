@@ -153,6 +153,7 @@ type AlgorandFullNode struct {
 	tracer messagetracer.MessageTracer
 
 	stateProofWorker *stateproof.Worker
+	partHandles      []db.Accessor
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -179,7 +180,7 @@ type TxnWithStatus struct {
 func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
 	node := new(AlgorandFullNode)
 	node.rootDir = rootDir
-	/*x*/ node.log = log.With("name", cfg.NetAddress)
+	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
@@ -217,7 +218,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
 	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
-	/*0*/ node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
+	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
 	if err != nil {
 		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
 		return nil, err
@@ -260,7 +261,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
 	crashPathname := filepath.Join(genesisDir, config.CrashFilename)
-	/*x1*/ crashAccess, err := db.MakeAccessor(crashPathname, false, false)
+	crashAccess, err := db.MakeAccessor(crashPathname, false, false)
 	if err != nil {
 		log.Errorf("Cannot load crash data: %v", err)
 		return nil, err
@@ -297,14 +298,14 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
-	registry, err := ensureParticipationDB(genesisDir, node.log) /*x1*/
+	registry, err := ensureParticipationDB(genesisDir, node.log)
 	if err != nil {
 		log.Errorf("unable to initialize the participation registry database: %v", err)
 		return nil, err
 	}
 	node.accountManager = data.MakeAccountManager(log, registry)
 
-	err = node.loadParticipationKeys() /*x1 inside*/
+	err = node.loadParticipationKeys()
 	if err != nil {
 		log.Errorf("Cannot load participation keys: %v", err)
 		return nil, err
@@ -335,7 +336,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	os.Remove(oldCompactCertPath)
 
 	stateProofPathname := filepath.Join(genesisDir, config.StateProofFileName)
-	stateProofAccess, err := db.MakeAccessor(stateProofPathname, false, false) /*x1 already colosed*/
+	stateProofAccess, err := db.MakeAccessor(stateProofPathname, false, false)
 	if err != nil {
 		log.Errorf("Cannot load state proof data: %v", err)
 		return nil, err
@@ -463,6 +464,9 @@ func (node *AlgorandFullNode) Stop() {
 func (node *AlgorandFullNode) Shutdown() {
 	node.accountManager.Registry().Close()
 	node.agreementService.Accessor.Close()
+	for h := range node.partHandles {
+		node.partHandles[h].Close()
+	}
 }
 
 // note: unlike the other two functions, this accepts a whole filename
@@ -934,6 +938,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 	if err != nil {
 		return fmt.Errorf("AlgorandFullNode.loadPartitipationKeys: could not read directory %v: %v", genesisDir, err)
 	}
+	node.partHandles = make([]db.Accessor, 0)
 
 	// For each of these files
 	for _, info := range files {
@@ -982,18 +987,17 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			// These files are not ephemeral and must be deleted eventually since
 			// this function is called to load files located in the node on startup
 			added := node.accountManager.AddParticipation(part, false)
-			if added {
-				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
-			} else {
+			if !added {
 				part.Close()
 				continue
 			}
+			node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
+			node.partHandles = append(node.partHandles, handle)
 			err = insertStateProofToRegistry(part, node)
 			if err != nil {
 				return err
 			}
 		}
-		part.Close()
 	}
 
 	return nil

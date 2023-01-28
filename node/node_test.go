@@ -64,6 +64,9 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion,
 	logging.Base().SetLevel(logging.Debug)
 
 	numAccounts := 10
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		numAccounts = 2
+	}
 	minMoneyAtStart := 10000
 	maxMoneyAtStart := 100000
 
@@ -191,7 +194,9 @@ func TestSyncingFullNode(t *testing.T) {
 	nodes, wallets, f := setupFullNodes(t, protocol.ConsensusCurrentVersion, nil)
 	defer f.Close()
 	for i := 0; i < len(nodes); i++ {
+		defer nodes[i].Shutdown()
 		defer os.Remove(wallets[i])
+		defer nodes[i].ledger.Close()
 		defer nodes[i].Stop()
 	}
 
@@ -324,7 +329,9 @@ func TestSimpleUpgrade(t *testing.T) {
 	nodes, wallets, f := setupFullNodes(t, consensusTest0, configurableConsensus)
 	defer f.Close()
 	for i := 0; i < len(nodes); i++ {
+		defer nodes[i].Shutdown()
 		defer os.Remove(wallets[i])
+		defer nodes[i].ledger.Close()
 		defer nodes[i].Stop()
 	}
 
@@ -386,9 +393,9 @@ func startAndConnectNodes(nodes []*AlgorandFullNode, delayStartFirstNode bool) {
 			continue
 		}
 		wg.Add(1)
-		go func(i int) {
+		go func(x int) {
 			defer wg.Done()
-			nodes[i].Start()
+			nodes[x].Start()
 		}(i)
 	}
 	wg.Wait()

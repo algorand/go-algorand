@@ -321,6 +321,7 @@ func (s *Server) Stop() {
 	s.log.Event(telemetryspec.ApplicationState, telemetryspec.ShutdownEvent)
 
 	s.node.Stop()
+	s.node.Shutdown()
 
 	err := server.Shutdown(context.Background())
 	if err != nil {
