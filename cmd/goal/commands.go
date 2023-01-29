@@ -30,6 +30,7 @@ import (
 	"github.com/spf13/cobra/doc"
 	"golang.org/x/crypto/ssh/terminal"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -95,7 +96,7 @@ func init() {
 
 	// Config
 	defaultDataDirValue := []string{""}
-	rootCmd.PersistentFlags().StringArrayVarP(&dataDirs, "datadir", "d", defaultDataDirValue, "Data directory for the node")
+	rootCmd.PersistentFlags().StringArrayVarP(&datadir.DataDirs, "datadir", "d", defaultDataDirValue, "Data directory for the node")
 	rootCmd.PersistentFlags().StringVarP(&kmdDataDirFlag, "kmddir", "k", "", "Data directory for kmd")
 }
 
@@ -161,7 +162,7 @@ var versionCmd = &cobra.Command{
 	Short: "The current version of the Algorand daemon (algod)",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			response, err := ensureAlgodClient(dataDir).AlgodVersions()
 			if err != nil {
 				fmt.Println(err)
@@ -204,7 +205,7 @@ var reportCmd = &cobra.Command{
 		}
 		fmt.Println(string(data))
 
-		dirs := getDataDirs()
+		dirs := datadir.GetDataDirs()
 		report := len(dirs) > 1
 		for _, dir := range dirs {
 			if report {
@@ -218,7 +219,7 @@ var reportCmd = &cobra.Command{
 			fmt.Printf("Genesis ID from genesis.json: %s\n", genesis.ID())
 		}
 		fmt.Println()
-		onDataDirs(getStatus)
+		datadir.OnDataDirs(getStatus)
 	},
 }
 
@@ -254,7 +255,7 @@ func resolveKmdDataDir(dataDir string) string {
 		return out
 	}
 	if dataDir == "" {
-		dataDir = resolveDataDir()
+		dataDir = datadir.ResolveDataDir()
 	}
 	if libgoal.AlgorandDataIsPrivate(dataDir) {
 		algodKmdPath, _ := filepath.Abs(filepath.Join(dataDir, libgoal.DefaultKMDDataDir))

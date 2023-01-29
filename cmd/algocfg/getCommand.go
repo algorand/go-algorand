@@ -23,8 +23,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/cmd/util/datadir"
+	"github.com/algorand/go-algorand/config"
 )
 
 var (

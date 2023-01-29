@@ -23,7 +23,6 @@ import (
 	"os"
 )
 
-
 func reportInfof(format string, args ...interface{}) {
 	fmt.Printf(format+"\n", args...)
 }
@@ -33,4 +32,8 @@ func reportErrorln(args ...interface{}) {
 	os.Exit(1)
 }
 
+// TODO: Replace all report functions with the higher grade ones from cmd/algo
 
+func reportErrorf(format string, args ...interface{}) {
+	reportErrorln(fmt.Sprintf(format, args...))
+}

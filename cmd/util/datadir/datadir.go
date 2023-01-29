@@ -16,16 +16,25 @@
 
 package datadir
 
-import "os"
+import (
+	"os"
+	"path/filepath"
+)
 
+// DataDirs contains the list of data directories
 var DataDirs []string
 
+// ResolveDataDir determines the data directory to to use.
+// If not specified on cmdline with '-d', look for default in environment.
 func ResolveDataDir() string {
-	// Figure out what data directory to tell algod to use.
-	// If not specified on cmdline with '-d', look for default in environment.
 	var dir string
-	if len(DataDirs) > 0 {
-		dir = DataDirs[0]
+	if (len(DataDirs) > 0) && (DataDirs[0] != "") {
+		// calculate absolute path, see https://github.com/algorand/go-algorand/issues/589
+		absDir, err := filepath.Abs(DataDirs[0])
+		if err != nil {
+			reportErrorf("Absolute path conversion error: %s", err)
+		}
+		dir = absDir
 	}
 	if dir == "" {
 		dir = os.Getenv("ALGORAND_DATA")
@@ -33,9 +42,9 @@ func ResolveDataDir() string {
 	return dir
 }
 
+// EnsureFirstDataDir retrieves the first data directory.
+// Reports an Error and exits when no data directory can be found.
 func EnsureFirstDataDir() string {
-	// Get the target data directory to work against,
-	// then handle the scenario where no data directory is provided.
 	dir := ResolveDataDir()
 	if dir == "" {
 		reportErrorln(errorNoDataDirectory)
@@ -43,6 +52,8 @@ func EnsureFirstDataDir() string {
 	return dir
 }
 
+// EnsureSingleDataDir retrieves the exactly one data directory that exists.
+// Reports and Error and exits when more than one data directories are available.
 func EnsureSingleDataDir() string {
 	if len(DataDirs) > 1 {
 		reportErrorln(errorOneDataDirSupported)
@@ -50,6 +61,17 @@ func EnsureSingleDataDir() string {
 	return EnsureFirstDataDir()
 }
 
+// MaybeSingleDataDir retrieves the exactly one data directory that exists.
+// Returns empty string "" when than one data directories are available.
+func MaybeSingleDataDir() string {
+	if len(DataDirs) > 1 {
+		return ""
+	}
+	return ResolveDataDir()
+}
+
+// GetDataDirs returns a list of available data directories as strings
+// Reports and Error and exits when no data directories are available.
 func GetDataDirs() (dirs []string) {
 	if len(DataDirs) == 0 {
 		reportErrorln(errorNoDataDirectory)
@@ -59,6 +81,7 @@ func GetDataDirs() (dirs []string) {
 	return
 }
 
+// OnDataDirs (...)
 func OnDataDirs(action func(dataDir string)) {
 	dirs := GetDataDirs()
 	doreport := len(dirs) > 1

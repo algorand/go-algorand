@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/algorand/go-algorand/cmd/util/datadir"
+	"github.com/spf13/cobra"
 )
 
 func init() {
