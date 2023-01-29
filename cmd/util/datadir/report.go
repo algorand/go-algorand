@@ -16,7 +16,7 @@
 
 package datadir
 
-// TODO: eliminate duplication with cmd/algocfg/report.go
+// TODO: eliminate duplication (copied from cmd/algocfg/report.go)
 
 import (
 	"fmt"

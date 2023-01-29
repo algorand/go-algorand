@@ -21,12 +21,13 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 )
 
 func init() {
 	// Config
 	defaultDataDirValue := []string{""}
-	rootCmd.PersistentFlags().StringArrayVarP(&dataDirs, "datadir", "d", defaultDataDirValue, "Data directory for the node")
+	rootCmd.PersistentFlags().StringArrayVarP(&datadir.DataDirs, "datadir", "d", defaultDataDirValue, "Data directory for the node")
 }
 
 var rootCmd = &cobra.Command{

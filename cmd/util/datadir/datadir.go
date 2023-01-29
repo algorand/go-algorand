@@ -14,18 +14,18 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package datadir
 
 import "os"
 
-var dataDirs []string
+var DataDirs []string
 
-func resolveDataDir() string {
+func ResolveDataDir() string {
 	// Figure out what data directory to tell algod to use.
 	// If not specified on cmdline with '-d', look for default in environment.
 	var dir string
-	if len(dataDirs) > 0 {
-		dir = dataDirs[0]
+	if len(DataDirs) > 0 {
+		dir = DataDirs[0]
 	}
 	if dir == "" {
 		dir = os.Getenv("ALGORAND_DATA")
@@ -33,38 +33,38 @@ func resolveDataDir() string {
 	return dir
 }
 
-func ensureFirstDataDir() string {
+func EnsureFirstDataDir() string {
 	// Get the target data directory to work against,
 	// then handle the scenario where no data directory is provided.
-	dir := resolveDataDir()
+	dir := ResolveDataDir()
 	if dir == "" {
 		reportErrorln(errorNoDataDirectory)
 	}
 	return dir
 }
 
-func ensureSingleDataDir() string {
-	if len(dataDirs) > 1 {
+func EnsureSingleDataDir() string {
+	if len(DataDirs) > 1 {
 		reportErrorln(errorOneDataDirSupported)
 	}
-	return ensureFirstDataDir()
+	return EnsureFirstDataDir()
 }
 
-func getDataDirs() (dirs []string) {
-	if len(dataDirs) == 0 {
+func GetDataDirs() (dirs []string) {
+	if len(DataDirs) == 0 {
 		reportErrorln(errorNoDataDirectory)
 	}
-	dirs = append(dirs, ensureFirstDataDir())
-	dirs = append(dirs, dataDirs[1:]...)
+	dirs = append(dirs, EnsureFirstDataDir())
+	dirs = append(dirs, DataDirs[1:]...)
 	return
 }
 
-func onDataDirs(action func(dataDir string)) {
-	dirs := getDataDirs()
-	report := len(dirs) > 1
+func OnDataDirs(action func(dataDir string)) {
+	dirs := GetDataDirs()
+	doreport := len(dirs) > 1
 
 	for _, dir := range dirs {
-		if report {
+		if doreport {
 			reportInfof(infoDataDir, dir)
 		}
 		action(dir)
