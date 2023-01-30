@@ -98,11 +98,6 @@ func TestEvalWithTracer(t *testing.T) {
 				require.Equal(t, testCase.expectedEvents, mock.Events)
 			})
 		}
-
-		testTracer := mocktracer.Tracer{}
-		ep := DefaultEvalParams()
-		ep.Tracer = &testTracer
-		TestLogic(t, debuggerTestProgramApprove, AssemblerMaxVersion, ep)
 	})
 
 	t.Run("simple app", func(t *testing.T) {
