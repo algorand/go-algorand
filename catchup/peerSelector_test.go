@@ -30,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-algorand/util"
 )
 
 type mockHTTPPeer struct {
@@ -62,9 +61,6 @@ func (d *mockUnicastPeer) Request(ctx context.Context, tag network.Tag, topics n
 }
 func (d *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, topics network.Topics) (e error) {
 	return nil
-}
-func (d *mockUnicastPeer) GetUnderlyingConnTCPInfo() (*util.TCPInfo, error) {
-	return &util.TCPInfo{}, nil
 }
 
 // GetConnectionLatency returns the connection latency between the local node and this peer.

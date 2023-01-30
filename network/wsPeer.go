@@ -298,6 +298,11 @@ type UnicastPeer interface {
 	Version() string
 	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
 	Respond(ctx context.Context, reqMsg IncomingMessage, topics Topics) (e error)
+}
+
+// TCPInfoUnicastPeer exposes information about the underlying connection if available on the platform
+type TCPInfoUnicastPeer interface {
+	UnicastPeer
 	GetUnderlyingConnTCPInfo() (*util.TCPInfo, error)
 }
 
@@ -354,7 +359,7 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 
 // GetUnderlyingConnTCPInfo unwraps the connection and returns statistics about it on supported underlying implementations
 //
-// (Implements UnicastPeer)
+// (Implements TCPInfoUnicastPeer)
 func (wp *wsPeer) GetUnderlyingConnTCPInfo() (*util.TCPInfo, error) {
 	// unwrap websocket.Conn, requestTrackedConnection, rejectingLimitListenerConn
 	var uconn net.Conn = wp.conn.UnderlyingConn()
