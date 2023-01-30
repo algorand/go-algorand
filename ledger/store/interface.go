@@ -43,6 +43,13 @@ type AccountsWriter interface {
 	Close()
 }
 
+// AccountsWriterExt is the write interface used inside transactions and batch operations.
+type AccountsWriterExt interface {
+	ResetAccountHashes(ctx context.Context) (err error)
+	TxtailNewRound(ctx context.Context, baseRound basics.Round, roundData [][]byte, forgetBeforeRound basics.Round) error
+	UpdateAccountsRound(rnd basics.Round) (err error)
+}
+
 // AccountsReader is the read interface for:
 // - accounts, resources, app kvs, creatables
 type AccountsReader interface {
@@ -59,6 +66,13 @@ type AccountsReader interface {
 	LookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error)
 
 	Close()
+}
+
+// AccountsReaderWriter is AccountsReader+AccountsWriter
+type AccountsReaderWriter interface {
+	// AccountsReader
+	// AccountsWriter
+	AccountsWriterExt
 }
 
 // OnlineAccountsWriter is the write interface for:
@@ -86,6 +100,11 @@ type CatchpointWriter interface {
 
 	WriteCatchpointStateUint64(ctx context.Context, stateName CatchpointState, setValue uint64) (err error)
 	WriteCatchpointStateString(ctx context.Context, stateName CatchpointState, setValue string) (err error)
+
+	WriteCatchpointStagingBalances(ctx context.Context, bals []NormalizedAccountBalance) error
+	WriteCatchpointStagingKVs(ctx context.Context, keys [][]byte, values [][]byte, hashes [][]byte) error
+	WriteCatchpointStagingCreatable(ctx context.Context, bals []NormalizedAccountBalance) error
+	WriteCatchpointStagingHashes(ctx context.Context, bals []NormalizedAccountBalance) error
 
 	InsertUnfinishedCatchpoint(ctx context.Context, round basics.Round, blockHash crypto.Digest) error
 	DeleteUnfinishedCatchpoint(ctx context.Context, round basics.Round) error

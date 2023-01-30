@@ -29,14 +29,22 @@ type trackerSQLStore struct {
 	pair db.Pair
 }
 
-// TODO: maintain a SQL tx for now
 type batchFn func(ctx context.Context, tx *sql.Tx) error
 
-// TODO: maintain a SQL tx for now
 type snapshotFn func(ctx context.Context, tx *sql.Tx) error
 
-// TODO: maintain a SQL tx for now
-type transactionFn func(ctx context.Context, tx *sql.Tx) error
+type transactionFn func(ctx context.Context, tx TransactionScope) error
+
+// TransactionScope read/write scope to the store.
+type TransactionScope interface {
+	CreateCatchpointReaderWriter() (CatchpointReaderWriter, error)
+	CreateAccountsReaderWriter() (AccountsReaderWriter, error)
+	CreateMerkleCommitter(staging bool) (MerkleCommitter, error)
+	CreateOrderedAccountsIter(accountCount int) *orderedAccountsIter
+}
+type sqlTransactionScope struct {
+	tx *sql.Tx
+}
 
 // TrackerStore is the interface for the tracker db.
 type TrackerStore interface {
@@ -117,7 +125,7 @@ func (s *trackerSQLStore) Transaction(fn transactionFn) (err error) {
 
 func (s *trackerSQLStore) TransactionContext(ctx context.Context, fn transactionFn) (err error) {
 	return s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
-		return fn(ctx, tx)
+		return fn(ctx, sqlTransactionScope{tx})
 	})
 }
 
@@ -143,4 +151,20 @@ func (s *trackerSQLStore) Vacuum(ctx context.Context) (stats db.VacuumStats, err
 
 func (s *trackerSQLStore) Close() {
 	s.pair.Close()
+}
+
+func (txs sqlTransactionScope) CreateCatchpointReaderWriter() (CatchpointReaderWriter, error) {
+	return NewCatchpointSQLReaderWriter(txs.tx), nil
+}
+
+func (txs sqlTransactionScope) CreateAccountsReaderWriter() (AccountsReaderWriter, error) {
+	return NewAccountsSQLReaderWriter(txs.tx), nil
+}
+
+func (txs sqlTransactionScope) CreateMerkleCommitter(staging bool) (MerkleCommitter, error) {
+	return MakeMerkleCommitter(txs.tx, staging)
+}
+
+func (txs sqlTransactionScope) CreateOrderedAccountsIter(accountCount int) *orderedAccountsIter {
+	return MakeOrderedAccountsIter(txs.tx, accountCount)
 }
