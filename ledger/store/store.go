@@ -19,8 +19,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"fmt"
-	"os"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
@@ -65,23 +63,7 @@ type TrackerStore interface {
 }
 
 // OpenTrackerSQLStore opens the sqlite database store
-func OpenTrackerSQLStore(dbPathPrefix string, dbMem bool) (store *trackerSQLStore, err error) {
-	var dbFilename string
-
-	if !dbMem {
-		commonDBFilename := dbPathPrefix + ".sqlite"
-		_, err = os.Stat(commonDBFilename)
-		if !os.IsNotExist(err) {
-			// before launch, we used to have both blocks and tracker
-			// state in a single SQLite db file. We don't have that anymore,
-			// and we want to fail when that's the case.
-			err = fmt.Errorf("a single ledger database file '%s' was detected. This is no longer supported by current binary", commonDBFilename)
-			return
-		}
-	}
-
-	dbFilename = dbPathPrefix + ".tracker.sqlite"
-
+func OpenTrackerSQLStore(dbFilename string, dbMem bool) (store *trackerSQLStore, err error) {
 	db, err := db.OpenPair(dbFilename, dbMem)
 	if err != nil {
 		return
