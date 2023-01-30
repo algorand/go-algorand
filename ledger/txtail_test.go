@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"testing"
@@ -150,32 +151,34 @@ func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.Conse
 	// create a corresponding blockdb.
 	inMemory := true
 	t.blockDBs, _ = storetesting.DbOpenTest(ts, inMemory)
-	t.trackerDBs, _ = storetesting.DbOpenTest(ts, inMemory)
+	t.trackerDBs, _ = store.DbOpenTrackerTest(ts, inMemory)
 	t.protoVersion = protoVersion
 
-	tx, err := t.trackerDBs.Wdb.Handle.Begin()
+	err := t.trackerDBs.Transaction(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
+		arw := store.NewAccountsSQLReaderWriter(tx)
+
+		accts := ledgertesting.RandomAccounts(20, true)
+		proto := config.Consensus[protoVersion]
+		newDB := store.AccountsInitTest(ts, tx, accts, protoVersion)
+		require.True(ts, newDB)
+
+		roundData := make([][]byte, 0, proto.MaxTxnLife)
+		startRound := t.Latest() - basics.Round(proto.MaxTxnLife) + 1
+		for i := startRound; i <= t.Latest(); i++ {
+			blk, err := t.Block(i)
+			require.NoError(ts, err)
+			tail, err := store.TxTailRoundFromBlock(blk)
+			require.NoError(ts, err)
+			encoded, _ := tail.Encode()
+			roundData = append(roundData, encoded)
+		}
+		err = arw.TxtailNewRound(context.Background(), startRound, roundData, 0)
+		require.NoError(ts, err)
+
+		return nil
+	})
 	require.NoError(ts, err)
 
-	arw := store.NewAccountsSQLReaderWriter(tx)
-
-	accts := ledgertesting.RandomAccounts(20, true)
-	proto := config.Consensus[protoVersion]
-	newDB := store.AccountsInitTest(ts, tx, accts, protoVersion)
-	require.True(ts, newDB)
-
-	roundData := make([][]byte, 0, proto.MaxTxnLife)
-	startRound := t.Latest() - basics.Round(proto.MaxTxnLife) + 1
-	for i := startRound; i <= t.Latest(); i++ {
-		blk, err := t.Block(i)
-		require.NoError(ts, err)
-		tail, err := store.TxTailRoundFromBlock(blk)
-		require.NoError(ts, err)
-		encoded, _ := tail.Encode()
-		roundData = append(roundData, encoded)
-	}
-	err = arw.TxtailNewRound(context.Background(), startRound, roundData, 0)
-	require.NoError(ts, err)
-	tx.Commit()
 	return nil
 }
 
@@ -296,12 +299,13 @@ func TestTxTailDeltaTracking(t *testing.T) {
 				err = txtail.prepareCommit(dcc)
 				require.NoError(t, err)
 
-				tx, err := ledger.trackerDBs.Wdb.Handle.Begin()
+				err := ledger.trackerDBs.Transaction(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
+					err = txtail.commitRound(context.Background(), tx, dcc)
+					require.NoError(t, err)
+					return nil
+				})
 				require.NoError(t, err)
 
-				err = txtail.commitRound(context.Background(), tx, dcc)
-				require.NoError(t, err)
-				tx.Commit()
 				proto := config.Consensus[protoVersion]
 				retainSize := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
 				if uint64(i) > proto.MaxTxnLife*2 {

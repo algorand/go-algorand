@@ -90,6 +90,7 @@ type CatchpointWriter interface {
 	InsertUnfinishedCatchpoint(ctx context.Context, round basics.Round, blockHash crypto.Digest) error
 	DeleteUnfinishedCatchpoint(ctx context.Context, round basics.Round) error
 	DeleteOldCatchpointFirstStageInfo(ctx context.Context, maxRoundToDelete basics.Round) error
+	InsertOrReplaceCatchpointFirstStageInfo(ctx context.Context, round basics.Round, info *CatchpointFirstStageInfo) error
 
 	DeleteStoredCatchpoints(ctx context.Context, dbDirectory string) (err error)
 }
@@ -106,4 +107,10 @@ type CatchpointReader interface {
 	SelectUnfinishedCatchpoints(ctx context.Context) ([]UnfinishedCatchpointRecord, error)
 	SelectCatchpointFirstStageInfo(ctx context.Context, round basics.Round) (CatchpointFirstStageInfo, bool /*exists*/, error)
 	SelectOldCatchpointFirstStageInfoRounds(ctx context.Context, maxRound basics.Round) ([]basics.Round, error)
+}
+
+// CatchpointReaderWriter is CatchpointReader+CatchpointWriter
+type CatchpointReaderWriter interface {
+	CatchpointReader
+	CatchpointWriter
 }

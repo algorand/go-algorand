@@ -924,7 +924,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		normalizedAccountBalances, err := prepareNormalizedBalancesV6(chunk.Balances, proto)
 		require.NoError(b, err)
 		b.StartTimer()
-		err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		err = l.trackerDBs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
 			crw := store.NewCatchpointSQLReaderWriter(tx)
 			err = crw.WriteCatchpointStagingBalances(ctx, normalizedAccountBalances)
 			return
@@ -937,7 +937,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		last64KDuration := time.Since(last64KStart) - last64KAccountCreationTime
 		fmt.Printf("%-82s%-7d (last 64k) %-6d ns/account       %d accounts/sec\n", b.Name(), last64KSize, (last64KDuration / time.Duration(last64KSize)).Nanoseconds(), int(float64(last64KSize)/float64(last64KDuration.Seconds())))
 	}
-	stats, err := l.trackerDBs.Wdb.Vacuum(context.Background())
+	stats, err := l.trackerDBs.Vacuum(context.Background())
 	require.NoError(b, err)
 	fmt.Printf("%-82sdb fragmentation   %.1f%%\n", b.Name(), float32(stats.PagesBefore-stats.PagesAfter)*100/float32(stats.PagesBefore))
 	b.ReportMetric(float64(b.N)/float64((time.Since(accountsWritingStarted)-accountsGenerationDuration).Seconds()), "accounts/sec")

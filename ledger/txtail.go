@@ -91,14 +91,13 @@ type txTail struct {
 }
 
 func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
-	rdb := l.trackerDB().Rdb
 	t.log = l.trackerLog()
 
 	var roundData []*store.TxTailRound
 	var roundTailHashes []crypto.Digest
 	var baseRound basics.Round
 	if dbRound > 0 {
-		err := rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		err := l.trackerDB().Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
 			arw := store.NewAccountsSQLReaderWriter(tx)
 			roundData, roundTailHashes, baseRound, err = arw.LoadTxTail(ctx, dbRound)
 			return
