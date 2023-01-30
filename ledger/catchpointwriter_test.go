@@ -459,7 +459,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	// now manually construct the MT and ensure the reading makeOrderedAccountsIter works as expected:
 	// no errors on read, hashes match
 	ctx := context.Background()
-	// tx, err := l.trackerDBs.Wdb.Handle.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+
 	err = l.trackerDBs.TransactionContext(ctx, func(ctx context.Context, tx store.TransactionScope) (err error) {
 		arw, err := tx.CreateAccountsReaderWriter()
 		if err != nil {
