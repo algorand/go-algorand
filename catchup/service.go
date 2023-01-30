@@ -95,6 +95,9 @@ type Service struct {
 	protocolErrorLogged          bool
 	lastSupportedRound           basics.Round
 	unmatchedPendingCertificates <-chan PendingUnmatchedCertificate
+	// This channel signals periodSync to attempt catchup immediately. This allows us to start fetching rounds from
+	// the network as soon as disableSyncRound is modified.
+	syncNow chan struct{}
 }
 
 // A BlockAuthenticator authenticates blocks given a certificate.
@@ -122,6 +125,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 	s.parallelBlocks = config.CatchupParallelBlocks
 	s.deadlineTimeout = agreement.DeadlineTimeout()
 	s.blockValidationPool = blockValidationPool
+	s.syncNow = make(chan struct{})
 
 	return s
 }
@@ -142,6 +146,7 @@ func (s *Service) Stop() {
 	if atomic.CompareAndSwapUint32(&s.initialSyncNotified, 0, 1) {
 		close(s.InitialSyncDone)
 	}
+	close(s.syncNow)
 }
 
 // IsSynchronizing returns true if we're currently executing a sync() call - either initial catchup
@@ -160,12 +165,18 @@ func (s *Service) SetDisableSyncRound(rnd uint64) error {
 		return ErrSyncRoundInvalid
 	}
 	atomic.StoreUint64(&s.disableSyncRound, rnd)
+	if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
+		s.syncNow <- struct{}{}
+	}
 	return nil
 }
 
 // UnsetDisableSyncRound removes any previously set disabled sync round
 func (s *Service) UnsetDisableSyncRound() {
 	atomic.StoreUint64(&s.disableSyncRound, 0)
+	if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
+		s.syncNow <- struct{}{}
+	}
 }
 
 // GetDisableSyncRound returns the disabled sync round
@@ -575,6 +586,13 @@ func (s *Service) periodicSync() {
 			// we want to sleep for a random duration since it would "de-syncronize" us from the ledger advance sync
 			sleepDuration = time.Duration(crypto.RandUint63()) % s.deadlineTimeout
 			continue
+		case <-s.syncNow:
+			if s.parallelBlocks == 0 || s.ledger.IsWritingCatchpointDataFile() {
+				continue
+			}
+			s.suspendForCatchpointWriting = false
+			s.log.Info("Immediate resync triggered; resyncing")
+			s.sync()
 		case <-time.After(sleepDuration):
 			if sleepDuration < s.deadlineTimeout || s.cfg.DisableNetworking {
 				sleepDuration = s.deadlineTimeout

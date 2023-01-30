@@ -266,8 +266,8 @@ func (client RestClient) getRaw(response RawResponse, path string, request inter
 // post sends a POST request to the given path with the given request object.
 // No query parameters will be sent if request is nil.
 // response must be a pointer to an object as post writes the response there.
-func (client RestClient) post(response interface{}, path string, request interface{}) error {
-	return client.submitForm(response, path, request, "POST", true /* encodeJSON */, true /* decodeJSON */, false)
+func (client RestClient) post(response interface{}, path string, request interface{}, expectNoContent bool) error {
+	return client.submitForm(response, path, request, "POST", true /* encodeJSON */, true /* decodeJSON */, expectNoContent)
 }
 
 // Status retrieves the StatusResponse from the running node
@@ -504,7 +504,7 @@ func (client RestClient) SuggestedParams() (response model.TransactionParameters
 
 // SendRawTransaction gets a SignedTxn and broadcasts it to the network
 func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response model.PostTransactionsResponse, err error) {
-	err = client.post(&response, "/v2/transactions", protocol.Encode(&txn))
+	err = client.post(&response, "/v2/transactions", protocol.Encode(&txn), false)
 	return
 }
 
@@ -518,7 +518,7 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 	}
 
 	var response model.PostTransactionsResponse
-	return client.post(&response, "/v2/transactions", enc)
+	return client.post(&response, "/v2/transactions", enc, false)
 }
 
 // Block gets the block info for the given round
@@ -538,7 +538,7 @@ func (client RestClient) RawBlock(round uint64) (response []byte, err error) {
 // Shutdown requests the node to shut itself down
 func (client RestClient) Shutdown() (err error) {
 	response := 1
-	err = client.post(&response, "/v2/shutdown", nil)
+	err = client.post(&response, "/v2/shutdown", nil, false)
 	return
 }
 
@@ -650,7 +650,7 @@ func (client RestClient) TransactionProof(txid string, round uint64, hashType cr
 
 // PostParticipationKey sends a key file to the node.
 func (client RestClient) PostParticipationKey(file []byte) (response model.PostParticipationResponse, err error) {
-	err = client.post(&response, "/v2/participation", file)
+	err = client.post(&response, "/v2/participation", file, false)
 	return
 }
 
@@ -671,4 +671,30 @@ func (client RestClient) RemoveParticipationKeyByID(participationID string) (err
 	err = client.delete(nil, fmt.Sprintf("/v2/participation/%s", participationID), nil, true)
 	return
 
+}
+
+/* Endpoint registered for follower nodes */
+
+// SetSyncRound sets the sync round for the catchup service
+func (client RestClient) SetSyncRound(round uint64) (err error) {
+	err = client.post(nil, fmt.Sprintf("/v2/ledger/sync/%d", round), nil, true)
+	return
+}
+
+// UnsetSyncRound deletes the sync round constraint
+func (client RestClient) UnsetSyncRound() (err error) {
+	err = client.delete(nil, "/v2/ledger/sync", nil, true)
+	return
+}
+
+// GetSyncRound retrieves the sync round (if set)
+func (client RestClient) GetSyncRound() (response model.GetSyncRoundResponse, err error) {
+	err = client.get(&response, "/v2/ledger/sync", nil)
+	return
+}
+
+// GetLedgerStateDelta retrieves the ledger state delta for the round
+func (client RestClient) GetLedgerStateDelta(round uint64) (response model.LedgerStateDeltaResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/deltas/%d", round), nil)
+	return
 }

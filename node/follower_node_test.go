@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func setupFollowNode(t *testing.T) *AlgorandFollowerNode {
@@ -55,6 +56,8 @@ func setupFollowNode(t *testing.T) *AlgorandFollowerNode {
 }
 
 func TestSyncRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 	node := setupFollowNode(t)
 	b := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
@@ -77,6 +80,8 @@ func TestSyncRound(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 	// Validates that expected functions are disabled
 	node := setupFollowNode(t)
 	require.Error(t, node.BroadcastSignedTxGroup([]transactions.SignedTxn{}))
