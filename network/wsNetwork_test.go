@@ -1090,6 +1090,7 @@ func TestAutoPublicAddress(t *testing.T) {
 
 	// check that "auto" has been overloaded
 	addr, ok := netA.Address()
+	addr = hostAndPort(addr)
 	require.True(t, ok)
 	require.NotEqual(t, "auto", netA.PublicAddress())
 	require.Equal(t, addr, netA.PublicAddress())
