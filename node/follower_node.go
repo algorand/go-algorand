@@ -86,7 +86,8 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	node.devMode = genesis.DevMode
 
 	if node.devMode {
-		cfg.DisableNetworking = true
+		log.Errorf("Cannot run follower node in devMode--submitting txns won't work")
+		return nil, fmt.Errorf("cannot run with both EnableFollowMode and DevMode")
 	}
 	node.config = cfg
 
