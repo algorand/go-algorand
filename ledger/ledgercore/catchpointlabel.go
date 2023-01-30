@@ -36,9 +36,9 @@ var ErrCatchpointParsingFailed = errors.New("catchpoint parsing failed")
 
 // CatchpointLabelMaker represents an interface for creating a label maker. Labels can be "assembled" based on its components.
 type CatchpointLabelMaker interface {
-	toBuffer() []byte
-	getRound() basics.Round
-	logStr() string
+	buffer() []byte
+	round() basics.Round
+	message() string
 }
 
 // CatchpointLabelMakerV6 represent a single catchpoint label maker, matching catchpoints of version V6 and below.
@@ -104,15 +104,15 @@ func (l *CatchpointLabelMakerCurrent) getRound() basics.Round {
 }
 
 func (l *CatchpointLabelMakerCurrent) logStr() string {
-	return fmt.Sprintf("%s state proof verification data digest=%s", l.v6Label.logStr(), l.stateProofVerificationContextHash)
+	return fmt.Sprintf("%s spver digest=%s", l.v6Label.logStr(), l.stateProofVerificationContextHash)
 }
 
 // MakeLabel returns the user-facing representation of this catchpoint label. ( i.e. the "label" )
 func MakeLabel(l CatchpointLabelMaker) string {
-	hash := crypto.Hash(l.toBuffer())
+	hash := crypto.Hash(l.buffer())
 	encodedHash := base32Encoder.EncodeToString(hash[:])
-	out := fmt.Sprintf("%d#%s", l.getRound(), encodedHash)
-	logging.Base().Infof("Creating a catchpoint label %s for %s", out, l.logStr())
+	out := fmt.Sprintf("%d#%s", l.round(), encodedHash)
+	logging.Base().Infof("Creating a catchpoint label %s for %s", out, l.message())
 	return out
 }
 

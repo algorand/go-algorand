@@ -77,8 +77,6 @@ func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ bas
 	spt.mu.Lock()
 	defer spt.mu.Unlock()
 
-	spt.lastLookedUpVerificationContext = ledgercore.StateProofVerificationContext{}
-
 	const initialContextArraySize = 10
 	spt.trackedCommitContext = make([]verificationCommitContext, 0, initialContextArraySize)
 	spt.trackedDeleteContext = make([]verificationDeleteContext, 0, initialContextArraySize)
@@ -168,41 +166,27 @@ func (spt *stateProofVerificationTracker) close() {
 }
 
 func (spt *stateProofVerificationTracker) LookupVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	if lstlookup := spt.retrieveFromCache(stateProofLastAttestedRound); lstlookup != nil {
-		return lstlookup, nil
+	spt.mu.RLock()
+	defer spt.mu.RUnlock()
+
+	// If cached - retrieve
+	if spt.lastLookedUpVerificationContext.LastAttestedRound == stateProofLastAttestedRound &&
+		!spt.lastLookedUpVerificationContext.MsgIsZero() {
+		return &spt.lastLookedUpVerificationContext, nil
 	}
 
-	verificationContext, err := spt.lookUpVerificationContext(stateProofLastAttestedRound)
+	verificationContext, err := spt.lookupVerificationContext(stateProofLastAttestedRound)
 	if err != nil {
 		return nil, err
 	}
 
-	spt.mu.Lock()
 	spt.lastLookedUpVerificationContext = *verificationContext
-	spt.mu.Unlock()
 
 	return verificationContext, nil
 }
 
-func (spt *stateProofVerificationTracker) retrieveFromCache(
-	stateProofLastAttestedRound basics.Round) *ledgercore.StateProofVerificationContext {
-	spt.mu.RLock()
-	defer spt.mu.RUnlock()
-
-	if spt.lastLookedUpVerificationContext.LastAttestedRound == stateProofLastAttestedRound &&
-		!spt.lastLookedUpVerificationContext.MsgIsZero() {
-		cpy := spt.lastLookedUpVerificationContext
-
-		return &cpy
-	}
-
-	return nil
-}
-
-func (spt *stateProofVerificationTracker) lookUpVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	spt.mu.RLock()
-	defer spt.mu.RUnlock()
-
+// This method must be called under spt.mu read lock
+func (spt *stateProofVerificationTracker) lookupVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	if len(spt.trackedCommitContext) > 0 &&
 		stateProofLastAttestedRound >= spt.trackedCommitContext[0].verificationContext.LastAttestedRound &&
 		stateProofLastAttestedRound <= spt.trackedCommitContext[len(spt.trackedCommitContext)-1].verificationContext.LastAttestedRound {

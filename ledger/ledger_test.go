@@ -3131,7 +3131,7 @@ func TestLedgerContinuesOnVotersCallbackFailure(t *testing.T) {
 	require.Equal(t, previousCachedDbRound+1, l.trackers.dbRound)
 }
 
-func TestStateProofVerificationTracker(t *testing.T) {
+func TestLedgerStateProofTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -3229,7 +3229,7 @@ func TestStateProofVerificationTracker(t *testing.T) {
 		numOfStateProofs-1, proto.StateProofInterval, true, any)
 }
 
-func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
+func TestLedgerReloadStateProofTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -3293,7 +3293,7 @@ func feedBlocksUntilRound(t *testing.T, l *Ledger, prevBlk bookkeeping.Block, ta
 	return prevBlk
 }
 
-func TestCatchpointStateProofVerificationTracker(t *testing.T) {
+func TestLedgerCatchpointStateProofTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -3352,7 +3352,7 @@ func TestCatchpointStateProofVerificationTracker(t *testing.T) {
 		numTrackedDataFirstCatchpoint, proto.StateProofInterval, true, any)
 }
 
-func TestStateProofTrackerAfterReplay(t *testing.T) {
+func TestLedgerStateProofTrackerAfterReplay(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]

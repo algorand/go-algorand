@@ -399,13 +399,13 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 		arw := store.NewAccountsSQLReaderWriter(tx)
 		err = crw.WriteCatchpointStateUint64(ctx, store.CatchpointStateCatchupVersion, fileHeader.Version)
 		if err != nil {
-			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", store.CatchpointStateCatchupVersion, err)
+			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup version '%s': %v", store.CatchpointStateCatchupVersion, err)
 		}
 		err = crw.WriteCatchpointStateUint64(ctx, store.CatchpointStateCatchupBlockRound, uint64(fileHeader.BlocksRound))
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", store.CatchpointStateCatchupBlockRound, err)
 		}
-		if fileHeader.Version == CatchpointFileVersionV6 || fileHeader.Version == CatchpointFileVersionV7 {
+		if fileHeader.Version >= CatchpointFileVersionV6 {
 			err = crw.WriteCatchpointStateUint64(ctx, store.CatchpointStateCatchupHashRound, uint64(fileHeader.BlocksRound))
 			if err != nil {
 				return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", store.CatchpointStateCatchupHashRound, err)
@@ -461,6 +461,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		expectingMoreEntries = make([]bool, len(balances.Balances))
 
 	case CatchpointFileVersionV6:
+		fallthrough
 	case CatchpointFileVersionV7:
 		var chunk catchpointFileChunkV6
 		err = protocol.Decode(bytes, &chunk)

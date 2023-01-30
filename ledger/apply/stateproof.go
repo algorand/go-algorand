@@ -65,9 +65,11 @@ func StateProof(tx transactions.StateProofTxnFields, atRound basics.Round, sp St
 		}
 	}
 
-	// IMPORTANT: this line does not support changing the StateProofInterval consensus param.
-	// When replaying past 320 blocks (after fast-catchup or after restart when initializing ledger) the StateProofVerification tracker
-	// and past block headers are not available, so we will use the interval from current consensus version for now.
+	// IMPORTANT: this line does not support changing the StateProofInterval consensus param;
+	// Ideally the protocol version should be taken from the votersHeader (or even the lastRoundInInterval header).
+	// However, when replaying the past 320 blocks we might not be able to fetch this header (only X+320+1000 past headers are available).
+	// So for now we will use the current protocol version parameter, and when support for changing StateProofInterval arises
+	// we shall revisit this decision.
 	sp.SetStateProofNextRound(lastRoundInInterval + basics.Round(sp.ConsensusParams().StateProofInterval))
 	return nil
 }

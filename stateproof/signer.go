@@ -17,6 +17,7 @@
 package stateproof
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"time"
@@ -133,12 +134,14 @@ func (spw *Worker) getProtoLatest() (*config.ConsensusParams, error) {
 	return &proto, nil
 }
 
-func (spw *Worker) getStateProofMessage(round basics.Round, proto *config.ConsensusParams) (stateproofmsg.Message, error) {
-	msg, err := spw.loadMessageFromDB(round)
+func (spw *Worker) getStateProofMessage(round basics.Round, proto *config.ConsensusParams) (msg stateproofmsg.Message, err error) {
+	err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		msg, err = getMessage(tx, round)
+		return err
+	})
 	if err == nil {
 		return msg, nil
 	}
-
 	if !errors.Is(err, sql.ErrNoRows) {
 		spw.log.Errorf("getStateProofMessage(%d): error while fetching builder from DB: %v", round, err)
 	}

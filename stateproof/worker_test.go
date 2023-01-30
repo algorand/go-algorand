@@ -1699,7 +1699,7 @@ func verifyPersistedBuilders(a *require.Assertions, w *Worker) {
 				builderFromDisk, err = getBuilder(tx, k)
 				return err
 			}))
-		a.Equal(v.BuilderPersistingFields, builderFromDisk.BuilderPersistingFields)
+		a.Equal(v.BuilderPersistedFields, builderFromDisk.BuilderPersistedFields)
 	}
 }
 
