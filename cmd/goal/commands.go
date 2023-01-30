@@ -42,8 +42,6 @@ import (
 
 var log = logging.Base()
 
-var dataDirs []string
-
 var defaultCacheDir = "goal.cache"
 
 var verboseVersionPrint bool
@@ -273,70 +271,6 @@ func resolveKmdDataDir(dataDir string) string {
 		reportErrorf("could not read genesis.json: %s", err)
 	}
 	return filepath.Join(cu.HomeDir, ".algorand", genesis.ID(), libgoal.DefaultKMDDataDir)
-}
-
-func resolveDataDir() string {
-	// Figure out what data directory to tell algod to use.
-	// If not specified on cmdline with '-d', look for default in environment.
-	var dir string
-	if (len(dataDirs) > 0) && (dataDirs[0] != "") {
-		// calculate absolute path, see https://github.com/algorand/go-algorand/issues/589
-		absDir, err := filepath.Abs(dataDirs[0])
-		if err != nil {
-			reportErrorf("Absolute path conversion error: %s", err)
-		}
-		dir = absDir
-	}
-	if dir == "" {
-		dir = os.Getenv("ALGORAND_DATA")
-	}
-	return dir
-}
-
-func ensureFirstDataDir() string {
-	// Get the target data directory to work against,
-	// then handle the scenario where no data directory is provided.
-	dir := resolveDataDir()
-	if dir == "" {
-		reportErrorln(errorNoDataDirectory)
-	}
-	return dir
-}
-
-func ensureSingleDataDir() string {
-	if len(dataDirs) > 1 {
-		reportErrorln(errorOneDataDirSupported)
-	}
-	return ensureFirstDataDir()
-}
-
-// like ensureSingleDataDir() but doesn't exit()
-func maybeSingleDataDir() string {
-	if len(dataDirs) > 1 {
-		return ""
-	}
-	return resolveDataDir()
-}
-
-func getDataDirs() (dirs []string) {
-	if len(dataDirs) == 0 {
-		reportErrorln(errorNoDataDirectory)
-	}
-	dirs = append(dirs, ensureFirstDataDir())
-	dirs = append(dirs, dataDirs[1:]...)
-	return
-}
-
-func onDataDirs(action func(dataDir string)) {
-	dirs := getDataDirs()
-	report := len(dirs) > 1
-
-	for _, dir := range dirs {
-		if report {
-			reportInfof(infoDataDir, dir)
-		}
-		action(dir)
-	}
 }
 
 func ensureCacheDir(dataDir string) string {
