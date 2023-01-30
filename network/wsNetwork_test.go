@@ -1148,6 +1148,14 @@ func (d *mockIdentityTracker) setIdentity(p *wsPeer) bool {
 	return d.shouldInsert
 }
 
+func hostAndPort(u string) string {
+	url, err := url.Parse(u)
+	if err == nil {
+		return fmt.Sprintf("%s:%s", url.Hostname(), url.Port())
+	}
+	return ""
+}
+
 // TestPeeringWithIdentityChallenge tests the happy path of connecting with identity challenge:
 // - both peers have correctly set PublicAddress
 // - both should exchange identities and verify
@@ -1179,6 +1187,10 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	require.True(t, ok)
 	gossipB, err := netB.addrToGossipAddr(addrB)
 	require.NoError(t, err)
+
+	// set addresses to just host:port to match phonebook/dns format
+	addrA = hostAndPort(addrA)
+	addrB = hostAndPort(addrB)
 
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
@@ -1272,6 +1284,10 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	gossipB, err := netB.addrToGossipAddr(addrB)
 	require.NoError(t, err)
 
+	// set addresses to just host:port to match phonebook/dns format
+	addrA = hostAndPort(addrA)
+	addrB = hostAndPort(addrB)
+
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
 		netA.wg.Add(1)
@@ -1332,6 +1348,10 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	gossipB, err := netB.addrToGossipAddr(addrB)
 	require.NoError(t, err)
 
+	// set addresses to just host:port to match phonebook/dns format
+	addrA = hostAndPort(addrA)
+	addrB = hostAndPort(addrB)
+
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
 		netA.wg.Add(1)
@@ -1391,6 +1411,10 @@ func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 	require.True(t, ok)
 	gossipB, err := netB.addrToGossipAddr(addrB)
 	require.NoError(t, err)
+
+	// set addresses to just host:port to match phonebook/dns format
+	addrA = hostAndPort(addrA)
+	addrB = hostAndPort(addrB)
 
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
@@ -1575,6 +1599,9 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 		gossipB, err := netB.addrToGossipAddr(addrB)
 		require.NoError(t, err)
 
+		// set addresses to just host:port to match phonebook/dns format
+		addrB = hostAndPort(addrB)
+
 		if _, ok := netA.tryConnectReserveAddr(addrB); ok {
 			netA.wg.Add(1)
 			netA.tryConnect(addrB, gossipB)
@@ -1704,6 +1731,9 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 		gossipB, err := netB.addrToGossipAddr(addrB)
 		require.NoError(t, err)
 
+		// set addresses to just host:port to match phonebook/dns format
+		addrB = hostAndPort(addrB)
+
 		if _, ok := netA.tryConnectReserveAddr(addrB); ok {
 			netA.wg.Add(1)
 			netA.tryConnect(addrB, gossipB)
@@ -1821,6 +1851,9 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 		require.True(t, ok)
 		gossipB, err := netB.addrToGossipAddr(addrB)
 		require.NoError(t, err)
+
+		// set addresses to just host:port to match phonebook/dns format
+		addrB = hostAndPort(addrB)
 
 		if _, ok := netA.tryConnectReserveAddr(addrB); ok {
 			netA.wg.Add(1)

@@ -844,7 +844,10 @@ func (wn *WebsocketNetwork) Start() {
 	if wn.config.PublicAddress == autoconfigPublicAddress {
 		addr, ok := wn.Address()
 		if ok {
-			wn.config.PublicAddress = addr
+			url, err := url.Parse(addr)
+			if err == nil {
+				wn.config.PublicAddress = fmt.Sprintf("%s:%s", url.Hostname(), url.Port())
+			}
 		}
 	}
 	// if the network has a public address, use that as the name for connection deduplication
