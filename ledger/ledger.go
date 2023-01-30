@@ -276,7 +276,6 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs store.TrackerStore, blockDBs db.Pair, err error) {
 	// Backwards compatibility: we used to store both blocks and tracker
 	// state in a single SQLite db file.
-	var trackerDBFilename string
 	var blockDBFilename string
 
 	if !dbMem {
@@ -291,13 +290,12 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs store.TrackerStor
 		}
 	}
 
-	trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
 	blockDBFilename = dbPathPrefix + ".block.sqlite"
 
 	outErr := make(chan error, 2)
 	go func() {
 		var lerr error
-		trackerDBs, lerr = store.OpenTrackerSQLStore(trackerDBFilename, dbMem)
+		trackerDBs, lerr = store.OpenTrackerSQLStore(dbPathPrefix, dbMem)
 		outErr <- lerr
 	}()
 
