@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util"
 )
 
 type mockUnicastPeer struct {
@@ -63,6 +64,9 @@ func (mup *mockUnicastPeer) Request(ctx context.Context, tag network.Tag, topics
 func (mup *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, topics network.Topics) (e error) {
 	mup.responseTopics = topics
 	return nil
+}
+func (mup *mockUnicastPeer) GetUnderlyingConnTCPInfo() (*util.TCPInfo, error) {
+	return &util.TCPInfo{}, nil
 }
 
 // TestHandleCatchupReqNegative covers the error reporting in handleCatchupReq

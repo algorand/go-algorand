@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, next basics.Round, b bookkeeping.Block, err error) {
@@ -299,6 +300,10 @@ func (p *testUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.
 	require.NotNil(p.t, dispather)
 	dispather.Handle(network.IncomingMessage{Tag: tag, Data: msg, Sender: p, Net: p.gn})
 	return nil
+}
+
+func (p *testUnicastPeer) GetUnderlyingConnTCPInfo() (*util.TCPInfo, error) {
+	return &util.TCPInfo{}, nil
 }
 
 func makeTestUnicastPeer(gn network.GossipNode, t *testing.T) network.UnicastPeer {
