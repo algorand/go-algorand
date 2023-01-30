@@ -18,6 +18,7 @@ package testing
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/config"
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
@@ -59,6 +60,16 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusFuture,
 }
 
+func versionStringFromIndex(index int) string {
+	var version string
+	if index == len(consensusByNumber)-1 {
+		version = "vFuture"
+	} else {
+		version = fmt.Sprintf("v%d", index)
+	}
+	return version
+}
+
 // TestConsensusRange allows for running tests against a range of consensus
 // versions. Generally `start` will be the version that introduced the feature,
 // and `stop` will be 0 to indicate it should work right on up through vFuture.
@@ -69,38 +80,34 @@ var consensusByNumber = []protocol.ConsensusVersion{
 // created and inserted in consensusByNumber. At that point, your feature is
 // probably active in that version. (If it's being held in vFuture, just
 // increment your `start`.)
-func TestConsensusRange(t *testing.T, start, stop int, test func(t *testing.T, ver int, cv protocol.ConsensusVersion)) {
+func TestConsensusRange(t *testing.T, start, stop int, test func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local)) {
 	if stop == 0 { // Treat 0 as "future"
 		stop = len(consensusByNumber) - 1
 	}
 	require.LessOrEqual(t, start, stop)
+	cfg := config.GetDefaultLocal()
 	for i := start; i <= stop; i++ {
-		var version string
-		if i == len(consensusByNumber)-1 {
-			version = "vFuture"
-		} else {
-			version = fmt.Sprintf("v%d", i)
-		}
+		version := versionStringFromIndex(i)
 		t.Run(fmt.Sprintf("cv=%s", version), func(t *testing.T) {
-			test(t, i, consensusByNumber[i])
+			test(t, i, consensusByNumber[i], cfg)
 		})
 	}
+	cfg.DisableLedgerLRUCache = true
+	t.Run(fmt.Sprintf("cv=%s without LRU cache", versionStringFromIndex(stop)), func(t *testing.T) {
+		test(t, stop, consensusByNumber[stop], cfg)
+	})
 }
 
 // BenchConsensusRange is for getting benchmarks across consensus versions.
-func BenchConsensusRange(b *testing.B, start, stop int, bench func(t *testing.B, ver int, cv protocol.ConsensusVersion)) {
+func BenchConsensusRange(b *testing.B, start, stop int, bench func(t *testing.B, ver int, cv protocol.ConsensusVersion, cfg config.Local)) {
 	if stop == 0 { // Treat 0 as "future"
 		stop = len(consensusByNumber) - 1
 	}
+	cfg := config.GetDefaultLocal()
 	for i := start; i <= stop; i++ {
-		var version string
-		if i == len(consensusByNumber)-1 {
-			version = "vFuture"
-		} else {
-			version = fmt.Sprintf("v%d", i)
-		}
+		version := versionStringFromIndex(i)
 		b.Run(fmt.Sprintf("cv=%s", version), func(b *testing.B) {
-			bench(b, i, consensusByNumber[i])
+			bench(b, i, consensusByNumber[i], cfg)
 		})
 	}
 }

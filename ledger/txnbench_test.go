@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"errors"
+	"github.com/algorand/go-algorand/config"
 	"strconv"
 	"strings"
 	"testing"
@@ -34,8 +35,8 @@ import (
 // BenchmarkTxnTypes compares the execution time of various txn types
 func BenchmarkTxnTypes(b *testing.B) {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	ledgertesting.BenchConsensusRange(b, 30, 0, func(b *testing.B, ver int, cv protocol.ConsensusVersion) {
-		l := newSimpleLedgerWithConsensusVersion(b, genBalances, cv)
+	ledgertesting.BenchConsensusRange(b, 30, 0, func(b *testing.B, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		l := newSimpleLedgerWithConsensusVersion(b, genBalances, cv, cfg)
 		defer l.Close()
 
 		createasa := txntest.Txn{
