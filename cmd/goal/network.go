@@ -116,7 +116,6 @@ var networkCreateCmd = &cobra.Command{
 		reportInfof(infoNetworkCreated, network.Name(), networkRootDir)
 
 		if startOnCreation {
-			fmt.Printf("startOnCreation true\n")
 			network, binDir := getNetworkAndBinDir()
 			err := network.Start(binDir, false)
 			if err != nil {
