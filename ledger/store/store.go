@@ -34,6 +34,8 @@ type batchFn func(ctx context.Context, tx *sql.Tx) error
 type snapshotFn func(ctx context.Context, tx *sql.Tx) error
 
 type transactionFn func(ctx context.Context, tx TransactionScope) error
+
+// TransactionScope read/write scope to the store.
 type TransactionScope interface {
 	CreateCatchpointReaderWriter() (CatchpointReaderWriter, error)
 	CreateAccountsReaderWriter() (AccountsReaderWriter, error)
