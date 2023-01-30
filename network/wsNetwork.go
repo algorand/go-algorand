@@ -1712,20 +1712,7 @@ func (wn *WebsocketNetwork) meshThread() {
 			wn.DisconnectPeers()
 		}
 
-		// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
-		dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
-		for _, dnsBootstrap := range dnsBootstrapArray {
-			relayAddrs, archiveAddrs := wn.getDNSAddrs(dnsBootstrap)
-			if len(relayAddrs) > 0 {
-				wn.log.Debugf("got %d relay dns addrs, %#v", len(relayAddrs), relayAddrs[:imin(5, len(relayAddrs))])
-				wn.phonebook.ReplacePeerList(relayAddrs, dnsBootstrap, PhoneBookEntryRelayRole)
-			} else {
-				wn.log.Infof("got no relay DNS addrs for network %s", wn.NetworkID)
-			}
-			if len(archiveAddrs) > 0 {
-				wn.phonebook.ReplacePeerList(archiveAddrs, dnsBootstrap, PhoneBookEntryArchiverRole)
-			}
-		}
+		wn.refreshRelayArchivePhonebookAddresses()
 
 		// as long as the call to checkExistingConnectionsNeedDisconnecting is deleting existing connections, we want to
 		// kick off the creation of new connections.
@@ -1748,6 +1735,41 @@ func (wn *WebsocketNetwork) meshThread() {
 		// telemetry server; that would allow the telemetry server
 		// to construct a cross-node map of all the nodes interconnections.
 		wn.sendPeerConnectionsTelemetryStatus()
+	}
+}
+
+func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
+	// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
+	dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
+
+	// If there is more than one entry in the DNS bootstrap array, we treat the first as 'primary',
+	// second as 'secondary' and attempt to merge/dedup the lists of relay records. Additional entries
+	// will be processed independently.
+	if len(dnsBootstrapArray) >= 2 {
+		primaryRelayAddrs, primaryArchiveAddrs := wn.getDNSAddrs(dnsBootstrapArray[0])
+		secondaryRelayAddrs, secondaryArchiveAddrs := wn.getDNSAddrs(dnsBootstrapArray[1])
+		dedupedRelayAddresses := wn.mergePrimarySecondaryRelayAddressLists(wn.NetworkID, primaryRelayAddrs, secondaryRelayAddrs)
+
+		wn.updatePhonebookAddresses(dedupedRelayAddresses, append(primaryArchiveAddrs, secondaryArchiveAddrs...))
+		//TODO: Sanity check these work in unit tests
+		dnsBootstrapArray = dnsBootstrapArray[2:]
+	}
+
+	for _, dnsBootstrap := range dnsBootstrapArray {
+		relayAddrs, archiveAddrs := wn.getDNSAddrs(dnsBootstrap)
+		wn.updatePhonebookAddresses(relayAddrs, archiveAddrs)
+	}
+}
+
+func (wn *WebsocketNetwork) updatePhonebookAddresses(relayAddrs []string, archiveAddrs []string) {
+	if len(relayAddrs) > 0 {
+		wn.log.Debugf("got %d relay dns addrs, %#v", len(relayAddrs), relayAddrs[:imin(5, len(relayAddrs))])
+		wn.phonebook.ReplacePeerList(relayAddrs, string(wn.NetworkID), PhoneBookEntryRelayRole)
+	} else {
+		wn.log.Infof("got no relay DNS addrs for network %s", wn.NetworkID)
+	}
+	if len(archiveAddrs) > 0 {
+		wn.phonebook.ReplacePeerList(archiveAddrs, string(wn.NetworkID), PhoneBookEntryArchiverRole)
 	}
 }
 
@@ -1963,6 +1985,57 @@ func (wn *WebsocketNetwork) prioWeightRefresh() {
 			}
 		}
 	}
+}
+
+func primaryNetwork(network protocol.NetworkID) string {
+	return fmt.Sprintf("algorand-%s.network", network)
+}
+
+func secondaryNetwork(network protocol.NetworkID) string {
+	return fmt.Sprintf("algorand-%s.net", network)
+}
+
+var networkIDToPrimarySRVBaseURIRegex = map[protocol.NetworkID]*regexp.Regexp{
+	config.Mainnet: regexp.MustCompile(primaryNetwork(config.Mainnet)),
+	config.Testnet: regexp.MustCompile(primaryNetwork(config.Testnet)),
+}
+
+var networkIDToSecondarySRVBaseURIRegex = map[protocol.NetworkID]*regexp.Regexp{
+	config.Mainnet: regexp.MustCompile(secondaryNetwork(config.Mainnet)),
+	config.Testnet: regexp.MustCompile(secondaryNetwork(config.Testnet)),
+}
+
+func (wn *WebsocketNetwork) mergePrimarySecondaryRelayAddressLists(network protocol.NetworkID,
+	primaryRelayAddresses []string, secondaryRelayAddresses []string) (dedupedRelayAddresses []string) {
+	// Initialize w/ worst case capacity
+	//dedupedRelayAddresses = make([]string, 0, len(primaryRelayAddresses)+len(secondaryRelayAddresses))
+	//copy(dedupedRelayAddresses, primaryRelayAddresses)
+
+	var relayAddressPrefixToValue = make(map[string]string, 2*len(primaryRelayAddresses))
+	var prgx = networkIDToPrimarySRVBaseURIRegex[network]
+
+	for _, pra := range primaryRelayAddresses {
+		var normalizedPra = strings.ToLower(pra)
+		relayAddressPrefixToValue[prgx.ReplaceAllString(normalizedPra, "")] = normalizedPra
+	}
+
+	var srgx = networkIDToSecondarySRVBaseURIRegex[network]
+
+	for _, sra := range secondaryRelayAddresses {
+		var normalizedSra = strings.ToLower(sra)
+		var pfxKey = srgx.ReplaceAllString(normalizedSra, "")
+		// Add to our address map if prefix does not exist, otherwise take no action (already covered by primary)
+		if relayAddressPrefixToValue[pfxKey] == "" {
+			relayAddressPrefixToValue[pfxKey] = normalizedSra
+		}
+	}
+
+	dedupedRelayAddresses = make([]string, 0, len(relayAddressPrefixToValue))
+	for _, value := range relayAddressPrefixToValue {
+		dedupedRelayAddresses = append(dedupedRelayAddresses, value)
+	}
+
+	return
 }
 
 func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []string, archiverAddresses []string) {
@@ -2377,6 +2450,7 @@ func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}
 func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo) (wn *WebsocketNetwork, err error) {
 	phonebook := MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
+	//TODO: The config.DNSBootstrapID direct call does not handle substitution - should we just remove this entirely?
 	phonebook.ReplacePeerList(phonebookAddresses, config.DNSBootstrapID, PhoneBookEntryRelayRole)
 	wn = &WebsocketNetwork{
 		log:       log,
