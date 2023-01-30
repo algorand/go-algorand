@@ -376,7 +376,7 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 // Close reclaims resources used by the ledger (namely, the database connection
 // and goroutines used by trackers).
 func (l *Ledger) Close() {
-	// we shut the the blockqueue first, since it's sync goroutine dispatches calls
+	// we shut the blockqueue first, since it's sync goroutine dispatches calls
 	// back to the trackers.
 	if l.blockQ != nil {
 		l.blockQ.stop()
