@@ -146,7 +146,6 @@ func (s *Service) Stop() {
 	if atomic.CompareAndSwapUint32(&s.initialSyncNotified, 0, 1) {
 		close(s.InitialSyncDone)
 	}
-	close(s.syncNow)
 }
 
 // IsSynchronizing returns true if we're currently executing a sync() call - either initial catchup
