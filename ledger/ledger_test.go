@@ -3074,7 +3074,7 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 
 type mockCommitListener struct{}
 
-func (l *mockCommitListener) OnPrepareVoterCommit(_ basics.Round, _ ledgercore.VotersForRoundFetcher) error {
+func (l *mockCommitListener) OnPrepareVoterCommit(_ basics.Round, _ ledgercore.LedgerForSPBuilder) error {
 	return nil
 }
 
@@ -3105,7 +3105,7 @@ func TestVotersCallbackPersistsAfterLedgerReload(t *testing.T) {
 
 type errorCommitListener struct{}
 
-func (l *errorCommitListener) OnPrepareVoterCommit(_ basics.Round, _ ledgercore.VotersForRoundFetcher) error {
+func (l *errorCommitListener) OnPrepareVoterCommit(_ basics.Round, _ ledgercore.LedgerForSPBuilder) error {
 	return fmt.Errorf("this error is expected")
 }
 
@@ -3131,7 +3131,7 @@ func TestLedgerContinuesOnVotersCallbackFailure(t *testing.T) {
 	require.Equal(t, previousCachedDbRound+1, l.trackers.dbRound)
 }
 
-func TestLedgerStateProofTracker(t *testing.T) {
+func TestStateProofVerificationTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -3229,7 +3229,7 @@ func TestLedgerStateProofTracker(t *testing.T) {
 		numOfStateProofs-1, proto.StateProofInterval, true, any)
 }
 
-func TestLedgerReloadStateProofTracker(t *testing.T) {
+func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -3293,7 +3293,7 @@ func feedBlocksUntilRound(t *testing.T, l *Ledger, prevBlk bookkeeping.Block, ta
 	return prevBlk
 }
 
-func TestLedgerCatchpointStateProofTracker(t *testing.T) {
+func TestCatchpointStateProofVerificationTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -3352,7 +3352,7 @@ func TestLedgerCatchpointStateProofTracker(t *testing.T) {
 		numTrackedDataFirstCatchpoint, proto.StateProofInterval, true, any)
 }
 
-func TestLedgerStateProofTrackerAfterReplay(t *testing.T) {
+func TestStateProofTrackerAfterReplay(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]

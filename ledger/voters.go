@@ -30,9 +30,18 @@ import (
 	"github.com/algorand/go-algorand/stateproof"
 )
 
-// VotersCommitListener represents an object that needs to get notified on commit stages in the voters tracker.
-type VotersCommitListener interface {
-	OnPrepareVoterCommit(rnd basics.Round, voters ledgercore.VotersForRoundFetcher) error
+// votersFetcher is used to provide safe access to the ledger while creating the state proof builder. Since the operation
+// is being run under the ledger's commit operation, this implementation guarantees lockless access to the VotersForStateProof function.
+type votersFetcher struct {
+	vt *votersTracker
+}
+
+func (vf *votersFetcher) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRound, error) {
+	return vf.vt.VotersForStateProof(rnd)
+}
+
+func (vf *votersFetcher) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	return vf.vt.l.BlockHdr(rnd)
 }
 
 // The votersTracker maintains the vector commitment for the most recent
@@ -216,8 +225,9 @@ func (vt *votersTracker) prepareCommit(dcc *deferredCommitContext) error {
 	}
 
 	commitListener := vt.commitListener
+	vf := votersFetcher{vt: vt}
 	for round := dcc.oldBase + 1; round <= dcc.newBase; round++ {
-		err := commitListener.OnPrepareVoterCommit(round, vt)
+		err := commitListener.OnPrepareVoterCommit(round, &vf)
 		// Having the commit process continue uninterrupted is more important to us than not
 		// having missing builders. To implement this hierarchy we've decided to exclusively log errors
 		// returning from the commitListener.

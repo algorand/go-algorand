@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -39,8 +40,8 @@ var errVotersNotTracked = errors.New("voters not tracked for the given lookback 
 
 // OnPrepareVoterCommit is a function called by the voters tracker when it's preparing to commit rnd. It gives the builder
 // the chance to persist the data it needs.
-func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgercore.VotersForRoundFetcher) error {
-	header, err := spw.ledger.BlockHdr(rnd)
+func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgercore.LedgerForSPBuilder) error {
+	header, err := votersFetcher.BlockHdr(rnd)
 	if err != nil {
 		return fmt.Errorf("OnPrepareVoterCommit(%d): could not fetch round header: %w", rnd, err)
 	}
@@ -57,9 +58,7 @@ func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgerco
 		return nil
 	}
 
-	// We create and persist the builder without using it. Signer can later use it (specifically the state proof
-	// message embedded in the builder) during catchup.
-	_, err = spw.createAndPersistBuilder(rnd, votersFetcher)
+	buildr, err := createBuilder(rnd, votersFetcher)
 	if err != nil {
 		if errors.Is(err, errVotersNotTracked) {
 			spw.log.Warnf("OnPrepareVoterCommit(%d): %v", rnd, err)
@@ -69,7 +68,9 @@ func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgerco
 		return fmt.Errorf("OnPrepareVoterCommit(%d): could not create builder: %w", rnd, err)
 	}
 
-	return nil
+	return spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		return persistBuilder(tx, rnd, &buildr)
+	})
 }
 
 // loadOrCreateBuilderWithSignatures either loads a builder from the DB or creates a new builder.
@@ -86,24 +87,62 @@ func (spw *Worker) loadOrCreateBuilderWithSignatures(rnd basics.Round) (builder,
 	return b, nil
 }
 
-func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (buildr builder, err error) {
-	err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		buildr, err = getBuilder(tx, rnd)
-		return err
-	})
+func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
+	buildr, err := spw.loadBuilderFromDB(rnd)
 	if err == nil {
 		return buildr, nil
 	}
+
 	if !errors.Is(err, sql.ErrNoRows) {
 		spw.log.Errorf("loadOrCreateBuilder: error while fetching builder from DB: %v", err)
 	}
 
-	buildr, err = spw.createAndPersistBuilder(rnd, spw.ledger)
+	buildr, err = createBuilder(rnd, spw.ledger)
+	if err != nil {
+		return builder{}, err
+	}
+
+	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		return persistBuilder(tx, rnd, &buildr)
+	})
+
+	// We ignore persisting errors because we still want to try and use our successfully generated builder,
+	// even if, for some reason, persisting it failed.
+	if err != nil {
+		spw.log.Errorf("loadOrCreateBuilder(%d): failed to insert builder into database: %v", rnd, err)
+	}
+
+	return buildr, nil
+}
+
+// loadBuilderFromDB loads a builder from disk.
+func (spw *Worker) loadBuilderFromDB(rnd basics.Round) (builder, error) {
+	var buildr builder
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var err2 error
+		buildr, err2 = getBuilder(tx, rnd)
+		return err2
+	})
 	if err != nil {
 		return builder{}, err
 	}
 
 	return buildr, nil
+}
+
+// loadMessageFromDB loads a StateProof Message from disk.
+func (spw *Worker) loadMessageFromDB(rnd basics.Round) (stateproofmsg.Message, error) {
+	var msg stateproofmsg.Message
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var err2 error
+		msg, err2 = getMessage(tx, rnd)
+		return err2
+	})
+	if err != nil {
+		return stateproofmsg.Message{}, err
+	}
+
+	return msg, nil
 }
 
 func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
@@ -126,16 +165,18 @@ func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
 	return nil
 }
 
-func (spw *Worker) createAndPersistBuilder(rnd basics.Round, votersFetcher ledgercore.VotersForRoundFetcher) (builder, error) {
-	l := spw.ledger
-	hdr, err := l.BlockHdr(rnd)
+func createBuilder(rnd basics.Round, votersFetcher ledgercore.LedgerForSPBuilder) (builder, error) {
+	// since this function might be invoked under tracker commit context (i.e invoked from the ledger code ),
+	// it is important that we do not use the ledger directly.
+
+	hdr, err := votersFetcher.BlockHdr(rnd)
 	if err != nil {
 		return builder{}, err
 	}
 
 	hdrProto := config.Consensus[hdr.CurrentProtocol]
 	votersRnd := rnd.SubSaturate(basics.Round(hdrProto.StateProofInterval))
-	votersHdr, err := l.BlockHdr(votersRnd)
+	votersHdr, err := votersFetcher.BlockHdr(votersRnd)
 	if err != nil {
 		return builder{}, err
 	}
@@ -152,7 +193,7 @@ func (spw *Worker) createAndPersistBuilder(rnd basics.Round, votersFetcher ledge
 		return builder{}, fmt.Errorf("lookback round %d: %w", lookback, errVotersNotTracked)
 	}
 
-	msg, err := GenerateStateProofMessage(l, rnd)
+	msg, err := GenerateStateProofMessage(votersFetcher, rnd)
 	if err != nil {
 		return builder{}, err
 	}
@@ -174,16 +215,6 @@ func (spw *Worker) createAndPersistBuilder(rnd basics.Round, votersFetcher ledge
 		config.Consensus[votersHdr.CurrentProtocol].StateProofStrengthTarget)
 	if err != nil {
 		return builder{}, err
-	}
-
-	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-		return persistBuilder(tx, rnd, &res)
-	})
-
-	// We ignore persisting errors because we still want to try and use our successfully generated builder,
-	// even if, for some reason, persisting it failed.
-	if err != nil {
-		spw.log.Errorf("loadOrCreateBuilder(%d): failed to insert builder into database: %v", rnd, err)
 	}
 
 	return res, nil
