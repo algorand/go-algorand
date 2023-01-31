@@ -65,6 +65,7 @@ type AssembleBlockStats struct {
 	BlockGenerationDuration   uint64
 	TransactionsLoopStartTime int64
 	StateProofNextRound       uint64 // next round for which state proof if expected
+	Speculative               bool   // started as speculative block assembly
 	StateProofStats           StateProofStats
 }
 

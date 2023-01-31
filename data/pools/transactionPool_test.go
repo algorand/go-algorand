@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -1637,6 +1638,7 @@ func TestSpeculativeBlockAssembly(t *testing.T) {
 	cfg.EnableProcessBlockStats = false
 	log := logging.TestingLog(t)
 	transactionPool := MakeTransactionPool(mockLedger, cfg, log)
+	transactionPool.logAssembleStats = true
 
 	savedTransactions := 0
 	for i, sender := range addresses {
@@ -1701,7 +1703,6 @@ func TestSpeculativeBlockAssembly(t *testing.T) {
 	t.Logf("prev block   hash %s", block.Block().Hash().String())
 
 	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{}, false)
-	//<-transactionPool.specAsmDone
 
 	// add the block
 	mockLedger.AddBlock(block.Block(), agreement.Certificate{})
@@ -1858,9 +1859,12 @@ func TestSpeculativeBlockAssemblyDataRace(t *testing.T) {
 	require.Len(t, pending, savedTransactions)
 	require.Len(t, pendingTxIDSet, savedTransactions)
 
+	// Create a block of the last txn created above, commit that block
+	pendingTxIDSet[pendingTxn.Sig] = false
 	blockEval := newBlockEvaluator(t, mockLedger)
 	err := blockEval.Transaction(pendingTxn, transactions.ApplyData{})
 	require.NoError(t, err)
+	blockATxn := pendingTxn
 
 	// simulate this transaction was applied
 	block, err := blockEval.GenerateBlock()
@@ -1911,11 +1915,20 @@ func TestSpeculativeBlockAssemblyDataRace(t *testing.T) {
 	specBlock, specErr := transactionPool.tryReadSpeculativeBlock(block.Block().Hash(), block.Block().Round()+1, time.Now().Add(time.Second), &stats)
 	require.NoError(t, specErr)
 	require.NotNil(t, specBlock)
-	// assembled block doesn't have txn in the speculated block
-	require.Len(t, specBlock.Block().Payset, savedTransactions-1, "len(Payset)=%d, savedTransactions=%d", len(specBlock.Block().Payset), savedTransactions)
+	// speculated block should also have txns newer than start of speculation
+	require.Len(t, specBlock.Block().Payset, newSavedTransactions+savedTransactions-1, "len(Payset)=%d, savedTransactions=%d", len(specBlock.Block().Payset), savedTransactions)
 
-	for _, txn := range specBlock.Block().Payset {
-		require.NotEqual(t, txn.SignedTxn.Sig, pendingTxn.Sig)
-		require.True(t, pendingTxIDSet[txn.SignedTxn.Sig])
+	for i, txn := range specBlock.Block().Payset {
+		assert.NotEqual(t, txn.SignedTxn.Sig, blockATxn.Sig, "specBlock Payset[%d] (of %d) found to be blockATxn", i, len(specBlock.Block().Payset))
+		unseen, exists := pendingTxIDSet[txn.SignedTxn.Sig]
+		assert.True(t, unseen, "specBlock Payset[%d] unseen=%v exists=%v", unseen, exists)
+		assert.True(t, exists, "specBlock Payset[%d] unseen=%v exists=%v", unseen, exists)
+		pendingTxIDSet[txn.SignedTxn.Sig] = false
 	}
+	for sig, unseen := range pendingTxIDSet {
+		if unseen {
+			t.Errorf("sig unseen %v", sig)
+		}
+	}
+	t.Log("lol wut")
 }

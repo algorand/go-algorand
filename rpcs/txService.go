@@ -191,9 +191,10 @@ func (txs *TxService) updateTxCache() (pendingTxGroups [][]transactions.SignedTx
 
 	// we need to check again, since we released and took the lock.
 	if txs.lastUpdate == 0 || txs.lastUpdate+updateInterval < currentUnixTime {
-		// The txs.pool.PendingTxGroups() function allocates a new array on every call. That means that the old
-		// array ( if being used ) is still valid. There is no risk of data race here since
-		// the txs.pendingTxGroups is a slice (hence a pointer to the array) and not the array itself.
+		// This takes a reference to TransactionPool internal
+		// memory, but that is safe as long as
+		// TransactionPool.pendingTxGroups only gets append()
+		// or replaced.
 		txs.pendingTxGroups = txs.pool.PendingTxGroups()
 		txs.lastUpdate = currentUnixTime
 	}
