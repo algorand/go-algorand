@@ -38,11 +38,14 @@ func boundUint(min, max uint64) TypeBound {
 func sizedBytes(min, max uint64) TypeBound {
 	return TypeBound{StackType: StackBytes, LengthRange: [2]uint64{min, max}}
 }
+func staticBytes(size uint64) TypeBound {
+	return sizedBytes(size, size)
+}
 
 var (
-	AddressBound = sizedBytes(32, 32)
-	HashBound    = sizedBytes(32, 32)
-	BigIntBound  = sizedBytes(1, maxByteMathSize) // TOOD: should this be 0?
+	AddressBound = staticBytes(32)
+	HashBound    = staticBytes(32)
+	BigIntBound  = sizedBytes(1, maxByteMathSize) // TOOD: should this 1 be a 0?
 	BytesBound   = sizedBytes(0, maxStringSize)
 
 	BooleanBound = boundUint(0, 1)
