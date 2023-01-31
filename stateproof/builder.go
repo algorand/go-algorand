@@ -40,37 +40,46 @@ var errVotersNotTracked = errors.New("voters not tracked for the given lookback 
 
 // OnPrepareVoterCommit is a function called by the voters tracker when it's preparing to commit rnd. It gives the builder
 // the chance to persist the data it needs.
-func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgercore.LedgerForSPBuilder) error {
-	header, err := votersFetcher.BlockHdr(rnd)
-	if err != nil {
-		return fmt.Errorf("OnPrepareVoterCommit(%d): could not fetch round header: %w", rnd, err)
-	}
-
-	proto := config.Consensus[header.CurrentProtocol]
-	if proto.StateProofInterval == 0 || uint64(rnd)%proto.StateProofInterval != 0 {
-		return nil
-	}
-
-	builderExists, err := spw.builderExists(rnd)
-	if err != nil {
-		spw.log.Warnf("OnPrepareVoterCommit(%d): could not check builder existence, assuming it doesn't exist: %v\n", rnd, err)
-	} else if builderExists {
-		return nil
-	}
-
-	buildr, err := createBuilder(rnd, votersFetcher)
-	if err != nil {
-		if errors.Is(err, errVotersNotTracked) {
-			spw.log.Warnf("OnPrepareVoterCommit(%d): %v", rnd, err)
-			return nil
+func (spw *Worker) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Round, votersFetcher ledgercore.LedgerForSPBuilder) {
+	for rnd := oldBase + 1; rnd < newBase; rnd++ {
+		header, err := votersFetcher.BlockHdr(rnd)
+		if err != nil {
+			spw.log.Errorf("OnPrepareVoterCommit(%d): could not fetch round header: %v", rnd, err)
+			continue
 		}
 
-		return fmt.Errorf("OnPrepareVoterCommit(%d): could not create builder: %w", rnd, err)
-	}
+		proto := config.Consensus[header.CurrentProtocol]
+		if proto.StateProofInterval == 0 || uint64(rnd)%proto.StateProofInterval != 0 {
+			continue
+		}
 
-	return spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-		return persistBuilder(tx, rnd, &buildr)
-	})
+		builderExists, err := spw.builderExists(rnd)
+		if err != nil {
+			spw.log.Warnf("OnPrepareVoterCommit(%d): could not check builder existence, assuming it doesn't exist: %v\n", rnd, err)
+		} else if builderExists {
+			continue
+		}
+
+		buildr, err := createBuilder(rnd, votersFetcher)
+		if err != nil {
+			if errors.Is(err, errVotersNotTracked) {
+				// Voters not tracked for that round.  Might not be a valid
+				// state proof round; state proofs might not be enabled; etc.
+				spw.log.Warnf("OnPrepareVoterCommit(%d): %v", rnd, err)
+				continue
+			}
+
+			spw.log.Errorf("OnPrepareVoterCommit(%d): could not create builder: %v", rnd, err)
+			continue
+		}
+
+		err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+			return persistBuilder(tx, rnd, &buildr)
+		})
+		if err != nil {
+			spw.log.Errorf("OnPrepareVoterCommit(%d): could not persist builder: %v", rnd, err)
+		}
+	}
 }
 
 // loadOrCreateBuilderWithSignatures either loads a builder from the DB or creates a new builder.

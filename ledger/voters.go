@@ -226,15 +226,9 @@ func (vt *votersTracker) prepareCommit(dcc *deferredCommitContext) error {
 
 	commitListener := vt.commitListener
 	vf := votersFetcher{vt: vt}
-	for round := dcc.oldBase + 1; round <= dcc.newBase; round++ {
-		err := commitListener.OnPrepareVoterCommit(round, &vf)
-		// Having the commit process continue uninterrupted is more important to us than not
-		// having missing builders. To implement this hierarchy we've decided to exclusively log errors
-		// returning from the commitListener.
-		if err != nil {
-			vt.l.trackerLog().Errorf("votersTracker.prepareCommit: listener encountered an error for round %d: %v", round, err)
-		}
-	}
+	// In case the listener's function fails, we do not want to break the commit process.
+	// To implement this hierarchy we've decided to not include a return value in OnPrepareVoterCommit function
+	commitListener.OnPrepareVoterCommit(dcc.oldBase, dcc.newBase, &vf)
 
 	return nil
 }
