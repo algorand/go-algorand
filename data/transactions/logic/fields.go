@@ -25,10 +25,23 @@ import (
 
 //go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding,JSONRefType,VrfStandard,BlockField -output=fields_string.go
 
+type HigherType string
+
+const (
+	HigherAddress HigherType = "address"
+	HigherHash    HigherType = "hash"
+	HigherBoolean HigherType = "boolean"
+	HigherBigint  HigherType = "bigint"
+	HigherUint    HigherType = "uint"
+	HigherBytes   HigherType = "bytes"
+	HigherNone    HigherType = ""
+)
+
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {
 	Field() byte
 	Type() StackType
+	HigherType() HigherType
 	OpVersion() uint64
 	Note() string
 	Version() uint64
@@ -239,6 +252,7 @@ func (s tfNameSpecMap) get(name string) (FieldSpec, bool) {
 type txnFieldSpec struct {
 	field      TxnField
 	ftype      StackType
+	htype      HigherType
 	array      bool   // Is this an array field?
 	version    uint64 // When this field become available to txn/gtxn. 0=always
 	itxVersion uint64 // When this field become available to itxn_field. 0=never
@@ -248,6 +262,9 @@ type txnFieldSpec struct {
 
 func (fs txnFieldSpec) Field() byte {
 	return byte(fs.field)
+}
+func (fs txnFieldSpec) HigherType() HigherType {
+	return fs.htype
 }
 func (fs txnFieldSpec) Type() StackType {
 	return fs.ftype
@@ -267,91 +284,91 @@ func (fs txnFieldSpec) Note() string {
 }
 
 var txnFieldSpecs = [...]txnFieldSpec{
-	{Sender, StackBytes, false, 0, 5, false, "32 byte address"},
-	{Fee, StackUint64, false, 0, 5, false, "microalgos"},
-	{FirstValid, StackUint64, false, 0, 0, false, "round number"},
-	{FirstValidTime, StackUint64, false, randomnessVersion, 0, false, "UNIX timestamp of block before txn.FirstValid. Fails if negative"},
-	{LastValid, StackUint64, false, 0, 0, false, "round number"},
-	{Note, StackBytes, false, 0, 6, false, "Any data up to 1024 bytes"},
-	{Lease, StackBytes, false, 0, 0, false, "32 byte lease value"},
-	{Receiver, StackBytes, false, 0, 5, false, "32 byte address"},
-	{Amount, StackUint64, false, 0, 5, false, "microalgos"},
-	{CloseRemainderTo, StackBytes, false, 0, 5, false, "32 byte address"},
-	{VotePK, StackBytes, false, 0, 6, false, "32 byte address"},
-	{SelectionPK, StackBytes, false, 0, 6, false, "32 byte address"},
-	{VoteFirst, StackUint64, false, 0, 6, false, "The first round that the participation key is valid."},
-	{VoteLast, StackUint64, false, 0, 6, false, "The last round that the participation key is valid."},
-	{VoteKeyDilution, StackUint64, false, 0, 6, false, "Dilution for the 2-level participation key"},
-	{Type, StackBytes, false, 0, 5, false, "Transaction type as bytes"},
-	{TypeEnum, StackUint64, false, 0, 5, false, "Transaction type as integer"},
-	{XferAsset, StackUint64, false, 0, 5, false, "Asset ID"},
-	{AssetAmount, StackUint64, false, 0, 5, false, "value in Asset's units"},
-	{AssetSender, StackBytes, false, 0, 5, false,
+	{Sender, StackBytes, HigherAddress, false, 0, 5, false, "32 byte address"},
+	{Fee, StackUint64, HigherUint, false, 0, 5, false, "microalgos"},
+	{FirstValid, StackUint64, HigherUint, false, 0, 0, false, "round number"},
+	{FirstValidTime, StackUint64, HigherUint, false, randomnessVersion, 0, false, "UNIX timestamp of block before txn.FirstValid. Fails if negative"},
+	{LastValid, StackUint64, HigherUint, false, 0, 0, false, "round number"},
+	{Note, StackBytes, HigherBytes, false, 0, 6, false, "Any data up to 1024 bytes"},
+	{Lease, StackBytes, HigherHash, false, 0, 0, false, "32 byte lease value"},
+	{Receiver, StackBytes, HigherAddress, false, 0, 5, false, "32 byte address"},
+	{Amount, StackUint64, HigherUint, false, 0, 5, false, "microalgos"},
+	{CloseRemainderTo, StackBytes, HigherAddress, false, 0, 5, false, "32 byte address"},
+	{VotePK, StackBytes, HigherAddress, false, 0, 6, false, "32 byte address"},
+	{SelectionPK, StackBytes, HigherAddress, false, 0, 6, false, "32 byte address"},
+	{VoteFirst, StackUint64, HigherUint, false, 0, 6, false, "The first round that the participation key is valid."},
+	{VoteLast, StackUint64, HigherUint, false, 0, 6, false, "The last round that the participation key is valid."},
+	{VoteKeyDilution, StackUint64, HigherUint, false, 0, 6, false, "Dilution for the 2-level participation key"},
+	{Type, StackBytes, HigherUint, false, 0, 5, false, "Transaction type as bytes"},
+	{TypeEnum, StackUint64, HigherUint, false, 0, 5, false, "Transaction type as integer"},
+	{XferAsset, StackUint64, HigherUint, false, 0, 5, false, "Asset ID"},
+	{AssetAmount, StackUint64, HigherUint, false, 0, 5, false, "value in Asset's units"},
+	{AssetSender, StackBytes, HigherAddress, false, 0, 5, false,
 		"32 byte address. Source of assets if Sender is the Asset's Clawback address."},
-	{AssetReceiver, StackBytes, false, 0, 5, false, "32 byte address"},
-	{AssetCloseTo, StackBytes, false, 0, 5, false, "32 byte address"},
-	{GroupIndex, StackUint64, false, 0, 0, false,
+	{AssetReceiver, StackBytes, HigherAddress, false, 0, 5, false, "32 byte address"},
+	{AssetCloseTo, StackBytes, HigherAddress, false, 0, 5, false, "32 byte address"},
+	{GroupIndex, StackUint64, HigherUint, false, 0, 0, false,
 		"Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1"},
-	{TxID, StackBytes, false, 0, 0, false, "The computed ID for this transaction. 32 bytes."},
-	{ApplicationID, StackUint64, false, 2, 6, false, "ApplicationID from ApplicationCall transaction"},
-	{OnCompletion, StackUint64, false, 2, 6, false, "ApplicationCall transaction on completion action"},
-	{ApplicationArgs, StackBytes, true, 2, 6, false,
+	{TxID, StackBytes, HigherHash, false, 0, 0, false, "The computed ID for this transaction. 32 bytes."},
+	{ApplicationID, StackUint64, HigherUint, false, 2, 6, false, "ApplicationID from ApplicationCall transaction"},
+	{OnCompletion, StackUint64, HigherUint, false, 2, 6, false, "ApplicationCall transaction on completion action"},
+	{ApplicationArgs, StackBytes, HigherBytes, true, 2, 6, false,
 		"Arguments passed to the application in the ApplicationCall transaction"},
-	{NumAppArgs, StackUint64, false, 2, 0, false, "Number of ApplicationArgs"},
-	{Accounts, StackBytes, true, 2, 6, false, "Accounts listed in the ApplicationCall transaction"},
-	{NumAccounts, StackUint64, false, 2, 0, false, "Number of Accounts"},
-	{ApprovalProgram, StackBytes, false, 2, 6, false, "Approval program"},
-	{ClearStateProgram, StackBytes, false, 2, 6, false, "Clear state program"},
-	{RekeyTo, StackBytes, false, 2, 6, false, "32 byte Sender's new AuthAddr"},
-	{ConfigAsset, StackUint64, false, 2, 5, false, "Asset ID in asset config transaction"},
-	{ConfigAssetTotal, StackUint64, false, 2, 5, false, "Total number of units of this asset created"},
-	{ConfigAssetDecimals, StackUint64, false, 2, 5, false,
+	{NumAppArgs, StackUint64, HigherUint, false, 2, 0, false, "Number of ApplicationArgs"},
+	{Accounts, StackBytes, HigherAddress, true, 2, 6, false, "Accounts listed in the ApplicationCall transaction"},
+	{NumAccounts, StackUint64, HigherUint, false, 2, 0, false, "Number of Accounts"},
+	{ApprovalProgram, StackBytes, HigherBytes, false, 2, 6, false, "Approval program"},
+	{ClearStateProgram, StackBytes, HigherBytes, false, 2, 6, false, "Clear state program"},
+	{RekeyTo, StackBytes, HigherAddress, false, 2, 6, false, "32 byte Sender's new AuthAddr"},
+	{ConfigAsset, StackUint64, HigherUint, false, 2, 5, false, "Asset ID in asset config transaction"},
+	{ConfigAssetTotal, StackUint64, HigherUint, false, 2, 5, false, "Total number of units of this asset created"},
+	{ConfigAssetDecimals, StackUint64, HigherUint, false, 2, 5, false,
 		"Number of digits to display after the decimal place when displaying the asset"},
-	{ConfigAssetDefaultFrozen, StackUint64, false, 2, 5, false,
+	{ConfigAssetDefaultFrozen, StackUint64, HigherBoolean, false, 2, 5, false,
 		"Whether the asset's slots are frozen by default or not, 0 or 1"},
-	{ConfigAssetUnitName, StackBytes, false, 2, 5, false, "Unit name of the asset"},
-	{ConfigAssetName, StackBytes, false, 2, 5, false, "The asset name"},
-	{ConfigAssetURL, StackBytes, false, 2, 5, false, "URL"},
-	{ConfigAssetMetadataHash, StackBytes, false, 2, 5, false,
+	{ConfigAssetUnitName, StackBytes, HigherBytes, false, 2, 5, false, "Unit name of the asset"},
+	{ConfigAssetName, StackBytes, HigherBytes, false, 2, 5, false, "The asset name"},
+	{ConfigAssetURL, StackBytes, HigherBytes, false, 2, 5, false, "URL"},
+	{ConfigAssetMetadataHash, StackBytes, HigherHash, false, 2, 5, false,
 		"32 byte commitment to unspecified asset metadata"},
-	{ConfigAssetManager, StackBytes, false, 2, 5, false, "32 byte address"},
-	{ConfigAssetReserve, StackBytes, false, 2, 5, false, "32 byte address"},
-	{ConfigAssetFreeze, StackBytes, false, 2, 5, false, "32 byte address"},
-	{ConfigAssetClawback, StackBytes, false, 2, 5, false, "32 byte address"},
-	{FreezeAsset, StackUint64, false, 2, 5, false, "Asset ID being frozen or un-frozen"},
-	{FreezeAssetAccount, StackBytes, false, 2, 5, false,
+	{ConfigAssetManager, StackBytes, HigherAddress, false, 2, 5, false, "32 byte address"},
+	{ConfigAssetReserve, StackBytes, HigherAddress, false, 2, 5, false, "32 byte address"},
+	{ConfigAssetFreeze, StackBytes, HigherAddress, false, 2, 5, false, "32 byte address"},
+	{ConfigAssetClawback, StackBytes, HigherAddress, false, 2, 5, false, "32 byte address"},
+	{FreezeAsset, StackUint64, HigherUint, false, 2, 5, false, "Asset ID being frozen or un-frozen"},
+	{FreezeAssetAccount, StackBytes, HigherAddress, false, 2, 5, false,
 		"32 byte address of the account whose asset slot is being frozen or un-frozen"},
-	{FreezeAssetFrozen, StackUint64, false, 2, 5, false, "The new frozen value, 0 or 1"},
-	{Assets, StackUint64, true, 3, 6, false, "Foreign Assets listed in the ApplicationCall transaction"},
-	{NumAssets, StackUint64, false, 3, 0, false, "Number of Assets"},
-	{Applications, StackUint64, true, 3, 6, false, "Foreign Apps listed in the ApplicationCall transaction"},
-	{NumApplications, StackUint64, false, 3, 0, false, "Number of Applications"},
-	{GlobalNumUint, StackUint64, false, 3, 6, false, "Number of global state integers in ApplicationCall"},
-	{GlobalNumByteSlice, StackUint64, false, 3, 6, false, "Number of global state byteslices in ApplicationCall"},
-	{LocalNumUint, StackUint64, false, 3, 6, false, "Number of local state integers in ApplicationCall"},
-	{LocalNumByteSlice, StackUint64, false, 3, 6, false, "Number of local state byteslices in ApplicationCall"},
-	{ExtraProgramPages, StackUint64, false, 4, 6, false,
+	{FreezeAssetFrozen, StackUint64, HigherBoolean, false, 2, 5, false, "The new frozen value, 0 or 1"},
+	{Assets, StackUint64, HigherUint, true, 3, 6, false, "Foreign Assets listed in the ApplicationCall transaction"},
+	{NumAssets, StackUint64, HigherUint, false, 3, 0, false, "Number of Assets"},
+	{Applications, StackUint64, HigherUint, true, 3, 6, false, "Foreign Apps listed in the ApplicationCall transaction"},
+	{NumApplications, StackUint64, HigherUint, false, 3, 0, false, "Number of Applications"},
+	{GlobalNumUint, StackUint64, HigherUint, false, 3, 6, false, "Number of global state integers in ApplicationCall"},
+	{GlobalNumByteSlice, StackUint64, HigherUint, false, 3, 6, false, "Number of global state byteslices in ApplicationCall"},
+	{LocalNumUint, StackUint64, HigherUint, false, 3, 6, false, "Number of local state integers in ApplicationCall"},
+	{LocalNumByteSlice, StackUint64, HigherUint, false, 3, 6, false, "Number of local state byteslices in ApplicationCall"},
+	{ExtraProgramPages, StackUint64, HigherUint, false, 4, 6, false,
 		"Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program."},
-	{Nonparticipation, StackUint64, false, 5, 6, false, "Marks an account nonparticipating for rewards"},
+	{Nonparticipation, StackUint64, HigherBoolean, false, 5, 6, false, "Marks an account nonparticipating for rewards"},
 
 	// "Effects" Last two things are always going to: 0, true
-	{Logs, StackBytes, true, 5, 0, true, "Log messages emitted by an application call (only with `itxn` in v5)"},
-	{NumLogs, StackUint64, false, 5, 0, true, "Number of Logs (only with `itxn` in v5)"},
-	{CreatedAssetID, StackUint64, false, 5, 0, true,
+	{Logs, StackBytes, HigherBytes, true, 5, 0, true, "Log messages emitted by an application call (only with `itxn` in v5)"},
+	{NumLogs, StackUint64, HigherUint, false, 5, 0, true, "Number of Logs (only with `itxn` in v5)"},
+	{CreatedAssetID, StackUint64, HigherUint, false, 5, 0, true,
 		"Asset ID allocated by the creation of an ASA (only with `itxn` in v5)"},
-	{CreatedApplicationID, StackUint64, false, 5, 0, true,
+	{CreatedApplicationID, StackUint64, HigherUint, false, 5, 0, true,
 		"ApplicationID allocated by the creation of an application (only with `itxn` in v5)"},
-	{LastLog, StackBytes, false, 6, 0, true, "The last message emitted. Empty bytes if none were emitted"},
+	{LastLog, StackBytes, HigherBytes, false, 6, 0, true, "The last message emitted. Empty bytes if none were emitted"},
 
 	// Not an effect. Just added after the effects fields.
-	{StateProofPK, StackBytes, false, 6, 6, false, "64 byte state proof public key"},
+	{StateProofPK, StackBytes, HigherBytes, false, 6, 6, false, "64 byte state proof public key"},
 
 	// Pseudo-fields to aid access to large programs (bigger than TEAL values)
 	// reading in a txn seems not *super* useful, but setting in `itxn` is critical to inner app factories
-	{ApprovalProgramPages, StackBytes, true, 7, 7, false, "Approval Program as an array of pages"},
-	{NumApprovalProgramPages, StackUint64, false, 7, 0, false, "Number of Approval Program pages"},
-	{ClearStateProgramPages, StackBytes, true, 7, 7, false, "ClearState Program as an array of pages"},
-	{NumClearStateProgramPages, StackUint64, false, 7, 0, false, "Number of ClearState Program pages"},
+	{ApprovalProgramPages, StackBytes, HigherBytes, true, 7, 7, false, "Approval Program as an array of pages"},
+	{NumApprovalProgramPages, StackUint64, HigherUint, false, 7, 0, false, "Number of Approval Program pages"},
+	{ClearStateProgramPages, StackBytes, HigherBytes, true, 7, 7, false, "ClearState Program as an array of pages"},
+	{NumClearStateProgramPages, StackUint64, HigherUint, false, 7, 0, false, "Number of ClearState Program pages"},
 }
 
 // TxnFields contains info on the arguments to the txn* family of opcodes
@@ -537,6 +554,7 @@ var GlobalFieldNames [invalidGlobalField]string
 type globalFieldSpec struct {
 	field   GlobalField
 	ftype   StackType
+	htype   HigherType
 	mode    RunMode
 	version uint64
 	doc     string
@@ -547,6 +565,9 @@ func (fs globalFieldSpec) Field() byte {
 }
 func (fs globalFieldSpec) Type() StackType {
 	return fs.ftype
+}
+func (fs globalFieldSpec) HigherType() HigherType {
+	return fs.htype
 }
 func (fs globalFieldSpec) OpVersion() uint64 {
 	return 0
@@ -565,28 +586,28 @@ func (fs globalFieldSpec) Note() string {
 
 var globalFieldSpecs = [...]globalFieldSpec{
 	// version 0 is the same as v1 (initial release)
-	{MinTxnFee, StackUint64, modeAny, 0, "microalgos"},
-	{MinBalance, StackUint64, modeAny, 0, "microalgos"},
-	{MaxTxnLife, StackUint64, modeAny, 0, "rounds"},
-	{ZeroAddress, StackBytes, modeAny, 0, "32 byte address of all zero bytes"},
-	{GroupSize, StackUint64, modeAny, 0,
+	{MinTxnFee, StackUint64, HigherUint, modeAny, 0, "microalgos"},
+	{MinBalance, StackUint64, HigherUint, modeAny, 0, "microalgos"},
+	{MaxTxnLife, StackUint64, HigherUint, modeAny, 0, "rounds"},
+	{ZeroAddress, StackBytes, HigherAddress, modeAny, 0, "32 byte address of all zero bytes"},
+	{GroupSize, StackUint64, HigherUint, modeAny, 0,
 		"Number of transactions in this atomic transaction group. At least 1"},
-	{LogicSigVersion, StackUint64, modeAny, 2, "Maximum supported version"},
-	{Round, StackUint64, ModeApp, 2, "Current round number"},
-	{LatestTimestamp, StackUint64, ModeApp, 2,
+	{LogicSigVersion, StackUint64, HigherUint, modeAny, 2, "Maximum supported version"},
+	{Round, StackUint64, HigherUint, ModeApp, 2, "Current round number"},
+	{LatestTimestamp, StackUint64, HigherUint, ModeApp, 2,
 		"Last confirmed block UNIX timestamp. Fails if negative"},
-	{CurrentApplicationID, StackUint64, ModeApp, 2, "ID of current application executing"},
-	{CreatorAddress, StackBytes, ModeApp, 3,
+	{CurrentApplicationID, StackUint64, HigherUint, ModeApp, 2, "ID of current application executing"},
+	{CreatorAddress, StackBytes, HigherAddress, ModeApp, 3,
 		"Address of the creator of the current application"},
-	{CurrentApplicationAddress, StackBytes, ModeApp, 5,
+	{CurrentApplicationAddress, StackBytes, HigherAddress, ModeApp, 5,
 		"Address that the current application controls"},
-	{GroupID, StackBytes, modeAny, 5,
+	{GroupID, StackBytes, HigherUint, modeAny, 5,
 		"ID of the transaction group. 32 zero bytes if the transaction is not part of a group."},
-	{OpcodeBudget, StackUint64, modeAny, 6,
+	{OpcodeBudget, StackUint64, HigherUint, modeAny, 6,
 		"The remaining cost that can be spent by opcodes in this program."},
-	{CallerApplicationID, StackUint64, ModeApp, 6,
+	{CallerApplicationID, StackUint64, HigherUint, ModeApp, 6,
 		"The application ID of the application that called this application. 0 if this application is at the top-level."},
-	{CallerApplicationAddress, StackBytes, ModeApp, 6,
+	{CallerApplicationAddress, StackBytes, HigherAddress, ModeApp, 6,
 		"The application address of the application that called this application. ZeroAddress if this application is at the top-level."},
 }
 
@@ -634,6 +655,9 @@ type ecdsaCurveSpec struct {
 
 func (fs ecdsaCurveSpec) Field() byte {
 	return byte(fs.field)
+}
+func (fs ecdsaCurveSpec) HigherType() HigherType {
+	return HigherNone // Will not show, since all are untyped
 }
 func (fs ecdsaCurveSpec) Type() StackType {
 	return StackNone // Will not show, since all are untyped
@@ -713,6 +737,9 @@ type base64EncodingSpecMap map[string]base64EncodingSpec
 func (fs base64EncodingSpec) Field() byte {
 	return byte(fs.field)
 }
+func (fs base64EncodingSpec) HigherType() HigherType {
+	return HigherNone // Will not show in docs, since all are untyped
+}
 func (fs base64EncodingSpec) Type() StackType {
 	return StackAny // Will not show in docs, since all are untyped
 }
@@ -757,13 +784,14 @@ var jsonRefTypeNames [invalidJSONRefType]string
 type jsonRefSpec struct {
 	field   JSONRefType
 	ftype   StackType
+	htype   HigherType
 	version uint64
 }
 
 var jsonRefSpecs = [...]jsonRefSpec{
-	{JSONString, StackBytes, fidoVersion},
-	{JSONUint64, StackUint64, fidoVersion},
-	{JSONObject, StackBytes, fidoVersion},
+	{JSONString, StackBytes, HigherBytes, fidoVersion},
+	{JSONUint64, StackUint64, HigherUint, fidoVersion},
+	{JSONObject, StackBytes, HigherBytes, fidoVersion},
 }
 
 func jsonRefSpecByField(r JSONRefType) (jsonRefSpec, bool) {
@@ -779,6 +807,9 @@ type jsonRefSpecMap map[string]jsonRefSpec
 
 func (fs jsonRefSpec) Field() byte {
 	return byte(fs.field)
+}
+func (fs jsonRefSpec) HigherType() HigherType {
+	return fs.htype
 }
 func (fs jsonRefSpec) Type() StackType {
 	return fs.ftype
@@ -846,6 +877,9 @@ func (fs vrfStandardSpec) Field() byte {
 	return byte(fs.field)
 }
 
+func (fs vrfStandardSpec) HigherType() HigherType {
+	return HigherNone // Will not show, since all are the same
+}
 func (fs vrfStandardSpec) Type() StackType {
 	return StackNone // Will not show, since all are the same
 }
@@ -890,12 +924,13 @@ var blockFieldNames [invalidBlockField]string
 type blockFieldSpec struct {
 	field   BlockField
 	ftype   StackType
+	htype   HigherType
 	version uint64
 }
 
 var blockFieldSpecs = [...]blockFieldSpec{
-	{BlkSeed, StackBytes, randomnessVersion},
-	{BlkTimestamp, StackUint64, randomnessVersion},
+	{BlkSeed, StackBytes, HigherHash, randomnessVersion},
+	{BlkTimestamp, StackUint64, HigherUint, randomnessVersion},
 }
 
 func blockFieldSpecByField(r BlockField) (blockFieldSpec, bool) {
@@ -916,6 +951,10 @@ func (s blockFieldSpecMap) get(name string) (FieldSpec, bool) {
 
 func (fs blockFieldSpec) Field() byte {
 	return byte(fs.field)
+}
+
+func (fs blockFieldSpec) HigherType() HigherType {
+	return fs.htype
 }
 
 func (fs blockFieldSpec) Type() StackType {
@@ -961,12 +1000,16 @@ var assetHoldingFieldNames [invalidAssetHoldingField]string
 type assetHoldingFieldSpec struct {
 	field   AssetHoldingField
 	ftype   StackType
+	htype   HigherType
 	version uint64
 	doc     string
 }
 
 func (fs assetHoldingFieldSpec) Field() byte {
 	return byte(fs.field)
+}
+func (fs assetHoldingFieldSpec) HigherType() HigherType {
+	return fs.htype
 }
 func (fs assetHoldingFieldSpec) Type() StackType {
 	return fs.ftype
@@ -982,8 +1025,8 @@ func (fs assetHoldingFieldSpec) Note() string {
 }
 
 var assetHoldingFieldSpecs = [...]assetHoldingFieldSpec{
-	{AssetBalance, StackUint64, 2, "Amount of the asset unit held by this account"},
-	{AssetFrozen, StackUint64, 2, "Is the asset frozen or not"},
+	{AssetBalance, StackUint64, HigherUint, 2, "Amount of the asset unit held by this account"},
+	{AssetFrozen, StackUint64, HigherBoolean, 2, "Is the asset frozen or not"},
 }
 
 func assetHoldingFieldSpecByField(f AssetHoldingField) (assetHoldingFieldSpec, bool) {
@@ -1047,6 +1090,7 @@ var assetParamsFieldNames [invalidAssetParamsField]string
 type assetParamsFieldSpec struct {
 	field   AssetParamsField
 	ftype   StackType
+	htype   HigherType
 	version uint64
 	doc     string
 }
@@ -1056,6 +1100,9 @@ func (fs assetParamsFieldSpec) Field() byte {
 }
 func (fs assetParamsFieldSpec) Type() StackType {
 	return fs.ftype
+}
+func (fs assetParamsFieldSpec) HigherType() HigherType {
+	return fs.htype
 }
 func (fs assetParamsFieldSpec) OpVersion() uint64 {
 	return 2
@@ -1068,18 +1115,18 @@ func (fs assetParamsFieldSpec) Note() string {
 }
 
 var assetParamsFieldSpecs = [...]assetParamsFieldSpec{
-	{AssetTotal, StackUint64, 2, "Total number of units of this asset"},
-	{AssetDecimals, StackUint64, 2, "See AssetParams.Decimals"},
-	{AssetDefaultFrozen, StackUint64, 2, "Frozen by default or not"},
-	{AssetUnitName, StackBytes, 2, "Asset unit name"},
-	{AssetName, StackBytes, 2, "Asset name"},
-	{AssetURL, StackBytes, 2, "URL with additional info about the asset"},
-	{AssetMetadataHash, StackBytes, 2, "Arbitrary commitment"},
-	{AssetManager, StackBytes, 2, "Manager address"},
-	{AssetReserve, StackBytes, 2, "Reserve address"},
-	{AssetFreeze, StackBytes, 2, "Freeze address"},
-	{AssetClawback, StackBytes, 2, "Clawback address"},
-	{AssetCreator, StackBytes, 5, "Creator address"},
+	{AssetTotal, StackUint64, HigherUint, 2, "Total number of units of this asset"},
+	{AssetDecimals, StackUint64, HigherUint, 2, "See AssetParams.Decimals"},
+	{AssetDefaultFrozen, StackUint64, HigherBoolean, 2, "Frozen by default or not"},
+	{AssetUnitName, StackBytes, HigherBytes, 2, "Asset unit name"},
+	{AssetName, StackBytes, HigherBytes, 2, "Asset name"},
+	{AssetURL, StackBytes, HigherBytes, 2, "URL with additional info about the asset"},
+	{AssetMetadataHash, StackBytes, HigherHash, 2, "Arbitrary commitment"},
+	{AssetManager, StackBytes, HigherAddress, 2, "Manager address"},
+	{AssetReserve, StackBytes, HigherAddress, 2, "Reserve address"},
+	{AssetFreeze, StackBytes, HigherAddress, 2, "Freeze address"},
+	{AssetClawback, StackBytes, HigherAddress, 2, "Clawback address"},
+	{AssetCreator, StackBytes, HigherAddress, 5, "Creator address"},
 }
 
 func assetParamsFieldSpecByField(f AssetParamsField) (assetParamsFieldSpec, bool) {
@@ -1138,6 +1185,7 @@ var appParamsFieldNames [invalidAppParamsField]string
 type appParamsFieldSpec struct {
 	field   AppParamsField
 	ftype   StackType
+	htype   HigherType
 	version uint64
 	doc     string
 }
@@ -1147,6 +1195,9 @@ func (fs appParamsFieldSpec) Field() byte {
 }
 func (fs appParamsFieldSpec) Type() StackType {
 	return fs.ftype
+}
+func (fs appParamsFieldSpec) HigherType() HigherType {
+	return fs.htype
 }
 func (fs appParamsFieldSpec) OpVersion() uint64 {
 	return 5
@@ -1159,15 +1210,15 @@ func (fs appParamsFieldSpec) Note() string {
 }
 
 var appParamsFieldSpecs = [...]appParamsFieldSpec{
-	{AppApprovalProgram, StackBytes, 5, "Bytecode of Approval Program"},
-	{AppClearStateProgram, StackBytes, 5, "Bytecode of Clear State Program"},
-	{AppGlobalNumUint, StackUint64, 5, "Number of uint64 values allowed in Global State"},
-	{AppGlobalNumByteSlice, StackUint64, 5, "Number of byte array values allowed in Global State"},
-	{AppLocalNumUint, StackUint64, 5, "Number of uint64 values allowed in Local State"},
-	{AppLocalNumByteSlice, StackUint64, 5, "Number of byte array values allowed in Local State"},
-	{AppExtraProgramPages, StackUint64, 5, "Number of Extra Program Pages of code space"},
-	{AppCreator, StackBytes, 5, "Creator address"},
-	{AppAddress, StackBytes, 5, "Address for which this application has authority"},
+	{AppApprovalProgram, StackBytes, HigherBytes, 5, "Bytecode of Approval Program"},
+	{AppClearStateProgram, StackBytes, HigherBytes, 5, "Bytecode of Clear State Program"},
+	{AppGlobalNumUint, StackUint64, HigherUint, 5, "Number of uint64 values allowed in Global State"},
+	{AppGlobalNumByteSlice, StackUint64, HigherUint, 5, "Number of byte array values allowed in Global State"},
+	{AppLocalNumUint, StackUint64, HigherUint, 5, "Number of uint64 values allowed in Local State"},
+	{AppLocalNumByteSlice, StackUint64, HigherUint, 5, "Number of byte array values allowed in Local State"},
+	{AppExtraProgramPages, StackUint64, HigherUint, 5, "Number of Extra Program Pages of code space"},
+	{AppCreator, StackBytes, HigherAddress, 5, "Creator address"},
+	{AppAddress, StackBytes, HigherAddress, 5, "Address for which this application has authority"},
 }
 
 func appParamsFieldSpecByField(f AppParamsField) (appParamsFieldSpec, bool) {
@@ -1236,12 +1287,16 @@ var acctParamsFieldNames [invalidAcctParamsField]string
 type acctParamsFieldSpec struct {
 	field   AcctParamsField
 	ftype   StackType
+	htype   HigherType
 	version uint64
 	doc     string
 }
 
 func (fs acctParamsFieldSpec) Field() byte {
 	return byte(fs.field)
+}
+func (fs acctParamsFieldSpec) HigherType() HigherType {
+	return fs.htype
 }
 func (fs acctParamsFieldSpec) Type() StackType {
 	return fs.ftype
@@ -1257,19 +1312,19 @@ func (fs acctParamsFieldSpec) Note() string {
 }
 
 var acctParamsFieldSpecs = [...]acctParamsFieldSpec{
-	{AcctBalance, StackUint64, 6, "Account balance in microalgos"},
-	{AcctMinBalance, StackUint64, 6, "Minimum required balance for account, in microalgos"},
-	{AcctAuthAddr, StackBytes, 6, "Address the account is rekeyed to."},
+	{AcctBalance, StackUint64, HigherUint, 6, "Account balance in microalgos"},
+	{AcctMinBalance, StackUint64, HigherUint, 6, "Minimum required balance for account, in microalgos"},
+	{AcctAuthAddr, StackBytes, HigherAddress, 6, "Address the account is rekeyed to."},
 
-	{AcctTotalNumUint, StackUint64, 8, "The total number of uint64 values allocated by this account in Global and Local States."},
-	{AcctTotalNumByteSlice, StackUint64, 8, "The total number of byte array values allocated by this account in Global and Local States."},
-	{AcctTotalExtraAppPages, StackUint64, 8, "The number of extra app code pages used by this account."},
-	{AcctTotalAppsCreated, StackUint64, 8, "The number of existing apps created by this account."},
-	{AcctTotalAppsOptedIn, StackUint64, 8, "The number of apps this account is opted into."},
-	{AcctTotalAssetsCreated, StackUint64, 8, "The number of existing ASAs created by this account."},
-	{AcctTotalAssets, StackUint64, 8, "The numbers of ASAs held by this account (including ASAs this account created)."},
-	{AcctTotalBoxes, StackUint64, boxVersion, "The number of existing boxes created by this account's app."},
-	{AcctTotalBoxBytes, StackUint64, boxVersion, "The total number of bytes used by this account's app's box keys and values."},
+	{AcctTotalNumUint, StackUint64, HigherUint, 8, "The total number of uint64 values allocated by this account in Global and Local States."},
+	{AcctTotalNumByteSlice, StackUint64, HigherUint, 8, "The total number of byte array values allocated by this account in Global and Local States."},
+	{AcctTotalExtraAppPages, StackUint64, HigherUint, 8, "The number of extra app code pages used by this account."},
+	{AcctTotalAppsCreated, StackUint64, HigherUint, 8, "The number of existing apps created by this account."},
+	{AcctTotalAppsOptedIn, StackUint64, HigherUint, 8, "The number of apps this account is opted into."},
+	{AcctTotalAssetsCreated, StackUint64, HigherUint, 8, "The number of existing ASAs created by this account."},
+	{AcctTotalAssets, StackUint64, HigherUint, 8, "The numbers of ASAs held by this account (including ASAs this account created)."},
+	{AcctTotalBoxes, StackUint64, HigherUint, boxVersion, "The number of existing boxes created by this account's app."},
+	{AcctTotalBoxBytes, StackUint64, HigherUint, boxVersion, "The total number of bytes used by this account's app's box keys and values."},
 }
 
 func acctParamsFieldSpecByField(f AcctParamsField) (acctParamsFieldSpec, bool) {

@@ -261,7 +261,7 @@ type Keyword struct {
 type LanguageSpec struct {
 	EvalMaxVersion  int
 	LogicSigVersion uint64
-	Keywords        map[string][]Keyword
+	Fields          map[string][]Keyword
 	PseudoOps       []OpRecord
 	Ops             []OpRecord
 }
@@ -421,7 +421,7 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 	return &LanguageSpec{
 		EvalMaxVersion:  docVersion,
 		LogicSigVersion: config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion,
-		Keywords:        keywords,
+		Fields:          keywords,
 		PseudoOps:       pseudoOps,
 		Ops:             records,
 	}
