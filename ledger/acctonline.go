@@ -62,7 +62,7 @@ type cachedOnlineAccount struct {
 // onlineAccounts tracks history of online accounts
 type onlineAccounts struct {
 	// Connection to the database.
-	dbs db.Pair
+	dbs store.TrackerStore
 
 	// Prepared SQL statements for fast accounts DB lookups.
 	accountsq store.OnlineAccountsReader
@@ -151,7 +151,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	ao.dbs = l.trackerDB()
 	ao.log = l.trackerLog()
 
-	err = ao.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = ao.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) error {
 		arw := store.NewAccountsSQLReaderWriter(tx)
 		var err0 error
 		var endRound basics.Round
@@ -175,7 +175,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
-	ao.accountsq, err = store.OnlineAccountsInitDbQueries(ao.dbs.Rdb.Handle)
+	ao.accountsq, err = ao.dbs.CreateOnlineAccountsReader()
 	if err != nil {
 		return
 	}
@@ -815,7 +815,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 			var accts map[basics.Address]*ledgercore.OnlineAccount
 			start := time.Now()
 			ledgerAccountsonlinetopCount.Inc(nil)
-			err = ao.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			err = ao.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
 				arw := store.NewAccountsSQLReaderWriter(tx)
 				accts, err = arw.AccountsOnlineTop(rnd, batchOffset, batchSize, genesisProto)
 				if err != nil {

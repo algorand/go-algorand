@@ -1842,16 +1842,7 @@ func (wn *WebsocketNetwork) getPeerConnectionTelemetryDetails(now time.Time, pee
 			AVCount:              atomic.LoadUint64(&peer.avMessageCount),
 			PPCount:              atomic.LoadUint64(&peer.ppMessageCount),
 		}
-		// unwrap websocket.Conn, requestTrackedConnection, rejectingLimitListenerConn
-		var uconn net.Conn = peer.conn.UnderlyingConn()
-		for i := 0; i < 10; i++ {
-			wconn, ok := uconn.(wrappedConn)
-			if !ok {
-				break
-			}
-			uconn = wconn.UnderlyingConn()
-		}
-		if tcpInfo, err := util.GetConnTCPInfo(uconn); err == nil && tcpInfo != nil {
+		if tcpInfo, err := peer.GetUnderlyingConnTCPInfo(); err == nil && tcpInfo != nil {
 			connDetail.TCP = *tcpInfo
 		}
 		if peer.outgoing {

@@ -39,7 +39,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 		return
 	}
 
-	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = dbs.Batch(func(ctx context.Context, tx *sql.Tx) error {
 		arw := store.NewAccountsSQLReaderWriter(tx)
 
 		tp := store.TrackerDBParams{

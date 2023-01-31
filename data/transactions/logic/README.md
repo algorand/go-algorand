@@ -212,7 +212,7 @@ Constants can be pushed onto the stack in two different ways:
 
 2. Constants can be loaded into storage separate from the stack and
    scratch space, using two opcodes `intcblock` and
-   `bytecblock`. Then, constants from this storage can be pushed
+   `bytecblock`. Then, constants from this storage can be
    pushed onto the stack by referring to the type and index using
    `intc`, `intc_[0123]`, `bytec`, and `bytec_[0123]`. This method is
    more efficient for constants that are used multiple times.
