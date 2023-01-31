@@ -252,9 +252,11 @@ type OpRecord struct {
 }
 
 type Keyword struct {
-	Name      string
-	Type      string
-	ValueEnum []string `json:",omitempty"`
+	Name        string
+	Type        string
+	ValueEnum   []string `json:",omitempty"`
+	LengthBound []uint64 `json:",omitempty"`
+	ValueBound  []uint64 `json:",omitempty"` // TODO: does this convert maxuint to a string? (no)
 }
 
 // LanguageSpec records the ops of the language at some version
@@ -303,7 +305,13 @@ func groupKeywords(group logic.FieldGroup) []Keyword {
 	for _, name := range group.Names {
 		if spec, ok := group.SpecByName(name); ok {
 			// TODO: replace tstring with something better
-			keywords = append(keywords, Keyword{Name: name, Type: string(typeByte(spec.Type()))})
+			kw := Keyword{
+				Name:        name,
+				Type:        string(typeByte(spec.Type())),
+				ValueBound:  spec.TypeBound().ValueRange,
+				LengthBound: spec.TypeBound().LengthRange,
+			}
+			keywords = append(keywords, kw)
 		}
 	}
 	return keywords

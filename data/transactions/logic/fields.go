@@ -28,15 +28,15 @@ import (
 
 type TypeBound struct {
 	StackType   StackType // The lower level type it maps to
-	ValueRange  [2]uint64 // If its an integer, what is the min/max values (inclusive)
-	LengthRange [2]uint64 // If its a bytestring, what is the min/max length (inclusive)
+	ValueRange  []uint64  // If its an integer, what is the min/max values (inclusive)
+	LengthRange []uint64  // If its a bytestring, what is the min/max length (inclusive)
 }
 
 func boundUint(min, max uint64) TypeBound {
-	return TypeBound{StackType: StackUint64, ValueRange: [2]uint64{min, max}}
+	return TypeBound{StackType: StackUint64, ValueRange: []uint64{min, max}}
 }
 func sizedBytes(min, max uint64) TypeBound {
-	return TypeBound{StackType: StackBytes, LengthRange: [2]uint64{min, max}}
+	return TypeBound{StackType: StackBytes, LengthRange: []uint64{min, max}}
 }
 func staticBytes(size uint64) TypeBound {
 	return sizedBytes(size, size)
