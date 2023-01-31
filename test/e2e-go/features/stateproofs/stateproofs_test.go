@@ -255,16 +255,14 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 	var lastStateProofMessage stateproofmsg.Message
 	libgoalClient := fixture.LibGoalClient
 
-	k, err := libgoalNodeClients[0].GetParticipationKeys()
-	r.NoError(err)
-	voteLastValid := k[0].Key.VoteLastValid
-	expectedNumberOfStateProofs := uint64(10)
+	expectedNumberOfStateProofs := uint64(8)
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
-		if rnd == voteLastValid-64 { // allow some buffer period before the voting keys are expired (for the keyreg to take effect)
+		if rnd == consensusParams.StateProofInterval*(5) { // allow some buffer period before the voting keys are expired (for the keyreg to take effect)
+			fmt.Println("at round.. installing", rnd)
 			// Generate participation keys (for the same accounts)
 			for i := 0; i < pNodes; i++ {
 				// Overlapping stateproof keys (the key for round 0 is valid up to 256)
-				_, part, err := installParticipationKey(t, libgoalNodeClients[i], accounts[i], 0, 200)
+				_, part, err := installParticipationKey(t, libgoalNodeClients[i], accounts[i], 0, 400)
 				r.NoError(err)
 				participations[i] = part
 			}
@@ -281,7 +279,7 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 			amount: 1,
 		}.sendPayment(r, &fixture, rnd)
 
-		err = fixture.WaitForRound(rnd, timeoutUntilNextRound)
+		err := fixture.WaitForRound(rnd, timeoutUntilNextRound)
 		r.NoError(err)
 
 		blk, err := libgoalClient.BookkeepingBlock(rnd)
@@ -383,11 +381,11 @@ func getDefaultStateProofConsensusParams() config.ConsensusParams {
 	consensusParams.StateProofStrengthTarget = 256
 	consensusParams.StateProofMaxRecoveryIntervals = 6
 	consensusParams.EnableStateProofKeyregCheck = true
+	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
+	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
 
 	if testing.Short() {
 		consensusParams.StateProofInterval = 16
-		consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
-		consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
 	} else {
 		consensusParams.StateProofInterval = 32
 	}
@@ -849,7 +847,7 @@ func TestTotalWeightChanges(t *testing.T) {
 
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		// Rich node goes offline
-		if consensusParams.StateProofInterval*2-8 == rnd {
+		if consensusParams.StateProofInterval*2-(consensusParams.StateProofInterval/2) == rnd {
 			// subtract 8 rounds since the total online stake is calculated prior to the actual state proof round (lookback)
 			richNode.goOffline(a, &fixture, rnd)
 		}
@@ -1233,8 +1231,8 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 	var lastStateProofBlock bookkeeping.Block
 	libgoalClient := fixture.LibGoalClient
 
-	var totalSupplyAtRound [100]model.SupplyResponse
-	var accountSnapshotAtRound [100][]model.Account
+	var totalSupplyAtRound [1000]model.SupplyResponse
+	var accountSnapshotAtRound [1000][]model.Account
 
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		if rnd == consensusParams.StateProofInterval+consensusParams.StateProofVotersLookback { // here we register the keys of address 0 so it won't be able the sign a state proof (its stake would be removed for the total)

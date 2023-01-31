@@ -36,12 +36,7 @@ func applyCatchpointStateProofConsensusChanges(consensusParams *config.Consensus
 	// we decrease the StateProofStrengthTarget creating a "weak cert" to allow state proofs to be generated when the
 	// signed weight and proven weight are very close to each other.
 	consensusParams.StateProofStrengthTarget = 4
-	if testing.Short() {
-		consensusParams.StateProofInterval = 8
-	} else {
-		consensusParams.StateProofInterval = 16
-	}
-
+	consensusParams.StateProofInterval = 8
 	consensusParams.StateProofVotersLookback = 2
 	consensusParams.EnableStateProofKeyregCheck = true
 	consensusParams.StateProofUseTrackerVerification = true
