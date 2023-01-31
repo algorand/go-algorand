@@ -626,7 +626,7 @@ var globalFieldSpecs = [...]globalFieldSpec{
 		"Address of the creator of the current application"},
 	{CurrentApplicationAddress, AddressBound, ModeApp, 5,
 		"Address that the current application controls"},
-	{GroupID, Uint64Bound, modeAny, 5,
+	{GroupID, HashBound, modeAny, 5,
 		"ID of the transaction group. 32 zero bytes if the transaction is not part of a group."},
 	{OpcodeBudget, Uint64Bound, modeAny, 6,
 		"The remaining cost that can be spent by opcodes in this program."},

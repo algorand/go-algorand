@@ -1,7 +1,7 @@
 {
   "EvalMaxVersion": 8,
   "LogicSigVersion": 8,
-  "Keywords": {
+  "Fields": {
     "ECDSA": [
       {
         "Name": "Secp256k1",
@@ -15,451 +15,875 @@
     "acct_params": [
       {
         "Name": "AcctBalance",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AcctMinBalance",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AcctAuthAddr",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "AcctTotalNumUint",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AcctTotalNumByteSlice",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AcctTotalExtraAppPages",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AcctTotalAppsCreated",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AcctTotalAppsOptedIn",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AcctTotalAssetsCreated",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AcctTotalAssets",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AcctTotalBoxes",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AcctTotalBoxBytes",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       }
     ],
     "app_params": [
       {
         "Name": "AppApprovalProgram",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "AppClearStateProgram",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "AppGlobalNumUint",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AppGlobalNumByteSlice",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AppLocalNumUint",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AppLocalNumByteSlice",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AppExtraProgramPages",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AppCreator",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "AppAddress",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       }
     ],
     "asset_holding": [
       {
         "Name": "AssetBalance",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AssetFrozen",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          1
+        ]
       }
     ],
     "asset_params": [
       {
         "Name": "AssetTotal",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AssetDecimals",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AssetDefaultFrozen",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          1
+        ]
       },
       {
         "Name": "AssetUnitName",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "AssetName",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "AssetURL",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "AssetMetadataHash",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "AssetManager",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "AssetReserve",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "AssetFreeze",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "AssetClawback",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "AssetCreator",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       }
     ],
     "base64": [
       {
         "Name": "URLEncoding",
-        "Type": "."
+        "Type": "_"
       },
       {
         "Name": "StdEncoding",
-        "Type": "."
+        "Type": "_"
       }
     ],
     "block": [
       {
         "Name": "BlkSeed",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "BlkTimestamp",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       }
     ],
     "global": [
       {
         "Name": "MinTxnFee",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "MinBalance",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "MaxTxnLife",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "ZeroAddress",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "GroupSize",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "LogicSigVersion",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "Round",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "LatestTimestamp",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "CurrentApplicationID",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "CreatorAddress",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "CurrentApplicationAddress",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "GroupID",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "OpcodeBudget",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "CallerApplicationID",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "CallerApplicationAddress",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       }
     ],
     "itxn_field": [
       {
         "Name": "Sender",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "Fee",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "Note",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          1000
+        ]
       },
       {
         "Name": "Receiver",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "Amount",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "CloseRemainderTo",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "VotePK",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "SelectionPK",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "VoteFirst",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "VoteLast",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "VoteKeyDilution",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "Type",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "TypeEnum",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "XferAsset",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AssetAmount",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AssetSender",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "AssetReceiver",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "AssetCloseTo",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "ApplicationID",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "OnCompletion",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "ApplicationArgs",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          2000
+        ]
       },
       {
         "Name": "Accounts",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "ApprovalProgram",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "ClearStateProgram",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "RekeyTo",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "ConfigAsset",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "ConfigAssetTotal",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "ConfigAssetDecimals",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "ConfigAssetDefaultFrozen",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          1
+        ]
       },
       {
         "Name": "ConfigAssetUnitName",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "ConfigAssetName",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "ConfigAssetURL",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "ConfigAssetMetadataHash",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "ConfigAssetManager",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "ConfigAssetReserve",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "ConfigAssetFreeze",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "ConfigAssetClawback",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "FreezeAsset",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "FreezeAssetAccount",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "FreezeAssetFrozen",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          1
+        ]
       },
       {
         "Name": "Assets",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "Applications",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "GlobalNumUint",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "GlobalNumByteSlice",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "LocalNumUint",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "LocalNumByteSlice",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "ExtraProgramPages",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "Nonparticipation",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          1
+        ]
       },
       {
         "Name": "StateProofPK",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          64,
+          64
+        ]
       },
       {
         "Name": "ApprovalProgramPages",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "ClearStateProgramPages",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       }
     ],
     "json_ref": [
       {
         "Name": "JSONString",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "JSONUint64",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "JSONObject",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       }
     ],
     "on_complete": [
@@ -491,250 +915,506 @@
     "txn": [
       {
         "Name": "Sender",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "Fee",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "FirstValid",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "FirstValidTime",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "LastValid",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "Note",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          1000
+        ]
       },
       {
         "Name": "Lease",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "Receiver",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "Amount",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "CloseRemainderTo",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "VotePK",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "SelectionPK",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "VoteFirst",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "VoteLast",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "VoteKeyDilution",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "Type",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "TypeEnum",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "XferAsset",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AssetAmount",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "AssetSender",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "AssetReceiver",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "AssetCloseTo",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "GroupIndex",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          16
+        ]
       },
       {
         "Name": "TxID",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "ApplicationID",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "OnCompletion",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "NumAppArgs",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "NumAccounts",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "ApprovalProgram",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "ClearStateProgram",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "RekeyTo",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "ConfigAsset",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "ConfigAssetTotal",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "ConfigAssetDecimals",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "ConfigAssetDefaultFrozen",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          1
+        ]
       },
       {
         "Name": "ConfigAssetUnitName",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "ConfigAssetName",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "ConfigAssetURL",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "ConfigAssetMetadataHash",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "ConfigAssetManager",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "ConfigAssetReserve",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "ConfigAssetFreeze",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "ConfigAssetClawback",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "FreezeAsset",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "FreezeAssetAccount",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "FreezeAssetFrozen",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          1
+        ]
       },
       {
         "Name": "NumAssets",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "NumApplications",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "GlobalNumUint",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "GlobalNumByteSlice",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "LocalNumUint",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "LocalNumByteSlice",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "ExtraProgramPages",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "Nonparticipation",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          1
+        ]
       },
       {
         "Name": "NumLogs",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "CreatedAssetID",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "CreatedApplicationID",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "LastLog",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "StateProofPK",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          64,
+          64
+        ]
       },
       {
         "Name": "NumApprovalProgramPages",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "NumClearStateProgramPages",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       }
     ],
     "txn_type": [
+      {
+        "Name": "keyreg",
+        "Type": "U"
+      },
+      {
+        "Name": "acfg",
+        "Type": "U"
+      },
+      {
+        "Name": "axfer",
+        "Type": "U"
+      },
       {
         "Name": "afrz",
         "Type": "U"
@@ -750,48 +1430,64 @@
       {
         "Name": "pay",
         "Type": "U"
-      },
-      {
-        "Name": "keyreg",
-        "Type": "U"
-      },
-      {
-        "Name": "acfg",
-        "Type": "U"
-      },
-      {
-        "Name": "axfer",
-        "Type": "U"
       }
     ],
     "txna": [
       {
         "Name": "ApplicationArgs",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          2000
+        ]
       },
       {
         "Name": "Accounts",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          32,
+          32
+        ]
       },
       {
         "Name": "Assets",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "Applications",
-        "Type": "U"
+        "Type": "U",
+        "ValueBound": [
+          0,
+          18446744073709551615
+        ]
       },
       {
         "Name": "Logs",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "ApprovalProgramPages",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       },
       {
         "Name": "ClearStateProgramPages",
-        "Type": "B"
+        "Type": "B",
+        "LengthBound": [
+          0,
+          4096
+        ]
       }
     ],
     "vrf_verify": [
