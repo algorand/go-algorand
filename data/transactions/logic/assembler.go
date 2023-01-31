@@ -1394,7 +1394,7 @@ func typeTxField(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, 
 	if !ok {
 		return nil, nil, nil
 	}
-	return StackTypes{fs.ftype}, nil, nil
+	return StackTypes{fs.btype.StackType}, nil, nil
 }
 
 func typeStore(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
