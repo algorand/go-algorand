@@ -118,6 +118,22 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	if err != nil {
 		return fmt.Errorf("Initialize() err: %w", err)
 	}
+	if cfg.IsGossipServer() {
+		cur, err := util.GetFdSoftLimit()
+		if err != nil {
+			return fmt.Errorf("Initialize() failed to obtain a current RLIMIT_NOFILE: %w", err)
+		}
+		var ot basics.OverflowTracker
+		fdRequired := ot.Add(cur, uint64(cfg.IncomingConnectionsLimit))
+		if ot.Overflowed {
+			return errors.New("Initialize() overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease RestConnectionsHardLimit or IncomingConnectionsLimit")
+		}
+		err = util.SetFdSoftLimit(fdRequired)
+		if err != nil {
+			// do not fail but log the error
+			s.log.Errorf("Failed to set a new RLIMIT_NOFILE value to %d: %s", fdRequired, err.Error())
+		}
+	}
 
 	// configure the deadlock detector library
 	switch {

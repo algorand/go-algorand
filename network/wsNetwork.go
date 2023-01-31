@@ -42,7 +42,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/network/limitlistener"
@@ -728,23 +727,6 @@ func (wn *WebsocketNetwork) setup() {
 	wn.relayMessages = wn.config.IsGossipServer() || wn.config.ForceRelayMessages
 	if wn.relayMessages || wn.config.ForceFetchTransactions {
 		wn.wantTXGossip = wantTXGossipYes
-	}
-	if wn.config.IsGossipServer() {
-		cur, err := util.GetFdSoftLimit()
-		if err != nil {
-			wn.log.Errorf("Failed to obtain a current RLIMIT_NOFILE: %s", err.Error())
-		} else {
-			var ot basics.OverflowTracker
-			fdRequired := ot.Add(cur, uint64(wn.config.IncomingConnectionsLimit))
-			if ot.Overflowed {
-				wn.log.Errorf("overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease it")
-			} else {
-				err = util.SetFdSoftLimit(fdRequired)
-				if err != nil {
-					wn.log.Errorf("Failed to set a new RLIMIT_NOFILE value to %d: %s", fdRequired, err.Error())
-				}
-			}
-		}
 	}
 	// roughly estimate the number of messages that could be seen at any given moment.
 	// For the late/redo/down committee, which happen in parallel, we need to allocate
