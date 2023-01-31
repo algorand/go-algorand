@@ -18,6 +18,7 @@ package logic
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -25,16 +26,29 @@ import (
 
 //go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding,JSONRefType,VrfStandard,BlockField -output=fields_string.go
 
-type HigherType string
+type HigherType struct {
+	StackType   StackType // The lower level type it maps to
+	ValueRange  [2]uint64 // If its an integer, what is the min/max values (inclusive)
+	LengthRange [2]uint64 // If its a bytestring, what is the min/max length (inclusive)
+}
 
-const (
-	HigherAddress HigherType = "address"
-	HigherHash    HigherType = "hash"
-	HigherBoolean HigherType = "boolean"
-	HigherBigint  HigherType = "bigint"
-	HigherUint    HigherType = "uint"
-	HigherBytes   HigherType = "bytes"
-	HigherNone    HigherType = ""
+func boundUint(min, max uint64) HigherType {
+	return HigherType{StackType: StackUint64, ValueRange: [2]uint64{min, max}}
+}
+func sizedBytes(min, max uint64) HigherType {
+	return HigherType{StackType: StackBytes, LengthRange: [2]uint64{min, max}}
+}
+
+var (
+	HigherAddress = sizedBytes(32, 32)
+	HigherHash    = sizedBytes(32, 32)
+	HigherBigint  = sizedBytes(1, maxByteMathSize) // TOOD: should this be 0?
+	HigherBytes   = sizedBytes(0, maxStringSize)
+
+	HigherBoolean = boundUint(0, 1)
+	HigherUint    = boundUint(0, math.MaxUint64)
+
+	HigherNone = HigherType{StackType: StackNone}
 )
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
@@ -361,7 +375,7 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{LastLog, StackBytes, HigherBytes, false, 6, 0, true, "The last message emitted. Empty bytes if none were emitted"},
 
 	// Not an effect. Just added after the effects fields.
-	{StateProofPK, StackBytes, HigherBytes, false, 6, 6, false, "64 byte state proof public key"},
+	{StateProofPK, StackBytes, sizedBytes(64, 64), false, 6, 6, false, "64 byte state proof public key"},
 
 	// Pseudo-fields to aid access to large programs (bigger than TEAL values)
 	// reading in a txn seems not *super* useful, but setting in `itxn` is critical to inner app factories
