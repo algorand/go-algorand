@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1182,8 +1182,8 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	wn.maybeSendMessagesOfInterest(peer, nil)
 
-	peers.Set(float64(wn.NumPeers()))
-	incomingPeers.Set(float64(wn.numIncomingPeers()))
+	peers.Set(uint64(wn.NumPeers()))
+	incomingPeers.Set(uint64(wn.numIncomingPeers()))
 }
 
 func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOfInterestEnc []byte) {
@@ -1842,16 +1842,7 @@ func (wn *WebsocketNetwork) getPeerConnectionTelemetryDetails(now time.Time, pee
 			AVCount:              atomic.LoadUint64(&peer.avMessageCount),
 			PPCount:              atomic.LoadUint64(&peer.ppMessageCount),
 		}
-		// unwrap websocket.Conn, requestTrackedConnection, rejectingLimitListenerConn
-		var uconn net.Conn = peer.conn.UnderlyingConn()
-		for i := 0; i < 10; i++ {
-			wconn, ok := uconn.(wrappedConn)
-			if !ok {
-				break
-			}
-			uconn = wconn.UnderlyingConn()
-		}
-		if tcpInfo, err := util.GetConnTCPInfo(uconn); err == nil && tcpInfo != nil {
+		if tcpInfo, err := peer.GetUnderlyingConnTCPInfo(); err == nil && tcpInfo != nil {
 			connDetail.TCP = *tcpInfo
 		}
 		if peer.outgoing {
@@ -2214,8 +2205,8 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 
 	wn.maybeSendMessagesOfInterest(peer, nil)
 
-	peers.Set(float64(wn.NumPeers()))
-	outgoingPeers.Set(float64(wn.numOutgoingPeers()))
+	peers.Set(uint64(wn.NumPeers()))
+	outgoingPeers.Set(uint64(wn.numOutgoingPeers()))
 
 	if wn.prioScheme != nil {
 		challenge := response.Header.Get(PriorityChallengeHeader)
@@ -2332,9 +2323,9 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 			PPCount:          atomic.LoadUint64(&peer.ppMessageCount),
 		})
 
-	peers.Set(float64(wn.NumPeers()))
-	incomingPeers.Set(float64(wn.numIncomingPeers()))
-	outgoingPeers.Set(float64(wn.numOutgoingPeers()))
+	peers.Set(uint64(wn.NumPeers()))
+	incomingPeers.Set(uint64(wn.numIncomingPeers()))
+	outgoingPeers.Set(uint64(wn.numOutgoingPeers()))
 
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
@@ -2399,8 +2390,8 @@ func (wn *WebsocketNetwork) countPeersSetGauges() {
 			numIn++
 		}
 	}
-	networkIncomingConnections.Set(float64(numIn))
-	networkOutgoingConnections.Set(float64(numOut))
+	networkIncomingConnections.Set(uint64(numIn))
+	networkOutgoingConnections.Set(uint64(numOut))
 }
 
 func justHost(hostPort string) string {

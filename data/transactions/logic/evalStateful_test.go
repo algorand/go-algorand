@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -197,44 +197,47 @@ pop
 bytec_0
 log
 `
-	tests := map[runMode]string{
-		modeSig: opcodesRunModeAny + opcodesRunModeSignature,
-		modeApp: opcodesRunModeAny + opcodesRunModeApplication,
+	tests := map[RunMode]string{
+		ModeSig: opcodesRunModeAny + opcodesRunModeSignature,
+		ModeApp: opcodesRunModeAny + opcodesRunModeApplication,
 	}
-
-	ep, tx, ledger := makeSampleEnv()
-	ep.TxnGroup[0].Lsig.Args = [][]byte{
-		tx.Sender[:],
-		tx.Receiver[:],
-		tx.CloseRemainderTo[:],
-		tx.VotePK[:],
-		tx.SelectionPK[:],
-		tx.Note,
-	}
-	params := basics.AssetParams{
-		Total:         1000,
-		Decimals:      2,
-		DefaultFrozen: false,
-		UnitName:      "ALGO",
-		AssetName:     "",
-		URL:           string(protocol.PaymentTx),
-		Manager:       tx.Sender,
-		Reserve:       tx.Receiver,
-		Freeze:        tx.Receiver,
-		Clawback:      tx.Receiver,
-	}
-	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-	ledger.NewAccount(tx.Sender, 1)
-	ledger.NewApp(tx.Sender, 100, basics.AppParams{})
-	ledger.NewLocals(tx.Sender, 100)
-	ledger.NewLocal(tx.Sender, 100, "ALGO", algoValue)
-	ledger.NewAsset(tx.Sender, 5, params)
 
 	for mode, test := range tests {
+		mode, test := mode, test
 		t.Run(fmt.Sprintf("opcodes_mode=%d", mode), func(t *testing.T) {
+			t.Parallel()
+
+			ep, tx, ledger := makeSampleEnv()
+			ep.TxnGroup[0].Lsig.Args = [][]byte{
+				tx.Sender[:],
+				tx.Receiver[:],
+				tx.CloseRemainderTo[:],
+				tx.VotePK[:],
+				tx.SelectionPK[:],
+				tx.Note,
+			}
 			ep.TxnGroup[0].Txn.ApplicationID = 100
 			ep.TxnGroup[0].Txn.ForeignAssets = []basics.AssetIndex{5} // needed since v4
-			if mode == modeSig {
+			params := basics.AssetParams{
+				Total:         1000,
+				Decimals:      2,
+				DefaultFrozen: false,
+				UnitName:      "ALGO",
+				AssetName:     "",
+				URL:           string(protocol.PaymentTx),
+				Manager:       tx.Sender,
+				Reserve:       tx.Receiver,
+				Freeze:        tx.Receiver,
+				Clawback:      tx.Receiver,
+			}
+			algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
+			ledger.NewAccount(tx.Sender, 1)
+			ledger.NewApp(tx.Sender, 100, basics.AppParams{})
+			ledger.NewLocals(tx.Sender, 100)
+			ledger.NewLocal(tx.Sender, 100, "ALGO", algoValue)
+			ledger.NewAsset(tx.Sender, 5, params)
+
+			if mode == ModeSig {
 				testLogic(t, test, AssemblerMaxVersion, ep)
 			} else {
 				testApp(t, test, ep)
@@ -295,13 +298,14 @@ log
 	}
 
 	for _, source := range statefulOpcodeCalls {
+		source := source
 		testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(),
 			"not allowed in current mode", "not allowed in current mode")
 	}
 
-	require.Equal(t, runMode(1), modeSig)
-	require.Equal(t, runMode(2), modeApp)
-	require.True(t, modeAny == modeSig|modeApp)
+	require.Equal(t, RunMode(1), ModeSig)
+	require.Equal(t, RunMode(2), ModeApp)
+	require.True(t, modeAny == ModeSig|ModeApp)
 	require.True(t, modeAny.Any())
 }
 
@@ -1276,7 +1280,9 @@ intc_1
 		"delete": {sourceDelete, 12},
 	}
 	for name, cmdtest := range tests {
+		name, cmdtest := name, cmdtest
 		t.Run(fmt.Sprintf("test=%s", name), func(t *testing.T) {
+			t.Parallel()
 			source := cmdtest.source
 			firstCmdOffset := cmdtest.accNumOffset
 
@@ -1628,7 +1634,9 @@ int 1
 		"delete": sourceDelete,
 	}
 	for name, source := range tests {
+		name, source := name, source
 		t.Run(fmt.Sprintf("test=%s", name), func(t *testing.T) {
+			t.Parallel()
 			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 			require.NoError(t, err)
 
@@ -2255,9 +2263,8 @@ int 1
 	require.Equal(t, 1, len(delta.LocalDeltas[0]))
 }
 
-func TestEnumFieldErrors(t *testing.T) {
+func TestEnumFieldErrors(t *testing.T) { // nolint:paralleltest // manipulates globalFieldSpecs
 	partitiontest.PartitionTest(t)
-	// t.Parallel() NO! manipulates globalFieldSpecs
 
 	source := `txn Amount`
 	origSpec := txnFieldSpecs[Amount]
@@ -2340,48 +2347,6 @@ func TestReturnTypes(t *testing.T) {
 		StackAny:    "int 1\n",
 		StackBytes:  "byte 0x33343536\n", // Which is the string "3456"
 	}
-	ep, tx, ledger := makeSampleEnv()
-
-	tx.Type = protocol.ApplicationCallTx
-	tx.ApplicationID = 1
-	tx.ForeignApps = []basics.AppIndex{tx.ApplicationID}
-	tx.ForeignAssets = []basics.AssetIndex{basics.AssetIndex(1), basics.AssetIndex(1)}
-	tx.Boxes = []transactions.BoxRef{{
-		Name: []byte("3456"),
-	}}
-	ep.TxnGroup[0].Lsig.Args = [][]byte{
-		[]byte("aoeu"),
-		[]byte("aoeu"),
-		[]byte("aoeu2"),
-		[]byte("aoeu3"),
-	}
-	// We are going to run with GroupIndex=1, so make tx1 interesting too (so
-	// txn can look at things)
-	ep.TxnGroup[1] = ep.TxnGroup[0]
-
-	ep.pastScratch[0] = &scratchSpace{} // for gload
-	ledger.NewAccount(tx.Sender, 1)
-	params := basics.AssetParams{
-		Total:         1000,
-		Decimals:      2,
-		DefaultFrozen: false,
-		UnitName:      "ALGO",
-		AssetName:     "",
-		URL:           string(protocol.PaymentTx),
-		Manager:       tx.Sender,
-		Reserve:       tx.Receiver,
-		Freeze:        tx.Receiver,
-		Clawback:      tx.Receiver,
-	}
-	ledger.NewAsset(tx.Sender, 1, params)
-	ledger.NewApp(tx.Sender, 1, basics.AppParams{})
-	ledger.NewAccount(tx.Receiver, 1000000)
-	ledger.NewLocals(tx.Receiver, 1)
-	key, err := hex.DecodeString("33343536")
-	require.NoError(t, err)
-	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-	ledger.NewLocal(tx.Receiver, 1, string(key), algoValue)
-	ledger.NewAccount(appAddr(1), 1000000)
 
 	// We try to form a snippet that will test every opcode, by sandwiching it
 	// between arguments that correspond to the opcode's input types, and then
@@ -2477,7 +2442,7 @@ func TestReturnTypes(t *testing.T) {
 	}
 
 	byName := OpsByName[LogicVersion]
-	for _, m := range []runMode{modeSig, modeApp} {
+	for _, m := range []RunMode{ModeSig, ModeApp} {
 		for name, spec := range byName {
 			// Only try an opcode in its modes
 			if (m & spec.Modes) == 0 {
@@ -2486,7 +2451,10 @@ func TestReturnTypes(t *testing.T) {
 			if skipCmd[name] || spec.trusted {
 				continue
 			}
+			m, name, spec := m, name, spec
 			t.Run(fmt.Sprintf("mode=%s,opcode=%s", m, name), func(t *testing.T) {
+				t.Parallel()
+
 				provideStackInput := true
 				cmd := name
 				if special, ok := specialCmd[name]; ok {
@@ -2529,6 +2497,49 @@ func TestReturnTypes(t *testing.T) {
 				sb.WriteString(cmd + "\n")
 				ops := testProg(t, sb.String(), AssemblerMaxVersion)
 
+				ep, tx, ledger := makeSampleEnv()
+
+				tx.Type = protocol.ApplicationCallTx
+				tx.ApplicationID = 1
+				tx.ForeignApps = []basics.AppIndex{tx.ApplicationID}
+				tx.ForeignAssets = []basics.AssetIndex{basics.AssetIndex(1), basics.AssetIndex(1)}
+				tx.Boxes = []transactions.BoxRef{{
+					Name: []byte("3456"),
+				}}
+				ep.TxnGroup[0].Lsig.Args = [][]byte{
+					[]byte("aoeu"),
+					[]byte("aoeu"),
+					[]byte("aoeu2"),
+					[]byte("aoeu3"),
+				}
+				// We are going to run with GroupIndex=1, so make tx1 interesting too (so
+				// txn can look at things)
+				ep.TxnGroup[1] = ep.TxnGroup[0]
+
+				ep.pastScratch[0] = &scratchSpace{} // for gload
+				ledger.NewAccount(tx.Sender, 1)
+				params := basics.AssetParams{
+					Total:         1000,
+					Decimals:      2,
+					DefaultFrozen: false,
+					UnitName:      "ALGO",
+					AssetName:     "",
+					URL:           string(protocol.PaymentTx),
+					Manager:       tx.Sender,
+					Reserve:       tx.Receiver,
+					Freeze:        tx.Receiver,
+					Clawback:      tx.Receiver,
+				}
+				ledger.NewAsset(tx.Sender, 1, params)
+				ledger.NewApp(tx.Sender, 1, basics.AppParams{})
+				ledger.NewAccount(tx.Receiver, 1000000)
+				ledger.NewLocals(tx.Receiver, 1)
+				key, err := hex.DecodeString("33343536")
+				require.NoError(t, err)
+				algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
+				ledger.NewLocal(tx.Receiver, 1, string(key), algoValue)
+				ledger.NewAccount(appAddr(1), 1000000)
+
 				ep.reset()                          // for Trace and budget isolation
 				ep.pastScratch[0] = &scratchSpace{} // for gload
 				// these allows the box_* opcodes that to work
@@ -2551,7 +2562,7 @@ func TestReturnTypes(t *testing.T) {
 				// is checked for typing, we can't get hung up on whether it is
 				// exactly one positive int. But if it fails for any *other*
 				// reason, we're not doing a good test.
-				_, err := eval(ops.Program, &cx)
+				_, err = eval(ops.Program, &cx)
 				if err != nil {
 					// Allow the kinds of errors we expect, but fail for stuff
 					// that indicates the opcode itself failed.
@@ -2710,6 +2721,7 @@ func appAddr(id int) basics.Address {
 
 func TestAppInfo(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := makeSampleEnv()
 	require.Equal(t, 888, int(tx.ApplicationID))

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -81,7 +81,7 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 				err := lt.prepareCommit(dcc)
 				require.NoError(t, err)
 			}
-			err := ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			err := ml.trackers.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
 				arw := store.NewAccountsSQLReaderWriter(tx)
 				for _, lt := range ml.trackers.trackers {
 					err0 := lt.commitRound(ctx, tx, dcc)
@@ -807,7 +807,7 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
 	var endRound basics.Round
-	err := ao.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := ao.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
 		arw := store.NewAccountsSQLReaderWriter(tx)
 		dbOnlineRoundParams, endRound, err = arw.AccountsOnlineRoundParams()
 		return err
@@ -1292,7 +1292,7 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	// DB has all the required history tho
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
 	var endRound basics.Round
-	err = oa.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = oa.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
 		arw := store.NewAccountsSQLReaderWriter(tx)
 		dbOnlineRoundParams, endRound, err = arw.AccountsOnlineRoundParams()
 		return err
@@ -1680,7 +1680,7 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 		go func() {
 			time.Sleep(2 * time.Second)
 			// tweak the database to move backwards
-			err = oa.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			err = oa.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
 				_, err = tx.Exec("update acctrounds set rnd = 1 WHERE id='acctbase' ")
 				return
 			})

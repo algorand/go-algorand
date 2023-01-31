@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -97,17 +97,6 @@ type BlockAcceptedEventDetails struct {
 	PreValidated bool
 	PropBufLen   uint64
 	VoteBufLen   uint64
-}
-
-// TopAccountsEvent event
-const TopAccountsEvent Event = "TopAccounts"
-
-// TopAccountEventDetails contains details for the BlockAcceptedEvent
-type TopAccountEventDetails struct {
-	Round              uint64
-	OnlineAccounts     []map[string]interface{}
-	OnlineCirculation  uint64
-	OfflineCirculation uint64
 }
 
 // AccountRegisteredEvent event

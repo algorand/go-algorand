@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,50 @@ func TestEnsureDataDirReturnsWhenDataDirIsProvided(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	expectedDir := "~/.algorand"
 	os.Setenv("ALGORAND_DATA", expectedDir)
+	actualDir := ensureFirstDataDir()
+	require.Equal(t, expectedDir, actualDir)
+}
+
+func TestEnsureDataDirReturnsWhenWorkDirIsProvided(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	expectedDir, err := os.Getwd()
+	if err != nil {
+		reportErrorf("Error getting work dir: %s", err)
+	}
+	dataDirs[0] = "."
+	actualDir := ensureFirstDataDir()
+	require.Equal(t, expectedDir, actualDir)
+}
+
+func TestEnsureDataDirReturnsWhenRelPath1IsProvided(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	expectedDir, err := os.Getwd()
+	if err != nil {
+		reportErrorf("Error getting work dir: %s", err)
+	}
+	dataDirs[0] = "./../goal"
+	actualDir := ensureFirstDataDir()
+	require.Equal(t, expectedDir, actualDir)
+}
+
+func TestEnsureDataDirReturnsWhenRelPath2IsProvided(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	expectedDir, err := os.Getwd()
+	if err != nil {
+		reportErrorf("Error getting work dir: %s", err)
+	}
+	dataDirs[0] = "../goal"
+	actualDir := ensureFirstDataDir()
+	require.Equal(t, expectedDir, actualDir)
+}
+
+func TestEnsureDataDirReturnsWhenRelPath3IsProvided(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	expectedDir, err := os.Getwd()
+	if err != nil {
+		reportErrorf("Error getting work dir: %s", err)
+	}
+	dataDirs[0] = "../../cmd/goal"
 	actualDir := ensureFirstDataDir()
 	require.Equal(t, expectedDir, actualDir)
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -278,8 +278,13 @@ func resolveDataDir() string {
 	// Figure out what data directory to tell algod to use.
 	// If not specified on cmdline with '-d', look for default in environment.
 	var dir string
-	if len(dataDirs) > 0 {
-		dir = dataDirs[0]
+	if (len(dataDirs) > 0) && (dataDirs[0] != "") {
+		// calculate absolute path, see https://github.com/algorand/go-algorand/issues/589
+		absDir, err := filepath.Abs(dataDirs[0])
+		if err != nil {
+			reportErrorf("Absolute path conversion error: %s", err)
+		}
+		dir = absDir
 	}
 	if dir == "" {
 		dir = os.Getenv("ALGORAND_DATA")

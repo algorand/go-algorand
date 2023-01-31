@@ -117,7 +117,61 @@ issues:
         - staticcheck
         - typecheck
     # Ignore missing parallel tests in existing packages
-    - path: (agreement|catchup|cmd|config|crypto|daemon|data|gen|ledger|logging|netdeploy|network|node|protocol|rpcs|shared|stateproof|test|tools|util).*_test.go
+    - path: ^agreement.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^catchup.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^cmd.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^config.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^crypto.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^daemon.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^data.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^gen.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^ledger.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^logging.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^netdeploy.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^network.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^node.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^protocol.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^rpcs.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^stateproof.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^test.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^tools.*_test\.go
+      linters:
+        - paralleltest
+    - path: ^util.*_test\.go
       linters:
         - paralleltest
     # Add all linters here -- Comment this block out for testing linters

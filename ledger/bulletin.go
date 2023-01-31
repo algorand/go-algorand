@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -81,7 +81,10 @@ func (b *bulletin) Wait(round basics.Round) chan struct{} {
 }
 
 func (b *bulletin) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
-	b.pendingNotificationRequests = make(map[basics.Round]notifier)
+	// We want to keep existing notification requests in memory if this flow is triggered by reloadLedger.
+	if b.pendingNotificationRequests == nil {
+		b.pendingNotificationRequests = make(map[basics.Round]notifier)
+	}
 	b.latestRound = l.Latest()
 	return nil
 }

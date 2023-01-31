@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,10 +20,9 @@ import (
 	"math"
 	"testing"
 
+	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -36,7 +35,7 @@ func TestEncodedKVRecordV6Allocbounds(t *testing.T) {
 	for version, params := range config.Consensus {
 		require.GreaterOrEqualf(t, uint64(KVRecordV6MaxValueLength), params.MaxBoxSize, "Allocbound constant no longer valid as of consensus version %s", version)
 		longestPossibleBoxName := string(make([]byte, params.MaxAppKeyLen))
-		longestPossibleKey := logic.MakeBoxKey(basics.AppIndex(math.MaxUint64), longestPossibleBoxName)
+		longestPossibleKey := apps.MakeBoxKey(math.MaxUint64, longestPossibleBoxName)
 		require.GreaterOrEqualf(t, KVRecordV6MaxValueLength, len(longestPossibleKey), "Allocbound constant no longer valid as of consensus version %s", version)
 	}
 }

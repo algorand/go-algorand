@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package logic
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -1457,7 +1458,7 @@ done:`
 	require.Equal(t, expectedProgBytes, ops.Program)
 }
 
-func TestMultipleErrors(t *testing.T) {
+func TestSeveralErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -1623,10 +1624,12 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 	// catch any suprises.
 	require.LessOrEqual(t, LogicVersion, len(nonsense)) // Allow nonsense for future versions
 	for v, source := range nonsense {
+		v, source := v, source
 		if v > LogicVersion {
 			continue // We allow them to be set, but can't test assembly beyond LogicVersion
 		}
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			t.Parallel()
 			ops := testProg(t, source, v)
 			t2, err := Disassemble(ops.Program)
 			require.NoError(t, err)
@@ -3050,4 +3053,109 @@ func TestAssemblePushConsts(t *testing.T) {
 	testProg(t, source, AssemblerMaxVersion, Expect{1, "concat arg 1 wanted type []byte got uint64"})
 	source = `pushbytess "x" "y"; +`
 	testProg(t, source, AssemblerMaxVersion, Expect{1, "+ arg 1 wanted type uint64 got []byte"})
+}
+
+func TestAssembleEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	emptyExpect := Expect{0, "Cannot assemble empty program text"}
+	emptyPrograms := []string{
+		"",
+		"     ",
+		"   \n\t\t\t\n\n    ",
+		"   \n \t   \t \t  \n   \n    \n\n",
+	}
+
+	nonEmpty := "   \n \t   \t \t  int 1   \n   \n \t \t   \n\n"
+
+	for version := uint64(1); version <= AssemblerMaxVersion; version++ {
+		for _, prog := range emptyPrograms {
+			testProg(t, prog, version, emptyExpect)
+		}
+		testProg(t, nonEmpty, version)
+	}
+}
+
+func TestReportMultipleErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	assertWithMsg := func(t *testing.T, expectedOutput string, b bytes.Buffer) {
+		if b.String() != expectedOutput {
+			t.Errorf("Unexpected output: got %q, want %q", b.String(), expectedOutput)
+		}
+	}
+
+	ops := &OpStream{
+		Errors: []lineError{
+			{Line: 1, Err: errors.New("error 1")},
+			{Err: errors.New("error 2")},
+			{Line: 3, Err: errors.New("error 3")},
+		},
+		Warnings: []error{
+			errors.New("warning 1"),
+			errors.New("warning 2"),
+		},
+	}
+
+	// Test the case where fname is not empty
+	var b bytes.Buffer
+	ops.ReportMultipleErrors("test.txt", &b)
+	expected := `test.txt: 1: error 1
+test.txt: 0: error 2
+test.txt: 3: error 3
+test.txt: warning 1
+test.txt: warning 2
+`
+	assertWithMsg(t, expected, b)
+
+	// Test the case where fname is empty
+	b.Reset()
+	ops.ReportMultipleErrors("", &b)
+	expected = `1: error 1
+0: error 2
+3: error 3
+warning 1
+warning 2
+`
+	assertWithMsg(t, expected, b)
+
+	// no errors or warnings at all
+	ops = &OpStream{}
+	b.Reset()
+	ops.ReportMultipleErrors("blah blah", &b)
+	expected = ""
+	assertWithMsg(t, expected, b)
+
+	// more than 10 errors:
+	file := "great-file.go"
+	les := []lineError{}
+	expectedStrs := []string{}
+	for i := 1; i <= 11; i++ {
+		errS := fmt.Errorf("error %d", i)
+		les = append(les, lineError{i, errS})
+		if i <= 10 {
+			expectedStrs = append(expectedStrs, fmt.Sprintf("%s: %d: %s", file, i, errS))
+		}
+	}
+	expected = strings.Join(expectedStrs, "\n") + "\n"
+	ops = &OpStream{Errors: les}
+	b.Reset()
+	ops.ReportMultipleErrors(file, &b)
+	assertWithMsg(t, expected, b)
+
+	// exactly 1 error + filename
+	ops = &OpStream{Errors: []lineError{{42, errors.New("super annoying error")}}}
+	b.Reset()
+	ops.ReportMultipleErrors("galaxy.py", &b)
+	expected = "galaxy.py: 1 error: 42: super annoying error\n"
+	assertWithMsg(t, expected, b)
+
+	// exactly 1 error w/o filename
+	ops = &OpStream{Errors: []lineError{{42, errors.New("super annoying error")}}}
+	b.Reset()
+	ops.ReportMultipleErrors("", &b)
+	expected = "1 error: 42: super annoying error\n"
+	assertWithMsg(t, expected, b)
 }

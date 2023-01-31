@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -121,7 +121,7 @@ type OpDetails struct {
 	check  checkFunc  // static check bytecode (and determine size)
 	refine refineFunc // refine arg/return types based on ProgramKnowledge at assembly time
 
-	Modes runMode // all modes that opcode can run in. i.e (cx.mode & Modes) != 0 allows
+	Modes RunMode // all modes that opcode can run in. i.e (cx.mode & Modes) != 0 allows
 
 	FullCost   linearCost  // if non-zero, the cost of the opcode, no immediates matter
 	Size       int         // if non-zero, the known size of opcode. if 0, check() determines.
@@ -221,13 +221,13 @@ func (d OpDetails) costs(cost int) OpDetails {
 	return d
 }
 
-func only(m runMode) OpDetails {
+func only(m RunMode) OpDetails {
 	d := detDefault()
 	d.Modes = m
 	return d
 }
 
-func (d OpDetails) only(m runMode) OpDetails {
+func (d OpDetails) only(m RunMode) OpDetails {
 	d.Modes = m
 	return d
 }
@@ -419,7 +419,7 @@ var OpSpecs = []OpSpec{
 		{0x03, "sha512_256", opSHA512_256, proto("b:b"), 7, unlimitedStorage, costByLength(17, 5, 8)},
 	*/
 
-	{0x04, "ed25519verify", opEd25519Verify, proto("bbb:i"), 1, costly(1900).only(modeSig)},
+	{0x04, "ed25519verify", opEd25519Verify, proto("bbb:i"), 1, costly(1900).only(ModeSig)},
 	{0x04, "ed25519verify", opEd25519Verify, proto("bbb:i"), 5, costly(1900)},
 
 	{0x05, "ecdsa_verify", opEcdsaVerify, proto("bbbbb:i"), 5, costByField("v", &EcdsaCurves, ecdsaVerifyCosts)},
@@ -463,11 +463,11 @@ var OpSpecs = []OpSpec{
 	{0x29, "bytec_1", opByteConst1, proto(":b"), 1, detDefault()},
 	{0x2a, "bytec_2", opByteConst2, proto(":b"), 1, detDefault()},
 	{0x2b, "bytec_3", opByteConst3, proto(":b"), 1, detDefault()},
-	{0x2c, "arg", opArg, proto(":b"), 1, immediates("n").only(modeSig).assembler(asmArg)},
-	{0x2d, "arg_0", opArg0, proto(":b"), 1, only(modeSig)},
-	{0x2e, "arg_1", opArg1, proto(":b"), 1, only(modeSig)},
-	{0x2f, "arg_2", opArg2, proto(":b"), 1, only(modeSig)},
-	{0x30, "arg_3", opArg3, proto(":b"), 1, only(modeSig)},
+	{0x2c, "arg", opArg, proto(":b"), 1, immediates("n").only(ModeSig).assembler(asmArg)},
+	{0x2d, "arg_0", opArg0, proto(":b"), 1, only(ModeSig)},
+	{0x2e, "arg_1", opArg1, proto(":b"), 1, only(ModeSig)},
+	{0x2f, "arg_2", opArg2, proto(":b"), 1, only(ModeSig)},
+	{0x30, "arg_3", opArg3, proto(":b"), 1, only(ModeSig)},
 	// txn, gtxn, and gtxns are also implemented as pseudoOps to choose
 	// between scalar and array version based on number of immediates.
 	{0x31, "txn", opTxn, proto(":a"), 1, field("f", &TxnScalarFields)},
@@ -481,11 +481,11 @@ var OpSpecs = []OpSpec{
 	{0x38, "gtxns", opGtxns, proto("i:a"), 3, immediates("f").field("f", &TxnScalarFields)},
 	{0x39, "gtxnsa", opGtxnsa, proto("i:a"), 3, immediates("f", "i").field("f", &TxnArrayFields)},
 	// Group scratch space access
-	{0x3a, "gload", opGload, proto(":a"), 4, immediates("t", "i").only(modeApp)},
-	{0x3b, "gloads", opGloads, proto("i:a"), 4, immediates("i").only(modeApp)},
+	{0x3a, "gload", opGload, proto(":a"), 4, immediates("t", "i").only(ModeApp)},
+	{0x3b, "gloads", opGloads, proto("i:a"), 4, immediates("i").only(ModeApp)},
 	// Access creatable IDs (consider deprecating, as txn CreatedAssetID, CreatedApplicationID should be enough
-	{0x3c, "gaid", opGaid, proto(":i"), 4, immediates("t").only(modeApp)},
-	{0x3d, "gaids", opGaids, proto("i:i"), 4, only(modeApp)},
+	{0x3c, "gaid", opGaid, proto(":i"), 4, immediates("t").only(ModeApp)},
+	{0x3d, "gaids", opGaids, proto("i:i"), 4, only(ModeApp)},
 
 	// Like load/store, but scratch slot taken from TOS instead of immediate
 	{0x3e, "loads", opLoads, proto("i:a"), 5, typed(typeLoads)},
@@ -526,31 +526,31 @@ var OpSpecs = []OpSpec{
 	{0x5e, "base64_decode", opBase64Decode, proto("b:b"), fidoVersion, field("e", &Base64Encodings).costByLength(1, 1, 16, 0)},
 	{0x5f, "json_ref", opJSONRef, proto("bb:a"), fidoVersion, field("r", &JSONRefTypes).costByLength(25, 2, 7, 1)},
 
-	{0x60, "balance", opBalance, proto("i:i"), 2, only(modeApp)},
-	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(modeApp)},
-	{0x61, "app_opted_in", opAppOptedIn, proto("ii:i"), 2, only(modeApp)},
-	{0x61, "app_opted_in", opAppOptedIn, proto("ai:i"), directRefEnabledVersion, only(modeApp)},
-	{0x62, "app_local_get", opAppLocalGet, proto("ib:a"), 2, only(modeApp)},
-	{0x62, "app_local_get", opAppLocalGet, proto("ab:a"), directRefEnabledVersion, only(modeApp)},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("iib:ai"), 2, only(modeApp)},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aib:ai"), directRefEnabledVersion, only(modeApp)},
-	{0x64, "app_global_get", opAppGlobalGet, proto("b:a"), 2, only(modeApp)},
-	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("ib:ai"), 2, only(modeApp)},
-	{0x66, "app_local_put", opAppLocalPut, proto("iba:"), 2, only(modeApp)},
-	{0x66, "app_local_put", opAppLocalPut, proto("aba:"), directRefEnabledVersion, only(modeApp)},
-	{0x67, "app_global_put", opAppGlobalPut, proto("ba:"), 2, only(modeApp)},
-	{0x68, "app_local_del", opAppLocalDel, proto("ib:"), 2, only(modeApp)},
-	{0x68, "app_local_del", opAppLocalDel, proto("ab:"), directRefEnabledVersion, only(modeApp)},
-	{0x69, "app_global_del", opAppGlobalDel, proto("b:"), 2, only(modeApp)},
+	{0x60, "balance", opBalance, proto("i:i"), 2, only(ModeApp)},
+	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(ModeApp)},
+	{0x61, "app_opted_in", opAppOptedIn, proto("ii:i"), 2, only(ModeApp)},
+	{0x61, "app_opted_in", opAppOptedIn, proto("ai:i"), directRefEnabledVersion, only(ModeApp)},
+	{0x62, "app_local_get", opAppLocalGet, proto("ib:a"), 2, only(ModeApp)},
+	{0x62, "app_local_get", opAppLocalGet, proto("ab:a"), directRefEnabledVersion, only(ModeApp)},
+	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("iib:ai"), 2, only(ModeApp)},
+	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aib:ai"), directRefEnabledVersion, only(ModeApp)},
+	{0x64, "app_global_get", opAppGlobalGet, proto("b:a"), 2, only(ModeApp)},
+	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("ib:ai"), 2, only(ModeApp)},
+	{0x66, "app_local_put", opAppLocalPut, proto("iba:"), 2, only(ModeApp)},
+	{0x66, "app_local_put", opAppLocalPut, proto("aba:"), directRefEnabledVersion, only(ModeApp)},
+	{0x67, "app_global_put", opAppGlobalPut, proto("ba:"), 2, only(ModeApp)},
+	{0x68, "app_local_del", opAppLocalDel, proto("ib:"), 2, only(ModeApp)},
+	{0x68, "app_local_del", opAppLocalDel, proto("ab:"), directRefEnabledVersion, only(ModeApp)},
+	{0x69, "app_global_del", opAppGlobalDel, proto("b:"), 2, only(ModeApp)},
 
-	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ii:ai"), 2, field("f", &AssetHoldingFields).only(modeApp)},
-	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ai:ai"), directRefEnabledVersion, field("f", &AssetHoldingFields).only(modeApp)},
-	{0x71, "asset_params_get", opAssetParamsGet, proto("i:ai"), 2, field("f", &AssetParamsFields).only(modeApp)},
-	{0x72, "app_params_get", opAppParamsGet, proto("i:ai"), 5, field("f", &AppParamsFields).only(modeApp)},
-	{0x73, "acct_params_get", opAcctParamsGet, proto("a:ai"), 6, field("f", &AcctParamsFields).only(modeApp)},
+	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ii:ai"), 2, field("f", &AssetHoldingFields).only(ModeApp)},
+	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ai:ai"), directRefEnabledVersion, field("f", &AssetHoldingFields).only(ModeApp)},
+	{0x71, "asset_params_get", opAssetParamsGet, proto("i:ai"), 2, field("f", &AssetParamsFields).only(ModeApp)},
+	{0x72, "app_params_get", opAppParamsGet, proto("i:ai"), 5, field("f", &AppParamsFields).only(ModeApp)},
+	{0x73, "acct_params_get", opAcctParamsGet, proto("a:ai"), 6, field("f", &AcctParamsFields).only(ModeApp)},
 
-	{0x78, "min_balance", opMinBalance, proto("i:i"), 3, only(modeApp)},
-	{0x78, "min_balance", opMinBalance, proto("a:i"), directRefEnabledVersion, only(modeApp)},
+	{0x78, "min_balance", opMinBalance, proto("i:i"), 3, only(ModeApp)},
+	{0x78, "min_balance", opMinBalance, proto("a:i"), directRefEnabledVersion, only(ModeApp)},
 
 	// Immediate bytes and ints. Smaller code size for single use of constant.
 	{0x80, "pushbytes", opPushBytes, proto(":b"), 3, constants(asmPushBytes, opPushBytes, "bytes", immBytes)},
@@ -607,33 +607,33 @@ var OpSpecs = []OpSpec{
 	{0xaf, "bzero", opBytesZero, proto("i:b"), 4, detDefault()},
 
 	// AVM "effects"
-	{0xb0, "log", opLog, proto("b:"), 5, only(modeApp)},
-	{0xb1, "itxn_begin", opTxBegin, proto(":"), 5, only(modeApp)},
-	{0xb2, "itxn_field", opItxnField, proto("a:"), 5, immediates("f").typed(typeTxField).field("f", &TxnFields).only(modeApp).assembler(asmItxnField)},
-	{0xb3, "itxn_submit", opItxnSubmit, proto(":"), 5, only(modeApp)},
-	{0xb4, "itxn", opItxn, proto(":a"), 5, field("f", &TxnScalarFields).only(modeApp).assembler(asmItxn)},
-	{0xb5, "itxna", opItxna, proto(":a"), 5, immediates("f", "i").field("f", &TxnArrayFields).only(modeApp)},
-	{0xb6, "itxn_next", opItxnNext, proto(":"), 6, only(modeApp)},
-	{0xb7, "gitxn", opGitxn, proto(":a"), 6, immediates("t", "f").field("f", &TxnFields).only(modeApp).assembler(asmGitxn)},
-	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(modeApp)},
+	{0xb0, "log", opLog, proto("b:"), 5, only(ModeApp)},
+	{0xb1, "itxn_begin", opTxBegin, proto(":"), 5, only(ModeApp)},
+	{0xb2, "itxn_field", opItxnField, proto("a:"), 5, immediates("f").typed(typeTxField).field("f", &TxnFields).only(ModeApp).assembler(asmItxnField)},
+	{0xb3, "itxn_submit", opItxnSubmit, proto(":"), 5, only(ModeApp)},
+	{0xb4, "itxn", opItxn, proto(":a"), 5, field("f", &TxnScalarFields).only(ModeApp).assembler(asmItxn)},
+	{0xb5, "itxna", opItxna, proto(":a"), 5, immediates("f", "i").field("f", &TxnArrayFields).only(ModeApp)},
+	{0xb6, "itxn_next", opItxnNext, proto(":"), 6, only(ModeApp)},
+	{0xb7, "gitxn", opGitxn, proto(":a"), 6, immediates("t", "f").field("f", &TxnFields).only(ModeApp).assembler(asmGitxn)},
+	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// Unlimited Global Storage - Boxes
-	{0xb9, "box_create", opBoxCreate, proto("bi:i"), boxVersion, only(modeApp)},
-	{0xba, "box_extract", opBoxExtract, proto("bii:b"), boxVersion, only(modeApp)},
-	{0xbb, "box_replace", opBoxReplace, proto("bib:"), boxVersion, only(modeApp)},
-	{0xbc, "box_del", opBoxDel, proto("b:i"), boxVersion, only(modeApp)},
-	{0xbd, "box_len", opBoxLen, proto("b:ii"), boxVersion, only(modeApp)},
-	{0xbe, "box_get", opBoxGet, proto("b:bi"), boxVersion, only(modeApp)},
-	{0xbf, "box_put", opBoxPut, proto("bb:"), boxVersion, only(modeApp)},
+	{0xb9, "box_create", opBoxCreate, proto("bi:i"), boxVersion, only(ModeApp)},
+	{0xba, "box_extract", opBoxExtract, proto("bii:b"), boxVersion, only(ModeApp)},
+	{0xbb, "box_replace", opBoxReplace, proto("bib:"), boxVersion, only(ModeApp)},
+	{0xbc, "box_del", opBoxDel, proto("b:i"), boxVersion, only(ModeApp)},
+	{0xbd, "box_len", opBoxLen, proto("b:ii"), boxVersion, only(ModeApp)},
+	{0xbe, "box_get", opBoxGet, proto("b:bi"), boxVersion, only(ModeApp)},
+	{0xbf, "box_put", opBoxPut, proto("bb:"), boxVersion, only(ModeApp)},
 
 	// Dynamic indexing
 	{0xc0, "txnas", opTxnas, proto("i:a"), 5, field("f", &TxnArrayFields)},
 	{0xc1, "gtxnas", opGtxnas, proto("i:a"), 5, immediates("t", "f").field("f", &TxnArrayFields)},
 	{0xc2, "gtxnsas", opGtxnsas, proto("ii:a"), 5, field("f", &TxnArrayFields)},
-	{0xc3, "args", opArgs, proto("i:b"), 5, only(modeSig)},
-	{0xc4, "gloadss", opGloadss, proto("ii:a"), 6, only(modeApp)},
-	{0xc5, "itxnas", opItxnas, proto("i:a"), 6, field("f", &TxnArrayFields).only(modeApp)},
-	{0xc6, "gitxnas", opGitxnas, proto("i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(modeApp)},
+	{0xc3, "args", opArgs, proto("i:b"), 5, only(ModeSig)},
+	{0xc4, "gloadss", opGloadss, proto("ii:a"), 6, only(ModeApp)},
+	{0xc5, "itxnas", opItxnas, proto("i:a"), 6, field("f", &TxnArrayFields).only(ModeApp)},
+	{0xc6, "gitxnas", opGitxnas, proto("i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bi"), randomnessVersion, field("s", &VrfStandards).costs(5700)},

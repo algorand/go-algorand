@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -275,6 +276,9 @@ type wsPeer struct {
 
 	// clientDataStoreMu synchronizes access to clientDataStore
 	clientDataStoreMu deadlock.Mutex
+
+	// closers is a slice of functions to run when the peer is closed
+	closers []func()
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -294,6 +298,12 @@ type UnicastPeer interface {
 	Version() string
 	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
 	Respond(ctx context.Context, reqMsg IncomingMessage, topics Topics) (e error)
+}
+
+// TCPInfoUnicastPeer exposes information about the underlying connection if available on the platform
+type TCPInfoUnicastPeer interface {
+	UnicastPeer
+	GetUnderlyingConnTCPInfo() (*util.TCPInfo, error)
 }
 
 // Create a wsPeerCore object
@@ -323,7 +333,8 @@ func (wp *wsPeer) Version() string {
 	return wp.version
 }
 
-// 	Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
+//	Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
+//
 // (Implements UnicastPeer)
 func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
 	var err error
@@ -344,6 +355,22 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 	}
 
 	return err
+}
+
+// GetUnderlyingConnTCPInfo unwraps the connection and returns statistics about it on supported underlying implementations
+//
+// (Implements TCPInfoUnicastPeer)
+func (wp *wsPeer) GetUnderlyingConnTCPInfo() (*util.TCPInfo, error) {
+	// unwrap websocket.Conn, requestTrackedConnection, rejectingLimitListenerConn
+	var uconn net.Conn = wp.conn.UnderlyingConn()
+	for i := 0; i < 10; i++ {
+		wconn, ok := uconn.(wrappedConn)
+		if !ok {
+			break
+		}
+		uconn = wconn.UnderlyingConn()
+	}
+	return util.GetConnTCPInfo(uconn)
 }
 
 // Respond sends the response of a request message
@@ -843,6 +870,10 @@ func (wp *wsPeer) Close(deadline time.Time) {
 			wp.net.log.Infof("failed to CloseWithoutFlush to connection for %s", wp.conn.RemoteAddr().String())
 		}
 	}
+	// now call all registered closers
+	for _, f := range wp.closers {
+		f()
+	}
 }
 
 // CloseAndWait internally calls Close() then waits for all peer activity to stop
@@ -961,6 +992,13 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 
 func (wp *wsPeer) pfProposalCompressionSupported() bool {
 	return wp.features&pfCompressedProposal != 0
+}
+
+func (wp *wsPeer) OnClose(f func()) {
+	if wp.closers == nil {
+		wp.closers = []func(){}
+	}
+	wp.closers = append(wp.closers, f)
 }
 
 type peerFeatureFlag int
