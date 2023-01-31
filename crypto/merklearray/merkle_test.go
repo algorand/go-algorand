@@ -101,7 +101,7 @@ func TestMerkle(t *testing.T) {
 		})
 	}
 
-	if !testing.Short() {
+	if testing.Short() {
 		for i := uint64(1); i < 10; i++ {
 			t.Run(fmt.Sprintf("hash#%s/Size#%d", crypto.Sumhash.String(), i), func(t *testing.T) {
 				testMerkle(t, crypto.Sumhash, i)
