@@ -124,20 +124,18 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		if ot.Overflowed {
 			return errors.New("Initialize() overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease RestConnectionsHardLimit or IncomingConnectionsLimit")
 		}
-		err = util.SetFdSoftLimit(fdRequired)
+		_, hard, err := util.GetFdLimits()
 		if err != nil {
-			// do not fail but log the error
-			s.log.Errorf("Failed to set a new RLIMIT_NOFILE value to %d: %s", fdRequired, err.Error())
-			_, hard, err := util.GetFdLimits()
+			s.log.Errorf("Failed to get RLIMIT_NOFILE values: %s", err.Error())
+		} else {
+			maxFd := fdRequired
+			if maxFd > hard {
+				maxFd = hard
+			}
+			err = util.SetFdSoftLimit(maxFd)
 			if err != nil {
-				s.log.Errorf("Failed to get RLIMIT_NOFILE values: %s", err.Error())
-			} else {
-				err = util.SetFdSoftLimit(hard)
-				if err != nil {
-					s.log.Errorf("Failed to set a new RLIMIT_NOFILE value to the max %d: %s", hard, err.Error())
-				} else {
-					s.log.Infof("Set RLIMIT_NOFILE to max value %d", hard)
-				}
+				// do not fail but log the error
+				s.log.Errorf("Failed to set a new RLIMIT_NOFILE value to %d (max %d): %s", fdRequired, hard, err.Error())
 			}
 		}
 	}
