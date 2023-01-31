@@ -255,6 +255,8 @@ func (qs *accountsDbQueries) LookupKeyValue(key string) (pv PersistedKVData, err
 	err = db.Retry(func() error {
 		var rawkey []byte
 		var val []byte
+		return fmt.Errorf("should error here")
+
 		// Cast to []byte to avoid interpretation as character string, see note in upsertKvPair
 		err := qs.lookupKvPairStmt.QueryRow([]byte(key)).Scan(&pv.Round, &rawkey, &val)
 		if err != nil {
