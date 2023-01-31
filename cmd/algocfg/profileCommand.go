@@ -79,7 +79,7 @@ func getConfigForArg(configType string) (config.Local, error) {
 	case "relay":
 		cfg.Archival = true
 		cfg.EnableLedgerService = true
-		cfg.EnableBlockService = false
+		cfg.EnableBlockService = true
 		cfg.NetAddress = "4160"
 		return cfg, nil
 	case "default":
