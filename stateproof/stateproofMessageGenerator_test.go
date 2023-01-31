@@ -303,7 +303,7 @@ func TestGenerateStateProofMessageForSmallRound(t *testing.T) {
 	s.w.latest--
 	s.addBlockWithStateProofHeaders(2 * basics.Round(proto.StateProofInterval))
 
-	_, err := GenerateStateProofMessage(s, 240, s.w.blocks[s.w.latest])
+	_, err := GenerateStateProofMessage(s, s.w.latest)
 	a.ErrorIs(err, errInvalidParams)
 }
 
@@ -331,7 +331,7 @@ func TestMessageLnApproxError(t *testing.T) {
 	newtracking := tracking
 	s.w.blocks[512].StateProofTracking[protocol.StateProofBasic] = newtracking
 
-	_, err := GenerateStateProofMessage(s, 256, s.w.blocks[512])
+	_, err := GenerateStateProofMessage(s, basics.Round(2*proto.StateProofInterval))
 	a.ErrorIs(err, stateproof.ErrIllegalInputForLnApprox)
 }
 
@@ -356,7 +356,7 @@ func TestMessageMissingHeaderOnInterval(t *testing.T) {
 	s.advanceLatest(2*proto.StateProofInterval + proto.StateProofInterval/2)
 	delete(s.w.blocks, 510)
 
-	_, err := GenerateStateProofMessage(s, 256, s.w.blocks[512])
+	_, err := GenerateStateProofMessage(s, basics.Round(2*proto.StateProofInterval))
 	a.ErrorIs(err, ledgercore.ErrNoEntry{Round: 510})
 }
 

@@ -51,8 +51,14 @@ func (b lightBlockHeaders) Marshal(pos uint64) (crypto.Hashable, error) {
 
 // GenerateStateProofMessage returns a stateproof message that contains all the necessary data for proving on Algorand's state.
 // In addition, it also includes the trusted data for the next stateproof verification
-func GenerateStateProofMessage(l BlockHeaderFetcher, votersRound uint64, latestRoundHeader bookkeeping.BlockHeader) (stateproofmsg.Message, error) {
+func GenerateStateProofMessage(l BlockHeaderFetcher, round basics.Round) (stateproofmsg.Message, error) {
+	latestRoundHeader, err := l.BlockHdr(round)
+	if err != nil {
+		return stateproofmsg.Message{}, err
+	}
+
 	proto := config.Consensus[latestRoundHeader.CurrentProtocol]
+	votersRound := uint64(round.SubSaturate(basics.Round(proto.StateProofInterval)))
 	commitment, err := createHeaderCommitment(l, &proto, &latestRoundHeader)
 	if err != nil {
 		return stateproofmsg.Message{}, err

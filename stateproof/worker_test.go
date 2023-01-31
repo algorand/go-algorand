@@ -570,15 +570,9 @@ func TestWorkerAllSigs(t *testing.T) {
 			if lastAttestedRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
 				continue
 			}
-
 			require.Equal(t, lastAttestedRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
 
-			stateProofLatestRound, err := s.BlockHdr(lastAttestedRound)
-			require.NoError(t, err)
-
-			votersRound := lastAttestedRound.SubSaturate(basics.Round(proto.StateProofInterval))
-
-			msg, err := GenerateStateProofMessage(s, uint64(votersRound), stateProofLatestRound)
+			msg, err := GenerateStateProofMessage(s, lastAttestedRound)
 			require.NoError(t, err)
 			require.Equal(t, msg, tx.Txn.Message)
 
@@ -645,12 +639,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 	require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
 	require.Equal(t, lastAttestedRound, 2*basics.Round(proto.StateProofInterval))
 
-	stateProofLatestRound, err := s.BlockHdr(lastAttestedRound)
-	require.NoError(t, err)
-
-	votersRound := lastAttestedRound.SubSaturate(basics.Round(proto.StateProofInterval))
-
-	msg, err := GenerateStateProofMessage(s, uint64(votersRound), stateProofLatestRound)
+	msg, err := GenerateStateProofMessage(s, lastAttestedRound)
 	require.NoError(t, err)
 	require.Equal(t, msg, tx.Txn.Message)
 
@@ -838,9 +827,7 @@ func TestWorkerIgnoresSignatureForNonCacheBuilders(t *testing.T) {
 
 func sendSigToHandler(proto config.ConsensusParams, i uint64, w *Worker, a *require.Assertions, s *testWorkerStubs) (network.ForwardingPolicy, error) {
 	rnd := basics.Round(2*proto.StateProofInterval + i*proto.StateProofInterval)
-	latestBlockHeader, err := w.ledger.BlockHdr(rnd)
-	a.NoError(err)
-	stateproofMessage, err := GenerateStateProofMessage(w.ledger, uint64(latestBlockHeader.Round)-proto.StateProofInterval, latestBlockHeader)
+	stateproofMessage, err := GenerateStateProofMessage(w.ledger, rnd)
 	a.NoError(err)
 
 	hashedStateproofMessage := stateproofMessage.Hash()
@@ -1511,9 +1498,7 @@ func TestWorkerHandleSigAlreadyIn(t *testing.T) {
 	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
 	defer w.Shutdown()
 
-	latestBlockHeader, err := w.ledger.BlockHdr(basics.Round(lastRound))
-	require.NoError(t, err)
-	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
+	stateproofMessage, err := GenerateStateProofMessage(w.ledger, basics.Round(lastRound))
 	require.NoError(t, err)
 
 	hashedStateproofMessage := stateproofMessage.Hash()
@@ -1553,10 +1538,7 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
 	defer w.Shutdown()
 
-	latestBlockHeader, err := w.ledger.BlockHdr(basics.Round(lastRound))
-	require.NoError(t, err)
-
-	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
+	stateproofMessage, err := GenerateStateProofMessage(w.ledger, basics.Round(lastRound))
 	require.NoError(t, err)
 
 	hashedStateproofMessage := stateproofMessage.Hash()
@@ -1835,9 +1817,7 @@ func TestWorkerLoadsBuilderAndSignatureUponMsgRecv(t *testing.T) {
 	lastRound := proto.StateProofInterval * 2
 	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
 
-	latestBlockHeader, err := w.ledger.BlockHdr(basics.Round(lastRound))
-	require.NoError(t, err)
-	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
+	stateproofMessage, err := GenerateStateProofMessage(w.ledger, basics.Round(lastRound))
 	require.NoError(t, err)
 
 	hashedStateproofMessage := stateproofMessage.Hash()

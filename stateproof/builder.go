@@ -152,7 +152,7 @@ func (spw *Worker) createAndPersistBuilder(rnd basics.Round, votersFetcher ledge
 		return builder{}, fmt.Errorf("lookback round %d: %w", lookback, errVotersNotTracked)
 	}
 
-	msg, err := GenerateStateProofMessage(l, uint64(votersHdr.Round), hdr)
+	msg, err := GenerateStateProofMessage(l, rnd)
 	if err != nil {
 		return builder{}, err
 	}
@@ -167,7 +167,7 @@ func (spw *Worker) createAndPersistBuilder(rnd basics.Round, votersFetcher ledge
 	res.AddrToPos = voters.AddrToPos
 	res.Message = msg
 	res.Builder, err = stateproof.MakeBuilder(msg.Hash(),
-		uint64(hdr.Round),
+		uint64(rnd),
 		provenWeight,
 		voters.Participants,
 		voters.Tree,
