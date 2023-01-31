@@ -119,12 +119,8 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		return fmt.Errorf("Initialize() err: %w", err)
 	}
 	if cfg.IsGossipServer() {
-		cur, err := util.GetFdSoftLimit()
-		if err != nil {
-			return fmt.Errorf("Initialize() failed to obtain a current RLIMIT_NOFILE: %w", err)
-		}
 		var ot basics.OverflowTracker
-		fdRequired := ot.Add(cur, uint64(cfg.IncomingConnectionsLimit))
+		fdRequired := ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit))
 		if ot.Overflowed {
 			return errors.New("Initialize() overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease RestConnectionsHardLimit or IncomingConnectionsLimit")
 		}

@@ -24,11 +24,6 @@ import (
 
 /* misc */
 
-// GetFdSoftLimit returns a current value for file descriptors soft limit.
-func GetFdSoftLimit() (uint64, error) {
-	return 0, nil
-}
-
 // SetFdSoftLimit sets a new file descriptors soft limit.
 func SetFdSoftLimit(_ uint64) error {
 	return nil
