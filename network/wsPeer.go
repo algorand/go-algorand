@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -299,6 +300,12 @@ type UnicastPeer interface {
 	Respond(ctx context.Context, reqMsg IncomingMessage, topics Topics) (e error)
 }
 
+// TCPInfoUnicastPeer exposes information about the underlying connection if available on the platform
+type TCPInfoUnicastPeer interface {
+	UnicastPeer
+	GetUnderlyingConnTCPInfo() (*util.TCPInfo, error)
+}
+
 // Create a wsPeerCore object
 func makePeerCore(net *WebsocketNetwork, rootURL string, roundTripper http.RoundTripper, originAddress string) wsPeerCore {
 	return wsPeerCore{
@@ -348,6 +355,22 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 	}
 
 	return err
+}
+
+// GetUnderlyingConnTCPInfo unwraps the connection and returns statistics about it on supported underlying implementations
+//
+// (Implements TCPInfoUnicastPeer)
+func (wp *wsPeer) GetUnderlyingConnTCPInfo() (*util.TCPInfo, error) {
+	// unwrap websocket.Conn, requestTrackedConnection, rejectingLimitListenerConn
+	var uconn net.Conn = wp.conn.UnderlyingConn()
+	for i := 0; i < 10; i++ {
+		wconn, ok := uconn.(wrappedConn)
+		if !ok {
+			break
+		}
+		uconn = wconn.UnderlyingConn()
+	}
+	return util.GetConnTCPInfo(uconn)
 }
 
 // Respond sends the response of a request message

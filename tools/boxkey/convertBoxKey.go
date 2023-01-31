@@ -16,9 +16,33 @@
 
 package main
 
-const (
-	// General
-	errorNoDataDirectory     = "Data directory not specified.  Please use -d or set $ALGORAND_DATA in your environment. Exiting."
-	errorOneDataDirSupported = "Only one data directory can be specified for this command."
-	infoDataDir              = "[Data Directory: %s]"
+import (
+	"encoding/base64"
+	"encoding/hex"
+	"flag"
+	"fmt"
+
+	"github.com/algorand/avm-abi/apps"
 )
+
+func main() {
+	var name string
+	var appIdx uint64
+	flag.Uint64Var(&appIdx, "a", 0, "base64/algorand address to convert to the other")
+	flag.StringVar(&name, "n", "", "base64 box name")
+	flag.Parse()
+
+	if appIdx == 0 && name == "" {
+		fmt.Println("provide input with '-a' and '-k' flags.")
+		return
+	}
+
+	nameBytes, err := base64.StdEncoding.DecodeString(name)
+	if err != nil {
+		fmt.Println("invalid key value")
+		return
+	}
+	key := apps.MakeBoxKey(appIdx, string(nameBytes))
+	fmt.Println(base64.StdEncoding.EncodeToString([]byte(key)))
+	fmt.Println(hex.EncodeToString([]byte(key)))
+}

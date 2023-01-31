@@ -133,14 +133,17 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 		if importKeys && hasWallet {
 			var client libgoal.Client
 			client, err = libgoal.MakeClientWithBinDir(binDir, nodeDir, "", libgoal.KmdClient)
+			if err != nil {
+				return
+			}
 			_, err = client.CreateWallet(libgoal.UnencryptedWalletName, nil, crypto.MasterDerivationKey{})
 			if err != nil {
 				return
 			}
 
-			_, _, err = util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-w", string(libgoal.UnencryptedWalletName), "-d", nodeDir)
+			stdout, stderr, err := util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-w", string(libgoal.UnencryptedWalletName), "-d", nodeDir)
 			if err != nil {
-				return
+				return nil, nil, fmt.Errorf("goal account importrootkey failed: %w\nstdout: %s\nstderr: %s", err, stdout, stderr)
 			}
 		}
 

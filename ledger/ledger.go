@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -48,7 +49,7 @@ type Ledger struct {
 	// Database connections to the DBs storing blocks and tracker state.
 	// We use potentially different databases to avoid SQLite contention
 	// during catchup.
-	trackerDBs db.Pair
+	trackerDBs store.TrackerStore
 	blockDBs   db.Pair
 
 	// blockQ is the buffer of added blocks that will be flushed to
@@ -138,8 +139,7 @@ func OpenLedger(
 		err = fmt.Errorf("OpenLedger.openLedgerDB %v", err)
 		return nil, err
 	}
-	l.trackerDBs.Rdb.SetLogger(log)
-	l.trackerDBs.Wdb.SetLogger(log)
+	l.trackerDBs.SetLogger(log)
 	l.blockDBs.Rdb.SetLogger(log)
 	l.blockDBs.Wdb.SetLogger(log)
 
@@ -160,6 +160,11 @@ func OpenLedger(
 		l.genesisAccounts = make(map[basics.Address]basics.AccountData)
 	}
 
+	l.blockQ, err = newBlockQueue(l)
+	if err != nil {
+		return nil, err
+	}
+
 	err = l.reloadLedger()
 	if err != nil {
 		return nil, err
@@ -168,19 +173,12 @@ func OpenLedger(
 	return l, nil
 }
 
-// ReloadLedger is exported for the benefit of tests in the internal
-// package. Revisit this when we rename / restructure that thing
-func (l *Ledger) ReloadLedger() error {
-	return l.reloadLedger()
-}
-
 func (l *Ledger) reloadLedger() error {
 	// similar to the Close function, we want to start by closing the blockQ first. The
 	// blockQ is having a sync goroutine which indirectly calls other trackers. We want to eliminate that go-routine first,
 	// and follow up by taking the trackers lock.
 	if l.blockQ != nil {
-		l.blockQ.close()
-		l.blockQ = nil
+		l.blockQ.stop()
 	}
 
 	// take the trackers lock. This would ensure that no other goroutine is using the trackers.
@@ -192,9 +190,9 @@ func (l *Ledger) reloadLedger() error {
 
 	// init block queue
 	var err error
-	l.blockQ, err = bqInit(l)
+	err = l.blockQ.start()
 	if err != nil {
-		err = fmt.Errorf("reloadLedger.bqInit %v", err)
+		err = fmt.Errorf("reloadLedger.blockQ.start %v", err)
 		return err
 	}
 
@@ -275,7 +273,7 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	return
 }
 
-func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs db.Pair, blockDBs db.Pair, err error) {
+func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs store.TrackerStore, blockDBs db.Pair, err error) {
 	// Backwards compatibility: we used to store both blocks and tracker
 	// state in a single SQLite db file.
 	var trackerDBFilename string
@@ -299,7 +297,7 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs db.Pair, blockDBs
 	outErr := make(chan error, 2)
 	go func() {
 		var lerr error
-		trackerDBs, lerr = db.OpenPair(trackerDBFilename, dbMem)
+		trackerDBs, lerr = store.OpenTrackerSQLStore(trackerDBFilename, dbMem)
 		outErr <- lerr
 	}()
 
@@ -330,7 +328,7 @@ func (l *Ledger) setSynchronousMode(ctx context.Context, synchronousMode db.Sync
 		return
 	}
 
-	err = l.trackerDBs.Wdb.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
+	err = l.trackerDBs.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
 	if err != nil {
 		l.log.Warnf("ledger.setSynchronousMode unable to set synchronous mode on trackers db: %v", err)
 		return
@@ -381,8 +379,7 @@ func (l *Ledger) Close() {
 	// we shut the the blockqueue first, since it's sync goroutine dispatches calls
 	// back to the trackers.
 	if l.blockQ != nil {
-		l.blockQ.close()
-		l.blockQ = nil
+		l.blockQ.stop()
 	}
 
 	// take the trackers lock. This would ensure that no other goroutine is using the trackers.
@@ -768,7 +765,7 @@ func (l *Ledger) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error)
 }
 
 // ledgerForTracker methods
-func (l *Ledger) trackerDB() db.Pair {
+func (l *Ledger) trackerDB() store.TrackerStore {
 	return l.trackerDBs
 }
 
