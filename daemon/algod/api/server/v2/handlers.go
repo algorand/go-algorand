@@ -341,7 +341,7 @@ func (v2 *Handlers) ShutdownNode(ctx echo.Context, params model.ShutdownNodePara
 // AccountInformation gets account information for a given account.
 // (GET /v2/accounts/{address})
 func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params model.AccountInformationParams) error {
-	handle, contentType, err := getCodecHandle((*model.Format)(params.Format))
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -488,7 +488,7 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 // AccountAssetInformation gets account information about a given asset.
 // (GET /v2/accounts/{address}/assets/{asset-id})
 func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, assetID uint64, params model.AccountAssetInformationParams) error {
-	handle, contentType, err := getCodecHandle((*model.Format)(params.Format))
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -541,7 +541,7 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, as
 // AccountApplicationInformation gets account information about a given app.
 // (GET /v2/accounts/{address}/applications/{application-id})
 func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address string, applicationID uint64, params model.AccountApplicationInformationParams) error {
-	handle, contentType, err := getCodecHandle((*model.Format)(params.Format))
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -598,7 +598,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address stri
 // GetBlock gets the block for the given round.
 // (GET /v2/blocks/{round})
 func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlockParams) error {
-	handle, contentType, err := getCodecHandle((*model.Format)(params.Format))
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -1187,7 +1187,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.Inners = convertInners(&txn)
 	}
 
-	handle, contentType, err := getCodecHandle((*model.Format)(params.Format))
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -1221,7 +1221,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		addrPtr = &addr
 	}
 
-	handle, contentType, err := getCodecHandle((*model.Format)(format))
+	handle, contentType, err := getCodecHandle(format)
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
