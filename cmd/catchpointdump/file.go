@@ -32,11 +32,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/avm-abi/apps"
 	cmdutil "github.com/algorand/go-algorand/cmd/util"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
@@ -471,7 +471,7 @@ func printStateProofVerificationContext(databaseName string, outFile *os.File) e
 
 func printKeyValue(writer *bufio.Writer, key, value []byte) {
 	var pretty string
-	ai, rest, err := logic.SplitBoxKey(string(key))
+	ai, rest, err := apps.SplitBoxKey(string(key))
 	if err == nil {
 		pretty = fmt.Sprintf("box(%d, %s)", ai, base64.StdEncoding.EncodeToString([]byte(rest)))
 	} else {

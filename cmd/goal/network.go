@@ -35,6 +35,7 @@ var startNode string
 var noImportKeys bool
 var noClean bool
 var devModeOverride bool
+var startOnCreation bool
 
 func init() {
 	networkCmd.AddCommand(networkCreateCmd)
@@ -47,6 +48,7 @@ func init() {
 	networkCreateCmd.Flags().BoolVarP(&noImportKeys, "noimportkeys", "K", false, "Do not import root keys when creating the network (by default will import)")
 	networkCreateCmd.Flags().BoolVar(&noClean, "noclean", false, "Prevents auto-cleanup on error - for diagnosing problems")
 	networkCreateCmd.Flags().BoolVar(&devModeOverride, "devMode", false, "Forces the configuration to enable DevMode, returns an error if the template is not compatible with DevMode.")
+	networkCreateCmd.Flags().BoolVarP(&startOnCreation, "start", "s", false, "Automatically start the network after creating it.")
 
 	networkStartCmd.Flags().StringVarP(&startNode, "node", "n", "", "Specify the name of a specific node to start")
 
@@ -112,6 +114,15 @@ var networkCreateCmd = &cobra.Command{
 		}
 
 		reportInfof(infoNetworkCreated, network.Name(), networkRootDir)
+
+		if startOnCreation {
+			network, binDir := getNetworkAndBinDir()
+			err := network.Start(binDir, false)
+			if err != nil {
+				reportErrorf(errorStartingNetwork, err)
+			}
+			reportInfof(infoNetworkStarted, networkRootDir)
+		}
 	},
 }
 

@@ -9,9 +9,7 @@ linters:
     - partitiontest
     - structcheck
     - varcheck
-    - unconvert
     - unused
-
 
 linters-settings:
   custom:
@@ -55,7 +53,6 @@ issues:
         - deadcode
         - structcheck
         - varcheck
-        - unconvert
         - unused
     # Add all linters here -- Comment this block out for testing linters
     - path: test/linttest/lintissues\.go
@@ -63,7 +60,6 @@ issues:
         - deadcode
         - structcheck
         - varcheck
-        - unconvert
         - unused
     - path: crypto/secp256k1/secp256_test\.go
       linters:
