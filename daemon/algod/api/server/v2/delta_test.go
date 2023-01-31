@@ -89,6 +89,12 @@ func TestDelta(t *testing.T) {
 				Data:    []byte("foobar"),
 				OldData: []byte("barfoo"),
 			},
+			"box2": {
+				Data: []byte("alpha"),
+			},
+			"box3": {
+				Data: []byte("beta"),
+			},
 		},
 		Txleases: map[ledgercore.Txlease]basics.Round{
 			{Sender: poolAddr, Lease: txLease}: 600,
@@ -134,6 +140,10 @@ func TestDelta(t *testing.T) {
 	require.Equal(t, len(original.KvMods), len(*converted.KvMods))
 	require.Equal(t, []uint8("box1"), *(*converted.KvMods)[0].Key)
 	require.Equal(t, original.KvMods["box1"].Data, *(*converted.KvMods)[0].Value)
+	require.Equal(t, []uint8("box2"), *(*converted.KvMods)[1].Key)
+	require.Equal(t, original.KvMods["box2"].Data, *(*converted.KvMods)[1].Value)
+	require.Equal(t, []uint8("box3"), *(*converted.KvMods)[2].Key)
+	require.Equal(t, original.KvMods["box3"].Data, *(*converted.KvMods)[2].Value)
 	require.Equal(t, txLease[:], (*converted.TxLeases)[0].Lease)
 	require.Equal(t, poolAddr.String(), (*converted.TxLeases)[0].Sender)
 	require.Equal(t, uint64(600), (*converted.TxLeases)[0].Expiration)
