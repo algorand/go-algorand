@@ -18,9 +18,9 @@ package testing
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/config"
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
 )

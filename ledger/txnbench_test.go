@@ -18,11 +18,11 @@ package ledger
 
 import (
 	"errors"
-	"github.com/algorand/go-algorand/config"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
