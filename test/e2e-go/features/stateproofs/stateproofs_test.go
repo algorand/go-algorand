@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -113,7 +112,7 @@ func TestStateProofs(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+	if testing.Short() {
 		fixture.Setup(t, filepath.Join("nettemplates", "StateProofSmall.json"))
 	} else {
 		fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
@@ -231,12 +230,8 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 	var fixture fixtures.RestClientFixture
 	pNodes := 5
 	fixture.SetConsensus(configurableConsensus)
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		fixture.Setup(t, filepath.Join("nettemplates", "StateProofSmall.json"))
-		pNodes = 2
-	} else {
-		fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
-	}
+	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
+
 	defer fixture.Shutdown()
 
 	// Get node libgoal clients in order to update their participation keys
@@ -331,7 +326,7 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+	if testing.Short() {
 		fixture.Setup(t, filepath.Join("nettemplates", "StateProofSmall.json"))
 	} else {
 		fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
@@ -381,15 +376,21 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 
 func getDefaultStateProofConsensusParams() config.ConsensusParams {
 	consensusParams := config.Consensus[protocol.ConsensusFuture]
-	consensusParams.StateProofInterval = 16
+
 	consensusParams.StateProofTopVoters = 1024
 	consensusParams.StateProofVotersLookback = 2
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 30 / 100
 	consensusParams.StateProofStrengthTarget = 256
 	consensusParams.StateProofMaxRecoveryIntervals = 6
 	consensusParams.EnableStateProofKeyregCheck = true
-	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
-	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
+
+	if testing.Short() {
+		consensusParams.StateProofInterval = 16
+		consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
+		consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
+	} else {
+		consensusParams.StateProofInterval = 32
+	}
 
 	return consensusParams
 }
@@ -450,8 +451,8 @@ func TestStateProofRecoveryDuringRecoveryPeriod(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is difficult for ARM")
+	if testing.Short() {
+		t.Skip()
 	}
 
 	r := require.New(fixtures.SynchronizedTest(t))
@@ -547,7 +548,9 @@ func TestStateProofRecovery(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	// todo skip on short tests and on weak machines
+	if testing.Short() {
+		t.Skip()
+	}
 
 	r := require.New(fixtures.SynchronizedTest(t))
 
@@ -821,7 +824,6 @@ func TestTotalWeightChanges(t *testing.T) {
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 4
 	consensusParams.StateProofTopVoters = 4
-	//consensusParams.StateProofInterval = 32
 
 	configurableConsensus := config.ConsensusProtocols{
 		protocol.ConsensusVersion("test-fast-stateproofs"): consensusParams,
@@ -829,7 +831,7 @@ func TestTotalWeightChanges(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+	if testing.Short() {
 		fixture.Setup(t, filepath.Join("nettemplates", "RichAccountStateProofSmall.json"))
 	} else {
 		fixture.Setup(t, filepath.Join("nettemplates", "RichAccountStateProof.json"))

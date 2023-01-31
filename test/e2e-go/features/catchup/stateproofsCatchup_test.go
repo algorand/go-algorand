@@ -36,7 +36,12 @@ func applyCatchpointStateProofConsensusChanges(consensusParams *config.Consensus
 	// we decrease the StateProofStrengthTarget creating a "weak cert" to allow state proofs to be generated when the
 	// signed weight and proven weight are very close to each other.
 	consensusParams.StateProofStrengthTarget = 4
-	consensusParams.StateProofInterval = 8
+	if testing.Short() {
+		consensusParams.StateProofInterval = 8
+	} else {
+		consensusParams.StateProofInterval = 16
+	}
+
 	consensusParams.StateProofVotersLookback = 2
 	consensusParams.EnableStateProofKeyregCheck = true
 	consensusParams.StateProofUseTrackerVerification = true
@@ -61,10 +66,10 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	// TODO: Reenable short
-	//if testing.Short() {
-	//	t.Skip()
-	//}
+	if testing.Short() {
+		t.Skip()
+	}
+
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -120,10 +125,9 @@ func TestStateProofAfterCatchpoint(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	// TODO: Reenable short
-	//if testing.Short() {
-	//	t.Skip()
-	//}
+	if testing.Short() {
+		t.Skip()
+	}
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -185,10 +189,9 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	// TODO: Reenable short
-	//if testing.Short() {
-	//	t.Skip()
-	//}
+	if testing.Short() {
+		t.Skip()
+	}
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	configurableConsensus := make(config.ConsensusProtocols)
