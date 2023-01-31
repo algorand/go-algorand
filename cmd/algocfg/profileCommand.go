@@ -74,9 +74,14 @@ var setProfileCmd = &cobra.Command{
 }
 
 func getConfigForArg(configType string) (config.Local, error) {
+	cfg := config.GetDefaultLocal()
 	switch configType {
 	case "relay":
-		return config.GetRelayLocal(), nil
+		cfg.Archival = true
+		cfg.EnableLedgerService = true
+		cfg.EnableBlockService = false
+		cfg.NetAddress = "4160"
+		return cfg, nil
 	case "default":
 		return config.GetDefaultLocal(), nil
 	default:

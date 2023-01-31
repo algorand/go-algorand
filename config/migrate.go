@@ -22,23 +22,16 @@ import (
 	"strconv"
 )
 
-//go:generate $GOROOT/bin/go run ./defaultsGenerator/defaultsGenerator.go -h ../scripts/LICENSE_HEADER -p config -o ./local_defaults.go -j ../installer/config.json.example -t local
+//go:generate $GOROOT/bin/go run ./defaultsGenerator/defaultsGenerator.go -h ../scripts/LICENSE_HEADER -p config -o ./local_defaults.go -j ../installer/config.json.example
 //go:generate $GOROOT/bin/go fmt local_defaults.go
-
-//go:generate $GOROOT/bin/go run ./defaultsGenerator/defaultsGenerator.go -h ../scripts/LICENSE_HEADER -p config -o ./relay_defaults.go -j ../installer/config.json.relay-example -t relay
-//go:generate $GOROOT/bin/go fmt relay_defaults.go
 
 // AutogenLocal - this variable is the "input" for the config default generator which automatically updates the above defaultLocal variable.
 // it's implemented in ./config/defaults_gen.go, and should be the only "consumer" of this exported variable
-var AutogenLocal = getVersionedDefaultLocalConfig(getLatestConfigVersion(Local{}))
-
-// AutogenRelay - this variable is the "input" for the config default generator. It separately generates the default
-// values for the Relay config.
-var AutogenRelay = getVersionedDefaultRelayConfig(getLatestConfigVersion(Relay{}))
+var AutogenLocal = getVersionedDefaultLocalConfig(getLatestConfigVersion())
 
 func migrate(cfg Local) (newCfg Local, err error) {
 	newCfg = cfg
-	latestConfigVersion := getLatestConfigVersion(Local{})
+	latestConfigVersion := getLatestConfigVersion()
 
 	if cfg.Version > latestConfigVersion {
 		err = fmt.Errorf("unexpected config version: %d", cfg.Version)
@@ -118,102 +111,20 @@ func migrate(cfg Local) (newCfg Local, err error) {
 	return
 }
 
-func getLatestConfigVersion(cfg interface{}) uint32 {
-	var versionField reflect.StructField
-	var found bool
-	switch cfg.(type) {
-	case Local:
-		localType := reflect.TypeOf(Local{})
-		versionField, found = localType.FieldByName("Version")
-	case Relay:
-		relayType := reflect.TypeOf(Relay{})
-		versionField, found = relayType.FieldByName("Version")
-	default:
-		return 0
-	}
+func getLatestConfigVersion() uint32 {
+	localType := reflect.TypeOf(Local{})
+	versionField, found := localType.FieldByName("Version")
 	if !found {
 		return 0
 	}
 	version := uint32(0)
 	for {
-		_, hasTag := versionField.Tag.Lookup(fmt.Sprintf("version[%d]", version+1))
+		_, hasTag := reflect.StructTag(versionField.Tag).Lookup(fmt.Sprintf("version[%d]", version+1))
 		if !hasTag {
 			return version
 		}
 		version++
 	}
-}
-
-func getVersionedDefaultRelayConfig(version uint32) (relay Relay) {
-	if version < 0 {
-		return
-	}
-	if version > 0 {
-		relay = getVersionedDefaultRelayConfig(version - 1)
-	}
-	// apply version specific changes.
-	localType := reflect.TypeOf(relay)
-	for fieldNum := 0; fieldNum < localType.NumField(); fieldNum++ {
-		field := localType.Field(fieldNum)
-		versionDefaultValue, hasTag := reflect.StructTag(field.Tag).Lookup(fmt.Sprintf("version[%d]", version))
-		if !hasTag {
-			continue
-		}
-		if versionDefaultValue == "" {
-			// set the default field value in case it's a map/array so we won't have nil ones.
-			switch reflect.ValueOf(&relay).Elem().FieldByName(field.Name).Kind() {
-			case reflect.Map:
-				reflect.ValueOf(&relay).Elem().FieldByName(field.Name).Set(reflect.MakeMap(field.Type))
-			case reflect.Array:
-				reflect.ValueOf(&relay).Elem().FieldByName(field.Name).Set(reflect.MakeSlice(field.Type, 0, 0))
-			default:
-			}
-			continue
-		}
-		switch reflect.ValueOf(&relay).Elem().FieldByName(field.Name).Kind() {
-		case reflect.Bool:
-			boolVal, err := strconv.ParseBool(versionDefaultValue)
-			if err != nil {
-				panic(err)
-			}
-			reflect.ValueOf(&relay).Elem().FieldByName(field.Name).SetBool(boolVal)
-
-		case reflect.Int32:
-			intVal, err := strconv.ParseInt(versionDefaultValue, 10, 32)
-			if err != nil {
-				panic(err)
-			}
-			reflect.ValueOf(&relay).Elem().FieldByName(field.Name).SetInt(intVal)
-		case reflect.Int:
-			fallthrough
-		case reflect.Int64:
-			intVal, err := strconv.ParseInt(versionDefaultValue, 10, 64)
-			if err != nil {
-				panic(err)
-			}
-			reflect.ValueOf(&relay).Elem().FieldByName(field.Name).SetInt(intVal)
-
-		case reflect.Uint32:
-			uintVal, err := strconv.ParseUint(versionDefaultValue, 10, 32)
-			if err != nil {
-				panic(err)
-			}
-			reflect.ValueOf(&relay).Elem().FieldByName(field.Name).SetUint(uintVal)
-		case reflect.Uint:
-			fallthrough
-		case reflect.Uint64:
-			uintVal, err := strconv.ParseUint(versionDefaultValue, 10, 64)
-			if err != nil {
-				panic(err)
-			}
-			reflect.ValueOf(&relay).Elem().FieldByName(field.Name).SetUint(uintVal)
-		case reflect.String:
-			reflect.ValueOf(&relay).Elem().FieldByName(field.Name).SetString(versionDefaultValue)
-		default:
-			panic(fmt.Sprintf("unsupported data type (%s) encountered when reflecting on config.Local datatype %s", reflect.ValueOf(&relay).Elem().FieldByName(field.Name).Kind(), field.Name))
-		}
-	}
-	return
 }
 
 func getVersionedDefaultLocalConfig(version uint32) (local Local) {
