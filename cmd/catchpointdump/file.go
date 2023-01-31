@@ -457,16 +457,16 @@ func printStateProofVerificationContext(databaseName string, outFile *os.File) e
 		return err
 	}
 
-	var printedLines []string
+	fmt.Fprintf(fileWriter, "State Proof Verification Data:\n")
 	for _, ctx := range stateProofVerificationContext {
 		jsonData, err := json.Marshal(ctx)
 		if err != nil {
 			return err
 		}
-		printedLines = append(printedLines, fmt.Sprintf("%d : %s", ctx.LastAttestedRound, string(jsonData)))
+		fmt.Fprintf(fileWriter, "%d : %s\n", ctx.LastAttestedRound, string(jsonData))
 	}
-	_, err = fmt.Fprintf(fileWriter, "State Proof Verification Data:\n"+strings.Join(printedLines, "\n")+"\n")
-	return err
+
+	return nil
 }
 
 func printKeyValue(writer *bufio.Writer, key, value []byte) {

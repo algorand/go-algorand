@@ -530,7 +530,7 @@ func (spw *Worker) deleteBuildData(proto *config.ConsensusParams, stateProofNext
 	// Delete from memory (already stored on disk)
 	spw.trimBuildersCache(proto, stateProofNextRound)
 
-	if spw.LastCleanupRound == stateProofNextRound {
+	if spw.lastCleanupRound == stateProofNextRound {
 		return
 	}
 
@@ -538,7 +538,7 @@ func (spw *Worker) deleteBuildData(proto *config.ConsensusParams, stateProofNext
 	spw.deleteStaleSigs(stateProofNextRound)
 	spw.deleteStaleKeys(stateProofNextRound)
 	spw.deleteStaleBuilders(stateProofNextRound)
-	spw.LastCleanupRound = stateProofNextRound
+	spw.lastCleanupRound = stateProofNextRound
 }
 
 func (spw *Worker) deleteStaleSigs(retainRound basics.Round) {

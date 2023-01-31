@@ -216,7 +216,7 @@ func (vt *votersTracker) prepareCommit(dcc *deferredCommitContext) error {
 	}
 
 	commitListener := vt.commitListener
-	for round := dcc.oldBase; round <= dcc.newBase; round++ {
+	for round := dcc.oldBase + 1; round <= dcc.newBase; round++ {
 		err := commitListener.OnPrepareVoterCommit(round, vt)
 		// Having the commit process continue uninterrupted is more important to us than not
 		// having missing builders. To implement this hierarchy we've decided to exclusively log errors

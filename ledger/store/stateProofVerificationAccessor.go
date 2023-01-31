@@ -108,7 +108,6 @@ func (spa *SPVerificationAccessor) getAllSPContextsInternal(ctx context.Context,
 	var result []ledgercore.StateProofVerificationContext
 	queryFunc := func() error {
 		rows, err := spa.e.QueryContext(ctx, query)
-
 		if err != nil {
 			return err
 		}
