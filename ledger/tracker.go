@@ -134,7 +134,7 @@ type ledgerTracker interface {
 // ledgerForTracker defines the part of the ledger that a tracker can
 // access.  This is particularly useful for testing trackers in isolation.
 type ledgerForTracker interface {
-	trackerDB() db.Pair
+	trackerDB() store.TrackerStore
 	blockDB() db.Pair
 	trackerLog() logging.Logger
 	trackerEvalVerified(bookkeeping.Block, internal.LedgerForEvaluator) (ledgercore.StateDelta, error)
@@ -174,7 +174,7 @@ type trackerRegistry struct {
 	// cached to avoid SQL queries.
 	dbRound basics.Round
 
-	dbs db.Pair
+	dbs store.TrackerStore
 	log logging.Logger
 
 	// the synchronous mode that would be used for the account database.
@@ -233,7 +233,6 @@ type deferredCommitRange struct {
 type deferredCommitContext struct {
 	deferredCommitRange
 
-	newBase   basics.Round
 	flushTime time.Time
 
 	genesisProto config.ConsensusParams
@@ -273,13 +272,17 @@ type deferredCommitContext struct {
 	updateStats bool
 }
 
+func (dcc deferredCommitContext) newBase() basics.Round {
+	return dcc.oldBase + basics.Round(dcc.offset)
+}
+
 var errMissingAccountUpdateTracker = errors.New("initializeTrackerCaches : called without a valid accounts update tracker")
 
 func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTracker, cfg config.Local) (err error) {
 	tr.dbs = l.trackerDB()
 	tr.log = l.trackerLog()
 
-	err = tr.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = tr.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
 		arw := store.NewAccountsSQLReaderWriter(tx)
 		tr.dbRound, err = arw.AccountsRound()
 		return err
@@ -495,7 +498,6 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 
 	dcc.offset = offset
 	dcc.oldBase = dbRound
-	dcc.newBase = newBase
 	dcc.flushTime = time.Now()
 
 	for _, lt := range tr.trackers {
@@ -510,7 +512,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	err := tr.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := tr.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
 		arw := store.NewAccountsSQLReaderWriter(tx)
 		for _, lt := range tr.trackers {
 			err0 := lt.commitRound(ctx, tx, dcc)
@@ -631,7 +633,7 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 	defer func() {
 		if rollbackSynchronousMode {
 			// restore default synchronous mode
-			err0 := tr.dbs.Wdb.SetSynchronousMode(context.Background(), tr.synchronousMode, tr.synchronousMode >= db.SynchronousModeFull)
+			err0 := tr.dbs.SetSynchronousMode(context.Background(), tr.synchronousMode, tr.synchronousMode >= db.SynchronousModeFull)
 			// override the returned error only in case there is no error - since this
 			// operation has a lower criticality.
 			if err == nil {
@@ -662,7 +664,7 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 
 			if !rollbackSynchronousMode {
 				// switch to rebuild synchronous mode to improve performance
-				err0 := tr.dbs.Wdb.SetSynchronousMode(context.Background(), tr.accountsRebuildSynchronousMode, tr.accountsRebuildSynchronousMode >= db.SynchronousModeFull)
+				err0 := tr.dbs.SetSynchronousMode(context.Background(), tr.accountsRebuildSynchronousMode, tr.accountsRebuildSynchronousMode >= db.SynchronousModeFull)
 				if err0 != nil {
 					tr.log.Warnf("trackerRegistry.replay was unable to switch to rbuild synchronous mode : %v", err0)
 				} else {

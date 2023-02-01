@@ -25,29 +25,26 @@ type Tag string
 // are encoded using a comma separator (see network/msgOfInterest.go).
 // The tags must be 2 bytes long.
 const (
-	UnknownMsgTag        Tag = "??"
 	AgreementVoteTag     Tag = "AV"
 	MsgOfInterestTag     Tag = "MI"
 	MsgDigestSkipTag     Tag = "MS"
-	NetPrioResponseTag   Tag = "NP"
-	NetIDVerificationTag Tag = "NI"
+	NetPrioResponseTag   Tag = "NP"	
+  NetIDVerificationTag Tag = "NI"
 	PingTag              Tag = "pi"
 	PingReplyTag         Tag = "pj"
 	ProposalPayloadTag   Tag = "PP"
 	StateProofSigTag     Tag = "SP"
 	TopicMsgRespTag      Tag = "TS"
 	TxnTag               Tag = "TX"
-	UniCatchupReqTag     Tag = "UC" //Replaced by UniEnsBlockReqTag. Only for backward compatibility.
+	//UniCatchupReqTag   Tag = "UC" was replaced by UniEnsBlockReqTag
 	UniEnsBlockReqTag    Tag = "UE"
 	//UniEnsBlockResTag  Tag = "US" was used for wsfetcherservice
 	//UniCatchupResTag   Tag = "UT" was used for wsfetcherservice
-	VoteBundleTag Tag = "VB"
+	VoteBundleTag        Tag = "VB"
 )
 
 // TagList is a list of all currently used protocol tags.
-// TODO: generate this and/or have a test that it is complete.
 var TagList = []Tag{
-	UnknownMsgTag,
 	AgreementVoteTag,
 	MsgOfInterestTag,
 	MsgDigestSkipTag,
@@ -59,7 +56,6 @@ var TagList = []Tag{
 	StateProofSigTag,
 	TopicMsgRespTag,
 	TxnTag,
-	UniCatchupReqTag,
 	UniEnsBlockReqTag,
 	VoteBundleTag,
 }
