@@ -85,10 +85,8 @@ var (
 	// StackNone is used when there is no input or output to
 	// an opcode
 	StackNone = StackType{
-		Name:        string(AVMNone),
-		AVMType:     AVMNone,
-		ValueBound:  []uint64{0, 0},
-		LengthBound: []uint64{0, 0},
+		Name:    string(AVMNone),
+		AVMType: AVMNone,
 	}
 
 	// Higher level types
@@ -120,13 +118,13 @@ var (
 type StackType struct {
 	Name        string
 	AVMType     AVMType
-	LengthBound []uint64
-	ValueBound  []uint64
+	LengthBound [2]uint64
+	ValueBound  [2]uint64
 }
 
 // NewStackType Initializes a new StackType with fields passed
-func NewStackType(at AVMType, bounds []uint64, stname ...string) StackType {
-	name := string(at)
+func NewStackType(at AVMType, bounds [2]uint64, stname ...string) StackType {
+	name := at.String()
 	if len(stname) > 0 {
 		name = stname[0]
 	}
@@ -139,6 +137,58 @@ func NewStackType(at AVMType, bounds []uint64, stname ...string) StackType {
 		st.ValueBound = bounds
 	}
 	return st
+}
+
+func (st StackType) ConvertableTo(other StackType) bool {
+	// what are you doing?
+	if st.AVMType == AVMNone || other.AVMType == AVMNone {
+		return false
+	}
+
+	if st.AVMType == AVMAny || other.AVMType == AVMAny {
+		return true
+	}
+
+	// By now, both are either uint or bytes
+	// and must match
+	if st.AVMType != other.AVMType {
+		return false
+	}
+
+	// Same type now
+
+	// Check if our constraints will be satisfied by
+	// the other type
+	switch st.AVMType {
+	case AVMBytes:
+		smin, smax := st.LengthBound[0], st.LengthBound[1]
+		omin, omax := other.LengthBound[0], other.LengthBound[1]
+
+		// yes definitely
+		// [32,32] => [0..4k]
+		// [32,32] => [32,32]
+
+		// yes, maybe determined at runtime
+		// [0..4k] => [32,32]
+
+		// no, cant fit
+		// [64,64] => [32,32]
+		// no, makes no sense
+		// [32,32] =>  [64,64]
+
+		// we only have 0-N and [N,N] (static) and only
+		// those that are both not static and have different lengths
+		// can be assigned
+		return !(smin == smax && omin == omax && smin != omin)
+
+	case AVMUint64:
+		// No static values at compile
+		// time so hard to do any typechecks for assembler,
+		// dont use this for AVM runtime
+		return true
+	default:
+		panic("wat")
+	}
 }
 
 // StackTypes is an alias for a list of StackType with syntactic sugar
@@ -157,10 +207,10 @@ func (st StackType) Typed() bool {
 	return false
 }
 
-func bounded(min, max uint64) []uint64 {
-	return []uint64{min, max}
+func bounded(min, max uint64) [2]uint64 {
+	return [2]uint64{min, max}
 }
 
-func static(size uint64) []uint64 {
+func static(size uint64) [2]uint64 {
 	return bounded(size, size)
 }

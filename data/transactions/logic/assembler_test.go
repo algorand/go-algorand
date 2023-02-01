@@ -2651,7 +2651,7 @@ func TestTxTypes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testProg(t, "itxn_begin; itxn_field Sender", 5, Expect{1, "itxn_field Sender expects 1 stack argument..."})
-	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{1, "...wanted type []byte got uint64"})
+	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{1, "...wanted type addr got uint64"})
 	testProg(t, "itxn_begin; byte 0x56127823; itxn_field Sender", 5)
 
 	testProg(t, "itxn_begin; itxn_field Amount", 5, Expect{1, "itxn_field Amount expects 1 stack argument..."})

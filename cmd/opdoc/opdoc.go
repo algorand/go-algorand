@@ -254,9 +254,9 @@ type OpRecord struct {
 // StackTypeSpec type is the definition of a higher level type with
 // bounds specified
 type StackTypeSpec struct {
-	Type        string   `json:",omitempty"`
-	LengthBound []uint64 `json:",omitempty"`
-	ValueBound  []uint64 `json:",omitempty"` // TODO: does this convert maxuint to a string? (no)
+	Type        string    `json:",omitempty"`
+	LengthBound [2]uint64 `json:",omitempty"`
+	ValueBound  [2]uint64 `json:",omitempty"` // TODO: does this convert maxuint to a string? (no)
 }
 
 // Keyword is a keyword from the Field Groups passed to an op

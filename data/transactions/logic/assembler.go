@@ -1690,15 +1690,7 @@ func (le lineError) Unwrap() error {
 }
 
 func typecheck(expected, got StackType) bool {
-	// Some ops push 'any' and we wait for run time to see what it is.
-	// Some of those 'any' are based on fields that we _could_ know now but haven't written a more detailed system of typecheck for (yet).
-	if expected.AVMType == AVMAny && got.AVMType == AVMNone { // Any is lenient, but stack can't be empty
-		return false
-	}
-	if (expected.AVMType == AVMAny) || (got.AVMType == AVMAny) {
-		return true
-	}
-	return expected.AVMType == got.AVMType
+	return got.ConvertableTo(expected)
 }
 
 // newline not included since handled in scanner
@@ -1825,7 +1817,7 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 			}
 			if !typecheck(argType, stype) {
 				ops.typeErrorf("%s arg %d wanted type %s got %s",
-					strings.Join(instruction, " "), i, argType.AVMType, stype.AVMType)
+					strings.Join(instruction, " "), i, argType.String(), stype.String())
 			}
 		}
 		if !firstPop {
