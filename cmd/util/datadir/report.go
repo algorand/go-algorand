@@ -14,34 +14,26 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package datadir
+
+// TODO: eliminate duplication (copied from cmd/algocfg/report.go)
 
 import (
 	"fmt"
 	"os"
-
-	"github.com/algorand/go-algorand/cmd/util/datadir"
-	"github.com/spf13/cobra"
 )
 
-func init() {
-	// Config
-	defaultDataDirValue := []string{""}
-	rootCmd.PersistentFlags().StringArrayVarP(&datadir.DataDirs, "datadir", "d", defaultDataDirValue, "Data directory for the node")
+func reportInfof(format string, args ...interface{}) {
+	fmt.Printf(format+"\n", args...)
 }
 
-var rootCmd = &cobra.Command{
-	Use:   "algocfg",
-	Short: "Tool for inspecting and updating algod's config.json file",
-	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		cmd.HelpFunc()(cmd, args)
-	},
+func reportErrorln(args ...interface{}) {
+	fmt.Fprintln(os.Stderr, args...)
+	os.Exit(1)
 }
 
-func main() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+// TODO: Replace all report functions with the higher grade ones from cmd/algo
+
+func reportErrorf(format string, args ...interface{}) {
+	reportErrorln(fmt.Sprintf(format, args...))
 }

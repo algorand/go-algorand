@@ -23,6 +23,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/netdeploy"
 	"github.com/algorand/go-algorand/util"
@@ -96,7 +97,7 @@ var networkCreateCmd = &cobra.Command{
 			panic(err)
 		}
 
-		dataDir := maybeSingleDataDir()
+		dataDir := datadir.MaybeSingleDataDir()
 		var consensus config.ConsensusProtocols
 		if dataDir != "" {
 			// try to load the consensus from there. If there is none, we can just use the built in one.
