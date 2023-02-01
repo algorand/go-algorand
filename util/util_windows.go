@@ -18,6 +18,7 @@ package util
 
 import (
 	"errors"
+	"math"
 	"syscall"
 	"time"
 )
@@ -26,7 +27,7 @@ import (
 
 // GetFdLimits returns a current values for file descriptors limits.
 func GetFdLimits() (soft uint64, hard uint64, err error) {
-	return 0, 0, nil
+	return math.MaxUint64, math.MaxUint64, nil // syscall.RLIM_INFINITY
 }
 
 // SetFdSoftLimit sets a new file descriptors soft limit.
