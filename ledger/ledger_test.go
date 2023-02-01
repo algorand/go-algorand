@@ -1481,11 +1481,11 @@ func benchLedgerCache(b *testing.B, startRound basics.Round) {
 }
 
 func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.InitState) {
-	l.trackers.mu.RLock()
+	l.trackers.mu.Lock()
 	initialDbRound := l.trackers.dbRound
 	currentDbRound := initialDbRound
 	l.trackers.lastFlushTime = time.Time{}
-	l.trackers.mu.RUnlock()
+	l.trackers.mu.Unlock()
 
 	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 
