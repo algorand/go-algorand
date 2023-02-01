@@ -79,7 +79,7 @@ func fieldGroupMarkdown(out io.Writer, group *logic.FieldGroup) {
 		if !ok {
 			continue
 		}
-		if spec.Type().Typed() {
+		if spec.StackType().Typed() {
 			showTypes = true
 		}
 		if opVer == uint64(0) {
@@ -108,7 +108,7 @@ func fieldGroupMarkdown(out io.Writer, group *logic.FieldGroup) {
 		}
 		str := fmt.Sprintf("| %d | %s", i, markdownTableEscape(name))
 		if showTypes {
-			str = fmt.Sprintf("%s | %s", str, markdownTableEscape(spec.Type().String()))
+			str = fmt.Sprintf("%s | %s", str, markdownTableEscape(spec.StackType().String()))
 		}
 		if showVers {
 			if spec.Version() == spec.OpVersion() {
@@ -278,10 +278,10 @@ type LanguageSpec struct {
 	Ops             []OpRecord
 }
 
-func abstractTypeString(types []logic.TypeBound) []string {
+func abstractTypeString(types []logic.StackType) []string {
 	out := make([]string, len(types))
 	for i, t := range types {
-		out[i] = t.AbstractType.String()
+		out[i] = t.String()
 	}
 	return out
 }
@@ -304,14 +304,14 @@ func typeString(types []logic.StackType) string {
 }
 
 func typeByte(t logic.StackType) byte {
-	switch t {
-	case logic.StackUint64:
+	switch t.AVMType {
+	case logic.AVMUint64:
 		return 'U'
-	case logic.StackBytes:
+	case logic.AVMBytes:
 		return 'B'
-	case logic.StackAny:
+	case logic.AVMAny:
 		return '.'
-	case logic.StackNone:
+	case logic.AVMNone:
 		return '_'
 	default:
 		panic("unexpected type in opdoc typeString")
@@ -324,9 +324,8 @@ func groupKeywords(group logic.FieldGroup) []Keyword {
 		if spec, ok := group.SpecByName(name); ok {
 			// TODO: replace tstring with something better
 			kw := Keyword{
-				Name:         name,
-				Type:         string(typeByte(spec.Type())),
-				AbstractType: spec.TypeBound().AbstractType.String(),
+				Name: name,
+				Type: string(typeByte(spec.StackType())),
 			}
 			keywords = append(keywords, kw)
 		}
@@ -413,13 +412,13 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 	}
 
 	abstractTypes := map[string]AbstractType{}
-	for _, tb := range logic.TypeBounds {
-		abstractTypes[tb.AbstractType.String()] = AbstractType{
-			Type:        string(typeByte(tb.StackType)),
-			LengthBound: tb.LengthRange,
-			ValueBound:  tb.ValueRange,
-		}
-	}
+	//for _, tb := range logic. {
+	//	abstractTypes[tb.AbstractType.String()] = AbstractType{
+	//		Type:        string(typeByte(tb.StackType)),
+	//		LengthBound: tb.LengthRange,
+	//		ValueBound:  tb.ValueRange,
+	//	}
+	//}
 
 	keywords["txn_type"] = txnTypeKeywords()
 	keywords["on_complete"] = onCompleteKeywords()
@@ -429,8 +428,8 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].Name = spec.Name
 		records[i].Args = typeString(spec.Arg.Types)
 		records[i].Returns = typeString(spec.Return.Types)
-		records[i].AbstractArgs = abstractTypeString(spec.AbstractArgs)
-		records[i].AbstractReturns = abstractTypeString(spec.AbstractReturns)
+		//records[i].AbstractArgs = abstractTypeString(spec.AbstractArgs)
+		//records[i].AbstractReturns = abstractTypeString(spec.AbstractReturns)
 		records[i].Size = spec.OpDetails.Size
 		records[i].ArgEnum = argEnums(spec.Name)
 		records[i].Doc = strings.ReplaceAll(logic.OpDoc(spec.Name), "<br />", "\n")

@@ -308,7 +308,7 @@ type ProgramKnowledge struct {
 
 func (pgm *ProgramKnowledge) top() (StackType, bool) {
 	if len(pgm.stack) == 0 {
-		return pgm.bottom, pgm.bottom != StackNone
+		return pgm.bottom, pgm.bottom.AVMType != AVMNone
 	}
 	last := len(pgm.stack) - 1
 	return pgm.stack[last], true
@@ -383,7 +383,7 @@ func (ops *OpStream) returns(spec *OpSpec, replacement StackType) {
 	end := len(ops.known.stack)
 	tip := ops.known.stack[end-len(spec.Return.Types):]
 	for i := range tip {
-		if tip[i] == StackAny {
+		if tip[i].AVMType == AVMAny {
 			tip[i] = replacement
 			return
 		}
@@ -1108,8 +1108,8 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 					return ops.errorf("%s unknown field: %#v", spec.Name, args[i])
 				}
 				// refine the typestack now, so it is maintained even if there's a version error
-				if fs.Type().Typed() {
-					ops.returns(spec, fs.Type())
+				if fs.StackType().Typed() {
+					ops.returns(spec, fs.StackType())
 				}
 				if fs.Version() > ops.Version {
 					return ops.errorf("%s %s field was introduced in v%d. Missed #pragma version?",
@@ -1222,7 +1222,7 @@ func typeBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 
 	idx := top - n
 	if idx < 0 {
-		if pgm.bottom == StackNone {
+		if pgm.bottom.AVMType == AVMNone {
 			// By demanding n+1 elements, we'll trigger an error
 			return anyTypes(n + 1), nil, nil
 		}
@@ -1276,7 +1276,7 @@ func typeFrameBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes
 		// Perhaps it would be cleaner to build up the args, return slices to
 		// cause this, rather than manipulate the pgm.stack directly.
 		for i := range pgm.stack {
-			if pgm.stack[i] != typ {
+			if pgm.stack[i].AVMType != typ.AVMType {
 				pgm.stack[i] = StackAny
 			}
 		}
@@ -1331,7 +1331,7 @@ func typeDupTwo(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 func typeSelect(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 2 {
-		if pgm.stack[top-1] == pgm.stack[top-2] {
+		if pgm.stack[top-1].AVMType == pgm.stack[top-2].AVMType {
 			return nil, StackTypes{pgm.stack[top-1]}, nil
 		}
 	}
@@ -1394,7 +1394,7 @@ func typeTxField(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, 
 	if !ok {
 		return nil, nil, nil
 	}
-	return StackTypes{fs.btype.StackType}, nil, nil
+	return StackTypes{fs.btype}, nil, nil
 }
 
 func typeStore(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
@@ -1416,7 +1416,7 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 	}
 	for i := range pgm.scratchSpace {
 		// We can't know what slot stacktop is being stored in, but we can at least keep the slots that are the same type as stacktop
-		if pgm.scratchSpace[i] != pgm.stack[top] {
+		if pgm.scratchSpace[i].AVMType != pgm.stack[top].AVMType {
 			pgm.scratchSpace[i] = StackAny
 		}
 	}
@@ -1438,7 +1438,7 @@ func typeProto(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, er
 		return nil, nil, nil
 	}
 
-	if len(pgm.stack) != 0 || pgm.bottom != StackAny {
+	if len(pgm.stack) != 0 || pgm.bottom.AVMType != StackAny.AVMType {
 		return nil, nil, fmt.Errorf("proto must be unreachable from previous PC")
 	}
 	pgm.stack = anyTypes(a)
@@ -1450,7 +1450,7 @@ func typeLoads(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, er
 	scratchType := pgm.scratchSpace[0]
 	for _, item := range pgm.scratchSpace {
 		// If all the scratch slots are one type, then we can say we are loading that type
-		if item != scratchType {
+		if item.AVMType != scratchType.AVMType {
 			return nil, nil, nil
 		}
 	}
@@ -1582,12 +1582,12 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 const anyImmediates = -1
 
 var pseudoOps = map[string]map[int]OpSpec{
-	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i", ":i"), OpDetails: immediates("i").assembler(asmInt)}},
-	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b", ":b"), OpDetails: immediates("b").assembler(asmByte)}},
+	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i"), OpDetails: immediates("i").assembler(asmInt)}},
+	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b"), OpDetails: immediates("b").assembler(asmByte)}},
 	// parse basics.Address, actually just another []byte constant
-	"addr": {anyImmediates: OpSpec{Name: "addr", Proto: proto(":b", ":A"), OpDetails: immediates("a").assembler(asmAddr)}},
+	"addr": {anyImmediates: OpSpec{Name: "addr", Proto: proto(":A"), OpDetails: immediates("a").assembler(asmAddr)}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method":  {anyImmediates: OpSpec{Name: "method", Proto: proto(":b", ":b"), OpDetails: immediates("m").assembler(asmMethod)}},
+	"method":  {anyImmediates: OpSpec{Name: "method", Proto: proto(":b"), OpDetails: immediates("m").assembler(asmMethod)}},
 	"txn":     {1: OpSpec{Name: "txn"}, 2: OpSpec{Name: "txna"}},
 	"gtxn":    {2: OpSpec{Name: "gtxn"}, 3: OpSpec{Name: "gtxna"}},
 	"gtxns":   {1: OpSpec{Name: "gtxns"}, 2: OpSpec{Name: "gtxnsa"}},
@@ -1641,12 +1641,12 @@ func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 				return Proto{}, 0, false
 			}
 			for j := range args {
-				if args[j] != spec.Arg.Types[j] {
+				if args[j].AVMType != spec.Arg.Types[j].AVMType {
 					args[j] = StackAny
 				}
 			}
 			for j := range returns {
-				if returns[j] != spec.Return.Types[j] {
+				if returns[j].AVMType != spec.Return.Types[j].AVMType {
 					returns[j] = StackAny
 				}
 			}
@@ -1689,13 +1689,13 @@ func (le lineError) Unwrap() error {
 	return le.Err
 }
 
-func typecheck(expected, got StackType) bool {
+func typecheck(expected, got AVMType) bool {
 	// Some ops push 'any' and we wait for run time to see what it is.
 	// Some of those 'any' are based on fields that we _could_ know now but haven't written a more detailed system of typecheck for (yet).
-	if expected == StackAny && got == StackNone { // Any is lenient, but stack can't be empty
+	if expected == AVMAny && got == AVMNone { // Any is lenient, but stack can't be empty
 		return false
 	}
-	if (expected == StackAny) || (got == StackAny) {
+	if (expected == AVMAny) || (got == AVMAny) {
 		return true
 	}
 	return expected == got
@@ -1809,7 +1809,7 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 		return
 	}
 	argcount := len(args)
-	if argcount > len(ops.known.stack) && ops.known.bottom == StackNone {
+	if argcount > len(ops.known.stack) && ops.known.bottom.AVMType == StackNone.AVMType {
 		ops.typeErrorf("%s expects %d stack arguments but stack height is %d",
 			strings.Join(instruction, " "), argcount, len(ops.known.stack))
 	} else {
@@ -1823,7 +1823,7 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 			} else {
 				ops.trace(", %s", argType)
 			}
-			if !typecheck(argType, stype) {
+			if !typecheck(argType.AVMType, stype.AVMType) {
 				ops.typeErrorf("%s arg %d wanted type %s got %s",
 					strings.Join(instruction, " "), i, argType, stype)
 			}

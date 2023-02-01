@@ -2767,22 +2767,22 @@ done:
 func TestMergeProtos(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	iVi := OpSpec{Proto: proto("i:i", "i:i")}
-	bVb := OpSpec{Proto: proto("b:b", "b:b")}
-	aaVa := OpSpec{Proto: proto("aa:a", "aa:a")}
-	aVaa := OpSpec{Proto: proto("a:aa", "a:aa")}
+	iVi := OpSpec{Proto: proto("i:i")}
+	bVb := OpSpec{Proto: proto("b:b")}
+	aaVa := OpSpec{Proto: proto("aa:a")}
+	aVaa := OpSpec{Proto: proto("a:aa")}
 	p, _, _ := mergeProtos(map[int]OpSpec{0: iVi, 1: bVb})
-	require.Equal(t, proto("a:a", "a:a"), p)
+	require.Equal(t, proto("a:a"), p)
 	_, _, ok := mergeProtos(map[int]OpSpec{0: aaVa, 1: iVi})
 	require.False(t, ok)
 	_, _, ok = mergeProtos(map[int]OpSpec{0: aVaa, 1: iVi})
 	require.False(t, ok)
-	medley := OpSpec{Proto: proto("aibibabai:aibibabai", "aibibabai:aibibabai")}
-	medley2 := OpSpec{Proto: proto("biabbaiia:biabbaiia", "biabbaiia:biabbaiia")}
+	medley := OpSpec{Proto: proto("aibibabai:aibibabai")}
+	medley2 := OpSpec{Proto: proto("biabbaiia:biabbaiia")}
 	p, _, _ = mergeProtos(map[int]OpSpec{0: medley, 1: medley2})
-	require.Equal(t, proto("aiaabaaaa:aiaabaaaa", "aiaabaaaa:aiaabaaaa"), p)
-	v1 := OpSpec{Version: 1, Proto: proto(":", ":")}
-	v2 := OpSpec{Version: 2, Proto: proto(":", ":")}
+	require.Equal(t, proto("aiaabaaaa:aiaabaaaa"), p)
+	v1 := OpSpec{Version: 1, Proto: proto(":")}
+	v2 := OpSpec{Version: 2, Proto: proto(":")}
 	_, v, _ := mergeProtos(map[int]OpSpec{0: v2, 1: v1})
 	require.Equal(t, uint64(1), v)
 }
@@ -2793,7 +2793,7 @@ func TestGetSpec(t *testing.T) {
 	t.Parallel()
 	ops := testProg(t, "int 1", AssemblerMaxVersion)
 	ops.versionedPseudoOps["dummyPseudo"] = make(map[int]OpSpec)
-	ops.versionedPseudoOps["dummyPseudo"][1] = OpSpec{Name: "b:", Version: AssemblerMaxVersion, Proto: proto("b:", "b:")}
+	ops.versionedPseudoOps["dummyPseudo"][1] = OpSpec{Name: "b:", Version: AssemblerMaxVersion, Proto: proto("b:")}
 	ops.versionedPseudoOps["dummyPseudo"][2] = OpSpec{Name: ":", Version: AssemblerMaxVersion}
 	_, _, ok := getSpec(ops, "dummyPseudo", []string{})
 	require.False(t, ok)

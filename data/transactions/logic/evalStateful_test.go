@@ -2269,7 +2269,7 @@ func TestEnumFieldErrors(t *testing.T) { // nolint:paralleltest // manipulates g
 	source := `txn Amount`
 	origSpec := txnFieldSpecs[Amount]
 	changed := origSpec
-	changed.btype.StackType = StackBytes
+	changed.btype.AVMType = AVMBytes
 	txnFieldSpecs[Amount] = changed
 	defer func() {
 		txnFieldSpecs[Amount] = origSpec
@@ -2282,7 +2282,7 @@ func TestEnumFieldErrors(t *testing.T) { // nolint:paralleltest // manipulates g
 
 	origMinTxnFs := globalFieldSpecs[MinTxnFee]
 	badMinTxnFs := origMinTxnFs
-	badMinTxnFs.btype.StackType = StackBytes
+	badMinTxnFs.btype.AVMType = AVMBytes
 	globalFieldSpecs[MinTxnFee] = badMinTxnFs
 	defer func() {
 		globalFieldSpecs[MinTxnFee] = origMinTxnFs
@@ -2314,7 +2314,7 @@ assert
 `
 	origBalanceFs := assetHoldingFieldSpecs[AssetBalance]
 	badBalanceFs := origBalanceFs
-	badBalanceFs.btype.StackType = StackBytes
+	badBalanceFs.btype.AVMType = AVMBytes
 	assetHoldingFieldSpecs[AssetBalance] = badBalanceFs
 	defer func() {
 		assetHoldingFieldSpecs[AssetBalance] = origBalanceFs
@@ -2328,7 +2328,7 @@ assert
 `
 	origTotalFs := assetParamsFieldSpecs[AssetTotal]
 	badTotalFs := origTotalFs
-	badTotalFs.btype.StackType = StackBytes
+	badTotalFs.btype.AVMType = AVMBytes
 	assetParamsFieldSpecs[AssetTotal] = badTotalFs
 	defer func() {
 		assetParamsFieldSpecs[AssetTotal] = origTotalFs
@@ -2342,10 +2342,10 @@ func TestReturnTypes(t *testing.T) {
 	t.Parallel()
 
 	// Ensure all opcodes return values they are supposed to according to the OpSpecs table
-	typeToArg := map[StackType]string{
-		StackUint64: "int 1\n",
-		StackAny:    "int 1\n",
-		StackBytes:  "byte 0x33343536\n", // Which is the string "3456"
+	typeToArg := map[AVMType]string{
+		AVMUint64: "int 1\n",
+		AVMAny:    "int 1\n",
+		AVMBytes:  "byte 0x33343536\n", // Which is the string "3456"
 	}
 
 	// We try to form a snippet that will test every opcode, by sandwiching it
@@ -2491,7 +2491,7 @@ func TestReturnTypes(t *testing.T) {
 				var sb strings.Builder
 				if provideStackInput {
 					for _, t := range spec.Arg.Types {
-						sb.WriteString(typeToArg[t])
+						sb.WriteString(typeToArg[t.AVMType])
 					}
 				}
 				sb.WriteString(cmd + "\n")
@@ -2577,7 +2577,7 @@ func TestReturnTypes(t *testing.T) {
 					stackType := cx.stack[i].argType()
 					retType := spec.Return.Types[i]
 					require.True(
-						t, typecheck(retType, stackType),
+						t, typecheck(retType.AVMType, stackType),
 						"%s expected to return %s but actual is %s", spec.Name, retType, stackType,
 					)
 				}
