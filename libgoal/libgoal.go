@@ -1287,3 +1287,30 @@ func (c *Client) LightBlockHeaderProof(round uint64) (resp model.LightBlockHeade
 	}
 	return
 }
+
+// SetSyncRound sets the sync round on a node w/ EnableFollowMode
+func (c *Client) SetSyncRound(round uint64) (err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.SetSyncRound(round)
+	}
+	return
+}
+
+// GetSyncRound gets the sync round on a node w/ EnableFollowMode
+func (c *Client) GetSyncRound() (rep model.GetSyncRoundResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.GetSyncRound()
+	}
+	return
+}
+
+// GetLedgerStateDelta gets the LedgerStateDelta on a node w/ EnableFollowMode
+func (c *Client) GetLedgerStateDelta(round uint64) (rep model.LedgerStateDeltaResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.GetLedgerStateDelta(round)
+	}
+	return
+}

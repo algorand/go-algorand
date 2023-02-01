@@ -49,6 +49,14 @@ import (
 
 var server http.Server
 
+// ServerNode is the required methods for any node the server fronts
+type ServerNode interface {
+	apiServer.APINodeInterface
+	ListeningAddress() (string, bool)
+	Start()
+	Stop()
+}
+
 // Server represents an instance of the REST API HTTP server
 type Server struct {
 	RootPath             string
@@ -57,7 +65,7 @@ type Server struct {
 	netFile              string
 	netListenFile        string
 	log                  logging.Logger
-	node                 *node.AlgorandFullNode
+	node                 ServerNode
 	metricCollector      *metrics.MetricService
 	metricServiceStarted bool
 	stopping             chan struct{}
@@ -171,14 +179,23 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 			NodeExporterPath:          cfg.NodeExporterPath,
 		})
 
-	s.node, err = node.MakeFull(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
+	var serverNode ServerNode
+	if cfg.EnableFollowMode {
+		var followerNode *node.AlgorandFollowerNode
+		followerNode, err = node.MakeFollower(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
+		serverNode = apiServer.FollowerNode{AlgorandFollowerNode: followerNode}
+	} else {
+		var fullNode *node.AlgorandFullNode
+		fullNode, err = node.MakeFull(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
+		serverNode = apiServer.APINode{AlgorandFullNode: fullNode}
+	}
 	if os.IsNotExist(err) {
 		return fmt.Errorf("node has not been installed: %s", err)
 	}
 	if err != nil {
 		return fmt.Errorf("couldn't initialize the node: %s", err)
 	}
-
+	s.node = serverNode
 	return nil
 }
 
