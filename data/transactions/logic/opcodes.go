@@ -366,6 +366,8 @@ func parseStackTypes(spec string) StackTypes {
 			types[i] = StackBoolean
 		case 'H':
 			types[i] = StackHash
+		case 'M':
+			types[i] = StackMethodSelector
 		default:
 			panic(spec)
 		}

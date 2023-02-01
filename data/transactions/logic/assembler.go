@@ -1587,7 +1587,7 @@ var pseudoOps = map[string]map[int]OpSpec{
 	// parse basics.Address, actually just another []byte constant
 	"addr": {anyImmediates: OpSpec{Name: "addr", Proto: proto(":A"), OpDetails: immediates("a").assembler(asmAddr)}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method":  {anyImmediates: OpSpec{Name: "method", Proto: proto(":b"), OpDetails: immediates("m").assembler(asmMethod)}},
+	"method":  {anyImmediates: OpSpec{Name: "method", Proto: proto(":M"), OpDetails: immediates("m").assembler(asmMethod)}},
 	"txn":     {1: OpSpec{Name: "txn"}, 2: OpSpec{Name: "txna"}},
 	"gtxn":    {2: OpSpec{Name: "gtxn"}, 3: OpSpec{Name: "gtxna"}},
 	"gtxns":   {1: OpSpec{Name: "gtxns"}, 2: OpSpec{Name: "gtxnsa"}},

@@ -68,6 +68,17 @@
         0
       ]
     },
+    "method": {
+      "Type": "B",
+      "LengthBound": [
+        4,
+        4
+      ],
+      "ValueBound": [
+        0,
+        0
+      ]
+    },
     "none": {
       "Type": "_",
       "LengthBound": [
@@ -826,6 +837,18 @@
     ],
     "txn_type": [
       {
+        "Name": "afrz",
+        "Type": "uint64"
+      },
+      {
+        "Name": "appl",
+        "Type": "uint64"
+      },
+      {
+        "Name": "unknown",
+        "Type": "uint64"
+      },
+      {
         "Name": "pay",
         "Type": "uint64"
       },
@@ -839,18 +862,6 @@
       },
       {
         "Name": "axfer",
-        "Type": "uint64"
-      },
-      {
-        "Name": "afrz",
-        "Type": "uint64"
-      },
-      {
-        "Name": "appl",
-        "Type": "uint64"
-      },
-      {
-        "Name": "unknown",
         "Type": "uint64"
       }
     ],
@@ -900,6 +911,13 @@
       "Size": 2
     },
     {
+      "Name": "method",
+      "Returns": [
+        "method"
+      ],
+      "Size": 2
+    },
+    {
       "Name": "int",
       "Returns": [
         "uint64"
@@ -908,13 +926,6 @@
     },
     {
       "Name": "byte",
-      "Returns": [
-        "[]byte"
-      ],
-      "Size": 2
-    },
-    {
-      "Name": "method",
       "Returns": [
         "[]byte"
       ],

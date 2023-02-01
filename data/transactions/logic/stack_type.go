@@ -99,6 +99,8 @@ var (
 	StackAddress = NewStackType(AVMBytes, static(32), "addr")
 	// StackBigInt represents a bytestring that should be treated like an int
 	StackBigInt = NewStackType(AVMBytes, bounded(0, maxByteMathSize), "bigint")
+	// StackMethodSelector represents a bytestring that should be treated like a method selector
+	StackMethodSelector = NewStackType(AVMBytes, static(4), "method")
 
 	// AllStackTypes is a list of all the stack types we recognize
 	// so that we can iterate over them in doc prep
@@ -111,6 +113,7 @@ var (
 		StackHash,
 		StackAddress,
 		StackBigInt,
+		StackMethodSelector,
 	}
 )
 
