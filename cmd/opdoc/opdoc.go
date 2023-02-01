@@ -254,6 +254,7 @@ type OpRecord struct {
 }
 
 type AbstractType struct {
+	Type        string   `json:",omitempty"`
 	LengthBound []uint64 `json:",omitempty"`
 	ValueBound  []uint64 `json:",omitempty"` // TODO: does this convert maxuint to a string? (no)
 }
@@ -411,6 +412,7 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 	abstractTypes := map[string]AbstractType{}
 	for _, tb := range logic.TypeBounds {
 		abstractTypes[tb.AbstractType.String()] = AbstractType{
+			Type:        tb.StackType.String(),
 			LengthBound: tb.LengthRange,
 			ValueBound:  tb.ValueRange,
 		}

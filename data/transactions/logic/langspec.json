@@ -907,14 +907,6 @@
     ],
     "txn_type": [
       {
-        "Name": "pay",
-        "Type": "U"
-      },
-      {
-        "Name": "keyreg",
-        "Type": "U"
-      },
-      {
         "Name": "acfg",
         "Type": "U"
       },
@@ -932,6 +924,14 @@
       },
       {
         "Name": "unknown",
+        "Type": "U"
+      },
+      {
+        "Name": "pay",
+        "Type": "U"
+      },
+      {
+        "Name": "keyreg",
         "Type": "U"
       }
     ],
@@ -982,11 +982,6 @@
   },
   "PseudoOps": [
     {
-      "Name": "int",
-      "Returns": "U",
-      "Size": 2
-    },
-    {
       "Name": "byte",
       "Returns": "B",
       "Size": 2
@@ -994,6 +989,11 @@
     {
       "Name": "addr",
       "Returns": "B",
+      "Size": 2
+    },
+    {
+      "Name": "int",
+      "Returns": "U",
       "Size": 2
     },
     {
@@ -4078,12 +4078,14 @@
   ],
   "AbstractTypes": {
     "address": {
+      "Type": "[]byte",
       "LengthBound": [
         32,
         32
       ]
     },
     "any": {
+      "Type": "any",
       "LengthBound": [
         0,
         4096
@@ -4094,31 +4096,46 @@
       ]
     },
     "bigint": {
+      "Type": "[]byte",
       "LengthBound": [
         0,
         64
       ]
     },
     "boolean": {
+      "Type": "uint64",
       "ValueBound": [
         0,
         1
       ]
     },
     "bytes": {
+      "Type": "[]byte",
       "LengthBound": [
         0,
         4096
       ]
     },
     "hash": {
+      "Type": "[]byte",
       "LengthBound": [
         32,
         32
       ]
     },
-    "none": {},
+    "none": {
+      "Type": "None",
+      "LengthBound": [
+        0,
+        0
+      ],
+      "ValueBound": [
+        0,
+        0
+      ]
+    },
     "uint64": {
+      "Type": "uint64",
       "ValueBound": [
         0,
         18446744073709551615

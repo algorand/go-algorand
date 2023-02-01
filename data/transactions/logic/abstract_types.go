@@ -54,7 +54,6 @@ func (at AbstractType) String() string {
 var (
 	params = config.Consensus[protocol.ConsensusCurrentVersion]
 
-	NoneBound   = TypeBound{StackType: StackNone, AbstractType: AbstractNone}
 	Uint64Bound = boundUint(0, math.MaxUint64).abstractType(AbstractUint64)
 	BytesBound  = boundBytes(0, maxStringSize).abstractType(AbstractBytes)
 	AnyBound    = TypeBound{
@@ -63,6 +62,7 @@ var (
 		ValueRange:   Uint64Bound.ValueRange,
 		LengthRange:  BytesBound.LengthRange,
 	}
+	NoneBound = TypeBound{StackType: StackNone, AbstractType: AbstractNone, ValueRange: []uint64{0, 0}, LengthRange: []uint64{0, 0}}
 
 	// Some higher level types that are common
 	BooleanBound = boundUint(0, 1).abstractType(AbstractBool)
