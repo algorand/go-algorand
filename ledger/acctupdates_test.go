@@ -2183,8 +2183,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 				defer ml.trackers.accountsWriting.Done()
 
 				// do not take any locks since all operations are synchronous
-				newBase := basics.Round(dcc.offset) + dcc.oldBase
-				dcc.newBase = newBase
+				newBase := dcc.newBase()
 
 				err := au.prepareCommit(dcc)
 				require.NoError(t, err)
@@ -2467,8 +2466,7 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 			defer ml.trackers.accountsWriting.Done()
 
 			// do not take any locks since all operations are synchronous
-			newBase := basics.Round(dcc.offset) + dcc.oldBase
-			dcc.newBase = newBase
+			newBase := dcc.newBase()
 
 			err := au.prepareCommit(dcc)
 			require.NoError(t, err)

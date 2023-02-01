@@ -249,10 +249,10 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 		dcc.txTailDeltas = append(dcc.txTailDeltas, t.roundTailSerializedDeltas[i])
 	}
 	lowest := t.lowestBlockHeaderRound
-	proto, ok := config.Consensus[t.blockHeaderData[dcc.newBase].CurrentProtocol]
+	proto, ok := config.Consensus[t.blockHeaderData[dcc.newBase()].CurrentProtocol]
 	t.tailMu.RUnlock()
 	if !ok {
-		return fmt.Errorf("round %d not found in blockHeaderData: lowest=%d, base=%d", dcc.newBase, lowest, dcc.oldBase)
+		return fmt.Errorf("round %d not found in blockHeaderData: lowest=%d, base=%d", dcc.newBase(), lowest, dcc.oldBase)
 	}
 	// get the MaxTxnLife from the consensus params of the latest round in this commit range
 	// preserve data for MaxTxnLife + DeeperBlockHeaderHistory
@@ -274,7 +274,7 @@ func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommi
 
 	// determine the round to remove data
 	// the formula is similar to the committedUpTo: rnd + 1 - retain size
-	forgetBeforeRound := (dcc.newBase + 1).SubSaturate(basics.Round(dcc.txTailRetainSize))
+	forgetBeforeRound := (dcc.newBase() + 1).SubSaturate(basics.Round(dcc.txTailRetainSize))
 	baseRound := dcc.oldBase + 1
 	if err := arw.TxtailNewRound(ctx, baseRound, dcc.txTailDeltas, forgetBeforeRound); err != nil {
 		return fmt.Errorf("txTail: unable to persist new round %d : %w", baseRound, err)
@@ -290,7 +290,7 @@ func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 
 	// get the MaxTxnLife from the consensus params of the latest round in this commit range
 	// preserve data for MaxTxnLife + DeeperBlockHeaderHistory rounds
-	newLowestRound := (dcc.newBase + 1).SubSaturate(basics.Round(dcc.txTailRetainSize))
+	newLowestRound := (dcc.newBase() + 1).SubSaturate(basics.Round(dcc.txTailRetainSize))
 	for t.lowestBlockHeaderRound < newLowestRound {
 		delete(t.blockHeaderData, t.lowestBlockHeaderRound)
 		t.lowestBlockHeaderRound++

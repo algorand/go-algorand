@@ -380,7 +380,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	if err != nil {
 		return err
 	}
-	end, err := ao.roundParamsOffset(dcc.newBase)
+	end, err := ao.roundParamsOffset(dcc.newBase())
 	if err != nil {
 		return err
 	}
@@ -388,7 +388,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	dcc.onlineRoundParams = ao.onlineRoundParamsData[start+1 : end+1]
 
 	maxOnlineLookback := basics.Round(ao.maxBalLookback())
-	dcc.onlineAccountsForgetBefore = (dcc.newBase + 1).SubSaturate(maxOnlineLookback)
+	dcc.onlineAccountsForgetBefore = (dcc.newBase() + 1).SubSaturate(maxOnlineLookback)
 	if dcc.lowestRound > 0 && dcc.lowestRound < dcc.onlineAccountsForgetBefore {
 		// extend history as needed
 		dcc.onlineAccountsForgetBefore = dcc.lowestRound
@@ -440,7 +440,7 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 
 func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 	offset := dcc.offset
-	newBase := dcc.newBase
+	newBase := dcc.newBase()
 
 	ao.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them

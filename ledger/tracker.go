@@ -233,7 +233,6 @@ type deferredCommitRange struct {
 type deferredCommitContext struct {
 	deferredCommitRange
 
-	newBase   basics.Round
 	flushTime time.Time
 
 	genesisProto config.ConsensusParams
@@ -271,6 +270,10 @@ type deferredCommitContext struct {
 
 	stats       telemetryspec.AccountsUpdateMetrics
 	updateStats bool
+}
+
+func (dcc deferredCommitContext) newBase() basics.Round {
+	return dcc.oldBase + basics.Round(dcc.offset)
 }
 
 var errMissingAccountUpdateTracker = errors.New("initializeTrackerCaches : called without a valid accounts update tracker")
@@ -495,7 +498,6 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 
 	dcc.offset = offset
 	dcc.oldBase = dbRound
-	dcc.newBase = newBase
 	dcc.flushTime = time.Now()
 
 	for _, lt := range tr.trackers {
