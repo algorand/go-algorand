@@ -461,11 +461,8 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 	dcr.catchpointDataWriting = &ct.catchpointDataWriting
 	dcr.enableGeneratingCatchpointFiles = ct.enableGeneratingCatchpointFiles
 
-	{
-		rounds := calculateCatchpointRounds(
-			dcr.oldBase+1, dcr.oldBase+basics.Round(dcr.offset), ct.catchpointInterval)
-		dcr.catchpointSecondStage = (len(rounds) > 0)
-	}
+	rounds := ct.calculateCatchpointRounds(dcr)
+	dcr.catchpointSecondStage = (len(rounds) > 0)
 
 	return dcr
 }
@@ -488,8 +485,7 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 	dbRound := dcc.oldBase
 
 	defer func() {
-		if err != nil && dcc.catchpointFirstStage &&
-			ct.enableGeneratingCatchpointFiles {
+		if err != nil && dcc.catchpointFirstStage && ct.enableGeneratingCatchpointFiles {
 			atomic.StoreInt32(&ct.catchpointDataWriting, 0)
 		}
 	}()
@@ -549,7 +545,7 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 		return err
 	}
 
-	for _, round := range ct.calculateCatchpointRounds(dcc) {
+	for _, round := range ct.calculateCatchpointRounds(&dcc.deferredCommitRange) {
 		err = crw.InsertUnfinishedCatchpoint(ctx, round, dcc.committedRoundDigests[round-dcc.oldBase-1])
 		if err != nil {
 			return err
@@ -579,22 +575,20 @@ func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommit
 }
 
 func doRepackCatchpoint(ctx context.Context, header CatchpointFileHeader, biggestChunkLen uint64, in *tar.Reader, out *tar.Writer) error {
-	{
-		bytes := protocol.Encode(&header)
+	bytes := protocol.Encode(&header)
 
-		err := out.WriteHeader(&tar.Header{
-			Name: "content.msgpack",
-			Mode: 0600,
-			Size: int64(len(bytes)),
-		})
-		if err != nil {
-			return err
-		}
+	err := out.WriteHeader(&tar.Header{
+		Name: "content.msgpack",
+		Mode: 0600,
+		Size: int64(len(bytes)),
+	})
+	if err != nil {
+		return err
+	}
 
-		_, err = out.Write(bytes)
-		if err != nil {
-			return err
-		}
+	_, err = out.Write(bytes)
+	if err != nil {
+		return err
 	}
 
 	// make buffer for re-use that can fit biggest chunk
@@ -818,13 +812,19 @@ func (ct *catchpointTracker) finishCatchpoint(ctx context.Context, round basics.
 // Calculate catchpoint round numbers in [min, max]. `catchpointInterval` must be
 // non-zero.
 func calculateCatchpointRounds(min basics.Round, max basics.Round, catchpointInterval uint64) []basics.Round {
-	var res []basics.Round
 
-	// The smallest integer i such that i * ct.catchpointInterval >= first.
+	// The smallest integer i such that i * ct.catchpointInterval >= min.
 	l := (uint64(min) + catchpointInterval - 1) / catchpointInterval
-	// The largest integer i such that i * ct.catchpointInterval <= last.
+	// The largest integer i such that i * ct.catchpointInterval <= max.
 	r := uint64(max) / catchpointInterval
 
+	// handle situations when max - min < catchpointInterval,
+	// for example min=11, max=19, catchpointInterval = 10
+	if l > r {
+		return nil
+	}
+
+	res := make([]basics.Round, 0, r-l+1)
 	for i := l; i <= r; i++ {
 		round := basics.Round(i * catchpointInterval)
 		res = append(res, round)
@@ -833,7 +833,7 @@ func calculateCatchpointRounds(min basics.Round, max basics.Round, catchpointInt
 	return res
 }
 
-func (ct *catchpointTracker) calculateCatchpointRounds(dcc *deferredCommitContext) []basics.Round {
+func (ct *catchpointTracker) calculateCatchpointRounds(dcc *deferredCommitRange) []basics.Round {
 	if ct.catchpointInterval == 0 {
 		return nil
 	}
@@ -842,7 +842,8 @@ func (ct *catchpointTracker) calculateCatchpointRounds(dcc *deferredCommitContex
 	if dcc.catchpointLookback+1 > uint64(min) {
 		min = basics.Round(dcc.catchpointLookback) + 1
 	}
-	return calculateCatchpointRounds(min, dcc.newBase, ct.catchpointInterval)
+	max := dcc.oldBase + basics.Round(dcc.offset)
+	return calculateCatchpointRounds(min, max, ct.catchpointInterval)
 }
 
 // Delete old first stage catchpoint records and data files.
@@ -875,7 +876,7 @@ func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferr
 	}
 
 	// Generate catchpoints for rounds in (dcc.oldBase, dcc.newBase].
-	for _, round := range ct.calculateCatchpointRounds(dcc) {
+	for _, round := range ct.calculateCatchpointRounds(&dcc.deferredCommitRange) {
 		err := ct.finishCatchpoint(
 			ctx, round, dcc.committedRoundDigests[round-dcc.oldBase-1], dcc.catchpointLookback)
 		if err != nil {
@@ -896,7 +897,7 @@ func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferr
 }
 
 // handleUnorderedCommit is a special method for handling deferred commits that are out of order.
-// Tracker might update own state in this case. For example, account updates tracker cancels
+// Tracker might update own state in this case. For example, account catchpoint tracker cancels
 // scheduled catchpoint writing that deferred commit.
 func (ct *catchpointTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
 	// if the node is configured to generate catchpoint files, we might need to update the catchpointWriting variable.
