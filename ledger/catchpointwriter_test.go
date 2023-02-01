@@ -140,14 +140,13 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 		mockCommitData = append(mockCommitData, verificationCommitContext{verificationContext: element})
 	}
 
-	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return insertStateProofVerificationContext(ctx, tx, mockCommitData)
+	err = ml.dbs.Batch(func(ctx context.Context, tx *sql.Tx) error {
+		return insertSPContexts(ctx, tx, mockCommitData)
 	})
 
 	require.NoError(t, err)
 
-	readDb := ml.trackerDB().Rdb
-	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = ml.trackerDB().Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
 		writer, err := makeCatchpointWriter(context.Background(), fileName, tx, ResourcesPerCatchpointFileChunk)
 		if err != nil {
 			return err

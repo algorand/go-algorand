@@ -81,7 +81,7 @@ func mockCommit(t *testing.T, spt *stateProofVerificationTracker, ml *mockLedger
 	err := spt.prepareCommit(&dcc)
 	a.NoError(err)
 
-	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = ml.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
 		return spt.commitRound(ctx, tx, &dcc)
 	})
 	a.NoError(err)

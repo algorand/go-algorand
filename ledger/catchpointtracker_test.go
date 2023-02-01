@@ -269,8 +269,9 @@ func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {
 
 func calculateStateProofVerificationHash(t *testing.T, ml *mockLedgerForTracker) crypto.Digest {
 	var digest crypto.Digest
-	err := ml.dbs.Rdb.AtomicContext(context.Background(), func(dbCtx context.Context, tx *sql.Tx) (err error) {
-		rawData, err := store.GetAllStateProofVerificationContexts(dbCtx, tx)
+	err := ml.dbs.Snapshot(func(dbCtx context.Context, tx *sql.Tx) (err error) {
+		spa := store.CreateSPVerificationAccessor(tx)
+		rawData, err := spa.GetAllSPContexts(dbCtx)
 		require.NoError(t, err)
 
 		wrappedData := catchpointStateProofVerificationContext{Data: rawData}
