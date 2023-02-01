@@ -251,7 +251,7 @@ type OpRecord struct {
 	Groups            []string `json:",omitempty"`
 }
 
-// Abstract type is the definition of a higher level type with
+// StackTypeSpec type is the definition of a higher level type with
 // bounds specified
 type StackTypeSpec struct {
 	Type        string   `json:",omitempty"`
@@ -377,7 +377,7 @@ func onCompleteKeywords() []Keyword {
 
 func txnTypeKeywords() []Keyword {
 	var txTypes []Keyword
-	for n, _ := range logic.TypeNameDescriptions {
+	for n := range logic.TypeNameDescriptions {
 		txTypes = append(txTypes, Keyword{Name: n, Type: "uint64"})
 	}
 	return txTypes

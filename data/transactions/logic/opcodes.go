@@ -394,8 +394,6 @@ func proto(signature string, effects ...string) Proto {
 	return Proto{
 		Arg:    typedList{parseStackTypes(parts[0]), argEffect},
 		Return: typedList{parseStackTypes(parts[1]), retEffect},
-		// AbstractArgs:    parseAbstractTypes(abstractParts[0]),
-		// AbstractReturns: parseAbstractTypes(abstractParts[1]),
 	}
 }
 
@@ -732,6 +730,7 @@ var opsByOpcode [LogicVersion + 1][256]OpSpec
 // OpsByName map for each version, mapping opcode name to OpSpec
 var OpsByName [LogicVersion + 1]map[string]OpSpec
 
+// PseudoOps holds a list of opspecs for the PseduoOps
 var PseudoOps []OpSpec
 
 // Migration from v1 to v2.

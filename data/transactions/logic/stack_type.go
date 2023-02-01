@@ -20,6 +20,7 @@ import (
 	"math"
 )
 
+// AVMType represents the types that are representable in the AVM
 type AVMType byte
 
 const (
@@ -36,30 +37,73 @@ const (
 	AVMBytes
 )
 
+func (at AVMType) String() string {
+	switch at {
+	case AVMNone:
+		return "None"
+	case AVMAny:
+		return "any"
+	case AVMUint64:
+		return "uint64"
+	case AVMBytes:
+		return "[]byte"
+	}
+	return "internal error, unknown type"
+}
+
+func (at AVMType) StackType() StackType {
+	switch at {
+	case AVMNone:
+		return StackNone
+	case AVMAny:
+		return StackAny
+	case AVMUint64:
+		return StackUint64
+	case AVMBytes:
+		return StackBytes
+	default:
+		panic(at)
+	}
+
+}
+
 var (
+	// TODO: reuse String result for name of base types
 	// Base stack types the AVM knows about
-	StackUint64 = NewStackType("uint64", AVMUint64, bounded(0, math.MaxUint64))
-	StackBytes  = NewStackType("[]byte", AVMBytes, bounded(0, maxStringSize))
-	StackAny    = StackType{
-		Name:        "any",
+
+	// StackUint64 is any valid uint64
+	StackUint64 = NewStackType(AVMUint64, bounded(0, math.MaxUint64))
+	// StackBytes is any valid bytestring
+	StackBytes = NewStackType(AVMBytes, bounded(0, maxStringSize))
+	// StackAny could be Bytes or Uint64
+	StackAny = StackType{
+		Name:        string(AVMAny),
 		AVMType:     AVMAny,
 		ValueBound:  StackUint64.ValueBound,
 		LengthBound: StackBytes.LengthBound,
 	}
+	// StackNone is used when there is no input or output to
+	// an opcode
 	StackNone = StackType{
-		Name:        "none",
+		Name:        string(AVMNone),
 		AVMType:     AVMNone,
 		ValueBound:  []uint64{0, 0},
 		LengthBound: []uint64{0, 0},
 	}
 
-	// Higher level types that are common
-	StackBoolean = NewStackType("bool", AVMUint64, bounded(0, 1))
-	StackHash    = NewStackType("hash", AVMBytes, static(32))
-	StackAddress = NewStackType("addr", AVMBytes, static(32))
-	StackBigInt  = NewStackType("bigint", AVMBytes, bounded(0, maxByteMathSize))
+	// Higher level types
 
-	// List of them so we can iterate in doc prep
+	// StackBoolean constrains the int to 1 or 0, representing True or False
+	StackBoolean = NewStackType(AVMUint64, bounded(0, 1), "bool")
+	// StackHash represents output from a hash function or a field that returns a hash
+	StackHash = NewStackType(AVMBytes, static(32), "hash")
+	// StackAddress represents a public key or address for an account
+	StackAddress = NewStackType(AVMBytes, static(32), "addr")
+	// StackBigInt represents a bytestring that should be treated like an int
+	StackBigInt = NewStackType(AVMBytes, bounded(0, maxByteMathSize), "bigint")
+
+	// AllStackTypes is a list of all the stack types we recognize
+	// so that we can iterate over them in doc prep
 	AllStackTypes = []StackType{
 		StackUint64,
 		StackBytes,
@@ -80,8 +124,13 @@ type StackType struct {
 	ValueBound  []uint64
 }
 
-// Initializes a new StackType with fields passed
-func NewStackType(name string, at AVMType, bounds []uint64) StackType {
+// NewStackType Initializes a new StackType with fields passed
+func NewStackType(at AVMType, bounds []uint64, stname ...string) StackType {
+	name := string(at)
+	if len(stname) > 0 {
+		name = stname[0]
+	}
+
 	st := StackType{Name: name, AVMType: at}
 	switch at {
 	case AVMBytes:

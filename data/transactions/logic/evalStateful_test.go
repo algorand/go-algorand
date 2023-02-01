@@ -2574,11 +2574,11 @@ func TestReturnTypes(t *testing.T) {
 				}
 				require.Len(t, cx.stack, len(spec.Return.Types), "%s", ep.Trace)
 				for i := 0; i < len(spec.Return.Types); i++ {
-					stackType := cx.stack[i].argType()
+					avmType := cx.stack[i].argType()
 					retType := spec.Return.Types[i]
 					require.True(
-						t, typecheck(retType.AVMType, stackType),
-						"%s expected to return %s but actual is %s", spec.Name, retType, stackType,
+						t, typecheck(retType, avmType.StackType()),
+						"%s expected to return %s but actual is %s", spec.Name, retType, avmType,
 					)
 				}
 			})
