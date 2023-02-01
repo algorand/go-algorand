@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
-set -ex
+set -e
+
+if [ "$DEBUG" = "1" ]; then
+  set -x
+fi
 
 # Script to configure or resume a network. Based on environment settings the
 # node will be setup with a private network or connect to a public network.
@@ -8,40 +12,6 @@ set -ex
 ####################
 # Helper functions #
 ####################
-
-function apply_configuration() {
-  cd "$ALGORAND_DATA"
-
-  # check for config file overrides.
-  if [ -f "/etc/algorand/config.json" ]; then
-    cp /etc/algorand/config.json config.json
-  fi
-  if [ -f "/etc/algorand/algod.token" ]; then
-    cp /etc/algorand/algod.token algod.token
-  fi
-  if [ -f "/etc/algorand/algod.admin.token" ]; then
-    cp /etc/algorand/algod.admin.token algod.admin.token
-  fi
-  if [ -f "/etc/algorand/logging.config" ]; then
-    cp /etc/algorand/logging.config logging.config
-  fi
-
-  # check for environment variable overrides.
-  if [ "$TOKEN" != "" ]; then
-    echo "$TOKEN" >algod.token
-  fi
-  if [ "$ADMIN_TOKEN" != "" ]; then
-    echo "$ADMIN_TOKEN" >algod.admin.token
-  fi
-
-  # configure telemetry
-  if [ "$TELEMETRY_NAME" != "" ]; then
-    diagcfg telemetry name -n "$TELEMETRY_NAME" -d "$ALGORAND_DATA"
-    diagcfg telemetry enable -d "$ALGORAND_DATA"
-  else
-    diagcfg telemetry disable
-  fi
-}
 
 function catchup() {
   local FAST_CATCHUP_URL="https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/CHANNEL/latest.catchpoint"
@@ -58,23 +28,74 @@ function catchup() {
 function start_public_network() {
   cd "$ALGORAND_DATA"
 
-  apply_configuration
+  configure_data_dir
+  start_kmd &
 
-  if [[ $FAST_CATCHUP ]]; then
+  if [ "$FAST_CATCHUP" = "1" ]; then
     catchup &
   fi
+
   # redirect output to stdout
   algod -o
 }
 
 function configure_data_dir() {
   cd "$ALGORAND_DATA"
-  algocfg -d . set -p GossipFanout -v 1
   algocfg -d . set -p EndpointAddress -v "0.0.0.0:${ALGOD_PORT}"
-  algocfg -d . set -p IncomingConnectionsLimit -v 0
-  algocfg -d . set -p Archival -v false
-  algocfg -d . set -p IsIndexerActive -v false
-  algocfg -d . set -p EnableDeveloperAPI -v true
+
+  # check for config file overrides.
+  if [ -f "/etc/algorand/config.json" ]; then
+    cp /etc/algorand/config.json config.json
+  fi
+  if [ -f "/etc/algorand/algod.token" ]; then
+    cp /etc/algorand/algod.token algod.token
+  fi
+  if [ -f "/etc/algorand/algod.admin.token" ]; then
+    cp /etc/algorand/algod.admin.token algod.admin.token
+  fi
+  if [ -f "/etc/algorand/logging.config" ]; then
+    cp /etc/algorand/logging.config logging.config
+  fi
+
+  # check for token overrides
+  if [ "$TOKEN" != "" ]; then
+    echo "$TOKEN" >algod.token
+  fi
+  if [ "$ADMIN_TOKEN" != "" ]; then
+    echo "$ADMIN_TOKEN" >algod.admin.token
+  fi
+
+  # configure telemetry
+  if [ "$TELEMETRY_NAME" != "" ]; then
+    diagcfg telemetry name -n "$TELEMETRY_NAME" -d "$ALGORAND_DATA"
+    diagcfg telemetry enable -d "$ALGORAND_DATA"
+  else
+    diagcfg telemetry disable
+  fi
+
+  # start kmd
+  if [ "$START_KMD" = "1" ]; then
+    local KMD_DIR="kmd-v0.5"
+    # on intial bootstrap, this directory won't exist.
+    mkdir -p "$KMD_DIR"
+    chmod 0700 "$KMD_DIR"
+    cd "$KMD_DIR"
+    if [ -f "/etc/algorand/kmd_config.json" ]; then
+      cp /etc/algorand/kmd_config.json kmd_config.json
+    else
+      echo "{ \"address\":\"0.0.0.0:${KMD_PORT}\", \"allowed_origins\":[\"*\"] }" >kmd_config.json
+    fi
+
+    if [ "$KMD_TOKEN" != "" ]; then
+      echo "$KMD_TOKEN" >kmd.token
+    fi
+  fi
+}
+
+function start_kmd() {
+  if [ "$START_KMD" = "1" ]; then
+    goal kmd start -d "$ALGORAND_DATA"
+  fi
 }
 
 function start_new_public_network() {
@@ -95,12 +116,15 @@ function start_new_public_network() {
 
   local ID
   case $NETWORK in
-    mainnet)  ID="<network>.algorand.network";;
-    testnet)  ID="<network>.algorand.network";;
-    betanet)  ID="<network>.algodev.network";;
-    alphanet) ID="<network>.algodev.network";;
-    devnet)   ID="<network>.algodev.network";;
-    *)        echo "Unknown network"; exit 1;;
+  mainnet) ID="<network>.algorand.network" ;;
+  testnet) ID="<network>.algorand.network" ;;
+  betanet) ID="<network>.algodev.network" ;;
+  alphanet) ID="<network>.algodev.network" ;;
+  devnet) ID="<network>.algodev.network" ;;
+  *)
+    echo "Unknown network"
+    exit 1
+    ;;
   esac
   set -p DNSBootstrapID -v "$ID"
 
@@ -108,7 +132,8 @@ function start_new_public_network() {
 }
 
 function start_private_network() {
-  apply_configuration
+  configure_data_dir
+  start_kmd
 
   # TODO: Is there a way to properly exec a private network?
   goal network start -r "${ALGORAND_DATA}/.."
@@ -117,7 +142,7 @@ function start_private_network() {
 
 function start_new_private_network() {
   local TEMPLATE="template.json"
-  if [ "$DEV_MODE" ]; then
+  if [ "$DEV_MODE" = "1" ]; then
     TEMPLATE="devmode_template.json"
   fi
   sed -i "s/NUM_ROUNDS/${NUM_ROUNDS:-30000}/" "/node/run/$TEMPLATE"
@@ -131,13 +156,15 @@ function start_new_private_network() {
 ##############
 
 echo "Starting Algod Docker Container"
-echo "   ALGORAND_DATA: $ALGORAND_DATA"
-echo "   NETWORK:       $NETWORK"
-echo "   ALGOD_PORT:    $ALGOD_PORT"
-echo "   FAST_CATCHUP:  $FAST_CATCHUP"
-echo "   DEV_MODE:      $DEV_MODE"
-echo "   TOKEN:         $TOKEN"
-echo "   TELEMETRY_NAME $TELEMETRY_NAME"
+echo "   ALGORAND_DATA:  $ALGORAND_DATA"
+echo "   NETWORK:        $NETWORK"
+echo "   ALGOD_PORT:     $ALGOD_PORT"
+echo "   FAST_CATCHUP:   $FAST_CATCHUP"
+echo "   DEV_MODE:       $DEV_MODE"
+echo "   TOKEN:          ${TOKEN:-"Not Set"}"
+echo "   KMD_TOKEN:      ${KMD_TOKEN:-"Not Set"}"
+echo "   TELEMETRY_NAME: $TELEMETRY_NAME"
+echo "   START_KMD:      ${START_KMD:-"Not Set"}"
 
 # If data directory is initialized, start existing environment.
 if [ -f "$ALGORAND_DATA/../network.json" ]; then
