@@ -62,7 +62,12 @@ var (
 		ValueRange:   Uint64Bound.ValueRange,
 		LengthRange:  BytesBound.LengthRange,
 	}
-	NoneBound = TypeBound{StackType: StackNone, AbstractType: AbstractNone, ValueRange: []uint64{0, 0}, LengthRange: []uint64{0, 0}}
+	NoneBound = TypeBound{
+		StackType:    StackNone,
+		AbstractType: AbstractNone,
+		ValueRange:   []uint64{0, 0},
+		LengthRange:  []uint64{0, 0},
+	}
 
 	// Some higher level types that are common
 	BooleanBound = boundUint(0, 1).abstractType(AbstractBool)

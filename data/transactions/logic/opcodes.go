@@ -572,14 +572,14 @@ var OpSpecs = []OpSpec{
 
 	{0x60, "balance", opBalance, proto("i:i", "i:i"), 2, only(ModeApp)},
 	{0x60, "balance", opBalance, proto("a:i", "a:i"), directRefEnabledVersion, only(ModeApp)},
-	{0x61, "app_opted_in", opAppOptedIn, proto("ii:i", "ii:i"), 2, only(ModeApp)},
-	{0x61, "app_opted_in", opAppOptedIn, proto("ai:i", "ai:i"), directRefEnabledVersion, only(ModeApp)},
+	{0x61, "app_opted_in", opAppOptedIn, proto("ii:i", "ii:B"), 2, only(ModeApp)},
+	{0x61, "app_opted_in", opAppOptedIn, proto("ai:i", "Ai:B"), directRefEnabledVersion, only(ModeApp)},
 	{0x62, "app_local_get", opAppLocalGet, proto("ib:a", "ib:a"), 2, only(ModeApp)},
-	{0x62, "app_local_get", opAppLocalGet, proto("ab:a", "ab:a"), directRefEnabledVersion, only(ModeApp)},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("iib:ai", "iib:ai"), 2, only(ModeApp)},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aib:ai", "aib:ai"), directRefEnabledVersion, only(ModeApp)},
+	{0x62, "app_local_get", opAppLocalGet, proto("ab:a", "Ab:a"), directRefEnabledVersion, only(ModeApp)},
+	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("iib:ai", "iib:aB"), 2, only(ModeApp)},
+	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aib:ai", "aib:aB"), directRefEnabledVersion, only(ModeApp)},
 	{0x64, "app_global_get", opAppGlobalGet, proto("b:a", "b:a"), 2, only(ModeApp)},
-	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("ib:ai", "ib:ai"), 2, only(ModeApp)},
+	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("ib:ai", "ib:aB"), 2, only(ModeApp)},
 	{0x66, "app_local_put", opAppLocalPut, proto("iba:", "iba:"), 2, only(ModeApp)},
 	{0x66, "app_local_put", opAppLocalPut, proto("aba:", "aba:"), directRefEnabledVersion, only(ModeApp)},
 	{0x67, "app_global_put", opAppGlobalPut, proto("ba:", "ba:"), 2, only(ModeApp)},
@@ -602,7 +602,7 @@ var OpSpecs = []OpSpec{
 	{0x82, "pushbytess", opPushBytess, proto(":", ":", "", "[N items]"), 8, constants(asmPushBytess, checkByteImmArgs, "bytes ...", immBytess).typed(typePushBytess).trust()},
 	{0x83, "pushints", opPushInts, proto(":", ":", "", "[N items]"), 8, constants(asmPushInts, checkIntImmArgs, "uint ...", immInts).typed(typePushInts).trust()},
 
-	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bbb:i", "bbb:i"), 7, costly(1900)},
+	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bbb:i", "bbb:B"), 7, costly(1900)},
 
 	// "Function oriented"
 	{0x88, "callsub", opCallSub, proto(":", ":"), 4, detBranch()},
@@ -621,9 +621,9 @@ var OpSpecs = []OpSpec{
 	{0x93, "bitlen", opBitLen, proto("a:i", "a:i"), 4, detDefault()},
 	{0x94, "exp", opExp, proto("ii:i", "ii:i"), 4, detDefault()},
 	{0x95, "expw", opExpw, proto("ii:ii", "ii:ii"), 4, costly(10)},
-	{0x96, "bsqrt", opBytesSqrt, proto("b:b", "b:b"), 6, costly(40)},
+	{0x96, "bsqrt", opBytesSqrt, proto("b:b", "N:N"), 6, costly(40)},
 	{0x97, "divw", opDivw, proto("iii:i", "iii:i"), 6, detDefault()},
-	{0x98, "sha3_256", opSHA3_256, proto("b:b", "b:b"), 7, costly(130)},
+	{0x98, "sha3_256", opSHA3_256, proto("b:b", "b:H"), 7, costly(130)},
 	/* Will end up following keccak256 -
 	{0x98, "sha3_256", opSHA3_256, proto("b:b","b:b"), unlimitedStorage, costByLength(58, 4, 8)},},
 	*/
@@ -662,12 +662,12 @@ var OpSpecs = []OpSpec{
 	{0xb8, "gitxna", opGitxna, proto(":a", ":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// Unlimited Global Storage - Boxes
-	{0xb9, "box_create", opBoxCreate, proto("bi:i", "bi:i"), boxVersion, only(ModeApp)},
+	{0xb9, "box_create", opBoxCreate, proto("bi:i", "bi:B"), boxVersion, only(ModeApp)},
 	{0xba, "box_extract", opBoxExtract, proto("bii:b", "bii:b"), boxVersion, only(ModeApp)},
 	{0xbb, "box_replace", opBoxReplace, proto("bib:", "bib:"), boxVersion, only(ModeApp)},
-	{0xbc, "box_del", opBoxDel, proto("b:i", "b:i"), boxVersion, only(ModeApp)},
-	{0xbd, "box_len", opBoxLen, proto("b:ii", "b:ii"), boxVersion, only(ModeApp)},
-	{0xbe, "box_get", opBoxGet, proto("b:bi", "b:bi"), boxVersion, only(ModeApp)},
+	{0xbc, "box_del", opBoxDel, proto("b:i", "b:B"), boxVersion, only(ModeApp)},
+	{0xbd, "box_len", opBoxLen, proto("b:ii", "b:iB"), boxVersion, only(ModeApp)},
+	{0xbe, "box_get", opBoxGet, proto("b:bi", "b:bB"), boxVersion, only(ModeApp)},
 	{0xbf, "box_put", opBoxPut, proto("bb:", "bb:"), boxVersion, only(ModeApp)},
 
 	// Dynamic indexing
@@ -680,7 +680,7 @@ var OpSpecs = []OpSpec{
 	{0xc6, "gitxnas", opGitxnas, proto("i:a", "i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// randomness support
-	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bi", "bbb:bi"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
+	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bi", "bbb:bB"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
 	{0xd1, "block", opBlock, proto("i:a", "i:a"), randomnessVersion, field("f", &BlockFields)},
 }
 

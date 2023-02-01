@@ -973,18 +973,6 @@
     ],
     "txn_type": [
       {
-        "Name": "axfer",
-        "Type": "U"
-      },
-      {
-        "Name": "afrz",
-        "Type": "U"
-      },
-      {
-        "Name": "appl",
-        "Type": "U"
-      },
-      {
         "Name": "unknown",
         "Type": "U"
       },
@@ -998,6 +986,18 @@
       },
       {
         "Name": "acfg",
+        "Type": "U"
+      },
+      {
+        "Name": "axfer",
+        "Type": "U"
+      },
+      {
+        "Name": "afrz",
+        "Type": "U"
+      },
+      {
+        "Name": "appl",
         "Type": "U"
       }
     ],
@@ -1048,13 +1048,13 @@
   },
   "PseudoOps": [
     {
-      "Name": "int",
-      "Returns": "U",
+      "Name": "byte",
+      "Returns": "B",
       "Size": 2
     },
     {
-      "Name": "byte",
-      "Returns": "B",
+      "Name": "int",
+      "Returns": "U",
       "Size": 2
     },
     {
@@ -2796,11 +2796,11 @@
       "Args": ".U",
       "Returns": "U",
       "AbstractArgs": [
-        "any",
+        "address",
         "uint64"
       ],
       "AbstractReturns": [
-        "uint64"
+        "boolean"
       ],
       "Size": 1,
       "Doc": "1 if account A is opted in to application B, else 0",
@@ -2816,7 +2816,7 @@
       "Args": ".B",
       "Returns": ".",
       "AbstractArgs": [
-        "any",
+        "address",
         "bytes"
       ],
       "AbstractReturns": [
@@ -2842,7 +2842,7 @@
       ],
       "AbstractReturns": [
         "any",
-        "uint64"
+        "boolean"
       ],
       "Size": 1,
       "Doc": "X is the local state of application B, key C in account A. Y is 1 if key existed, else 0",
@@ -2882,7 +2882,7 @@
       ],
       "AbstractReturns": [
         "any",
-        "uint64"
+        "boolean"
       ],
       "Size": 1,
       "Doc": "X is the global state of application A, key B. Y is 1 if key existed, else 0",
@@ -3129,7 +3129,7 @@
         "bytes"
       ],
       "AbstractReturns": [
-        "uint64"
+        "boolean"
       ],
       "Size": 1,
       "Doc": "for (data A, signature B, pubkey C) verify the signature of the data against the pubkey =\u003e {0 or 1}",
@@ -3350,10 +3350,10 @@
       "Args": "B",
       "Returns": "B",
       "AbstractArgs": [
-        "bytes"
+        "bigint"
       ],
       "AbstractReturns": [
-        "bytes"
+        "bigint"
       ],
       "Size": 1,
       "Doc": "The largest integer I such that I^2 \u003c= A. A and I are interpreted as big-endian unsigned integers",
@@ -3392,7 +3392,7 @@
         "bytes"
       ],
       "AbstractReturns": [
-        "bytes"
+        "hash"
       ],
       "Size": 1,
       "Doc": "SHA3_256 hash of value A, yields [32]byte",
@@ -3842,7 +3842,7 @@
         "uint64"
       ],
       "AbstractReturns": [
-        "uint64"
+        "boolean"
       ],
       "Size": 1,
       "Doc": "create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1",
@@ -3897,7 +3897,7 @@
         "bytes"
       ],
       "AbstractReturns": [
-        "uint64"
+        "boolean"
       ],
       "Size": 1,
       "Doc": "delete box named A if it exists. Return 1 if A existed, 0 otherwise",
@@ -3916,7 +3916,7 @@
       ],
       "AbstractReturns": [
         "uint64",
-        "uint64"
+        "boolean"
       ],
       "Size": 1,
       "Doc": "X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.",
@@ -3935,7 +3935,7 @@
       ],
       "AbstractReturns": [
         "bytes",
-        "uint64"
+        "boolean"
       ],
       "Size": 1,
       "Doc": "X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.",
@@ -4109,7 +4109,7 @@
       ],
       "AbstractReturns": [
         "bytes",
-        "uint64"
+        "boolean"
       ],
       "Size": 2,
       "ArgEnum": "vrf_verify",
