@@ -1,832 +1,908 @@
 {
   "EvalMaxVersion": 8,
   "LogicSigVersion": 8,
-  "AbstractTypes": {},
+  "StackTypes": {
+    "[]byte": {
+      "Type": "B",
+      "LengthBound": [
+        0,
+        4096
+      ]
+    },
+    "addr": {
+      "Type": "B",
+      "LengthBound": [
+        32,
+        32
+      ]
+    },
+    "any": {
+      "Type": ".",
+      "LengthBound": [
+        0,
+        4096
+      ],
+      "ValueBound": [
+        0,
+        18446744073709551615
+      ]
+    },
+    "bigint": {
+      "Type": "B",
+      "LengthBound": [
+        0,
+        64
+      ]
+    },
+    "bool": {
+      "Type": "U",
+      "ValueBound": [
+        0,
+        1
+      ]
+    },
+    "hash": {
+      "Type": "B",
+      "LengthBound": [
+        32,
+        32
+      ]
+    },
+    "none": {
+      "Type": "_",
+      "LengthBound": [
+        0,
+        0
+      ],
+      "ValueBound": [
+        0,
+        0
+      ]
+    },
+    "uint64": {
+      "Type": "U",
+      "ValueBound": [
+        0,
+        18446744073709551615
+      ]
+    }
+  },
   "Fields": {
     "ECDSA": [
       {
         "Name": "Secp256k1",
-        "Type": "_"
+        "Type": "none"
       },
       {
         "Name": "Secp256r1",
-        "Type": "_"
+        "Type": "none"
       }
     ],
     "acct_params": [
       {
         "Name": "AcctBalance",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AcctMinBalance",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AcctAuthAddr",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "AcctTotalNumUint",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AcctTotalNumByteSlice",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AcctTotalExtraAppPages",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AcctTotalAppsCreated",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AcctTotalAppsOptedIn",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AcctTotalAssetsCreated",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AcctTotalAssets",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AcctTotalBoxes",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AcctTotalBoxBytes",
-        "Type": "U"
+        "Type": "uint64"
       }
     ],
     "app_params": [
       {
         "Name": "AppApprovalProgram",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "AppClearStateProgram",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "AppGlobalNumUint",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AppGlobalNumByteSlice",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AppLocalNumUint",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AppLocalNumByteSlice",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AppExtraProgramPages",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AppCreator",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "AppAddress",
-        "Type": "B"
+        "Type": "addr"
       }
     ],
     "asset_holding": [
       {
         "Name": "AssetBalance",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AssetFrozen",
-        "Type": "U"
+        "Type": "bool"
       }
     ],
     "asset_params": [
       {
         "Name": "AssetTotal",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AssetDecimals",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AssetDefaultFrozen",
-        "Type": "U"
+        "Type": "bool"
       },
       {
         "Name": "AssetUnitName",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "AssetName",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "AssetURL",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "AssetMetadataHash",
-        "Type": "B"
+        "Type": "hash"
       },
       {
         "Name": "AssetManager",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "AssetReserve",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "AssetFreeze",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "AssetClawback",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "AssetCreator",
-        "Type": "B"
+        "Type": "addr"
       }
     ],
     "base64": [
       {
         "Name": "URLEncoding",
-        "Type": "_"
+        "Type": "none"
       },
       {
         "Name": "StdEncoding",
-        "Type": "_"
+        "Type": "none"
       }
     ],
     "block": [
       {
         "Name": "BlkSeed",
-        "Type": "B"
+        "Type": "hash"
       },
       {
         "Name": "BlkTimestamp",
-        "Type": "U"
+        "Type": "uint64"
       }
     ],
     "global": [
       {
         "Name": "MinTxnFee",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "MinBalance",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "MaxTxnLife",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "ZeroAddress",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "GroupSize",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "LogicSigVersion",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "Round",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "LatestTimestamp",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "CurrentApplicationID",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "CreatorAddress",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "CurrentApplicationAddress",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "GroupID",
-        "Type": "B"
+        "Type": "hash"
       },
       {
         "Name": "OpcodeBudget",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "CallerApplicationID",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "CallerApplicationAddress",
-        "Type": "B"
+        "Type": "addr"
       }
     ],
     "itxn_field": [
       {
         "Name": "Sender",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "Fee",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "Note",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "Receiver",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "Amount",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "CloseRemainderTo",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "VotePK",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "SelectionPK",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "VoteFirst",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "VoteLast",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "VoteKeyDilution",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "Type",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "TypeEnum",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "XferAsset",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AssetAmount",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AssetSender",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "AssetReceiver",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "AssetCloseTo",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "ApplicationID",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "OnCompletion",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "ApplicationArgs",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "Accounts",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "ApprovalProgram",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "ClearStateProgram",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "RekeyTo",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "ConfigAsset",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "ConfigAssetTotal",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "ConfigAssetDecimals",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "ConfigAssetDefaultFrozen",
-        "Type": "U"
+        "Type": "bool"
       },
       {
         "Name": "ConfigAssetUnitName",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "ConfigAssetName",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "ConfigAssetURL",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "ConfigAssetMetadataHash",
-        "Type": "B"
+        "Type": "hash"
       },
       {
         "Name": "ConfigAssetManager",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "ConfigAssetReserve",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "ConfigAssetFreeze",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "ConfigAssetClawback",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "FreezeAsset",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "FreezeAssetAccount",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "FreezeAssetFrozen",
-        "Type": "U"
+        "Type": "bool"
       },
       {
         "Name": "Assets",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "Applications",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "GlobalNumUint",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "GlobalNumByteSlice",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "LocalNumUint",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "LocalNumByteSlice",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "ExtraProgramPages",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "Nonparticipation",
-        "Type": "U"
+        "Type": "bool"
       },
       {
         "Name": "StateProofPK",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "ApprovalProgramPages",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "ClearStateProgramPages",
-        "Type": "B"
+        "Type": "[]byte"
       }
     ],
     "json_ref": [
       {
         "Name": "JSONString",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "JSONUint64",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "JSONObject",
-        "Type": "B"
+        "Type": "[]byte"
       }
     ],
     "on_complete": [
       {
         "Name": "NoOp",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "OptIn",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "CloseOut",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "ClearState",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "UpdateApplication",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "DeleteApplication",
-        "Type": "U"
+        "Type": "uint64"
       }
     ],
     "txn": [
       {
         "Name": "Sender",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "Fee",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "FirstValid",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "FirstValidTime",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "LastValid",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "Note",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "Lease",
-        "Type": "B"
+        "Type": "hash"
       },
       {
         "Name": "Receiver",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "Amount",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "CloseRemainderTo",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "VotePK",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "SelectionPK",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "VoteFirst",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "VoteLast",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "VoteKeyDilution",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "Type",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "TypeEnum",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "XferAsset",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AssetAmount",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "AssetSender",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "AssetReceiver",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "AssetCloseTo",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "GroupIndex",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "TxID",
-        "Type": "B"
+        "Type": "hash"
       },
       {
         "Name": "ApplicationID",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "OnCompletion",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "NumAppArgs",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "NumAccounts",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "ApprovalProgram",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "ClearStateProgram",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "RekeyTo",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "ConfigAsset",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "ConfigAssetTotal",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "ConfigAssetDecimals",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "ConfigAssetDefaultFrozen",
-        "Type": "U"
+        "Type": "bool"
       },
       {
         "Name": "ConfigAssetUnitName",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "ConfigAssetName",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "ConfigAssetURL",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "ConfigAssetMetadataHash",
-        "Type": "B"
+        "Type": "hash"
       },
       {
         "Name": "ConfigAssetManager",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "ConfigAssetReserve",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "ConfigAssetFreeze",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "ConfigAssetClawback",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "FreezeAsset",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "FreezeAssetAccount",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "FreezeAssetFrozen",
-        "Type": "U"
+        "Type": "bool"
       },
       {
         "Name": "NumAssets",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "NumApplications",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "GlobalNumUint",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "GlobalNumByteSlice",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "LocalNumUint",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "LocalNumByteSlice",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "ExtraProgramPages",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "Nonparticipation",
-        "Type": "U"
+        "Type": "bool"
       },
       {
         "Name": "NumLogs",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "CreatedAssetID",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "CreatedApplicationID",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "LastLog",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "StateProofPK",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "NumApprovalProgramPages",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "NumClearStateProgramPages",
-        "Type": "U"
+        "Type": "uint64"
       }
     ],
     "txn_type": [
       {
-        "Name": "afrz",
-        "Type": "U"
-      },
-      {
         "Name": "appl",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "unknown",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "pay",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "keyreg",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "acfg",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "axfer",
-        "Type": "U"
+        "Type": "uint64"
+      },
+      {
+        "Name": "afrz",
+        "Type": "uint64"
       }
     ],
     "txna": [
       {
         "Name": "ApplicationArgs",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "Accounts",
-        "Type": "B"
+        "Type": "addr"
       },
       {
         "Name": "Assets",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "Applications",
-        "Type": "U"
+        "Type": "uint64"
       },
       {
         "Name": "Logs",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "ApprovalProgramPages",
-        "Type": "B"
+        "Type": "[]byte"
       },
       {
         "Name": "ClearStateProgramPages",
-        "Type": "B"
+        "Type": "[]byte"
       }
     ],
     "vrf_verify": [
       {
         "Name": "VrfAlgorand",
-        "Type": "_"
+        "Type": "none"
       }
     ]
   },
   "PseudoOps": [
     {
       "Name": "method",
-      "Returns": "B",
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 2
     },
     {
       "Name": "int",
-      "Returns": "U",
-      "Size": 2
-    },
-    {
-      "Name": "addr",
-      "Returns": "B",
+      "Returns": [
+        "uint64"
+      ],
       "Size": 2
     },
     {
       "Name": "byte",
-      "Returns": "B",
+      "Returns": [
+        "[]byte"
+      ],
+      "Size": 2
+    },
+    {
+      "Name": "addr",
+      "Returns": [
+        "addr"
+      ],
       "Size": 2
     }
   ],
   "Ops": [
     {
       "Name": "err",
+      "Returns": [
+        "none"
+      ],
       "Size": 1,
       "Doc": "Fail immediately.",
       "IntroducedVersion": 1,
@@ -837,8 +913,12 @@
     {
       "Opcode": 1,
       "Name": "sha256",
-      "Args": "B",
-      "Returns": "B",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "hash"
+      ],
       "Size": 1,
       "Doc": "SHA256 hash of value A, yields [32]byte",
       "IntroducedVersion": 1,
@@ -849,8 +929,12 @@
     {
       "Opcode": 2,
       "Name": "keccak256",
-      "Args": "B",
-      "Returns": "B",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "hash"
+      ],
       "Size": 1,
       "Doc": "Keccak256 hash of value A, yields [32]byte",
       "IntroducedVersion": 1,
@@ -861,8 +945,12 @@
     {
       "Opcode": 3,
       "Name": "sha512_256",
-      "Args": "B",
-      "Returns": "B",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "hash"
+      ],
       "Size": 1,
       "Doc": "SHA512_256 hash of value A, yields [32]byte",
       "IntroducedVersion": 1,
@@ -873,8 +961,14 @@
     {
       "Opcode": 4,
       "Name": "ed25519verify",
-      "Args": "BBB",
-      "Returns": "U",
+      "Args": [
+        "[]byte",
+        "[]byte",
+        "[]byte"
+      ],
+      "Returns": [
+        "bool"
+      ],
       "Size": 1,
       "Doc": "for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey =\u003e {0 or 1}",
       "DocExtra": "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.",
@@ -886,8 +980,16 @@
     {
       "Opcode": 5,
       "Name": "ecdsa_verify",
-      "Args": "BBBBB",
-      "Returns": "U",
+      "Args": [
+        "[]byte",
+        "[]byte",
+        "[]byte",
+        "[]byte",
+        "[]byte"
+      ],
+      "Returns": [
+        "bool"
+      ],
       "Size": 2,
       "ArgEnum": "ECDSA",
       "Doc": "for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey =\u003e {0 or 1}",
@@ -901,8 +1003,13 @@
     {
       "Opcode": 6,
       "Name": "ecdsa_pk_decompress",
-      "Args": "B",
-      "Returns": "BB",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "[]byte",
+        "[]byte"
+      ],
       "Size": 2,
       "ArgEnum": "ECDSA",
       "Doc": "decompress pubkey A into components X, Y",
@@ -916,8 +1023,16 @@
     {
       "Opcode": 7,
       "Name": "ecdsa_pk_recover",
-      "Args": "BUBB",
-      "Returns": "BB",
+      "Args": [
+        "[]byte",
+        "uint64",
+        "[]byte",
+        "[]byte"
+      ],
+      "Returns": [
+        "[]byte",
+        "[]byte"
+      ],
       "Size": 2,
       "ArgEnum": "ECDSA",
       "Doc": "for (data A, recovery id B, signature C, D) recover a public key",
@@ -931,8 +1046,13 @@
     {
       "Opcode": 8,
       "Name": "+",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A plus B. Fail on overflow.",
       "DocExtra": "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`.",
@@ -944,8 +1064,13 @@
     {
       "Opcode": 9,
       "Name": "-",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A minus B. Fail if B \u003e A.",
       "IntroducedVersion": 1,
@@ -956,8 +1081,13 @@
     {
       "Opcode": 10,
       "Name": "/",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A divided by B (truncated division). Fail if B == 0.",
       "DocExtra": "`divmodw` is available to divide the two-element values produced by `mulw` and `addw`.",
@@ -969,8 +1099,13 @@
     {
       "Opcode": 11,
       "Name": "*",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A times B. Fail on overflow.",
       "DocExtra": "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`.",
@@ -982,8 +1117,13 @@
     {
       "Opcode": 12,
       "Name": "\u003c",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A less than B =\u003e {0 or 1}",
       "IntroducedVersion": 1,
@@ -994,8 +1134,13 @@
     {
       "Opcode": 13,
       "Name": "\u003e",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A greater than B =\u003e {0 or 1}",
       "IntroducedVersion": 1,
@@ -1006,8 +1151,13 @@
     {
       "Opcode": 14,
       "Name": "\u003c=",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A less than or equal to B =\u003e {0 or 1}",
       "IntroducedVersion": 1,
@@ -1018,8 +1168,13 @@
     {
       "Opcode": 15,
       "Name": "\u003e=",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A greater than or equal to B =\u003e {0 or 1}",
       "IntroducedVersion": 1,
@@ -1030,8 +1185,13 @@
     {
       "Opcode": 16,
       "Name": "\u0026\u0026",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A is not zero and B is not zero =\u003e {0 or 1}",
       "IntroducedVersion": 1,
@@ -1042,8 +1202,13 @@
     {
       "Opcode": 17,
       "Name": "||",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A is not zero or B is not zero =\u003e {0 or 1}",
       "IntroducedVersion": 1,
@@ -1054,8 +1219,13 @@
     {
       "Opcode": 18,
       "Name": "==",
-      "Args": "..",
-      "Returns": "U",
+      "Args": [
+        "any",
+        "any"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A is equal to B =\u003e {0 or 1}",
       "IntroducedVersion": 1,
@@ -1066,8 +1236,13 @@
     {
       "Opcode": 19,
       "Name": "!=",
-      "Args": "..",
-      "Returns": "U",
+      "Args": [
+        "any",
+        "any"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A is not equal to B =\u003e {0 or 1}",
       "IntroducedVersion": 1,
@@ -1078,8 +1253,12 @@
     {
       "Opcode": 20,
       "Name": "!",
-      "Args": "U",
-      "Returns": "U",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A == 0 yields 1; else 0",
       "IntroducedVersion": 1,
@@ -1090,8 +1269,12 @@
     {
       "Opcode": 21,
       "Name": "len",
-      "Args": "B",
-      "Returns": "U",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "yields length of byte value A",
       "IntroducedVersion": 1,
@@ -1102,8 +1285,12 @@
     {
       "Opcode": 22,
       "Name": "itob",
-      "Args": "U",
-      "Returns": "B",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "converts uint64 A to big-endian byte array, always of length 8",
       "IntroducedVersion": 1,
@@ -1114,8 +1301,12 @@
     {
       "Opcode": 23,
       "Name": "btoi",
-      "Args": "B",
-      "Returns": "U",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "converts big-endian byte array A to uint64. Fails if len(A) \u003e 8. Padded by leading 0s if len(A) \u003c 8.",
       "DocExtra": "`btoi` fails if the input is longer than 8 bytes.",
@@ -1127,8 +1318,13 @@
     {
       "Opcode": 24,
       "Name": "%",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A modulo B. Fail if B == 0.",
       "IntroducedVersion": 1,
@@ -1139,8 +1335,13 @@
     {
       "Opcode": 25,
       "Name": "|",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A bitwise-or B",
       "IntroducedVersion": 1,
@@ -1151,8 +1352,13 @@
     {
       "Opcode": 26,
       "Name": "\u0026",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A bitwise-and B",
       "IntroducedVersion": 1,
@@ -1163,8 +1369,13 @@
     {
       "Opcode": 27,
       "Name": "^",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A bitwise-xor B",
       "IntroducedVersion": 1,
@@ -1175,8 +1386,12 @@
     {
       "Opcode": 28,
       "Name": "~",
-      "Args": "U",
-      "Returns": "U",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "bitwise invert value A",
       "IntroducedVersion": 1,
@@ -1187,8 +1402,14 @@
     {
       "Opcode": 29,
       "Name": "mulw",
-      "Args": "UU",
-      "Returns": "UU",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64",
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A times B as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low",
       "IntroducedVersion": 1,
@@ -1199,8 +1420,14 @@
     {
       "Opcode": 30,
       "Name": "addw",
-      "Args": "UU",
-      "Returns": "UU",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64",
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A plus B as a 128-bit result. X is the carry-bit, Y is the low-order 64 bits.",
       "IntroducedVersion": 2,
@@ -1211,8 +1438,18 @@
     {
       "Opcode": 31,
       "Name": "divmodw",
-      "Args": "UUUU",
-      "Returns": "UUUU",
+      "Args": [
+        "uint64",
+        "uint64",
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64",
+        "uint64",
+        "uint64",
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "W,X = (A,B / C,D); Y,Z = (A,B modulo C,D)",
       "DocExtra": "The notation J,K indicates that two uint64 values J and K are interpreted as a uint128 value, with J as the high uint64 and K the low.",
@@ -1236,7 +1473,9 @@
     {
       "Opcode": 33,
       "Name": "intc",
-      "Returns": "U",
+      "Returns": [
+        "uint64"
+      ],
       "Size": 2,
       "Doc": "Ith constant from intcblock",
       "ImmediateNote": "{uint8 int constant index}",
@@ -1248,7 +1487,9 @@
     {
       "Opcode": 34,
       "Name": "intc_0",
-      "Returns": "U",
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "constant 0 from intcblock",
       "IntroducedVersion": 1,
@@ -1259,7 +1500,9 @@
     {
       "Opcode": 35,
       "Name": "intc_1",
-      "Returns": "U",
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "constant 1 from intcblock",
       "IntroducedVersion": 1,
@@ -1270,7 +1513,9 @@
     {
       "Opcode": 36,
       "Name": "intc_2",
-      "Returns": "U",
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "constant 2 from intcblock",
       "IntroducedVersion": 1,
@@ -1281,7 +1526,9 @@
     {
       "Opcode": 37,
       "Name": "intc_3",
-      "Returns": "U",
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "constant 3 from intcblock",
       "IntroducedVersion": 1,
@@ -1304,7 +1551,9 @@
     {
       "Opcode": 39,
       "Name": "bytec",
-      "Returns": "B",
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 2,
       "Doc": "Ith constant from bytecblock",
       "ImmediateNote": "{uint8 byte constant index}",
@@ -1316,7 +1565,9 @@
     {
       "Opcode": 40,
       "Name": "bytec_0",
-      "Returns": "B",
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "constant 0 from bytecblock",
       "IntroducedVersion": 1,
@@ -1327,7 +1578,9 @@
     {
       "Opcode": 41,
       "Name": "bytec_1",
-      "Returns": "B",
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "constant 1 from bytecblock",
       "IntroducedVersion": 1,
@@ -1338,7 +1591,9 @@
     {
       "Opcode": 42,
       "Name": "bytec_2",
-      "Returns": "B",
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "constant 2 from bytecblock",
       "IntroducedVersion": 1,
@@ -1349,7 +1604,9 @@
     {
       "Opcode": 43,
       "Name": "bytec_3",
-      "Returns": "B",
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "constant 3 from bytecblock",
       "IntroducedVersion": 1,
@@ -1360,7 +1617,9 @@
     {
       "Opcode": 44,
       "Name": "arg",
-      "Returns": "B",
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 2,
       "Doc": "Nth LogicSig argument",
       "ImmediateNote": "{uint8 arg index}",
@@ -1372,7 +1631,9 @@
     {
       "Opcode": 45,
       "Name": "arg_0",
-      "Returns": "B",
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "LogicSig argument 0",
       "IntroducedVersion": 1,
@@ -1383,7 +1644,9 @@
     {
       "Opcode": 46,
       "Name": "arg_1",
-      "Returns": "B",
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "LogicSig argument 1",
       "IntroducedVersion": 1,
@@ -1394,7 +1657,9 @@
     {
       "Opcode": 47,
       "Name": "arg_2",
-      "Returns": "B",
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "LogicSig argument 2",
       "IntroducedVersion": 1,
@@ -1405,7 +1670,9 @@
     {
       "Opcode": 48,
       "Name": "arg_3",
-      "Returns": "B",
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "LogicSig argument 3",
       "IntroducedVersion": 1,
@@ -1416,7 +1683,9 @@
     {
       "Opcode": 49,
       "Name": "txn",
-      "Returns": ".",
+      "Returns": [
+        "any"
+      ],
       "Size": 2,
       "ArgEnum": "txn",
       "Doc": "field F of current transaction",
@@ -1429,7 +1698,9 @@
     {
       "Opcode": 50,
       "Name": "global",
-      "Returns": ".",
+      "Returns": [
+        "any"
+      ],
       "Size": 2,
       "ArgEnum": "global",
       "Doc": "global field F",
@@ -1442,7 +1713,9 @@
     {
       "Opcode": 51,
       "Name": "gtxn",
-      "Returns": ".",
+      "Returns": [
+        "any"
+      ],
       "Size": 3,
       "ArgEnum": "txn",
       "Doc": "field F of the Tth transaction in the current group",
@@ -1456,7 +1729,9 @@
     {
       "Opcode": 52,
       "Name": "load",
-      "Returns": ".",
+      "Returns": [
+        "any"
+      ],
       "Size": 2,
       "Doc": "Ith scratch space value. All scratch spaces are 0 at program start.",
       "ImmediateNote": "{uint8 position in scratch space to load from}",
@@ -1468,7 +1743,9 @@
     {
       "Opcode": 53,
       "Name": "store",
-      "Args": ".",
+      "Args": [
+        "any"
+      ],
       "Size": 2,
       "Doc": "store A to the Ith scratch space",
       "ImmediateNote": "{uint8 position in scratch space to store to}",
@@ -1480,7 +1757,9 @@
     {
       "Opcode": 54,
       "Name": "txna",
-      "Returns": ".",
+      "Returns": [
+        "any"
+      ],
       "Size": 3,
       "ArgEnum": "txna",
       "Doc": "Ith value of the array field F of the current transaction\n`txna` can be called using `txn` with 2 immediates.",
@@ -1493,7 +1772,9 @@
     {
       "Opcode": 55,
       "Name": "gtxna",
-      "Returns": ".",
+      "Returns": [
+        "any"
+      ],
       "Size": 4,
       "ArgEnum": "txna",
       "Doc": "Ith value of the array field F from the Tth transaction in the current group\n`gtxna` can be called using `gtxn` with 3 immediates.",
@@ -1506,8 +1787,12 @@
     {
       "Opcode": 56,
       "Name": "gtxns",
-      "Args": "U",
-      "Returns": ".",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 2,
       "ArgEnum": "txn",
       "Doc": "field F of the Ath transaction in the current group",
@@ -1521,8 +1806,12 @@
     {
       "Opcode": 57,
       "Name": "gtxnsa",
-      "Args": "U",
-      "Returns": ".",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 3,
       "ArgEnum": "txna",
       "Doc": "Ith value of the array field F from the Ath transaction in the current group\n`gtxnsa` can be called using `gtxns` with 2 immediates.",
@@ -1535,7 +1824,9 @@
     {
       "Opcode": 58,
       "Name": "gload",
-      "Returns": ".",
+      "Returns": [
+        "any"
+      ],
       "Size": 3,
       "Doc": "Ith scratch space value of the Tth transaction in the current group",
       "DocExtra": "`gload` fails unless the requested transaction is an ApplicationCall and T \u003c GroupIndex.",
@@ -1548,8 +1839,12 @@
     {
       "Opcode": 59,
       "Name": "gloads",
-      "Args": "U",
-      "Returns": ".",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 2,
       "Doc": "Ith scratch space value of the Ath transaction in the current group",
       "DocExtra": "`gloads` fails unless the requested transaction is an ApplicationCall and A \u003c GroupIndex.",
@@ -1562,7 +1857,9 @@
     {
       "Opcode": 60,
       "Name": "gaid",
-      "Returns": "U",
+      "Returns": [
+        "uint64"
+      ],
       "Size": 2,
       "Doc": "ID of the asset or application created in the Tth transaction of the current group",
       "DocExtra": "`gaid` fails unless the requested transaction created an asset or application and T \u003c GroupIndex.",
@@ -1575,8 +1872,12 @@
     {
       "Opcode": 61,
       "Name": "gaids",
-      "Args": "U",
-      "Returns": "U",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "ID of the asset or application created in the Ath transaction of the current group",
       "DocExtra": "`gaids` fails unless the requested transaction created an asset or application and A \u003c GroupIndex.",
@@ -1588,8 +1889,12 @@
     {
       "Opcode": 62,
       "Name": "loads",
-      "Args": "U",
-      "Returns": ".",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 1,
       "Doc": "Ath scratch space value.  All scratch spaces are 0 at program start.",
       "IntroducedVersion": 5,
@@ -1600,7 +1905,10 @@
     {
       "Opcode": 63,
       "Name": "stores",
-      "Args": "U.",
+      "Args": [
+        "uint64",
+        "any"
+      ],
       "Size": 1,
       "Doc": "store B to the Ath scratch space",
       "IntroducedVersion": 5,
@@ -1611,7 +1919,9 @@
     {
       "Opcode": 64,
       "Name": "bnz",
-      "Args": "U",
+      "Args": [
+        "uint64"
+      ],
       "Size": 3,
       "Doc": "branch to TARGET if value A is not zero",
       "DocExtra": "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.\n\nAt v2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before v2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)",
@@ -1624,7 +1934,9 @@
     {
       "Opcode": 65,
       "Name": "bz",
-      "Args": "U",
+      "Args": [
+        "uint64"
+      ],
       "Size": 3,
       "Doc": "branch to TARGET if value A is zero",
       "DocExtra": "See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.",
@@ -1649,7 +1961,12 @@
     {
       "Opcode": 67,
       "Name": "return",
-      "Args": "U",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "none"
+      ],
       "Size": 1,
       "Doc": "use A as success value; end",
       "IntroducedVersion": 2,
@@ -1660,7 +1977,9 @@
     {
       "Opcode": 68,
       "Name": "assert",
-      "Args": "U",
+      "Args": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "immediately fail unless A is a non-zero number",
       "IntroducedVersion": 3,
@@ -1671,7 +1990,9 @@
     {
       "Opcode": 69,
       "Name": "bury",
-      "Args": ".",
+      "Args": [
+        "any"
+      ],
       "Size": 2,
       "Doc": "replace the Nth value from the top of the stack with A. bury 0 fails.",
       "ImmediateNote": "{uint8 depth}",
@@ -1694,7 +2015,9 @@
     {
       "Opcode": 71,
       "Name": "dupn",
-      "Args": ".",
+      "Args": [
+        "any"
+      ],
       "Size": 2,
       "Doc": "duplicate A, N times",
       "ImmediateNote": "{uint8 copy count}",
@@ -1706,7 +2029,9 @@
     {
       "Opcode": 72,
       "Name": "pop",
-      "Args": ".",
+      "Args": [
+        "any"
+      ],
       "Size": 1,
       "Doc": "discard A",
       "IntroducedVersion": 1,
@@ -1717,8 +2042,13 @@
     {
       "Opcode": 73,
       "Name": "dup",
-      "Args": ".",
-      "Returns": "..",
+      "Args": [
+        "any"
+      ],
+      "Returns": [
+        "any",
+        "any"
+      ],
       "Size": 1,
       "Doc": "duplicate A",
       "IntroducedVersion": 1,
@@ -1729,8 +2059,16 @@
     {
       "Opcode": 74,
       "Name": "dup2",
-      "Args": "..",
-      "Returns": "....",
+      "Args": [
+        "any",
+        "any"
+      ],
+      "Returns": [
+        "any",
+        "any",
+        "any",
+        "any"
+      ],
       "Size": 1,
       "Doc": "duplicate A and B",
       "IntroducedVersion": 2,
@@ -1741,8 +2079,13 @@
     {
       "Opcode": 75,
       "Name": "dig",
-      "Args": ".",
-      "Returns": "..",
+      "Args": [
+        "any"
+      ],
+      "Returns": [
+        "any",
+        "any"
+      ],
       "Size": 2,
       "Doc": "Nth value from the top of the stack. dig 0 is equivalent to dup",
       "ImmediateNote": "{uint8 depth}",
@@ -1754,8 +2097,14 @@
     {
       "Opcode": 76,
       "Name": "swap",
-      "Args": "..",
-      "Returns": "..",
+      "Args": [
+        "any",
+        "any"
+      ],
+      "Returns": [
+        "any",
+        "any"
+      ],
       "Size": 1,
       "Doc": "swaps A and B on stack",
       "IntroducedVersion": 3,
@@ -1766,8 +2115,14 @@
     {
       "Opcode": 77,
       "Name": "select",
-      "Args": "..U",
-      "Returns": ".",
+      "Args": [
+        "any",
+        "any",
+        "uint64"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 1,
       "Doc": "selects one of two values based on top-of-stack: B if C != 0, else A",
       "IntroducedVersion": 3,
@@ -1778,8 +2133,12 @@
     {
       "Opcode": 78,
       "Name": "cover",
-      "Args": ".",
-      "Returns": ".",
+      "Args": [
+        "any"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 2,
       "Doc": "remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth \u003c= N.",
       "ImmediateNote": "{uint8 depth}",
@@ -1791,8 +2150,12 @@
     {
       "Opcode": 79,
       "Name": "uncover",
-      "Args": ".",
-      "Returns": ".",
+      "Args": [
+        "any"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 2,
       "Doc": "remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth \u003c= N.",
       "ImmediateNote": "{uint8 depth}",
@@ -1804,8 +2167,13 @@
     {
       "Opcode": 80,
       "Name": "concat",
-      "Args": "BB",
-      "Returns": "B",
+      "Args": [
+        "[]byte",
+        "[]byte"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "join A and B",
       "DocExtra": "`concat` fails if the result would be greater than 4096 bytes.",
@@ -1817,8 +2185,12 @@
     {
       "Opcode": 81,
       "Name": "substring",
-      "Args": "B",
-      "Returns": "B",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 3,
       "Doc": "A range of bytes from A starting at S up to but not including E. If E \u003c S, or either is larger than the array length, the program fails",
       "ImmediateNote": "{uint8 start position} {uint8 end position}",
@@ -1830,8 +2202,14 @@
     {
       "Opcode": 82,
       "Name": "substring3",
-      "Args": "BUU",
-      "Returns": "B",
+      "Args": [
+        "[]byte",
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "A range of bytes from A starting at B up to but not including C. If C \u003c B, or either is larger than the array length, the program fails",
       "IntroducedVersion": 2,
@@ -1842,8 +2220,13 @@
     {
       "Opcode": 83,
       "Name": "getbit",
-      "Args": ".U",
-      "Returns": "U",
+      "Args": [
+        "any",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails",
       "DocExtra": "see explanation of bit ordering in setbit",
@@ -1855,8 +2238,14 @@
     {
       "Opcode": 84,
       "Name": "setbit",
-      "Args": ".UU",
-      "Returns": ".",
+      "Args": [
+        "any",
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 1,
       "Doc": "Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails",
       "DocExtra": "When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on the integer 0 yields 8, or 2^3. When A is a byte array, index 0 is the leftmost bit of the leftmost byte. Setting bits 0 through 11 to 1 in a 4-byte-array of 0s yields the byte array 0xfff00000. Setting bit 3 to 1 on the 1-byte-array 0x00 yields the byte array 0x10.",
@@ -1868,8 +2257,13 @@
     {
       "Opcode": 85,
       "Name": "getbyte",
-      "Args": "BU",
-      "Returns": "U",
+      "Args": [
+        "[]byte",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails",
       "IntroducedVersion": 3,
@@ -1880,8 +2274,14 @@
     {
       "Opcode": 86,
       "Name": "setbyte",
-      "Args": "BUU",
-      "Returns": "B",
+      "Args": [
+        "[]byte",
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails",
       "IntroducedVersion": 3,
@@ -1892,8 +2292,12 @@
     {
       "Opcode": 87,
       "Name": "extract",
-      "Args": "B",
-      "Returns": "B",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 3,
       "Doc": "A range of bytes from A starting at S up to but not including S+L. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails",
       "ImmediateNote": "{uint8 start position} {uint8 length}",
@@ -1905,8 +2309,14 @@
     {
       "Opcode": 88,
       "Name": "extract3",
-      "Args": "BUU",
-      "Returns": "B",
+      "Args": [
+        "[]byte",
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails\n`extract3` can be called using `extract` with no immediates.",
       "IntroducedVersion": 5,
@@ -1917,8 +2327,13 @@
     {
       "Opcode": 89,
       "Name": "extract_uint16",
-      "Args": "BU",
-      "Returns": "U",
+      "Args": [
+        "[]byte",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails",
       "IntroducedVersion": 5,
@@ -1929,8 +2344,13 @@
     {
       "Opcode": 90,
       "Name": "extract_uint32",
-      "Args": "BU",
-      "Returns": "U",
+      "Args": [
+        "[]byte",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails",
       "IntroducedVersion": 5,
@@ -1941,8 +2361,13 @@
     {
       "Opcode": 91,
       "Name": "extract_uint64",
-      "Args": "BU",
-      "Returns": "U",
+      "Args": [
+        "[]byte",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails",
       "IntroducedVersion": 5,
@@ -1953,8 +2378,13 @@
     {
       "Opcode": 92,
       "Name": "replace2",
-      "Args": "BB",
-      "Returns": "B",
+      "Args": [
+        "[]byte",
+        "[]byte"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 2,
       "Doc": "Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)\n`replace2` can be called using `replace` with 1 immediate.",
       "ImmediateNote": "{uint8 start position}",
@@ -1966,8 +2396,14 @@
     {
       "Opcode": 93,
       "Name": "replace3",
-      "Args": "BUB",
-      "Returns": "B",
+      "Args": [
+        "[]byte",
+        "uint64",
+        "[]byte"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)\n`replace3` can be called using `replace` with no immediates.",
       "IntroducedVersion": 7,
@@ -1978,8 +2414,12 @@
     {
       "Opcode": 94,
       "Name": "base64_decode",
-      "Args": "B",
-      "Returns": "B",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 2,
       "ArgEnum": "base64",
       "Doc": "decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E",
@@ -1993,8 +2433,13 @@
     {
       "Opcode": 95,
       "Name": "json_ref",
-      "Args": "BB",
-      "Returns": ".",
+      "Args": [
+        "[]byte",
+        "[]byte"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 2,
       "ArgEnum": "json_ref",
       "Doc": "key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A",
@@ -2008,8 +2453,12 @@
     {
       "Opcode": 96,
       "Name": "balance",
-      "Args": ".",
-      "Returns": "U",
+      "Args": [
+        "any"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. Changes caused by inner transactions are observable immediately following `itxn_submit`",
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
@@ -2021,8 +2470,13 @@
     {
       "Opcode": 97,
       "Name": "app_opted_in",
-      "Args": ".U",
-      "Returns": "U",
+      "Args": [
+        "any",
+        "uint64"
+      ],
+      "Returns": [
+        "bool"
+      ],
       "Size": 1,
       "Doc": "1 if account A is opted in to application B, else 0",
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.",
@@ -2034,8 +2488,13 @@
     {
       "Opcode": 98,
       "Name": "app_local_get",
-      "Args": ".B",
-      "Returns": ".",
+      "Args": [
+        "any",
+        "[]byte"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 1,
       "Doc": "local state of the key B in the current application in account A",
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
@@ -2047,8 +2506,15 @@
     {
       "Opcode": 99,
       "Name": "app_local_get_ex",
-      "Args": ".UB",
-      "Returns": ".U",
+      "Args": [
+        "any",
+        "uint64",
+        "[]byte"
+      ],
+      "Returns": [
+        "any",
+        "bool"
+      ],
       "Size": 1,
       "Doc": "X is the local state of application B, key C in account A. Y is 1 if key existed, else 0",
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
@@ -2060,8 +2526,12 @@
     {
       "Opcode": 100,
       "Name": "app_global_get",
-      "Args": "B",
-      "Returns": ".",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 1,
       "Doc": "global state of the key A in the current application",
       "DocExtra": "params: state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
@@ -2073,8 +2543,14 @@
     {
       "Opcode": 101,
       "Name": "app_global_get_ex",
-      "Args": "UB",
-      "Returns": ".U",
+      "Args": [
+        "uint64",
+        "[]byte"
+      ],
+      "Returns": [
+        "any",
+        "bool"
+      ],
       "Size": 1,
       "Doc": "X is the global state of application A, key B. Y is 1 if key existed, else 0",
       "DocExtra": "params: Txn.ForeignApps offset (or, since v4, an _available_ application id), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
@@ -2086,7 +2562,11 @@
     {
       "Opcode": 102,
       "Name": "app_local_put",
-      "Args": ".B.",
+      "Args": [
+        "any",
+        "[]byte",
+        "any"
+      ],
       "Size": 1,
       "Doc": "write C to key B in account A's local state of the current application",
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key, value.",
@@ -2098,7 +2578,10 @@
     {
       "Opcode": 103,
       "Name": "app_global_put",
-      "Args": "B.",
+      "Args": [
+        "[]byte",
+        "any"
+      ],
       "Size": 1,
       "Doc": "write B to key A in the global state of the current application",
       "IntroducedVersion": 2,
@@ -2109,7 +2592,10 @@
     {
       "Opcode": 104,
       "Name": "app_local_del",
-      "Args": ".B",
+      "Args": [
+        "any",
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "delete key B from account A's local state of the current application",
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key.\n\nDeleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)",
@@ -2121,7 +2607,9 @@
     {
       "Opcode": 105,
       "Name": "app_global_del",
-      "Args": "B",
+      "Args": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "delete key A from the global state of the current application",
       "DocExtra": "params: state key.\n\nDeleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)",
@@ -2133,8 +2621,14 @@
     {
       "Opcode": 112,
       "Name": "asset_holding_get",
-      "Args": ".U",
-      "Returns": ".U",
+      "Args": [
+        "any",
+        "uint64"
+      ],
+      "Returns": [
+        "any",
+        "uint64"
+      ],
       "Size": 2,
       "ArgEnum": "asset_holding",
       "Doc": "X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0",
@@ -2148,8 +2642,13 @@
     {
       "Opcode": 113,
       "Name": "asset_params_get",
-      "Args": "U",
-      "Returns": ".U",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "any",
+        "uint64"
+      ],
       "Size": 2,
       "ArgEnum": "asset_params",
       "Doc": "X is field F from asset A. Y is 1 if A exists, else 0",
@@ -2163,8 +2662,13 @@
     {
       "Opcode": 114,
       "Name": "app_params_get",
-      "Args": "U",
-      "Returns": ".U",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "any",
+        "uint64"
+      ],
       "Size": 2,
       "ArgEnum": "app_params",
       "Doc": "X is field F from app A. Y is 1 if A exists, else 0",
@@ -2178,8 +2682,13 @@
     {
       "Opcode": 115,
       "Name": "acct_params_get",
-      "Args": ".",
-      "Returns": ".U",
+      "Args": [
+        "any"
+      ],
+      "Returns": [
+        "any",
+        "uint64"
+      ],
       "Size": 2,
       "ArgEnum": "acct_params",
       "Doc": "X is field F from account A. Y is 1 if A owns positive algos, else 0",
@@ -2192,8 +2701,12 @@
     {
       "Opcode": 120,
       "Name": "min_balance",
-      "Args": ".",
-      "Returns": "U",
+      "Args": [
+        "any"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "minimum required balance for account A, in microalgos. Required balance is affected by ASA, App, and Box usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. Changes caused by inner transactions or box usage are observable immediately following the opcode effecting the change.",
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
@@ -2205,7 +2718,9 @@
     {
       "Opcode": 128,
       "Name": "pushbytes",
-      "Returns": "B",
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 0,
       "Doc": "immediate BYTES",
       "DocExtra": "pushbytes args are not added to the bytecblock during assembly processes",
@@ -2218,7 +2733,9 @@
     {
       "Opcode": 129,
       "Name": "pushint",
-      "Returns": "U",
+      "Returns": [
+        "uint64"
+      ],
       "Size": 0,
       "Doc": "immediate UINT",
       "DocExtra": "pushint args are not added to the intcblock during assembly processes",
@@ -2255,8 +2772,14 @@
     {
       "Opcode": 132,
       "Name": "ed25519verify_bare",
-      "Args": "BBB",
-      "Returns": "U",
+      "Args": [
+        "[]byte",
+        "[]byte",
+        "[]byte"
+      ],
+      "Returns": [
+        "bool"
+      ],
       "Size": 1,
       "Doc": "for (data A, signature B, pubkey C) verify the signature of the data against the pubkey =\u003e {0 or 1}",
       "IntroducedVersion": 7,
@@ -2302,7 +2825,9 @@
     {
       "Opcode": 139,
       "Name": "frame_dig",
-      "Returns": ".",
+      "Returns": [
+        "any"
+      ],
       "Size": 2,
       "Doc": "Nth (signed) value from the frame pointer.",
       "ImmediateNote": "{int8 frame slot}",
@@ -2314,7 +2839,9 @@
     {
       "Opcode": 140,
       "Name": "frame_bury",
-      "Args": ".",
+      "Args": [
+        "any"
+      ],
       "Size": 2,
       "Doc": "replace the Nth (signed) value from the frame pointer in the stack with A",
       "ImmediateNote": "{int8 frame slot}",
@@ -2326,7 +2853,9 @@
     {
       "Opcode": 141,
       "Name": "switch",
-      "Args": "U",
+      "Args": [
+        "uint64"
+      ],
       "Size": 0,
       "Doc": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",
       "ImmediateNote": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
@@ -2350,8 +2879,13 @@
     {
       "Opcode": 144,
       "Name": "shl",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A times 2^B, modulo 2^64",
       "IntroducedVersion": 4,
@@ -2362,8 +2896,13 @@
     {
       "Opcode": 145,
       "Name": "shr",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A divided by 2^B",
       "IntroducedVersion": 4,
@@ -2374,8 +2913,12 @@
     {
       "Opcode": 146,
       "Name": "sqrt",
-      "Args": "U",
-      "Returns": "U",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "The largest integer I such that I^2 \u003c= A",
       "IntroducedVersion": 4,
@@ -2386,8 +2929,12 @@
     {
       "Opcode": 147,
       "Name": "bitlen",
-      "Args": ".",
-      "Returns": "U",
+      "Args": [
+        "any"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "The highest set bit in A. If A is a byte-array, it is interpreted as a big-endian unsigned integer. bitlen of 0 is 0, bitlen of 8 is 4",
       "DocExtra": "bitlen interprets arrays as big-endian integers, unlike setbit/getbit",
@@ -2399,8 +2946,13 @@
     {
       "Opcode": 148,
       "Name": "exp",
-      "Args": "UU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A raised to the Bth power. Fail if A == B == 0 and on overflow",
       "IntroducedVersion": 4,
@@ -2411,8 +2963,14 @@
     {
       "Opcode": 149,
       "Name": "expw",
-      "Args": "UU",
-      "Returns": "UU",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64",
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A raised to the Bth power as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low. Fail if A == B == 0 or if the results exceeds 2^128-1",
       "IntroducedVersion": 4,
@@ -2423,8 +2981,12 @@
     {
       "Opcode": 150,
       "Name": "bsqrt",
-      "Args": "B",
-      "Returns": "B",
+      "Args": [
+        "bigint"
+      ],
+      "Returns": [
+        "bigint"
+      ],
       "Size": 1,
       "Doc": "The largest integer I such that I^2 \u003c= A. A and I are interpreted as big-endian unsigned integers",
       "IntroducedVersion": 6,
@@ -2435,8 +2997,14 @@
     {
       "Opcode": 151,
       "Name": "divw",
-      "Args": "UUU",
-      "Returns": "U",
+      "Args": [
+        "uint64",
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "uint64"
+      ],
       "Size": 1,
       "Doc": "A,B / C. Fail if C == 0 or if result overflows.",
       "DocExtra": "The notation A,B indicates that A and B are interpreted as a uint128 value, with A as the high uint64 and B the low.",
@@ -2448,8 +3016,12 @@
     {
       "Opcode": 152,
       "Name": "sha3_256",
-      "Args": "B",
-      "Returns": "B",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "hash"
+      ],
       "Size": 1,
       "Doc": "SHA3_256 hash of value A, yields [32]byte",
       "IntroducedVersion": 7,
@@ -2460,8 +3032,13 @@
     {
       "Opcode": 160,
       "Name": "b+",
-      "Args": "BB",
-      "Returns": "B",
+      "Args": [
+        "bigint",
+        "bigint"
+      ],
+      "Returns": [
+        "bigint"
+      ],
       "Size": 1,
       "Doc": "A plus B. A and B are interpreted as big-endian unsigned integers",
       "IntroducedVersion": 4,
@@ -2472,8 +3049,13 @@
     {
       "Opcode": 161,
       "Name": "b-",
-      "Args": "BB",
-      "Returns": "B",
+      "Args": [
+        "bigint",
+        "bigint"
+      ],
+      "Returns": [
+        "bigint"
+      ],
       "Size": 1,
       "Doc": "A minus B. A and B are interpreted as big-endian unsigned integers. Fail on underflow.",
       "IntroducedVersion": 4,
@@ -2484,8 +3066,13 @@
     {
       "Opcode": 162,
       "Name": "b/",
-      "Args": "BB",
-      "Returns": "B",
+      "Args": [
+        "bigint",
+        "bigint"
+      ],
+      "Returns": [
+        "bigint"
+      ],
       "Size": 1,
       "Doc": "A divided by B (truncated division). A and B are interpreted as big-endian unsigned integers. Fail if B is zero.",
       "IntroducedVersion": 4,
@@ -2496,8 +3083,13 @@
     {
       "Opcode": 163,
       "Name": "b*",
-      "Args": "BB",
-      "Returns": "B",
+      "Args": [
+        "bigint",
+        "bigint"
+      ],
+      "Returns": [
+        "bigint"
+      ],
       "Size": 1,
       "Doc": "A times B. A and B are interpreted as big-endian unsigned integers.",
       "IntroducedVersion": 4,
@@ -2508,8 +3100,13 @@
     {
       "Opcode": 164,
       "Name": "b\u003c",
-      "Args": "BB",
-      "Returns": "U",
+      "Args": [
+        "bigint",
+        "bigint"
+      ],
+      "Returns": [
+        "bool"
+      ],
       "Size": 1,
       "Doc": "1 if A is less than B, else 0. A and B are interpreted as big-endian unsigned integers",
       "IntroducedVersion": 4,
@@ -2520,8 +3117,13 @@
     {
       "Opcode": 165,
       "Name": "b\u003e",
-      "Args": "BB",
-      "Returns": "U",
+      "Args": [
+        "bigint",
+        "bigint"
+      ],
+      "Returns": [
+        "bool"
+      ],
       "Size": 1,
       "Doc": "1 if A is greater than B, else 0. A and B are interpreted as big-endian unsigned integers",
       "IntroducedVersion": 4,
@@ -2532,8 +3134,13 @@
     {
       "Opcode": 166,
       "Name": "b\u003c=",
-      "Args": "BB",
-      "Returns": "U",
+      "Args": [
+        "bigint",
+        "bigint"
+      ],
+      "Returns": [
+        "bool"
+      ],
       "Size": 1,
       "Doc": "1 if A is less than or equal to B, else 0. A and B are interpreted as big-endian unsigned integers",
       "IntroducedVersion": 4,
@@ -2544,8 +3151,13 @@
     {
       "Opcode": 167,
       "Name": "b\u003e=",
-      "Args": "BB",
-      "Returns": "U",
+      "Args": [
+        "bigint",
+        "bigint"
+      ],
+      "Returns": [
+        "bool"
+      ],
       "Size": 1,
       "Doc": "1 if A is greater than or equal to B, else 0. A and B are interpreted as big-endian unsigned integers",
       "IntroducedVersion": 4,
@@ -2556,8 +3168,13 @@
     {
       "Opcode": 168,
       "Name": "b==",
-      "Args": "BB",
-      "Returns": "U",
+      "Args": [
+        "bigint",
+        "bigint"
+      ],
+      "Returns": [
+        "bool"
+      ],
       "Size": 1,
       "Doc": "1 if A is equal to B, else 0. A and B are interpreted as big-endian unsigned integers",
       "IntroducedVersion": 4,
@@ -2568,8 +3185,13 @@
     {
       "Opcode": 169,
       "Name": "b!=",
-      "Args": "BB",
-      "Returns": "U",
+      "Args": [
+        "bigint",
+        "bigint"
+      ],
+      "Returns": [
+        "bool"
+      ],
       "Size": 1,
       "Doc": "0 if A is equal to B, else 1. A and B are interpreted as big-endian unsigned integers",
       "IntroducedVersion": 4,
@@ -2580,8 +3202,13 @@
     {
       "Opcode": 170,
       "Name": "b%",
-      "Args": "BB",
-      "Returns": "B",
+      "Args": [
+        "bigint",
+        "bigint"
+      ],
+      "Returns": [
+        "bigint"
+      ],
       "Size": 1,
       "Doc": "A modulo B. A and B are interpreted as big-endian unsigned integers. Fail if B is zero.",
       "IntroducedVersion": 4,
@@ -2592,8 +3219,13 @@
     {
       "Opcode": 171,
       "Name": "b|",
-      "Args": "BB",
-      "Returns": "B",
+      "Args": [
+        "bigint",
+        "bigint"
+      ],
+      "Returns": [
+        "bigint"
+      ],
       "Size": 1,
       "Doc": "A bitwise-or B. A and B are zero-left extended to the greater of their lengths",
       "IntroducedVersion": 4,
@@ -2604,8 +3236,13 @@
     {
       "Opcode": 172,
       "Name": "b\u0026",
-      "Args": "BB",
-      "Returns": "B",
+      "Args": [
+        "bigint",
+        "bigint"
+      ],
+      "Returns": [
+        "bigint"
+      ],
       "Size": 1,
       "Doc": "A bitwise-and B. A and B are zero-left extended to the greater of their lengths",
       "IntroducedVersion": 4,
@@ -2616,8 +3253,13 @@
     {
       "Opcode": 173,
       "Name": "b^",
-      "Args": "BB",
-      "Returns": "B",
+      "Args": [
+        "bigint",
+        "bigint"
+      ],
+      "Returns": [
+        "bigint"
+      ],
       "Size": 1,
       "Doc": "A bitwise-xor B. A and B are zero-left extended to the greater of their lengths",
       "IntroducedVersion": 4,
@@ -2628,8 +3270,12 @@
     {
       "Opcode": 174,
       "Name": "b~",
-      "Args": "B",
-      "Returns": "B",
+      "Args": [
+        "bigint"
+      ],
+      "Returns": [
+        "bigint"
+      ],
       "Size": 1,
       "Doc": "A with all bits inverted",
       "IntroducedVersion": 4,
@@ -2640,8 +3286,12 @@
     {
       "Opcode": 175,
       "Name": "bzero",
-      "Args": "U",
-      "Returns": "B",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "zero filled byte-array of length A",
       "IntroducedVersion": 4,
@@ -2652,7 +3302,9 @@
     {
       "Opcode": 176,
       "Name": "log",
-      "Args": "B",
+      "Args": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "write A to log state of the current application",
       "DocExtra": "`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.",
@@ -2675,7 +3327,9 @@
     {
       "Opcode": 178,
       "Name": "itxn_field",
-      "Args": ".",
+      "Args": [
+        "any"
+      ],
       "Size": 2,
       "ArgEnum": "itxn_field",
       "Doc": "set field F of the current inner transaction to A",
@@ -2700,7 +3354,9 @@
     {
       "Opcode": 180,
       "Name": "itxn",
-      "Returns": ".",
+      "Returns": [
+        "any"
+      ],
       "Size": 2,
       "ArgEnum": "txn",
       "Doc": "field F of the last inner transaction",
@@ -2713,7 +3369,9 @@
     {
       "Opcode": 181,
       "Name": "itxna",
-      "Returns": ".",
+      "Returns": [
+        "any"
+      ],
       "Size": 3,
       "ArgEnum": "txna",
       "Doc": "Ith value of the array field F of the last inner transaction",
@@ -2737,7 +3395,9 @@
     {
       "Opcode": 183,
       "Name": "gitxn",
-      "Returns": ".",
+      "Returns": [
+        "any"
+      ],
       "Size": 3,
       "ArgEnum": "txn",
       "Doc": "field F of the Tth transaction in the last inner group submitted",
@@ -2750,7 +3410,9 @@
     {
       "Opcode": 184,
       "Name": "gitxna",
-      "Returns": ".",
+      "Returns": [
+        "any"
+      ],
       "Size": 4,
       "ArgEnum": "txna",
       "Doc": "Ith value of the array field F from the Tth transaction in the last inner group submitted",
@@ -2763,8 +3425,13 @@
     {
       "Opcode": 185,
       "Name": "box_create",
-      "Args": "BU",
-      "Returns": "U",
+      "Args": [
+        "[]byte",
+        "uint64"
+      ],
+      "Returns": [
+        "bool"
+      ],
       "Size": 1,
       "Doc": "create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1",
       "DocExtra": "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.",
@@ -2776,8 +3443,14 @@
     {
       "Opcode": 186,
       "Name": "box_extract",
-      "Args": "BUU",
-      "Returns": "B",
+      "Args": [
+        "[]byte",
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
       "IntroducedVersion": 8,
@@ -2788,7 +3461,11 @@
     {
       "Opcode": 187,
       "Name": "box_replace",
-      "Args": "BUB",
+      "Args": [
+        "[]byte",
+        "uint64",
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
       "IntroducedVersion": 8,
@@ -2799,8 +3476,12 @@
     {
       "Opcode": 188,
       "Name": "box_del",
-      "Args": "B",
-      "Returns": "U",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "bool"
+      ],
       "Size": 1,
       "Doc": "delete box named A if it exists. Return 1 if A existed, 0 otherwise",
       "IntroducedVersion": 8,
@@ -2811,8 +3492,13 @@
     {
       "Opcode": 189,
       "Name": "box_len",
-      "Args": "B",
-      "Returns": "UU",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "uint64",
+        "bool"
+      ],
       "Size": 1,
       "Doc": "X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.",
       "IntroducedVersion": 8,
@@ -2823,8 +3509,13 @@
     {
       "Opcode": 190,
       "Name": "box_get",
-      "Args": "B",
-      "Returns": "BU",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "[]byte",
+        "bool"
+      ],
       "Size": 1,
       "Doc": "X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.",
       "DocExtra": "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
@@ -2836,7 +3527,10 @@
     {
       "Opcode": 191,
       "Name": "box_put",
-      "Args": "BB",
+      "Args": [
+        "[]byte",
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist",
       "DocExtra": "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
@@ -2848,8 +3542,12 @@
     {
       "Opcode": 192,
       "Name": "txnas",
-      "Args": "U",
-      "Returns": ".",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 2,
       "ArgEnum": "txna",
       "Doc": "Ath value of the array field F of the current transaction",
@@ -2862,8 +3560,12 @@
     {
       "Opcode": 193,
       "Name": "gtxnas",
-      "Args": "U",
-      "Returns": ".",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 3,
       "ArgEnum": "txna",
       "Doc": "Ath value of the array field F from the Tth transaction in the current group",
@@ -2876,8 +3578,13 @@
     {
       "Opcode": 194,
       "Name": "gtxnsas",
-      "Args": "UU",
-      "Returns": ".",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 2,
       "ArgEnum": "txna",
       "Doc": "Bth value of the array field F from the Ath transaction in the current group",
@@ -2890,8 +3597,12 @@
     {
       "Opcode": 195,
       "Name": "args",
-      "Args": "U",
-      "Returns": "B",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
       "Size": 1,
       "Doc": "Ath LogicSig argument",
       "IntroducedVersion": 5,
@@ -2902,8 +3613,13 @@
     {
       "Opcode": 196,
       "Name": "gloadss",
-      "Args": "UU",
-      "Returns": ".",
+      "Args": [
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 1,
       "Doc": "Bth scratch space value of the Ath transaction in the current group",
       "IntroducedVersion": 6,
@@ -2914,8 +3630,12 @@
     {
       "Opcode": 197,
       "Name": "itxnas",
-      "Args": "U",
-      "Returns": ".",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 2,
       "Doc": "Ath value of the array field F of the last inner transaction",
       "ImmediateNote": "{uint8 transaction field index}",
@@ -2927,8 +3647,12 @@
     {
       "Opcode": 198,
       "Name": "gitxnas",
-      "Args": "U",
-      "Returns": ".",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 3,
       "Doc": "Ath value of the array field F from the Tth transaction in the last inner group submitted",
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index}",
@@ -2940,8 +3664,15 @@
     {
       "Opcode": 208,
       "Name": "vrf_verify",
-      "Args": "BBB",
-      "Returns": "BU",
+      "Args": [
+        "[]byte",
+        "[]byte",
+        "[]byte"
+      ],
+      "Returns": [
+        "[]byte",
+        "bool"
+      ],
       "Size": 2,
       "ArgEnum": "vrf_verify",
       "Doc": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
@@ -2955,8 +3686,12 @@
     {
       "Opcode": 209,
       "Name": "block",
-      "Args": "U",
-      "Returns": ".",
+      "Args": [
+        "uint64"
+      ],
+      "Returns": [
+        "any"
+      ],
       "Size": 2,
       "ArgEnum": "block",
       "Doc": "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",

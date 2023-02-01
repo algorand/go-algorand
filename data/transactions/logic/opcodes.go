@@ -448,9 +448,9 @@ var OpSpecs = []OpSpec{
 		is currently a useful pattern that requires hashes on long slices to
 		creating logicsigs in apps.
 
-		{0x01, "sha256", opSHA256, proto("b:b","b:b"), unlimitedStorage, costByLength(12, 6, 8)},
-		{0x02, "keccak256", opKeccak256, proto("b:b","b:b"), unlimitedStorage, costByLength(58, 4, 8)},
-		{0x03, "sha512_256", opSHA512_256, proto("b:b","b:b"), 7, unlimitedStorage, costByLength(17, 5, 8)},
+		{0x01, "sha256", opSHA256, proto("b:H"), unlimitedStorage, costByLength(12, 6, 8)},
+		{0x02, "keccak256", opKeccak256, proto("b:H"), unlimitedStorage, costByLength(58, 4, 8)},
+		{0x03, "sha512_256", opSHA512_256, proto("b:H"), 7, unlimitedStorage, costByLength(17, 5, 8)},
 	*/
 
 	{0x04, "ed25519verify", opEd25519Verify, proto("bbb:B"), 1, costly(1900).only(ModeSig)},
@@ -615,7 +615,7 @@ var OpSpecs = []OpSpec{
 	{0x97, "divw", opDivw, proto("iii:i"), 6, detDefault()},
 	{0x98, "sha3_256", opSHA3_256, proto("b:H"), 7, costly(130)},
 	/* Will end up following keccak256 -
-	{0x98, "sha3_256", opSHA3_256, proto("b:b","b:b"), unlimitedStorage, costByLength(58, 4, 8)},},
+	{0x98, "sha3_256", opSHA3_256, proto("b:H"), unlimitedStorage, costByLength(58, 4, 8)},},
 	*/
 
 	{0x99, "bn256_add", opBn256Add, proto("bb:b"), pairingVersion, costly(70)},

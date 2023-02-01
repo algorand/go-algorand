@@ -18,9 +18,6 @@ package logic
 
 import (
 	"math"
-
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/protocol"
 )
 
 type AVMType byte
@@ -40,8 +37,7 @@ const (
 )
 
 var (
-	params = config.Consensus[protocol.ConsensusCurrentVersion]
-
+	// Base stack types the AVM knows about
 	StackUint64 = NewStackType("uint64", AVMUint64, bounded(0, math.MaxUint64))
 	StackBytes  = NewStackType("[]byte", AVMBytes, bounded(0, maxStringSize))
 	StackAny    = StackType{
@@ -57,21 +53,23 @@ var (
 		LengthBound: []uint64{0, 0},
 	}
 
-	// Some higher level types that are common
+	// Higher level types that are common
 	StackBoolean = NewStackType("bool", AVMUint64, bounded(0, 1))
 	StackHash    = NewStackType("hash", AVMBytes, static(32))
 	StackAddress = NewStackType("addr", AVMBytes, static(32))
 	StackBigInt  = NewStackType("bigint", AVMBytes, bounded(0, maxByteMathSize))
 
-	// These don't need to be here but makes them easier to see how it
-	// might work while reviewing
-	// AppArgsNumBound    = boundUint(0, uint64(params.MaxAppArgs))
-	// AppArgBound        = boundBytes(0, uint64(params.MaxAppTotalArgLen))
-	// AssetURLBound      = boundBytes(0, uint64(params.MaxAssetURLBytes))
-	// AssetNameBound     = boundBytes(0, uint64(params.MaxAssetNameBytes))
-	// AssetUnitNameBound = boundBytes(0, uint64(params.MaxAssetUnitNameBytes))
-	// NoteFieldBound     = boundBytes(0, uint64(params.MaxTxnNoteBytes))
-	// ...
+	// List of them so we can iterate in doc prep
+	AllStackTypes = []StackType{
+		StackUint64,
+		StackBytes,
+		StackAny,
+		StackNone,
+		StackBoolean,
+		StackHash,
+		StackAddress,
+		StackBigInt,
+	}
 )
 
 // StackType describes the type of a value on the operand stack
