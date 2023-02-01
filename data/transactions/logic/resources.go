@@ -17,6 +17,8 @@
 package logic
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -72,9 +74,9 @@ func (r *resources) shareLocal(addr basics.Address, id basics.AppIndex) {
 	r.sharedLocals[ledgercore.AccountApp{Address: addr, App: id}] = struct{}{}
 }
 
-// In the fill* routines, we pass the header and the fields in separately, even
-// though they are pointers into the same structure. That prevents dumb attempts
-// to use other fields from the transaction.
+// In the fill* and allows* routines, we pass the header and the fields in
+// separately, even though they are pointers into the same structure. That
+// prevents dumb attempts to use other fields from the transaction.
 
 func (r *resources) fill(tx *transactions.Transaction, ep *EvalParams) {
 	switch tx.Type {
@@ -93,6 +95,22 @@ func (r *resources) fill(tx *transactions.Transaction, ep *EvalParams) {
 	}
 }
 
+func (r *resources) allows(ep *EvalParams, tx *transactions.Transaction, callerVer, calleeVer uint64) error {
+	switch tx.Type {
+	case protocol.PaymentTx, protocol.KeyRegistrationTx, protocol.AssetConfigTx:
+		// these transactions don't touch cross-product resources, so no error is possible
+		return nil
+	case protocol.AssetTransferTx:
+		return r.allowsAssetTransfer(&tx.Header, &tx.AssetTransferTxnFields)
+	case protocol.AssetFreezeTx:
+		return r.allowsAssetFreeze(&tx.Header, &tx.AssetFreezeTxnFields)
+	case protocol.ApplicationCallTx:
+		return r.allowsApplicationCall(ep, &tx.Header, &tx.ApplicationCallTxnFields, callerVer, calleeVer)
+	default:
+		return fmt.Errorf("unknown inner transaction type %s", tx.Type)
+	}
+}
+
 func (r *resources) fillKeyRegistration(hdr *transactions.Header) {
 	r.sharedAccounts[hdr.Sender] = struct{}{}
 }
@@ -106,7 +124,7 @@ func (r *resources) fillPayment(hdr *transactions.Header, tx *transactions.Payme
 }
 
 func (r *resources) fillAssetConfig(hdr *transactions.Header, tx *transactions.AssetConfigTxnFields) {
-	r.shareAccountAndHolding(hdr.Sender, tx.ConfigAsset)
+	r.sharedAccounts[hdr.Sender] = struct{}{}
 	if id := tx.ConfigAsset; id != 0 {
 		r.sharedAsas[id] = struct{}{}
 	}
@@ -128,11 +146,88 @@ func (r *resources) fillAssetTransfer(hdr *transactions.Header, tx *transactions
 	}
 }
 
+// allowsHolding checks if a holding is available under the txgroup sharing rules
+func (r *resources) allowsHolding(addr basics.Address, ai basics.AssetIndex) bool {
+	if _, ok := r.sharedHoldings[ledgercore.AccountAsset{Address: addr, Asset: ai}]; ok {
+		return true
+	}
+	// All holdings of created assets are available
+	for _, created := range r.createdAsas {
+		if created == ai {
+			return true
+		}
+	}
+	return false
+}
+
+// allowsLocals checks if a local state is available under the txgroup sharing rules
+func (r *resources) allowsLocals(addr basics.Address, ai basics.AppIndex) bool {
+	if _, ok := r.sharedLocals[ledgercore.AccountApp{Address: addr, App: ai}]; ok {
+		return true
+	}
+	// All locals of created apps are available
+	for _, created := range r.createdApps {
+		if created == ai {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *resources) requireHolding(acct basics.Address, id basics.AssetIndex) error {
+	/* Previous versions allowed inner appls with zeros in "required" places,
+	   even if that 0 resource should have be inaccessible, because the check
+	   was done at itxn_field time, and maybe the app siimply didn't set the
+	   field. */
+	if id == 0 || acct.IsZero() {
+		return nil
+	}
+	if !r.allowsHolding(acct, id) {
+		return fmt.Errorf("invalid Holding access %s x %d", acct, id)
+	}
+	return nil
+}
+
+func (r *resources) requireLocals(acct basics.Address, id basics.AppIndex) error {
+	if !r.allowsLocals(acct, id) {
+		return fmt.Errorf("invalid Local State access %s x %d", acct, id)
+	}
+	return nil
+}
+
+func (r *resources) allowsAssetTransfer(hdr *transactions.Header, tx *transactions.AssetTransferTxnFields) error {
+	err := r.requireHolding(hdr.Sender, tx.XferAsset)
+	if err != nil {
+		return fmt.Errorf("axfer Sender: %v", err)
+	}
+	err = r.requireHolding(tx.AssetReceiver, tx.XferAsset)
+	if err != nil {
+		return fmt.Errorf("axfer AssetReceiver: %v", err)
+	}
+	err = r.requireHolding(tx.AssetSender, tx.XferAsset)
+	if err != nil {
+		return fmt.Errorf("axfer AssetSender: %v", err)
+	}
+	err = r.requireHolding(tx.AssetCloseTo, tx.XferAsset)
+	if err != nil {
+		return fmt.Errorf("axfer AssetCloseTo: %v", err)
+	}
+	return nil
+}
+
 func (r *resources) fillAssetFreeze(hdr *transactions.Header, tx *transactions.AssetFreezeTxnFields) {
 	r.sharedAccounts[hdr.Sender] = struct{}{}
 	id := tx.FreezeAsset
 	r.sharedAsas[id] = struct{}{}
 	r.shareAccountAndHolding(tx.FreezeAccount, id)
+}
+
+func (r *resources) allowsAssetFreeze(hdr *transactions.Header, tx *transactions.AssetFreezeTxnFields) error {
+	err := r.requireHolding(tx.FreezeAccount, tx.FreezeAsset)
+	if err != nil {
+		return fmt.Errorf("afrz FreezeAccount: %v", err)
+	}
+	return nil
 }
 
 func (r *resources) fillApplicationCall(ep *EvalParams, hdr *transactions.Header, tx *transactions.ApplicationCallTxnFields) {
@@ -187,4 +282,47 @@ func (r *resources) fillApplicationCall(ep *EvalParams, hdr *transactions.Header
 		}
 		r.boxes[boxRef{app, string(br.Name)}] = false
 	}
+}
+
+func (r *resources) allowsApplicationCall(ep *EvalParams, hdr *transactions.Header, tx *transactions.ApplicationCallTxnFields, callerVer, calleeVer uint64) error {
+	// If an old (pre resorce sharing) app is being called from an app that has
+	// resource sharing enabled, we need to confirm that no new "cross-product"
+	// resources have become available.
+	if callerVer < resourceSharingVersion || calleeVer >= resourceSharingVersion {
+		return nil
+	}
+
+	// This should closely match the `fillApplicationCall` routine, as the idea
+	// is to find all of the cross product resources this attempted call will
+	// have access to, and check that they are already available.
+	txAccounts := make([]basics.Address, 0, 2+len(tx.Accounts)+len(tx.ForeignApps))
+	txAccounts = append(txAccounts, hdr.Sender)
+	txAccounts = append(txAccounts, tx.Accounts...)
+	if id := tx.ApplicationID; id != 0 {
+		txAccounts = append(txAccounts, ep.getApplicationAddress(id))
+	}
+	for _, id := range tx.ForeignApps {
+		txAccounts = append(txAccounts, ep.getApplicationAddress(id))
+	}
+	for _, address := range txAccounts {
+		for _, id := range tx.ForeignAssets {
+			err := r.requireHolding(address, id)
+			if err != nil {
+				return fmt.Errorf("appl ForeignAssets: %v", err)
+			}
+		}
+		if id := tx.ApplicationID; id != 0 {
+			err := r.requireLocals(address, id)
+			if err != nil {
+				return fmt.Errorf("appl ApplicationID: %v", err)
+			}
+		}
+		for _, id := range tx.ForeignApps {
+			err := r.requireLocals(address, id)
+			if err != nil {
+				return fmt.Errorf("appl ForeignApps: %v", err)
+			}
+		}
+	}
+	return nil
 }

@@ -3992,10 +3992,11 @@ func opExtract64Bits(cx *EvalContext) error {
 // predicted the address, and therefore it IS in txn.Accounts, then happy day,
 // we can set/del it. Return the proper index.
 
-// If we ever want apps to be able to change local state on these accounts
-// (which includes this app's own account!), we will need a change to
-// EvalDelta's on disk format, so that the addr can be encoded explicitly rather
-// than by index into txn.Accounts.
+// Starting in v9, apps can change local state on these accounts by adding the
+// address to EvalDelta.ShardAccounts and indexing it there. But at this level,
+// we still report the "failure" to find an index with `invalidIndex=len+1` That
+// value allows mutableAccountReference to decide whether to report an error or
+// not, based on version.
 
 func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uint64, error) {
 	if account.argType() == StackUint64 {
@@ -4049,10 +4050,20 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 
 func (cx *EvalContext) mutableAccountReference(account stackValue) (basics.Address, uint64, error) {
 	addr, accountIdx, err := cx.accountReference(account)
-	if err == nil && accountIdx > uint64(len(cx.txn.Txn.Accounts)) {
+	if err != nil {
+		return basics.Address{}, 0, err
+	}
+	if accountIdx > uint64(len(cx.txn.Txn.Accounts)) {
 		// There was no error, but accountReference has signaled that accountIdx
 		// is not for mutable ops (because it can't encode it in EvalDelta)
-		err = fmt.Errorf("invalid Account reference for mutation %s", addr)
+		if cx.version < resourceSharingVersion {
+			return basics.Address{}, 0, fmt.Errorf("invalid Account reference for mutation %s", addr)
+		}
+		// fall through, which means that starting in v9, the accountIdx
+		// returned can be > len(tx.Accounts). It will end up getting passed to
+		// GetLocal, which seems bad, since GetLocal can record that index. But
+		// that record is only done in very old consenus versions. At that point
+		// v9 did not exist.
 	}
 	return addr, accountIdx, err
 }
@@ -4153,18 +4164,8 @@ func opAppLocalGetEx(cx *EvalContext) error {
 }
 
 func opAppLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValue) (result stackValue, ok bool, err error) {
-	addr, accountIdx, err := cx.accountReference(acct)
+	addr, app, accountIdx, err := cx.localsReference(acct, appID)
 	if err != nil {
-		return
-	}
-
-	app, err := cx.appReference(appID, false)
-	if err != nil {
-		return
-	}
-
-	if !cx.availableLocals(addr, app) {
-		err = fmt.Errorf("invalid Local State access %s x %d", addr, app)
 		return
 	}
 
@@ -4226,6 +4227,32 @@ func opAppGlobalGetEx(cx *EvalContext) error {
 	return nil
 }
 
+// ensureLocalDelta is used to get accountIdx that is usable in the LocalDeltas
+// of the EvalDelta. The input accountIdx is "tentative" - if it's longer that
+// the txn.Accounts, then we may need to add the address into SharedAccounts,
+// and index into it.
+func (cx *EvalContext) ensureLocalDelta(accountIdx uint64, addr basics.Address) uint64 {
+	if accountIdx > uint64(len(cx.txn.Txn.Accounts)) {
+		// the returned accountIdx was just a signal that the account was
+		// not in txn, so we look in SharedAccounts, allocating space if needed.
+		found := false
+		for i, shared := range cx.txn.EvalDelta.SharedAccts {
+			if shared == addr {
+				found = true
+				accountIdx = uint64(len(cx.txn.Txn.Accounts) + 1 + i)
+			}
+		}
+		if !found {
+			cx.txn.EvalDelta.SharedAccts = append(cx.txn.EvalDelta.SharedAccts, addr)
+			accountIdx = uint64(len(cx.txn.Txn.Accounts) + len(cx.txn.EvalDelta.SharedAccts))
+		}
+	}
+	if _, ok := cx.txn.EvalDelta.LocalDeltas[accountIdx]; !ok {
+		cx.txn.EvalDelta.LocalDeltas[accountIdx] = basics.StateDelta{}
+	}
+	return accountIdx
+}
+
 func opAppLocalPut(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // value
 	prev := last - 1          // state key
@@ -4255,9 +4282,7 @@ func opAppLocalPut(cx *EvalContext) error {
 
 	tv := sv.toTealValue()
 	if !ok || tv != etv {
-		if _, ok := cx.txn.EvalDelta.LocalDeltas[accountIdx]; !ok {
-			cx.txn.EvalDelta.LocalDeltas[accountIdx] = basics.StateDelta{}
-		}
+		accountIdx = cx.ensureLocalDelta(accountIdx, addr)
 		cx.txn.EvalDelta.LocalDeltas[accountIdx][key] = tv.ToValueDelta()
 	}
 
@@ -4342,9 +4367,7 @@ func opAppLocalDel(cx *EvalContext) error {
 		if err != nil {
 			return err
 		}
-		if _, ok := cx.txn.EvalDelta.LocalDeltas[accountIdx]; !ok {
-			cx.txn.EvalDelta.LocalDeltas[accountIdx] = basics.StateDelta{}
-		}
+		accountIdx = cx.ensureLocalDelta(accountIdx, addr)
 		cx.txn.EvalDelta.LocalDeltas[accountIdx][key] = basics.ValueDelta{
 			Action: basics.DeleteAction,
 		}
@@ -4420,7 +4443,73 @@ func (cx *EvalContext) appReference(ref uint64, foreign bool) (basics.AppIndex, 
 			return basics.AppIndex(ref), nil
 		}
 	}
-	return basics.AppIndex(0), fmt.Errorf("invalid App reference %d", ref)
+	return 0, fmt.Errorf("invalid App reference %d", ref)
+}
+
+// localsReference has the main job of resolving the account (as bytes or u64)
+// and the App, taking access rules into account.  It has the funny side job of
+// also reporting which "slot" the address appears in, if it is in txn.Accounts
+// (or is the Sender, which yields 0). But it only needs to do this funny side
+// job in certainly old versions that need the slot index while doing a lookup.
+func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.Address, basics.AppIndex, uint64, error) {
+	if cx.version >= resourceSharingVersion {
+		unused := uint64(0) // see function comment
+		var addr basics.Address
+		var err error
+		if account.Bytes != nil {
+			addr, err = account.address()
+		} else {
+			addr, err = cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
+		}
+		if err != nil {
+			return basics.Address{}, 0, 0, err
+		}
+		aid := basics.AppIndex(ref)
+		if cx.available.allowsLocals(addr, aid) {
+			return addr, aid, unused, nil
+		}
+		if ref == 0 {
+			aid := cx.appID
+			if cx.available.allowsLocals(addr, aid) {
+				return addr, aid, unused, nil
+			}
+		} else if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
+			aid := cx.txn.Txn.ForeignApps[ref-1]
+			if cx.available.allowsLocals(addr, aid) {
+				return addr, aid, unused, nil
+			}
+		}
+
+		// Do some extra lookups to give a more concise err. Whenever a locals
+		// is available, its account and app must be as well (but not vice
+		// versa, anymore). So, if (only) one of them is not available, yell
+		// about it, specifically.
+
+		_, _, acctErr := cx.accountReference(account)
+		_, appErr := cx.appReference(ref, false)
+		switch {
+		case acctErr != nil && appErr == nil:
+			err = acctErr
+		case acctErr == nil && appErr != nil:
+			err = appErr
+		default:
+			err = fmt.Errorf("invalid Local State access %s x %d", addr, aid)
+		}
+
+		return basics.Address{}, 0, 0, err
+	}
+
+	// Pre group resource sharing, the rule is just that account and app are
+	// each available.
+	addr, addrIdx, err := cx.accountReference(account)
+	if err != nil {
+		return basics.Address{}, 0, 0, err
+	}
+	app, err := cx.appReference(ref, false)
+	if err != nil {
+		return basics.Address{}, 0, 0, err
+	}
+	return addr, app, addrIdx, nil
 }
 
 func (cx *EvalContext) assetReference(ref uint64, foreign bool) (basics.AssetIndex, error) {
@@ -4448,7 +4537,7 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (basics.AssetInd
 			return basics.AssetIndex(ref), nil
 		}
 	}
-	return basics.AssetIndex(0), fmt.Errorf("invalid Asset reference %d", ref)
+	return 0, fmt.Errorf("invalid Asset reference %d", ref)
 
 }
 
@@ -4462,15 +4551,15 @@ func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.
 			addr, err = cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
 		}
 		if err != nil {
-			return basics.Address{}, basics.AssetIndex(0), err
+			return basics.Address{}, 0, err
 		}
 		aid := basics.AssetIndex(ref)
-		if cx.availableHolding(addr, aid) {
+		if cx.available.allowsHolding(addr, aid) {
 			return addr, aid, nil
 		}
 		if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
 			aid := cx.txn.Txn.ForeignAssets[ref]
-			if cx.availableHolding(addr, aid) {
+			if cx.available.allowsHolding(addr, aid) {
 				return addr, aid, nil
 			}
 		}
@@ -4491,18 +4580,18 @@ func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.
 			err = fmt.Errorf("invalid Holding access %s x %d", addr, aid)
 		}
 
-		return basics.Address{}, basics.AssetIndex(0), err
+		return basics.Address{}, 0, err
 	}
 
 	// Pre group resource sharing, the rule is just that account and asset are
 	// each available.
 	addr, _, err := cx.accountReference(account)
 	if err != nil {
-		return basics.Address{}, basics.AssetIndex(0), err
+		return basics.Address{}, 0, err
 	}
 	asset, err := cx.assetReference(ref, false)
 	if err != nil {
-		return basics.Address{}, basics.AssetIndex(0), err
+		return basics.Address{}, 0, err
 	}
 	return addr, asset, nil
 }
@@ -4532,7 +4621,6 @@ func opAssetHoldingGet(cx *EvalContext) error {
 			return err
 		}
 	}
-	fmt.Printf("err=%v\n", err)
 
 	cx.stack[prev] = value
 	cx.stack[last].Uint = exist
@@ -4755,12 +4843,12 @@ func opItxnNext(cx *EvalContext) error {
 // assignAccount is used to convert a stackValue into a 32-byte account value,
 // enforcing any "availability" restrictions in force.
 func (cx *EvalContext) assignAccount(sv stackValue) (basics.Address, error) {
-	addr, err := sv.address()
+	_, err := sv.address()
 	if err != nil {
 		return basics.Address{}, err
 	}
 
-	addr, _, err = cx.accountReference(sv)
+	addr, _, err := cx.accountReference(sv)
 	return addr, err
 }
 
@@ -4769,7 +4857,7 @@ func (cx *EvalContext) assignAccount(sv stackValue) (basics.Address, error) {
 func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 	uint, err := sv.uint()
 	if err != nil {
-		return basics.AssetIndex(0), err
+		return 0, err
 	}
 	aid := basics.AssetIndex(uint)
 
@@ -4777,7 +4865,7 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 		return aid, nil
 	}
 
-	return basics.AssetIndex(0), fmt.Errorf("invalid Asset reference %d", aid)
+	return 0, fmt.Errorf("invalid Asset reference %d", aid)
 }
 
 // availableAsset determines whether an asset is "available". Before
@@ -4818,7 +4906,7 @@ func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
 func (cx *EvalContext) assignApp(sv stackValue) (basics.AppIndex, error) {
 	uint, err := sv.uint()
 	if err != nil {
-		return basics.AppIndex(0), err
+		return 0, err
 	}
 	aid := basics.AppIndex(uint)
 
@@ -4856,40 +4944,6 @@ func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
 		}
 	}
 
-	return false
-}
-
-// availableHolding checks if a holding is available under the txgroup sharing rules
-func (cx *EvalContext) availableHolding(addr basics.Address, ai basics.AssetIndex) bool {
-	if _, ok := cx.available.sharedHoldings[ledgercore.AccountAsset{Address: addr, Asset: ai}]; ok {
-		return true
-	}
-	// All holdings of created assets are available
-	for _, created := range cx.available.createdAsas {
-		if created == ai {
-			return true
-		}
-	}
-	return false
-}
-
-// availableLocals is an additional check, required since
-// resourceSharingVersion. It will work in previous versions too, since
-// cx.available will be populated to make it work. But it must protect for <
-// directRefEnabledVersion, because unnamed holdings could be read then.
-func (cx *EvalContext) availableLocals(addr basics.Address, ai basics.AppIndex) bool {
-	if cx.version < directRefEnabledVersion {
-		return true
-	}
-	if _, ok := cx.available.sharedLocals[ledgercore.AccountApp{Address: addr, App: ai}]; ok {
-		return true
-	}
-	// All locals of created apps are available
-	for _, created := range cx.available.createdApps {
-		if created == ai {
-			return true
-		}
-	}
 	return false
 }
 
@@ -5215,6 +5269,8 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 			return err
 		}
 
+		var calledVersion uint64
+
 		// Disallow reentrancy, limit inner app call depth, and do version checks
 		if cx.subtxns[itx].Txn.Type == protocol.ApplicationCallTx {
 			if cx.appID == cx.subtxns[itx].Txn.ApplicationID {
@@ -5245,13 +5301,13 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 			}
 
 			// Can't call old versions in inner apps.
-			v, _, err := transactions.ProgramVersion(program)
+			calledVersion, _, err = transactions.ProgramVersion(program)
 			if err != nil {
 				return err
 			}
-			if v < cx.Proto.MinInnerApplVersion {
+			if calledVersion < cx.Proto.MinInnerApplVersion {
 				return fmt.Errorf("inner app call with version v%d < v%d",
-					v, cx.Proto.MinInnerApplVersion)
+					calledVersion, cx.Proto.MinInnerApplVersion)
 			}
 
 			// Don't allow opt-in if the CSP is not runnable as an inner.
@@ -5275,7 +5331,18 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 						csv, cx.Proto.MinInnerApplVersion)
 				}
 			}
+		}
 
+		// Starting in v9, it's possible for apps to create transactions that
+		// should not be allowed to run, because they require access to
+		// resources that the caller does not have.  This can only happen for
+		// Holdings and Local States. The caller might have access to the
+		// account and the asa or app, but not the holding or locals, because
+		// the caller gained access to the two top resources by group sharing
+		// from two different transactions.
+		err = cx.available.allows(cx.EvalParams, &cx.subtxns[itx].Txn, cx.version, calledVersion)
+		if err != nil {
+			return err
 		}
 
 		if isGroup {

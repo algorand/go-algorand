@@ -25,9 +25,10 @@ import (
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/require"
 )
 
-// TestAppSharing confirms that as of v9, assets can be accessed across
+// TestAppSharing confirms that as of v9, apps can be accessed across
 // groups, but that before then, they could not.
 func TestAppSharing(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -89,9 +90,37 @@ pop; pop; int 1
 		logic.NewExpect(1, "invalid Local State access"))
 
 	// But it's ok in appl2, because appl2 uses the same Sender, even though the
-	// foreign-app is not repeated in appl2 so the holding being accessed is is
-	// the one from tx0.
+	// foreign-app is not repeated in appl2 because the holding being accessed
+	// is the one from tx0.
 	logic.TestApps(t, sources, txntest.Group(&appl0, &appl2), 9, ledger)
+
+	// Now, confirm that *setting* a local state in tx1 that was made available
+	// in tx0 works.  The extra check here is that the change is recorded
+	// properly in EvalDelta.
+	putLocal := `
+txn ApplicationArgs 0
+byte "X"
+int 74
+app_local_put
+int 1
+`
+	noop := `int 1`
+	sources = []string{noop, putLocal}
+	appl1.ApplicationArgs = [][]byte{appl0.Sender[:]} // tx1 will try to modify local state exposed in tx0
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
+		logic.NewExpect(1, "account "+appl0.Sender.String()+" is not opted into 888"))
+	ledger.NewLocals(appl0.Sender, 888) // opt in
+	ep := logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger)
+	require.Len(t, ep.TxnGroup, 2)
+	ed := ep.TxnGroup[1].ApplyData.EvalDelta
+	require.Len(t, ed.LocalDeltas, 1)
+	require.Contains(t, ed.LocalDeltas, uint64(1)) // no tx.Accounts, 1 indicates first in SharedAccts
+	sd := ed.LocalDeltas[1]
+	require.Len(t, sd, 1)
+	require.Contains(t, sd, "X")
+	require.EqualValues(t, 74, sd["X"].Uint)
+	require.Len(t, ed.SharedAccts, 1)
+	require.Equal(t, ep.TxnGroup[0].Txn.Sender, ed.SharedAccts[0])
 }
 
 // TestAssetSharing confirms that as of v9, assets can be accessed across
@@ -330,14 +359,24 @@ itxn_submit
 int 1
 `
 
+	acfgArg := `
+itxn_begin
+  int acfg;                    itxn_field TypeEnum
+  txn ApplicationArgs 0; btoi; itxn_field ConfigAsset
+itxn_submit
+int 1
+`
+
 	appl := txntest.Txn{
-		Type:   protocol.ApplicationCallTx,
-		Sender: basics.Address{5, 5, 5, 5}, // different from all other accounts used
+		Type:          protocol.ApplicationCallTx,
+		ApplicationID: 1234,
+		Sender:        basics.Address{5, 5, 5, 5}, // different from all other accounts used
 	}
+	appAcct := appl.ApplicationID.Address()
 	// App will do a lot of txns. Start well funded.
-	ledger.NewAccount(basics.AppIndex(888).Address(), 1_000_000)
+	ledger.NewAccount(appAcct, 1_000_000)
 	// And needs some ASAs for inner axfer testing
-	ledger.NewHolding(basics.AppIndex(888).Address(), asa1, 1_000_000, false)
+	ledger.NewHolding(appAcct, asa1, 1_000_000, false)
 
 	t.Run("keyreg", func(t *testing.T) {
 		keyreg := txntest.Txn{
@@ -390,17 +429,30 @@ int 1
 			AssetSender:   otherAcct,
 		}
 
-		// appl can pay or axfer to the sender
+		// appl can pay the axfer sender
 		appl.ApplicationArgs = [][]byte{senderAcct[:], {asa1}}
 		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&axfer, &appl), 9, ledger)
-		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&axfer, &appl), 9, ledger)
+		// bur can't axfer to them, because appAcct doesn't have holding access
+		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&axfer, &appl), 9, ledger,
+			logic.NewExpect(1, "invalid Holding access"))
 		// and to the receiver
 		appl.ApplicationArgs = [][]byte{receiverAcct[:], {asa1}}
 		logic.TestApps(t, []string{payToArg}, txntest.Group(&appl, &axfer), 9, ledger)
-		logic.TestApps(t, []string{axferToArgs}, txntest.Group(&appl, &axfer), 9, ledger)
+		logic.TestApps(t, []string{axferToArgs}, txntest.Group(&appl, &axfer), 9, ledger,
+			logic.NewExpect(0, "invalid Holding access"))
 		// and to the clawback
 		appl.ApplicationArgs = [][]byte{otherAcct[:], {asa1}}
 		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&axfer, &appl), 9, ledger)
+		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&axfer, &appl), 9, ledger,
+			logic.NewExpect(1, "invalid Holding access"))
+
+		// Those axfers become possible by adding the asa to the appl's ForeignAssets
+		appl.ForeignAssets = []basics.AssetIndex{asa1}
+		appl.ApplicationArgs = [][]byte{senderAcct[:], {asa1}}
+		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&axfer, &appl), 9, ledger)
+		appl.ApplicationArgs = [][]byte{receiverAcct[:], {asa1}}
+		logic.TestApps(t, []string{axferToArgs}, txntest.Group(&appl, &axfer), 9, ledger)
+		appl.ApplicationArgs = [][]byte{otherAcct[:], {asa1}}
 		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&axfer, &appl), 9, ledger)
 
 		// but can't axfer a different asset
@@ -411,6 +463,91 @@ int 1
 		appl.ApplicationArgs = [][]byte{unusedAcct[:], {asa1}}
 		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&axfer, &appl), 9, ledger,
 			logic.NewExpect(1, "invalid Account reference"))
+
+		// appl can acfg the asset from tx0 (which requires asset available, not holding)
+		appl.ApplicationArgs = [][]byte{{asa1}}
+		logic.TestApps(t, []string{"", acfgArg}, txntest.Group(&axfer, &appl), 9, ledger)
+		appl.ApplicationArgs = [][]byte{{asa2}} // but not asa2
+		logic.TestApps(t, []string{"", acfgArg}, txntest.Group(&axfer, &appl), 9, ledger,
+			logic.NewExpect(1, fmt.Sprintf("invalid Asset reference %d", asa2)))
+
+		// Now, confirm that access to account from a pay in one tx, and asa
+		// from another don't allow inner axfer in the third (because there's no
+		// access to that payer's holding.)
+		payAcct := basics.Address{3, 2, 3, 2, 3, 2}
+		pay := txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   payAcct,
+			Receiver: payAcct,
+		}
+		// the asset is acfg-able
+		appl.ApplicationArgs = [][]byte{{asa1}}
+		logic.TestApps(t, []string{"", "", acfgArg}, txntest.Group(&pay, &axfer, &appl), 9, ledger)
+		logic.TestApps(t, []string{"", "", acfgArg}, txntest.Group(&axfer, &pay, &appl), 9, ledger)
+		// payAcct (the pay sender) is payable
+		appl.ApplicationArgs = [][]byte{payAcct[:]}
+		logic.TestApps(t, []string{"", "", payToArg}, txntest.Group(&axfer, &pay, &appl), 9, ledger)
+		// but the cross-product is not available, so no axfer (opting in first, to prevent that error)
+		ledger.NewHolding(payAcct, asa1, 1, false)
+		appl.ApplicationArgs = [][]byte{payAcct[:], {asa1}}
+		logic.TestApps(t, []string{"", "", axferToArgs}, txntest.Group(&axfer, &pay, &appl), 9, ledger,
+			logic.NewExpect(2, "invalid Holding access "+payAcct.String()))
+	})
+
+	t.Run("afrz", func(t *testing.T) {
+		appl.ForeignAssets = []basics.AssetIndex{} // reset after previous test
+		afrz := txntest.Txn{
+			Type:          protocol.AssetFreezeTx,
+			FreezeAsset:   asa1,
+			Sender:        senderAcct,
+			FreezeAccount: otherAcct,
+		}
+
+		// appl can pay to the sender & freeze account
+		appl.ApplicationArgs = [][]byte{senderAcct[:], {asa1}}
+		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&afrz, &appl), 9, ledger)
+		appl.ApplicationArgs = [][]byte{otherAcct[:], {asa1}}
+		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&afrz, &appl), 9, ledger)
+
+		// can't axfer to the afrz sender because appAcct holding is not available from afrz
+		appl.ApplicationArgs = [][]byte{senderAcct[:], {asa1}}
+		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&afrz, &appl), 9, ledger,
+			logic.NewExpect(1, "invalid Holding access "+appAcct.String()))
+		appl.ForeignAssets = []basics.AssetIndex{asa1}
+		// _still_ can't axfer to sender because afrz sender's holding does NOT
+		// become available (not note that complaint is now about that account)
+		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&afrz, &appl), 9, ledger,
+			logic.NewExpect(1, "invalid Holding access "+senderAcct.String()))
+
+		// and not to the receiver which isn't in afrz
+		appl.ApplicationArgs = [][]byte{receiverAcct[:], {asa1}}
+		logic.TestApps(t, []string{payToArg}, txntest.Group(&appl, &afrz), 9, ledger,
+			logic.NewExpect(0, "invalid Account reference "+receiverAcct.String()))
+		logic.TestApps(t, []string{axferToArgs}, txntest.Group(&appl, &afrz), 9, ledger,
+			logic.NewExpect(0, "invalid Account reference "+receiverAcct.String()))
+
+		// otherAcct is the afrz target, it's holding and account are available
+		appl.ApplicationArgs = [][]byte{otherAcct[:], {asa1}}
+		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&afrz, &appl), 9, ledger)
+		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&afrz, &appl), 9, ledger)
+
+		// but still can't axfer a different asset
+		appl.ApplicationArgs = [][]byte{otherAcct[:], {asa2}}
+		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&afrz, &appl), 9, ledger,
+			logic.NewExpect(1, fmt.Sprintf("invalid Asset reference %d", asa2)))
+		appl.ForeignAssets = []basics.AssetIndex{asa2}
+		// once added to appl's foreign array, the appl still lacks access to other's holding
+		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&afrz, &appl), 9, ledger,
+			logic.NewExpect(1, "invalid Holding access "+otherAcct.String()))
+
+		// appl can acfg the asset from tx0 (which requires asset available, not holding)
+		appl.ForeignAssets = []basics.AssetIndex{}
+		appl.ApplicationArgs = [][]byte{{asa1}}
+		logic.TestApps(t, []string{"", acfgArg}, txntest.Group(&afrz, &appl), 9, ledger)
+		appl.ApplicationArgs = [][]byte{{asa2}} // but not asa2
+		logic.TestApps(t, []string{"", acfgArg}, txntest.Group(&afrz, &appl), 9, ledger,
+			logic.NewExpect(1, fmt.Sprintf("invalid Asset reference %d", asa2)))
+
 	})
 
 }

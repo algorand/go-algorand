@@ -383,7 +383,7 @@ func TestBalance(t *testing.T) {
 }
 
 func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn, version uint64, ledger *Ledger,
-	expected ...Expect) {
+	expected ...Expect) *EvalParams {
 	t.Helper()
 	codes := make([][]byte, len(programs))
 	for i, program := range programs {
@@ -408,6 +408,7 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 	ep.Ledger = ledger
 	ep.SigLedger = ledger
 	testAppsBytes(t, codes, ep, expected...)
+	return ep
 }
 
 func testAppsBytes(t *testing.T, programs [][]byte, ep *EvalParams, expected ...Expect) {
@@ -2810,11 +2811,11 @@ int 695
 	testApp(t, source, defaultEvalParams())
 }
 
-func TestSelfMutate(t *testing.T) {
+func TestSelfMutateV8(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	ep, _, ledger := makeSampleEnv()
+	ep, _, ledger := makeSampleEnvWithVersion(8)
 
 	/* In order to test the added protection of mutableAccountReference, we're
 	   going to set up a ledger in which an app account is opted into
@@ -2848,4 +2849,91 @@ int 77
 ==
 `
 	testApp(t, source, ep)
+}
+
+func TestSelfMutateCurrent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, tx, ledger := makeSampleEnv()
+
+	/* In order to test that apps can now mutate their own app's local state,
+	   we're going to set up a ledger in which an app account is opted into
+	   itself. */
+	ledger.NewLocals(basics.AppIndex(888).Address(), 888)
+	ledger.NewLocal(basics.AppIndex(888).Address(), 888, "hey",
+		basics.TealValue{Type: basics.TealUintType, Uint: 77})
+
+	source := `
+global CurrentApplicationAddress
+byte "hey"
+int 42
+app_local_put
+int 1
+`
+	ed := testApp(t, source, ep)
+	require.Len(t, ed.LocalDeltas, 1)
+	require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
+
+	require.Contains(t, ed.LocalDeltas, uint64(2))
+	sd := ed.LocalDeltas[2]
+	require.Len(t, sd, 1)
+	require.Contains(t, sd, "hey")
+	require.EqualValues(t, 42, sd["hey"].Uint)
+	require.Len(t, ed.SharedAccts, 1)
+	require.Equal(t, tx.ApplicationID.Address(), ed.SharedAccts[0])
+
+	/* Confirm it worked. */
+	source = `
+global CurrentApplicationAddress
+byte "hey"
+app_local_get
+int 42
+==
+`
+	testApp(t, source, ep)
+
+	source = `
+global CurrentApplicationAddress
+byte "hey"
+app_local_del
+int 1
+`
+	ed = testApp(t, source, ep)
+	require.Len(t, ed.LocalDeltas, 1)
+	require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
+
+	require.Contains(t, ed.LocalDeltas, uint64(2))
+	sd = ed.LocalDeltas[2]
+	require.Len(t, sd, 1)
+	require.Contains(t, sd, "hey")
+	require.EqualValues(t, basics.DeleteAction, sd["hey"].Action)
+	require.Len(t, ed.SharedAccts, 1)
+	require.Equal(t, tx.ApplicationID.Address(), ed.SharedAccts[0])
+
+	// Now, repeat the "put" test with multiple keys, to ensure only one address is added to SharedAccts
+	source = `
+global CurrentApplicationAddress
+byte "hey"
+int 42
+app_local_put
+global CurrentApplicationAddress
+byte "joe"
+int 21
+app_local_put
+int 1
+`
+	ed = testApp(t, source, ep)
+	require.Len(t, ed.LocalDeltas, 1)
+	require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
+
+	require.Contains(t, ed.LocalDeltas, uint64(2))
+	sd = ed.LocalDeltas[2]
+	require.Len(t, sd, 2)
+	require.Contains(t, sd, "hey")
+	require.EqualValues(t, 42, sd["hey"].Uint)
+	require.Contains(t, sd, "joe")
+	require.EqualValues(t, 21, sd["joe"].Uint)
+	require.Len(t, ed.SharedAccts, 1)
+	require.Equal(t, tx.ApplicationID.Address(), ed.SharedAccts[0])
 }

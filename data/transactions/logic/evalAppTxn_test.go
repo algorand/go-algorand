@@ -369,8 +369,12 @@ func TestAppAxfer(t *testing.T) {
   itxn_field TypeEnum
   itxn_submit
 `
+
+	was := ep.Proto.LogicSigVersion
+	ep.Proto.LogicSigVersion = 8
 	TestApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+noid+"int 1", ep,
 		fmt.Sprintf("Sender (%s) not opted in to 0", appAddr(888)))
+	ep.Proto.LogicSigVersion = was
 
 	TestApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+axfer+"int 1", ep)
 

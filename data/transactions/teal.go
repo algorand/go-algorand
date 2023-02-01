@@ -32,8 +32,10 @@ type EvalDelta struct {
 	GlobalDelta basics.StateDelta `codec:"gd"`
 
 	// When decoding EvalDeltas, the integer key represents an offset into
-	// [txn.Sender, txn.Accounts[0], txn.Accounts[1], ...]
+	// [txn.Sender, txn.Accounts[0], txn.Accounts[1], ..., SharedAccts[0], SharedAccts[1], ...]
 	LocalDeltas map[uint64]basics.StateDelta `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
+
+	SharedAccts []basics.Address `codec:"sa,allocbound=4"`
 
 	Logs []string `codec:"lg,allocbound=config.MaxLogCalls"`
 
