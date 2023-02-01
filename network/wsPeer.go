@@ -105,18 +105,18 @@ var unknownProtocolTagMessagesTotal = metrics.MakeCounter(metrics.UnknownProtoco
 // defaultSendMessageTags is the default list of messages which a peer would
 // allow to be sent without receiving any explicit request.
 var defaultSendMessageTags = map[protocol.Tag]bool{
-	protocol.AgreementVoteTag:   true,
-	protocol.MsgDigestSkipTag:   true,
-	protocol.NetPrioResponseTag: true,
-  protocol.NetIDVerificationTag: true,
-	protocol.PingTag:            true,
-	protocol.PingReplyTag:       true,
-	protocol.ProposalPayloadTag: true,
-	protocol.TopicMsgRespTag:    true,
-	protocol.MsgOfInterestTag:   true,
-	protocol.TxnTag:             true,
-	protocol.UniEnsBlockReqTag:  true,
-	protocol.VoteBundleTag:      true,
+	protocol.AgreementVoteTag:     true,
+	protocol.MsgDigestSkipTag:     true,
+	protocol.NetPrioResponseTag:   true,
+	protocol.NetIDVerificationTag: true,
+	protocol.PingTag:              true,
+	protocol.PingReplyTag:         true,
+	protocol.ProposalPayloadTag:   true,
+	protocol.TopicMsgRespTag:      true,
+	protocol.MsgOfInterestTag:     true,
+	protocol.TxnTag:               true,
+	protocol.UniEnsBlockReqTag:    true,
+	protocol.VoteBundleTag:        true,
 }
 
 // interface allows substituting debug implementation for *websocket.Conn
@@ -577,7 +577,7 @@ func (wp *wsPeer) readLoop() {
 			atomic.AddUint64(&wp.ppMessageCount, 1)
 		// the remaining valid tags: no special handling here
 		case protocol.NetPrioResponseTag, protocol.PingTag, protocol.PingReplyTag,
-			protocol.StateProofSigTag, protocol.UniEnsBlockReqTag, protocol.VoteBundleTag:
+			protocol.StateProofSigTag, protocol.UniEnsBlockReqTag, protocol.VoteBundleTag, protocol.NetIDVerificationTag:
 		default: // unrecognized tag
 			unknownProtocolTagMessagesTotal.Inc(nil)
 			atomic.AddUint64(&wp.unkMessageCount, 1)
