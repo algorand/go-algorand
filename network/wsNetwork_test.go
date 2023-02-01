@@ -332,7 +332,7 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 }
 
 // Set up two nodes, test that B drops invalid tags when A ends them.
-func TestWebsocketNetworkBasicInvalidTags(t *testing.T) {
+func TestWebsocketNetworkBasicInvalidTags(t *testing.T) { // nolint:paralleltest // changes global variable allowCustomTags
 	partitiontest.PartitionTest(t)
 	// disallow custom tags for this test
 	allowCustomTags = false
