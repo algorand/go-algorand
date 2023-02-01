@@ -92,6 +92,10 @@ func accountDataToAccount(addr string, amntWithoutPendingRewards uint64, rnd uin
 			apiParticipation.StateProofKey = &tmp
 		}
 	}
+	var authAddr *string = nil
+	if !ad.AuthAddr.IsZero() {
+		authAddr = strOrNil(ad.AuthAddr.String())
+	}
 	return model.Account{
 		Address:                     addr,
 		Amount:                      ad.MicroAlgos.Raw,
@@ -101,7 +105,7 @@ func accountDataToAccount(addr string, amntWithoutPendingRewards uint64, rnd uin
 			NumUint:      ad.TotalAppSchema.NumUint,
 			NumByteSlice: ad.TotalAppSchema.NumByteSlice,
 		},
-		AuthAddr:           strOrNil(ad.AuthAddr.String()),
+		AuthAddr:           authAddr,
 		MinBalance:         ad.MinBalance(consensus).Raw,
 		Participation:      apiParticipation,
 		PendingRewards:     pendingRewards.Raw,
