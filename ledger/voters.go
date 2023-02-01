@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -29,6 +30,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/stateproof"
 )
+
+var errListenerAlreadySet = errors.New("voters listener has been already set")
 
 // VotersCommitListener represents an object that needs to get notified on commit stages in the voters tracker.
 type VotersCommitListener interface {
@@ -88,9 +91,13 @@ type votersTracker struct {
 	// shutdown the tracker without leaving any running go-routines.
 	loadWaitGroup sync.WaitGroup
 
-	// commitListener provides a callback to call on each prepare commit. This callback receives access to the voters
-	// cache.
-	commitListener   ledgercore.VotersCommitListener
+	// eternalData survive tracker reloads
+	eternalData struct {
+		// commitListener provides a callback to call on each prepare commit. This callback receives access to the voters
+		// cache.
+		commitListener ledgercore.VotersCommitListener
+	}
+
 	commitListenerMu deadlock.RWMutex
 }
 
@@ -211,11 +218,11 @@ func (vt *votersTracker) prepareCommit(dcc *deferredCommitContext) error {
 	vt.commitListenerMu.RLock()
 	defer vt.commitListenerMu.RUnlock()
 
-	if vt.commitListener == nil {
+	if vt.eternalData.commitListener == nil {
 		return nil
 	}
 
-	commitListener := vt.commitListener
+	commitListener := vt.eternalData.commitListener
 	for round := dcc.oldBase; round <= dcc.newBase; round++ {
 		err := commitListener.OnPrepareVoterCommit(round, vt)
 		// Having the commit process continue uninterrupted is more important to us than not
@@ -303,11 +310,16 @@ func (vt *votersTracker) VotersForStateProof(r basics.Round) (*ledgercore.Voters
 	return tr, nil
 }
 
-func (vt *votersTracker) registerPrepareCommitListener(commitListener ledgercore.VotersCommitListener) {
+func (vt *votersTracker) registerPrepareCommitListener(commitListener ledgercore.VotersCommitListener) error {
 	vt.commitListenerMu.Lock()
 	defer vt.commitListenerMu.Unlock()
 
-	vt.commitListener = commitListener
+	if vt.eternalData.commitListener != nil {
+		return errListenerAlreadySet
+	}
+
+	vt.eternalData.commitListener = commitListener
+	return nil
 }
 
 func (vt *votersTracker) initializeVoters() {
