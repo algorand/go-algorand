@@ -20,7 +20,7 @@ import (
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
 //
-// BuilderPersistingFields
+// BuilderPersistedFields
 //            |-----> (*) MarshalMsg
 //            |-----> (*) CanMarshalMsg
 //            |-----> (*) UnmarshalMsg
