@@ -17,9 +17,12 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -45,7 +48,6 @@ func init() {
 
 	networkCreateCmd.Flags().StringVarP(&networkName, "network", "n", "", "Specify the name to use for the private network")
 	networkCreateCmd.Flags().StringVarP(&networkTemplateFile, "template", "t", "", "Specify the path to the template file for the network")
-	networkCreateCmd.MarkFlagRequired("template")
 	networkCreateCmd.Flags().BoolVarP(&noImportKeys, "noimportkeys", "K", false, "Do not import root keys when creating the network (by default will import)")
 	networkCreateCmd.Flags().BoolVar(&noClean, "noclean", false, "Prevents auto-cleanup on error - for diagnosing problems")
 	networkCreateCmd.Flags().BoolVar(&devModeOverride, "devMode", false, "Forces the configuration to enable DevMode, returns an error if the template is not compatible with DevMode.")
@@ -73,6 +75,9 @@ The basic idea is that we create one or more data directories and wallets to for
 	},
 }
 
+//go:embed defaultNetworkTemplate.json
+var defaultNetworkTemplate string
+
 var networkCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a private named network from a template",
@@ -83,10 +88,25 @@ var networkCreateCmd = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
-		networkTemplateFile, err := filepath.Abs(networkTemplateFile)
-		if err != nil {
-			panic(err)
+
+		var templateReader io.Reader
+
+		if networkTemplateFile == "" {
+			templateReader = strings.NewReader(defaultNetworkTemplate)
+		} else {
+			networkTemplateFile, err = filepath.Abs(networkTemplateFile)
+			if err != nil {
+				panic(err)
+			}
+			file, err := os.Open(networkTemplateFile)
+			if err != nil {
+				reportErrorf(errorCreateNetwork, err)
+			}
+
+			defer file.Close()
+			templateReader = file
 		}
+
 		// Make sure target directory does not exist or is empty
 		if util.FileExists(networkRootDir) && !util.IsEmpty(networkRootDir) {
 			reportErrorf(infoNetworkAlreadyExists, networkRootDir)
@@ -104,7 +124,7 @@ var networkCreateCmd = &cobra.Command{
 			consensus, _ = config.PreloadConfigurableConsensusProtocols(dataDir)
 		}
 
-		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, networkTemplateFile, binDir, !noImportKeys, nil, consensus, devModeOverride)
+		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, templateReader, binDir, !noImportKeys, nil, consensus, devModeOverride)
 		if err != nil {
 			if noClean {
 				reportInfof(" ** failed ** - Preserving network rootdir '%s'", networkRootDir)
