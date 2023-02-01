@@ -34,7 +34,7 @@ for n in range(0, nodes):
 
   d["Nodes"].append(node)
 
-npn_nodes = 50
+npn_nodes = 0
 for n in range(0, npn_nodes):
   node = {
     "Name": "NPNode%d" % n,
