@@ -606,15 +606,9 @@ func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
 	const reservedRESTConns = 10
 	diff := requiredFDs - maxFDs
 
-	if cfg.RestConnectionsSoftLimit <= diff+reservedRESTConns {
-		cfg.RestConnectionsSoftLimit = reservedRESTConns
-	} else {
-		cfg.RestConnectionsSoftLimit -= diff
-	}
-
-	if cfg.RestConnectionsHardLimit <= diff+2*reservedRESTConns {
-		restDelta := diff + 2*reservedRESTConns - cfg.RestConnectionsHardLimit
-		cfg.RestConnectionsHardLimit = 2 * reservedRESTConns
+	if cfg.RestConnectionsHardLimit <= diff+reservedRESTConns {
+		restDelta := diff + reservedRESTConns - cfg.RestConnectionsHardLimit
+		cfg.RestConnectionsHardLimit = reservedRESTConns
 		if cfg.IncomingConnectionsLimit > int(restDelta) {
 			cfg.IncomingConnectionsLimit -= int(restDelta)
 		} else {
@@ -623,5 +617,10 @@ func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
 	} else {
 		cfg.RestConnectionsHardLimit -= diff
 	}
+
+	if cfg.RestConnectionsSoftLimit > cfg.RestConnectionsHardLimit {
+		cfg.RestConnectionsSoftLimit = cfg.RestConnectionsHardLimit
+	}
+
 	return true
 }

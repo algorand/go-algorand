@@ -633,13 +633,14 @@ func TestLocal_RecalculateConnectionLimits(t *testing.T) {
 		incomingExp int
 	}{
 		{100, 10, 20, 40, 50, false, 20, 40, 50},               // no change
-		{100, 10, 20, 50, 50, true, 10, 40, 50},                // borrow from rest
-		{100, 10, 25, 50, 50, true, 15, 40, 50},                // borrow from rest
-		{100, 10, 9, 19, 81, true, 10, 20, 70},                 // borrow from both rest and incoming
-		{100, 10, 10, 20, 80, true, 10, 20, 70},                // borrow from both rest and incoming
-		{100, 50, 10, 30, 40, true, 10, 20, 30},                // borrow from both rest and incoming
-		{100, 80, 10, 30, 40, true, 10, 20, 0},                 // borrow from both rest and incoming, clear incoming
-		{4096, 256, 1024, 2048, 2400, true, 416, 1440, 2400},   // real numbers
+		{100, 10, 20, 50, 50, true, 20, 40, 50},                // borrow from rest
+		{100, 10, 25, 50, 50, true, 25, 40, 50},                // borrow from rest
+		{100, 10, 50, 50, 50, true, 40, 40, 50},                // borrow from rest, update soft
+		{100, 10, 9, 19, 81, true, 9, 10, 80},                  // borrow from both rest and incoming
+		{100, 10, 10, 20, 80, true, 10, 10, 80},                // borrow from both rest and incoming
+		{100, 50, 10, 30, 40, true, 10, 10, 40},                // borrow from both rest and incoming
+		{100, 90, 10, 30, 40, true, 10, 10, 0},                 // borrow from both rest and incoming, clear incoming
+		{4096, 256, 1024, 2048, 2400, true, 1024, 1440, 2400},  // real numbers
 		{5000, 256, 1024, 2048, 2400, false, 1024, 2048, 2400}, // real numbers
 	}
 
