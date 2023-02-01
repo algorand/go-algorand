@@ -28,8 +28,8 @@ const (
 	AgreementVoteTag     Tag = "AV"
 	MsgOfInterestTag     Tag = "MI"
 	MsgDigestSkipTag     Tag = "MS"
-	NetPrioResponseTag   Tag = "NP"	
-  NetIDVerificationTag Tag = "NI"
+	NetPrioResponseTag   Tag = "NP"
+	NetIDVerificationTag Tag = "NI"
 	PingTag              Tag = "pi"
 	PingReplyTag         Tag = "pj"
 	ProposalPayloadTag   Tag = "PP"
@@ -37,10 +37,10 @@ const (
 	TopicMsgRespTag      Tag = "TS"
 	TxnTag               Tag = "TX"
 	//UniCatchupReqTag   Tag = "UC" was replaced by UniEnsBlockReqTag
-	UniEnsBlockReqTag    Tag = "UE"
+	UniEnsBlockReqTag Tag = "UE"
 	//UniEnsBlockResTag  Tag = "US" was used for wsfetcherservice
 	//UniCatchupResTag   Tag = "UT" was used for wsfetcherservice
-	VoteBundleTag        Tag = "VB"
+	VoteBundleTag Tag = "VB"
 )
 
 // TagList is a list of all currently used protocol tags.
