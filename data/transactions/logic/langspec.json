@@ -2,28 +2,6 @@
   "EvalMaxVersion": 8,
   "LogicSigVersion": 8,
   "StackTypes": {
-    "\u0000": {
-      "Type": "_",
-      "LengthBound": [
-        0,
-        0
-      ],
-      "ValueBound": [
-        0,
-        0
-      ]
-    },
-    "\u0001": {
-      "Type": ".",
-      "LengthBound": [
-        0,
-        4096
-      ],
-      "ValueBound": [
-        0,
-        18446744073709551615
-      ]
-    },
     "[]byte": {
       "Type": "B",
       "LengthBound": [
@@ -44,6 +22,17 @@
       "ValueBound": [
         0,
         0
+      ]
+    },
+    "any": {
+      "Type": ".",
+      "LengthBound": [
+        0,
+        4096
+      ],
+      "ValueBound": [
+        0,
+        18446744073709551615
       ]
     },
     "bigint": {
@@ -79,6 +68,17 @@
         0
       ]
     },
+    "none": {
+      "Type": "_",
+      "LengthBound": [
+        0,
+        0
+      ],
+      "ValueBound": [
+        0,
+        0
+      ]
+    },
     "uint64": {
       "Type": "U",
       "LengthBound": [
@@ -95,11 +95,11 @@
     "ECDSA": [
       {
         "Name": "Secp256k1",
-        "Type": "\u0000"
+        "Type": "none"
       },
       {
         "Name": "Secp256r1",
-        "Type": "\u0000"
+        "Type": "none"
       }
     ],
     "acct_params": [
@@ -253,11 +253,11 @@
     "base64": [
       {
         "Name": "URLEncoding",
-        "Type": "\u0000"
+        "Type": "none"
       },
       {
         "Name": "StdEncoding",
-        "Type": "\u0000"
+        "Type": "none"
       }
     ],
     "block": [
@@ -826,10 +826,6 @@
     ],
     "txn_type": [
       {
-        "Name": "unknown",
-        "Type": "uint64"
-      },
-      {
         "Name": "pay",
         "Type": "uint64"
       },
@@ -851,6 +847,10 @@
       },
       {
         "Name": "appl",
+        "Type": "uint64"
+      },
+      {
+        "Name": "unknown",
         "Type": "uint64"
       }
     ],
@@ -887,22 +887,22 @@
     "vrf_verify": [
       {
         "Name": "VrfAlgorand",
-        "Type": "\u0000"
+        "Type": "none"
       }
     ]
   },
   "PseudoOps": [
     {
-      "Name": "int",
+      "Name": "addr",
       "Returns": [
-        "uint64"
+        "addr"
       ],
       "Size": 2
     },
     {
-      "Name": "method",
+      "Name": "int",
       "Returns": [
-        "[]byte"
+        "uint64"
       ],
       "Size": 2
     },
@@ -914,9 +914,9 @@
       "Size": 2
     },
     {
-      "Name": "addr",
+      "Name": "method",
       "Returns": [
-        "addr"
+        "[]byte"
       ],
       "Size": 2
     }
@@ -925,7 +925,7 @@
     {
       "Name": "err",
       "Returns": [
-        "\u0000"
+        "none"
       ],
       "Size": 1,
       "Doc": "Fail immediately.",
@@ -1244,8 +1244,8 @@
       "Opcode": 18,
       "Name": "==",
       "Args": [
-        "\u0001",
-        "\u0001"
+        "any",
+        "any"
       ],
       "Returns": [
         "uint64"
@@ -1261,8 +1261,8 @@
       "Opcode": 19,
       "Name": "!=",
       "Args": [
-        "\u0001",
-        "\u0001"
+        "any",
+        "any"
       ],
       "Returns": [
         "uint64"
@@ -1708,7 +1708,7 @@
       "Opcode": 49,
       "Name": "txn",
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "ArgEnum": "txn",
@@ -1723,7 +1723,7 @@
       "Opcode": 50,
       "Name": "global",
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "ArgEnum": "global",
@@ -1738,7 +1738,7 @@
       "Opcode": 51,
       "Name": "gtxn",
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 3,
       "ArgEnum": "txn",
@@ -1754,7 +1754,7 @@
       "Opcode": 52,
       "Name": "load",
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "Doc": "Ith scratch space value. All scratch spaces are 0 at program start.",
@@ -1768,7 +1768,7 @@
       "Opcode": 53,
       "Name": "store",
       "Args": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "Doc": "store A to the Ith scratch space",
@@ -1782,7 +1782,7 @@
       "Opcode": 54,
       "Name": "txna",
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 3,
       "ArgEnum": "txna",
@@ -1797,7 +1797,7 @@
       "Opcode": 55,
       "Name": "gtxna",
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 4,
       "ArgEnum": "txna",
@@ -1815,7 +1815,7 @@
         "uint64"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "ArgEnum": "txn",
@@ -1834,7 +1834,7 @@
         "uint64"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 3,
       "ArgEnum": "txna",
@@ -1849,7 +1849,7 @@
       "Opcode": 58,
       "Name": "gload",
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 3,
       "Doc": "Ith scratch space value of the Tth transaction in the current group",
@@ -1867,7 +1867,7 @@
         "uint64"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "Doc": "Ith scratch space value of the Ath transaction in the current group",
@@ -1917,7 +1917,7 @@
         "uint64"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 1,
       "Doc": "Ath scratch space value.  All scratch spaces are 0 at program start.",
@@ -1931,7 +1931,7 @@
       "Name": "stores",
       "Args": [
         "uint64",
-        "\u0001"
+        "any"
       ],
       "Size": 1,
       "Doc": "store B to the Ath scratch space",
@@ -1989,7 +1989,7 @@
         "uint64"
       ],
       "Returns": [
-        "\u0000"
+        "none"
       ],
       "Size": 1,
       "Doc": "use A as success value; end",
@@ -2015,7 +2015,7 @@
       "Opcode": 69,
       "Name": "bury",
       "Args": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "Doc": "replace the Nth value from the top of the stack with A. bury 0 fails.",
@@ -2040,7 +2040,7 @@
       "Opcode": 71,
       "Name": "dupn",
       "Args": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "Doc": "duplicate A, N times",
@@ -2054,7 +2054,7 @@
       "Opcode": 72,
       "Name": "pop",
       "Args": [
-        "\u0001"
+        "any"
       ],
       "Size": 1,
       "Doc": "discard A",
@@ -2067,11 +2067,11 @@
       "Opcode": 73,
       "Name": "dup",
       "Args": [
-        "\u0001"
+        "any"
       ],
       "Returns": [
-        "\u0001",
-        "\u0001"
+        "any",
+        "any"
       ],
       "Size": 1,
       "Doc": "duplicate A",
@@ -2084,14 +2084,14 @@
       "Opcode": 74,
       "Name": "dup2",
       "Args": [
-        "\u0001",
-        "\u0001"
+        "any",
+        "any"
       ],
       "Returns": [
-        "\u0001",
-        "\u0001",
-        "\u0001",
-        "\u0001"
+        "any",
+        "any",
+        "any",
+        "any"
       ],
       "Size": 1,
       "Doc": "duplicate A and B",
@@ -2104,11 +2104,11 @@
       "Opcode": 75,
       "Name": "dig",
       "Args": [
-        "\u0001"
+        "any"
       ],
       "Returns": [
-        "\u0001",
-        "\u0001"
+        "any",
+        "any"
       ],
       "Size": 2,
       "Doc": "Nth value from the top of the stack. dig 0 is equivalent to dup",
@@ -2122,12 +2122,12 @@
       "Opcode": 76,
       "Name": "swap",
       "Args": [
-        "\u0001",
-        "\u0001"
+        "any",
+        "any"
       ],
       "Returns": [
-        "\u0001",
-        "\u0001"
+        "any",
+        "any"
       ],
       "Size": 1,
       "Doc": "swaps A and B on stack",
@@ -2140,12 +2140,12 @@
       "Opcode": 77,
       "Name": "select",
       "Args": [
-        "\u0001",
-        "\u0001",
+        "any",
+        "any",
         "uint64"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 1,
       "Doc": "selects one of two values based on top-of-stack: B if C != 0, else A",
@@ -2158,10 +2158,10 @@
       "Opcode": 78,
       "Name": "cover",
       "Args": [
-        "\u0001"
+        "any"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "Doc": "remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth \u003c= N.",
@@ -2175,10 +2175,10 @@
       "Opcode": 79,
       "Name": "uncover",
       "Args": [
-        "\u0001"
+        "any"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "Doc": "remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth \u003c= N.",
@@ -2245,7 +2245,7 @@
       "Opcode": 83,
       "Name": "getbit",
       "Args": [
-        "\u0001",
+        "any",
         "uint64"
       ],
       "Returns": [
@@ -2263,12 +2263,12 @@
       "Opcode": 84,
       "Name": "setbit",
       "Args": [
-        "\u0001",
+        "any",
         "uint64",
         "uint64"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 1,
       "Doc": "Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails",
@@ -2462,7 +2462,7 @@
         "[]byte"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "ArgEnum": "json_ref",
@@ -2478,7 +2478,7 @@
       "Opcode": 96,
       "Name": "balance",
       "Args": [
-        "\u0001"
+        "any"
       ],
       "Returns": [
         "uint64"
@@ -2495,7 +2495,7 @@
       "Opcode": 97,
       "Name": "app_opted_in",
       "Args": [
-        "\u0001",
+        "any",
         "uint64"
       ],
       "Returns": [
@@ -2513,11 +2513,11 @@
       "Opcode": 98,
       "Name": "app_local_get",
       "Args": [
-        "\u0001",
+        "any",
         "[]byte"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 1,
       "Doc": "local state of the key B in the current application in account A",
@@ -2531,12 +2531,12 @@
       "Opcode": 99,
       "Name": "app_local_get_ex",
       "Args": [
-        "\u0001",
+        "any",
         "uint64",
         "[]byte"
       ],
       "Returns": [
-        "\u0001",
+        "any",
         "bool"
       ],
       "Size": 1,
@@ -2554,7 +2554,7 @@
         "[]byte"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 1,
       "Doc": "global state of the key A in the current application",
@@ -2572,7 +2572,7 @@
         "[]byte"
       ],
       "Returns": [
-        "\u0001",
+        "any",
         "bool"
       ],
       "Size": 1,
@@ -2587,9 +2587,9 @@
       "Opcode": 102,
       "Name": "app_local_put",
       "Args": [
-        "\u0001",
+        "any",
         "[]byte",
-        "\u0001"
+        "any"
       ],
       "Size": 1,
       "Doc": "write C to key B in account A's local state of the current application",
@@ -2604,7 +2604,7 @@
       "Name": "app_global_put",
       "Args": [
         "[]byte",
-        "\u0001"
+        "any"
       ],
       "Size": 1,
       "Doc": "write B to key A in the global state of the current application",
@@ -2617,7 +2617,7 @@
       "Opcode": 104,
       "Name": "app_local_del",
       "Args": [
-        "\u0001",
+        "any",
         "[]byte"
       ],
       "Size": 1,
@@ -2646,11 +2646,11 @@
       "Opcode": 112,
       "Name": "asset_holding_get",
       "Args": [
-        "\u0001",
+        "any",
         "uint64"
       ],
       "Returns": [
-        "\u0001",
+        "any",
         "uint64"
       ],
       "Size": 2,
@@ -2670,7 +2670,7 @@
         "uint64"
       ],
       "Returns": [
-        "\u0001",
+        "any",
         "uint64"
       ],
       "Size": 2,
@@ -2690,7 +2690,7 @@
         "uint64"
       ],
       "Returns": [
-        "\u0001",
+        "any",
         "uint64"
       ],
       "Size": 2,
@@ -2707,10 +2707,10 @@
       "Opcode": 115,
       "Name": "acct_params_get",
       "Args": [
-        "\u0001"
+        "any"
       ],
       "Returns": [
-        "\u0001",
+        "any",
         "uint64"
       ],
       "Size": 2,
@@ -2726,7 +2726,7 @@
       "Opcode": 120,
       "Name": "min_balance",
       "Args": [
-        "\u0001"
+        "any"
       ],
       "Returns": [
         "uint64"
@@ -2850,7 +2850,7 @@
       "Opcode": 139,
       "Name": "frame_dig",
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "Doc": "Nth (signed) value from the frame pointer.",
@@ -2864,7 +2864,7 @@
       "Opcode": 140,
       "Name": "frame_bury",
       "Args": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "Doc": "replace the Nth (signed) value from the frame pointer in the stack with A",
@@ -2954,7 +2954,7 @@
       "Opcode": 147,
       "Name": "bitlen",
       "Args": [
-        "\u0001"
+        "any"
       ],
       "Returns": [
         "uint64"
@@ -3352,7 +3352,7 @@
       "Opcode": 178,
       "Name": "itxn_field",
       "Args": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "ArgEnum": "itxn_field",
@@ -3379,7 +3379,7 @@
       "Opcode": 180,
       "Name": "itxn",
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "ArgEnum": "txn",
@@ -3394,7 +3394,7 @@
       "Opcode": 181,
       "Name": "itxna",
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 3,
       "ArgEnum": "txna",
@@ -3420,7 +3420,7 @@
       "Opcode": 183,
       "Name": "gitxn",
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 3,
       "ArgEnum": "txn",
@@ -3435,7 +3435,7 @@
       "Opcode": 184,
       "Name": "gitxna",
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 4,
       "ArgEnum": "txna",
@@ -3570,7 +3570,7 @@
         "uint64"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "ArgEnum": "txna",
@@ -3588,7 +3588,7 @@
         "uint64"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 3,
       "ArgEnum": "txna",
@@ -3607,7 +3607,7 @@
         "uint64"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "ArgEnum": "txna",
@@ -3642,7 +3642,7 @@
         "uint64"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 1,
       "Doc": "Bth scratch space value of the Ath transaction in the current group",
@@ -3658,7 +3658,7 @@
         "uint64"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "Doc": "Ath value of the array field F of the last inner transaction",
@@ -3675,7 +3675,7 @@
         "uint64"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 3,
       "Doc": "Ath value of the array field F from the Tth transaction in the last inner group submitted",
@@ -3714,7 +3714,7 @@
         "uint64"
       ],
       "Returns": [
-        "\u0001"
+        "any"
       ],
       "Size": 2,
       "ArgEnum": "block",

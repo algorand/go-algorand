@@ -40,7 +40,7 @@ const (
 func (at AVMType) String() string {
 	switch at {
 	case AVMNone:
-		return "None"
+		return "none"
 	case AVMAny:
 		return "any"
 	case AVMUint64:
@@ -77,7 +77,7 @@ var (
 	StackBytes = NewStackType(AVMBytes, bounded(0, maxStringSize))
 	// StackAny could be Bytes or Uint64
 	StackAny = StackType{
-		Name:        string(AVMAny),
+		Name:        AVMAny.String(),
 		AVMType:     AVMAny,
 		ValueBound:  StackUint64.ValueBound,
 		LengthBound: StackBytes.LengthBound,
@@ -85,7 +85,7 @@ var (
 	// StackNone is used when there is no input or output to
 	// an opcode
 	StackNone = StackType{
-		Name:    string(AVMNone),
+		Name:    AVMNone.String(),
 		AVMType: AVMNone,
 	}
 

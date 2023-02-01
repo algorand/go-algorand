@@ -354,7 +354,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 ## txn f
 
 - Opcode: 0x31 {uint8 transaction field index}
-- Stack: ... &rarr; ..., 
+- Stack: ... &rarr; ..., any
 - field F of current transaction
 
 `txn` Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/)):
@@ -427,7 +427,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 ## global f
 
 - Opcode: 0x32 {uint8 global field index}
-- Stack: ... &rarr; ..., 
+- Stack: ... &rarr; ..., any
 - global field F
 
 `global` Fields:
@@ -454,7 +454,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 ## gtxn t f
 
 - Opcode: 0x33 {uint8 transaction group index} {uint8 transaction field index}
-- Stack: ... &rarr; ..., 
+- Stack: ... &rarr; ..., any
 - field F of the Tth transaction in the current group
 
 for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.
@@ -462,7 +462,7 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 ## load i
 
 - Opcode: 0x34 {uint8 position in scratch space to load from}
-- Stack: ... &rarr; ..., 
+- Stack: ... &rarr; ..., any
 - Ith scratch space value. All scratch spaces are 0 at program start.
 
 ## store i
@@ -474,7 +474,7 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 ## txna f i
 
 - Opcode: 0x36 {uint8 transaction field index} {uint8 transaction field array index}
-- Stack: ... &rarr; ..., 
+- Stack: ... &rarr; ..., any
 - Ith value of the array field F of the current transaction<br />`txna` can be called using `txn` with 2 immediates.
 - Availability: v2
 
@@ -494,14 +494,14 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 ## gtxna t f i
 
 - Opcode: 0x37 {uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}
-- Stack: ... &rarr; ..., 
+- Stack: ... &rarr; ..., any
 - Ith value of the array field F from the Tth transaction in the current group<br />`gtxna` can be called using `gtxn` with 3 immediates.
 - Availability: v2
 
 ## gtxns f
 
 - Opcode: 0x38 {uint8 transaction field index}
-- Stack: ..., A: uint64 &rarr; ..., 
+- Stack: ..., A: uint64 &rarr; ..., any
 - field F of the Ath transaction in the current group
 - Availability: v3
 
@@ -510,14 +510,14 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 ## gtxnsa f i
 
 - Opcode: 0x39 {uint8 transaction field index} {uint8 transaction field array index}
-- Stack: ..., A: uint64 &rarr; ..., 
+- Stack: ..., A: uint64 &rarr; ..., any
 - Ith value of the array field F from the Ath transaction in the current group<br />`gtxnsa` can be called using `gtxns` with 2 immediates.
 - Availability: v3
 
 ## gload t i
 
 - Opcode: 0x3a {uint8 transaction group index} {uint8 position in scratch space to load from}
-- Stack: ... &rarr; ..., 
+- Stack: ... &rarr; ..., any
 - Ith scratch space value of the Tth transaction in the current group
 - Availability: v4
 - Mode: Application
@@ -527,7 +527,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 ## gloads i
 
 - Opcode: 0x3b {uint8 position in scratch space to load from}
-- Stack: ..., A: uint64 &rarr; ..., 
+- Stack: ..., A: uint64 &rarr; ..., any
 - Ith scratch space value of the Ath transaction in the current group
 - Availability: v4
 - Mode: Application
@@ -557,7 +557,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 ## loads
 
 - Opcode: 0x3e
-- Stack: ..., A: uint64 &rarr; ..., 
+- Stack: ..., A: uint64 &rarr; ..., any
 - Ath scratch space value.  All scratch spaces are 0 at program start.
 - Availability: v5
 
@@ -720,7 +720,7 @@ see explanation of bit ordering in setbit
 ## setbit
 
 - Opcode: 0x54
-- Stack: ..., A, B: uint64, C: uint64 &rarr; ..., 
+- Stack: ..., A, B: uint64, C: uint64 &rarr; ..., any
 - Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails
 - Availability: v3
 
@@ -812,7 +812,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 ## json_ref r
 
 - Opcode: 0x5f {uint8 return type index}
-- Stack: ..., A: []byte, B: []byte &rarr; ..., 
+- Stack: ..., A: []byte, B: []byte &rarr; ..., any
 - key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A
 - **Cost**: 25 + 2 per 7 bytes of A
 - Availability: v7
@@ -853,7 +853,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 ## app_local_get
 
 - Opcode: 0x62
-- Stack: ..., A, B: []byte &rarr; ..., 
+- Stack: ..., A, B: []byte &rarr; ..., any
 - local state of the key B in the current application in account A
 - Availability: v2
 - Mode: Application
@@ -863,7 +863,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_local_get_ex
 
 - Opcode: 0x63
-- Stack: ..., A, B: uint64, C: []byte &rarr; ..., X: , Y: bool
+- Stack: ..., A, B: uint64, C: []byte &rarr; ..., X: any, Y: bool
 - X is the local state of application B, key C in account A. Y is 1 if key existed, else 0
 - Availability: v2
 - Mode: Application
@@ -873,7 +873,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 ## app_global_get
 
 - Opcode: 0x64
-- Stack: ..., A: []byte &rarr; ..., 
+- Stack: ..., A: []byte &rarr; ..., any
 - global state of the key A in the current application
 - Availability: v2
 - Mode: Application
@@ -883,7 +883,7 @@ params: state key. Return: value. The value is zero (of type uint64) if the key 
 ## app_global_get_ex
 
 - Opcode: 0x65
-- Stack: ..., A: uint64, B: []byte &rarr; ..., X: , Y: bool
+- Stack: ..., A: uint64, B: []byte &rarr; ..., X: any, Y: bool
 - X is the global state of application A, key B. Y is 1 if key existed, else 0
 - Availability: v2
 - Mode: Application
@@ -935,7 +935,7 @@ Deleting a key which is already absent has no effect on the application global s
 ## asset_holding_get f
 
 - Opcode: 0x70 {uint8 asset holding field index}
-- Stack: ..., A, B: uint64 &rarr; ..., X: , Y: uint64
+- Stack: ..., A, B: uint64 &rarr; ..., X: any, Y: uint64
 - X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0
 - Availability: v2
 - Mode: Application
@@ -953,7 +953,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or
 ## asset_params_get f
 
 - Opcode: 0x71 {uint8 asset params field index}
-- Stack: ..., A: uint64 &rarr; ..., X: , Y: uint64
+- Stack: ..., A: uint64 &rarr; ..., X: any, Y: uint64
 - X is field F from asset A. Y is 1 if A exists, else 0
 - Availability: v2
 - Mode: Application
@@ -981,7 +981,7 @@ params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return:
 ## app_params_get f
 
 - Opcode: 0x72 {uint8 app params field index}
-- Stack: ..., A: uint64 &rarr; ..., X: , Y: uint64
+- Stack: ..., A: uint64 &rarr; ..., X: any, Y: uint64
 - X is field F from app A. Y is 1 if A exists, else 0
 - Availability: v5
 - Mode: Application
@@ -1006,7 +1006,7 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 ## acct_params_get f
 
 - Opcode: 0x73 {uint8 account params field index}
-- Stack: ..., A &rarr; ..., X: , Y: uint64
+- Stack: ..., A &rarr; ..., X: any, Y: uint64
 - X is field F from account A. Y is 1 if A owns positive algos, else 0
 - Availability: v6
 - Mode: Application
@@ -1113,7 +1113,7 @@ Fails unless the last instruction executed was a `callsub`.
 ## frame_dig i
 
 - Opcode: 0x8b {int8 frame slot}
-- Stack: ... &rarr; ..., 
+- Stack: ... &rarr; ..., any
 - Nth (signed) value from the frame pointer.
 - Availability: v8
 
@@ -1375,7 +1375,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## itxn f
 
 - Opcode: 0xb4 {uint8 transaction field index}
-- Stack: ... &rarr; ..., 
+- Stack: ... &rarr; ..., any
 - field F of the last inner transaction
 - Availability: v5
 - Mode: Application
@@ -1383,7 +1383,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## itxna f i
 
 - Opcode: 0xb5 {uint8 transaction field index} {uint8 transaction field array index}
-- Stack: ... &rarr; ..., 
+- Stack: ... &rarr; ..., any
 - Ith value of the array field F of the last inner transaction
 - Availability: v5
 - Mode: Application
@@ -1401,7 +1401,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## gitxn t f
 
 - Opcode: 0xb7 {uint8 transaction group index} {uint8 transaction field index}
-- Stack: ... &rarr; ..., 
+- Stack: ... &rarr; ..., any
 - field F of the Tth transaction in the last inner group submitted
 - Availability: v6
 - Mode: Application
@@ -1409,7 +1409,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## gitxna t f i
 
 - Opcode: 0xb8 {uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}
-- Stack: ... &rarr; ..., 
+- Stack: ... &rarr; ..., any
 - Ith value of the array field F from the Tth transaction in the last inner group submitted
 - Availability: v6
 - Mode: Application
@@ -1479,21 +1479,21 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 ## txnas f
 
 - Opcode: 0xc0 {uint8 transaction field index}
-- Stack: ..., A: uint64 &rarr; ..., 
+- Stack: ..., A: uint64 &rarr; ..., any
 - Ath value of the array field F of the current transaction
 - Availability: v5
 
 ## gtxnas t f
 
 - Opcode: 0xc1 {uint8 transaction group index} {uint8 transaction field index}
-- Stack: ..., A: uint64 &rarr; ..., 
+- Stack: ..., A: uint64 &rarr; ..., any
 - Ath value of the array field F from the Tth transaction in the current group
 - Availability: v5
 
 ## gtxnsas f
 
 - Opcode: 0xc2 {uint8 transaction field index}
-- Stack: ..., A: uint64, B: uint64 &rarr; ..., 
+- Stack: ..., A: uint64, B: uint64 &rarr; ..., any
 - Bth value of the array field F from the Ath transaction in the current group
 - Availability: v5
 
@@ -1508,7 +1508,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 ## gloadss
 
 - Opcode: 0xc4
-- Stack: ..., A: uint64, B: uint64 &rarr; ..., 
+- Stack: ..., A: uint64, B: uint64 &rarr; ..., any
 - Bth scratch space value of the Ath transaction in the current group
 - Availability: v6
 - Mode: Application
@@ -1516,7 +1516,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 ## itxnas f
 
 - Opcode: 0xc5 {uint8 transaction field index}
-- Stack: ..., A: uint64 &rarr; ..., 
+- Stack: ..., A: uint64 &rarr; ..., any
 - Ath value of the array field F of the last inner transaction
 - Availability: v6
 - Mode: Application
@@ -1524,7 +1524,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 ## gitxnas t f
 
 - Opcode: 0xc6 {uint8 transaction group index} {uint8 transaction field index}
-- Stack: ..., A: uint64 &rarr; ..., 
+- Stack: ..., A: uint64 &rarr; ..., any
 - Ath value of the array field F from the Tth transaction in the last inner group submitted
 - Availability: v6
 - Mode: Application
@@ -1549,7 +1549,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 ## block f
 
 - Opcode: 0xd1 {uint8 block field index}
-- Stack: ..., A: uint64 &rarr; ..., 
+- Stack: ..., A: uint64 &rarr; ..., any
 - field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)
 - Availability: v7
 
