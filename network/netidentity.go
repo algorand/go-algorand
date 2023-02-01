@@ -28,7 +28,7 @@ import (
 )
 
 // netidentity holds the functionality to participate in "Identity Challenge Exchange"
-// with the purpose of identitfying redundant and bidirectional connections and prevent them.
+// with the purpose of identifying redundant and bidirectional connections and preventing them.
 // the identity challenge exchange protocol is a 3 way handshake that exchanges signed messages.
 // Message 1 (Identity Challenge): when a peering request is made, an identityChallenge is attached with:
 // - a 32 byte random challenge
