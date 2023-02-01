@@ -973,18 +973,6 @@
     ],
     "txn_type": [
       {
-        "Name": "unknown",
-        "Type": "U"
-      },
-      {
-        "Name": "pay",
-        "Type": "U"
-      },
-      {
-        "Name": "keyreg",
-        "Type": "U"
-      },
-      {
         "Name": "acfg",
         "Type": "U"
       },
@@ -998,6 +986,18 @@
       },
       {
         "Name": "appl",
+        "Type": "U"
+      },
+      {
+        "Name": "unknown",
+        "Type": "U"
+      },
+      {
+        "Name": "pay",
+        "Type": "U"
+      },
+      {
+        "Name": "keyreg",
         "Type": "U"
       }
     ],
@@ -1048,13 +1048,13 @@
   },
   "PseudoOps": [
     {
-      "Name": "byte",
-      "Returns": "B",
+      "Name": "int",
+      "Returns": "U",
       "Size": 2
     },
     {
-      "Name": "int",
-      "Returns": "U",
+      "Name": "byte",
+      "Returns": "B",
       "Size": 2
     },
     {
@@ -3597,11 +3597,11 @@
       "Args": "BB",
       "Returns": "B",
       "AbstractArgs": [
-        "bytes",
-        "bytes"
+        "bigint",
+        "bigint"
       ],
       "AbstractReturns": [
-        "bytes"
+        "bigint"
       ],
       "Size": 1,
       "Doc": "A modulo B. A and B are interpreted as big-endian unsigned integers. Fail if B is zero.",
@@ -3616,11 +3616,11 @@
       "Args": "BB",
       "Returns": "B",
       "AbstractArgs": [
-        "bytes",
-        "bytes"
+        "bigint",
+        "bigint"
       ],
       "AbstractReturns": [
-        "bytes"
+        "bigint"
       ],
       "Size": 1,
       "Doc": "A bitwise-or B. A and B are zero-left extended to the greater of their lengths",
@@ -3635,11 +3635,11 @@
       "Args": "BB",
       "Returns": "B",
       "AbstractArgs": [
-        "bytes",
-        "bytes"
+        "bigint",
+        "bigint"
       ],
       "AbstractReturns": [
-        "bytes"
+        "bigint"
       ],
       "Size": 1,
       "Doc": "A bitwise-and B. A and B are zero-left extended to the greater of their lengths",
@@ -3654,11 +3654,11 @@
       "Args": "BB",
       "Returns": "B",
       "AbstractArgs": [
-        "bytes",
-        "bytes"
+        "bigint",
+        "bigint"
       ],
       "AbstractReturns": [
-        "bytes"
+        "bigint"
       ],
       "Size": 1,
       "Doc": "A bitwise-xor B. A and B are zero-left extended to the greater of their lengths",
@@ -3673,10 +3673,11 @@
       "Args": "B",
       "Returns": "B",
       "AbstractArgs": [
-        "bytes"
+        "bigint",
+        "bigint"
       ],
       "AbstractReturns": [
-        "bytes"
+        "bigint"
       ],
       "Size": 1,
       "Doc": "A with all bits inverted",

@@ -253,12 +253,15 @@ type OpRecord struct {
 	Groups            []string `json:",omitempty"`
 }
 
+// Abstract type is the definition of a higher level type with
+// bounds specified
 type AbstractType struct {
 	Type        string   `json:",omitempty"`
 	LengthBound []uint64 `json:",omitempty"`
 	ValueBound  []uint64 `json:",omitempty"` // TODO: does this convert maxuint to a string? (no)
 }
 
+// Keyword is a keyword from the Field Groups passed to an op
 type Keyword struct {
 	Name         string `json:",omitempty"`
 	Type         string `json:",omitempty"`

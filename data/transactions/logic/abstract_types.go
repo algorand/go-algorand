@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2023 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package logic
 
 import (
@@ -7,6 +23,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// AbstractType is the higher level type that some opcodes
+// work with implicitly
 type AbstractType int
 
 const (
@@ -73,14 +91,14 @@ var (
 	BooleanBound = boundUint(0, 1).abstractType(AbstractBool)
 	HashBound    = staticBytes(32).abstractType(AbstractHash)
 	AddressBound = staticBytes(32).abstractType(AbstractAddress)
-	BigIntBound  = boundBytes(0, maxByteMathSize).abstractType(AbstractBigInt) // TOOD: should min size be 1 be a 0?
+	BigIntBound  = boundBytes(0, maxByteMathSize).abstractType(AbstractBigInt) // TODO: should min size be 1 be a 0?
 
 	// These don't need to be here but makes them easier to see how it
 	// might work while reviewing
 	AppArgsNumBound = boundUint(0, uint64(params.MaxAppArgs))
 	AppArgBound     = boundBytes(0, uint64(params.MaxAppTotalArgLen))
 
-	AssetUrlBound      = boundBytes(0, uint64(params.MaxAssetURLBytes))
+	AssetURLBound      = boundBytes(0, uint64(params.MaxAssetURLBytes))
 	AssetNameBound     = boundBytes(0, uint64(params.MaxAssetNameBytes))
 	AssetUnitNameBound = boundBytes(0, uint64(params.MaxAssetUnitNameBytes))
 
@@ -99,6 +117,8 @@ var (
 	}
 )
 
+// TypeBound provides information about the possible range of values or length
+// of an abstract type
 type TypeBound struct {
 	StackType    StackType    // The lower level type it maps to
 	AbstractType AbstractType // The higher level type

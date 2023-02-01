@@ -643,11 +643,11 @@ var OpSpecs = []OpSpec{
 	{0xa7, "b>=", opBytesGe, proto("bb:i", "NN:B"), 4, detDefault()},
 	{0xa8, "b==", opBytesEq, proto("bb:i", "NN:B"), 4, detDefault()},
 	{0xa9, "b!=", opBytesNeq, proto("bb:i", "NN:B"), 4, detDefault()},
-	{0xaa, "b%", opBytesModulo, proto("bb:b", "bb:b"), 4, costly(20)},
-	{0xab, "b|", opBytesBitOr, proto("bb:b", "bb:b"), 4, costly(6)},
-	{0xac, "b&", opBytesBitAnd, proto("bb:b", "bb:b"), 4, costly(6)},
-	{0xad, "b^", opBytesBitXor, proto("bb:b", "bb:b"), 4, costly(6)},
-	{0xae, "b~", opBytesBitNot, proto("b:b", "b:b"), 4, costly(4)},
+	{0xaa, "b%", opBytesModulo, proto("bb:b", "NN:N"), 4, costly(20)},
+	{0xab, "b|", opBytesBitOr, proto("bb:b", "NN:N"), 4, costly(6)},
+	{0xac, "b&", opBytesBitAnd, proto("bb:b", "NN:N"), 4, costly(6)},
+	{0xad, "b^", opBytesBitXor, proto("bb:b", "NN:N"), 4, costly(6)},
+	{0xae, "b~", opBytesBitNot, proto("b:b", "NN:N"), 4, costly(4)},
 	{0xaf, "bzero", opBytesZero, proto("i:b", "i:b"), 4, detDefault()},
 
 	// AVM "effects"
