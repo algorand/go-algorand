@@ -3074,8 +3074,7 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 
 type mockCommitListener struct{}
 
-func (l *mockCommitListener) OnPrepareVoterCommit(_ basics.Round, _ ledgercore.LedgerForSPBuilder) error {
-	return nil
+func (l *mockCommitListener) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Round, _ ledgercore.LedgerForSPBuilder) {
 }
 
 func TestVotersCallbackPersistsAfterLedgerReload(t *testing.T) {
@@ -3105,8 +3104,7 @@ func TestVotersCallbackPersistsAfterLedgerReload(t *testing.T) {
 
 type errorCommitListener struct{}
 
-func (l *errorCommitListener) OnPrepareVoterCommit(_ basics.Round, _ ledgercore.LedgerForSPBuilder) error {
-	return fmt.Errorf("this error is expected")
+func (l *errorCommitListener) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Round, _ ledgercore.LedgerForSPBuilder) {
 }
 
 func TestLedgerContinuesOnVotersCallbackFailure(t *testing.T) {
