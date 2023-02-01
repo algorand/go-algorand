@@ -615,3 +615,50 @@ func TestLocal_IsGossipServer(t *testing.T) {
 	cfg.NetAddress = ":4160"
 	require.True(t, cfg.IsGossipServer())
 }
+
+func TestLocal_RecalculateConnectionLimits(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var tests = []struct {
+		maxFDs     uint64
+		reservedIn uint64
+		restSoftIn uint64
+		restHardIn uint64
+		incomingIn int
+
+		updated     bool
+		restSoftExp uint64
+		restHardExp uint64
+		incomingExp int
+	}{
+		{100, 10, 20, 40, 50, false, 20, 40, 50},               // no change
+		{100, 10, 20, 50, 50, true, 10, 40, 50},                // borrow from rest
+		{100, 10, 25, 50, 50, true, 15, 40, 50},                // borrow from rest
+		{100, 10, 9, 19, 81, true, 10, 20, 70},                 // borrow from both rest and incoming
+		{100, 10, 10, 20, 80, true, 10, 20, 70},                // borrow from both rest and incoming
+		{100, 50, 10, 30, 40, true, 10, 20, 30},                // borrow from both rest and incoming
+		{100, 80, 10, 30, 40, true, 10, 20, 0},                 // borrow from both rest and incoming, clear incoming
+		{4096, 256, 1024, 2048, 2400, true, 416, 1440, 2400},   // real numbers
+		{5000, 256, 1024, 2048, 2400, false, 1024, 2048, 2400}, // real numbers
+	}
+
+	for i, test := range tests {
+		test := test
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			t.Parallel()
+
+			c := Local{
+				RestConnectionsSoftLimit: test.restSoftIn,
+				RestConnectionsHardLimit: test.restHardIn,
+				IncomingConnectionsLimit: test.incomingIn,
+			}
+			requireFDs := test.reservedIn + test.restHardIn + uint64(test.incomingIn)
+			res := c.AdjustConnectionLimits(requireFDs, test.maxFDs)
+			require.Equal(t, test.updated, res)
+			require.Equal(t, test.restSoftExp, c.RestConnectionsSoftLimit)
+			require.Equal(t, test.restHardExp, c.RestConnectionsHardLimit)
+			require.Equal(t, test.incomingExp, c.IncomingConnectionsLimit)
+		})
+	}
+}
