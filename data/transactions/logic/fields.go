@@ -18,51 +18,12 @@ package logic
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 //go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding,JSONRefType,VrfStandard,BlockField -output=fields_string.go
-
-type TypeBound struct {
-	StackType   StackType // The lower level type it maps to
-	ValueRange  []uint64  // If its an integer, what is the min/max values (inclusive)
-	LengthRange []uint64  // If its a bytestring, what is the min/max length (inclusive)
-}
-
-func boundUint(min, max uint64) TypeBound {
-	return TypeBound{StackType: StackUint64, ValueRange: []uint64{min, max}}
-}
-func sizedBytes(min, max uint64) TypeBound {
-	return TypeBound{StackType: StackBytes, LengthRange: []uint64{min, max}}
-}
-func staticBytes(size uint64) TypeBound {
-	return sizedBytes(size, size)
-}
-
-var (
-	AddressBound = staticBytes(32)
-	HashBound    = staticBytes(32)
-	BigIntBound  = sizedBytes(1, maxByteMathSize) // TOOD: should this 1 be a 0?
-	BytesBound   = sizedBytes(0, maxStringSize)
-
-	BooleanBound = boundUint(0, 1)
-	Uint64Bound  = boundUint(0, math.MaxUint64)
-
-	NoneBound = TypeBound{StackType: StackNone}
-
-	// TODO: get protocol params
-
-	NoteFieldBound = sizedBytes(0, 1000)
-
-	AppArgsNumBound = boundUint(0, 15)
-	AppArgBound     = boundUint(0, 2000)
-
-	AssetUrlBound   = sizedBytes(0, 96)
-	AssetNamehBound = sizedBytes(0, 32)
-)
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {
@@ -338,7 +299,7 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{TxID, HashBound, false, 0, 0, false, "The computed ID for this transaction. 32 bytes."},
 	{ApplicationID, Uint64Bound, false, 2, 6, false, "ApplicationID from ApplicationCall transaction"},
 	{OnCompletion, Uint64Bound, false, 2, 6, false, "ApplicationCall transaction on completion action"},
-	{ApplicationArgs, sizedBytes(0, 2000), true, 2, 6, false,
+	{ApplicationArgs, boundBytes(0, 2000), true, 2, 6, false,
 		"Arguments passed to the application in the ApplicationCall transaction"},
 	{NumAppArgs, Uint64Bound, false, 2, 0, false, "Number of ApplicationArgs"},
 	{Accounts, AddressBound, true, 2, 6, false, "Accounts listed in the ApplicationCall transaction"},
@@ -387,7 +348,7 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{LastLog, BytesBound, false, 6, 0, true, "The last message emitted. Empty bytes if none were emitted"},
 
 	// Not an effect. Just added after the effects fields.
-	{StateProofPK, sizedBytes(64, 64), false, 6, 6, false, "64 byte state proof public key"},
+	{StateProofPK, boundBytes(64, 64), false, 6, 6, false, "64 byte state proof public key"},
 
 	// Pseudo-fields to aid access to large programs (bigger than TEAL values)
 	// reading in a txn seems not *super* useful, but setting in `itxn` is critical to inner app factories

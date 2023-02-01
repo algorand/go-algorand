@@ -236,11 +236,13 @@ func opsToMarkdown(out io.Writer) (err error) {
 
 // OpRecord is a consolidated record of things about an Op
 type OpRecord struct {
-	Opcode  byte `json:",omitempty"`
-	Name    string
-	Args    string `json:",omitempty"`
-	Returns string `json:",omitempty"`
-	Size    int
+	Opcode          byte `json:",omitempty"`
+	Name            string
+	Args            string `json:",omitempty"`
+	Returns         string `json:",omitempty"`
+	AbstractArgs    string `json:",omitempty"`
+	AbstractReturns string `json:",omitempty"`
+	Size            int
 
 	ArgEnum string `json:",omitempty"`
 
@@ -251,12 +253,15 @@ type OpRecord struct {
 	Groups            []string `json:",omitempty"`
 }
 
-type Keyword struct {
-	Name        string
-	Type        string
-	ValueEnum   []string `json:",omitempty"`
+type AbstractType struct {
 	LengthBound []uint64 `json:",omitempty"`
 	ValueBound  []uint64 `json:",omitempty"` // TODO: does this convert maxuint to a string? (no)
+}
+
+type Keyword struct {
+	Name         string `json:",omitempty"`
+	Type         string `json:",omitempty"`
+	AbstractType string `json:",omitempty"`
 }
 
 // LanguageSpec records the ops of the language at some version
@@ -266,6 +271,7 @@ type LanguageSpec struct {
 	Fields          map[string][]Keyword
 	PseudoOps       []OpRecord
 	Ops             []OpRecord
+	AbstractTypes   map[string]AbstractType
 }
 
 func typeString(types []logic.StackType) string {
@@ -306,10 +312,9 @@ func groupKeywords(group logic.FieldGroup) []Keyword {
 		if spec, ok := group.SpecByName(name); ok {
 			// TODO: replace tstring with something better
 			kw := Keyword{
-				Name:        name,
-				Type:        string(typeByte(spec.Type())),
-				ValueBound:  spec.TypeBound().ValueRange,
-				LengthBound: spec.TypeBound().LengthRange,
+				Name:         name,
+				Type:         string(typeByte(spec.Type())),
+				AbstractType: spec.TypeBound().AbstractType.String(),
 			}
 			keywords = append(keywords, kw)
 		}
@@ -395,6 +400,14 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		keywords[fg.Name] = groupKeywords(fg)
 	}
 
+	abstractTypes := map[string]AbstractType{}
+	for _, tb := range logic.TypeBounds {
+		abstractTypes[tb.AbstractType.String()] = AbstractType{
+			LengthBound: tb.LengthRange,
+			ValueBound:  tb.ValueRange,
+		}
+	}
+
 	keywords["txn_type"] = txnTypeKeywords()
 	keywords["on_complete"] = onCompleteKeywords()
 
@@ -432,6 +445,7 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		Fields:          keywords,
 		PseudoOps:       pseudoOps,
 		Ops:             records,
+		AbstractTypes:   abstractTypes,
 	}
 }
 

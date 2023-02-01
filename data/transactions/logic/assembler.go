@@ -1582,12 +1582,12 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 const anyImmediates = -1
 
 var pseudoOps = map[string]map[int]OpSpec{
-	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i"), OpDetails: immediates("i").assembler(asmInt)}},
-	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b"), OpDetails: immediates("b").assembler(asmByte)}},
+	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i", ":i"), OpDetails: immediates("i").assembler(asmInt)}},
+	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b", ":b"), OpDetails: immediates("b").assembler(asmByte)}},
 	// parse basics.Address, actually just another []byte constant
-	"addr": {anyImmediates: OpSpec{Name: "addr", Proto: proto(":b"), OpDetails: immediates("a").assembler(asmAddr)}},
+	"addr": {anyImmediates: OpSpec{Name: "addr", Proto: proto(":b", ":A"), OpDetails: immediates("a").assembler(asmAddr)}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method":  {anyImmediates: OpSpec{Name: "method", Proto: proto(":b"), OpDetails: immediates("m").assembler(asmMethod)}},
+	"method":  {anyImmediates: OpSpec{Name: "method", Proto: proto(":b", ":b"), OpDetails: immediates("m").assembler(asmMethod)}},
 	"txn":     {1: OpSpec{Name: "txn"}, 2: OpSpec{Name: "txna"}},
 	"gtxn":    {2: OpSpec{Name: "gtxn"}, 3: OpSpec{Name: "gtxna"}},
 	"gtxns":   {1: OpSpec{Name: "gtxns"}, 2: OpSpec{Name: "gtxnsa"}},
@@ -1653,7 +1653,7 @@ func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 		}
 		i++
 	}
-	return Proto{typedList{args, ""}, typedList{returns, ""}}, minVersion, true
+	return Proto{Arg: typedList{args, ""}, Return: typedList{returns, ""}}, minVersion, true
 }
 
 func prepareVersionedPseudoTable(version uint64) map[string]map[int]OpSpec {
