@@ -1841,6 +1841,7 @@ func (wn *WebsocketNetwork) getPeerConnectionTelemetryDetails(now time.Time, pee
 			MICount:              atomic.LoadUint64(&peer.miMessageCount),
 			AVCount:              atomic.LoadUint64(&peer.avMessageCount),
 			PPCount:              atomic.LoadUint64(&peer.ppMessageCount),
+			UNKCount:             atomic.LoadUint64(&peer.unkMessageCount),
 		}
 		if tcpInfo, err := peer.GetUnderlyingConnTCPInfo(); err == nil && tcpInfo != nil {
 			connDetail.TCP = *tcpInfo
