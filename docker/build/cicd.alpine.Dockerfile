@@ -5,7 +5,6 @@ RUN apk update && \
     apk add bash && \
     apk add git && \
     apk add python3 && \
-    apk add boost-dev && \
     apk add expect && \
     apk add jq && \
     apk add autoconf && \

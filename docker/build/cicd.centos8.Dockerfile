@@ -5,7 +5,7 @@ ARG GOLANG_VERSION
 ARG ARCH="amd64"
 RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
     dnf update -y && \
-    dnf install -y autoconf wget awscli git gnupg2 nfs-utils python3-devel boost-devel expect jq \
+    dnf install -y autoconf wget awscli git gnupg2 nfs-utils python3-devel expect jq \
     libtool gcc-c++ libstdc++-devel rpmdevtools createrepo rpm-sign bzip2 which \
     libffi-devel openssl-devel
 RUN dnf install -y epel-release && \
