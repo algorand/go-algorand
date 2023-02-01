@@ -927,7 +927,7 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transacti
 // TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWithAD) (returnErr error) {
+func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWithAD) (err error) {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -954,7 +954,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		eval.Tracer.BeforeTxnGroup(evalParams)
 		// Ensure we update the tracer before exiting
 		defer func() {
-			eval.Tracer.AfterTxnGroup(evalParams, returnErr)
+			eval.Tracer.AfterTxnGroup(evalParams, err)
 		}()
 	}
 

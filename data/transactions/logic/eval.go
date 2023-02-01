@@ -5044,7 +5044,7 @@ func opItxnField(cx *EvalContext) error {
 	return err
 }
 
-func opItxnSubmit(cx *EvalContext) (returnErr error) {
+func opItxnSubmit(cx *EvalContext) (err error) {
 	// Should rarely trigger, since itxn_next checks these too. (but that check
 	// must be imperfect, see its comment) In contrast to that check, subtxns is
 	// already populated here.
@@ -5194,7 +5194,7 @@ func opItxnSubmit(cx *EvalContext) (returnErr error) {
 		ep.Tracer.BeforeTxnGroup(ep)
 		// Ensure we update the tracer before exiting
 		defer func() {
-			ep.Tracer.AfterTxnGroup(ep, returnErr)
+			ep.Tracer.AfterTxnGroup(ep, err)
 		}()
 	}
 
