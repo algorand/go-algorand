@@ -1,6 +1,72 @@
 {
   "EvalMaxVersion": 8,
   "LogicSigVersion": 8,
+  "AbstractTypes": {
+    "address": {
+      "Type": "B",
+      "LengthBound": [
+        32,
+        32
+      ]
+    },
+    "any": {
+      "Type": ".",
+      "LengthBound": [
+        0,
+        4096
+      ],
+      "ValueBound": [
+        0,
+        18446744073709551615
+      ]
+    },
+    "bigint": {
+      "Type": "B",
+      "LengthBound": [
+        0,
+        64
+      ]
+    },
+    "boolean": {
+      "Type": "U",
+      "ValueBound": [
+        0,
+        1
+      ]
+    },
+    "bytes": {
+      "Type": "B",
+      "LengthBound": [
+        0,
+        4096
+      ]
+    },
+    "hash": {
+      "Type": "B",
+      "LengthBound": [
+        32,
+        32
+      ]
+    },
+    "none": {
+      "Type": "_",
+      "LengthBound": [
+        0,
+        0
+      ],
+      "ValueBound": [
+        0,
+        0
+      ]
+    },
+    "uint64": {
+      "Type": "U",
+      "ValueBound": [
+        0,
+        18446744073709551615
+      ]
+    }
+  },
   "Fields": {
     "ECDSA": [
       {
@@ -907,10 +973,6 @@
     ],
     "txn_type": [
       {
-        "Name": "acfg",
-        "Type": "U"
-      },
-      {
         "Name": "axfer",
         "Type": "U"
       },
@@ -932,6 +994,10 @@
       },
       {
         "Name": "keyreg",
+        "Type": "U"
+      },
+      {
+        "Name": "acfg",
         "Type": "U"
       }
     ],
@@ -982,6 +1048,11 @@
   },
   "PseudoOps": [
     {
+      "Name": "int",
+      "Returns": "U",
+      "Size": 2
+    },
+    {
       "Name": "byte",
       "Returns": "B",
       "Size": 2
@@ -989,11 +1060,6 @@
     {
       "Name": "addr",
       "Returns": "B",
-      "Size": 2
-    },
-    {
-      "Name": "int",
-      "Returns": "U",
       "Size": 2
     },
     {
@@ -4075,71 +4141,5 @@
         "State Access"
       ]
     }
-  ],
-  "AbstractTypes": {
-    "address": {
-      "Type": "[]byte",
-      "LengthBound": [
-        32,
-        32
-      ]
-    },
-    "any": {
-      "Type": "any",
-      "LengthBound": [
-        0,
-        4096
-      ],
-      "ValueBound": [
-        0,
-        18446744073709551615
-      ]
-    },
-    "bigint": {
-      "Type": "[]byte",
-      "LengthBound": [
-        0,
-        64
-      ]
-    },
-    "boolean": {
-      "Type": "uint64",
-      "ValueBound": [
-        0,
-        1
-      ]
-    },
-    "bytes": {
-      "Type": "[]byte",
-      "LengthBound": [
-        0,
-        4096
-      ]
-    },
-    "hash": {
-      "Type": "[]byte",
-      "LengthBound": [
-        32,
-        32
-      ]
-    },
-    "none": {
-      "Type": "None",
-      "LengthBound": [
-        0,
-        0
-      ],
-      "ValueBound": [
-        0,
-        0
-      ]
-    },
-    "uint64": {
-      "Type": "uint64",
-      "ValueBound": [
-        0,
-        18446744073709551615
-      ]
-    }
-  }
+  ]
 }

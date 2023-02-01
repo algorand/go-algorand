@@ -269,10 +269,10 @@ type Keyword struct {
 type LanguageSpec struct {
 	EvalMaxVersion  int
 	LogicSigVersion uint64
+	AbstractTypes   map[string]AbstractType
 	Fields          map[string][]Keyword
 	PseudoOps       []OpRecord
 	Ops             []OpRecord
-	AbstractTypes   map[string]AbstractType
 }
 
 func abstractTypeString(types []logic.TypeBound) []string {
@@ -412,7 +412,7 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 	abstractTypes := map[string]AbstractType{}
 	for _, tb := range logic.TypeBounds {
 		abstractTypes[tb.AbstractType.String()] = AbstractType{
-			Type:        tb.StackType.String(),
+			Type:        string(typeByte(tb.StackType)),
 			LengthBound: tb.LengthRange,
 			ValueBound:  tb.ValueRange,
 		}
