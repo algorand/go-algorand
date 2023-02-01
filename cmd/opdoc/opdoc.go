@@ -238,10 +238,10 @@ func opsToMarkdown(out io.Writer) (err error) {
 type OpRecord struct {
 	Opcode          byte `json:",omitempty"`
 	Name            string
-	Args            string `json:",omitempty"`
-	Returns         string `json:",omitempty"`
-	AbstractArgs    string `json:",omitempty"`
-	AbstractReturns string `json:",omitempty"`
+	Args            string   `json:",omitempty"`
+	Returns         string   `json:",omitempty"`
+	AbstractArgs    []string `json:",omitempty"`
+	AbstractReturns []string `json:",omitempty"`
 	Size            int
 
 	ArgEnum string `json:",omitempty"`
@@ -272,6 +272,14 @@ type LanguageSpec struct {
 	PseudoOps       []OpRecord
 	Ops             []OpRecord
 	AbstractTypes   map[string]AbstractType
+}
+
+func abstractTypeString(types []logic.TypeBound) []string {
+	out := make([]string, len(types))
+	for i, t := range types {
+		out[i] = t.AbstractType.String()
+	}
+	return out
 }
 
 func typeString(types []logic.StackType) string {
@@ -416,6 +424,8 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].Name = spec.Name
 		records[i].Args = typeString(spec.Arg.Types)
 		records[i].Returns = typeString(spec.Return.Types)
+		records[i].AbstractArgs = abstractTypeString(spec.AbstractArgs)
+		records[i].AbstractReturns = abstractTypeString(spec.AbstractReturns)
 		records[i].Size = spec.OpDetails.Size
 		records[i].ArgEnum = argEnums(spec.Name)
 		records[i].Doc = strings.ReplaceAll(logic.OpDoc(spec.Name), "<br />", "\n")
