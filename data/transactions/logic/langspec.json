@@ -737,14 +737,6 @@
     ],
     "txn_type": [
       {
-        "Name": "acfg",
-        "Type": "U"
-      },
-      {
-        "Name": "axfer",
-        "Type": "U"
-      },
-      {
         "Name": "afrz",
         "Type": "U"
       },
@@ -762,6 +754,14 @@
       },
       {
         "Name": "keyreg",
+        "Type": "U"
+      },
+      {
+        "Name": "acfg",
+        "Type": "U"
+      },
+      {
+        "Name": "axfer",
         "Type": "U"
       }
     ],
@@ -804,8 +804,13 @@
   },
   "PseudoOps": [
     {
-      "Name": "byte",
+      "Name": "method",
       "Returns": "B",
+      "Size": 2
+    },
+    {
+      "Name": "int",
+      "Returns": "U",
       "Size": 2
     },
     {
@@ -814,13 +819,8 @@
       "Size": 2
     },
     {
-      "Name": "method",
+      "Name": "byte",
       "Returns": "B",
-      "Size": 2
-    },
-    {
-      "Name": "int",
-      "Returns": "U",
       "Size": 2
     }
   ],
@@ -2021,7 +2021,7 @@
     {
       "Opcode": 97,
       "Name": "app_opted_in",
-      "Args": "BU",
+      "Args": ".U",
       "Returns": "U",
       "Size": 1,
       "Doc": "1 if account A is opted in to application B, else 0",
@@ -2034,7 +2034,7 @@
     {
       "Opcode": 98,
       "Name": "app_local_get",
-      "Args": "BB",
+      "Args": ".B",
       "Returns": ".",
       "Size": 1,
       "Doc": "local state of the key B in the current application in account A",
@@ -2628,7 +2628,7 @@
     {
       "Opcode": 174,
       "Name": "b~",
-      "Args": "BB",
+      "Args": "B",
       "Returns": "B",
       "Size": 1,
       "Doc": "A with all bits inverted",

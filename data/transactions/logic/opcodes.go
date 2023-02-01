@@ -563,9 +563,9 @@ var OpSpecs = []OpSpec{
 	{0x60, "balance", opBalance, proto("i:i"), 2, only(ModeApp)},
 	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(ModeApp)},
 	{0x61, "app_opted_in", opAppOptedIn, proto("ii:B"), 2, only(ModeApp)},
-	{0x61, "app_opted_in", opAppOptedIn, proto("Ai:B"), directRefEnabledVersion, only(ModeApp)},
+	{0x61, "app_opted_in", opAppOptedIn, proto("ai:B"), directRefEnabledVersion, only(ModeApp)},
 	{0x62, "app_local_get", opAppLocalGet, proto("ib:a"), 2, only(ModeApp)},
-	{0x62, "app_local_get", opAppLocalGet, proto("Ab:a"), directRefEnabledVersion, only(ModeApp)},
+	{0x62, "app_local_get", opAppLocalGet, proto("ab:a"), directRefEnabledVersion, only(ModeApp)},
 	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("iib:aB"), 2, only(ModeApp)},
 	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aib:aB"), directRefEnabledVersion, only(ModeApp)},
 	{0x64, "app_global_get", opAppGlobalGet, proto("b:a"), 2, only(ModeApp)},
@@ -637,7 +637,7 @@ var OpSpecs = []OpSpec{
 	{0xab, "b|", opBytesBitOr, proto("NN:N"), 4, costly(6)},
 	{0xac, "b&", opBytesBitAnd, proto("NN:N"), 4, costly(6)},
 	{0xad, "b^", opBytesBitXor, proto("NN:N"), 4, costly(6)},
-	{0xae, "b~", opBytesBitNot, proto("NN:N"), 4, costly(4)},
+	{0xae, "b~", opBytesBitNot, proto("N:N"), 4, costly(4)},
 	{0xaf, "bzero", opBytesZero, proto("i:b"), 4, detDefault()},
 
 	// AVM "effects"

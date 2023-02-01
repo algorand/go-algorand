@@ -843,7 +843,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 ## app_opted_in
 
 - Opcode: 0x61
-- Stack: ..., A: addr, B: uint64 &rarr; ..., bool
+- Stack: ..., A, B: uint64 &rarr; ..., bool
 - 1 if account A is opted in to application B, else 0
 - Availability: v2
 - Mode: Application
@@ -853,7 +853,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 ## app_local_get
 
 - Opcode: 0x62
-- Stack: ..., A: addr, B: []byte &rarr; ..., any
+- Stack: ..., A, B: []byte &rarr; ..., any
 - local state of the key B in the current application in account A
 - Availability: v2
 - Mode: Application
@@ -1320,7 +1320,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## b~
 
 - Opcode: 0xae
-- Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
+- Stack: ..., A: bigint &rarr; ..., bigint
 - A with all bits inverted
 - **Cost**: 4
 - Availability: v4
