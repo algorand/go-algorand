@@ -57,6 +57,7 @@ var TestApp = testApp
 var TestAppBytes = testAppBytes
 var TestApps = testApps
 var TestProg = testProg
+var WithPanicOpcode = withPanicOpcode
 
 const CreatedResourcesVersion = createdResourcesVersion
 const AssemblerNoVersion = assemblerNoVersion

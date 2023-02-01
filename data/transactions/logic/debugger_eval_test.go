@@ -66,6 +66,7 @@ bytec 4
 `
 const debuggerTestProgramReject string = debuggerTestProgramApprove + "!"
 const debuggerTestProgramError string = debuggerTestProgramApprove + "err"
+const debuggerTestProgramPanic string = debuggerTestProgramApprove + "panic"
 
 func TestWebDebuggerManual(t *testing.T) { //nolint:paralleltest // Manual test
 	partitiontest.PartitionTest(t)
@@ -110,169 +111,168 @@ func (d *testDebugger) Complete(state *DebugState) {
 	d.state = state
 }
 
-func TestDebuggerProgramEval(t *testing.T) {
+var debuggerTestCases = []struct {
+	name             string
+	program          string
+	evalProblems     []string
+	expectedRegister int
+	expectedUpdate   int
+	expectedComplete int
+	expectedStack    []basics.TealValue
+}{
+	{
+		name:             "approve",
+		program:          debuggerTestProgramApprove,
+		expectedRegister: 1,
+		expectedUpdate:   35,
+		expectedComplete: 1,
+		expectedStack: []basics.TealValue{
+			{
+				Type: basics.TealUintType,
+				Uint: 1,
+			},
+		},
+	},
+	{
+		name:             "reject",
+		program:          debuggerTestProgramReject,
+		evalProblems:     []string{"REJECT"},
+		expectedRegister: 1,
+		expectedUpdate:   36,
+		expectedComplete: 1,
+		expectedStack: []basics.TealValue{
+			{
+				Type: basics.TealUintType,
+				Uint: 0,
+			},
+		},
+	},
+	{
+		name:             "error",
+		program:          debuggerTestProgramError,
+		evalProblems:     []string{"err opcode executed"},
+		expectedRegister: 1,
+		expectedUpdate:   36,
+		expectedComplete: 1,
+		expectedStack: []basics.TealValue{
+			{
+				Type: basics.TealUintType,
+				Uint: 1,
+			},
+		},
+	},
+}
+
+func TestDebuggerLogicSigEval(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+	for _, testCase := range debuggerTestCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			testDbg := testDebugger{}
+			ep := DefaultEvalParams()
+			ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
+			TestLogic(t, testCase.program, AssemblerMaxVersion, ep, testCase.evalProblems...)
 
-	simpleTestCases := []struct {
-		name             string
-		program          string
-		evalProblems     []string
-		expectedRegister int
-		expectedUpdate   int
-		expectedComplete int
-		expectedStack    []basics.TealValue
-	}{
-		{
-			name:             "approve",
-			program:          debuggerTestProgramApprove,
-			expectedRegister: 1,
-			expectedUpdate:   35,
-			expectedComplete: 1,
-			expectedStack: []basics.TealValue{
-				{
-					Type: basics.TealUintType,
-					Uint: 1,
-				},
-			},
-		},
-		{
-			name:             "reject",
-			program:          debuggerTestProgramReject,
-			evalProblems:     []string{"REJECT"},
-			expectedRegister: 1,
-			expectedUpdate:   36,
-			expectedComplete: 1,
-			expectedStack: []basics.TealValue{
-				{
-					Type: basics.TealUintType,
-					Uint: 0,
-				},
-			},
-		},
-		{
-			name:             "error",
-			program:          debuggerTestProgramError,
-			evalProblems:     []string{"err opcode executed"},
-			expectedRegister: 1,
-			expectedUpdate:   36,
-			expectedComplete: 1,
-			expectedStack: []basics.TealValue{
-				{
-					Type: basics.TealUintType,
-					Uint: 1,
-				},
-			},
-		},
+			require.Equal(t, testCase.expectedRegister, testDbg.register)
+			require.Equal(t, testCase.expectedComplete, testDbg.complete)
+			require.Equal(t, testCase.expectedUpdate, testDbg.update)
+			require.Equal(t, testCase.expectedStack, testDbg.state.Stack)
+		})
 	}
+}
 
-	t.Run("logicsig", func(t *testing.T) {
-		t.Parallel()
-		for _, testCase := range simpleTestCases {
-			testCase := testCase
-			t.Run(testCase.name, func(t *testing.T) {
-				t.Parallel()
-				testDbg := testDebugger{}
-				ep := DefaultEvalParams()
-				ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
-				TestLogic(t, testCase.program, AssemblerMaxVersion, ep, testCase.evalProblems...)
+func TestDebuggerTopLeveLAppEval(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	for _, testCase := range debuggerTestCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			testDbg := testDebugger{}
+			ep := DefaultEvalParams()
+			ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
+			TestApp(t, testCase.program, ep, testCase.evalProblems...)
 
-				require.Equal(t, testCase.expectedRegister, testDbg.register)
-				require.Equal(t, testCase.expectedComplete, testDbg.complete)
-				require.Equal(t, testCase.expectedUpdate, testDbg.update)
-				require.Equal(t, testCase.expectedStack, testDbg.state.Stack)
+			require.Equal(t, testCase.expectedRegister, testDbg.register)
+			require.Equal(t, testCase.expectedComplete, testDbg.complete)
+			require.Equal(t, testCase.expectedUpdate, testDbg.update)
+			require.Equal(t, testCase.expectedStack, testDbg.state.Stack)
+		})
+	}
+}
+
+func TestDebuggerInnerAppEval(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	scenarios := mocktracer.GetTestScenarios()
+	for scenarioName, makeScenario := range scenarios {
+		scenarioName := scenarioName
+		makeScenario := makeScenario
+		t.Run(scenarioName, func(t *testing.T) {
+			t.Parallel()
+			testDbg := testDebugger{}
+			ep, tx, ledger := MakeSampleEnv()
+
+			// Establish 888 as the app id, and fund it.
+			ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+			ledger.NewAccount(basics.AppIndex(888).Address(), 200_000)
+
+			scenario := makeScenario(mocktracer.TestScenarioInfo{
+				CallingTxn:   *tx,
+				CreatedAppID: basics.AppIndex(888),
 			})
-		}
-	})
 
-	t.Run("simple app", func(t *testing.T) {
-		t.Parallel()
-		for _, testCase := range simpleTestCases {
-			testCase := testCase
-			t.Run(testCase.name, func(t *testing.T) {
-				testDbg := testDebugger{}
-				ep := DefaultEvalParams()
-				ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
-				TestApp(t, testCase.program, ep, testCase.evalProblems...)
-
-				require.Equal(t, testCase.expectedRegister, testDbg.register)
-				require.Equal(t, testCase.expectedComplete, testDbg.complete)
-				require.Equal(t, testCase.expectedUpdate, testDbg.update)
-				require.Equal(t, testCase.expectedStack, testDbg.state.Stack)
-			})
-		}
-	})
-
-	t.Run("app with inner txns", func(t *testing.T) {
-		t.Parallel()
-		scenarios := mocktracer.GetTestScenarios()
-		for scenarioName, makeScenario := range scenarios {
-			scenarioName := scenarioName
-			makeScenario := makeScenario
-			t.Run(scenarioName, func(t *testing.T) {
-				t.Parallel()
-				testDbg := testDebugger{}
-				ep, tx, ledger := MakeSampleEnv()
-
-				// Establish 888 as the app id, and fund it.
-				ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-				ledger.NewAccount(basics.AppIndex(888).Address(), 200_000)
-
-				scenario := makeScenario(mocktracer.TestScenarioInfo{
-					CallingTxn:   *tx,
-					CreatedAppID: basics.AppIndex(888),
-				})
-
-				var evalProblems []string
-				switch scenario.Outcome {
-				case mocktracer.RejectionOutcome:
-					evalProblems = []string{"REJECT"}
-				case mocktracer.ErrorOutcome:
-					if scenario.ExpectedError == "overspend" {
-						// the logic test ledger uses this error instead
-						evalProblems = []string{"insufficient balance"}
-					} else {
-						evalProblems = []string{scenario.ExpectedError}
-					}
+			var evalProblems []string
+			switch scenario.Outcome {
+			case mocktracer.RejectionOutcome:
+				evalProblems = []string{"REJECT"}
+			case mocktracer.ErrorOutcome:
+				if scenario.ExpectedError == "overspend" {
+					// the logic test ledger uses this error instead
+					evalProblems = []string{"insufficient balance"}
+				} else {
+					evalProblems = []string{scenario.ExpectedError}
 				}
+			}
 
-				ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
-				ops := TestProg(t, scenario.Program, AssemblerNoVersion)
-				TestAppBytes(t, ops.Program, ep, evalProblems...)
+			ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
+			ops := TestProg(t, scenario.Program, AssemblerNoVersion)
+			TestAppBytes(t, ops.Program, ep, evalProblems...)
 
-				require.Equal(t, 1, testDbg.register)
-				require.Equal(t, 1, testDbg.complete)
+			require.Equal(t, 1, testDbg.register)
+			require.Equal(t, 1, testDbg.complete)
 
-				var expectedUpdateCount int
-				expectedStack := []basics.TealValue{}
-				switch {
-				case scenarioName == "none":
-					expectedUpdateCount = 26
-					expectedStack = []basics.TealValue{{Type: basics.TealUintType, Uint: 1}}
-				case strings.HasPrefix(scenarioName, "before inners"):
-					expectedUpdateCount = 2
+			var expectedUpdateCount int
+			expectedStack := []basics.TealValue{}
+			switch {
+			case scenarioName == "none":
+				expectedUpdateCount = 26
+				expectedStack = []basics.TealValue{{Type: basics.TealUintType, Uint: 1}}
+			case strings.HasPrefix(scenarioName, "before inners"):
+				expectedUpdateCount = 2
+				expectedStack = []basics.TealValue{{Type: basics.TealUintType}}
+			case strings.HasPrefix(scenarioName, "first inner"):
+				expectedUpdateCount = 10
+			case strings.HasPrefix(scenarioName, "between inners"):
+				expectedUpdateCount = 12
+				expectedStack = []basics.TealValue{{Type: basics.TealUintType}}
+			case scenarioName == "second inner":
+				expectedUpdateCount = 25
+			case scenarioName == "third inner":
+				expectedUpdateCount = 25
+			case strings.HasPrefix(scenarioName, "after inners"):
+				expectedUpdateCount = 26
+				if scenario.Outcome == mocktracer.RejectionOutcome {
 					expectedStack = []basics.TealValue{{Type: basics.TealUintType}}
-				case strings.HasPrefix(scenarioName, "first inner"):
-					expectedUpdateCount = 10
-				case strings.HasPrefix(scenarioName, "between inners"):
-					expectedUpdateCount = 12
-					expectedStack = []basics.TealValue{{Type: basics.TealUintType}}
-				case scenarioName == "second inner":
-					expectedUpdateCount = 25
-				case scenarioName == "third inner":
-					expectedUpdateCount = 25
-				case strings.HasPrefix(scenarioName, "after inners"):
-					expectedUpdateCount = 26
-					if scenario.Outcome == mocktracer.RejectionOutcome {
-						expectedStack = []basics.TealValue{{Type: basics.TealUintType}}
-					}
 				}
+			}
 
-				require.Equal(t, expectedUpdateCount, testDbg.update)
-				require.Equal(t, expectedStack, testDbg.state.Stack)
-			})
-		}
-	})
+			require.Equal(t, expectedUpdateCount, testDbg.update)
+			require.Equal(t, expectedStack, testDbg.state.Stack)
+		})
+	}
 }
 
 func TestCallStackUpdate(t *testing.T) {
