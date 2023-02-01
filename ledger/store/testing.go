@@ -19,14 +19,27 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/stretchr/testify/require"
 )
+
+// DbOpenTrackerTest opens a sqlite db file for testing purposes.
+func DbOpenTrackerTest(t testing.TB, inMemory bool) (TrackerStore, string) {
+	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
+
+	dbs, err := db.OpenPair(fn, inMemory)
+	require.NoErrorf(t, err, "Filename : %s\nInMemory: %v", fn, inMemory)
+
+	return &trackerSQLStore{dbs}, fn
+}
 
 // AccountsInitLightTest initializes an empty database for testing without the extra methods being called.
 func AccountsInitLightTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {

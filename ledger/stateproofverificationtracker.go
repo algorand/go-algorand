@@ -49,10 +49,6 @@ type verificationCommitContext struct {
 // stateProofVerificationTracker is in charge of tracking context required to verify state proofs until such a time
 // as the context is no longer needed.
 type stateProofVerificationTracker struct {
-	// dbQueries are the pre-generated queries used to query the database, if needed,
-	// to lookup state proof verification context.
-	dbQueries *store.StateProofVerificationDbQueries
-
 	// trackedCommitContext represents the part of the tracked verification context currently in memory. Each element in this
 	// array contains both the context required to verify a single state proof and context to decide whether it's possible to
 	// commit the verification context to the database.
@@ -68,19 +64,15 @@ type stateProofVerificationTracker struct {
 	// log copied from ledger
 	log logging.Logger
 
+	l ledgerForTracker
+
 	// lastLookedUpVerificationContext should store the last verification context that was looked up.
 	lastLookedUpVerificationContext ledgercore.StateProofVerificationContext
 }
 
 func (spt *stateProofVerificationTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
-	preparedDbQueries, err := store.StateProofVerificationInitDbQueries(l.trackerDB().Rdb.Handle)
-	if err != nil {
-		return err
-	}
-
-	spt.dbQueries = preparedDbQueries
-
 	spt.log = l.trackerLog()
+	spt.l = l
 
 	spt.mu.Lock()
 	defer spt.mu.Unlock()
@@ -135,16 +127,27 @@ func (spt *stateProofVerificationTracker) prepareCommit(dcc *deferredCommitConte
 }
 
 func (spt *stateProofVerificationTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
-	err = insertStateProofVerificationContext(ctx, tx, dcc.spVerification.CommitContext)
-	if err != nil {
-		return err
+	if len(dcc.spVerification.CommitContext) != 0 {
+		err = commitSPContexts(ctx, tx, dcc.spVerification.CommitContext)
+		if err != nil {
+			return err
+		}
 	}
 
 	if dcc.spVerification.LastDeleteIndex >= 0 {
-		err = store.DeleteOldStateProofVerificationContext(ctx, tx, dcc.spVerification.EarliestLastAttestedRound)
+		err = store.CreateSPVerificationAccessor(tx).DeleteOldSPContexts(ctx, dcc.spVerification.EarliestLastAttestedRound)
 	}
 
 	return err
+}
+
+func commitSPContexts(ctx context.Context, tx *sql.Tx, commitData []verificationCommitContext) error {
+	ptrToCtxs := make([]*ledgercore.StateProofVerificationContext, len(commitData))
+	for i := 0; i < len(commitData); i++ {
+		ptrToCtxs[i] = &commitData[i].verificationContext
+	}
+
+	return store.CreateSPVerificationAccessor(tx).WriteMultiSPContexts(ctx, ptrToCtxs)
 }
 
 func (spt *stateProofVerificationTracker) postCommit(_ context.Context, dcc *deferredCommitContext) {
@@ -156,18 +159,14 @@ func (spt *stateProofVerificationTracker) postCommit(_ context.Context, dcc *def
 }
 
 func (spt *stateProofVerificationTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
-
 }
 
 func (spt *stateProofVerificationTracker) handleUnorderedCommit(*deferredCommitContext) {
+}
 
-}
 func (spt *stateProofVerificationTracker) close() {
-	if spt.dbQueries != nil {
-		spt.dbQueries.Close()
-		spt.dbQueries = nil
-	}
 }
+
 func (spt *stateProofVerificationTracker) LookupVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	if lstlookup := spt.retrieveFromCache(stateProofLastAttestedRound); lstlookup != nil {
 		return lstlookup, nil
@@ -233,12 +232,17 @@ func (spt *stateProofVerificationTracker) lookupContextInTrackedMemory(stateProo
 }
 
 func (spt *stateProofVerificationTracker) lookupContextInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	verificationContext, err := spt.dbQueries.LookupContext(stateProofLastAttestedRound)
-	if err != nil {
-		err = fmt.Errorf("%w for round %d: %s", errStateProofVerificationContextNotFound, stateProofLastAttestedRound, err)
-	}
+	var spContext *ledgercore.StateProofVerificationContext
+	err := spt.l.trackerDB().Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
+		spContext, err = store.CreateSPVerificationAccessor(tx).LookupSPContext(stateProofLastAttestedRound)
+		if err != nil {
+			err = fmt.Errorf("%w for round %d: %s", errStateProofVerificationContextNotFound, stateProofLastAttestedRound, err)
+		}
 
-	return verificationContext, err
+		return err
+	})
+
+	return spContext, err
 }
 
 func (spt *stateProofVerificationTracker) roundToLatestCommitContextIndex(committedRound basics.Round) int {
@@ -316,25 +320,4 @@ func (spt *stateProofVerificationTracker) appendDeleteContext(blk *bookkeeping.B
 	}
 
 	spt.trackedDeleteContext = append(spt.trackedDeleteContext, deletionContext)
-}
-
-func insertStateProofVerificationContext(ctx context.Context, tx *sql.Tx, contexts []verificationCommitContext) error {
-	if len(contexts) == 0 {
-		return nil
-	}
-
-	writer, err := store.MakeStateProofVerificationWriter(ctx, tx)
-	if err != nil {
-		return err
-	}
-	defer writer.Close()
-
-	for _, commitContext := range contexts {
-		err = writer.WriteStateProofVerificationContext(&commitContext.verificationContext)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }

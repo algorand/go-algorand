@@ -146,7 +146,7 @@ const (
 	// that a certificate has formed for that proposal-value.
 	proposalCommittable
 
-	// proposalCommittable is returned by the proposal state machines when a
+	// proposalAccepted is returned by the proposal state machines when a
 	// proposal-value is accepted.
 	proposalAccepted
 
@@ -947,6 +947,6 @@ func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
 }
 
 func (e messageEvent) AttachReceivedAt(d time.Duration) messageEvent {
-	e.Input.Proposal.receivedAt = d
+	e.Input.UnauthenticatedProposal.receivedAt = d
 	return e
 }

@@ -52,7 +52,7 @@ var setCmd = &cobra.Command{
 		onDataDirs(func(dataDir string) {
 			cfg, err := config.LoadConfigFromDisk(dataDir)
 			if err != nil && !os.IsNotExist(err) {
-				reportWarnf("Error loading config file from '%s'", dataDir)
+				reportWarnf("Error loading config file from '%s' - %s", dataDir, err)
 				anyError = true
 				return
 			}
