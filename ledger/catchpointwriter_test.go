@@ -141,7 +141,7 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 	}
 
 	err = ml.dbs.Batch(func(ctx context.Context, tx *sql.Tx) error {
-		return insertSPContexts(ctx, tx, mockCommitData)
+		return commitSPContexts(ctx, tx, mockCommitData)
 	})
 
 	require.NoError(t, err)

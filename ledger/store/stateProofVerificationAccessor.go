@@ -62,30 +62,36 @@ func (spa *SPVerificationAccessor) DeleteOldSPContexts(ctx context.Context, earl
 	return err
 }
 
-// WriteSPContext write a single state proof verification context to database
-func (spa *SPVerificationAccessor) WriteSPContext(ctx context.Context, verificationContext *ledgercore.StateProofVerificationContext) error {
+// WriteMultiSPContexts writes a single state proof verification context to database
+func (spa *SPVerificationAccessor) WriteMultiSPContexts(ctx context.Context, verificationContext []*ledgercore.StateProofVerificationContext) error {
 	spWriteStmt, err := spa.e.PrepareContext(ctx, "INSERT INTO stateProofVerification(lastattestedround, verificationContext) VALUES(?, ?)")
 	if err != nil {
 		return err
 	}
-	_, err = spWriteStmt.ExecContext(ctx, verificationContext.LastAttestedRound, protocol.Encode(verificationContext))
-	if err != nil {
-		return err
+	for _, e := range verificationContext {
+		_, err = spWriteStmt.ExecContext(ctx, e.LastAttestedRound, protocol.Encode(e))
+		if err != nil {
+			return err
+		}
 	}
-	return err
+
+	return nil
 }
 
-// WriteSPContextToCatchpoint write a single state proof verification context to database
-func (spa *SPVerificationAccessor) WriteSPContextToCatchpoint(ctx context.Context, verificationContext *ledgercore.StateProofVerificationContext) error {
+// WriteMultiSPContextsToCatchpoint writes state proof verification contexts to database
+func (spa *SPVerificationAccessor) WriteMultiSPContextsToCatchpoint(ctx context.Context, verificationContexts []ledgercore.StateProofVerificationContext) error {
 	spWriteStmt, err := spa.e.PrepareContext(ctx, "INSERT INTO catchpointstateproofverification(lastattestedround, verificationContext) VALUES(?, ?)")
 	if err != nil {
 		return err
 	}
-	_, err = spWriteStmt.ExecContext(ctx, verificationContext.LastAttestedRound, protocol.Encode(verificationContext))
-	if err != nil {
-		return err
+
+	for _, data := range verificationContexts {
+		_, err = spWriteStmt.ExecContext(ctx, data.LastAttestedRound, protocol.Encode(&data))
+		if err != nil {
+			return err
+		}
 	}
-	return err
+	return nil
 }
 
 // GetAllSPContexts returns all contexts needed to verify state proofs.

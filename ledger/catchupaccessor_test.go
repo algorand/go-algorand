@@ -213,8 +213,7 @@ func verifyStateProofVerificationCatchupAccessor(t *testing.T, targetData []ledg
 
 	var trackedStateProofVerificationContext []ledgercore.StateProofVerificationContext
 	err = l.trackerDBs.Snapshot(func(ctx context.Context, tx *sql.Tx) error {
-		spa := store.CreateSPVerificationAccessor(tx)
-		dbData, err := spa.GetAllSPContexts(ctx)
+		dbData, err := store.CreateSPVerificationAccessor(tx).GetAllSPContexts(ctx)
 		trackedStateProofVerificationContext = dbData
 		return err
 	})
