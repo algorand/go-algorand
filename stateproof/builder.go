@@ -41,7 +41,7 @@ var errVotersNotTracked = errors.New("voters not tracked for the given lookback 
 // OnPrepareVoterCommit is a function called by the voters tracker when it's preparing to commit rnd. It gives the builder
 // the chance to persist the data it needs.
 func (spw *Worker) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Round, votersFetcher ledgercore.LedgerForSPBuilder) {
-	for rnd := oldBase + 1; rnd < newBase; rnd++ {
+	for rnd := oldBase + 1; rnd <= newBase; rnd++ {
 		header, err := votersFetcher.BlockHdr(rnd)
 		if err != nil {
 			spw.log.Errorf("OnPrepareVoterCommit(%d): could not fetch round header: %v", rnd, err)

@@ -102,7 +102,7 @@ func newWorkerStubsWithVersion(t *testing.T, keys []account.Participation, versi
 	return s
 }
 
-func (s *testWorkerStubs) notifyPrepareVoterCommit(round basics.Round) {
+func (s *testWorkerStubs) notifyPrepareVoterCommit(oldBase, newBase basics.Round) {
 	s.listenerMu.RLock()
 	defer s.listenerMu.RUnlock()
 
@@ -110,8 +110,7 @@ func (s *testWorkerStubs) notifyPrepareVoterCommit(round basics.Round) {
 		return
 	}
 
-	err := s.commitListener.OnPrepareVoterCommit(round, s)
-	require.NoError(s.t, err)
+	s.commitListener.OnPrepareVoterCommit(oldBase, newBase, s)
 }
 
 func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
@@ -401,10 +400,7 @@ func (s *testWorkerStubs) mockCommit(upTo basics.Round) {
 		}
 	}
 	s.mu.Unlock()
-
-	for round := startRound; round <= upTo; round++ {
-		s.notifyPrepareVoterCommit(round)
-	}
+	s.notifyPrepareVoterCommit(startRound, upTo)
 
 	for round := startRound; round <= upTo; round++ {
 		s.mu.Lock()
