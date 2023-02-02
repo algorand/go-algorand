@@ -9,7 +9,6 @@ linters:
     - errcheck
     - exportloopref
     - gofmt
-    - gosec
     - gosimple
     - govet
     - ineffassign
@@ -38,8 +37,6 @@ linters-settings:
     - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).warn
     # We do this 121 times and never check the error.
     - (*github.com/spf13/cobra.Command).MarkFlagRequired
-  gosec: # we are mostly only interested in G601
-    excludes: [G101, G103, G104, G107, G202, G301, G302, G303, G304, G306, G307, G404]
   govet:
     settings:
       printf:
@@ -115,7 +112,6 @@ issues:
         # - gofmt
         - gosimple
         # - govet
-        - gosec
         - ineffassign
         - misspell
         - nolintlint
