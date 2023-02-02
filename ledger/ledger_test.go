@@ -3092,13 +3092,13 @@ func TestVotersCallbackPersistsAfterLedgerReload(t *testing.T) {
 
 	commitListener := mockCommitListener{}
 	l.RegisterVotersCommitListener(&commitListener)
-	listenerBeforeReload := l.acctsOnline.voters.eternalData.commitListener
+	listenerBeforeReload := l.acctsOnline.voters.commitListener
 
 	require.NotNil(t, listenerBeforeReload)
 	err = l.reloadLedger()
 	require.NoError(t, err)
 
-	listenerAfterReload := l.acctsOnline.voters.eternalData.commitListener
+	listenerAfterReload := l.acctsOnline.voters.commitListener
 	require.Equal(t, listenerBeforeReload, listenerAfterReload)
 }
 

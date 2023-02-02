@@ -17,7 +17,6 @@
 package ledger
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 
@@ -30,8 +29,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/stateproof"
 )
-
-var errListenerAlreadySet = errors.New("voters listener has been already set")
 
 // votersFetcher is used to provide safe access to the ledger while creating the state proof builder. Since the operation
 // is being run under the ledger's commit operation, this implementation guarantees lockless access to the VotersForStateProof function.
@@ -100,13 +97,9 @@ type votersTracker struct {
 	// shutdown the tracker without leaving any running go-routines.
 	loadWaitGroup sync.WaitGroup
 
-	// eternalData survive tracker reloads
-	eternalData struct {
-		// commitListener provides a callback to call on each prepare commit. This callback receives access to the voters
-		// cache.
-		commitListener ledgercore.VotersCommitListener
-	}
-
+	// commitListener provides a callback to call on each prepare commit. This callback receives access to the voters
+	// cache.
+	commitListener   ledgercore.VotersCommitListener
 	commitListenerMu deadlock.RWMutex
 }
 
@@ -228,11 +221,11 @@ func (vt *votersTracker) prepareCommit(dcc *deferredCommitContext) error {
 	vt.commitListenerMu.RLock()
 	defer vt.commitListenerMu.RUnlock()
 
-	if vt.eternalData.commitListener == nil {
+	if vt.commitListener == nil {
 		return nil
 	}
 
-	commitListener := vt.eternalData.commitListener
+	commitListener := vt.commitListener
 	vf := votersFetcher{vt: vt}
 	// In case the listener's function fails, we do not want to break the commit process.
 	// To implement this hierarchy we've decided to not include a return value in OnPrepareVoterCommit function
@@ -315,16 +308,11 @@ func (vt *votersTracker) VotersForStateProof(r basics.Round) (*ledgercore.Voters
 	return tr, nil
 }
 
-func (vt *votersTracker) registerPrepareCommitListener(commitListener ledgercore.VotersCommitListener) error {
+func (vt *votersTracker) registerPrepareCommitListener(commitListener ledgercore.VotersCommitListener) {
 	vt.commitListenerMu.Lock()
 	defer vt.commitListenerMu.Unlock()
 
-	if vt.eternalData.commitListener != nil {
-		return errListenerAlreadySet
-	}
-
-	vt.eternalData.commitListener = commitListener
-	return nil
+	vt.commitListener = commitListener
 }
 
 func (vt *votersTracker) getVoters(round basics.Round) (*ledgercore.VotersForRound, bool) {

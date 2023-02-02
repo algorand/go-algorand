@@ -61,10 +61,6 @@ interface:
   for recent blocks, if the tracker's state depends only on recent blocks
   (e.g., for the tracker that keeps track of the recently committed
   transactions).
-  `loadFromDisk` is expected to reconstruct a tracker from scratch with one
-  exception: `eternalData` might survive between `loadFromDisk` calls
-  without being loaded from disk. This is especially useful for trackers
-  that don't rely on the tracker DB.
 
 - `newBlock(rnd, delta)` tells the tracker about a new block added to
   the ledger.  `delta` describes the changes made by this block; this

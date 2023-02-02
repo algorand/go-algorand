@@ -253,10 +253,7 @@ func (spw *Worker) initBuilders() {
 		spw.builders[rnd] = buildr
 	}
 
-	err = spw.ledger.RegisterVotersCommitListener(spw)
-	if err != nil {
-		spw.log.Errorf("initBuilders: registering voters listener failed: %v", err)
-	}
+	spw.ledger.RegisterVotersCommitListener(spw)
 }
 
 func (spw *Worker) getAllOnlineBuilderRounds() ([]basics.Round, error) {
