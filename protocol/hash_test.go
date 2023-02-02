@@ -14,34 +14,28 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package protocol
 
 import (
-	"fmt"
-	"os"
+	"strings"
+	"testing"
 
-	"github.com/algorand/go-algorand/cmd/util/datadir"
-	"github.com/spf13/cobra"
+	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/assert"
 )
 
-func init() {
-	// Config
-	defaultDataDirValue := []string{""}
-	rootCmd.PersistentFlags().StringArrayVarP(&datadir.DataDirs, "datadir", "d", defaultDataDirValue, "Data directory for the node")
-}
+// TestHashIDPrefix checks if any HashID const declared in hash.go is a prefix of another.
+func TestHashIDPrefix(t *testing.T) {
+	t.Parallel()
+	partitiontest.PartitionTest(t)
 
-var rootCmd = &cobra.Command{
-	Use:   "algocfg",
-	Short: "Tool for inspecting and updating algod's config.json file",
-	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		cmd.HelpFunc()(cmd, args)
-	},
-}
-
-func main() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	values := getConstValues(t, "hash.go", "HashID")
+	for i, v1 := range values {
+		for j, v2 := range values {
+			if i == j {
+				continue
+			}
+			assert.False(t, strings.HasPrefix(v1, v2), "HashID %s is a prefix of %s", v2, v1)
+		}
 	}
 }

@@ -25,7 +25,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -320,16 +322,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(5, true)}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
+	addSinkAndPoolAccounts(accts)
 
 	ml := makeMockLedgerForTracker(b, true, 10, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
@@ -352,7 +345,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
-	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = ml.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
 		arw := store.NewAccountsSQLReaderWriter(tx)
 
 		for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
@@ -395,17 +388,8 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	}()
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	addSinkAndPoolAccounts(accts)
 	rewardsLevels := []uint64{0}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
 
 	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion, accts)
 	defer ml.Close()
@@ -998,7 +982,8 @@ func TestFirstStagePersistence(t *testing.T) {
 	defer ml2.Close()
 	ml.Close()
 
-	cps2 := store.NewCatchpointSQLReaderWriter(ml2.dbs.Wdb.Handle)
+	cps2, err := ml2.dbs.CreateCatchpointReaderWriter()
+	require.NoError(t, err)
 
 	// Insert unfinished first stage record.
 	err = cps2.WriteCatchpointStateUint64(
@@ -1127,7 +1112,8 @@ func TestSecondStagePersistence(t *testing.T) {
 	err = os.WriteFile(catchpointDataFilePath, catchpointData, 0644)
 	require.NoError(t, err)
 
-	cps2 := store.NewCatchpointSQLReaderWriter(ml2.dbs.Wdb.Handle)
+	cps2, err := ml2.dbs.CreateCatchpointReaderWriter()
+	require.NoError(t, err)
 
 	// Restore the first stage database record.
 	err = cps2.InsertOrReplaceCatchpointFirstStageInfo(context.Background(), firstStageRound, &firstStageInfo)
@@ -1318,7 +1304,8 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 	defer ml2.Close()
 	ml.Close()
 
-	cps2 := store.NewCatchpointSQLReaderWriter(ml2.dbs.Wdb.Handle)
+	cps2, err := ml2.dbs.CreateCatchpointReaderWriter()
+	require.NoError(t, err)
 
 	// Sanity check: first stage record should be deleted.
 	_, exists, err := cps2.SelectCatchpointFirstStageInfo(context.Background(), firstStageRound)
@@ -1477,4 +1464,187 @@ func TestHashContract(t *testing.T) {
 			require.True(t, hasTestCoverageForKind(store.HashKind(i)), fmt.Sprintf("Missing test coverage for HashKind ordinal value = %d", i))
 		}
 	}
+}
+
+// TestCatchpoint_FastUpdates tests catchpoint label writing data race
+func TestCatchpointFastUpdates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	addSinkAndPoolAccounts(accts)
+	rewardsLevels := []uint64{0}
+
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	conf.CatchpointTracking = 1
+	initialBlocksCount := int(conf.MaxAcctLookback)
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
+
+	ct := newCatchpointTracker(t, ml, conf, ".")
+	au := ml.trackers.accts
+	ao := ml.trackers.acctsOnline
+
+	// Remove the txtail from the list of trackers since it causes a data race that
+	// wouldn't be observed under normal execution because commitedUpTo and newBlock
+	// are protected by the tracker mutex.
+	trackers := make([]ledgerTracker, 0, len(ml.trackers.trackers))
+	for _, tracker := range ml.trackers.trackers {
+		if _, ok := tracker.(*txTail); !ok {
+			trackers = append(trackers, tracker)
+		}
+	}
+	ml.trackers.trackers = trackers
+
+	// cover 10 genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < initialBlocksCount; i++ {
+		accts = append(accts, accts[0])
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+
+	checkAcctUpdates(t, au, ao, 0, basics.Round(initialBlocksCount)-1, accts, rewardsLevels, proto)
+
+	wg := sync.WaitGroup{}
+
+	for i := basics.Round(initialBlocksCount); i < basics.Round(proto.CatchpointLookback+15); i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		updates, totals := ledgertesting.RandomDeltasBalanced(1, accts[i-1], rewardLevel)
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
+		require.NoError(t, err)
+
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates.Upsert(testPoolAddr, newPool)
+		totals[testPoolAddr] = newPool
+		newAccts := applyPartialDeltas(accts[i-1], updates)
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
+
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta.Accts.MergeAccounts(updates)
+		ml.trackers.newBlock(blk, delta)
+		accts = append(accts, newAccts)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+
+		wg.Add(1)
+		go func(round basics.Round) {
+			defer wg.Done()
+			ml.trackers.committedUpTo(round)
+		}(i)
+	}
+	ml.trackers.waitAccountsWriting()
+	wg.Wait()
+
+	require.NotEmpty(t, ct.GetLastCatchpointLabel())
+}
+
+// TestCatchpoint_LargeAccountCountCatchpointGeneration creates a ledger containing a large set of accounts ( i.e. 100K accounts )
+// and attempts to have the catchpoint tracker create the associated catchpoint. It's designed precisely around setting an
+// environment which would quickly ( i.e. after 32 rounds ) would start producing catchpoints.
+func TestCatchpointLargeAccountCountCatchpointGeneration(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" || testing.Short() {
+		t.Skip("This test is too slow on CI executors: cannot repack catchpoint")
+	}
+
+	// The next operations are heavy on the memory.
+	// Garbage collection helps prevent trashing
+	runtime.GC()
+
+	// create new protocol version, which has lower lookback
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLargeAccountCountCatchpointGeneration")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.CatchpointLookback = 16
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(100000, true)}
+	addSinkAndPoolAccounts(accts)
+	rewardsLevels := []uint64{0}
+
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 32
+	conf.CatchpointTracking = 1
+	conf.Archival = true
+	initialBlocksCount := int(conf.MaxAcctLookback)
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, testProtocolVersion, accts)
+	defer ml.Close()
+
+	ct := newCatchpointTracker(t, ml, conf, ".")
+	temporaryDirectory := t.TempDir()
+	catchpointsDirectory := filepath.Join(temporaryDirectory, store.CatchpointDirName)
+	err := os.Mkdir(catchpointsDirectory, 0777)
+	require.NoError(t, err)
+	defer os.RemoveAll(catchpointsDirectory)
+
+	ct.dbDirectory = temporaryDirectory
+
+	au := ml.trackers.accts
+
+	// cover 10 genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < initialBlocksCount; i++ {
+		accts = append(accts, accts[0])
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+
+	start := basics.Round(initialBlocksCount)
+	min := conf.CatchpointInterval
+	if min < protoParams.CatchpointLookback {
+		min = protoParams.CatchpointLookback
+	}
+	end := basics.Round(min + conf.MaxAcctLookback + 3) // few more rounds to commit and generate the second stage
+	for i := start; i < end; i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		updates, totals := ledgertesting.RandomDeltasBalanced(1, accts[i-1], rewardLevel)
+
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
+		require.NoError(t, err)
+
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates.Upsert(testPoolAddr, newPool)
+		totals[testPoolAddr] = newPool
+		newAccts := applyPartialDeltas(accts[i-1], updates)
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = testProtocolVersion
+
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta.Accts.MergeAccounts(updates)
+		ml.trackers.newBlock(blk, delta)
+		accts = append(accts, newAccts)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+
+		ml.trackers.committedUpTo(i)
+		if i%2 == 1 || i == end-1 {
+			ml.trackers.waitAccountsWriting()
+		}
+	}
+
+	require.NotEmpty(t, ct.GetLastCatchpointLabel())
+
+	// Garbage collection helps prevent trashing for next tests
+	runtime.GC()
 }

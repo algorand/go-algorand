@@ -18,20 +18,24 @@ package store
 
 import "database/sql"
 
-// MerkleCommitter allows storing and loading merkletrie pages from a sqlite database.
-//
 //msgp:ignore MerkleCommitter
-type MerkleCommitter struct {
+type merkleCommitter struct {
 	tx         *sql.Tx
 	deleteStmt *sql.Stmt
 	insertStmt *sql.Stmt
 	selectStmt *sql.Stmt
 }
 
+// MerkleCommitter allows storing and loading merkletrie pages from a sqlite database.
+type MerkleCommitter interface {
+	StorePage(page uint64, content []byte) error
+	LoadPage(page uint64) (content []byte, err error)
+}
+
 // MakeMerkleCommitter creates a MerkleCommitter object that implements the merkletrie.Committer interface allowing storing and loading
 // merkletrie pages from a sqlite database.
-func MakeMerkleCommitter(tx *sql.Tx, staging bool) (mc *MerkleCommitter, err error) {
-	mc = &MerkleCommitter{tx: tx}
+func MakeMerkleCommitter(tx *sql.Tx, staging bool) (mc *merkleCommitter, err error) {
+	mc = &merkleCommitter{tx: tx}
 	accountHashesTable := "accounthashes"
 	if staging {
 		accountHashesTable = "catchpointaccounthashes"
@@ -52,7 +56,7 @@ func MakeMerkleCommitter(tx *sql.Tx, staging bool) (mc *MerkleCommitter, err err
 }
 
 // StorePage is the merkletrie.Committer interface implementation, stores a single page in a sqlite database table.
-func (mc *MerkleCommitter) StorePage(page uint64, content []byte) error {
+func (mc *merkleCommitter) StorePage(page uint64, content []byte) error {
 	if len(content) == 0 {
 		_, err := mc.deleteStmt.Exec(page)
 		return err
@@ -62,7 +66,7 @@ func (mc *MerkleCommitter) StorePage(page uint64, content []byte) error {
 }
 
 // LoadPage is the merkletrie.Committer interface implementation, load a single page from a sqlite database table.
-func (mc *MerkleCommitter) LoadPage(page uint64) (content []byte, err error) {
+func (mc *merkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 	err = mc.selectStmt.QueryRow(page).Scan(&content)
 	if err == sql.ErrNoRows {
 		content = nil
