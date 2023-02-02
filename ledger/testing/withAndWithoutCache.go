@@ -22,6 +22,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 )
 
+// WithAndWithoutLRUCache allows for running a test with ledger LRU cache activated and deactivated.
 func WithAndWithoutLRUCache(t *testing.T, cfg config.Local, test func(t *testing.T, cfg config.Local)) {
 	cfg.DisableLedgerLRUCache = false
 	t.Run("test with lru cache", func(t *testing.T) {
