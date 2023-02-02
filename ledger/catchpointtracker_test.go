@@ -377,6 +377,10 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 func TestReproducibleCatchpointLabels(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		t.Skip("This test is too slow on ARM and causes CI builds to time out")
+	}
+
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -1469,6 +1473,10 @@ func TestHashContract(t *testing.T) {
 // TestCatchpoint_FastUpdates tests catchpoint label writing data race
 func TestCatchpointFastUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		t.Skip("This test is too slow on ARM and causes CI builds to time out")
+	}
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 

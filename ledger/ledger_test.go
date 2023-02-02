@@ -197,17 +197,6 @@ func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.A
 	return l.AddBlock(blk, agreement.Certificate{})
 }
 
-func withAndWithoutLRUCache(t *testing.T, cfg config.Local, test func(t *testing.T, cfg config.Local)) {
-	cfg.DisableLedgerLRUCache = false
-	t.Run(fmt.Sprintf("test with lru cache"), func(t *testing.T) {
-		test(t, cfg)
-	})
-	cfg.DisableLedgerLRUCache = true
-	t.Run(fmt.Sprintf("test without lru cache"), func(t *testing.T) {
-		test(t, cfg)
-	})
-}
-
 func testLedgerBasic(t *testing.T, cfg config.Local) {
 	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	const inMem = true
@@ -222,7 +211,7 @@ func TestLedgerBasic(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 
-	withAndWithoutLRUCache(t, cfg, testLedgerBasic)
+	ledgertesting.WithAndWithoutLRUCache(t, cfg, testLedgerBasic)
 }
 
 func TestLedgerBlockHeaders(t *testing.T) {
@@ -1554,7 +1543,7 @@ func TestLedgerReload(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	withAndWithoutLRUCache(t, cfg, testLedgerReload)
+	ledgertesting.WithAndWithoutLRUCache(t, cfg, testLedgerReload)
 }
 
 func TestWaitLedgerReload(t *testing.T) {
@@ -2954,7 +2943,7 @@ func TestVotersReloadFromDisk(t *testing.T) {
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
 
-	withAndWithoutLRUCache(t, cfg, testVotersReloadFromDisk)
+	ledgertesting.WithAndWithoutLRUCache(t, cfg, testVotersReloadFromDisk)
 }
 
 func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg config.Local) {
@@ -3022,7 +3011,7 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
 
-	withAndWithoutLRUCache(t, cfg, testVotersReloadFromDiskAfterOneStateProofCommitted)
+	ledgertesting.WithAndWithoutLRUCache(t, cfg, testVotersReloadFromDiskAfterOneStateProofCommitted)
 }
 
 func testVotersReloadFromDiskPassRecoveryPeriod(t *testing.T, cfg config.Local) {
@@ -3093,5 +3082,5 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
 
-	withAndWithoutLRUCache(t, cfg, testVotersReloadFromDiskPassRecoveryPeriod)
+	ledgertesting.WithAndWithoutLRUCache(t, cfg, testVotersReloadFromDiskPassRecoveryPeriod)
 }

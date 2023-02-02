@@ -594,7 +594,7 @@ func TestAcctUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	conf := config.GetDefaultLocal()
-	withAndWithoutLRUCache(t, conf, testAcctUpdates)
+	ledgertesting.WithAndWithoutLRUCache(t, conf, testAcctUpdates)
 }
 
 func BenchmarkBalancesChanges(b *testing.B) {
