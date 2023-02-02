@@ -1100,20 +1100,11 @@ func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64) error {
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingStateDelta, v2.Log)
 	}
-	consensusParams, err := v2.Node.LedgerForAPI().ConsensusParams(basics.Round(round))
-	if err != nil {
-		return internalError(ctx, fmt.Errorf("unable to retrieve consensus params for round %d", round), errInternalFailure, v2.Log)
-	}
-	hdr, err := v2.Node.LedgerForAPI().BlockHdr(basics.Round(round))
-	if err != nil {
-		return internalError(ctx, fmt.Errorf("unable to retrieve block header for round %d", round), errInternalFailure, v2.Log)
-	}
-
-	response, err := stateDeltaToLedgerDelta(sDelta, consensusParams, hdr.RewardsLevel, round)
+	consensusParams := config.Consensus[sDelta.Hdr.CurrentProtocol]
+	response, err := StateDeltaToLedgerDelta(sDelta, consensusParams)
 	if err != nil {
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}
-
 	return ctx.JSON(http.StatusOK, response)
 }
 
