@@ -434,7 +434,7 @@ func itxnSettableFieldNames() []string {
 	return names
 }
 
-var innerTxnTypes = map[string]uint64{
+var InnerTxnTypes = map[string]uint64{
 	string(protocol.PaymentTx):         5,
 	string(protocol.KeyRegistrationTx): 6,
 	string(protocol.AssetTransferTx):   5,

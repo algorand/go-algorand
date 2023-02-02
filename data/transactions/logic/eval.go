@@ -4707,7 +4707,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 			return fmt.Errorf("Type arg not a byte array")
 		}
 		txType := string(sv.Bytes)
-		ver, ok := innerTxnTypes[txType]
+		ver, ok := InnerTxnTypes[txType]
 		if ok && ver <= cx.version {
 			txn.Type = protocol.TxType(txType)
 		} else {
@@ -4721,7 +4721,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		}
 		// i != 0 is so that the error reports 0 instead of Unknown
 		if i != 0 && i < uint64(len(TxnTypeNames)) {
-			ver, ok := innerTxnTypes[TxnTypeNames[i]]
+			ver, ok := InnerTxnTypes[TxnTypeNames[i]]
 			if ok && ver <= cx.version {
 				txn.Type = protocol.TxType(TxnTypeNames[i])
 			} else {

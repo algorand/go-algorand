@@ -843,6 +843,50 @@
         "Value": 66
       }
     ],
+    "itxn_type": [
+      {
+        "Name": "appl",
+        "Type": "uint64",
+        "Note": "ApplicationCall",
+        "Version": 6,
+        "Value": 0
+      },
+      {
+        "Name": "pay",
+        "Type": "uint64",
+        "Note": "Payment",
+        "Version": 5,
+        "Value": 0
+      },
+      {
+        "Name": "keyreg",
+        "Type": "uint64",
+        "Note": "KeyRegistration",
+        "Version": 6,
+        "Value": 0
+      },
+      {
+        "Name": "axfer",
+        "Type": "uint64",
+        "Note": "AssetTransfer",
+        "Version": 5,
+        "Value": 0
+      },
+      {
+        "Name": "acfg",
+        "Type": "uint64",
+        "Note": "AssetConfig",
+        "Version": 5,
+        "Value": 0
+      },
+      {
+        "Name": "afrz",
+        "Type": "uint64",
+        "Note": "AssetFreeze",
+        "Version": 5,
+        "Value": 0
+      }
+    ],
     "json_ref": [
       {
         "Name": "JSONString",
@@ -1303,12 +1347,6 @@
     ],
     "txn_type": [
       {
-        "Name": "appl",
-        "Type": "uint64",
-        "Note": "ApplicationCall",
-        "Value": 0
-      },
-      {
         "Name": "unknown",
         "Type": "uint64",
         "Note": "Unknown type. Invalid transaction",
@@ -1318,31 +1356,37 @@
         "Name": "pay",
         "Type": "uint64",
         "Note": "Payment",
-        "Value": 0
+        "Value": 1
       },
       {
         "Name": "keyreg",
         "Type": "uint64",
         "Note": "KeyRegistration",
-        "Value": 0
+        "Value": 2
       },
       {
         "Name": "acfg",
         "Type": "uint64",
         "Note": "AssetConfig",
-        "Value": 0
+        "Value": 3
       },
       {
         "Name": "axfer",
         "Type": "uint64",
         "Note": "AssetTransfer",
-        "Value": 0
+        "Value": 4
       },
       {
         "Name": "afrz",
         "Type": "uint64",
         "Note": "AssetFreeze",
-        "Value": 0
+        "Value": 5
+      },
+      {
+        "Name": "appl",
+        "Type": "uint64",
+        "Note": "ApplicationCall",
+        "Value": 6
       }
     ],
     "txna": [
@@ -1407,6 +1451,13 @@
   },
   "PseudoOps": [
     {
+      "Name": "byte",
+      "Returns": [
+        "[]byte"
+      ],
+      "Size": 2
+    },
+    {
       "Name": "addr",
       "Returns": [
         "addr"
@@ -1417,13 +1468,6 @@
       "Name": "int",
       "Returns": [
         "uint64"
-      ],
-      "Size": 2
-    },
-    {
-      "Name": "byte",
-      "Returns": [
-        "[]byte"
       ],
       "Size": 2
     },
@@ -3896,7 +3940,7 @@
         "any"
       ],
       "Size": 2,
-      "ArgEnum": "txn",
+      "ArgEnum": "itxn_field",
       "Doc": "field F of the last inner transaction",
       "ImmediateNote": "{uint8 transaction field index}",
       "IntroducedVersion": 5,

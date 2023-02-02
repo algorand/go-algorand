@@ -375,6 +375,7 @@ func fieldGroups() []logic.FieldGroup {
 func onCompleteKeywords() []Keyword {
 	var ocs []Keyword
 	for _, ocn := range logic.OnCompletionNames {
+		// TODO: add Value/Doc
 		ocs = append(ocs, Keyword{Name: ocn, Type: "uint64"})
 	}
 	return ocs
@@ -382,10 +383,20 @@ func onCompleteKeywords() []Keyword {
 
 func txnTypeKeywords() []Keyword {
 	var txTypes []Keyword
-	for n, doc := range logic.TypeNameDescriptions {
-		txTypes = append(txTypes, Keyword{Name: n, Type: "uint64", Note: doc})
+	for idx, n := range logic.TxnTypeNames {
+		doc := logic.TypeNameDescriptions[n]
+		txTypes = append(txTypes, Keyword{Name: n, Type: "uint64", Note: doc, Value: uint64(idx)})
 	}
 	return txTypes
+}
+
+func itxnTypeKeywords() []Keyword {
+	var itxTypes []Keyword
+	for n, version := range logic.InnerTxnTypes {
+		doc := logic.TypeNameDescriptions[n]
+		itxTypes = append(itxTypes, Keyword{Name: n, Type: "uint64", Version: version, Note: doc})
+	}
+	return itxTypes
 }
 
 func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
@@ -407,6 +418,7 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 	}
 
 	keywords["txn_type"] = txnTypeKeywords()
+	keywords["itxn_type"] = itxnTypeKeywords()
 	keywords["on_complete"] = onCompleteKeywords()
 
 	for i, spec := range opSpecs {
