@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -354,7 +353,7 @@ func TestClawbackAction(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	asaIndex := basics.AssetIndex(1)
@@ -440,7 +439,7 @@ func TestRekeyAction(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	appIndex := basics.AppIndex(1)
@@ -545,7 +544,7 @@ func TestRekeyActionCloseAccount(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	appIndex := basics.AppIndex(1)
@@ -621,7 +620,7 @@ func TestDuplicatePayAction(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	appIndex := basics.AppIndex(1)
@@ -697,7 +696,7 @@ func TestInnerTxnCount(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	create := txntest.Txn{
@@ -746,7 +745,7 @@ func TestAcfgAction(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	appIndex := basics.AppIndex(1)
@@ -923,7 +922,7 @@ func TestAsaDuringInit(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	appIndex := basics.AppIndex(2)
@@ -977,7 +976,7 @@ func TestRekey(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	app := txntest.Txn{
@@ -1029,7 +1028,7 @@ func TestNote(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	app := txntest.Txn{
@@ -1078,7 +1077,7 @@ func TestKeyreg(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	app := txntest.Txn{
@@ -1179,7 +1178,7 @@ func TestInnerAppCall(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	app0 := txntest.Txn{
@@ -1247,9 +1246,7 @@ func TestInnerAppManipulate(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	log := logging.TestingLogWithFilter(t, []logging.Filter{{Msg: "database table is locked"}})
-	log.SetLevel(logging.Warn)
-	l := newTestLedgerWithLogger(t, genBalances, log)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	calleeIndex := basics.AppIndex(1)
@@ -1522,7 +1519,7 @@ func TestIndirectReentry(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	app0 := txntest.Txn{
@@ -1587,7 +1584,7 @@ func TestValidAppReentry(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	app0 := txntest.Txn{
@@ -1777,7 +1774,7 @@ func TestAbortWhenInnerAppCallFails(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	app0 := txntest.Txn{
@@ -1971,7 +1968,7 @@ func TestAppVersionMatching(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	four, err := logic.AssembleStringWithVersion("int 1", 4)
@@ -2130,7 +2127,7 @@ func TestCreatedAppsAreAvailable(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	ops, err := logic.AssembleStringWithVersion("int 1\nint 1\nassert", logic.AssemblerMaxVersion)
@@ -2196,7 +2193,7 @@ func TestInvalidAppsNotAccessible(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	app0 := txntest.Txn{
@@ -2253,7 +2250,7 @@ func TestInvalidAssetsNotAccessible(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	createapp := txntest.Txn{
@@ -2413,7 +2410,7 @@ func TestInnerClearState(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	// inner will be an app that we opt into, then clearstate
@@ -2502,7 +2499,7 @@ func TestInnerClearStateBadCallee(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	// badCallee tries to run down your budget, so an inner clear must be
@@ -2604,7 +2601,7 @@ func TestInnerClearStateBadCaller(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	inner := txntest.Txn{
@@ -2839,7 +2836,7 @@ func TestGlobalChangesAcrossApps(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	appA := txntest.Txn{
@@ -2948,7 +2945,7 @@ func TestLocalChangesAcrossApps(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
+	l := newTestFilteredLedger(t, genBalances)
 	defer l.Close()
 
 	appA := txntest.Txn{

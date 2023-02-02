@@ -311,6 +311,12 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
 	return newTestLedgerWithLogger(t, balances, log)
 }
 
+func newTestFilteredLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
+	log := logging.TestingLogWithFilter(t, []logging.Filter{{Msg: "database table is locked"}})
+	log.SetLevel(logging.Warn)
+	return newTestLedgerWithLogger(t, balances, log)
+}
+
 // Test that preloading data in cow base works as expected.
 func TestResourceCaching(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -332,7 +338,7 @@ func TestResourceCaching(t *testing.T) {
 		RewardsPool: testPoolAddr,
 		Timestamp:   0,
 	}
-	l := newTestLedger(t, genesisBalances)
+	l := newTestFilteredLedger(t, genesisBalances)
 	defer l.Close()
 
 	genesisBlockHeader, err := l.BlockHdr(basics.Round(0))

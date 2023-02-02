@@ -25,8 +25,12 @@ import (
 // Being an io.Writer lets us pass it to Logger.SetOutput() in testing code -- this way if we want we can use Go's built-in testing log instead of making a new base.log file for each test.
 // As a bonus, the detailed logs produced in a Travis test are now easily accessible and are printed if and only if that particular test fails.
 type TestLogWriter struct {
-	testing.TB
+	logWriter
 	filters []Filter
+}
+
+type logWriter interface {
+	Log(args ...interface{})
 }
 
 func (tb TestLogWriter) Write(p []byte) (n int, err error) {
@@ -59,10 +63,10 @@ func TestingLog(tb testing.TB) Logger {
 }
 
 // TestingLogWithFilter is a test-only convenience function to configure logging for testing with filtering
-func TestingLogWithFilter(tb testing.TB, filters []Filter) Logger {
+func TestingLogWithFilter(lw logWriter, filters []Filter) Logger {
 	l := NewLogger()
 	l.SetLevel(Debug)
-	writer := TestLogWriter{tb, filters}
+	writer := TestLogWriter{lw, filters}
 	l.SetOutput(writer)
 	return l
 }

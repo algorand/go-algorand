@@ -528,7 +528,9 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess store.
 	var initState ledgercore.InitState
 	initState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	conf := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.TestingLog(t), t.Name()+"FromCatchpoint", true, initState, conf)
+	log := logging.TestingLogWithFilter(t, []logging.Filter{{Msg: "database table is locked"}})
+	log.SetLevel(logging.Warn)
+	l, err := OpenLedger(log, t.Name()+"FromCatchpoint", true, initState, conf)
 	require.NoError(t, err)
 	accessor := MakeCatchpointCatchupAccessor(l, l.log)
 

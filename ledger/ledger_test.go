@@ -1738,10 +1738,10 @@ func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 	}
 	genesisInitState.Accounts = accountsWithValid
 
-	const inMem = false
+	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
-	log := logging.TestingLog(t)
+	log := logging.TestingLogWithFilter(t, []logging.Filter{{Msg: "database table is locked"}})
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
@@ -2999,11 +2999,11 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
-	const inMem = false
+	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
-	log := logging.TestingLog(t)
+	log := logging.TestingLogWithFilter(t, []logging.Filter{{Msg: "database table is locked"}})
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
