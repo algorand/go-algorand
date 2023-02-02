@@ -17,6 +17,8 @@
 package v2
 
 import (
+	"bytes"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -138,6 +140,10 @@ func TestDelta(t *testing.T) {
 	require.Equal(t, expAppDelta.Addr.String(), actAppDelta.Address)
 	require.Equal(t, expAppDelta.Params.Deleted, actAppDelta.AppDeleted)
 	require.Equal(t, len(original.KvMods), len(*converted.KvMods))
+	// sort the result so we have deterministic order
+	sort.Slice(*converted.KvMods, func(i, j int) bool {
+		return bytes.Compare(*(*converted.KvMods)[i].Key, *(*converted.KvMods)[j].Key) < 0
+	})
 	require.Equal(t, []uint8("box1"), *(*converted.KvMods)[0].Key)
 	require.Equal(t, original.KvMods["box1"].Data, *(*converted.KvMods)[0].Value)
 	require.Equal(t, []uint8("box2"), *(*converted.KvMods)[1].Key)
