@@ -7,10 +7,6 @@
       "LengthBound": [
         0,
         4096
-      ],
-      "ValueBound": [
-        0,
-        0
       ]
     },
     "addr": {
@@ -18,10 +14,6 @@
       "LengthBound": [
         32,
         32
-      ],
-      "ValueBound": [
-        0,
-        0
       ]
     },
     "any": {
@@ -40,18 +32,10 @@
       "LengthBound": [
         0,
         64
-      ],
-      "ValueBound": [
-        0,
-        0
       ]
     },
     "bool": {
       "Type": "U",
-      "LengthBound": [
-        0,
-        0
-      ],
       "ValueBound": [
         0,
         1
@@ -62,10 +46,6 @@
       "LengthBound": [
         32,
         32
-      ],
-      "ValueBound": [
-        0,
-        0
       ]
     },
     "method": {
@@ -73,29 +53,13 @@
       "LengthBound": [
         4,
         4
-      ],
-      "ValueBound": [
-        0,
-        0
       ]
     },
     "none": {
-      "Type": "_",
-      "LengthBound": [
-        0,
-        0
-      ],
-      "ValueBound": [
-        0,
-        0
-      ]
+      "Type": "_"
     },
     "uint64": {
       "Type": "U",
-      "LengthBound": [
-        0,
-        0
-      ],
       "ValueBound": [
         0,
         18446744073709551615
@@ -108,14 +72,14 @@
         "Name": "Secp256k1",
         "Type": "none",
         "Note": "secp256k1 curve, used in Bitcoin",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 0
       },
       {
         "Name": "Secp256r1",
         "Type": "none",
         "Note": "secp256r1 curve, NIST standard",
-        "Version": 7,
+        "IntroducedVersion": 7,
         "Value": 1
       }
     ],
@@ -124,84 +88,84 @@
         "Name": "AcctBalance",
         "Type": "uint64",
         "Note": "Account balance in microalgos",
-        "Version": 6,
+        "IntroducedVersion": 6,
         "Value": 0
       },
       {
         "Name": "AcctMinBalance",
         "Type": "uint64",
         "Note": "Minimum required balance for account, in microalgos",
-        "Version": 6,
+        "IntroducedVersion": 6,
         "Value": 1
       },
       {
         "Name": "AcctAuthAddr",
         "Type": "addr",
         "Note": "Address the account is rekeyed to.",
-        "Version": 6,
+        "IntroducedVersion": 6,
         "Value": 2
       },
       {
         "Name": "AcctTotalNumUint",
         "Type": "uint64",
         "Note": "The total number of uint64 values allocated by this account in Global and Local States.",
-        "Version": 8,
+        "IntroducedVersion": 8,
         "Value": 3
       },
       {
         "Name": "AcctTotalNumByteSlice",
         "Type": "uint64",
         "Note": "The total number of byte array values allocated by this account in Global and Local States.",
-        "Version": 8,
+        "IntroducedVersion": 8,
         "Value": 4
       },
       {
         "Name": "AcctTotalExtraAppPages",
         "Type": "uint64",
         "Note": "The number of extra app code pages used by this account.",
-        "Version": 8,
+        "IntroducedVersion": 8,
         "Value": 5
       },
       {
         "Name": "AcctTotalAppsCreated",
         "Type": "uint64",
         "Note": "The number of existing apps created by this account.",
-        "Version": 8,
+        "IntroducedVersion": 8,
         "Value": 6
       },
       {
         "Name": "AcctTotalAppsOptedIn",
         "Type": "uint64",
         "Note": "The number of apps this account is opted into.",
-        "Version": 8,
+        "IntroducedVersion": 8,
         "Value": 7
       },
       {
         "Name": "AcctTotalAssetsCreated",
         "Type": "uint64",
         "Note": "The number of existing ASAs created by this account.",
-        "Version": 8,
+        "IntroducedVersion": 8,
         "Value": 8
       },
       {
         "Name": "AcctTotalAssets",
         "Type": "uint64",
         "Note": "The numbers of ASAs held by this account (including ASAs this account created).",
-        "Version": 8,
+        "IntroducedVersion": 8,
         "Value": 9
       },
       {
         "Name": "AcctTotalBoxes",
         "Type": "uint64",
         "Note": "The number of existing boxes created by this account's app.",
-        "Version": 8,
+        "IntroducedVersion": 8,
         "Value": 10
       },
       {
         "Name": "AcctTotalBoxBytes",
         "Type": "uint64",
         "Note": "The total number of bytes used by this account's app's box keys and values.",
-        "Version": 8,
+        "IntroducedVersion": 8,
         "Value": 11
       }
     ],
@@ -210,63 +174,63 @@
         "Name": "AppApprovalProgram",
         "Type": "[]byte",
         "Note": "Bytecode of Approval Program",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 0
       },
       {
         "Name": "AppClearStateProgram",
         "Type": "[]byte",
         "Note": "Bytecode of Clear State Program",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 1
       },
       {
         "Name": "AppGlobalNumUint",
         "Type": "uint64",
         "Note": "Number of uint64 values allowed in Global State",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 2
       },
       {
         "Name": "AppGlobalNumByteSlice",
         "Type": "uint64",
         "Note": "Number of byte array values allowed in Global State",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 3
       },
       {
         "Name": "AppLocalNumUint",
         "Type": "uint64",
         "Note": "Number of uint64 values allowed in Local State",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 4
       },
       {
         "Name": "AppLocalNumByteSlice",
         "Type": "uint64",
         "Note": "Number of byte array values allowed in Local State",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 5
       },
       {
         "Name": "AppExtraProgramPages",
         "Type": "uint64",
         "Note": "Number of Extra Program Pages of code space",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 6
       },
       {
         "Name": "AppCreator",
         "Type": "addr",
         "Note": "Creator address",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 7
       },
       {
         "Name": "AppAddress",
         "Type": "addr",
         "Note": "Address for which this application has authority",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 8
       }
     ],
@@ -275,14 +239,14 @@
         "Name": "AssetBalance",
         "Type": "uint64",
         "Note": "Amount of the asset unit held by this account",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 0
       },
       {
         "Name": "AssetFrozen",
         "Type": "bool",
         "Note": "Is the asset frozen or not",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 1
       }
     ],
@@ -291,84 +255,84 @@
         "Name": "AssetTotal",
         "Type": "uint64",
         "Note": "Total number of units of this asset",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 0
       },
       {
         "Name": "AssetDecimals",
         "Type": "uint64",
         "Note": "See AssetParams.Decimals",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 1
       },
       {
         "Name": "AssetDefaultFrozen",
         "Type": "bool",
         "Note": "Frozen by default or not",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 2
       },
       {
         "Name": "AssetUnitName",
         "Type": "[]byte",
         "Note": "Asset unit name",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 3
       },
       {
         "Name": "AssetName",
         "Type": "[]byte",
         "Note": "Asset name",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 4
       },
       {
         "Name": "AssetURL",
         "Type": "[]byte",
         "Note": "URL with additional info about the asset",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 5
       },
       {
         "Name": "AssetMetadataHash",
         "Type": "hash",
         "Note": "Arbitrary commitment",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 6
       },
       {
         "Name": "AssetManager",
         "Type": "addr",
         "Note": "Manager address",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 7
       },
       {
         "Name": "AssetReserve",
         "Type": "addr",
         "Note": "Reserve address",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 8
       },
       {
         "Name": "AssetFreeze",
         "Type": "addr",
         "Note": "Freeze address",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 9
       },
       {
         "Name": "AssetClawback",
         "Type": "addr",
         "Note": "Clawback address",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 10
       },
       {
         "Name": "AssetCreator",
         "Type": "addr",
         "Note": "Creator address",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 11
       }
     ],
@@ -376,13 +340,13 @@
       {
         "Name": "URLEncoding",
         "Type": "none",
-        "Version": 6,
+        "IntroducedVersion": 6,
         "Value": 0
       },
       {
         "Name": "StdEncoding",
         "Type": "none",
-        "Version": 6,
+        "IntroducedVersion": 6,
         "Value": 1
       }
     ],
@@ -390,13 +354,13 @@
       {
         "Name": "BlkSeed",
         "Type": "hash",
-        "Version": 7,
+        "IntroducedVersion": 7,
         "Value": 0
       },
       {
         "Name": "BlkTimestamp",
         "Type": "uint64",
-        "Version": 7,
+        "IntroducedVersion": 7,
         "Value": 1
       }
     ],
@@ -435,70 +399,70 @@
         "Name": "LogicSigVersion",
         "Type": "uint64",
         "Note": "Maximum supported version",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 5
       },
       {
         "Name": "Round",
         "Type": "uint64",
         "Note": "Current round number. Application mode only.",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 6
       },
       {
         "Name": "LatestTimestamp",
         "Type": "uint64",
         "Note": "Last confirmed block UNIX timestamp. Fails if negative. Application mode only.",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 7
       },
       {
         "Name": "CurrentApplicationID",
         "Type": "uint64",
         "Note": "ID of current application executing. Application mode only.",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 8
       },
       {
         "Name": "CreatorAddress",
         "Type": "addr",
         "Note": "Address of the creator of the current application. Application mode only.",
-        "Version": 3,
+        "IntroducedVersion": 3,
         "Value": 9
       },
       {
         "Name": "CurrentApplicationAddress",
         "Type": "addr",
         "Note": "Address that the current application controls. Application mode only.",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 10
       },
       {
         "Name": "GroupID",
         "Type": "hash",
         "Note": "ID of the transaction group. 32 zero bytes if the transaction is not part of a group.",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 11
       },
       {
         "Name": "OpcodeBudget",
         "Type": "uint64",
         "Note": "The remaining cost that can be spent by opcodes in this program.",
-        "Version": 6,
+        "IntroducedVersion": 6,
         "Value": 12
       },
       {
         "Name": "CallerApplicationID",
         "Type": "uint64",
         "Note": "The application ID of the application that called this application. 0 if this application is at the top-level. Application mode only.",
-        "Version": 6,
+        "IntroducedVersion": 6,
         "Value": 13
       },
       {
         "Name": "CallerApplicationAddress",
         "Type": "addr",
         "Note": "The application address of the application that called this application. ZeroAddress if this application is at the top-level. Application mode only.",
-        "Version": 6,
+        "IntroducedVersion": 6,
         "Value": 14
       }
     ],
@@ -615,231 +579,231 @@
         "Name": "ApplicationID",
         "Type": "uint64",
         "Note": "ApplicationID from ApplicationCall transaction",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 24
       },
       {
         "Name": "OnCompletion",
         "Type": "uint64",
         "Note": "ApplicationCall transaction on completion action",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 25
       },
       {
         "Name": "ApplicationArgs",
         "Type": "[]byte",
         "Note": "Arguments passed to the application in the ApplicationCall transaction",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 26
       },
       {
         "Name": "Accounts",
         "Type": "addr",
         "Note": "Accounts listed in the ApplicationCall transaction",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 28
       },
       {
         "Name": "ApprovalProgram",
         "Type": "[]byte",
         "Note": "Approval program",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 30
       },
       {
         "Name": "ClearStateProgram",
         "Type": "[]byte",
         "Note": "Clear state program",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 31
       },
       {
         "Name": "RekeyTo",
         "Type": "addr",
         "Note": "32 byte Sender's new AuthAddr",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 32
       },
       {
         "Name": "ConfigAsset",
         "Type": "uint64",
         "Note": "Asset ID in asset config transaction",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 33
       },
       {
         "Name": "ConfigAssetTotal",
         "Type": "uint64",
         "Note": "Total number of units of this asset created",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 34
       },
       {
         "Name": "ConfigAssetDecimals",
         "Type": "uint64",
         "Note": "Number of digits to display after the decimal place when displaying the asset",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 35
       },
       {
         "Name": "ConfigAssetDefaultFrozen",
         "Type": "bool",
         "Note": "Whether the asset's slots are frozen by default or not, 0 or 1",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 36
       },
       {
         "Name": "ConfigAssetUnitName",
         "Type": "[]byte",
         "Note": "Unit name of the asset",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 37
       },
       {
         "Name": "ConfigAssetName",
         "Type": "[]byte",
         "Note": "The asset name",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 38
       },
       {
         "Name": "ConfigAssetURL",
         "Type": "[]byte",
         "Note": "URL",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 39
       },
       {
         "Name": "ConfigAssetMetadataHash",
         "Type": "hash",
         "Note": "32 byte commitment to unspecified asset metadata",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 40
       },
       {
         "Name": "ConfigAssetManager",
         "Type": "addr",
         "Note": "32 byte address",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 41
       },
       {
         "Name": "ConfigAssetReserve",
         "Type": "addr",
         "Note": "32 byte address",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 42
       },
       {
         "Name": "ConfigAssetFreeze",
         "Type": "addr",
         "Note": "32 byte address",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 43
       },
       {
         "Name": "ConfigAssetClawback",
         "Type": "addr",
         "Note": "32 byte address",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 44
       },
       {
         "Name": "FreezeAsset",
         "Type": "uint64",
         "Note": "Asset ID being frozen or un-frozen",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 45
       },
       {
         "Name": "FreezeAssetAccount",
         "Type": "addr",
         "Note": "32 byte address of the account whose asset slot is being frozen or un-frozen",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 46
       },
       {
         "Name": "FreezeAssetFrozen",
         "Type": "bool",
         "Note": "The new frozen value, 0 or 1",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 47
       },
       {
         "Name": "Assets",
         "Type": "uint64",
         "Note": "Foreign Assets listed in the ApplicationCall transaction",
-        "Version": 3,
+        "IntroducedVersion": 3,
         "Value": 48
       },
       {
         "Name": "Applications",
         "Type": "uint64",
         "Note": "Foreign Apps listed in the ApplicationCall transaction",
-        "Version": 3,
+        "IntroducedVersion": 3,
         "Value": 50
       },
       {
         "Name": "GlobalNumUint",
         "Type": "uint64",
         "Note": "Number of global state integers in ApplicationCall",
-        "Version": 3,
+        "IntroducedVersion": 3,
         "Value": 52
       },
       {
         "Name": "GlobalNumByteSlice",
         "Type": "uint64",
         "Note": "Number of global state byteslices in ApplicationCall",
-        "Version": 3,
+        "IntroducedVersion": 3,
         "Value": 53
       },
       {
         "Name": "LocalNumUint",
         "Type": "uint64",
         "Note": "Number of local state integers in ApplicationCall",
-        "Version": 3,
+        "IntroducedVersion": 3,
         "Value": 54
       },
       {
         "Name": "LocalNumByteSlice",
         "Type": "uint64",
         "Note": "Number of local state byteslices in ApplicationCall",
-        "Version": 3,
+        "IntroducedVersion": 3,
         "Value": 55
       },
       {
         "Name": "ExtraProgramPages",
         "Type": "uint64",
         "Note": "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
-        "Version": 4,
+        "IntroducedVersion": 4,
         "Value": 56
       },
       {
         "Name": "Nonparticipation",
         "Type": "bool",
         "Note": "Marks an account nonparticipating for rewards",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 57
       },
       {
         "Name": "StateProofPK",
         "Type": "[]byte",
         "Note": "64 byte state proof public key",
-        "Version": 6,
+        "IntroducedVersion": 6,
         "Value": 63
       },
       {
         "Name": "ApprovalProgramPages",
         "Type": "[]byte",
         "Note": "Approval Program as an array of pages",
-        "Version": 7,
+        "IntroducedVersion": 7,
         "Value": 64
       },
       {
         "Name": "ClearStateProgramPages",
         "Type": "[]byte",
         "Note": "ClearState Program as an array of pages",
-        "Version": 7,
+        "IntroducedVersion": 7,
         "Value": 66
       }
     ],
@@ -854,42 +818,42 @@
         "Name": "pay",
         "Type": "uint64",
         "Note": "Payment",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 1
       },
       {
         "Name": "keyreg",
         "Type": "uint64",
         "Note": "KeyRegistration",
-        "Version": 6,
+        "IntroducedVersion": 6,
         "Value": 2
       },
       {
         "Name": "acfg",
         "Type": "uint64",
         "Note": "AssetConfig",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 3
       },
       {
         "Name": "axfer",
         "Type": "uint64",
         "Note": "AssetTransfer",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 4
       },
       {
         "Name": "afrz",
         "Type": "uint64",
         "Note": "AssetFreeze",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 5
       },
       {
         "Name": "appl",
         "Type": "uint64",
         "Note": "ApplicationCall",
-        "Version": 6,
+        "IntroducedVersion": 6,
         "Value": 6
       }
     ],
@@ -897,19 +861,19 @@
       {
         "Name": "JSONString",
         "Type": "[]byte",
-        "Version": 7,
+        "IntroducedVersion": 7,
         "Value": 0
       },
       {
         "Name": "JSONUint64",
         "Type": "uint64",
-        "Version": 7,
+        "IntroducedVersion": 7,
         "Value": 1
       },
       {
         "Name": "JSONObject",
         "Type": "[]byte",
-        "Version": 7,
+        "IntroducedVersion": 7,
         "Value": 2
       }
     ],
@@ -974,7 +938,7 @@
         "Name": "FirstValidTime",
         "Type": "uint64",
         "Note": "UNIX timestamp of block before txn.FirstValid. Fails if negative",
-        "Version": 7,
+        "IntroducedVersion": 7,
         "Value": 3
       },
       {
@@ -1101,259 +1065,259 @@
         "Name": "ApplicationID",
         "Type": "uint64",
         "Note": "ApplicationID from ApplicationCall transaction",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 24
       },
       {
         "Name": "OnCompletion",
         "Type": "uint64",
         "Note": "ApplicationCall transaction on completion action",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 25
       },
       {
         "Name": "NumAppArgs",
         "Type": "uint64",
         "Note": "Number of ApplicationArgs",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 27
       },
       {
         "Name": "NumAccounts",
         "Type": "uint64",
         "Note": "Number of Accounts",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 29
       },
       {
         "Name": "ApprovalProgram",
         "Type": "[]byte",
         "Note": "Approval program",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 30
       },
       {
         "Name": "ClearStateProgram",
         "Type": "[]byte",
         "Note": "Clear state program",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 31
       },
       {
         "Name": "RekeyTo",
         "Type": "addr",
         "Note": "32 byte Sender's new AuthAddr",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 32
       },
       {
         "Name": "ConfigAsset",
         "Type": "uint64",
         "Note": "Asset ID in asset config transaction",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 33
       },
       {
         "Name": "ConfigAssetTotal",
         "Type": "uint64",
         "Note": "Total number of units of this asset created",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 34
       },
       {
         "Name": "ConfigAssetDecimals",
         "Type": "uint64",
         "Note": "Number of digits to display after the decimal place when displaying the asset",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 35
       },
       {
         "Name": "ConfigAssetDefaultFrozen",
         "Type": "bool",
         "Note": "Whether the asset's slots are frozen by default or not, 0 or 1",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 36
       },
       {
         "Name": "ConfigAssetUnitName",
         "Type": "[]byte",
         "Note": "Unit name of the asset",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 37
       },
       {
         "Name": "ConfigAssetName",
         "Type": "[]byte",
         "Note": "The asset name",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 38
       },
       {
         "Name": "ConfigAssetURL",
         "Type": "[]byte",
         "Note": "URL",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 39
       },
       {
         "Name": "ConfigAssetMetadataHash",
         "Type": "hash",
         "Note": "32 byte commitment to unspecified asset metadata",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 40
       },
       {
         "Name": "ConfigAssetManager",
         "Type": "addr",
         "Note": "32 byte address",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 41
       },
       {
         "Name": "ConfigAssetReserve",
         "Type": "addr",
         "Note": "32 byte address",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 42
       },
       {
         "Name": "ConfigAssetFreeze",
         "Type": "addr",
         "Note": "32 byte address",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 43
       },
       {
         "Name": "ConfigAssetClawback",
         "Type": "addr",
         "Note": "32 byte address",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 44
       },
       {
         "Name": "FreezeAsset",
         "Type": "uint64",
         "Note": "Asset ID being frozen or un-frozen",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 45
       },
       {
         "Name": "FreezeAssetAccount",
         "Type": "addr",
         "Note": "32 byte address of the account whose asset slot is being frozen or un-frozen",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 46
       },
       {
         "Name": "FreezeAssetFrozen",
         "Type": "bool",
         "Note": "The new frozen value, 0 or 1",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 47
       },
       {
         "Name": "NumAssets",
         "Type": "uint64",
         "Note": "Number of Assets",
-        "Version": 3,
+        "IntroducedVersion": 3,
         "Value": 49
       },
       {
         "Name": "NumApplications",
         "Type": "uint64",
         "Note": "Number of Applications",
-        "Version": 3,
+        "IntroducedVersion": 3,
         "Value": 51
       },
       {
         "Name": "GlobalNumUint",
         "Type": "uint64",
         "Note": "Number of global state integers in ApplicationCall",
-        "Version": 3,
+        "IntroducedVersion": 3,
         "Value": 52
       },
       {
         "Name": "GlobalNumByteSlice",
         "Type": "uint64",
         "Note": "Number of global state byteslices in ApplicationCall",
-        "Version": 3,
+        "IntroducedVersion": 3,
         "Value": 53
       },
       {
         "Name": "LocalNumUint",
         "Type": "uint64",
         "Note": "Number of local state integers in ApplicationCall",
-        "Version": 3,
+        "IntroducedVersion": 3,
         "Value": 54
       },
       {
         "Name": "LocalNumByteSlice",
         "Type": "uint64",
         "Note": "Number of local state byteslices in ApplicationCall",
-        "Version": 3,
+        "IntroducedVersion": 3,
         "Value": 55
       },
       {
         "Name": "ExtraProgramPages",
         "Type": "uint64",
         "Note": "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
-        "Version": 4,
+        "IntroducedVersion": 4,
         "Value": 56
       },
       {
         "Name": "Nonparticipation",
         "Type": "bool",
         "Note": "Marks an account nonparticipating for rewards",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 57
       },
       {
         "Name": "NumLogs",
         "Type": "uint64",
         "Note": "Number of Logs (only with `itxn` in v5). Application mode only",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 59
       },
       {
         "Name": "CreatedAssetID",
         "Type": "uint64",
         "Note": "Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 60
       },
       {
         "Name": "CreatedApplicationID",
         "Type": "uint64",
         "Note": "ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 61
       },
       {
         "Name": "LastLog",
         "Type": "[]byte",
         "Note": "The last message emitted. Empty bytes if none were emitted. Application mode only",
-        "Version": 6,
+        "IntroducedVersion": 6,
         "Value": 62
       },
       {
         "Name": "StateProofPK",
         "Type": "[]byte",
         "Note": "64 byte state proof public key",
-        "Version": 6,
+        "IntroducedVersion": 6,
         "Value": 63
       },
       {
         "Name": "NumApprovalProgramPages",
         "Type": "uint64",
         "Note": "Number of Approval Program pages",
-        "Version": 7,
+        "IntroducedVersion": 7,
         "Value": 65
       },
       {
         "Name": "NumClearStateProgramPages",
         "Type": "uint64",
         "Note": "Number of ClearState Program pages",
-        "Version": 7,
+        "IntroducedVersion": 7,
         "Value": 67
       }
     ],
@@ -1406,49 +1370,49 @@
         "Name": "ApplicationArgs",
         "Type": "[]byte",
         "Note": "Arguments passed to the application in the ApplicationCall transaction",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 26
       },
       {
         "Name": "Accounts",
         "Type": "addr",
         "Note": "Accounts listed in the ApplicationCall transaction",
-        "Version": 2,
+        "IntroducedVersion": 2,
         "Value": 28
       },
       {
         "Name": "Assets",
         "Type": "uint64",
         "Note": "Foreign Assets listed in the ApplicationCall transaction",
-        "Version": 3,
+        "IntroducedVersion": 3,
         "Value": 48
       },
       {
         "Name": "Applications",
         "Type": "uint64",
         "Note": "Foreign Apps listed in the ApplicationCall transaction",
-        "Version": 3,
+        "IntroducedVersion": 3,
         "Value": 50
       },
       {
         "Name": "Logs",
         "Type": "[]byte",
         "Note": "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
-        "Version": 5,
+        "IntroducedVersion": 5,
         "Value": 58
       },
       {
         "Name": "ApprovalProgramPages",
         "Type": "[]byte",
         "Note": "Approval Program as an array of pages",
-        "Version": 7,
+        "IntroducedVersion": 7,
         "Value": 64
       },
       {
         "Name": "ClearStateProgramPages",
         "Type": "[]byte",
         "Note": "ClearState Program as an array of pages",
-        "Version": 7,
+        "IntroducedVersion": 7,
         "Value": 66
       }
     ],
@@ -1456,23 +1420,23 @@
       {
         "Name": "VrfAlgorand",
         "Type": "none",
-        "Version": 7,
+        "IntroducedVersion": 7,
         "Value": 0
       }
     ]
   },
   "PseudoOps": [
     {
-      "Name": "byte",
+      "Name": "addr",
       "Returns": [
-        "[]byte"
+        "addr"
       ],
       "Size": 2
     },
     {
-      "Name": "addr",
+      "Name": "method",
       "Returns": [
-        "addr"
+        "method"
       ],
       "Size": 2
     },
@@ -1484,9 +1448,9 @@
       "Size": 2
     },
     {
-      "Name": "method",
+      "Name": "byte",
       "Returns": [
-        "method"
+        "[]byte"
       ],
       "Size": 2
     }

@@ -254,18 +254,18 @@ type OpRecord struct {
 // StackTypeSpec type is the definition of a higher level type with
 // bounds specified
 type StackTypeSpec struct {
-	Type        string    `json:",omitempty"`
-	LengthBound [2]uint64 `json:",omitempty"`
-	ValueBound  [2]uint64 `json:",omitempty"` // TODO: does this convert maxuint to a string? (no)
+	Type        string   `json:",omitempty"`
+	LengthBound []uint64 `json:",omitempty"`
+	ValueBound  []uint64 `json:",omitempty"` // TODO: does this convert maxuint to a string? (no)
 }
 
 // Keyword is a keyword from the Field Groups passed to an op
 type Keyword struct {
-	Name    string `json:",omitempty"`
-	Type    string `json:",omitempty"`
-	Note    string `json:",omitempty"`
-	Version uint64 `json:",omitempty"`
-	Value   uint64
+	Name              string `json:",omitempty"`
+	Type              string `json:",omitempty"`
+	Note              string `json:",omitempty"`
+	IntroducedVersion uint64 `json:",omitempty"`
+	Value             uint64
 }
 
 // LanguageSpec records the ops of the language at some version
@@ -278,7 +278,7 @@ type LanguageSpec struct {
 	Ops             []OpRecord
 }
 
-func stackTypes(types []logic.StackType) []string {
+func stackTypeStrings(types []logic.StackType) []string {
 	out := make([]string, len(types))
 	for i, t := range types {
 		out[i] = t.String()
@@ -305,13 +305,12 @@ func groupKeywords(group logic.FieldGroup) []Keyword {
 	keywords := make([]Keyword, 0, len(group.Names))
 	for _, name := range group.Names {
 		if spec, ok := group.SpecByName(name); ok {
-			// TODO: replace tstring with something better
 			kw := Keyword{
-				Name:    name,
-				Value:   uint64(spec.Field()),
-				Type:    spec.StackType().String(),
-				Note:    spec.Note(),
-				Version: spec.Version(),
+				Name:              name,
+				Value:             uint64(spec.Field()),
+				Type:              spec.StackType().String(),
+				Note:              spec.Note(),
+				IntroducedVersion: spec.Version(),
 			}
 			keywords = append(keywords, kw)
 		}
@@ -369,7 +368,6 @@ func fieldGroups() []logic.FieldGroup {
 		logic.VrfStandards,
 		logic.EcdsaCurves,
 	}
-
 }
 
 func onCompleteKeywords() []Keyword {
@@ -395,9 +393,34 @@ func itxnTypeKeywords() []Keyword {
 	for idx, name := range logic.TxnTypeNames {
 		version := logic.InnerTxnTypes[name]
 		doc := logic.TypeNameDescriptions[name]
-		itxTypes = append(itxTypes, Keyword{Name: name, Type: "uint64", Version: version, Note: doc, Value: uint64(idx)})
+		itxTypes = append(itxTypes, Keyword{Name: name, Type: "uint64", IntroducedVersion: version, Note: doc, Value: uint64(idx)})
 	}
 	return itxTypes
+}
+
+func stackTypeSpecs() map[string]StackTypeSpec {
+
+	allStackTypes := map[string]StackTypeSpec{}
+	for _, st := range logic.AllStackTypes {
+		sts := StackTypeSpec{
+			Type: string(typeByte(st)),
+		}
+		if st.LengthBound[0] != 0 || st.LengthBound[1] != 0 {
+			sts.LengthBound = []uint64{
+				st.LengthBound[0],
+				st.LengthBound[1],
+			}
+		}
+		if st.ValueBound[0] != 0 || st.ValueBound[1] != 0 {
+			sts.ValueBound = []uint64{
+				st.ValueBound[0],
+				st.ValueBound[1],
+			}
+		}
+
+		allStackTypes[st.String()] = sts
+	}
+	return allStackTypes
 }
 
 func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
@@ -409,14 +432,7 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		keywords[fg.Name] = groupKeywords(fg)
 	}
 
-	allStackTypes := map[string]StackTypeSpec{}
-	for _, st := range logic.AllStackTypes {
-		allStackTypes[st.String()] = StackTypeSpec{
-			Type:        string(typeByte(st)),
-			LengthBound: st.LengthBound,
-			ValueBound:  st.ValueBound,
-		}
-	}
+	allStackTypes := stackTypeSpecs()
 
 	keywords["txn_type"] = txnTypeKeywords()
 	keywords["itxn_type"] = itxnTypeKeywords()
@@ -425,8 +441,8 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 	for i, spec := range opSpecs {
 		records[i].Opcode = spec.Opcode
 		records[i].Name = spec.Name
-		records[i].Args = stackTypes(spec.Arg.Types)
-		records[i].Returns = stackTypes(spec.Return.Types)
+		records[i].Args = stackTypeStrings(spec.Arg.Types)
+		records[i].Returns = stackTypeStrings(spec.Return.Types)
 		records[i].Size = spec.OpDetails.Size
 		records[i].ArgEnum = argEnums(spec.Name)
 		records[i].Doc = strings.ReplaceAll(logic.OpDoc(spec.Name), "<br />", "\n")
@@ -439,8 +455,8 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 	var pseudoOps = make([]OpRecord, len(logic.PseudoOps))
 	for i, spec := range logic.PseudoOps {
 		pseudoOps[i].Name = spec.Name
-		pseudoOps[i].Args = stackTypes(spec.Arg.Types)
-		pseudoOps[i].Returns = stackTypes(spec.Return.Types)
+		pseudoOps[i].Args = stackTypeStrings(spec.Arg.Types)
+		pseudoOps[i].Returns = stackTypeStrings(spec.Return.Types)
 		pseudoOps[i].Size = spec.OpDetails.Size
 		pseudoOps[i].ArgEnum = argEnums(spec.Name)
 		pseudoOps[i].Doc = strings.ReplaceAll(logic.OpDoc(spec.Name), "<br />", "\n")
