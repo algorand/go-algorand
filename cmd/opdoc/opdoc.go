@@ -261,9 +261,10 @@ type StackTypeSpec struct {
 
 // Keyword is a keyword from the Field Groups passed to an op
 type Keyword struct {
-	Name string `json:",omitempty"`
-	Type string `json:",omitempty"`
-	Note string `json:",omitempty"`
+	Name    string `json:",omitempty"`
+	Type    string `json:",omitempty"`
+	Note    string `json:",omitempty"`
+	Version uint64 `json:",omitempty"`
 }
 
 // LanguageSpec records the ops of the language at some version
@@ -305,9 +306,10 @@ func groupKeywords(group logic.FieldGroup) []Keyword {
 		if spec, ok := group.SpecByName(name); ok {
 			// TODO: replace tstring with something better
 			kw := Keyword{
-				Name: name,
-				Type: spec.StackType().String(),
-				Note: spec.Note(),
+				Name:    name,
+				Type:    spec.StackType().String(),
+				Note:    spec.Note(),
+				Version: spec.Version(),
 			}
 			keywords = append(keywords, kw)
 		}
