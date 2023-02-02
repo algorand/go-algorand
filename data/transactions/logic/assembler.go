@@ -1505,7 +1505,13 @@ func typePushInts(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes,
 }
 
 func typeByte(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	l := uint64(len(args[0]))
+	if len(args) == 0 {
+		return nil, StackTypes{StackBytes}, nil
+	}
+
+	val, _, _ := parseBinaryArgs(args)
+	l := uint64(len(val))
+
 	return nil, StackTypes{NewStackType(AVMBytes, static(l), fmt.Sprintf("[%d]byte", l))}, nil
 }
 
