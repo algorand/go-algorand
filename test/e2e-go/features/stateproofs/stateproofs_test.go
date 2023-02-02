@@ -709,10 +709,6 @@ func registerParticipationAndWait(t *testing.T, client libgoal.Client, part acco
 // conclude whether the poor node is used to create the StateProof or the rich node.
 func TestAttestorsChange(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	if testing.Short() {
-		t.Skip()
-	}
-
 	defer fixtures.ShutdownSynchronizedTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
