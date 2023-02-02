@@ -35,20 +35,36 @@ missing_dep() {
 }
 
 GO_DEPS=(
-    "$GO_BIN/stringer"
-    "$GO_BIN/msgp"
-    "$GO_BIN/golangci-lint"
+    "msgp"
+    "golangci-lint"
+    "oapi-codegen"
+    "swagger"
 )
 
+check_go_binary_version() {
+  binary_name=$1
+  expected_version=$(grep "$binary_name" scripts/buildtools/versions | awk '{print $2}')
+  actual_version=$(go version -m "$GO_BIN/$binary_name" | awk 'NR==3 {print $3}')
+
+  if [ "$expected_version" != "$actual_version" ]; then
+      echo "$YELLOW_FG[WARNING]$END_FG_COLOR $binary_name version mismatch, expected $expected_version, but got $actual_version"
+  else
+      echo "OK: $binary_name version $actual_version matches expected version $expected_version"
+      return 0
+  fi
+}
+
 check_deps() {
-    for path in ${GO_DEPS[*]}
+    for dep in ${GO_DEPS[*]}
     do
-        if [ ! -f "$path" ]
+        if [ ! -f "$GO_BIN/$dep" ]
         then
             # Parameter expansion is faster than invoking another process.
             # https://www.linuxjournal.com/content/bash-parameter-expansion
-            missing_dep "${path##*/}"
+            missing_dep "${dep##*/}"
         fi
+
+        check_go_binary_version "$dep"
     done
 
     # Don't print `shellcheck`s location.
@@ -61,14 +77,6 @@ check_deps() {
     if ! which sqlite3 > /dev/null
     then
         missing_dep sqlite3
-    fi
-
-    # Check version of golangci-lint
-    version_req=$(grep "github.com/golangci/golangci-lint/cmd/golangci-lint" scripts/buildtools/versions | awk '{print $2}')
-    version_cur=$($GO_BIN/golangci-lint version | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+')
-    if [ "$version_cur" != "$version_req" ]
-    then
-        echo "$YELLOW_FG[WARNING]$END_FG_COLOR \`golangci-lint\` version mismatch, expected $version_req, but got $version_cur. You may get different linter output than CI as a result."
     fi
 }
 
