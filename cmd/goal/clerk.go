@@ -221,8 +221,8 @@ func createSignedTransaction(client libgoal.Client, signTx bool, dataDir string,
 
 func writeSignedTxnsToFile(stxns []transactions.SignedTxn, filename string) error {
 	var outData []byte
-	for _, stxn := range stxns {
-		outData = append(outData, protocol.Encode(&stxn)...)
+	for i := range stxns {
+		outData = append(outData, protocol.Encode(&stxns[i])...)
 	}
 
 	return writeFile(filename, outData, 0600)
