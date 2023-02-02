@@ -191,7 +191,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	if !ao.disableCache {
 		ao.baseOnlineAccounts.init(ao.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
 	} else {
-		ao.baseOnlineAccounts.init(ao.log, 0, 1)
+		ao.baseOnlineAccounts.init(ao.log, 0, 0)
 	}
 	return
 }
