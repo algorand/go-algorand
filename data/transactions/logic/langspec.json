@@ -543,7 +543,8 @@
         "Name": "TypeEnum",
         "Type": "uint64",
         "Note": "Transaction type as integer",
-        "Value": 16
+        "Value": 16,
+        "ArgEnum": "itxn_type"
       },
       {
         "Name": "XferAsset",
@@ -587,7 +588,8 @@
         "Type": "uint64",
         "Note": "ApplicationCall transaction on completion action",
         "IntroducedVersion": 2,
-        "Value": 25
+        "Value": 25,
+        "ArgEnum": "on_completion"
       },
       {
         "Name": "ApplicationArgs",
@@ -1017,7 +1019,8 @@
         "Name": "TypeEnum",
         "Type": "uint64",
         "Note": "Transaction type as integer",
-        "Value": 16
+        "Value": 16,
+        "ArgEnum": "txn_type"
       },
       {
         "Name": "XferAsset",
@@ -1073,7 +1076,8 @@
         "Type": "uint64",
         "Note": "ApplicationCall transaction on completion action",
         "IntroducedVersion": 2,
-        "Value": 25
+        "Value": 25,
+        "ArgEnum": "on_completion"
       },
       {
         "Name": "NumAppArgs",
@@ -1427,9 +1431,9 @@
   },
   "PseudoOps": [
     {
-      "Name": "addr",
+      "Name": "int",
       "Returns": [
-        "addr"
+        "uint64"
       ],
       "Size": 2
     },
@@ -1441,16 +1445,16 @@
       "Size": 2
     },
     {
-      "Name": "int",
+      "Name": "byte",
       "Returns": [
-        "uint64"
+        "[]byte"
       ],
       "Size": 2
     },
     {
-      "Name": "byte",
+      "Name": "addr",
       "Returns": [
-        "[]byte"
+        "addr"
       ],
       "Size": 2
     }

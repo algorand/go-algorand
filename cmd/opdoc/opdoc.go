@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 
@@ -266,6 +267,7 @@ type Keyword struct {
 	Note              string `json:",omitempty"`
 	IntroducedVersion uint64 `json:",omitempty"`
 	Value             uint64
+	ArgEnum           string `json:",omitempty"`
 }
 
 // LanguageSpec records the ops of the language at some version
@@ -312,6 +314,17 @@ func groupKeywords(group logic.FieldGroup) []Keyword {
 				Note:              spec.Note(),
 				IntroducedVersion: spec.Version(),
 			}
+			if name == "OnCompletion" {
+				kw.ArgEnum = "on_completion"
+			}
+			if name == "TypeEnum" {
+				if group.Name == "itxn_field" {
+					kw.ArgEnum = "itxn_type"
+				} else {
+					kw.ArgEnum = "txn_type"
+				}
+			}
+			log.Printf("%s %s", name, group.Name)
 			keywords = append(keywords, kw)
 		}
 	}
