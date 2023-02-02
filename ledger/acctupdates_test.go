@@ -300,6 +300,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	latest := au.latest()
 	require.Equal(t, latestRnd, latest)
 
+	// the log has "onlineAccounts failed to fetch online totals for rnd" warning that is expected
 	_, err := ao.onlineTotals(latest + 1)
 	require.Error(t, err)
 
@@ -596,82 +597,6 @@ func TestAcctUpdates(t *testing.T) {
 	}
 }
 
-// TestAcctUpdatesFastUpdates tests catchpoint label writing datarace
-func TestAcctUpdatesFastUpdates(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
-	}
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	accts := setupAccts(20)
-	rewardsLevels := []uint64{0}
-
-	conf := config.GetDefaultLocal()
-	conf.CatchpointInterval = 1
-	initialBlocksCount := int(conf.MaxAcctLookback)
-	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
-	defer ml.Close()
-
-	au, ao := newAcctUpdates(t, ml, conf)
-	defer au.close()
-	defer ao.close()
-
-	// Remove the txtail from the list of trackers since it causes a data race that
-	// wouldn't be observed under normal execution because commitedUpTo and newBlock
-	// are protected by the tracker mutex.
-	ml.trackers.trackers = ml.trackers.trackers[:2]
-
-	// cover 10 genesis blocks
-	rewardLevel := uint64(0)
-	for i := 1; i < initialBlocksCount; i++ {
-		accts = append(accts, accts[0])
-		rewardsLevels = append(rewardsLevels, rewardLevel)
-	}
-
-	checkAcctUpdates(t, au, ao, 0, basics.Round(initialBlocksCount)-1, accts, rewardsLevels, proto)
-
-	wg := sync.WaitGroup{}
-
-	for i := basics.Round(initialBlocksCount); i < basics.Round(proto.CatchpointLookback+15); i++ {
-		rewardLevelDelta := crypto.RandUint64() % 5
-		rewardLevel += rewardLevelDelta
-		updates, totals := ledgertesting.RandomDeltasBalanced(1, accts[i-1], rewardLevel)
-		prevRound, prevTotals, err := au.LatestTotals()
-		require.Equal(t, i-1, prevRound)
-		require.NoError(t, err)
-
-		newPool := totals[testPoolAddr]
-		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates.Upsert(testPoolAddr, newPool)
-		totals[testPoolAddr] = newPool
-		newAccts := applyPartialDeltas(accts[i-1], updates)
-
-		blk := bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
-			},
-		}
-		blk.RewardsLevel = rewardLevel
-		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
-
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.Accts.MergeAccounts(updates)
-		ml.trackers.newBlock(blk, delta)
-		accts = append(accts, newAccts)
-		rewardsLevels = append(rewardsLevels, rewardLevel)
-
-		wg.Add(1)
-		go func(round basics.Round) {
-			defer wg.Done()
-			ml.trackers.committedUpTo(round)
-		}(i)
-	}
-	ml.trackers.waitAccountsWriting()
-	wg.Wait()
-}
-
 func BenchmarkBalancesChanges(b *testing.B) {
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		b.Skip("This test is too slow on ARM and causes travis builds to time out")
@@ -782,94 +707,6 @@ func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
 		})
 	}
 	store.TrieCachedNodesCount = defaultTrieCachedNodesCount
-}
-
-// TestLargeAccountCountCatchpointGeneration creates a ledger containing a large set of accounts ( i.e. 100K accounts )
-// and attempts to have the accountUpdates create the associated catchpoint. It's designed precisely around setting an
-// environment which would quickly ( i.e. after 32 rounds ) would start producing catchpoints.
-func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Skip("TODO: move to catchpointtracker_test and add catchpoint tracker into trackers list")
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
-	}
-
-	// The next operations are heavy on the memory.
-	// Garbage collection helps prevent trashing
-	runtime.GC()
-
-	// create new protocol version, which has lower lookback
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLargeAccountCountCatchpointGeneration")
-	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	// TODO: fix MaxBalLookback after updating catchpoint round
-	protoParams.MaxBalLookback = 32
-	protoParams.SeedLookback = 2
-	protoParams.SeedRefreshInterval = 8
-	config.Consensus[testProtocolVersion] = protoParams
-	defer func() {
-		delete(config.Consensus, testProtocolVersion)
-		os.RemoveAll(store.CatchpointDirName)
-	}()
-
-	accts := setupAccts(100000)
-	rewardsLevels := []uint64{0}
-	conf := config.GetDefaultLocal()
-	conf.CatchpointInterval = 1
-	conf.Archival = true
-	initialBlocksCount := int(conf.MaxAcctLookback)
-	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, testProtocolVersion, accts)
-	defer ml.Close()
-
-	au, _ := newAcctUpdates(t, ml, conf)
-	defer au.close()
-
-	// cover 10 genesis blocks
-	rewardLevel := uint64(0)
-	for i := 1; i < initialBlocksCount; i++ {
-		accts = append(accts, accts[0])
-		rewardsLevels = append(rewardsLevels, rewardLevel)
-	}
-
-	start := basics.Round(initialBlocksCount)
-	end := basics.Round(protoParams.MaxBalLookback + 5)
-	for i := start; i < end; i++ {
-		rewardLevelDelta := crypto.RandUint64() % 5
-		rewardLevel += rewardLevelDelta
-		updates, totals := ledgertesting.RandomDeltasBalanced(1, accts[i-1], rewardLevel)
-
-		prevRound, prevTotals, err := au.LatestTotals()
-		require.Equal(t, i-1, prevRound)
-		require.NoError(t, err)
-
-		newPool := totals[testPoolAddr]
-		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates.Upsert(testPoolAddr, newPool)
-		totals[testPoolAddr] = newPool
-		newAccts := applyPartialDeltas(accts[i-1], updates)
-
-		blk := bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
-			},
-		}
-		blk.RewardsLevel = rewardLevel
-		blk.CurrentProtocol = testProtocolVersion
-
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.Accts.MergeAccounts(updates)
-		ml.trackers.newBlock(blk, delta)
-		accts = append(accts, newAccts)
-		rewardsLevels = append(rewardsLevels, rewardLevel)
-
-		ml.trackers.committedUpTo(i)
-		if i%2 == 1 || i == end-1 {
-			ml.trackers.waitAccountsWriting()
-		}
-	}
-
-	// Garbage collection helps prevent trashing for next tests
-	runtime.GC()
 }
 
 // The TestAcctUpdatesUpdatesCorrectness conduct a correctless test for the accounts update in the following way -
@@ -2346,8 +2183,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 				defer ml.trackers.accountsWriting.Done()
 
 				// do not take any locks since all operations are synchronous
-				newBase := basics.Round(dcc.offset) + dcc.oldBase
-				dcc.newBase = newBase
+				newBase := dcc.newBase()
 
 				err := au.prepareCommit(dcc)
 				require.NoError(t, err)
@@ -2630,8 +2466,7 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 			defer ml.trackers.accountsWriting.Done()
 
 			// do not take any locks since all operations are synchronous
-			newBase := basics.Round(dcc.offset) + dcc.oldBase
-			dcc.newBase = newBase
+			newBase := dcc.newBase()
 
 			err := au.prepareCommit(dcc)
 			require.NoError(t, err)
