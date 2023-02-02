@@ -197,20 +197,6 @@ func (s *workerForStateProofMessageTests) advanceLatest(delta uint64) {
 	}
 }
 
-func (s *workerForStateProofMessageTests) notifyPrepareVoterCommit(round basics.Round) {
-	s.w.listenerMu.RLock()
-	defer s.w.listenerMu.RUnlock()
-
-	if s.w.commitListener == nil {
-		return
-	}
-
-	// It looks the same as s.w.notifyPrepareVoterCommit, but it provides OnPrepareVoterCommit with a different
-	// VotersForStateProof, which is important.
-	err := s.w.commitListener.OnPrepareVoterCommit(round, s)
-	require.NoError(s.w.t, err)
-}
-
 func TestStateProofMessage(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -303,7 +289,7 @@ func TestGenerateStateProofMessageForSmallRound(t *testing.T) {
 	s.w.latest--
 	s.addBlockWithStateProofHeaders(2 * basics.Round(proto.StateProofInterval))
 
-	_, err := GenerateStateProofMessage(s, 240, s.w.blocks[s.w.latest])
+	_, err := GenerateStateProofMessage(s, s.w.latest)
 	a.ErrorIs(err, errInvalidParams)
 }
 
@@ -331,7 +317,7 @@ func TestMessageLnApproxError(t *testing.T) {
 	newtracking := tracking
 	s.w.blocks[512].StateProofTracking[protocol.StateProofBasic] = newtracking
 
-	_, err := GenerateStateProofMessage(s, 256, s.w.blocks[512])
+	_, err := GenerateStateProofMessage(s, basics.Round(2*proto.StateProofInterval))
 	a.ErrorIs(err, stateproof.ErrIllegalInputForLnApprox)
 }
 
@@ -356,7 +342,7 @@ func TestMessageMissingHeaderOnInterval(t *testing.T) {
 	s.advanceLatest(2*proto.StateProofInterval + proto.StateProofInterval/2)
 	delete(s.w.blocks, 510)
 
-	_, err := GenerateStateProofMessage(s, 256, s.w.blocks[512])
+	_, err := GenerateStateProofMessage(s, basics.Round(2*proto.StateProofInterval))
 	a.ErrorIs(err, ledgercore.ErrNoEntry{Round: 510})
 }
 

@@ -40,37 +40,46 @@ var errVotersNotTracked = errors.New("voters not tracked for the given lookback 
 
 // OnPrepareVoterCommit is a function called by the voters tracker when it's preparing to commit rnd. It gives the builder
 // the chance to persist the data it needs.
-func (spw *Worker) OnPrepareVoterCommit(rnd basics.Round, votersFetcher ledgercore.VotersForRoundFetcher) error {
-	header, err := spw.ledger.BlockHdr(rnd)
-	if err != nil {
-		return fmt.Errorf("OnPrepareVoterCommit(%d): could not fetch round header: %w", rnd, err)
-	}
-
-	proto := config.Consensus[header.CurrentProtocol]
-	if proto.StateProofInterval == 0 || uint64(rnd)%proto.StateProofInterval != 0 {
-		return nil
-	}
-
-	builderExists, err := spw.builderExists(rnd)
-	if err != nil {
-		spw.log.Warnf("OnPrepareVoterCommit(%d): could not check builder existence, assuming it doesn't exist: %v\n", rnd, err)
-	} else if builderExists {
-		return nil
-	}
-
-	// We create and persist the builder without using it. Signer can later use it (specifically the state proof
-	// message embedded in the builder) during catchup.
-	_, err = spw.createAndPersistBuilder(rnd, votersFetcher)
-	if err != nil {
-		if errors.Is(err, errVotersNotTracked) {
-			spw.log.Warnf("OnPrepareVoterCommit(%d): %v", rnd, err)
-			return nil
+func (spw *Worker) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Round, votersFetcher ledgercore.LedgerForSPBuilder) {
+	for rnd := oldBase + 1; rnd <= newBase; rnd++ {
+		header, err := votersFetcher.BlockHdr(rnd)
+		if err != nil {
+			spw.log.Errorf("OnPrepareVoterCommit(%d): could not fetch round header: %v", rnd, err)
+			continue
 		}
 
-		return fmt.Errorf("OnPrepareVoterCommit(%d): could not create builder: %w", rnd, err)
-	}
+		proto := config.Consensus[header.CurrentProtocol]
+		if proto.StateProofInterval == 0 || uint64(rnd)%proto.StateProofInterval != 0 {
+			continue
+		}
 
-	return nil
+		builderExists, err := spw.builderExists(rnd)
+		if err != nil {
+			spw.log.Warnf("OnPrepareVoterCommit(%d): could not check builder existence, assuming it doesn't exist: %v\n", rnd, err)
+		} else if builderExists {
+			continue
+		}
+
+		buildr, err := createBuilder(rnd, votersFetcher)
+		if err != nil {
+			if errors.Is(err, errVotersNotTracked) {
+				// Voters not tracked for that round.  Might not be a valid
+				// state proof round; state proofs might not be enabled; etc.
+				spw.log.Warnf("OnPrepareVoterCommit(%d): %v", rnd, err)
+				continue
+			}
+
+			spw.log.Errorf("OnPrepareVoterCommit(%d): could not create builder: %v", rnd, err)
+			continue
+		}
+
+		err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+			return persistBuilder(tx, rnd, &buildr)
+		})
+		if err != nil {
+			spw.log.Errorf("OnPrepareVoterCommit(%d): could not persist builder: %v", rnd, err)
+		}
+	}
 }
 
 // loadOrCreateBuilderWithSignatures either loads a builder from the DB or creates a new builder.
@@ -97,9 +106,19 @@ func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 		spw.log.Errorf("loadOrCreateBuilder: error while fetching builder from DB: %v", err)
 	}
 
-	buildr, err = spw.createAndPersistBuilder(rnd, spw.ledger)
+	buildr, err = createBuilder(rnd, spw.ledger)
 	if err != nil {
 		return builder{}, err
+	}
+
+	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		return persistBuilder(tx, rnd, &buildr)
+	})
+
+	// We ignore persisting errors because we still want to try and use our successfully generated builder,
+	// even if, for some reason, persisting it failed.
+	if err != nil {
+		spw.log.Errorf("loadOrCreateBuilder(%d): failed to insert builder into database: %v", rnd, err)
 	}
 
 	return buildr, nil
@@ -155,16 +174,18 @@ func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
 	return nil
 }
 
-func (spw *Worker) createAndPersistBuilder(rnd basics.Round, votersFetcher ledgercore.VotersForRoundFetcher) (builder, error) {
-	l := spw.ledger
-	hdr, err := l.BlockHdr(rnd)
+func createBuilder(rnd basics.Round, votersFetcher ledgercore.LedgerForSPBuilder) (builder, error) {
+	// since this function might be invoked under tracker commit context (i.e invoked from the ledger code ),
+	// it is important that we do not use the ledger directly.
+
+	hdr, err := votersFetcher.BlockHdr(rnd)
 	if err != nil {
 		return builder{}, err
 	}
 
 	hdrProto := config.Consensus[hdr.CurrentProtocol]
 	votersRnd := rnd.SubSaturate(basics.Round(hdrProto.StateProofInterval))
-	votersHdr, err := l.BlockHdr(votersRnd)
+	votersHdr, err := votersFetcher.BlockHdr(votersRnd)
 	if err != nil {
 		return builder{}, err
 	}
@@ -181,7 +202,7 @@ func (spw *Worker) createAndPersistBuilder(rnd basics.Round, votersFetcher ledge
 		return builder{}, fmt.Errorf("lookback round %d: %w", lookback, errVotersNotTracked)
 	}
 
-	msg, err := GenerateStateProofMessage(l, uint64(votersHdr.Round), hdr)
+	msg, err := GenerateStateProofMessage(votersFetcher, rnd)
 	if err != nil {
 		return builder{}, err
 	}
@@ -196,23 +217,13 @@ func (spw *Worker) createAndPersistBuilder(rnd basics.Round, votersFetcher ledge
 	res.AddrToPos = voters.AddrToPos
 	res.Message = msg
 	res.Builder, err = stateproof.MakeBuilder(msg.Hash(),
-		uint64(hdr.Round),
+		uint64(rnd),
 		provenWeight,
 		voters.Participants,
 		voters.Tree,
 		config.Consensus[votersHdr.CurrentProtocol].StateProofStrengthTarget)
 	if err != nil {
 		return builder{}, err
-	}
-
-	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-		return persistBuilder(tx, rnd, &res)
-	})
-
-	// We ignore persisting errors because we still want to try and use our successfully generated builder,
-	// even if, for some reason, persisting it failed.
-	if err != nil {
-		spw.log.Errorf("loadOrCreateBuilder(%d): failed to insert builder into database: %v", rnd, err)
 	}
 
 	return res, nil
@@ -559,7 +570,7 @@ func (spw *Worker) deleteBuildData(proto *config.ConsensusParams, stateProofNext
 	// Delete from memory (already stored on disk)
 	spw.trimBuildersCache(proto, stateProofNextRound)
 
-	if spw.LastCleanupRound == stateProofNextRound {
+	if spw.lastCleanupRound == stateProofNextRound {
 		return
 	}
 
@@ -567,7 +578,7 @@ func (spw *Worker) deleteBuildData(proto *config.ConsensusParams, stateProofNext
 	spw.deleteStaleSigs(stateProofNextRound)
 	spw.deleteStaleKeys(stateProofNextRound)
 	spw.deleteStaleBuilders(stateProofNextRound)
-	spw.LastCleanupRound = stateProofNextRound
+	spw.lastCleanupRound = stateProofNextRound
 }
 
 func (spw *Worker) deleteStaleSigs(retainRound basics.Round) {

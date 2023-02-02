@@ -30,9 +30,18 @@ import (
 	"github.com/algorand/go-algorand/stateproof"
 )
 
-// VotersCommitListener represents an object that needs to get notified on commit stages in the voters tracker.
-type VotersCommitListener interface {
-	OnPrepareVoterCommit(rnd basics.Round, voters ledgercore.VotersForRoundFetcher) error
+// votersFetcher is used to provide safe access to the ledger while creating the state proof builder. Since the operation
+// is being run under the ledger's commit operation, this implementation guarantees lockless access to the VotersForStateProof function.
+type votersFetcher struct {
+	vt *votersTracker
+}
+
+func (vf *votersFetcher) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRound, error) {
+	return vf.vt.VotersForStateProof(rnd)
+}
+
+func (vf *votersFetcher) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	return vf.vt.l.BlockHdr(rnd)
 }
 
 // The votersTracker maintains the vector commitment for the most recent
@@ -105,10 +114,11 @@ func votersRoundForStateProofRound(stateProofRnd basics.Round, proto *config.Con
 }
 
 func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.OnlineAccountsFetcher, latestDbRound basics.Round) error {
+	vt.votersMu.Lock()
 	vt.l = l
 	vt.onlineAccountsFetcher = fetcher
-
-	vt.initializeVoters()
+	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
+	vt.votersMu.Unlock()
 
 	latestRoundInLedger := l.Latest()
 	hdr, err := l.BlockHdr(latestRoundInLedger)
@@ -216,15 +226,10 @@ func (vt *votersTracker) prepareCommit(dcc *deferredCommitContext) error {
 	}
 
 	commitListener := vt.commitListener
-	for round := dcc.oldBase; round <= dcc.newBase; round++ {
-		err := commitListener.OnPrepareVoterCommit(round, vt)
-		// Having the commit process continue uninterrupted is more important to us than not
-		// having missing builders. To implement this hierarchy we've decided to exclusively log errors
-		// returning from the commitListener.
-		if err != nil {
-			vt.l.trackerLog().Errorf("votersTracker.prepareCommit: listener encountered an error for round %d: %v", round, err)
-		}
-	}
+	vf := votersFetcher{vt: vt}
+	// In case the listener's function fails, we do not want to break the commit process.
+	// To implement this hierarchy we've decided to not include a return value in OnPrepareVoterCommit function
+	commitListener.OnPrepareVoterCommit(dcc.oldBase, dcc.newBase, &vf)
 
 	return nil
 }
@@ -308,13 +313,6 @@ func (vt *votersTracker) registerPrepareCommitListener(commitListener ledgercore
 	defer vt.commitListenerMu.Unlock()
 
 	vt.commitListener = commitListener
-}
-
-func (vt *votersTracker) initializeVoters() {
-	vt.votersMu.Lock()
-	defer vt.votersMu.Unlock()
-
-	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
 }
 
 func (vt *votersTracker) getVoters(round basics.Round) (*ledgercore.VotersForRound, bool) {

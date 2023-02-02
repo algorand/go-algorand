@@ -74,9 +74,9 @@ func BenchmarkUnmarshalBuilder(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalBuilderPersistingFields(t *testing.T) {
+func TestMarshalUnmarshalBuilderPersistedFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := BuilderPersistingFields{}
+	v := BuilderPersistedFields{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -95,12 +95,12 @@ func TestMarshalUnmarshalBuilderPersistingFields(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingBuilderPersistingFields(t *testing.T) {
-	protocol.RunEncodingTest(t, &BuilderPersistingFields{})
+func TestRandomizedEncodingBuilderPersistedFields(t *testing.T) {
+	protocol.RunEncodingTest(t, &BuilderPersistedFields{})
 }
 
-func BenchmarkMarshalMsgBuilderPersistingFields(b *testing.B) {
-	v := BuilderPersistingFields{}
+func BenchmarkMarshalMsgBuilderPersistedFields(b *testing.B) {
+	v := BuilderPersistedFields{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -108,8 +108,8 @@ func BenchmarkMarshalMsgBuilderPersistingFields(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgBuilderPersistingFields(b *testing.B) {
-	v := BuilderPersistingFields{}
+func BenchmarkAppendMsgBuilderPersistedFields(b *testing.B) {
+	v := BuilderPersistedFields{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -120,8 +120,8 @@ func BenchmarkAppendMsgBuilderPersistingFields(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalBuilderPersistingFields(b *testing.B) {
-	v := BuilderPersistingFields{}
+func BenchmarkUnmarshalBuilderPersistedFields(b *testing.B) {
+	v := BuilderPersistedFields{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

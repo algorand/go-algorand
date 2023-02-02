@@ -89,7 +89,7 @@ func TestDbSchemaUpgrade1(t *testing.T) {
 		b2, err = getBuilder(tx, 0)
 		return err
 	}))
-	a.Equal(b.BuilderPersistingFields, b2.BuilderPersistingFields)
+	a.Equal(b.BuilderPersistedFields, b2.BuilderPersistedFields)
 }
 
 func TestPendingSigDB(t *testing.T) {
