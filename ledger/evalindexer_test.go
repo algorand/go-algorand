@@ -286,7 +286,7 @@ func TestEvalForIndexerForExpiredAccounts(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
+func newTestLedgerWithLogger(t testing.TB, balances bookkeeping.GenesisBalances, log logging.Logger) *Ledger {
 	var genHash crypto.Digest
 	crypto.RandBytes(genHash[:])
 	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture, balances, "test", genHash)
@@ -296,13 +296,19 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
+	l, err := OpenLedger(log, dbName, true, ledgercore.InitState{
 		Block:       genBlock,
 		Accounts:    balances.Balances,
 		GenesisHash: genHash,
 	}, cfg)
 	require.NoError(t, err)
 	return l
+}
+
+func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+	return newTestLedgerWithLogger(t, balances, log)
 }
 
 // Test that preloading data in cow base works as expected.

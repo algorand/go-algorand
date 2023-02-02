@@ -35,10 +35,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newSimpleLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
-	return newSimpleLedgerWithConsensusVersion(t, balances, protocol.ConsensusFuture)
-}
-
 func newSimpleLedgerWithConsensusVersion(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion) *Ledger {
 	var genHash crypto.Digest
 	crypto.RandBytes(genHash[:])
@@ -53,7 +49,9 @@ func newSimpleLedgerFull(t testing.TB, balances bookkeeping.GenesisBalances, cv 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
+	log := logging.TestingLogWithFilter(t, []logging.Filter{{Msg: "database table is locked"}})
+	log.SetLevel(logging.Warn)
+	l, err := OpenLedger(log, dbName, true, ledgercore.InitState{
 		Block:       genBlock,
 		Accounts:    balances.Balances,
 		GenesisHash: genHash,

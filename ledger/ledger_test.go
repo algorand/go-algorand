@@ -1037,6 +1037,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	genesisInitState, initSecrets := ledgertesting.GenerateInitState(t, version, 100)
 	const inMem = true
 	log := logging.TestingLog(t)
+	log.SetLevel(logging.Warn)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
@@ -1737,7 +1738,7 @@ func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 	}
 	genesisInitState.Accounts = accountsWithValid
 
-	const inMem = true
+	const inMem = false
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
 	log := logging.TestingLog(t)
@@ -2998,7 +2999,7 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
-	const inMem = true
+	const inMem = false
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10

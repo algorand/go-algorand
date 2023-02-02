@@ -17,6 +17,7 @@
 package logging
 
 import (
+	"bytes"
 	"testing"
 )
 
@@ -25,11 +26,19 @@ import (
 // As a bonus, the detailed logs produced in a Travis test are now easily accessible and are printed if and only if that particular test fails.
 type TestLogWriter struct {
 	testing.TB
+	filters []Filter
 }
 
 func (tb TestLogWriter) Write(p []byte) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil
+	}
+	if tb.filters != nil {
+		for _, filter := range tb.filters {
+			if bytes.Contains(p, []byte(filter.Msg)) {
+				return len(p), nil
+			}
+		}
 	}
 	if p[len(p)-1] == '\n' {
 		// t.Log() does its own line ending, don't need an extra
@@ -39,10 +48,21 @@ func (tb TestLogWriter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
+// Filter defines messages to filter out message regex
+type Filter struct {
+	Msg string
+}
+
 // TestingLog is a test-only convenience function to configure logging for testing
 func TestingLog(tb testing.TB) Logger {
+	return TestingLogWithFilter(tb, nil)
+}
+
+// TestingLogWithFilter is a test-only convenience function to configure logging for testing with filtering
+func TestingLogWithFilter(tb testing.TB, filters []Filter) Logger {
 	l := NewLogger()
 	l.SetLevel(Debug)
-	l.SetOutput(TestLogWriter{tb})
+	writer := TestLogWriter{tb, filters}
+	l.SetOutput(writer)
 	return l
 }

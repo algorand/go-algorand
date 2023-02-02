@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -1253,7 +1254,9 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 		delete(config.Consensus, testProtocolVersion)
 	}()
 
-	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, genesisAccts)
+	log := logging.TestingLogWithFilter(t, []logging.Filter{{Msg: "database table is locked"}})
+	log.SetLevel(logging.Warn)
+	ml := makeMockLedgerForTrackerWithLogger(t, true, 1, testProtocolVersion, genesisAccts, log)
 	defer ml.Close()
 	conf := config.GetDefaultLocal()
 

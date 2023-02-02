@@ -1482,11 +1482,14 @@ func TestCatchpointFastUpdates(t *testing.T) {
 	addSinkAndPoolAccounts(accts)
 	rewardsLevels := []uint64{0}
 
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Warn)
+
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.CatchpointTracking = 1
 	initialBlocksCount := int(conf.MaxAcctLookback)
-	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
+	ml := makeMockLedgerForTrackerWithLogger(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts, log)
 	defer ml.Close()
 
 	ct := newCatchpointTracker(t, ml, conf, ".")
@@ -1494,7 +1497,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 	ao := ml.trackers.acctsOnline
 
 	// Remove the txtail from the list of trackers since it causes a data race that
-	// wouldn't be observed under normal execution because commitedUpTo and newBlock
+	// wouldn't be observed under normal execution because committedUpTo and newBlock
 	// are protected by the tracker mutex.
 	trackers := make([]ledgerTracker, 0, len(ml.trackers.trackers))
 	for _, tracker := range ml.trackers.trackers {
