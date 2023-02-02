@@ -84,7 +84,7 @@ type Ledger struct {
 	bulletin               bulletin
 	notifier               blockNotifier
 	metrics                metricsTracker
-	stateProofVerification stateProofVerificationTracker
+	stateProofVerification spVerificationTracker
 
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
