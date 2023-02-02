@@ -114,10 +114,11 @@ func votersRoundForStateProofRound(stateProofRnd basics.Round, proto *config.Con
 }
 
 func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.OnlineAccountsFetcher, latestDbRound basics.Round) error {
+	vt.votersMu.Lock()
 	vt.l = l
 	vt.onlineAccountsFetcher = fetcher
-
 	vt.initializeVoters()
+	vt.votersMu.Unlock()
 
 	latestRoundInLedger := l.Latest()
 	hdr, err := l.BlockHdr(latestRoundInLedger)

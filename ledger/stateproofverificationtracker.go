@@ -166,13 +166,8 @@ func (spt *stateProofVerificationTracker) close() {
 }
 
 func (spt *stateProofVerificationTracker) LookupVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	spt.mu.RLock()
-	defer spt.mu.RUnlock()
-
-	// If cached - retrieve
-	if spt.lastLookedUpVerificationContext.LastAttestedRound == stateProofLastAttestedRound &&
-		!spt.lastLookedUpVerificationContext.MsgIsZero() {
-		return &spt.lastLookedUpVerificationContext, nil
+	if lstlookup := spt.retrieveFromCache(stateProofLastAttestedRound); lstlookup != nil {
+		return lstlookup, nil
 	}
 
 	verificationContext, err := spt.lookupVerificationContext(stateProofLastAttestedRound)
@@ -180,9 +175,26 @@ func (spt *stateProofVerificationTracker) LookupVerificationContext(stateProofLa
 		return nil, err
 	}
 
+	// before return, update the cache
+	spt.mu.Lock()
 	spt.lastLookedUpVerificationContext = *verificationContext
+	spt.mu.Unlock()
 
 	return verificationContext, nil
+}
+
+func (spt *stateProofVerificationTracker) retrieveFromCache(stateProofLastAttestedRound basics.Round) *ledgercore.StateProofVerificationContext {
+	spt.mu.RLock()
+	defer spt.mu.RUnlock()
+
+	if spt.lastLookedUpVerificationContext.LastAttestedRound == stateProofLastAttestedRound &&
+		!spt.lastLookedUpVerificationContext.MsgIsZero() {
+		cpy := spt.lastLookedUpVerificationContext
+
+		return &cpy
+	}
+
+	return nil
 }
 
 // This method must be called under spt.mu read lock
