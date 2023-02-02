@@ -1302,6 +1302,7 @@ func typeFrameBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes
 func typeEquals(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 0 {
+		// TODO: should we do this? or is this a chance to catch an error
 		//Require arg0 and arg1 to have same type
 		return StackTypes{pgm.stack[top], pgm.stack[top]}, nil, nil
 	}
@@ -1331,6 +1332,7 @@ func typeDupTwo(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 func typeSelect(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 2 {
+		// TODO: Doesn't select have more than 2 types allowed?
 		if pgm.stack[top-1].AVMType == pgm.stack[top-2].AVMType {
 			return nil, StackTypes{pgm.stack[top-1]}, nil
 		}
