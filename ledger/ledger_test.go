@@ -1497,7 +1497,7 @@ func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.In
 	// The solution is to wait for the advancement of l.trackers.dbRound, which is a side effect of postCommit's success.
 	for currentDbRound == initialDbRound {
 		time.Sleep(50 * time.Microsecond)
-		require.True(t, time.Now().Sub(started) < timeout)
+		require.True(t, time.Since(started) < timeout)
 		l.trackers.mu.RLock()
 		currentDbRound = l.trackers.dbRound
 		l.trackers.mu.RUnlock()
@@ -3089,6 +3089,7 @@ func TestVotersCallbackPersistsAfterLedgerReload(t *testing.T) {
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
+	defer l.Close()
 
 	commitListener := mockCommitListener{}
 	l.RegisterVotersCommitListener(&commitListener)
@@ -3120,6 +3121,7 @@ func TestLedgerContinuesOnVotersCallbackFailure(t *testing.T) {
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
+	defer l.Close()
 
 	commitListener := errorCommitListener{}
 	l.RegisterVotersCommitListener(&commitListener)
@@ -3206,10 +3208,10 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 	// This implementation is an easy way to feed the delta, which the state proof verification tracker relies on,
 	// to the ledger.
 	delta, err := internal.Eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
+	require.NoError(t, err)
 	delta.StateProofNext = stateProofReceived.StateProofNextRound
 	vb := ledgercore.MakeValidatedBlock(blk, delta)
 	err = l.AddValidatedBlock(vb, agreement.Certificate{})
-
 	require.NoError(t, err)
 
 	for i := uint64(0); i < proto.MaxBalLookback; i++ {
@@ -3330,8 +3332,8 @@ func TestLedgerCatchpointSPVerificationTracker(t *testing.T) {
 	l.Close()
 
 	l, err = OpenLedger(log, dbName, inMem, genesisInitState, cfg)
-	defer l.Close()
 	require.NoError(t, err)
+	defer l.Close()
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofDataTargetRound),
 		numTrackedDataFirstCatchpoint, proto.StateProofInterval, false, any)
