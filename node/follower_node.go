@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -240,7 +241,7 @@ func (node *AlgorandFollowerNode) BroadcastInternalSignedTxGroup(_ []transaction
 
 // Simulate speculatively runs a transaction group against the current
 // blockchain state and returns the effects and/or errors that would result.
-func (node *AlgorandFollowerNode) Simulate(_ []transactions.SignedTxn) (vb *ledgercore.ValidatedBlock, missingSignatures bool, err error) {
+func (node *AlgorandFollowerNode) Simulate(_ []transactions.SignedTxn) (result simulation.Result, err error) {
 	err = fmt.Errorf("cannot simulate in data mode")
 	return
 }
