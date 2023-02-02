@@ -404,10 +404,10 @@ func (l *Ledger) RegisterBlockListeners(listeners []ledgercore.BlockListener) {
 
 // RegisterVotersCommitListener registers a listener that will be called when a
 // commit is about to cover a round.
-func (l *Ledger) RegisterVotersCommitListener(listener ledgercore.VotersCommitListener) error {
+func (l *Ledger) RegisterVotersCommitListener(listener ledgercore.VotersCommitListener) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.acctsOnline.voters.registerPrepareCommitListener(listener)
+	l.acctsOnline.voters.registerPrepareCommitListener(listener)
 }
 
 // notifyCommit informs the trackers that all blocks up to r have been
