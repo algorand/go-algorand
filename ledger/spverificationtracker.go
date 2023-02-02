@@ -197,8 +197,10 @@ func (spt *spVerificationTracker) retrieveFromCache(stateProofLastAttestedRound 
 	return nil
 }
 
-// This method must be called under spt.mu read lock
 func (spt *spVerificationTracker) lookupVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	spt.mu.RLock()
+	defer spt.mu.RUnlock()
+
 	if len(spt.trackedCommitContext) > 0 &&
 		stateProofLastAttestedRound >= spt.trackedCommitContext[0].verificationContext.LastAttestedRound &&
 		stateProofLastAttestedRound <= spt.trackedCommitContext[len(spt.trackedCommitContext)-1].verificationContext.LastAttestedRound {
