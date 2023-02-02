@@ -3129,7 +3129,7 @@ func TestLedgerContinuesOnVotersCallbackFailure(t *testing.T) {
 	require.Equal(t, previousCachedDbRound+1, l.trackers.dbRound)
 }
 
-func TestStateProofVerificationTracker(t *testing.T) {
+func TestLedgerSPVerificationTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -3166,7 +3166,7 @@ func TestStateProofVerificationTracker(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofContextTargetRound),
+	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		1, proto.StateProofInterval, false, any)
 
 	blk.BlockHeader.Round++
@@ -3174,7 +3174,7 @@ func TestStateProofVerificationTracker(t *testing.T) {
 	err = l.AddBlock(blk, agreement.Certificate{})
 	require.NoError(t, err)
 
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofContextTargetRound),
+	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		1, proto.StateProofInterval, true, trackerMemory)
 
 	for i := firstStateProofContextConfirmedRound; i < lastStateProofContextConfirmedRound; i++ {
@@ -3184,15 +3184,15 @@ func TestStateProofVerificationTracker(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofContextTargetRound),
+	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
 	// Last one should be in memory as a result of cfg.MaxAcctLookback not being equal to 0.
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(lastStateProofContextTargetRound),
+	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(lastStateProofContextTargetRound),
 		1, proto.StateProofInterval, true, trackerMemory)
 
 	l.WaitForCommit(blk.BlockHeader.Round)
 
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofContextTargetRound),
+	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		numOfStateProofs, proto.StateProofInterval, true, any)
 
 	var stateProofReceived bookkeeping.StateProofTrackingData
@@ -3221,9 +3221,9 @@ func TestStateProofVerificationTracker(t *testing.T) {
 
 	l.WaitForCommit(blk.BlockHeader.Round)
 
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofContextTargetRound),
+	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		1, proto.StateProofInterval, false, any)
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofContextTargetRound+proto.StateProofInterval),
+	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound+proto.StateProofInterval),
 		numOfStateProofs-1, proto.StateProofInterval, true, any)
 }
 
@@ -3266,17 +3266,17 @@ func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
 
 	l.WaitForCommit(blk.BlockHeader.Round)
 
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofContextTargetRound),
+	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(lastStateProofContextTargetRound),
+	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(lastStateProofContextTargetRound),
 		1, proto.StateProofInterval, true, trackerMemory)
 
 	err = l.reloadLedger()
 	require.NoError(t, err)
 
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofContextTargetRound),
+	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(lastStateProofContextTargetRound),
+	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(lastStateProofContextTargetRound),
 		1, proto.StateProofInterval, true, trackerMemory)
 }
 
@@ -3291,7 +3291,7 @@ func feedBlocksUntilRound(t *testing.T, l *Ledger, prevBlk bookkeeping.Block, ta
 	return prevBlk
 }
 
-func TestCatchpointStateProofVerificationTracker(t *testing.T) {
+func TestLedgerCatchpointSPVerificationTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -3325,7 +3325,7 @@ func TestCatchpointStateProofVerificationTracker(t *testing.T) {
 
 	numTrackedDataFirstCatchpoint := (cfg.CatchpointInterval - proto.MaxBalLookback) / proto.StateProofInterval
 
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofDataTargetRound),
 		numTrackedDataFirstCatchpoint, proto.StateProofInterval, true, any)
 	l.Close()
 
@@ -3333,7 +3333,7 @@ func TestCatchpointStateProofVerificationTracker(t *testing.T) {
 	defer l.Close()
 	require.NoError(t, err)
 
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofDataTargetRound),
 		numTrackedDataFirstCatchpoint, proto.StateProofInterval, false, any)
 
 	catchpointAccessor, accessorProgress := initializeTestCatchupAccessor(t, l, uint64(len(initkeys)))
@@ -3346,11 +3346,11 @@ func TestCatchpointStateProofVerificationTracker(t *testing.T) {
 	err = catchpointAccessor.CompleteCatchup(context.Background())
 	require.NoError(t, err)
 
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, basics.Round(firstStateProofDataTargetRound),
+	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofDataTargetRound),
 		numTrackedDataFirstCatchpoint, proto.StateProofInterval, true, any)
 }
 
-func TestStateProofTrackerAfterReplay(t *testing.T) {
+func TestLedgerSPTrackerAfterReplay(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -3384,22 +3384,22 @@ func TestStateProofTrackerAfterReplay(t *testing.T) {
 	}
 
 	// 1024
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
-	a.Equal(0, len(l.stateProofVerification.trackedDeleteContext))
+	verifyStateProofVerificationTracking(t, &l.spVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
+	a.Equal(0, len(l.spVerification.trackedDeleteContext))
 
 	// Add StateProof transaction (for round 512) and apply without validating, advancing the NextStateProofRound to 768
 	spblk := createBlkWithStateproof(t, int(blk.BlockHeader.Round), proto, genesisInitState, l, genesisInitState.Accounts)
 	err = l.AddBlock(spblk, agreement.Certificate{})
 	a.NoError(err)
-	a.Equal(1, len(l.stateProofVerification.trackedDeleteContext))
+	a.Equal(1, len(l.spVerification.trackedDeleteContext))
 	// To be deleted, but not yet deleted (waiting for commit)
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
+	verifyStateProofVerificationTracking(t, &l.spVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
 
 	l.WaitForCommit(l.Latest())
 
 	err = l.reloadLedger()
 	a.NoError(err)
 
-	a.Equal(1, len(l.stateProofVerification.trackedDeleteContext))
-	verifyStateProofVerificationTracking(t, &l.stateProofVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
+	a.Equal(1, len(l.spVerification.trackedDeleteContext))
+	verifyStateProofVerificationTracking(t, &l.spVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
 }

@@ -145,7 +145,7 @@ func commitSPContexts(ctx context.Context, tx *sql.Tx, commitData []verification
 		ptrToCtxs[i] = &commitData[i].verificationContext
 	}
 
-	return store.CreateSPVerificationAccessor(tx).WriteMultiSPContexts(ctx, ptrToCtxs)
+	return store.CreateSPVerificationAccessor(tx).StoreSPContexts(ctx, ptrToCtxs)
 }
 
 func (spt *spVerificationTracker) postCommit(_ context.Context, dcc *deferredCommitContext) {
