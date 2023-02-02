@@ -133,14 +133,17 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 		if importKeys && hasWallet {
 			var client libgoal.Client
 			client, err = libgoal.MakeClientWithBinDir(binDir, nodeDir, "", libgoal.KmdClient)
+			if err != nil {
+				return
+			}
 			_, err = client.CreateWallet(libgoal.UnencryptedWalletName, nil, crypto.MasterDerivationKey{})
 			if err != nil {
 				return
 			}
 
-			_, _, err = util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-w", string(libgoal.UnencryptedWalletName), "-d", nodeDir)
+			stdout, stderr, err := util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-w", string(libgoal.UnencryptedWalletName), "-d", nodeDir)
 			if err != nil {
-				return
+				return nil, nil, fmt.Errorf("goal account importrootkey failed: %w\nstdout: %s\nstderr: %s", err, stdout, stderr)
 			}
 		}
 
@@ -162,16 +165,16 @@ func loadTemplate(templateFile string) (NetworkTemplate, error) {
 	}
 	defer f.Close()
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		// for arm machines, use smaller key dilution
-		template.Genesis.PartKeyDilution = 100
-	}
-
 	err = loadTemplateFromReader(f, &template)
 	return template, err
 }
 
 func loadTemplateFromReader(reader io.Reader, template *NetworkTemplate) error {
+
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		// for arm machines, use smaller key dilution
+		template.Genesis.PartKeyDilution = 100
+	}
 	dec := json.NewDecoder(reader)
 	return dec.Decode(template)
 }
@@ -261,6 +264,14 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 
 	if node.DeadlockDetection != 0 {
 		cfg.DeadlockDetection = node.DeadlockDetection
+	}
+
+	if node.ConfigJSONOverride != "" {
+		reader := strings.NewReader(node.ConfigJSONOverride)
+		dec := json.NewDecoder(reader)
+		if err := dec.Decode(&cfg); err != nil {
+			return err
+		}
 	}
 	return cfg.SaveToFile(configFile)
 }

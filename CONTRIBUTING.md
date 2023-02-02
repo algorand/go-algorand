@@ -15,7 +15,7 @@ Some of our most active projects include:
 * [py-algorand-sdk](https://github.com/algorand/py-algorand-sdk) - Python SDK
 * [sandbox](https://github.com/algorand/sandbox) - Algorand node quickstart tool
 
-# Filing Issues
+## Filing Issues
 
 Did you discover a bug? Do you have a feature request? Filing issues is an easy way anyone can contribute and helps us improve Algorand. We use GitHub Issues to track all known bugs and feature requests.
 
@@ -25,15 +25,13 @@ If you’d like to contribute to any of the repositories, please file a [GitHub 
 
 See the GitHub help guide for more information on [filing an issue](https://help.github.com/en/articles/creating-an-issue).
 
-## Vulnerabilities
+## Security / Vulnerabilities
 
-Please don't create issues for any security vulnerabilities.  Instead, we would appreciate it if you reported them through our [vulnerability disclosure form][vuln_url].  This allows us to distribute a fix before the vulnerability is exploited.
-
-Additionally, if you believe that you've discovered a security vulnerability, you might qualify for our bug bounty program.  Visit our [bug bounty site][bug_bounty_url] for details.
+Please refer to our [SECURITY](SECURITY.md) document.
 
 If you have any questions, don't hesitate to contact us at security@algorand.com.
 
-# Contribution Model
+## Contribution Model
 
 For each of our repositories we use the same model for contributing code. Developers wanting to contribute must create pull requests. This process is described in the GitHub [Creating a pull request from a fork](https://help.github.com/en/articles/creating-a-pull-request-from-a-fork) documentation. Each pull request should be initiated against the `master` branch in the Algorand repository.  After a pull request is submitted the core development team will review the submission and communicate with the developer using the comments sections of the PR. After the submission is reviewed and approved, it will be merged into the `master` branch of the source. These changes will be merged to our release branch on the next viable release date. For the SDKs, this may be immediate. Changes to the node software may take more time as we must ensure and verify the security, as well as apply protocol upgrades in an orderly way.
 
@@ -41,7 +39,7 @@ Note: some of our projects are using gitflow, for these you will open pull reque
 
 Again, if you have a patch for a critical security vulnerability, please use our [vulnerability disclosure form][vuln_url] instead of creating a PR.  We'll follow up with you on distributing the patch before we merge it.
 
-# Code Guidelines
+## Code Guidelines
 
 For Go code we use the [Golang guidelines defined here](https://golang.org/doc/effective_go.html).
 * Code must adhere to the official Go formatting guidelines (i.e. uses gofmt).
@@ -52,7 +50,7 @@ For JavaScript code we use the [MDN formatting rules](https://developer.mozilla.
 
 For Java code we use [Oracle’s standard formatting rules for Java](https://www.oracle.com/technetwork/java/codeconventions-150003.pdf).
 
-# Communication Channels
+## Communication Channels
 
 The core development team monitors the Algorand community forums and regularly responds to questions and suggestions. Issues and Pull Requests are handled on GitHub.
 
