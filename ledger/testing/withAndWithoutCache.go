@@ -17,7 +17,6 @@
 package testing
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
@@ -25,11 +24,11 @@ import (
 
 func WithAndWithoutLRUCache(t *testing.T, cfg config.Local, test func(t *testing.T, cfg config.Local)) {
 	cfg.DisableLedgerLRUCache = false
-	t.Run(fmt.Sprintf("test with lru cache"), func(t *testing.T) {
+	t.Run("test with lru cache", func(t *testing.T) {
 		test(t, cfg)
 	})
 	cfg.DisableLedgerLRUCache = true
-	t.Run(fmt.Sprintf("test without lru cache"), func(t *testing.T) {
+	t.Run("test without lru cache", func(t *testing.T) {
 		test(t, cfg)
 	})
 }
