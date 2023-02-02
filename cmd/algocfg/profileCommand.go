@@ -17,8 +17,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"github.com/spf13/cobra"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -65,6 +67,19 @@ var setProfileCmd = &cobra.Command{
 				reportErrorf("%v", err)
 			}
 			file := filepath.Join(dataDir, config.ConfigFilename)
+			if _, err := os.Stat(file); err == nil {
+				fmt.Printf("A config.json file already exists for this data directory. Would you like to overwrite it? (Y/n)")
+				reader := bufio.NewReader(os.Stdin)
+				resp, err := reader.ReadString('\n')
+				resp = strings.TrimSpace(resp)
+				if err != nil {
+					reportErrorf("Failed to read response: %v", err)
+				}
+				if strings.ToLower(resp) != "y" {
+					reportInfof("Exiting without overwriting existing config.")
+					return
+				}
+			}
 			err = codecs.SaveNonDefaultValuesToFile(file, cfg, config.GetDefaultLocal(), nil, true)
 			if err != nil {
 				reportErrorf("Error saving updated config file '%s' - %s", file, err)
