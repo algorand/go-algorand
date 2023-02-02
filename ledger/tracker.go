@@ -67,6 +67,10 @@ type ledgerTracker interface {
 	// ledger internals so that individual trackers can be tested
 	// in isolation. The provided round number represents the
 	// current accounts storage round number.
+	// loadFromDisk is expected to reconstruct a tracker from scratch with one
+	// exception: `eternalData` might survive between loadFromDisk calls
+	// without being loaded from disk. This is especially useful for trackers
+	// that don't rely on the tracker DB.
 	loadFromDisk(ledgerForTracker, basics.Round) error
 
 	// newBlock informs the tracker of a new block along with

@@ -230,10 +230,11 @@ func (s *testWorkerStubs) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, err
 
 var errEmptyVoters = errors.New("ledger does not have voters")
 
-func (s *testWorkerStubs) RegisterVotersCommitListener(listener ledgercore.VotersCommitListener) {
+func (s *testWorkerStubs) RegisterVotersCommitListener(listener ledgercore.VotersCommitListener) error {
 	s.listenerMu.Lock()
 	defer s.listenerMu.Unlock()
 	s.commitListener = listener
+	return nil
 }
 
 func (s *testWorkerStubs) VotersForStateProof(r basics.Round) (*ledgercore.VotersForRound, error) {

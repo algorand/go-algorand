@@ -49,15 +49,13 @@ func (notifier *notifier) notify() {
 // bulletin provides an easy way to wait on a round to be written to the ledger.
 // To use it, call <-Wait(round)
 type bulletin struct {
-	mu                          deadlock.Mutex
-	pendingNotificationRequests map[basics.Round]notifier
-	latestRound                 basics.Round
-}
+	mu          deadlock.Mutex
+	latestRound basics.Round
 
-func makeBulletin() *bulletin {
-	b := new(bulletin)
-	b.pendingNotificationRequests = make(map[basics.Round]notifier)
-	return b
+	// eternalData survives tracker reloads
+	eternalData struct {
+		pendingNotificationRequests map[basics.Round]notifier
+	}
 }
 
 // Wait returns a channel which gets closed when the ledger reaches a given round.
@@ -72,18 +70,18 @@ func (b *bulletin) Wait(round basics.Round) chan struct{} {
 		return closed
 	}
 
-	signal, exists := b.pendingNotificationRequests[round]
+	signal, exists := b.eternalData.pendingNotificationRequests[round]
 	if !exists {
 		signal = makeNotifier()
-		b.pendingNotificationRequests[round] = signal
+		b.eternalData.pendingNotificationRequests[round] = signal
 	}
 	return signal.signal
 }
 
 func (b *bulletin) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	// We want to keep existing notification requests in memory if this flow is triggered by reloadLedger.
-	if b.pendingNotificationRequests == nil {
-		b.pendingNotificationRequests = make(map[basics.Round]notifier)
+	if b.eternalData.pendingNotificationRequests == nil {
+		b.eternalData.pendingNotificationRequests = make(map[basics.Round]notifier)
 	}
 	b.latestRound = l.Latest()
 	return nil
@@ -99,12 +97,12 @@ func (b *bulletin) committedUpTo(rnd basics.Round) (retRound, lookback basics.Ro
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	for pending, signal := range b.pendingNotificationRequests {
+	for pending, signal := range b.eternalData.pendingNotificationRequests {
 		if pending > rnd {
 			continue
 		}
 
-		delete(b.pendingNotificationRequests, pending)
+		delete(b.eternalData.pendingNotificationRequests, pending)
 		signal.notify()
 	}
 

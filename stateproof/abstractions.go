@@ -18,6 +18,7 @@ package stateproof
 
 import (
 	"context"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -41,7 +42,7 @@ type Ledger interface {
 	GenesisHash() crypto.Digest
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	VotersForStateProof(basics.Round) (*ledgercore.VotersForRound, error)
-	RegisterVotersCommitListener(listener ledgercore.VotersCommitListener)
+	RegisterVotersCommitListener(listener ledgercore.VotersCommitListener) error
 }
 
 // Network captures the aspects of the gossip network protocol that are

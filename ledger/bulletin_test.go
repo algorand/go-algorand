@@ -20,10 +20,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 const epsilon = 5 * time.Millisecond
+
+func makeBulletin() *bulletin {
+	b := new(bulletin)
+	b.eternalData.pendingNotificationRequests = make(map[basics.Round]notifier)
+	return b
+}
 
 func TestBulletin(t *testing.T) {
 	partitiontest.PartitionTest(t)

@@ -118,8 +118,8 @@ func (s *workerForStateProofMessageTests) VotersForStateProof(round basics.Round
 	return voters, nil
 }
 
-func (s *workerForStateProofMessageTests) RegisterVotersCommitListener(listener ledgercore.VotersCommitListener) {
-	s.w.RegisterVotersCommitListener(listener)
+func (s *workerForStateProofMessageTests) RegisterVotersCommitListener(listener ledgercore.VotersCommitListener) error {
+	return s.w.RegisterVotersCommitListener(listener)
 }
 
 func (s *workerForStateProofMessageTests) Broadcast(ctx context.Context, tag protocol.Tag, bytes []byte, b bool, peer network.Peer) error {
