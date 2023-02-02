@@ -48,9 +48,6 @@ check_go_binary_version() {
 
   if [ "$expected_version" != "$actual_version" ]; then
       echo "$YELLOW_FG[WARNING]$END_FG_COLOR $binary_name version mismatch, expected $expected_version, but got $actual_version"
-  else
-      echo "OK: $binary_name version $actual_version matches expected version $expected_version"
-      return 0
   fi
 }
 
