@@ -1001,32 +1001,39 @@
     ],
     "txn_type": [
       {
+        "Name": "unknown",
+        "Type": "uint64",
+        "Note": "Unknown type. Invalid transaction"
+      },
+      {
         "Name": "pay",
-        "Type": "uint64"
+        "Type": "uint64",
+        "Note": "Payment"
       },
       {
         "Name": "keyreg",
-        "Type": "uint64"
+        "Type": "uint64",
+        "Note": "KeyRegistration"
       },
       {
         "Name": "acfg",
-        "Type": "uint64"
+        "Type": "uint64",
+        "Note": "AssetConfig"
       },
       {
         "Name": "axfer",
-        "Type": "uint64"
+        "Type": "uint64",
+        "Note": "AssetTransfer"
       },
       {
         "Name": "afrz",
-        "Type": "uint64"
+        "Type": "uint64",
+        "Note": "AssetFreeze"
       },
       {
         "Name": "appl",
-        "Type": "uint64"
-      },
-      {
-        "Name": "unknown",
-        "Type": "uint64"
+        "Type": "uint64",
+        "Note": "ApplicationCall"
       }
     ],
     "txna": [
@@ -1075,16 +1082,9 @@
   },
   "PseudoOps": [
     {
-      "Name": "int",
+      "Name": "addr",
       "Returns": [
-        "uint64"
-      ],
-      "Size": 2
-    },
-    {
-      "Name": "byte",
-      "Returns": [
-        "[]byte"
+        "addr"
       ],
       "Size": 2
     },
@@ -1096,9 +1096,16 @@
       "Size": 2
     },
     {
-      "Name": "addr",
+      "Name": "int",
       "Returns": [
-        "addr"
+        "uint64"
+      ],
+      "Size": 2
+    },
+    {
+      "Name": "byte",
+      "Returns": [
+        "[]byte"
       ],
       "Size": 2
     }

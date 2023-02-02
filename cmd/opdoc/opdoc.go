@@ -378,8 +378,8 @@ func onCompleteKeywords() []Keyword {
 
 func txnTypeKeywords() []Keyword {
 	var txTypes []Keyword
-	for n := range logic.TypeNameDescriptions {
-		txTypes = append(txTypes, Keyword{Name: n, Type: "uint64"})
+	for n, doc := range logic.TypeNameDescriptions {
+		txTypes = append(txTypes, Keyword{Name: n, Type: "uint64", Note: doc})
 	}
 	return txTypes
 }
