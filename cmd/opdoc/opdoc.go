@@ -392,9 +392,10 @@ func txnTypeKeywords() []Keyword {
 
 func itxnTypeKeywords() []Keyword {
 	var itxTypes []Keyword
-	for n, version := range logic.InnerTxnTypes {
-		doc := logic.TypeNameDescriptions[n]
-		itxTypes = append(itxTypes, Keyword{Name: n, Type: "uint64", Version: version, Note: doc})
+	for idx, name := range logic.TxnTypeNames {
+		version := logic.InnerTxnTypes[name]
+		doc := logic.TypeNameDescriptions[name]
+		itxTypes = append(itxTypes, Keyword{Name: name, Type: "uint64", Version: version, Note: doc, Value: uint64(idx)})
 	}
 	return itxTypes
 }

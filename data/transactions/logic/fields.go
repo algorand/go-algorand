@@ -643,7 +643,7 @@ func (fs ecdsaCurveSpec) Field() byte {
 	return byte(fs.field)
 }
 func (fs ecdsaCurveSpec) StackType() StackType {
-	return StackNone // Will not show, since all are untyped
+	return StackNone
 }
 func (fs ecdsaCurveSpec) Type() AVMType {
 	return fs.StackType().AVMType // Will not show, since all are untyped
@@ -724,7 +724,7 @@ func (fs base64EncodingSpec) Field() byte {
 	return byte(fs.field)
 }
 func (fs base64EncodingSpec) StackType() StackType {
-	return StackNone // Will not show in docs, since all are untyped
+	return StackNone
 }
 func (fs base64EncodingSpec) Type() AVMType {
 	return fs.StackType().AVMType // Will not show in docs, since all are untyped
@@ -863,7 +863,7 @@ func (fs vrfStandardSpec) Field() byte {
 }
 
 func (fs vrfStandardSpec) StackType() StackType {
-	return StackNone // Will not show, since all are the same
+	return StackNone
 }
 func (fs vrfStandardSpec) Type() AVMType {
 	return fs.StackType().AVMType // Will not show, since all are the same
