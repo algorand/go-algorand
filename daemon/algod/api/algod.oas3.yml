@@ -2062,14 +2062,14 @@
         "type": "object"
       },
       "SimulationTransactionGroupResult": {
-        "description": "TODO",
+        "description": "Simulation result for an atomic transaction group",
         "properties": {
           "failure-message": {
-            "description": "TODO",
+            "description": "If present, indicates that the transaction group failed and specifies why that happened",
             "type": "string"
           },
           "txn-results": {
-            "description": "TODO",
+            "description": "Simulation result for individual transactions",
             "items": {
               "$ref": "#/components/schemas/SimulationTransactionResult"
             },
@@ -2082,10 +2082,10 @@
         "type": "object"
       },
       "SimulationTransactionResult": {
-        "description": "TODO",
+        "description": "Simulation result for an individual transaction",
         "properties": {
           "missing-signature": {
-            "description": "TODO",
+            "description": "A boolean indicating whether this transaction is missing signatures",
             "type": "boolean"
           },
           "txn-result": {

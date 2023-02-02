@@ -331,6 +331,8 @@ type EvalParams struct {
 	caller *EvalContext
 }
 
+// GetCaller returns the calling EvalContext if this is an inner transaction evaluation. Otherwise,
+// this returns nil.
 func (ep *EvalParams) GetCaller() *EvalContext {
 	return ep.caller
 }

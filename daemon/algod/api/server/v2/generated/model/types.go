@@ -733,18 +733,18 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
-// SimulationTransactionGroupResult TODO
+// SimulationTransactionGroupResult Simulation result for an atomic transaction group
 type SimulationTransactionGroupResult struct {
-	// FailureMessage TODO
+	// FailureMessage If present, indicates that the transaction group failed and specifies why that happened
 	FailureMessage *string `json:"failure-message,omitempty"`
 
-	// TxnResults TODO
+	// TxnResults Simulation result for individual transactions
 	TxnResults []SimulationTransactionResult `json:"txn-results"`
 }
 
-// SimulationTransactionResult TODO
+// SimulationTransactionResult Simulation result for an individual transaction
 type SimulationTransactionResult struct {
-	// MissingSignature TODO
+	// MissingSignature A boolean indicating whether this transaction is missing signatures
 	MissingSignature *bool `json:"missing-signature,omitempty"`
 
 	// TxnResult Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.

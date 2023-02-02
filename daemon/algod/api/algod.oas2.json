@@ -3581,38 +3581,38 @@
       }
     },
     "SimulationTransactionGroupResult": {
-      "description": "TODO",
+      "description": "Simulation result for an atomic transaction group",
       "type": "object",
       "required": [
         "txn-results"
       ],
       "properties": {
         "txn-results": {
-          "description": "TODO",
+          "description": "Simulation result for individual transactions",
           "type": "array",
           "items": {
             "$ref": "#/definitions/SimulationTransactionResult"
           }
         },
         "failure-message": {
-          "description": "TODO",
+          "description": "If present, indicates that the transaction group failed and specifies why that happened",
           "type": "string"
         }
       }
     },
     "SimulationTransactionResult": {
-      "description": "TODO",
+      "description": "Simulation result for an individual transaction",
       "type": "object",
       "required": [
         "txn-result"
       ],
       "properties": {
         "txn-result": {
-          "description": "TODO",
+          "description": "Includes details about the transaction and it execution, even if it fails",
           "$ref": "#/definitions/PendingTransactionResponse"
         },
         "missing-signature": {
-          "description": "TODO",
+          "description": "A boolean indicating whether this transaction is missing signatures",
           "type": "boolean"
         }
       }
