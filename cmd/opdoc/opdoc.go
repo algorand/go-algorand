@@ -248,6 +248,7 @@ type OpRecord struct {
 	DocExtra      string   `json:",omitempty"`
 	ImmediateNote string   `json:",omitempty"`
 	Groups        []string `json:",omitempty"`
+	Cost          string
 }
 
 // StackTypeSpec type is the definition of a higher level type with
@@ -462,12 +463,13 @@ func buildLanguageSpec(version uint64, opGroups map[string][]string) *LanguageSp
 
 	allStackTypes := stackTypeSpecs()
 
+	keywords["on_complete"] = onCompleteKeywords()
 	keywords["txn_type"] = txnTypeKeywords()
+
 	itxn_types := itxnTypeKeywords(version)
 	if len(itxn_types) > 0 {
 		keywords["itxn_type"] = itxn_types
 	}
-	keywords["on_complete"] = onCompleteKeywords()
 
 	for i, spec := range opSpecs {
 		records[i].Opcode = spec.Opcode
@@ -480,6 +482,17 @@ func buildLanguageSpec(version uint64, opGroups map[string][]string) *LanguageSp
 		records[i].DocExtra = logic.OpDocExtra(spec.Name)
 		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
 		records[i].Groups = opGroups[spec.Name]
+
+		for _, cost := range logic.OpAllCosts(spec.Name) {
+			if cost.From <= int(version) && cost.To >= int(version) {
+				records[i].Cost = cost.Cost
+			}
+		}
+
+		if records[i].Cost == "" {
+			records[i].Cost = "1"
+		}
+
 	}
 
 	var pseudoOps = make([]OpRecord, len(logic.PseudoOps))

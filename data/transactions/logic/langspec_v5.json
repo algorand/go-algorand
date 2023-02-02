@@ -1029,28 +1029,32 @@
       "Returns": [
         "addr"
       ],
-      "Size": 2
-    },
-    {
-      "Name": "int",
-      "Returns": [
-        "uint64"
-      ],
-      "Size": 2
-    },
-    {
-      "Name": "byte",
-      "Returns": [
-        "[]byte"
-      ],
-      "Size": 2
+      "Size": 2,
+      "Cost": ""
     },
     {
       "Name": "method",
       "Returns": [
         "method"
       ],
-      "Size": 2
+      "Size": 2,
+      "Cost": ""
+    },
+    {
+      "Name": "int",
+      "Returns": [
+        "uint64"
+      ],
+      "Size": 2,
+      "Cost": ""
+    },
+    {
+      "Name": "byte",
+      "Returns": [
+        "[]byte"
+      ],
+      "Size": 2,
+      "Cost": ""
     }
   ],
   "Ops": [
@@ -1063,7 +1067,8 @@
       "Doc": "Fail immediately.",
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 1,
@@ -1078,7 +1083,8 @@
       "Doc": "SHA256 hash of value A, yields [32]byte",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "35"
     },
     {
       "Opcode": 2,
@@ -1093,7 +1099,8 @@
       "Doc": "Keccak256 hash of value A, yields [32]byte",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "130"
     },
     {
       "Opcode": 3,
@@ -1108,7 +1115,8 @@
       "Doc": "SHA512_256 hash of value A, yields [32]byte",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "45"
     },
     {
       "Opcode": 4,
@@ -1126,7 +1134,8 @@
       "DocExtra": "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1900"
     },
     {
       "Opcode": 5,
@@ -1148,7 +1157,8 @@
       "ImmediateNote": "{uint8 curve index}",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": " Secp256k1=1700 Secp256r1=2500"
     },
     {
       "Opcode": 6,
@@ -1167,7 +1177,8 @@
       "ImmediateNote": "{uint8 curve index}",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": " Secp256k1=650 Secp256r1=2400"
     },
     {
       "Opcode": 7,
@@ -1189,7 +1200,8 @@
       "ImmediateNote": "{uint8 curve index}",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "2000"
     },
     {
       "Opcode": 8,
@@ -1206,7 +1218,8 @@
       "DocExtra": "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`.",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 9,
@@ -1222,7 +1235,8 @@
       "Doc": "A minus B. Fail if B \u003e A.",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 10,
@@ -1239,7 +1253,8 @@
       "DocExtra": "`divmodw` is available to divide the two-element values produced by `mulw` and `addw`.",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 11,
@@ -1256,7 +1271,8 @@
       "DocExtra": "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`.",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 12,
@@ -1272,7 +1288,8 @@
       "Doc": "A less than B =\u003e {0 or 1}",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 13,
@@ -1288,7 +1305,8 @@
       "Doc": "A greater than B =\u003e {0 or 1}",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 14,
@@ -1304,7 +1322,8 @@
       "Doc": "A less than or equal to B =\u003e {0 or 1}",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 15,
@@ -1320,7 +1339,8 @@
       "Doc": "A greater than or equal to B =\u003e {0 or 1}",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 16,
@@ -1336,7 +1356,8 @@
       "Doc": "A is not zero and B is not zero =\u003e {0 or 1}",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 17,
@@ -1352,7 +1373,8 @@
       "Doc": "A is not zero or B is not zero =\u003e {0 or 1}",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 18,
@@ -1368,7 +1390,8 @@
       "Doc": "A is equal to B =\u003e {0 or 1}",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 19,
@@ -1384,7 +1407,8 @@
       "Doc": "A is not equal to B =\u003e {0 or 1}",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 20,
@@ -1399,7 +1423,8 @@
       "Doc": "A == 0 yields 1; else 0",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 21,
@@ -1414,7 +1439,8 @@
       "Doc": "yields length of byte value A",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 22,
@@ -1429,7 +1455,8 @@
       "Doc": "converts uint64 A to big-endian byte array, always of length 8",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 23,
@@ -1445,7 +1472,8 @@
       "DocExtra": "`btoi` fails if the input is longer than 8 bytes.",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 24,
@@ -1461,7 +1489,8 @@
       "Doc": "A modulo B. Fail if B == 0.",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 25,
@@ -1477,7 +1506,8 @@
       "Doc": "A bitwise-or B",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 26,
@@ -1493,7 +1523,8 @@
       "Doc": "A bitwise-and B",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 27,
@@ -1509,7 +1540,8 @@
       "Doc": "A bitwise-xor B",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 28,
@@ -1524,7 +1556,8 @@
       "Doc": "bitwise invert value A",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 29,
@@ -1541,7 +1574,8 @@
       "Doc": "A times B as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 30,
@@ -1558,7 +1592,8 @@
       "Doc": "A plus B as a 128-bit result. X is the carry-bit, Y is the low-order 64 bits.",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 31,
@@ -1580,7 +1615,8 @@
       "DocExtra": "The notation J,K indicates that two uint64 values J and K are interpreted as a uint128 value, with J as the high uint64 and K the low.",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "20"
     },
     {
       "Opcode": 32,
@@ -1591,7 +1627,8 @@
       "ImmediateNote": "{varuint count} [{varuint value}, ...]",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 33,
@@ -1604,7 +1641,8 @@
       "ImmediateNote": "{uint8 int constant index}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 34,
@@ -1616,7 +1654,8 @@
       "Doc": "constant 0 from intcblock",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 35,
@@ -1628,7 +1667,8 @@
       "Doc": "constant 1 from intcblock",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 36,
@@ -1640,7 +1680,8 @@
       "Doc": "constant 2 from intcblock",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 37,
@@ -1652,7 +1693,8 @@
       "Doc": "constant 3 from intcblock",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 38,
@@ -1663,7 +1705,8 @@
       "ImmediateNote": "{varuint count} [({varuint length} bytes), ...]",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 39,
@@ -1676,7 +1719,8 @@
       "ImmediateNote": "{uint8 byte constant index}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 40,
@@ -1688,7 +1732,8 @@
       "Doc": "constant 0 from bytecblock",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 41,
@@ -1700,7 +1745,8 @@
       "Doc": "constant 1 from bytecblock",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 42,
@@ -1712,7 +1758,8 @@
       "Doc": "constant 2 from bytecblock",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 43,
@@ -1724,7 +1771,8 @@
       "Doc": "constant 3 from bytecblock",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 44,
@@ -1737,7 +1785,8 @@
       "ImmediateNote": "{uint8 arg index}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 45,
@@ -1749,7 +1798,8 @@
       "Doc": "LogicSig argument 0",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 46,
@@ -1761,7 +1811,8 @@
       "Doc": "LogicSig argument 1",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 47,
@@ -1773,7 +1824,8 @@
       "Doc": "LogicSig argument 2",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 48,
@@ -1785,7 +1837,8 @@
       "Doc": "LogicSig argument 3",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 49,
@@ -1799,7 +1852,8 @@
       "ImmediateNote": "{uint8 transaction field index}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 50,
@@ -1813,7 +1867,8 @@
       "ImmediateNote": "{uint8 global field index}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 51,
@@ -1828,7 +1883,8 @@
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 52,
@@ -1841,7 +1897,8 @@
       "ImmediateNote": "{uint8 position in scratch space to load from}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 53,
@@ -1854,7 +1911,8 @@
       "ImmediateNote": "{uint8 position in scratch space to store to}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 54,
@@ -1868,7 +1926,8 @@
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 55,
@@ -1882,7 +1941,8 @@
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 56,
@@ -1900,7 +1960,8 @@
       "ImmediateNote": "{uint8 transaction field index}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 57,
@@ -1917,7 +1978,8 @@
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 58,
@@ -1931,7 +1993,8 @@
       "ImmediateNote": "{uint8 transaction group index} {uint8 position in scratch space to load from}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 59,
@@ -1948,7 +2011,8 @@
       "ImmediateNote": "{uint8 position in scratch space to load from}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 60,
@@ -1962,7 +2026,8 @@
       "ImmediateNote": "{uint8 transaction group index}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 61,
@@ -1978,7 +2043,8 @@
       "DocExtra": "`gaids` fails unless the requested transaction created an asset or application and A \u003c GroupIndex.",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 62,
@@ -1993,7 +2059,8 @@
       "Doc": "Ath scratch space value.  All scratch spaces are 0 at program start.",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 63,
@@ -2006,7 +2073,8 @@
       "Doc": "store B to the Ath scratch space",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 64,
@@ -2020,7 +2088,8 @@
       "ImmediateNote": "{int16 branch offset, big-endian}",
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 65,
@@ -2034,7 +2103,8 @@
       "ImmediateNote": "{int16 branch offset, big-endian}",
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 66,
@@ -2045,7 +2115,8 @@
       "ImmediateNote": "{int16 branch offset, big-endian}",
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 67,
@@ -2060,7 +2131,8 @@
       "Doc": "use A as success value; end",
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 68,
@@ -2072,7 +2144,8 @@
       "Doc": "immediately fail unless A is a non-zero number",
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 72,
@@ -2084,7 +2157,8 @@
       "Doc": "discard A",
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 73,
@@ -2100,7 +2174,8 @@
       "Doc": "duplicate A",
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 74,
@@ -2119,7 +2194,8 @@
       "Doc": "duplicate A and B",
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 75,
@@ -2136,7 +2212,8 @@
       "ImmediateNote": "{uint8 depth}",
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 76,
@@ -2153,7 +2230,8 @@
       "Doc": "swaps A and B on stack",
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 77,
@@ -2170,7 +2248,8 @@
       "Doc": "selects one of two values based on top-of-stack: B if C != 0, else A",
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 78,
@@ -2186,7 +2265,8 @@
       "ImmediateNote": "{uint8 depth}",
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 79,
@@ -2202,7 +2282,8 @@
       "ImmediateNote": "{uint8 depth}",
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 80,
@@ -2219,7 +2300,8 @@
       "DocExtra": "`concat` fails if the result would be greater than 4096 bytes.",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 81,
@@ -2235,7 +2317,8 @@
       "ImmediateNote": "{uint8 start position} {uint8 end position}",
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 82,
@@ -2252,7 +2335,8 @@
       "Doc": "A range of bytes from A starting at B up to but not including C. If C \u003c B, or either is larger than the array length, the program fails",
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 83,
@@ -2269,7 +2353,8 @@
       "DocExtra": "see explanation of bit ordering in setbit",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 84,
@@ -2287,7 +2372,8 @@
       "DocExtra": "When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on the integer 0 yields 8, or 2^3. When A is a byte array, index 0 is the leftmost bit of the leftmost byte. Setting bits 0 through 11 to 1 in a 4-byte-array of 0s yields the byte array 0xfff00000. Setting bit 3 to 1 on the 1-byte-array 0x00 yields the byte array 0x10.",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 85,
@@ -2303,7 +2389,8 @@
       "Doc": "Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 86,
@@ -2320,7 +2407,8 @@
       "Doc": "Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 87,
@@ -2336,7 +2424,8 @@
       "ImmediateNote": "{uint8 start position} {uint8 length}",
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 88,
@@ -2353,7 +2442,8 @@
       "Doc": "A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails\n`extract3` can be called using `extract` with no immediates.",
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 89,
@@ -2369,7 +2459,8 @@
       "Doc": "A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails",
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 90,
@@ -2385,7 +2476,8 @@
       "Doc": "A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails",
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 91,
@@ -2401,7 +2493,8 @@
       "Doc": "A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails",
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 96,
@@ -2417,7 +2510,8 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
       "Groups": [
         "State Access"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 97,
@@ -2434,7 +2528,8 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.",
       "Groups": [
         "State Access"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 98,
@@ -2451,7 +2546,8 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
       "Groups": [
         "State Access"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 99,
@@ -2470,7 +2566,8 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
       "Groups": [
         "State Access"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 100,
@@ -2486,7 +2583,8 @@
       "DocExtra": "params: state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
       "Groups": [
         "State Access"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 101,
@@ -2504,7 +2602,8 @@
       "DocExtra": "params: Txn.ForeignApps offset (or, since v4, an _available_ application id), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
       "Groups": [
         "State Access"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 102,
@@ -2519,7 +2618,8 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key, value.",
       "Groups": [
         "State Access"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 103,
@@ -2532,7 +2632,8 @@
       "Doc": "write B to key A in the global state of the current application",
       "Groups": [
         "State Access"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 104,
@@ -2546,7 +2647,8 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key.\n\nDeleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)",
       "Groups": [
         "State Access"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 105,
@@ -2559,7 +2661,8 @@
       "DocExtra": "params: state key.\n\nDeleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)",
       "Groups": [
         "State Access"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 112,
@@ -2579,7 +2682,8 @@
       "ImmediateNote": "{uint8 asset holding field index}",
       "Groups": [
         "State Access"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 113,
@@ -2598,7 +2702,8 @@
       "ImmediateNote": "{uint8 asset params field index}",
       "Groups": [
         "State Access"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 114,
@@ -2617,7 +2722,8 @@
       "ImmediateNote": "{uint8 app params field index}",
       "Groups": [
         "State Access"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 120,
@@ -2633,7 +2739,8 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
       "Groups": [
         "State Access"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 128,
@@ -2647,7 +2754,8 @@
       "ImmediateNote": "{varuint length} {bytes}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 129,
@@ -2661,7 +2769,8 @@
       "ImmediateNote": "{varuint int}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 136,
@@ -2672,7 +2781,8 @@
       "ImmediateNote": "{int16 branch offset, big-endian}",
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 137,
@@ -2682,7 +2792,8 @@
       "DocExtra": "If the current frame was prepared by `proto A R`, `retsub` will remove the 'A' arguments from the stack, move the `R` return values down, and pop any stack locations above the relocated return values.",
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 144,
@@ -2698,7 +2809,8 @@
       "Doc": "A times 2^B, modulo 2^64",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 145,
@@ -2714,7 +2826,8 @@
       "Doc": "A divided by 2^B",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 146,
@@ -2729,7 +2842,8 @@
       "Doc": "The largest integer I such that I^2 \u003c= A",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "4"
     },
     {
       "Opcode": 147,
@@ -2745,7 +2859,8 @@
       "DocExtra": "bitlen interprets arrays as big-endian integers, unlike setbit/getbit",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 148,
@@ -2761,7 +2876,8 @@
       "Doc": "A raised to the Bth power. Fail if A == B == 0 and on overflow",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 149,
@@ -2778,7 +2894,8 @@
       "Doc": "A raised to the Bth power as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low. Fail if A == B == 0 or if the results exceeds 2^128-1",
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Cost": "10"
     },
     {
       "Opcode": 160,
@@ -2794,7 +2911,8 @@
       "Doc": "A plus B. A and B are interpreted as big-endian unsigned integers",
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Cost": "10"
     },
     {
       "Opcode": 161,
@@ -2810,7 +2928,8 @@
       "Doc": "A minus B. A and B are interpreted as big-endian unsigned integers. Fail on underflow.",
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Cost": "10"
     },
     {
       "Opcode": 162,
@@ -2826,7 +2945,8 @@
       "Doc": "A divided by B (truncated division). A and B are interpreted as big-endian unsigned integers. Fail if B is zero.",
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Cost": "20"
     },
     {
       "Opcode": 163,
@@ -2842,7 +2962,8 @@
       "Doc": "A times B. A and B are interpreted as big-endian unsigned integers.",
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Cost": "20"
     },
     {
       "Opcode": 164,
@@ -2858,7 +2979,8 @@
       "Doc": "1 if A is less than B, else 0. A and B are interpreted as big-endian unsigned integers",
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 165,
@@ -2874,7 +2996,8 @@
       "Doc": "1 if A is greater than B, else 0. A and B are interpreted as big-endian unsigned integers",
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 166,
@@ -2890,7 +3013,8 @@
       "Doc": "1 if A is less than or equal to B, else 0. A and B are interpreted as big-endian unsigned integers",
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 167,
@@ -2906,7 +3030,8 @@
       "Doc": "1 if A is greater than or equal to B, else 0. A and B are interpreted as big-endian unsigned integers",
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 168,
@@ -2922,7 +3047,8 @@
       "Doc": "1 if A is equal to B, else 0. A and B are interpreted as big-endian unsigned integers",
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 169,
@@ -2938,7 +3064,8 @@
       "Doc": "0 if A is equal to B, else 1. A and B are interpreted as big-endian unsigned integers",
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 170,
@@ -2954,7 +3081,8 @@
       "Doc": "A modulo B. A and B are interpreted as big-endian unsigned integers. Fail if B is zero.",
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Cost": "20"
     },
     {
       "Opcode": 171,
@@ -2970,7 +3098,8 @@
       "Doc": "A bitwise-or B. A and B are zero-left extended to the greater of their lengths",
       "Groups": [
         "Byte Array Logic"
-      ]
+      ],
+      "Cost": "6"
     },
     {
       "Opcode": 172,
@@ -2986,7 +3115,8 @@
       "Doc": "A bitwise-and B. A and B are zero-left extended to the greater of their lengths",
       "Groups": [
         "Byte Array Logic"
-      ]
+      ],
+      "Cost": "6"
     },
     {
       "Opcode": 173,
@@ -3002,7 +3132,8 @@
       "Doc": "A bitwise-xor B. A and B are zero-left extended to the greater of their lengths",
       "Groups": [
         "Byte Array Logic"
-      ]
+      ],
+      "Cost": "6"
     },
     {
       "Opcode": 174,
@@ -3017,7 +3148,8 @@
       "Doc": "A with all bits inverted",
       "Groups": [
         "Byte Array Logic"
-      ]
+      ],
+      "Cost": "4"
     },
     {
       "Opcode": 175,
@@ -3032,7 +3164,8 @@
       "Doc": "zero filled byte-array of length A",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 176,
@@ -3045,7 +3178,8 @@
       "DocExtra": "`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.",
       "Groups": [
         "State Access"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 177,
@@ -3055,7 +3189,8 @@
       "DocExtra": "`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero or empty values.",
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 178,
@@ -3070,7 +3205,8 @@
       "ImmediateNote": "{uint8 transaction field index}",
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 179,
@@ -3080,7 +3216,8 @@
       "DocExtra": "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 180,
@@ -3094,7 +3231,8 @@
       "ImmediateNote": "{uint8 transaction field index}",
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 181,
@@ -3108,7 +3246,8 @@
       "ImmediateNote": "{uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 192,
@@ -3125,7 +3264,8 @@
       "ImmediateNote": "{uint8 transaction field index}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 193,
@@ -3142,7 +3282,8 @@
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 194,
@@ -3160,7 +3301,8 @@
       "ImmediateNote": "{uint8 transaction field index}",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     },
     {
       "Opcode": 195,
@@ -3175,7 +3317,8 @@
       "Doc": "Ath LogicSig argument",
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Cost": "1"
     }
   ]
 }
