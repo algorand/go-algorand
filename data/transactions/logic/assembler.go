@@ -1508,10 +1508,8 @@ func typeByte(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 	if len(args) == 0 {
 		return nil, StackTypes{StackBytes}, nil
 	}
-
 	val, _, _ := parseBinaryArgs(args)
 	l := uint64(len(val))
-
 	return nil, StackTypes{NewStackType(AVMBytes, static(l), fmt.Sprintf("[%d]byte", l))}, nil
 }
 
