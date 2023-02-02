@@ -52,7 +52,7 @@ type bulletin struct {
 	mu          deadlock.Mutex
 	latestRound basics.Round
 
-	// eternalData survive tracker reloads
+	// eternalData survives tracker reloads
 	eternalData struct {
 		pendingNotificationRequests map[basics.Round]notifier
 	}
