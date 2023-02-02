@@ -277,18 +277,21 @@ func convertToDeltas(txn node.TxnWithStatus) (*[]model.AccountStateDelta, *model
 	if len(txn.ApplyData.EvalDelta.LocalDeltas) > 0 {
 		d := make([]model.AccountStateDelta, 0)
 		accounts := txn.Txn.Txn.Accounts
+		shared := txn.ApplyData.EvalDelta.SharedAccts
 
 		for k, v := range txn.ApplyData.EvalDelta.LocalDeltas {
 			// Resolve address from index
 			var addr string
-			if k == 0 {
+			// k is an index into [Sender, accounts[0], accounts[1], ..., shared[0], shared[1], ...]
+			switch {
+			case k == 0:
 				addr = txn.Txn.Txn.Sender.String()
-			} else {
-				if int(k-1) < len(accounts) {
-					addr = txn.Txn.Txn.Accounts[k-1].String()
-				} else {
-					addr = fmt.Sprintf("Invalid Address Index: %d", k-1)
-				}
+			case int(k-1) < len(accounts):
+				addr = txn.Txn.Txn.Accounts[k-1].String()
+			case int(k-1)-len(accounts) < len(shared):
+				addr = shared[int(k-1)-len(accounts)].String()
+			default:
+				addr = fmt.Sprintf("Invalid Account Index %d in LocalDelta", k)
 			}
 			d = append(d, model.AccountStateDelta{
 				Address: addr,
