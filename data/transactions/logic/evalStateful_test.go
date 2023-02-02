@@ -2577,7 +2577,7 @@ func TestReturnTypes(t *testing.T) {
 					avmType := cx.stack[i].argType()
 					retType := spec.Return.Types[i]
 					require.True(
-						t, typecheck(retType, avmType.StackType()),
+						t, avmType.StackType().ConvertableTo(retType),
 						"%s expected to return %s but actual is %s", spec.Name, retType, avmType,
 					)
 				}

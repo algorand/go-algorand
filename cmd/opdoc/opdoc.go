@@ -321,9 +321,9 @@ func groupKeywords(group logic.FieldGroup) []Keyword {
 
 func argEnums(name string) string {
 	switch name {
-	case "txn", "gtxn", "gtxns", "itxn", "gitxn":
+	case "txn", "gtxn", "gtxns", "gitxn":
 		return "txn"
-	case "itxn_field":
+	case "itxn_field", "itxn":
 		return "itxn_field"
 	case "global":
 		return "global"
