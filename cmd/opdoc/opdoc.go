@@ -374,9 +374,9 @@ func fieldGroups() []logic.FieldGroup {
 
 func onCompleteKeywords() []Keyword {
 	var ocs []Keyword
-	for _, ocn := range logic.OnCompletionNames {
-		// TODO: add Value/Doc
-		ocs = append(ocs, Keyword{Name: ocn, Type: "uint64"})
+	for val, ocn := range logic.OnCompletionNames {
+		doc := logic.OnCompletionDescription(uint64(val))
+		ocs = append(ocs, Keyword{Name: ocn, Type: "uint64", Value: uint64(val), Note: doc})
 	}
 	return ocs
 }

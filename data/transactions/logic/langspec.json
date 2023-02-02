@@ -917,32 +917,38 @@
       {
         "Name": "NoOp",
         "Type": "uint64",
+        "Note": "Only execute the `ApprovalProgram` associated with this application ID, with no additional effects.",
         "Value": 0
       },
       {
         "Name": "OptIn",
         "Type": "uint64",
-        "Value": 0
+        "Note": "Before executing the `ApprovalProgram`, allocate local state for this application into the sender's account data.",
+        "Value": 1
       },
       {
         "Name": "CloseOut",
         "Type": "uint64",
-        "Value": 0
+        "Note": "After executing the `ApprovalProgram`, clear any local state for this application out of the sender's account data.",
+        "Value": 2
       },
       {
         "Name": "ClearState",
         "Type": "uint64",
-        "Value": 0
+        "Note": "Don't execute the `ApprovalProgram`, and instead execute the `ClearStateProgram` (which may not reject this transaction). Additionally, clear any local state for this application out of the sender's account data as in `CloseOutOC`.",
+        "Value": 3
       },
       {
         "Name": "UpdateApplication",
         "Type": "uint64",
-        "Value": 0
+        "Note": "After executing the `ApprovalProgram`, replace the `ApprovalProgram` and `ClearStateProgram` associated with this application ID with the programs specified in this transaction.",
+        "Value": 4
       },
       {
         "Name": "DeleteApplication",
         "Type": "uint64",
-        "Value": 0
+        "Note": "After executing the `ApprovalProgram`, delete the application parameters from the account data of the application's creator.",
+        "Value": 5
       }
     ],
     "txn": [
@@ -1457,13 +1463,6 @@
   },
   "PseudoOps": [
     {
-      "Name": "int",
-      "Returns": [
-        "uint64"
-      ],
-      "Size": 2
-    },
-    {
       "Name": "byte",
       "Returns": [
         "[]byte"
@@ -1474,6 +1473,13 @@
       "Name": "addr",
       "Returns": [
         "addr"
+      ],
+      "Size": 2
+    },
+    {
+      "Name": "int",
+      "Returns": [
+        "uint64"
       ],
       "Size": 2
     },
