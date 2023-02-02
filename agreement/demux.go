@@ -265,8 +265,6 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		speculationDeadlineCh = s.Clock.TimeoutAt(speculationDeadline)
 	}
 
-	//d.log.Infof("demux deadline %d, fastD %d, specD %d, d.monitor %v", deadline, fastDeadline, speculationDeadline, d.monitor) // not threadsafe in some tests
-
 	d.UpdateEventsQueue(eventQueueDemux, 0)
 	d.monitor.dec(demuxCoserviceType)
 

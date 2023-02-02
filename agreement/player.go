@@ -130,7 +130,7 @@ func (p *player) handle(r routerHandle, e event) []action {
 	}
 }
 
-// handleSpeculationTimeout TODO: rename this 'timeout' is the START of speculative assembly.
+// handleSpeculationTimeout  is when to _start_ speculative assembly.
 func (p *player) handleSpeculationTimeout(r routerHandle, e timeoutEvent) []action {
 	if e.Proto.Err != nil {
 		r.t.log.Errorf("failed to read protocol version for speculationTimeout event (proto %v): %v", e.Proto.Version, e.Proto.Err)
@@ -178,7 +178,6 @@ func (p *player) issueSoftVote(r routerHandle) (actions []action) {
 		// If we arrive due to fast-forward/soft threshold; then answer.Bottom = false and answer.Proposal = bottom
 		// and we should soft-vote normally (not based on the starting value)
 		a.Proposal = nextStatus.Proposal
-		// TODO: how do we speculative block assemble based on nextStatus.Proposal?
 		return append(actions, a)
 	}
 
@@ -626,9 +625,10 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			actions = append(actions, a)
 		}
 
-		// StartSpeculativeBlockAssembly every time we validate a proposal
-		// TODO: maybe only do this if after speculation has started; interrupt speculation on a block when we get a better block
-		// TODO: maybe don't do this at all and just delete it?
+		// StartSpeculativeBlockAssembly when we validate a
+		// proposal, but only re-start when we're finding a
+		// better proposal than what we had when we started
+		// due to timer.
 		if ef.t() == payloadAccepted {
 			actions = p.startSpeculativeBlockAsm(r, actions, true)
 		}

@@ -148,7 +148,6 @@ func (s *Service) Start() {
 	input := make(chan externalEvent)
 	output := make(chan []action)
 	ready := make(chan externalDemuxSignals)
-	// TODO: use demuxOne() inside of mainLoop() instead of this nonsense pair of threads
 	go s.demuxLoop(ctx, input, output, ready)
 	go s.mainLoop(input, output, ready)
 }
@@ -179,12 +178,6 @@ func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, out
 	s.loopback.Quit()
 	s.voteVerifier.Quit()
 	close(s.done)
-}
-
-// TODO: use demuxOne() inside mainLoop() instead of having a pair of synchronous go threads trading off via chan
-func (s *Service) demuxOne(ctx context.Context, a []action, extSignals externalDemuxSignals) (e externalEvent, ok bool) {
-	s.do(ctx, a)
-	return s.demux.next(s, extSignals.Deadline, extSignals.FastRecoveryDeadline, extSignals.SpeculativeBlockAsmDeadline, extSignals.CurrentRound)
 }
 
 // mainLoop drives the state machine.
@@ -241,7 +234,6 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		// set speculative block assembly based on the current local configuration
 		specClock := SpeculativeBlockAsmTime(status.Period, status.ConsensusVersion, s.parameters.Local.SpeculativeAsmTimeOffset)
 
-		// TODO: e, ok := s.demuxOne(ctx, a, externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, SpeculativeBlockAsmDeadline: specClock, CurrentRound: status.Round})
 		output <- a
 		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, SpeculativeBlockAsmDeadline: specClock, CurrentRound: status.Round}
 		e, ok := <-input

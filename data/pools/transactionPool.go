@@ -108,14 +108,17 @@ type TransactionPool struct {
 	specBlockDigest           crypto.Digest
 	cancelSpeculativeAssembly context.CancelFunc
 	speculativePool           *TransactionPool
-	specMoreTxns              chan []transactions.SignedTxn
-	// specBlockCh has an assembled speculative block
-	//specBlockCh chan *ledgercore.ValidatedBlock
-	// specAsmDone channel is closed when there is no speculative assembly
-	//specAsmDone <-chan struct{}
-	// TODO: feed into assemblyMu & assemblyCond above!
+
+	// specMoreTxns in a 'inner' speculative assembly scope is txn
+	// groups coming in from the .Remember() of the outer
+	// TransactionPool; in the outer scope it is the chan to feed
+	// txngroups into the inner speculative assembly
+	// TransactionPool.
+	// Use only if .specActive is true
+	specMoreTxns chan []transactions.SignedTxn
 
 	cfg config.Local
+
 	// stateproofOverflowed indicates that a stateproof transaction was allowed to
 	// exceed the txPoolMaxSize. This flag is reset to false OnNewBlock
 	stateproofOverflowed bool
@@ -159,7 +162,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	return &pool
 }
 
-// TODO: this needs a careful read for lock/shallow-copy issues
+// this expects pool.mu and pool.specBlockMu to be held
 func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(ctx context.Context, vb *ledgercore.ValidatedBlock) (*TransactionPool, context.CancelFunc, error) {
 	specLedger, err := ledger.MakeValidatedBlockAsLFE(vb, pool.ledger)
 	if err != nil {
@@ -185,16 +188,8 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(ctx context.Conte
 		cfg:                  pool.cfg,
 		ctx:                  copyPoolctx,
 	}
-	// TODO: make an 'assembly context struct' with a subset of TransactionPool fields?
 	copy.cond.L = &copy.mu
 	copy.assemblyCond.L = &copy.assemblyMu
-
-	//pool.cancelSpeculativeAssembly = cancel
-
-	// specBlockCh := make(chan *ledgercore.ValidatedBlock, 1)
-	// pool.specBlockMu.Lock()
-	// pool.specBlockCh = specBlockCh
-	// pool.specBlockMu.Unlock()
 
 	return &copy, cancel, nil
 }
@@ -239,6 +234,7 @@ const (
 // Reset resets the content of the transaction pool
 func (pool *TransactionPool) Reset() {
 	// cancel speculative assembly and clear its result
+	// briefly lock specBlockMu before doing the rest of work under pool.mu
 	pool.specBlockMu.Lock()
 	if pool.cancelSpeculativeAssembly != nil {
 		pool.cancelSpeculativeAssembly()
@@ -657,7 +653,6 @@ func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHas
 			pool.log.Infof("update speculative deadline: %s", deadline.String())
 			specPool := pool.speculativePool
 			pool.specBlockMu.Unlock()
-			// TODO: is continuing to hold outer pool.assemblyMu here a bad thing?
 			specPool.assemblyMu.Lock()
 			assembled, err := specPool.waitForBlockAssembly(round, deadline, stats)
 			specPool.assemblyMu.Unlock()
@@ -681,7 +676,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 		pool.specActive = false
 		// cancel speculative assembly, fall through to starting normal assembly
 	}
-	// TODO: make core onNewBlock() _wait_ until speculative block is done, merge state from that result
+	// TODO: make core onNewBlock() _wait_ until speculative block is done, merge state from that result (optimization)
 	pool.specBlockMu.Unlock()
 	pool.onNewBlock(block, delta, false)
 }
@@ -926,10 +921,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	asmStats.StopReason = telemetryspec.AssembleBlockEmpty
 
 	firstTxnGrpTime := time.Now()
-
-	// TODO: run additional txgroup from a chan
-	// in speculative context this is new txn coming in from outer pool .Remember()
-	// in normal OnNewBlockContext this can break the shadow of locks taken by .AssembleBlock()
 
 	blockDone := false
 	// Feed the transactions in order
@@ -1186,7 +1177,6 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	}
 
 	// Maybe we have a block already assembled
-	// TODO: this needs to be changed if a speculative block is in flight and if it is valid. If it is not valid, cancel it, if it is valid, wait for it.
 	prev, err := pool.ledger.Block(round.SubSaturate(1))
 	if err == nil {
 		specBlock, specErr := pool.tryReadSpeculativeBlock(prev.Hash(), round, deadline, &stats)
