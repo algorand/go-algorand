@@ -1203,6 +1203,8 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			node.txPoolSyncerService.Stop()
 			node.blockService.Stop()
 			node.ledgerService.Stop()
+			// As for now, the state proof services handles catchpoint mode
+			// so we don't need to stop it.
 
 			prevNodeCancelFunc := node.cancelCtx
 

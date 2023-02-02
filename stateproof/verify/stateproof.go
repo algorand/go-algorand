@@ -166,7 +166,7 @@ func ValidateStateProof(verificationContext *ledgercore.StateProofVerificationCo
 
 	verifier, err := stateproof.MkVerifier(verificationContext.VotersCommitment,
 		provenWeight,
-		config.Consensus[verificationContext.Version].StateProofStrengthTarget)
+		proto.StateProofStrengthTarget)
 	if err != nil {
 		return err
 	}

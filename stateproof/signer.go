@@ -17,6 +17,7 @@
 package stateproof
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"time"
@@ -101,7 +102,7 @@ func (spw *Worker) signStateProof(round basics.Round) {
 		return
 	}
 
-	stateProofMessage, err := spw.getStateProofMessage(round, proto)
+	stateProofMessage, err := spw.getStateProofMessage(round)
 	if err != nil {
 		spw.log.Warnf("spw.signStateProof(%d): getStateProofMessage: %v", round, err)
 		return
@@ -115,51 +116,30 @@ func (spw *Worker) getProto(round basics.Round) (*config.ConsensusParams, error)
 	if err != nil {
 		// IMPORTANT: This doesn't support modification of the state proof interval at the moment. Actually supporting
 		// it will probably require using (and slightly modifying) the stateProofVerificationTracker.
-		return spw.getProtoLatest()
+		latestRound := spw.ledger.Latest()
+		protoHdr, err = spw.ledger.BlockHdr(latestRound)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	proto := config.Consensus[protoHdr.CurrentProtocol]
 	return &proto, nil
 }
 
-func (spw *Worker) getProtoLatest() (*config.ConsensusParams, error) {
-	latestRound := spw.ledger.Latest()
-	protoHdr, err := spw.ledger.BlockHdr(latestRound)
-	if err != nil {
-		return nil, err
-	}
-
-	proto := config.Consensus[protoHdr.CurrentProtocol]
-	return &proto, nil
-}
-
-func (spw *Worker) getStateProofMessage(round basics.Round, proto *config.ConsensusParams) (stateproofmsg.Message, error) {
-	msg, err := spw.loadMessageFromDB(round)
+func (spw *Worker) getStateProofMessage(round basics.Round) (msg stateproofmsg.Message, err error) {
+	err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		msg, err = getMessage(tx, round)
+		return err
+	})
 	if err == nil {
 		return msg, nil
 	}
-
 	if !errors.Is(err, sql.ErrNoRows) {
 		spw.log.Errorf("getStateProofMessage(%d): error while fetching builder from DB: %v", round, err)
 	}
 
-	return spw.generateStateProofMessageLedger(round, proto)
-}
-
-func (spw *Worker) generateStateProofMessageLedger(round basics.Round, proto *config.ConsensusParams) (stateproofmsg.Message, error) {
-	hdr, err := spw.ledger.BlockHdr(round)
-	if err != nil {
-		return stateproofmsg.Message{}, err
-	}
-
-	votersRound := round.SubSaturate(basics.Round(proto.StateProofInterval))
-
-	stateproofMessage, err := GenerateStateProofMessage(spw.ledger, uint64(votersRound), hdr)
-	if err != nil {
-		return stateproofmsg.Message{}, err
-	}
-
-	return stateproofMessage, nil
+	return GenerateStateProofMessage(spw.ledger, round)
 }
 
 func (spw *Worker) signStateProofMessage(message *stateproofmsg.Message, round basics.Round, keys []account.StateProofSecretsForRound) {

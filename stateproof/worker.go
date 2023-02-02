@@ -73,7 +73,7 @@ type Worker struct {
 
 	signed           basics.Round
 	signedCh         chan struct{}
-	LastCleanupRound basics.Round
+	lastCleanupRound basics.Round
 }
 
 // NewWorker constructs a new Worker, as used by the node.

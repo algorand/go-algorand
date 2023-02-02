@@ -43,13 +43,13 @@ const (
 	trackerMemory
 )
 
-func initializeLedgerSpt(t *testing.T) (*mockLedgerForTracker, *stateProofVerificationTracker) {
+func initializeLedgerSpt(t *testing.T) (*mockLedgerForTracker, *spVerificationTracker) {
 	a := require.New(t)
 	accts := []map[basics.Address]basics.AccountData{makeRandomOnlineAccounts(20)}
 
 	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, accts)
 
-	spt := stateProofVerificationTracker{}
+	spt := spVerificationTracker{}
 
 	conf := config.GetDefaultLocal()
 
@@ -64,7 +64,7 @@ func initializeLedgerSpt(t *testing.T) (*mockLedgerForTracker, *stateProofVerifi
 	return ml, &spt
 }
 
-func mockCommit(t *testing.T, spt *stateProofVerificationTracker, ml *mockLedgerForTracker, dbRound basics.Round, newBase basics.Round) {
+func mockCommit(t *testing.T, spt *spVerificationTracker, ml *mockLedgerForTracker, dbRound basics.Round, newBase basics.Round) {
 	a := require.New(t)
 
 	offset := uint64(newBase - dbRound)
@@ -129,7 +129,7 @@ func blockStateProofsEnabled(prevBlock *blockEntry, stateProofInterval uint64, s
 	return block
 }
 
-func feedBlocksUpToRound(spt *stateProofVerificationTracker, prevBlock *blockEntry, targetRound basics.Round,
+func feedBlocksUpToRound(spt *spVerificationTracker, prevBlock *blockEntry, targetRound basics.Round,
 	stateProofInterval uint64, stuckStateProofs bool) *blockEntry {
 	for i := prevBlock.block.Round(); i < targetRound; i++ {
 		block := blockStateProofsEnabled(prevBlock, stateProofInterval, stuckStateProofs)
@@ -149,7 +149,7 @@ func feedBlocksUpToRound(spt *stateProofVerificationTracker, prevBlock *blockEnt
 	return prevBlock
 }
 
-func verifyStateProofVerificationTracking(t *testing.T, spt *stateProofVerificationTracker,
+func verifyStateProofVerificationTracking(t *testing.T, spt *spVerificationTracker,
 	startRound basics.Round, contextAmount uint64, stateProofInterval uint64, contextPresenceExpected bool, trackingLocation StateProofTrackingLocation) {
 	a := require.New(t)
 
@@ -169,7 +169,7 @@ func verifyStateProofVerificationTracking(t *testing.T, spt *stateProofVerificat
 		if contextPresenceExpected {
 			a.NoError(err)
 		} else {
-			a.ErrorIs(err, errStateProofVerificationContextNotFound)
+			a.ErrorIs(err, errSPVerificationContextNotFound)
 		}
 	}
 }
@@ -424,12 +424,12 @@ func TestStateProofVerificationTracker_LookupVerificationContext(t *testing.T) {
 	mockCommit(t, spt, ml, 0, basics.Round(defaultStateProofInterval*expectedContextInDbNum))
 
 	_, err := spt.LookupVerificationContext(basics.Round(0))
-	a.ErrorIs(err, errStateProofVerificationContextNotFound)
+	a.ErrorIs(err, errSPVerificationContextNotFound)
 	a.ErrorContains(err, "no rows")
 
 	finalLastAttestedRound := basics.Round(defaultStateProofInterval + contextToAdd*defaultStateProofInterval)
 	_, err = spt.LookupVerificationContext(finalLastAttestedRound + basics.Round(defaultStateProofInterval))
-	a.ErrorIs(err, errStateProofVerificationContextNotFound)
+	a.ErrorIs(err, errSPVerificationContextNotFound)
 	a.ErrorContains(err, "greater than maximum")
 
 	dbContextRound := basics.Round(defaultStateProofInterval + expectedContextInDbNum*defaultStateProofInterval)
@@ -447,7 +447,7 @@ func TestStateProofVerificationTracker_LookupVerificationContext(t *testing.T) {
 	spt.trackedCommitContext[0].verificationContext.LastAttestedRound = 0
 	spt.lastLookedUpVerificationContext = ledgercore.StateProofVerificationContext{}
 	_, err = spt.LookupVerificationContext(memoryContextRound)
-	a.ErrorIs(err, errStateProofVerificationContextNotFound)
+	a.ErrorIs(err, errSPVerificationContextNotFound)
 	a.ErrorContains(err, "memory lookup failed")
 }
 

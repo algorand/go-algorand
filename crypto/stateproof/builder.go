@@ -34,11 +34,11 @@ var (
 	ErrCoinIndexError         = errors.New("could not find corresponding index for a given coin")
 )
 
-// VotersAllocBound should be equal to config.Consensus[protocol.ConsensusCurrentVersion].VotersAllocBound
+// VotersAllocBound should be equal to config.Consensus[protocol.ConsensusCurrentVersion].StateProofTopVoters
 const VotersAllocBound = 1024
 
-// BuilderPersistingFields is the set of fields of a Builder that are persisted to disk.
-type BuilderPersistingFields struct {
+// BuilderPersistedFields is the set of fields of a Builder that are persisted to disk.
+type BuilderPersistedFields struct {
 	_struct        struct{}             `codec:",omitempty,omitemptyarray"`
 	Data           MessageHash          `codec:"data"`
 	Round          uint64               `codec:"rnd"`
@@ -52,7 +52,7 @@ type BuilderPersistingFields struct {
 // Builder keeps track of signatures on a message and eventually produces
 // a state proof for that message.
 type Builder struct {
-	BuilderPersistingFields
+	BuilderPersistedFields
 	sigs         []sigslot // Indexed by pos in Participants
 	signedWeight uint64    // Total weight of signatures so far
 	cachedProof  *StateProof
@@ -67,7 +67,7 @@ func MakeBuilder(data MessageHash, round uint64, provenWeight uint64, part []bas
 	}
 
 	b := &Builder{
-		BuilderPersistingFields: BuilderPersistingFields{
+		BuilderPersistedFields: BuilderPersistedFields{
 			Data:           data,
 			Round:          round,
 			Participants:   part,

@@ -36,9 +36,9 @@ var ErrCatchpointParsingFailed = errors.New("catchpoint parsing failed")
 
 // CatchpointLabelMaker represents an interface for creating a label maker. Labels can be "assembled" based on its components.
 type CatchpointLabelMaker interface {
-	toBuffer() []byte
-	getRound() basics.Round
-	logStr() string
+	buffer() []byte
+	round() basics.Round
+	message() string
 }
 
 // CatchpointLabelMakerV6 represent a single catchpoint label maker, matching catchpoints of version V6 and below.
@@ -60,7 +60,7 @@ func MakeCatchpointLabelMakerV6(ledgerRound basics.Round, ledgerRoundBlockHash *
 	}
 }
 
-func (l *CatchpointLabelMakerV6) toBuffer() []byte {
+func (l *CatchpointLabelMakerV6) buffer() []byte {
 	encodedTotals := protocol.EncodeReflect(&l.totals)
 	buffer := make([]byte, 2*crypto.DigestSize+len(encodedTotals))
 	copy(buffer[:], l.ledgerRoundBlockHash[:])
@@ -70,11 +70,11 @@ func (l *CatchpointLabelMakerV6) toBuffer() []byte {
 	return buffer
 }
 
-func (l *CatchpointLabelMakerV6) getRound() basics.Round {
+func (l *CatchpointLabelMakerV6) round() basics.Round {
 	return l.ledgerRound
 }
 
-func (l *CatchpointLabelMakerV6) logStr() string {
+func (l *CatchpointLabelMakerV6) message() string {
 	return fmt.Sprintf("round=%d, block digest=%s, accounts digest=%s", l.ledgerRound, l.ledgerRoundBlockHash, l.balancesMerkleRoot)
 }
 
@@ -93,26 +93,26 @@ func MakeCatchpointLabelMakerCurrent(ledgerRound basics.Round, ledgerRoundBlockH
 	}
 }
 
-func (l *CatchpointLabelMakerCurrent) toBuffer() []byte {
-	v6Buffer := l.v6Label.toBuffer()
+func (l *CatchpointLabelMakerCurrent) buffer() []byte {
+	v6Buffer := l.v6Label.buffer()
 
 	return append(v6Buffer, l.stateProofVerificationContextHash[:]...)
 }
 
-func (l *CatchpointLabelMakerCurrent) getRound() basics.Round {
-	return l.v6Label.getRound()
+func (l *CatchpointLabelMakerCurrent) round() basics.Round {
+	return l.v6Label.round()
 }
 
-func (l *CatchpointLabelMakerCurrent) logStr() string {
-	return fmt.Sprintf("%s state proof verification data digest=%s", l.v6Label.logStr(), l.stateProofVerificationContextHash)
+func (l *CatchpointLabelMakerCurrent) message() string {
+	return fmt.Sprintf("%s spver digest=%s", l.v6Label.message(), l.stateProofVerificationContextHash)
 }
 
 // MakeLabel returns the user-facing representation of this catchpoint label. ( i.e. the "label" )
 func MakeLabel(l CatchpointLabelMaker) string {
-	hash := crypto.Hash(l.toBuffer())
+	hash := crypto.Hash(l.buffer())
 	encodedHash := base32Encoder.EncodeToString(hash[:])
-	out := fmt.Sprintf("%d#%s", l.getRound(), encodedHash)
-	logging.Base().Infof("Creating a catchpoint label %s for %s", out, l.logStr())
+	out := fmt.Sprintf("%d#%s", l.round(), encodedHash)
+	logging.Base().Infof("Creating a catchpoint label %s for %s", out, l.message())
 	return out
 }
 

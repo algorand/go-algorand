@@ -102,7 +102,7 @@ func newWorkerStubsWithVersion(t *testing.T, keys []account.Participation, versi
 	return s
 }
 
-func (s *testWorkerStubs) notifyPrepareVoterCommit(round basics.Round) {
+func (s *testWorkerStubs) notifyPrepareVoterCommit(oldBase, newBase basics.Round) {
 	s.listenerMu.RLock()
 	defer s.listenerMu.RUnlock()
 
@@ -110,8 +110,7 @@ func (s *testWorkerStubs) notifyPrepareVoterCommit(round basics.Round) {
 		return
 	}
 
-	err := s.commitListener.OnPrepareVoterCommit(round, s)
-	require.NoError(s.t, err)
+	s.commitListener.OnPrepareVoterCommit(oldBase, newBase, s)
 }
 
 func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
@@ -402,10 +401,7 @@ func (s *testWorkerStubs) mockCommit(upTo basics.Round) {
 		}
 	}
 	s.mu.Unlock()
-
-	for round := startRound; round <= upTo; round++ {
-		s.notifyPrepareVoterCommit(round)
-	}
+	s.notifyPrepareVoterCommit(startRound, upTo)
 
 	for round := startRound; round <= upTo; round++ {
 		s.mu.Lock()
@@ -571,15 +567,9 @@ func TestWorkerAllSigs(t *testing.T) {
 			if lastAttestedRound < basics.Round(iter+2)*basics.Round(proto.StateProofInterval) {
 				continue
 			}
-
 			require.Equal(t, lastAttestedRound, basics.Round(iter+2)*basics.Round(proto.StateProofInterval))
 
-			stateProofLatestRound, err := s.BlockHdr(lastAttestedRound)
-			require.NoError(t, err)
-
-			votersRound := lastAttestedRound.SubSaturate(basics.Round(proto.StateProofInterval))
-
-			msg, err := GenerateStateProofMessage(s, uint64(votersRound), stateProofLatestRound)
+			msg, err := GenerateStateProofMessage(s, lastAttestedRound)
 			require.NoError(t, err)
 			require.Equal(t, msg, tx.Txn.Message)
 
@@ -646,12 +636,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 	require.Equal(t, tx.Txn.Type, protocol.StateProofTx)
 	require.Equal(t, lastAttestedRound, 2*basics.Round(proto.StateProofInterval))
 
-	stateProofLatestRound, err := s.BlockHdr(lastAttestedRound)
-	require.NoError(t, err)
-
-	votersRound := lastAttestedRound.SubSaturate(basics.Round(proto.StateProofInterval))
-
-	msg, err := GenerateStateProofMessage(s, uint64(votersRound), stateProofLatestRound)
+	msg, err := GenerateStateProofMessage(s, lastAttestedRound)
 	require.NoError(t, err)
 	require.Equal(t, msg, tx.Txn.Message)
 
@@ -839,9 +824,7 @@ func TestWorkerIgnoresSignatureForNonCacheBuilders(t *testing.T) {
 
 func sendSigToHandler(proto config.ConsensusParams, i uint64, w *Worker, a *require.Assertions, s *testWorkerStubs) (network.ForwardingPolicy, error) {
 	rnd := basics.Round(2*proto.StateProofInterval + i*proto.StateProofInterval)
-	latestBlockHeader, err := w.ledger.BlockHdr(rnd)
-	a.NoError(err)
-	stateproofMessage, err := GenerateStateProofMessage(w.ledger, uint64(latestBlockHeader.Round)-proto.StateProofInterval, latestBlockHeader)
+	stateproofMessage, err := GenerateStateProofMessage(w.ledger, rnd)
 	a.NoError(err)
 
 	hashedStateproofMessage := stateproofMessage.Hash()
@@ -1512,9 +1495,7 @@ func TestWorkerHandleSigAlreadyIn(t *testing.T) {
 	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
 	defer w.Shutdown()
 
-	latestBlockHeader, err := w.ledger.BlockHdr(basics.Round(lastRound))
-	require.NoError(t, err)
-	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
+	stateproofMessage, err := GenerateStateProofMessage(w.ledger, basics.Round(lastRound))
 	require.NoError(t, err)
 
 	hashedStateproofMessage := stateproofMessage.Hash()
@@ -1554,10 +1535,7 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
 	defer w.Shutdown()
 
-	latestBlockHeader, err := w.ledger.BlockHdr(basics.Round(lastRound))
-	require.NoError(t, err)
-
-	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
+	stateproofMessage, err := GenerateStateProofMessage(w.ledger, basics.Round(lastRound))
 	require.NoError(t, err)
 
 	hashedStateproofMessage := stateproofMessage.Hash()
@@ -1700,7 +1678,7 @@ func verifyPersistedBuilders(a *require.Assertions, w *Worker) {
 				builderFromDisk, err = getBuilder(tx, k)
 				return err
 			}))
-		a.Equal(v.BuilderPersistingFields, builderFromDisk.BuilderPersistingFields)
+		a.Equal(v.BuilderPersistedFields, builderFromDisk.BuilderPersistedFields)
 	}
 }
 
@@ -1836,9 +1814,7 @@ func TestWorkerLoadsBuilderAndSignatureUponMsgRecv(t *testing.T) {
 	lastRound := proto.StateProofInterval * 2
 	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
 
-	latestBlockHeader, err := w.ledger.BlockHdr(basics.Round(lastRound))
-	require.NoError(t, err)
-	stateproofMessage, err := GenerateStateProofMessage(w.ledger, proto.StateProofInterval, latestBlockHeader)
+	stateproofMessage, err := GenerateStateProofMessage(w.ledger, basics.Round(lastRound))
 	require.NoError(t, err)
 
 	hashedStateproofMessage := stateproofMessage.Hash()

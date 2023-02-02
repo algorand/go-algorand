@@ -365,7 +365,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingStateProofVerificationCont
 	// 6 months of stuck state proofs should lead to about 1.5 MB of data, so we avoid redundant timers
 	// and progress reports.
 	err = c.ledger.trackerDB().Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
-		return store.CreateSPVerificationAccessor(tx).WriteMultiSPContextsToCatchpoint(ctx, decodedData.Data)
+		return store.CreateSPVerificationAccessor(tx).StoreSPContextsToCatchpointTbl(ctx, decodedData.Data)
 	})
 
 	return err
@@ -399,13 +399,13 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 		arw := store.NewAccountsSQLReaderWriter(tx)
 		err = crw.WriteCatchpointStateUint64(ctx, store.CatchpointStateCatchupVersion, fileHeader.Version)
 		if err != nil {
-			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", store.CatchpointStateCatchupVersion, err)
+			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup version '%s': %v", store.CatchpointStateCatchupVersion, err)
 		}
 		err = crw.WriteCatchpointStateUint64(ctx, store.CatchpointStateCatchupBlockRound, uint64(fileHeader.BlocksRound))
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", store.CatchpointStateCatchupBlockRound, err)
 		}
-		if fileHeader.Version == CatchpointFileVersionV6 || fileHeader.Version == CatchpointFileVersionV7 {
+		if fileHeader.Version >= CatchpointFileVersionV6 {
 			err = crw.WriteCatchpointStateUint64(ctx, store.CatchpointStateCatchupHashRound, uint64(fileHeader.BlocksRound))
 			if err != nil {
 				return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", store.CatchpointStateCatchupHashRound, err)
@@ -461,6 +461,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		expectingMoreEntries = make([]bool, len(balances.Balances))
 
 	case CatchpointFileVersionV6:
+		fallthrough
 	case CatchpointFileVersionV7:
 		var chunk catchpointFileChunkV6
 		err = protocol.Decode(bytes, &chunk)
@@ -926,7 +927,7 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 			return fmt.Errorf("unable to get accounts totals: %v", err)
 		}
 
-		rawStateProofVerificationContext, err = store.CreateSPVerificationAccessor(tx).GetAllSPContextsFromCatchpoint(ctx)
+		rawStateProofVerificationContext, err = store.CreateSPVerificationAccessor(tx).GetAllSPContextsFromCatchpointTbl(ctx)
 		if err != nil {
 			return fmt.Errorf("unable to get state proof verification data: %v", err)
 		}

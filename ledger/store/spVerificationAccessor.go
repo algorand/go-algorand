@@ -62,8 +62,8 @@ func (spa *SPVerificationAccessor) DeleteOldSPContexts(ctx context.Context, earl
 	return err
 }
 
-// WriteMultiSPContexts writes a single state proof verification context to database
-func (spa *SPVerificationAccessor) WriteMultiSPContexts(ctx context.Context, verificationContext []*ledgercore.StateProofVerificationContext) error {
+// StoreSPContexts stores a single state proof verification context to database
+func (spa *SPVerificationAccessor) StoreSPContexts(ctx context.Context, verificationContext []*ledgercore.StateProofVerificationContext) error {
 	spWriteStmt, err := spa.e.PrepareContext(ctx, "INSERT INTO stateProofVerification(lastattestedround, verificationContext) VALUES(?, ?)")
 	if err != nil {
 		return err
@@ -78,8 +78,8 @@ func (spa *SPVerificationAccessor) WriteMultiSPContexts(ctx context.Context, ver
 	return nil
 }
 
-// WriteMultiSPContextsToCatchpoint writes state proof verification contexts to database
-func (spa *SPVerificationAccessor) WriteMultiSPContextsToCatchpoint(ctx context.Context, verificationContexts []ledgercore.StateProofVerificationContext) error {
+// StoreSPContextsToCatchpointTbl stores state proof verification contexts to catchpoint staging table
+func (spa *SPVerificationAccessor) StoreSPContextsToCatchpointTbl(ctx context.Context, verificationContexts []ledgercore.StateProofVerificationContext) error {
 	spWriteStmt, err := spa.e.PrepareContext(ctx, "INSERT INTO catchpointstateproofverification(lastattestedround, verificationContext) VALUES(?, ?)")
 	if err != nil {
 		return err
@@ -99,8 +99,8 @@ func (spa *SPVerificationAccessor) GetAllSPContexts(ctx context.Context) ([]ledg
 	return spa.getAllSPContextsInternal(ctx, "SELECT verificationContext FROM stateProofVerification ORDER BY lastattestedround")
 }
 
-// GetAllSPContextsFromCatchpoint returns all state proof verification data from the catchpointStateProofVerification table.
-func (spa *SPVerificationAccessor) GetAllSPContextsFromCatchpoint(ctx context.Context) ([]ledgercore.StateProofVerificationContext, error) {
+// GetAllSPContextsFromCatchpointTbl returns all state proof verification data from the catchpointStateProofVerification table.
+func (spa *SPVerificationAccessor) GetAllSPContextsFromCatchpointTbl(ctx context.Context) ([]ledgercore.StateProofVerificationContext, error) {
 	return spa.getAllSPContextsInternal(ctx, "SELECT verificationContext FROM catchpointStateProofVerification ORDER BY lastattestedround")
 }
 
@@ -108,7 +108,6 @@ func (spa *SPVerificationAccessor) getAllSPContextsInternal(ctx context.Context,
 	var result []ledgercore.StateProofVerificationContext
 	queryFunc := func() error {
 		rows, err := spa.e.QueryContext(ctx, query)
-
 		if err != nil {
 			return err
 		}

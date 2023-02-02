@@ -39,15 +39,17 @@ type OnlineAccountsFetcher interface {
 	TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64, params *config.ConsensusParams, rewardsLevel uint64) (topOnlineAccounts []*OnlineAccount, totalOnlineStake basics.MicroAlgos, err error)
 }
 
-// VotersForRoundFetcher captures the functionality of querying the top voting accounts for a
-// specific round
-type VotersForRoundFetcher interface {
+// LedgerForSPBuilder captures the functionality needed for the creation of the cryptographic state proof builder.
+type LedgerForSPBuilder interface {
 	VotersForStateProof(rnd basics.Round) (*VotersForRound, error)
+	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 // VotersCommitListener represents an object that needs to get notified on commit stages in the voters tracker.
 type VotersCommitListener interface {
-	OnPrepareVoterCommit(rnd basics.Round, voters VotersForRoundFetcher) error
+	// OnPrepareVoterCommit gives the listener the opportunity to create and store data related to rounds
+	// (oldBase, newBase]. The implementation should log any errors that might occur.
+	OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Round, voters LedgerForSPBuilder)
 }
 
 // VotersForRound tracks the top online voting accounts as of a particular
