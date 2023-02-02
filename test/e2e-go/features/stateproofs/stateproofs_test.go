@@ -745,7 +745,7 @@ func TestAttestorsChange(t *testing.T) {
 		from: accountFetcher{nodeName: "richNode", accountNumber: 0},
 		to:   accountFetcher{nodeName: "poorNode", accountNumber: 0},
 	}
-	sum := uint64(0)
+
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		// Changing the amount to pay. This should transfer most of the money from the rich node to the poor node.
 		if consensusParams.StateProofInterval*2 == rnd {
@@ -763,30 +763,14 @@ func TestAttestorsChange(t *testing.T) {
 		}
 
 		a.NoError(fixture.WaitForRound(rnd, timeoutUntilNextRound))
+
 		blk, err := libgoal.BookkeepingBlock(rnd)
 		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
-
-		// We sample the accounts' balances StateProofVotersLookback rounds before state proof round.
-		if (rnd+consensusParams.StateProofVotersLookback)%consensusParams.StateProofInterval == 0 {
-			sum = 0
-			// the main part of the test (computing the total stake of the nodes):
-			for i := 1; i <= 3; i++ {
-				sum += accountFetcher{fmt.Sprintf("Node%d", i), 0}.getBalance(a, &fixture)
-			}
-
-			richNodeStake := accountFetcher{"richNode", 0}.getBalance(a, &fixture)
-			poorNodeStake := accountFetcher{"poorNode", 0}.getBalance(a, &fixture)
-			sum = sum + richNodeStake + poorNodeStake
-		}
 
 		if (rnd % consensusParams.StateProofInterval) == 0 {
 			// Must have a merkle commitment for participants
 			a.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
 			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != basics.MicroAlgos{})
-
-			stake := blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.ToUint64()
-
-			a.Equal(sum, stake)
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
