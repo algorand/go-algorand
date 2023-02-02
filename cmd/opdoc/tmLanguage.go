@@ -126,7 +126,7 @@ func buildSyntaxHighlight() *tmLanguage {
 	allNamedFields = append(allNamedFields, logic.TxnTypeNames[:]...)
 	allNamedFields = append(allNamedFields, logic.OnCompletionNames[:]...)
 	accumulated := make(map[string]bool)
-	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
+	opSpecs := logic.OpcodesByVersion(uint64(latestVersion))
 	for _, spec := range opSpecs {
 		for _, imm := range spec.OpDetails.Immediates {
 			if imm.Group != nil && !accumulated[imm.Group.Name] {

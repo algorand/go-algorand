@@ -237,6 +237,9 @@ func (s tfNameSpecMap) get(name string) (FieldSpec, bool) {
 	return fs, ok
 }
 
+type ItxnVersion interface {
+	ItxnVersion() uint64
+}
 type txnFieldSpec struct {
 	field      TxnField
 	btype      StackType
@@ -245,6 +248,10 @@ type txnFieldSpec struct {
 	itxVersion uint64 // When this field become available to itxn_field. 0=never
 	effects    bool   // Is this a field on the "effects"? That is, something in ApplyData
 	doc        string
+}
+
+func (fs txnFieldSpec) ItxnVersion() uint64 {
+	return fs.itxVersion
 }
 
 func (fs txnFieldSpec) Field() byte {

@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strings"
 
@@ -29,13 +28,13 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-var docVersion = 8
+var latestVersion = 8
 
 func opGroupMarkdownTable(names []string, out io.Writer) {
 	fmt.Fprint(out, `| Opcode | Description |
 | - | -- |
 `)
-	opSpecs := logic.OpsByName[docVersion]
+	opSpecs := logic.OpsByName[latestVersion]
 	for _, opname := range names {
 		spec, ok := opSpecs[opname]
 		if !ok {
@@ -187,7 +186,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 			if cost.From == cost.To {
 				fmt.Fprintf(out, "    - %s (v%d)\n", cost.Cost, cost.To)
 			} else {
-				if cost.To < docVersion {
+				if cost.To < latestVersion {
 					fmt.Fprintf(out, "    - %s (v%d - v%d)\n", cost.Cost, cost.From, cost.To)
 				} else {
 					fmt.Fprintf(out, "    - %s (since v%d)\n", cost.Cost, cost.From)
@@ -224,7 +223,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 
 func opsToMarkdown(out io.Writer) (err error) {
 	out.Write([]byte("# Opcodes\n\nOps have a 'cost' of 1 unless otherwise specified.\n\n"))
-	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
+	opSpecs := logic.OpcodesByVersion(uint64(latestVersion))
 	written := make(map[string]bool)
 	for _, spec := range opSpecs {
 		err = opToMarkdown(out, &spec, written)
@@ -245,11 +244,10 @@ type OpRecord struct {
 
 	ArgEnum string `json:",omitempty"`
 
-	Doc               string   `json:",omitempty"`
-	DocExtra          string   `json:",omitempty"`
-	ImmediateNote     string   `json:",omitempty"`
-	IntroducedVersion uint64   `json:",omitempty"`
-	Groups            []string `json:",omitempty"`
+	Doc           string   `json:",omitempty"`
+	DocExtra      string   `json:",omitempty"`
+	ImmediateNote string   `json:",omitempty"`
+	Groups        []string `json:",omitempty"`
 }
 
 // StackTypeSpec type is the definition of a higher level type with
@@ -303,10 +301,22 @@ func typeByte(t logic.StackType) byte {
 	}
 }
 
-func groupKeywords(group logic.FieldGroup) []Keyword {
+func groupKeywords(version uint64, group logic.FieldGroup) []Keyword {
 	keywords := make([]Keyword, 0, len(group.Names))
 	for _, name := range group.Names {
 		if spec, ok := group.SpecByName(name); ok {
+			specVersion := spec.Version()
+
+			if specVersion > version {
+				continue
+			}
+
+			if group.Name == "itxn_field" {
+				if spec.(logic.ItxnVersion).ItxnVersion() > version {
+					continue
+				}
+			}
+
 			kw := Keyword{
 				Name:              name,
 				Value:             uint64(spec.Field()),
@@ -314,17 +324,16 @@ func groupKeywords(group logic.FieldGroup) []Keyword {
 				Note:              spec.Note(),
 				IntroducedVersion: spec.Version(),
 			}
+
 			if name == "OnCompletion" {
 				kw.ArgEnum = "on_completion"
 			}
 			if name == "TypeEnum" {
+				kw.ArgEnum = "txn_type"
 				if group.Name == "itxn_field" {
 					kw.ArgEnum = "itxn_type"
-				} else {
-					kw.ArgEnum = "txn_type"
 				}
 			}
-			log.Printf("%s %s", name, group.Name)
 			keywords = append(keywords, kw)
 		}
 	}
@@ -401,12 +410,15 @@ func txnTypeKeywords() []Keyword {
 	return txTypes
 }
 
-func itxnTypeKeywords() []Keyword {
+func itxnTypeKeywords(version uint64) []Keyword {
 	var itxTypes []Keyword
 	for idx, name := range logic.TxnTypeNames {
-		version := logic.InnerTxnTypes[name]
+		fieldVersion := logic.InnerTxnTypes[name]
+		if fieldVersion == 0 || fieldVersion > version {
+			continue
+		}
 		doc := logic.TypeNameDescriptions[name]
-		itxTypes = append(itxTypes, Keyword{Name: name, Type: "uint64", IntroducedVersion: version, Note: doc, Value: uint64(idx)})
+		itxTypes = append(itxTypes, Keyword{Name: name, Type: "uint64", Note: doc, Value: uint64(idx)})
 	}
 	return itxTypes
 }
@@ -436,19 +448,25 @@ func stackTypeSpecs() map[string]StackTypeSpec {
 	return allStackTypes
 }
 
-func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
-	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
+func buildLanguageSpec(version uint64, opGroups map[string][]string) *LanguageSpec {
+	opSpecs := logic.OpcodesByVersion(version)
 	records := make([]OpRecord, len(opSpecs))
 
 	keywords := map[string][]Keyword{}
 	for _, fg := range fieldGroups() {
-		keywords[fg.Name] = groupKeywords(fg)
+		kws := groupKeywords(version, fg)
+		if len(kws) > 0 {
+			keywords[fg.Name] = kws
+		}
 	}
 
 	allStackTypes := stackTypeSpecs()
 
 	keywords["txn_type"] = txnTypeKeywords()
-	keywords["itxn_type"] = itxnTypeKeywords()
+	itxn_types := itxnTypeKeywords(version)
+	if len(itxn_types) > 0 {
+		keywords["itxn_type"] = itxn_types
+	}
 	keywords["on_complete"] = onCompleteKeywords()
 
 	for i, spec := range opSpecs {
@@ -462,7 +480,6 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].DocExtra = logic.OpDocExtra(spec.Name)
 		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
 		records[i].Groups = opGroups[spec.Name]
-		records[i].IntroducedVersion = spec.Version
 	}
 
 	var pseudoOps = make([]OpRecord, len(logic.PseudoOps))
@@ -476,11 +493,10 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		pseudoOps[i].DocExtra = logic.OpDocExtra(spec.Name)
 		pseudoOps[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
 		pseudoOps[i].Groups = opGroups[spec.Name]
-		pseudoOps[i].IntroducedVersion = spec.Version
 	}
 
 	return &LanguageSpec{
-		EvalMaxVersion:  docVersion,
+		EvalMaxVersion:  int(version),
 		LogicSigVersion: config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion,
 		StackTypes:      allStackTypes,
 		Fields:          keywords,
@@ -518,7 +534,7 @@ func main() {
 	constants.Close()
 
 	written := make(map[string]bool)
-	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
+	opSpecs := logic.OpcodesByVersion(uint64(latestVersion))
 	for _, spec := range opSpecs {
 		for _, imm := range spec.OpDetails.Immediates {
 			if imm.Group != nil && !written[imm.Group.Name] {
@@ -530,14 +546,16 @@ func main() {
 		}
 	}
 
-	langspecjs := create("langspec.json")
-	enc := json.NewEncoder(langspecjs)
-	enc.SetIndent("", "  ")
-	enc.Encode(buildLanguageSpec(opGroups))
-	langspecjs.Close()
+	for i := 1; i <= latestVersion; i++ {
+		langspecjs := create(fmt.Sprintf("langspec_v%d.json", i))
+		enc := json.NewEncoder(langspecjs)
+		enc.SetIndent("", "  ")
+		enc.Encode(buildLanguageSpec(uint64(i), opGroups))
+		langspecjs.Close()
+	}
 
 	tealtm := create("teal.tmLanguage.json")
-	enc = json.NewEncoder(tealtm)
+	enc := json.NewEncoder(tealtm)
 	enc.SetIndent("", "  ")
 	enc.Encode(buildSyntaxHighlight())
 	tealtm.Close()
