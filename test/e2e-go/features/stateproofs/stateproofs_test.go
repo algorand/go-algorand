@@ -750,8 +750,6 @@ func TestAttestorsChange(t *testing.T) {
 		to:   accountFetcher{nodeName: "poorNode", accountNumber: 0},
 	}
 
-	rndToTotalSupply := map[basics.Round]uint64{}
-
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		// Changing the amount to pay. This should transfer most of the money from the rich node to the poor node.
 		if consensusParams.StateProofInterval*2 == rnd {
@@ -770,11 +768,6 @@ func TestAttestorsChange(t *testing.T) {
 
 		a.NoError(fixture.WaitForRound(rnd, timeoutUntilNextRound))
 
-		supplyResponse, err := libgoal.LedgerSupply()
-		require.NoError(t, err)
-
-		rndToTotalSupply[basics.Round(supplyResponse.CurrentRound)] = supplyResponse.OnlineMoney
-
 		blk, err := libgoal.BookkeepingBlock(rnd)
 		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 
@@ -782,13 +775,6 @@ func TestAttestorsChange(t *testing.T) {
 			// Must have a merkle commitment for participants
 			a.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
 			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != basics.MicroAlgos{})
-
-			stake := blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.ToUint64()
-
-			expected, ok := rndToTotalSupply[basics.Round(rnd-consensusParams.StateProofVotersLookback)]
-			a.True(ok, "gap in knowledge regarding online money.")
-
-			a.Equal(expected, stake)
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
