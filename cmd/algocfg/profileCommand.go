@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/util/codecs"
 )
@@ -61,7 +62,7 @@ var setProfileCmd = &cobra.Command{
 	Short: "Set preconfigured config defaults",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			cfg, err := getConfigForArg(args[0])
 			if err != nil {
 				reportErrorf("%v", err)
