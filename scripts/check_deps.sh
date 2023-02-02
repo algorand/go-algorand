@@ -62,6 +62,14 @@ check_deps() {
     then
         missing_dep sqlite3
     fi
+
+    # Check version of golangci-lint
+    version_req=$(grep "github.com/golangci/golangci-lint/cmd/golangci-lint" scripts/buildtools/versions | awk '{print $2}')
+    version_cur=$($GO_BIN/golangci-lint version | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+')
+    if [ "$version_cur" != "$version_req" ]
+    then
+        echo "$YELLOW_FG[WARNING]$END_FG_COLOR \`golangci-lint\` version mismatch, expected $version_req, but got $version_cur. You may get different linter output than CI as a result."
+    fi
 }
 
 check_deps
