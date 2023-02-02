@@ -589,10 +589,10 @@ type PendingTransactionResponse struct {
 	// InnerTxns Inner transactions produced by application execution.
 	InnerTxns *[]PendingTransactionResponse `json:"inner-txns,omitempty"`
 
-	// LocalStateDelta \[ld\] Local state key/value changes for the application being executed by this transaction.
+	// LocalStateDelta Local state key/value changes for the application being executed by this transaction.
 	LocalStateDelta *[]AccountStateDelta `json:"local-state-delta,omitempty"`
 
-	// Logs \[lg\] Logs for the application being executed by this transaction.
+	// Logs Logs for the application being executed by this transaction.
 	Logs *[][]byte `json:"logs,omitempty"`
 
 	// PoolError Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.
