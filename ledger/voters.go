@@ -117,7 +117,7 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.Onl
 	vt.votersMu.Lock()
 	vt.l = l
 	vt.onlineAccountsFetcher = fetcher
-	vt.initializeVoters()
+	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
 	vt.votersMu.Unlock()
 
 	latestRoundInLedger := l.Latest()
@@ -313,13 +313,6 @@ func (vt *votersTracker) registerPrepareCommitListener(commitListener ledgercore
 	defer vt.commitListenerMu.Unlock()
 
 	vt.commitListener = commitListener
-}
-
-func (vt *votersTracker) initializeVoters() {
-	vt.votersMu.Lock()
-	defer vt.votersMu.Unlock()
-
-	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound)
 }
 
 func (vt *votersTracker) getVoters(round basics.Round) (*ledgercore.VotersForRound, bool) {
