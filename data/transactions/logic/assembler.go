@@ -1504,6 +1504,11 @@ func typePushInts(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes,
 	return nil, types, nil
 }
 
+func typeByte(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	l := uint64(len(args[0]))
+	return nil, StackTypes{NewStackType(AVMBytes, static(l), fmt.Sprintf("[%d]byte", l))}, nil
+}
+
 func joinIntsOnOr(singularTerminator string, list ...int) string {
 	if len(list) == 1 {
 		switch list[0] {
@@ -1585,7 +1590,7 @@ const anyImmediates = -1
 
 var pseudoOps = map[string]map[int]OpSpec{
 	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i"), OpDetails: immediates("i").assembler(asmInt)}},
-	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b"), OpDetails: immediates("b").assembler(asmByte)}},
+	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b"), OpDetails: immediates("b").assembler(asmByte).typed(typeByte)}},
 	// parse basics.Address, actually just another []byte constant
 	"addr": {anyImmediates: OpSpec{Name: "addr", Proto: proto(":A"), OpDetails: immediates("a").assembler(asmAddr)}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
