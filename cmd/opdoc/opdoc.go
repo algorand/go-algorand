@@ -265,6 +265,7 @@ type Keyword struct {
 	Type    string `json:",omitempty"`
 	Note    string `json:",omitempty"`
 	Version uint64 `json:",omitempty"`
+	Value   uint64
 }
 
 // LanguageSpec records the ops of the language at some version
@@ -307,6 +308,7 @@ func groupKeywords(group logic.FieldGroup) []Keyword {
 			// TODO: replace tstring with something better
 			kw := Keyword{
 				Name:    name,
+				Value:   uint64(spec.Field()),
 				Type:    spec.StackType().String(),
 				Note:    spec.Note(),
 				Version: spec.Version(),
