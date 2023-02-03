@@ -82,11 +82,11 @@ type stackValue struct {
 	Bytes []byte
 }
 
-func (sv stackValue) argType() StackType {
+func (sv stackValue) argType() avmType {
 	if sv.Bytes != nil {
-		return StackBytes
+		return avmBytes
 	}
-	return StackUint64
+	return avmUint64
 }
 
 func (sv stackValue) typeName() string {
@@ -154,7 +154,7 @@ func (sv stackValue) string(limit int) (string, error) {
 }
 
 func (sv stackValue) toTealValue() (tv basics.TealValue) {
-	if sv.argType() == StackBytes {
+	if sv.argType() == avmBytes {
 		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(sv.Bytes)}
 	}
 	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
@@ -601,71 +601,6 @@ func (cx *EvalContext) RunMode() RunMode {
 	return cx.runModeFlags
 }
 
-// StackType describes the type of a value on the operand stack
-type StackType byte
-
-const (
-	// StackNone in an OpSpec shows that the op pops or yields nothing
-	StackNone StackType = iota
-
-	// StackAny in an OpSpec shows that the op pops or yield any type
-	StackAny
-
-	// StackUint64 in an OpSpec shows that the op pops or yields a uint64
-	StackUint64
-
-	// StackBytes in an OpSpec shows that the op pops or yields a []byte
-	StackBytes
-)
-
-// StackTypes is an alias for a list of StackType with syntactic sugar
-type StackTypes []StackType
-
-func parseStackTypes(spec string) StackTypes {
-	if spec == "" {
-		return nil
-	}
-	types := make(StackTypes, len(spec))
-	for i, letter := range spec {
-		switch letter {
-		case 'a':
-			types[i] = StackAny
-		case 'b':
-			types[i] = StackBytes
-		case 'i':
-			types[i] = StackUint64
-		case 'x':
-			types[i] = StackNone
-		default:
-			panic(spec)
-		}
-	}
-	return types
-}
-
-func (st StackType) String() string {
-	switch st {
-	case StackNone:
-		return "None"
-	case StackAny:
-		return "any"
-	case StackUint64:
-		return "uint64"
-	case StackBytes:
-		return "[]byte"
-	}
-	return "internal error, unknown type"
-}
-
-// Typed tells whether the StackType is a specific concrete type.
-func (st StackType) Typed() bool {
-	switch st {
-	case StackUint64, StackBytes:
-		return true
-	}
-	return false
-}
-
 // PanicError wraps a recover() catching a panic()
 type PanicError struct {
 	PanicValue interface{}
@@ -983,10 +918,7 @@ func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
 }
 
 func opCompat(expected, got StackType) bool {
-	if expected == StackAny {
-		return true
-	}
-	return expected == got
+	return got.ConvertableTo(expected)
 }
 
 func nilToEmpty(x []byte) []byte {
@@ -1061,7 +993,7 @@ func (cx *EvalContext) step() error {
 	}
 	first := len(cx.stack) - len(spec.Arg.Types)
 	for i, argType := range spec.Arg.Types {
-		if !opCompat(argType, cx.stack[first+i].argType()) {
+		if !opCompat(argType, cx.stack[first+i].argType().stackType()) {
 			return fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType, cx.stack[first+i].typeName())
 		}
 	}
@@ -1109,14 +1041,14 @@ func (cx *EvalContext) step() error {
 		}
 		first = postheight - len(spec.Return.Types)
 		for i, argType := range spec.Return.Types {
-			stackType := cx.stack[first+i].argType()
+			stackType := cx.stack[first+i].argType().stackType()
 			if !opCompat(argType, stackType) {
 				if spec.AlwaysExits() { // We test in the loop because it's the uncommon case.
 					break
 				}
 				return fmt.Errorf("%s produced %s but intended %s", spec.Name, cx.stack[first+i].typeName(), argType)
 			}
-			if stackType == StackBytes && len(cx.stack[first+i].Bytes) > maxStringSize {
+			if stackType.AVMType == avmBytes && len(cx.stack[first+i].Bytes) > maxStringSize {
 				return fmt.Errorf("%s produced a too big (%d) byte-array", spec.Name, len(cx.stack[first+i].Bytes))
 			}
 		}
@@ -1512,7 +1444,7 @@ func opEq(cx *EvalContext) error {
 		return fmt.Errorf("cannot compare (%s to %s)", cx.stack[prev].typeName(), cx.stack[last].typeName())
 	}
 	var cond bool
-	if ta == StackBytes {
+	if ta == avmBytes {
 		cond = bytes.Equal(cx.stack[prev].Bytes, cx.stack[last].Bytes)
 	} else {
 		cond = cx.stack[prev].Uint == cx.stack[last].Uint
@@ -1651,7 +1583,7 @@ func opSqrt(cx *EvalContext) error {
 
 func opBitLen(cx *EvalContext) error {
 	last := len(cx.stack) - 1
-	if cx.stack[last].argType() == StackUint64 {
+	if cx.stack[last].argType() == avmUint64 {
 		cx.stack[last].Uint = uint64(bits.Len64(cx.stack[last].Uint))
 		return nil
 	}
@@ -2309,10 +2241,10 @@ func opMatch(cx *EvalContext) error {
 			continue
 		}
 
-		if matchVal.argType() == StackBytes && bytes.Equal(matchVal.Bytes, stackArg.Bytes) {
+		if matchVal.argType() == avmBytes && bytes.Equal(matchVal.Bytes, stackArg.Bytes) {
 			matchedIdx = i
 			break
-		} else if matchVal.argType() == StackUint64 && matchVal.Uint == stackArg.Uint {
+		} else if matchVal.argType() == avmUint64 && matchVal.Uint == stackArg.Uint {
 			matchedIdx = i
 			break
 		}
@@ -2450,8 +2382,8 @@ func (cx *EvalContext) assetHoldingToValue(holding *basics.AssetHolding, fs asse
 		return sv, fmt.Errorf("invalid asset_holding_get field %d", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.btype.AVMType != sv.argType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.btype.AVMType, sv.argType())
 	}
 	return sv, nil
 }
@@ -2486,8 +2418,8 @@ func (cx *EvalContext) assetParamsToValue(params *basics.AssetParams, creator ba
 		return sv, fmt.Errorf("invalid asset_params_get field %d", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.btype.AVMType != sv.argType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.btype.AVMType, sv.argType())
 	}
 	return sv, nil
 }
@@ -2513,8 +2445,8 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 		return sv, fmt.Errorf("invalid app_params_get field %d", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.btype.AVMType != sv.argType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.btype.AVMType, sv.argType())
 	}
 	return sv, nil
 }
@@ -2847,8 +2779,8 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		return sv, fmt.Errorf("invalid txn field %s", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.btype.AVMType != sv.argType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.btype.AVMType, sv.argType())
 	}
 	return sv, nil
 }
@@ -3295,8 +3227,8 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		err = fmt.Errorf("invalid global field %d", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.btype.AVMType != sv.argType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.btype.AVMType, sv.argType())
 	}
 
 	return sv, err
@@ -3721,7 +3653,7 @@ func opGetBit(cx *EvalContext) error {
 	target := cx.stack[prev]
 
 	var bit uint64
-	if target.argType() == StackUint64 {
+	if target.argType() == avmUint64 {
 		if idx > 63 {
 			return errors.New("getbit index > 63 with with Uint")
 		}
@@ -3763,7 +3695,7 @@ func opSetBit(cx *EvalContext) error {
 		return errors.New("setbit value > 1")
 	}
 
-	if target.argType() == StackUint64 {
+	if target.argType() == avmUint64 {
 		if idx > 63 {
 			return errors.New("setbit index > 63 with Uint")
 		}
@@ -3984,7 +3916,7 @@ func opExtract64Bits(cx *EvalContext) error {
 // than by index into txn.Accounts.
 
 func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uint64, error) {
-	if account.argType() == StackUint64 {
+	if account.argType() == avmUint64 {
 		addr, err := cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
 		return addr, account.Uint, err
 	}
@@ -4697,7 +4629,7 @@ func opItxnNext(cx *EvalContext) error {
 // that don't need (or want!) to allow low numbers to represent the account at
 // that index in Accounts array.
 func (cx *EvalContext) availableAccount(sv stackValue) (basics.Address, error) {
-	if sv.argType() != StackBytes || len(sv.Bytes) != crypto.DigestSize {
+	if sv.argType() != avmBytes || len(sv.Bytes) != crypto.DigestSize {
 		return basics.Address{}, fmt.Errorf("not an address")
 	}
 
@@ -4772,7 +4704,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 			return fmt.Errorf("Type arg not a byte array")
 		}
 		txType := string(sv.Bytes)
-		ver, ok := innerTxnTypes[txType]
+		ver, ok := InnerTxnTypes[txType]
 		if ok && ver <= cx.version {
 			txn.Type = protocol.TxType(txType)
 		} else {
@@ -4786,7 +4718,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		}
 		// i != 0 is so that the error reports 0 instead of Unknown
 		if i != 0 && i < uint64(len(TxnTypeNames)) {
-			ver, ok := innerTxnTypes[TxnTypeNames[i]]
+			ver, ok := InnerTxnTypes[TxnTypeNames[i]]
 			if ok && ver <= cx.version {
 				txn.Type = protocol.TxType(TxnTypeNames[i])
 			} else {

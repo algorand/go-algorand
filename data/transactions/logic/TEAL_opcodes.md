@@ -12,7 +12,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 ## sha256
 
 - Opcode: 0x01
-- Stack: ..., A: []byte &rarr; ..., []byte
+- Stack: ..., A: []byte &rarr; ..., hash
 - SHA256 hash of value A, yields [32]byte
 - **Cost**:
     - 7 (v1)
@@ -21,7 +21,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 ## keccak256
 
 - Opcode: 0x02
-- Stack: ..., A: []byte &rarr; ..., []byte
+- Stack: ..., A: []byte &rarr; ..., hash
 - Keccak256 hash of value A, yields [32]byte
 - **Cost**:
     - 26 (v1)
@@ -30,7 +30,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 ## sha512_256
 
 - Opcode: 0x03
-- Stack: ..., A: []byte &rarr; ..., []byte
+- Stack: ..., A: []byte &rarr; ..., hash
 - SHA512_256 hash of value A, yields [32]byte
 - **Cost**:
     - 9 (v1)
@@ -39,7 +39,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 ## ed25519verify
 
 - Opcode: 0x04
-- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., uint64
+- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., bool
 - for (data A, signature B, pubkey C) verify the signature of ("ProgData" || program_hash || data) against the pubkey => {0 or 1}
 - **Cost**: 1900
 
@@ -48,7 +48,7 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 ## ecdsa_verify v
 
 - Opcode: 0x05 {uint8 curve index}
-- Stack: ..., A: []byte, B: []byte, C: []byte, D: []byte, E: []byte &rarr; ..., uint64
+- Stack: ..., A: []byte, B: []byte, C: []byte, D: []byte, E: []byte &rarr; ..., bool
 - for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}
 - **Cost**:  Secp256k1=1700 Secp256r1=2500
 - Availability: v5
@@ -361,18 +361,18 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
-| 0 | Sender | []byte |      | 32 byte address |
+| 0 | Sender | addr |      | 32 byte address |
 | 1 | Fee | uint64 |      | microalgos |
 | 2 | FirstValid | uint64 |      | round number |
 | 3 | FirstValidTime | uint64 | v7  | UNIX timestamp of block before txn.FirstValid. Fails if negative |
 | 4 | LastValid | uint64 |      | round number |
 | 5 | Note | []byte |      | Any data up to 1024 bytes |
-| 6 | Lease | []byte |      | 32 byte lease value |
-| 7 | Receiver | []byte |      | 32 byte address |
+| 6 | Lease | hash |      | 32 byte lease value |
+| 7 | Receiver | addr |      | 32 byte address |
 | 8 | Amount | uint64 |      | microalgos |
-| 9 | CloseRemainderTo | []byte |      | 32 byte address |
-| 10 | VotePK | []byte |      | 32 byte address |
-| 11 | SelectionPK | []byte |      | 32 byte address |
+| 9 | CloseRemainderTo | addr |      | 32 byte address |
+| 10 | VotePK | addr |      | 32 byte address |
+| 11 | SelectionPK | addr |      | 32 byte address |
 | 12 | VoteFirst | uint64 |      | The first round that the participation key is valid. |
 | 13 | VoteLast | uint64 |      | The last round that the participation key is valid. |
 | 14 | VoteKeyDilution | uint64 |      | Dilution for the 2-level participation key |
@@ -380,33 +380,33 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 16 | TypeEnum | uint64 |      | Transaction type as integer |
 | 17 | XferAsset | uint64 |      | Asset ID |
 | 18 | AssetAmount | uint64 |      | value in Asset's units |
-| 19 | AssetSender | []byte |      | 32 byte address. Source of assets if Sender is the Asset's Clawback address. |
-| 20 | AssetReceiver | []byte |      | 32 byte address |
-| 21 | AssetCloseTo | []byte |      | 32 byte address |
+| 19 | AssetSender | addr |      | 32 byte address. Source of assets if Sender is the Asset's Clawback address. |
+| 20 | AssetReceiver | addr |      | 32 byte address |
+| 21 | AssetCloseTo | addr |      | 32 byte address |
 | 22 | GroupIndex | uint64 |      | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1 |
-| 23 | TxID | []byte |      | The computed ID for this transaction. 32 bytes. |
+| 23 | TxID | hash |      | The computed ID for this transaction. 32 bytes. |
 | 24 | ApplicationID | uint64 | v2  | ApplicationID from ApplicationCall transaction |
 | 25 | OnCompletion | uint64 | v2  | ApplicationCall transaction on completion action |
 | 27 | NumAppArgs | uint64 | v2  | Number of ApplicationArgs |
 | 29 | NumAccounts | uint64 | v2  | Number of Accounts |
 | 30 | ApprovalProgram | []byte | v2  | Approval program |
 | 31 | ClearStateProgram | []byte | v2  | Clear state program |
-| 32 | RekeyTo | []byte | v2  | 32 byte Sender's new AuthAddr |
+| 32 | RekeyTo | addr | v2  | 32 byte Sender's new AuthAddr |
 | 33 | ConfigAsset | uint64 | v2  | Asset ID in asset config transaction |
 | 34 | ConfigAssetTotal | uint64 | v2  | Total number of units of this asset created |
 | 35 | ConfigAssetDecimals | uint64 | v2  | Number of digits to display after the decimal place when displaying the asset |
-| 36 | ConfigAssetDefaultFrozen | uint64 | v2  | Whether the asset's slots are frozen by default or not, 0 or 1 |
+| 36 | ConfigAssetDefaultFrozen | bool | v2  | Whether the asset's slots are frozen by default or not, 0 or 1 |
 | 37 | ConfigAssetUnitName | []byte | v2  | Unit name of the asset |
 | 38 | ConfigAssetName | []byte | v2  | The asset name |
 | 39 | ConfigAssetURL | []byte | v2  | URL |
-| 40 | ConfigAssetMetadataHash | []byte | v2  | 32 byte commitment to unspecified asset metadata |
-| 41 | ConfigAssetManager | []byte | v2  | 32 byte address |
-| 42 | ConfigAssetReserve | []byte | v2  | 32 byte address |
-| 43 | ConfigAssetFreeze | []byte | v2  | 32 byte address |
-| 44 | ConfigAssetClawback | []byte | v2  | 32 byte address |
+| 40 | ConfigAssetMetadataHash | hash | v2  | 32 byte commitment to unspecified asset metadata |
+| 41 | ConfigAssetManager | addr | v2  | 32 byte address |
+| 42 | ConfigAssetReserve | addr | v2  | 32 byte address |
+| 43 | ConfigAssetFreeze | addr | v2  | 32 byte address |
+| 44 | ConfigAssetClawback | addr | v2  | 32 byte address |
 | 45 | FreezeAsset | uint64 | v2  | Asset ID being frozen or un-frozen |
-| 46 | FreezeAssetAccount | []byte | v2  | 32 byte address of the account whose asset slot is being frozen or un-frozen |
-| 47 | FreezeAssetFrozen | uint64 | v2  | The new frozen value, 0 or 1 |
+| 46 | FreezeAssetAccount | addr | v2  | 32 byte address of the account whose asset slot is being frozen or un-frozen |
+| 47 | FreezeAssetFrozen | bool | v2  | The new frozen value, 0 or 1 |
 | 49 | NumAssets | uint64 | v3  | Number of Assets |
 | 51 | NumApplications | uint64 | v3  | Number of Applications |
 | 52 | GlobalNumUint | uint64 | v3  | Number of global state integers in ApplicationCall |
@@ -414,7 +414,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 54 | LocalNumUint | uint64 | v3  | Number of local state integers in ApplicationCall |
 | 55 | LocalNumByteSlice | uint64 | v3  | Number of local state byteslices in ApplicationCall |
 | 56 | ExtraProgramPages | uint64 | v4  | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. |
-| 57 | Nonparticipation | uint64 | v5  | Marks an account nonparticipating for rewards |
+| 57 | Nonparticipation | bool | v5  | Marks an account nonparticipating for rewards |
 | 59 | NumLogs | uint64 | v5  | Number of Logs (only with `itxn` in v5). Application mode only |
 | 60 | CreatedAssetID | uint64 | v5  | Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only |
 | 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only |
@@ -437,18 +437,18 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 | 0 | MinTxnFee | uint64 |      | microalgos |
 | 1 | MinBalance | uint64 |      | microalgos |
 | 2 | MaxTxnLife | uint64 |      | rounds |
-| 3 | ZeroAddress | []byte |      | 32 byte address of all zero bytes |
+| 3 | ZeroAddress | addr |      | 32 byte address of all zero bytes |
 | 4 | GroupSize | uint64 |      | Number of transactions in this atomic transaction group. At least 1 |
 | 5 | LogicSigVersion | uint64 | v2  | Maximum supported version |
 | 6 | Round | uint64 | v2  | Current round number. Application mode only. |
 | 7 | LatestTimestamp | uint64 | v2  | Last confirmed block UNIX timestamp. Fails if negative. Application mode only. |
 | 8 | CurrentApplicationID | uint64 | v2  | ID of current application executing. Application mode only. |
-| 9 | CreatorAddress | []byte | v3  | Address of the creator of the current application. Application mode only. |
-| 10 | CurrentApplicationAddress | []byte | v5  | Address that the current application controls. Application mode only. |
-| 11 | GroupID | []byte | v5  | ID of the transaction group. 32 zero bytes if the transaction is not part of a group. |
+| 9 | CreatorAddress | addr | v3  | Address of the creator of the current application. Application mode only. |
+| 10 | CurrentApplicationAddress | addr | v5  | Address that the current application controls. Application mode only. |
+| 11 | GroupID | hash | v5  | ID of the transaction group. 32 zero bytes if the transaction is not part of a group. |
 | 12 | OpcodeBudget | uint64 | v6  | The remaining cost that can be spent by opcodes in this program. |
 | 13 | CallerApplicationID | uint64 | v6  | The application ID of the application that called this application. 0 if this application is at the top-level. Application mode only. |
-| 14 | CallerApplicationAddress | []byte | v6  | The application address of the application that called this application. ZeroAddress if this application is at the top-level. Application mode only. |
+| 14 | CallerApplicationAddress | addr | v6  | The application address of the application that called this application. ZeroAddress if this application is at the top-level. Application mode only. |
 
 
 ## gtxn t f
@@ -483,7 +483,7 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
 | 26 | ApplicationArgs | []byte | v2  | Arguments passed to the application in the ApplicationCall transaction |
-| 28 | Accounts | []byte | v2  | Accounts listed in the ApplicationCall transaction |
+| 28 | Accounts | addr | v2  | Accounts listed in the ApplicationCall transaction |
 | 48 | Assets | uint64 | v3  | Foreign Assets listed in the ApplicationCall transaction |
 | 50 | Applications | uint64 | v3  | Foreign Apps listed in the ApplicationCall transaction |
 | 58 | Logs | []byte | v5  | Log messages emitted by an application call (only with `itxn` in v5). Application mode only |
@@ -843,7 +843,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 ## app_opted_in
 
 - Opcode: 0x61
-- Stack: ..., A, B: uint64 &rarr; ..., uint64
+- Stack: ..., A, B: uint64 &rarr; ..., bool
 - 1 if account A is opted in to application B, else 0
 - Availability: v2
 - Mode: Application
@@ -863,7 +863,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_local_get_ex
 
 - Opcode: 0x63
-- Stack: ..., A, B: uint64, C: []byte &rarr; ..., X: any, Y: uint64
+- Stack: ..., A, B: uint64, C: []byte &rarr; ..., X: any, Y: bool
 - X is the local state of application B, key C in account A. Y is 1 if key existed, else 0
 - Availability: v2
 - Mode: Application
@@ -883,7 +883,7 @@ params: state key. Return: value. The value is zero (of type uint64) if the key 
 ## app_global_get_ex
 
 - Opcode: 0x65
-- Stack: ..., A: uint64, B: []byte &rarr; ..., X: any, Y: uint64
+- Stack: ..., A: uint64, B: []byte &rarr; ..., X: any, Y: bool
 - X is the global state of application A, key B. Y is 1 if key existed, else 0
 - Availability: v2
 - Mode: Application
@@ -945,7 +945,7 @@ Deleting a key which is already absent has no effect on the application global s
 | Index | Name | Type | Notes |
 | - | ------ | -- | --------- |
 | 0 | AssetBalance | uint64 | Amount of the asset unit held by this account |
-| 1 | AssetFrozen | uint64 | Is the asset frozen or not |
+| 1 | AssetFrozen | bool | Is the asset frozen or not |
 
 
 params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.
@@ -964,16 +964,16 @@ params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or
 | - | ------ | -- | - | --------- |
 | 0 | AssetTotal | uint64 |      | Total number of units of this asset |
 | 1 | AssetDecimals | uint64 |      | See AssetParams.Decimals |
-| 2 | AssetDefaultFrozen | uint64 |      | Frozen by default or not |
+| 2 | AssetDefaultFrozen | bool |      | Frozen by default or not |
 | 3 | AssetUnitName | []byte |      | Asset unit name |
 | 4 | AssetName | []byte |      | Asset name |
 | 5 | AssetURL | []byte |      | URL with additional info about the asset |
-| 6 | AssetMetadataHash | []byte |      | Arbitrary commitment |
-| 7 | AssetManager | []byte |      | Manager address |
-| 8 | AssetReserve | []byte |      | Reserve address |
-| 9 | AssetFreeze | []byte |      | Freeze address |
-| 10 | AssetClawback | []byte |      | Clawback address |
-| 11 | AssetCreator | []byte | v5  | Creator address |
+| 6 | AssetMetadataHash | hash |      | Arbitrary commitment |
+| 7 | AssetManager | addr |      | Manager address |
+| 8 | AssetReserve | addr |      | Reserve address |
+| 9 | AssetFreeze | addr |      | Freeze address |
+| 10 | AssetClawback | addr |      | Clawback address |
+| 11 | AssetCreator | addr | v5  | Creator address |
 
 
 params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.
@@ -997,8 +997,8 @@ params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return:
 | 4 | AppLocalNumUint | uint64 | Number of uint64 values allowed in Local State |
 | 5 | AppLocalNumByteSlice | uint64 | Number of byte array values allowed in Local State |
 | 6 | AppExtraProgramPages | uint64 | Number of Extra Program Pages of code space |
-| 7 | AppCreator | []byte | Creator address |
-| 8 | AppAddress | []byte | Address for which this application has authority |
+| 7 | AppCreator | addr | Creator address |
+| 8 | AppAddress | addr | Address for which this application has authority |
 
 
 params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.
@@ -1017,7 +1017,7 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 | - | ------ | -- | - | --------- |
 | 0 | AcctBalance | uint64 |      | Account balance in microalgos |
 | 1 | AcctMinBalance | uint64 |      | Minimum required balance for account, in microalgos |
-| 2 | AcctAuthAddr | []byte |      | Address the account is rekeyed to. |
+| 2 | AcctAuthAddr | addr |      | Address the account is rekeyed to. |
 | 3 | AcctTotalNumUint | uint64 | v8  | The total number of uint64 values allocated by this account in Global and Local States. |
 | 4 | AcctTotalNumByteSlice | uint64 | v8  | The total number of byte array values allocated by this account in Global and Local States. |
 | 5 | AcctTotalExtraAppPages | uint64 | v8  | The number of extra app code pages used by this account. |
@@ -1078,7 +1078,7 @@ pushints args are not added to the intcblock during assembly processes
 ## ed25519verify_bare
 
 - Opcode: 0x84
-- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., uint64
+- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., bool
 - for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}
 - **Cost**: 1900
 - Availability: v7
@@ -1189,7 +1189,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 ## bsqrt
 
 - Opcode: 0x96
-- Stack: ..., A: []byte &rarr; ..., []byte
+- Stack: ..., A: bigint &rarr; ..., bigint
 - The largest integer I such that I^2 <= A. A and I are interpreted as big-endian unsigned integers
 - **Cost**: 40
 - Availability: v6
@@ -1206,15 +1206,45 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## sha3_256
 
 - Opcode: 0x98
-- Stack: ..., A: []byte &rarr; ..., []byte
+- Stack: ..., A: []byte &rarr; ..., hash
 - SHA3_256 hash of value A, yields [32]byte
 - **Cost**: 130
 - Availability: v7
 
+## bn256_add
+
+- Opcode: 0x99
+- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- for (curve points A and B) return the curve point A + B
+- **Cost**: 70
+- Availability: v9
+
+A, B are curve points in G1 group. Each point consists of (X, Y) where X and Y are 256 bit integers, big-endian encoded. The encoded point is 64 bytes from concatenation of 32 byte X and 32 byte Y.
+
+## bn256_scalar_mul
+
+- Opcode: 0x9a
+- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- for (curve point A, scalar K) return the curve point KA
+- **Cost**: 970
+- Availability: v9
+
+A is a curve point in G1 Group and encoded as described in `bn256_add`. Scalar K is a big-endian encoded big integer that has no padding zeros.
+
+## bn256_pairing
+
+- Opcode: 0x9b
+- Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
+- for (points in G1 group G1s, points in G2 group G2s), return whether they are paired => {0 or 1}
+- **Cost**: 8700
+- Availability: v9
+
+G1s are encoded by the concatenation of encoded G1 points, as described in `bn256_add`. G2s are encoded by the concatenation of encoded G2 points. Each G2 is in form (XA0+i*XA1, YA0+i*YA1) and encoded by big-endian field element XA0, XA1, YA0 and YA1 in sequence.
+
 ## b+
 
 - Opcode: 0xa0
-- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
 - A plus B. A and B are interpreted as big-endian unsigned integers
 - **Cost**: 10
 - Availability: v4
@@ -1222,7 +1252,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## b-
 
 - Opcode: 0xa1
-- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
 - A minus B. A and B are interpreted as big-endian unsigned integers. Fail on underflow.
 - **Cost**: 10
 - Availability: v4
@@ -1230,7 +1260,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## b/
 
 - Opcode: 0xa2
-- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
 - A divided by B (truncated division). A and B are interpreted as big-endian unsigned integers. Fail if B is zero.
 - **Cost**: 20
 - Availability: v4
@@ -1238,7 +1268,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## b*
 
 - Opcode: 0xa3
-- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
 - A times B. A and B are interpreted as big-endian unsigned integers.
 - **Cost**: 20
 - Availability: v4
@@ -1246,49 +1276,49 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## b<
 
 - Opcode: 0xa4
-- Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bool
 - 1 if A is less than B, else 0. A and B are interpreted as big-endian unsigned integers
 - Availability: v4
 
 ## b>
 
 - Opcode: 0xa5
-- Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bool
 - 1 if A is greater than B, else 0. A and B are interpreted as big-endian unsigned integers
 - Availability: v4
 
 ## b<=
 
 - Opcode: 0xa6
-- Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bool
 - 1 if A is less than or equal to B, else 0. A and B are interpreted as big-endian unsigned integers
 - Availability: v4
 
 ## b>=
 
 - Opcode: 0xa7
-- Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bool
 - 1 if A is greater than or equal to B, else 0. A and B are interpreted as big-endian unsigned integers
 - Availability: v4
 
 ## b==
 
 - Opcode: 0xa8
-- Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bool
 - 1 if A is equal to B, else 0. A and B are interpreted as big-endian unsigned integers
 - Availability: v4
 
 ## b!=
 
 - Opcode: 0xa9
-- Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bool
 - 0 if A is equal to B, else 1. A and B are interpreted as big-endian unsigned integers
 - Availability: v4
 
 ## b%
 
 - Opcode: 0xaa
-- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
 - A modulo B. A and B are interpreted as big-endian unsigned integers. Fail if B is zero.
 - **Cost**: 20
 - Availability: v4
@@ -1296,7 +1326,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## b|
 
 - Opcode: 0xab
-- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
 - A bitwise-or B. A and B are zero-left extended to the greater of their lengths
 - **Cost**: 6
 - Availability: v4
@@ -1304,7 +1334,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## b&
 
 - Opcode: 0xac
-- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
 - A bitwise-and B. A and B are zero-left extended to the greater of their lengths
 - **Cost**: 6
 - Availability: v4
@@ -1312,7 +1342,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## b^
 
 - Opcode: 0xad
-- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
 - A bitwise-xor B. A and B are zero-left extended to the greater of their lengths
 - **Cost**: 6
 - Availability: v4
@@ -1320,7 +1350,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## b~
 
 - Opcode: 0xae
-- Stack: ..., A: []byte &rarr; ..., []byte
+- Stack: ..., A: bigint &rarr; ..., bigint
 - A with all bits inverted
 - **Cost**: 4
 - Availability: v4
@@ -1417,7 +1447,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## box_create
 
 - Opcode: 0xb9
-- Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
+- Stack: ..., A: []byte, B: uint64 &rarr; ..., bool
 - create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1
 - Availability: v8
 - Mode: Application
@@ -1443,7 +1473,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 ## box_del
 
 - Opcode: 0xbc
-- Stack: ..., A: []byte &rarr; ..., uint64
+- Stack: ..., A: []byte &rarr; ..., bool
 - delete box named A if it exists. Return 1 if A existed, 0 otherwise
 - Availability: v8
 - Mode: Application
@@ -1451,7 +1481,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 ## box_len
 
 - Opcode: 0xbd
-- Stack: ..., A: []byte &rarr; ..., X: uint64, Y: uint64
+- Stack: ..., A: []byte &rarr; ..., X: uint64, Y: bool
 - X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.
 - Availability: v8
 - Mode: Application
@@ -1459,7 +1489,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 ## box_get
 
 - Opcode: 0xbe
-- Stack: ..., A: []byte &rarr; ..., X: []byte, Y: uint64
+- Stack: ..., A: []byte &rarr; ..., X: []byte, Y: bool
 - X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.
 - Availability: v8
 - Mode: Application
@@ -1532,7 +1562,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 ## vrf_verify s
 
 - Opcode: 0xd0 {uint8 parameters index}
-- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., X: []byte, Y: uint64
+- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., X: []byte, Y: bool
 - Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.
 - **Cost**: 5700
 - Availability: v7
@@ -1557,6 +1587,6 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 
 | Index | Name | Type | Notes |
 | - | ------ | -- | --------- |
-| 0 | BlkSeed | []byte |  |
+| 0 | BlkSeed | hash |  |
 | 1 | BlkTimestamp | uint64 |  |
 

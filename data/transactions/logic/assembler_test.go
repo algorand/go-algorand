@@ -771,7 +771,7 @@ int 1
 +
 // comment
 `
-	testProg(t, source, AssemblerMaxVersion, Expect{3, "+ arg 0 wanted type uint64 got []byte"})
+	testProg(t, source, AssemblerMaxVersion, Expect{3, "+ arg 0 wanted type uint64 got [5]byte"})
 }
 
 // mutateProgVersion replaces version (first two symbols) in hex-encoded program
@@ -1288,7 +1288,8 @@ func TestFieldsFromLine(t *testing.T) {
 
 	check := func(line string, tokens ...string) {
 		t.Helper()
-		assert.Equal(t, tokensFromLine(line), tokens)
+		_tokens := tokensFromLine(line, 0)
+		assert.Equal(t, lineTokens(_tokens).strings(), tokens)
 	}
 
 	check("op arg", "op", "arg")
@@ -1339,11 +1340,26 @@ func TestSplitTokens(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	check := func(tokens []string, left []string, right []string) {
+	check := func(tokenStrs []string, left []string, right []string) {
 		t.Helper()
+		tokens := make([]token, len(tokenStrs))
+		for idx, t := range tokenStrs {
+			tokens[idx] = token{str: t}
+		}
 		current, next := splitTokens(tokens)
-		assert.Equal(t, left, current)
-		assert.Equal(t, right, next)
+
+		var _current []string
+		if left != nil {
+			_current = lineTokens(current).strings()
+		}
+
+		var _next []string
+		if right != nil {
+			_next = lineTokens(next).strings()
+		}
+
+		assert.Equal(t, left, _current)
+		assert.Equal(t, right, _next)
 	}
 
 	check([]string{"hey,", "how's", ";", ";", "it", "going", ";"},
@@ -1849,7 +1865,7 @@ balance
 int 1
 ==`
 	for v := uint64(2); v < directRefEnabledVersion; v++ {
-		testProg(t, source, v, Expect{2, "balance arg 0 wanted type uint64 got []byte"})
+		testProg(t, source, v, Expect{2, "balance arg 0 wanted type uint64 got [1]byte"})
 	}
 	for v := uint64(directRefEnabledVersion); v <= AssemblerMaxVersion; v++ {
 		testProg(t, source, v)
@@ -1865,7 +1881,7 @@ min_balance
 int 1
 ==`
 	for v := uint64(3); v < directRefEnabledVersion; v++ {
-		testProg(t, source, v, Expect{2, "min_balance arg 0 wanted type uint64 got []byte"})
+		testProg(t, source, v, Expect{2, "min_balance arg 0 wanted type uint64 got [1]byte"})
 	}
 	for v := uint64(directRefEnabledVersion); v <= AssemblerMaxVersion; v++ {
 		testProg(t, source, v)
@@ -2651,11 +2667,12 @@ func TestTxTypes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testProg(t, "itxn_begin; itxn_field Sender", 5, Expect{1, "itxn_field Sender expects 1 stack argument..."})
-	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{1, "...wanted type []byte got uint64"})
-	testProg(t, "itxn_begin; byte 0x56127823; itxn_field Sender", 5)
+	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{1, "...wanted type addr got uint64"})
+	testProg(t, "itxn_begin; byte 0x56127823; itxn_field Sender", 5, Expect{1, "...arg 0 wanted type addr got [4]byte"})
+	testProg(t, "itxn_begin; global ZeroAddress; itxn_field Sender", 5)
 
 	testProg(t, "itxn_begin; itxn_field Amount", 5, Expect{1, "itxn_field Amount expects 1 stack argument..."})
-	testProg(t, "itxn_begin; byte 0x87123376; itxn_field Amount", 5, Expect{1, "...wanted type uint64 got []byte"})
+	testProg(t, "itxn_begin; byte 0x87123376; itxn_field Amount", 5, Expect{1, "...wanted type uint64 got [4]byte"})
 	testProg(t, "itxn_begin; int 1; itxn_field Amount", 5)
 }
 
@@ -2667,14 +2684,14 @@ func TestBadInnerFields(t *testing.T) {
 	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 5, Expect{1, "...is not allowed."})
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field Lease", 5, Expect{1, "...is not allowed."})
 	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 5, Expect{1, "...Note field was introduced in v6..."})
-	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 5, Expect{1, "...VotePK field was introduced in v6..."})
+	testProg(t, "itxn_begin; global ZeroAddress; itxn_field VotePK", 5, Expect{1, "...VotePK field was introduced in v6..."})
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 5, Expect{1, "...is not allowed."})
 
 	testProg(t, "itxn_begin; int 1000; itxn_field FirstValid", 6, Expect{1, "...is not allowed."})
 	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 6, Expect{1, "...is not allowed."})
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field Lease", 6, Expect{1, "...is not allowed."})
 	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 6)
-	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 6)
+	testProg(t, "itxn_begin; global ZeroAddress; itxn_field VotePK", 6)
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 6, Expect{1, "...is not allowed."})
 }
 
@@ -2795,9 +2812,9 @@ func TestGetSpec(t *testing.T) {
 	ops.versionedPseudoOps["dummyPseudo"] = make(map[int]OpSpec)
 	ops.versionedPseudoOps["dummyPseudo"][1] = OpSpec{Name: "b:", Version: AssemblerMaxVersion, Proto: proto("b:")}
 	ops.versionedPseudoOps["dummyPseudo"][2] = OpSpec{Name: ":", Version: AssemblerMaxVersion}
-	_, _, ok := getSpec(ops, "dummyPseudo", []string{})
+	_, _, ok := getSpec(ops, "dummyPseudo", []token{})
 	require.False(t, ok)
-	_, _, ok = getSpec(ops, "nonsense", []string{})
+	_, _, ok = getSpec(ops, "nonsense", []token{})
 	require.False(t, ok)
 	require.Equal(t, 2, len(ops.Errors))
 	require.Equal(t, "unknown opcode: nonsense", ops.Errors[1].Err.Error())

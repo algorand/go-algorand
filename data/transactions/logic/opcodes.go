@@ -342,11 +342,45 @@ type Proto struct {
 	Return typedList // what gets pushed to the stack
 }
 
+func parseStackTypes(spec string) StackTypes {
+	if spec == "" {
+		return nil
+	}
+	types := make(StackTypes, len(spec))
+	for i, letter := range spec {
+		switch letter {
+		case 'a':
+			types[i] = StackAny
+		case 'b':
+			types[i] = StackBytes
+		case 'i':
+			types[i] = StackUint64
+		case 'x':
+			types[i] = StackNone
+		// *new* types
+		case 'A':
+			types[i] = StackAddress
+		case 'N':
+			types[i] = StackBigInt
+		case 'B':
+			types[i] = StackBoolean
+		case 'H':
+			types[i] = StackHash
+		case 'M':
+			types[i] = StackMethodSelector
+		default:
+			panic(spec)
+		}
+	}
+	return types
+}
+
 func proto(signature string, effects ...string) Proto {
 	parts := strings.Split(signature, ":")
 	if len(parts) != 2 {
 		panic(signature)
 	}
+
 	var argEffect, retEffect string
 	switch len(effects) {
 	case 0:
@@ -377,7 +411,7 @@ type OpSpec struct {
 
 // AlwaysExits is true iff the opcode always ends the program.
 func (spec *OpSpec) AlwaysExits() bool {
-	return len(spec.Return.Types) == 1 && spec.Return.Types[0] == StackNone
+	return len(spec.Return.Types) == 1 && spec.Return.Types[0].AVMType == avmNone
 }
 
 func (spec *OpSpec) deadens() bool {
@@ -397,32 +431,32 @@ func (spec *OpSpec) deadens() bool {
 // assembly-time, with ops.returns()
 var OpSpecs = []OpSpec{
 	{0x00, "err", opErr, proto(":x"), 1, detDefault()},
-	{0x01, "sha256", opSHA256, proto("b:b"), 1, costly(7)},
-	{0x02, "keccak256", opKeccak256, proto("b:b"), 1, costly(26)},
-	{0x03, "sha512_256", opSHA512_256, proto("b:b"), 1, costly(9)},
+	{0x01, "sha256", opSHA256, proto("b:H"), 1, costly(7)},
+	{0x02, "keccak256", opKeccak256, proto("b:H"), 1, costly(26)},
+	{0x03, "sha512_256", opSHA512_256, proto("b:H"), 1, costly(9)},
 
 	// Cost of these opcodes increases in AVM version 2 based on measured
 	// performance. Should be able to run max hashes during stateful TEAL
 	// and achieve reasonable TPS. Same opcode for different versions
 	// is OK.
-	{0x01, "sha256", opSHA256, proto("b:b"), 2, costly(35)},
-	{0x02, "keccak256", opKeccak256, proto("b:b"), 2, costly(130)},
-	{0x03, "sha512_256", opSHA512_256, proto("b:b"), 2, costly(45)},
+	{0x01, "sha256", opSHA256, proto("b:H"), 2, costly(35)},
+	{0x02, "keccak256", opKeccak256, proto("b:H"), 2, costly(130)},
+	{0x03, "sha512_256", opSHA512_256, proto("b:H"), 2, costly(45)},
 
 	/*
 		Tabling these changes until we offer unlimited global storage as there
 		is currently a useful pattern that requires hashes on long slices to
 		creating logicsigs in apps.
 
-		{0x01, "sha256", opSHA256, proto("b:b"), unlimitedStorage, costByLength(12, 6, 8)},
-		{0x02, "keccak256", opKeccak256, proto("b:b"), unlimitedStorage, costByLength(58, 4, 8)},
-		{0x03, "sha512_256", opSHA512_256, proto("b:b"), 7, unlimitedStorage, costByLength(17, 5, 8)},
+		{0x01, "sha256", opSHA256, proto("b:H"), unlimitedStorage, costByLength(12, 6, 8)},
+		{0x02, "keccak256", opKeccak256, proto("b:H"), unlimitedStorage, costByLength(58, 4, 8)},
+		{0x03, "sha512_256", opSHA512_256, proto("b:H"), 7, unlimitedStorage, costByLength(17, 5, 8)},
 	*/
 
-	{0x04, "ed25519verify", opEd25519Verify, proto("bbb:i"), 1, costly(1900).only(ModeSig)},
-	{0x04, "ed25519verify", opEd25519Verify, proto("bbb:i"), 5, costly(1900)},
+	{0x04, "ed25519verify", opEd25519Verify, proto("bbb:B"), 1, costly(1900).only(ModeSig)},
+	{0x04, "ed25519verify", opEd25519Verify, proto("bbb:B"), 5, costly(1900)},
 
-	{0x05, "ecdsa_verify", opEcdsaVerify, proto("bbbbb:i"), 5, costByField("v", &EcdsaCurves, ecdsaVerifyCosts)},
+	{0x05, "ecdsa_verify", opEcdsaVerify, proto("bbbbb:B"), 5, costByField("v", &EcdsaCurves, ecdsaVerifyCosts)},
 	{0x06, "ecdsa_pk_decompress", opEcdsaPkDecompress, proto("b:bb"), 5, costByField("v", &EcdsaCurves, ecdsaDecompressCosts)},
 	{0x07, "ecdsa_pk_recover", opEcdsaPkRecover, proto("bibb:bb"), 5, field("v", &EcdsaCurves).costs(2000)},
 
@@ -528,14 +562,14 @@ var OpSpecs = []OpSpec{
 
 	{0x60, "balance", opBalance, proto("i:i"), 2, only(ModeApp)},
 	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(ModeApp)},
-	{0x61, "app_opted_in", opAppOptedIn, proto("ii:i"), 2, only(ModeApp)},
-	{0x61, "app_opted_in", opAppOptedIn, proto("ai:i"), directRefEnabledVersion, only(ModeApp)},
+	{0x61, "app_opted_in", opAppOptedIn, proto("ii:B"), 2, only(ModeApp)},
+	{0x61, "app_opted_in", opAppOptedIn, proto("ai:B"), directRefEnabledVersion, only(ModeApp)},
 	{0x62, "app_local_get", opAppLocalGet, proto("ib:a"), 2, only(ModeApp)},
 	{0x62, "app_local_get", opAppLocalGet, proto("ab:a"), directRefEnabledVersion, only(ModeApp)},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("iib:ai"), 2, only(ModeApp)},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aib:ai"), directRefEnabledVersion, only(ModeApp)},
+	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("iib:aB"), 2, only(ModeApp)},
+	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aib:aB"), directRefEnabledVersion, only(ModeApp)},
 	{0x64, "app_global_get", opAppGlobalGet, proto("b:a"), 2, only(ModeApp)},
-	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("ib:ai"), 2, only(ModeApp)},
+	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("ib:aB"), 2, only(ModeApp)},
 	{0x66, "app_local_put", opAppLocalPut, proto("iba:"), 2, only(ModeApp)},
 	{0x66, "app_local_put", opAppLocalPut, proto("aba:"), directRefEnabledVersion, only(ModeApp)},
 	{0x67, "app_global_put", opAppGlobalPut, proto("ba:"), 2, only(ModeApp)},
@@ -558,7 +592,7 @@ var OpSpecs = []OpSpec{
 	{0x82, "pushbytess", opPushBytess, proto(":", "", "[N items]"), 8, constants(asmPushBytess, checkByteImmArgs, "bytes ...", immBytess).typed(typePushBytess).trust()},
 	{0x83, "pushints", opPushInts, proto(":", "", "[N items]"), 8, constants(asmPushInts, checkIntImmArgs, "uint ...", immInts).typed(typePushInts).trust()},
 
-	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bbb:i"), 7, costly(1900)},
+	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bbb:B"), 7, costly(1900)},
 
 	// "Function oriented"
 	{0x88, "callsub", opCallSub, proto(":"), 4, detBranch()},
@@ -577,11 +611,11 @@ var OpSpecs = []OpSpec{
 	{0x93, "bitlen", opBitLen, proto("a:i"), 4, detDefault()},
 	{0x94, "exp", opExp, proto("ii:i"), 4, detDefault()},
 	{0x95, "expw", opExpw, proto("ii:ii"), 4, costly(10)},
-	{0x96, "bsqrt", opBytesSqrt, proto("b:b"), 6, costly(40)},
+	{0x96, "bsqrt", opBytesSqrt, proto("N:N"), 6, costly(40)},
 	{0x97, "divw", opDivw, proto("iii:i"), 6, detDefault()},
-	{0x98, "sha3_256", opSHA3_256, proto("b:b"), 7, costly(130)},
+	{0x98, "sha3_256", opSHA3_256, proto("b:H"), 7, costly(130)},
 	/* Will end up following keccak256 -
-	{0x98, "sha3_256", opSHA3_256, proto("b:b"), unlimitedStorage, costByLength(58, 4, 8)},},
+	{0x98, "sha3_256", opSHA3_256, proto("b:H"), unlimitedStorage, costByLength(58, 4, 8)},},
 	*/
 
 	{0x99, "bn256_add", opBn256Add, proto("bb:b"), pairingVersion, costly(70)},
@@ -589,21 +623,21 @@ var OpSpecs = []OpSpec{
 	{0x9b, "bn256_pairing", opBn256Pairing, proto("bb:i"), pairingVersion, costly(8700)},
 
 	// Byteslice math.
-	{0xa0, "b+", opBytesPlus, proto("bb:b"), 4, costly(10)},
-	{0xa1, "b-", opBytesMinus, proto("bb:b"), 4, costly(10)},
-	{0xa2, "b/", opBytesDiv, proto("bb:b"), 4, costly(20)},
-	{0xa3, "b*", opBytesMul, proto("bb:b"), 4, costly(20)},
-	{0xa4, "b<", opBytesLt, proto("bb:i"), 4, detDefault()},
-	{0xa5, "b>", opBytesGt, proto("bb:i"), 4, detDefault()},
-	{0xa6, "b<=", opBytesLe, proto("bb:i"), 4, detDefault()},
-	{0xa7, "b>=", opBytesGe, proto("bb:i"), 4, detDefault()},
-	{0xa8, "b==", opBytesEq, proto("bb:i"), 4, detDefault()},
-	{0xa9, "b!=", opBytesNeq, proto("bb:i"), 4, detDefault()},
-	{0xaa, "b%", opBytesModulo, proto("bb:b"), 4, costly(20)},
-	{0xab, "b|", opBytesBitOr, proto("bb:b"), 4, costly(6)},
-	{0xac, "b&", opBytesBitAnd, proto("bb:b"), 4, costly(6)},
-	{0xad, "b^", opBytesBitXor, proto("bb:b"), 4, costly(6)},
-	{0xae, "b~", opBytesBitNot, proto("b:b"), 4, costly(4)},
+	{0xa0, "b+", opBytesPlus, proto("NN:N"), 4, costly(10)},
+	{0xa1, "b-", opBytesMinus, proto("NN:N"), 4, costly(10)},
+	{0xa2, "b/", opBytesDiv, proto("NN:N"), 4, costly(20)},
+	{0xa3, "b*", opBytesMul, proto("NN:N"), 4, costly(20)},
+	{0xa4, "b<", opBytesLt, proto("NN:B"), 4, detDefault()},
+	{0xa5, "b>", opBytesGt, proto("NN:B"), 4, detDefault()},
+	{0xa6, "b<=", opBytesLe, proto("NN:B"), 4, detDefault()},
+	{0xa7, "b>=", opBytesGe, proto("NN:B"), 4, detDefault()},
+	{0xa8, "b==", opBytesEq, proto("NN:B"), 4, detDefault()},
+	{0xa9, "b!=", opBytesNeq, proto("NN:B"), 4, detDefault()},
+	{0xaa, "b%", opBytesModulo, proto("NN:N"), 4, costly(20)},
+	{0xab, "b|", opBytesBitOr, proto("NN:N"), 4, costly(6)},
+	{0xac, "b&", opBytesBitAnd, proto("NN:N"), 4, costly(6)},
+	{0xad, "b^", opBytesBitXor, proto("NN:N"), 4, costly(6)},
+	{0xae, "b~", opBytesBitNot, proto("N:N"), 4, costly(4)},
 	{0xaf, "bzero", opBytesZero, proto("i:b"), 4, detDefault()},
 
 	// AVM "effects"
@@ -618,12 +652,12 @@ var OpSpecs = []OpSpec{
 	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// Unlimited Global Storage - Boxes
-	{0xb9, "box_create", opBoxCreate, proto("bi:i"), boxVersion, only(ModeApp)},
+	{0xb9, "box_create", opBoxCreate, proto("bi:B"), boxVersion, only(ModeApp)},
 	{0xba, "box_extract", opBoxExtract, proto("bii:b"), boxVersion, only(ModeApp)},
 	{0xbb, "box_replace", opBoxReplace, proto("bib:"), boxVersion, only(ModeApp)},
-	{0xbc, "box_del", opBoxDel, proto("b:i"), boxVersion, only(ModeApp)},
-	{0xbd, "box_len", opBoxLen, proto("b:ii"), boxVersion, only(ModeApp)},
-	{0xbe, "box_get", opBoxGet, proto("b:bi"), boxVersion, only(ModeApp)},
+	{0xbc, "box_del", opBoxDel, proto("b:B"), boxVersion, only(ModeApp)},
+	{0xbd, "box_len", opBoxLen, proto("b:iB"), boxVersion, only(ModeApp)},
+	{0xbe, "box_get", opBoxGet, proto("b:bB"), boxVersion, only(ModeApp)},
 	{0xbf, "box_put", opBoxPut, proto("bb:"), boxVersion, only(ModeApp)},
 
 	// Dynamic indexing
@@ -636,7 +670,7 @@ var OpSpecs = []OpSpec{
 	{0xc6, "gitxnas", opGitxnas, proto("i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// randomness support
-	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bi"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
+	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bB"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
 }
 
@@ -698,6 +732,9 @@ var opsByOpcode [LogicVersion + 1][256]OpSpec
 // OpsByName map for each version, mapping opcode name to OpSpec
 var OpsByName [LogicVersion + 1]map[string]OpSpec
 
+// PseudoOps holds a list of opspecs for the PseduoOps
+var PseudoOps []OpSpec
+
 // Migration from v1 to v2.
 // v1 allowed execution of program with version 0.
 // With v2 opcode versions are introduced and they are bound to every opcode.
@@ -740,5 +777,12 @@ func init() {
 				OpsByName[v][oi.Name] = oi
 			}
 		}
+	}
+
+	for _, specs := range pseudoOps {
+		if _, ok := specs[anyImmediates]; !ok || len(specs) != 1 {
+			continue
+		}
+		PseudoOps = append(PseudoOps, specs[anyImmediates])
 	}
 }
