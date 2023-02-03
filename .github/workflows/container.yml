@@ -11,6 +11,7 @@ jobs:
   build-and-push:
     name: Build and Push to DockerHub
     runs-on: ubuntu-latest
+    if: github.repository == 'algorand/go-algorand'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
