@@ -3,21 +3,21 @@
   "LogicSigVersion": 9,
   "StackTypes": {
     "[]byte": {
-      "Type": "B",
+      "Type": "[]byte",
       "LengthBound": [
         0,
         4096
       ]
     },
     "addr": {
-      "Type": "B",
+      "Type": "addr",
       "LengthBound": [
         32,
         32
       ]
     },
     "any": {
-      "Type": ".",
+      "Type": "any",
       "LengthBound": [
         0,
         4096
@@ -28,38 +28,38 @@
       ]
     },
     "bigint": {
-      "Type": "B",
+      "Type": "bigint",
       "LengthBound": [
         0,
         64
       ]
     },
     "bool": {
-      "Type": "U",
+      "Type": "bool",
       "ValueBound": [
         0,
         1
       ]
     },
     "hash": {
-      "Type": "B",
+      "Type": "hash",
       "LengthBound": [
         32,
         32
       ]
     },
     "method": {
-      "Type": "B",
+      "Type": "method",
       "LengthBound": [
         4,
         4
       ]
     },
     "none": {
-      "Type": "_"
+      "Type": "none"
     },
     "uint64": {
-      "Type": "U",
+      "Type": "uint64",
       "ValueBound": [
         0,
         18446744073709551615
@@ -1419,14 +1419,6 @@
   },
   "PseudoOps": [
     {
-      "Name": "byte",
-      "Returns": [
-        "[]byte"
-      ],
-      "Size": 2,
-      "Cost": ""
-    },
-    {
       "Name": "method",
       "Returns": [
         "method"
@@ -1438,6 +1430,14 @@
       "Name": "int",
       "Returns": [
         "uint64"
+      ],
+      "Size": 2,
+      "Cost": ""
+    },
+    {
+      "Name": "byte",
+      "Returns": [
+        "[]byte"
       ],
       "Size": 2,
       "Cost": ""
