@@ -1180,9 +1180,10 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		responseHeader.Set(PriorityChallengeHeader, challenge)
 	}
 
+	localAddr, _ := wn.Address()
 	peerIDChallenge, peerID, err := wn.identityScheme.VerifyAndAttachResponse(responseHeader, request.Header)
 	if err != nil {
-		wn.log.With("err", err).With("remote", trackedRequest.otherPublicAddr).Warnf("peer (%s) supplied an invalid identity challenge, abandoning peering", trackedRequest.otherPublicAddr)
+		wn.log.With("err", err).With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Warnf("peer (%s) supplied an invalid identity challenge, abandoning peering", trackedRequest.otherPublicAddr)
 		return
 	}
 
@@ -2222,11 +2223,12 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		// The error was already logged, so no need to log again.
 		return
 	}
+	localAddr, _ := wn.Address()
 
 	// if the peer responded with an identity challenge response, but it can't be verified, don't proceed with peering
 	peerID, idVerificationMessage, err := wn.identityScheme.VerifyResponse(response.Header, idChallenge)
 	if err != nil {
-		wn.log.With("err", err).With("remote", addr).Warnf("peer (%s) supplied an invalid identity response, abandoning peering", addr)
+		wn.log.With("err", err).With("remote", addr).With("local", localAddr).Warn("peer supplied an invalid identity response, abandoning peering")
 		return
 	}
 
@@ -2260,14 +2262,13 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		wn.peersLock.Unlock()
 		if !ok {
 			networkPeeringStopDupeIdentity.Inc(nil)
-			wn.log.With("remote", addr).Warnf("peer deduplicated before adding because the identity is already known: %s", addr)
+			wn.log.With("remote", addr).With("local", localAddr).Warn("peer deduplicated before adding because the identity is already known")
 			return
 		}
 	}
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
 
-	localAddr, _ := wn.Address()
 	wn.log.With("event", "ConnectedOut").With("remote", addr).With("local", localAddr).Infof("Made outgoing connection to peer %v", addr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
 		telemetryspec.PeerEventDetails{
@@ -2284,7 +2285,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	if len(idVerificationMessage) > 0 {
 		sent := peer.writeNonBlock(context.Background(), idVerificationMessage, true, crypto.Digest{}, time.Now())
 		if !sent {
-			wn.log.With("remote", addr).With("local", localAddr).Warnf("could not send identity challenge verification to %v", addr)
+			wn.log.With("remote", addr).With("local", localAddr).Warn("could not send identity challenge verification")
 		}
 	}
 
