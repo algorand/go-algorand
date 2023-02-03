@@ -1182,7 +1182,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	peerIDChallenge, peerID, err := wn.identityScheme.VerifyAndAttachResponse(responseHeader, request.Header)
 	if err != nil {
-		wn.log.Info("peer identity challenge did not verify: ", err)
+		wn.log.With("err", err).With("remote", trackedRequest.otherPublicAddr).Warnf("peer (%s) supplied an invalid identity challenge, abandoning peering", trackedRequest.otherPublicAddr)
 		return
 	}
 
@@ -2226,6 +2226,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	// if the peer responded with an identity challenge response, but it can't be verified, don't proceed with peering
 	peerID, idVerificationMessage, err := wn.identityScheme.VerifyResponse(response.Header, idChallenge)
 	if err != nil {
+		wn.log.With("err", err).With("remote", addr).Warnf("peer (%s) supplied an invalid identity response, abandoning peering", addr)
 		return
 	}
 
@@ -2259,7 +2260,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		wn.peersLock.Unlock()
 		if !ok {
 			networkPeeringStopDupeIdentity.Inc(nil)
-			wn.log.Warnf("peer deduplicated at addPeer because the identity is already known: %s", peer.identity)
+			wn.log.With("remote", addr).Warnf("peer deduplicated before adding because the identity is already known: %s", addr)
 			return
 		}
 	}

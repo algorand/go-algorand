@@ -322,14 +322,17 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	msg := identityVerificationMessageSigned{}
 	err := protocol.Decode(message.Data, &msg)
 	if err != nil {
+		peer.net.log.With("err", err).With("remote", peer.OriginAddress()).Warnf("peer (%s) identity verification could not be decoded, disconnecting", peer.OriginAddress())
 		peer.net.Disconnect(peer)
 		return OutgoingMessage{}
 	}
 	if peer.identityChallenge != msg.Msg.ResponseChallenge {
+		peer.net.log.With("remote", peer.OriginAddress()).Warnf("peer (%s) identity verification challenge does not match, disconnecting", peer.OriginAddress())
 		peer.net.Disconnect(peer)
 		return OutgoingMessage{}
 	}
 	if !msg.Verify(peer.identity) {
+		peer.net.log.With("remote", peer.OriginAddress()).Warnf("peer (%s) identity verification is incorrectly signed, disconnecting", peer.OriginAddress())
 		peer.net.Disconnect(peer)
 		return OutgoingMessage{}
 	}
@@ -340,6 +343,7 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	peer.net.peersLock.Unlock()
 	if !ok {
 		networkPeerDisconnectDupeIdentity.Inc(nil)
+		peer.net.log.Warnf("peer (%s) identity already in use, disconnecting", peer.OriginAddress())
 		peer.net.Disconnect(peer)
 	}
 	return OutgoingMessage{}
