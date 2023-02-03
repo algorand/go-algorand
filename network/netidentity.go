@@ -17,7 +17,6 @@
 package network
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -27,35 +26,38 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// netidentity holds the functionality to participate in "Identity Challenge Exchange"
-// with the purpose of identitfying redundant and bidirectional connections and prevent them.
-// the identity challenge exchange protocol is a 3 way handshake that exchanges signed messages.
-// Message 1 (Identity Challenge): when a peering request is made, an identityChallenge is attached with:
+// netidentity.go implements functionality to participate in an "Identity Challenge Exchange"
+// with the purpose of identitfying redundant connections between peers, and prevent them.
+// The identity challenge exchange protocol is a 3 way handshake that exchanges signed messages.
+//
+// Message 1 (Identity Challenge): when a request is made to start a gossip connection, an
+// identityChallengeSigned message is added to HTTP request headers, containing:
 // - a 32 byte random challenge
 // - the requester's "identity" PublicKey
 // - the PublicAddress of the intended recipient
-// - a Nonce "IC"
-// - Signature of the above by the requester's PublicKey
-// Message 2 (Identity Challenge Response): when responding to a peering request,
-// if the identity challenge is correct, an identityChallengeResponse is attached with:
-// - the original 32 byte random challenge
+// - Signature on the above by the requester's PublicKey
+//
+// Message 2 (Identity Challenge Response): when responding to the gossip connection request,
+// if the identity challenge is valid, an identityChallengeResponseSigned message is added
+// to the HTTP response headers, containing:
+// - the original 32 byte random challenge from Message 1
 // - a new "response" 32 byte random challenge
 // - the responder's "identity" PublicKey
-// - a Nonce "ICR"
-// - Signature of the above by the responder's PublicKey
-// Message 3 (Identity Verification): if the identityChallengeResponse is correct,
-// the requester sends a message "NI" over websocket to verify its identity PublicKey, with:
-// - Signature of the resposne challenge by the requester's PublicKey
+// - Signature on the above by the responder's PublicKey
 //
-// Upon receipt of Message 2, the requester has enough data to consider the peer's Identity "verified"
-// Upon receipt of Message 3, the responder has enough data to consider the peer's Identity "verified"
-// at each of these steps, if the peer's identity is verified, wsNetwork will attempt to add it to the
+// Message 3 (Identity Verification): if the identityChallengeResponse is valid, the requester
+// sends a NetIDVerificationTag message over websockets to verify it owns its PublicKey, with:
+// - Signature on the response challenge from Message 2, using the requester's PublicKey
+//
+// Upon receipt of Message 2, the requester has enough data to consider the responder's identity "verified".
+// Upon receipt of Message 3, the responder has enough data to consider the requester's identity "verified".
+// At each of these steps, if the peer's identity was verified, wsNetwork will attempt to add it to the
 // identityTracker, which maintains a single peer per identity PublicKey. If the identity is already in use
-// by another peer, we know this connection is duplicate and can be closed or disconnected
+// by another connected peer, we know this connection is a duplicate, and can be closed.
 //
 // Protocol Enablement:
-// Identity Challenge Exchange is optional for peers, and is enabled by setting PublicAddress in the node's config
-// to either the address used in Foundation DNS, or to "auto" to attempt to load the PublicAddress after the listener starts.
+// This exchange is optional, and is enabled by setting the configuration value "PublicAddress" to match the
+// node's public endpoint address stored in other peers' phonebooks (like "r-aa.algorand-mainnet.network:4160").
 //
 // Protocol Error Handling:
 // Message 1
@@ -64,11 +66,13 @@ import (
 //   this is so that if an operator misconfigures PublicAddress, it does not decline well meaning peering attempts
 // - If the Message is malformed or cannot be decoded, the peering attempt is stopped
 // - If the Signature in the challenge does not verify to the included key, the peering attempt is stopped
+//
 // Message 2
 // - If the Message is not included, assume the peer does not use identity exchange, and do not send Message 3
 // - If the Message is malformed or cannot be decoded, the peering attempt is stopped
-// - If the original 32 Byte challenge does not match the one sent in Message 1, the peering attempt is stopped
+// - If the original 32 byte challenge does not match the one sent in Message 1, the peering attempt is stopped
 // - If the Signature in the challenge does not verify to the included key, the peering attempt is stopped
+//
 // Message 3
 // - If the Message is malformed or cannot be decoded, the peer is disconnected
 // - If the Signature in the challenge does not verify peer's assumed PublicKey and assigned Challenge Bytes, the peer is disconnected
@@ -119,9 +123,9 @@ func (i identityChallengePublicKeyScheme) AttachChallenge(attach http.Header, ad
 		return identityChallengeValue{}
 	}
 	c := identityChallenge{
-		Key:       i.identityKeys.SignatureVerifier,
-		Challenge: newIdentityChallengeValue(),
-		Address:   []byte(addr),
+		Key:           i.identityKeys.SignatureVerifier,
+		Challenge:     newIdentityChallengeValue(),
+		PublicAddress: []byte(addr),
 	}
 
 	attach.Add(IdentityChallengeHeader, c.signAndEncodeB64(i.identityKeys))
@@ -150,7 +154,7 @@ func (i identityChallengePublicKeyScheme) VerifyAndAttachResponse(attach http.He
 	if err != nil {
 		return identityChallengeValue{}, crypto.PublicKey{}, err
 	}
-	idChal := identityChallenge{}
+	idChal := identityChallengeSigned{}
 	err = protocol.Decode(msg, &idChal)
 	if err != nil {
 		return identityChallengeValue{}, crypto.PublicKey{}, err
@@ -161,17 +165,17 @@ func (i identityChallengePublicKeyScheme) VerifyAndAttachResponse(attach http.He
 	// if the address is not meant for this host, return without attaching headers,
 	// but also do not emit an error. This is because if an operator were to incorrectly
 	// specify their dedupName, it could result in inappropriate disconnections from valid peers
-	if string(idChal.Address) != i.dedupName {
+	if string(idChal.Msg.PublicAddress) != i.dedupName {
 		return identityChallengeValue{}, crypto.PublicKey{}, nil
 	}
 	// make the response object, encode it and attach it to the header
 	r := identityChallengeResponse{
 		Key:               i.identityKeys.SignatureVerifier,
-		Challenge:         idChal.Challenge,
+		Challenge:         idChal.Msg.Challenge,
 		ResponseChallenge: newIdentityChallengeValue(),
 	}
 	attach.Add(IdentityChallengeHeader, r.signAndEncodeB64(i.identityKeys))
-	return r.ResponseChallenge, idChal.Key, nil
+	return r.ResponseChallenge, idChal.Msg.Key, nil
 }
 
 // VerifyResponse will decode the identity challenge header and confirm it self-verifies,
@@ -188,95 +192,122 @@ func (i identityChallengePublicKeyScheme) VerifyResponse(h http.Header, c identi
 	if err != nil {
 		return crypto.PublicKey{}, []byte{}, err
 	}
-	resp := identityChallengeResponse{}
+	resp := identityChallengeResponseSigned{}
 	err = protocol.Decode(msg, &resp)
 	if err != nil {
 		return crypto.PublicKey{}, []byte{}, err
 	}
-	if resp.Challenge != c {
+	if resp.Msg.Challenge != c {
 		return crypto.PublicKey{}, []byte{}, fmt.Errorf("challenge response did not contain originally issued challenge value")
 	}
 	if !resp.Verify() {
 		return crypto.PublicKey{}, []byte{}, fmt.Errorf("challenge response incorrectly signed ")
 	}
-	return resp.Key, i.identityVerificationMessage(resp.ResponseChallenge), nil
+	return resp.Msg.Key, i.identityVerificationMessage(resp.Msg.ResponseChallenge), nil
 }
 
 // IdentityVerificationMessage generates the 3rd message of the challenge exchange,
 // which a wsNetwork can then send to a peer in order to verify their own identity.
 // It is prefixed with the ID Verification tag and returned ready-to-send
 func (i *identityChallengePublicKeyScheme) identityVerificationMessage(c identityChallengeValue) []byte {
-	msg := identityVerificationMessage{
-		Signature: i.identityKeys.SignBytes(c[:]),
-	}
-	return append([]byte(protocol.NetIDVerificationTag), protocol.Encode(&msg)[:]...)
+	signedMsg := identityVerificationMessage{ResponseChallenge: c}.Sign(i.identityKeys)
+	return append([]byte(protocol.NetIDVerificationTag), protocol.Encode(&signedMsg)...)
 }
 
 // The initial challenge object, giving the peer a challenge to return (Challenge),
 // the presumed identity of this node (Key), the intended recipient (Address), all Signed.
 type identityChallenge struct {
-	_struct   struct{}               `codec:",omitempty,omitemptyarray"`
-	Key       crypto.PublicKey       `codec:"pk"`
-	Challenge identityChallengeValue `codec:"c"`
-	Address   []byte                 `codec:"a,allocbound=maxAddressLen"`
-	Signature crypto.Signature       `codec:"s"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Key           crypto.PublicKey       `codec:"pk"`
+	Challenge     identityChallengeValue `codec:"c"`
+	PublicAddress []byte                 `codec:"a,allocbound=maxAddressLen"`
+}
+
+// identityChallengeSigned wraps an identityChallenge with a signature,
+// similar to SignedTxn and netPrioResponseSigned.
+type identityChallengeSigned struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Msg       identityChallenge `codec:"ic"`
+	Signature crypto.Signature  `codec:"sig"`
 }
 
 type identityChallengeResponse struct {
-	_struct           struct{}               `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	Key               crypto.PublicKey       `codec:"pk"`
 	Challenge         identityChallengeValue `codec:"c"`
 	ResponseChallenge identityChallengeValue `codec:"rc"`
-	Signature         crypto.Signature       `codec:"s"`
+}
+
+type identityChallengeResponseSigned struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Msg       identityChallengeResponse `codec:"icr"`
+	Signature crypto.Signature          `codec:"sig"`
 }
 
 type identityVerificationMessage struct {
-	_struct   struct{}         `codec:",omitempty,omitemptyarray"`
-	Signature crypto.Signature `codec:"s"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	ResponseChallenge identityChallengeValue `codec:"rc"`
 }
 
-func (i *identityChallenge) signAndEncodeB64(s *crypto.SignatureSecrets) string {
-	i.Signature = s.SignBytes(i.signableBytes())
-	enc := protocol.Encode(i)
-	b64enc := base64.StdEncoding.EncodeToString(enc)
-	return b64enc
+type identityVerificationMessageSigned struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Msg       identityVerificationMessage `codec:"ivm"`
+	Signature crypto.Signature            `codec:"sig"`
 }
 
-func (i identityChallenge) signableBytes() []byte {
-	return bytes.Join([][]byte{
-		[]byte("IC"),
-		i.Challenge[:],
-		i.Key[:],
-		[]byte(i.Address),
-	},
-		[]byte(":"))
+func (i identityChallenge) signAndEncodeB64(s *crypto.SignatureSecrets) string {
+	signedChal := i.Sign(s)
+	return base64.StdEncoding.EncodeToString(protocol.Encode(&signedChal))
+}
+
+func (i identityChallenge) Sign(secrets *crypto.SignatureSecrets) identityChallengeSigned {
+	return identityChallengeSigned{Msg: i, Signature: secrets.Sign(i)}
+}
+
+func (i identityChallenge) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.NetIdentityChallenge, protocol.Encode(&i)
 }
 
 // Verify checks that the signature included in the identityChallenge was indeed created by the included Key
-func (i identityChallenge) Verify() bool {
-	return i.Key.VerifyBytes(i.signableBytes(), i.Signature)
+func (i identityChallengeSigned) Verify() bool {
+	return i.Msg.Key.Verify(i.Msg, i.Signature)
 }
 
-func (i *identityChallengeResponse) signAndEncodeB64(s *crypto.SignatureSecrets) string {
-	i.Signature = s.SignBytes(i.signableBytes())
-	enc := protocol.Encode(i)
-	b64enc := base64.StdEncoding.EncodeToString(enc)
-	return b64enc
+func (i identityChallengeResponse) signAndEncodeB64(s *crypto.SignatureSecrets) string {
+	signedChalResp := i.Sign(s)
+	return base64.StdEncoding.EncodeToString(protocol.Encode(&signedChalResp))
 }
 
-func (i identityChallengeResponse) signableBytes() []byte {
-	return bytes.Join([][]byte{
-		[]byte("ICR"),
-		i.Challenge[:],
-		i.ResponseChallenge[:],
-		i.Key[:],
-	},
-		[]byte(":"))
+func (i identityChallengeResponse) Sign(secrets *crypto.SignatureSecrets) identityChallengeResponseSigned {
+	return identityChallengeResponseSigned{Msg: i, Signature: secrets.Sign(i)}
+}
+
+func (i identityChallengeResponse) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.NetIdentityChallengeResponse, protocol.Encode(&i)
 }
 
 // Verify checks that the signature included in the identityChallengeResponse was indeed created by the included Key
-func (i identityChallengeResponse) Verify() bool {
-	return i.Key.VerifyBytes(i.signableBytes(), i.Signature)
+func (i identityChallengeResponseSigned) Verify() bool {
+	return i.Msg.Key.Verify(i.Msg, i.Signature)
+}
+
+func (i identityVerificationMessage) Sign(secrets *crypto.SignatureSecrets) identityVerificationMessageSigned {
+	return identityVerificationMessageSigned{Msg: i, Signature: secrets.Sign(i)}
+}
+
+func (i identityVerificationMessage) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.NetIdentityChallengeResponse, protocol.Encode(&i)
+}
+
+// Verify checks that the signature included in the identityVerificationMessage was indeed created by the included Key
+func (i identityVerificationMessageSigned) Verify(key crypto.PublicKey) bool {
+	return key.Verify(i.Msg, i.Signature)
 }
 
 // identityVerificationHandler receives a signature over websocket, and confirms it matches the
@@ -288,13 +319,17 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	if atomic.LoadUint32(&peer.identityVerified) == 1 {
 		return OutgoingMessage{}
 	}
-	msg := identityVerificationMessage{}
+	msg := identityVerificationMessageSigned{}
 	err := protocol.Decode(message.Data, &msg)
 	if err != nil {
 		peer.net.Disconnect(peer)
 		return OutgoingMessage{}
 	}
-	if !peer.identity.VerifyBytes(peer.identityChallenge[:], msg.Signature) {
+	if peer.identityChallenge != msg.Msg.ResponseChallenge {
+		peer.net.Disconnect(peer)
+		return OutgoingMessage{}
+	}
+	if !msg.Verify(peer.identity) {
 		peer.net.Disconnect(peer)
 		return OutgoingMessage{}
 	}

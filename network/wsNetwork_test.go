@@ -1538,9 +1538,9 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
 				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
 				c := identityChallenge{
-					Key:       s.identityKeys.SignatureVerifier,
-					Challenge: newIdentityChallengeValue(),
-					Address:   []byte("incorrect address!"),
+					Key:           s.identityKeys.SignatureVerifier,
+					Challenge:     newIdentityChallengeValue(),
+					PublicAddress: []byte("incorrect address!"),
 				}
 				attach.Add(IdentityChallengeHeader, c.signAndEncodeB64(s.identityKeys))
 				return c.Challenge
@@ -1556,16 +1556,15 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
 				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
 				c := identityChallenge{
-					Key:       s.identityKeys.SignatureVerifier,
-					Challenge: newIdentityChallengeValue(),
-					Address:   []byte("incorrect address!"),
-				}
-				c.Signature = s.identityKeys.SignBytes(c.signableBytes())
-				c.Challenge = newIdentityChallengeValue() // change the underlying value of the challenge so the signature fails
+					Key:           s.identityKeys.SignatureVerifier,
+					Challenge:     newIdentityChallengeValue(),
+					PublicAddress: []byte("incorrect address!"),
+				}.Sign(s.identityKeys)
+				c.Msg.Challenge = newIdentityChallengeValue() // change the challenge after signing the message, so the signature check fails
 				enc := protocol.Encode(&c)
 				b64enc := base64.StdEncoding.EncodeToString(enc)
 				attach.Add(IdentityChallengeHeader, b64enc)
-				return c.Challenge
+				return c.Msg.Challenge
 			},
 			totalInA:  0,
 			totalOutA: 0,
@@ -1693,13 +1692,12 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 					Key:               s.identityKeys.SignatureVerifier,
 					Challenge:         newIdentityChallengeValue(),
 					ResponseChallenge: newIdentityChallengeValue(),
-				}
-				r.Signature = s.identityKeys.SignBytes(r.signableBytes())
-				r.ResponseChallenge = newIdentityChallengeValue() // change the challenge after signing
+				}.Sign(s.identityKeys)
+				r.Msg.ResponseChallenge = newIdentityChallengeValue() // change the challenge after signing the message
 				enc := protocol.Encode(&r)
 				b64enc := base64.StdEncoding.EncodeToString(enc)
 				attach.Add(IdentityChallengeHeader, b64enc)
-				return r.ResponseChallenge, idChal.Key, nil
+				return r.Msg.ResponseChallenge, idChal.Key, nil
 			},
 			totalInA:  0,
 			totalOutA: 0,
@@ -1799,7 +1797,8 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 			name: "bad signature",
 			verifyResponse: func(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
 				s := NewIdentityChallengeScheme("does not matter") // make a
-				ver := identityVerificationMessage{
+				ver := identityVerificationMessageSigned{
+					Msg:       identityVerificationMessage{ResponseChallenge: c},
 					Signature: s.identityKeys.SignBytes([]byte("bad bytes for signing")),
 				}
 				message := append([]byte(protocol.NetIDVerificationTag), protocol.Encode(&ver)[:]...)

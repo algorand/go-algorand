@@ -234,7 +234,7 @@ type wsPeer struct {
 	identity         crypto.PublicKey
 	identityVerified uint32
 	// the identityChallenge is recorded to the peer so it may verify its identity at a later time
-	identityChallenge [32]byte
+	identityChallenge identityChallengeValue
 
 	// Challenge sent to the peer on an incoming connection
 	prioChallenge string

@@ -135,11 +135,12 @@ func TestIdentityChallengeSchemeBadSignature(t *testing.T) {
 	h := http.Header{}
 	i := NewIdentityChallengeScheme("i1")
 	// Copy the logic of attaching the header and signing so we can sign it wrong
-	c := identityChallenge{
-		Key:       i.identityKeys.SignatureVerifier,
-		Challenge: newIdentityChallengeValue(),
-		Address:   []byte("i1"),
-	}
+	c := identityChallengeSigned{
+		Msg: identityChallenge{
+			Key:           i.identityKeys.SignatureVerifier,
+			Challenge:     newIdentityChallengeValue(),
+			PublicAddress: []byte("i1"),
+		}}
 	c.Signature = i.identityKeys.SignBytes([]byte("WRONG BYTES SIGNED"))
 	enc := protocol.Encode(&c)
 	b64enc := base64.StdEncoding.EncodeToString(enc)
@@ -186,11 +187,12 @@ func TestIdentityChallengeSchemeBadResponseSignature(t *testing.T) {
 
 	// use the code to sign and encode responses so we can sign incorrectly
 	r := http.Header{}
-	resp := identityChallengeResponse{
-		Key:               i.identityKeys.SignatureVerifier,
-		Challenge:         origChal,
-		ResponseChallenge: newIdentityChallengeValue(),
-	}
+	resp := identityChallengeResponseSigned{
+		Msg: identityChallengeResponse{
+			Key:               i.identityKeys.SignatureVerifier,
+			Challenge:         origChal,
+			ResponseChallenge: newIdentityChallengeValue(),
+		}}
 	resp.Signature = i.identityKeys.SignBytes([]byte("BAD BYTES FOR SIGNING"))
 	enc := protocol.Encode(&resp)
 	b64enc := base64.StdEncoding.EncodeToString(enc)

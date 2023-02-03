@@ -134,6 +134,126 @@ func BenchmarkUnmarshalidentityChallengeResponse(b *testing.B) {
 	}
 }
 
+func TestMarshalUnmarshalidentityChallengeResponseSigned(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := identityChallengeResponseSigned{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingidentityChallengeResponseSigned(t *testing.T) {
+	protocol.RunEncodingTest(t, &identityChallengeResponseSigned{})
+}
+
+func BenchmarkMarshalMsgidentityChallengeResponseSigned(b *testing.B) {
+	v := identityChallengeResponseSigned{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgidentityChallengeResponseSigned(b *testing.B) {
+	v := identityChallengeResponseSigned{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalidentityChallengeResponseSigned(b *testing.B) {
+	v := identityChallengeResponseSigned{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalidentityChallengeSigned(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := identityChallengeSigned{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingidentityChallengeSigned(t *testing.T) {
+	protocol.RunEncodingTest(t, &identityChallengeSigned{})
+}
+
+func BenchmarkMarshalMsgidentityChallengeSigned(b *testing.B) {
+	v := identityChallengeSigned{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgidentityChallengeSigned(b *testing.B) {
+	v := identityChallengeSigned{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalidentityChallengeSigned(b *testing.B) {
+	v := identityChallengeSigned{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestMarshalUnmarshalidentityChallengeValue(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	v := identityChallengeValue{}
@@ -242,6 +362,66 @@ func BenchmarkAppendMsgidentityVerificationMessage(b *testing.B) {
 
 func BenchmarkUnmarshalidentityVerificationMessage(b *testing.B) {
 	v := identityVerificationMessage{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalidentityVerificationMessageSigned(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := identityVerificationMessageSigned{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingidentityVerificationMessageSigned(t *testing.T) {
+	protocol.RunEncodingTest(t, &identityVerificationMessageSigned{})
+}
+
+func BenchmarkMarshalMsgidentityVerificationMessageSigned(b *testing.B) {
+	v := identityVerificationMessageSigned{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgidentityVerificationMessageSigned(b *testing.B) {
+	v := identityVerificationMessageSigned{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalidentityVerificationMessageSigned(b *testing.B) {
+	v := identityVerificationMessageSigned{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

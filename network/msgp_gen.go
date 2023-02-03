@@ -31,6 +31,22 @@ import (
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
 //
+// identityChallengeResponseSigned
+//                |-----> (*) MarshalMsg
+//                |-----> (*) CanMarshalMsg
+//                |-----> (*) UnmarshalMsg
+//                |-----> (*) CanUnmarshalMsg
+//                |-----> (*) Msgsize
+//                |-----> (*) MsgIsZero
+//
+// identityChallengeSigned
+//            |-----> (*) MarshalMsg
+//            |-----> (*) CanMarshalMsg
+//            |-----> (*) UnmarshalMsg
+//            |-----> (*) CanUnmarshalMsg
+//            |-----> (*) Msgsize
+//            |-----> (*) MsgIsZero
+//
 // identityChallengeValue
 //            |-----> (*) MarshalMsg
 //            |-----> (*) CanMarshalMsg
@@ -46,6 +62,14 @@ import (
 //              |-----> (*) CanUnmarshalMsg
 //              |-----> (*) Msgsize
 //              |-----> (*) MsgIsZero
+//
+// identityVerificationMessageSigned
+//                 |-----> (*) MarshalMsg
+//                 |-----> (*) CanMarshalMsg
+//                 |-----> (*) UnmarshalMsg
+//                 |-----> (*) CanUnmarshalMsg
+//                 |-----> (*) Msgsize
+//                 |-----> (*) MsgIsZero
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -98,9 +122,9 @@ func (z disconnectReason) MsgIsZero() bool {
 func (z *identityChallenge) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0002Len := uint32(4)
-	var zb0002Mask uint8 /* 5 bits */
-	if len((*z).Address) == 0 {
+	zb0002Len := uint32(3)
+	var zb0002Mask uint8 /* 4 bits */
+	if len((*z).PublicAddress) == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
@@ -112,17 +136,13 @@ func (z *identityChallenge) MarshalMsg(b []byte) (o []byte) {
 		zb0002Len--
 		zb0002Mask |= 0x8
 	}
-	if (*z).Signature.MsgIsZero() {
-		zb0002Len--
-		zb0002Mask |= 0x10
-	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
 	if zb0002Len != 0 {
 		if (zb0002Mask & 0x2) == 0 { // if not empty
 			// string "a"
 			o = append(o, 0xa1, 0x61)
-			o = msgp.AppendBytes(o, (*z).Address)
+			o = msgp.AppendBytes(o, (*z).PublicAddress)
 		}
 		if (zb0002Mask & 0x4) == 0 { // if not empty
 			// string "c"
@@ -133,11 +153,6 @@ func (z *identityChallenge) MarshalMsg(b []byte) (o []byte) {
 			// string "pk"
 			o = append(o, 0xa2, 0x70, 0x6b)
 			o = (*z).Key.MarshalMsg(o)
-		}
-		if (zb0002Mask & 0x10) == 0 { // if not empty
-			// string "s"
-			o = append(o, 0xa1, 0x73)
-			o = (*z).Signature.MarshalMsg(o)
 		}
 	}
 	return
@@ -182,24 +197,16 @@ func (z *identityChallenge) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0004 int
 			zb0004, err = msgp.ReadBytesBytesHeader(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Address")
+				err = msgp.WrapError(err, "struct-from-array", "PublicAddress")
 				return
 			}
 			if zb0004 > maxAddressLen {
 				err = msgp.ErrOverflow(uint64(zb0004), uint64(maxAddressLen))
 				return
 			}
-			(*z).Address, bts, err = msgp.ReadBytesBytes(bts, (*z).Address)
+			(*z).PublicAddress, bts, err = msgp.ReadBytesBytes(bts, (*z).PublicAddress)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Address")
-				return
-			}
-		}
-		if zb0002 > 0 {
-			zb0002--
-			bts, err = (*z).Signature.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Signature")
+				err = msgp.WrapError(err, "struct-from-array", "PublicAddress")
 				return
 			}
 		}
@@ -242,22 +249,16 @@ func (z *identityChallenge) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0005 int
 				zb0005, err = msgp.ReadBytesBytesHeader(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Address")
+					err = msgp.WrapError(err, "PublicAddress")
 					return
 				}
 				if zb0005 > maxAddressLen {
 					err = msgp.ErrOverflow(uint64(zb0005), uint64(maxAddressLen))
 					return
 				}
-				(*z).Address, bts, err = msgp.ReadBytesBytes(bts, (*z).Address)
+				(*z).PublicAddress, bts, err = msgp.ReadBytesBytes(bts, (*z).PublicAddress)
 				if err != nil {
-					err = msgp.WrapError(err, "Address")
-					return
-				}
-			case "s":
-				bts, err = (*z).Signature.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Signature")
+					err = msgp.WrapError(err, "PublicAddress")
 					return
 				}
 			default:
@@ -280,21 +281,21 @@ func (_ *identityChallenge) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *identityChallenge) Msgsize() (s int) {
-	s = 1 + 3 + (*z).Key.Msgsize() + 2 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + msgp.BytesPrefixSize + len((*z).Address) + 2 + (*z).Signature.Msgsize()
+	s = 1 + 3 + (*z).Key.Msgsize() + 2 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + msgp.BytesPrefixSize + len((*z).PublicAddress)
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *identityChallenge) MsgIsZero() bool {
-	return ((*z).Key.MsgIsZero()) && ((*z).Challenge == (identityChallengeValue{})) && (len((*z).Address) == 0) && ((*z).Signature.MsgIsZero())
+	return ((*z).Key.MsgIsZero()) && ((*z).Challenge == (identityChallengeValue{})) && (len((*z).PublicAddress) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *identityChallengeResponse) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0003Len := uint32(4)
-	var zb0003Mask uint8 /* 5 bits */
+	zb0003Len := uint32(3)
+	var zb0003Mask uint8 /* 4 bits */
 	if (*z).Challenge == (identityChallengeValue{}) {
 		zb0003Len--
 		zb0003Mask |= 0x2
@@ -306,10 +307,6 @@ func (z *identityChallengeResponse) MarshalMsg(b []byte) (o []byte) {
 	if (*z).ResponseChallenge == (identityChallengeValue{}) {
 		zb0003Len--
 		zb0003Mask |= 0x8
-	}
-	if (*z).Signature.MsgIsZero() {
-		zb0003Len--
-		zb0003Mask |= 0x10
 	}
 	// variable map header, size zb0003Len
 	o = append(o, 0x80|uint8(zb0003Len))
@@ -328,11 +325,6 @@ func (z *identityChallengeResponse) MarshalMsg(b []byte) (o []byte) {
 			// string "rc"
 			o = append(o, 0xa2, 0x72, 0x63)
 			o = msgp.AppendBytes(o, ((*z).ResponseChallenge)[:])
-		}
-		if (zb0003Mask & 0x10) == 0 { // if not empty
-			// string "s"
-			o = append(o, 0xa1, 0x73)
-			o = (*z).Signature.MarshalMsg(o)
 		}
 	}
 	return
@@ -381,14 +373,6 @@ func (z *identityChallengeResponse) UnmarshalMsg(bts []byte) (o []byte, err erro
 			}
 		}
 		if zb0003 > 0 {
-			zb0003--
-			bts, err = (*z).Signature.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Signature")
-				return
-			}
-		}
-		if zb0003 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0003)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -429,12 +413,6 @@ func (z *identityChallengeResponse) UnmarshalMsg(bts []byte) (o []byte, err erro
 					err = msgp.WrapError(err, "ResponseChallenge")
 					return
 				}
-			case "s":
-				bts, err = (*z).Signature.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Signature")
-					return
-				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -455,13 +433,271 @@ func (_ *identityChallengeResponse) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *identityChallengeResponse) Msgsize() (s int) {
-	s = 1 + 3 + (*z).Key.Msgsize() + 2 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + (*z).Signature.Msgsize()
+	s = 1 + 3 + (*z).Key.Msgsize() + 2 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *identityChallengeResponse) MsgIsZero() bool {
-	return ((*z).Key.MsgIsZero()) && ((*z).Challenge == (identityChallengeValue{})) && ((*z).ResponseChallenge == (identityChallengeValue{})) && ((*z).Signature.MsgIsZero())
+	return ((*z).Key.MsgIsZero()) && ((*z).Challenge == (identityChallengeValue{})) && ((*z).ResponseChallenge == (identityChallengeValue{}))
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *identityChallengeResponseSigned) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
+	if (*z).Msg.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Signature.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "icr"
+			o = append(o, 0xa3, 0x69, 0x63, 0x72)
+			o = (*z).Msg.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "sig"
+			o = append(o, 0xa3, 0x73, 0x69, 0x67)
+			o = (*z).Signature.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *identityChallengeResponseSigned) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*identityChallengeResponseSigned)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *identityChallengeResponseSigned) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Msg.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Msg")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Signature.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Signature")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = identityChallengeResponseSigned{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "icr":
+				bts, err = (*z).Msg.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Msg")
+					return
+				}
+			case "sig":
+				bts, err = (*z).Signature.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Signature")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *identityChallengeResponseSigned) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*identityChallengeResponseSigned)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *identityChallengeResponseSigned) Msgsize() (s int) {
+	s = 1 + 4 + (*z).Msg.Msgsize() + 4 + (*z).Signature.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *identityChallengeResponseSigned) MsgIsZero() bool {
+	return ((*z).Msg.MsgIsZero()) && ((*z).Signature.MsgIsZero())
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *identityChallengeSigned) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
+	if (*z).Msg.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Signature.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "ic"
+			o = append(o, 0xa2, 0x69, 0x63)
+			o = (*z).Msg.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "sig"
+			o = append(o, 0xa3, 0x73, 0x69, 0x67)
+			o = (*z).Signature.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *identityChallengeSigned) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*identityChallengeSigned)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *identityChallengeSigned) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Msg.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Msg")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Signature.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Signature")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = identityChallengeSigned{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "ic":
+				bts, err = (*z).Msg.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Msg")
+					return
+				}
+			case "sig":
+				bts, err = (*z).Signature.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Signature")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *identityChallengeSigned) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*identityChallengeSigned)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *identityChallengeSigned) Msgsize() (s int) {
+	s = 1 + 3 + (*z).Msg.Msgsize() + 4 + (*z).Signature.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *identityChallengeSigned) MsgIsZero() bool {
+	return ((*z).Msg.MsgIsZero()) && ((*z).Signature.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -507,19 +743,19 @@ func (z *identityChallengeValue) MsgIsZero() bool {
 func (z *identityVerificationMessage) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(1)
-	var zb0001Mask uint8 /* 2 bits */
-	if (*z).Signature.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x2
+	zb0002Len := uint32(1)
+	var zb0002Mask uint8 /* 2 bits */
+	if (*z).ResponseChallenge == (identityChallengeValue{}) {
+		zb0002Len--
+		zb0002Mask |= 0x2
 	}
-	// variable map header, size zb0001Len
-	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len != 0 {
-		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "s"
-			o = append(o, 0xa1, 0x73)
-			o = (*z).Signature.MarshalMsg(o)
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "rc"
+			o = append(o, 0xa2, 0x72, 0x63)
+			o = msgp.AppendBytes(o, ((*z).ResponseChallenge)[:])
 		}
 	}
 	return
@@ -534,25 +770,25 @@ func (_ *identityVerificationMessage) CanMarshalMsg(z interface{}) bool {
 func (z *identityVerificationMessage) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 int
-	var zb0002 bool
-	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).Signature.UnmarshalMsg(bts)
+		if zb0002 > 0 {
+			zb0002--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).ResponseChallenge)[:])
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Signature")
+				err = msgp.WrapError(err, "struct-from-array", "ResponseChallenge")
 				return
 			}
 		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -563,21 +799,21 @@ func (z *identityVerificationMessage) UnmarshalMsg(bts []byte) (o []byte, err er
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 {
+		if zb0003 {
 			(*z) = identityVerificationMessage{}
 		}
-		for zb0001 > 0 {
-			zb0001--
+		for zb0002 > 0 {
+			zb0002--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
 			}
 			switch string(field) {
-			case "s":
-				bts, err = (*z).Signature.UnmarshalMsg(bts)
+			case "rc":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).ResponseChallenge)[:])
 				if err != nil {
-					err = msgp.WrapError(err, "Signature")
+					err = msgp.WrapError(err, "ResponseChallenge")
 					return
 				}
 			default:
@@ -600,11 +836,253 @@ func (_ *identityVerificationMessage) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *identityVerificationMessage) Msgsize() (s int) {
-	s = 1 + 2 + (*z).Signature.Msgsize()
+	s = 1 + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *identityVerificationMessage) MsgIsZero() bool {
-	return ((*z).Signature.MsgIsZero())
+	return ((*z).ResponseChallenge == (identityChallengeValue{}))
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *identityVerificationMessageSigned) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0002Len := uint32(2)
+	var zb0002Mask uint8 /* 3 bits */
+	if (*z).Msg.ResponseChallenge == (identityChallengeValue{}) {
+		zb0002Len--
+		zb0002Mask |= 0x2
+	}
+	if (*z).Signature.MsgIsZero() {
+		zb0002Len--
+		zb0002Mask |= 0x4
+	}
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "ivm"
+			o = append(o, 0xa3, 0x69, 0x76, 0x6d)
+			// omitempty: check for empty values
+			zb0003Len := uint32(1)
+			var zb0003Mask uint8 /* 2 bits */
+			if (*z).Msg.ResponseChallenge == (identityChallengeValue{}) {
+				zb0003Len--
+				zb0003Mask |= 0x2
+			}
+			// variable map header, size zb0003Len
+			o = append(o, 0x80|uint8(zb0003Len))
+			if (zb0003Mask & 0x2) == 0 { // if not empty
+				// string "rc"
+				o = append(o, 0xa2, 0x72, 0x63)
+				o = msgp.AppendBytes(o, ((*z).Msg.ResponseChallenge)[:])
+			}
+		}
+		if (zb0002Mask & 0x4) == 0 { // if not empty
+			// string "sig"
+			o = append(o, 0xa3, 0x73, 0x69, 0x67)
+			o = (*z).Signature.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *identityVerificationMessageSigned) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*identityVerificationMessageSigned)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *identityVerificationMessageSigned) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 0 {
+			zb0002--
+			var zb0004 int
+			var zb0005 bool
+			zb0004, zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if _, ok := err.(msgp.TypeError); ok {
+				zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Msg")
+					return
+				}
+				if zb0004 > 0 {
+					zb0004--
+					bts, err = msgp.ReadExactBytes(bts, ((*z).Msg.ResponseChallenge)[:])
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Msg", "struct-from-array", "ResponseChallenge")
+						return
+					}
+				}
+				if zb0004 > 0 {
+					err = msgp.ErrTooManyArrayFields(zb0004)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Msg", "struct-from-array")
+						return
+					}
+				}
+			} else {
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Msg")
+					return
+				}
+				if zb0005 {
+					(*z).Msg = identityVerificationMessage{}
+				}
+				for zb0004 > 0 {
+					zb0004--
+					field, bts, err = msgp.ReadMapKeyZC(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Msg")
+						return
+					}
+					switch string(field) {
+					case "rc":
+						bts, err = msgp.ReadExactBytes(bts, ((*z).Msg.ResponseChallenge)[:])
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Msg", "ResponseChallenge")
+							return
+						}
+					default:
+						err = msgp.ErrNoField(string(field))
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Msg")
+							return
+						}
+					}
+				}
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			bts, err = (*z).Signature.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Signature")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0003 {
+			(*z) = identityVerificationMessageSigned{}
+		}
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "ivm":
+				var zb0006 int
+				var zb0007 bool
+				zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if _, ok := err.(msgp.TypeError); ok {
+					zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Msg")
+						return
+					}
+					if zb0006 > 0 {
+						zb0006--
+						bts, err = msgp.ReadExactBytes(bts, ((*z).Msg.ResponseChallenge)[:])
+						if err != nil {
+							err = msgp.WrapError(err, "Msg", "struct-from-array", "ResponseChallenge")
+							return
+						}
+					}
+					if zb0006 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0006)
+						if err != nil {
+							err = msgp.WrapError(err, "Msg", "struct-from-array")
+							return
+						}
+					}
+				} else {
+					if err != nil {
+						err = msgp.WrapError(err, "Msg")
+						return
+					}
+					if zb0007 {
+						(*z).Msg = identityVerificationMessage{}
+					}
+					for zb0006 > 0 {
+						zb0006--
+						field, bts, err = msgp.ReadMapKeyZC(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Msg")
+							return
+						}
+						switch string(field) {
+						case "rc":
+							bts, err = msgp.ReadExactBytes(bts, ((*z).Msg.ResponseChallenge)[:])
+							if err != nil {
+								err = msgp.WrapError(err, "Msg", "ResponseChallenge")
+								return
+							}
+						default:
+							err = msgp.ErrNoField(string(field))
+							if err != nil {
+								err = msgp.WrapError(err, "Msg")
+								return
+							}
+						}
+					}
+				}
+			case "sig":
+				bts, err = (*z).Signature.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Signature")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *identityVerificationMessageSigned) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*identityVerificationMessageSigned)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *identityVerificationMessageSigned) Msgsize() (s int) {
+	s = 1 + 4 + 1 + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 4 + (*z).Signature.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *identityVerificationMessageSigned) MsgIsZero() bool {
+	return ((*z).Msg.ResponseChallenge == (identityChallengeValue{})) && ((*z).Signature.MsgIsZero())
 }
