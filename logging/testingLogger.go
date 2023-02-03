@@ -33,6 +33,7 @@ type logWriter interface {
 	Log(args ...interface{})
 }
 
+// DBLockedFilter is filter for "database table is locked" message as the most common
 var DBLockedFilter = []Filter{{Msg: "database table is locked"}}
 
 func (tb TestLogWriter) Write(p []byte) (n int, err error) {

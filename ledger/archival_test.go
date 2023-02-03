@@ -199,7 +199,9 @@ func TestArchivalRestart(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 
-	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
@@ -225,7 +227,8 @@ func TestArchivalRestart(t *testing.T) {
 	require.Equal(t, basics.Round(0), earliest)
 	// close and reopen the same DB, ensure latest/earliest are not changed
 	l.Close()
-	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
+	log = logging.TestingLog(t)
+	l, err = OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -370,7 +373,9 @@ func TestArchivalCreatables(t *testing.T) {
 	const inMem = false // use persistent storage
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
@@ -475,7 +480,9 @@ func TestArchivalCreatables(t *testing.T) {
 
 	// close and reopen the same DB
 	l.Close()
-	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
+	log = logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+	l, err = OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 
 	// check that we can fetch creator for all created assets and can't for
@@ -618,7 +625,8 @@ func TestArchivalCreatables(t *testing.T) {
 
 	// close and reopen the same DB
 	l.Close()
-	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
+	log = logging.TestingLog(t)
+	l, err = OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 

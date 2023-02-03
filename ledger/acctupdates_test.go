@@ -2532,7 +2532,8 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 	testProtocolVersion := protocol.ConsensusCurrentVersion
 	protoParams := config.Consensus[testProtocolVersion]
 
-	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
+	ml := makeMockLedgerForTrackerWithLogger(t, true, 1, testProtocolVersion, accts, log)
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()

@@ -219,7 +219,8 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, cfg)
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
@@ -363,7 +364,7 @@ func TestLedgerSingleTx(t *testing.T) {
 	// The genesis for mainnet is at V17
 	genesisInitState, initSecrets := ledgertesting.GenerateInitState(t, protocol.ConsensusV15, 100)
 	const inMem = true
-	log := logging.TestingLog(t)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
@@ -566,7 +567,7 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	protoName := protocol.ConsensusV24
 	genesisInitState, initSecrets := ledgertesting.GenerateInitState(t, protoName, 100)
 	const inMem = true
-	log := logging.TestingLog(t)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
@@ -741,7 +742,7 @@ func TestLedgerAppCrossRoundWrites(t *testing.T) {
 	protoName := protocol.ConsensusV24
 	genesisInitState, initSecrets := ledgertesting.GenerateInitState(t, protoName, 100)
 	const inMem = true
-	log := logging.TestingLog(t)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
@@ -875,7 +876,7 @@ func TestLedgerAppMultiTxnWrites(t *testing.T) {
 	protoName := protocol.ConsensusV24
 	genesisInitState, initSecrets := ledgertesting.GenerateInitState(t, protoName, 100)
 	const inMem = true
-	log := logging.TestingLog(t)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
@@ -1036,7 +1037,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	genesisInitState, initSecrets := ledgertesting.GenerateInitState(t, version, 100)
 	const inMem = true
-	log := logging.TestingLog(t)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	log.SetLevel(logging.Warn)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
@@ -1326,7 +1327,7 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	log := logging.TestingLog(t)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
@@ -1390,7 +1391,7 @@ func TestLedgerBlockHdrCaching(t *testing.T) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	log := logging.TestingLog(t)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	a.NoError(err)
@@ -1512,7 +1513,7 @@ func TestLedgerReload(t *testing.T) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	log := logging.TestingLog(t)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
@@ -1656,7 +1657,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 	//initLedger
 	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	const inMem = true
-	log := logging.TestingLog(t)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
@@ -2702,7 +2703,7 @@ func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 10_000_000_000)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
-	log := logging.TestingLog(t)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
 	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err)
@@ -2895,7 +2896,7 @@ func TestVotersReloadFromDisk(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
-	log := logging.TestingLog(t)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
@@ -2943,7 +2944,7 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
-	log := logging.TestingLog(t)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)

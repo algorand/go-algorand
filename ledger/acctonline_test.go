@@ -1406,7 +1406,9 @@ func TestAcctOnlineTop(t *testing.T) {
 	genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
 	addSinkAndPoolAccounts(genesisAccts)
 
-	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, genesisAccts)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
+	proto := protocol.ConsensusCurrentVersion
+	ml := makeMockLedgerForTrackerWithLogger(t, true, 1, proto, genesisAccts, log)
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()

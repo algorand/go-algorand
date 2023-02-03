@@ -176,7 +176,8 @@ return`
 	}
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), "TestAppAccountData", true, genesisInitState, cfg)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
+	l, err := OpenLedger(log, "TestAppAccountData", true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
 
@@ -402,7 +403,9 @@ return`
 	a.Contains(genesisInitState.Accounts, userLocal)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
 
@@ -645,7 +648,9 @@ return`
 	a.Contains(genesisInitState.Accounts, userLocal)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
 
@@ -799,7 +804,9 @@ return`
 	a.Contains(genesisInitState.Accounts, userLocal)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
 
@@ -995,7 +1002,9 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	a.Contains(genesisInitState.Accounts, userLocal)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
 
@@ -1135,7 +1144,9 @@ int 1
 			a.Contains(genesisInitState.Accounts, userLocal)
 
 			cfg := config.GetDefaultLocal()
-			l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+			log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
+			log.SetLevel(logging.Info)
+			l, err := OpenLedger(log, t.Name(), true, genesisInitState, cfg)
 			a.NoError(err)
 			defer l.Close()
 
@@ -1262,7 +1273,9 @@ int 1
 	a.Contains(genesisInitState.Accounts, funder)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
 
@@ -1343,7 +1356,9 @@ return
 
 	cfg := config.GetDefaultLocal()
 	cfg.MaxAcctLookback = 2
-	l1, err := OpenLedger(logging.Base(), dbPrefix, false, genesisInitState, cfg)
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
+	log.SetLevel(logging.Info)
+	l1, err := OpenLedger(log, dbPrefix, false, genesisInitState, cfg)
 	a.NoError(err)
 	defer l1.Close()
 
@@ -1404,7 +1419,8 @@ return
 	// restart
 	l1.Close()
 
-	l2, err := OpenLedger(logging.Base(), dbPrefix, false, genesisInitState, cfg)
+	log = logging.TestingLog(t)
+	l2, err := OpenLedger(log, dbPrefix, false, genesisInitState, cfg)
 	a.NoError(err)
 	defer l2.Close()
 

@@ -132,7 +132,8 @@ func TestEvalForIndexerCustomProtocolParams(t *testing.T) {
 	dbName := t.Name()
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, true, ledgercore.InitState{
 		Block:       block,
 		Accounts:    genesisBalances.Balances,
 		GenesisHash: genHash,
@@ -234,7 +235,8 @@ func TestEvalForIndexerForExpiredAccounts(t *testing.T) {
 	dbName := t.Name()
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, true, ledgercore.InitState{
 		Block:       block,
 		Accounts:    genesisBalances.Balances,
 		GenesisHash: genHash,
