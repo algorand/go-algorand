@@ -182,8 +182,6 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
 
     $clientrunner ${KEEP_TEMPS_CMD_STR} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
 
-    fi
-
     duration "parallel client runner"
 
     for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
