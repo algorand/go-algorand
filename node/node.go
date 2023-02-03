@@ -1154,9 +1154,9 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 		node.log.Warnf("unable to create catchpoint catchup service : %v", err)
 		return err
 	}
-	node.catchpointCatchupService.Start(node.ctx)
+	err = node.catchpointCatchupService.Start(node.ctx)
 	node.log.Infof("starting catching up toward catchpoint %s", catchpoint)
-	return nil
+	return err
 }
 
 // AbortCatchup aborts the given catchpoint

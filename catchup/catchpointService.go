@@ -99,6 +99,8 @@ type CatchpointCatchupService struct {
 	abortCtxFunc context.CancelFunc
 	// blocksDownloadPeerSelector is the peer selector used for downloading blocks.
 	blocksDownloadPeerSelector *peerSelector
+	// err is used to remember the last error
+	err error
 }
 
 // MakeResumedCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
@@ -157,11 +159,20 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 }
 
 // Start starts the catchpoint catchup service ( continue in the process )
-func (cs *CatchpointCatchupService) Start(ctx context.Context) {
+func (cs *CatchpointCatchupService) Start(ctx context.Context) (err error) {
 	cs.ctx, cs.cancelCtxFunc = context.WithCancel(ctx)
 	cs.abortCtx, cs.abortCtxFunc = context.WithCancel(context.Background())
 	cs.running.Add(1)
+	// ensure err is nil.
+	cs.err = nil
+	// no return value possible, see: https://go.dev/ref/spec#Go_statements
 	go cs.run()
+	// give some time to start, possibly poll for a relevant cs.xyz value here,
+	// which signals that catchup has been started correctly
+	///DEV: adjust prior to merge
+	time.Sleep(1000 * time.Millisecond)
+	// return the err code retrieved via cs.err
+	return cs.err
 }
 
 // Abort aborts the catchpoint catchup process
@@ -193,10 +204,19 @@ func (cs *CatchpointCatchupService) GetLatestBlockHeader() bookkeeping.BlockHead
 func (cs *CatchpointCatchupService) run() {
 	defer cs.running.Done()
 	var err error
+
+	///DEV: For testing / PR review only, remove pre merge ---------
+	// Enable next 2 lines to get a mock error, in order to validate that the err is correctly receive via cs.err
+	//cs.err = fmt.Errorf("!!! mock Catchup Error CatchpointCatchupService::run !!!")
+	//return
+	///END ---------------------------------------------------------
+
 	for {
 		// check if we need to abort.
 		select {
 		case <-cs.ctx.Done():
+			// remember the last err (cannot be returnd, a "go cs.run" was used)
+			cs.err = err
 			return
 		default:
 		}
