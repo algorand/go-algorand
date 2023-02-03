@@ -8,8 +8,8 @@ import (
 	"github.com/algorand/go-algorand/ledger/apply"
 )
 
-// applierStateChanger can be extended to add in new interfaces to roundCowState.
-// alternatively closures or recievers methods could attach this state such that it is invisible to the BlockEvaluator.
+// ApplierStateChanger can be extended to add in new interfaces to roundCowState.
+// alternatively closures or receivers methods could attach this state such that it is invisible to the BlockEvaluator.
 type ApplierStateChanger interface {
 	apply.Balances
 	apply.StateProofsApplier
@@ -19,6 +19,9 @@ type ApplierStateChanger interface {
 // return values:
 //   * txHandled - return true if the TransactionApplier handled the transaction. Multiple appliers handling the transaction is illegal.
 type TransactionApplier func(params *ApplierParams) (txHandled bool, err error)
+
+// ApplierParams is a parameter object to the TransactionApplier.
+// I'm not really happy about this, it would be nice to slim it down.
 type ApplierParams struct {
 	Tx       *transactions.Transaction
 	Params   *config.ConsensusParams

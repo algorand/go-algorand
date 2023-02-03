@@ -9,14 +9,17 @@ import (
 // Simple adapters wrapping the existing (sort of) pure functions.
 // State passes between them via the StateChanger object (a.k.a. Balances).
 
+// ApplyFee handles the transaction fee.
 func ApplyFee(params *ApplierParams) (bool, error) {
 	return false, params.StateChanger.Move(params.Tx.Sender, params.Specials.FeeSink, params.Tx.Fee, &(params.Ad.SenderRewards), nil)
 }
 
+// ApplyRekey handles rekeying.
 func ApplyRekey(params *ApplierParams) (bool, error) {
 	return false, apply.Rekey(params.StateChanger, params.Tx)
 }
 
+// ApplyPayment handles a payment transaction.
 func ApplyPayment(params *ApplierParams) (bool, error) {
 	if params.Tx.Type != protocol.PaymentTx {
 		return false, nil
@@ -24,6 +27,7 @@ func ApplyPayment(params *ApplierParams) (bool, error) {
 	return true, apply.Payment(params.Tx.PaymentTxnFields, params.Tx.Header, params.StateChanger, *params.Specials, params.Ad)
 }
 
+// ApplyKeyRegistration handles a key registration transaction.
 func ApplyKeyRegistration(params *ApplierParams) (bool, error) {
 	if params.Tx.Type != protocol.KeyRegistrationTx {
 		return false, nil
@@ -31,6 +35,7 @@ func ApplyKeyRegistration(params *ApplierParams) (bool, error) {
 	return true, apply.Keyreg(params.Tx.KeyregTxnFields, params.Tx.Header, params.StateChanger, *params.Specials, params.Ad, params.Round)
 }
 
+// ApplyAssetConfig handles an asset config transaction.
 func ApplyAssetConfig(params *ApplierParams) (bool, error) {
 	if params.Tx.Type != protocol.AssetConfigTx {
 		return false, nil
@@ -38,6 +43,7 @@ func ApplyAssetConfig(params *ApplierParams) (bool, error) {
 	return true, apply.AssetConfig(params.Tx.AssetConfigTxnFields, params.Tx.Header, params.StateChanger, *params.Specials, params.Ad, params.Ctr)
 }
 
+// ApplyAssetTransfer handles an asset transfer transaction.
 func ApplyAssetTransfer(params *ApplierParams) (bool, error) {
 	if params.Tx.Type != protocol.AssetTransferTx {
 		return false, nil
@@ -45,6 +51,7 @@ func ApplyAssetTransfer(params *ApplierParams) (bool, error) {
 	return true, apply.AssetTransfer(params.Tx.AssetTransferTxnFields, params.Tx.Header, params.StateChanger, *params.Specials, params.Ad)
 }
 
+// ApplyAssetFreeze handles an asset freeze transaction.
 func ApplyAssetFreeze(params *ApplierParams) (bool, error) {
 	if params.Tx.Type != protocol.AssetFreezeTx {
 		return false, nil
@@ -52,6 +59,7 @@ func ApplyAssetFreeze(params *ApplierParams) (bool, error) {
 	return true, apply.AssetFreeze(params.Tx.AssetFreezeTxnFields, params.Tx.Header, params.StateChanger, *params.Specials, params.Ad)
 }
 
+// ApplyApplicationCall handles an application call transaction.
 func ApplyApplicationCall(params *ApplierParams) (bool, error) {
 	if params.Tx.Type != protocol.ApplicationCallTx {
 		return false, nil
@@ -79,6 +87,7 @@ func ApplyStateProof(params *ApplierParams) (bool, error) {
 	return true, apply.StateProof(params.Tx.StateProofTxnFields, params.Tx.Header.FirstValid, params.StateChanger, params.Validate)
 }
 
+// ApplyAppThings does some sort of app things.
 func ApplyAppThings(params *ApplierParams) (bool, error) {
 	// Record first, so that details can all be used in logic evaluation, even
 	// if cleared below. For example, `gaid`, introduced in v28 is now
@@ -88,6 +97,8 @@ func ApplyAppThings(params *ApplierParams) (bool, error) {
 	return false, nil
 }
 
+// ApplyDisableRewards makes sure rewards are not accidentally set.
+// You could imagine conditionally adding this to the list of middlewards instead of checking the protocol.
 func ApplyDisableRewards(params *ApplierParams) (bool, error) {
 	// If the protocol does not support rewards in ApplyData,
 	// clear them out.
@@ -100,6 +111,8 @@ func ApplyDisableRewards(params *ApplierParams) (bool, error) {
 	return false, nil
 }
 
+// ApplyInnerTxnThing clears out IDs for some reason.
+// You could imagine conditionally adding this to the list of middlewards instead of checking the protocol.
 func ApplyInnerTxnThing(params *ApplierParams) (bool, error) {
 	// No separate config for activating these AD fields because inner
 	// transactions require their presence, so the consensus update to add
