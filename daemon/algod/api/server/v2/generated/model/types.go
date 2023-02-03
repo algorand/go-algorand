@@ -1045,6 +1045,30 @@ type NodeStatusResponse struct {
 
 	// TimeSinceLastRound TimeSinceLastRound in nanoseconds
 	TimeSinceLastRound uint64 `json:"time-since-last-round"`
+
+	// UpgradeDelay Upgrade delay
+	UpgradeDelay *uint64 `json:"upgrade-delay,omitempty"`
+
+	// UpgradeNextProtocolVoteBefore Next protocol round
+	UpgradeNextProtocolVoteBefore *uint64 `json:"upgrade-next-protocol-vote-before,omitempty"`
+
+	// UpgradeNoVotes No votes cast for consensus upgrade
+	UpgradeNoVotes *uint64 `json:"upgrade-no-votes,omitempty"`
+
+	// UpgradeNodeVote This node's upgrade vote
+	UpgradeNodeVote *bool `json:"upgrade-node-vote,omitempty"`
+
+	// UpgradeVoteRounds Total voting ounds for current upgrade
+	UpgradeVoteRounds *uint64 `json:"upgrade-vote-rounds,omitempty"`
+
+	// UpgradeVotes Total votes cast for consensus upgrade
+	UpgradeVotes *uint64 `json:"upgrade-votes,omitempty"`
+
+	// UpgradeVotesRequired Yes votes required for consensus upgrade
+	UpgradeVotesRequired *uint64 `json:"upgrade-votes-required,omitempty"`
+
+	// UpgradeYesVotes Yes votes cast for consensus upgrade
+	UpgradeYesVotes *uint64 `json:"upgrade-yes-votes,omitempty"`
 }
 
 // ParticipationKeyResponse Represents a participation key used by the node.
@@ -1072,6 +1096,15 @@ type PostParticipationResponse struct {
 type PostTransactionsResponse struct {
 	// TxId encoding of the transaction hash.
 	TxId string `json:"txId"`
+}
+
+// SimulationResponse defines model for SimulationResponse.
+type SimulationResponse struct {
+	// FailureMessage \[fm\] Failure message, if the transaction would have failed during a live broadcast.
+	FailureMessage string `json:"failure-message"`
+
+	// MissingSignatures \[ms\] Whether any transactions would have failed during a live broadcast because they were missing signatures.
+	MissingSignatures bool `json:"missing-signatures"`
 }
 
 // StateProofResponse Represents a state proof and its corresponding message

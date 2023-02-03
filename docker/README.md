@@ -1,13 +1,14 @@
 # Algod Container
 
-General purpose algod docker container.
+[![DockerHub](https://img.shields.io/badge/DockerHub-blue)](https://hub.docker.com/r/algorand/algod)
 
+General purpose algod container image.
 
-# Image Configuration
+## Image Configuration
 
 There are a number of special files and environment variables used to control how a container is started.
 
-## Default Configuration
+### Default Configuration
 
 By default the following config.json overrides are applied:
 
@@ -20,7 +21,7 @@ By default the following config.json overrides are applied:
 | IsIndexerActive | false |
 | EnableDeveloperAPI | true |
 
-## Environment Variables
+### Environment Variables
 
 The following environment variables can be supplied. Except when noted, it is possible to reconfigure deployments even after the data directory has been initialized.
 
@@ -34,23 +35,24 @@ The following environment variables can be supplied. Except when noted, it is po
 | TOKEN         | If set, overrides the REST API token. |
 | ADMIN_TOKEN   | If set, overrides the REST API admin token. |
 
+### Special Files
 
-## Special Files
-
-Configuration can be modified by specifying certian files. These can be changed each time you start the container if the data directory is a mounted volume.
+Configuration can be modified by specifying certain files. These can be changed each time you start the container if the data directory is a mounted volume.
 
 | File | Description |
 | ---- | ----------- |
-| /etc/config.json | Override default configurations by providing your own file. |
-| /etc/algod.token | Override default randomized REST API token. |
-| /etc/algod.admin.token | Override default randomized REST API admin token. |
+| /etc/algorand/config.json | Override default configurations by providing your own file. |
+| /etc/algorand/algod.token | Override default randomized REST API token. |
+| /etc/algorand/algod.admin.token | Override default randomized REST API admin token. |
+| /etc/algorand/logging.config | Use a custom [logging.config](https://developer.algorand.org/docs/run-a-node/reference/telemetry-config/#configuration) file for configuring telemetry. |
 
-TODO: `/etc/template.json` for overriding the private network topology.
+TODO: `/etc/algorand/template.json` for overriding the private network topology.
 
-# Example Configuration
+## Example Configuration
 
 The following command launches a container configured with one of the public networks:
-```
+
+```bash
 docker run --rm -it \
     -p 4190:8080 \
     -e NETWORK=mainnet \
@@ -63,21 +65,51 @@ docker run --rm -it \
 ```
 
 Explanation of parts:
+
 * `-p 4190:8080` maps the internal algod REST API to local port 4190
 * `-e NETWORK=` can be set to any of the supported public networks.
 * `-e FAST_CATCHUP=` causes fast catchup to start shortly after launching the network.
-* `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis.
+* `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis. The value of this variable takes precedence over the `name` attribute set in `/etc/algorand/logging.config`.
 * `-e TOKEN=` sets the REST API token to use.
-* `-v ${PWD}/data:/algod/data/` mounts a local volume to the data directory, which can be used to restart and upgrad the deployment.
+* `-v ${PWD}/data:/algod/data/` mounts a local volume to the data directory, which can be used to restart and upgrade the deployment.
 
-
-# Mounting the Data Directory
+## Mounting the Data Directory
 
 The data directory located at `/algod/data`. Mounting a volume at that location will allow you to shutdown and resume the node.
 
-## Private Network
+### Volume Permissions
+
+The container executes in the context of the `algorand` user with it's own UID and GID which is handled differently depending on your operating system. Here are a few options for how to work with this environment:
+
+#### Named Volume
+
+Using a named volume will work without any specific configuration in most cases:
+
+```bash
+docker volume create algod-data
+docker run -it --rm -d -v algod-data:/algod/data algorand/algod
+```
+
+#### Local Directory without SELinux
+
+Explicitly set the UID and GID of the container:
+
+```bash
+docker run -it --rm -d -v /srv/data:/algod/data -u $UID:$GID algorand/algod
+```
+
+#### Local Directory with SELinux
+
+Set the UID and GID of the container while add the `Z` option to the volume definition:
+
+```bash
+docker run -it --rm -d -v /srv/data:/algod/data:Z -u $UID:$GID algorand/algod
+```
+
+> See the documentation on [configuring the selinux label](https://docs.docker.com/storage/bind-mounts/#configure-the-selinux-label).
+
+### Private Network
 
 Private networks work a little bit differently. They are configured with, potentially, several data directories. The default topology supplied with this container is installed to `/algod/`, and has a single node named `data`. This means the private network has a data directory at `/algod/data`, matching the production configuration.
 
 Because the root directory contains some metadata, if persistence of the private network is required, you should mount the volume `/algod/` instead of `/algod/data`. This will ensure the extra metadata is included when changing images.
-

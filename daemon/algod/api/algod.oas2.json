@@ -1088,7 +1088,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Gets the node status after waiting for the given round.",
+        "summary": "Gets the node status after waiting for a round after the given round.",
         "operationId": "WaitForBlock",
         "parameters": [
           {
@@ -1157,7 +1157,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Broadcasts a raw transaction to the network.",
+        "summary": "Broadcasts a raw transaction or transaction group to the network.",
         "operationId": "RawTransaction",
         "parameters": [
           {
@@ -1177,6 +1177,69 @@
           },
           "400": {
             "description": "Bad Request - Malformed Algorand transaction ",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/transactions/simulate": {
+      "post": {
+        "tags": [
+          "public",
+          "experimental"
+        ],
+        "consumes": [
+          "application/x-binary"
+        ],
+        "produces": [
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. WARNING: This endpoint is experimental and under active development. There are no guarantees in terms of functionality or future support.",
+        "operationId": "SimulateTransaction",
+        "parameters": [
+          {
+            "description": "The byte encoded transaction to simulate",
+            "name": "rawtxn",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/SimulationResponse"
+          },
+          "400": {
+            "description": "Bad Request - Malformed Algorand transaction",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -4054,6 +4117,38 @@
           "catchpoint-acquired-blocks": {
             "description": "The number of blocks that have already been obtained by the node as part of the catchup",
             "type": "integer"
+          },
+          "upgrade-delay": {
+            "description": "Upgrade delay",
+            "type": "integer"
+          },
+          "upgrade-node-vote": {
+            "description": "This node's upgrade vote",
+            "type": "boolean"
+          },
+          "upgrade-votes-required": {
+            "description": "Yes votes required for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-votes": {
+            "description": "Total votes cast for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-yes-votes": {
+            "description": "Yes votes cast for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-no-votes": {
+            "description": "No votes cast for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-next-protocol-vote-before": {
+            "description": "Next protocol round",
+            "type": "integer"
+          },
+          "upgrade-vote-rounds": {
+            "description": "Total voting ounds for current upgrade",
+            "type": "integer"
           }
         }
       }
@@ -4124,6 +4219,29 @@
           "txId": {
             "description": "encoding of the transaction hash.",
             "type": "string"
+          }
+        }
+      }
+    },
+    "SimulationResponse": {
+      "description": "Result of a transaction group simulation.",
+      "tags": [
+        "experimental"
+      ],
+      "schema": {
+        "type": "object",
+        "required": [
+          "failure-message",
+          "missing-signatures"
+        ],
+        "properties": {
+          "failure-message": {
+            "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+            "type": "string"
+          },
+          "missing-signatures": {
+            "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+            "type": "boolean"
           }
         }
       }

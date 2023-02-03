@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -526,7 +526,7 @@ func CreateTinyManSignedTxGroup(tb testing.TB, txns []Txn) ([]transactions.Signe
 	ops, err := logic.AssembleString(TmLsig)
 	require.NoError(tb, err)
 
-	stxns := SignedTxns(&txns[0], &txns[1], &txns[2], &txns[3])
+	stxns := Group(&txns[0], &txns[1], &txns[2], &txns[3])
 	stxns[1].Lsig.Logic = ops.Program
 	stxns[3].Lsig.Logic = ops.Program
 

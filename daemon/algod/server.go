@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -109,17 +109,48 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	// Set large enough soft file descriptors limit.
 	var ot basics.OverflowTracker
-	fdRequired := ot.Add(
-		cfg.ReservedFDs,
-		ot.Add(uint64(cfg.IncomingConnectionsLimit), cfg.RestConnectionsHardLimit))
+	fdRequired := ot.Add(cfg.ReservedFDs, cfg.RestConnectionsHardLimit)
 	if ot.Overflowed {
 		return errors.New(
-			"Initialize() overflowed when adding up ReservedFDs, IncomingConnectionsLimit " +
-				"RestConnectionsHardLimit; decrease them")
+			"Initialize() overflowed when adding up ReservedFDs and RestConnectionsHardLimit; decrease them")
 	}
 	err = util.SetFdSoftLimit(fdRequired)
 	if err != nil {
 		return fmt.Errorf("Initialize() err: %w", err)
+	}
+	if cfg.IsGossipServer() {
+		var ot basics.OverflowTracker
+		fdRequired := ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit))
+		if ot.Overflowed {
+			return errors.New("Initialize() overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease RestConnectionsHardLimit or IncomingConnectionsLimit")
+		}
+		_, hard, err := util.GetFdLimits()
+		if err != nil {
+			s.log.Errorf("Failed to get RLIMIT_NOFILE values: %s", err.Error())
+		} else {
+			maxFDs := fdRequired
+			if fdRequired > hard {
+				// claim as many descriptors are possible
+				maxFDs = hard
+				// but try to keep cfg.ReservedFDs untouched by decreasing other limits
+				if cfg.AdjustConnectionLimits(fdRequired, hard) {
+					s.log.Warnf(
+						"Updated connection limits: RestConnectionsSoftLimit=%d, RestConnectionsHardLimit=%d, IncomingConnectionsLimit=%d",
+						cfg.RestConnectionsSoftLimit,
+						cfg.RestConnectionsHardLimit,
+						cfg.IncomingConnectionsLimit,
+					)
+					if cfg.IncomingConnectionsLimit == 0 {
+						return errors.New("Initialize() failed to adjust connection limits")
+					}
+				}
+			}
+			err = util.SetFdSoftLimit(maxFDs)
+			if err != nil {
+				// do not fail but log the error
+				s.log.Errorf("Failed to set a new RLIMIT_NOFILE value to %d (max %d): %s", fdRequired, hard, err.Error())
+			}
+		}
 	}
 
 	// configure the deadlock detector library

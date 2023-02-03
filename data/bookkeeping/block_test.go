@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -206,7 +206,7 @@ func TestMakeBlockUpgrades(t *testing.T) {
 	require.Equal(t, bd2.NextProtocolSwitchOn-bd2.NextProtocolVoteBefore, basics.Round(5))
 }
 
-func TestBlockUnsupported(t *testing.T) {
+func TestBlockUnsupported(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies config.Consensus
 	partitiontest.PartitionTest(t)
 
 	var b Block

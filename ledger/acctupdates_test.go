@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,11 +31,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
@@ -1290,7 +1290,7 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 
 		boxChange := ledgercore.KvValueDelta{Data: []byte(boxName)}
 		auNewBlock(t, currentRound, au, accts, opts, map[string]ledgercore.KvValueDelta{
-			logic.MakeBoxKey(appID, boxName): boxChange,
+			apps.MakeBoxKey(uint64(appID), boxName): boxChange,
 		})
 		auCommitSync(t, currentRound, au, ml)
 
@@ -1305,10 +1305,10 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 
 		// check input, see all present keys are all still there
 		for _, storedBoxName := range testingBoxNames[:i+1] {
-			res, err := au.LookupKeysByPrefix(currentRound, logic.MakeBoxKey(boxNameToAppID[storedBoxName], ""), 10000)
+			res, err := au.LookupKeysByPrefix(currentRound, apps.MakeBoxKey(uint64(boxNameToAppID[storedBoxName]), ""), 10000)
 			require.NoError(t, err)
 			require.Len(t, res, 1)
-			require.Equal(t, logic.MakeBoxKey(boxNameToAppID[storedBoxName], storedBoxName), res[0])
+			require.Equal(t, apps.MakeBoxKey(uint64(boxNameToAppID[storedBoxName]), storedBoxName), res[0])
 		}
 	}
 
@@ -1319,12 +1319,12 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		// remove inserted box
 		appID := boxNameToAppID[boxName]
 		auNewBlock(t, currentRound, au, accts, opts, map[string]ledgercore.KvValueDelta{
-			logic.MakeBoxKey(appID, boxName): {},
+			apps.MakeBoxKey(uint64(appID), boxName): {},
 		})
 		auCommitSync(t, currentRound, au, ml)
 
 		// ensure recently removed key is not present, and it is not part of the result
-		res, err := au.LookupKeysByPrefix(currentRound, logic.MakeBoxKey(boxNameToAppID[boxName], ""), 10000)
+		res, err := au.LookupKeysByPrefix(currentRound, apps.MakeBoxKey(uint64(boxNameToAppID[boxName]), ""), 10000)
 		require.NoError(t, err)
 		require.Len(t, res, 0)
 	}

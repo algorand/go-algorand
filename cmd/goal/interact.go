@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-algorand/crypto"
 	apiclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/data/basics"
@@ -513,7 +514,7 @@ var appExecuteCmd = &cobra.Command{
 
 		var inputs appCallInputs
 		for _, arg := range proc.Args {
-			var callArg logic.AppCallBytes
+			var callArg apps.AppCallBytes
 			callArg.Encoding = arg.Kind
 
 			if !procFlags.Changed(arg.Name) && arg.Default != "" {
