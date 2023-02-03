@@ -1288,7 +1288,11 @@ func TestFieldsFromLine(t *testing.T) {
 
 	check := func(line string, tokens ...string) {
 		t.Helper()
-		assert.Equal(t, tokensFromLine(line), tokens)
+		_tokens := make([]string, len(tokens))
+		for idx, t := range tokensFromLine(line) {
+			_tokens[idx] = t.str
+		}
+		assert.Equal(t, _tokens, tokens)
 	}
 
 	check("op arg", "op", "arg")
@@ -1339,11 +1343,32 @@ func TestSplitTokens(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	check := func(tokens []string, left []string, right []string) {
+	check := func(tokenStrs []string, left []string, right []string) {
 		t.Helper()
+		tokens := make([]token, len(tokenStrs))
+		for idx, t := range tokenStrs {
+			tokens[idx] = token{str: t}
+		}
 		current, next := splitTokens(tokens)
-		assert.Equal(t, left, current)
-		assert.Equal(t, right, next)
+
+		var _current []string
+		if left != nil {
+			_current = make([]string, len(current))
+			for idx, c := range current {
+				_current[idx] = c.str
+			}
+		}
+
+		var _next []string
+		if right != nil {
+			_next = make([]string, len(next))
+			for idx, n := range next {
+				_next[idx] = n.str
+			}
+		}
+
+		assert.Equal(t, left, _current)
+		assert.Equal(t, right, _next)
 	}
 
 	check([]string{"hey,", "how's", ";", ";", "it", "going", ";"},
@@ -2796,9 +2821,9 @@ func TestGetSpec(t *testing.T) {
 	ops.versionedPseudoOps["dummyPseudo"] = make(map[int]OpSpec)
 	ops.versionedPseudoOps["dummyPseudo"][1] = OpSpec{Name: "b:", Version: AssemblerMaxVersion, Proto: proto("b:")}
 	ops.versionedPseudoOps["dummyPseudo"][2] = OpSpec{Name: ":", Version: AssemblerMaxVersion}
-	_, _, ok := getSpec(ops, "dummyPseudo", []string{})
+	_, _, ok := getSpec(ops, "dummyPseudo", []token{})
 	require.False(t, ok)
-	_, _, ok = getSpec(ops, "nonsense", []string{})
+	_, _, ok = getSpec(ops, "nonsense", []token{})
 	require.False(t, ok)
 	require.Equal(t, 2, len(ops.Errors))
 	require.Equal(t, "unknown opcode: nonsense", ops.Errors[1].Err.Error())
