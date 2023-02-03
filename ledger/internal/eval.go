@@ -29,7 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/ledger/apply"
+	"github.com/algorand/go-algorand/ledger/internal/appliers"
 	"github.com/algorand/go-algorand/ledger/internal/prefetcher"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -47,6 +47,23 @@ type LedgerForCowBase interface {
 	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
 	LookupKv(basics.Round, string) ([]byte, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+}
+
+// TODO: the next step would be to pass this into StartEvaluator.
+func defaultAppliers() (a []appliers.TransactionApplier) {
+	a = append(a, appliers.ApplyFee)
+	a = append(a, appliers.ApplyRekey)
+	a = append(a, appliers.ApplyPayment)
+	a = append(a, appliers.ApplyKeyRegistration)
+	a = append(a, appliers.ApplyAssetConfig)
+	a = append(a, appliers.ApplyAssetTransfer)
+	a = append(a, appliers.ApplyAssetFreeze)
+	a = append(a, appliers.ApplyApplicationCall)
+	a = append(a, appliers.ApplyStateProof)
+	a = append(a, appliers.ApplyAppThings)
+	a = append(a, appliers.ApplyDisableRewards)
+	a = append(a, appliers.ApplyInnerTxnThing)
+	return
 }
 
 // ErrRoundZero is self-explanatory
@@ -596,6 +613,8 @@ type BlockEvaluator struct {
 	maxTxnBytesPerBlock int
 
 	Tracer logic.EvalTracer
+
+	appliers []appliers.TransactionApplier
 }
 
 // LedgerForEvaluator defines the ledger interface needed by the evaluator.
@@ -673,6 +692,8 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		genesisHash:         l.GenesisHash(),
 		l:                   l,
 		maxTxnBytesPerBlock: evalOpts.MaxTxnBytesPerBlock,
+		// TODO: The next step would be passing this in so that external programs can modify the evaluator behavior.
+		appliers: defaultAppliers(),
 	}
 
 	// Preallocate space for the payset so that we don't have to
@@ -1150,71 +1171,37 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 
 // applyTransaction changes the balances according to this transaction.
 func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *roundCowState, evalParams *logic.EvalParams, gi int, ctr uint64) (ad transactions.ApplyData, err error) {
-	params := cow.ConsensusParams()
-
-	// move fee to pool
-	err = cow.Move(tx.Sender, eval.specials.FeeSink, tx.Fee, &ad.SenderRewards, nil)
-	if err != nil {
-		return
+	applierParams := appliers.ApplierParams{
+		Tx:           &tx,
+		Params:       &eval.proto,
+		StateChanger: cow,
+		Specials:     &eval.specials,
+		Ad:           &ad,
+		Ctr:          ctr,
+		Round:        cow.Round(),
+		Gi:           gi,
+		EvalParams:   evalParams,
+		Validate:     eval.validate,
+		Generate:     eval.generate,
 	}
 
-	err = apply.Rekey(cow, &tx)
-	if err != nil {
-		return
-	}
-
-	switch tx.Type {
-	case protocol.PaymentTx:
-		err = apply.Payment(tx.PaymentTxnFields, tx.Header, cow, eval.specials, &ad)
-
-	case protocol.KeyRegistrationTx:
-		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, cow, eval.specials, &ad, cow.Round())
-
-	case protocol.AssetConfigTx:
-		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, cow, eval.specials, &ad, ctr)
-
-	case protocol.AssetTransferTx:
-		err = apply.AssetTransfer(tx.AssetTransferTxnFields, tx.Header, cow, eval.specials, &ad)
-
-	case protocol.AssetFreezeTx:
-		err = apply.AssetFreeze(tx.AssetFreezeTxnFields, tx.Header, cow, eval.specials, &ad)
-
-	case protocol.ApplicationCallTx:
-		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, cow, &ad, gi, evalParams, ctr)
-
-	case protocol.StateProofTx:
-		// in case of a StateProofTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's StateProofNextRound depending on
-		// whether we're in validate/generate mode or not, however - given that this variable is only being used in these modes, it would be safe.
-		// The reason for making this into an exception is that during initialization time, the accounts update is "converting" the recent 320 blocks into deltas to
-		// be stored in memory. These deltas don't care about the state proofs, and so we can improve the node load time. Additionally, it save us from
-		// performing the validation during catchup, which is another performance boost.
-		if eval.validate || eval.generate {
-			err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, eval.validate)
+	txHandled := false
+	for i := range eval.appliers {
+		handled := false
+		handled, err = eval.appliers[i](&applierParams)
+		if err != nil {
+			return
 		}
+		if txHandled && handled {
+			err = fmt.Errorf("multiple appliers attempted to handle this tx type: %s", tx.Type)
+			return
+		}
+		txHandled = txHandled || handled
+	}
 
-	default:
+	// (at most) One of the appliers should have handled the transaction
+	if !txHandled {
 		err = fmt.Errorf("unknown transaction type %v", tx.Type)
-	}
-
-	// Record first, so that details can all be used in logic evaluation, even
-	// if cleared below. For example, `gaid`, introduced in v28 is now
-	// implemented in terms of the AD fields introduced in v30.
-	evalParams.RecordAD(gi, ad)
-
-	// If the protocol does not support rewards in ApplyData,
-	// clear them out.
-	if !params.RewardsInApplyData {
-		ad.SenderRewards = basics.MicroAlgos{}
-		ad.ReceiverRewards = basics.MicroAlgos{}
-		ad.CloseRewards = basics.MicroAlgos{}
-	}
-
-	// No separate config for activating these AD fields because inner
-	// transactions require their presence, so the consensus update to add
-	// inners also stores these IDs.
-	if params.MaxInnerTransactions == 0 {
-		ad.ApplicationID = 0
-		ad.ConfigAsset = 0
 	}
 
 	return
