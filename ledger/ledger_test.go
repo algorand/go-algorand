@@ -1741,7 +1741,7 @@ func TestLedgerKeepsOldBlocksForStateProof(t *testing.T) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
-	log := logging.TestingLogWithFilter(t, []logging.Filter{{Msg: "database table is locked"}})
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
@@ -3003,7 +3003,7 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
-	log := logging.TestingLogWithFilter(t, []logging.Filter{{Msg: "database table is locked"}})
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)

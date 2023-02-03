@@ -49,7 +49,7 @@ func newSimpleLedgerFull(t testing.TB, balances bookkeeping.GenesisBalances, cv 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	log := logging.TestingLogWithFilter(t, []logging.Filter{{Msg: "database table is locked"}})
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	log.SetLevel(logging.Warn)
 	l, err := OpenLedger(log, dbName, true, ledgercore.InitState{
 		Block:       genBlock,

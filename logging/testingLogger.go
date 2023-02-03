@@ -33,6 +33,8 @@ type logWriter interface {
 	Log(args ...interface{})
 }
 
+var DBLockedFilter = []Filter{{Msg: "database table is locked"}}
+
 func (tb TestLogWriter) Write(p []byte) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil

@@ -1254,7 +1254,7 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 		delete(config.Consensus, testProtocolVersion)
 	}()
 
-	log := logging.TestingLogWithFilter(t, []logging.Filter{{Msg: "database table is locked"}})
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	log.SetLevel(logging.Warn)
 	ml := makeMockLedgerForTrackerWithLogger(t, true, 1, testProtocolVersion, genesisAccts, log)
 	defer ml.Close()

@@ -312,7 +312,7 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
 }
 
 func newTestFilteredLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
-	log := logging.TestingLogWithFilter(t, []logging.Filter{{Msg: "database table is locked"}})
+	log := logging.TestingLogWithFilter(t, logging.DBLockedFilter)
 	log.SetLevel(logging.Warn)
 	return newTestLedgerWithLogger(t, balances, log)
 }
