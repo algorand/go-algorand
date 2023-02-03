@@ -1494,16 +1494,15 @@ func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 // make a mockIdentityScheme which can accept overloaded behavior
 // use this over the next few tests to check that when one peer misbehaves, peering continues/halts as expected
 type mockIdentityScheme struct {
+	t                       *testing.T
 	realScheme              *identityChallengePublicKeyScheme
 	attachChallenge         func(attach http.Header, addr string) identityChallengeValue
 	verifyAndAttachResponse func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error)
-	verifyResponse          func(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error)
+	verifyResponse          func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error)
 }
 
-func newMockIdentityScheme() *mockIdentityScheme {
-	return &mockIdentityScheme{
-		realScheme: NewIdentityChallengeScheme("any"),
-	}
+func newMockIdentityScheme(t *testing.T) *mockIdentityScheme {
+	return &mockIdentityScheme{t: t, realScheme: NewIdentityChallengeScheme("any")}
 }
 func (i mockIdentityScheme) AttachChallenge(attach http.Header, addr string) identityChallengeValue {
 	if i.attachChallenge != nil {
@@ -1519,7 +1518,7 @@ func (i mockIdentityScheme) VerifyAndAttachResponse(attach http.Header, h http.H
 }
 func (i mockIdentityScheme) VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
 	if i.verifyResponse != nil {
-		return i.verifyResponse(h, c)
+		return i.verifyResponse(i.t, h, c)
 	}
 	return i.realScheme.VerifyResponse(h, c)
 }
@@ -1619,7 +1618,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 		netA.config.PublicAddress = "auto"
 		netA.config.GossipFanout = 1
 
-		scheme := newMockIdentityScheme()
+		scheme := newMockIdentityScheme(t)
 		scheme.attachChallenge = tc.attachChallenge
 		netA.identityScheme = scheme
 
@@ -1755,7 +1754,7 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 		netB.config.PublicAddress = "auto"
 		netB.config.GossipFanout = 1
 
-		scheme := newMockIdentityScheme()
+		scheme := newMockIdentityScheme(t)
 		scheme.verifyAndAttachResponse = tc.verifyAndAttachResponse
 		netB.identityScheme = scheme
 
@@ -1790,7 +1789,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 
 	type testCase struct {
 		name            string
-		verifyResponse  func(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error)
+		verifyResponse  func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error)
 		totalInA        int
 		totalOutA       int
 		totalInB        int
@@ -1811,7 +1810,17 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 		// if the peer does not send a final message, the peers stay connected
 		{
 			name: "not included",
-			verifyResponse: func(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
+			verifyResponse: func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
+				return crypto.PublicKey{}, []byte{}, nil
+			},
+			totalInA:  0,
+			totalOutA: 1,
+			totalInB:  1,
+			totalOutB: 0,
+		},
+		{
+			name: "not included",
+			verifyResponse: func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
 				return crypto.PublicKey{}, []byte{}, nil
 			},
 			totalInA:  0,
@@ -1822,7 +1831,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 		// when the identityVerification can't be unmarshalled, peer is disconnected
 		{
 			name: "not msgp decodable",
-			verifyResponse: func(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
+			verifyResponse: func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
 				message := append([]byte(protocol.NetIDVerificationTag), []byte("Bad!Data!")[:]...)
 				return crypto.PublicKey{}, message, nil
 			},
@@ -1834,10 +1843,36 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 		{
 			// when the verification signature doesn't match the peer's expectation (the previously exchanged identity), peer is disconnected
 			name: "bad signature",
-			verifyResponse: func(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
-				s := NewIdentityChallengeScheme("does not matter") // make a
+			verifyResponse: func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
+				headerString := h.Get(IdentityChallengeHeader)
+				require.NotEmpty(t, headerString)
+				msg, err := base64.StdEncoding.DecodeString(headerString)
+				require.NoError(t, err)
+				resp := identityChallengeResponseSigned{}
+				err = protocol.Decode(msg, &resp)
+				require.NoError(t, err)
+				s := NewIdentityChallengeScheme("does not matter") // make a throwaway key
 				ver := identityVerificationMessageSigned{
-					Msg:       identityVerificationMessage{ResponseChallenge: c},
+					// fill in correct ResponseChallenge field
+					Msg:       identityVerificationMessage{ResponseChallenge: resp.Msg.ResponseChallenge},
+					Signature: s.identityKeys.SignBytes([]byte("bad bytes for signing")),
+				}
+				message := append([]byte(protocol.NetIDVerificationTag), protocol.Encode(&ver)[:]...)
+				return crypto.PublicKey{}, message, nil
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
+		{
+			// when the verification signature doesn't match the peer's expectation (the previously exchanged identity), peer is disconnected
+			name: "bad signature",
+			verifyResponse: func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
+				s := NewIdentityChallengeScheme("does not matter") // make a throwaway key
+				ver := identityVerificationMessageSigned{
+					// fill in wrong ResponseChallenge field
+					Msg:       identityVerificationMessage{ResponseChallenge: newIdentityChallengeValue()},
 					Signature: s.identityKeys.SignBytes([]byte("bad bytes for signing")),
 				}
 				message := append([]byte(protocol.NetIDVerificationTag), protocol.Encode(&ver)[:]...)
@@ -1867,7 +1902,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 		netA.config.PublicAddress = "auto"
 		netA.config.GossipFanout = 1
 
-		scheme := newMockIdentityScheme()
+		scheme := newMockIdentityScheme(t)
 		scheme.verifyResponse = tc.verifyResponse
 		netA.identityScheme = scheme
 

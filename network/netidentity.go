@@ -206,7 +206,7 @@ func (i identityChallengePublicKeyScheme) VerifyResponse(h http.Header, c identi
 	return resp.Msg.Key, i.identityVerificationMessage(resp.Msg.ResponseChallenge), nil
 }
 
-// IdentityVerificationMessage generates the 3rd message of the challenge exchange,
+// identityVerificationMessage generates the 3rd message of the challenge exchange,
 // which a wsNetwork can then send to a peer in order to verify their own identity.
 // It is prefixed with the ID Verification tag and returned ready-to-send
 func (i *identityChallengePublicKeyScheme) identityVerificationMessage(c identityChallengeValue) []byte {
