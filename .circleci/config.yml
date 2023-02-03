@@ -70,30 +70,12 @@ workflows:
                 - /pull/[0-9]+/
                 - << pipeline.parameters.valid_nightly_branch >>
 
-      - test:
-          name: << matrix.platform >>_test
-          matrix: &matrix-default
-            parameters:
-              platform: ["amd64", "arm64"]
-          filters: &filters-default
-            branches:
-              ignore:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
-
       - test_nightly:
           name: << matrix.platform >>_test_nightly
           matrix:
             <<: *matrix-nightly
           requires:
             - << matrix.platform >>_build_nightly
-
-      - integration:
-          name: << matrix.platform >>_integration
-          matrix:
-            <<: *matrix-default
-          filters:
-            <<: *filters-default
 
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
@@ -102,13 +84,6 @@ workflows:
           requires:
             - << matrix.platform >>_build_nightly
 
-      - e2e_expect:
-          name: << matrix.platform >>_e2e_expect
-          matrix:
-            <<: *matrix-default
-          filters:
-            <<: *filters-default
-
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
           matrix:
@@ -116,28 +91,12 @@ workflows:
           requires:
             - << matrix.platform >>_build_nightly
 
-      - e2e_subs:
-          name: << matrix.platform >>_e2e_subs
-          matrix:
-            <<: *matrix-default
-          filters:
-            <<: *filters-default
-
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
           matrix:
             <<: *matrix-nightly
           requires:
             - << matrix.platform >>_build_nightly
-
-      - tests_verification_job:
-          name: << matrix.platform >>_<< matrix.job_type >>_verification
-          matrix:
-            parameters:
-              platform: ["amd64", "arm64"]
-              job_type: ["test", "integration", "e2e_expect"]
-          requires:
-            - << matrix.platform >>_<< matrix.job_type >>
 
       - tests_verification_job_nightly:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
@@ -173,21 +132,6 @@ jobs:
             - gimme
             - .gimme
 
-  test:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 32
-    steps:
-      - generic_build
-      - generic_test:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_test
-          short_test_flag: "-short"
-      - upload_coverage
-
   test_nightly:
     parameters:
       platform:
@@ -202,22 +146,6 @@ jobs:
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
       - upload_coverage
-
-  integration:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_large
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 16
-    environment:
-      E2E_TEST_FILTER: "GO"
-    steps:
-      - generic_build
-      - generic_integration:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_integration
-          short_test_flag: "-short"
 
   integration_nightly:
     parameters:
@@ -235,22 +163,6 @@ jobs:
           result_subdir: << parameters.platform >>_integration_nightly
           no_output_timeout: 45m
 
-  e2e_expect:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 10
-    environment:
-      E2E_TEST_FILTER: "EXPECT"
-    steps:
-      - generic_build
-      - generic_integration:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_e2e_expect
-          short_test_flag: "-short"
-
   e2e_expect_nightly:
     parameters:
       platform:
@@ -266,21 +178,6 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform>>_e2e_expect_nightly
           no_output_timeout: 45m
-
-  e2e_subs:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_large
-    working_directory: << pipeline.parameters.build_dir >>/project
-    environment:
-      E2E_TEST_FILTER: "SCRIPTS"
-    steps:
-      - generic_build
-      - generic_integration:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_e2e_subs
-          short_test_flag: "-short"
 
   e2e_subs_nightly:
     parameters:
@@ -319,21 +216,6 @@ jobs:
             export MAKE=mingw32-make
             $msys2 scripts/travis/build_test.sh
           shell: bash.exe
-
-  tests_verification_job:
-    docker:
-      - image: python:3.9.6-alpine
-    resource_class: small
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parameters:
-      platform:
-        type: string
-      job_type:
-        type: string
-    steps:
-      - checkout
-      - tests_verification_command:
-          result_subdir: << parameters.platform >>_<< parameters.job_type >>
 
   tests_verification_job_nightly:
     docker:
