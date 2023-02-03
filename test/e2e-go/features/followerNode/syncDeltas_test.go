@@ -68,6 +68,8 @@ func TestBasicSyncMode(t *testing.T) {
 		rResp, err := followClient.GetSyncRound()
 		a.NoError(err)
 		a.Equal(round, rResp.Round)
+		err = fixture.ClientWaitForRoundWithTimeout(followClient, round)
+		a.NoError(err)
 		// retrieve state delta
 		gResp, err := followClient.GetLedgerStateDelta(round)
 		a.NoError(err)
