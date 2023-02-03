@@ -1,6 +1,6 @@
 {
   "EvalMaxVersion": 3,
-  "LogicSigVersion": 8,
+  "LogicSigVersion": 3,
   "StackTypes": {
     "[]byte": {
       "Type": "B",
@@ -682,9 +682,9 @@
   },
   "PseudoOps": [
     {
-      "Name": "addr",
+      "Name": "byte",
       "Returns": [
-        "addr"
+        "[]byte"
       ],
       "Size": 2,
       "Cost": ""
@@ -706,9 +706,9 @@
       "Cost": ""
     },
     {
-      "Name": "byte",
+      "Name": "addr",
       "Returns": [
-        "[]byte"
+        "addr"
       ],
       "Size": 2,
       "Cost": ""

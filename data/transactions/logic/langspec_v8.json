@@ -1419,9 +1419,9 @@
   },
   "PseudoOps": [
     {
-      "Name": "addr",
+      "Name": "byte",
       "Returns": [
-        "addr"
+        "[]byte"
       ],
       "Size": 2,
       "Cost": ""
@@ -1443,9 +1443,9 @@
       "Cost": ""
     },
     {
-      "Name": "byte",
+      "Name": "addr",
       "Returns": [
-        "[]byte"
+        "addr"
       ],
       "Size": 2,
       "Cost": ""

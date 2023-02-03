@@ -23,12 +23,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/protocol"
 )
 
-var latestVersion = 8
+var latestVersion = logic.LogicVersion
 
 func opGroupMarkdownTable(names []string, out io.Writer) {
 	fmt.Fprint(out, `| Opcode | Description |
@@ -510,7 +508,7 @@ func buildLanguageSpec(version uint64, opGroups map[string][]string) *LanguageSp
 
 	return &LanguageSpec{
 		EvalMaxVersion:  int(version),
-		LogicSigVersion: config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion,
+		LogicSigVersion: version,
 		StackTypes:      allStackTypes,
 		Fields:          keywords,
 		PseudoOps:       pseudoOps,

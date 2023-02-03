@@ -1,6 +1,6 @@
 {
-  "EvalMaxVersion": 7,
-  "LogicSigVersion": 7,
+  "EvalMaxVersion": 9,
+  "LogicSigVersion": 9,
   "StackTypes": {
     "[]byte": {
       "Type": "B",
@@ -104,6 +104,69 @@
         "Note": "Address the account is rekeyed to.",
         "IntroducedVersion": 6,
         "Value": 2
+      },
+      {
+        "Name": "AcctTotalNumUint",
+        "Type": "uint64",
+        "Note": "The total number of uint64 values allocated by this account in Global and Local States.",
+        "IntroducedVersion": 8,
+        "Value": 3
+      },
+      {
+        "Name": "AcctTotalNumByteSlice",
+        "Type": "uint64",
+        "Note": "The total number of byte array values allocated by this account in Global and Local States.",
+        "IntroducedVersion": 8,
+        "Value": 4
+      },
+      {
+        "Name": "AcctTotalExtraAppPages",
+        "Type": "uint64",
+        "Note": "The number of extra app code pages used by this account.",
+        "IntroducedVersion": 8,
+        "Value": 5
+      },
+      {
+        "Name": "AcctTotalAppsCreated",
+        "Type": "uint64",
+        "Note": "The number of existing apps created by this account.",
+        "IntroducedVersion": 8,
+        "Value": 6
+      },
+      {
+        "Name": "AcctTotalAppsOptedIn",
+        "Type": "uint64",
+        "Note": "The number of apps this account is opted into.",
+        "IntroducedVersion": 8,
+        "Value": 7
+      },
+      {
+        "Name": "AcctTotalAssetsCreated",
+        "Type": "uint64",
+        "Note": "The number of existing ASAs created by this account.",
+        "IntroducedVersion": 8,
+        "Value": 8
+      },
+      {
+        "Name": "AcctTotalAssets",
+        "Type": "uint64",
+        "Note": "The numbers of ASAs held by this account (including ASAs this account created).",
+        "IntroducedVersion": 8,
+        "Value": 9
+      },
+      {
+        "Name": "AcctTotalBoxes",
+        "Type": "uint64",
+        "Note": "The number of existing boxes created by this account's app.",
+        "IntroducedVersion": 8,
+        "Value": 10
+      },
+      {
+        "Name": "AcctTotalBoxBytes",
+        "Type": "uint64",
+        "Note": "The total number of bytes used by this account's app's box keys and values.",
+        "IntroducedVersion": 8,
+        "Value": 11
       }
     ],
     "app_params": [
@@ -2479,6 +2542,45 @@
       "Cost": "1"
     },
     {
+      "Opcode": 69,
+      "Name": "bury",
+      "Args": [
+        "any"
+      ],
+      "Size": 2,
+      "Doc": "replace the Nth value from the top of the stack with A. bury 0 fails.",
+      "ImmediateNote": "{uint8 depth}",
+      "Groups": [
+        "Flow Control"
+      ],
+      "Cost": "1"
+    },
+    {
+      "Opcode": 70,
+      "Name": "popn",
+      "Size": 2,
+      "Doc": "remove N values from the top of the stack",
+      "ImmediateNote": "{uint8 stack depth}",
+      "Groups": [
+        "Flow Control"
+      ],
+      "Cost": "1"
+    },
+    {
+      "Opcode": 71,
+      "Name": "dupn",
+      "Args": [
+        "any"
+      ],
+      "Size": 2,
+      "Doc": "duplicate A, N times",
+      "ImmediateNote": "{uint8 copy count}",
+      "Groups": [
+        "Flow Control"
+      ],
+      "Cost": "1"
+    },
+    {
       "Opcode": 72,
       "Name": "pop",
       "Args": [
@@ -3198,6 +3300,30 @@
       "Cost": "1"
     },
     {
+      "Opcode": 130,
+      "Name": "pushbytess",
+      "Size": 0,
+      "Doc": "push sequences of immediate byte arrays to stack (first byte array being deepest)",
+      "DocExtra": "pushbytess args are not added to the bytecblock during assembly processes",
+      "ImmediateNote": "{varuint count} [({varuint length} bytes), ...]",
+      "Groups": [
+        "Loading Values"
+      ],
+      "Cost": "1"
+    },
+    {
+      "Opcode": 131,
+      "Name": "pushints",
+      "Size": 0,
+      "Doc": "push sequence of immediate uints to stack in the order they appear (first uint being deepest)",
+      "DocExtra": "pushints args are not added to the intcblock during assembly processes",
+      "ImmediateNote": "{varuint count} [{varuint value}, ...]",
+      "Groups": [
+        "Loading Values"
+      ],
+      "Cost": "1"
+    },
+    {
       "Opcode": 132,
       "Name": "ed25519verify_bare",
       "Args": [
@@ -3233,6 +3359,72 @@
       "Size": 1,
       "Doc": "pop the top instruction from the call stack and branch to it",
       "DocExtra": "If the current frame was prepared by `proto A R`, `retsub` will remove the 'A' arguments from the stack, move the `R` return values down, and pop any stack locations above the relocated return values.",
+      "Groups": [
+        "Flow Control"
+      ],
+      "Cost": "1"
+    },
+    {
+      "Opcode": 138,
+      "Name": "proto",
+      "Size": 3,
+      "Doc": "Prepare top call frame for a retsub that will assume A args and R return values.",
+      "DocExtra": "Fails unless the last instruction executed was a `callsub`.",
+      "ImmediateNote": "{uint8 arguments} {uint8 return values}",
+      "Groups": [
+        "Flow Control"
+      ],
+      "Cost": "1"
+    },
+    {
+      "Opcode": 139,
+      "Name": "frame_dig",
+      "Returns": [
+        "any"
+      ],
+      "Size": 2,
+      "Doc": "Nth (signed) value from the frame pointer.",
+      "ImmediateNote": "{int8 frame slot}",
+      "Groups": [
+        "Flow Control"
+      ],
+      "Cost": "1"
+    },
+    {
+      "Opcode": 140,
+      "Name": "frame_bury",
+      "Args": [
+        "any"
+      ],
+      "Size": 2,
+      "Doc": "replace the Nth (signed) value from the frame pointer in the stack with A",
+      "ImmediateNote": "{int8 frame slot}",
+      "Groups": [
+        "Flow Control"
+      ],
+      "Cost": "1"
+    },
+    {
+      "Opcode": 141,
+      "Name": "switch",
+      "Args": [
+        "uint64"
+      ],
+      "Size": 0,
+      "Doc": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",
+      "ImmediateNote": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
+      "Groups": [
+        "Flow Control"
+      ],
+      "Cost": "1"
+    },
+    {
+      "Opcode": 142,
+      "Name": "match",
+      "Size": 0,
+      "Doc": "given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.",
+      "DocExtra": "`match` consumes N+1 values from the stack. Let the top stack value be B. The following N values represent an ordered list of match cases/constants (A), where the first value (A[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (T). `match` will branch to target T[I], where A[I] = B. If there are no matches then execution continues on to the next instruction.",
+      "ImmediateNote": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
       "Groups": [
         "Flow Control"
       ],
@@ -3390,6 +3582,60 @@
         "Arithmetic"
       ],
       "Cost": "130"
+    },
+    {
+      "Opcode": 153,
+      "Name": "bn256_add",
+      "Args": [
+        "[]byte",
+        "[]byte"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
+      "Size": 1,
+      "Doc": "for (curve points A and B) return the curve point A + B",
+      "DocExtra": "A, B are curve points in G1 group. Each point consists of (X, Y) where X and Y are 256 bit integers, big-endian encoded. The encoded point is 64 bytes from concatenation of 32 byte X and 32 byte Y.",
+      "Groups": [
+        "Arithmetic"
+      ],
+      "Cost": "70"
+    },
+    {
+      "Opcode": 154,
+      "Name": "bn256_scalar_mul",
+      "Args": [
+        "[]byte",
+        "[]byte"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
+      "Size": 1,
+      "Doc": "for (curve point A, scalar K) return the curve point KA",
+      "DocExtra": "A is a curve point in G1 Group and encoded as described in `bn256_add`. Scalar K is a big-endian encoded big integer that has no padding zeros.",
+      "Groups": [
+        "Arithmetic"
+      ],
+      "Cost": "970"
+    },
+    {
+      "Opcode": 155,
+      "Name": "bn256_pairing",
+      "Args": [
+        "[]byte",
+        "[]byte"
+      ],
+      "Returns": [
+        "uint64"
+      ],
+      "Size": 1,
+      "Doc": "for (points in G1 group G1s, points in G2 group G2s), return whether they are paired =\u003e {0 or 1}",
+      "DocExtra": "G1s are encoded by the concatenation of encoded G1 points, as described in `bn256_add`. G2s are encoded by the concatenation of encoded G2 points. Each G2 is in form (XA0+i*XA1, YA0+i*YA1) and encoded by big-endian field element XA0, XA1, YA0 and YA1 in sequence.",
+      "Groups": [
+        "Arithmetic"
+      ],
+      "Cost": "8700"
     },
     {
       "Opcode": 160,
@@ -3781,6 +4027,123 @@
       "ImmediateNote": "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
       "Groups": [
         "Inner Transactions"
+      ],
+      "Cost": "1"
+    },
+    {
+      "Opcode": 185,
+      "Name": "box_create",
+      "Args": [
+        "[]byte",
+        "uint64"
+      ],
+      "Returns": [
+        "bool"
+      ],
+      "Size": 1,
+      "Doc": "create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1",
+      "DocExtra": "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.",
+      "Groups": [
+        "Box Access"
+      ],
+      "Cost": "1"
+    },
+    {
+      "Opcode": 186,
+      "Name": "box_extract",
+      "Args": [
+        "[]byte",
+        "uint64",
+        "uint64"
+      ],
+      "Returns": [
+        "[]byte"
+      ],
+      "Size": 1,
+      "Doc": "read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
+      "Groups": [
+        "Box Access"
+      ],
+      "Cost": "1"
+    },
+    {
+      "Opcode": 187,
+      "Name": "box_replace",
+      "Args": [
+        "[]byte",
+        "uint64",
+        "[]byte"
+      ],
+      "Size": 1,
+      "Doc": "write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
+      "Groups": [
+        "Box Access"
+      ],
+      "Cost": "1"
+    },
+    {
+      "Opcode": 188,
+      "Name": "box_del",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "bool"
+      ],
+      "Size": 1,
+      "Doc": "delete box named A if it exists. Return 1 if A existed, 0 otherwise",
+      "Groups": [
+        "Box Access"
+      ],
+      "Cost": "1"
+    },
+    {
+      "Opcode": 189,
+      "Name": "box_len",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "uint64",
+        "bool"
+      ],
+      "Size": 1,
+      "Doc": "X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.",
+      "Groups": [
+        "Box Access"
+      ],
+      "Cost": "1"
+    },
+    {
+      "Opcode": 190,
+      "Name": "box_get",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "[]byte",
+        "bool"
+      ],
+      "Size": 1,
+      "Doc": "X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.",
+      "DocExtra": "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
+      "Groups": [
+        "Box Access"
+      ],
+      "Cost": "1"
+    },
+    {
+      "Opcode": 191,
+      "Name": "box_put",
+      "Args": [
+        "[]byte",
+        "[]byte"
+      ],
+      "Size": 1,
+      "Doc": "replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist",
+      "DocExtra": "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
+      "Groups": [
+        "Box Access"
       ],
       "Cost": "1"
     },
