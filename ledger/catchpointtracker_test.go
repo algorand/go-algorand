@@ -531,8 +531,9 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			delta := roundDeltas[i]
 
 			ml2.trackers.newBlock(blk, delta)
+			err := ml2.addMockBlock(blockEntry{block: blk}, delta)
+			require.NoError(t, err)
 			ml2.trackers.committedUpTo(i)
-			ml2.addMockBlock(blockEntry{block: blk}, delta)
 
 			// if this is a catchpoint round, check the label.
 			if (uint64(i) >= cfg.MaxAcctLookback) && (uint64(i)-cfg.MaxAcctLookback > protoParams.CatchpointLookback) && ((uint64(i)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0) {
