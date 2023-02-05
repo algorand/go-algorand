@@ -487,8 +487,8 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		delta.Totals = newTotals
 
 		ml.trackers.newBlock(blk, delta)
-		ml.trackers.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
+		ml.trackers.committedUpTo(i)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 		roundDeltas[i] = delta
