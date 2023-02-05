@@ -10,7 +10,7 @@ export SHELLOPTS
 # make sure the time is updating
 for i in {1..20}; do
   output=$(goal node status)
-  if [[ $output == *"Time since last block: 0.0s"* ]]; then
+  if [[ $output != *"Time since last block: 0.0s"* ]]; then
     exit 0
   fi
   sleep 0.5
