@@ -26,7 +26,10 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
-var latestVersion = logic.LogicVersion - 1
+var (
+	nextVersion   = logic.LogicVersion
+	latestVersion = nextVersion - 1
+)
 
 func opGroupMarkdownTable(names []string, out io.Writer) {
 	fmt.Fprint(out, `| Opcode | Description |
@@ -508,6 +511,16 @@ func create(file string) *os.File {
 	return f
 }
 
+func writeJSONFile(name string, data interface{}) {
+	w := create(name)
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(data); err != nil {
+		panic(err)
+	}
+	w.Close()
+}
+
 func main() {
 	opcodesMd := create("TEAL_opcodes.md")
 	opsToMarkdown(opcodesMd)
@@ -540,23 +553,12 @@ func main() {
 		}
 	}
 
-	for i := latestVersion; i <= latestVersion; i++ {
-		langspecjs := create(fmt.Sprintf("langspec_v%d.json", i))
-		enc := json.NewEncoder(langspecjs)
-		enc.SetIndent("", "  ")
-		err := enc.Encode(buildLanguageSpec(uint64(i), opGroups))
-		if err != nil {
-			panic(err)
-		}
-		langspecjs.Close()
-	}
+	writeJSONFile("langspec.json", buildLanguageSpec(uint64(latestVersion), opGroups))
+	writeJSONFile("teal.tmLanguage.json", buildSyntaxHighlight(uint64(latestVersion)))
 
-	tealtm := create("teal.tmLanguage.json")
-	enc := json.NewEncoder(tealtm)
-	enc.SetIndent("", "  ")
-	err := enc.Encode(buildSyntaxHighlight(uint64(latestVersion)))
-	if err != nil {
-		panic(err)
-	}
-	tealtm.Close()
+	//for i := 1; i <= nextVersion; i++ {
+	//	writeJSONFile(fmt.Sprintf("langspec_v%d.json", i), buildLanguageSpec(uint64(i), opGroups))
+	//	//writeJSONFile(fmt.Sprintf("teal.v%d.tmLanguage.json", i), buildSyntaxHighlight(uint64(i)))
+	//}
+
 }
