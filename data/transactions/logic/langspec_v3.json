@@ -744,7 +744,7 @@
         "bool"
       ],
       "Size": 1,
-      "Doc": "for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey =\u003e {0 or 1}",
+      "Doc": "for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey => {0 or 1}",
       "DocExtra": "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.",
       "Groups": [
         "Arithmetic"
@@ -780,7 +780,7 @@
         "uint64"
       ],
       "Size": 1,
-      "Doc": "A minus B. Fail if B \u003e A.",
+      "Doc": "A minus B. Fail if B > A.",
       "Groups": [
         "Arithmetic"
       ],
@@ -824,7 +824,7 @@
     },
     {
       "Opcode": 12,
-      "Name": "\u003c",
+      "Name": "<",
       "Args": [
         "uint64",
         "uint64"
@@ -833,7 +833,7 @@
         "bool"
       ],
       "Size": 1,
-      "Doc": "A less than B =\u003e {0 or 1}",
+      "Doc": "A less than B => {0 or 1}",
       "Groups": [
         "Arithmetic"
       ],
@@ -841,7 +841,7 @@
     },
     {
       "Opcode": 13,
-      "Name": "\u003e",
+      "Name": ">",
       "Args": [
         "uint64",
         "uint64"
@@ -850,7 +850,7 @@
         "bool"
       ],
       "Size": 1,
-      "Doc": "A greater than B =\u003e {0 or 1}",
+      "Doc": "A greater than B => {0 or 1}",
       "Groups": [
         "Arithmetic"
       ],
@@ -858,7 +858,7 @@
     },
     {
       "Opcode": 14,
-      "Name": "\u003c=",
+      "Name": "<=",
       "Args": [
         "uint64",
         "uint64"
@@ -867,7 +867,7 @@
         "bool"
       ],
       "Size": 1,
-      "Doc": "A less than or equal to B =\u003e {0 or 1}",
+      "Doc": "A less than or equal to B => {0 or 1}",
       "Groups": [
         "Arithmetic"
       ],
@@ -875,7 +875,7 @@
     },
     {
       "Opcode": 15,
-      "Name": "\u003e=",
+      "Name": ">=",
       "Args": [
         "uint64",
         "uint64"
@@ -884,7 +884,7 @@
         "bool"
       ],
       "Size": 1,
-      "Doc": "A greater than or equal to B =\u003e {0 or 1}",
+      "Doc": "A greater than or equal to B => {0 or 1}",
       "Groups": [
         "Arithmetic"
       ],
@@ -892,7 +892,7 @@
     },
     {
       "Opcode": 16,
-      "Name": "\u0026\u0026",
+      "Name": "&&",
       "Args": [
         "uint64",
         "uint64"
@@ -901,7 +901,7 @@
         "bool"
       ],
       "Size": 1,
-      "Doc": "A is not zero and B is not zero =\u003e {0 or 1}",
+      "Doc": "A is not zero and B is not zero => {0 or 1}",
       "Groups": [
         "Arithmetic"
       ],
@@ -918,7 +918,7 @@
         "bool"
       ],
       "Size": 1,
-      "Doc": "A is not zero or B is not zero =\u003e {0 or 1}",
+      "Doc": "A is not zero or B is not zero => {0 or 1}",
       "Groups": [
         "Arithmetic"
       ],
@@ -935,7 +935,7 @@
         "bool"
       ],
       "Size": 1,
-      "Doc": "A is equal to B =\u003e {0 or 1}",
+      "Doc": "A is equal to B => {0 or 1}",
       "Groups": [
         "Arithmetic"
       ],
@@ -952,7 +952,7 @@
         "bool"
       ],
       "Size": 1,
-      "Doc": "A is not equal to B =\u003e {0 or 1}",
+      "Doc": "A is not equal to B => {0 or 1}",
       "Groups": [
         "Arithmetic"
       ],
@@ -1016,7 +1016,7 @@
         "uint64"
       ],
       "Size": 1,
-      "Doc": "converts big-endian byte array A to uint64. Fails if len(A) \u003e 8. Padded by leading 0s if len(A) \u003c 8.",
+      "Doc": "converts big-endian byte array A to uint64. Fails if len(A) > 8. Padded by leading 0s if len(A) < 8.",
       "DocExtra": "`btoi` fails if the input is longer than 8 bytes.",
       "Groups": [
         "Arithmetic"
@@ -1059,7 +1059,7 @@
     },
     {
       "Opcode": 26,
-      "Name": "\u0026",
+      "Name": "&",
       "Args": [
         "uint64",
         "uint64"
@@ -1709,7 +1709,7 @@
         "[]byte"
       ],
       "Size": 3,
-      "Doc": "A range of bytes from A starting at S up to but not including E. If E \u003c S, or either is larger than the array length, the program fails",
+      "Doc": "A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails",
       "ImmediateNote": "{uint8 start position} {uint8 end position}",
       "Groups": [
         "Byte Array Manipulation"
@@ -1728,7 +1728,7 @@
         "[]byte"
       ],
       "Size": 1,
-      "Doc": "A range of bytes from A starting at B up to but not including C. If C \u003c B, or either is larger than the array length, the program fails",
+      "Doc": "A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails",
       "Groups": [
         "Byte Array Manipulation"
       ],

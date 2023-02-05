@@ -76,7 +76,7 @@
         },
         {
           "name": "keyword.operator.teal",
-          "match": "^(\\!|\\!\\=|%|\u0026|\u0026\u0026|\\*|\\+|\\-|/|\\\u003c|\\\u003c\\=|\\=\\=|\\\u003e|\\\u003e\\=|\\^|addw|bitlen|bn256_add|bn256_pairing|bn256_scalar_mul|btoi|concat|divmodw|divw|ecdsa_pk_decompress|ecdsa_pk_recover|ecdsa_verify|ed25519verify|ed25519verify_bare|exp|expw|getbit|getbyte|itob|keccak256|len|mulw|setbit|setbyte|sha256|sha3_256|sha512_256|shl|shr|sqrt|vrf_verify|\\||\\|\\||\\~|b\\!\\=|b%|b\\*|b\\+|b\\-|b/|b\\\u003c|b\\\u003c\\=|b\\=\\=|b\\\u003e|b\\\u003e\\=|bsqrt|b\u0026|b\\^|b\\||b\\~|base64_decode|extract|extract3|extract_uint16|extract_uint32|extract_uint64|json_ref|replace2|replace3|substring|substring3|gitxn|gitxna|gitxnas|itxn|itxn_begin|itxn_field|itxn_next|itxn_submit|itxna|itxnas)\\b"
+          "match": "^(\\!|\\!\\=|%|&|&&|\\*|\\+|\\-|/|\\<|\\<\\=|\\=\\=|\\>|\\>\\=|\\^|addw|bitlen|bn256_add|bn256_pairing|bn256_scalar_mul|btoi|concat|divmodw|divw|ecdsa_pk_decompress|ecdsa_pk_recover|ecdsa_verify|ed25519verify|ed25519verify_bare|exp|expw|getbit|getbyte|itob|keccak256|len|mulw|setbit|setbyte|sha256|sha3_256|sha512_256|shl|shr|sqrt|vrf_verify|\\||\\|\\||\\~|b\\!\\=|b%|b\\*|b\\+|b\\-|b/|b\\<|b\\<\\=|b\\=\\=|b\\>|b\\>\\=|bsqrt|b&|b\\^|b\\||b\\~|base64_decode|extract|extract3|extract_uint16|extract_uint32|extract_uint64|json_ref|replace2|replace3|substring|substring3|gitxn|gitxna|gitxnas|itxn|itxn_begin|itxn_field|itxn_next|itxn_submit|itxna|itxnas)\\b"
         }
       ]
     },
@@ -87,7 +87,7 @@
           "match": "^\\w+:.*$"
         },
         {
-          "match": "\\b(?\u003c=b|bz|bnz)\\s+(\\w+)\\b",
+          "match": "\\b(?<=b|bz|bnz)\\s+(\\w+)\\b",
           "captures": {
             "1": {
               "name": "support.variable.teal"
@@ -104,11 +104,11 @@
         },
         {
           "name": "constant.numeric.teal",
-          "match": "\\b(?\u003c=int\\s+)(0x[0-9]+)\\b"
+          "match": "\\b(?<=int\\s+)(0x[0-9]+)\\b"
         },
         {
           "name": "string.quoted.double.teal",
-          "match": "\\b(?\u003c=byte\\s+)(0x[0-9]+)\\b"
+          "match": "\\b(?<=byte\\s+)(0x[0-9]+)\\b"
         },
         {
           "name": "variable.parameter.teal",

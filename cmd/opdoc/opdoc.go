@@ -515,6 +515,7 @@ func writeJSONFile(name string, data interface{}) {
 	w := create(name)
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
+	enc.SetEscapeHTML(false)
 	if err := enc.Encode(data); err != nil {
 		panic(err)
 	}
@@ -556,9 +557,9 @@ func main() {
 	writeJSONFile("langspec.json", buildLanguageSpec(uint64(latestVersion), opGroups))
 	writeJSONFile("teal.tmLanguage.json", buildSyntaxHighlight(uint64(latestVersion)))
 
-	//for i := 1; i <= nextVersion; i++ {
-	//	writeJSONFile(fmt.Sprintf("langspec_v%d.json", i), buildLanguageSpec(uint64(i), opGroups))
-	//	//writeJSONFile(fmt.Sprintf("teal.v%d.tmLanguage.json", i), buildSyntaxHighlight(uint64(i)))
-	//}
-
+	// Uncomment to generate _all_ specs
+	// for i := 1; i <= nextVersion; i++ {
+	// 	writeJSONFile(fmt.Sprintf("langspec_v%d.json", i), buildLanguageSpec(uint64(i), opGroups))
+	// 	//writeJSONFile(fmt.Sprintf("teal.v%d.tmLanguage.json", i), buildSyntaxHighlight(uint64(i)))
+	// }
 }
