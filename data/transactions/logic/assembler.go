@@ -1502,6 +1502,11 @@ func typePushInts(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, 
 	return nil, types, nil
 }
 
+func typeBzero(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
+	// Bzero should only allow its input int to be up to maxStringSize bytes
+	return StackTypes{StackUint64.narrowed(0, maxStringSize)}, StackTypes{StackBytes}, nil
+}
+
 func typeByte(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
 	if len(args) == 0 {
 		return nil, StackTypes{StackBytes}, nil

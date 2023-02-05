@@ -48,6 +48,13 @@
         32
       ]
     },
+    "key": {
+      "Type": "key",
+      "LengthBound": [
+        0,
+        64
+      ]
+    },
     "method": {
       "Type": "method",
       "LengthBound": [
@@ -1543,7 +1550,7 @@
         "uint64"
       ],
       "Returns": [
-        "uint64"
+        "bool"
       ],
       "Size": 1,
       "Doc": "A less than B =\u003e {0 or 1}",
@@ -1560,7 +1567,7 @@
         "uint64"
       ],
       "Returns": [
-        "uint64"
+        "bool"
       ],
       "Size": 1,
       "Doc": "A greater than B =\u003e {0 or 1}",
@@ -1577,7 +1584,7 @@
         "uint64"
       ],
       "Returns": [
-        "uint64"
+        "bool"
       ],
       "Size": 1,
       "Doc": "A less than or equal to B =\u003e {0 or 1}",
@@ -1594,7 +1601,7 @@
         "uint64"
       ],
       "Returns": [
-        "uint64"
+        "bool"
       ],
       "Size": 1,
       "Doc": "A greater than or equal to B =\u003e {0 or 1}",
@@ -1611,7 +1618,7 @@
         "uint64"
       ],
       "Returns": [
-        "uint64"
+        "bool"
       ],
       "Size": 1,
       "Doc": "A is not zero and B is not zero =\u003e {0 or 1}",
@@ -1628,7 +1635,7 @@
         "uint64"
       ],
       "Returns": [
-        "uint64"
+        "bool"
       ],
       "Size": 1,
       "Doc": "A is not zero or B is not zero =\u003e {0 or 1}",
@@ -1645,7 +1652,7 @@
         "any"
       ],
       "Returns": [
-        "uint64"
+        "bool"
       ],
       "Size": 1,
       "Doc": "A is equal to B =\u003e {0 or 1}",
@@ -1662,7 +1669,7 @@
         "any"
       ],
       "Returns": [
-        "uint64"
+        "bool"
       ],
       "Size": 1,
       "Doc": "A is not equal to B =\u003e {0 or 1}",
@@ -1678,7 +1685,7 @@
         "uint64"
       ],
       "Returns": [
-        "uint64"
+        "bool"
       ],
       "Size": 1,
       "Doc": "A == 0 yields 1; else 0",
@@ -2911,7 +2918,7 @@
       "Name": "app_local_get",
       "Args": [
         "any",
-        "[]byte"
+        "key"
       ],
       "Returns": [
         "any"
@@ -2930,7 +2937,7 @@
       "Args": [
         "any",
         "uint64",
-        "[]byte"
+        "key"
       ],
       "Returns": [
         "any",
@@ -2948,7 +2955,7 @@
       "Opcode": 100,
       "Name": "app_global_get",
       "Args": [
-        "[]byte"
+        "key"
       ],
       "Returns": [
         "any"
@@ -2966,7 +2973,7 @@
       "Name": "app_global_get_ex",
       "Args": [
         "uint64",
-        "[]byte"
+        "key"
       ],
       "Returns": [
         "any",
@@ -2985,7 +2992,7 @@
       "Name": "app_local_put",
       "Args": [
         "any",
-        "[]byte",
+        "key",
         "any"
       ],
       "Size": 1,
@@ -3000,7 +3007,7 @@
       "Opcode": 103,
       "Name": "app_global_put",
       "Args": [
-        "[]byte",
+        "key",
         "any"
       ],
       "Size": 1,
@@ -3015,7 +3022,7 @@
       "Name": "app_local_del",
       "Args": [
         "any",
-        "[]byte"
+        "key"
       ],
       "Size": 1,
       "Doc": "delete key B from account A's local state of the current application",
@@ -3029,7 +3036,7 @@
       "Opcode": 105,
       "Name": "app_global_del",
       "Args": [
-        "[]byte"
+        "key"
       ],
       "Size": 1,
       "Doc": "delete key A from the global state of the current application",
@@ -3048,7 +3055,7 @@
       ],
       "Returns": [
         "any",
-        "uint64"
+        "bool"
       ],
       "Size": 2,
       "ArgEnum": "asset_holding",
@@ -3068,7 +3075,7 @@
       ],
       "Returns": [
         "any",
-        "uint64"
+        "bool"
       ],
       "Size": 2,
       "ArgEnum": "asset_params",
@@ -3088,7 +3095,7 @@
       ],
       "Returns": [
         "any",
-        "uint64"
+        "bool"
       ],
       "Size": 2,
       "ArgEnum": "app_params",
@@ -3108,7 +3115,7 @@
       ],
       "Returns": [
         "any",
-        "uint64"
+        "bool"
       ],
       "Size": 2,
       "ArgEnum": "acct_params",
@@ -3847,7 +3854,7 @@
       "Opcode": 185,
       "Name": "box_create",
       "Args": [
-        "[]byte",
+        "key",
         "uint64"
       ],
       "Returns": [
@@ -3865,7 +3872,7 @@
       "Opcode": 186,
       "Name": "box_extract",
       "Args": [
-        "[]byte",
+        "key",
         "uint64",
         "uint64"
       ],
@@ -3883,7 +3890,7 @@
       "Opcode": 187,
       "Name": "box_replace",
       "Args": [
-        "[]byte",
+        "key",
         "uint64",
         "[]byte"
       ],
@@ -3898,7 +3905,7 @@
       "Opcode": 188,
       "Name": "box_del",
       "Args": [
-        "[]byte"
+        "key"
       ],
       "Returns": [
         "bool"
@@ -3914,7 +3921,7 @@
       "Opcode": 189,
       "Name": "box_len",
       "Args": [
-        "[]byte"
+        "key"
       ],
       "Returns": [
         "uint64",
@@ -3931,7 +3938,7 @@
       "Opcode": 190,
       "Name": "box_get",
       "Args": [
-        "[]byte"
+        "key"
       ],
       "Returns": [
         "[]byte",
@@ -3949,7 +3956,7 @@
       "Opcode": 191,
       "Name": "box_put",
       "Args": [
-        "[]byte",
+        "key",
         "[]byte"
       ],
       "Size": 1,

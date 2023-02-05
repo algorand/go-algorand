@@ -368,6 +368,8 @@ func parseStackTypes(spec string) StackTypes {
 			types[i] = StackHash
 		case 'M':
 			types[i] = StackMethodSelector
+		case 'K':
+			types[i] = StackStorageKey
 		default:
 			panic(spec)
 		}
@@ -464,15 +466,15 @@ var OpSpecs = []OpSpec{
 	{0x09, "-", opMinus, proto("ii:i"), 1, detDefault()},
 	{0x0a, "/", opDiv, proto("ii:i"), 1, detDefault()},
 	{0x0b, "*", opMul, proto("ii:i"), 1, detDefault()},
-	{0x0c, "<", opLt, proto("ii:i"), 1, detDefault()},
-	{0x0d, ">", opGt, proto("ii:i"), 1, detDefault()},
-	{0x0e, "<=", opLe, proto("ii:i"), 1, detDefault()},
-	{0x0f, ">=", opGe, proto("ii:i"), 1, detDefault()},
-	{0x10, "&&", opAnd, proto("ii:i"), 1, detDefault()},
-	{0x11, "||", opOr, proto("ii:i"), 1, detDefault()},
-	{0x12, "==", opEq, proto("aa:i"), 1, typed(typeEquals)},
-	{0x13, "!=", opNeq, proto("aa:i"), 1, typed(typeEquals)},
-	{0x14, "!", opNot, proto("i:i"), 1, detDefault()},
+	{0x0c, "<", opLt, proto("ii:B"), 1, detDefault()},
+	{0x0d, ">", opGt, proto("ii:B"), 1, detDefault()},
+	{0x0e, "<=", opLe, proto("ii:B"), 1, detDefault()},
+	{0x0f, ">=", opGe, proto("ii:B"), 1, detDefault()},
+	{0x10, "&&", opAnd, proto("ii:B"), 1, detDefault()},
+	{0x11, "||", opOr, proto("ii:B"), 1, detDefault()},
+	{0x12, "==", opEq, proto("aa:B"), 1, typed(typeEquals)},
+	{0x13, "!=", opNeq, proto("aa:B"), 1, typed(typeEquals)},
+	{0x14, "!", opNot, proto("i:B"), 1, detDefault()},
 	{0x15, "len", opLen, proto("b:i"), 1, detDefault()},
 	{0x16, "itob", opItob, proto("i:b"), 1, detDefault()},
 	{0x17, "btoi", opBtoi, proto("b:i"), 1, detDefault()},
@@ -564,24 +566,24 @@ var OpSpecs = []OpSpec{
 	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(ModeApp)},
 	{0x61, "app_opted_in", opAppOptedIn, proto("ii:B"), 2, only(ModeApp)},
 	{0x61, "app_opted_in", opAppOptedIn, proto("ai:B"), directRefEnabledVersion, only(ModeApp)},
-	{0x62, "app_local_get", opAppLocalGet, proto("ib:a"), 2, only(ModeApp)},
-	{0x62, "app_local_get", opAppLocalGet, proto("ab:a"), directRefEnabledVersion, only(ModeApp)},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("iib:aB"), 2, only(ModeApp)},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aib:aB"), directRefEnabledVersion, only(ModeApp)},
-	{0x64, "app_global_get", opAppGlobalGet, proto("b:a"), 2, only(ModeApp)},
-	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("ib:aB"), 2, only(ModeApp)},
-	{0x66, "app_local_put", opAppLocalPut, proto("iba:"), 2, only(ModeApp)},
-	{0x66, "app_local_put", opAppLocalPut, proto("aba:"), directRefEnabledVersion, only(ModeApp)},
-	{0x67, "app_global_put", opAppGlobalPut, proto("ba:"), 2, only(ModeApp)},
-	{0x68, "app_local_del", opAppLocalDel, proto("ib:"), 2, only(ModeApp)},
-	{0x68, "app_local_del", opAppLocalDel, proto("ab:"), directRefEnabledVersion, only(ModeApp)},
-	{0x69, "app_global_del", opAppGlobalDel, proto("b:"), 2, only(ModeApp)},
+	{0x62, "app_local_get", opAppLocalGet, proto("iK:a"), 2, only(ModeApp)},
+	{0x62, "app_local_get", opAppLocalGet, proto("aK:a"), directRefEnabledVersion, only(ModeApp)},
+	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("iiK:aB"), 2, only(ModeApp)},
+	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aiK:aB"), directRefEnabledVersion, only(ModeApp)},
+	{0x64, "app_global_get", opAppGlobalGet, proto("K:a"), 2, only(ModeApp)},
+	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("iK:aB"), 2, only(ModeApp)},
+	{0x66, "app_local_put", opAppLocalPut, proto("iKa:"), 2, only(ModeApp)},
+	{0x66, "app_local_put", opAppLocalPut, proto("aKa:"), directRefEnabledVersion, only(ModeApp)},
+	{0x67, "app_global_put", opAppGlobalPut, proto("Ka:"), 2, only(ModeApp)},
+	{0x68, "app_local_del", opAppLocalDel, proto("iK:"), 2, only(ModeApp)},
+	{0x68, "app_local_del", opAppLocalDel, proto("aK:"), directRefEnabledVersion, only(ModeApp)},
+	{0x69, "app_global_del", opAppGlobalDel, proto("K:"), 2, only(ModeApp)},
 
-	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ii:ai"), 2, field("f", &AssetHoldingFields).only(ModeApp)},
-	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ai:ai"), directRefEnabledVersion, field("f", &AssetHoldingFields).only(ModeApp)},
-	{0x71, "asset_params_get", opAssetParamsGet, proto("i:ai"), 2, field("f", &AssetParamsFields).only(ModeApp)},
-	{0x72, "app_params_get", opAppParamsGet, proto("i:ai"), 5, field("f", &AppParamsFields).only(ModeApp)},
-	{0x73, "acct_params_get", opAcctParamsGet, proto("a:ai"), 6, field("f", &AcctParamsFields).only(ModeApp)},
+	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ii:aB"), 2, field("f", &AssetHoldingFields).only(ModeApp)},
+	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ai:aB"), directRefEnabledVersion, field("f", &AssetHoldingFields).only(ModeApp)},
+	{0x71, "asset_params_get", opAssetParamsGet, proto("i:aB"), 2, field("f", &AssetParamsFields).only(ModeApp)},
+	{0x72, "app_params_get", opAppParamsGet, proto("i:aB"), 5, field("f", &AppParamsFields).only(ModeApp)},
+	{0x73, "acct_params_get", opAcctParamsGet, proto("a:aB"), 6, field("f", &AcctParamsFields).only(ModeApp)},
 
 	{0x78, "min_balance", opMinBalance, proto("i:i"), 3, only(ModeApp)},
 	{0x78, "min_balance", opMinBalance, proto("a:i"), directRefEnabledVersion, only(ModeApp)},
@@ -638,7 +640,7 @@ var OpSpecs = []OpSpec{
 	{0xac, "b&", opBytesBitAnd, proto("NN:N"), 4, costly(6)},
 	{0xad, "b^", opBytesBitXor, proto("NN:N"), 4, costly(6)},
 	{0xae, "b~", opBytesBitNot, proto("N:N"), 4, costly(4)},
-	{0xaf, "bzero", opBytesZero, proto("i:b"), 4, detDefault()},
+	{0xaf, "bzero", opBytesZero, proto("i:b"), 4, detDefault().typed(typeBzero)},
 
 	// AVM "effects"
 	{0xb0, "log", opLog, proto("b:"), 5, only(ModeApp)},
@@ -652,13 +654,13 @@ var OpSpecs = []OpSpec{
 	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// Unlimited Global Storage - Boxes
-	{0xb9, "box_create", opBoxCreate, proto("bi:B"), boxVersion, only(ModeApp)},
-	{0xba, "box_extract", opBoxExtract, proto("bii:b"), boxVersion, only(ModeApp)},
-	{0xbb, "box_replace", opBoxReplace, proto("bib:"), boxVersion, only(ModeApp)},
-	{0xbc, "box_del", opBoxDel, proto("b:B"), boxVersion, only(ModeApp)},
-	{0xbd, "box_len", opBoxLen, proto("b:iB"), boxVersion, only(ModeApp)},
-	{0xbe, "box_get", opBoxGet, proto("b:bB"), boxVersion, only(ModeApp)},
-	{0xbf, "box_put", opBoxPut, proto("bb:"), boxVersion, only(ModeApp)},
+	{0xb9, "box_create", opBoxCreate, proto("Ki:B"), boxVersion, only(ModeApp)},
+	{0xba, "box_extract", opBoxExtract, proto("Kii:b"), boxVersion, only(ModeApp)},
+	{0xbb, "box_replace", opBoxReplace, proto("Kib:"), boxVersion, only(ModeApp)},
+	{0xbc, "box_del", opBoxDel, proto("K:B"), boxVersion, only(ModeApp)},
+	{0xbd, "box_len", opBoxLen, proto("K:iB"), boxVersion, only(ModeApp)},
+	{0xbe, "box_get", opBoxGet, proto("K:bB"), boxVersion, only(ModeApp)},
+	{0xbf, "box_put", opBoxPut, proto("Kb:"), boxVersion, only(ModeApp)},
 
 	// Dynamic indexing
 	{0xc0, "txnas", opTxnas, proto("i:a"), 5, field("f", &TxnArrayFields)},
@@ -785,4 +787,6 @@ func init() {
 		}
 		PseudoOps = append(PseudoOps, specs[anyImmediates])
 	}
+	// Since pseudoOps is a map, sort the PseudoOps array for consistent ordering
+	sort.Slice(PseudoOps, func(i, j int) bool { return strings.Compare(PseudoOps[i].Name, PseudoOps[j].Name) > 0 })
 }

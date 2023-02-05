@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
 	"strings"
 
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -489,7 +488,6 @@ func buildLanguageSpec(version uint64, opGroups map[string][]string) *LanguageSp
 		pseudoOps[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
 		pseudoOps[i].Groups = opGroups[spec.Name]
 	}
-	sort.Slice(pseudoOps, func(i, j int) bool { return strings.Compare(pseudoOps[i].Name, pseudoOps[j].Name) > 0 })
 
 	return &LanguageSpec{
 		EvalMaxVersion:  int(version),

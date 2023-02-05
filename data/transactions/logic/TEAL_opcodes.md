@@ -116,55 +116,55 @@ Overflow is an error condition which halts execution and fails the transaction. 
 ## <
 
 - Opcode: 0x0c
-- Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
+- Stack: ..., A: uint64, B: uint64 &rarr; ..., bool
 - A less than B => {0 or 1}
 
 ## >
 
 - Opcode: 0x0d
-- Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
+- Stack: ..., A: uint64, B: uint64 &rarr; ..., bool
 - A greater than B => {0 or 1}
 
 ## <=
 
 - Opcode: 0x0e
-- Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
+- Stack: ..., A: uint64, B: uint64 &rarr; ..., bool
 - A less than or equal to B => {0 or 1}
 
 ## >=
 
 - Opcode: 0x0f
-- Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
+- Stack: ..., A: uint64, B: uint64 &rarr; ..., bool
 - A greater than or equal to B => {0 or 1}
 
 ## &&
 
 - Opcode: 0x10
-- Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
+- Stack: ..., A: uint64, B: uint64 &rarr; ..., bool
 - A is not zero and B is not zero => {0 or 1}
 
 ## ||
 
 - Opcode: 0x11
-- Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
+- Stack: ..., A: uint64, B: uint64 &rarr; ..., bool
 - A is not zero or B is not zero => {0 or 1}
 
 ## ==
 
 - Opcode: 0x12
-- Stack: ..., A, B &rarr; ..., uint64
+- Stack: ..., A, B &rarr; ..., bool
 - A is equal to B => {0 or 1}
 
 ## !=
 
 - Opcode: 0x13
-- Stack: ..., A, B &rarr; ..., uint64
+- Stack: ..., A, B &rarr; ..., bool
 - A is not equal to B => {0 or 1}
 
 ## !
 
 - Opcode: 0x14
-- Stack: ..., A: uint64 &rarr; ..., uint64
+- Stack: ..., A: uint64 &rarr; ..., bool
 - A == 0 yields 1; else 0
 
 ## len
@@ -853,7 +853,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 ## app_local_get
 
 - Opcode: 0x62
-- Stack: ..., A, B: []byte &rarr; ..., any
+- Stack: ..., A, B: key &rarr; ..., any
 - local state of the key B in the current application in account A
 - Availability: v2
 - Mode: Application
@@ -863,7 +863,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_local_get_ex
 
 - Opcode: 0x63
-- Stack: ..., A, B: uint64, C: []byte &rarr; ..., X: any, Y: bool
+- Stack: ..., A, B: uint64, C: key &rarr; ..., X: any, Y: bool
 - X is the local state of application B, key C in account A. Y is 1 if key existed, else 0
 - Availability: v2
 - Mode: Application
@@ -873,7 +873,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 ## app_global_get
 
 - Opcode: 0x64
-- Stack: ..., A: []byte &rarr; ..., any
+- Stack: ..., A: key &rarr; ..., any
 - global state of the key A in the current application
 - Availability: v2
 - Mode: Application
@@ -883,7 +883,7 @@ params: state key. Return: value. The value is zero (of type uint64) if the key 
 ## app_global_get_ex
 
 - Opcode: 0x65
-- Stack: ..., A: uint64, B: []byte &rarr; ..., X: any, Y: bool
+- Stack: ..., A: uint64, B: key &rarr; ..., X: any, Y: bool
 - X is the global state of application A, key B. Y is 1 if key existed, else 0
 - Availability: v2
 - Mode: Application
@@ -893,7 +893,7 @@ params: Txn.ForeignApps offset (or, since v4, an _available_ application id), st
 ## app_local_put
 
 - Opcode: 0x66
-- Stack: ..., A, B: []byte, C &rarr; ...
+- Stack: ..., A, B: key, C &rarr; ...
 - write C to key B in account A's local state of the current application
 - Availability: v2
 - Mode: Application
@@ -903,7 +903,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_global_put
 
 - Opcode: 0x67
-- Stack: ..., A: []byte, B &rarr; ...
+- Stack: ..., A: key, B &rarr; ...
 - write B to key A in the global state of the current application
 - Availability: v2
 - Mode: Application
@@ -911,7 +911,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_local_del
 
 - Opcode: 0x68
-- Stack: ..., A, B: []byte &rarr; ...
+- Stack: ..., A, B: key &rarr; ...
 - delete key B from account A's local state of the current application
 - Availability: v2
 - Mode: Application
@@ -923,7 +923,7 @@ Deleting a key which is already absent has no effect on the application local st
 ## app_global_del
 
 - Opcode: 0x69
-- Stack: ..., A: []byte &rarr; ...
+- Stack: ..., A: key &rarr; ...
 - delete key A from the global state of the current application
 - Availability: v2
 - Mode: Application
@@ -935,7 +935,7 @@ Deleting a key which is already absent has no effect on the application global s
 ## asset_holding_get f
 
 - Opcode: 0x70 {uint8 asset holding field index}
-- Stack: ..., A, B: uint64 &rarr; ..., X: any, Y: uint64
+- Stack: ..., A, B: uint64 &rarr; ..., X: any, Y: bool
 - X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0
 - Availability: v2
 - Mode: Application
@@ -953,7 +953,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or
 ## asset_params_get f
 
 - Opcode: 0x71 {uint8 asset params field index}
-- Stack: ..., A: uint64 &rarr; ..., X: any, Y: uint64
+- Stack: ..., A: uint64 &rarr; ..., X: any, Y: bool
 - X is field F from asset A. Y is 1 if A exists, else 0
 - Availability: v2
 - Mode: Application
@@ -981,7 +981,7 @@ params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return:
 ## app_params_get f
 
 - Opcode: 0x72 {uint8 app params field index}
-- Stack: ..., A: uint64 &rarr; ..., X: any, Y: uint64
+- Stack: ..., A: uint64 &rarr; ..., X: any, Y: bool
 - X is field F from app A. Y is 1 if A exists, else 0
 - Availability: v5
 - Mode: Application
@@ -1006,7 +1006,7 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 ## acct_params_get f
 
 - Opcode: 0x73 {uint8 account params field index}
-- Stack: ..., A &rarr; ..., X: any, Y: uint64
+- Stack: ..., A &rarr; ..., X: any, Y: bool
 - X is field F from account A. Y is 1 if A owns positive algos, else 0
 - Availability: v6
 - Mode: Application
@@ -1417,7 +1417,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## box_create
 
 - Opcode: 0xb9
-- Stack: ..., A: []byte, B: uint64 &rarr; ..., bool
+- Stack: ..., A: key, B: uint64 &rarr; ..., bool
 - create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1
 - Availability: v8
 - Mode: Application
@@ -1427,7 +1427,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 ## box_extract
 
 - Opcode: 0xba
-- Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
+- Stack: ..., A: key, B: uint64, C: uint64 &rarr; ..., []byte
 - read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.
 - Availability: v8
 - Mode: Application
@@ -1435,7 +1435,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 ## box_replace
 
 - Opcode: 0xbb
-- Stack: ..., A: []byte, B: uint64, C: []byte &rarr; ...
+- Stack: ..., A: key, B: uint64, C: []byte &rarr; ...
 - write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.
 - Availability: v8
 - Mode: Application
@@ -1443,7 +1443,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 ## box_del
 
 - Opcode: 0xbc
-- Stack: ..., A: []byte &rarr; ..., bool
+- Stack: ..., A: key &rarr; ..., bool
 - delete box named A if it exists. Return 1 if A existed, 0 otherwise
 - Availability: v8
 - Mode: Application
@@ -1451,7 +1451,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 ## box_len
 
 - Opcode: 0xbd
-- Stack: ..., A: []byte &rarr; ..., X: uint64, Y: bool
+- Stack: ..., A: key &rarr; ..., X: uint64, Y: bool
 - X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.
 - Availability: v8
 - Mode: Application
@@ -1459,7 +1459,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 ## box_get
 
 - Opcode: 0xbe
-- Stack: ..., A: []byte &rarr; ..., X: []byte, Y: bool
+- Stack: ..., A: key &rarr; ..., X: []byte, Y: bool
 - X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.
 - Availability: v8
 - Mode: Application
@@ -1469,7 +1469,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 ## box_put
 
 - Opcode: 0xbf
-- Stack: ..., A: []byte, B: []byte &rarr; ...
+- Stack: ..., A: key, B: []byte &rarr; ...
 - replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist
 - Availability: v8
 - Mode: Application

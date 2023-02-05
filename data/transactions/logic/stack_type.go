@@ -72,9 +72,9 @@ var (
 	// Base stack types the avm knows about
 
 	// StackUint64 is any valid uint64
-	StackUint64 = NewStackType(avmUint64, bounded(0, math.MaxUint64))
+	StackUint64 = NewStackType(avmUint64, bound(0, math.MaxUint64))
 	// StackBytes is any valid bytestring
-	StackBytes = NewStackType(avmBytes, bounded(0, maxStringSize))
+	StackBytes = NewStackType(avmBytes, bound(0, maxStringSize))
 	// StackAny could be Bytes or Uint64
 	StackAny = StackType{
 		Name:        avmAny.String(),
@@ -92,15 +92,17 @@ var (
 	// Higher level types
 
 	// StackBoolean constrains the int to 1 or 0, representing True or False
-	StackBoolean = NewStackType(avmUint64, bounded(0, 1), "bool")
+	StackBoolean = NewStackType(avmUint64, bound(0, 1), "bool")
 	// StackHash represents output from a hash function or a field that returns a hash
 	StackHash = NewStackType(avmBytes, static(32), "hash")
 	// StackAddress represents a public key or address for an account
 	StackAddress = NewStackType(avmBytes, static(32), "addr")
 	// StackBigInt represents a bytestring that should be treated like an int
-	StackBigInt = NewStackType(avmBytes, bounded(0, maxByteMathSize), "bigint")
+	StackBigInt = NewStackType(avmBytes, bound(0, maxByteMathSize), "bigint")
 	// StackMethodSelector represents a bytestring that should be treated like a method selector
 	StackMethodSelector = NewStackType(avmBytes, static(4), "method")
+	// StackStorageKey represents a bytestring that can be used as a key to some storage (global/local/box)
+	StackStorageKey = NewStackType(avmBytes, bound(0, 64), "key")
 
 	// AllStackTypes is a list of all the stack types we recognize
 	// so that we can iterate over them in doc prep
@@ -114,6 +116,7 @@ var (
 		StackAddress,
 		StackBigInt,
 		StackMethodSelector,
+		StackStorageKey,
 	}
 )
 
@@ -140,6 +143,10 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 		st.ValueBound = bounds
 	}
 	return st
+}
+
+func (st StackType) narrowed(min, max uint64) StackType {
+	return NewStackType(st.AVMType, [2]uint64{min, max})
 }
 
 // AssignableTo returns a bool indicating whether the receiver can be
@@ -212,10 +219,10 @@ func (st StackType) Typed() bool {
 	return false
 }
 
-func bounded(min, max uint64) [2]uint64 {
+func bound(min, max uint64) [2]uint64 {
 	return [2]uint64{min, max}
 }
 
 func static(size uint64) [2]uint64 {
-	return bounded(size, size)
+	return bound(size, size)
 }
