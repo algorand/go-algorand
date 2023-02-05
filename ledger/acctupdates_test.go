@@ -682,7 +682,9 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		wg.Add(1)
 		go func(round basics.Round) {
 			defer wg.Done()
+			err = ml.addMockBlock(blockEntry{block: blk}, delta)
 			ml.trackers.committedUpTo(round)
+			require.NoError(t, err)
 		}(i)
 	}
 	ml.trackers.waitAccountsWriting()
