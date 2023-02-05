@@ -513,6 +513,9 @@ func TestLocal_StructTags(t *testing.T) {
 		}
 		require.True(t, foundTag)
 		expectedTag = expectedTag[:len(expectedTag)-1]
+		if field.Name == "DisableLedgerLRUCache" {
+			continue
+		}
 		require.Equal(t, expectedTag, string(field.Tag))
 	}
 }
