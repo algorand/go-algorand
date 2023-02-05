@@ -3235,3 +3235,75 @@ return
 	assert.Equal(t, expectedFilteredLines, filtered)
 
 }
+
+func TestStackSnaps(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ops, err := assembleWithTrace(`#pragma version 8
+int 1
+int 1
+byte 0xdead 
+pop
+pop
+return
+`, 8)
+
+	if err != nil {
+		t.Logf("Errors: %+v", ops.Errors)
+		t.Fail()
+	}
+
+	bytConst := StackBytes.narrowed(2, 2)
+	bytConst.Name = "[2]byte"
+
+	expected := []StackTypes{
+		{StackUint64},
+		{StackUint64, StackUint64},
+		{StackUint64, StackUint64, bytConst},
+		{StackUint64, StackUint64},
+		{StackUint64},
+		{StackNone},
+	}
+
+	assert.Equal(t, expected, ops.stacks)
+
+	//	ops, err = assembleWithTrace(`
+	//#pragma version 8
+	//int 1 			// uint
+	//int 1           // uint,uint
+	//callsub lbl     // uint, uint, uint
+	//
+	//lbl:
+	//proto 0 1
+	//			// []
+	//	int 2  // uint
+	//	int 3  // uint, uint
+	//	+ 	   // uint
+	//	retsub //
+	//
+	//pop 		 // uint,uint
+	//pop			 // uint
+	//return 		 //
+	//`, 8)
+	//
+	//	if err != nil {
+	//		t.Logf("Errors: %+v", ops.Errors)
+	//		t.Fail()
+	//	}
+	//
+	//	t.Logf("%+v", ops.stacks)
+	//
+	//	expected = []StackTypes{
+	//		{StackUint64},
+	//		{StackUint64, StackUint64},
+	//		{StackUint64, StackUint64},
+	//		{StackUint64},
+	//		{StackUint64, StackUint64},
+	//		{StackUint64},
+	//		{StackUint64},
+	//	}
+	//
+	//	assert.Equal(t, expected, ops.stacks)
+
+}

@@ -239,6 +239,7 @@ type OpStream struct {
 
 	// tracks information we know to be true at the point being assembled
 	known        ProgramKnowledge
+	stacks       []StackTypes
 	typeTracking bool
 
 	// current sourceLine during assembly
@@ -1877,6 +1878,11 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 		}
 		ops.trace(")")
 	}
+
+	// Snapshot the stack after every call to trackStack
+	snap := make([]StackType, len(ops.known.stack))
+	copy(snap, ops.known.stack[:])
+	ops.stacks = append(ops.stacks, snap)
 }
 
 // splitTokens breaks tokens into two slices at the first semicolon.
