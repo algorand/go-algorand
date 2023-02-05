@@ -127,8 +127,9 @@ func (spw *Worker) getProto(round basics.Round) (*config.ConsensusParams, error)
 	return &proto, nil
 }
 
-func (spw *Worker) getStateProofMessage(round basics.Round) (msg stateproofmsg.Message, err error) {
-	err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+func (spw *Worker) getStateProofMessage(round basics.Round) (stateproofmsg.Message, error) {
+	var msg stateproofmsg.Message
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		msg, err = getMessage(tx, round)
 		return err
 	})

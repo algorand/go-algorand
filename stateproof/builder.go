@@ -27,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -97,7 +96,12 @@ func (spw *Worker) loadOrCreateBuilderWithSignatures(rnd basics.Round) (builder,
 }
 
 func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
-	buildr, err := spw.loadBuilderFromDB(rnd)
+	var buildr builder
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		buildr, err = getBuilder(tx, rnd)
+		return err
+	})
+
 	if err == nil {
 		return buildr, nil
 	}
@@ -122,36 +126,6 @@ func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
 	}
 
 	return buildr, nil
-}
-
-// loadBuilderFromDB loads a builder from disk.
-func (spw *Worker) loadBuilderFromDB(rnd basics.Round) (builder, error) {
-	var buildr builder
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		var err2 error
-		buildr, err2 = getBuilder(tx, rnd)
-		return err2
-	})
-	if err != nil {
-		return builder{}, err
-	}
-
-	return buildr, nil
-}
-
-// loadMessageFromDB loads a StateProof Message from disk.
-func (spw *Worker) loadMessageFromDB(rnd basics.Round) (stateproofmsg.Message, error) {
-	var msg stateproofmsg.Message
-	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		var err2 error
-		msg, err2 = getMessage(tx, rnd)
-		return err2
-	})
-	if err != nil {
-		return stateproofmsg.Message{}, err
-	}
-
-	return msg, nil
 }
 
 func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
