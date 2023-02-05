@@ -221,6 +221,7 @@ type OpStream struct {
 	Warnings []error     // informational warnings, shouldn't stop assembly
 	Errors   []lineError // errors that should prevent final assembly
 	Program  []byte      // Final program bytes. Will stay nil if any errors
+	Lines    []lineTokens
 
 	// Running bytes as they are assembled. jumps must be resolved
 	// and cblocks added before these bytes become a legal program.
@@ -1700,7 +1701,19 @@ func (le lineError) Unwrap() error {
 // newline not included since handled in scanner
 var tokenSeparators = [256]bool{'\t': true, ' ': true, ';': true}
 
+type tokenKind uint8
+
+const (
+	tokenUnknown tokenKind = iota
+	tokenSeparator
+	tokenComment
+	tokenString
+	tokenImm
+	tokenOp
+)
+
 type token struct {
+	kind tokenKind
 	str  string
 	col  int
 	line int
@@ -1726,7 +1739,7 @@ func tokensFromLine(line string, lineno int) []token {
 	i := 0
 	for i < len(line) && tokenSeparators[line[i]] {
 		if line[i] == ';' {
-			tokens = append(tokens, token{str: ";", col: i, line: lineno})
+			tokens = append(tokens, token{str: ";", col: i, line: lineno, kind: tokenSeparator})
 		}
 		i++
 	}
@@ -1750,7 +1763,7 @@ func tokensFromLine(line string, lineno int) []token {
 			case '/': // is a comment?
 				if i < len(line)-1 && line[i+1] == '/' && !inBase64 && !inString {
 					if start != i { // if a comment without whitespace
-						tokens = append(tokens, token{str: line[start:i], col: start, line: lineno})
+						tokens = append(tokens, token{str: line[start:i], col: start, line: lineno, kind: tokenComment})
 					}
 					return tokens
 				}
@@ -1775,7 +1788,7 @@ func tokensFromLine(line string, lineno int) []token {
 			_token := line[start:i]
 			tokens = append(tokens, token{str: _token, col: start, line: lineno})
 			if line[i] == ';' {
-				tokens = append(tokens, token{str: ";", col: i, line: lineno})
+				tokens = append(tokens, token{str: ";", col: i, line: lineno, kind: tokenSeparator})
 			}
 			if inBase64 {
 				inBase64 = false
@@ -1839,7 +1852,7 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 			} else {
 				ops.trace(", %s", argType)
 			}
-			if !stype.ConvertableTo(argType) {
+			if !stype.AssignableTo(argType) {
 				ops.typeErrorf("%s arg %d wanted type %s got %s",
 					strings.Join(lineTokens(instruction).strings(), " "), i, argType.String(), stype.String())
 			}
@@ -1880,11 +1893,16 @@ func (ops *OpStream) assemble(text string) error {
 		return ops.errorf("Cannot assemble empty program text")
 	}
 	fin := strings.NewReader(text)
+
 	scanner := bufio.NewScanner(fin)
 	for scanner.Scan() {
 		ops.sourceLine++
 		line := scanner.Text()
 		tokens := tokensFromLine(line, ops.sourceLine)
+
+		// TODO: should use `line` as index
+		ops.Lines = append(ops.Lines, tokens)
+
 		if len(tokens) > 0 {
 			if first := tokens[0]; first.str[0] == '#' {
 				directive := first.str[1:]

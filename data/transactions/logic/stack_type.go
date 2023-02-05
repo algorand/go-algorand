@@ -142,9 +142,9 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 	return st
 }
 
-// ConvertableTo returns a bool indicating whether the receiver can be
-// converted to some other type that is expected by the next operation
-func (st StackType) ConvertableTo(other StackType) bool {
+// AssignableTo returns a bool indicating whether the receiver can be
+// assigned to some other type that is expected by the next operation
+func (st StackType) AssignableTo(other StackType) bool {
 	// what are you doing?
 	if st.AVMType == avmNone || other.AVMType == avmNone {
 		return false

@@ -52,7 +52,7 @@ type pattern struct {
 	Patterns []pattern          `json:"patterns,omitempty"`
 }
 
-func buildSyntaxHighlight() *tmLanguage {
+func buildSyntaxHighlight(version uint64) *tmLanguage {
 	tm := tmLanguage{
 		Schema:    "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
 		Name:      "Algorand TEAL",
@@ -126,7 +126,7 @@ func buildSyntaxHighlight() *tmLanguage {
 	allNamedFields = append(allNamedFields, logic.TxnTypeNames[:]...)
 	allNamedFields = append(allNamedFields, logic.OnCompletionNames[:]...)
 	accumulated := make(map[string]bool)
-	opSpecs := logic.OpcodesByVersion(uint64(latestVersion))
+	opSpecs := logic.OpcodesByVersion(version)
 	for _, spec := range opSpecs {
 		for _, imm := range spec.OpDetails.Immediates {
 			if imm.Group != nil && !accumulated[imm.Group.Name] {

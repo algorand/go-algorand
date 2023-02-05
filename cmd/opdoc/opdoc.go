@@ -27,7 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
-var latestVersion = logic.LogicVersion
+var latestVersion = logic.LogicVersion - 1
 
 func opGroupMarkdownTable(names []string, out io.Writer) {
 	fmt.Fprint(out, `| Opcode | Description |
@@ -544,7 +544,7 @@ func main() {
 		}
 	}
 
-	for i := 1; i <= latestVersion; i++ {
+	for i := latestVersion; i <= latestVersion; i++ {
 		langspecjs := create(fmt.Sprintf("langspec_v%d.json", i))
 		enc := json.NewEncoder(langspecjs)
 		enc.SetIndent("", "  ")
@@ -558,7 +558,7 @@ func main() {
 	tealtm := create("teal.tmLanguage.json")
 	enc := json.NewEncoder(tealtm)
 	enc.SetIndent("", "  ")
-	err := enc.Encode(buildSyntaxHighlight())
+	err := enc.Encode(buildSyntaxHighlight(uint64(latestVersion)))
 	if err != nil {
 		panic(err)
 	}

@@ -918,7 +918,7 @@ func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
 }
 
 func opCompat(expected, got StackType) bool {
-	return got.ConvertableTo(expected)
+	return got.AssignableTo(expected)
 }
 
 func nilToEmpty(x []byte) []byte {
