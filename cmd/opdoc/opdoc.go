@@ -260,12 +260,11 @@ type StackTypeSpec struct {
 
 // Keyword is a keyword from the Field Groups passed to an op
 type Keyword struct {
-	Name              string `json:",omitempty"`
-	Type              string `json:",omitempty"`
-	Note              string `json:",omitempty"`
-	IntroducedVersion uint64 `json:",omitempty"`
-	Value             uint64
-	ArgEnum           string `json:",omitempty"`
+	Name    string `json:",omitempty"`
+	Type    string `json:",omitempty"`
+	Note    string `json:",omitempty"`
+	Value   uint64
+	ArgEnum string `json:",omitempty"`
 }
 
 // LanguageSpec records the ops of the language at some version
@@ -303,11 +302,10 @@ func groupKeywords(version uint64, group logic.FieldGroup) []Keyword {
 			}
 
 			kw := Keyword{
-				Name:              name,
-				Value:             uint64(spec.Field()),
-				Type:              spec.StackType().String(),
-				Note:              spec.Note(),
-				IntroducedVersion: spec.Version(),
+				Name:  name,
+				Value: uint64(spec.Field()),
+				Type:  spec.StackType().String(),
+				Note:  spec.Note(),
 			}
 
 			if name == "OnCompletion" {

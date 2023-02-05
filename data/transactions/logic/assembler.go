@@ -1704,12 +1704,9 @@ var tokenSeparators = [256]bool{'\t': true, ' ': true, ';': true}
 type tokenKind uint8
 
 const (
-	tokenUnknown tokenKind = iota
+	tokenData tokenKind = iota
 	tokenSeparator
 	tokenComment
-	tokenString
-	tokenImm
-	tokenOp
 )
 
 type token struct {
@@ -1762,9 +1759,12 @@ func tokensFromLine(line string, lineno int) []token {
 				}
 			case '/': // is a comment?
 				if i < len(line)-1 && line[i+1] == '/' && !inBase64 && !inString {
+					cmtStr := strings.Trim(line[i:], "/ ")
 					if start != i { // if a comment without whitespace
-						tokens = append(tokens, token{str: line[start:i], col: start, line: lineno, kind: tokenComment})
+						// take up to the comment as a token
+						tokens = append(tokens, token{str: line[start:i], col: start, line: lineno})
 					}
+					tokens = append(tokens, token{str: cmtStr, col: i, line: lineno, kind: tokenComment})
 					return tokens
 				}
 			case '(': // is base64( seq?
@@ -1785,14 +1785,14 @@ func tokensFromLine(line string, lineno int) []token {
 		// we've hit a space, end last token unless inString
 
 		if !inString {
-			_token := line[start:i]
-			tokens = append(tokens, token{str: _token, col: start, line: lineno})
+			tkn := line[start:i]
+			tokens = append(tokens, token{str: tkn, col: start, line: lineno})
 			if line[i] == ';' {
 				tokens = append(tokens, token{str: ";", col: i, line: lineno, kind: tokenSeparator})
 			}
 			if inBase64 {
 				inBase64 = false
-			} else if _token == "base64" || _token == "b64" {
+			} else if tkn == "base64" || tkn == "b64" {
 				inBase64 = true
 			}
 		}
@@ -1884,6 +1884,16 @@ func splitTokens(tokens []token) (current, rest []token) {
 	return tokens, nil
 }
 
+func filterComments(lts lineTokens) lineTokens {
+	var nlts lineTokens
+	for _, lt := range lts {
+		if lt.kind != tokenComment {
+			nlts = append(nlts, lt)
+		}
+	}
+	return nlts
+}
+
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
@@ -1900,8 +1910,11 @@ func (ops *OpStream) assemble(text string) error {
 		line := scanner.Text()
 		tokens := tokensFromLine(line, ops.sourceLine)
 
-		// TODO: should use `line` as index
+		// TODO: should use `line` as index?
 		ops.Lines = append(ops.Lines, tokens)
+
+		// Filter out comment tokens since they're not useful for assembly
+		tokens = filterComments(tokens)
 
 		if len(tokens) > 0 {
 			if first := tokens[0]; first.str[0] == '#' {

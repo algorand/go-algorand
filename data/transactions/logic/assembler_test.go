@@ -1288,8 +1288,8 @@ func TestFieldsFromLine(t *testing.T) {
 
 	check := func(line string, tokens ...string) {
 		t.Helper()
-		_tokens := tokensFromLine(line, 0)
-		assert.Equal(t, lineTokens(_tokens).strings(), tokens)
+		_tokens := filterComments(tokensFromLine(line, 0))
+		assert.Equal(t, _tokens.strings(), tokens)
 	}
 
 	check("op arg", "op", "arg")
@@ -3175,4 +3175,63 @@ warning 2
 	ops.ReportMultipleErrors("", &b)
 	expected = "1 error: 42: super annoying error\n"
 	assertWithMsg(t, expected, b)
+}
+
+func TestLineTokens(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ops := newOpStream(8)
+	err := ops.assemble(`#pragma version 8
+// put 1 on the stack
+int 1// this is the one 
+return
+`)
+	if err != nil {
+		t.Logf("Errors: %+v", ops.Errors)
+		t.Fail()
+	}
+
+	expectedLines := []lineTokens{
+		{
+			{kind: tokenData, str: "#pragma", col: 0, line: 1},
+			{kind: tokenData, str: "version", col: 8, line: 1},
+			{kind: tokenData, str: "8", col: 16, line: 1},
+		},
+		{
+			{kind: tokenComment, str: "put 1 on the stack", col: 0, line: 2},
+		},
+		{
+			{kind: tokenData, str: "int", col: 0, line: 3},
+			{kind: tokenData, str: "1", col: 4, line: 3},
+			{kind: tokenComment, str: "this is the one", col: 5, line: 3},
+		},
+		{
+			{kind: tokenData, str: "return", col: 0, line: 4},
+		},
+	}
+
+	assert.Equal(t, expectedLines, ops.Lines)
+
+	expectedFilteredLines := []lineTokens{
+		{
+			{kind: tokenData, str: "#pragma", col: 0, line: 1},
+			{kind: tokenData, str: "version", col: 8, line: 1},
+			{kind: tokenData, str: "8", col: 16, line: 1},
+		},
+		nil,
+		{
+			{kind: tokenData, str: "int", col: 0, line: 3},
+			{kind: tokenData, str: "1", col: 4, line: 3},
+		},
+		{
+			{kind: tokenData, str: "return", col: 0, line: 4},
+		},
+	}
+	var filtered []lineTokens
+	for _, lts := range ops.Lines {
+		filtered = append(filtered, filterComments(lts))
+	}
+	assert.Equal(t, expectedFilteredLines, filtered)
+
 }
