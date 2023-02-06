@@ -2215,11 +2215,25 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		return
 	}
 
+	// if we abort before making a wsPeer this cleanup logic will close the connection
+	closeEarly := func(msg string) {
+		deadline := time.Now().Add(peerDisconnectionAckDuration)
+		err := conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseProtocolError, msg), deadline)
+		if err != nil {
+			wn.log.Infof("tryConnect: failed to write CloseMessage to connection for %s", conn.RemoteAddr().String())
+		}
+		err = conn.CloseWithoutFlush()
+		if err != nil {
+			wn.log.Infof("tryConnect: failed to CloseWithoutFlush to connection for %s", conn.RemoteAddr().String())
+		}
+	}
+
 	// no need to test the response.StatusCode since we know it's going to be http.StatusSwitchingProtocols, as it's already being tested inside websocketDialer.DialContext.
 	// we need to examine the headers here to extract which protocol version we should be using.
 	responseHeaderOk, matchingVersion := wn.checkServerResponseVariables(response.Header, gossipAddr)
 	if !responseHeaderOk {
 		// The error was already logged, so no need to log again.
+		closeEarly("Unsupported headers")
 		return
 	}
 	localAddr, _ := wn.Address()
@@ -2228,6 +2242,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	peerID, idVerificationMessage, err := wn.identityScheme.VerifyResponse(response.Header, idChallenge)
 	if err != nil {
 		wn.log.With("err", err).With("remote", addr).With("local", localAddr).Warn("peer supplied an invalid identity response, abandoning peering")
+		closeEarly("Invalid identity response")
 		return
 	}
 
@@ -2262,6 +2277,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		if !ok {
 			networkPeeringStopDupeIdentity.Inc(nil)
 			wn.log.With("remote", addr).With("local", localAddr).Warn("peer deduplicated before adding because the identity is already known")
+			closeEarly("Duplicate connection")
 			return
 		}
 	}
