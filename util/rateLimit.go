@@ -65,9 +65,8 @@ type capacityQueue chan capacity
 // ErlCapacityGuard is the structure returned to clients so they can release the capacity when needed
 // they also inform the congestion manager of events
 type ErlCapacityGuard struct {
-	client ErlClient
-	cq     capacityQueue
-	cm     CongestionManager
+	cq capacityQueue
+	cm CongestionManager
 }
 
 // Release will put capacity back into the queue attached to this capacity guard

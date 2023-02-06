@@ -32,6 +32,8 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -60,7 +62,7 @@ var spec = transactions.SpecialAddresses{
 func verifyTxn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 	batchVerifier := crypto.MakeBatchVerifier()
 
-	if err := txnBatchPrep(s, txnIdx, groupCtx, batchVerifier); err != nil {
+	if err := txnBatchPrep(s, txnIdx, groupCtx, batchVerifier, nil); err != nil {
 		return err
 	}
 	return batchVerifier.Verify()
@@ -352,6 +354,89 @@ func TestDecodeNil(t *testing.T) {
 		require.NoError(t, err)
 		verifyTxn(&st, 0, groupCtx)
 	}
+}
+
+func TestTxnGroupWithTracer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	account := keypair()
+	accountAddr := basics.Address(account.SignatureVerifier)
+
+	ops1, err := logic.AssembleString(`#pragma version 6
+pushint 1`)
+	require.NoError(t, err)
+	program1 := ops1.Program
+	program1Addr := basics.Address(logic.HashProgram(program1))
+
+	ops2, err := logic.AssembleString(`#pragma version 6
+pushbytes "test"
+pop
+pushint 1`)
+	require.NoError(t, err)
+	program2 := ops2.Program
+	program2Addr := basics.Address(logic.HashProgram(program2))
+
+	// this shouldn't be invoked during this test
+	appProgram := "err"
+
+	lsigPay := txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   program1Addr,
+		Receiver: accountAddr,
+		Fee:      proto.MinTxnFee,
+	}
+
+	normalSigAppCall := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            accountAddr,
+		ApprovalProgram:   appProgram,
+		ClearStateProgram: appProgram,
+		Fee:               proto.MinTxnFee,
+	}
+
+	lsigAppCall := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            program2Addr,
+		ApprovalProgram:   appProgram,
+		ClearStateProgram: appProgram,
+		Fee:               proto.MinTxnFee,
+	}
+
+	txntest.Group(&lsigPay, &normalSigAppCall, &lsigAppCall)
+
+	txgroup := []transactions.SignedTxn{
+		{
+			Lsig: transactions.LogicSig{
+				Logic: program1,
+			},
+			Txn: lsigPay.Txn(),
+		},
+		normalSigAppCall.Txn().Sign(account),
+		{
+			Lsig: transactions.LogicSig{
+				Logic: program2,
+			},
+			Txn: lsigAppCall.Txn(),
+		},
+	}
+
+	mockTracer := &mocktracer.Tracer{}
+	_, err = TxnGroupWithTracer(txgroup, blockHeader, nil, logic.NoHeaderLedger{}, mockTracer)
+	require.NoError(t, err)
+
+	expectedEvents := []mocktracer.Event{
+		mocktracer.BeforeProgram(logic.ModeSig),             // first txn start
+		mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(), // first txn LogicSig: 1 op
+		mocktracer.AfterProgram(logic.ModeSig), // first txn end
+		// nothing for second txn (not signed with a LogicSig)
+		mocktracer.BeforeProgram(logic.ModeSig),                                                                                                                       // third txn start
+		mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(), mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(), mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(), // third txn LogicSig: 3 ops
+		mocktracer.AfterProgram(logic.ModeSig), // third txn end
+	}
+	require.Equal(t, expectedEvents, mockTracer.Events)
 }
 
 func TestPaysetGroups(t *testing.T) {

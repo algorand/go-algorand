@@ -322,7 +322,7 @@ func (sv *StreamVerifier) addVerificationTaskToThePoolNow(ue []*UnverifiedElemen
 		// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
 		blockHeader := sv.nbw.getBlockHeader()
 		for _, ue := range ue {
-			groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, blockHeader, sv.ledger, batchVerifier)
+			groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, blockHeader, sv.ledger, batchVerifier, nil)
 			if err != nil {
 				// verification failed, no need to add the sig to the batch, report the error
 				sv.sendResult(ue.TxnGroup, ue.BacklogMessage, err)
