@@ -2279,7 +2279,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 
 	// reset tables and re-init again, similary to the catchpount apply code
 	// since the ledger has only genesis accounts, this recreates them
-	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = l.trackerDBs.Batch(func(ctx context.Context, tx *sql.Tx) error {
 		arw := store.NewAccountsSQLReaderWriter(tx)
 		err0 := arw.AccountsReset(ctx)
 		if err0 != nil {
@@ -2335,7 +2335,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 
 	// drop new tables
 	// reloadLedger should migrate db properly
-	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = l.trackerDBs.Batch(func(ctx context.Context, tx *sql.Tx) error {
 		var resetExprs = []string{
 			`DROP TABLE IF EXISTS onlineaccounts`,
 			`DROP TABLE IF EXISTS txtail`,
@@ -2458,7 +2458,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		blockDB.Close()
 	}()
 	// create tables so online accounts can still be written
-	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = trackerDB.Batch(func(ctx context.Context, tx *sql.Tx) error {
 		if err := store.AccountsUpdateSchemaTest(ctx, tx); err != nil {
 			return err
 		}
@@ -2635,7 +2635,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	cfg.MaxAcctLookback = shorterLookback
 	store.AccountDBVersion = 7
 	// delete tables since we want to check they can be made from other data
-	err = trackerDB.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = trackerDB.Batch(func(ctx context.Context, tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineaccounts"); err != nil {
 			return err
 		}

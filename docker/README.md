@@ -14,12 +14,7 @@ By default the following config.json overrides are applied:
 
 | Setting | Value |
 | ------- | ----- |
-| GossipFanout | 1 |
 | EndpointAddress | 0.0.0.0:8080 |
-| IncomingConnectionsLimit | 0 |
-| Archival | false |
-| IsIndexerActive | false |
-| EnableDeveloperAPI | true |
 
 ### Environment Variables
 
@@ -28,12 +23,14 @@ The following environment variables can be supplied. Except when noted, it is po
 | Variable | Description |
 | -------- | ----------- |
 | NETWORK       | Leave blank for a private network, otherwise specify one of mainnet, betanet, testnet, or devnet. Only used during a data directory initialization. |
-| FAST_CATCHUP  | If set on a public network, attempt to start fast-catchup during initial config. |
+| FAST_CATCHUP  | If set to 1 on a public network, attempt to start fast-catchup during initial config. |
 | TELEMETRY_NAME| If set on a public network, telemetry is reported with this name. |
-| DEV_MODE      | If set on a private network, enable dev mode. Only used during data directory initialization. |
+| DEV_MODE      | If set to 1 on a private network, enable dev mode. Only used during data directory initialization. |
 | NUM_ROUNDS    | If set on a private network, override default of 30000 participation keys. |
 | TOKEN         | If set, overrides the REST API token. |
 | ADMIN_TOKEN   | If set, overrides the REST API admin token. |
+| KMD_TOKEN | If set along with `START_KMD`, override the KMD REST API token. |
+| START_KMD | When set to 1, start kmd service with no timeout. THIS SHOULD NOT BE USED IN PRODUCTION. |
 
 ### Special Files
 
@@ -55,10 +52,12 @@ The following command launches a container configured with one of the public net
 ```bash
 docker run --rm -it \
     -p 4190:8080 \
+    -p 4191:7833 \
     -e NETWORK=mainnet \
     -e FAST_CATCHUP=1 \
     -e TELEMETRY_NAME=name \
     -e TOKEN=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+    -e START_KMD=1 \
     -v ${PWD}/data:/algod/data/ \
     --name mainnet-container \
     algorand/algod:latest
@@ -66,11 +65,13 @@ docker run --rm -it \
 
 Explanation of parts:
 
-* `-p 4190:8080` maps the internal algod REST API to local port 4190
-* `-e NETWORK=` can be set to any of the supported public networks.
-* `-e FAST_CATCHUP=` causes fast catchup to start shortly after launching the network.
-* `-e TELEMETRY_NAME=` enables telemetry reporting to Algorand for network health analysis. The value of this variable takes precedence over the `name` attribute set in `/etc/algorand/logging.config`.
-* `-e TOKEN=` sets the REST API token to use.
+* `-p 4190:8080` maps the internal algod REST API to local port 4190.
+* `-p 4191:7833` maps the internal kmd REST API to local port 4191.
+* `-e NETWORK=mainnet` can be set to any of the supported public networks.
+* `-e TELEMETRY_NAME=name` enables telemetry reporting to Algorand for network health analysis. The value of this variable takes precedence over the `name` attribute set in `/etc/algorand/logging.config`.
+* `-e FAST_CATCHUP=1` causes fast catchup to start shortly after launching the network.
+* `-e START_KMD=1` signals to entrypoint to start the kmd REST API (THIS SHOULD NOT BE USED IN PRODUCTION).
+* `-e TOKEN=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` sets the REST API token to use.
 * `-v ${PWD}/data:/algod/data/` mounts a local volume to the data directory, which can be used to restart and upgrade the deployment.
 
 ## Mounting the Data Directory

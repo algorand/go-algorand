@@ -85,9 +85,10 @@ func StateDeltaToLedgerDelta(sDelta ledgercore.StateDelta, consensus config.Cons
 
 	for key, kvDelta := range sDelta.KvMods {
 		var keyBytes = []byte(key)
+		var valueBytes = kvDelta.Data
 		keyValues = append(keyValues, model.KvDelta{
 			Key:   &keyBytes,
-			Value: &kvDelta.Data,
+			Value: &valueBytes,
 		})
 	}
 

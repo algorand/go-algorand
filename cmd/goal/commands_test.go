@@ -20,6 +20,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -28,7 +29,7 @@ func TestEnsureDataDirReturnsWhenDataDirIsProvided(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	expectedDir := "~/.algorand"
 	os.Setenv("ALGORAND_DATA", expectedDir)
-	actualDir := ensureFirstDataDir()
+	actualDir := datadir.EnsureFirstDataDir()
 	require.Equal(t, expectedDir, actualDir)
 }
 
@@ -38,8 +39,8 @@ func TestEnsureDataDirReturnsWhenWorkDirIsProvided(t *testing.T) {
 	if err != nil {
 		reportErrorf("Error getting work dir: %s", err)
 	}
-	dataDirs[0] = "."
-	actualDir := ensureFirstDataDir()
+	datadir.DataDirs[0] = "."
+	actualDir := datadir.EnsureFirstDataDir()
 	require.Equal(t, expectedDir, actualDir)
 }
 
@@ -49,8 +50,8 @@ func TestEnsureDataDirReturnsWhenRelPath1IsProvided(t *testing.T) {
 	if err != nil {
 		reportErrorf("Error getting work dir: %s", err)
 	}
-	dataDirs[0] = "./../goal"
-	actualDir := ensureFirstDataDir()
+	datadir.DataDirs[0] = "./../goal"
+	actualDir := datadir.EnsureFirstDataDir()
 	require.Equal(t, expectedDir, actualDir)
 }
 
@@ -60,8 +61,8 @@ func TestEnsureDataDirReturnsWhenRelPath2IsProvided(t *testing.T) {
 	if err != nil {
 		reportErrorf("Error getting work dir: %s", err)
 	}
-	dataDirs[0] = "../goal"
-	actualDir := ensureFirstDataDir()
+	datadir.DataDirs[0] = "../goal"
+	actualDir := datadir.EnsureFirstDataDir()
 	require.Equal(t, expectedDir, actualDir)
 }
 
@@ -71,7 +72,7 @@ func TestEnsureDataDirReturnsWhenRelPath3IsProvided(t *testing.T) {
 	if err != nil {
 		reportErrorf("Error getting work dir: %s", err)
 	}
-	dataDirs[0] = "../../cmd/goal"
-	actualDir := ensureFirstDataDir()
+	datadir.DataDirs[0] = "../../cmd/goal"
+	actualDir := datadir.EnsureFirstDataDir()
 	require.Equal(t, expectedDir, actualDir)
 }

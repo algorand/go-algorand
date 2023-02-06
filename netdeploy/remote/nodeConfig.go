@@ -53,8 +53,9 @@ func (nc NodeConfig) IsRelay() bool {
 
 // NodeConfigGoal represents is a simplified version of NodeConfig used with 'goal network' commands
 type NodeConfigGoal struct {
-	Name              string
-	IsRelay           bool `json:",omitempty"`
-	Wallets           []NodeWalletData
-	DeadlockDetection int `json:"-"`
+	Name               string
+	IsRelay            bool `json:",omitempty"`
+	Wallets            []NodeWalletData
+	DeadlockDetection  int    `json:"-"`
+	ConfigJSONOverride string `json:",omitempty"` // Raw json to merge into config.json after other modifications are complete
 }
