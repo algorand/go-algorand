@@ -417,6 +417,7 @@ int 1`,
 				Fee:         minFee,
 				GenesisHash: genHash,
 			}
+			// an app call with inner txn
 			innerAppCallTxn := txntest.Txn{
 				Type:   protocol.ApplicationCallTx,
 				Sender: addrs[0],
