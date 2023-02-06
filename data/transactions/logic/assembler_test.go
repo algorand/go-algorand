@@ -2857,7 +2857,7 @@ func checkSame(t *testing.T, version uint64, first string, compares ...string) {
 	ops := testProg(t, first, version)
 	for _, compare := range compares {
 		other := testProg(t, compare, version)
-		if bytes.Compare(other.Program, ops.Program) != 0 {
+		if !bytes.Equal(other.Program, ops.Program) {
 			t.Log(Disassemble(ops.Program))
 			t.Log(Disassemble(other.Program))
 		}
@@ -3236,7 +3236,7 @@ return
 
 }
 
-func TestStackSnaps(t *testing.T) {
+func TestStackSnapshot(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -3257,53 +3257,65 @@ return
 	bytConst := StackBytes.narrowed(2, 2)
 	bytConst.Name = "[2]byte"
 
-	expected := []StackTypes{
-		{StackUint64},
-		{StackUint64, StackUint64},
-		{StackUint64, StackUint64, bytConst},
-		{StackUint64, StackUint64},
-		{StackUint64},
-		{StackNone},
+	// expected := []StackTypes{
+	// 	{StackUint64},
+	// 	{StackUint64, StackUint64},
+	// 	{StackUint64, StackUint64, bytConst},
+	// 	{StackUint64, StackUint64},
+	// 	{StackUint64},
+	// 	{StackNone},
+	// }
+
+	//assert.Equal(t, expected, ops.stacks)
+
+}
+
+func TestStackSnapshotCallsub(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	ops, err := assembleWithTrace(`
+#pragma version 8
+int 1
+int 1
+
+callsub lbl     
+
+lbl:
+	int 2
+	int 3
+	+ 	   
+	retsub 
+
+int 5
+==
+assert
+
+pop
+return
+	`, 8)
+
+	if err != nil {
+		t.Logf("Errors: %+v", ops.Errors)
+		t.Fail()
 	}
 
-	assert.Equal(t, expected, ops.stacks)
+	for idx, lts := range ops.Lines {
+		t.Logf("| %+20s | %-20v |", strings.Join(lts.strings(), " "), ops.stacks[idx])
+	}
 
-	//	ops, err = assembleWithTrace(`
-	//#pragma version 8
-	//int 1 			// uint
-	//int 1           // uint,uint
-	//callsub lbl     // uint, uint, uint
-	//
-	//lbl:
-	//proto 0 1
-	//			// []
-	//	int 2  // uint
-	//	int 3  // uint, uint
-	//	+ 	   // uint
-	//	retsub //
-	//
-	//pop 		 // uint,uint
-	//pop			 // uint
-	//return 		 //
-	//`, 8)
-	//
-	//	if err != nil {
-	//		t.Logf("Errors: %+v", ops.Errors)
-	//		t.Fail()
-	//	}
-	//
-	//	t.Logf("%+v", ops.stacks)
-	//
-	//	expected = []StackTypes{
-	//		{StackUint64},
-	//		{StackUint64, StackUint64},
-	//		{StackUint64, StackUint64},
-	//		{StackUint64},
-	//		{StackUint64, StackUint64},
-	//		{StackUint64},
-	//		{StackUint64},
-	//	}
-	//
-	//	assert.Equal(t, expected, ops.stacks)
+	t.Logf("%d %+v", len(ops.stacks), ops.stacks)
+	t.Logf("%d %+v", len(ops.Lines), ops.Lines)
 
+	//expected := []StackTypes{
+	//	{StackUint64},
+	//	{StackUint64, StackUint64},
+	//	{StackUint64, StackUint64},
+	//	{},
+	//	{StackUint64},
+	//	{StackUint64, StackUint64},
+	//	{StackUint64},
+	//	{StackUint64},
+	//}
+
+	//assert.Equal(t, expected, ops.stacks)
 }

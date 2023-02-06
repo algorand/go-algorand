@@ -17,7 +17,9 @@
 package logic
 
 import (
+	"fmt"
 	"math"
+	"strings"
 )
 
 // avmType represents the types that are representable in the avm
@@ -205,6 +207,14 @@ func (st StackType) AssignableTo(other StackType) bool {
 
 // StackTypes is an alias for a list of StackType with syntactic sugar
 type StackTypes []StackType
+
+func (st StackTypes) String() string {
+	var s = make([]string, len(st))
+	for idx, stype := range st {
+		s[idx] = stype.String()
+	}
+	return fmt.Sprintf("(%s)", strings.Join(s, ", "))
+}
 
 func (st StackType) String() string {
 	return st.Name
