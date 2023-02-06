@@ -1038,6 +1038,7 @@ func (cx *EvalContext) Cost() int {
 	return cx.cost
 }
 
+// AppID returns the ID of the currently executing app. For LogicSigs it returns 0.
 func (cx *EvalContext) AppID() basics.AppIndex {
 	return cx.appID
 }

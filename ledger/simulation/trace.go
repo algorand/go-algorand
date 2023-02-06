@@ -51,7 +51,8 @@ func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
 	return groupResult
 }
 
-const ResultCurrentVersion = uint64(1)
+// ResultLatestVersion is the latest version of the Result struct
+const ResultLatestVersion = uint64(1)
 
 // Result contains the result from a call to Simulator.Simulate
 type Result struct {
@@ -61,7 +62,7 @@ type Result struct {
 }
 
 func makeSimulationResultWithVersion(txgroups [][]transactions.SignedTxn, version uint64) (Result, error) {
-	if version != ResultCurrentVersion {
+	if version != ResultLatestVersion {
 		return Result{}, fmt.Errorf("invalid SimulationResult version: %d", version)
 	}
 
@@ -75,9 +76,9 @@ func makeSimulationResultWithVersion(txgroups [][]transactions.SignedTxn, versio
 }
 
 func makeSimulationResult(txgroups [][]transactions.SignedTxn) Result {
-	result, err := makeSimulationResultWithVersion(txgroups, ResultCurrentVersion)
+	result, err := makeSimulationResultWithVersion(txgroups, ResultLatestVersion)
 	if err != nil {
-		// this should never happen, since we pass in ResultCurrentVersion
+		// this should never happen, since we pass in ResultLatestVersion
 		panic(err)
 	}
 	return result
