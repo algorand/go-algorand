@@ -607,42 +607,41 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 	testAccepts(t, progText, 5)
 }
 
-// TODO: reenable
-//func TestEcdsaCostVariation(t *testing.T) {
-//	partitiontest.PartitionTest(t)
-//	t.Parallel()
-//
-//	// Doesn't matter if the actual verify returns true or false. Just confirm the cost depends on curve.
-//	source := `
-//global ZeroAddress				// need 32 bytes
-//byte "signature r"
-//byte "signature s"
-//byte "PK x"
-//byte "PK y"
-//ecdsa_verify Secp256k1
-//!
-//assert
-//global OpcodeBudget
-//int ` + fmt.Sprintf("%d", 20_000-1700-8) + `
-//==
-//`
-//	testAccepts(t, source, 6) // Secp256k1 was 5, but OpcodeBudget is 6
-//
-//	source = `
-//global ZeroAddress				// need 32 bytes
-//byte "signature r"
-//byte "signature s"
-//byte "PK x"
-//byte "PK y"
-//ecdsa_verify Secp256r1
-//!
-//assert
-//global OpcodeBudget
-//int ` + fmt.Sprintf("%d", 20_000-2500-8) + `
-//==
-//`
-//	testAccepts(t, source, fidoVersion)
-//}
+func TestEcdsaCostVariation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Doesn't matter if the actual verify returns true or false. Just confirm the cost depends on curve.
+	source := `
+global ZeroAddress				// need 32 bytes
+byte "signature r"
+byte "signature s"
+byte "PK x"
+byte "PK y"
+ecdsa_verify Secp256k1
+!
+assert
+global OpcodeBudget
+int ` + fmt.Sprintf("%d", 20_000-1700-8) + `
+==
+`
+	testAccepts(t, source, 6) // Secp256k1 was 5, but OpcodeBudget is 6
+
+	source = `
+global ZeroAddress				// need 32 bytes
+byte "signature r"
+byte "signature s"
+byte "PK x"
+byte "PK y"
+ecdsa_verify Secp256r1
+!
+assert
+global OpcodeBudget
+int ` + fmt.Sprintf("%d", 20_000-2500-8) + `
+==
+`
+	testAccepts(t, source, fidoVersion)
+}
 
 func BenchmarkHash(b *testing.B) {
 	for _, hash := range []string{"sha256", "keccak256", "sha512_256"} {
