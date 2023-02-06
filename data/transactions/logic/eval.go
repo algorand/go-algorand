@@ -917,8 +917,11 @@ func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
 	return version, vlen, nil
 }
 
-func opCompat(expected, got StackType) bool {
-	return got.AssignableTo(expected)
+func opCompat(expected, got avmType) bool {
+	if expected == avmAny {
+		return true
+	}
+	return expected == got
 }
 
 func nilToEmpty(x []byte) []byte {
@@ -993,7 +996,7 @@ func (cx *EvalContext) step() error {
 	}
 	first := len(cx.stack) - len(spec.Arg.Types)
 	for i, argType := range spec.Arg.Types {
-		if !opCompat(argType, cx.stack[first+i].argType().stackType()) {
+		if !opCompat(argType.AVMType, cx.stack[first+i].argType()) {
 			return fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType, cx.stack[first+i].typeName())
 		}
 	}
@@ -1041,14 +1044,14 @@ func (cx *EvalContext) step() error {
 		}
 		first = postheight - len(spec.Return.Types)
 		for i, argType := range spec.Return.Types {
-			stackType := cx.stack[first+i].argType().stackType()
-			if !opCompat(argType, stackType) {
+			stackType := cx.stack[first+i].argType()
+			if !opCompat(argType.AVMType, stackType) {
 				if spec.AlwaysExits() { // We test in the loop because it's the uncommon case.
 					break
 				}
 				return fmt.Errorf("%s produced %s but intended %s", spec.Name, cx.stack[first+i].typeName(), argType)
 			}
-			if stackType.AVMType == avmBytes && len(cx.stack[first+i].Bytes) > maxStringSize {
+			if stackType == avmBytes && len(cx.stack[first+i].Bytes) > maxStringSize {
 				return fmt.Errorf("%s produced a too big (%d) byte-array", spec.Name, len(cx.stack[first+i].Bytes))
 			}
 		}
