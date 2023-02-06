@@ -487,8 +487,8 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		delta.Totals = newTotals
 
 		ml.trackers.newBlock(blk, delta)
-		ml.trackers.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
+		ml.trackers.committedUpTo(i)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 		roundDeltas[i] = delta
@@ -531,6 +531,8 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			delta := roundDeltas[i]
 
 			ml2.trackers.newBlock(blk, delta)
+			err := ml2.addMockBlock(blockEntry{block: blk}, delta)
+			require.NoError(t, err)
 			ml2.trackers.committedUpTo(i)
 
 			// if this is a catchpoint round, check the label.
