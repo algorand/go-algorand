@@ -33,24 +33,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ==============================
-// > Simulation Test Helpers
-// ==============================
-
+// Account contains public and private keys, as well as the state of an account
 type Account struct {
 	Addr     basics.Address
 	Sk       *crypto.SignatureSecrets
 	AcctData basics.AccountData
 }
 
+// TxnInfo contains information about the network used for instantiating txntest.Txns
 type TxnInfo struct {
 	LatestHeader bookkeeping.BlockHeader
 }
 
+// CurrentProtocolParams returns the consensus parameters that the network is currently using
 func (info TxnInfo) CurrentProtocolParams() config.ConsensusParams {
 	return config.Consensus[info.LatestHeader.CurrentProtocol]
 }
 
+// NewTxn sets network-specific values to the given transaction
 func (info TxnInfo) NewTxn(txn txntest.Txn) txntest.Txn {
 	txn.FirstValid = info.LatestHeader.Round
 	txn.GenesisID = info.LatestHeader.GenesisID
@@ -59,6 +59,8 @@ func (info TxnInfo) NewTxn(txn txntest.Txn) txntest.Txn {
 	return txn
 }
 
+// InnerTxn sets network- and parent-specific values to the given inner transaction. This is only
+// useful for creating an expected inner transaction to compare against.
 func (info TxnInfo) InnerTxn(parent transactions.SignedTxn, inner txntest.Txn) txntest.Txn {
 	inner.FirstValid = parent.Txn.FirstValid
 	inner.LastValid = parent.Txn.LastValid
@@ -66,28 +68,7 @@ func (info TxnInfo) InnerTxn(parent transactions.SignedTxn, inner txntest.Txn) t
 	return inner
 }
 
-// InnerTxnGroup calculates and assigns the GroupID to the passed in transactions. GroupID
-// calculation assumes the consensus parameter UnifyInnerTxIDs is true.
-func InnerTxnGroup(parent transactions.Txid, offset int, inners ...*txntest.Txn) []transactions.SignedTxn {
-	if len(inners) == 1 {
-		return []transactions.SignedTxn{inners[0].SignedTxn()}
-	}
-
-	var group transactions.TxGroup
-	for i, inner := range inners {
-		innerID := inner.Txn().InnerID(parent, offset+i)
-		group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(innerID))
-	}
-
-	groupID := crypto.HashObj(group)
-	stxns := make([]transactions.SignedTxn, len(inners))
-	for i := range inners {
-		inners[i].Group = groupID
-		stxns[i] = inners[i].SignedTxn()
-	}
-	return stxns
-}
-
+// PrepareSimulatorTest creates an environment to test transaction simulations
 func PrepareSimulatorTest(t *testing.T) (l *data.Ledger, accounts []Account, txnInfo TxnInfo) {
 	genesisInitState, keys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 

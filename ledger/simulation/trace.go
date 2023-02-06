@@ -26,24 +26,22 @@ import (
 // You can use this transaction path to find the txn data in the `TxnResults` list.
 type TxnPath []uint64
 
-// ==============================
-// > Transaction Results
-// ==============================
-
+// TxnResult contains the simulation result for a single transaction
 type TxnResult struct {
 	Txn              transactions.SignedTxnWithAD
 	MissingSignature bool
 }
 
+// TxnGroupResult contains the simulation result for a single transaction group
 type TxnGroupResult struct {
 	Txns           []TxnResult
 	FailureMessage string
 
-	// FailedAt is the path to the txn that failed, instead of repeating the FailureMessage at every level
+	// FailedAt is the path to the txn that failed inside of this group
 	FailedAt TxnPath
 }
 
-func MakeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
+func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
 	groupResult := TxnGroupResult{Txns: make([]TxnResult, len(txgroup))}
 	for i, tx := range txgroup {
 		groupResult.Txns[i] = TxnResult{Txn: transactions.SignedTxnWithAD{
@@ -55,13 +53,14 @@ func MakeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
 
 const ResultCurrentVersion = uint64(1)
 
+// Result contains the result from a call to Simulator.Simulate
 type Result struct {
 	Version      uint64
 	TxnGroups    []TxnGroupResult // txngroups is a list so that supporting multiple in the future is not breaking
 	WouldSucceed bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
 }
 
-func MakeSimulationResultWithVersion(txgroups [][]transactions.SignedTxn, version uint64) (Result, error) {
+func makeSimulationResultWithVersion(txgroups [][]transactions.SignedTxn, version uint64) (Result, error) {
 	if version != ResultCurrentVersion {
 		return Result{}, fmt.Errorf("invalid SimulationResult version: %d", version)
 	}
@@ -69,14 +68,14 @@ func MakeSimulationResultWithVersion(txgroups [][]transactions.SignedTxn, versio
 	groups := make([]TxnGroupResult, len(txgroups))
 
 	for i, txgroup := range txgroups {
-		groups[i] = MakeTxnGroupResult(txgroup)
+		groups[i] = makeTxnGroupResult(txgroup)
 	}
 
 	return Result{Version: version, TxnGroups: groups, WouldSucceed: true}, nil
 }
 
-func MakeSimulationResult(txgroups [][]transactions.SignedTxn) Result {
-	result, err := MakeSimulationResultWithVersion(txgroups, ResultCurrentVersion)
+func makeSimulationResult(txgroups [][]transactions.SignedTxn) Result {
+	result, err := makeSimulationResultWithVersion(txgroups, ResultCurrentVersion)
 	if err != nil {
 		// this should never happen, since we pass in ResultCurrentVersion
 		panic(err)

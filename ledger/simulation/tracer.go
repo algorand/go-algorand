@@ -84,7 +84,7 @@ type evalTracer struct {
 }
 
 func makeEvalTracer(txgroup []transactions.SignedTxn) *evalTracer {
-	result := MakeSimulationResult([][]transactions.SignedTxn{txgroup})
+	result := makeSimulationResult([][]transactions.SignedTxn{txgroup})
 	return &evalTracer{result: &result}
 }
 
