@@ -252,18 +252,26 @@ func (node *AlgorandFollowerNode) GetPendingTransaction(_ transactions.Txid) (re
 }
 
 // Status returns a StatusReport structure reporting our status as Active and with our ledger's LastRound
-func (node *AlgorandFollowerNode) Status() (s StatusReport, err error) {
+func (node *AlgorandFollowerNode) Status() (StatusReport, error) {
 	node.syncStatusMu.Lock()
-	s.LastRoundTimestamp = node.lastRoundTimestamp
-	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
+	lastRoundTimestamp := node.lastRoundTimestamp
+	hasSyncedSinceStartup := node.hasSyncedSinceStartup
 	node.syncStatusMu.Unlock()
 
 	node.mu.Lock()
 	defer node.mu.Unlock()
+	var s StatusReport
+	var err error
 	if node.catchpointCatchupService != nil {
-		return catchpointCatchupStatus(node.catchpointCatchupService.GetLatestBlockHeader(), node.catchpointCatchupService.GetStatistics()), nil
+		s = catchpointCatchupStatus(node.catchpointCatchupService.GetLatestBlockHeader(), node.catchpointCatchupService.GetStatistics())
+	} else {
+		s, err = latestBlockStatus(node.ledger, node.catchupService)
 	}
-	return latestBlockStatus(node.ledger, node.catchupService)
+
+	s.LastRoundTimestamp = lastRoundTimestamp
+	s.HasSyncedSinceStartup = hasSyncedSinceStartup
+
+	return s, err
 }
 
 // GenesisID returns the ID of the genesis node.

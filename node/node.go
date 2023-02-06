@@ -678,18 +678,26 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 }
 
 // Status returns a StatusReport structure reporting our status as Active and with our ledger's LastRound
-func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
+func (node *AlgorandFullNode) Status() (StatusReport, error) {
 	node.syncStatusMu.Lock()
-	s.LastRoundTimestamp = node.lastRoundTimestamp
-	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
+	lastRoundTimestamp := node.lastRoundTimestamp
+	hasSyncedSinceStartup := node.hasSyncedSinceStartup
 	node.syncStatusMu.Unlock()
 
 	node.mu.Lock()
 	defer node.mu.Unlock()
+	var s StatusReport
+	var err error
 	if node.catchpointCatchupService != nil {
-		return catchpointCatchupStatus(node.catchpointCatchupService.GetLatestBlockHeader(), node.catchpointCatchupService.GetStatistics()), nil
+		s = catchpointCatchupStatus(node.catchpointCatchupService.GetLatestBlockHeader(), node.catchpointCatchupService.GetStatistics())
+	} else {
+		s, err = latestBlockStatus(node.ledger, node.catchupService)
 	}
-	return latestBlockStatus(node.ledger, node.catchupService)
+
+	s.LastRoundTimestamp = lastRoundTimestamp
+	s.HasSyncedSinceStartup = hasSyncedSinceStartup
+
+	return s, err
 }
 
 func catchpointCatchupStatus(lastBlockHeader bookkeeping.BlockHeader, stats catchup.CatchpointCatchupStats) (s StatusReport) {
