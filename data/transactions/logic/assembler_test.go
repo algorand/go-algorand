@@ -1288,7 +1288,7 @@ func TestFieldsFromLine(t *testing.T) {
 
 	check := func(line string, tokens ...string) {
 		t.Helper()
-		_tokens := filterComments(tokensFromLine(line, 0))
+		_tokens := tokensFromLine(line, 0).filter(tokenComment)
 		assert.Equal(t, _tokens.strings(), tokens)
 	}
 
@@ -1342,11 +1342,11 @@ func TestSplitTokens(t *testing.T) {
 
 	check := func(tokenStrs []string, left []string, right []string) {
 		t.Helper()
-		tokens := make([]token, len(tokenStrs))
+		tokens := make(lineTokens, len(tokenStrs))
 		for idx, t := range tokenStrs {
 			tokens[idx] = token{str: t}
 		}
-		current, next := splitTokens(tokens)
+		current, next := tokens.split()
 
 		var _current []string
 		if left != nil {
@@ -3230,7 +3230,7 @@ return
 	}
 	var filtered []lineTokens
 	for _, lts := range ops.Lines {
-		filtered = append(filtered, filterComments(lts))
+		filtered = append(filtered, lts.filter(tokenComment))
 	}
 	assert.Equal(t, expectedFilteredLines, filtered)
 

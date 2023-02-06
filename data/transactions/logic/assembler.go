@@ -1728,15 +1728,34 @@ func (t token) String() string {
 
 type lineTokens []token
 
-func (lt lineTokens) strings() []string {
-	ts := make([]string, len(lt))
-	for idx, tk := range lt {
+func (lts lineTokens) strings() []string {
+	ts := make([]string, len(lts))
+	for idx, tk := range lts {
 		ts[idx] = tk.str
 	}
 	return ts
 }
 
-func tokensFromLine(line string, lineno int) []token {
+func (lts lineTokens) split() (lineTokens, lineTokens) {
+	for i, token := range lts {
+		if token.str == ";" {
+			return lts[:i], lts[i+1:]
+		}
+	}
+	return lts, nil
+}
+
+func (lts lineTokens) filter(kind tokenKind) lineTokens {
+	var nlts lineTokens
+	for _, lt := range lts {
+		if lt.kind != kind {
+			nlts = append(nlts, lt)
+		}
+	}
+	return nlts
+}
+
+func tokensFromLine(line string, lineno int) lineTokens {
 	var tokens []token
 
 	i := 0
@@ -1845,23 +1864,22 @@ func (ops *OpStream) snapshotStack() {
 }
 
 // trackStack checks that the typeStack has `args` on it, then pushes `returns` to it.
-func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction []token) {
+func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction lineTokens) {
 	// If in deadcode, allow anything. Maybe it's some sort of onchain data.
 	if ops.known.deadcode {
 		return
 	}
 
 	expectedCnt, actualCnt := len(args), len(ops.known.stack)
-
 	if expectedCnt > actualCnt && ops.known.bottom.AVMType == StackNone.AVMType {
 		ops.typeErrorf("%s expects %d stack arguments but stack height is %d",
-			strings.Join(lineTokens(instruction).strings(), " "), expectedCnt, actualCnt)
+			strings.Join(instruction.strings(), " "), expectedCnt, actualCnt)
 	} else {
 		for i := expectedCnt - 1; i >= 0; i-- {
 			expectedType, actualType := args[i], ops.known.pop()
 			if !actualType.AssignableTo(expectedType) {
 				ops.typeErrorf("%s arg %d wanted type %s got %s",
-					strings.Join(lineTokens(instruction).strings(), " "), i,
+					strings.Join(instruction.strings(), " "), i,
 					expectedType.String(), actualType.String())
 			}
 		}
@@ -1874,26 +1892,79 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	}
 }
 
-// splitTokens breaks tokens into two slices at the first semicolon.
-func splitTokens(tokens []token) (current, rest []token) {
-	for i, token := range tokens {
-		if token.str == ";" {
-			return tokens[:i], tokens[i+1:]
+// assembleTokens works on a single set of tokens representing
+// an `op` and its immediate args
+func (ops *OpStream) assembleTokens(current []token) {
+	if len(current) == 0 {
+		return
+	}
+
+	// we're about to begin processing opcodes, so settle the Version
+	if ops.Version == assemblerNoVersion {
+		ops.Version = AssemblerDefaultVersion
+	}
+	if ops.versionedPseudoOps == nil {
+		ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
+	}
+
+	// Check for label
+	opstring := current[0].str
+	if opstring[len(opstring)-1] == ':' {
+		ops.createLabel(opstring[:len(opstring)-1])
+		current = current[1:]
+		if len(current) == 0 {
+			ops.trace("%3d: label only\n", ops.sourceLine)
+			return
+		}
+		// it is a label but more on the same line with no semi colon
+		// e.g. `...; label_a: int 1; ...`
+		opstring = current[0].str
+	}
+
+	defer ops.trace("\n")
+
+	// Get the spec for the current op
+	spec, expandedName, ok := getSpec(ops, opstring, current[1:])
+	if !ok {
+		return
+	}
+
+	ops.trace("%3d: %s\t", ops.sourceLine, opstring)
+	ops.recordSourceLine()
+	if spec.Modes == ModeApp {
+		ops.HasStatefulOps = true
+	}
+
+	args, returns := spec.Arg.Types, spec.Return.Types
+	if spec.refine != nil {
+		nargs, nreturns, err := spec.refine(&ops.known, current[1:])
+		if err != nil {
+			ops.typeErrorf("%w", err)
+		}
+		if nargs != nil {
+			args = nargs
+		}
+		if nreturns != nil {
+			returns = nreturns
 		}
 	}
-	return tokens, nil
-}
 
-func filterComments(lts lineTokens) lineTokens {
-	var nlts lineTokens
-	for _, lt := range lts {
-		if lt.kind != tokenComment {
-			nlts = append(nlts, lt)
-		}
+	ops.trackStack(args, returns, append([]token{{str: expandedName}}, current[1:]...))
+
+	spec.asm(ops, &spec, current[1:]) //nolint:errcheck // ignore error and continue, to collect more errors
+
+	if spec.deadens() { // An unconditional branch deadens the following code
+		ops.known.deaden()
 	}
-	return nlts
+
+	if spec.Name == "callsub" || spec.Name == "retsub" {
+		// since retsub comes back to the callsub, it is an entry point like a label
+		ops.known.label()
+	}
 }
 
+// assembleLine deals with a single line of the program
+// which may contain multiple items joined with semicolon
 func (ops *OpStream) assembleLine(line string) {
 	tokens := tokensFromLine(line, ops.sourceLine)
 
@@ -1901,7 +1972,7 @@ func (ops *OpStream) assembleLine(line string) {
 
 	// Filter out comment tokens after adding tokens
 	// to the lines, since they're not useful for assembly
-	tokens = filterComments(tokens)
+	tokens = tokens.filter(tokenComment)
 
 	if len(tokens) > 0 {
 		if first := tokens[0]; first.str[0] == '#' {
@@ -1918,73 +1989,8 @@ func (ops *OpStream) assembleLine(line string) {
 		}
 	}
 
-	for current, next := splitTokens(tokens); len(current) > 0 || len(next) > 0; current, next = splitTokens(next) {
-		if len(current) == 0 {
-			continue
-		}
-
-		// we're about to begin processing opcodes, so settle the Version
-		if ops.Version == assemblerNoVersion {
-			ops.Version = AssemblerDefaultVersion
-		}
-		if ops.versionedPseudoOps == nil {
-			ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
-		}
-
-		// Check for label
-		opstring := current[0].str
-		if opstring[len(opstring)-1] == ':' {
-			ops.createLabel(opstring[:len(opstring)-1])
-			current = current[1:]
-			if len(current) == 0 {
-				ops.trace("%3d: label only\n", ops.sourceLine)
-				continue
-			}
-			// it is a label but more on the same line
-			opstring = current[0].str
-		}
-
-		// Get the spec for the current op
-		spec, expandedName, ok := getSpec(ops, opstring, current[1:])
-
-		if !ok {
-			ops.trace("\n")
-			continue
-		}
-
-		ops.trace("%3d: %s\t", ops.sourceLine, opstring)
-		ops.recordSourceLine()
-		if spec.Modes == ModeApp {
-			ops.HasStatefulOps = true
-		}
-		args, returns := spec.Arg.Types, spec.Return.Types
-		if spec.refine != nil {
-			nargs, nreturns, err := spec.refine(&ops.known, current[1:])
-			if err != nil {
-				ops.typeErrorf("%w", err)
-			}
-			if nargs != nil {
-				args = nargs
-			}
-			if nreturns != nil {
-				returns = nreturns
-			}
-		}
-
-		ops.trackStack(args, returns, append([]token{{str: expandedName}}, current[1:]...))
-
-		spec.asm(ops, &spec, current[1:]) //nolint:errcheck // ignore error and continue, to collect more errors
-
-		if spec.deadens() { // An unconditional branch deadens the following code
-			ops.known.deaden()
-		}
-
-		if spec.Name == "callsub" || spec.Name == "retsub" {
-			// since retsub comes back to the callsub, it is an entry point like a label
-			ops.known.label()
-		}
-
-		ops.trace("\n")
+	for current, next := tokens.split(); len(current) > 0 || len(next) > 0; current, next = next.split() {
+		ops.assembleTokens(current)
 	}
 }
 

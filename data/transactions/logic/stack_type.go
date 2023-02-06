@@ -64,14 +64,14 @@ func (at avmType) stackType() StackType {
 	case avmBytes:
 		return StackBytes
 	default:
-		panic(at)
+		panic(fmt.Sprintf("no stack type matching: %s", at))
 	}
-
 }
 
 var (
-	// TODO: reuse String result for name of base types
+	//
 	// Base stack types the avm knows about
+	//
 
 	// StackUint64 is any valid uint64
 	StackUint64 = NewStackType(avmUint64, bound(0, math.MaxUint64))
@@ -91,7 +91,9 @@ var (
 		AVMType: avmNone,
 	}
 
+	//
 	// Higher level types
+	//
 
 	// StackBoolean constrains the int to 1 or 0, representing True or False
 	StackBoolean = NewStackType(avmUint64, bound(0, 1), "bool")
@@ -150,13 +152,22 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 }
 
 func (st StackType) narrowed(bounds [2]uint64) StackType {
+	// It's static, set the name to show
+	// the static value
+	if bounds[0] == bounds[1] {
+		switch st.AVMType {
+		case avmBytes:
+			return NewStackType(st.AVMType, bounds, fmt.Sprintf("[%d]bytes", bounds[0]))
+		case avmUint64:
+			return NewStackType(st.AVMType, bounds, fmt.Sprintf("%d", bounds[0]))
+		}
+	}
 	return NewStackType(st.AVMType, bounds)
 }
 
 // AssignableTo returns a bool indicating whether the receiver can be
 // assigned to some other type that is expected by the next operation
 func (st StackType) AssignableTo(other StackType) bool {
-	// what are you doing?
 	if st.AVMType == avmNone || other.AVMType == avmNone {
 		return false
 	}
@@ -203,7 +214,7 @@ func (st StackType) AssignableTo(other StackType) bool {
 		// dont use this for avm runtime
 		return true
 	default:
-		panic("wat")
+		panic("no stack type match in AssignableTo check")
 	}
 }
 
