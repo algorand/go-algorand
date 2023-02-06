@@ -1893,7 +1893,7 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 }
 
 // assembleTokens works on a single set of tokens representing
-// an `op` and its immediate args
+// an op and its immediate args
 func (ops *OpStream) assembleTokens(current []token) {
 	if len(current) == 0 {
 		return
@@ -1964,7 +1964,7 @@ func (ops *OpStream) assembleTokens(current []token) {
 }
 
 // assembleLine deals with a single line of the program
-// which may contain multiple items joined with semicolon
+// which may contain multiple ops, joined with semicolon
 func (ops *OpStream) assembleLine(line string) {
 	tokens := tokensFromLine(line, ops.sourceLine)
 
@@ -1984,7 +1984,6 @@ func (ops *OpStream) assembleLine(line string) {
 			default:
 				ops.errorf("Unknown directive: %s", directive)
 			}
-			ops.snapshotStack()
 			return
 		}
 	}
