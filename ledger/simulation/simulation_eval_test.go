@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/libgoal"
 
@@ -33,6 +34,7 @@ import (
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -84,6 +86,7 @@ type simulationTestCase struct {
 }
 
 func normalizeEvalDeltas(t *testing.T, actual, expected *transactions.EvalDelta) {
+	t.Helper()
 	for _, evalDelta := range []*transactions.EvalDelta{actual, expected} {
 		if len(evalDelta.GlobalDelta) == 0 {
 			evalDelta.GlobalDelta = nil
@@ -92,14 +95,23 @@ func normalizeEvalDeltas(t *testing.T, actual, expected *transactions.EvalDelta)
 			evalDelta.LocalDeltas = nil
 		}
 	}
-	require.Equal(t, len(expected.InnerTxns), len(actual.InnerTxns))
+	// Use assert instead of require here so that we get a more useful error message later
+	assert.Equal(t, len(expected.InnerTxns), len(actual.InnerTxns))
 	for innerIndex := range expected.InnerTxns {
-		if expected.InnerTxns[innerIndex].SignedTxn.Txn.Type == "" {
+		if innerIndex == len(actual.InnerTxns) {
+			break
+		}
+		expectedTxn := &expected.InnerTxns[innerIndex]
+		actualTxn := &actual.InnerTxns[innerIndex]
+		if expectedTxn.SignedTxn.Txn.Type == "" {
 			// Use Type as a marker for whether the transaction was specified or not. If not
 			// specified, replace it with the actual inner txn
-			expected.InnerTxns[innerIndex].SignedTxn = actual.InnerTxns[innerIndex].SignedTxn
+			expectedTxn.SignedTxn = actualTxn.SignedTxn
+		} else if expectedTxn.SignedTxn.Txn.Group.IsZero() {
+			// Inner txn IDs are very difficult to calculate, so copy from actual
+			expectedTxn.SignedTxn.Txn.Group = actualTxn.SignedTxn.Txn.Group
 		}
-		normalizeEvalDeltas(t, &actual.InnerTxns[innerIndex].EvalDelta, &expected.InnerTxns[innerIndex].EvalDelta)
+		normalizeEvalDeltas(t, &actualTxn.EvalDelta, &expectedTxn.EvalDelta)
 	}
 }
 
@@ -1264,4 +1276,79 @@ int 1`,
 			},
 		}
 	})
+}
+
+func getMockTracerScenarioSimulationResult(scenario mocktracer.TestScenario) simulation.Result {
+	failedAt := scenario.FailedAt
+	if len(failedAt) != 0 {
+		// The mocktracer scenario txn is second in our group, so add 1 to the top-level index
+		failedAt[0]++
+	}
+
+	result := simulation.Result{
+		Version: 1,
+		TxnGroups: []simulation.TxnGroupResult{
+			{
+				FailedAt: failedAt,
+				Txns: []simulation.TxnResult{
+					{},
+					{
+						Txn: transactions.SignedTxnWithAD{
+							ApplyData: scenario.ExpectedSimulationAD,
+						},
+					},
+				},
+			},
+		},
+		WouldSucceed: scenario.Outcome == mocktracer.ApprovalOutcome,
+	}
+	return result
+}
+
+func TestMockTracerScenarios(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	scenarios := mocktracer.GetTestScenarios()
+
+	for name, scenarioFn := range scenarios {
+		scenarioFn := scenarioFn
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+				sender := accounts[0]
+
+				futureAppID := basics.AppIndex(2)
+				payTxn := txnInfo.NewTxn(txntest.Txn{
+					Type:     protocol.PaymentTx,
+					Sender:   sender.Addr,
+					Receiver: futureAppID.Address(),
+					Amount:   2_000_000,
+				})
+				appCallTxn := txnInfo.NewTxn(txntest.Txn{
+					Type:   protocol.ApplicationCallTx,
+					Sender: sender.Addr,
+					ClearStateProgram: `#pragma version 6
+	int 1`,
+				})
+				scenario := scenarioFn(mocktracer.TestScenarioInfo{
+					CallingTxn:   appCallTxn.Txn(),
+					MinFee:       basics.MicroAlgos{Raw: txnInfo.CurrentProtocolParams().MinTxnFee},
+					CreatedAppID: futureAppID,
+				})
+				appCallTxn.ApprovalProgram = scenario.Program
+
+				txntest.Group(&payTxn, &appCallTxn)
+
+				signedPayTxn := payTxn.Txn().Sign(sender.Sk)
+				signedAppCallTxn := appCallTxn.Txn().Sign(sender.Sk)
+
+				return simulationTestCase{
+					input:         []transactions.SignedTxn{signedPayTxn, signedAppCallTxn},
+					expectedError: scenario.ExpectedError,
+					expected:      getMockTracerScenarioSimulationResult(scenario),
+				}
+			})
+		})
+	}
 }
