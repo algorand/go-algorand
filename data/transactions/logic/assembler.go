@@ -1938,7 +1938,7 @@ func (ops *OpStream) assembleLine(line string) {
 			current = current[1:]
 			if len(current) == 0 {
 				ops.trace("%3d: label only\n", ops.sourceLine)
-				return
+				continue
 			}
 			// it is a label but more on the same line
 			opstring = current[0].str
