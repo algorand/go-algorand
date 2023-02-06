@@ -495,7 +495,7 @@ type Local struct {
 
 	// DisableLedgerLRUCache disables LRU caches in ledger for testing purpose.
 	// Note that we turn it on for only testing purpose, not supposed to use it in real production environment.
-	DisableLedgerLRUCache bool `version[27]:"false" codec:""`
+	DisableLedgerLRUCache bool `version[27]:"false" codec:"-"`
 
 	// EnableFollowMode launches the node in "follower" mode. This turns off the agreement service,
 	// and APIs related to broadcasting transactions, and enables APIs which can retrieve detailed information
