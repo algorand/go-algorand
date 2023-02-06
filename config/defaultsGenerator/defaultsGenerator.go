@@ -112,6 +112,12 @@ func prettyPrint(c config.Local, format string) (out string) {
 	}
 
 	for fieldIdx, field := range fields {
+		// skip fields in Local with tag `codec:"-"` (for DisableLedgerLRUCache)
+		if format == "json" && field.Tag.Get("codec") == "-" {
+			continue
+		}
+
+		// normal generator logic
 		switch field.Type.Kind() {
 		case reflect.Bool:
 			v := reflect.ValueOf(&c).Elem().FieldByName(field.Name).Bool()
