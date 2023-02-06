@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"reflect"
@@ -108,7 +107,7 @@ type ledgerTracker interface {
 	// commitRound is called for each of the trackers after a deferredCommitContext was agreed upon
 	// by all the prepareCommit calls. The commitRound is being executed within a single transactional
 	// context, and so, if any of the tracker's commitRound calls fails, the transaction is rolled back.
-	commitRound(context.Context, *sql.Tx, *deferredCommitContext) error
+	commitRound(context.Context, store.TransactionScope, *deferredCommitContext) error
 	// postCommit is called only on a successful commitRound. In that case, each of the trackers have
 	// the chance to update it's internal data structures, knowing that the given deferredCommitContext
 	// has completed. An optional context is provided for long-running operations.
@@ -282,9 +281,13 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 	tr.dbs = l.trackerDB()
 	tr.log = l.trackerLog()
 
-	err = tr.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
-		arw := store.NewAccountsSQLReaderWriter(tx)
-		tr.dbRound, err = arw.AccountsRound()
+	err = tr.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
+		ar, err := tx.CreateAccountsReader()
+		if err != nil {
+			return err
+		}
+
+		tr.dbRound, err = ar.AccountsRound()
 		return err
 	})
 
@@ -512,8 +515,12 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	err := tr.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
-		arw := store.NewAccountsSQLReaderWriter(tx)
+	err := tr.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		arw, err := tx.CreateAccountsReaderWriter()
+		if err != nil {
+			return err
+		}
+
 		for _, lt := range tr.trackers {
 			err0 := lt.commitRound(ctx, tx, dcc)
 			if err0 != nil {

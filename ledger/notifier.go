@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"sync"
 
 	"github.com/algorand/go-deadlock"
@@ -26,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 )
 
 type blockDeltaPair struct {
@@ -113,7 +113,7 @@ func (bn *blockNotifier) prepareCommit(dcc *deferredCommitContext) error {
 	return nil
 }
 
-func (bn *blockNotifier) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+func (bn *blockNotifier) commitRound(context.Context, store.TransactionScope, *deferredCommitContext) error {
 	return nil
 }
 

@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -345,8 +344,11 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
-	err = ml.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
-		arw := store.NewAccountsSQLReaderWriter(tx)
+	err = ml.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		arw, err := tx.CreateAccountsReaderWriter()
+		if err != nil {
+			return err
+		}
 
 		for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
 			var updates compactAccountDeltas
@@ -563,7 +565,7 @@ func (bt *blockingTracker) prepareCommit(*deferredCommitContext) error {
 }
 
 // commitRound is not used by the blockingTracker
-func (bt *blockingTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+func (bt *blockingTracker) commitRound(context.Context, store.TransactionScope, *deferredCommitContext) error {
 	return nil
 }
 

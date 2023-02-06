@@ -19,7 +19,6 @@ package ledger
 import (
 	"container/heap"
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"sort"
@@ -35,7 +34,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -151,11 +149,15 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	ao.dbs = l.trackerDB()
 	ao.log = l.trackerLog()
 
-	err = ao.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) error {
-		arw := store.NewAccountsSQLReaderWriter(tx)
+	err = ao.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) error {
+		ar, err := tx.CreateAccountsReader()
+		if err != nil {
+			return err
+		}
+
 		var err0 error
 		var endRound basics.Round
-		ao.onlineRoundParamsData, endRound, err0 = arw.AccountsOnlineRoundParams()
+		ao.onlineRoundParamsData, endRound, err0 = ar.AccountsOnlineRoundParams()
 		if err0 != nil {
 			return err0
 		}
@@ -163,7 +165,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 			return fmt.Errorf("last onlineroundparams round %d does not match dbround %d", endRound, ao.cachedDBRoundOnline)
 		}
 
-		onlineAccounts, err0 := arw.OnlineAccountsAll(onlineAccountsCacheMaxSize)
+		onlineAccounts, err0 := ar.OnlineAccountsAll(onlineAccountsCacheMaxSize)
 		if err0 != nil {
 			return err0
 		}
@@ -399,28 +401,31 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 
 // commitRound closure is called within the same transaction for all trackers
 // it receives current offset and dbRound
-func (ao *onlineAccounts) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
+func (ao *onlineAccounts) commitRound(ctx context.Context, ts store.TransactionScope, dcc *deferredCommitContext) (err error) {
 	offset := dcc.offset
 	dbRound := dcc.oldBase
 
-	_, err = db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
+	_, err = ts.ResetTransactionWarnDeadline(ctx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 	if err != nil {
 		return err
 	}
 
-	err = dcc.compactOnlineAccountDeltas.accountsLoadOld(tx)
+	err = dcc.compactOnlineAccountDeltas.accountsLoadOld(ts)
 	if err != nil {
 		return err
 	}
 
 	// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 	// so that we can update the base account back.
-	dcc.updatedPersistedOnlineAccounts, err = onlineAccountsNewRound(tx, dcc.compactOnlineAccountDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
+	dcc.updatedPersistedOnlineAccounts, err = onlineAccountsNewRound(ts, dcc.compactOnlineAccountDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
 	if err != nil {
 		return err
 	}
 
-	arw := store.NewAccountsSQLReaderWriter(tx)
+	arw, err := ts.CreateAccountsReaderWriter()
+	if err != nil {
+		return err
+	}
 
 	err = arw.OnlineAccountsDelete(dcc.onlineAccountsForgetBefore)
 	if err != nil {
@@ -815,13 +820,17 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 			var accts map[basics.Address]*ledgercore.OnlineAccount
 			start := time.Now()
 			ledgerAccountsonlinetopCount.Inc(nil)
-			err = ao.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
-				arw := store.NewAccountsSQLReaderWriter(tx)
-				accts, err = arw.AccountsOnlineTop(rnd, batchOffset, batchSize, genesisProto)
+			err = ao.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
+				ar, err := tx.CreateAccountsReader()
+				if err != nil {
+					return err
+				}
+
+				accts, err = ar.AccountsOnlineTop(rnd, batchOffset, batchSize, genesisProto)
 				if err != nil {
 					return
 				}
-				dbRound, err = arw.AccountsRound()
+				dbRound, err = ar.AccountsRound()
 				return
 			})
 			ledgerAccountsonlinetopMicros.AddMicrosecondsSince(start, nil)

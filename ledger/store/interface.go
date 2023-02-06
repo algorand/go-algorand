@@ -18,9 +18,12 @@ package store
 
 import (
 	"context"
+	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // AccountsWriter is the write interface for:
@@ -45,9 +48,15 @@ type AccountsWriter interface {
 
 // AccountsWriterExt is the write interface used inside transactions and batch operations.
 type AccountsWriterExt interface {
+	AccountsReset(ctx context.Context) error
 	ResetAccountHashes(ctx context.Context) (err error)
 	TxtailNewRound(ctx context.Context, baseRound basics.Round, roundData [][]byte, forgetBeforeRound basics.Round) error
 	UpdateAccountsRound(rnd basics.Round) (err error)
+	UpdateAccountsHashRound(ctx context.Context, hashRound basics.Round) (err error)
+	AccountsPutTotals(totals ledgercore.AccountTotals, catchpointStaging bool) error
+	OnlineAccountsDelete(forgetBefore basics.Round) (err error)
+	AccountsPutOnlineRoundParams(onlineRoundParamsData []ledgercore.OnlineRoundParamsData, startRound basics.Round) error
+	AccountsPruneOnlineRoundParams(deleteBeforeRound basics.Round) error
 }
 
 // AccountsReader is the read interface for:
@@ -68,11 +77,32 @@ type AccountsReader interface {
 	Close()
 }
 
+type AccountsReaderExt interface {
+	AccountsTotals(ctx context.Context, catchpointStaging bool) (totals ledgercore.AccountTotals, err error)
+	AccountsHashRound(ctx context.Context) (hashrnd basics.Round, err error)
+	LookupAccountAddressFromAddressID(ctx context.Context, addrid int64) (address basics.Address, err error)
+	LookupAccountDataByAddress(basics.Address) (rowid int64, data []byte, err error)
+	LookupAccountRowID(basics.Address) (addrid int64, err error)
+	LookupResourceDataByAddrID(addrid int64, aidx basics.CreatableIndex) (data []byte, err error)
+	TotalAccounts(ctx context.Context) (total uint64, err error)
+	TotalKVs(ctx context.Context) (total uint64, err error)
+	AccountsRound() (rnd basics.Round, err error)
+	AccountsAllTest() (bals map[basics.Address]basics.AccountData, err error)
+	CheckCreatablesTest(t *testing.T, iteration int, expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
+	LookupOnlineAccountDataByAddress(addr basics.Address) (rowid int64, data []byte, err error)
+	AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error)
+	AccountsOnlineRoundParams() (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error)
+	OnlineAccountsAll(maxAccounts uint64) ([]PersistedOnlineAccountData, error)
+	LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error)
+	LoadAllFullAccounts(ctx context.Context, balancesTable string, resourcesTable string, acctCb func(basics.Address, basics.AccountData)) (count int, err error)
+}
+
 // AccountsReaderWriter is AccountsReader+AccountsWriter
 type AccountsReaderWriter interface {
 	// AccountsReader
 	// AccountsWriter
 	AccountsWriterExt
+	AccountsReaderExt
 }
 
 // OnlineAccountsWriter is the write interface for:
@@ -96,6 +126,8 @@ type OnlineAccountsReader interface {
 // CatchpointWriter is the write interface for:
 // - catchpoints
 type CatchpointWriter interface {
+	CreateCatchpointStagingHashesIndex(ctx context.Context) (err error)
+
 	StoreCatchpoint(ctx context.Context, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error)
 
 	WriteCatchpointStateUint64(ctx context.Context, stateName CatchpointState, setValue uint64) (err error)
@@ -105,6 +137,9 @@ type CatchpointWriter interface {
 	WriteCatchpointStagingKVs(ctx context.Context, keys [][]byte, values [][]byte, hashes [][]byte) error
 	WriteCatchpointStagingCreatable(ctx context.Context, bals []NormalizedAccountBalance) error
 	WriteCatchpointStagingHashes(ctx context.Context, bals []NormalizedAccountBalance) error
+
+	ApplyCatchpointStagingBalances(ctx context.Context, balancesRound basics.Round, merkleRootRound basics.Round) (err error)
+	ResetCatchpointStagingBalances(ctx context.Context, newCatchup bool) (err error)
 
 	InsertUnfinishedCatchpoint(ctx context.Context, round basics.Round, blockHash crypto.Digest) error
 	DeleteUnfinishedCatchpoint(ctx context.Context, round basics.Round) error

@@ -294,11 +294,14 @@ func makeCompactResourceDeltas(stateDeltas []ledgercore.StateDelta, baseRound ba
 // resourcesLoadOld updates the entries on the deltas.oldResource map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
-func (a *compactResourcesDeltas) resourcesLoadOld(tx *sql.Tx, knownAddresses map[basics.Address]int64) (err error) {
+func (a *compactResourcesDeltas) resourcesLoadOld(ts store.TransactionScope, knownAddresses map[basics.Address]int64) (err error) {
 	if len(a.misses) == 0 {
 		return nil
 	}
-	arw := store.NewAccountsSQLReaderWriter(tx)
+	arw, err := ts.CreateAccountsReaderWriter()
+	if err != nil {
+		return err
+	}
 
 	defer func() {
 		a.misses = nil
@@ -458,11 +461,16 @@ func makeCompactAccountDeltas(stateDeltas []ledgercore.StateDelta, baseRound bas
 // accountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
-func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
+func (a *compactAccountDeltas) accountsLoadOld(ts store.TransactionScope) (err error) {
+	// TODO: this function only needs a reader's scope to the datastore
 	if len(a.misses) == 0 {
 		return nil
 	}
-	arw := store.NewAccountsSQLReaderWriter(tx)
+	arw, err := ts.CreateAccountsReaderWriter()
+	if err != nil {
+		return err
+	}
+
 	defer func() {
 		a.misses = nil
 	}()
@@ -595,11 +603,14 @@ func makeCompactOnlineAccountDeltas(accountDeltas []ledgercore.AccountDeltas, ba
 // accountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
-func (a *compactOnlineAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
+func (a *compactOnlineAccountDeltas) accountsLoadOld(ts store.TransactionScope) (err error) {
 	if len(a.misses) == 0 {
 		return nil
 	}
-	arw := store.NewAccountsSQLReaderWriter(tx)
+	arw, err := ts.CreateAccountsReaderWriter()
+	if err != nil {
+		return err
+	}
 	defer func() {
 		a.misses = nil
 	}()
@@ -693,7 +704,7 @@ func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, pro
 
 // accountsNewRound is a convenience wrapper for accountsNewRoundImpl
 func accountsNewRound(
-	tx *sql.Tx,
+	ts store.TransactionScope,
 	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedKvValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
 ) (updatedAccounts []store.PersistedAccountData, updatedResources map[basics.Address][]store.PersistedResourcesData, updatedKVs map[string]store.PersistedKVData, err error) {
@@ -702,7 +713,7 @@ func accountsNewRound(
 	hasKvPairs := len(kvPairs) > 0
 	hasCreatables := len(creatables) > 0
 
-	writer, err := store.MakeAccountsSQLWriter(tx, hasAccounts, hasResources, hasKvPairs, hasCreatables)
+	writer, err := ts.CreateAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables)
 	if err != nil {
 		return
 	}
@@ -712,13 +723,13 @@ func accountsNewRound(
 }
 
 func onlineAccountsNewRound(
-	tx *sql.Tx,
+	ts store.TransactionScope,
 	updates compactOnlineAccountDeltas,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
 ) (updatedAccounts []store.PersistedOnlineAccountData, err error) {
 	hasAccounts := updates.len() > 0
 
-	writer, err := store.MakeOnlineAccountsSQLWriter(tx, hasAccounts)
+	writer, err := ts.CreateOnlineAccountsOptimizedWriter(hasAccounts)
 	if err != nil {
 		return
 	}

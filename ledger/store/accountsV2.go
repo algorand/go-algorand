@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"testing"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -29,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/stretchr/testify/require"
 )
 
 type accountsV2Reader struct {
@@ -45,7 +47,7 @@ type accountsV2ReaderWriter struct {
 	accountsV2Writer
 }
 
-// NewAccountsSQLReaderWriter creates a Catchpoint SQL reader+writer
+// NewAccountsSQLReaderWriter creates an SQL reader+writer
 func NewAccountsSQLReaderWriter(e db.Executable) *accountsV2ReaderWriter {
 	return &accountsV2ReaderWriter{
 		accountsV2Reader{q: e, preparedStatements: make(map[string]*sql.Stmt)},
@@ -82,6 +84,81 @@ func (r *accountsV2Reader) AccountsTotals(ctx context.Context, catchpointStaging
 		&totals.RewardsLevel)
 
 	return
+}
+
+// AccountsAllTest iterates the account table and returns a map of the data
+// It is meant only for testing purposes - it is heavy and has no production use case.
+func (r *accountsV2Reader) AccountsAllTest() (bals map[basics.Address]basics.AccountData, err error) {
+	rows, err := r.q.Query("SELECT rowid, address, data FROM accountbase")
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	bals = make(map[basics.Address]basics.AccountData)
+	for rows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		var rowid sql.NullInt64
+		err = rows.Scan(&rowid, &addrbuf, &buf)
+		if err != nil {
+			return
+		}
+
+		var data BaseAccountData
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return
+		}
+
+		var addr basics.Address
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return
+		}
+		copy(addr[:], addrbuf)
+
+		var ad basics.AccountData
+		ad, err = r.LoadFullAccount(context.Background(), "resources", addr, rowid.Int64, data)
+		if err != nil {
+			return
+		}
+
+		bals[addr] = ad
+	}
+
+	err = rows.Err()
+	return
+}
+
+func (r *accountsV2Reader) CheckCreatablesTest(t *testing.T,
+	iteration int,
+	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
+	stmt, err := r.q.Prepare("SELECT asset, creator, ctype FROM assetcreators")
+	require.NoError(t, err)
+
+	defer stmt.Close()
+	rows, err := stmt.Query()
+	if err != sql.ErrNoRows {
+		require.NoError(t, err)
+	}
+	defer rows.Close()
+	counter := 0
+	for rows.Next() {
+		counter++
+		mc := ledgercore.ModifiedCreatable{}
+		var buf []byte
+		var asset basics.CreatableIndex
+		err := rows.Scan(&asset, &buf, &mc.Ctype)
+		require.NoError(t, err)
+		copy(mc.Creator[:], buf)
+
+		require.NotNil(t, expectedDbImage[asset])
+		require.Equal(t, expectedDbImage[asset].Creator, mc.Creator)
+		require.Equal(t, expectedDbImage[asset].Ctype, mc.Ctype)
+		require.True(t, expectedDbImage[asset].Created)
+	}
+	require.Equal(t, len(expectedDbImage), counter)
 }
 
 // AccountsRound returns the tracker balances round number

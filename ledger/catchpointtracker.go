@@ -45,7 +45,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/db"
 )
 
 const (
@@ -211,9 +210,13 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		}
 	}
 
-	return ct.dbs.Batch(func(ctx context.Context, tx *sql.Tx) error {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
-		err := ct.recordFirstStageInfo(ctx, tx, dbRound, totalKVs, totalAccounts, totalChunks, biggestChunkLen)
+	return ct.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) error {
+		crw, err := tx.CreateCatchpointReaderWriter()
+		if err != nil {
+			return err
+		}
+
+		err = ct.recordFirstStageInfo(ctx, tx, dbRound, totalKVs, totalAccounts, totalChunks, biggestChunkLen)
 		if err != nil {
 			return err
 		}
@@ -324,7 +327,7 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Rou
 	ct.catchpointDataSlowWriting = make(chan struct{}, 1)
 	close(ct.catchpointDataSlowWriting)
 
-	err = ct.dbs.Batch(func(ctx context.Context, tx *sql.Tx) error {
+	err = ct.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) error {
 		return ct.initializeHashes(ctx, tx, dbRound)
 	})
 	if err != nil {
@@ -479,7 +482,7 @@ func (ct *catchpointTracker) prepareCommit(dcc *deferredCommitContext) error {
 	return nil
 }
 
-func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
+func (ct *catchpointTracker) commitRound(ctx context.Context, ts store.TransactionScope, dcc *deferredCommitContext) (err error) {
 	treeTargetRound := basics.Round(0)
 	offset := dcc.offset
 	dbRound := dcc.oldBase
@@ -490,12 +493,18 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 		}
 	}()
 
-	crw := store.NewCatchpointSQLReaderWriter(tx)
-	arw := store.NewAccountsSQLReaderWriter(tx)
+	crw, err := ts.CreateCatchpointReaderWriter()
+	if err != nil {
+		return err
+	}
+	arw, err := ts.CreateAccountsReaderWriter()
+	if err != nil {
+		return err
+	}
 
 	if ct.catchpointEnabled() {
 		var mc store.MerkleCommitter
-		mc, err = store.MakeMerkleCommitter(tx, false)
+		mc, err = ts.CreateMerkleCommitter(false)
 		if err != nil {
 			return
 		}
@@ -768,8 +777,12 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 		return err
 	}
 
-	err = ct.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
+	err = ct.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		crw, err := tx.CreateCatchpointReaderWriter()
+		if err != nil {
+			return err
+		}
+
 		err = ct.recordCatchpointFile(ctx, crw, round, relCatchpointFilePath, fileInfo.Size())
 		if err != nil {
 			return err
@@ -1088,7 +1101,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	var catchpointWriter *catchpointWriter
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
-	err = ct.dbs.BatchContext(ctx, func(dbCtx context.Context, tx *sql.Tx) (err error) {
+	err = ct.dbs.TransactionContext(ctx, func(dbCtx context.Context, tx store.TransactionScope) (err error) {
 		catchpointWriter, err = makeCatchpointWriter(dbCtx, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk)
 		if err != nil {
 			return
@@ -1104,7 +1117,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 				// we just wrote some data, but there is more to be written.
 				// go to sleep for while.
 				// before going to sleep, extend the transaction timeout so that we won't get warnings:
-				_, err0 := db.ResetTransactionWarnDeadline(dbCtx, tx, time.Now().Add(1*time.Second))
+				_, err0 := tx.ResetTransactionWarnDeadline(dbCtx, time.Now().Add(1*time.Second))
 				if err0 != nil {
 					ct.log.Warnf("catchpointTracker: generateCatchpoint: failed to reset transaction warn deadline : %v", err0)
 				}
@@ -1164,15 +1177,19 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	return catchpointWriter.totalKVs, catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, nil
 }
 
-func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.Tx, accountsRound basics.Round, totalKVs uint64, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64) error {
-	arw := store.NewAccountsSQLReaderWriter(tx)
+func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx store.TransactionScope, accountsRound basics.Round, totalKVs uint64, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64) error {
+	arw, err := tx.CreateAccountsReaderWriter()
+	if err != nil {
+		return err
+	}
+
 	accountTotals, err := arw.AccountsTotals(ctx, false)
 	if err != nil {
 		return err
 	}
 
 	{
-		mc, err := store.MakeMerkleCommitter(tx, false)
+		mc, err := tx.CreateMerkleCommitter(false)
 		if err != nil {
 			return err
 		}
@@ -1191,7 +1208,11 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.T
 		return err
 	}
 
-	crw := store.NewCatchpointSQLReaderWriter(tx)
+	crw, err := tx.CreateCatchpointReaderWriter()
+	if err != nil {
+		return err
+	}
+
 	info := store.CatchpointFirstStageInfo{
 		Totals:           accountTotals,
 		TotalAccounts:    totalAccounts,
@@ -1254,9 +1275,13 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 	ledgerGetcatchpointCount.Inc(nil)
 	// TODO: we need to generalize this, check @cce PoC PR, he has something
 	//       somewhat broken for some KVs..
-	err := ct.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
-		dbFileName, _, fileSize, err = crw.GetCatchpoint(ctx, round)
+	err := ct.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
+		cr, err := tx.CreateCatchpointReader()
+		if err != nil {
+			return err
+		}
+
+		dbFileName, _, fileSize, err = cr.GetCatchpoint(ctx, round)
 		return
 	})
 	ledgerGetcatchpointMicros.AddMicrosecondsSince(start, nil)
@@ -1321,8 +1346,11 @@ func (ct *catchpointTracker) catchpointEnabled() bool {
 
 // initializeHashes initializes account/resource/kv hashes.
 // as part of the initialization, it tests if a hash table matches to account base and updates the former.
-func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, rnd basics.Round) error {
-	arw := store.NewAccountsSQLReaderWriter(tx)
+func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx store.TransactionScope, rnd basics.Round) error {
+	arw, err := tx.CreateAccountsReaderWriter()
+	if err != nil {
+		return err
+	}
 	hashRound, err := arw.AccountsHashRound(ctx)
 	if err != nil {
 		return err
@@ -1342,7 +1370,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 	}
 
 	// create the merkle trie for the balances
-	committer, err := store.MakeMerkleCommitter(tx, false)
+	committer, err := tx.CreateMerkleCommitter(false)
 	if err != nil {
 		return fmt.Errorf("initializeHashes was unable to makeMerkleCommitter: %v", err)
 	}
@@ -1361,7 +1389,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 
 	if rootHash.IsZero() {
 		ct.log.Infof("initializeHashes rebuilding merkle trie for round %d", rnd)
-		accountBuilderIt := store.MakeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
+		accountBuilderIt := tx.CreateOrderedAccountsIter(trieRebuildAccountChunkSize)
 		defer accountBuilderIt.Close(ctx)
 		startTrieBuildTime := time.Now()
 		trieHashCount := 0
@@ -1432,7 +1460,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 
 		// Now add the kvstore hashes
 		pendingTrieHashes = 0
-		kvs, err := store.MakeKVsIter(ctx, tx)
+		kvs, err := tx.CreateKVsIter(ctx)
 		if err != nil {
 			return err
 		}

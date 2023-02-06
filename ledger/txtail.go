@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
 	"github.com/algorand/go-deadlock"
@@ -97,9 +96,13 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	var roundTailHashes []crypto.Digest
 	var baseRound basics.Round
 	if dbRound > 0 {
-		err := l.trackerDB().Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
-			arw := store.NewAccountsSQLReaderWriter(tx)
-			roundData, roundTailHashes, baseRound, err = arw.LoadTxTail(ctx, dbRound)
+		err := l.trackerDB().Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
+			ar, err := tx.CreateAccountsReader()
+			if err != nil {
+				return err
+			}
+
+			roundData, roundTailHashes, baseRound, err = ar.LoadTxTail(ctx, dbRound)
 			return
 		})
 		if err != nil {
@@ -269,8 +272,12 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 	return
 }
 
-func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) error {
-	arw := store.NewAccountsSQLReaderWriter(tx)
+func (t *txTail) commitRound(ctx context.Context, ts store.TransactionScope, dcc *deferredCommitContext) error {
+	arw, err := ts.CreateAccountsReaderWriter()
+	if err != nil {
+		return err
+	}
+	return nil
 
 	// determine the round to remove data
 	// the formula is similar to the committedUpTo: rnd + 1 - retain size

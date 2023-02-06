@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"testing"
@@ -154,12 +153,15 @@ func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.Conse
 	t.trackerDBs, _ = store.DbOpenTrackerTest(ts, inMemory)
 	t.protoVersion = protoVersion
 
-	err := t.trackerDBs.Batch(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
-		arw := store.NewAccountsSQLReaderWriter(tx)
+	err := t.trackerDBs.Batch(func(transactionCtx context.Context, tx store.BatchScope) (err error) {
+		arw, err := tx.CreateAccountsWriter()
+		if err != nil {
+			return err
+		}
 
 		accts := ledgertesting.RandomAccounts(20, true)
 		proto := config.Consensus[protoVersion]
-		newDB := store.AccountsInitTest(ts, tx, accts, protoVersion)
+		newDB := tx.AccountsInitTest(ts, accts, protoVersion)
 		require.True(ts, newDB)
 
 		roundData := make([][]byte, 0, proto.MaxTxnLife)
@@ -298,7 +300,7 @@ func TestTxTailDeltaTracking(t *testing.T) {
 				err = txtail.prepareCommit(dcc)
 				require.NoError(t, err)
 
-				err := ledger.trackerDBs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
+				err := ledger.trackerDBs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
 					err = txtail.commitRound(context.Background(), tx, dcc)
 					require.NoError(t, err)
 					return nil

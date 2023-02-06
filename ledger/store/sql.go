@@ -45,10 +45,10 @@ type onlineAccountsDbQueries struct {
 }
 
 type accountsSQLWriter struct {
-	insertCreatableIdxStmt, deleteCreatableIdxStmt             *sql.Stmt
-	deleteByRowIDStmt, insertStmt, updateStmt                  *sql.Stmt
-	deleteResourceStmt, insertResourceStmt, updateResourceStmt *sql.Stmt
-	deleteKvPairStmt, upsertKvPairStmt                         *sql.Stmt
+	insertCreatableIdxStmt, deleteCreatableIdxStmt                 *sql.Stmt
+	deleteByRowIDStmt, insertStmt, insertBasicTestStmt, updateStmt *sql.Stmt
+	deleteResourceStmt, insertResourceStmt, updateResourceStmt     *sql.Stmt
+	deleteKvPairStmt, upsertKvPairStmt                             *sql.Stmt
 }
 
 type onlineAccountsSQLWriter struct {
@@ -126,6 +126,11 @@ func MakeOnlineAccountsSQLWriter(tx *sql.Tx, hasAccounts bool) (w *onlineAccount
 
 	if hasAccounts {
 		w.insertStmt, err = tx.Prepare("INSERT INTO onlineaccounts (address, normalizedonlinebalance, data, updround, votelastvalid) VALUES (?, ?, ?, ?, ?)")
+		if err != nil {
+			return
+		}
+
+		w.insertStmt, err = tx.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
 		if err != nil {
 			return
 		}

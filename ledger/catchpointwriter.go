@@ -19,7 +19,6 @@ package ledger
 import (
 	"archive/tar"
 	"context"
-	"database/sql"
 	"fmt"
 	"io"
 	"os"
@@ -47,7 +46,7 @@ const (
 // has the option of throttling the CPU utilization in between the calls.
 type catchpointWriter struct {
 	ctx                  context.Context
-	tx                   *sql.Tx
+	tx                   store.TransactionScope
 	filePath             string
 	totalAccounts        uint64
 	totalKVs             uint64
@@ -71,7 +70,7 @@ type kvIter interface {
 }
 
 type accountsBatchIter interface {
-	Next(ctx context.Context, tx *sql.Tx, accountCount int, resourceCount int) ([]encoded.BalanceRecordV6, uint64, error)
+	Next(ctx context.Context, accountCount int, resourceCount int) ([]encoded.BalanceRecordV6, uint64, error)
 	Close()
 }
 
@@ -92,8 +91,11 @@ func (chunk catchpointFileChunkV6) empty() bool {
 	return len(chunk.Balances) == 0 && len(chunk.KVs) == 0
 }
 
-func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxResourcesPerChunk int) (*catchpointWriter, error) {
-	arw := store.NewAccountsSQLReaderWriter(tx)
+func makeCatchpointWriter(ctx context.Context, filePath string, tx store.TransactionScope, maxResourcesPerChunk int) (*catchpointWriter, error) {
+	arw, err := tx.CreateAccountsReaderWriter()
+	if err != nil {
+		return nil, err
+	}
 
 	totalAccounts, err := arw.TotalAccounts(ctx)
 	if err != nil {
@@ -128,7 +130,7 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxR
 		file:                 file,
 		compressor:           compressor,
 		tar:                  tar,
-		accountsIterator:     store.MakeEncodedAccoutsBatchIter(),
+		accountsIterator:     tx.CreateEncodedAccoutsBatchIter(),
 		maxResourcesPerChunk: maxResourcesPerChunk,
 	}
 	return res, nil
@@ -204,7 +206,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		}
 
 		if cw.chunk.empty() {
-			err = cw.readDatabaseStep(cw.ctx, cw.tx)
+			err = cw.readDatabaseStep(cw.ctx)
 			if err != nil {
 				return
 			}
@@ -268,9 +270,9 @@ func (cw *catchpointWriter) asyncWriter(chunks chan catchpointFileChunkV6, respo
 // all of the account chunks first, and then the kv chunks. Even if the accounts
 // are evenly divisible by BalancesPerCatchpointFileChunk, it must not return an
 // empty chunk between accounts and kvs.
-func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) error {
+func (cw *catchpointWriter) readDatabaseStep(ctx context.Context) error {
 	if !cw.accountsDone {
-		balances, numAccounts, err := cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk, cw.maxResourcesPerChunk)
+		balances, numAccounts, err := cw.accountsIterator.Next(ctx, BalancesPerCatchpointFileChunk, cw.maxResourcesPerChunk)
 		if err != nil {
 			return err
 		}
@@ -286,7 +288,7 @@ func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) er
 
 	// Create the *Rows iterator JIT
 	if cw.kvRows == nil {
-		rows, err := store.MakeKVsIter(ctx, tx)
+		rows, err := cw.tx.CreateKVsIter(ctx)
 		if err != nil {
 			return err
 		}

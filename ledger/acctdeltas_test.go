@@ -50,22 +50,22 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
-	arw := store.NewAccountsSQLReaderWriter(tx)
+func checkAccounts(t *testing.T, tx store.TransactionScope, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
+	arw, err := tx.CreateAccountsReaderWriter()
+	require.NoError(t, err)
 
 	r, err := arw.AccountsRound()
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 
-	aq, err := store.AccountsInitDbQueries(tx)
+	aor, err := tx.CreateAccountsOptimizedReader()
 	require.NoError(t, err)
-	defer aq.Close()
 
 	var totalOnline, totalOffline, totalNotPart uint64
 
 	for addr, data := range accts {
 		expected := ledgercore.ToAccountData(data)
-		pad, err := aq.LookupAccount(addr)
+		pad, err := aor.LookupAccount(addr)
 		require.NoError(t, err)
 		d := pad.AccountData.GetLedgerCoreAccountData()
 		require.Equal(t, expected, d)
@@ -82,7 +82,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 		}
 	}
 
-	all, err := accountsAll(tx)
+	all, err := arw.AccountsAllTest()
 	require.NoError(t, err)
 	require.Equal(t, all, accts)
 
@@ -94,7 +94,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.Equal(t, totalOnline+totalOffline, totals.Participating().Raw)
 	require.Equal(t, totalOnline+totalOffline+totalNotPart, totals.All().Raw)
 
-	d, err := aq.LookupAccount(ledgertesting.RandomAddress())
+	d, err := aor.LookupAccount(ledgertesting.RandomAddress())
 	require.NoError(t, err)
 	require.Equal(t, rnd, d.Round)
 	require.Equal(t, d.AccountData, store.BaseAccountData{})
@@ -148,24 +148,24 @@ func TestAccountDBInit(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	dbs, _ := storetesting.DbOpenTest(t, true)
-	storetesting.SetDbLogging(t, dbs)
+	dbs, _ := store.DbOpenTrackerTest(t, true)
+	dbs.SetLogger(logging.TestingLog(t))
 	defer dbs.Close()
 
-	tx, err := dbs.Wdb.Handle.Begin()
+	err := dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		accts := ledgertesting.RandomAccounts(20, true)
+		newDB := tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+		require.True(t, newDB)
+
+		checkAccounts(t, tx, 0, accts)
+
+		newDB, err = tx.AccountsInitLightTest(t, accts, proto)
+		require.NoError(t, err)
+		require.False(t, newDB)
+		checkAccounts(t, tx, 0, accts)
+		return
+	})
 	require.NoError(t, err)
-	defer tx.Rollback()
-
-	accts := ledgertesting.RandomAccounts(20, true)
-	newDB := store.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
-	require.True(t, newDB)
-
-	checkAccounts(t, tx, 0, accts)
-
-	newDB, err = store.AccountsInitLightTest(t, tx, accts, proto)
-	require.NoError(t, err)
-	require.False(t, newDB)
-	checkAccounts(t, tx, 0, accts)
 }
 
 // creatablesFromUpdates calculates creatables from updates
@@ -209,124 +209,124 @@ func TestAccountDBRound(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	dbs, _ := storetesting.DbOpenTest(t, true)
-	storetesting.SetDbLogging(t, dbs)
+	dbs, _ := store.DbOpenTrackerTest(t, true)
+	dbs.SetLogger(logging.TestingLog(t))
 	defer dbs.Close()
 
-	tx, err := dbs.Wdb.Handle.Begin()
-	require.NoError(t, err)
-	defer tx.Rollback()
+	dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) error {
+		arw, err := tx.CreateAccountsReaderWriter()
+		require.NoError(t, err)
 
-	arw := store.NewAccountsSQLReaderWriter(tx)
+		accts := ledgertesting.RandomAccounts(20, true)
+		tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+		checkAccounts(t, tx, 0, accts)
+		totals, err := arw.AccountsTotals(context.Background(), false)
+		require.NoError(t, err)
+		expectedOnlineRoundParams, endRound, err := arw.AccountsOnlineRoundParams()
+		require.NoError(t, err)
+		require.Equal(t, 1, len(expectedOnlineRoundParams))
+		require.Equal(t, 0, int(endRound))
 
-	accts := ledgertesting.RandomAccounts(20, true)
-	store.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
-	checkAccounts(t, tx, 0, accts)
-	totals, err := arw.AccountsTotals(context.Background(), false)
-	require.NoError(t, err)
-	expectedOnlineRoundParams, endRound, err := arw.AccountsOnlineRoundParams()
-	require.NoError(t, err)
-	require.Equal(t, 1, len(expectedOnlineRoundParams))
-	require.Equal(t, 0, int(endRound))
+		// used to determine how many creatables element will be in the test per iteration
+		numElementsPerSegment := 10
 
-	// used to determine how many creatables element will be in the test per iteration
-	numElementsPerSegment := 10
+		// lastCreatableID stores asset or app max used index to get rid of conflicts
+		lastCreatableID := basics.CreatableIndex(crypto.RandUint64() % 512)
+		ctbsList, randomCtbs := randomCreatables(numElementsPerSegment)
+		expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
+		var baseAccounts lruAccounts
+		var baseResources lruResources
+		var baseOnlineAccounts lruOnlineAccounts
+		var newacctsTotals map[basics.Address]ledgercore.AccountData
+		baseAccounts.init(nil, 100, 80)
+		baseResources.init(nil, 100, 80)
+		baseOnlineAccounts.init(nil, 100, 80)
+		for i := 1; i < 10; i++ {
+			var updates ledgercore.AccountDeltas
+			updates, newacctsTotals, _ = ledgertesting.RandomDeltasFull(20, accts, 0, &lastCreatableID)
+			totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, accts, totals)
+			accts = applyPartialDeltas(accts, updates)
+			ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
+				expectedDbImage, numElementsPerSegment)
 
-	// lastCreatableID stores asset or app max used index to get rid of conflicts
-	lastCreatableID := basics.CreatableIndex(crypto.RandUint64() % 512)
-	ctbsList, randomCtbs := randomCreatables(numElementsPerSegment)
-	expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-	var baseAccounts lruAccounts
-	var baseResources lruResources
-	var baseOnlineAccounts lruOnlineAccounts
-	var newacctsTotals map[basics.Address]ledgercore.AccountData
-	baseAccounts.init(nil, 100, 80)
-	baseResources.init(nil, 100, 80)
-	baseOnlineAccounts.init(nil, 100, 80)
-	for i := 1; i < 10; i++ {
+			oldBase := i - 1
+			updatesCnt := makeCompactAccountDeltas([]ledgercore.StateDelta{{Accts: updates}}, basics.Round(oldBase), true, baseAccounts)
+			resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.StateDelta{{Accts: updates}}, basics.Round(oldBase), true, baseAccounts, baseResources)
+			updatesOnlineCnt := makeCompactOnlineAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(oldBase), baseOnlineAccounts)
+
+			err = updatesCnt.accountsLoadOld(tx)
+			require.NoError(t, err)
+
+			err = updatesOnlineCnt.accountsLoadOld(tx)
+			require.NoError(t, err)
+
+			knownAddresses := make(map[basics.Address]int64)
+			for _, delta := range updatesCnt.deltas {
+				knownAddresses[delta.oldAcct.Addr] = delta.oldAcct.Rowid
+			}
+
+			err = resourceUpdatesCnt.resourcesLoadOld(tx, knownAddresses)
+			require.NoError(t, err)
+
+			err = arw.AccountsPutTotals(totals, false)
+			require.NoError(t, err)
+			onlineRoundParams := ledgercore.OnlineRoundParamsData{RewardsLevel: totals.RewardsLevel, OnlineSupply: totals.Online.Money.Raw, CurrentProtocol: protocol.ConsensusCurrentVersion}
+			err = arw.AccountsPutOnlineRoundParams([]ledgercore.OnlineRoundParamsData{onlineRoundParams}, basics.Round(i))
+			require.NoError(t, err)
+			expectedOnlineRoundParams = append(expectedOnlineRoundParams, onlineRoundParams)
+
+			updatedAccts, updatesResources, updatedKVs, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, nil, ctbsWithDeletes, proto, basics.Round(i))
+			require.NoError(t, err)
+			require.Equal(t, updatesCnt.len(), len(updatedAccts))
+			numResUpdates := 0
+			for _, rs := range updatesResources {
+				numResUpdates += len(rs)
+			}
+			require.Equal(t, resourceUpdatesCnt.len(), numResUpdates)
+			require.Empty(t, updatedKVs)
+
+			updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, basics.Round(i))
+			require.NoError(t, err)
+
+			err = arw.UpdateAccountsRound(basics.Round(i))
+			require.NoError(t, err)
+
+			// TODO: calculate exact number of updates?
+			// newly created online accounts + accounts went offline + voting data/stake modifed accounts
+			require.NotEmpty(t, updatedOnlineAccts)
+
+			checkAccounts(t, tx, basics.Round(i), accts)
+			arw.CheckCreatablesTest(t, i, expectedDbImage)
+		}
+
+		// test the accounts totals
 		var updates ledgercore.AccountDeltas
-		updates, newacctsTotals, _ = ledgertesting.RandomDeltasFull(20, accts, 0, &lastCreatableID)
-		totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, accts, totals)
-		accts = applyPartialDeltas(accts, updates)
-		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
-			expectedDbImage, numElementsPerSegment)
-
-		oldBase := i - 1
-		updatesCnt := makeCompactAccountDeltas([]ledgercore.StateDelta{{Accts: updates}}, basics.Round(oldBase), true, baseAccounts)
-		resourceUpdatesCnt := makeCompactResourceDeltas([]ledgercore.StateDelta{{Accts: updates}}, basics.Round(oldBase), true, baseAccounts, baseResources)
-		updatesOnlineCnt := makeCompactOnlineAccountDeltas([]ledgercore.AccountDeltas{updates}, basics.Round(oldBase), baseOnlineAccounts)
-
-		err = updatesCnt.accountsLoadOld(tx)
-		require.NoError(t, err)
-
-		err = updatesOnlineCnt.accountsLoadOld(tx)
-		require.NoError(t, err)
-
-		knownAddresses := make(map[basics.Address]int64)
-		for _, delta := range updatesCnt.deltas {
-			knownAddresses[delta.oldAcct.Addr] = delta.oldAcct.Rowid
+		for addr, acctData := range newacctsTotals {
+			updates.Upsert(addr, acctData)
 		}
 
-		err = resourceUpdatesCnt.resourcesLoadOld(tx, knownAddresses)
+		expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, nil, ledgercore.AccountTotals{})
+		actualTotals, err := arw.AccountsTotals(context.Background(), false)
 		require.NoError(t, err)
+		require.Equal(t, expectedTotals, actualTotals)
 
-		err = arw.AccountsPutTotals(totals, false)
+		actualOnlineRoundParams, endRound, err := arw.AccountsOnlineRoundParams()
 		require.NoError(t, err)
-		onlineRoundParams := ledgercore.OnlineRoundParamsData{RewardsLevel: totals.RewardsLevel, OnlineSupply: totals.Online.Money.Raw, CurrentProtocol: protocol.ConsensusCurrentVersion}
-		err = arw.AccountsPutOnlineRoundParams([]ledgercore.OnlineRoundParamsData{onlineRoundParams}, basics.Round(i))
-		require.NoError(t, err)
-		expectedOnlineRoundParams = append(expectedOnlineRoundParams, onlineRoundParams)
+		require.Equal(t, expectedOnlineRoundParams, actualOnlineRoundParams)
+		require.Equal(t, 9, int(endRound))
 
-		updatedAccts, updatesResources, updatedKVs, err := accountsNewRound(tx, updatesCnt, resourceUpdatesCnt, nil, ctbsWithDeletes, proto, basics.Round(i))
-		require.NoError(t, err)
-		require.Equal(t, updatesCnt.len(), len(updatedAccts))
-		numResUpdates := 0
-		for _, rs := range updatesResources {
-			numResUpdates += len(rs)
+		// check LoadAllFullAccounts
+		loaded := make(map[basics.Address]basics.AccountData, len(accts))
+		acctCb := func(addr basics.Address, data basics.AccountData) {
+			loaded[addr] = data
 		}
-		require.Equal(t, resourceUpdatesCnt.len(), numResUpdates)
-		require.Empty(t, updatedKVs)
-
-		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, basics.Round(i))
+		count, err := arw.LoadAllFullAccounts(context.Background(), "accountbase", "resources", acctCb)
 		require.NoError(t, err)
-
-		err = arw.UpdateAccountsRound(basics.Round(i))
-		require.NoError(t, err)
-
-		// TODO: calculate exact number of updates?
-		// newly created online accounts + accounts went offline + voting data/stake modifed accounts
-		require.NotEmpty(t, updatedOnlineAccts)
-
-		checkAccounts(t, tx, basics.Round(i), accts)
-		checkCreatables(t, tx, i, expectedDbImage)
-	}
-
-	// test the accounts totals
-	var updates ledgercore.AccountDeltas
-	for addr, acctData := range newacctsTotals {
-		updates.Upsert(addr, acctData)
-	}
-
-	expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, nil, ledgercore.AccountTotals{})
-	actualTotals, err := arw.AccountsTotals(context.Background(), false)
-	require.NoError(t, err)
-	require.Equal(t, expectedTotals, actualTotals)
-
-	actualOnlineRoundParams, endRound, err := arw.AccountsOnlineRoundParams()
-	require.NoError(t, err)
-	require.Equal(t, expectedOnlineRoundParams, actualOnlineRoundParams)
-	require.Equal(t, 9, int(endRound))
-
-	// check LoadAllFullAccounts
-	loaded := make(map[basics.Address]basics.AccountData, len(accts))
-	acctCb := func(addr basics.Address, data basics.AccountData) {
-		loaded[addr] = data
-	}
-	count, err := arw.LoadAllFullAccounts(context.Background(), "accountbase", "resources", acctCb)
-	require.NoError(t, err)
-	require.Equal(t, count, len(accts))
-	require.Equal(t, count, len(loaded))
-	require.Equal(t, accts, loaded)
+		require.Equal(t, count, len(accts))
+		require.Equal(t, count, len(loaded))
+		require.Equal(t, accts, loaded)
+		return nil
+	})
 }
 
 // TestAccountDBInMemoryAcct checks in-memory only account modifications are handled correctly by
@@ -365,71 +365,70 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 
 	for i, test := range tests {
 
-		dbs, _ := storetesting.DbOpenTest(t, true)
-		storetesting.SetDbLogging(t, dbs)
+		dbs, _ := store.DbOpenTrackerTest(t, true)
+		dbs.SetLogger(logging.TestingLog(t))
 		defer dbs.Close()
 
-		tx, err := dbs.Wdb.Handle.Begin()
-		require.NoError(t, err)
-		defer tx.Rollback()
+		dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) error {
+			accts := ledgertesting.RandomAccounts(1, true)
+			tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+			addr := ledgertesting.RandomAddress()
 
-		accts := ledgertesting.RandomAccounts(1, true)
-		store.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
-		addr := ledgertesting.RandomAddress()
+			// lastCreatableID stores asset or app max used index to get rid of conflicts
+			var baseAccounts lruAccounts
+			var baseResources lruResources
+			baseAccounts.init(nil, 100, 80)
+			baseResources.init(nil, 100, 80)
 
-		// lastCreatableID stores asset or app max used index to get rid of conflicts
-		var baseAccounts lruAccounts
-		var baseResources lruResources
-		baseAccounts.init(nil, 100, 80)
-		baseResources.init(nil, 100, 80)
+			t.Run(fmt.Sprintf("test%d", i), func(t *testing.T) {
 
-		t.Run(fmt.Sprintf("test%d", i), func(t *testing.T) {
+				stateDeltas, numAcctDeltas, numResDeltas := test(addr)
+				lastRound := uint64(len(stateDeltas) + 1)
 
-			stateDeltas, numAcctDeltas, numResDeltas := test(addr)
-			lastRound := uint64(len(stateDeltas) + 1)
+				outAccountDeltas := makeCompactAccountDeltas(stateDeltas, basics.Round(1), true, baseAccounts)
+				require.Equal(t, 1, len(outAccountDeltas.deltas))
+				require.Equal(t, accountDelta{newAcct: store.BaseAccountData{UpdateRound: lastRound}, nAcctDeltas: numAcctDeltas, address: addr}, outAccountDeltas.deltas[0])
+				require.Equal(t, 1, len(outAccountDeltas.misses))
 
-			outAccountDeltas := makeCompactAccountDeltas(stateDeltas, basics.Round(1), true, baseAccounts)
-			require.Equal(t, 1, len(outAccountDeltas.deltas))
-			require.Equal(t, accountDelta{newAcct: store.BaseAccountData{UpdateRound: lastRound}, nAcctDeltas: numAcctDeltas, address: addr}, outAccountDeltas.deltas[0])
-			require.Equal(t, 1, len(outAccountDeltas.misses))
+				outResourcesDeltas := makeCompactResourceDeltas(stateDeltas, basics.Round(1), true, baseAccounts, baseResources)
+				require.Equal(t, 1, len(outResourcesDeltas.deltas))
+				require.Equal(t,
+					resourceDelta{
+						oldResource: store.PersistedResourcesData{Aidx: 100}, newResource: store.MakeResourcesData(lastRound - 1),
+						nAcctDeltas: numResDeltas, address: addr,
+					},
+					outResourcesDeltas.deltas[0],
+				)
+				require.Equal(t, 1, len(outAccountDeltas.misses))
 
-			outResourcesDeltas := makeCompactResourceDeltas(stateDeltas, basics.Round(1), true, baseAccounts, baseResources)
-			require.Equal(t, 1, len(outResourcesDeltas.deltas))
-			require.Equal(t,
-				resourceDelta{
-					oldResource: store.PersistedResourcesData{Aidx: 100}, newResource: store.MakeResourcesData(lastRound - 1),
-					nAcctDeltas: numResDeltas, address: addr,
-				},
-				outResourcesDeltas.deltas[0],
-			)
-			require.Equal(t, 1, len(outAccountDeltas.misses))
+				err := outAccountDeltas.accountsLoadOld(tx)
+				require.NoError(t, err)
 
-			err = outAccountDeltas.accountsLoadOld(tx)
-			require.NoError(t, err)
+				knownAddresses := make(map[basics.Address]int64)
+				for _, delta := range outAccountDeltas.deltas {
+					knownAddresses[delta.oldAcct.Addr] = delta.oldAcct.Rowid
+				}
 
-			knownAddresses := make(map[basics.Address]int64)
-			for _, delta := range outAccountDeltas.deltas {
-				knownAddresses[delta.oldAcct.Addr] = delta.oldAcct.Rowid
-			}
+				err = outResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
+				require.NoError(t, err)
 
-			err = outResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
-			require.NoError(t, err)
+				updatedAccts, updatesResources, updatedKVs, err := accountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, nil, proto, basics.Round(lastRound))
+				require.NoError(t, err)
+				require.Equal(t, 1, len(updatedAccts)) // we store empty even for deleted accounts
+				require.Equal(t,
+					store.PersistedAccountData{Addr: addr, Round: basics.Round(lastRound)},
+					updatedAccts[0],
+				)
 
-			updatedAccts, updatesResources, updatedKVs, err := accountsNewRound(tx, outAccountDeltas, outResourcesDeltas, nil, nil, proto, basics.Round(lastRound))
-			require.NoError(t, err)
-			require.Equal(t, 1, len(updatedAccts)) // we store empty even for deleted accounts
-			require.Equal(t,
-				store.PersistedAccountData{Addr: addr, Round: basics.Round(lastRound)},
-				updatedAccts[0],
-			)
+				require.Equal(t, 1, len(updatesResources[addr])) // we store empty even for deleted resources
+				require.Equal(t,
+					store.PersistedResourcesData{Addrid: 0, Aidx: 100, Data: store.MakeResourcesData(0), Round: basics.Round(lastRound)},
+					updatesResources[addr][0],
+				)
 
-			require.Equal(t, 1, len(updatesResources[addr])) // we store empty even for deleted resources
-			require.Equal(t,
-				store.PersistedResourcesData{Addrid: 0, Aidx: 100, Data: store.MakeResourcesData(0), Round: basics.Round(lastRound)},
-				updatesResources[addr][0],
-			)
-
-			require.Empty(t, updatedKVs)
+				require.Empty(t, updatedKVs)
+			})
+			return nil
 		})
 	}
 }
@@ -437,18 +436,17 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 func TestAccountStorageWithStateProofID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := storetesting.DbOpenTest(t, true)
-	storetesting.SetDbLogging(t, dbs)
+	dbs, _ := store.DbOpenTrackerTest(t, true)
+	dbs.SetLogger(logging.TestingLog(t))
 	defer dbs.Close()
 
-	tx, err := dbs.Wdb.Handle.Begin()
-	require.NoError(t, err)
-	defer tx.Rollback()
-
-	accts := ledgertesting.RandomAccounts(20, false)
-	_ = store.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
-	checkAccounts(t, tx, 0, accts)
-	require.True(t, allAccountsHaveStateProofPKs(accts))
+	dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		accts := ledgertesting.RandomAccounts(20, false)
+		_ = tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+		checkAccounts(t, tx, 0, accts)
+		require.True(t, allAccountsHaveStateProofPKs(accts))
+		return nil
+	})
 }
 
 func allAccountsHaveStateProofPKs(accts map[basics.Address]basics.AccountData) bool {
@@ -458,38 +456,6 @@ func allAccountsHaveStateProofPKs(accts map[basics.Address]basics.AccountData) b
 		}
 	}
 	return true
-}
-
-// checkCreatables compares the expected database image to the actual databse content
-func checkCreatables(t *testing.T,
-	tx *sql.Tx, iteration int,
-	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
-
-	stmt, err := tx.Prepare("SELECT asset, creator, ctype FROM assetcreators")
-	require.NoError(t, err)
-
-	defer stmt.Close()
-	rows, err := stmt.Query()
-	if err != sql.ErrNoRows {
-		require.NoError(t, err)
-	}
-	defer rows.Close()
-	counter := 0
-	for rows.Next() {
-		counter++
-		mc := ledgercore.ModifiedCreatable{}
-		var buf []byte
-		var asset basics.CreatableIndex
-		err := rows.Scan(&asset, &buf, &mc.Ctype)
-		require.NoError(t, err)
-		copy(mc.Creator[:], buf)
-
-		require.NotNil(t, expectedDbImage[asset])
-		require.Equal(t, expectedDbImage[asset].Creator, mc.Creator)
-		require.Equal(t, expectedDbImage[asset].Ctype, mc.Ctype)
-		require.True(t, expectedDbImage[asset].Created)
-	}
-	require.Equal(t, len(expectedDbImage), counter)
 }
 
 // randomCreatableSampling sets elements to delete from previous iteration
@@ -631,15 +597,9 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 	return
 }
 
-func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto protocol.ConsensusVersion) (updates map[basics.Address]basics.AccountData) {
-	tx, err := dbs.Wdb.Handle.Begin()
-	require.NoError(b, err)
-
+func benchmarkInitBalances(b testing.TB, numAccounts int, tx store.TransactionScope, proto protocol.ConsensusVersion) (updates map[basics.Address]basics.AccountData) {
 	updates = generateRandomTestingAccountBalances(numAccounts)
-
-	store.AccountsInitTest(b, tx, updates, proto)
-	err = tx.Commit()
-	require.NoError(b, err)
+	tx.AccountsInitTest(b, updates, proto)
 	return
 }
 
@@ -651,20 +611,25 @@ func cleanupTestDb(dbs db.Pair, dbName string, inMemory bool) {
 }
 
 func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
-	dbs, fn := storetesting.DbOpenTest(b, inMemory)
-	storetesting.SetDbLogging(b, dbs)
-	defer cleanupTestDb(dbs, fn, inMemory)
+	dbs, _ := store.DbOpenTrackerTest(b, true)
+	dbs.SetLogger(logging.TestingLog(b))
+	defer dbs.Close()
+	bal := make(map[basics.Address]basics.AccountData)
 
-	benchmarkInitBalances(b, b.N, dbs, protocol.ConsensusCurrentVersion)
-	tx, err := dbs.Rdb.Handle.Begin()
+	err := dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		benchmarkInitBalances(b, b.N, tx, protocol.ConsensusCurrentVersion)
+		arw, err := tx.CreateAccountsReaderWriter()
+		if err != nil {
+			return err
+		}
+		b.ResetTimer()
+		// read all the balances in the database.
+		var err2 error
+		bal, err2 = arw.AccountsAllTest()
+		require.NoError(b, err2)
+		return nil
+	})
 	require.NoError(b, err)
-
-	b.ResetTimer()
-	// read all the balances in the database.
-	bal, err2 := accountsAll(tx)
-	require.NoError(b, err2)
-	tx.Commit()
-
 	prevHash := crypto.Digest{}
 	for _, accountBalance := range bal {
 		encodedAccountBalance := protocol.Encode(&accountBalance)
@@ -682,31 +647,35 @@ func BenchmarkReadingAllBalancesDisk(b *testing.B) {
 }
 
 func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
-	dbs, fn := storetesting.DbOpenTest(b, inMemory)
-	storetesting.SetDbLogging(b, dbs)
-	defer cleanupTestDb(dbs, fn, inMemory)
+	dbs, fn := store.DbOpenTrackerTest(b, true)
+	dbs.SetLogger(logging.TestingLog(b))
+	defer dbs.CleanupTest(fn, inMemory)
 
-	accounts := benchmarkInitBalances(b, b.N, dbs, protocol.ConsensusCurrentVersion)
+	err := dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		accounts := benchmarkInitBalances(b, b.N, tx, protocol.ConsensusCurrentVersion)
 
-	qs, err := store.AccountsInitDbQueries(dbs.Rdb.Handle)
-	require.NoError(b, err)
-	defer qs.Close()
-
-	// read all the balances in the database, shuffled
-	addrs := make([]basics.Address, len(accounts))
-	pos := 0
-	for addr := range accounts {
-		addrs[pos] = addr
-		pos++
-	}
-	rand.Shuffle(len(addrs), func(i, j int) { addrs[i], addrs[j] = addrs[j], addrs[i] })
-
-	// only measure the actual fetch time
-	b.ResetTimer()
-	for _, addr := range addrs {
-		_, err = qs.LookupAccount(addr)
+		ar, err := dbs.CreateAccountsReader()
 		require.NoError(b, err)
-	}
+		defer ar.Close()
+
+		// read all the balances in the database, shuffled
+		addrs := make([]basics.Address, len(accounts))
+		pos := 0
+		for addr := range accounts {
+			addrs[pos] = addr
+			pos++
+		}
+		rand.Shuffle(len(addrs), func(i, j int) { addrs[i], addrs[j] = addrs[j], addrs[i] })
+
+		// only measure the actual fetch time
+		b.ResetTimer()
+		for _, addr := range addrs {
+			_, err = ar.LookupAccount(addr)
+			require.NoError(b, err)
+		}
+		return nil
+	})
+	require.NoError(b, err)
 }
 
 func BenchmarkReadingRandomBalancesRAM(b *testing.B) {
@@ -721,36 +690,38 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 	batchCount := 1000
 	startupAcct := 5
 	initDatabase := func() (*sql.Tx, func(), error) {
-		dbs, fn := storetesting.DbOpenTest(b, false)
-		storetesting.SetDbLogging(b, dbs)
+		dbs, fn := store.DbOpenTrackerTest(b, true)
+		dbs.SetLogger(logging.TestingLog(b))
 		cleanup := func() {
-			cleanupTestDb(dbs, fn, false)
+			dbs.CleanupTest(fn, false)
 		}
-
-		benchmarkInitBalances(b, startupAcct, dbs, protocol.ConsensusCurrentVersion)
-		dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
+		err := dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+			benchmarkInitBalances(b, startupAcct, tx, protocol.ConsensusCurrentVersion)
+			return nil
+		})
+		require.NoError(b, err)
+		dbs.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
 
 		// insert 1M accounts data, in batches of 1000
 		for batch := 0; batch <= batchCount; batch++ {
 			fmt.Printf("\033[M\r %d / %d accounts written", totalStartupAccountsNumber*batch/batchCount, totalStartupAccountsNumber)
 
-			tx, err := dbs.Wdb.Handle.Begin()
-
-			require.NoError(b, err)
-
-			acctsData := generateRandomTestingAccountBalances(totalStartupAccountsNumber / batchCount)
-			replaceStmt, err := tx.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
-			require.NoError(b, err)
-			defer replaceStmt.Close()
-			for addr, acctData := range acctsData {
-				_, err = replaceStmt.Exec(addr[:], uint64(0), protocol.Encode(&acctData))
+			err := dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+				aow, err := tx.CreateAccountsOptimizedWriter(true, false, false, false)
 				require.NoError(b, err)
-			}
-
-			err = tx.Commit()
+				acctsData := generateRandomTestingAccountBalances(totalStartupAccountsNumber / batchCount)
+				for addr, acctData := range acctsData {
+					// map to other type
+					baseData := store.BaseAccountData{}
+					baseData.SetAccountData(&acctData)
+					_, err := aow.InsertAccount(addr, uint64(0), baseData)
+					require.NoError(b, err)
+				}
+				return nil
+			})
 			require.NoError(b, err)
 		}
-		dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeFull, true)
+		dbs.SetSynchronousMode(context.Background(), db.SynchronousModeFull, true)
 		tx, err := dbs.Wdb.Handle.Begin()
 		require.NoError(b, err)
 		fmt.Printf("\033[M\r")
@@ -924,9 +895,12 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		normalizedAccountBalances, err := prepareNormalizedBalancesV6(chunk.Balances, proto)
 		require.NoError(b, err)
 		b.StartTimer()
-		err = l.trackerDBs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
-			crw := store.NewCatchpointSQLReaderWriter(tx)
-			err = crw.WriteCatchpointStagingBalances(ctx, normalizedAccountBalances)
+		err = l.trackerDBs.Batch(func(ctx context.Context, tx store.BatchScope) (err error) {
+			cw, err := tx.CreateCatchpointWriter()
+			if err != nil {
+				return err
+			}
+			err = cw.WriteCatchpointStagingBalances(ctx, normalizedAccountBalances)
 			return
 		})
 
@@ -963,14 +937,19 @@ func TestLookupKeysByPrefix(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	dbs, fn := storetesting.DbOpenTest(t, false)
-	storetesting.SetDbLogging(t, dbs)
-	defer cleanupTestDb(dbs, fn, false)
+	dbs, fn := store.DbOpenTrackerTest(t, false)
+	dbs.SetLogger(logging.TestingLog(t))
+	defer dbs.CleanupTest(fn, false)
 
-	// return account data, initialize DB tables from AccountsInitTest
-	_ = benchmarkInitBalances(t, 1, dbs, protocol.ConsensusCurrentVersion)
+	err := dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		// return account data, initialize DB tables from AccountsInitTest
+		_ = benchmarkInitBalances(t, 1, tx, protocol.ConsensusCurrentVersion)
 
-	qs, err := store.AccountsInitDbQueries(dbs.Rdb.Handle)
+		return nil
+	})
+	require.NoError(t, err)
+
+	qs, err := dbs.CreateAccountsReader()
 	require.NoError(t, err)
 	defer qs.Close()
 
@@ -997,23 +976,23 @@ func TestLookupKeysByPrefix(t *testing.T) {
 		{key: []byte(`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`), value: []byte("random Bluh")},
 	}
 
-	tx, err := dbs.Wdb.Handle.Begin()
+	err = dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		// writer is only for kvstore
+		writer, err := tx.CreateAccountsOptimizedWriter(true, true, true, true)
+		if err != nil {
+			return
+		}
+
+		for i := 0; i < len(kvPairDBPrepareSet); i++ {
+			err := writer.UpsertKvPair(string(kvPairDBPrepareSet[i].key), kvPairDBPrepareSet[i].value)
+			require.NoError(t, err)
+		}
+
+		writer.Close()
+
+		return nil
+	})
 	require.NoError(t, err)
-
-	// writer is only for kvstore
-	writer, err := store.MakeAccountsSQLWriter(tx, true, true, true, true)
-	if err != nil {
-		return
-	}
-
-	for i := 0; i < len(kvPairDBPrepareSet); i++ {
-		err := writer.UpsertKvPair(string(kvPairDBPrepareSet[i].key), kvPairDBPrepareSet[i].value)
-		require.NoError(t, err)
-	}
-
-	err = tx.Commit()
-	require.NoError(t, err)
-	writer.Close()
 
 	testCases := []struct {
 		prefix        []byte
@@ -1144,14 +1123,19 @@ func TestLookupKeysByPrefix(t *testing.T) {
 func BenchmarkLookupKeyByPrefix(b *testing.B) {
 	// learn something from BenchmarkWritingRandomBalancesDisk
 
-	dbs, fn := storetesting.DbOpenTest(b, false)
-	storetesting.SetDbLogging(b, dbs)
-	defer cleanupTestDb(dbs, fn, false)
+	dbs, fn := store.DbOpenTrackerTest(b, false)
+	dbs.SetLogger(logging.TestingLog(b))
+	defer dbs.CleanupTest(fn, false)
 
-	// return account data, initialize DB tables from AccountsInitTest
-	_ = benchmarkInitBalances(b, 1, dbs, protocol.ConsensusCurrentVersion)
+	err := dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		// return account data, initialize DB tables from AccountsInitTest
+		_ = benchmarkInitBalances(b, 1, tx, protocol.ConsensusCurrentVersion)
 
-	qs, err := store.AccountsInitDbQueries(dbs.Rdb.Handle)
+		return nil
+	})
+	require.NoError(b, err)
+
+	qs, err := dbs.CreateAccountsReader()
 	require.NoError(b, err)
 	defer qs.Close()
 
@@ -1164,33 +1148,33 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 
 	// from 2^1 -> 2^2 -> ... -> 2^22 sized DB
 	for bIndex := 0; bIndex < 22; bIndex++ {
-		// make writer to DB
-		tx, err := dbs.Wdb.Handle.Begin()
-		require.NoError(b, err)
-
-		// writer is only for kvstore
-		writer, err := store.MakeAccountsSQLWriter(tx, true, true, true, true)
-		if err != nil {
-			return
-		}
-
 		var prefix string
-		// how to write to dbs a bunch of stuffs?
-		for i := 0; i < nextDBSize-currentDBSize; i++ {
-			crypto.RandBytes(nameBuffer)
-			crypto.RandBytes(valueBuffer)
-			appID := basics.AppIndex(crypto.RandUint64())
-			boxKey := apps.MakeBoxKey(uint64(appID), string(nameBuffer))
-			err = writer.UpsertKvPair(boxKey, valueBuffer)
-			require.NoError(b, err)
 
-			if i == 0 {
-				prefix = apps.MakeBoxKey(uint64(appID), "")
+		// make writer to DB
+		err = dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+			// writer is only for kvstore
+			writer, err := tx.CreateAccountsOptimizedWriter(true, true, true, true)
+			if err != nil {
+				return
 			}
-		}
-		err = tx.Commit()
+
+			// how to write to dbs a bunch of stuffs?
+			for i := 0; i < nextDBSize-currentDBSize; i++ {
+				crypto.RandBytes(nameBuffer)
+				crypto.RandBytes(valueBuffer)
+				appID := basics.AppIndex(crypto.RandUint64())
+				boxKey := apps.MakeBoxKey(uint64(appID), string(nameBuffer))
+				err = writer.UpsertKvPair(boxKey, valueBuffer)
+				require.NoError(b, err)
+
+				if i == 0 {
+					prefix = apps.MakeBoxKey(uint64(appID), "")
+				}
+			}
+			writer.Close()
+			return nil
+		})
 		require.NoError(b, err)
-		writer.Close()
 
 		// benchmark the query against large DB, see if we have O(log N) speed
 		currentDBSize = nextDBSize
@@ -2219,312 +2203,317 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	dbs, _ := storetesting.DbOpenTest(t, true)
-	storetesting.SetDbLogging(t, dbs)
+	dbs, _ := store.DbOpenTrackerTest(t, true)
+	dbs.SetLogger(logging.TestingLog(t))
 	defer dbs.Close()
 
-	tx, err := dbs.Wdb.Handle.Begin()
-	require.NoError(t, err)
-	defer tx.Rollback()
+	err := dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) error {
 
-	arw := store.NewAccountsSQLReaderWriter(tx)
+		arw, err := tx.CreateAccountsReaderWriter()
+		if err != nil {
+			return err
+		}
 
-	var accts map[basics.Address]basics.AccountData
-	store.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
-	totals, err := arw.AccountsTotals(context.Background(), false)
-	require.NoError(t, err)
-
-	var baseAccounts lruAccounts
-	var baseResources lruResources
-	var baseOnlineAccounts lruOnlineAccounts
-	baseAccounts.init(nil, 100, 80)
-	baseResources.init(nil, 100, 80)
-	baseOnlineAccounts.init(nil, 100, 80)
-
-	addrA := basics.Address(crypto.Hash([]byte("A")))
-	addrB := basics.Address(crypto.Hash([]byte("B")))
-	addrC := basics.Address(crypto.Hash([]byte("C")))
-
-	var voteIDA crypto.OneTimeSignatureVerifier
-	crypto.RandBytes(voteIDA[:])
-	var voteIDB crypto.OneTimeSignatureVerifier
-	crypto.RandBytes(voteIDB[:])
-	var voteIDC crypto.OneTimeSignatureVerifier
-	crypto.RandBytes(voteIDC[:])
-
-	dataA1 := ledgercore.AccountData{
-		AccountBaseData: ledgercore.AccountBaseData{
-			MicroAlgos: basics.MicroAlgos{Raw: 100_000_000},
-			Status:     basics.Online,
-		},
-		VotingData: ledgercore.VotingData{
-			VoteID: voteIDA,
-		},
-	}
-
-	dataB1 := ledgercore.AccountData{
-		AccountBaseData: ledgercore.AccountBaseData{
-			MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
-			Status:     basics.Online,
-		},
-		VotingData: ledgercore.VotingData{
-			VoteID: voteIDB,
-		},
-	}
-
-	dataC3 := ledgercore.AccountData{
-		AccountBaseData: ledgercore.AccountBaseData{
-			MicroAlgos: basics.MicroAlgos{Raw: 300_000_000},
-			Status:     basics.Online,
-		},
-		VotingData: ledgercore.VotingData{
-			VoteID: voteIDC,
-		},
-	}
-
-	dataA2 := dataA1
-	dataA2.Status = basics.Offline
-	dataA2.VoteID = crypto.OneTimeSignatureVerifier{}
-
-	dataB2 := dataB1
-	dataB2.Status = basics.Offline
-	dataB2.VoteID = crypto.OneTimeSignatureVerifier{}
-
-	delta1 := ledgercore.AccountDeltas{}
-	delta1.Upsert(addrA, dataA1)
-	delta1.Upsert(addrB, dataB1)
-
-	delta2 := ledgercore.AccountDeltas{}
-	delta2.Upsert(addrA, dataA2)
-
-	delta3 := ledgercore.AccountDeltas{}
-	delta3.Upsert(addrB, dataB2)
-	delta3.Upsert(addrC, dataC3)
-
-	addRound := func(rnd basics.Round, updates ledgercore.StateDelta) {
-		totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates.Accts, 0, proto, accts, totals)
-		accts = applyPartialDeltas(accts, updates.Accts)
-
-		oldBase := rnd - 1
-		updatesCnt := makeCompactAccountDeltas([]ledgercore.StateDelta{updates}, oldBase, true, baseAccounts)
-		updatesOnlineCnt := makeCompactOnlineAccountDeltas([]ledgercore.AccountDeltas{updates.Accts}, oldBase, baseOnlineAccounts)
-
-		err = updatesCnt.accountsLoadOld(tx)
+		var accts map[basics.Address]basics.AccountData
+		tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+		totals, err := arw.AccountsTotals(context.Background(), false)
 		require.NoError(t, err)
 
-		err = updatesOnlineCnt.accountsLoadOld(tx)
+		var baseAccounts lruAccounts
+		var baseResources lruResources
+		var baseOnlineAccounts lruOnlineAccounts
+		baseAccounts.init(nil, 100, 80)
+		baseResources.init(nil, 100, 80)
+		baseOnlineAccounts.init(nil, 100, 80)
+
+		addrA := basics.Address(crypto.Hash([]byte("A")))
+		addrB := basics.Address(crypto.Hash([]byte("B")))
+		addrC := basics.Address(crypto.Hash([]byte("C")))
+
+		var voteIDA crypto.OneTimeSignatureVerifier
+		crypto.RandBytes(voteIDA[:])
+		var voteIDB crypto.OneTimeSignatureVerifier
+		crypto.RandBytes(voteIDB[:])
+		var voteIDC crypto.OneTimeSignatureVerifier
+		crypto.RandBytes(voteIDC[:])
+
+		dataA1 := ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{
+				MicroAlgos: basics.MicroAlgos{Raw: 100_000_000},
+				Status:     basics.Online,
+			},
+			VotingData: ledgercore.VotingData{
+				VoteID: voteIDA,
+			},
+		}
+
+		dataB1 := ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{
+				MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
+				Status:     basics.Online,
+			},
+			VotingData: ledgercore.VotingData{
+				VoteID: voteIDB,
+			},
+		}
+
+		dataC3 := ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{
+				MicroAlgos: basics.MicroAlgos{Raw: 300_000_000},
+				Status:     basics.Online,
+			},
+			VotingData: ledgercore.VotingData{
+				VoteID: voteIDC,
+			},
+		}
+
+		dataA2 := dataA1
+		dataA2.Status = basics.Offline
+		dataA2.VoteID = crypto.OneTimeSignatureVerifier{}
+
+		dataB2 := dataB1
+		dataB2.Status = basics.Offline
+		dataB2.VoteID = crypto.OneTimeSignatureVerifier{}
+
+		delta1 := ledgercore.AccountDeltas{}
+		delta1.Upsert(addrA, dataA1)
+		delta1.Upsert(addrB, dataB1)
+
+		delta2 := ledgercore.AccountDeltas{}
+		delta2.Upsert(addrA, dataA2)
+
+		delta3 := ledgercore.AccountDeltas{}
+		delta3.Upsert(addrB, dataB2)
+		delta3.Upsert(addrC, dataC3)
+
+		addRound := func(rnd basics.Round, updates ledgercore.StateDelta) {
+			totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates.Accts, 0, proto, accts, totals)
+			accts = applyPartialDeltas(accts, updates.Accts)
+
+			oldBase := rnd - 1
+			updatesCnt := makeCompactAccountDeltas([]ledgercore.StateDelta{updates}, oldBase, true, baseAccounts)
+			updatesOnlineCnt := makeCompactOnlineAccountDeltas([]ledgercore.AccountDeltas{updates.Accts}, oldBase, baseOnlineAccounts)
+
+			err = updatesCnt.accountsLoadOld(tx)
+			require.NoError(t, err)
+
+			err = updatesOnlineCnt.accountsLoadOld(tx)
+			require.NoError(t, err)
+
+			err = arw.AccountsPutTotals(totals, false)
+			require.NoError(t, err)
+			updatedAccts, _, _, err := accountsNewRound(tx, updatesCnt, compactResourcesDeltas{}, nil, nil, proto, rnd)
+			require.NoError(t, err)
+			require.Equal(t, updatesCnt.len(), len(updatedAccts))
+
+			updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, rnd)
+			require.NoError(t, err)
+			require.NotEmpty(t, updatedOnlineAccts)
+
+			err = arw.UpdateAccountsRound(rnd)
+			require.NoError(t, err)
+		}
+
+		addRound(1, ledgercore.StateDelta{Accts: delta1})
+		addRound(2, ledgercore.StateDelta{Accts: delta2})
+		addRound(3, ledgercore.StateDelta{Accts: delta3})
+
+		queries, err := tx.CreateOnlineAccountsOptimizedReader()
 		require.NoError(t, err)
 
-		err = arw.AccountsPutTotals(totals, false)
+		// check round 1
+		rnd := basics.Round(1)
+		online, err := arw.AccountsOnlineTop(rnd, 0, 10, proto)
 		require.NoError(t, err)
-		updatedAccts, _, _, err := accountsNewRound(tx, updatesCnt, compactResourcesDeltas{}, nil, nil, proto, rnd)
+		require.Equal(t, 2, len(online))
+		require.NotContains(t, online, addrC)
+
+		onlineAcctA, ok := online[addrA]
+		require.True(t, ok)
+		require.NotNil(t, onlineAcctA)
+		require.Equal(t, addrA, onlineAcctA.Address)
+		require.Equal(t, dataA1.AccountBaseData.MicroAlgos, onlineAcctA.MicroAlgos)
+
+		onlineAcctB, ok := online[addrB]
+		require.True(t, ok)
+		require.NotNil(t, onlineAcctB)
+		require.Equal(t, addrB, onlineAcctB.Address)
+		require.Equal(t, dataB1.AccountBaseData.MicroAlgos, onlineAcctB.MicroAlgos)
+
+		paod, err := queries.LookupOnline(addrA, rnd)
 		require.NoError(t, err)
-		require.Equal(t, updatesCnt.len(), len(updatedAccts))
+		require.Equal(t, basics.Round(3), paod.Round)
+		require.Equal(t, addrA, paod.Addr)
+		require.Equal(t, dataA1.AccountBaseData.MicroAlgos, paod.AccountData.MicroAlgos)
+		require.Equal(t, voteIDA, paod.AccountData.VoteID)
 
-		updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, rnd)
+		paod, err = queries.LookupOnline(addrB, rnd)
 		require.NoError(t, err)
-		require.NotEmpty(t, updatedOnlineAccts)
+		require.Equal(t, basics.Round(3), paod.Round)
+		require.Equal(t, addrB, paod.Addr)
+		require.Equal(t, dataB1.AccountBaseData.MicroAlgos, paod.AccountData.MicroAlgos)
+		require.Equal(t, voteIDB, paod.AccountData.VoteID)
 
-		err = arw.UpdateAccountsRound(rnd)
+		paod, err = queries.LookupOnline(addrC, rnd)
 		require.NoError(t, err)
-	}
+		require.Equal(t, basics.Round(3), paod.Round)
+		require.Equal(t, addrC, paod.Addr)
+		require.Empty(t, paod.AccountData)
 
-	addRound(1, ledgercore.StateDelta{Accts: delta1})
-	addRound(2, ledgercore.StateDelta{Accts: delta2})
-	addRound(3, ledgercore.StateDelta{Accts: delta3})
+		// check round 2
+		rnd = basics.Round(2)
+		online, err = arw.AccountsOnlineTop(rnd, 0, 10, proto)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(online))
+		require.NotContains(t, online, addrA)
+		require.NotContains(t, online, addrC)
 
-	queries, err := store.OnlineAccountsInitDbQueries(tx)
-	require.NoError(t, err)
+		onlineAcctB, ok = online[addrB]
+		require.True(t, ok)
+		require.NotNil(t, onlineAcctB)
+		require.Equal(t, addrB, onlineAcctB.Address)
+		require.Equal(t, dataB1.AccountBaseData.MicroAlgos, onlineAcctB.MicroAlgos)
 
-	// check round 1
-	rnd := basics.Round(1)
-	online, err := arw.AccountsOnlineTop(rnd, 0, 10, proto)
-	require.NoError(t, err)
-	require.Equal(t, 2, len(online))
-	require.NotContains(t, online, addrC)
+		paod, err = queries.LookupOnline(addrA, rnd)
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(3), paod.Round)
+		require.Equal(t, addrA, paod.Addr)
+		require.Empty(t, paod.AccountData)
 
-	onlineAcctA, ok := online[addrA]
-	require.True(t, ok)
-	require.NotNil(t, onlineAcctA)
-	require.Equal(t, addrA, onlineAcctA.Address)
-	require.Equal(t, dataA1.AccountBaseData.MicroAlgos, onlineAcctA.MicroAlgos)
+		paod, err = queries.LookupOnline(addrB, rnd)
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(3), paod.Round)
+		require.Equal(t, addrB, paod.Addr)
+		require.Equal(t, dataB1.AccountBaseData.MicroAlgos, paod.AccountData.MicroAlgos)
+		require.Equal(t, voteIDB, paod.AccountData.VoteID)
 
-	onlineAcctB, ok := online[addrB]
-	require.True(t, ok)
-	require.NotNil(t, onlineAcctB)
-	require.Equal(t, addrB, onlineAcctB.Address)
-	require.Equal(t, dataB1.AccountBaseData.MicroAlgos, onlineAcctB.MicroAlgos)
+		paod, err = queries.LookupOnline(addrC, rnd)
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(3), paod.Round)
+		require.Equal(t, addrC, paod.Addr)
+		require.Empty(t, paod.AccountData)
 
-	paod, err := queries.LookupOnline(addrA, rnd)
-	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), paod.Round)
-	require.Equal(t, addrA, paod.Addr)
-	require.Equal(t, dataA1.AccountBaseData.MicroAlgos, paod.AccountData.MicroAlgos)
-	require.Equal(t, voteIDA, paod.AccountData.VoteID)
+		// check round 3
+		rnd = basics.Round(3)
+		online, err = arw.AccountsOnlineTop(rnd, 0, 10, proto)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(online))
+		require.NotContains(t, online, addrA)
+		require.NotContains(t, online, addrB)
 
-	paod, err = queries.LookupOnline(addrB, rnd)
-	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), paod.Round)
-	require.Equal(t, addrB, paod.Addr)
-	require.Equal(t, dataB1.AccountBaseData.MicroAlgos, paod.AccountData.MicroAlgos)
-	require.Equal(t, voteIDB, paod.AccountData.VoteID)
+		onlineAcctC, ok := online[addrC]
+		require.True(t, ok)
+		require.NotNil(t, onlineAcctC)
+		require.Equal(t, addrC, onlineAcctC.Address)
+		require.Equal(t, dataC3.AccountBaseData.MicroAlgos, onlineAcctC.MicroAlgos)
 
-	paod, err = queries.LookupOnline(addrC, rnd)
-	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), paod.Round)
-	require.Equal(t, addrC, paod.Addr)
-	require.Empty(t, paod.AccountData)
+		paod, err = queries.LookupOnline(addrA, rnd)
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(3), paod.Round)
+		require.Equal(t, addrA, paod.Addr)
+		require.Empty(t, paod.AccountData)
 
-	// check round 2
-	rnd = basics.Round(2)
-	online, err = arw.AccountsOnlineTop(rnd, 0, 10, proto)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(online))
-	require.NotContains(t, online, addrA)
-	require.NotContains(t, online, addrC)
+		paod, err = queries.LookupOnline(addrB, rnd)
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(3), paod.Round)
+		require.Equal(t, addrB, paod.Addr)
+		require.Empty(t, paod.AccountData)
 
-	onlineAcctB, ok = online[addrB]
-	require.True(t, ok)
-	require.NotNil(t, onlineAcctB)
-	require.Equal(t, addrB, onlineAcctB.Address)
-	require.Equal(t, dataB1.AccountBaseData.MicroAlgos, onlineAcctB.MicroAlgos)
+		paod, err = queries.LookupOnline(addrC, rnd)
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(3), paod.Round)
+		require.Equal(t, addrC, paod.Addr)
+		require.Equal(t, dataC3.AccountBaseData.MicroAlgos, paod.AccountData.MicroAlgos)
+		require.Equal(t, voteIDC, paod.AccountData.VoteID)
 
-	paod, err = queries.LookupOnline(addrA, rnd)
-	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), paod.Round)
-	require.Equal(t, addrA, paod.Addr)
-	require.Empty(t, paod.AccountData)
+		paods, err := arw.OnlineAccountsAll(0)
+		require.NoError(t, err)
+		require.Equal(t, 5, len(paods))
 
-	paod, err = queries.LookupOnline(addrB, rnd)
-	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), paod.Round)
-	require.Equal(t, addrB, paod.Addr)
-	require.Equal(t, dataB1.AccountBaseData.MicroAlgos, paod.AccountData.MicroAlgos)
-	require.Equal(t, voteIDB, paod.AccountData.VoteID)
+		// expect:
+		//
+		// addr | rnd | status
+		// -----|-----|--------
+		//    B |   1 |      1
+		//    B |   3 |      0
+		//    C |   3 |      1
+		//    A |   1 |      1
+		//    A |   2 |      0
 
-	paod, err = queries.LookupOnline(addrC, rnd)
-	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), paod.Round)
-	require.Equal(t, addrC, paod.Addr)
-	require.Empty(t, paod.AccountData)
+		checkAddrB := func() {
+			require.Equal(t, int64(2), paods[0].Rowid)
+			require.Equal(t, basics.Round(1), paods[0].UpdRound)
+			require.Equal(t, addrB, paods[0].Addr)
+			require.Equal(t, int64(4), paods[1].Rowid)
+			require.Equal(t, basics.Round(3), paods[1].UpdRound)
+			require.Equal(t, addrB, paods[1].Addr)
+		}
 
-	// check round 3
-	rnd = basics.Round(3)
-	online, err = arw.AccountsOnlineTop(rnd, 0, 10, proto)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(online))
-	require.NotContains(t, online, addrA)
-	require.NotContains(t, online, addrB)
+		checkAddrC := func() {
+			require.Equal(t, int64(5), paods[2].Rowid)
+			require.Equal(t, basics.Round(3), paods[2].UpdRound)
+			require.Equal(t, addrC, paods[2].Addr)
+		}
 
-	onlineAcctC, ok := online[addrC]
-	require.True(t, ok)
-	require.NotNil(t, onlineAcctC)
-	require.Equal(t, addrC, onlineAcctC.Address)
-	require.Equal(t, dataC3.AccountBaseData.MicroAlgos, onlineAcctC.MicroAlgos)
+		checkAddrA := func() {
+			require.Equal(t, int64(1), paods[3].Rowid)
+			require.Equal(t, basics.Round(1), paods[3].UpdRound)
+			require.Equal(t, addrA, paods[3].Addr)
+			require.Equal(t, int64(3), paods[4].Rowid)
+			require.Equal(t, basics.Round(2), paods[4].UpdRound)
+			require.Equal(t, addrA, paods[4].Addr)
+		}
 
-	paod, err = queries.LookupOnline(addrA, rnd)
-	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), paod.Round)
-	require.Equal(t, addrA, paod.Addr)
-	require.Empty(t, paod.AccountData)
+		checkAddrB()
+		checkAddrC()
+		checkAddrA()
 
-	paod, err = queries.LookupOnline(addrB, rnd)
-	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), paod.Round)
-	require.Equal(t, addrB, paod.Addr)
-	require.Empty(t, paod.AccountData)
+		paods, err = arw.OnlineAccountsAll(3)
+		require.NoError(t, err)
+		require.Equal(t, 5, len(paods))
+		checkAddrB()
+		checkAddrC()
+		checkAddrA()
 
-	paod, err = queries.LookupOnline(addrC, rnd)
-	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), paod.Round)
-	require.Equal(t, addrC, paod.Addr)
-	require.Equal(t, dataC3.AccountBaseData.MicroAlgos, paod.AccountData.MicroAlgos)
-	require.Equal(t, voteIDC, paod.AccountData.VoteID)
+		paods, err = arw.OnlineAccountsAll(2)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(paods))
+		checkAddrB()
+		checkAddrC()
 
-	paods, err := arw.OnlineAccountsAll(0)
-	require.NoError(t, err)
-	require.Equal(t, 5, len(paods))
+		paods, err = arw.OnlineAccountsAll(1)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(paods))
+		checkAddrB()
 
-	// expect:
-	//
-	// addr | rnd | status
-	// -----|-----|--------
-	//    B |   1 |      1
-	//    B |   3 |      0
-	//    C |   3 |      1
-	//    A |   1 |      1
-	//    A |   2 |      0
+		paods, rnd, err = queries.LookupOnlineHistory(addrA)
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(3), rnd)
+		require.Equal(t, 2, len(paods))
+		require.Equal(t, int64(1), paods[0].Rowid)
+		require.Equal(t, basics.Round(1), paods[0].UpdRound)
+		require.Equal(t, int64(3), paods[1].Rowid)
+		require.Equal(t, basics.Round(2), paods[1].UpdRound)
 
-	checkAddrB := func() {
+		paods, rnd, err = queries.LookupOnlineHistory(addrB)
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(3), rnd)
+		require.Equal(t, 2, len(paods))
 		require.Equal(t, int64(2), paods[0].Rowid)
 		require.Equal(t, basics.Round(1), paods[0].UpdRound)
-		require.Equal(t, addrB, paods[0].Addr)
 		require.Equal(t, int64(4), paods[1].Rowid)
 		require.Equal(t, basics.Round(3), paods[1].UpdRound)
-		require.Equal(t, addrB, paods[1].Addr)
-	}
 
-	checkAddrC := func() {
-		require.Equal(t, int64(5), paods[2].Rowid)
-		require.Equal(t, basics.Round(3), paods[2].UpdRound)
-		require.Equal(t, addrC, paods[2].Addr)
-	}
+		paods, rnd, err = queries.LookupOnlineHistory(addrC)
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(3), rnd)
+		require.Equal(t, 1, len(paods))
+		require.Equal(t, int64(5), paods[0].Rowid)
+		require.Equal(t, basics.Round(3), paods[0].UpdRound)
 
-	checkAddrA := func() {
-		require.Equal(t, int64(1), paods[3].Rowid)
-		require.Equal(t, basics.Round(1), paods[3].UpdRound)
-		require.Equal(t, addrA, paods[3].Addr)
-		require.Equal(t, int64(3), paods[4].Rowid)
-		require.Equal(t, basics.Round(2), paods[4].UpdRound)
-		require.Equal(t, addrA, paods[4].Addr)
-	}
-
-	checkAddrB()
-	checkAddrC()
-	checkAddrA()
-
-	paods, err = arw.OnlineAccountsAll(3)
+		return nil
+	})
 	require.NoError(t, err)
-	require.Equal(t, 5, len(paods))
-	checkAddrB()
-	checkAddrC()
-	checkAddrA()
-
-	paods, err = arw.OnlineAccountsAll(2)
-	require.NoError(t, err)
-	require.Equal(t, 3, len(paods))
-	checkAddrB()
-	checkAddrC()
-
-	paods, err = arw.OnlineAccountsAll(1)
-	require.NoError(t, err)
-	require.Equal(t, 2, len(paods))
-	checkAddrB()
-
-	paods, rnd, err = queries.LookupOnlineHistory(addrA)
-	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), rnd)
-	require.Equal(t, 2, len(paods))
-	require.Equal(t, int64(1), paods[0].Rowid)
-	require.Equal(t, basics.Round(1), paods[0].UpdRound)
-	require.Equal(t, int64(3), paods[1].Rowid)
-	require.Equal(t, basics.Round(2), paods[1].UpdRound)
-
-	paods, rnd, err = queries.LookupOnlineHistory(addrB)
-	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), rnd)
-	require.Equal(t, 2, len(paods))
-	require.Equal(t, int64(2), paods[0].Rowid)
-	require.Equal(t, basics.Round(1), paods[0].UpdRound)
-	require.Equal(t, int64(4), paods[1].Rowid)
-	require.Equal(t, basics.Round(3), paods[1].UpdRound)
-
-	paods, rnd, err = queries.LookupOnlineHistory(addrC)
-	require.NoError(t, err)
-	require.Equal(t, basics.Round(3), rnd)
-	require.Equal(t, 1, len(paods))
-	require.Equal(t, int64(5), paods[0].Rowid)
-	require.Equal(t, basics.Round(3), paods[0].UpdRound)
 }
 
 type mockOnlineAccountsWriter struct {

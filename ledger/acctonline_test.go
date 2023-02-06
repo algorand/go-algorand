@@ -78,8 +78,12 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 				err := lt.prepareCommit(dcc)
 				require.NoError(t, err)
 			}
-			err := ml.trackers.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
-				arw := store.NewAccountsSQLReaderWriter(tx)
+			err := ml.trackers.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+				arw, err := tx.CreateAccountsReaderWriter()
+				if err != nil {
+					return err
+				}
+
 				for _, lt := range ml.trackers.trackers {
 					err0 := lt.commitRound(ctx, tx, dcc)
 					if err0 != nil {
@@ -804,9 +808,13 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
 	var endRound basics.Round
-	err := ao.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
-		arw := store.NewAccountsSQLReaderWriter(tx)
-		dbOnlineRoundParams, endRound, err = arw.AccountsOnlineRoundParams()
+	err := ao.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
+		ar, err := tx.CreateAccountsReader()
+		if err != nil {
+			return err
+		}
+
+		dbOnlineRoundParams, endRound, err = ar.AccountsOnlineRoundParams()
 		return err
 	})
 	require.NoError(t, err)
@@ -1289,9 +1297,13 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	// DB has all the required history tho
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
 	var endRound basics.Round
-	err = oa.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
-		arw := store.NewAccountsSQLReaderWriter(tx)
-		dbOnlineRoundParams, endRound, err = arw.AccountsOnlineRoundParams()
+	err = oa.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
+		ar, err := tx.CreateAccountsReader()
+		if err != nil {
+			return err
+		}
+
+		dbOnlineRoundParams, endRound, err = ar.AccountsOnlineRoundParams()
 		return err
 	})
 
@@ -1677,7 +1689,7 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 		go func() {
 			time.Sleep(2 * time.Second)
 			// tweak the database to move backwards
-			err = oa.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
+			err = oa.dbs.Batch(func(ctx context.Context, tx store.BatchScope) (err error) {
 				_, err = tx.Exec("update acctrounds set rnd = 1 WHERE id='acctbase' ")
 				return
 			})

@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -40,7 +39,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -928,9 +926,13 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
-	err = au.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) error {
-		arw := store.NewAccountsSQLReaderWriter(tx)
-		totals, err0 := arw.AccountsTotals(ctx, false)
+	err = au.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) error {
+		ar, err := tx.CreateAccountsReader()
+		if err != nil {
+			return err
+		}
+
+		totals, err0 := ar.AccountsTotals(ctx, false)
 		if err0 != nil {
 			return err0
 		}
@@ -1656,7 +1658,7 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 
 // commitRound is called within the same transaction for all trackers it
 // receives current offset and dbRound
-func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
+func (au *accountUpdates) commitRound(ctx context.Context, ts store.TransactionScope, dcc *deferredCommitContext) (err error) {
 	offset := dcc.offset
 	dbRound := dcc.oldBase
 
@@ -1668,7 +1670,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		}
 	}()
 
-	_, err = db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
+	_, err = ts.ResetTransactionWarnDeadline(ctx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 	if err != nil {
 		return err
 	}
@@ -1676,8 +1678,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 	if dcc.updateStats {
 		dcc.stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano())
 	}
-
-	err = dcc.compactAccountDeltas.accountsLoadOld(tx)
+	err = dcc.compactAccountDeltas.accountsLoadOld(ts)
 	if err != nil {
 		return err
 	}
@@ -1687,7 +1688,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		knownAddresses[delta.oldAcct.Addr] = delta.oldAcct.Rowid
 	}
 
-	err = dcc.compactResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
+	err = dcc.compactResourcesDeltas.resourcesLoadOld(ts, knownAddresses)
 	if err != nil {
 		return err
 	}
@@ -1696,7 +1697,10 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		dcc.stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano()) - dcc.stats.OldAccountPreloadDuration
 	}
 
-	arw := store.NewAccountsSQLReaderWriter(tx)
+	arw, err := ts.CreateAccountsReaderWriter()
+	if err != nil {
+		return err
+	}
 
 	err = arw.AccountsPutTotals(dcc.roundTotals, false)
 	if err != nil {
@@ -1709,7 +1713,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 
 	// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 	// so that we can update the base account back.
-	dcc.updatedPersistedAccounts, dcc.updatedPersistedResources, dcc.updatedPersistedKVs, err = accountsNewRound(tx, dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.compactKvDeltas, dcc.compactCreatableDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
+	dcc.updatedPersistedAccounts, dcc.updatedPersistedResources, dcc.updatedPersistedKVs, err = accountsNewRound(ts, dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.compactKvDeltas, dcc.compactCreatableDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
 	if err != nil {
 		return err
 	}
