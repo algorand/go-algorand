@@ -1505,7 +1505,7 @@ func typePushInts(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, 
 
 func typeBzero(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
 	// Bzero should only allow its input int to be up to maxStringSize bytes
-	return StackTypes{StackUint64.narrowed(0, maxStringSize)}, StackTypes{StackBytes}, nil
+	return StackTypes{StackUint64.narrowed(bound(0, maxStringSize))}, StackTypes{StackBytes}, nil
 }
 
 func typeByte(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
@@ -1850,29 +1850,27 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	if ops.known.deadcode {
 		return
 	}
+
 	expectedCnt, actualCnt := len(args), len(ops.known.stack)
+
 	if expectedCnt > actualCnt && ops.known.bottom.AVMType == StackNone.AVMType {
 		ops.typeErrorf("%s expects %d stack arguments but stack height is %d",
 			strings.Join(lineTokens(instruction).strings(), " "), expectedCnt, actualCnt)
 	} else {
-		reversed := make(StackTypes, len(args))
 		for i := expectedCnt - 1; i >= 0; i-- {
 			expectedType, actualType := args[i], ops.known.pop()
-
-			reversed[(expectedCnt-1)-i] = expectedType
-
 			if !actualType.AssignableTo(expectedType) {
 				ops.typeErrorf("%s arg %d wanted type %s got %s",
 					strings.Join(lineTokens(instruction).strings(), " "), i,
 					expectedType.String(), actualType.String())
 			}
 		}
-		ops.trace("pops%s", reversed.String())
+		ops.trace("pops%s ", args.String())
 	}
 
 	if len(returns) > 0 {
 		ops.known.push(returns...)
-		ops.trace("pushes%s", returns.String())
+		ops.trace("pushes%s ", returns.String())
 	}
 }
 
@@ -1897,8 +1895,6 @@ func filterComments(lts lineTokens) lineTokens {
 }
 
 func (ops *OpStream) assembleLine(line string) {
-	defer ops.snapshotStack()
-
 	tokens := tokensFromLine(line, ops.sourceLine)
 
 	ops.Lines = append(ops.Lines, tokens)
@@ -1982,7 +1978,8 @@ func (ops *OpStream) assembleLine(line string) {
 		if spec.deadens() { // An unconditional branch deadens the following code
 			ops.known.deaden()
 		}
-		if spec.Name == "callsub" {
+
+		if spec.Name == "callsub" || spec.Name == "retsub" {
 			// since retsub comes back to the callsub, it is an entry point like a label
 			ops.known.label()
 		}

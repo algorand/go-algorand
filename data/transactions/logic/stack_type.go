@@ -138,17 +138,19 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 	}
 
 	st := StackType{Name: name, AVMType: at}
+
 	switch at {
 	case avmBytes:
 		st.LengthBound = bounds
 	case avmUint64:
 		st.ValueBound = bounds
 	}
+
 	return st
 }
 
-func (st StackType) narrowed(min, max uint64) StackType {
-	return NewStackType(st.AVMType, [2]uint64{min, max})
+func (st StackType) narrowed(bounds [2]uint64) StackType {
+	return NewStackType(st.AVMType, bounds)
 }
 
 // AssignableTo returns a bool indicating whether the receiver can be
@@ -209,9 +211,12 @@ func (st StackType) AssignableTo(other StackType) bool {
 type StackTypes []StackType
 
 func (st StackTypes) String() string {
+	// Note this reverses the stack so top appears first
 	var s = make([]string, len(st))
-	for idx, stype := range st {
-		s[idx] = stype.String()
+	i := 0
+	for idx := len(st) - 1; idx >= 0; idx-- {
+		s[i] = st[idx].String()
+		i++
 	}
 	return fmt.Sprintf("(%s)", strings.Join(s, ", "))
 }
