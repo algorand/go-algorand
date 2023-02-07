@@ -115,6 +115,47 @@ func normalizeEvalDeltas(t *testing.T, actual, expected *transactions.EvalDelta)
 	}
 }
 
+func validateSimulationResult(t *testing.T, result simulation.Result) {
+	t.Helper()
+
+	shouldHaveBlock := true
+	if !result.WouldSucceed {
+		// WouldSucceed might be false because of missing signatures, in which case a block would
+		// still be generated. The only reason for no block would be an eval error.
+		for _, groupResult := range result.TxnGroups {
+			if len(groupResult.FailureMessage) != 0 {
+				shouldHaveBlock = false
+				break
+			}
+		}
+	}
+	if !shouldHaveBlock {
+		assert.Nil(t, result.Block)
+		return
+	}
+	require.NotNil(t, result.Block)
+
+	blockGroups, err := result.Block.Block().DecodePaysetGroups()
+	require.NoError(t, err)
+
+	if !assert.Equal(t, len(blockGroups), len(result.TxnGroups)) {
+		return
+	}
+
+	for i, groupResult := range result.TxnGroups {
+		blockGroup := blockGroups[i]
+
+		if !assert.Equal(t, len(blockGroup), len(groupResult.Txns), "mismatched number of txns in group %d", i) {
+			continue
+		}
+
+		for j, txnResult := range groupResult.Txns {
+			blockTxn := blockGroup[j]
+			assert.Equal(t, blockTxn.ApplyData, txnResult.Txn.ApplyData, "transaction %d of group %d has a simulation ApplyData that does not match what appears in a block", i, j)
+		}
+	}
+}
+
 func simulationTest(t *testing.T, f func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase) {
 	t.Helper()
 	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
@@ -125,6 +166,8 @@ func simulationTest(t *testing.T, f func(accounts []simulationtesting.Account, t
 
 	actual, err := s.Simulate(testcase.input)
 	require.NoError(t, err)
+
+	validateSimulationResult(t, actual)
 
 	require.Len(t, testcase.expected.TxnGroups, 1, "Test case must expect a single txn group")
 	require.Len(t, testcase.expected.TxnGroups[0].Txns, len(testcase.input), "Test case expected a different number of transactions than its input")
@@ -145,6 +188,8 @@ func simulationTest(t *testing.T, f func(accounts []simulationtesting.Account, t
 		testcase.expected.TxnGroups[0].FailureMessage = actual.TxnGroups[0].FailureMessage
 	}
 
+	// Do not attempt to compare blocks
+	actual.Block = nil
 	require.Equal(t, testcase.expected, actual)
 }
 

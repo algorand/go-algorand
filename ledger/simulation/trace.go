@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // TxnPath is a "transaction path": e.g. [0, 0, 1] means the second inner txn of the first inner txn of the first txn.
@@ -57,8 +58,9 @@ const ResultLatestVersion = uint64(1)
 // Result contains the result from a call to Simulator.Simulate
 type Result struct {
 	Version      uint64
-	TxnGroups    []TxnGroupResult // txngroups is a list so that supporting multiple in the future is not breaking
+	TxnGroups    []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
 	WouldSucceed bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
+	Block        *ledgercore.ValidatedBlock
 }
 
 func makeSimulationResultWithVersion(txgroups [][]transactions.SignedTxn, version uint64) (Result, error) {
