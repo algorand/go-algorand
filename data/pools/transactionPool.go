@@ -108,13 +108,17 @@ type TransactionPool struct {
 	specBlockDigest           crypto.Digest
 	cancelSpeculativeAssembly context.CancelFunc
 	speculativePool           *TransactionPool
-	// specBlockCh has an assembled speculative block
-	//specBlockCh chan *ledgercore.ValidatedBlock
-	// specAsmDone channel is closed when there is no speculative assembly
-	//specAsmDone <-chan struct{}
-	// TODO: feed into assemblyMu & assemblyCond above!
+
+	// specMoreTxns in a 'inner' speculative assembly scope is txn
+	// groups coming in from the .Remember() of the outer
+	// TransactionPool; in the outer scope it is the chan to feed
+	// txngroups into the inner speculative assembly
+	// TransactionPool.
+	// Use only if .specActive is true
+	specMoreTxns chan []transactions.SignedTxn
 
 	cfg config.Local
+
 	// stateproofOverflowed indicates that a stateproof transaction was allowed to
 	// exceed the txPoolMaxSize. This flag is reset to false OnNewBlock
 	stateproofOverflowed bool
@@ -158,7 +162,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	return &pool
 }
 
-// TODO: this needs a careful read for lock/shallow-copy issues
+// this expects pool.mu and pool.specBlockMu to be held
 func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(ctx context.Context, vb *ledgercore.ValidatedBlock) (*TransactionPool, context.CancelFunc, error) {
 	specLedger, err := ledger.MakeValidatedBlockAsLFE(vb, pool.ledger)
 	if err != nil {
@@ -184,16 +188,8 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(ctx context.Conte
 		cfg:                  pool.cfg,
 		ctx:                  copyPoolctx,
 	}
-	// TODO: make an 'assembly context struct' with a subset of TransactionPool fields?
 	copy.cond.L = &copy.mu
 	copy.assemblyCond.L = &copy.assemblyMu
-
-	//pool.cancelSpeculativeAssembly = cancel
-
-	// specBlockCh := make(chan *ledgercore.ValidatedBlock, 1)
-	// pool.specBlockMu.Lock()
-	// pool.specBlockCh = specBlockCh
-	// pool.specBlockMu.Unlock()
 
 	return &copy, cancel, nil
 }
@@ -237,6 +233,14 @@ const (
 
 // Reset resets the content of the transaction pool
 func (pool *TransactionPool) Reset() {
+	// cancel speculative assembly and clear its result
+	// briefly lock specBlockMu before doing the rest of work under pool.mu
+	pool.specBlockMu.Lock()
+	if pool.cancelSpeculativeAssembly != nil {
+		pool.cancelSpeculativeAssembly()
+	}
+	pool.specBlockMu.Unlock()
+
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 	defer pool.cond.Broadcast()
@@ -249,13 +253,6 @@ func (pool *TransactionPool) Reset() {
 	pool.pendingBlockEvaluator = nil
 	pool.statusCache.reset()
 	pool.recomputeBlockEvaluator(nil, 0, false)
-
-	// cancel speculative assembly and clear its result
-	pool.specBlockMu.Lock()
-	if pool.cancelSpeculativeAssembly != nil {
-		pool.cancelSpeculativeAssembly()
-	}
-	pool.specBlockMu.Unlock()
 }
 
 // NumExpired returns the number of transactions that expired at the
@@ -286,9 +283,13 @@ func (pool *TransactionPool) PendingTxIDs() []transactions.Txid {
 func (pool *TransactionPool) PendingTxGroups() [][]transactions.SignedTxn {
 	pool.pendingMu.RLock()
 	defer pool.pendingMu.RUnlock()
-	// note that this operation is safe for the sole reason that arrays in go are immutable.
-	// if the underlaying array need to be expanded, the actual underlaying array would need
-	// to be reallocated.
+	// This is safe because the returned slice will keep a pointer
+	// to the underlying storage and the len() at the moment of
+	// this return and .pendingTxGroups only gets append() or
+	// replaced.
+	//
+	// If code changes to write to the middle of .pendingTxGroups
+	// this becomes unsafe.
 	return pool.pendingTxGroups
 }
 
@@ -465,6 +466,7 @@ type poolIngestParams struct {
 }
 
 // remember attempts to add a transaction group to the pool.
+// remember() is called from inside Remember() while pool.mu.Lock() is held
 func (pool *TransactionPool) remember(txgroup []transactions.SignedTxn) error {
 	params := poolIngestParams{
 		recomputing: false,
@@ -538,14 +540,25 @@ func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
 	}
 
 	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
 	err := pool.remember(txgroup)
 	if err != nil {
+		pool.mu.Unlock()
 		return fmt.Errorf("TransactionPool.Remember: %w", err)
 	}
 
 	pool.rememberCommit(false)
+	pool.mu.Unlock()
+
+	pool.specBlockMu.Lock()
+	if pool.specActive {
+		select {
+		case pool.specMoreTxns <- txgroup:
+		default:
+			// full chan, drop, oh well
+			// TODO: add counter here?
+		}
+	}
+	pool.specBlockMu.Unlock()
 	return nil
 }
 
@@ -610,8 +623,13 @@ func (pool *TransactionPool) StartSpeculativeBlockAssembly(ctx context.Context, 
 	// create shallow pool copy, close the done channel when we're done with
 	// speculative block assembly.
 	speculativePool, cancel, err := pool.copyTransactionPoolOverSpecLedger(ctx, vb)
-	pool.cancelSpeculativeAssembly = cancel
-	pool.speculativePool = speculativePool
+	if err == nil {
+		pool.cancelSpeculativeAssembly = cancel
+		pool.speculativePool = speculativePool
+		pool.specMoreTxns = make(chan []transactions.SignedTxn, 10000)
+		speculativePool.specMoreTxns = pool.specMoreTxns
+		pool.log.Infof("StartSpeculativeBlockAssembly %d pendingTxGroups", len(speculativePool.pendingTxGroups))
+	}
 
 	pool.mu.Unlock()
 
@@ -635,7 +653,6 @@ func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHas
 			pool.log.Infof("update speculative deadline: %s", deadline.String())
 			specPool := pool.speculativePool
 			pool.specBlockMu.Unlock()
-			// TODO: is continuing to hold outer pool.assemblyMu here a bad thing?
 			specPool.assemblyMu.Lock()
 			assembled, err := specPool.waitForBlockAssembly(round, deadline, stats)
 			specPool.assemblyMu.Unlock()
@@ -659,13 +676,13 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 		pool.specActive = false
 		// cancel speculative assembly, fall through to starting normal assembly
 	}
-	// TODO: make core onNewBlock() _wait_ until speculative block is done, merge state from that result
+	// TODO: make core onNewBlock() _wait_ until speculative block is done, merge state from that result (optimization)
 	pool.specBlockMu.Unlock()
 	pool.onNewBlock(block, delta, false)
 }
 
 // onNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
-func (pool *TransactionPool) onNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta, stopReprocessingAtFirstAsmBlock bool) {
+func (pool *TransactionPool) onNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta, isSpeculativeBlock bool) {
 	var stats telemetryspec.ProcessBlockMetrics
 	var knownCommitted uint
 	var unknownCommitted uint
@@ -714,7 +731,7 @@ func (pool *TransactionPool) onNewBlock(block bookkeeping.Block, delta ledgercor
 		// Recompute the pool by starting from the new latest block.
 		// This has the side-effect of discarding transactions that
 		// have been committed (or that are otherwise no longer valid).
-		stats = pool.recomputeBlockEvaluator(committedTxids, knownCommitted, stopReprocessingAtFirstAsmBlock)
+		stats = pool.recomputeBlockEvaluator(committedTxids, knownCommitted, isSpeculativeBlock)
 	}
 
 	stats.KnownCommittedCount = knownCommitted
@@ -834,7 +851,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator). Expects that the pool.mu mutex would be already taken.
-func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint, stopAtFirstBlock bool) (stats telemetryspec.ProcessBlockMetrics) {
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint, isSpeculativeBlock bool) (stats telemetryspec.ProcessBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
@@ -865,6 +882,10 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	txgroups := pool.pendingTxGroups
 	pendingCount := pool.pendingCountNoLock()
 	pool.pendingMu.RUnlock()
+
+	if isSpeculativeBlock {
+		pool.log.Infof("rBE %d pendingCount, %d txgroups", pendingCount, len(txgroups))
+	}
 
 	pool.assemblyMu.Lock()
 	pool.assemblyResults = poolAsmResults{
@@ -901,6 +922,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	firstTxnGrpTime := time.Now()
 
+	blockDone := false
 	// Feed the transactions in order
 	for _, txgroup := range txgroups {
 		select {
@@ -908,48 +930,60 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			return
 		default: // continue processing transactions
 		}
-
-		if len(txgroup) == 0 {
-			asmStats.InvalidCount++
-			continue
-		}
-		if _, alreadyCommitted := committedTxIds[txgroup[0].ID()]; alreadyCommitted {
-			asmStats.EarlyCommittedCount++
-			continue
-		}
-
-		hasBlock, err := pool.add(txgroup, &asmStats, stopAtFirstBlock)
-		if err != nil {
-			for _, tx := range txgroup {
-				pool.statusCache.put(tx, err.Error())
-			}
-			// metrics here are duplicated for historic reasons. stats is hardly used and should be removed in favor of asmstats
-			switch terr := err.(type) {
-			case *ledgercore.TransactionInLedgerError:
-				asmStats.CommittedCount++
-				stats.RemovedInvalidCount++
-			case *transactions.TxnDeadError:
-				if int(terr.LastValid-terr.FirstValid) > 20 {
-					// cutoff value  here is picked as a somewhat arbitrary cutoff trying to separate longer lived transactions from very short lived ones
-					asmStats.ExpiredLongLivedCount++
-				}
-				asmStats.ExpiredCount++
-				stats.ExpiredCount++
-			case *ledgercore.LeaseInLedgerError:
-				asmStats.LeaseErrorCount++
-				stats.RemovedInvalidCount++
-				pool.log.Infof("Cannot re-add pending transaction to pool (lease): %v", err)
-			case *transactions.MinFeeError:
-				asmStats.MinFeeErrorCount++
-				stats.RemovedInvalidCount++
-				pool.log.Infof("Cannot re-add pending transaction to pool (fee): %v", err)
-			default:
-				asmStats.InvalidCount++
-				stats.RemovedInvalidCount++
-				pool.log.Warnf("Cannot re-add pending transaction to pool: %v", err)
-			}
-		} else if hasBlock {
+		blockDone = pool.recomputeBlockEvaluatorTxGroup(committedTxIds, &asmStats, isSpeculativeBlock, &stats, txgroup)
+		if blockDone {
 			break
+		}
+	}
+
+	if isSpeculativeBlock {
+		pool.log.Info("rBE txgroups done")
+	}
+
+	var deadlineTimer *time.Timer
+	var deadlineChan <-chan time.Time
+	for isSpeculativeBlock && (!blockDone) {
+		// In Speculative Block Assembly, try to include more
+		// txns that may have arrived and been .Remember()ed
+		// by the outer TransactionPool since speculation
+		// started.
+		if deadlineTimer == nil {
+			pool.assemblyMu.Lock()
+			deadline := pool.assemblyDeadline
+			pool.assemblyMu.Unlock()
+			if !deadline.IsZero() {
+				deadlineTimer = time.NewTimer(time.Until(deadline))
+				deadlineChan = deadlineTimer.C
+				defer deadlineTimer.Stop()
+			}
+		}
+		select {
+		case <-pool.ctx.Done():
+			pool.log.Info("rBE spec ctx cancelled")
+			return
+		case txgroup := <-pool.specMoreTxns:
+			blockDone = pool.recomputeBlockEvaluatorTxGroup(committedTxIds, &asmStats, isSpeculativeBlock, &stats, txgroup)
+		case <-deadlineChan:
+			pool.log.Info("rBE spec deadline hit")
+			blockDone = true
+			break
+		default:
+			if deadlineTimer != nil {
+				// deadline is set but hasn't been hit
+				// yet, we're after AssembleBlock, but
+				// before deadline. We're out of
+				// specMoreTxns backlog of .Remember()
+				// traffic that came in after
+				// speculation started. This is a
+				// good-enough time to finish the
+				// block.
+				pool.log.Info("rBE spec good enough")
+				blockDone = true
+				break
+			}
+			// poll waiting for more txns or deadline to
+			// be set by outer AssembleBlock
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 
@@ -979,10 +1013,56 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	pool.assemblyMu.Unlock()
 
 	// remember the changes made to the tx pool if we're not in speculative assembly
-	if !stopAtFirstBlock {
+	if !isSpeculativeBlock {
 		pool.rememberCommit(true)
 	}
 	return
+}
+
+func (pool *TransactionPool) recomputeBlockEvaluatorTxGroup(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, asmStats *telemetryspec.AssembleBlockMetrics, isSpeculativeBlock bool, stats *telemetryspec.ProcessBlockMetrics, txgroup []transactions.SignedTxn) (blockDone bool) {
+	if len(txgroup) == 0 {
+		asmStats.InvalidCount++
+		return false
+	}
+	if _, alreadyCommitted := committedTxIds[txgroup[0].ID()]; alreadyCommitted {
+		asmStats.EarlyCommittedCount++
+		return false
+	}
+
+	hasBlock, err := pool.add(txgroup, asmStats, isSpeculativeBlock)
+	if err != nil {
+		for _, tx := range txgroup {
+			pool.statusCache.put(tx, err.Error())
+		}
+		// metrics here are duplicated for historic reasons. stats is hardly used and should be removed in favor of asmstats
+		switch terr := err.(type) {
+		case *ledgercore.TransactionInLedgerError:
+			asmStats.CommittedCount++
+			stats.RemovedInvalidCount++
+		case *transactions.TxnDeadError:
+			if int(terr.LastValid-terr.FirstValid) > 20 {
+				// cutoff value  here is picked as a somewhat arbitrary cutoff trying to separate longer lived transactions from very short lived ones
+				asmStats.ExpiredLongLivedCount++
+			}
+			asmStats.ExpiredCount++
+			stats.ExpiredCount++
+		case *ledgercore.LeaseInLedgerError:
+			asmStats.LeaseErrorCount++
+			stats.RemovedInvalidCount++
+			pool.log.Infof("Cannot re-add pending transaction to pool (lease): %v", err)
+		case *transactions.MinFeeError:
+			asmStats.MinFeeErrorCount++
+			stats.RemovedInvalidCount++
+			pool.log.Infof("Cannot re-add pending transaction to pool (fee): %v", err)
+		default:
+			asmStats.InvalidCount++
+			stats.RemovedInvalidCount++
+			pool.log.Warnf("Cannot re-add pending transaction to pool: %v", err)
+		}
+	} else if hasBlock {
+		return true
+	}
+	return false
 }
 
 func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBlock, encodedLen int) telemetryspec.StateProofStats {
@@ -1097,11 +1177,11 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	}
 
 	// Maybe we have a block already assembled
-	// TODO: this needs to be changed if a speculative block is in flight and if it is valid. If it is not valid, cancel it, if it is valid, wait for it.
 	prev, err := pool.ledger.Block(round.SubSaturate(1))
 	if err == nil {
 		specBlock, specErr := pool.tryReadSpeculativeBlock(prev.Hash(), round, deadline, &stats)
 		if specBlock != nil || specErr != nil {
+			stats.Speculative = true
 			pool.log.Infof("got spec block for %s, specErr %v", prev.Hash().String(), specErr)
 			return specBlock, specErr
 		}

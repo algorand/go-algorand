@@ -122,6 +122,7 @@ const (
 	// period.
 	//
 	// fastTimeout is like timeout but for fast partition recovery.
+	//
 	// speculation timeout marks when the player should start speculative
 	// block assembly.
 	timeout
@@ -374,7 +375,7 @@ func (e roundInterruptionEvent) AttachConsensusVersion(v ConsensusVersionView) e
 }
 
 type timeoutEvent struct {
-	// {timeout,fastTimeout,speculationTimeout}
+	// T in {timeout,fastTimeout,speculationTimeout}
 	T eventType
 
 	RandomEntropy uint64
