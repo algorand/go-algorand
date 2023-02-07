@@ -673,7 +673,11 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		}
 
 		// creating the index can take a while, so ensure we don't generate false alerts for no good reason.
-		tx.ResetTransactionWarnDeadline(ctx, time.Now().Add(120*time.Second))
+		_, err = tx.ResetTransactionWarnDeadline(ctx, time.Now().Add(120*time.Second))
+		if err != nil {
+			return err
+		}
+
 		return crw.CreateCatchpointStagingHashesIndex(ctx)
 	})
 	if err != nil {
@@ -792,7 +796,10 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			if uncommitedHashesCount >= trieRebuildCommitFrequency {
 				err = trackerdb.Transaction(func(transactionCtx context.Context, tx store.TransactionScope) (err error) {
 					// set a long 30-second window for the evict before warning is generated.
-					tx.ResetTransactionWarnDeadline(transactionCtx, time.Now().Add(30*time.Second))
+					_, err = tx.ResetTransactionWarnDeadline(transactionCtx, time.Now().Add(30*time.Second))
+					if err != nil {
+						return
+					}
 					mc, err = tx.CreateMerkleCommitter(true)
 					if err != nil {
 						return
@@ -822,7 +829,10 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		if uncommitedHashesCount > 0 {
 			err = trackerdb.Transaction(func(transactionCtx context.Context, tx store.TransactionScope) (err error) {
 				// set a long 30-second window for the evict before warning is generated.
-				tx.ResetTransactionWarnDeadline(transactionCtx, time.Now().Add(30*time.Second))
+				_, err = tx.ResetTransactionWarnDeadline(transactionCtx, time.Now().Add(30*time.Second))
+				if err != nil {
+					return
+				}
 				mc, err = tx.CreateMerkleCommitter(true)
 				if err != nil {
 					return

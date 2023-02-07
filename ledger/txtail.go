@@ -277,7 +277,6 @@ func (t *txTail) commitRound(ctx context.Context, ts store.TransactionScope, dcc
 	if err != nil {
 		return err
 	}
-	return nil
 
 	// determine the round to remove data
 	// the formula is similar to the committedUpTo: rnd + 1 - retain size

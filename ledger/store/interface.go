@@ -59,7 +59,7 @@ type AccountsWriterExt interface {
 	AccountsPruneOnlineRoundParams(deleteBeforeRound basics.Round) error
 }
 
-// AccountsReader is the read interface for:
+// AccountsReader is the "optimized" read interface for:
 // - accounts, resources, app kvs, creatables
 type AccountsReader interface {
 	ListCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, dbRound basics.Round, err error)
@@ -77,6 +77,8 @@ type AccountsReader interface {
 	Close()
 }
 
+// AccountsReaderExt is the read interface for:
+// - accounts, resources, app kvs, creatables
 type AccountsReaderExt interface {
 	AccountsTotals(ctx context.Context, catchpointStaging bool) (totals ledgercore.AccountTotals, err error)
 	AccountsHashRound(ctx context.Context) (hashrnd basics.Round, err error)
