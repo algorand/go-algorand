@@ -1350,12 +1350,12 @@ func TestSplitTokens(t *testing.T) {
 
 		var _current []string
 		if left != nil {
-			_current = lineTokens(current).strings()
+			_current = current.strings()
 		}
 
 		var _next []string
 		if right != nil {
-			_next = lineTokens(next).strings()
+			_next = next.strings()
 		}
 
 		assert.Equal(t, left, _current)
@@ -3236,94 +3236,98 @@ return
 
 }
 
-// func TestStackSnapshot(t *testing.T) {
-// 	partitiontest.PartitionTest(t)
-// 	t.Parallel()
-//
-// 	ops, err := assembleWithTrace(`#pragma version 8
-// int 1
-// int 1
-// byte 0xdead
-// pop
-// pop
-// return
-// `, 8)
-//
-// 	if err != nil {
-// 		t.Logf("Errors: %+v", ops.Errors)
-// 		t.Fail()
-// 	}
-//
-// 	for idx, lts := range ops.Lines {
-// 		t.Logf("| %-20s | %-20v |", strings.Join(lts.strings(), " "), ops.stacks[idx])
-// 	}
-//
-// 	bConst := StackBytes.narrowed(static(2))
-// 	bConst.Name = "[2]byte"
-//
-// 	expected := []StackTypes{
-// 		{},
-// 		{},
-// 		{StackUint64},
-// 		{StackUint64, StackUint64},
-// 		{StackUint64, StackUint64, bConst},
-// 		{StackUint64, StackUint64},
-// 		{StackUint64},
-// 		{},
-// 	}
-//
-// 	assert.Equal(t, expected, ops.stacks)
-//
-// }
-//
-// func TestStackSnapshotCallsub(t *testing.T) {
-// 	partitiontest.PartitionTest(t)
-// 	t.Parallel()
-// 	src := `#pragma version 8
-// int 1
-// int 1
-// callsub lbl
-// int 5
-// ==
-// byte 0xbeef
-// swap
-// assert
-// pop
-// return
-//
-// lbl:
-// 	proto 0 1
-// 	int 2
-// 	int 3
-// 	+
-// 	retsub
-// `
-//
-// 	ops, err := assembleWithTrace(src, 8)
-//
-// 	if err != nil {
-// 		t.Logf("Errors: %+v", ops.Errors)
-// 		t.Fail()
-// 	}
-//
-// 	for idx, lts := range ops.Lines {
-// 		t.Logf("| %-20s | %-20v |", strings.Join(lts.strings(), " "), ops.stacks[idx])
-// 	}
-//
-// 	t.Logf("%d %+v", len(ops.stacks), ops.stacks)
-// 	t.Logf("%d %+v", len(ops.Lines), ops.Lines)
-//
-// 	//expected := []StackTypes{
-// 	//	{StackUint64},
-// 	//	{StackUint64, StackUint64},
-// 	//	{StackUint64, StackUint64},
-// 	//	{},
-// 	//	{StackUint64},
-// 	//	{StackUint64, StackUint64},
-// 	//	{StackUint64},
-// 	//	{StackUint64},
-// 	//}
-//
-// 	//assert.Equal(t, expected, ops.stacks)
-// }
-//
+func TestStackSnapshot(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ops, err := assembleWithTrace(`#pragma version 8
+int 1
+int 1
+byte 0xdead
+pop
+pop
+return`, 8)
+
+	if err != nil {
+		t.Logf("Errors: %+v", ops.Errors)
+		t.Fail()
+	}
+
+	// for idx, lts := range ops.Lines {
+	// 	t.Logf("| %-20s | %-20v |", lts, ops.stacks[idx])
+	// }
+
+	expected := []StackTypes{
+		{},
+		{StackUint64},
+		{StackUint64, StackUint64},
+		{StackUint64, StackUint64, StackBytes.narrowed(static(2))},
+		{StackUint64, StackUint64},
+		{StackUint64},
+		{},
+	}
+
+	assert.Equal(t, expected, ops.stacks)
+}
+
+func TestStackSnapshotCallsub(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	src := `#pragma version 8
+ int 1
+ int 1
+ callsub lbl
+ int 5
+ ==
+ byte 0xbeef
+ swap
+ assert
+ pop
+ return
+
+ lbl:
+ 	proto 0 1
+ 	int 2
+ 	int 3
+ 	+
+ 	retsub
+ `
+
+	ops, err := assembleWithTrace(src, 8)
+
+	if err != nil {
+		t.Logf("Errors: %+v", ops.Errors)
+		t.Fail()
+	}
+
+	for idx, lts := range ops.Lines {
+		t.Logf("| %-20s | %-20v |", lts, ops.stacks[idx].Reverse())
+	}
+
+	t.Logf("%d %+v", len(ops.stacks), ops.stacks)
+	t.Logf("%d %+v", len(ops.Lines), ops.Lines)
+
+	expected := []StackTypes{
+		{},
+		{StackUint64},
+		{StackUint64, StackUint64},
+		{},
+		{StackUint64},
+		{StackBoolean},
+		{StackBoolean, StackBytes.narrowed(static(2))},
+		{StackBytes.narrowed(static(2)), StackBoolean},
+		{StackBytes.narrowed(static(2))},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{StackUint64},
+		{StackUint64, StackUint64},
+		{StackUint64},
+		{},
+		{},
+	}
+
+	assert.Equal(t, expected, ops.stacks)
+}

@@ -157,7 +157,7 @@ func (st StackType) narrowed(bounds [2]uint64) StackType {
 	if bounds[0] == bounds[1] {
 		switch st.AVMType {
 		case avmBytes:
-			return NewStackType(st.AVMType, bounds, fmt.Sprintf("[%d]bytes", bounds[0]))
+			return NewStackType(st.AVMType, bounds, fmt.Sprintf("[%d]byte", bounds[0]))
 		case avmUint64:
 			return NewStackType(st.AVMType, bounds, fmt.Sprintf("%d", bounds[0]))
 		}
@@ -218,20 +218,6 @@ func (st StackType) AssignableTo(other StackType) bool {
 	}
 }
 
-// StackTypes is an alias for a list of StackType with syntactic sugar
-type StackTypes []StackType
-
-func (st StackTypes) String() string {
-	// Note this reverses the stack so top appears first
-	var s = make([]string, len(st))
-	i := 0
-	for idx := len(st) - 1; idx >= 0; idx-- {
-		s[i] = st[idx].String()
-		i++
-	}
-	return fmt.Sprintf("(%s)", strings.Join(s, ", "))
-}
-
 func (st StackType) String() string {
 	return st.Name
 }
@@ -243,6 +229,32 @@ func (st StackType) Typed() bool {
 		return true
 	}
 	return false
+}
+
+// StackTypes is an alias for a list of StackType with syntactic sugar
+type StackTypes []StackType
+
+// Reverse returns the StackTypes in reverse order
+// useful for displaying the stack as an op sees it
+func (st StackTypes) Reverse() StackTypes {
+	nst := make(StackTypes, len(st))
+	for idx := 0; idx < len(st); idx++ {
+		nst[idx] = st[len(st)-1-idx]
+	}
+	return nst
+}
+
+func (st StackTypes) String() string {
+	// Note this reverses the stack so top appears first
+	return fmt.Sprintf("(%s)", strings.Join(st.strings(), ", "))
+}
+
+func (st StackTypes) strings() []string {
+	var strs = make([]string, len(st))
+	for idx, s := range st {
+		strs[idx] = s.String()
+	}
+	return strs
 }
 
 func bound(min, max uint64) [2]uint64 {

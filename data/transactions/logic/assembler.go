@@ -1728,6 +1728,12 @@ func (t token) String() string {
 
 type lineTokens []token
 
+func (lts lineTokens) String() string {
+	// TODO: should we use `col` to
+	// reproduce the source string more accurately?
+	return strings.Join(lts.strings(), " ")
+}
+
 func (lts lineTokens) strings() []string {
 	ts := make([]string, len(lts))
 	for idx, tk := range lts {
@@ -1873,22 +1879,22 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	expectedCnt, actualCnt := len(args), len(ops.known.stack)
 	if expectedCnt > actualCnt && ops.known.bottom.AVMType == StackNone.AVMType {
 		ops.typeErrorf("%s expects %d stack arguments but stack height is %d",
-			strings.Join(instruction.strings(), " "), expectedCnt, actualCnt)
+			instruction, expectedCnt, actualCnt)
 	} else {
+		// We compare them in reverse order, because stacks
 		for i := expectedCnt - 1; i >= 0; i-- {
 			expectedType, actualType := args[i], ops.known.pop()
 			if !actualType.AssignableTo(expectedType) {
 				ops.typeErrorf("%s arg %d wanted type %s got %s",
-					strings.Join(instruction.strings(), " "), i,
-					expectedType.String(), actualType.String())
+					instruction, i, expectedType.String(), actualType.String())
 			}
 		}
-		ops.trace("pops%s ", args.String())
+		ops.trace("pops%s ", args.Reverse())
 	}
 
 	if len(returns) > 0 {
 		ops.known.push(returns...)
-		ops.trace("pushes%s ", returns.String())
+		ops.trace("pushes%s ", returns)
 	}
 }
 
@@ -1897,14 +1903,6 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 func (ops *OpStream) assembleTokens(current []token) {
 	if len(current) == 0 {
 		return
-	}
-
-	// we're about to begin processing opcodes, so settle the Version
-	if ops.Version == assemblerNoVersion {
-		ops.Version = AssemblerDefaultVersion
-	}
-	if ops.versionedPseudoOps == nil {
-		ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
 	}
 
 	// Check for label
@@ -1974,18 +1972,30 @@ func (ops *OpStream) assembleLine(line string) {
 	// to the lines, since they're not useful for assembly
 	tokens = tokens.filter(tokenComment)
 
-	if len(tokens) > 0 {
-		if first := tokens[0]; first.str[0] == '#' {
-			directive := first.str[1:]
-			switch directive {
-			case "pragma":
-				ops.pragma(tokens) //nolint:errcheck // report bad pragma line error, but continue assembling
-				ops.trace("%3d: #pragma line\n", ops.sourceLine)
-			default:
-				ops.errorf("Unknown directive: %s", directive)
-			}
-			return
+	defer ops.snapshotStack()
+
+	if len(tokens) == 0 {
+		return
+	}
+
+	if tokens[0].str[0] == '#' {
+		directive := tokens[0].str[1:]
+		switch directive {
+		case "pragma":
+			ops.pragma(tokens) //nolint:errcheck // report bad pragma line error, but continue assembling
+			ops.trace("%3d: #pragma line\n", ops.sourceLine)
+		default:
+			ops.errorf("Unknown directive: %s", directive)
 		}
+		return
+	}
+
+	// we're about to begin processing opcodes, so settle the Version
+	if ops.Version == assemblerNoVersion {
+		ops.Version = AssemblerDefaultVersion
+	}
+	if ops.versionedPseudoOps == nil {
+		ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
 	}
 
 	for current, next := tokens.split(); len(current) > 0 || len(next) > 0; current, next = next.split() {
