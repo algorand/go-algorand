@@ -52,6 +52,9 @@ const msgsInReadBufferPerPeer = 10
 
 var tagStringList []string
 
+// allowCustomTags is set by tests to allow non-protocol-defined message tags. It is false in non-test code.
+var allowCustomTags bool
+
 func init() {
 	tagStringList = make([]string, len(protocol.TagList))
 	for i, t := range protocol.TagList {
@@ -97,6 +100,7 @@ var duplicateNetworkMessageReceivedBytesTotal = metrics.MakeCounter(metrics.Dupl
 var duplicateNetworkFilterReceivedTotal = metrics.MakeCounter(metrics.DuplicateNetworkFilterReceivedTotal)
 var outgoingNetworkMessageFilteredOutTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutTotal)
 var outgoingNetworkMessageFilteredOutBytesTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutBytesTotal)
+var unknownProtocolTagMessagesTotal = metrics.MakeCounter(metrics.UnknownProtocolTagMessagesTotal)
 
 // defaultSendMessageTags is the default list of messages which a peer would
 // allow to be sent without receiving any explicit request.
@@ -110,7 +114,6 @@ var defaultSendMessageTags = map[protocol.Tag]bool{
 	protocol.TopicMsgRespTag:    true,
 	protocol.MsgOfInterestTag:   true,
 	protocol.TxnTag:             true,
-	protocol.UniCatchupReqTag:   true,
 	protocol.UniEnsBlockReqTag:  true,
 	protocol.VoteBundleTag:      true,
 }
@@ -192,7 +195,7 @@ type wsPeer struct {
 	duplicateFilterCount uint64
 
 	// These message counters need to be 64-bit aligned as well.
-	txMessageCount, miMessageCount, ppMessageCount, avMessageCount uint64
+	txMessageCount, miMessageCount, ppMessageCount, avMessageCount, unkMessageCount uint64
 
 	wsPeerCore
 
@@ -566,6 +569,15 @@ func (wp *wsPeer) readLoop() {
 			atomic.AddUint64(&wp.avMessageCount, 1)
 		case protocol.ProposalPayloadTag:
 			atomic.AddUint64(&wp.ppMessageCount, 1)
+		// the remaining valid tags: no special handling here
+		case protocol.NetPrioResponseTag, protocol.PingTag, protocol.PingReplyTag,
+			protocol.StateProofSigTag, protocol.UniEnsBlockReqTag, protocol.VoteBundleTag:
+		default: // unrecognized tag
+			unknownProtocolTagMessagesTotal.Inc(nil)
+			atomic.AddUint64(&wp.unkMessageCount, 1)
+			if !allowCustomTags {
+				continue // drop message, skip adding it to queue
+			}
 		}
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {

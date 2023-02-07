@@ -26,6 +26,16 @@ import (
 
 /* misc */
 
+// GetFdLimits returns a current values for file descriptors limits.
+func GetFdLimits() (soft uint64, hard uint64, err error) {
+	var rLimit syscall.Rlimit
+	err = syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
+	if err != nil {
+		return 0, 0, fmt.Errorf("GetFdSoftLimit() err: %w", err)
+	}
+	return rLimit.Cur, rLimit.Max, nil
+}
+
 // SetFdSoftLimit sets a new file descriptors soft limit.
 func SetFdSoftLimit(newLimit uint64) error {
 	var rLimit syscall.Rlimit

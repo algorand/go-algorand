@@ -294,7 +294,6 @@ func TestTxTailDeltaTracking(t *testing.T) {
 						offset:               1,
 						catchpointFirstStage: true,
 					},
-					newBase: basics.Round(i),
 				}
 				err = txtail.prepareCommit(dcc)
 				require.NoError(t, err)
@@ -363,12 +362,11 @@ func BenchmarkTxTailBlockHeaderCache(b *testing.B) {
 					oldBase:  dbRound,
 					lookback: lookback,
 				},
-				newBase: dbRound + basics.Round(offset),
 			}
 			err := tail.prepareCommit(dcc)
 			require.NoError(b, err)
 			tail.postCommit(context.Background(), dcc)
-			dbRound = dcc.newBase
+			dbRound = dcc.newBase()
 			require.Less(b, len(tail.blockHeaderData), 1001+10)
 		}
 	}

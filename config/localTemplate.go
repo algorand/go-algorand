@@ -103,6 +103,8 @@ type Local struct {
 	// that RLIMIT_NOFILE >= IncomingConnectionsLimit + RestConnectionsHardLimit +
 	// ReservedFDs. ReservedFDs are meant to leave room for short-lived FDs like
 	// DNS queries, SQLite files, etc. This parameter shouldn't be changed.
+	// If RLIMIT_NOFILE < IncomingConnectionsLimit + RestConnectionsHardLimit + ReservedFDs
+	// then either RestConnectionsHardLimit or IncomingConnectionsLimit decreased.
 	ReservedFDs uint64 `version[2]:"256"`
 
 	// local server
@@ -592,4 +594,38 @@ func (cfg Local) TxFilterRawMsgEnabled() bool {
 // TxFilterCanonicalEnabled returns true if canonical tx group filtering is enabled
 func (cfg Local) TxFilterCanonicalEnabled() bool {
 	return cfg.TxIncomingFilteringFlags&txFilterCanonical != 0
+}
+
+// IsGossipServer returns true if NetAddress is set and this node supposed
+// to start websocket server
+func (cfg Local) IsGossipServer() bool {
+	return cfg.NetAddress != ""
+}
+
+// AdjustConnectionLimits updates RestConnectionsSoftLimit, RestConnectionsHardLimit, IncomingConnectionsLimit
+// if requiredFDs greater than maxFDs
+func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
+	if maxFDs >= requiredFDs {
+		return false
+	}
+	const reservedRESTConns = 10
+	diff := requiredFDs - maxFDs
+
+	if cfg.RestConnectionsHardLimit <= diff+reservedRESTConns {
+		restDelta := diff + reservedRESTConns - cfg.RestConnectionsHardLimit
+		cfg.RestConnectionsHardLimit = reservedRESTConns
+		if cfg.IncomingConnectionsLimit > int(restDelta) {
+			cfg.IncomingConnectionsLimit -= int(restDelta)
+		} else {
+			cfg.IncomingConnectionsLimit = 0
+		}
+	} else {
+		cfg.RestConnectionsHardLimit -= diff
+	}
+
+	if cfg.RestConnectionsSoftLimit > cfg.RestConnectionsHardLimit {
+		cfg.RestConnectionsSoftLimit = cfg.RestConnectionsHardLimit
+	}
+
+	return true
 }

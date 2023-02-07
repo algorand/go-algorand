@@ -1729,7 +1729,7 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 
 	offset := dcc.offset
 	dbRound := dcc.oldBase
-	newBase := dcc.newBase
+	newBase := dcc.newBase()
 
 	dcc.updatingBalancesDuration = time.Since(dcc.flushTime)
 

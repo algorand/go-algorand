@@ -518,7 +518,7 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 		dcc.stats.MerkleTrieUpdateDuration = time.Duration(time.Now().UnixNano())
 	}
 
-	err = ct.accountsUpdateBalances(dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.compactKvDeltas, dcc.oldBase, dcc.newBase)
+	err = ct.accountsUpdateBalances(dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.compactKvDeltas, dcc.oldBase, dcc.newBase())
 	if err != nil {
 		return err
 	}
@@ -867,11 +867,11 @@ func (ct *catchpointTracker) pruneFirstStageRecordsData(ctx context.Context, max
 
 func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 	if dcc.catchpointFirstStage {
-		err := ct.finishFirstStage(ctx, dcc.newBase, dcc.updatingBalancesDuration)
+		err := ct.finishFirstStage(ctx, dcc.newBase(), dcc.updatingBalancesDuration)
 		if err != nil {
 			ct.log.Warnf(
 				"error finishing catchpoint's first stage dcc.newBase: %d err: %v",
-				dcc.newBase, err)
+				dcc.newBase(), err)
 		}
 	}
 
@@ -885,13 +885,13 @@ func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferr
 	}
 
 	// Prune first stage catchpoint records from the database.
-	if uint64(dcc.newBase) >= dcc.catchpointLookback {
+	if uint64(dcc.newBase()) >= dcc.catchpointLookback {
 		err := ct.pruneFirstStageRecordsData(
-			ctx, dcc.newBase-basics.Round(dcc.catchpointLookback))
+			ctx, dcc.newBase()-basics.Round(dcc.catchpointLookback))
 		if err != nil {
 			ct.log.Warnf(
 				"error pruning first stage records and data dcc.newBase: %d err: %v",
-				dcc.newBase, err)
+				dcc.newBase(), err)
 		}
 	}
 }
