@@ -45,10 +45,10 @@ type onlineAccountsDbQueries struct {
 }
 
 type accountsSQLWriter struct {
-	insertCreatableIdxStmt, deleteCreatableIdxStmt                 *sql.Stmt
-	deleteByRowIDStmt, insertStmt, insertBasicTestStmt, updateStmt *sql.Stmt
-	deleteResourceStmt, insertResourceStmt, updateResourceStmt     *sql.Stmt
-	deleteKvPairStmt, upsertKvPairStmt                             *sql.Stmt
+	insertCreatableIdxStmt, deleteCreatableIdxStmt             *sql.Stmt
+	deleteByRowIDStmt, insertStmt, updateStmt                  *sql.Stmt
+	deleteResourceStmt, insertResourceStmt, updateResourceStmt *sql.Stmt
+	deleteKvPairStmt, upsertKvPairStmt                         *sql.Stmt
 }
 
 type onlineAccountsSQLWriter struct {
