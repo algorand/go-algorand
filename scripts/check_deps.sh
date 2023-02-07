@@ -61,7 +61,11 @@ check_deps() {
             missing_dep "${dep##*/}"
         fi
 
-        check_go_binary_version "$dep"
+        # go 1.17 on arm64 macs has an issue checking binaries with "go version", skip version check
+        if [[ "$(uname)" != "Darwin" ]] || [[ "$(uname -m)" != "arm64" ]] || ! [[ "$(go version | awk '{print $3}')" < "go1.17" ]]
+        then
+           check_go_binary_version "$dep"
+        fi
     done
 
     # Don't print `shellcheck`s location.
