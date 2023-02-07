@@ -735,6 +735,9 @@ type PendingTransactionResponse struct {
 
 // SimulationTransactionGroupResult Simulation result for an atomic transaction group
 type SimulationTransactionGroupResult struct {
+	// FailedAt If present, indicates which transaction in this group caused the failure
+	FailedAt *[]uint64 `json:"failed-at,omitempty"`
+
 	// FailureMessage If present, indicates that the transaction group failed and specifies why that happened
 	FailureMessage *string `json:"failure-message,omitempty"`
 

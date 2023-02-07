@@ -3597,6 +3597,13 @@
         "failure-message": {
           "description": "If present, indicates that the transaction group failed and specifies why that happened",
           "type": "string"
+        },
+        "failed-at": {
+          "description": "If present, indicates which transaction in this group caused the failure",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
         }
       }
     },
@@ -3608,7 +3615,6 @@
       ],
       "properties": {
         "txn-result": {
-          "description": "Includes details about the transaction and it execution, even if it fails",
           "$ref": "#/definitions/PendingTransactionResponse"
         },
         "missing-signature": {

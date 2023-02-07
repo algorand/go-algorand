@@ -70,10 +70,6 @@ func (tracer *cursorEvalTracer) absolutePath() TxnPath {
 	return path
 }
 
-// ==============================
-// > Simulator Debugger
-// ==============================
-
 type evalTracer struct {
 	cursorEvalTracer
 
