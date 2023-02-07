@@ -19,8 +19,6 @@ package v2
 import (
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/crypto"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
@@ -71,57 +69,6 @@ func convertAssetResourceRecordToGenerated(asset ledgercore.AssetResourceRecord)
 	}
 }
 
-// accountDataToAccount converts a ledgercore.AccountData to model.Account
-func accountDataToAccount(addr string, amntWithoutPendingRewards uint64, rnd uint64,
-	consensus *config.ConsensusParams, ad ledgercore.AccountData) (model.Account, error) {
-	pendingRewards, overflowed := basics.OSubA(ad.MicroAlgos, basics.MicroAlgos{Raw: amntWithoutPendingRewards})
-	if overflowed {
-		return model.Account{}, errors.New("overflow on pending reward calculation")
-	}
-	var apiParticipation *model.AccountParticipation
-	if ad.VoteID != (crypto.OneTimeSignatureVerifier{}) {
-		apiParticipation = &model.AccountParticipation{
-			VoteParticipationKey:      ad.VoteID[:],
-			SelectionParticipationKey: ad.SelectionID[:],
-			VoteFirstValid:            uint64(ad.VoteFirstValid),
-			VoteLastValid:             uint64(ad.VoteLastValid),
-			VoteKeyDilution:           ad.VoteKeyDilution,
-		}
-		if !ad.StateProofID.IsEmpty() {
-			tmp := ad.StateProofID[:]
-			apiParticipation.StateProofKey = &tmp
-		}
-	}
-	var authAddr *string = nil
-	if !ad.AuthAddr.IsZero() {
-		authAddr = strOrNil(ad.AuthAddr.String())
-	}
-	return model.Account{
-		Address:                     addr,
-		Amount:                      ad.MicroAlgos.Raw,
-		AmountWithoutPendingRewards: amntWithoutPendingRewards,
-		AppsTotalExtraPages:         numOrNil(uint64(ad.TotalExtraAppPages)),
-		AppsTotalSchema: &model.ApplicationStateSchema{
-			NumUint:      ad.TotalAppSchema.NumUint,
-			NumByteSlice: ad.TotalAppSchema.NumByteSlice,
-		},
-		AuthAddr:           authAddr,
-		MinBalance:         ad.MinBalance(consensus).Raw,
-		Participation:      apiParticipation,
-		PendingRewards:     pendingRewards.Raw,
-		RewardBase:         numOrNil(ad.RewardsBase),
-		Rewards:            ad.RewardedMicroAlgos.Raw,
-		Round:              rnd,
-		Status:             ad.Status.String(),
-		TotalAppsOptedIn:   ad.TotalAppLocalStates,
-		TotalAssetsOptedIn: ad.TotalAssets,
-		TotalBoxBytes:      numOrNil(ad.TotalBoxBytes),
-		TotalBoxes:         numOrNil(ad.TotalBoxes),
-		TotalCreatedApps:   ad.TotalAppParams,
-		TotalCreatedAssets: ad.TotalAssetParams,
-	}, nil
-}
-
 // StateDeltaToLedgerDelta converts ledgercore.StateDelta to v2.model.LedgerStateDelta
 func StateDeltaToLedgerDelta(sDelta ledgercore.StateDelta, consensus config.ConsensusParams) (response model.LedgerStateDelta, err error) {
 	rewardsLevel := sDelta.Hdr.RewardsLevel
@@ -153,7 +100,7 @@ func StateDeltaToLedgerDelta(sDelta ledgercore.StateDelta, consensus config.Cons
 			return response, errors.New("overflow on pending reward calculation")
 		}
 
-		a, err := accountDataToAccount(record.Addr.String(), amountWithoutPendingRewards.Raw, uint64(round), &consensus, record.AccountData)
+		a, err := ledgercoreADToAccount(record.Addr.String(), amountWithoutPendingRewards.Raw, uint64(round), &consensus, record.AccountData)
 		if err != nil {
 			return response, err
 		}
