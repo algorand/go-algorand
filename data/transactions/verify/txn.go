@@ -208,7 +208,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
 	for i, stxn := range stxs {
-		prepErr := txnBatchPrep(&stxn, i, groupCtx, verifier, evalTracer)
+		prepErr := txnBatchPrep(&stxs[i], i, groupCtx, verifier, evalTracer)
 		if prepErr != nil {
 			// re-wrap the error with more details
 			prepErr.err = fmt.Errorf("transaction %+v invalid : %w", stxn, prepErr.err)
