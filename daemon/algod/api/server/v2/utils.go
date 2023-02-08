@@ -373,9 +373,7 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) encodedTxnG
 
 	if len(txnGroupResult.FailedAt) > 0 {
 		failedAt := make([]uint64, len(txnGroupResult.FailedAt))
-		for i, txn := range txnGroupResult.FailedAt {
-			failedAt[i] = uint64(txn)
-		}
+		copy(failedAt, txnGroupResult.FailedAt)
 		encoded.FailedAt = &failedAt
 	}
 

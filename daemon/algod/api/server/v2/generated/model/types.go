@@ -118,6 +118,12 @@ const (
 	PendingTransactionInformationParamsFormatMsgpack PendingTransactionInformationParamsFormat = "msgpack"
 )
 
+// Defines values for SimulateTransactionParamsFormat.
+const (
+	SimulateTransactionParamsFormatJson    SimulateTransactionParamsFormat = "json"
+	SimulateTransactionParamsFormatMsgpack SimulateTransactionParamsFormat = "msgpack"
+)
+
 // Account Account information at a given round.
 //
 // Definition:
@@ -1318,6 +1324,15 @@ type PendingTransactionInformationParams struct {
 
 // PendingTransactionInformationParamsFormat defines parameters for PendingTransactionInformation.
 type PendingTransactionInformationParamsFormat string
+
+// SimulateTransactionParams defines parameters for SimulateTransaction.
+type SimulateTransactionParams struct {
+	// Format Configures whether the response object is JSON or MessagePack encoded.
+	Format *SimulateTransactionParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+}
+
+// SimulateTransactionParamsFormat defines parameters for SimulateTransaction.
+type SimulateTransactionParamsFormat string
 
 // TealCompileTextRequestBody defines body for TealCompile for text/plain ContentType.
 type TealCompileTextRequestBody = TealCompileTextBody

@@ -920,27 +920,27 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 
 // encodedTxnResult mirrors simulation.TxnResult
 type encodedTxnResult struct {
-	Txn              PreEncodedTxInfo
-	MissingSignature *bool `codec:"nosig,omitempty"`
+	Txn              PreEncodedTxInfo `codec:"txn-result"`
+	MissingSignature *bool            `codec:"missing-signature,omitempty"`
 }
 
 // encodedTxnGroupResult mirrors simulation.TxnGroupResult
 type encodedTxnGroupResult struct {
-	Txns           []encodedTxnResult
-	FailureMessage *string   `codec:"failmsg,omitempty"`
-	FailedAt       *[]uint64 `codec:"failedat,omitempty"`
+	Txns           []encodedTxnResult `codec:"txn-results,omitempty"`
+	FailureMessage *string            `codec:"failure-message,omitempty"`
+	FailedAt       *[]uint64          `codec:"failed-at,omitempty"`
 }
 
 // EncodedSimulationResult mirrors simulation.Result
 type EncodedSimulationResult struct {
-	Version      uint64                   `codec:"v"`
-	TxnGroups    *[]encodedTxnGroupResult `codec:"txns,omitempty"`
-	WouldSucceed *bool                    `codec:"s,omitempty"`
+	Version      uint64                   `codec:"version"`
+	TxnGroups    *[]encodedTxnGroupResult `codec:"txn-groups,omitempty"`
+	WouldSucceed *bool                    `codec:"would-succeed,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
 // (POST /v2/transactions/simulate)
-func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
+func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateTransactionParams) error {
 	if !v2.Node.Config().EnableExperimentalAPI {
 		// Right now this is a redundant/useless check at runtime, since experimental APIs are not registered when EnableExperimentalAPI=false.
 		// However, this endpoint won't always be experimental, so I've left this here as a reminder to have some other flag guarding its usage.
@@ -974,16 +974,18 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 		}
 	}
 
-	// Encode simulation result
 	response := convertSimulationResult(simulationResult)
 
-	// Return msgpack response
-	msgpack, err := encode(protocol.CodecHandle, &response)
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+	data, err := encode(handle, &response)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
 
-	return ctx.Blob(http.StatusOK, "application/msgpack", msgpack)
+	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
 // TealDryrun takes transactions and additional simulated ledger state and returns debugging information.

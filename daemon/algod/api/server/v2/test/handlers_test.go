@@ -681,10 +681,10 @@ func TestPostTransaction(t *testing.T) {
 	postTransactionTest(t, 0, 200)
 }
 
-func simulateTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTransactionSimulator bool) {
+func simulateTransactionTest(t *testing.T, txnToUse int, format string, expectedCode int, enableTransactionSimulator bool) {
 	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode, enableTransactionSimulator)
 	defer releasefunc()
-	err := handler.SimulateTransaction(c)
+	err := handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: (*model.SimulateTransactionParamsFormat)(&format)})
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
 }
@@ -693,9 +693,63 @@ func TestPostSimulateTransaction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	simulateTransactionTest(t, -1, 400, true)
-	simulateTransactionTest(t, 0, 404, false)
-	simulateTransactionTest(t, 0, 200, true)
+	testCases := []struct {
+		txnIndex                   int
+		format                     string
+		expectedStatus             int
+		enableTransactionSimulator bool
+	}{
+		{
+			txnIndex:                   -1,
+			format:                     "json",
+			expectedStatus:             400,
+			enableTransactionSimulator: true,
+		},
+		{
+			txnIndex:                   0,
+			format:                     "json",
+			expectedStatus:             404,
+			enableTransactionSimulator: false,
+		},
+		{
+			txnIndex:                   0,
+			format:                     "msgpack",
+			expectedStatus:             404,
+			enableTransactionSimulator: false,
+		},
+		{
+			txnIndex:                   0,
+			format:                     "bad format",
+			expectedStatus:             404,
+			enableTransactionSimulator: false,
+		},
+		{
+			txnIndex:                   0,
+			format:                     "json",
+			expectedStatus:             200,
+			enableTransactionSimulator: true,
+		},
+		{
+			txnIndex:                   0,
+			format:                     "msgpack",
+			expectedStatus:             200,
+			enableTransactionSimulator: true,
+		},
+		{
+			txnIndex:                   0,
+			format:                     "bad format",
+			expectedStatus:             400,
+			enableTransactionSimulator: true,
+		},
+	}
+
+	for i, testCase := range testCases {
+		testCase := testCase
+		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			t.Parallel()
+			simulateTransactionTest(t, testCase.txnIndex, testCase.format, testCase.expectedStatus, testCase.enableTransactionSimulator)
+		})
+	}
 }
 
 const trivialAVMProgram = `#pragma version 6
@@ -839,7 +893,8 @@ func TestSimulateTransaction(t *testing.T) {
 			c := e.NewContext(req, rec)
 
 			// simulate transaction
-			err := handler.SimulateTransaction(c)
+			format := model.SimulateTransactionParamsFormatMsgpack
+			err := handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
 
 			// common checks
 			require.NoError(t, err)

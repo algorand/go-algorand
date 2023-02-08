@@ -5861,6 +5861,20 @@
     "/v2/transactions/simulate": {
       "post": {
         "operationId": "SimulateTransaction",
+        "parameters": [
+          {
+            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "msgpack"
+              ],
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/x-binary": {
@@ -5876,6 +5890,33 @@
         "responses": {
           "200": {
             "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "txn-groups": {
+                      "description": "A result object for each transaction group that was simulated.",
+                      "items": {
+                        "$ref": "#/components/schemas/SimulationTransactionGroupResult"
+                      },
+                      "type": "array"
+                    },
+                    "version": {
+                      "description": "\\[v\\] The version of this response object.",
+                      "type": "integer"
+                    },
+                    "would-succeed": {
+                      "description": "\\[s\\] Indicates whether the simulated transactions would have succeeded during an actual submission.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "txn-groups",
+                    "version",
+                    "would-succeed"
+                  ],
+                  "type": "object"
+                }
+              },
               "application/msgpack": {
                 "schema": {
                   "properties": {
@@ -5908,6 +5949,11 @@
           },
           "400": {
             "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
@@ -5918,6 +5964,11 @@
           },
           "401": {
             "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
@@ -5928,6 +5979,11 @@
           },
           "500": {
             "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
@@ -5938,6 +5994,11 @@
           },
           "503": {
             "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
