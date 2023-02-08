@@ -287,6 +287,17 @@ func (r *accountsV2Reader) OnlineAccountsAll(maxAccounts uint64) ([]PersistedOnl
 	return result, nil
 }
 
+// TotalResources returns the total number of resources
+func (r *accountsV2Reader) TotalResources(ctx context.Context) (total uint64, err error) {
+	err = r.q.QueryRowContext(ctx, "SELECT count(1) FROM resources").Scan(&total)
+	if err == sql.ErrNoRows {
+		total = 0
+		err = nil
+		return
+	}
+	return
+}
+
 // TotalAccounts returns the total number of accounts
 func (r *accountsV2Reader) TotalAccounts(ctx context.Context) (total uint64, err error) {
 	err = r.q.QueryRowContext(ctx, "SELECT count(1) FROM accountbase").Scan(&total)

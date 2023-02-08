@@ -293,12 +293,19 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
 		totalChunks := 0
-		var expectedTotalResources int
 		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
-		err = cw.tx.QueryRowContext(cw.ctx, "SELECT count(1) FROM resources").Scan(&expectedTotalResources)
+		require.NoError(t, err)
+
+		arw, err := tx.CreateAccountsReaderWriter()
 		if err != nil {
 			return err
 		}
+
+		expectedTotalResources, err := arw.TotalResources(ctx)
+		if err != nil {
+			return err
+		}
+
 		// repeat this until read all accts
 		for totalAccountsWritten < expectedTotalAccounts {
 			cw.chunk.Balances = nil
@@ -322,7 +329,7 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 			return fmt.Errorf("expected more than one chunk due to overflow")
 		}
 
-		if expectedTotalResources != totalResources {
+		if expectedTotalResources != uint64(totalResources) {
 			return fmt.Errorf("total resources did not match: expected %d, actual %d", expectedTotalResources, totalResources)
 		}
 
@@ -385,15 +392,16 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 			return err
 		}
 
-		totalAccountsWritten := uint64(0)
-		totalResources := 0
-		var expectedTotalResources int
-		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
-		require.NoError(t, err)
-		err = cw.tx.QueryRowContext(cw.ctx, "SELECT count(1) FROM resources").Scan(&expectedTotalResources)
+		expectedTotalResources, err := arw.TotalResources(ctx)
 		if err != nil {
 			return err
 		}
+
+		totalAccountsWritten := uint64(0)
+		totalResources := 0
+		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
+		require.NoError(t, err)
+
 		// repeat this until read all accts
 		for totalAccountsWritten < expectedTotalAccounts {
 			cw.chunk.Balances = nil
@@ -412,7 +420,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 			totalResources += numResources
 		}
 
-		if expectedTotalResources != totalResources {
+		if expectedTotalResources != uint64(totalResources) {
 			return fmt.Errorf("total resources did not match: expected %d, actual %d", expectedTotalResources, totalResources)
 		}
 

@@ -86,6 +86,7 @@ type AccountsReaderExt interface {
 	LookupAccountDataByAddress(basics.Address) (rowid int64, data []byte, err error)
 	LookupAccountRowID(basics.Address) (addrid int64, err error)
 	LookupResourceDataByAddrID(addrid int64, aidx basics.CreatableIndex) (data []byte, err error)
+	TotalResources(ctx context.Context) (total uint64, err error)
 	TotalAccounts(ctx context.Context) (total uint64, err error)
 	TotalKVs(ctx context.Context) (total uint64, err error)
 	AccountsRound() (rnd basics.Round, err error)
