@@ -167,12 +167,22 @@ func (cs *CatchpointCatchupService) Start(ctx context.Context) (err error) {
 	cs.err = nil
 	// no return value possible, see: https://go.dev/ref/spec#Go_statements
 	go cs.run()
-	// give some time to start, possibly poll for a relevant cs.xyz value here,
-	// which signals that catchup has been started correctly
-	///DEV: adjust prior to merge
-	time.Sleep(1000 * time.Millisecond)
-	// return the err code retrieved via cs.err
-	return cs.err
+
+	// above cs.run() returns immediately, wait a little
+	time.Sleep(500 * time.Millisecond)
+
+	// if we got an error during the above sleep, return with this error...
+	if cs.err != nil {
+		return cs.err
+	}
+
+	// ...otherwise check if we're still in inactive state and report it as an error
+	if cs.stage == ledger.CatchpointCatchupStateInactive {
+		return fmt.Errorf("catchup service still in inactive state, please try again")
+	}
+
+	// no error detected
+	return nil
 }
 
 // Abort aborts the catchpoint catchup process
@@ -204,18 +214,11 @@ func (cs *CatchpointCatchupService) GetLatestBlockHeader() bookkeeping.BlockHead
 func (cs *CatchpointCatchupService) run() {
 	defer cs.running.Done()
 	var err error
-
-	///DEV: For testing / PR review only, remove pre merge ---------
-	// Enable next 2 lines to get a mock error, in order to validate that the err is correctly receive via cs.err
-	//cs.err = fmt.Errorf("!!! mock Catchup Error CatchpointCatchupService::run !!!")
-	//return
-	///END ---------------------------------------------------------
-
 	for {
 		// check if we need to abort.
 		select {
 		case <-cs.ctx.Done():
-			// remember the last err (cannot be returnd, a "go cs.run" was used)
+			// remember the last err (cannot be returnd directly)
 			cs.err = err
 			return
 		default:
