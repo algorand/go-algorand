@@ -48,13 +48,13 @@ func TestDelta(t *testing.T) {
 							MicroAlgos:          basics.MicroAlgos{Raw: 5000},
 							RewardsBase:         2,
 							RewardedMicroAlgos:  basics.MicroAlgos{Raw: 0},
-							TotalExtraAppPages:  0,
-							TotalAppParams:      0,
-							TotalAppLocalStates: 0,
-							TotalAssetParams:    0,
-							TotalAssets:         0,
-							TotalBoxes:          0,
-							TotalBoxBytes:       0,
+							TotalExtraAppPages:  1,
+							TotalAppParams:      2,
+							TotalAppLocalStates: 3,
+							TotalAssetParams:    4,
+							TotalAssets:         5,
+							TotalBoxes:          6,
+							TotalBoxBytes:       7,
 						},
 					},
 				},
@@ -69,7 +69,7 @@ func TestDelta(t *testing.T) {
 							ClearStateProgram: []byte("2"),
 							GlobalState:       basics.TealKeyValue{},
 							StateSchemas:      basics.StateSchemas{},
-							ExtraProgramPages: 0,
+							ExtraProgramPages: 2,
 						},
 						Deleted: false,
 					},
@@ -125,6 +125,10 @@ func TestDelta(t *testing.T) {
 	actAccDelta := (*converted.Accts.Accounts)[0]
 	require.Equal(t, expAccDelta.Addr.String(), actAccDelta.Address)
 	require.Equal(t, expAccDelta.Status.String(), actAccDelta.AccountData.Status)
+	require.Equal(t, expAccDelta.TotalAppLocalStates, actAccDelta.AccountData.TotalAppsOptedIn)
+	require.Equal(t, expAccDelta.TotalAppParams, actAccDelta.AccountData.TotalCreatedApps)
+	require.Equal(t, expAccDelta.TotalAssetParams, actAccDelta.AccountData.TotalCreatedAssets)
+	require.Equal(t, expAccDelta.TotalAssets, actAccDelta.AccountData.TotalAssetsOptedIn)
 	require.Equal(t, uint64(0), actAccDelta.AccountData.PendingRewards)
 	require.Equal(t, len(original.Accts.AssetResources), len(*converted.Accts.Assets))
 	expAssetDelta := original.Accts.AssetResources[0]

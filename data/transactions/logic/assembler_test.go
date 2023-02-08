@@ -560,6 +560,7 @@ type Expect struct {
 
 func testMatch(t testing.TB, actual, expected string) (ok bool) {
 	defer func() {
+		t.Helper()
 		if !ok {
 			t.Logf("'%s' does not match '%s'", actual, expected)
 		}
@@ -1336,10 +1337,12 @@ func TestFieldsFromLine(t *testing.T) {
 	check(" ; ", ";")
 }
 
-func TestSplitTokens(t *testing.T) {
+func TestNextStatement(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	// this test ensures nextStatement splits tokens on semicolons properly
+	// macro testing should be handled in TestMacros
 	check := func(tokenStrs []string, left []string, right []string) {
 		t.Helper()
 		tokens := make(lineTokens, len(tokenStrs))
@@ -1386,7 +1389,6 @@ func TestSplitTokens(t *testing.T) {
 		[]string{`"hey in quotes;"`, "getting", `";"`},
 		[]string{"tricky"},
 	)
-
 }
 
 func TestAssembleRejectNegJump(t *testing.T) {
@@ -2945,7 +2947,7 @@ int 1
 	switch %s extra
 	%s
 	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
-	ops = testProg(t, source, AssemblerMaxVersion, Expect{3, "switch cannot take more than 255 labels"})
+	testProg(t, source, AssemblerMaxVersion, Expect{3, "switch cannot take more than 255 labels"})
 
 	// allow duplicate label reference
 	source = `
@@ -2954,6 +2956,330 @@ int 1
 	label1:
 	`
 	testProg(t, source, AssemblerMaxVersion)
+}
+
+func TestMacros(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	checkSame(t, AssemblerMaxVersion, `
+		pushint 0; pushint 1; +`, `
+		#define none 0
+		#define one 1
+		pushint none; pushint one; +`,
+	)
+
+	checkSame(t, AssemblerMaxVersion, `
+		pushint 1
+		pushint 2
+		==
+		bnz label1
+		err
+		label1:
+		pushint 1`, `
+		#define ==? ==; bnz
+		pushint 1; pushint 2; ==? label1
+		err
+		label1: 
+		pushint 1`,
+	)
+
+	// Test redefining macros with macro chaining works
+	checkSame(t, AssemblerMaxVersion, `
+		pushbytes 0x100000000000; substring 3 5; substring 0 1`, `
+		#define rowSize 3
+		#define columnSize 5
+		#define tableDimensions rowSize columnSize
+		pushbytes 0x100000000000; substring tableDimensions
+		#define rowSize 0
+		#define columnSize 1
+		substring tableDimensions`,
+	)
+
+	// Test more complicated macros like multi-token
+	checkSame(t, AssemblerMaxVersion, `
+		int 3
+		store 0
+		int 4
+		store 1
+		load 0
+		load 1
+		<`, `
+		#define &x 0
+		#define x load &x;
+		#define &y 1
+		#define y load &y;
+		#define -> ; store
+		int 3 -> &x; int 4 -> &y
+		x y <`,
+	)
+
+	checkSame(t, AssemblerMaxVersion, `
+	pushbytes 0xddf2554d
+	txna ApplicationArgs 0
+	==
+	bnz kickstart 
+	pushbytes 0x903f4535 
+	txna ApplicationArgs 0
+	==
+	bnz portal_transfer 
+	kickstart:
+		pushint 1
+	portal_transfer:
+		pushint 1
+	`, `
+	#define abi-route txna ApplicationArgs 0; ==; bnz 
+	method "kickstart(account)void"; abi-route kickstart 
+	method "portal_transfer(byte[])byte[]"; abi-route portal_transfer 
+	kickstart:
+		pushint 1
+	portal_transfer:
+		pushint 1
+	`)
+
+	checkSame(t, AssemblerMaxVersion, `
+method "echo(string)string"
+txn ApplicationArgs 0
+==
+bnz echo
+
+echo:
+	int 1
+	dup
+	txnas ApplicationArgs
+	extract 2 0
+	stores
+
+	int 1
+	loads
+	dup
+	len
+	itob
+	extract 6 0
+	swap
+	concat
+
+	pushbytes 0x151f7c75
+	swap
+	concat
+	log
+	int 1
+	return
+
+method "add(uint32,uint32)uint32"
+txn ApplicationArgs 0
+==
+bnz add
+
+add:
+	int 1
+	dup
+	txnas ApplicationArgs
+	int 0
+	extract_uint32
+	stores
+
+	int 2
+	dup
+	txnas ApplicationArgs
+	int 0
+	extract_uint32
+	stores
+
+	load 1; load 2; + 
+	store 255
+
+	int 255
+	loads
+	itob
+	extract 4 0
+	pushbytes 0x151f7c75
+	swap
+	concat
+
+	log
+	int 1
+	return
+	`, `
+// Library Methods
+
+// codecs
+#define abi-encode-uint16 ;itob; extract 6 0;
+#define abi-decode-uint16 ;extract_uint16;
+
+#define abi-decode-uint32 ;int 0; extract_uint32;
+#define abi-encode-uint32 ;itob;extract 4 0;
+
+#define abi-encode-bytes  ;dup; len; abi-encode-uint16; swap; concat; 
+#define abi-decode-bytes  ;extract 2 0;
+
+// abi method handling 
+#define abi-route 	;txna ApplicationArgs 0; ==; bnz 
+#define abi-return  ;pushbytes 0x151f7c75; swap; concat; log; int 1; return;
+
+// stanza: "set $var from-{type}"
+#define parse ; int
+#define read_arg ;dup; txnas ApplicationArgs;
+#define from-string	;read_arg; abi-decode-bytes;  stores;
+#define from-uint16	;read_arg; abi-decode-uint16;  stores;
+#define from-uint32 ;read_arg; abi-decode-uint32;  stores;
+
+// stanza: "reply $var as-{type}
+#define returns ; int
+#define as-uint32; loads; abi-encode-uint32; abi-return;
+#define as-string; loads; abi-encode-bytes; abi-return;
+
+// Contract
+
+// echo handler
+method "echo(string)string"; abi-route echo
+echo:
+	#define msg 1
+	parse msg from-string
+
+	// cool things happen ...
+
+	returns msg as-string
+
+
+// add handler
+method "add(uint32,uint32)uint32"; abi-route add 
+add:
+	#define x 1
+	parse x from-uint32 
+
+	#define y 2
+	parse y from-uint32
+
+	#define sum 255 
+	load x; load y; +; store sum
+
+	returns sum as-uint32
+	`)
+
+	testProg(t, `
+		#define x a d
+		#define d c a
+		#define hey wat's up x
+		#define c woah hey
+		int 1
+		c`,
+		AssemblerMaxVersion, Expect{5, "Macro cycle discovered: c -> hey -> x -> d -> c"}, Expect{7, "unknown opcode: c"},
+	)
+
+	testProg(t, `
+		#define c +
+		#define x a c
+		#define d x
+		#define c d
+		int 1
+		c`,
+		AssemblerMaxVersion, Expect{5, "Macro cycle discovered: c -> d -> x -> c"}, Expect{7, "+ expects..."},
+	)
+
+	testProg(t, `
+		#define X X
+		int 3`,
+		AssemblerMaxVersion, Expect{2, "Macro cycle discovered: X -> X"},
+	)
+
+	// Check that macros names can't be things like named constants, opcodes, etc.
+	// If pragma is given, only macros that violate that version's stuff should be errored on
+	testProg(t, `
+		#define return random
+		#define pay randomm
+		#define NoOp randommm
+		#define + randommmm
+		#pragma version 1 // now the versioned check should activate and check all previous macros
+		#define return hi // no error b/c return is after v1
+		#define + hey // since versioned check is now online, we can error here
+		int 1`,
+		assemblerNoVersion,
+		Expect{3, "Named constants..."},
+		Expect{4, "Named constants..."},
+		Expect{6, "Macro names cannot be opcodes: +"},
+		Expect{8, "Macro names cannot be opcodes: +"},
+	)
+
+	// Same check, but this time since no version is given, the versioned check
+	// uses AssemblerDefaultVersion and activates on first instruction (int 1)
+	testProg(t, `
+		#define return random
+		#define pay randomm
+		#define NoOp randommm
+		#define + randommmm
+		int 1 // versioned check activates here
+		#define return hi
+		#define + hey`,
+		assemblerNoVersion,
+		Expect{3, "Named constants..."},
+		Expect{4, "Named constants..."},
+		Expect{6, "Macro names cannot be opcodes: +"},
+		Expect{8, "Macro names cannot be opcodes: +"},
+	)
+
+	testProg(t, `
+		#define Sender hello
+		#define ApplicationArgs hiya
+		#pragma version 1
+		#define Sender helllooooo
+		#define ApplicationArgs heyyyyy // no error b/c ApplicationArgs is after v1
+		int 1`,
+		assemblerNoVersion,
+		Expect{4, "Macro names cannot be field names: Sender"}, // error happens once version is known
+	)
+
+	// Same check but defaults to AssemblerDefaultVersion instead of pragma
+	testProg(t, `
+		#define Sender hello
+		#define ApplicationArgs hiya
+		int 1
+		#define Sender helllooooo
+		#define ApplicationArgs heyyyyy`,
+		assemblerNoVersion,
+		Expect{4, "Macro names cannot be field names: Sender"}, // error happens once version is auto-set
+		Expect{5, "Macro names cannot be field names: Sender"}, // and on following line
+	)
+	// define needs name and body
+	testLine(t, "#define", AssemblerMaxVersion, "define directive requires a name and body")
+	testLine(t, "#define hello", AssemblerMaxVersion, "define directive requires a name and body")
+	// macro names cannot be directives
+	testLine(t, "#define #define 1", AssemblerMaxVersion, "# character not allowed in macro name")
+	testLine(t, "#define #pragma 1", AssemblerMaxVersion, "# character not allowed in macro name")
+	// macro names cannot begin with digits (including negative ones)
+	testLine(t, "#define 1hello one", AssemblerMaxVersion, "Cannot begin macro name with number: 1hello")
+	testLine(t, "#define -1hello negativeOne", AssemblerMaxVersion, "Cannot begin macro name with number: -1hello")
+	// macro names can't use base64/32 notation
+	testLine(t, "#define b64 AA", AssemblerMaxVersion, "Cannot use b64 as macro name")
+	testLine(t, "#define base64 AA", AssemblerMaxVersion, "Cannot use base64 as macro name")
+	testLine(t, "#define b32 AA", AssemblerMaxVersion, "Cannot use b32 as macro name")
+	testLine(t, "#define base32 AA", AssemblerMaxVersion, "Cannot use base32 as macro name")
+	// macro names can't use non-alphanumeric characters that aren't specifically allowed
+	testLine(t, "#define wh@t 1", AssemblerMaxVersion, "@ character not allowed in macro name")
+	// check both kinds of pseudo-ops to make sure they can't be used as macro names
+	testLine(t, "#define int 3", AssemblerMaxVersion, "Macro names cannot be pseudo-ops: int")
+	testLine(t, "#define extract 3", AssemblerMaxVersion, "Macro names cannot be pseudo-ops: extract")
+	// check labels to make sure they can't be used as macro names
+	testProg(t, `
+		coolLabel:
+		int 1
+		#define coolLabel 1`,
+		AssemblerMaxVersion,
+		Expect{4, "Labels cannot be used as macro names: coolLabel"},
+	)
+	testProg(t, `
+		#define coolLabel 1
+		coolLabel:
+		int 1`,
+		AssemblerMaxVersion,
+		Expect{3, "Cannot create label with same name as macro: coolLabel"},
+	)
+	// Admittedly these two tests are just for coverage
+	ops := newOpStream(AssemblerMaxVersion)
+	err := define(&ops, []token{{str: "not#define"}})
+	require.EqualError(t, err, "0: invalid syntax: not#define")
+	err = pragma(&ops, []token{{str: "not#pragma"}})
+	require.EqualError(t, err, "0: invalid syntax: not#pragma")
 }
 
 func TestAssembleMatch(t *testing.T) {

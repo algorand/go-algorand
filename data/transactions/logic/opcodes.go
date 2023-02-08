@@ -737,6 +737,9 @@ var OpsByName [LogicVersion + 1]map[string]OpSpec
 // PseudoOps holds a list of opspecs for the PseduoOps
 var PseudoOps []OpSpec
 
+// Keeps track of all field names accessible in each version
+var fieldNames [LogicVersion + 1]map[string]bool
+
 // Migration from v1 to v2.
 // v1 allowed execution of program with version 0.
 // With v2 opcode versions are introduced and they are bound to every opcode.
@@ -789,4 +792,17 @@ func init() {
 	}
 	// Since pseudoOps is a map, sort the PseudoOps array for consistent ordering
 	sort.Slice(PseudoOps, func(i, j int) bool { return strings.Compare(PseudoOps[i].Name, PseudoOps[j].Name) > 0 })
+
+	for v := 0; v <= LogicVersion; v++ {
+		fieldNames[v] = make(map[string]bool)
+		for _, spec := range OpsByName[v] {
+			for _, imm := range spec.Immediates {
+				if imm.Group != nil {
+					for _, fieldName := range imm.Group.Names {
+						fieldNames[v][fieldName] = true
+					}
+				}
+			}
+		}
+	}
 }

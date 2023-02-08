@@ -31,6 +31,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/algorand/avm-abi/abi"
 	"github.com/algorand/go-algorand/data/basics"
@@ -257,6 +258,8 @@ type OpStream struct {
 
 	// Need new copy for each opstream
 	versionedPseudoOps map[string]map[int]OpSpec
+
+	macros map[string][]token
 }
 
 // newOpStream constructs OpStream instances ready to invoke assemble. A new
@@ -267,6 +270,7 @@ func newOpStream(version uint64) OpStream {
 		OffsetToLine: make(map[int]int),
 		typeTracking: true,
 		Version:      version,
+		macros:       make(map[string][]token),
 		known:        ProgramKnowledge{fp: -1},
 	}
 
@@ -1890,6 +1894,28 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	}
 }
 
+// nextStatement breaks tokens into two slices at the first semicolon and expands macros along the way.
+func nextStatement(ops *OpStream, tokens []token) (current, rest []token) {
+	for i := 0; i < len(tokens); i++ {
+		tkn := tokens[i]
+		replacement, ok := ops.macros[tkn.str]
+		if ok {
+			tokens = append(tokens[0:i], append(replacement, tokens[i+1:]...)...)
+			// backup to handle potential re-expansion of the first token in the expansion
+			i--
+			continue
+		}
+		if tkn.str == ";" {
+			return tokens[:i], tokens[i+1:]
+		}
+	}
+	return tokens, nil
+}
+
+type directiveFunc func(*OpStream, []token) error
+
+var directives = map[string]directiveFunc{"pragma": pragma, "define": define}
+
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
@@ -1910,35 +1936,38 @@ func (ops *OpStream) assemble(text string) error {
 		if len(tokens) == 0 {
 			continue
 		}
-		if tokens[0].str[0] == '#' {
-			directive := tokens[0].str[1:]
-			switch directive {
-			case "pragma":
-				ops.pragma(tokens) //nolint:errcheck // report bad pragma line error, but continue assembling
-				ops.trace("%3d: #pragma line\n", ops.sourceLine)
-			default:
+
+		if first := tokens[0].str; first[0] == '#' {
+			directive := first[1:]
+			if dFunc, ok := directives[directive]; ok {
+				_ = dFunc(ops, tokens)
+				ops.trace("%3d: %s line\n", ops.sourceLine, first)
+			} else {
 				ops.errorf("Unknown directive: %s", directive)
 			}
 			continue
 		}
 
-		// we're about to begin processing opcodes, so settle the Version
-		if ops.Version == assemblerNoVersion {
-			ops.Version = AssemblerDefaultVersion
-		}
-		if ops.versionedPseudoOps == nil {
-			ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
-		}
-
-		for current, next := tokens.split(); len(current) > 0 || len(next) > 0; current, next = next.split() {
+		for current, next := nextStatement(ops, tokens); len(current) > 0 || len(next) > 0; current, next = nextStatement(ops, next) {
 			if len(current) == 0 {
 				continue
 			}
-
-			// Check for label
+			// we're about to begin processing opcodes, so settle the Version
+			if ops.Version == assemblerNoVersion {
+				ops.Version = AssemblerDefaultVersion
+				_ = ops.recheckMacroNames()
+			}
+			if ops.versionedPseudoOps == nil {
+				ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
+			}
 			opstring := current[0].str
 			if opstring[len(opstring)-1] == ':' {
-				ops.createLabel(opstring[:len(opstring)-1])
+				labelName := opstring[:len(opstring)-1]
+				if _, ok := ops.macros[labelName]; ok {
+					ops.errorf("Cannot create label with same name as macro: %s", labelName)
+				} else {
+					ops.createLabel(opstring[:len(opstring)-1])
+				}
 				current = current[1:]
 				if len(current) == 0 {
 					ops.trace("%3d: label only\n", ops.sourceLine)
@@ -2023,7 +2052,122 @@ func (ops *OpStream) assemble(text string) error {
 	return nil
 }
 
-func (ops *OpStream) pragma(tokens []token) error {
+func (ops *OpStream) cycle(macro string, previous ...string) bool {
+	replacement, ok := ops.macros[macro]
+	if !ok {
+		return false
+	}
+	if len(previous) > 0 && macro == previous[0] {
+		ops.errorf("Macro cycle discovered: %s", strings.Join(append(previous, macro), " -> "))
+		return true
+	}
+	for _, token := range replacement {
+		if ops.cycle(token.str, append(previous, macro)...) {
+			return true
+		}
+	}
+	return false
+}
+
+// recheckMacroNames goes through previously defined macros and ensures they
+// don't use opcodes/fields from newly obtained version. Therefore it repeats
+// some checks that don't need to be repeated, in the interest of simplicity.
+func (ops *OpStream) recheckMacroNames() error {
+	errored := false
+	for macroName := range ops.macros {
+		err := checkMacroName(macroName, ops.Version, ops.labels)
+		if err != nil {
+			delete(ops.macros, macroName)
+			ops.error(err)
+			errored = true
+		}
+	}
+	if errored {
+		return errors.New("version is incompatible with defined macros")
+	}
+	return nil
+}
+
+var otherAllowedChars = [256]bool{'+': true, '-': true, '*': true, '/': true, '^': true, '%': true, '&': true, '|': true, '~': true, '!': true, '>': true, '<': true, '=': true, '?': true, '_': true}
+
+func checkMacroName(macroName string, version uint64, labels map[string]int) error {
+	var firstRune rune
+	var secondRune rune
+	count := 0
+	for _, r := range macroName {
+		if count == 0 {
+			firstRune = r
+		} else if count == 1 {
+			secondRune = r
+		}
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && !otherAllowedChars[r] {
+			return fmt.Errorf("%s character not allowed in macro name", string(r))
+		}
+		count++
+	}
+	if unicode.IsDigit(firstRune) {
+		return fmt.Errorf("Cannot begin macro name with number: %s", macroName)
+	}
+	if len(macroName) > 1 && (firstRune == '-' || firstRune == '+') {
+		if unicode.IsDigit(secondRune) {
+			return fmt.Errorf("Cannot begin macro name with number: %s", macroName)
+		}
+	}
+	// Note parentheses are not allowed characters, so we don't have to check for b64(AAA) syntax
+	if macroName == "b64" || macroName == "base64" {
+		return fmt.Errorf("Cannot use %s as macro name", macroName)
+	}
+	if macroName == "b32" || macroName == "base32" {
+		return fmt.Errorf("Cannot use %s as macro name", macroName)
+	}
+	_, isTxnType := txnTypeMap[macroName]
+	_, isOnCompletion := onCompletionMap[macroName]
+	if isTxnType || isOnCompletion {
+		return fmt.Errorf("Named constants cannot be used as macro names: %s", macroName)
+	}
+	if _, ok := pseudoOps[macroName]; ok {
+		return fmt.Errorf("Macro names cannot be pseudo-ops: %s", macroName)
+	}
+	if version != assemblerNoVersion {
+		if _, ok := OpsByName[version][macroName]; ok {
+			return fmt.Errorf("Macro names cannot be opcodes: %s", macroName)
+		}
+		if fieldNames[version][macroName] {
+			return fmt.Errorf("Macro names cannot be field names: %s", macroName)
+		}
+	}
+	if _, ok := labels[macroName]; ok {
+		return fmt.Errorf("Labels cannot be used as macro names: %s", macroName)
+	}
+	return nil
+}
+
+func define(ops *OpStream, tokens []token) error {
+	if tokens[0].str != "#define" {
+		return ops.errorf("invalid syntax: %s", tokens[0])
+	}
+	if len(tokens) < 3 {
+		return ops.errorf("define directive requires a name and body")
+	}
+	name := tokens[1].str
+	err := checkMacroName(name, ops.Version, ops.labels)
+	if err != nil {
+		return ops.error(err)
+	}
+	saved, ok := ops.macros[name]
+	ops.macros[name] = tokens[2:len(tokens):len(tokens)]
+	if ops.cycle(tokens[1].str) {
+		if ok {
+			ops.macros[tokens[1].str] = saved
+		} else {
+			delete(ops.macros, tokens[1].str)
+		}
+	}
+
+	return nil
+}
+
+func pragma(ops *OpStream, tokens []token) error {
 	if tokens[0].str != "#pragma" {
 		return ops.errorf("invalid syntax: %s", tokens[0])
 	}
@@ -2054,11 +2198,12 @@ func (ops *OpStream) pragma(tokens []token) error {
 		// version for v1.
 		if ops.Version == assemblerNoVersion {
 			ops.Version = ver
-		} else if ops.Version != ver {
-			return ops.errorf("version mismatch: assembling v%d with v%d assembler", ver, ops.Version)
-		} else {
-			// ops.Version is already correct, or needed to be upped.
+			return ops.recheckMacroNames()
 		}
+		if ops.Version != ver {
+			return ops.errorf("version mismatch: assembling v%d with v%d assembler", ver, ops.Version)
+		}
+		// ops.Version is already correct, or needed to be upped.
 		return nil
 	case "typetrack":
 		if len(tokens) < 3 {
