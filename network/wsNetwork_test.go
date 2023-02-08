@@ -1544,11 +1544,11 @@ func (i mockIdentityScheme) AttachChallenge(attach http.Header, addr string) ide
 	}
 	return i.realScheme.AttachChallenge(attach, addr)
 }
-func (i mockIdentityScheme) VerifyAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
+func (i mockIdentityScheme) VerifyRequestAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
 	if i.verifyAndAttachResponse != nil {
 		return i.verifyAndAttachResponse(attach, h)
 	}
-	return i.realScheme.VerifyAndAttachResponse(attach, h)
+	return i.realScheme.VerifyRequestAndAttachResponse(attach, h)
 }
 func (i mockIdentityScheme) VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
 	if i.verifyResponse != nil {

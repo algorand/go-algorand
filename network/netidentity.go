@@ -91,7 +91,7 @@ func newIdentityChallengeValue() identityChallengeValue {
 
 type identityChallengeScheme interface {
 	AttachChallenge(attach http.Header, addr string) identityChallengeValue
-	VerifyAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error)
+	VerifyRequestAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error)
 	VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error)
 }
 
@@ -114,10 +114,10 @@ func NewIdentityChallengeScheme(dn string) *identityChallengePublicKeyScheme {
 	}
 }
 
-// AttachChallenge will generate a new identity challenge
-// and will encode and attach the challenge as a header.
-// returns the identityChallengeValue used for this challenge so the network can confirm it later
-// or returns an empty challenge if dedupName is not set
+// AttachChallenge will generate a new identity challenge and will encode and attach the challenge
+// as a header. It returns the identityChallengeValue used for this challenge, so the network can
+// confirm it later (by passing it to VerifyResponse), or returns an empty challenge if dedupName is
+// not set.
 func (i identityChallengePublicKeyScheme) AttachChallenge(attach http.Header, addr string) identityChallengeValue {
 	if i.dedupName == "" {
 		return identityChallengeValue{}
@@ -132,14 +132,14 @@ func (i identityChallengePublicKeyScheme) AttachChallenge(attach http.Header, ad
 	return c.Challenge
 }
 
-// VerifyAndAttachResponse  headers for an Identity Challenge, and verifies:
+// VerifyRequestAndAttachResponse checks headers for an Identity Challenge, and verifies:
 // * the provided challenge bytes matches the one encoded in the header
 // * the identity challenge verifies against the included key
 // * the "Address" field matches what this scheme expects
 // once verified, it will attach the header to the "attach" header
 // and will return the challenge and identity of the peer for recording
 // or returns empty values if the header did not end up getting set
-func (i identityChallengePublicKeyScheme) VerifyAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
+func (i identityChallengePublicKeyScheme) VerifyRequestAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
 	// if dedupName is not set, this scheme is not configured to exchange identity
 	if i.dedupName == "" {
 		return identityChallengeValue{}, crypto.PublicKey{}, nil
@@ -178,10 +178,11 @@ func (i identityChallengePublicKeyScheme) VerifyAndAttachResponse(attach http.He
 	return r.ResponseChallenge, idChal.Msg.Key, nil
 }
 
-// VerifyResponse will decode the identity challenge header and confirm it self-verifies,
-// and that the provided challenge matches the encoded one
-// if the response can be verified, it returns the identity of the peer and a final Verification Message to send to the peer
-// otherwise, returns empty values
+// VerifyResponse will decode the identity challenge header from an HTTP response (containing an
+// encoding of identityChallengeResponseSigned) and confirm it has a valid signature, and that the
+// provided challenge (generated and added to the HTTP request by AttachChallenge) matches the one
+// found in the header. If the response can be verified, it returns the identity of the peer and an
+// encoded identityVerificationMessage to send to the peer. Otherwise, it returns empty values.
 func (i identityChallengePublicKeyScheme) VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
 	headerString := h.Get(IdentityChallengeHeader)
 	// if the header is not populated, assume the peer is not participating in identity exchange
@@ -215,7 +216,7 @@ func (i *identityChallengePublicKeyScheme) identityVerificationMessage(c identit
 }
 
 // The initial challenge object, giving the peer a challenge to return (Challenge),
-// the presumed identity of this node (Key), the intended recipient (Address), all Signed.
+// the presumed identity of this node (Key), the intended recipient (Address).
 type identityChallenge struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -224,8 +225,8 @@ type identityChallenge struct {
 	PublicAddress []byte                 `codec:"a,allocbound=maxAddressLen"`
 }
 
-// identityChallengeSigned wraps an identityChallenge with a signature,
-// similar to SignedTxn and netPrioResponseSigned.
+// identityChallengeSigned wraps an identityChallenge with a signature, similar to SignedTxn and
+// netPrioResponseSigned.
 type identityChallengeSigned struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -233,6 +234,8 @@ type identityChallengeSigned struct {
 	Signature crypto.Signature  `codec:"sig"`
 }
 
+// The response to an identityChallenge, containing the responder's public key, the original
+// requestor's challenge, and a new challenge for the requestor.
 type identityChallengeResponse struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -312,7 +315,7 @@ func (i identityVerificationMessageSigned) Verify(key crypto.PublicKey) bool {
 
 // identityVerificationHandler receives a signature over websocket, and confirms it matches the
 // sender's claimed identity and the challenge that was assigned to it. If the identity is available,
-// the peer is loaded into the identity tracker. Otherwise, we ask the network to disconnect the peer
+// the peer is loaded into the identity tracker. Otherwise, we ask the network to disconnect the peer.
 func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	peer := message.Sender.(*wsPeer)
 	// avoid doing work (crypto and potentially taking a lock) if the peer is already verified

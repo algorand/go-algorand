@@ -1181,7 +1181,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	}
 
 	localAddr, _ := wn.Address()
-	peerIDChallenge, peerID, err := wn.identityScheme.VerifyAndAttachResponse(responseHeader, request.Header)
+	peerIDChallenge, peerID, err := wn.identityScheme.VerifyRequestAndAttachResponse(responseHeader, request.Header)
 	if err != nil {
 		wn.log.With("err", err).With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Warnf("peer (%s) supplied an invalid identity challenge, abandoning peering", trackedRequest.otherPublicAddr)
 		return

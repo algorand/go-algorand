@@ -43,9 +43,9 @@ func TestIdentityChallengeSchemeAttachIfEnabled(t *testing.T) {
 	require.NotEmpty(t, chal)
 }
 
-// TestIdentityChallengeSchemeVerifyAndAttachResponse will confirm that the scheme
+// TestIdentityChallengeSchemeVerifyRequestAndAttachResponse will confirm that the scheme
 // attaches responses only if dedup name is set and the provided challenge verifies
-func TestIdentityChallengeSchemeVerifyAndAttachResponse(t *testing.T) {
+func TestIdentityChallengeSchemeVerifyRequestAndAttachResponse(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	i := NewIdentityChallengeScheme("i1")
@@ -59,7 +59,7 @@ func TestIdentityChallengeSchemeVerifyAndAttachResponse(t *testing.T) {
 	i.AttachChallenge(h, "i2")
 	r := http.Header{}
 	i2 := NewIdentityChallengeScheme("")
-	chal, key, err := i2.VerifyAndAttachResponse(r, h)
+	chal, key, err := i2.VerifyRequestAndAttachResponse(r, h)
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, chal)
 	require.Empty(t, key)
@@ -70,7 +70,7 @@ func TestIdentityChallengeSchemeVerifyAndAttachResponse(t *testing.T) {
 	i.AttachChallenge(h, "i2")
 	r = http.Header{}
 	i2 = NewIdentityChallengeScheme("not i2")
-	chal, key, err = i2.VerifyAndAttachResponse(r, h)
+	chal, key, err = i2.VerifyRequestAndAttachResponse(r, h)
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, chal)
 	require.Empty(t, key)
@@ -81,7 +81,7 @@ func TestIdentityChallengeSchemeVerifyAndAttachResponse(t *testing.T) {
 	h.Add(IdentityChallengeHeader, "garbage")
 	r = http.Header{}
 	i2 = NewIdentityChallengeScheme("i2")
-	chal, key, err = i2.VerifyAndAttachResponse(r, h)
+	chal, key, err = i2.VerifyRequestAndAttachResponse(r, h)
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, chal)
 	require.Empty(t, key)
@@ -92,7 +92,7 @@ func TestIdentityChallengeSchemeVerifyAndAttachResponse(t *testing.T) {
 	i.AttachChallenge(h, "i2")
 	r = http.Header{}
 	i2 = NewIdentityChallengeScheme("i2")
-	chal, key, err = i2.VerifyAndAttachResponse(r, h)
+	chal, key, err = i2.VerifyRequestAndAttachResponse(r, h)
 	require.NotEmpty(t, r.Get(IdentityChallengeHeader))
 	require.NotEmpty(t, chal)
 	require.NotEmpty(t, key)
@@ -112,7 +112,7 @@ func TestIdentityChallengeSchemeVerifyResponse(t *testing.T) {
 	require.NotEmpty(t, origChal)
 	r := http.Header{}
 
-	respChal, key, err := i.VerifyAndAttachResponse(r, h)
+	respChal, key, err := i.VerifyRequestAndAttachResponse(r, h)
 	require.NotEmpty(t, r.Get(IdentityChallengeHeader))
 	require.NotEmpty(t, respChal)
 	require.NotEmpty(t, key)
@@ -146,9 +146,9 @@ func TestIdentityChallengeSchemeBadSignature(t *testing.T) {
 	b64enc := base64.StdEncoding.EncodeToString(enc)
 	h.Add(IdentityChallengeHeader, b64enc)
 
-	// observe that VerifyAndAttachResponse returns error on bad signature
+	// observe that VerifyRequestAndAttachResponse returns error on bad signature
 	r := http.Header{}
-	respChal, key, err := i.VerifyAndAttachResponse(r, h)
+	respChal, key, err := i.VerifyRequestAndAttachResponse(r, h)
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, respChal)
 	require.Empty(t, key)
@@ -164,9 +164,9 @@ func TestIdentityChallengeSchemeBadPayload(t *testing.T) {
 	i := NewIdentityChallengeScheme("i1")
 	h.Add(IdentityChallengeHeader, "NOT VALID BASE 64! :)")
 
-	// observe that VerifyAndAttachResponse won't do anything on bad signature
+	// observe that VerifyRequestAndAttachResponse won't do anything on bad signature
 	r := http.Header{}
-	respChal, key, err := i.VerifyAndAttachResponse(r, h)
+	respChal, key, err := i.VerifyRequestAndAttachResponse(r, h)
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, respChal)
 	require.Empty(t, key)
@@ -239,7 +239,7 @@ func TestIdentityChallengeSchemeWrongChallenge(t *testing.T) {
 	require.NotEmpty(t, origChal)
 
 	r := http.Header{}
-	respChal, key, err := i.VerifyAndAttachResponse(r, h)
+	respChal, key, err := i.VerifyRequestAndAttachResponse(r, h)
 	require.NotEmpty(t, r.Get(IdentityChallengeHeader))
 	require.NotEmpty(t, respChal)
 	require.NotEmpty(t, key)
