@@ -239,7 +239,6 @@ type OpStream struct {
 
 	// tracks information we know to be true at the point being assembled
 	known        ProgramKnowledge
-	stacks       []StackTypes
 	typeTracking bool
 
 	// current sourceLine during assembly
@@ -1862,13 +1861,6 @@ func (ops *OpStream) typeErrorf(format string, args ...interface{}) {
 	}
 }
 
-func (ops *OpStream) snapshotStack() {
-	// Snapshot the stack after every call to trackStack
-	snap := make([]StackType, len(ops.known.stack))
-	copy(snap, ops.known.stack[:])
-	ops.stacks = append(ops.stacks, snap)
-}
-
 // trackStack checks that the typeStack has `args` on it, then pushes `returns` to it.
 func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction lineTokens) {
 	// If in deadcode, allow anything. Maybe it's some sort of onchain data.
@@ -1898,111 +1890,6 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	}
 }
 
-// assembleTokens works on a single set of tokens representing
-// an op and its immediate args
-func (ops *OpStream) assembleTokens(current []token) {
-	if len(current) == 0 {
-		return
-	}
-
-	// Check for label
-	opstring := current[0].str
-	if opstring[len(opstring)-1] == ':' {
-		ops.createLabel(opstring[:len(opstring)-1])
-		current = current[1:]
-		if len(current) == 0 {
-			ops.trace("%3d: label only\n", ops.sourceLine)
-			return
-		}
-		// it is a label but more on the same line with no semi colon
-		// e.g. `...; label_a: int 1; ...`
-		opstring = current[0].str
-	}
-
-	defer ops.trace("\n")
-
-	// Get the spec for the current op
-	spec, expandedName, ok := getSpec(ops, opstring, current[1:])
-	if !ok {
-		return
-	}
-
-	ops.trace("%3d: %s\t", ops.sourceLine, opstring)
-	ops.recordSourceLine()
-	if spec.Modes == ModeApp {
-		ops.HasStatefulOps = true
-	}
-
-	args, returns := spec.Arg.Types, spec.Return.Types
-	if spec.refine != nil {
-		nargs, nreturns, err := spec.refine(&ops.known, current[1:])
-		if err != nil {
-			ops.typeErrorf("%w", err)
-		}
-		if nargs != nil {
-			args = nargs
-		}
-		if nreturns != nil {
-			returns = nreturns
-		}
-	}
-
-	ops.trackStack(args, returns, append([]token{{str: expandedName}}, current[1:]...))
-
-	spec.asm(ops, &spec, current[1:]) //nolint:errcheck // ignore error and continue, to collect more errors
-
-	if spec.deadens() { // An unconditional branch deadens the following code
-		ops.known.deaden()
-	}
-
-	if spec.Name == "callsub" || spec.Name == "retsub" {
-		// since retsub comes back to the callsub, it is an entry point like a label
-		ops.known.label()
-	}
-}
-
-// assembleLine deals with a single line of the program
-// which may contain multiple ops, joined with semicolon
-func (ops *OpStream) assembleLine(line string) {
-	tokens := tokensFromLine(line, ops.sourceLine)
-
-	ops.Lines = append(ops.Lines, tokens)
-
-	// Filter out comment tokens after adding tokens
-	// to the lines, since they're not useful for assembly
-	tokens = tokens.filter(tokenComment)
-
-	defer ops.snapshotStack()
-
-	if len(tokens) == 0 {
-		return
-	}
-
-	if tokens[0].str[0] == '#' {
-		directive := tokens[0].str[1:]
-		switch directive {
-		case "pragma":
-			ops.pragma(tokens) //nolint:errcheck // report bad pragma line error, but continue assembling
-			ops.trace("%3d: #pragma line\n", ops.sourceLine)
-		default:
-			ops.errorf("Unknown directive: %s", directive)
-		}
-		return
-	}
-
-	// we're about to begin processing opcodes, so settle the Version
-	if ops.Version == assemblerNoVersion {
-		ops.Version = AssemblerDefaultVersion
-	}
-	if ops.versionedPseudoOps == nil {
-		ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
-	}
-
-	for current, next := tokens.split(); len(current) > 0 || len(next) > 0; current, next = next.split() {
-		ops.assembleTokens(current)
-	}
-}
-
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
@@ -2016,7 +1903,90 @@ func (ops *OpStream) assemble(text string) error {
 	scanner := bufio.NewScanner(fin)
 	for scanner.Scan() {
 		ops.sourceLine++
-		ops.assembleLine(scanner.Text())
+		line := scanner.Text()
+		tokens := tokensFromLine(line, ops.sourceLine)
+		ops.Lines = append(ops.Lines, tokens)
+		tokens = tokens.filter(tokenComment)
+		if len(tokens) == 0 {
+			continue
+		}
+		if tokens[0].str[0] == '#' {
+			directive := tokens[0].str[1:]
+			switch directive {
+			case "pragma":
+				ops.pragma(tokens) //nolint:errcheck // report bad pragma line error, but continue assembling
+				ops.trace("%3d: #pragma line\n", ops.sourceLine)
+			default:
+				ops.errorf("Unknown directive: %s", directive)
+			}
+			continue
+		}
+
+		// we're about to begin processing opcodes, so settle the Version
+		if ops.Version == assemblerNoVersion {
+			ops.Version = AssemblerDefaultVersion
+		}
+		if ops.versionedPseudoOps == nil {
+			ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
+		}
+
+		for current, next := tokens.split(); len(current) > 0 || len(next) > 0; current, next = next.split() {
+			if len(current) == 0 {
+				continue
+			}
+
+			// Check for label
+			opstring := current[0].str
+			if opstring[len(opstring)-1] == ':' {
+				ops.createLabel(opstring[:len(opstring)-1])
+				current = current[1:]
+				if len(current) == 0 {
+					ops.trace("%3d: label only\n", ops.sourceLine)
+					continue
+				}
+				// TODO: shouldn't we reset the stack here?
+				// it is a label but more on the same line with no semi colon
+				// e.g. `...; label_a: int 1; ...`
+				opstring = current[0].str
+			}
+
+			// Get the spec for the current op
+			spec, expandedName, ok := getSpec(ops, opstring, current[1:])
+			if !ok {
+				ops.trace("\n")
+				continue
+			}
+
+			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
+			ops.recordSourceLine()
+			if spec.Modes == ModeApp {
+				ops.HasStatefulOps = true
+			}
+
+			args, returns := spec.Arg.Types, spec.Return.Types
+			if spec.refine != nil {
+				nargs, nreturns, err := spec.refine(&ops.known, current[1:])
+				if err != nil {
+					ops.typeErrorf("%w", err)
+				}
+				if nargs != nil {
+					args = nargs
+				}
+				if nreturns != nil {
+					returns = nreturns
+				}
+			}
+			ops.trackStack(args, returns, append([]token{{str: expandedName}}, current[1:]...))
+			spec.asm(ops, &spec, current[1:]) //nolint:errcheck // ignore error and continue, to collect more errors
+			if spec.deadens() {               // An unconditional branch deadens the following code
+				ops.known.deaden()
+			}
+			if spec.Name == "callsub" || spec.Name == "retsub" {
+				// since retsub comes back to the callsub, it is an entry point like a label
+				ops.known.label()
+			}
+			ops.trace("\n")
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
