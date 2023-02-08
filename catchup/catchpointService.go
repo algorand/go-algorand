@@ -218,7 +218,7 @@ func (cs *CatchpointCatchupService) run() {
 		// check if we need to abort.
 		select {
 		case <-cs.ctx.Done():
-			// remember the last err (cannot be returnd directly)
+			// remember the last err (cannot be returned directly)
 			cs.err = err
 			return
 		default:
