@@ -371,7 +371,7 @@ func (node *AlgorandFullNode) Start() {
 
 	if node.catchpointCatchupService != nil {
 		startNetwork()
-		node.catchpointCatchupService.Start(node.ctx)
+		_ = node.catchpointCatchupService.Start(node.ctx)
 	} else {
 		node.catchupService.Start()
 		node.agreementService.Start()
