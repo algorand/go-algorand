@@ -245,7 +245,7 @@ type ItxnVersion interface {
 }
 type txnFieldSpec struct {
 	field      TxnField
-	btype      StackType
+	ftype      StackType
 	array      bool   // Is this an array field?
 	version    uint64 // When this field become available to txn/gtxn. 0=always
 	itxVersion uint64 // When this field become available to itxn_field. 0=never
@@ -261,7 +261,7 @@ func (fs txnFieldSpec) Field() byte {
 	return byte(fs.field)
 }
 func (fs txnFieldSpec) StackType() StackType {
-	return fs.btype
+	return fs.ftype
 }
 func (fs txnFieldSpec) Type() avmType {
 	return fs.StackType().AVMType
@@ -552,7 +552,7 @@ var GlobalFieldNames [invalidGlobalField]string
 
 type globalFieldSpec struct {
 	field   GlobalField
-	btype   StackType
+	ftype   StackType
 	mode    RunMode
 	version uint64
 	doc     string
@@ -562,7 +562,7 @@ func (fs globalFieldSpec) Field() byte {
 	return byte(fs.field)
 }
 func (fs globalFieldSpec) StackType() StackType {
-	return fs.btype
+	return fs.ftype
 }
 func (fs globalFieldSpec) Type() avmType {
 	return fs.StackType().AVMType
@@ -781,7 +781,7 @@ var jsonRefTypeNames [invalidJSONRefType]string
 
 type jsonRefSpec struct {
 	field   JSONRefType
-	btype   StackType
+	ftype   StackType
 	version uint64
 }
 
@@ -806,7 +806,7 @@ func (fs jsonRefSpec) Field() byte {
 	return byte(fs.field)
 }
 func (fs jsonRefSpec) StackType() StackType {
-	return fs.btype
+	return fs.ftype
 }
 func (fs jsonRefSpec) Type() avmType {
 	return fs.StackType().AVMType
@@ -920,7 +920,7 @@ var blockFieldNames [invalidBlockField]string
 
 type blockFieldSpec struct {
 	field   BlockField
-	btype   StackType
+	ftype   StackType
 	version uint64
 }
 
@@ -950,7 +950,7 @@ func (fs blockFieldSpec) Field() byte {
 }
 
 func (fs blockFieldSpec) StackType() StackType {
-	return fs.btype
+	return fs.ftype
 }
 
 func (fs blockFieldSpec) Type() avmType {
@@ -995,7 +995,7 @@ var assetHoldingFieldNames [invalidAssetHoldingField]string
 
 type assetHoldingFieldSpec struct {
 	field   AssetHoldingField
-	btype   StackType
+	ftype   StackType
 	version uint64
 	doc     string
 }
@@ -1004,7 +1004,7 @@ func (fs assetHoldingFieldSpec) Field() byte {
 	return byte(fs.field)
 }
 func (fs assetHoldingFieldSpec) StackType() StackType {
-	return fs.btype
+	return fs.ftype
 }
 func (fs assetHoldingFieldSpec) Type() avmType {
 	return fs.StackType().AVMType
@@ -1084,7 +1084,7 @@ var assetParamsFieldNames [invalidAssetParamsField]string
 
 type assetParamsFieldSpec struct {
 	field   AssetParamsField
-	btype   StackType
+	ftype   StackType
 	version uint64
 	doc     string
 }
@@ -1096,7 +1096,7 @@ func (fs assetParamsFieldSpec) Type() avmType {
 	return fs.StackType().AVMType
 }
 func (fs assetParamsFieldSpec) StackType() StackType {
-	return fs.btype
+	return fs.ftype
 }
 func (fs assetParamsFieldSpec) OpVersion() uint64 {
 	return 2
@@ -1178,7 +1178,7 @@ var appParamsFieldNames [invalidAppParamsField]string
 
 type appParamsFieldSpec struct {
 	field   AppParamsField
-	btype   StackType
+	ftype   StackType
 	version uint64
 	doc     string
 }
@@ -1190,7 +1190,7 @@ func (fs appParamsFieldSpec) Type() avmType {
 	return fs.StackType().AVMType
 }
 func (fs appParamsFieldSpec) StackType() StackType {
-	return fs.btype
+	return fs.ftype
 }
 func (fs appParamsFieldSpec) OpVersion() uint64 {
 	return 5
@@ -1279,7 +1279,7 @@ var acctParamsFieldNames [invalidAcctParamsField]string
 
 type acctParamsFieldSpec struct {
 	field   AcctParamsField
-	btype   StackType
+	ftype   StackType
 	version uint64
 	doc     string
 }
@@ -1288,7 +1288,7 @@ func (fs acctParamsFieldSpec) Field() byte {
 	return byte(fs.field)
 }
 func (fs acctParamsFieldSpec) StackType() StackType {
-	return fs.btype
+	return fs.ftype
 }
 func (fs acctParamsFieldSpec) Type() avmType {
 	return fs.StackType().AVMType

@@ -2269,7 +2269,7 @@ func TestEnumFieldErrors(t *testing.T) { // nolint:paralleltest // manipulates g
 	source := `txn Amount`
 	origSpec := txnFieldSpecs[Amount]
 	changed := origSpec
-	changed.btype.AVMType = avmBytes
+	changed.ftype.AVMType = avmBytes
 	txnFieldSpecs[Amount] = changed
 	defer func() {
 		txnFieldSpecs[Amount] = origSpec
@@ -2282,7 +2282,7 @@ func TestEnumFieldErrors(t *testing.T) { // nolint:paralleltest // manipulates g
 
 	origMinTxnFs := globalFieldSpecs[MinTxnFee]
 	badMinTxnFs := origMinTxnFs
-	badMinTxnFs.btype.AVMType = avmBytes
+	badMinTxnFs.ftype.AVMType = avmBytes
 	globalFieldSpecs[MinTxnFee] = badMinTxnFs
 	defer func() {
 		globalFieldSpecs[MinTxnFee] = origMinTxnFs
@@ -2314,7 +2314,7 @@ assert
 `
 	origBalanceFs := assetHoldingFieldSpecs[AssetBalance]
 	badBalanceFs := origBalanceFs
-	badBalanceFs.btype.AVMType = avmBytes
+	badBalanceFs.ftype.AVMType = avmBytes
 	assetHoldingFieldSpecs[AssetBalance] = badBalanceFs
 	defer func() {
 		assetHoldingFieldSpecs[AssetBalance] = origBalanceFs
@@ -2328,7 +2328,7 @@ assert
 `
 	origTotalFs := assetParamsFieldSpecs[AssetTotal]
 	badTotalFs := origTotalFs
-	badTotalFs.btype.AVMType = avmBytes
+	badTotalFs.ftype.AVMType = avmBytes
 	assetParamsFieldSpecs[AssetTotal] = badTotalFs
 	defer func() {
 		assetParamsFieldSpecs[AssetTotal] = origTotalFs

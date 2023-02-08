@@ -220,7 +220,7 @@ func TestAssetParamsFieldsVersions(t *testing.T) {
 		// Need to use intc so we can "backversion" the
 		// program and not have it fail because of pushint.
 		text := fmt.Sprintf("intcblock 0 1; intc_0; asset_params_get %s; bnz ok; err; ok: ", field.field.String())
-		switch field.btype.AVMType {
+		switch field.ftype.AVMType {
 		case avmUint64: // ensure the return type is uint64 by adding
 			text += " intc_1; +"
 		case avmBytes: // ensure the return type is bytes by using len

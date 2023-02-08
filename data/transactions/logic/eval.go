@@ -2385,8 +2385,8 @@ func (cx *EvalContext) assetHoldingToValue(holding *basics.AssetHolding, fs asse
 		return sv, fmt.Errorf("invalid asset_holding_get field %d", fs.field)
 	}
 
-	if fs.btype.AVMType != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.btype.AVMType, sv.argType())
+	if fs.ftype.AVMType != sv.argType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype.AVMType, sv.argType())
 	}
 	return sv, nil
 }
@@ -2421,8 +2421,8 @@ func (cx *EvalContext) assetParamsToValue(params *basics.AssetParams, creator ba
 		return sv, fmt.Errorf("invalid asset_params_get field %d", fs.field)
 	}
 
-	if fs.btype.AVMType != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.btype.AVMType, sv.argType())
+	if fs.ftype.AVMType != sv.argType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype.AVMType, sv.argType())
 	}
 	return sv, nil
 }
@@ -2448,8 +2448,8 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 		return sv, fmt.Errorf("invalid app_params_get field %d", fs.field)
 	}
 
-	if fs.btype.AVMType != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.btype.AVMType, sv.argType())
+	if fs.ftype.AVMType != sv.argType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype.AVMType, sv.argType())
 	}
 	return sv, nil
 }
@@ -2782,8 +2782,8 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		return sv, fmt.Errorf("invalid txn field %s", fs.field)
 	}
 
-	if fs.btype.AVMType != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.btype.AVMType, sv.argType())
+	if fs.ftype.AVMType != sv.argType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype.AVMType, sv.argType())
 	}
 	return sv, nil
 }
@@ -3230,8 +3230,8 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		err = fmt.Errorf("invalid global field %d", fs.field)
 	}
 
-	if fs.btype.AVMType != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.btype.AVMType, sv.argType())
+	if fs.ftype.AVMType != sv.argType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype.AVMType, sv.argType())
 	}
 
 	return sv, err
