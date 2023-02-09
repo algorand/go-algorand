@@ -381,19 +381,14 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) encodedTxnG
 }
 
 func convertSimulationResult(result simulation.Result) EncodedSimulationResult {
-	var encodedSimulationResult EncodedSimulationResult
-	encodedSimulationResult.Version = result.Version
-
-	if result.TxnGroups != nil {
-		txnGroups := make([]encodedTxnGroupResult, len(result.TxnGroups))
-		for i, txnGroup := range result.TxnGroups {
-			txnGroups[i] = convertTxnGroupResult(txnGroup)
-		}
-		encodedSimulationResult.TxnGroups = &txnGroups
+	encodedSimulationResult := EncodedSimulationResult{
+		Version:      result.Version,
+		WouldSucceed: result.WouldSucceed,
+		TxnGroups:    make([]encodedTxnGroupResult, len(result.TxnGroups)),
 	}
 
-	if result.WouldSucceed {
-		encodedSimulationResult.WouldSucceed = &result.WouldSucceed
+	for i, txnGroup := range result.TxnGroups {
+		encodedSimulationResult.TxnGroups[i] = convertTxnGroupResult(txnGroup)
 	}
 
 	return encodedSimulationResult

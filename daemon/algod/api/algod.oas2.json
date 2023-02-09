@@ -4284,7 +4284,7 @@
         ],
         "properties": {
           "version": {
-            "description": "\\[v\\] The version of this response object.",
+            "description": "The version of this response object.",
             "type": "integer"
           },
           "txn-groups": {
@@ -4295,7 +4295,7 @@
             }
           },
           "would-succeed": {
-            "description": "\\[s\\] Indicates whether the simulated transactions would have succeeded during an actual submission.",
+            "description": "Indicates whether the simulated transactions would have succeeded during an actual submission.",
             "type": "boolean"
           }
         }

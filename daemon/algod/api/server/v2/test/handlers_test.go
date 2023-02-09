@@ -908,23 +908,21 @@ func TestSimulateTransaction(t *testing.T) {
 
 			// check common fields
 			require.Equal(t, uint64(1), result.Version)
-			require.NotNil(t, result.TxnGroups)
 
 			// if i == 3, the program should pass because no inner txn was marked for failure
 			if i == 3 {
-				require.NotNil(t, result.WouldSucceed)
-				require.True(t, *result.WouldSucceed)
+				require.True(t, result.WouldSucceed)
 
 				// check logs
-				logs := *(*result.TxnGroups)[0].Txns[1].Txn.Logs
+				logs := *result.TxnGroups[0].Txns[1].Txn.Logs
 				require.Len(t, logs, 3)
 				require.Equal(t, []byte{0, 0, 0, 0, 0, 0, 0, 2}, logs[0])
 				require.Equal(t, []byte{0, 0, 0, 0, 0, 0, 0, 1}, logs[1])
 				require.Equal(t, []byte{0, 0, 0, 0, 0, 0, 0, 0}, logs[2])
 			} else {
 				// otherwise the program should fail at the correct index
-				require.Nil(t, result.WouldSucceed)
-				txnGroup := (*result.TxnGroups)[0]
+				require.False(t, result.WouldSucceed)
+				txnGroup := result.TxnGroups[0]
 				require.Contains(t, *txnGroup.FailureMessage, "rejected by ApprovalProgram")
 				require.Equal(t, []uint64{1, uint64(i)}, *txnGroup.FailedAt)
 

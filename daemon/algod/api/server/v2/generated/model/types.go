@@ -1130,10 +1130,10 @@ type SimulationResponse struct {
 	// TxnGroups A result object for each transaction group that was simulated.
 	TxnGroups []SimulationTransactionGroupResult `json:"txn-groups"`
 
-	// Version \[v\] The version of this response object.
+	// Version The version of this response object.
 	Version uint64 `json:"version"`
 
-	// WouldSucceed \[s\] Indicates whether the simulated transactions would have succeeded during an actual submission.
+	// WouldSucceed Indicates whether the simulated transactions would have succeeded during an actual submission.
 	WouldSucceed bool `json:"would-succeed"`
 }
 

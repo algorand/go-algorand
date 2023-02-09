@@ -926,16 +926,16 @@ type encodedTxnResult struct {
 
 // encodedTxnGroupResult mirrors simulation.TxnGroupResult
 type encodedTxnGroupResult struct {
-	Txns           []encodedTxnResult `codec:"txn-results,omitempty"`
+	Txns           []encodedTxnResult `codec:"txn-results"`
 	FailureMessage *string            `codec:"failure-message,omitempty"`
 	FailedAt       *[]uint64          `codec:"failed-at,omitempty"`
 }
 
 // EncodedSimulationResult mirrors simulation.Result
 type EncodedSimulationResult struct {
-	Version      uint64                   `codec:"version"`
-	TxnGroups    *[]encodedTxnGroupResult `codec:"txn-groups,omitempty"`
-	WouldSucceed *bool                    `codec:"would-succeed,omitempty"`
+	Version      uint64                  `codec:"version"`
+	TxnGroups    []encodedTxnGroupResult `codec:"txn-groups"`
+	WouldSucceed bool                    `codec:"would-succeed"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.

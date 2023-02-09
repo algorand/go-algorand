@@ -766,11 +766,11 @@
                   "type": "array"
                 },
                 "version": {
-                  "description": "\\[v\\] The version of this response object.",
+                  "description": "The version of this response object.",
                   "type": "integer"
                 },
                 "would-succeed": {
-                  "description": "\\[s\\] Indicates whether the simulated transactions would have succeeded during an actual submission.",
+                  "description": "Indicates whether the simulated transactions would have succeeded during an actual submission.",
                   "type": "boolean"
                 }
               },
@@ -5901,11 +5901,11 @@
                       "type": "array"
                     },
                     "version": {
-                      "description": "\\[v\\] The version of this response object.",
+                      "description": "The version of this response object.",
                       "type": "integer"
                     },
                     "would-succeed": {
-                      "description": "\\[s\\] Indicates whether the simulated transactions would have succeeded during an actual submission.",
+                      "description": "Indicates whether the simulated transactions would have succeeded during an actual submission.",
                       "type": "boolean"
                     }
                   },
@@ -5928,11 +5928,11 @@
                       "type": "array"
                     },
                     "version": {
-                      "description": "\\[v\\] The version of this response object.",
+                      "description": "The version of this response object.",
                       "type": "integer"
                     },
                     "would-succeed": {
-                      "description": "\\[s\\] Indicates whether the simulated transactions would have succeeded during an actual submission.",
+                      "description": "Indicates whether the simulated transactions would have succeeded during an actual submission.",
                       "type": "boolean"
                     }
                   },

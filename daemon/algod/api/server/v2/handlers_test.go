@@ -94,6 +94,8 @@ func (node *tagNode) AssertEquals(t *testing.T, other *tagNode) {
 	node.assertEquals(t, other, nil, make(map[*tagNode]bool))
 }
 
+// makeTagGraph creates a graph of encoding keys that an object uses when encoded as JSON or
+// msgpack. TODO: also represent if fields have "omitempty"
 func makeTagGraph(rootType reflect.Type, seen map[reflect.Type]*tagNode) *tagNode {
 	if value, ok := seen[rootType]; ok {
 		return value
