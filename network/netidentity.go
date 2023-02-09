@@ -305,7 +305,7 @@ func (i identityVerificationMessage) Sign(secrets *crypto.SignatureSecrets) iden
 }
 
 func (i identityVerificationMessage) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.NetIdentityChallengeResponse, protocol.Encode(&i)
+	return protocol.NetIdentityVerificationMessage, protocol.Encode(&i)
 }
 
 // Verify checks that the signature included in the identityVerificationMessage was indeed created by the included Key
