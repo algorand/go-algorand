@@ -17,6 +17,8 @@
 package testing
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"testing"
 
@@ -70,6 +72,15 @@ func versionStringFromIndex(index int) string {
 	return version
 }
 
+// rand16 samples randomness for TestConsensusRange,
+// which tests with or without LRU Cache in ledger
+func rand16(t *testing.T) uint16 {
+	var twobytes [2]byte
+	_, err := rand.Read(twobytes[:])
+	require.NoError(t, err)
+	return binary.LittleEndian.Uint16(twobytes[:])
+}
+
 // TestConsensusRange allows for running tests against a range of consensus
 // versions. Generally `start` will be the version that introduced the feature,
 // and `stop` will be 0 to indicate it should work right on up through vFuture.
@@ -88,14 +99,12 @@ func TestConsensusRange(t *testing.T, start, stop int, test func(t *testing.T, v
 	cfg := config.GetDefaultLocal()
 	for i := start; i <= stop; i++ {
 		version := versionStringFromIndex(i)
+		disable := rand16(t)%2 == 0
 		t.Run(fmt.Sprintf("cv=%s", version), func(t *testing.T) {
+			cfg.DisableLedgerLRUCache = disable
 			test(t, i, consensusByNumber[i], cfg)
 		})
 	}
-	cfg.DisableLedgerLRUCache = true
-	t.Run(fmt.Sprintf("cv=%s without LRU cache", versionStringFromIndex(stop)), func(t *testing.T) {
-		test(t, stop, consensusByNumber[stop], cfg)
-	})
 }
 
 // BenchConsensusRange is for getting benchmarks across consensus versions.
