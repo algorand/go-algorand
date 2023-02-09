@@ -166,6 +166,7 @@ const disconnectLeastPerformingPeer disconnectReason = "LeastPerformingPeer"
 const disconnectCliqueResolve disconnectReason = "CliqueResolving"
 const disconnectRequestReceived disconnectReason = "DisconnectRequest"
 const disconnectStaleWrite disconnectReason = "DisconnectStaleWrite"
+const disconnectDuplicateConnection disconnectReason = "DisconnectDuplicateConnection"
 
 // Response is the structure holding the response from the server
 type Response struct {

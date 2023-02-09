@@ -99,6 +99,49 @@ func TestIdentityChallengeSchemeVerifyRequestAndAttachResponse(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestIdentityChallengeNoErrorWhenNotParticipating(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// blank deduplication name will make the scheme a no-op
+	iNotParticipate := NewIdentityChallengeScheme("")
+
+	// create a request header first
+	h := http.Header{}
+	i := NewIdentityChallengeScheme("i1")
+	origChal := i.AttachChallenge(h, "i1")
+	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
+	require.NotEmpty(t, origChal)
+
+	// confirm a nil scheme will not return values or error
+	c, k, err := iNotParticipate.VerifyRequestAndAttachResponse(http.Header{}, h)
+	require.Empty(t, c)
+	require.Empty(t, k)
+	require.NoError(t, err)
+
+	// create a response
+	h2 := http.Header{}
+	i2 := NewIdentityChallengeScheme("i2")
+	i2.VerifyRequestAndAttachResponse(h2, h)
+
+	// confirm a nil scheme will not return values or error
+	k2, bytes, err := iNotParticipate.VerifyResponse(h2, identityChallengeValue{})
+	require.Empty(t, k2)
+	require.Empty(t, bytes)
+	require.NoError(t, err)
+
+	// add broken payload to a new header and try inspecting it with the empty scheme
+	h3 := http.Header{}
+	h3.Add(IdentityChallengeHeader, "broken text!")
+	c, k, err = iNotParticipate.VerifyRequestAndAttachResponse(http.Header{}, h)
+	require.Empty(t, c)
+	require.Empty(t, k)
+	require.NoError(t, err)
+	k2, bytes, err = iNotParticipate.VerifyResponse(h2, identityChallengeValue{})
+	require.Empty(t, k2)
+	require.Empty(t, bytes)
+	require.NoError(t, err)
+}
+
 // TestIdentityChallengeSchemeVerifyResponse confirms the scheme will
 // attach responses only if dedup name is set and the provided challenge verifies
 func TestIdentityChallengeSchemeVerifyResponse(t *testing.T) {

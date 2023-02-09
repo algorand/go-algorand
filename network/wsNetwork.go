@@ -118,6 +118,7 @@ var networkPeerBroadcastDropped = metrics.MakeCounter(metrics.MetricName{Name: "
 
 var networkPeerDisconnectDupeIdentity = metrics.MakeCounter(metrics.MetricName{Name: "algod_peer_disconnect_duplicate_identity", Description: "number of times identity challenge cause us to disconnect a peer"})
 var networkPeeringStopDupeIdentity = metrics.MakeCounter(metrics.MetricName{Name: "algod_peering_stop_duplicate_identity", Description: "number of times identity challenge cause us to stop the peering process"})
+var networkPeerIdentityError = metrics.MakeCounter(metrics.MetricName{Name: "algod_peer_identity_error", Description: "number of times an error occurs (besides expected) when processing identity challenges"})
 
 var networkSlowPeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_slow_drops_total", Description: "number of peers dropped for being slow to send to"})
 var networkIdlePeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_idle_drops_total", Description: "number of peers dropped due to idle connection"})

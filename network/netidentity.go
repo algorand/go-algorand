@@ -105,6 +105,10 @@ type identityChallengePublicKeyScheme struct {
 
 // NewIdentityChallengeScheme will create a default Identification Scheme
 func NewIdentityChallengeScheme(dn string) *identityChallengePublicKeyScheme {
+	// without an deduplication name, there is no identityto manage, so just return an empty scheme
+	if dn == "" {
+		return &identityChallengePublicKeyScheme{}
+	}
 	var seed crypto.Seed
 	crypto.RandBytes(seed[:])
 
@@ -119,7 +123,7 @@ func NewIdentityChallengeScheme(dn string) *identityChallengePublicKeyScheme {
 // confirm it later (by passing it to VerifyResponse), or returns an empty challenge if dedupName is
 // not set.
 func (i identityChallengePublicKeyScheme) AttachChallenge(attach http.Header, addr string) identityChallengeValue {
-	if i.dedupName == "" {
+	if i.dedupName == "" || addr == "" {
 		return identityChallengeValue{}
 	}
 	c := identityChallenge{
@@ -152,14 +156,17 @@ func (i identityChallengePublicKeyScheme) VerifyRequestAndAttachResponse(attach 
 	// decode the header to an identityChallenge
 	msg, err := base64.StdEncoding.DecodeString(headerString)
 	if err != nil {
+		networkPeerIdentityError.Inc(nil)
 		return identityChallengeValue{}, crypto.PublicKey{}, err
 	}
 	idChal := identityChallengeSigned{}
 	err = protocol.Decode(msg, &idChal)
 	if err != nil {
+		networkPeerIdentityError.Inc(nil)
 		return identityChallengeValue{}, crypto.PublicKey{}, err
 	}
 	if !idChal.Verify() {
+		networkPeerIdentityError.Inc(nil)
 		return identityChallengeValue{}, crypto.PublicKey{}, fmt.Errorf("identity challenge incorrectly signed")
 	}
 	// if the address is not meant for this host, return without attaching headers,
@@ -184,6 +191,10 @@ func (i identityChallengePublicKeyScheme) VerifyRequestAndAttachResponse(attach 
 // found in the header. If the response can be verified, it returns the identity of the peer and an
 // encoded identityVerificationMessage to send to the peer. Otherwise, it returns empty values.
 func (i identityChallengePublicKeyScheme) VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
+	// if we are not participating in identity challenge exchange, do nothing (no error and no value)
+	if i.dedupName == "" {
+		return crypto.PublicKey{}, []byte{}, nil
+	}
 	headerString := h.Get(IdentityChallengeHeader)
 	// if the header is not populated, assume the peer is not participating in identity exchange
 	if headerString == "" {
@@ -191,17 +202,21 @@ func (i identityChallengePublicKeyScheme) VerifyResponse(h http.Header, c identi
 	}
 	msg, err := base64.StdEncoding.DecodeString(headerString)
 	if err != nil {
+		networkPeerIdentityError.Inc(nil)
 		return crypto.PublicKey{}, []byte{}, err
 	}
 	resp := identityChallengeResponseSigned{}
 	err = protocol.Decode(msg, &resp)
 	if err != nil {
+		networkPeerIdentityError.Inc(nil)
 		return crypto.PublicKey{}, []byte{}, err
 	}
 	if resp.Msg.Challenge != c {
+		networkPeerIdentityError.Inc(nil)
 		return crypto.PublicKey{}, []byte{}, fmt.Errorf("challenge response did not contain originally issued challenge value")
 	}
 	if !resp.Verify() {
+		networkPeerIdentityError.Inc(nil)
 		return crypto.PublicKey{}, []byte{}, fmt.Errorf("challenge response incorrectly signed ")
 	}
 	return resp.Msg.Key, i.identityVerificationMessage(resp.Msg.ResponseChallenge), nil
@@ -326,16 +341,19 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	msg := identityVerificationMessageSigned{}
 	err := protocol.Decode(message.Data, &msg)
 	if err != nil {
+		networkPeerIdentityError.Inc(nil)
 		peer.net.log.With("err", err).With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity verification could not be decoded, disconnecting")
 		peer.net.Disconnect(peer)
 		return OutgoingMessage{}
 	}
 	if peer.identityChallenge != msg.Msg.ResponseChallenge {
+		networkPeerIdentityError.Inc(nil)
 		peer.net.log.With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity verification challenge does not match, disconnecting")
 		peer.net.Disconnect(peer)
 		return OutgoingMessage{}
 	}
 	if !msg.Verify(peer.identity) {
+		networkPeerIdentityError.Inc(nil)
 		peer.net.log.With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity verification is incorrectly signed, disconnecting")
 		peer.net.Disconnect(peer)
 		return OutgoingMessage{}
@@ -348,7 +366,7 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	if !ok {
 		networkPeerDisconnectDupeIdentity.Inc(nil)
 		peer.net.log.With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity already in use, disconnecting")
-		peer.net.Disconnect(peer)
+		peer.net.disconnect(peer, disconnectDuplicateConnection)
 	}
 	return OutgoingMessage{}
 }
