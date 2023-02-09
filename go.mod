@@ -66,6 +66,7 @@ require (
 	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.1 // indirect
+	github.com/winder/go-algorand-lib v0.0.0-20230209144039-f366dc0acd8c // indirect
 	golang.org/x/net v0.1.0 // indirect
 	golang.org/x/term v0.1.0 // indirect
 	golang.org/x/time v0.0.0-20201208040808-7e3f01d25324 // indirect

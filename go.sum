@@ -140,6 +140,10 @@ github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6Kllzaw
 github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyCJ6HpOuEn7z0Csc=
 github.com/valyala/fasttemplate v1.2.1 h1:TVEnxayobAdVkhQfrfes2IzOB6o+z4roRkPF52WA1u4=
 github.com/valyala/fasttemplate v1.2.1/go.mod h1:KHLXt3tVN2HBp8eijSv/kGJopbvo7S+qRAEEKiv+SiQ=
+github.com/winder/go-algorand-lib v0.0.0-20230209143253-05493c404dfa h1:DksWulm7/+aHokwFkeMibKwX4yKEjwpctfnA9CuT0G0=
+github.com/winder/go-algorand-lib v0.0.0-20230209143253-05493c404dfa/go.mod h1:NjsVKKY+0cDnRmcSr3Y7Bj4uKBYCTSVwwwrFwgaXlGw=
+github.com/winder/go-algorand-lib v0.0.0-20230209144039-f366dc0acd8c h1:oa4hxDFVOhqHtTa6p7HTaNelG/T7CqpK+OJeQ6Bx+Z4=
+github.com/winder/go-algorand-lib v0.0.0-20230209144039-f366dc0acd8c/go.mod h1:NjsVKKY+0cDnRmcSr3Y7Bj4uKBYCTSVwwwrFwgaXlGw=
 github.com/yuin/goldmark v1.4.1/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=
