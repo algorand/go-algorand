@@ -116,9 +116,8 @@ var networkBroadcastSendMicros = metrics.MakeCounter(metrics.MetricName{Name: "a
 var networkBroadcastsDropped = metrics.MakeCounter(metrics.MetricName{Name: "algod_broadcasts_dropped_total", Description: "number of broadcast messages not sent to any peer"})
 var networkPeerBroadcastDropped = metrics.MakeCounter(metrics.MetricName{Name: "algod_peer_broadcast_dropped_total", Description: "number of broadcast messages not sent to some peer"})
 
-var networkPeerDisconnectDupeIdentity = metrics.MakeCounter(metrics.MetricName{Name: "algod_peer_disconnect_duplicate_identity", Description: "number of times identity challenge cause us to disconnect a peer"})
-var networkPeeringStopDupeIdentity = metrics.MakeCounter(metrics.MetricName{Name: "algod_peering_stop_duplicate_identity", Description: "number of times identity challenge cause us to stop the peering process"})
-var networkPeerIdentityError = metrics.MakeCounter(metrics.MetricName{Name: "algod_peer_identity_error", Description: "number of times an error occurs (besides expected) when processing identity challenges"})
+var networkPeerIdentityDisconnect = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_identity_duplicate", Description: "number of times identity challenge cause us to disconnect a peer"})
+var networkPeerIdentityError = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_identity_error", Description: "number of times an error occurs (besides expected) when processing identity challenges"})
 
 var networkSlowPeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_slow_drops_total", Description: "number of peers dropped for being slow to send to"})
 var networkIdlePeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_idle_drops_total", Description: "number of peers dropped due to idle connection"})
@@ -1184,6 +1183,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	localAddr, _ := wn.Address()
 	peerIDChallenge, peerID, err := wn.identityScheme.VerifyRequestAndAttachResponse(responseHeader, request.Header)
 	if err != nil {
+		networkPeerIdentityError.Inc(nil)
 		wn.log.With("err", err).With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Warnf("peer (%s) supplied an invalid identity challenge, abandoning peering", trackedRequest.otherPublicAddr)
 		return
 	}
@@ -2242,6 +2242,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	// if the peer responded with an identity challenge response, but it can't be verified, don't proceed with peering
 	peerID, idVerificationMessage, err := wn.identityScheme.VerifyResponse(response.Header, idChallenge)
 	if err != nil {
+		networkPeerIdentityError.Inc(nil)
 		wn.log.With("err", err).With("remote", addr).With("local", localAddr).Warn("peer supplied an invalid identity response, abandoning peering")
 		closeEarly("Invalid identity response")
 		return
@@ -2276,7 +2277,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		ok := wn.identityTracker.setIdentity(peer)
 		wn.peersLock.Unlock()
 		if !ok {
-			networkPeeringStopDupeIdentity.Inc(nil)
+			networkPeerIdentityDisconnect.Inc(nil)
 			wn.log.With("remote", addr).With("local", localAddr).Warn("peer deduplicated before adding because the identity is already known")
 			closeEarly("Duplicate connection")
 			return

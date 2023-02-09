@@ -156,17 +156,14 @@ func (i identityChallengePublicKeyScheme) VerifyRequestAndAttachResponse(attach 
 	// decode the header to an identityChallenge
 	msg, err := base64.StdEncoding.DecodeString(headerString)
 	if err != nil {
-		networkPeerIdentityError.Inc(nil)
 		return identityChallengeValue{}, crypto.PublicKey{}, err
 	}
 	idChal := identityChallengeSigned{}
 	err = protocol.Decode(msg, &idChal)
 	if err != nil {
-		networkPeerIdentityError.Inc(nil)
 		return identityChallengeValue{}, crypto.PublicKey{}, err
 	}
 	if !idChal.Verify() {
-		networkPeerIdentityError.Inc(nil)
 		return identityChallengeValue{}, crypto.PublicKey{}, fmt.Errorf("identity challenge incorrectly signed")
 	}
 	// if the address is not meant for this host, return without attaching headers,
@@ -202,21 +199,17 @@ func (i identityChallengePublicKeyScheme) VerifyResponse(h http.Header, c identi
 	}
 	msg, err := base64.StdEncoding.DecodeString(headerString)
 	if err != nil {
-		networkPeerIdentityError.Inc(nil)
 		return crypto.PublicKey{}, []byte{}, err
 	}
 	resp := identityChallengeResponseSigned{}
 	err = protocol.Decode(msg, &resp)
 	if err != nil {
-		networkPeerIdentityError.Inc(nil)
 		return crypto.PublicKey{}, []byte{}, err
 	}
 	if resp.Msg.Challenge != c {
-		networkPeerIdentityError.Inc(nil)
 		return crypto.PublicKey{}, []byte{}, fmt.Errorf("challenge response did not contain originally issued challenge value")
 	}
 	if !resp.Verify() {
-		networkPeerIdentityError.Inc(nil)
 		return crypto.PublicKey{}, []byte{}, fmt.Errorf("challenge response incorrectly signed ")
 	}
 	return resp.Msg.Key, i.identityVerificationMessage(resp.Msg.ResponseChallenge), nil
@@ -364,7 +357,7 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	ok := peer.net.identityTracker.setIdentity(peer)
 	peer.net.peersLock.Unlock()
 	if !ok {
-		networkPeerDisconnectDupeIdentity.Inc(nil)
+		networkPeerIdentityDisconnect.Inc(nil)
 		peer.net.log.With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity already in use, disconnecting")
 		peer.net.disconnect(peer, disconnectDuplicateConnection)
 	}
