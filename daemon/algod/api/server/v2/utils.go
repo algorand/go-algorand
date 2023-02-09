@@ -310,8 +310,8 @@ func convertLogs(txn node.TxnWithStatus) *[][]byte {
 
 func convertInners(txn *node.TxnWithStatus) *[]PreEncodedTxInfo {
 	inner := make([]PreEncodedTxInfo, len(txn.ApplyData.EvalDelta.InnerTxns))
-	for i, itxn := range txn.ApplyData.EvalDelta.InnerTxns {
-		inner[i] = convertInnerTxn(&itxn)
+	for i := range txn.ApplyData.EvalDelta.InnerTxns {
+		inner[i] = convertInnerTxn(&txn.ApplyData.EvalDelta.InnerTxns[i])
 	}
 	return &inner
 }

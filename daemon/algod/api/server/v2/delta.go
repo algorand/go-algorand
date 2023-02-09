@@ -19,7 +19,6 @@ package v2
 import (
 	"errors"
 	"fmt"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
@@ -101,9 +100,7 @@ func StateDeltaToLedgerDelta(sDelta ledgercore.StateDelta, consensus config.Cons
 			return response, errors.New("overflow on pending reward calculation")
 		}
 
-		ad := basics.AccountData{}
-		ledgercore.AssignAccountData(&ad, record.AccountData)
-		a, err := AccountDataToAccount(record.Addr.String(), &ad, basics.Round(round), &consensus, amountWithoutPendingRewards)
+		a, err := ledgercoreADToAccount(record.Addr.String(), amountWithoutPendingRewards.Raw, uint64(round), &consensus, record.AccountData)
 		if err != nil {
 			return response, err
 		}
