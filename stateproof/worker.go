@@ -122,6 +122,7 @@ func (spw *Worker) Start() {
 func (spw *Worker) Shutdown() {
 	spw.shutdown()
 	spw.wg.Wait()
+	spw.ledger.UnregisterVotersCommitListener()
 	spw.db.Close()
 }
 
