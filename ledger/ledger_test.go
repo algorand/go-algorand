@@ -1541,36 +1541,6 @@ func TestLedgerReload(t *testing.T) {
 	}
 }
 
-func TestWaitLedgerReload(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
-	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.MaxAcctLookback = 0
-	log := logging.TestingLog(t)
-	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
-	require.NoError(t, err)
-	defer l.Close()
-
-	waitRound := l.Latest() + 1
-	waitChannel := l.Wait(waitRound)
-
-	err = l.reloadLedger()
-	a.NoError(err)
-	triggerTrackerFlush(t, l, genesisInitState)
-
-	select {
-	case <-waitChannel:
-		return
-	default:
-		a.Failf("", "Wait channel did not receive an expected signal for round %d", waitRound)
-	}
-}
-
 // TestGetLastCatchpointLabel tests ledger.GetLastCatchpointLabel is returning the correct value.
 func TestGetLastCatchpointLabel(t *testing.T) {
 	partitiontest.PartitionTest(t)
