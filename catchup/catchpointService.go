@@ -169,16 +169,17 @@ func (cs *CatchpointCatchupService) Start(ctx context.Context) (err error) {
 	go cs.run()
 
 	// above cs.run() returns immediately, wait a little
+	// DEV: reduce this timeout to 0 to trigger the cs.stage error below
 	time.Sleep(500 * time.Millisecond)
 
-	// if we got an error during the above sleep, return with this error...
+	// if we got an error during the above sleep, return the error...
 	if cs.err != nil {
 		return cs.err
 	}
 
 	// ...otherwise check if we're still in inactive state and report it as an error
 	if cs.stage == ledger.CatchpointCatchupStateInactive {
-		return fmt.Errorf("catchup service still in inactive state, please try again")
+		return fmt.Errorf("catchpoint catchup service still in inactive state, please try again")
 	}
 
 	// no error detected
@@ -218,8 +219,6 @@ func (cs *CatchpointCatchupService) run() {
 		// check if we need to abort.
 		select {
 		case <-cs.ctx.Done():
-			// remember the last err (cannot be returned directly)
-			cs.err = err
 			return
 		default:
 		}
@@ -250,6 +249,9 @@ func (cs *CatchpointCatchupService) run() {
 			cs.log.Warnf("catchpoint catchup stage error : %v", err)
 			time.Sleep(200 * time.Millisecond)
 		}
+
+		// remember the last err (cannot be returned directly)
+		cs.err = err
 	}
 }
 
