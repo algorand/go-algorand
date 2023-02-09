@@ -27,7 +27,7 @@ import (
 )
 
 // netidentity.go implements functionality to participate in an "Identity Challenge Exchange"
-// with the purpose of identifying redundant connections between peers, and prevent them.
+// with the purpose of identifying redundant connections between peers, and preventing them.
 // The identity challenge exchange protocol is a 3 way handshake that exchanges signed messages.
 //
 // Message 1 (Identity Challenge): when a request is made to start a gossip connection, an
