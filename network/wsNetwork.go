@@ -854,7 +854,7 @@ func (wn *WebsocketNetwork) Start() {
 	if wn.config.PublicAddress != "" {
 		wn.RegisterHandlers(identityHandlers)
 	}
-	if wn.identityScheme == nil {
+	if wn.identityScheme == nil && wn.config.PublicAddress != "" {
 		wn.identityScheme = NewIdentityChallengeScheme(wn.config.PublicAddress)
 	}
 
@@ -1181,11 +1181,16 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	}
 
 	localAddr, _ := wn.Address()
-	peerIDChallenge, peerID, err := wn.identityScheme.VerifyRequestAndAttachResponse(responseHeader, request.Header)
-	if err != nil {
-		networkPeerIdentityError.Inc(nil)
-		wn.log.With("err", err).With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Warnf("peer (%s) supplied an invalid identity challenge, abandoning peering", trackedRequest.otherPublicAddr)
-		return
+	var peerIDChallenge identityChallengeValue
+	var peerID crypto.PublicKey
+	if wn.identityScheme != nil {
+		var err error
+		peerIDChallenge, peerID, err = wn.identityScheme.VerifyRequestAndAttachResponse(responseHeader, request.Header)
+		if err != nil {
+			networkPeerIdentityError.Inc(nil)
+			wn.log.With("err", err).With("remote", trackedRequest.otherPublicAddr).With("local", localAddr).Warnf("peer (%s) supplied an invalid identity challenge, abandoning peering", trackedRequest.otherPublicAddr)
+			return
+		}
 	}
 
 	conn, err := wn.upgrader.Upgrade(response, request, responseHeader)
@@ -2163,7 +2168,10 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		requestHeader.Add(ProtocolAcceptVersionHeader, supportedProtocolVersion)
 	}
 
-	idChallenge := wn.identityScheme.AttachChallenge(requestHeader, addr)
+	var idChallenge identityChallengeValue
+	if wn.identityScheme != nil {
+		idChallenge = wn.identityScheme.AttachChallenge(requestHeader, addr)
+	}
 
 	// for backward compatibility, include the ProtocolVersion header as well.
 	requestHeader.Set(ProtocolVersionHeader, wn.protocolVersion)
@@ -2239,13 +2247,17 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 	localAddr, _ := wn.Address()
 
-	// if the peer responded with an identity challenge response, but it can't be verified, don't proceed with peering
-	peerID, idVerificationMessage, err := wn.identityScheme.VerifyResponse(response.Header, idChallenge)
-	if err != nil {
-		networkPeerIdentityError.Inc(nil)
-		wn.log.With("err", err).With("remote", addr).With("local", localAddr).Warn("peer supplied an invalid identity response, abandoning peering")
-		closeEarly("Invalid identity response")
-		return
+	var peerID crypto.PublicKey
+	var idVerificationMessage []byte
+	if wn.identityScheme != nil {
+		// if the peer responded with an identity challenge response, but it can't be verified, don't proceed with peering
+		peerID, idVerificationMessage, err = wn.identityScheme.VerifyResponse(response.Header, idChallenge)
+		if err != nil {
+			networkPeerIdentityError.Inc(nil)
+			wn.log.With("err", err).With("remote", addr).With("local", localAddr).Warn("peer supplied an invalid identity response, abandoning peering")
+			closeEarly("Invalid identity response")
+			return
+		}
 	}
 
 	throttledConnection := false
