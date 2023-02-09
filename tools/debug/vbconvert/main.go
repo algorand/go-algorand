@@ -24,9 +24,6 @@ import (
 
 	"github.com/algorand/go-codec/codec"
 
-	"github.com/algorand/go-algorand/config"
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -43,11 +40,6 @@ type algodVB struct {
 	Delta ledgercore.StateDelta
 }
 
-type conduitVB struct {
-	Blk   bookkeeping.Block
-	Delta model.LedgerStateDelta
-}
-
 func run(args arguments) {
 	var algodType algodVB
 
@@ -61,14 +53,6 @@ func run(args arguments) {
 	err = protocol.DecodeReflect(data, &algodType)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to decode input file '%s': %s\n", args.inputFile, err)
-		os.Exit(1)
-	}
-
-	// Convert
-	consensusParams := config.Consensus[algodType.Delta.Hdr.CurrentProtocol]
-	modelDelta, err := v2.StateDeltaToLedgerDelta(algodType.Delta, consensusParams)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to convert ledgercore.StateDelta from input file '%s': %s\n", args.inputFile, err)
 		os.Exit(1)
 	}
 
@@ -90,11 +74,7 @@ func run(args arguments) {
 		os.Exit(1)
 	}
 
-	conduitType := conduitVB{
-		Blk:   algodType.Blk,
-		Delta: modelDelta,
-	}
-	err = enc.Encode(conduitType)
+	err = enc.Encode(algodType)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to decode input file '%s': %s\n", args.outputFile, err)
 		os.Exit(1)
