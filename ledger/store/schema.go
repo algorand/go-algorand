@@ -205,7 +205,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 
 		for addr, data := range initAccounts {
 			_, err = tx.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
-				addr[:], protocol.Encode(&data))
+				addr[:], protocol.Encode(&data)) //nolint:gosec // Encode does not hold on to reference
 			if err != nil {
 				return true, err
 			}

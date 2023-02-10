@@ -61,6 +61,7 @@ var defaultLocal = Local{
 	EnableCatchupFromArchiveServers:            false,
 	EnableDeveloperAPI:                         false,
 	EnableExperimentalAPI:                      false,
+	EnableFollowMode:                           false,
 	EnableGossipBlockService:                   true,
 	EnableIncomingMessageFilter:                false,
 	EnableLedgerService:                        false,

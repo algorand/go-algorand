@@ -23,9 +23,9 @@ const (
 
 // Defines values for AddressRole.
 const (
-	FreezeTarget AddressRole = "freeze-target"
-	Receiver     AddressRole = "receiver"
-	Sender       AddressRole = "sender"
+	AddressRoleFreezeTarget AddressRole = "freeze-target"
+	AddressRoleReceiver     AddressRole = "receiver"
+	AddressRoleSender       AddressRole = "sender"
 )
 
 // Defines values for Format.
@@ -43,13 +43,13 @@ const (
 
 // Defines values for TxType.
 const (
-	Acfg   TxType = "acfg"
-	Afrz   TxType = "afrz"
-	Appl   TxType = "appl"
-	Axfer  TxType = "axfer"
-	Keyreg TxType = "keyreg"
-	Pay    TxType = "pay"
-	Stpf   TxType = "stpf"
+	TxTypeAcfg   TxType = "acfg"
+	TxTypeAfrz   TxType = "afrz"
+	TxTypeAppl   TxType = "appl"
+	TxTypeAxfer  TxType = "axfer"
+	TxTypeKeyreg TxType = "keyreg"
+	TxTypePay    TxType = "pay"
+	TxTypeStpf   TxType = "stpf"
 )
 
 // Defines values for TransactionProofResponseHashtype.
@@ -66,8 +66,8 @@ const (
 
 // Defines values for AccountInformationParamsExclude.
 const (
-	All  AccountInformationParamsExclude = "all"
-	None AccountInformationParamsExclude = "none"
+	AccountInformationParamsExcludeAll  AccountInformationParamsExclude = "all"
+	AccountInformationParamsExcludeNone AccountInformationParamsExclude = "none"
 )
 
 // Defines values for AccountApplicationInformationParamsFormat.
@@ -114,8 +114,8 @@ const (
 
 // Defines values for PendingTransactionInformationParamsFormat.
 const (
-	Json    PendingTransactionInformationParamsFormat = "json"
-	Msgpack PendingTransactionInformationParamsFormat = "msgpack"
+	PendingTransactionInformationParamsFormatJson    PendingTransactionInformationParamsFormat = "json"
+	PendingTransactionInformationParamsFormatMsgpack PendingTransactionInformationParamsFormat = "msgpack"
 )
 
 // Account Account information at a given round.

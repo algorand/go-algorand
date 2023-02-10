@@ -19,7 +19,6 @@ package v2
 import (
 	"errors"
 	"fmt"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
@@ -70,8 +69,11 @@ func convertAssetResourceRecordToGenerated(asset ledgercore.AssetResourceRecord)
 	}
 }
 
-// stateDeltaToLedgerDelta converts ledgercore.StateDelta to v2.model.LedgerStateDelta
-func stateDeltaToLedgerDelta(sDelta ledgercore.StateDelta, consensus config.ConsensusParams, rewardsLevel uint64, round uint64) (response model.LedgerStateDelta, err error) {
+// StateDeltaToLedgerDelta converts ledgercore.StateDelta to v2.model.LedgerStateDelta
+func StateDeltaToLedgerDelta(sDelta ledgercore.StateDelta, consensus config.ConsensusParams) (response model.LedgerStateDelta, err error) {
+	rewardsLevel := sDelta.Hdr.RewardsLevel
+	round := sDelta.Hdr.Round
+
 	var accts []model.AccountBalanceRecord
 	var apps []model.AppResourceRecord
 	var assets []model.AssetResourceRecord
@@ -82,9 +84,10 @@ func stateDeltaToLedgerDelta(sDelta ledgercore.StateDelta, consensus config.Cons
 
 	for key, kvDelta := range sDelta.KvMods {
 		var keyBytes = []byte(key)
+		var valueBytes = kvDelta.Data
 		keyValues = append(keyValues, model.KvDelta{
 			Key:   &keyBytes,
-			Value: &kvDelta.Data,
+			Value: &valueBytes,
 		})
 	}
 
@@ -97,9 +100,7 @@ func stateDeltaToLedgerDelta(sDelta ledgercore.StateDelta, consensus config.Cons
 			return response, errors.New("overflow on pending reward calculation")
 		}
 
-		ad := basics.AccountData{}
-		ledgercore.AssignAccountData(&ad, record.AccountData)
-		a, err := AccountDataToAccount(record.Addr.String(), &ad, basics.Round(round), &consensus, amountWithoutPendingRewards)
+		a, err := ledgercoreADToAccount(record.Addr.String(), amountWithoutPendingRewards.Raw, uint64(round), &consensus, record.AccountData)
 		if err != nil {
 			return response, err
 		}

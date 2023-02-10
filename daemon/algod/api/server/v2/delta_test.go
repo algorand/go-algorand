@@ -17,6 +17,8 @@
 package v2
 
 import (
+	"bytes"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -46,13 +48,13 @@ func TestDelta(t *testing.T) {
 							MicroAlgos:          basics.MicroAlgos{Raw: 5000},
 							RewardsBase:         2,
 							RewardedMicroAlgos:  basics.MicroAlgos{Raw: 0},
-							TotalExtraAppPages:  0,
-							TotalAppParams:      0,
-							TotalAppLocalStates: 0,
-							TotalAssetParams:    0,
-							TotalAssets:         0,
-							TotalBoxes:          0,
-							TotalBoxBytes:       0,
+							TotalExtraAppPages:  1,
+							TotalAppParams:      2,
+							TotalAppLocalStates: 3,
+							TotalAssetParams:    4,
+							TotalAssets:         5,
+							TotalBoxes:          6,
+							TotalBoxBytes:       7,
 						},
 					},
 				},
@@ -67,7 +69,7 @@ func TestDelta(t *testing.T) {
 							ClearStateProgram: []byte("2"),
 							GlobalState:       basics.TealKeyValue{},
 							StateSchemas:      basics.StateSchemas{},
-							ExtraProgramPages: 0,
+							ExtraProgramPages: 2,
 						},
 						Deleted: false,
 					},
@@ -88,6 +90,12 @@ func TestDelta(t *testing.T) {
 			"box1": {
 				Data:    []byte("foobar"),
 				OldData: []byte("barfoo"),
+			},
+			"box2": {
+				Data: []byte("alpha"),
+			},
+			"box3": {
+				Data: []byte("beta"),
 			},
 		},
 		Txleases: map[ledgercore.Txlease]basics.Round{
@@ -110,13 +118,17 @@ func TestDelta(t *testing.T) {
 		Totals:        ledgercore.AccountTotals{},
 	}
 
-	converted, err := stateDeltaToLedgerDelta(original, config.Consensus[protocol.ConsensusCurrentVersion], 25, 4)
+	converted, err := StateDeltaToLedgerDelta(original, config.Consensus[protocol.ConsensusCurrentVersion])
 	require.NoError(t, err)
 	require.Equal(t, original.Accts.Len(), len(*converted.Accts.Accounts))
 	expAccDelta := original.Accts.Accts[0]
 	actAccDelta := (*converted.Accts.Accounts)[0]
 	require.Equal(t, expAccDelta.Addr.String(), actAccDelta.Address)
 	require.Equal(t, expAccDelta.Status.String(), actAccDelta.AccountData.Status)
+	require.Equal(t, expAccDelta.TotalAppLocalStates, actAccDelta.AccountData.TotalAppsOptedIn)
+	require.Equal(t, expAccDelta.TotalAppParams, actAccDelta.AccountData.TotalCreatedApps)
+	require.Equal(t, expAccDelta.TotalAssetParams, actAccDelta.AccountData.TotalCreatedAssets)
+	require.Equal(t, expAccDelta.TotalAssets, actAccDelta.AccountData.TotalAssetsOptedIn)
 	require.Equal(t, uint64(0), actAccDelta.AccountData.PendingRewards)
 	require.Equal(t, len(original.Accts.AssetResources), len(*converted.Accts.Assets))
 	expAssetDelta := original.Accts.AssetResources[0]
@@ -132,8 +144,16 @@ func TestDelta(t *testing.T) {
 	require.Equal(t, expAppDelta.Addr.String(), actAppDelta.Address)
 	require.Equal(t, expAppDelta.Params.Deleted, actAppDelta.AppDeleted)
 	require.Equal(t, len(original.KvMods), len(*converted.KvMods))
+	// sort the result so we have deterministic order
+	sort.Slice(*converted.KvMods, func(i, j int) bool {
+		return bytes.Compare(*(*converted.KvMods)[i].Key, *(*converted.KvMods)[j].Key) < 0
+	})
 	require.Equal(t, []uint8("box1"), *(*converted.KvMods)[0].Key)
 	require.Equal(t, original.KvMods["box1"].Data, *(*converted.KvMods)[0].Value)
+	require.Equal(t, []uint8("box2"), *(*converted.KvMods)[1].Key)
+	require.Equal(t, original.KvMods["box2"].Data, *(*converted.KvMods)[1].Value)
+	require.Equal(t, []uint8("box3"), *(*converted.KvMods)[2].Key)
+	require.Equal(t, original.KvMods["box3"].Data, *(*converted.KvMods)[2].Value)
 	require.Equal(t, txLease[:], (*converted.TxLeases)[0].Lease)
 	require.Equal(t, poolAddr.String(), (*converted.TxLeases)[0].Sender)
 	require.Equal(t, uint64(600), (*converted.TxLeases)[0].Expiration)
