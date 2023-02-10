@@ -22,6 +22,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/algorand/go-algorand/crypto"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/logging"
 )
 
@@ -32,6 +33,7 @@ var GenesisJSONText string
 type NodeInterface interface {
 	GenesisHash() crypto.Digest
 	GenesisID() string
+	v2.NodeInterface
 }
 
 // HandlerFunc defines a wrapper for http.HandlerFunc that includes a context
