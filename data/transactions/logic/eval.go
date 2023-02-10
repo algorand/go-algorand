@@ -632,7 +632,7 @@ func (at avmType) String() string {
 	return "internal error, unknown type"
 }
 
-// stackType lifts the AVM type to a StackType
+// stackType lifts the avmType to a StackType
 // it can do this because the base StackTypes
 // are a superset of avmType
 func (at avmType) stackType() StackType {

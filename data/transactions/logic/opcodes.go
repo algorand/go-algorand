@@ -604,7 +604,7 @@ var OpSpecs = []OpSpec{
 	{0xac, "b&", opBytesBitAnd, proto("bb:b"), 4, costly(6)},
 	{0xad, "b^", opBytesBitXor, proto("bb:b"), 4, costly(6)},
 	{0xae, "b~", opBytesBitNot, proto("b:b"), 4, costly(4)},
-	{0xaf, "bzero", opBytesZero, proto("i:b"), 4, detDefault()},
+	{0xaf, "bzero", opBytesZero, proto("i:b"), 4, detDefault().typed(typeBzero)},
 
 	// AVM "effects"
 	{0xb0, "log", opLog, proto("b:"), 5, only(ModeApp)},
