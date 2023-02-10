@@ -30,27 +30,28 @@ type lruOnlineAccounts struct {
 	// and the ones on the back are the oldest.
 	accountsList *persistedOnlineAccountDataList
 	// accounts provides fast access to the various elements in the list by using the account address
+	// if lruOnlineAccounts is set with pendingWrites 0, then accounts is nil
 	accounts map[basics.Address]*persistedOnlineAccountDataListNode
 	// pendingAccounts are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the accounts/accountsList
+	// if lruOnlineAccounts is set with pendingWrites 0, then pendingAccounts is nil
 	pendingAccounts chan store.PersistedOnlineAccountData
 	// log interface; used for logging the threshold event.
 	log logging.Logger
 	// pendingWritesWarnThreshold is the threshold beyond we would write a warning for exceeding the number of pendingAccounts entries
 	pendingWritesWarnThreshold int
-	// disableWriteAccounts is the boolean indicator that disables write into accounts
-	disableWriteAccounts bool
 }
 
 // init initializes the lruAccounts for use.
 // thread locking semantics : write lock
 func (m *lruOnlineAccounts) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	m.accountsList = newPersistedOnlineAccountList().allocateFreeNodes(pendingWrites)
-	m.accounts = make(map[basics.Address]*persistedOnlineAccountDataListNode, pendingWrites)
-	m.pendingAccounts = make(chan store.PersistedOnlineAccountData, pendingWrites)
+	if pendingWrites > 0 {
+		m.accounts = make(map[basics.Address]*persistedOnlineAccountDataListNode, pendingWrites)
+		m.pendingAccounts = make(chan store.PersistedOnlineAccountData, pendingWrites)
+	}
 	m.log = log
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
-	m.disableWriteAccounts = pendingWrites == 0
 }
 
 // read the persistedAccountData object that the lruAccounts has for the given address.
@@ -95,7 +96,7 @@ func (m *lruOnlineAccounts) writePending(acct store.PersistedOnlineAccountData) 
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
 func (m *lruOnlineAccounts) write(acctData store.PersistedOnlineAccountData) {
-	if m.disableWriteAccounts {
+	if m.accounts == nil {
 		return
 	}
 	if el := m.accounts[acctData.Addr]; el != nil {

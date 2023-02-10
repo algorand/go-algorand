@@ -30,18 +30,20 @@ type cachedKVData struct {
 }
 
 // lruKV provides a storage class for the most recently used kv data.
-// It doesn't have any synchronization primitive on it's own and require to be
-// syncronized by the caller.
+// It doesn't have any synchronization primitive on its own and require to be
+// synchronized by the caller.
 type lruKV struct {
 	// kvList contain the list of persistedKVData, where the front ones are the most "fresh"
 	// and the ones on the back are the oldest.
 	kvList *persistedKVDataList
 
 	// kvs provides fast access to the various elements in the list by using the key
+	// if lruKV is set with pendingWrites 0, then kvs is nil
 	kvs map[string]*persistedKVDataListNode
 
 	// pendingKVs are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the kvs/kvList
+	// if lruKV is set with pendingWrites 0, then pendingKVs is nil
 	pendingKVs chan cachedKVData
 
 	// log interface; used for logging the threshold event.
@@ -49,20 +51,18 @@ type lruKV struct {
 
 	// pendingWritesWarnThreshold is the threshold beyond we would write a warning for exceeding the number of pendingKVs entries
 	pendingWritesWarnThreshold int
-
-	// disableWriteKV is the boolean indicator that disables write into kvs
-	disableWriteKV bool
 }
 
 // init initializes the lruKV for use.
 // thread locking semantics : write lock
 func (m *lruKV) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	m.kvList = newPersistedKVList().allocateFreeNodes(pendingWrites)
-	m.kvs = make(map[string]*persistedKVDataListNode, pendingWrites)
-	m.pendingKVs = make(chan cachedKVData, pendingWrites)
+	if pendingWrites > 0 {
+		m.kvs = make(map[string]*persistedKVDataListNode, pendingWrites)
+		m.pendingKVs = make(chan cachedKVData, pendingWrites)
+	}
 	m.log = log
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
-	m.disableWriteKV = pendingWrites == 0
 }
 
 // read the persistedKVData object that the lruKV has for the given key.
@@ -107,7 +107,7 @@ func (m *lruKV) writePending(kv store.PersistedKVData, key string) {
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
 func (m *lruKV) write(kvData store.PersistedKVData, key string) {
-	if m.disableWriteKV {
+	if m.kvs == nil {
 		return
 	}
 	if el := m.kvs[key]; el != nil {

@@ -85,7 +85,6 @@ func TestLRUKVDisable(t *testing.T) {
 
 	var baseKV lruKV
 	baseKV.init(logging.TestingLog(t), 0, 1)
-	require.True(t, baseKV.disableWriteKV)
 
 	kvNum := 5
 
