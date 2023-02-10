@@ -377,7 +377,7 @@ type OpSpec struct {
 
 // AlwaysExits is true iff the opcode always ends the program.
 func (spec *OpSpec) AlwaysExits() bool {
-	return len(spec.Return.Types) == 1 && spec.Return.Types[0] == StackNone
+	return len(spec.Return.Types) == 1 && spec.Return.Types[0].AVMType == avmNone
 }
 
 func (spec *OpSpec) deadens() bool {

@@ -2342,10 +2342,10 @@ func TestReturnTypes(t *testing.T) {
 	t.Parallel()
 
 	// Ensure all opcodes return values they are supposed to according to the OpSpecs table
-	typeToArg := map[StackType]string{
-		StackUint64: "int 1\n",
-		StackAny:    "int 1\n",
-		StackBytes:  "byte 0x33343536\n", // Which is the string "3456"
+	typeToArg := map[avmType]string{
+		avmUint64: "int 1\n",
+		avmAny:    "int 1\n",
+		avmBytes:  "byte 0x33343536\n", // Which is the string "3456"
 	}
 
 	// We try to form a snippet that will test every opcode, by sandwiching it
@@ -2491,7 +2491,7 @@ func TestReturnTypes(t *testing.T) {
 				var sb strings.Builder
 				if provideStackInput {
 					for _, t := range spec.Arg.Types {
-						sb.WriteString(typeToArg[t])
+						sb.WriteString(typeToArg[t.AVMType])
 					}
 				}
 				sb.WriteString(cmd + "\n")

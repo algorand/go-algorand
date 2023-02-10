@@ -238,12 +238,12 @@ func opsToMarkdown(out io.Writer) (err error) {
 type OpRecord struct {
 	Opcode  byte
 	Name    string
-	Args    string `json:",omitempty"`
-	Returns string `json:",omitempty"`
+	Args    []string `json:",omitempty"`
+	Returns []string `json:",omitempty"`
 	Size    int
 
 	ArgEnum      []string `json:",omitempty"`
-	ArgEnumTypes string   `json:",omitempty"`
+	ArgEnumTypes []string `json:",omitempty"`
 
 	Doc               string
 	DocExtra          string `json:",omitempty"`
@@ -259,35 +259,16 @@ type LanguageSpec struct {
 	Ops             []OpRecord
 }
 
-func typeString(types []logic.StackType) string {
-	out := make([]byte, len(types))
+func typeStrings(types []logic.StackType) []string {
+	out := make([]string, len(types))
 	for i, t := range types {
-		switch t {
-		case logic.StackUint64:
-			out[i] = 'U'
-		case logic.StackBytes:
-			out[i] = 'B'
-		case logic.StackAny:
-			out[i] = '.'
-		case logic.StackNone:
-			out[i] = '_'
-		default:
-			panic("unexpected type in opdoc typeString")
-		}
+		out[i] = t.String()
 	}
 
-	// Cant return None and !None from same op
-	if strings.Contains(string(out), "_") {
-		if strings.ContainsAny(string(out), "UB.") {
-			panic("unexpected StackNone in opdoc typeString")
-		}
-		return ""
-	}
-
-	return string(out)
+	return out
 }
 
-func fieldsAndTypes(group logic.FieldGroup) ([]string, string) {
+func fieldsAndTypes(group logic.FieldGroup) ([]string, []string) {
 	// reminder: group.Names can be "sparse" See: logic.TxnaFields
 	fields := make([]string, 0, len(group.Names))
 	types := make([]logic.StackType, 0, len(group.Names))
@@ -297,10 +278,10 @@ func fieldsAndTypes(group logic.FieldGroup) ([]string, string) {
 			types = append(types, spec.Type())
 		}
 	}
-	return fields, typeString(types)
+	return fields, typeStrings(types)
 }
 
-func argEnums(name string) ([]string, string) {
+func argEnums(name string) ([]string, []string) {
 	// reminder: this needs to be manually updated every time
 	// a new opcode is added with an associated FieldGroup
 	// it'd be nice to have this auto-update
@@ -334,7 +315,7 @@ func argEnums(name string) ([]string, string) {
 	case "ecdsa_pk_recover", "ecdsa_verify", "ecdsa_pk_decompress":
 		return fieldsAndTypes(logic.EcdsaCurves)
 	default:
-		return nil, ""
+		return nil, nil
 	}
 }
 
@@ -344,8 +325,8 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 	for i, spec := range opSpecs {
 		records[i].Opcode = spec.Opcode
 		records[i].Name = spec.Name
-		records[i].Args = typeString(spec.Arg.Types)
-		records[i].Returns = typeString(spec.Return.Types)
+		records[i].Args = typeStrings(spec.Arg.Types)
+		records[i].Returns = typeStrings(spec.Return.Types)
 		records[i].Size = spec.OpDetails.Size
 		records[i].ArgEnum, records[i].ArgEnumTypes = argEnums(spec.Name)
 		records[i].Doc = strings.ReplaceAll(logic.OpDoc(spec.Name), "<br />", "\n")
