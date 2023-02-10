@@ -76,7 +76,7 @@ var setProfileCmd = &cobra.Command{
 				if err != nil {
 					reportErrorf("Failed to read response: %v", err)
 				}
-				if strings.ToLower(resp) != "y" {
+				if strings.ToLower(resp) == "n" {
 					reportInfof("Exiting without overwriting existing config.")
 					return
 				}
