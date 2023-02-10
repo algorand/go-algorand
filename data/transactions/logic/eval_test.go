@@ -3332,10 +3332,11 @@ intc_1
 import random
 
 def foo():
-    for i in range(64):
-        print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
-    for i in range(63):
-        print('+')
+
+	for i in range(64):
+	    print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+	for i in range(63):
+	    print('+')
 */
 const addBenchmarkSource = `int 20472989571761113
 int 80135167795737348
@@ -3470,10 +3471,11 @@ int 28939890412103745
 import random
 
 def foo():
-    print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
-    for i in range(63):
-        print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
-        print('+')
+
+	print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+	for i in range(63):
+	    print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+	    print('+')
 */
 const addBenchmark2Source = `int 8371863094338737
 int 29595196041051360
@@ -4126,13 +4128,13 @@ func TestArgType(t *testing.T) {
 	t.Parallel()
 
 	var sv stackValue
-	require.Equal(t, StackUint64, sv.argType())
+	require.Equal(t, avmUint64, sv.argType())
 	sv.Bytes = []byte("")
-	require.Equal(t, StackBytes, sv.argType())
+	require.Equal(t, avmBytes, sv.argType())
 	sv.Uint = 1
-	require.Equal(t, StackBytes, sv.argType())
+	require.Equal(t, avmBytes, sv.argType())
 	sv.Bytes = nil
-	require.Equal(t, StackUint64, sv.argType())
+	require.Equal(t, avmUint64, sv.argType())
 }
 
 func TestApplicationsDisallowOldTeal(t *testing.T) {

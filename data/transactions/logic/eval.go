@@ -82,11 +82,11 @@ type stackValue struct {
 	Bytes []byte
 }
 
-func (sv stackValue) argType() StackType {
+func (sv stackValue) argType() avmType {
 	if sv.Bytes != nil {
-		return StackBytes
+		return avmBytes
 	}
-	return StackUint64
+	return avmUint64
 }
 
 func (sv stackValue) typeName() string {
@@ -154,7 +154,7 @@ func (sv stackValue) string(limit int) (string, error) {
 }
 
 func (sv stackValue) toTealValue() (tv basics.TealValue) {
-	if sv.argType() == StackBytes {
+	if sv.argType() == avmBytes {
 		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(sv.Bytes)}
 	}
 	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
@@ -601,25 +601,248 @@ func (cx *EvalContext) RunMode() RunMode {
 	return cx.runModeFlags
 }
 
-// StackType describes the type of a value on the operand stack
-type StackType byte
+// avmType describes the type of a value on the operand stack
+type avmType byte
 
 const (
-	// StackNone in an OpSpec shows that the op pops or yields nothing
-	StackNone StackType = iota
+	// avmNone in an OpSpec shows that the op pops or yields nothing
+	avmNone avmType = iota
 
-	// StackAny in an OpSpec shows that the op pops or yield any type
-	StackAny
+	// avmAny in an OpSpec shows that the op pops or yield any type
+	avmAny
 
-	// StackUint64 in an OpSpec shows that the op pops or yields a uint64
-	StackUint64
+	// avmUint64 in an OpSpec shows that the op pops or yields a uint64
+	avmUint64
 
-	// StackBytes in an OpSpec shows that the op pops or yields a []byte
-	StackBytes
+	// avmBytes in an OpSpec shows that the op pops or yields a []byte
+	avmBytes
 )
+
+func (at avmType) String() string {
+	switch at {
+	case avmNone:
+		return "none"
+	case avmAny:
+		return "any"
+	case avmUint64:
+		return "uint64"
+	case avmBytes:
+		return "[]byte"
+	}
+	return "internal error, unknown type"
+}
+
+func (at avmType) stackType() StackType {
+	switch at {
+	case avmNone:
+		return StackNone
+	case avmAny:
+		return StackAny
+	case avmUint64:
+		return StackUint64
+	case avmBytes:
+		return StackBytes
+	default:
+		panic(fmt.Sprintf("no stack type matching: %s", at))
+	}
+}
+
+var (
+	//
+	// Base stack types the avm knows about
+	//
+
+	// StackUint64 is any valid uint64
+	StackUint64 = NewStackType(avmUint64, bound(0, math.MaxUint64))
+	// StackBytes is any valid bytestring
+	StackBytes = NewStackType(avmBytes, bound(0, maxStringSize))
+	// StackAny could be Bytes or Uint64
+	StackAny = StackType{
+		Name:        avmAny.String(),
+		AVMType:     avmAny,
+		ValueBound:  StackUint64.ValueBound,
+		LengthBound: StackBytes.LengthBound,
+	}
+	// StackNone is used when there is no input or output to
+	// an opcode
+	StackNone = StackType{
+		Name:    avmNone.String(),
+		AVMType: avmNone,
+	}
+
+	//
+	// Higher level types
+	//
+
+	// StackBoolean constrains the int to 1 or 0, representing True or False
+	StackBoolean = NewStackType(avmUint64, bound(0, 1), "bool")
+	// StackHash represents output from a hash function or a field that returns a hash
+	StackHash = NewStackType(avmBytes, static(32), "hash")
+	// StackAddress represents a public key or address for an account
+	StackAddress = NewStackType(avmBytes, static(32), "addr")
+	// StackBigInt represents a bytestring that should be treated like an int
+	StackBigInt = NewStackType(avmBytes, bound(0, maxByteMathSize), "bigint")
+	// StackMethodSelector represents a bytestring that should be treated like a method selector
+	StackMethodSelector = NewStackType(avmBytes, static(4), "method")
+	// StackStorageKey represents a bytestring that can be used as a key to some storage (global/local/box)
+	StackStorageKey = NewStackType(avmBytes, bound(0, 64), "key")
+
+	// AllStackTypes is a list of all the stack types we recognize
+	// so that we can iterate over them in doc prep
+	AllStackTypes = []StackType{
+		StackUint64,
+		StackBytes,
+		StackAny,
+		StackNone,
+		StackBoolean,
+		StackHash,
+		StackAddress,
+		StackBigInt,
+		StackMethodSelector,
+		StackStorageKey,
+	}
+)
+
+// StackType describes the type of a value on the operand stack
+type StackType struct {
+	Name        string
+	AVMType     avmType
+	LengthBound [2]uint64
+	ValueBound  [2]uint64
+}
+
+// NewStackType Initializes a new StackType with fields passed
+func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
+	name := at.String()
+	if len(stname) > 0 {
+		name = stname[0]
+	}
+
+	st := StackType{Name: name, AVMType: at}
+
+	switch at {
+	case avmBytes:
+		st.LengthBound = bounds
+	case avmUint64:
+		st.ValueBound = bounds
+	}
+
+	return st
+}
+
+func (st StackType) narrowed(bounds [2]uint64) StackType {
+	// It's static, set the name to show
+	// the static value
+	if bounds[0] == bounds[1] {
+		switch st.AVMType {
+		case avmBytes:
+			return NewStackType(st.AVMType, bounds, fmt.Sprintf("[%d]byte", bounds[0]))
+		case avmUint64:
+			return NewStackType(st.AVMType, bounds, fmt.Sprintf("%d", bounds[0]))
+		}
+	}
+	return NewStackType(st.AVMType, bounds)
+}
+
+// AssignableTo returns a bool indicating whether the receiver can be
+// assigned to some other type that is expected by the next operation
+func (st StackType) AssignableTo(other StackType) bool {
+	if st.AVMType == avmNone || other.AVMType == avmNone {
+		return false
+	}
+
+	if st.AVMType == avmAny || other.AVMType == avmAny {
+		return true
+	}
+
+	// By now, both are either uint or bytes
+	// and must match
+	if st.AVMType != other.AVMType {
+		return false
+	}
+
+	// Same type now
+
+	// Check if our constraints will be satisfied by
+	// the other type
+	switch st.AVMType {
+	case avmBytes:
+		smin, smax := st.LengthBound[0], st.LengthBound[1]
+		omin, omax := other.LengthBound[0], other.LengthBound[1]
+
+		// yes definitely
+		// [32,32] => [0..4k]
+		// [32,32] => [32,32]
+
+		// yes, maybe determined at runtime
+		// [0..4k] => [32,32]
+
+		// no, cant fit
+		// [64,64] => [32,32]
+		// no, makes no sense
+		// [32,32] =>  [64,64]
+
+		// we only have 0-N and [N,N] (static) and only
+		// those that are both not static and have different lengths
+		// can be assigned
+		return !(smin == smax && omin == omax && smin != omin)
+
+	case avmUint64:
+		// No static values at compile
+		// time so hard to do any typechecks for assembler,
+		// dont use this for avm runtime
+		return true
+	default:
+		panic("no stack type match in AssignableTo check")
+	}
+}
+
+func (st StackType) String() string {
+	return st.Name
+}
+
+// Typed tells whether the StackType is a specific concrete type.
+func (st StackType) Typed() bool {
+	switch st.AVMType {
+	case avmUint64, avmBytes:
+		return true
+	}
+	return false
+}
 
 // StackTypes is an alias for a list of StackType with syntactic sugar
 type StackTypes []StackType
+
+// Reverse returns the StackTypes in reverse order
+// useful for displaying the stack as an op sees it
+func (st StackTypes) Reverse() StackTypes {
+	nst := make(StackTypes, len(st))
+	for idx := 0; idx < len(st); idx++ {
+		nst[idx] = st[len(st)-1-idx]
+	}
+	return nst
+}
+
+func (st StackTypes) String() string {
+	// Note this reverses the stack so top appears first
+	return fmt.Sprintf("(%s)", strings.Join(st.strings(), ", "))
+}
+
+func (st StackTypes) strings() []string {
+	var strs = make([]string, len(st))
+	for idx, s := range st {
+		strs[idx] = s.String()
+	}
+	return strs
+}
+
+func bound(min, max uint64) [2]uint64 {
+	return [2]uint64{min, max}
+}
+
+func static(size uint64) [2]uint64 {
+	return bound(size, size)
+}
 
 func parseStackTypes(spec string) StackTypes {
 	if spec == "" {
@@ -636,34 +859,23 @@ func parseStackTypes(spec string) StackTypes {
 			types[i] = StackUint64
 		case 'x':
 			types[i] = StackNone
+		case 'A':
+			types[i] = StackAddress
+		case 'N':
+			types[i] = StackBigInt
+		case 'B':
+			types[i] = StackBoolean
+		case 'H':
+			types[i] = StackHash
+		case 'M':
+			types[i] = StackMethodSelector
+		case 'K':
+			types[i] = StackStorageKey
 		default:
 			panic(spec)
 		}
 	}
 	return types
-}
-
-func (st StackType) String() string {
-	switch st {
-	case StackNone:
-		return "None"
-	case StackAny:
-		return "any"
-	case StackUint64:
-		return "uint64"
-	case StackBytes:
-		return "[]byte"
-	}
-	return "internal error, unknown type"
-}
-
-// Typed tells whether the StackType is a specific concrete type.
-func (st StackType) Typed() bool {
-	switch st {
-	case StackUint64, StackBytes:
-		return true
-	}
-	return false
 }
 
 // PanicError wraps a recover() catching a panic()
@@ -982,8 +1194,8 @@ func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
 	return version, vlen, nil
 }
 
-func opCompat(expected, got StackType) bool {
-	if expected == StackAny {
+func opCompat(expected, got avmType) bool {
+	if expected == avmAny {
 		return true
 	}
 	return expected == got
@@ -1061,7 +1273,7 @@ func (cx *EvalContext) step() error {
 	}
 	first := len(cx.stack) - len(spec.Arg.Types)
 	for i, argType := range spec.Arg.Types {
-		if !opCompat(argType, cx.stack[first+i].argType()) {
+		if !opCompat(argType.AVMType, cx.stack[first+i].argType()) {
 			return fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType, cx.stack[first+i].typeName())
 		}
 	}
@@ -1110,13 +1322,13 @@ func (cx *EvalContext) step() error {
 		first = postheight - len(spec.Return.Types)
 		for i, argType := range spec.Return.Types {
 			stackType := cx.stack[first+i].argType()
-			if !opCompat(argType, stackType) {
+			if !opCompat(argType.AVMType, stackType) {
 				if spec.AlwaysExits() { // We test in the loop because it's the uncommon case.
 					break
 				}
 				return fmt.Errorf("%s produced %s but intended %s", spec.Name, cx.stack[first+i].typeName(), argType)
 			}
-			if stackType == StackBytes && len(cx.stack[first+i].Bytes) > maxStringSize {
+			if stackType == avmBytes && len(cx.stack[first+i].Bytes) > maxStringSize {
 				return fmt.Errorf("%s produced a too big (%d) byte-array", spec.Name, len(cx.stack[first+i].Bytes))
 			}
 		}
@@ -1512,7 +1724,7 @@ func opEq(cx *EvalContext) error {
 		return fmt.Errorf("cannot compare (%s to %s)", cx.stack[prev].typeName(), cx.stack[last].typeName())
 	}
 	var cond bool
-	if ta == StackBytes {
+	if ta == avmBytes {
 		cond = bytes.Equal(cx.stack[prev].Bytes, cx.stack[last].Bytes)
 	} else {
 		cond = cx.stack[prev].Uint == cx.stack[last].Uint
@@ -1651,7 +1863,7 @@ func opSqrt(cx *EvalContext) error {
 
 func opBitLen(cx *EvalContext) error {
 	last := len(cx.stack) - 1
-	if cx.stack[last].argType() == StackUint64 {
+	if cx.stack[last].argType() == avmUint64 {
 		cx.stack[last].Uint = uint64(bits.Len64(cx.stack[last].Uint))
 		return nil
 	}
@@ -2309,10 +2521,10 @@ func opMatch(cx *EvalContext) error {
 			continue
 		}
 
-		if matchVal.argType() == StackBytes && bytes.Equal(matchVal.Bytes, stackArg.Bytes) {
+		if matchVal.argType() == avmBytes && bytes.Equal(matchVal.Bytes, stackArg.Bytes) {
 			matchedIdx = i
 			break
-		} else if matchVal.argType() == StackUint64 && matchVal.Uint == stackArg.Uint {
+		} else if matchVal.argType() == avmUint64 && matchVal.Uint == stackArg.Uint {
 			matchedIdx = i
 			break
 		}
@@ -2450,7 +2662,7 @@ func (cx *EvalContext) assetHoldingToValue(holding *basics.AssetHolding, fs asse
 		return sv, fmt.Errorf("invalid asset_holding_get field %d", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
+	if fs.ftype.AVMType != sv.argType() {
 		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 	return sv, nil
@@ -2486,7 +2698,7 @@ func (cx *EvalContext) assetParamsToValue(params *basics.AssetParams, creator ba
 		return sv, fmt.Errorf("invalid asset_params_get field %d", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
+	if fs.ftype.AVMType != sv.argType() {
 		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 	return sv, nil
@@ -2513,7 +2725,7 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 		return sv, fmt.Errorf("invalid app_params_get field %d", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
+	if fs.ftype.AVMType != sv.argType() {
 		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 	return sv, nil
@@ -2847,7 +3059,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		return sv, fmt.Errorf("invalid txn field %s", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
+	if fs.ftype.AVMType != sv.argType() {
 		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 	return sv, nil
@@ -3295,7 +3507,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		err = fmt.Errorf("invalid global field %d", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
+	if fs.ftype.AVMType != sv.argType() {
 		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
 	}
 
@@ -3721,7 +3933,7 @@ func opGetBit(cx *EvalContext) error {
 	target := cx.stack[prev]
 
 	var bit uint64
-	if target.argType() == StackUint64 {
+	if target.argType() == avmUint64 {
 		if idx > 63 {
 			return errors.New("getbit index > 63 with with Uint")
 		}
@@ -3763,7 +3975,7 @@ func opSetBit(cx *EvalContext) error {
 		return errors.New("setbit value > 1")
 	}
 
-	if target.argType() == StackUint64 {
+	if target.argType() == avmUint64 {
 		if idx > 63 {
 			return errors.New("setbit index > 63 with Uint")
 		}
@@ -3984,7 +4196,7 @@ func opExtract64Bits(cx *EvalContext) error {
 // than by index into txn.Accounts.
 
 func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uint64, error) {
-	if account.argType() == StackUint64 {
+	if account.argType() == avmUint64 {
 		addr, err := cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
 		return addr, account.Uint, err
 	}
@@ -4697,7 +4909,7 @@ func opItxnNext(cx *EvalContext) error {
 // that don't need (or want!) to allow low numbers to represent the account at
 // that index in Accounts array.
 func (cx *EvalContext) availableAccount(sv stackValue) (basics.Address, error) {
-	if sv.argType() != StackBytes || len(sv.Bytes) != crypto.DigestSize {
+	if sv.argType() != avmBytes || len(sv.Bytes) != crypto.DigestSize {
 		return basics.Address{}, fmt.Errorf("not an address")
 	}
 

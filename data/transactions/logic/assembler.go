@@ -312,7 +312,7 @@ type ProgramKnowledge struct {
 
 func (pgm *ProgramKnowledge) top() (StackType, bool) {
 	if len(pgm.stack) == 0 {
-		return pgm.bottom, pgm.bottom != StackNone
+		return pgm.bottom, pgm.bottom.AVMType != avmNone
 	}
 	last := len(pgm.stack) - 1
 	return pgm.stack[last], true
@@ -387,7 +387,7 @@ func (ops *OpStream) returns(spec *OpSpec, replacement StackType) {
 	end := len(ops.known.stack)
 	tip := ops.known.stack[end-len(spec.Return.Types):]
 	for i := range tip {
-		if tip[i] == StackAny {
+		if tip[i].AVMType == avmAny {
 			tip[i] = replacement
 			return
 		}
@@ -1226,7 +1226,7 @@ func typeBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 
 	idx := top - n
 	if idx < 0 {
-		if pgm.bottom == StackNone {
+		if pgm.bottom.AVMType == avmNone {
 			// By demanding n+1 elements, we'll trigger an error
 			return anyTypes(n + 1), nil, nil
 		}
@@ -1335,7 +1335,7 @@ func typeDupTwo(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 func typeSelect(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 2 {
-		if pgm.stack[top-1] == pgm.stack[top-2] {
+		if pgm.stack[top-1].AVMType == pgm.stack[top-2].AVMType {
 			return nil, StackTypes{pgm.stack[top-1]}, nil
 		}
 	}
@@ -1421,7 +1421,7 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 	for i := range pgm.scratchSpace {
 		// We can't know what slot stacktop is being stored in, but we can at least keep the slots that are the same type as stacktop
 		if pgm.scratchSpace[i] != pgm.stack[top] {
-			pgm.scratchSpace[i] = StackAny
+			pgm.scratchSpace[i].AVMType = avmAny
 		}
 	}
 	return nil, nil, nil
@@ -1442,7 +1442,7 @@ func typeProto(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, er
 		return nil, nil, nil
 	}
 
-	if len(pgm.stack) != 0 || pgm.bottom != StackAny {
+	if len(pgm.stack) != 0 || pgm.bottom.AVMType != avmAny {
 		return nil, nil, fmt.Errorf("proto must be unreachable from previous PC")
 	}
 	pgm.stack = anyTypes(a)
@@ -1693,13 +1693,13 @@ func (le lineError) Unwrap() error {
 	return le.Err
 }
 
-func typecheck(expected, got StackType) bool {
+func typecheck(expected, got avmType) bool {
 	// Some ops push 'any' and we wait for run time to see what it is.
 	// Some of those 'any' are based on fields that we _could_ know now but haven't written a more detailed system of typecheck for (yet).
-	if expected == StackAny && got == StackNone { // Any is lenient, but stack can't be empty
+	if expected == avmAny && got == avmNone { // Any is lenient, but stack can't be empty
 		return false
 	}
-	if (expected == StackAny) || (got == StackAny) {
+	if (expected == avmAny) || (got == avmAny) {
 		return true
 	}
 	return expected == got
@@ -1813,7 +1813,7 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 		return
 	}
 	argcount := len(args)
-	if argcount > len(ops.known.stack) && ops.known.bottom == StackNone {
+	if argcount > len(ops.known.stack) && ops.known.bottom.AVMType == avmNone {
 		ops.typeErrorf("%s expects %d stack arguments but stack height is %d",
 			strings.Join(instruction, " "), argcount, len(ops.known.stack))
 	} else {
@@ -1827,7 +1827,7 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 			} else {
 				ops.trace(", %s", argType)
 			}
-			if !typecheck(argType, stype) {
+			if !typecheck(argType.AVMType, stype.AVMType) {
 				ops.typeErrorf("%s arg %d wanted type %s got %s",
 					strings.Join(instruction, " "), i, argType, stype)
 			}
