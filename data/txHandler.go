@@ -294,16 +294,11 @@ func (handler *TxHandler) backlogWorker() {
 				// this is never happening since handler.backlogQueue is never closed
 				return
 			}
-			if wi.capguard != nil {
-				if err := wi.capguard.Release(); err != nil {
-					logging.Base().Warnf("Failed to release capacity to ElasticRateLimiter: %v", err)
-				}
-			}
-			if handler.checkAlreadyCommitted(wi) {
+			ac := handler.checkAlreadyCommitted(wi)
+			// mark the capacity as released, and as served too, if it's alreadyCommitted
+			handleCapguard(wi.capguard, true, ac)
+			if ac {
 				transactionMessagesAlreadyCommitted.Inc(nil)
-				if wi.capguard != nil {
-					wi.capguard.Served()
-				}
 				continue
 			}
 			// handler.streamVerifierChan does not receive if ctx is cancled
@@ -313,9 +308,8 @@ func (handler *TxHandler) backlogWorker() {
 				transactionMessagesDroppedFromBacklog.Inc(nil)
 				return
 			}
-			if wi.capguard != nil {
-				wi.capguard.Served()
-			}
+			// mark the capguard as served
+			handleCapguard(wi.capguard, false, true)
 		case wi, ok := <-handler.postVerificationQueue:
 			if !ok {
 				// this is never happening since handler.postVerificationQueue is never closed
@@ -582,8 +576,11 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		// if the elastic rate limiter cannot vend a capacity, the error it returns
 		// is sufficient to indicate that we should enable Congestion Control, because
 		// an issue in vending capacity indicates the underlying resource (TXBacklog) is full
-		capguard, err = handler.erl.ConsumeCapacity(rawmsg.Sender.(util.ErlClient))
-		if err != nil {
+		capguard, err = handler.erl.ConsumeCapacity(rawmsg.Sender)
+		// do not enable congestion control if consumption failed because the sender couldn't be used for consumption
+		// as that sender is simply unable to consume capacity (and therefore should not affect congestion control)
+		// this should not currently be possible as all senders are wsPeers
+		if err != nil && !errors.Is(err, util.ErrIncompatibleERLClient) {
 			handler.erl.EnableCongestionControl()
 			// if there is no capacity, it is the same as if we failed to put the item onto the backlog, so report such
 			transactionMessagesDroppedFromBacklog.Inc(nil)
@@ -758,4 +755,18 @@ func (handler *solicitedTxHandler) Handle(txgroup []transactions.SignedTxn) erro
 		return fmt.Errorf("invalid transaction")
 	}
 	return nil
+}
+
+func handleCapguard(c *util.ErlCapacityGuard, released, served bool) {
+	if c == nil {
+		return
+	}
+	if released {
+		if err := c.Release(); err != nil {
+			logging.Base().Warnf("Failed to release capacity to ElasticRateLimiter: %v", err)
+		}
+	}
+	if served {
+		c.Served()
+	}
 }

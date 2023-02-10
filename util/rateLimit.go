@@ -30,10 +30,12 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
-var errConManDropped = errors.New("congestionManager prevented client from consuming capacity")
+var ErrIncompatibleERLClient = errors.New("provided client doesn't satisfy ERLClient")
 var errFailedConsume = errors.New("could not consume capacity from capacityQueue")
-var errERLReservationExists = errors.New("client already has a reservation")
+var errReservationExists = errors.New("client already has a reservation")
 var errCapacityReturn = errors.New("could not replace capacity to channel")
+
+var errConManDropped = errors.New("congestionManager prevented client from consuming capacity")
 
 // ElasticRateLimiter holds and distributes capacity through capacityQueues
 // Capacity consumers are given an error if there is no capacity available for them,
@@ -168,9 +170,14 @@ func (erl *ElasticRateLimiter) DisableCongestionControl() {
 // ConsumeCapacity will dispense one capacity from either the resource's reservedCapacity,
 // and will return a guard who can return capacity when the client is ready
 // Returns an error if the capacity could not be vended, which could be:
+// - the client provided doesn't support the ErlClient interface
 // - there is not sufficient free capacity to assign a reserved capacity block
 // - there is no reserved or shared capacity available for the client
-func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, error) {
+func (erl *ElasticRateLimiter) ConsumeCapacity(client interface{}) (*ErlCapacityGuard, error) {
+	c, ok := client.(ErlClient)
+	if !ok {
+		return nil, ErrIncompatibleERLClient
+	}
 	var q capacityQueue
 	var err error
 	var exists bool
@@ -229,7 +236,7 @@ func (erl *ElasticRateLimiter) openReservation(c ErlClient) (capacityQueue, erro
 	erl.clientLock.Lock()
 	defer erl.clientLock.Unlock()
 	if _, exists := erl.capacityByClient[c]; exists {
-		return capacityQueue(nil), errERLReservationExists
+		return capacityQueue(nil), errReservationExists
 	}
 	// guard against overprovisioning, if there is less than a reservedCapacity amount left
 	remaining := erl.MaxCapacity - (erl.CapacityPerReservation * len(erl.capacityByClient))
