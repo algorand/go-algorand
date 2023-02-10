@@ -99,8 +99,8 @@ type CatchpointCatchupService struct {
 	abortCtxFunc context.CancelFunc
 	// blocksDownloadPeerSelector is the peer selector used for downloading blocks.
 	blocksDownloadPeerSelector *peerSelector
-	// err is used to remember the last error
-	err error
+	// lastErr is used to remember the last error
+	lastErr error
 }
 
 // MakeResumedCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
@@ -163,27 +163,30 @@ func (cs *CatchpointCatchupService) Start(ctx context.Context) (err error) {
 	cs.ctx, cs.cancelCtxFunc = context.WithCancel(ctx)
 	cs.abortCtx, cs.abortCtxFunc = context.WithCancel(context.Background())
 	cs.running.Add(1)
-	// ensure err is nil.
-	cs.err = nil
+	// ensure that lastErr is set to nil.
+	cs.lastErr = nil
 	// no return value possible, see: https://go.dev/ref/spec#Go_statements
 	go cs.run()
 
-	// above cs.run() returns immediately, wait a little
-	// DEV: reduce this timeout to 0 to trigger the cs.stage error below
-	time.Sleep(500 * time.Millisecond)
-
-	// if we got an error during the above sleep, return the error...
-	if cs.err != nil {
-		return cs.err
+	// above cs.run() returns immediately, so we wait for an interval in seconds
+	// in order to be able to report an error if the service does not start
+	// https://github.com/algorand/go-algorand/issues/3637
+	const waitInterval = time.Second * 1 / 2
+	start := time.Now()
+	for time.Since(start) < waitInterval {
+		// if we get an error during waiting, return the error...
+		if cs.lastErr != nil {
+			return cs.lastErr
+		}
+		// if the catchup service left the inactive state, all good, return nil
+		if cs.stage != ledger.CatchpointCatchupStateInactive {
+			return nil
+		}
+		// reduce polling
+		time.Sleep(50 * time.Millisecond)
 	}
-
-	// ...otherwise check if we're still in inactive state and report it as an error
-	if cs.stage == ledger.CatchpointCatchupStateInactive {
-		return fmt.Errorf("catchpoint catchup service still in inactive state, please try again")
-	}
-
-	// no error detected
-	return nil
+	// reprot an error because the...
+	return fmt.Errorf("catchpoint catchup service is still in inactive state, please try again")
 }
 
 // Abort aborts the catchpoint catchup process
@@ -251,7 +254,7 @@ func (cs *CatchpointCatchupService) run() {
 		}
 
 		// remember the last err (cannot be returned directly)
-		cs.err = err
+		cs.lastErr = err
 	}
 }
 
