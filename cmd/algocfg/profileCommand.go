@@ -29,13 +29,36 @@ import (
 	"github.com/algorand/go-algorand/util/codecs"
 )
 
+// profileConfigUpdater updates the provided config for non-defaults in a given profile
+type profileConfigUpdater func(cfg config.Local) config.Local
+
+// defaultConfigUpdater leaves all default values in place
+func defaultConfigUpdater(cfg config.Local) config.Local {
+	return cfg
+}
+
+// relayConfigUpdater alters config values to set up a relay node
+func relayConfigUpdater(cfg config.Local) config.Local {
+	cfg.Archival = true
+	cfg.EnableLedgerService = true
+	cfg.EnableBlockService = true
+	cfg.NetAddress = "4160"
+	return cfg
+}
+
 var (
-	profileNames = []string{"relay", "default"}
+	// profileNames are the supported pre-configurations of config values
+	profileNames = map[string]profileConfigUpdater{
+		"relay":   relayConfigUpdater,
+		"default": defaultConfigUpdater,
+	}
+	forceUpdate bool
 )
 
 func init() {
 	rootCmd.AddCommand(profileCmd)
 	profileCmd.AddCommand(setProfileCmd)
+	setProfileCmd.Flags().BoolVarP(&forceUpdate, "yes", "y", false, "Force updates to be written")
 	profileCmd.AddCommand(listProfileCmd)
 }
 
@@ -53,7 +76,11 @@ var listProfileCmd = &cobra.Command{
 	Short: "List config profiles",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		reportInfof("%v", strings.Join(profileNames, " "))
+		var profiles string
+		for key := range profileNames {
+			profiles += fmt.Sprintf("%s ", key)
+		}
+		reportInfof(profiles)
 	},
 }
 
@@ -68,7 +95,7 @@ var setProfileCmd = &cobra.Command{
 				reportErrorf("%v", err)
 			}
 			file := filepath.Join(dataDir, config.ConfigFilename)
-			if _, err := os.Stat(file); err == nil {
+			if _, err := os.Stat(file); !forceUpdate && err == nil {
 				fmt.Printf("A config.json file already exists for this data directory. Would you like to overwrite it? (Y/n)")
 				reader := bufio.NewReader(os.Stdin)
 				resp, err := reader.ReadString('\n')
@@ -89,18 +116,11 @@ var setProfileCmd = &cobra.Command{
 	},
 }
 
+// getConfigForArg returns a Local config w/ options updated acorrding to the profil specified by configType
 func getConfigForArg(configType string) (config.Local, error) {
 	cfg := config.GetDefaultLocal()
-	switch configType {
-	case "relay":
-		cfg.Archival = true
-		cfg.EnableLedgerService = true
-		cfg.EnableBlockService = true
-		cfg.NetAddress = "4160"
-		return cfg, nil
-	case "default":
-		return config.GetDefaultLocal(), nil
-	default:
-		return config.Local{}, fmt.Errorf("invalid profile type %v", configType)
+	if updater, ok := profileNames[configType]; ok {
+		return updater(cfg), nil
 	}
+	return config.Local{}, fmt.Errorf("invalid profile type %v", configType)
 }
