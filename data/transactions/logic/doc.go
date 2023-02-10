@@ -17,6 +17,8 @@
 package logic
 
 import (
+	"strings"
+
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -219,84 +221,113 @@ func OpDoc(opName string) string {
 	return opDocByName[opName]
 }
 
-var opcodeImmediateNotes = map[string]string{
-	"intcblock":  "{varuint count} [{varuint value}, ...]",
-	"intc":       "{uint8 int constant index}",
-	"pushint":    "{varuint int}",
-	"pushints":   "{varuint count} [{varuint value}, ...]",
-	"bytecblock": "{varuint count} [({varuint length} bytes), ...]",
-	"bytec":      "{uint8 byte constant index}",
-	"pushbytes":  "{varuint length} {bytes}",
-	"pushbytess": "{varuint count} [({varuint length} bytes), ...]",
+var opcodeImmediateNotes = map[string][]string{
+	"intcblock":  {"a block of int constant values"},
+	"intc":       {"an index in the intcblock"},
+	"pushint":    {"an int constant"},
+	"pushints":   {"a list of int constants"},
+	"bytecblock": {"a block of byte const values"},
+	"bytec":      {"an index in the bytec block"},
+	"pushbytes":  {"a byte constant"},
+	"pushbytess": {"a list of byte constants"},
 
-	"arg":    "{uint8 arg index}",
-	"global": "{uint8 global field index}",
+	"arg":    {"an arg index"},
+	"global": {"a global field index"},
 
-	"txn":     "{uint8 transaction field index}",
-	"gtxn":    "{uint8 transaction group index} {uint8 transaction field index}",
-	"gtxns":   "{uint8 transaction field index}",
-	"txna":    "{uint8 transaction field index} {uint8 transaction field array index}",
-	"gtxna":   "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
-	"gtxnsa":  "{uint8 transaction field index} {uint8 transaction field array index}",
-	"txnas":   "{uint8 transaction field index}",
-	"gtxnas":  "{uint8 transaction group index} {uint8 transaction field index}",
-	"gtxnsas": "{uint8 transaction field index}",
+	"txn":     {"transaction field index"},
+	"gtxn":    {"transaction group index", "transaction field index"},
+	"gtxns":   {"transaction field index"},
+	"txna":    {"transaction field index", "transaction field array index"},
+	"gtxna":   {"transaction group index", "transaction field index", "transaction field array index"},
+	"gtxnsa":  {"transaction field index", "transaction field array index"},
+	"txnas":   {"transaction field index"},
+	"gtxnas":  {"transaction group index", "transaction field index"},
+	"gtxnsas": {"transaction field index"},
 
-	"bnz":     "{int16 branch offset, big-endian}",
-	"bz":      "{int16 branch offset, big-endian}",
-	"b":       "{int16 branch offset, big-endian}",
-	"callsub": "{int16 branch offset, big-endian}",
+	"bnz":     {"branch offset"},
+	"bz":      {"branch offset"},
+	"b":       {"branch offset"},
+	"callsub": {"branch offset"},
 
-	"load":   "{uint8 position in scratch space to load from}",
-	"store":  "{uint8 position in scratch space to store to}",
-	"gload":  "{uint8 transaction group index} {uint8 position in scratch space to load from}",
-	"gloads": "{uint8 position in scratch space to load from}",
-	"gaid":   "{uint8 transaction group index}",
+	"load":   {"position in scratch space to load from"},
+	"store":  {"position in scratch space to store to"},
+	"gload":  {"transaction group index", "position in scratch space to load from"},
+	"gloads": {"position in scratch space to load from"},
+	"gaid":   {"transaction group index"},
 
-	"substring": "{uint8 start position} {uint8 end position}",
-	"extract":   "{uint8 start position} {uint8 length}",
-	"replace2":  "{uint8 start position}",
-	"dig":       "{uint8 depth}",
-	"bury":      "{uint8 depth}",
-	"cover":     "{uint8 depth}",
-	"uncover":   "{uint8 depth}",
+	"substring": {"start position", "end position"},
+	"extract":   {"start position", "length"},
+	"replace2":  {"start position"},
+	"dig":       {"depth"},
+	"bury":      {"depth"},
+	"cover":     {"depth"},
+	"uncover":   {"depth"},
 
-	"asset_holding_get": "{uint8 asset holding field index}",
-	"asset_params_get":  "{uint8 asset params field index}",
-	"app_params_get":    "{uint8 app params field index}",
-	"acct_params_get":   "{uint8 account params field index}",
+	"asset_holding_get": {"asset holding field index"},
+	"asset_params_get":  {"asset params field index"},
+	"app_params_get":    {"app params field index"},
+	"acct_params_get":   {"account params field index"},
 
-	"itxn_field": "{uint8 transaction field index}",
-	"itxn":       "{uint8 transaction field index}",
-	"itxna":      "{uint8 transaction field index} {uint8 transaction field array index}",
-	"itxnas":     "{uint8 transaction field index}",
-	"gitxn":      "{uint8 transaction group index} {uint8 transaction field index}",
-	"gitxna":     "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
-	"gitxnas":    "{uint8 transaction group index} {uint8 transaction field index}",
+	"itxn_field": {"transaction field index"},
+	"itxn":       {"transaction field index"},
+	"itxna":      {"transaction field index", "a transaction field array index"},
+	"itxnas":     {"transaction field index"},
+	"gitxn":      {"transaction group index", "transaction field index"},
+	"gitxna":     {"transaction group index", "transaction field index", "transaction field array index"},
+	"gitxnas":    {"transaction group index", "transaction field index"},
 
-	"ecdsa_verify":        "{uint8 curve index}",
-	"ecdsa_pk_decompress": "{uint8 curve index}",
-	"ecdsa_pk_recover":    "{uint8 curve index}",
+	"ecdsa_verify":        {"curve index"},
+	"ecdsa_pk_decompress": {"curve index"},
+	"ecdsa_pk_recover":    {"curve index"},
 
-	"base64_decode": "{uint8 encoding index}",
-	"json_ref":      "{uint8 return type index}",
+	"base64_decode": {"encoding index"},
+	"json_ref":      {"return type index"},
 
-	"vrf_verify": "{uint8 parameters index}",
-	"block":      "{uint8 block field index}",
+	"vrf_verify": {" parameters index"},
+	"block":      {" block field index"},
 
-	"switch": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
-	"match":  "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
+	"switch": {"list of labels"},
+	"match":  {"list of labels"},
 
-	"proto":      "{uint8 arguments} {uint8 return values}",
-	"frame_dig":  "{int8 frame slot}",
-	"frame_bury": "{int8 frame slot}",
-	"popn":       "{uint8 stack depth}",
-	"dupn":       "{uint8 copy count}",
+	"proto":      {"number of arguments", "number of return values"},
+	"frame_dig":  {"frame slot"},
+	"frame_bury": {"frame slot"},
+	"popn":       {"stack depth"},
+	"dupn":       {"copy count"},
 }
 
-// OpImmediateNote returns a short string about immediate data which follows the op byte
-func OpImmediateNote(opName string) string {
-	return opcodeImmediateNotes[opName]
+// OpImmediateDetails contains information about the an immediate argument for
+// a given opcode, combining OpSpec details with the extra note in
+// the opcodeImmediateNotes map
+type OpImmediateDetails struct {
+	Comment   string `json:",omitempty"`
+	Encoding  string `json:",omitempty"`
+	Name      string `json:",omitempty"`
+	Reference string `json:",omitempty"`
+}
+
+// OpImmediateDetailsFromSpec provides a slice of OpImmediateDetails
+// for a given OpSpec
+func OpImmediateDetailsFromSpec(spec OpSpec) []OpImmediateDetails {
+	argNotes := opcodeImmediateNotes[spec.Name]
+	if len(argNotes) == 0 {
+		return nil
+	}
+
+	details := make([]OpImmediateDetails, len(spec.Immediates))
+	for idx, imm := range spec.Immediates {
+		details[idx] = OpImmediateDetails{
+			Name:     strings.ToTitle(imm.Name),
+			Comment:  argNotes[idx],
+			Encoding: imm.kind.String(),
+		}
+
+		if imm.Group != nil {
+			details[idx].Reference = imm.Group.Name
+		}
+	}
+
+	return details
 }
 
 // further documentation on the function of the opcode
