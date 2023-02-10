@@ -100,7 +100,7 @@ func TestConsensusRange(t *testing.T, start, stop int, test func(t *testing.T, v
 	for i := start; i <= stop; i++ {
 		version := versionStringFromIndex(i)
 		disable := rand16(t)%2 == 0
-		t.Run(fmt.Sprintf("cv=%s", version), func(t *testing.T) {
+		t.Run(fmt.Sprintf("cv=%s,LRU-cache-disable=%t", version, disable), func(t *testing.T) {
 			cfg.DisableLedgerLRUCache = disable
 			test(t, i, consensusByNumber[i], cfg)
 		})
