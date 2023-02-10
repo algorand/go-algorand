@@ -567,7 +567,7 @@ func (w *worksetBuilder) completed() bool {
 	return w.idx >= len(w.payset)
 }
 
-// UnverifiedElement is the element passed to the Stream verifier
+// UnverifiedTxnElement is the element passed to the Stream verifier
 // It represents an unverified txn whose signatures will be verified
 // BacklogMessage is a *txBacklogMsg from data/txHandler.go which needs to be
 // passed back to that context
@@ -656,11 +656,11 @@ func (svh *streamVerifierHelper) Cleanup(pending []UnverifiedElement, err error)
 	// report an error for the unchecked txns
 	// drop the messages without reporting if the receiver does not consume
 	for _, uel := range pending {
-		svh.SendResult(uel, err)
+		svh.ReturnUnverified(uel, err)
 	}
 }
 
-func (svh streamVerifierHelper) SendResult(ue UnverifiedElement, err error) {
+func (svh streamVerifierHelper) ReturnUnverified(ue UnverifiedElement, err error) {
 	uelt := ue.(*UnverifiedTxnElement)
 	// send the txn result out the pipe
 	select {
@@ -689,8 +689,9 @@ func (svh streamVerifierHelper) sendResult(veTxnGroup []transactions.SignedTxn, 
 	}
 }
 
+// MakeStreamVerifierHelper returns the object implementing the stream verifier Helper interface
 func MakeStreamVerifierHelper(ledger LedgerForStreamVerifier, cache VerifiedTransactionCache,
-	resultChan chan<- *VerificationResult, droppedChan chan<- *UnverifiedTxnElement) (svh *streamVerifierHelper, err error) {
+	resultChan chan<- *VerificationResult, droppedChan chan<- *UnverifiedTxnElement) (svh Helper, err error) {
 	latest := ledger.Latest()
 	latestHdr, err := ledger.BlockHdr(latest)
 	if err != nil {
@@ -729,6 +730,7 @@ func (svh *streamVerifierHelper) PreProcessUnverifiedElements(uelts []Unverified
 	return batchVerifier, bl
 }
 
+// GetNumberOfBatchableSigsInGroup returns the number of batchable signatures in the element
 func (ue UnverifiedTxnElement) GetNumberOfBatchableSigsInGroup() (batchSigs uint64, err error) {
 	batchSigs = 0
 	for i := range ue.TxnGroup {

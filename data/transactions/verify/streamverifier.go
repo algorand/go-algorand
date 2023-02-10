@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
+// ErrShuttingDownError is the error returned when a sig is not verified because the service is shutting down
 var ErrShuttingDownError = errors.New("not verified, verifier is shutting down")
 
 // WaitForNextTxnDuration is the time to wait before sending the batch to the exec pool
@@ -42,14 +43,22 @@ const WaitForNextTxnDuration = 2 * time.Millisecond
 // and the batch verifier will block until the exec pool accepts the batch
 const batchSizeBlockLimit = 1024
 
+// UnverifiedElement is the interface the incoming sig verification elts need to implement
 type UnverifiedElement interface {
 	GetNumberOfBatchableSigsInGroup() (batchSigs uint64, err error)
 }
 
+// Helper is the interface of the functions needed to extract signatures from the elements, post-process the results,
+// send the results and cleanup when shutting down.
 type Helper interface {
+	// PreProcessUnverifiedElements prepares a BatchVerifier from an array of unverified elements
+	// ctx is anything associated with the array of elements, which will be passed to PostProcessVerifiedElements
 	PreProcessUnverifiedElements(uelts []UnverifiedElement) (batchVerifier *crypto.BatchVerifier, ctx interface{})
+	// PostProcessVerifiedElements implments the passing of the results to their destination (cts from PreProcessUnverifiedElements)
 	PostProcessVerifiedElements(ctx interface{}, failed []bool, err error)
-	SendResult(ue UnverifiedElement, err error)
+	// ReturnUnverified returns an unverified element because of the err
+	ReturnUnverified(ue UnverifiedElement, err error)
+	// Cleanup called on the unverified elements when the verification shuts down
 	Cleanup(ue []UnverifiedElement, err error)
 }
 
@@ -102,8 +111,7 @@ func (sv *StreamVerifier) batchingLoop() {
 		case stx := <-sv.stxnChan:
 			numberOfBatchableSigsInGroup, err := stx.GetNumberOfBatchableSigsInGroup()
 			if err != nil {
-				// wrong number of signatures
-				sv.helper.SendResult(stx, err)
+				sv.helper.ReturnUnverified(stx, err)
 				continue
 			}
 
