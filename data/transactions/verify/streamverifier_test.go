@@ -57,11 +57,12 @@ func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups m
 
 	defer cancel()
 
-	stxnChan := make(chan *UnverifiedElement)
+	stxnChan := make(chan UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
-	droppedChan := make(chan *UnverifiedElement)
-	sv, err := MakeStreamVerifier(stxnChan, resultChan, droppedChan, &DummyLedgerForSignature{}, verificationPool, cache)
+	droppedChan := make(chan *UnverifiedTxnElement)
+	helper, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
+	sv = MakeStreamVerifier(stxnChan, verificationPool, helper)
 	sv.Start(ctx)
 
 	wg := sync.WaitGroup{}
@@ -78,7 +79,7 @@ func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups m
 	go func() {
 		defer wg.Done()
 		for _, tg := range txnGroups {
-			stxnChan <- &UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}
+			stxnChan <- &UnverifiedTxnElement{TxnGroup: tg, BacklogMessage: nil}
 		}
 	}()
 
@@ -298,13 +299,13 @@ func TestGetNumberOfBatchableSigsInGroup(t *testing.T) {
 
 	// txn with 0 sigs
 	txnGroups[mod][0].Sig = crypto.Signature{}
-	batchSigs, err := getNumberOfBatchableSigsInGroup(txnGroups[mod])
+	batchSigs, err := UnverifiedTxnElement{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableSigsInGroup()
 	require.ErrorIs(t, err, errTxnSigHasNoSig)
 	mod++
 
 	_, signedTxns, secrets, addrs := generateTestObjects(numOfTxns, 20, 0, 50)
 	txnGroups = generateTransactionGroups(1, signedTxns, secrets, addrs)
-	batchSigs, err = getNumberOfBatchableSigsInGroup(txnGroups[0])
+	batchSigs, err = UnverifiedTxnElement{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableSigsInGroup()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), batchSigs)
 
@@ -312,14 +313,15 @@ func TestGetNumberOfBatchableSigsInGroup(t *testing.T) {
 	txnGroups[mod][0].Sig = crypto.Signature{}
 	txnGroups[mod][0].Txn.Type = protocol.StateProofTx
 	txnGroups[mod][0].Txn.Header.Sender = transactions.StateProofSender
-	batchSigs, err = getNumberOfBatchableSigsInGroup(txnGroups[mod])
+	batchSigs, err = UnverifiedTxnElement{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableSigsInGroup()
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), batchSigs)
 	mod++
 
 	// multisig
 	_, mSigTxn, _, _ := generateMultiSigTxn(1, 6, 50, t)
-	batchSigs, err = getNumberOfBatchableSigsInGroup(mSigTxn)
+
+	batchSigs, err = UnverifiedTxnElement{TxnGroup: mSigTxn}.GetNumberOfBatchableSigsInGroup()
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), batchSigs)
 	mod++
@@ -340,7 +342,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[mod][0].Lsig.Logic = op.Program
 	program := logic.Program(op.Program)
 	txnGroups[mod][0].Lsig.Sig = secrets[s].Sign(program)
-	batchSigs, err = getNumberOfBatchableSigsInGroup(txnGroups[mod])
+	batchSigs, err = UnverifiedTxnElement{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableSigsInGroup()
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), batchSigs)
 	mod++
@@ -349,7 +351,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	_, signedTxn, secrets, addrs = generateTestObjects(numOfTxns, 20, 0, 50)
 	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
 	txnGroups[mod][0].Msig = mSigTxn[0].Msig
-	batchSigs, err = getNumberOfBatchableSigsInGroup(txnGroups[mod])
+	batchSigs, err = UnverifiedTxnElement{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableSigsInGroup()
 	require.ErrorIs(t, err, errTxnSigNotWellFormed)
 }
 
@@ -404,11 +406,12 @@ func TestStreamVerifierPoolShutdown(t *testing.T) { //nolint:paralleltest // Not
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50000)
 
-	stxnChan := make(chan *UnverifiedElement)
+	stxnChan := make(chan UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
-	droppedChan := make(chan *UnverifiedElement)
-	sv, err := MakeStreamVerifier(stxnChan, resultChan, droppedChan, &DummyLedgerForSignature{}, verificationPool, cache)
+	droppedChan := make(chan *UnverifiedTxnElement)
+	helper, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
+	sv := MakeStreamVerifier(stxnChan, verificationPool, helper)
 	sv.Start(ctx)
 
 	errChan := make(chan error)
@@ -436,12 +439,12 @@ func TestStreamVerifierPoolShutdown(t *testing.T) { //nolint:paralleltest // Not
 			select {
 			case <-ctx.Done():
 				break
-			case stxnChan <- &UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}:
+			case stxnChan <- &UnverifiedTxnElement{TxnGroup: tg, BacklogMessage: nil}:
 			}
 		}
 	}()
 	for err := range errChan {
-		require.ErrorIs(t, err, errShuttingDownError)
+		require.ErrorIs(t, err, ErrShuttingDownError)
 	}
 	require.Contains(t, logBuffer.String(), "addVerificationTaskToThePoolNow: EnqueueBacklog returned an error and StreamVerifier will stop: context canceled")
 }
@@ -460,13 +463,14 @@ func TestStreamVerifierRestart(t *testing.T) {
 
 	cache := MakeVerifiedTransactionCache(50)
 
-	stxnChan := make(chan *UnverifiedElement)
+	stxnChan := make(chan UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
-	droppedChan := make(chan *UnverifiedElement)
+	droppedChan := make(chan *UnverifiedTxnElement)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	sv, err := MakeStreamVerifier(stxnChan, resultChan, droppedChan, &DummyLedgerForSignature{}, verificationPool, cache)
+	helper, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
+	sv := MakeStreamVerifier(stxnChan, verificationPool, helper)
 	sv.Start(ctx)
 
 	errChan := make(chan error)
@@ -494,13 +498,13 @@ func TestStreamVerifierRestart(t *testing.T) {
 			select {
 			case <-ctx2.Done():
 				break
-			case stxnChan <- &UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}:
+			case stxnChan <- &UnverifiedTxnElement{TxnGroup: tg, BacklogMessage: nil}:
 			}
 		}
 		cancel()
 	}()
 	for err := range errChan {
-		require.ErrorIs(t, err, errShuttingDownError)
+		require.ErrorIs(t, err, ErrShuttingDownError)
 	}
 	wg.Wait()
 	sv.WaitForStop()
@@ -577,11 +581,12 @@ func TestStreamVerifierCtxCancel(t *testing.T) {
 	defer verificationPool.Shutdown()
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50)
-	stxnChan := make(chan *UnverifiedElement)
+	stxnChan := make(chan UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
-	droppedChan := make(chan *UnverifiedElement)
-	sv, err := MakeStreamVerifier(stxnChan, resultChan, droppedChan, &DummyLedgerForSignature{}, verificationPool, cache)
+	droppedChan := make(chan *UnverifiedTxnElement)
+	helper, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
+	sv := MakeStreamVerifier(stxnChan, verificationPool, helper)
 	sv.Start(ctx)
 
 	var result *VerificationResult
@@ -597,7 +602,7 @@ func TestStreamVerifierCtxCancel(t *testing.T) {
 	// send batchSizeBlockLimit after the exec pool buffer is full
 	numOfTxns := 1
 	txnGroups, _ := getSignedTransactions(numOfTxns, 1, 0, 0.5)
-	stxnChan <- &UnverifiedElement{TxnGroup: txnGroups[0], BacklogMessage: nil}
+	stxnChan <- &UnverifiedTxnElement{TxnGroup: txnGroups[0], BacklogMessage: nil}
 	// cancel the ctx before the sig is sent to the exec pool
 	cancel()
 
@@ -608,7 +613,7 @@ func TestStreamVerifierCtxCancel(t *testing.T) {
 	close(holdTasks)
 
 	wg.Wait()
-	require.ErrorIs(t, result.Err, errShuttingDownError)
+	require.ErrorIs(t, result.Err, ErrShuttingDownError)
 }
 
 // TestStreamVerifierCtxCancelPoolQueue tests the termination when the ctx is canceled
@@ -631,11 +636,12 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest 
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50)
-	stxnChan := make(chan *UnverifiedElement)
+	stxnChan := make(chan UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
-	droppedChan := make(chan *UnverifiedElement)
-	sv, err := MakeStreamVerifier(stxnChan, resultChan, droppedChan, &DummyLedgerForSignature{}, verificationPool, cache)
+	droppedChan := make(chan *UnverifiedTxnElement)
+	helper, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
+	sv := MakeStreamVerifier(stxnChan, verificationPool, helper)
 	sv.Start(ctx)
 
 	var result *VerificationResult
@@ -645,8 +651,8 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest 
 		defer wg.Done()
 		for {
 			result = <-resultChan
-			// at least one errShuttingDownError is expected
-			if result.Err != errShuttingDownError {
+			// at least one ErrShuttingDownError is expected
+			if result.Err != ErrShuttingDownError {
 				continue
 			}
 			break
@@ -668,7 +674,7 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest 
 			// the single transaction slips through and passes the batch verifier before the exec pool shuts down.
 			// this happens when close(holdTasks) runs and frees the exec pool, and lets the txns get verified, before
 			// verificationPool.Shutdown() executes.
-			case stxnChan <- &UnverifiedElement{TxnGroup: txnGroups[0], BacklogMessage: nil}:
+			case stxnChan <- &UnverifiedTxnElement{TxnGroup: txnGroups[0], BacklogMessage: nil}:
 			case <-ctx.Done():
 				return
 			}
@@ -677,7 +683,7 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest 
 	// cancel the ctx as the sig is not yet sent to the exec pool
 	// the test might sporadically fail if between sending the txn above
 	// and the cancelation, 2 x waitForNextTxnDuration elapses (10ms)
-	time.Sleep(6 * waitForNextTxnDuration)
+	time.Sleep(6 * WaitForNextTxnDuration)
 	go func() {
 		// wait a bit before releasing the tasks, so that the verificationPool ctx first gets canceled
 		time.Sleep(20 * time.Millisecond)
@@ -690,7 +696,7 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest 
 	cancel()
 
 	wg.Wait()
-	require.ErrorIs(t, result.Err, errShuttingDownError)
+	require.ErrorIs(t, result.Err, ErrShuttingDownError)
 	require.Contains(t, logBuffer.String(), "addVerificationTaskToThePoolNow: EnqueueBacklog returned an error and StreamVerifier will stop: context canceled")
 }
 
@@ -712,11 +718,12 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 
 	txBacklogSizeMod := txBacklogSize / 20
 
-	stxnChan := make(chan *UnverifiedElement)
+	stxnChan := make(chan UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSizeMod)
-	droppedChan := make(chan *UnverifiedElement)
-	sv, err := MakeStreamVerifier(stxnChan, resultChan, droppedChan, &DummyLedgerForSignature{}, verificationPool, cache)
+	droppedChan := make(chan *UnverifiedTxnElement)
+	helper, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
+	sv := MakeStreamVerifier(stxnChan, verificationPool, helper)
 
 	defer close(droppedChan)
 	go func() {
@@ -733,7 +740,7 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0, 0.5)
 	numOfTxnGroups := len(txnGroups)
 	for _, tg := range txnGroups {
-		stxnChan <- &UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}
+		stxnChan <- &UnverifiedTxnElement{TxnGroup: tg, BacklogMessage: nil}
 	}
 
 	var droppedPool uint64
@@ -754,7 +761,7 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 	go processResults(ctx, errChan, resultChan, numOfTxnGroups-overflow, badTxnGroups, &badSigResultCounter, &goodSigResultCounter, &wg)
 
 	for err := range errChan {
-		require.ErrorIs(t, err, errShuttingDownError)
+		require.ErrorIs(t, err, ErrShuttingDownError)
 		fmt.Println(badTxnGroups)
 	}
 
@@ -771,11 +778,11 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 	go processResults(ctx, errChan, resultChan, numOfTxnGroups, badTxnGroups, &badSigResultCounter, &goodSigResultCounter, &wg)
 
 	for _, tg := range txnGroups {
-		stxnChan <- &UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}
+		stxnChan <- &UnverifiedTxnElement{TxnGroup: tg, BacklogMessage: nil}
 	}
 
 	for err := range errChan {
-		require.ErrorIs(t, err, errShuttingDownError)
+		require.ErrorIs(t, err, ErrShuttingDownError)
 		fmt.Println(badTxnGroups)
 	}
 
@@ -784,7 +791,7 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 
 func TestStreamVerifierMakeStreamVerifierErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	_, err := MakeStreamVerifier(nil, nil, nil, &DummyLedgerForSignature{badHdr: true}, nil, nil)
+	_, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{badHdr: true}, nil, nil, nil)
 	require.Error(t, err)
 }
 
@@ -804,12 +811,13 @@ func TestStreamVerifierCancelWhenPooled(t *testing.T) {
 
 	cache := MakeVerifiedTransactionCache(50)
 
-	stxnChan := make(chan *UnverifiedElement)
+	stxnChan := make(chan UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
-	droppedChan := make(chan *UnverifiedElement)
+	droppedChan := make(chan *UnverifiedTxnElement)
 	ctx, cancel := context.WithCancel(context.Background())
-	sv, err := MakeStreamVerifier(stxnChan, resultChan, droppedChan, &DummyLedgerForSignature{}, verificationPool, cache)
+	helper, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
+	sv := MakeStreamVerifier(stxnChan, verificationPool, helper)
 	sv.Start(ctx)
 
 	errChan := make(chan error)
@@ -828,13 +836,13 @@ func TestStreamVerifierCancelWhenPooled(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for _, tg := range txnGroups {
-			stxnChan <- &UnverifiedElement{TxnGroup: tg, BacklogMessage: nil}
+			stxnChan <- &UnverifiedTxnElement{TxnGroup: tg, BacklogMessage: nil}
 		}
 		// cancel the ctx, and expect at least one task queued to the pool but not yet executed
 		cancel()
 	}()
 	for err := range errChan {
-		require.ErrorIs(t, err, errShuttingDownError)
+		require.ErrorIs(t, err, ErrShuttingDownError)
 	}
 	wg.Wait()
 	sv.WaitForStop()
