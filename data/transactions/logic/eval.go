@@ -632,26 +632,7 @@ func (at avmType) String() string {
 	return "internal error, unknown type"
 }
 
-func (at avmType) stackType() StackType {
-	switch at {
-	case avmNone:
-		return StackNone
-	case avmAny:
-		return StackAny
-	case avmUint64:
-		return StackUint64
-	case avmBytes:
-		return StackBytes
-	default:
-		panic(fmt.Sprintf("no stack type matching: %s", at))
-	}
-}
-
 var (
-	//
-	// Base stack types the avm knows about
-	//
-
 	// StackUint64 is any valid uint64
 	StackUint64 = NewStackType(avmUint64, bound(0, math.MaxUint64))
 	// StackBytes is any valid bytestring
@@ -669,10 +650,6 @@ var (
 		Name:    avmNone.String(),
 		AVMType: avmNone,
 	}
-
-	//
-	// Higher level types
-	//
 
 	// StackBoolean constrains the int to 1 or 0, representing True or False
 	StackBoolean = NewStackType(avmUint64, bound(0, 1), "bool")
@@ -702,6 +679,14 @@ var (
 		StackStorageKey,
 	}
 )
+
+func bound(min, max uint64) [2]uint64 {
+	return [2]uint64{min, max}
+}
+
+func static(size uint64) [2]uint64 {
+	return bound(size, size)
+}
 
 // StackType describes the type of a value on the operand stack
 type StackType struct {
@@ -836,14 +821,6 @@ func (st StackTypes) strings() []string {
 	return strs
 }
 
-func bound(min, max uint64) [2]uint64 {
-	return [2]uint64{min, max}
-}
-
-func static(size uint64) [2]uint64 {
-	return bound(size, size)
-}
-
 func parseStackTypes(spec string) StackTypes {
 	if spec == "" {
 		return nil
@@ -863,7 +840,7 @@ func parseStackTypes(spec string) StackTypes {
 			types[i] = StackAddress
 		case 'N':
 			types[i] = StackBigInt
-		case 'B':
+		case 'T':
 			types[i] = StackBoolean
 		case 'H':
 			types[i] = StackHash
