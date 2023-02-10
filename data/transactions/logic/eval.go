@@ -632,6 +632,23 @@ func (at avmType) String() string {
 	return "internal error, unknown type"
 }
 
+// stackType lifts the AVM type to a StackType
+// it can do this because the base StackTypes
+// are a superset of avmType
+func (at avmType) stackType() StackType {
+	switch at {
+	case avmNone:
+		return StackNone
+	case avmAny:
+		return StackAny
+	case avmUint64:
+		return StackUint64
+	case avmBytes:
+		return StackBytes
+	}
+	return StackNone
+}
+
 var (
 	// StackUint64 is any valid uint64
 	StackUint64 = NewStackType(avmUint64, bound(0, math.MaxUint64))
