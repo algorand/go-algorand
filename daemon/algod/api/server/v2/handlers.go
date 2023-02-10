@@ -1072,17 +1072,20 @@ func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
 // GetLedgerStateDelta returns the deltas for a given round.
 // This should be a representation of the ledgercore.StateDelta object.
 // (GET /v2/deltas/{round})
-func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64) error {
+func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64, params model.GetLedgerStateDeltaParams) error {
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
 	sDelta, err := v2.Node.LedgerForAPI().GetStateDeltaForRound(basics.Round(round))
 	if err != nil {
-		return internalError(ctx, err, errFailedRetrievingStateDelta, v2.Log)
+		return notFound(ctx, err, errFailedRetrievingStateDelta, v2.Log)
 	}
-	consensusParams := config.Consensus[sDelta.Hdr.CurrentProtocol]
-	response, err := StateDeltaToLedgerDelta(sDelta, consensusParams)
+	data, err := encode(handle, sDelta)
 	if err != nil {
-		return internalError(ctx, err, errInternalFailure, v2.Log)
+		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
-	return ctx.JSON(http.StatusOK, response)
+	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
 // TransactionParams returns the suggested parameters for constructing a new transaction.
