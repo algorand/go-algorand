@@ -962,3 +962,15 @@ func BenchmarkTxn(b *testing.B) {
 	}
 	b.StopTimer()
 }
+
+func TestReturnUnverified(t *testing.T) {
+	droppedChan := make(chan *UnverifiedTxnElement, 1)
+	svh := streamVerifierHelper{
+		resultChan:  make(chan<- *VerificationResult, 0),
+		droppedChan: droppedChan,
+	}
+
+	svh.ReturnUnverified(&UnverifiedTxnElement{}, nil)
+	dropped := <-droppedChan
+	require.Equal(t, *dropped, UnverifiedTxnElement{})
+}
