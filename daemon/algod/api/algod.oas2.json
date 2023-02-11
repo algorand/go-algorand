@@ -1442,7 +1442,8 @@
             "data"
         ],
         "produces": [
-          "application/json"
+          "application/json",
+          "application/msgpack"
         ],
         "schemes": [
           "http"
@@ -1457,6 +1458,9 @@
             "in": "path",
             "required": true,
             "minimum": 0
+          },
+          {
+            "$ref": "#/parameters/format"
           }
         ],
         "responses": {
@@ -2370,6 +2374,11 @@
     }
   },
   "definitions": {
+    "LedgerStateDelta": {
+      "description": "Ledger StateDelta object",
+      "type": "object",
+      "x-algorand-format": "StateDelta"
+    },
     "Account": {
       "description": "Account information at a given round.\n\nDefinition:\ndata/basics/userBalance.go : AccountData\n",
       "type": "object",
@@ -2500,274 +2509,6 @@
           "description": "\\[spend\\] the address against which signing should be checked. If empty, the address of the current account is used. This field can be updated in any transaction by setting the RekeyTo field.",
           "type": "string",
           "x-algorand-format": "Address"
-        }
-      }
-    },
-    "LedgerStateDelta": {
-      "description": "Contains ledger updates.",
-      "type": "object",
-      "required": [
-      ],
-      "properties": {
-        "accts": {
-          "description": "AccountDeltas object",
-          "$ref": "#/definitions/AccountDeltas"
-        },
-        "kv-mods": {
-          "description": "Array of KV Deltas",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/KvDelta"
-          }
-        },
-        "tx-leases": {
-          "description": "List of transaction leases",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/TxLease"
-          }
-        },
-        "modified-apps": {
-          "description": "List of modified Apps",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/ModifiedApp"
-          }
-        },
-        "modified-assets": {
-          "description": "List of modified Assets",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/ModifiedAsset"
-          }
-        },
-        "state-proof-next": {
-          "description": "Next round for which we expect a state proof",
-          "type": "integer"
-        },
-        "prev-timestamp": {
-          "description": "Previous block timestamp",
-          "type": "integer"
-        },
-        "totals": {
-          "description": "Account Totals",
-          "$ref": "#/definitions/AccountTotals"
-        }
-      }
-    },
-    "AccountTotals": {
-      "description": "Total Algos in the system grouped by account status",
-      "type": "object",
-      "required": [
-        "online",
-        "offline",
-        "not-participating",
-        "rewards-level"
-      ],
-      "properties": {
-        "online": {
-          "description": "Amount of stake in online accounts",
-          "type": "integer"
-        },
-        "offline": {
-          "description": "Amount of stake in offline accounts",
-          "type": "integer"
-        },
-        "not-participating": {
-          "description": "Amount of stake in non-participating accounts",
-          "type": "integer"
-        },
-        "rewards-level": {
-          "description": "Total number of algos received per reward unit since genesis",
-          "type": "integer"
-        }
-      }
-    },
-    "AccountDeltas": {
-      "description": "Exposes deltas for account based resources in a single round",
-      "type": "object",
-      "properties": {
-        "accounts": {
-          "description": "Array of Account updates for the round",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/AccountBalanceRecord"
-          }
-        },
-        "apps": {
-          "description": "Array of App updates for the round.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/AppResourceRecord"
-          }
-        },
-        "assets": {
-          "description": "Array of Asset updates for the round.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/AssetResourceRecord"
-          }
-        }
-      }
-    },
-    "TxLease": {
-      "description": "",
-      "type": "object",
-      "required": [
-        "sender",
-        "lease",
-        "expiration"
-      ],
-      "properties": {
-        "sender": {
-          "description": "Address of the lease sender",
-          "type": "string"
-        },
-        "lease": {
-          "description": "Lease data",
-          "type": "string",
-          "format": "byte"
-        },
-        "expiration": {
-          "description": "Round that the lease expires",
-          "type": "integer"
-        }
-      }
-    },
-    "ModifiedAsset": {
-      "description": "Asset which was created or deleted.",
-      "type": "object",
-      "required": [
-        "id",
-        "created",
-        "creator"
-      ],
-      "properties": {
-        "id": {
-          "description": "Asset Id",
-          "type": "integer"
-        },
-        "created": {
-          "description": "Created if true, deleted if false",
-          "type": "boolean"
-        },
-        "creator": {
-          "description": "Address of the creator.",
-          "type": "string"
-        }
-      }
-    },
-    "ModifiedApp": {
-      "description": "App which was created or deleted.",
-      "type": "object",
-      "required": [
-        "id",
-        "created",
-        "creator"
-      ],
-      "properties": {
-        "id": {
-          "description": "App Id",
-          "type": "integer"
-        },
-        "created": {
-          "description": "Created if true, deleted if false",
-          "type": "boolean"
-        },
-        "creator": {
-          "description": "Address of the creator.",
-          "type": "string"
-        }
-      }
-    },
-    "AccountBalanceRecord": {
-      "description": "Account and its address",
-      "type": "object",
-      "required": [
-        "address",
-        "account-data"
-      ],
-      "properties": {
-        "address": {
-          "description": "Address of the updated account.",
-          "type": "string"
-        },
-        "account-data": {
-          "description": "Updated account data.",
-          "$ref": "#/definitions/Account"
-        }
-      }
-    },
-    "AppResourceRecord": {
-      "description": "Represents AppParams and AppLocalStateDelta in deltas",
-      "type": "object",
-      "required": [
-        "app-index",
-        "address",
-        "app-deleted",
-        "app-local-state-deleted"
-      ],
-      "properties": {
-        "app-index": {
-          "description": "App index",
-          "type": "integer",
-          "x-algorand-format": "uint64"
-        },
-        "address": {
-          "description": "App account address",
-          "type": "string"
-        },
-        "app-deleted": {
-          "description": "Whether the app was deleted",
-          "type": "boolean"
-        },
-        "app-local-state-deleted": {
-          "description": "Whether the app local state was deleted",
-          "type": "boolean"
-        },
-        "app-params": {
-          "description": "App params",
-          "$ref": "#/definitions/ApplicationParams"
-        },
-        "app-local-state": {
-          "description": "App local state",
-          "$ref": "#/definitions/ApplicationLocalState"
-        }
-      }
-    },
-    "AssetResourceRecord": {
-      "description": "Represents AssetParams and AssetHolding in deltas",
-      "required": [
-        "asset-index",
-        "address",
-        "asset-deleted",
-        "asset-holding-deleted"
-      ],
-      "properties": {
-        "asset-index": {
-          "description": "Index of the asset",
-          "type": "integer",
-          "x-algorand-format": "uint64"
-        },
-        "address": {
-          "description": "Account address of the asset",
-          "type": "string"
-        },
-        "asset-deleted": {
-          "description": "Whether the asset was deleted",
-          "type": "boolean"
-        },
-        "asset-params": {
-          "description": "Asset params",
-          "$ref": "#/definitions/AssetParams"
-        },
-        "asset-holding-deleted": {
-          "description": "Whether the asset holding was deleted",
-          "type": "boolean"
-        },
-        "asset-holding": {
-          "description": "The asset holding",
-          "$ref": "#/definitions/AssetHolding"
         }
       }
     },

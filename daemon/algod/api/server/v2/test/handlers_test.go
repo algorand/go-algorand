@@ -133,30 +133,42 @@ func TestGetBlock(t *testing.T) {
 	getBlockTest(t, 0, "bad format", 400)
 }
 
-func TestGetLedgerStateDelta(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	a := require.New(t)
-
+func testGetLedgerStateDelta(t *testing.T, round uint64, format string, expectedCode int) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
 	defer releasefunc()
-	insertRounds(a, handler, 3)
-
-	err := handler.GetLedgerStateDelta(c, 2)
+	insertRounds(require.New(t), handler, 3)
+	err := handler.GetLedgerStateDelta(c, round, model.GetLedgerStateDeltaParams{Format: (*model.GetLedgerStateDeltaParamsFormat)(&format)})
 	require.NoError(t, err)
-	require.Equal(t, 200, rec.Code)
+	require.Equal(t, expectedCode, rec.Code)
+}
 
-	actualResponse := model.LedgerStateDelta{}
-	expectedResponse := poolDeltaResponseGolden
-	(*expectedResponse.Accts.Accounts)[0].AccountData.Round = 2
-	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResponse)
-	require.NoError(t, err)
-	require.Equal(t, poolDeltaResponseGolden.Accts, actualResponse.Accts)
-	require.Equal(t, poolDeltaResponseGolden.KvMods, actualResponse.KvMods)
-	require.Equal(t, poolDeltaResponseGolden.ModifiedAssets, actualResponse.ModifiedAssets)
-	require.Equal(t, poolDeltaResponseGolden.ModifiedApps, actualResponse.ModifiedApps)
-	require.Equal(t, poolDeltaResponseGolden.TxLeases, actualResponse.TxLeases)
-	require.Equal(t, poolDeltaResponseGolden.Totals, actualResponse.Totals)
+func TestGetLedgerStateDelta(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Run("json-200", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 1, "json", 200)
+	})
+	t.Run("msgpack-200", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 2, "msgpack", 200)
+	})
+	t.Run("msgp-200", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 3, "msgp", 200)
+	})
+	t.Run("json-404", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 0, "json", 404)
+	})
+	t.Run("msgpack-404", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 9999, "msgpack", 404)
+	})
+	t.Run("format-400", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 1, "bad format", 400)
+	})
+
 }
 
 func TestSyncRound(t *testing.T) {

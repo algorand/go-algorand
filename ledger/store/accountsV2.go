@@ -710,8 +710,8 @@ func (w *accountsV2Writer) AccountsPutOnlineRoundParams(onlineRoundParamsData []
 		return err
 	}
 
-	for i, onlineRoundParams := range onlineRoundParamsData {
-		_, err = insertStmt.Exec(startRound+basics.Round(i), protocol.Encode(&onlineRoundParams))
+	for i := range onlineRoundParamsData {
+		_, err = insertStmt.Exec(startRound+basics.Round(i), protocol.Encode(&onlineRoundParamsData[i]))
 		if err != nil {
 			return err
 		}
