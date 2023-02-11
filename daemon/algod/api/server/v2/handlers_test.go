@@ -187,7 +187,7 @@ func TestSimulateResponseStruct(t *testing.T) {
 	generatedResponseType := reflect.TypeOf(model.SimulationResponse{})
 	generatedResponseGraph := makeTagGraph(generatedResponseType, make(map[reflect.Type]*tagNode))
 
-	customResponseType := reflect.TypeOf(EncodedSimulationResult{})
+	customResponseType := reflect.TypeOf(preEncodedSimulationResult{})
 	customResponseGraph := makeTagGraph(customResponseType, make(map[reflect.Type]*tagNode))
 
 	expectedGeneratedTxnGraph := map[string]*tagNode{

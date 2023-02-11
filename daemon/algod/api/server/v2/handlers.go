@@ -918,24 +918,24 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, model.PostTransactionsResponse{TxId: txid.String()})
 }
 
-// encodedTxnResult mirrors simulation.TxnResult
-type encodedTxnResult struct {
+// preEncodedTxnResult mirrors simulation.TxnResult
+type preEncodedTxnResult struct {
 	Txn              PreEncodedTxInfo `codec:"txn-result"`
 	MissingSignature *bool            `codec:"missing-signature,omitempty"`
 }
 
-// encodedTxnGroupResult mirrors simulation.TxnGroupResult
-type encodedTxnGroupResult struct {
-	Txns           []encodedTxnResult `codec:"txn-results"`
-	FailureMessage *string            `codec:"failure-message,omitempty"`
-	FailedAt       *[]uint64          `codec:"failed-at,omitempty"`
+// preEncodedTxnGroupResult mirrors simulation.TxnGroupResult
+type preEncodedTxnGroupResult struct {
+	Txns           []preEncodedTxnResult `codec:"txn-results"`
+	FailureMessage *string               `codec:"failure-message,omitempty"`
+	FailedAt       *[]uint64             `codec:"failed-at,omitempty"`
 }
 
-// EncodedSimulationResult mirrors simulation.Result
-type EncodedSimulationResult struct {
-	Version      uint64                  `codec:"version"`
-	TxnGroups    []encodedTxnGroupResult `codec:"txn-groups"`
-	WouldSucceed bool                    `codec:"would-succeed"`
+// preEncodedSimulationResult mirrors simulation.Result
+type preEncodedSimulationResult struct {
+	Version      uint64                     `codec:"version"`
+	TxnGroups    []preEncodedTxnGroupResult `codec:"txn-groups"`
+	WouldSucceed bool                       `codec:"would-succeed"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.

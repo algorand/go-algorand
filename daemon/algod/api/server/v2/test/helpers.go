@@ -307,10 +307,14 @@ var retOneProgram = []byte{2, 0x20, 1, 1, 0x22}
 var proto = config.Consensus[protocol.ConsensusCurrentVersion]
 
 func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
+	maxMoneyAtStart := 1000000 // max money start
+	minMoneyAtStart := 100000  // max money start
+	return testingenvWithBalances(t, maxMoneyAtStart, minMoneyAtStart, numAccounts, numTxs, offlineAccounts)
+}
+
+func testingenvWithBalances(t testing.TB, maxMoneyAtStart, minMoneyAtStart, numAccounts, numTxs int, offlineAccounts bool) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
 	P := numAccounts               // n accounts
 	TXs := numTxs                  // n txns
-	maxMoneyAtStart := 1000000     // max money start
-	minMoneyAtStart := 100000      // max money start
 	transferredMoney := 100        // max money/txn
 	maxFee := 10                   // max maxFee/txn
 	lastValid := basics.Round(500) // max round

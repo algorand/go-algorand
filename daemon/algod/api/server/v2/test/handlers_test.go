@@ -50,6 +50,9 @@ import (
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
+	"github.com/algorand/go-algorand/data/txntest"
+	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -752,44 +755,104 @@ func TestPostSimulateTransaction(t *testing.T) {
 	}
 }
 
-const trivialAVMProgram = `#pragma version 6
-int 1`
-const plannedFailureProgramWithLogs = `#pragma version 6
-int 3                           // [index(3)]
-prepare_txn:
-	itxn_begin                    // [index]
-	int appl                      // [index, appl]
-	itxn_field TypeEnum           // [index]
-	int NoOp                      // [index, NoOp]
-	itxn_field OnCompletion       // [index]
-	byte 0x068101                 // [index, 0x068101]
-	itxn_field ClearStateProgram  // [index]
-app_arg_check:
-	dup													  // [index, index]
-	txn ApplicationArgs 0         // [index, index, args[0]]
-	btoi                          // [index, index, btoi(args[0])]
-	==                            // [index, index=?=btoi(args[0])]
-	bnz reject_approval_program   // [index]
-pass_approval_program:
-	byte 0x068101                 // [index, 0x068101]. 0x068101 is #pragma version 6; int 1;
-	b submit_and_loop             // [index, 0x068101]
-reject_approval_program:
-	byte 0x068100                 // [index, 0x068100]. 0x068100 is #pragma version 6; int 0;
-	b submit_and_loop             // [index, 0x068100]
-submit_and_loop:
-	itxn_field ApprovalProgram    // [index]
-	itxn_submit                   // [index]
-decrement_and_loop:
-	int 1                         // [index, 1]
-	-                             // [index - 1]
-	dup                           // [index - 1, index - 1]
-	itob                          // [index - 1, itob(index - 1)]
-	log                           // [index - 1]
-	dup                           // [index - 1, index - 1]
-	bnz prepare_txn               // [index - 1]
-pop                             // []
-int 1                           // [1]
-`
+func copyInnerTxnGroupIDs(t *testing.T, dst, src *model.PendingTransactionResponse) {
+	t.Helper()
+
+	// msgpack decodes to map[interface{}]interface{} while JSON decodes to map[string]interface{}
+	txn := dst.Txn["txn"]
+	switch dstTxnMap := txn.(type) {
+	case map[string]interface{}:
+		srcTxnMap := src.Txn["txn"].(map[string]interface{})
+		groupID, hasGroupID := srcTxnMap["grp"]
+		if hasGroupID {
+			dstTxnMap["grp"] = groupID
+		}
+	case map[interface{}]interface{}:
+		srcTxnMap := src.Txn["txn"].(map[interface{}]interface{})
+		groupID, hasGroupID := srcTxnMap["grp"]
+		if hasGroupID {
+			dstTxnMap["grp"] = groupID
+		}
+	}
+
+	if dst.InnerTxns == nil || src.InnerTxns == nil {
+		return
+	}
+
+	assert.Equal(t, len(*dst.InnerTxns), len(*src.InnerTxns))
+
+	for innerIndex := range *dst.InnerTxns {
+		if innerIndex == len(*src.InnerTxns) {
+			break
+		}
+		dstInner := &(*dst.InnerTxns)[innerIndex]
+		srcInner := &(*src.InnerTxns)[innerIndex]
+		copyInnerTxnGroupIDs(t, dstInner, srcInner)
+	}
+}
+
+func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, actual model.SimulationResponse) {
+	t.Helper()
+
+	if len(expectedError) != 0 {
+		require.NotNil(t, actual.TxnGroups[0].FailureMessage)
+		require.Contains(t, *actual.TxnGroups[0].FailureMessage, expectedError)
+		require.False(t, expected.WouldSucceed, "Test case WouldSucceed value is not consistent with expected failure")
+		// if it matched the expected error, copy the actual one so it will pass the equality check below
+		expected.TxnGroups[0].FailureMessage = actual.TxnGroups[0].FailureMessage
+	}
+
+	// Copy inner txn groups IDs, since the mocktracer scenarios don't populate them
+	assert.Equal(t, len(expected.TxnGroups), len(actual.TxnGroups))
+	for groupIndex := range expected.TxnGroups {
+		if groupIndex == len(actual.TxnGroups) {
+			break
+		}
+		expectedGroup := &expected.TxnGroups[groupIndex]
+		actualGroup := &actual.TxnGroups[groupIndex]
+		assert.Equal(t, len(expectedGroup.TxnResults), len(actualGroup.TxnResults))
+		for txnIndex := range expectedGroup.TxnResults {
+			if txnIndex == len(actualGroup.TxnResults) {
+				break
+			}
+			expectedTxn := &expectedGroup.TxnResults[txnIndex]
+			actualTxn := &actualGroup.TxnResults[txnIndex]
+			if expectedTxn.TxnResult.InnerTxns == nil || actualTxn.TxnResult.InnerTxns == nil {
+				continue
+			}
+			assert.Equal(t, len(*expectedTxn.TxnResult.InnerTxns), len(*actualTxn.TxnResult.InnerTxns))
+			for innerIndex := range *expectedTxn.TxnResult.InnerTxns {
+				if innerIndex == len(*actualTxn.TxnResult.InnerTxns) {
+					break
+				}
+				expectedInner := &(*expectedTxn.TxnResult.InnerTxns)[innerIndex]
+				actualInner := &(*actualTxn.TxnResult.InnerTxns)[innerIndex]
+				copyInnerTxnGroupIDs(t, expectedInner, actualInner)
+			}
+		}
+	}
+
+	require.Equal(t, expected, actual)
+}
+
+func makePendingTxnResponse(t *testing.T, txn transactions.SignedTxnWithAD, handle codec.Handle) model.PendingTransactionResponse {
+	t.Helper()
+	preEncoded := v2.ConvertInnerTxn(&txn)
+
+	// encode to bytes
+	var encodedBytes []byte
+	encoder := codec.NewEncoderBytes(&encodedBytes, handle)
+	err := encoder.Encode(&preEncoded)
+	require.NoError(t, err)
+
+	// decode to model.PendingTransactionResponse
+	var response model.PendingTransactionResponse
+	decoder := codec.NewDecoderBytes(encodedBytes, handle)
+	err = decoder.Decode(&response)
+	require.NoError(t, err)
+
+	return response
+}
 
 func TestSimulateTransaction(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -798,7 +861,7 @@ func TestSimulateTransaction(t *testing.T) {
 	// prepare node and handler
 	numAccounts := 5
 	offlineAccounts := true
-	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 0, offlineAccounts)
+	mockLedger, roots, _, _, releasefunc := testingenvWithBalances(t, 999_999, 999_998, numAccounts, 1, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
@@ -809,74 +872,41 @@ func TestSimulateTransaction(t *testing.T) {
 		Shutdown: dummyShutdownChan,
 	}
 
-	// compile programs
-	ops, err := logic.AssembleString(plannedFailureProgramWithLogs)
-	require.NoError(t, err, ops.Errors)
-	approvalProg := ops.Program
-
-	ops, err = logic.AssembleString(trivialAVMProgram)
-	require.NoError(t, err, ops.Errors)
-	clearStateProg := ops.Program
-
 	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
 	require.NoError(t, err)
+	txnInfo := simulationtesting.TxnInfo{hdr}
 
-	sender := roots[0]
-	header := transactions.Header{
-		Sender:      sender.Address(),
-		Fee:         basics.MicroAlgos{Raw: 1000},
-		FirstValid:  hdr.Round,
-		LastValid:   hdr.Round + basics.Round(1000),
-		GenesisID:   hdr.GenesisID,
-		GenesisHash: hdr.GenesisHash,
-	}
+	scenarios := mocktracer.GetTestScenarios()
 
-	for i := 0; i < 4; i++ {
-		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			// prepare transaction group
-			txns := []transactions.Transaction{
-				{
-					Type:   protocol.PaymentTx,
-					Header: header,
-					PaymentTxnFields: transactions.PaymentTxnFields{
-						Receiver: basics.AppIndex(2).Address(),
-						Amount:   basics.MicroAlgos{Raw: 403000}, // 400000 min balance plus 3000 for 3 txns
-					},
-				},
-				{
-					Type:   protocol.ApplicationCallTx,
-					Header: header,
-					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-						ApplicationID:     0,
-						ApplicationArgs:   [][]byte{{0, 0, 0, 0, 0, 0, 0, byte(3 - i)}},
-						ApprovalProgram:   approvalProg,
-						ClearStateProgram: clearStateProg,
-						LocalStateSchema: basics.StateSchema{
-							NumUint:      0,
-							NumByteSlice: 0,
-						},
-						GlobalStateSchema: basics.StateSchema{
-							NumUint:      0,
-							NumByteSlice: 0,
-						},
-					},
-				},
-			}
+	for name, scenarioFn := range scenarios {
+		t.Run(name, func(t *testing.T) { //nolint:paralleltest // Uses shared resources
+			sender := roots[0]
+			futureAppID := basics.AppIndex(2)
 
-			// attach group ID
-			var group transactions.TxGroup
-			for _, tx := range txns {
-				group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(tx.ID()))
-			}
-			groupID := crypto.HashObj(group)
-			for i := range txns {
-				txns[i].Header.Group = groupID
-			}
+			payTxn := txnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Address(),
+				Receiver: futureAppID.Address(),
+				Amount:   700_000, // don't have enough money to run this test >:(
+			})
+			appCallTxn := txnInfo.NewTxn(txntest.Txn{
+				Type:   protocol.ApplicationCallTx,
+				Sender: sender.Address(),
+				ClearStateProgram: `#pragma version 6
+int 1`,
+			})
+			scenario := scenarioFn(mocktracer.TestScenarioInfo{
+				CallingTxn:   appCallTxn.Txn(),
+				MinFee:       basics.MicroAlgos{Raw: txnInfo.CurrentProtocolParams().MinTxnFee},
+				CreatedAppID: futureAppID,
+			})
+			appCallTxn.ApprovalProgram = scenario.Program
 
-			// sign the transaction group
-			stxns := make([]transactions.SignedTxn, len(txns))
-			for i, txn := range txns {
-				stxns[i] = txn.Sign(sender.Secrets())
+			txntest.Group(&payTxn, &appCallTxn)
+
+			stxns := []transactions.SignedTxn{
+				payTxn.Txn().Sign(sender.Secrets()),
+				appCallTxn.Txn().Sign(sender.Secrets()),
 			}
 
 			// build request body
@@ -885,60 +915,89 @@ func TestSimulateTransaction(t *testing.T) {
 			for _, stxn := range stxns {
 				bodyBytes = append(bodyBytes, protocol.Encode(&stxn)...)
 			}
-			body = bytes.NewReader(bodyBytes)
-			req := httptest.NewRequest(http.MethodPost, "/", body)
-			rec := httptest.NewRecorder()
 
-			e := echo.New()
-			c := e.NewContext(req, rec)
+			msgpackFormat := model.SimulateTransactionParamsFormatMsgpack
+			jsonFormat := model.SimulateTransactionParamsFormatJson
+			responseFormats := []struct {
+				name   string
+				params model.SimulateTransactionParams
+				handle codec.Handle
+			}{
+				{
+					name: "msgpack",
+					params: model.SimulateTransactionParams{
+						Format: &msgpackFormat,
+					},
+					handle: protocol.CodecHandle,
+				},
+				{
+					name: "json",
+					params: model.SimulateTransactionParams{
+						Format: &jsonFormat,
+					},
+					handle: protocol.JSONStrictHandle,
+				},
+				{
+					name: "default (json)",
+					params: model.SimulateTransactionParams{
+						Format: nil, // should default to JSON
+					},
+					handle: protocol.JSONStrictHandle,
+				},
+			}
 
-			// simulate transaction
-			format := model.SimulateTransactionParamsFormatMsgpack
-			err := handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
+			for _, responseFormat := range responseFormats {
+				t.Run(string(responseFormat.name), func(t *testing.T) { //nolint:paralleltest // Uses shared resources
+					body = bytes.NewReader(bodyBytes)
+					req := httptest.NewRequest(http.MethodPost, "/", body)
+					rec := httptest.NewRecorder()
 
-			// common checks
-			require.NoError(t, err)
-			require.Equal(t, 200, rec.Code, rec.Body.String())
+					e := echo.New()
+					c := e.NewContext(req, rec)
 
-			// decode response
-			var result v2.EncodedSimulationResult
-			enc := codec.NewDecoderBytes(rec.Body.Bytes(), protocol.CodecHandle)
-			err = enc.Decode(&result)
-			require.NoError(t, err)
+					// simulate transaction
+					err := handler.SimulateTransaction(c, responseFormat.params)
+					require.NoError(t, err)
+					require.Equal(t, 200, rec.Code, rec.Body.String())
 
-			// check common fields
-			require.Equal(t, uint64(1), result.Version)
+					// decode actual response
+					var actualBody model.SimulationResponse
+					decoder := codec.NewDecoderBytes(rec.Body.Bytes(), responseFormat.handle)
+					err = decoder.Decode(&actualBody)
+					require.NoError(t, err)
 
-			// if i == 3, the program should pass because no inner txn was marked for failure
-			if i == 3 {
-				require.True(t, result.WouldSucceed)
-
-				// check logs
-				logs := *result.TxnGroups[0].Txns[1].Txn.Logs
-				require.Len(t, logs, 3)
-				require.Equal(t, []byte{0, 0, 0, 0, 0, 0, 0, 2}, logs[0])
-				require.Equal(t, []byte{0, 0, 0, 0, 0, 0, 0, 1}, logs[1])
-				require.Equal(t, []byte{0, 0, 0, 0, 0, 0, 0, 0}, logs[2])
-			} else {
-				// otherwise the program should fail at the correct index
-				require.False(t, result.WouldSucceed)
-				txnGroup := result.TxnGroups[0]
-				require.Contains(t, *txnGroup.FailureMessage, "rejected by ApprovalProgram")
-				require.Equal(t, []uint64{1, uint64(i)}, *txnGroup.FailedAt)
-
-				// check inner txn length
-				innerTxns := *txnGroup.Txns[1].Txn.Inners
-				require.Len(t, innerTxns, i+1)
-
-				// check log length, if logs should exist
-				logsPointer := txnGroup.Txns[1].Txn.Logs
-				if i == 0 {
-					require.Nil(t, logsPointer)
-				} else {
-					require.NotNil(t, logsPointer)
-					logs := *logsPointer
-					require.Len(t, logs, i)
-				}
+					var expectedFailedAt *[]uint64
+					if len(scenario.FailedAt) != 0 {
+						clone := make([]uint64, len(scenario.FailedAt))
+						copy(clone, scenario.FailedAt)
+						clone[0]++
+						expectedFailedAt = &clone
+					}
+					expectedBody := model.SimulationResponse{
+						Version: 1,
+						TxnGroups: []model.SimulationTransactionGroupResult{
+							{
+								FailedAt: expectedFailedAt,
+								TxnResults: []model.SimulationTransactionResult{
+									{
+										TxnResult: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
+											SignedTxn: stxns[0],
+											// expect no ApplyData info
+										}, responseFormat.handle),
+									},
+									{
+										TxnResult: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
+											SignedTxn: stxns[1],
+											ApplyData: scenario.ExpectedSimulationAD,
+										}, responseFormat.handle),
+									},
+								},
+							},
+						},
+						WouldSucceed: scenario.Outcome == mocktracer.ApprovalOutcome,
+					}
+					assertSimulationResultsEqual(t, scenario.ExpectedError, expectedBody, actualBody)
+				})
 			}
 		})
 	}

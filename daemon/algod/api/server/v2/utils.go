@@ -91,6 +91,13 @@ func byteOrNil(data []byte) *[]byte {
 	return &data
 }
 
+func boolOrNil(b bool) *bool {
+	if !b {
+		return nil
+	}
+	return &b
+}
+
 func nilToZero(numPtr *uint64) uint64 {
 	if numPtr == nil {
 		return 0
@@ -312,12 +319,12 @@ func convertLogs(txn node.TxnWithStatus) *[][]byte {
 func convertInners(txn *node.TxnWithStatus) *[]PreEncodedTxInfo {
 	inner := make([]PreEncodedTxInfo, len(txn.ApplyData.EvalDelta.InnerTxns))
 	for i, itxn := range txn.ApplyData.EvalDelta.InnerTxns {
-		inner[i] = convertInnerTxn(&itxn)
+		inner[i] = ConvertInnerTxn(&itxn)
 	}
 	return &inner
 }
 
-func convertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
+func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	// This copies from handlers.PendingTransactionInformation, with
 	// simplifications because we have a SignedTxnWithAD rather than
 	// TxnWithStatus, and we know this txn has committed.
@@ -345,30 +352,22 @@ func convertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
-func convertTxnResult(txnResult simulation.TxnResult) encodedTxnResult {
-	encoded := encodedTxnResult{
-		Txn: convertInnerTxn(&txnResult.Txn),
+func convertTxnResult(txnResult simulation.TxnResult) preEncodedTxnResult {
+	return preEncodedTxnResult{
+		Txn:              ConvertInnerTxn(&txnResult.Txn),
+		MissingSignature: boolOrNil(txnResult.MissingSignature),
 	}
-
-	if txnResult.MissingSignature {
-		encoded.MissingSignature = &txnResult.MissingSignature
-	}
-
-	return encoded
 }
 
-func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) encodedTxnGroupResult {
-	txnResults := make([]encodedTxnResult, len(txnGroupResult.Txns))
+func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) preEncodedTxnGroupResult {
+	txnResults := make([]preEncodedTxnResult, len(txnGroupResult.Txns))
 	for i, txnResult := range txnGroupResult.Txns {
 		txnResults[i] = convertTxnResult(txnResult)
 	}
 
-	encoded := encodedTxnGroupResult{
-		Txns: txnResults,
-	}
-
-	if txnGroupResult.FailureMessage != "" {
-		encoded.FailureMessage = &txnGroupResult.FailureMessage
+	encoded := preEncodedTxnGroupResult{
+		Txns:           txnResults,
+		FailureMessage: strOrNil(txnGroupResult.FailureMessage),
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {
@@ -380,11 +379,11 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) encodedTxnG
 	return encoded
 }
 
-func convertSimulationResult(result simulation.Result) EncodedSimulationResult {
-	encodedSimulationResult := EncodedSimulationResult{
+func convertSimulationResult(result simulation.Result) preEncodedSimulationResult {
+	encodedSimulationResult := preEncodedSimulationResult{
 		Version:      result.Version,
 		WouldSucceed: result.WouldSucceed,
-		TxnGroups:    make([]encodedTxnGroupResult, len(result.TxnGroups)),
+		TxnGroups:    make([]preEncodedTxnGroupResult, len(result.TxnGroups)),
 	}
 
 	for i, txnGroup := range result.TxnGroups {
