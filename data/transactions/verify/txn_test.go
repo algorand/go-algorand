@@ -964,6 +964,8 @@ func BenchmarkTxn(b *testing.B) {
 }
 
 func TestReturnUnverified(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	droppedChan := make(chan *UnverifiedTxnElement, 1)
 	svh := streamVerifierHelper{
 		resultChan:  make(chan<- *VerificationResult, 0),
