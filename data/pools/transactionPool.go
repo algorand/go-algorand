@@ -869,7 +869,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 					}
 					stats.TotalLength += uint64(encodedLen)
 					if txib.Txn.Type == protocol.StateProofTx {
-						stats.StateProofStats = pool.getStateProofStats(&txib, encodedLen)
+						stats.StateProofStats = pool.getStateProofStats(&payset[i], encodedLen)
 					}
 				}
 				stats.AverageFee = totalFees / uint64(stats.IncludedCount)
