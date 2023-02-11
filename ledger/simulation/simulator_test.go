@@ -20,8 +20,10 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/internal"
@@ -97,7 +99,7 @@ func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 }
 
 // TestSimulateWithTrace is a simple test to ensure that the debugger hooks are called. More
-// complicated tests are in the logic/tracer_test.go file.
+// complicated tests are in data/transactions/logic/tracer_test.go
 func TestSimulateWithTrace(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -105,31 +107,61 @@ func TestSimulateWithTrace(t *testing.T) {
 	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
 	defer l.Close()
 	s := MakeSimulator(l)
-	sender := accounts[0].Addr
-	senderBalance := accounts[0].AcctData.MicroAlgos
-	amount := senderBalance.Raw - 10000
+	sender := accounts[0]
 
-	txgroup := []transactions.SignedTxn{
-		txnInfo.NewTxn(txntest.Txn{
-			Type:     protocol.PaymentTx,
-			Sender:   sender,
-			Receiver: sender,
-			Amount:   amount,
-		}).SignedTxn(),
-	}
+	op, err := logic.AssembleString(`#pragma version 8
+int 1`)
+	require.NoError(t, err)
+	program := logic.Program(op.Program)
+	lsigAddr := basics.Address(crypto.HashObj(&program))
+
+	payTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: lsigAddr,
+		Amount:   1_000_000,
+	})
+	appCallTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:   protocol.ApplicationCallTx,
+		Sender: lsigAddr,
+		ApprovalProgram: `#pragma version 8
+int 1`,
+		ClearStateProgram: `#pragma version 8
+int 1`,
+	})
+
+	txntest.Group(&payTxn, &appCallTxn)
+
+	signedPayTxn := payTxn.Txn().Sign(sender.Sk)
+	signedAppCallTxn := appCallTxn.SignedTxn()
+	signedAppCallTxn.Lsig.Logic = program
+
+	txgroup := []transactions.SignedTxn{signedPayTxn, signedAppCallTxn}
 
 	mockTracer := &mocktracer.Tracer{}
 	block, _, err := s.simulateWithTracer(txgroup, mockTracer)
 	require.NoError(t, err)
 
 	payset := block.Block().Payset
-	require.Len(t, payset, 1)
+	require.Len(t, payset, 2)
 
 	expectedEvents := []mocktracer.Event{
-		mocktracer.BeforeTxnGroup(1),
+		// LogicSig evaluation
+		mocktracer.BeforeProgram(logic.ModeSig),
+		mocktracer.BeforeOpcode(),
+		mocktracer.AfterOpcode(false),
+		mocktracer.AfterProgram(logic.ModeSig, false),
+		// Txn evaluation
+		mocktracer.BeforeTxnGroup(2),
 		mocktracer.BeforeTxn(protocol.PaymentTx),
 		mocktracer.AfterTxn(protocol.PaymentTx, payset[0].ApplyData, false),
-		mocktracer.AfterTxnGroup(1, false),
+		mocktracer.BeforeTxn(protocol.ApplicationCallTx),
+		mocktracer.BeforeProgram(logic.ModeApp),
+		mocktracer.BeforeOpcode(),
+		mocktracer.AfterOpcode(false),
+		mocktracer.AfterProgram(logic.ModeApp, false),
+		mocktracer.AfterTxn(protocol.ApplicationCallTx, payset[1].ApplyData, false),
+		mocktracer.AfterTxnGroup(2, false),
 	}
 	require.Equal(t, expectedEvents, mockTracer.Events)
 }

@@ -22,12 +22,12 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/txntest"
-	"github.com/algorand/go-algorand/libgoal"
 
 	"github.com/algorand/go-algorand/ledger/simulation"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
@@ -38,35 +38,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func makeTestClient() libgoal.Client {
-	c, err := libgoal.MakeClientFromConfig(libgoal.ClientConfig{
-		AlgodDataDir: "NO_DIR",
-	}, libgoal.DynamicClient)
-	if err != nil {
-		panic(err)
+// attachGroupID calculates and assigns the ID for a transaction group.
+// Mutates the group directly.
+func attachGroupID(txns []transactions.SignedTxn) {
+	txgroup := transactions.TxGroup{
+		TxGroupHashes: make([]crypto.Digest, len(txns)),
 	}
-
-	return c
-}
-
-// Attach group ID to a transaction group. Mutates the group directly.
-func attachGroupID(txgroup []transactions.SignedTxn) error {
-	txnArray := make([]transactions.Transaction, len(txgroup))
-	for i, txn := range txgroup {
-		txnArray[i] = txn.Txn
+	for i, txn := range txns {
+		txn.Txn.Group = crypto.Digest{}
+		txgroup.TxGroupHashes[i] = crypto.Digest(txn.ID())
 	}
+	group := crypto.HashObj(txgroup)
 
-	client := makeTestClient()
-	groupID, err := client.GroupID(txnArray)
-	if err != nil {
-		return err
+	for i := range txns {
+		txns[i].Txn.Header.Group = group
 	}
-
-	for i := range txgroup {
-		txgroup[i].Txn.Header.Group = groupID
-	}
-
-	return nil
 }
 
 func uint64ToBytes(num uint64) []byte {
@@ -192,8 +178,6 @@ func simulationTest(t *testing.T, f func(accounts []simulationtesting.Account, t
 	actual.Block = nil
 	require.Equal(t, testcase.expected, actual)
 }
-
-// > Simulate Without Debugger
 
 func TestPayTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -443,8 +427,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	require.Contains(t, result.TxnGroups[0].FailureMessage, "had zero Group but was submitted in a group of 2")
 
 	// Add group parameter
-	err = attachGroupID(txgroup)
-	require.NoError(t, err)
+	attachGroupID(txgroup)
 
 	// Check balances before transaction
 	sender1Data, _, err := l.LookupWithoutRewards(l.Latest(), sender1)
@@ -471,6 +454,111 @@ func TestSimpleGroupTxn(t *testing.T) {
 	sender2Data, _, err = l.LookupWithoutRewards(l.Latest(), sender2)
 	require.NoError(t, err)
 	require.Equal(t, sender2Balance, sender2Data.MicroAlgos)
+}
+
+func TestLogicSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	op, err := logic.AssembleString(`#pragma version 8
+arg 0
+btoi`)
+	require.NoError(t, err)
+	program := logic.Program(op.Program)
+	lsigAddr := basics.Address(crypto.HashObj(&program))
+
+	testCases := []struct {
+		name          string
+		arguments     [][]byte
+		expectedError string
+	}{
+		{
+			name:          "approval",
+			arguments:     [][]byte{{1}},
+			expectedError: "", // no error
+		},
+		{
+			name:          "rejection",
+			arguments:     [][]byte{{0}},
+			expectedError: "rejected by logic",
+		},
+		{
+			name:          "error",
+			arguments:     [][]byte{},
+			expectedError: "rejected by logic err=cannot load arg[0] of 0",
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+				sender := accounts[0]
+
+				payTxn := txnInfo.NewTxn(txntest.Txn{
+					Type:     protocol.PaymentTx,
+					Sender:   sender.Addr,
+					Receiver: lsigAddr,
+					Amount:   1_000_000,
+				})
+				appCallTxn := txnInfo.NewTxn(txntest.Txn{
+					Type:   protocol.ApplicationCallTx,
+					Sender: lsigAddr,
+					ApprovalProgram: `#pragma version 8
+byte "hello"
+log
+int 1`,
+					ClearStateProgram: `#pragma version 8
+int 1`,
+				})
+
+				txntest.Group(&payTxn, &appCallTxn)
+
+				signedPayTxn := payTxn.Txn().Sign(sender.Sk)
+				signedAppCallTxn := appCallTxn.SignedTxn()
+				signedAppCallTxn.Lsig = transactions.LogicSig{
+					Logic: program,
+					Args:  testCase.arguments,
+				}
+
+				expectedSuccess := len(testCase.expectedError) == 0
+				var expectedAppCallAD transactions.ApplyData
+				expectedFailedAt := simulation.TxnPath{1}
+				if expectedSuccess {
+					expectedAppCallAD = transactions.ApplyData{
+						ApplicationID: 2,
+						EvalDelta: transactions.EvalDelta{
+							Logs: []string{"hello"},
+						},
+					}
+					expectedFailedAt = nil
+				}
+
+				return simulationTestCase{
+					input:         []transactions.SignedTxn{signedPayTxn, signedAppCallTxn},
+					expectedError: testCase.expectedError,
+					expected: simulation.Result{
+						Version: 1,
+						TxnGroups: []simulation.TxnGroupResult{
+							{
+								Txns: []simulation.TxnResult{
+									{},
+									{
+										Txn: transactions.SignedTxnWithAD{
+											ApplyData: expectedAppCallAD,
+										},
+									},
+								},
+								FailedAt: expectedFailedAt,
+							},
+						},
+						WouldSucceed: expectedSuccess,
+					},
+				}
+			})
+		})
+	}
 }
 
 func TestSimpleAppCall(t *testing.T) {

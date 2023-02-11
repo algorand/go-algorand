@@ -152,11 +152,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 
 	// Verify the signed transactions are well-formed and have valid signatures
 	_, err = verify.TxnGroupWithTracer(txnsToVerify, &hdr, nil, s.ledger, debugger)
-	if err != nil {
-		return nil, InvalidTxGroupError{SimulatorError{err}}
-	}
-
-	return missingSigs, nil
+	return missingSigs, err
 }
 
 func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.SignedTxn, tracer logic.EvalTracer) (*ledgercore.ValidatedBlock, error) {
@@ -195,7 +191,7 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 	// check that the transaction is well-formed and mark whether signatures are missing
 	missingSignatures, err := s.check(hdr, txgroup, tracer)
 	if err != nil {
-		return nil, nil, err
+		return nil, missingSignatures, err
 	}
 
 	vb, err := s.evaluate(hdr, txgroup, tracer)
@@ -207,17 +203,20 @@ func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
 	simulatorTracer := makeEvalTracer(txgroup)
 	block, missingSigIndexes, err := s.simulateWithTracer(txgroup, simulatorTracer)
 	if err != nil {
-		// if there was a non-evaluation error, return it
-		if !errors.As(err, &EvalFailureError{}) {
+		simulatorTracer.result.WouldSucceed = false
+
+		var lsigError verify.LogicSigError
+		switch {
+		case errors.As(err, &lsigError):
+			simulatorTracer.result.TxnGroups[0].FailureMessage = lsigError.Error()
+			simulatorTracer.result.TxnGroups[0].FailedAt = TxnPath{uint64(lsigError.GroupIndex)}
+		case errors.As(err, &EvalFailureError{}):
+			simulatorTracer.result.TxnGroups[0].FailureMessage = err.Error()
+			simulatorTracer.result.TxnGroups[0].FailedAt = simulatorTracer.failedAt
+		default:
+			// error is not related to evaluation
 			return Result{}, err
 		}
-
-		// otherwise add the failure message and location to the result
-		simulatorTracer.result.TxnGroups[0].FailureMessage = err.Error()
-		simulatorTracer.result.TxnGroups[0].FailedAt = simulatorTracer.failedAt
-
-		// and set WouldSucceed to false
-		simulatorTracer.result.WouldSucceed = false
 	}
 
 	simulatorTracer.result.Block = block
