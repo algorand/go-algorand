@@ -171,7 +171,7 @@ func (cs *CatchpointCatchupService) Start(ctx context.Context) (err error) {
 	// above cs.run() returns immediately, so we wait for an interval in seconds
 	// in order to be able to report an error if the service does not start
 	// https://github.com/algorand/go-algorand/issues/3637
-	const waitInterval = time.Second * 1 / 2
+	const waitInterval = time.Second * 2
 	start := time.Now()
 	for time.Since(start) < waitInterval {
 		// if we get an error during waiting, return the error...
