@@ -79,7 +79,7 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 				require.NoError(t, err)
 			}
 			err := ml.trackers.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
-				arw, err := tx.CreateAccountsReaderWriter()
+				arw, err := tx.MakeAccountsReaderWriter()
 				if err != nil {
 					return err
 				}
@@ -809,7 +809,7 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
 	var endRound basics.Round
 	err := ao.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
-		ar, err := tx.CreateAccountsReader()
+		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}
@@ -1298,7 +1298,7 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
 	var endRound basics.Round
 	err = oa.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
-		ar, err := tx.CreateAccountsReader()
+		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}

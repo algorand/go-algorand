@@ -51,14 +51,14 @@ import (
 )
 
 func checkAccounts(t *testing.T, tx store.TransactionScope, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
-	arw, err := tx.CreateAccountsReaderWriter()
+	arw, err := tx.MakeAccountsReaderWriter()
 	require.NoError(t, err)
 
 	r, err := arw.AccountsRound()
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 
-	aor, err := tx.CreateAccountsOptimizedReader()
+	aor, err := tx.MakeAccountsOptimizedReader()
 	require.NoError(t, err)
 
 	var totalOnline, totalOffline, totalNotPart uint64
@@ -214,7 +214,7 @@ func TestAccountDBRound(t *testing.T) {
 	defer dbs.Close()
 
 	dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) error {
-		arw, err := tx.CreateAccountsReaderWriter()
+		arw, err := tx.MakeAccountsReaderWriter()
 		require.NoError(t, err)
 
 		accts := ledgertesting.RandomAccounts(20, true)
@@ -618,7 +618,7 @@ func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 
 	err := dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
 		benchmarkInitBalances(b, b.N, tx, protocol.ConsensusCurrentVersion)
-		arw, err := tx.CreateAccountsReaderWriter()
+		arw, err := tx.MakeAccountsReaderWriter()
 		if err != nil {
 			return err
 		}
@@ -654,7 +654,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 	err := dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
 		accounts := benchmarkInitBalances(b, b.N, tx, protocol.ConsensusCurrentVersion)
 
-		ar, err := dbs.CreateAccountsReader()
+		ar, err := dbs.MakeAccountsReader()
 		require.NoError(b, err)
 		defer ar.Close()
 
@@ -771,7 +771,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		require.NoError(b, err)
 		b.StartTimer()
 		err = l.trackerDBs.Batch(func(ctx context.Context, tx store.BatchScope) (err error) {
-			cw, err := tx.CreateCatchpointWriter()
+			cw, err := tx.MakeCatchpointWriter()
 			if err != nil {
 				return err
 			}
@@ -824,7 +824,7 @@ func TestLookupKeysByPrefix(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	qs, err := dbs.CreateAccountsReader()
+	qs, err := dbs.MakeAccountsReader()
 	require.NoError(t, err)
 	defer qs.Close()
 
@@ -853,7 +853,7 @@ func TestLookupKeysByPrefix(t *testing.T) {
 
 	err = dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
 		// writer is only for kvstore
-		writer, err := tx.CreateAccountsOptimizedWriter(true, true, true, true)
+		writer, err := tx.MakeAccountsOptimizedWriter(true, true, true, true)
 		if err != nil {
 			return
 		}
@@ -1010,7 +1010,7 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 	})
 	require.NoError(b, err)
 
-	qs, err := dbs.CreateAccountsReader()
+	qs, err := dbs.MakeAccountsReader()
 	require.NoError(b, err)
 	defer qs.Close()
 
@@ -1028,7 +1028,7 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 		// make writer to DB
 		err = dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
 			// writer is only for kvstore
-			writer, err := tx.CreateAccountsOptimizedWriter(true, true, true, true)
+			writer, err := tx.MakeAccountsOptimizedWriter(true, true, true, true)
 			if err != nil {
 				return
 			}
@@ -2084,7 +2084,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 	err := dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) error {
 
-		arw, err := tx.CreateAccountsReaderWriter()
+		arw, err := tx.MakeAccountsReaderWriter()
 		if err != nil {
 			return err
 		}
@@ -2193,7 +2193,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 		addRound(2, ledgercore.StateDelta{Accts: delta2})
 		addRound(3, ledgercore.StateDelta{Accts: delta3})
 
-		queries, err := tx.CreateOnlineAccountsOptimizedReader()
+		queries, err := tx.MakeOnlineAccountsOptimizedReader()
 		require.NoError(t, err)
 
 		// check round 1

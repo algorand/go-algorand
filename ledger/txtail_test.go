@@ -154,7 +154,7 @@ func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.Conse
 	t.protoVersion = protoVersion
 
 	err := t.trackerDBs.Batch(func(transactionCtx context.Context, tx store.BatchScope) (err error) {
-		arw, err := tx.CreateAccountsWriter()
+		arw, err := tx.MakeAccountsWriter()
 		if err != nil {
 			return err
 		}

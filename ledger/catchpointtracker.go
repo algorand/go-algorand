@@ -211,7 +211,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 	}
 
 	return ct.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) error {
-		crw, err := tx.CreateCatchpointReaderWriter()
+		crw, err := tx.MakeCatchpointReaderWriter()
 		if err != nil {
 			return err
 		}
@@ -316,7 +316,7 @@ func (ct *catchpointTracker) recoverFromCrash(dbRound basics.Round) error {
 func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Round) (err error) {
 	ct.log = l.trackerLog()
 	ct.dbs = l.trackerDB()
-	ct.catchpointStore, err = l.trackerDB().CreateCatchpointReaderWriter()
+	ct.catchpointStore, err = l.trackerDB().MakeCatchpointReaderWriter()
 	if err != nil {
 		return err
 	}
@@ -334,7 +334,7 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Rou
 		return err
 	}
 
-	ct.accountsq, err = ct.dbs.CreateAccountsReader()
+	ct.accountsq, err = ct.dbs.MakeAccountsReader()
 	if err != nil {
 		return
 	}
@@ -493,18 +493,18 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx store.Transacti
 		}
 	}()
 
-	crw, err := tx.CreateCatchpointReaderWriter()
+	crw, err := tx.MakeCatchpointReaderWriter()
 	if err != nil {
 		return err
 	}
-	arw, err := tx.CreateAccountsReaderWriter()
+	arw, err := tx.MakeAccountsReaderWriter()
 	if err != nil {
 		return err
 	}
 
 	if ct.catchpointEnabled() {
 		var mc store.MerkleCommitter
-		mc, err = tx.CreateMerkleCommitter(false)
+		mc, err = tx.MakeMerkleCommitter(false)
 		if err != nil {
 			return
 		}
@@ -778,7 +778,7 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 	}
 
 	err = ct.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
-		crw, err := tx.CreateCatchpointReaderWriter()
+		crw, err := tx.MakeCatchpointReaderWriter()
 		if err != nil {
 			return err
 		}
@@ -1178,7 +1178,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 }
 
 func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx store.TransactionScope, accountsRound basics.Round, totalKVs uint64, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64) error {
-	arw, err := tx.CreateAccountsReaderWriter()
+	arw, err := tx.MakeAccountsReaderWriter()
 	if err != nil {
 		return err
 	}
@@ -1189,7 +1189,7 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx store.
 	}
 
 	{
-		mc, err := tx.CreateMerkleCommitter(false)
+		mc, err := tx.MakeMerkleCommitter(false)
 		if err != nil {
 			return err
 		}
@@ -1208,7 +1208,7 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx store.
 		return err
 	}
 
-	crw, err := tx.CreateCatchpointReaderWriter()
+	crw, err := tx.MakeCatchpointReaderWriter()
 	if err != nil {
 		return err
 	}
@@ -1276,7 +1276,7 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 	// TODO: we need to generalize this, check @cce PoC PR, he has something
 	//       somewhat broken for some KVs..
 	err := ct.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
-		cr, err := tx.CreateCatchpointReader()
+		cr, err := tx.MakeCatchpointReader()
 		if err != nil {
 			return err
 		}
@@ -1299,7 +1299,7 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 		if os.IsNotExist(err) {
 			// the database told us that we have this file.. but we couldn't find it.
 			// delete it from the database.
-			crw, err := ct.dbs.CreateCatchpointReaderWriter()
+			crw, err := ct.dbs.MakeCatchpointReaderWriter()
 			if err != nil {
 				return nil, err
 			}
@@ -1327,7 +1327,7 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 			// we couldn't get the stat, so just return with the file.
 			return &readCloseSizer{ReadCloser: file, size: -1}, nil
 		}
-		crw, err := ct.dbs.CreateCatchpointReaderWriter()
+		crw, err := ct.dbs.MakeCatchpointReaderWriter()
 		if err != nil {
 			return nil, err
 		}
@@ -1347,7 +1347,7 @@ func (ct *catchpointTracker) catchpointEnabled() bool {
 // initializeHashes initializes account/resource/kv hashes.
 // as part of the initialization, it tests if a hash table matches to account base and updates the former.
 func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx store.TransactionScope, rnd basics.Round) error {
-	arw, err := tx.CreateAccountsReaderWriter()
+	arw, err := tx.MakeAccountsReaderWriter()
 	if err != nil {
 		return err
 	}
@@ -1370,7 +1370,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx store.Tran
 	}
 
 	// create the merkle trie for the balances
-	committer, err := tx.CreateMerkleCommitter(false)
+	committer, err := tx.MakeMerkleCommitter(false)
 	if err != nil {
 		return fmt.Errorf("initializeHashes was unable to makeMerkleCommitter: %v", err)
 	}
@@ -1389,7 +1389,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx store.Tran
 
 	if rootHash.IsZero() {
 		ct.log.Infof("initializeHashes rebuilding merkle trie for round %d", rnd)
-		accountBuilderIt := tx.CreateOrderedAccountsIter(trieRebuildAccountChunkSize)
+		accountBuilderIt := tx.MakeOrderedAccountsIter(trieRebuildAccountChunkSize)
 		defer accountBuilderIt.Close(ctx)
 		startTrieBuildTime := time.Now()
 		trieHashCount := 0
@@ -1460,7 +1460,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx store.Tran
 
 		// Now add the kvstore hashes
 		pendingTrieHashes = 0
-		kvs, err := tx.CreateKVsIter(ctx)
+		kvs, err := tx.MakeKVsIter(ctx)
 		if err != nil {
 			return err
 		}

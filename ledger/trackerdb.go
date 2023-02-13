@@ -39,7 +39,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 	}
 
 	err = dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) error {
-		arw, err := tx.CreateAccountsReaderWriter()
+		arw, err := tx.MakeAccountsReaderWriter()
 		if err != nil {
 			return err
 		}

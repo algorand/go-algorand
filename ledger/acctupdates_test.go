@@ -263,7 +263,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 
 	err = au.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) error {
 		var err0 error
-		arw, err := tx.CreateAccountsReaderWriter()
+		arw, err := tx.MakeAccountsReaderWriter()
 		if err != nil {
 			return err
 		}
@@ -575,7 +575,7 @@ func TestAcctUpdates(t *testing.T) {
 			// check the account totals.
 			var dbRound basics.Round
 			err := ml.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
-				ar, err := tx.CreateAccountsReader()
+				ar, err := tx.MakeAccountsReader()
 				if err != nil {
 					return err
 				}
@@ -593,7 +593,7 @@ func TestAcctUpdates(t *testing.T) {
 			expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardsLevels[dbRound], proto, nil, ledgercore.AccountTotals{})
 			var actualTotals ledgercore.AccountTotals
 			err = ml.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
-				ar, err := tx.CreateAccountsReader()
+				ar, err := tx.MakeAccountsReader()
 				if err != nil {
 					return err
 				}
@@ -1009,7 +1009,7 @@ func TestListCreatables(t *testing.T) {
 		require.NoError(t, err)
 
 		au := &accountUpdates{}
-		au.accountsq, err = tx.CreateAccountsOptimizedReader()
+		au.accountsq, err = tx.MakeAccountsOptimizedReader()
 		require.NoError(t, err)
 
 		// ******* All results are obtained from the cache. Empty database *******
@@ -1389,7 +1389,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	}
 
 	err := ml.dbs.Batch(func(ctx context.Context, tx store.BatchScope) (err error) {
-		aw, err := tx.CreateAccountsWriter()
+		aw, err := tx.MakeAccountsWriter()
 		if err != nil {
 			return err
 		}
@@ -2159,7 +2159,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 				err := au.prepareCommit(dcc)
 				require.NoError(t, err)
 				err = ml.trackers.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
-					arw, err := tx.CreateAccountsReaderWriter()
+					arw, err := tx.MakeAccountsReaderWriter()
 					if err != nil {
 						return err
 					}
@@ -2446,7 +2446,7 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 			err := au.prepareCommit(dcc)
 			require.NoError(t, err)
 			err = ml.trackers.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
-				arw, err := tx.CreateAccountsReaderWriter()
+				arw, err := tx.MakeAccountsReaderWriter()
 				if err != nil {
 					return err
 				}

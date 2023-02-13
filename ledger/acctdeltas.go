@@ -298,7 +298,7 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx store.TransactionScope, kno
 	if len(a.misses) == 0 {
 		return nil
 	}
-	arw, err := tx.CreateAccountsReaderWriter()
+	arw, err := tx.MakeAccountsReaderWriter()
 	if err != nil {
 		return err
 	}
@@ -466,7 +466,7 @@ func (a *compactAccountDeltas) accountsLoadOld(tx store.TransactionScope) (err e
 	if len(a.misses) == 0 {
 		return nil
 	}
-	arw, err := tx.CreateAccountsReaderWriter()
+	arw, err := tx.MakeAccountsReaderWriter()
 	if err != nil {
 		return err
 	}
@@ -607,7 +607,7 @@ func (a *compactOnlineAccountDeltas) accountsLoadOld(tx store.TransactionScope) 
 	if len(a.misses) == 0 {
 		return nil
 	}
-	arw, err := tx.CreateAccountsReaderWriter()
+	arw, err := tx.MakeAccountsReaderWriter()
 	if err != nil {
 		return err
 	}
@@ -713,7 +713,7 @@ func accountsNewRound(
 	hasKvPairs := len(kvPairs) > 0
 	hasCreatables := len(creatables) > 0
 
-	writer, err := tx.CreateAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables)
+	writer, err := tx.MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables)
 	if err != nil {
 		return
 	}
@@ -729,7 +729,7 @@ func onlineAccountsNewRound(
 ) (updatedAccounts []store.PersistedOnlineAccountData, err error) {
 	hasAccounts := updates.len() > 0
 
-	writer, err := tx.CreateOnlineAccountsOptimizedWriter(hasAccounts)
+	writer, err := tx.MakeOnlineAccountsOptimizedWriter(hasAccounts)
 	if err != nil {
 		return
 	}

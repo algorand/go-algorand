@@ -39,9 +39,9 @@ type batchFn func(ctx context.Context, tx BatchScope) error
 
 // BatchScope is the write scope to the store.
 type BatchScope interface {
-	CreateCatchpointWriter() (CatchpointWriter, error)
-	CreateAccountsWriter() (AccountsWriterExt, error)
-	CreateAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
+	MakeCatchpointWriter() (CatchpointWriter, error)
+	MakeAccountsWriter() (AccountsWriterExt, error)
+	MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
 
 	RunMigrations(ctx context.Context, params TrackerDBParams, log logging.Logger, targetVersion int32) (mgr TrackerDBInitParams, err error)
 	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
@@ -57,10 +57,10 @@ type snapshotFn func(ctx context.Context, tx SnapshotScope) error
 
 // SnapshotScope is the read scope to the store.
 type SnapshotScope interface {
-	CreateAccountsReader() (AccountsReaderExt, error)
-	CreateCatchpointReader() (CatchpointReader, error)
+	MakeAccountsReader() (AccountsReaderExt, error)
+	MakeCatchpointReader() (CatchpointReader, error)
 
-	CreateCatchpointPendingHashesIterator(hashCount int) *catchpointPendingHashesIterator
+	MakeCatchpointPendingHashesIterator(hashCount int) *catchpointPendingHashesIterator
 }
 type sqlSnapshotScope struct {
 	tx *sql.Tx
@@ -70,18 +70,18 @@ type transactionFn func(ctx context.Context, tx TransactionScope) error
 
 // TransactionScope is the read/write scope to the store.
 type TransactionScope interface {
-	CreateCatchpointReaderWriter() (CatchpointReaderWriter, error)
-	CreateAccountsReaderWriter() (AccountsReaderWriter, error)
-	CreateAccountsOptimizedReader() (AccountsReader, error)
-	CreateAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
-	CreateOnlineAccountsOptimizedWriter(hasAccounts bool) (w OnlineAccountsWriter, err error)
-	CreateOnlineAccountsOptimizedReader() (OnlineAccountsReader, error)
+	MakeCatchpointReaderWriter() (CatchpointReaderWriter, error)
+	MakeAccountsReaderWriter() (AccountsReaderWriter, error)
+	MakeAccountsOptimizedReader() (AccountsReader, error)
+	MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
+	MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (w OnlineAccountsWriter, err error)
+	MakeOnlineAccountsOptimizedReader() (OnlineAccountsReader, error)
 
-	CreateMerkleCommitter(staging bool) (MerkleCommitter, error)
+	MakeMerkleCommitter(staging bool) (MerkleCommitter, error)
 
-	CreateOrderedAccountsIter(accountCount int) *orderedAccountsIter
-	CreateKVsIter(ctx context.Context) (*kvsIter, error)
-	CreateEncodedAccoutsBatchIter() *encodedAccountsBatchIter
+	MakeOrderedAccountsIter(accountCount int) *orderedAccountsIter
+	MakeKVsIter(ctx context.Context) (*kvsIter, error)
+	MakeEncodedAccoutsBatchIter() *encodedAccountsBatchIter
 
 	RunMigrations(ctx context.Context, params TrackerDBParams, log logging.Logger, targetVersion int32) (mgr TrackerDBInitParams, err error)
 	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
@@ -108,10 +108,10 @@ type TrackerStore interface {
 	Transaction(fn transactionFn) (err error)
 	TransactionContext(ctx context.Context, fn transactionFn) (err error)
 
-	CreateAccountsReader() (AccountsReader, error)
-	CreateOnlineAccountsReader() (OnlineAccountsReader, error)
+	MakeAccountsReader() (AccountsReader, error)
+	MakeOnlineAccountsReader() (OnlineAccountsReader, error)
 
-	CreateCatchpointReaderWriter() (CatchpointReaderWriter, error)
+	MakeCatchpointReaderWriter() (CatchpointReaderWriter, error)
 
 	Vacuum(ctx context.Context) (stats db.VacuumStats, err error)
 	Close()
@@ -177,15 +177,15 @@ func (s *trackerSQLStore) TransactionContext(ctx context.Context, fn transaction
 	})
 }
 
-func (s *trackerSQLStore) CreateAccountsReader() (AccountsReader, error) {
+func (s *trackerSQLStore) MakeAccountsReader() (AccountsReader, error) {
 	return AccountsInitDbQueries(s.pair.Rdb.Handle)
 }
 
-func (s *trackerSQLStore) CreateOnlineAccountsReader() (OnlineAccountsReader, error) {
+func (s *trackerSQLStore) MakeOnlineAccountsReader() (OnlineAccountsReader, error) {
 	return OnlineAccountsInitDbQueries(s.pair.Rdb.Handle)
 }
 
-func (s *trackerSQLStore) CreateCatchpointReaderWriter() (CatchpointReaderWriter, error) {
+func (s *trackerSQLStore) MakeCatchpointReaderWriter() (CatchpointReaderWriter, error) {
 	w := NewCatchpointSQLReaderWriter(s.pair.Wdb.Handle)
 	return w, nil
 }
@@ -208,43 +208,43 @@ func (s *trackerSQLStore) Close() {
 	s.pair.Close()
 }
 
-func (txs sqlTransactionScope) CreateCatchpointReaderWriter() (CatchpointReaderWriter, error) {
+func (txs sqlTransactionScope) MakeCatchpointReaderWriter() (CatchpointReaderWriter, error) {
 	return NewCatchpointSQLReaderWriter(txs.tx), nil
 }
 
-func (txs sqlTransactionScope) CreateAccountsReaderWriter() (AccountsReaderWriter, error) {
+func (txs sqlTransactionScope) MakeAccountsReaderWriter() (AccountsReaderWriter, error) {
 	return NewAccountsSQLReaderWriter(txs.tx), nil
 }
 
-func (txs sqlTransactionScope) CreateAccountsOptimizedReader() (AccountsReader, error) {
+func (txs sqlTransactionScope) MakeAccountsOptimizedReader() (AccountsReader, error) {
 	return AccountsInitDbQueries(txs.tx)
 }
 
-func (txs sqlTransactionScope) CreateAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error) {
+func (txs sqlTransactionScope) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error) {
 	return MakeAccountsSQLWriter(txs.tx, hasAccounts, hasResources, hasKvPairs, hasCreatables)
 }
 
-func (txs sqlTransactionScope) CreateOnlineAccountsOptimizedWriter(hasAccounts bool) (w OnlineAccountsWriter, err error) {
+func (txs sqlTransactionScope) MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (w OnlineAccountsWriter, err error) {
 	return MakeOnlineAccountsSQLWriter(txs.tx, hasAccounts)
 }
 
-func (txs sqlTransactionScope) CreateOnlineAccountsOptimizedReader() (r OnlineAccountsReader, err error) {
+func (txs sqlTransactionScope) MakeOnlineAccountsOptimizedReader() (r OnlineAccountsReader, err error) {
 	return OnlineAccountsInitDbQueries(txs.tx)
 }
 
-func (txs sqlTransactionScope) CreateMerkleCommitter(staging bool) (MerkleCommitter, error) {
+func (txs sqlTransactionScope) MakeMerkleCommitter(staging bool) (MerkleCommitter, error) {
 	return MakeMerkleCommitter(txs.tx, staging)
 }
 
-func (txs sqlTransactionScope) CreateOrderedAccountsIter(accountCount int) *orderedAccountsIter {
+func (txs sqlTransactionScope) MakeOrderedAccountsIter(accountCount int) *orderedAccountsIter {
 	return MakeOrderedAccountsIter(txs.tx, accountCount)
 }
 
-func (txs sqlTransactionScope) CreateKVsIter(ctx context.Context) (*kvsIter, error) {
+func (txs sqlTransactionScope) MakeKVsIter(ctx context.Context) (*kvsIter, error) {
 	return MakeKVsIter(ctx, txs.tx)
 }
 
-func (txs sqlTransactionScope) CreateEncodedAccoutsBatchIter() *encodedAccountsBatchIter {
+func (txs sqlTransactionScope) MakeEncodedAccoutsBatchIter() *encodedAccountsBatchIter {
 	return MakeEncodedAccoutsBatchIter(txs.tx)
 }
 
@@ -264,15 +264,15 @@ func (txs sqlTransactionScope) AccountsInitLightTest(tb testing.TB, initAccounts
 	return AccountsInitLightTest(tb, txs.tx, initAccounts, proto)
 }
 
-func (bs sqlBatchScope) CreateCatchpointWriter() (CatchpointWriter, error) {
+func (bs sqlBatchScope) MakeCatchpointWriter() (CatchpointWriter, error) {
 	return NewCatchpointSQLReaderWriter(bs.tx), nil
 }
 
-func (bs sqlBatchScope) CreateAccountsWriter() (AccountsWriterExt, error) {
+func (bs sqlBatchScope) MakeAccountsWriter() (AccountsWriterExt, error) {
 	return NewAccountsSQLReaderWriter(bs.tx), nil
 }
 
-func (bs sqlBatchScope) CreateAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error) {
+func (bs sqlBatchScope) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error) {
 	return MakeAccountsSQLWriter(bs.tx, hasAccounts, hasResources, hasKvPairs, hasCreatables)
 }
 
@@ -292,14 +292,14 @@ func (bs sqlBatchScope) AccountsUpdateSchemaTest(ctx context.Context) (err error
 	return AccountsUpdateSchemaTest(ctx, bs.tx)
 }
 
-func (ss sqlSnapshotScope) CreateAccountsReader() (AccountsReaderExt, error) {
+func (ss sqlSnapshotScope) MakeAccountsReader() (AccountsReaderExt, error) {
 	return NewAccountsSQLReaderWriter(ss.tx), nil
 }
 
-func (ss sqlSnapshotScope) CreateCatchpointReader() (CatchpointReader, error) {
+func (ss sqlSnapshotScope) MakeCatchpointReader() (CatchpointReader, error) {
 	return NewCatchpointSQLReaderWriter(ss.tx), nil
 }
 
-func (ss sqlSnapshotScope) CreateCatchpointPendingHashesIterator(hashCount int) *catchpointPendingHashesIterator {
+func (ss sqlSnapshotScope) MakeCatchpointPendingHashesIterator(hashCount int) *catchpointPendingHashesIterator {
 	return MakeCatchpointPendingHashesIterator(hashCount, ss.tx)
 }

@@ -199,7 +199,7 @@ func testWriteCatchpoint(t *testing.T, rdb store.TrackerStore, datapath string, 
 			return err
 		}
 
-		arw, err := tx.CreateAccountsReaderWriter()
+		arw, err := tx.MakeAccountsReaderWriter()
 		if err != nil {
 			return err
 		}
@@ -296,7 +296,7 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
 		require.NoError(t, err)
 
-		arw, err := tx.CreateAccountsReaderWriter()
+		arw, err := tx.MakeAccountsReaderWriter()
 		if err != nil {
 			return err
 		}
@@ -382,7 +382,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
 
 	err = ml.trackerDB().Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
-		arw, err := tx.CreateAccountsReaderWriter()
+		arw, err := tx.MakeAccountsReaderWriter()
 		if err != nil {
 			return err
 		}
@@ -478,13 +478,13 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	ctx := context.Background()
 
 	err = l.trackerDBs.TransactionContext(ctx, func(ctx context.Context, tx store.TransactionScope) (err error) {
-		arw, err := tx.CreateAccountsReaderWriter()
+		arw, err := tx.MakeAccountsReaderWriter()
 		if err != nil {
 			return nil
 		}
 
 		// save the existing hash
-		committer, err := tx.CreateMerkleCommitter(false)
+		committer, err := tx.MakeMerkleCommitter(false)
 		require.NoError(t, err)
 		trie, err := merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
 		require.NoError(t, err)
@@ -498,7 +498,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 		require.NoError(t, err)
 
 		// rebuild the MT
-		committer, err = tx.CreateMerkleCommitter(false)
+		committer, err = tx.MakeMerkleCommitter(false)
 		require.NoError(t, err)
 		trie, err = merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
 		require.NoError(t, err)
@@ -507,7 +507,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 		require.NoError(t, err)
 		require.Zero(t, h)
 
-		iter := tx.CreateOrderedAccountsIter(trieRebuildAccountChunkSize)
+		iter := tx.MakeOrderedAccountsIter(trieRebuildAccountChunkSize)
 		defer iter.Close(ctx)
 		for {
 			accts, _, err := iter.Next(ctx)
@@ -593,7 +593,7 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess store.
 	require.NoError(t, err)
 
 	err = l.trackerDBs.Batch(func(ctx context.Context, tx store.BatchScope) error {
-		cw, err := tx.CreateCatchpointWriter()
+		cw, err := tx.MakeCatchpointWriter()
 		if err != nil {
 			return err
 		}
@@ -605,7 +605,7 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess store.
 	balanceTrieStats := func(db store.TrackerStore) merkletrie.Stats {
 		var stats merkletrie.Stats
 		err = db.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
-			committer, err := tx.CreateMerkleCommitter(false)
+			committer, err := tx.MakeMerkleCommitter(false)
 			if err != nil {
 				return err
 			}

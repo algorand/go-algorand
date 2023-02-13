@@ -282,7 +282,7 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 	tr.log = l.trackerLog()
 
 	err = tr.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
-		ar, err := tx.CreateAccountsReader()
+		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}
@@ -516,7 +516,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
 	err := tr.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
-		arw, err := tx.CreateAccountsReaderWriter()
+		arw, err := tx.MakeAccountsReaderWriter()
 		if err != nil {
 			return err
 		}

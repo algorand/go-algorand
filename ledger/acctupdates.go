@@ -927,7 +927,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
 	err = au.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) error {
-		ar, err := tx.CreateAccountsReader()
+		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}
@@ -946,7 +946,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
-	au.accountsq, err = au.dbs.CreateAccountsReader()
+	au.accountsq, err = au.dbs.MakeAccountsReader()
 	if err != nil {
 		return
 	}
@@ -1697,7 +1697,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx store.TransactionS
 		dcc.stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano()) - dcc.stats.OldAccountPreloadDuration
 	}
 
-	arw, err := tx.CreateAccountsReaderWriter()
+	arw, err := tx.MakeAccountsReaderWriter()
 	if err != nil {
 		return err
 	}

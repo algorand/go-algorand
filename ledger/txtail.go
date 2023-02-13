@@ -97,7 +97,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	var baseRound basics.Round
 	if dbRound > 0 {
 		err := l.trackerDB().Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
-			ar, err := tx.CreateAccountsReader()
+			ar, err := tx.MakeAccountsReader()
 			if err != nil {
 				return err
 			}
@@ -273,7 +273,7 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 }
 
 func (t *txTail) commitRound(ctx context.Context, tx store.TransactionScope, dcc *deferredCommitContext) error {
-	arw, err := tx.CreateAccountsReaderWriter()
+	arw, err := tx.MakeAccountsReaderWriter()
 	if err != nil {
 		return err
 	}

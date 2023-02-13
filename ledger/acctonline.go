@@ -150,7 +150,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	ao.log = l.trackerLog()
 
 	err = ao.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) error {
-		ar, err := tx.CreateAccountsReader()
+		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}
@@ -177,7 +177,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
-	ao.accountsq, err = ao.dbs.CreateOnlineAccountsReader()
+	ao.accountsq, err = ao.dbs.MakeOnlineAccountsReader()
 	if err != nil {
 		return
 	}
@@ -422,7 +422,7 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx store.TransactionS
 		return err
 	}
 
-	arw, err := tx.CreateAccountsReaderWriter()
+	arw, err := tx.MakeAccountsReaderWriter()
 	if err != nil {
 		return err
 	}
@@ -821,7 +821,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 			start := time.Now()
 			ledgerAccountsonlinetopCount.Inc(nil)
 			err = ao.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
-				ar, err := tx.CreateAccountsReader()
+				ar, err := tx.MakeAccountsReader()
 				if err != nil {
 					return err
 				}

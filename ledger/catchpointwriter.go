@@ -92,7 +92,7 @@ func (chunk catchpointFileChunkV6) empty() bool {
 }
 
 func makeCatchpointWriter(ctx context.Context, filePath string, tx store.TransactionScope, maxResourcesPerChunk int) (*catchpointWriter, error) {
-	arw, err := tx.CreateAccountsReaderWriter()
+	arw, err := tx.MakeAccountsReaderWriter()
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx store.Transac
 		file:                 file,
 		compressor:           compressor,
 		tar:                  tar,
-		accountsIterator:     tx.CreateEncodedAccoutsBatchIter(),
+		accountsIterator:     tx.MakeEncodedAccoutsBatchIter(),
 		maxResourcesPerChunk: maxResourcesPerChunk,
 	}
 	return res, nil
@@ -288,7 +288,7 @@ func (cw *catchpointWriter) readDatabaseStep(ctx context.Context) error {
 
 	// Create the *Rows iterator JIT
 	if cw.kvRows == nil {
-		rows, err := cw.tx.CreateKVsIter(ctx)
+		rows, err := cw.tx.MakeKVsIter(ctx)
 		if err != nil {
 			return err
 		}

@@ -345,7 +345,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
 	err = ml.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
-		arw, err := tx.CreateAccountsReaderWriter()
+		arw, err := tx.MakeAccountsReaderWriter()
 		if err != nil {
 			return err
 		}
@@ -987,7 +987,7 @@ func TestFirstStagePersistence(t *testing.T) {
 	defer ml2.Close()
 	ml.Close()
 
-	cps2, err := ml2.dbs.CreateCatchpointReaderWriter()
+	cps2, err := ml2.dbs.MakeCatchpointReaderWriter()
 	require.NoError(t, err)
 
 	// Insert unfinished first stage record.
@@ -1117,7 +1117,7 @@ func TestSecondStagePersistence(t *testing.T) {
 	err = os.WriteFile(catchpointDataFilePath, catchpointData, 0644)
 	require.NoError(t, err)
 
-	cps2, err := ml2.dbs.CreateCatchpointReaderWriter()
+	cps2, err := ml2.dbs.MakeCatchpointReaderWriter()
 	require.NoError(t, err)
 
 	// Restore the first stage database record.
@@ -1309,7 +1309,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 	defer ml2.Close()
 	ml.Close()
 
-	cps2, err := ml2.dbs.CreateCatchpointReaderWriter()
+	cps2, err := ml2.dbs.MakeCatchpointReaderWriter()
 	require.NoError(t, err)
 
 	// Sanity check: first stage record should be deleted.
