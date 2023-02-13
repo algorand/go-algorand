@@ -90,8 +90,8 @@ func newIdentityChallengeValue() identityChallengeValue {
 }
 
 type identityChallengeScheme interface {
-	AttachChallenge(attach http.Header, addr string) identityChallengeValue
-	VerifyRequestAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error)
+	AttachChallenge(attachTo http.Header, addr string) identityChallengeValue
+	VerifyRequestAndAttachResponse(attachTo http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error)
 	VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error)
 }
 
@@ -122,7 +122,7 @@ func NewIdentityChallengeScheme(dn string) *identityChallengePublicKeyScheme {
 // as a header. It returns the identityChallengeValue used for this challenge, so the network can
 // confirm it later (by passing it to VerifyResponse), or returns an empty challenge if dedupName is
 // not set.
-func (i identityChallengePublicKeyScheme) AttachChallenge(attach http.Header, addr string) identityChallengeValue {
+func (i identityChallengePublicKeyScheme) AttachChallenge(attachTo http.Header, addr string) identityChallengeValue {
 	if i.dedupName == "" || addr == "" {
 		return identityChallengeValue{}
 	}
@@ -132,7 +132,7 @@ func (i identityChallengePublicKeyScheme) AttachChallenge(attach http.Header, ad
 		PublicAddress: []byte(addr),
 	}
 
-	attach.Add(IdentityChallengeHeader, c.signAndEncodeB64(i.identityKeys))
+	attachTo.Add(IdentityChallengeHeader, c.signAndEncodeB64(i.identityKeys))
 	return c.Challenge
 }
 
@@ -143,7 +143,7 @@ func (i identityChallengePublicKeyScheme) AttachChallenge(attach http.Header, ad
 // once verified, it will attach the header to the "attach" header
 // and will return the challenge and identity of the peer for recording
 // or returns empty values if the header did not end up getting set
-func (i identityChallengePublicKeyScheme) VerifyRequestAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
+func (i identityChallengePublicKeyScheme) VerifyRequestAndAttachResponse(attachTo http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
 	// if dedupName is not set, this scheme is not configured to exchange identity
 	if i.dedupName == "" {
 		return identityChallengeValue{}, crypto.PublicKey{}, nil
@@ -178,7 +178,7 @@ func (i identityChallengePublicKeyScheme) VerifyRequestAndAttachResponse(attach 
 		Challenge:         idChal.Msg.Challenge,
 		ResponseChallenge: newIdentityChallengeValue(),
 	}
-	attach.Add(IdentityChallengeHeader, r.signAndEncodeB64(i.identityKeys))
+	attachTo.Add(IdentityChallengeHeader, r.signAndEncodeB64(i.identityKeys))
 	return r.ResponseChallenge, idChal.Msg.Key, nil
 }
 
