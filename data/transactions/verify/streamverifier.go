@@ -30,14 +30,14 @@ import (
 // ErrShuttingDownError is the error returned when a sig is not verified because the service is shutting down
 var ErrShuttingDownError = errors.New("not verified, verifier is shutting down")
 
-// WaitForNextTxnDuration is the time to wait before sending the batch to the exec pool
-// If the incoming txn rate is low, a txn in the batch may  wait no less than
-// WaitForNextTxnDuration before it is set for verification.
-// This can introduce a latency to the propagation of a transaction in the network,
-// since every relay will go through this wait time before broadcasting the txn.
-// However, when the incoming txn rate is high, the batch will fill up quickly and will send
-// for signature evaluation before WaitForNextTxnDuration.
-const WaitForNextTxnDuration = 2 * time.Millisecond
+// waitForNextElmtDuration is the time to wait before sending the batch to the exec pool
+// If the incoming element rate is low, an element in the batch may wait no less than
+// waitForNextElmtDuration before it is set for verification.
+// This can introduce a latency to the propagation of the elements (e.g. txn, vote) in the network,
+// since every relay will go through this wait time before broadcasting the result.
+// However, when the incoming element rate is high, the batch will fill up quickly and will send
+// for signature evaluation before waitForNextElmtDuration.
+const waitForNextElmtDuration = 2 * time.Millisecond
 
 // batchSizeBlockLimit is the limit when the batch exceeds, will be added to the exec pool, even if the pool is saturated
 // and the batch verifier will block until the exec pool accepts the batch
@@ -48,39 +48,38 @@ type UnverifiedElement interface {
 	GetNumberOfBatchableSigsInGroup() (batchSigs uint64, err error)
 }
 
-// Helper is the interface of the functions needed to extract signatures from the elements, post-process the results,
+// ElementProcessor is the interface of the functions needed to extract signatures from the elements, post-process the results,
 // send the results and cleanup when shutting down.
-type Helper interface {
+type ElementProcessor interface {
 	// PreProcessUnverifiedElements prepares a BatchVerifier from an array of unverified elements
 	// ctx is anything associated with the array of elements, which will be passed to PostProcessVerifiedElements
 	PreProcessUnverifiedElements(uelts []UnverifiedElement) (batchVerifier *crypto.BatchVerifier, ctx interface{})
 	// PostProcessVerifiedElements implments the passing of the results to their destination (cts from PreProcessUnverifiedElements)
 	PostProcessVerifiedElements(ctx interface{}, failed []bool, err error)
-	// ReturnUnverified returns an unverified element because of the err
-	ReturnUnverified(ue UnverifiedElement, err error)
+	// GetErredUnverified returns an unverified element because of the err
+	GetErredUnverified(ue UnverifiedElement, err error)
 	// Cleanup called on the unverified elements when the verification shuts down
 	Cleanup(ue []UnverifiedElement, err error)
 }
 
-// StreamVerifier verifies txn groups received through the stxnChan channel, and returns the
+// StreamVerifier verifies signatures in elements received through the inputChan channel, and returns the
 // results through the resultChan
 type StreamVerifier struct {
-	stxnChan         <-chan UnverifiedElement
+	inputChan        <-chan UnverifiedElement
 	verificationPool execpool.BacklogPool
 	ctx              context.Context
 	activeLoopWg     sync.WaitGroup
-	helper           Helper
+	ep               ElementProcessor
 }
 
-// MakeStreamVerifier creates a new stream verifier and returns the chans used to send txn groups
-// to it and obtain the txn signature verification result from
-func MakeStreamVerifier(stxnChan <-chan UnverifiedElement, verificationPool execpool.BacklogPool,
-	helper Helper) *StreamVerifier {
+// MakeStreamVerifier creates a new stream verifier to verify signatures in elements received through inputChan
+func MakeStreamVerifier(inputChan <-chan UnverifiedElement, verificationPool execpool.BacklogPool,
+	ep ElementProcessor) *StreamVerifier {
 
 	return &StreamVerifier{
-		stxnChan:         stxnChan,
+		inputChan:        inputChan,
 		verificationPool: verificationPool,
-		helper:           helper,
+		ep:               ep,
 	}
 }
 
@@ -99,55 +98,55 @@ func (sv *StreamVerifier) WaitForStop() {
 
 func (sv *StreamVerifier) batchingLoop() {
 	defer sv.activeLoopWg.Done()
-	timer := time.NewTicker(WaitForNextTxnDuration)
+	timer := time.NewTicker(waitForNextElmtDuration)
 	defer timer.Stop()
 	var added bool
 	var numberOfSigsInCurrent uint64
 	var numberOfBatchAttempts uint64
-	uelts := make([]UnverifiedElement, 0, 8)
-	defer func() { sv.helper.Cleanup(uelts, ErrShuttingDownError) }()
+	uElmts := make([]UnverifiedElement, 0, 8)
+	defer func() { sv.ep.Cleanup(uElmts, ErrShuttingDownError) }()
 	for {
 		select {
-		case stx := <-sv.stxnChan:
-			numberOfBatchableSigsInGroup, err := stx.GetNumberOfBatchableSigsInGroup()
+		case elem := <-sv.inputChan:
+			numberOfBatchableSigsInGroup, err := elem.GetNumberOfBatchableSigsInGroup()
 			if err != nil {
-				sv.helper.ReturnUnverified(stx, err)
+				sv.ep.GetErredUnverified(elem, err)
 				continue
 			}
 
 			// if no batchable signatures here, send this as a task of its own
 			if numberOfBatchableSigsInGroup == 0 {
-				err := sv.addVerificationTaskToThePoolNow([]UnverifiedElement{stx})
+				err := sv.addVerificationTaskToThePoolNow([]UnverifiedElement{elem})
 				if err != nil {
 					return
 				}
-				continue // stx is handled, continue
+				continue // elem is handled, continue
 			}
 
-			// add this txngrp to the list of batchable txn groups
+			// add this element to the list of batchable elements
 			numberOfSigsInCurrent = numberOfSigsInCurrent + numberOfBatchableSigsInGroup
-			uelts = append(uelts, stx)
+			uElmts = append(uElmts, elem)
 			if numberOfSigsInCurrent > txnPerWorksetThreshold {
-				// enough transaction in the batch to efficiently verify
+				// enough signatures in the batch to efficiently verify
 
 				if numberOfSigsInCurrent > batchSizeBlockLimit {
-					// do not consider adding more txns to this batch.
+					// do not consider adding more signatures to this batch.
 					// bypass the exec pool situation and queue anyway
 					// this is to prevent creation of very large batches
-					err := sv.addVerificationTaskToThePoolNow(uelts)
+					err := sv.addVerificationTaskToThePoolNow(uElmts)
 					if err != nil {
 						return
 					}
 					added = true
 				} else {
-					added, err = sv.tryAddVerificationTaskToThePool(uelts)
+					added, err = sv.tryAddVerificationTaskToThePool(uElmts)
 					if err != nil {
 						return
 					}
 				}
 				if added {
 					numberOfSigsInCurrent = 0
-					uelts = make([]UnverifiedElement, 0, 8)
+					uElmts = make([]UnverifiedElement, 0, 8)
 					numberOfBatchAttempts = 0
 				} else {
 					// was not added because of the exec pool buffer length
@@ -163,22 +162,22 @@ func (sv *StreamVerifier) batchingLoop() {
 			var err error
 			if numberOfBatchAttempts > 1 {
 				// bypass the exec pool situation and queue anyway
-				// this is to prevent long delays in transaction propagation
-				// at least one transaction here has waited 3 x WaitForNextTxnDuration
-				err = sv.addVerificationTaskToThePoolNow(uelts)
+				// this is to prevent long delays in the propagation of the elements (txn/vote)
+				// at least one element here has waited 3 x waitForNextElmtDuration
+				err = sv.addVerificationTaskToThePoolNow(uElmts)
 				added = true
 			} else {
-				added, err = sv.tryAddVerificationTaskToThePool(uelts)
+				added, err = sv.tryAddVerificationTaskToThePool(uElmts)
 			}
 			if err != nil {
 				return
 			}
 			if added {
 				numberOfSigsInCurrent = 0
-				uelts = make([]UnverifiedElement, 0, 8)
+				uElmts = make([]UnverifiedElement, 0, 8)
 				numberOfBatchAttempts = 0
 			} else {
-				// was not added because of the exec pool buffer length. wait for some more txns
+				// was not added because of the exec pool buffer length. wait for some more signatures
 				numberOfBatchAttempts++
 			}
 		case <-sv.ctx.Done():
@@ -187,7 +186,7 @@ func (sv *StreamVerifier) batchingLoop() {
 	}
 }
 
-func (sv *StreamVerifier) tryAddVerificationTaskToThePool(uelts []UnverifiedElement) (added bool, err error) {
+func (sv *StreamVerifier) tryAddVerificationTaskToThePool(uElmts []UnverifiedElement) (added bool, err error) {
 	// if the exec pool buffer is full, can go back and collect
 	// more signatures instead of waiting in the exec pool buffer
 	// more signatures to the batch do not harm performance but introduce latency when delayed (see crypto.BenchmarkBatchVerifierBig)
@@ -196,7 +195,7 @@ func (sv *StreamVerifier) tryAddVerificationTaskToThePool(uelts []UnverifiedElem
 	if l, c := sv.verificationPool.BufferSize(); l == c {
 		return false, nil
 	}
-	err = sv.addVerificationTaskToThePoolNow(uelts)
+	err = sv.addVerificationTaskToThePoolNow(uElmts)
 	if err != nil {
 		// An error is returned when the context of the pool expires
 		return false, err
@@ -210,19 +209,19 @@ func (sv *StreamVerifier) addVerificationTaskToThePoolNow(unvrifiedElts []Unveri
 	// is created, this task still gets canceled due to the ctx at the time of this task
 	taskCtx := sv.ctx
 	function := func(arg interface{}) interface{} {
-		uelts := arg.([]UnverifiedElement)
+		uElmts := arg.([]UnverifiedElement)
 		if taskCtx.Err() != nil {
 			// ctx is canceled. the results will be returned
-			sv.helper.Cleanup(uelts, ErrShuttingDownError)
+			sv.ep.Cleanup(uElmts, ErrShuttingDownError)
 			return nil
 		}
 
-		batchVerifier, ctx := sv.helper.PreProcessUnverifiedElements(uelts)
+		batchVerifier, ctx := sv.ep.PreProcessUnverifiedElements(uElmts)
 
 		failed, err := batchVerifier.VerifyWithFeedback()
 		// this error can only be crypto.ErrBatchHasFailedSigs
 
-		sv.helper.PostProcessVerifiedElements(ctx, failed, err)
+		sv.ep.PostProcessVerifiedElements(ctx, failed, err)
 		return nil
 	}
 

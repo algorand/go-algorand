@@ -636,7 +636,7 @@ func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext
 
 }
 
-type streamVerifierHelper struct {
+type txnElementProcessor struct {
 	cache       VerifiedTransactionCache
 	nbw         *NewBlockWatcher
 	ledger      logic.LedgerForSignature
@@ -652,15 +652,15 @@ type LedgerForStreamVerifier interface {
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 }
 
-func (svh *streamVerifierHelper) Cleanup(pending []UnverifiedElement, err error) {
+func (svh *txnElementProcessor) Cleanup(pending []UnverifiedElement, err error) {
 	// report an error for the unchecked txns
 	// drop the messages without reporting if the receiver does not consume
 	for _, uel := range pending {
-		svh.ReturnUnverified(uel, err)
+		svh.GetErredUnverified(uel, err)
 	}
 }
 
-func (svh streamVerifierHelper) ReturnUnverified(ue UnverifiedElement, err error) {
+func (svh txnElementProcessor) GetErredUnverified(ue UnverifiedElement, err error) {
 	uelt := ue.(*UnverifiedTxnElement)
 	// send the txn result out the pipe
 	select {
@@ -675,7 +675,7 @@ func (svh streamVerifierHelper) ReturnUnverified(ue UnverifiedElement, err error
 	}
 }
 
-func (svh streamVerifierHelper) sendResult(veTxnGroup []transactions.SignedTxn, veBacklogMessage interface{}, err error) {
+func (svh txnElementProcessor) sendResult(veTxnGroup []transactions.SignedTxn, veBacklogMessage interface{}, err error) {
 	// send the txn result out the pipe
 	select {
 	case svh.resultChan <- &VerificationResult{
@@ -689,9 +689,9 @@ func (svh streamVerifierHelper) sendResult(veTxnGroup []transactions.SignedTxn, 
 	}
 }
 
-// MakeStreamVerifierHelper returns the object implementing the stream verifier Helper interface
-func MakeStreamVerifierHelper(ledger LedgerForStreamVerifier, cache VerifiedTransactionCache,
-	resultChan chan<- *VerificationResult, droppedChan chan<- *UnverifiedTxnElement) (svh Helper, err error) {
+// MakeElementProcessor returns the object implementing the stream verifier Helper interface
+func MakeElementProcessor(ledger LedgerForStreamVerifier, cache VerifiedTransactionCache,
+	resultChan chan<- *VerificationResult, droppedChan chan<- *UnverifiedTxnElement) (svh ElementProcessor, err error) {
 	latest := ledger.Latest()
 	latestHdr, err := ledger.BlockHdr(latest)
 	if err != nil {
@@ -701,7 +701,7 @@ func MakeStreamVerifierHelper(ledger LedgerForStreamVerifier, cache VerifiedTran
 	nbw := MakeNewBlockWatcher(latestHdr)
 	ledger.RegisterBlockListeners([]ledgercore.BlockListener{nbw})
 
-	return &streamVerifierHelper{
+	return &txnElementProcessor{
 		cache:       cache,
 		nbw:         nbw,
 		ledger:      ledger,
@@ -710,7 +710,7 @@ func MakeStreamVerifierHelper(ledger LedgerForStreamVerifier, cache VerifiedTran
 	}, nil
 }
 
-func (svh *streamVerifierHelper) PreProcessUnverifiedElements(uelts []UnverifiedElement) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
+func (svh *txnElementProcessor) PreProcessUnverifiedElements(uelts []UnverifiedElement) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
 	batchVerifier = crypto.MakeBatchVerifier()
 	bl := makeBatchLoad(len(uelts))
 	// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
@@ -771,7 +771,7 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (uint64, error) 
 	}
 }
 
-func (svh *streamVerifierHelper) PostProcessVerifiedElements(ctx interface{}, failed []bool, err error) {
+func (svh *txnElementProcessor) PostProcessVerifiedElements(ctx interface{}, failed []bool, err error) {
 	bl := ctx.(*batchLoad)
 	if err == nil { // success, all signatures verified
 		for i := range bl.txnGroups {

@@ -193,12 +193,12 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 
 	// prepare the transaction stream verifer
 	var err error
-	helper, err := verify.MakeStreamVerifierHelper(handler.ledger, handler.ledger.VerifiedTransactionCache(),
+	txnElementProcessor, err := verify.MakeElementProcessor(handler.ledger, handler.ledger.VerifiedTransactionCache(),
 		handler.postVerificationQueue, handler.streamVerifierDropped)
 	if err != nil {
 		return nil, err
 	}
-	handler.streamVerifier = verify.MakeStreamVerifier(handler.streamVerifierChan, handler.txVerificationPool, helper)
+	handler.streamVerifier = verify.MakeStreamVerifier(handler.streamVerifierChan, handler.txVerificationPool, txnElementProcessor)
 	go handler.droppedTxnWatcher()
 	return handler, nil
 }

@@ -60,9 +60,9 @@ func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups m
 	stxnChan := make(chan UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
 	droppedChan := make(chan *UnverifiedTxnElement)
-	helper, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
+	ep, err := MakeElementProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv = MakeStreamVerifier(stxnChan, verificationPool, helper)
+	sv = MakeStreamVerifier(stxnChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	wg := sync.WaitGroup{}
@@ -409,9 +409,9 @@ func TestStreamVerifierPoolShutdown(t *testing.T) { //nolint:paralleltest // Not
 	stxnChan := make(chan UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
 	droppedChan := make(chan *UnverifiedTxnElement)
-	helper, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
+	ep, err := MakeElementProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamVerifier(stxnChan, verificationPool, helper)
+	sv := MakeStreamVerifier(stxnChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	errChan := make(chan error)
@@ -468,9 +468,9 @@ func TestStreamVerifierRestart(t *testing.T) {
 	droppedChan := make(chan *UnverifiedTxnElement)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	helper, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
+	ep, err := MakeElementProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamVerifier(stxnChan, verificationPool, helper)
+	sv := MakeStreamVerifier(stxnChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	errChan := make(chan error)
@@ -584,9 +584,9 @@ func TestStreamVerifierCtxCancel(t *testing.T) {
 	stxnChan := make(chan UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
 	droppedChan := make(chan *UnverifiedTxnElement)
-	helper, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
+	ep, err := MakeElementProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamVerifier(stxnChan, verificationPool, helper)
+	sv := MakeStreamVerifier(stxnChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	var result *VerificationResult
@@ -639,9 +639,9 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest 
 	stxnChan := make(chan UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
 	droppedChan := make(chan *UnverifiedTxnElement)
-	helper, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
+	ep, err := MakeElementProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamVerifier(stxnChan, verificationPool, helper)
+	sv := MakeStreamVerifier(stxnChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	var result *VerificationResult
@@ -683,7 +683,7 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest 
 	// cancel the ctx as the sig is not yet sent to the exec pool
 	// the test might sporadically fail if between sending the txn above
 	// and the cancelation, 2 x waitForNextTxnDuration elapses (10ms)
-	time.Sleep(6 * WaitForNextTxnDuration)
+	time.Sleep(6 * waitForNextElmtDuration)
 	go func() {
 		// wait a bit before releasing the tasks, so that the verificationPool ctx first gets canceled
 		time.Sleep(20 * time.Millisecond)
@@ -721,9 +721,9 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 	stxnChan := make(chan UnverifiedElement)
 	resultChan := make(chan *VerificationResult, txBacklogSizeMod)
 	droppedChan := make(chan *UnverifiedTxnElement)
-	helper, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
+	ep, err := MakeElementProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamVerifier(stxnChan, verificationPool, helper)
+	sv := MakeStreamVerifier(stxnChan, verificationPool, ep)
 
 	defer close(droppedChan)
 	go func() {
@@ -791,7 +791,7 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 
 func TestStreamVerifierMakeStreamVerifierErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	_, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{badHdr: true}, nil, nil, nil)
+	_, err := MakeElementProcessor(&DummyLedgerForSignature{badHdr: true}, nil, nil, nil)
 	require.Error(t, err)
 }
 
@@ -815,9 +815,9 @@ func TestStreamVerifierCancelWhenPooled(t *testing.T) {
 	resultChan := make(chan *VerificationResult, txBacklogSize)
 	droppedChan := make(chan *UnverifiedTxnElement)
 	ctx, cancel := context.WithCancel(context.Background())
-	helper, err := MakeStreamVerifierHelper(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
+	ep, err := MakeElementProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamVerifier(stxnChan, verificationPool, helper)
+	sv := MakeStreamVerifier(stxnChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	errChan := make(chan error)

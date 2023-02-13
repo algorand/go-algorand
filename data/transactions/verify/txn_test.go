@@ -967,12 +967,12 @@ func TestReturnUnverified(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	droppedChan := make(chan *UnverifiedTxnElement, 1)
-	svh := streamVerifierHelper{
+	svh := txnElementProcessor{
 		resultChan:  make(chan<- *VerificationResult, 0),
 		droppedChan: droppedChan,
 	}
 
-	svh.ReturnUnverified(&UnverifiedTxnElement{}, nil)
+	svh.GetErredUnverified(&UnverifiedTxnElement{}, nil)
 	dropped := <-droppedChan
 	require.Equal(t, *dropped, UnverifiedTxnElement{})
 }
