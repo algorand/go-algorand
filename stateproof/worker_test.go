@@ -233,7 +233,16 @@ var errEmptyVoters = errors.New("ledger does not have voters")
 func (s *testWorkerStubs) RegisterVotersCommitListener(listener ledgercore.VotersCommitListener) {
 	s.listenerMu.Lock()
 	defer s.listenerMu.Unlock()
+	if s.commitListener != nil {
+		panic("re-register commit Listener")
+	}
 	s.commitListener = listener
+}
+
+func (s *testWorkerStubs) UnregisterVotersCommitListener() {
+	s.listenerMu.Lock()
+	defer s.listenerMu.Unlock()
+	s.commitListener = nil
 }
 
 func (s *testWorkerStubs) VotersForStateProof(r basics.Round) (*ledgercore.VotersForRound, error) {
@@ -1949,4 +1958,40 @@ func TestSignerUsesPersistedBuilderLatestProto(t *testing.T) {
 	s.waitForSignerAndBuilder(t)
 
 	a.True(s.isRoundSigned(a, w, firstBuilderRound))
+}
+
+func TestRegisterCommitListener(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	const expectedStateProofs = 3
+	var keys []account.Participation
+	for i := 0; i < 10; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	dbRand := crypto.RandUint64()
+	dbs, _ := dbOpenTestRand(t, true, dbRand)
+	s := newWorkerStubs(t, keys, len(keys))
+	a.Nil(s.commitListener)
+
+	w := newTestWorkerDB(t, s, dbs.Wdb)
+	w.Start()
+
+	a.NotNil(s.commitListener)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	// we break the loop into two part since we don't want to add a state proof round (Round % 256 == 0)
+	for iter := 0; iter < expectedStateProofs-1; iter++ {
+		s.advanceRoundsAndCreateStateProofs(t, proto.StateProofInterval)
+	}
+	s.advanceRoundsAndCreateStateProofs(t, proto.StateProofInterval/2)
+
+	w.Shutdown()
+
+	a.Nil(s.commitListener)
 }

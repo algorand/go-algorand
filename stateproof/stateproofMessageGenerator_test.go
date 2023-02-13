@@ -122,6 +122,10 @@ func (s *workerForStateProofMessageTests) RegisterVotersCommitListener(listener 
 	s.w.RegisterVotersCommitListener(listener)
 }
 
+func (s *workerForStateProofMessageTests) UnregisterVotersCommitListener() {
+	s.w.UnregisterVotersCommitListener()
+}
+
 func (s *workerForStateProofMessageTests) Broadcast(ctx context.Context, tag protocol.Tag, bytes []byte, b bool, peer network.Peer) error {
 	return s.w.Broadcast(ctx, tag, bytes, b, peer)
 }
