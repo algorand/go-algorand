@@ -1929,7 +1929,21 @@ func TestSignerUsesPersistedBuilderLatestProto(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	_, s, w := createWorkerAndParticipants(t, protocol.ConsensusCurrentVersion, proto)
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		p := newPartKey(t, parent)
+		defer p.Close()
+		keys = append(keys, p.Participation)
+	}
+
+	dbRand := crypto.RandUint64()
+	dbs, _ := dbOpenTestRand(t, true, dbRand)
+
+	s := newWorkerStubs(t, keys, 10)
+	w := newTestWorkerDB(t, s, dbs.Wdb)
+	w.Start()
 
 	// We remove the signer's keys to stop it from generating builders and signing.
 	prevKeys := s.keys
@@ -1946,10 +1960,9 @@ func TestSignerUsesPersistedBuilderLatestProto(t *testing.T) {
 
 	// We restart the signing process.
 	s.keys = prevKeys
-	oldDb := w.db
-	w.shutdown()
-	w.wg.Wait()
-	w = newTestWorkerDB(t, s, oldDb)
+	w.Stop()
+	dbs, _ = dbOpenTestRand(t, true, dbRand)
+	w = newTestWorkerDB(t, s, dbs.Wdb)
 	w.Start()
 	defer w.Stop()
 
