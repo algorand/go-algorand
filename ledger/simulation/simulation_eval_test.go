@@ -61,10 +61,6 @@ func uint64ToBytes(num uint64) []byte {
 	return ibytes
 }
 
-// ==============================
-// > Simulation Tests
-// ==============================
-
 type simulationTestCase struct {
 	input         []transactions.SignedTxn
 	expected      simulation.Result
@@ -74,6 +70,7 @@ type simulationTestCase struct {
 func normalizeEvalDeltas(t *testing.T, actual, expected *transactions.EvalDelta) {
 	t.Helper()
 	for _, evalDelta := range []*transactions.EvalDelta{actual, expected} {
+		// The difference between a nil contain and a 0-length one is not meaningful for these tests
 		if len(evalDelta.GlobalDelta) == 0 {
 			evalDelta.GlobalDelta = nil
 		}
@@ -129,6 +126,9 @@ func validateSimulationResult(t *testing.T, result simulation.Result) {
 	}
 
 	for i, groupResult := range result.TxnGroups {
+		if i == len(blockGroups) {
+			break
+		}
 		blockGroup := blockGroups[i]
 
 		if !assert.Equal(t, len(blockGroup), len(groupResult.Txns), "mismatched number of txns in group %d", i) {
@@ -324,7 +324,7 @@ func TestPayTxn(t *testing.T) {
 	})
 }
 
-func TestAuthAddrTxn(t *testing.T) {
+func TestWrongAuthorizerTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -341,15 +341,18 @@ func TestAuthAddrTxn(t *testing.T) {
 					Sender:   sender.Addr,
 					Receiver: sender.Addr,
 					Amount:   0,
-				}).SignedTxn()
-				txn.AuthAddr = authority.Addr
+				})
 
+				var stxn transactions.SignedTxn
 				if signed {
-					txn = txn.Txn.Sign(authority.Sk)
+					stxn = txn.Txn().Sign(authority.Sk)
+				} else {
+					stxn = txn.SignedTxn()
+					stxn.AuthAddr = authority.Addr
 				}
 
 				return simulationTestCase{
-					input:         []transactions.SignedTxn{txn},
+					input:         []transactions.SignedTxn{stxn},
 					expectedError: fmt.Sprintf("should have been authorized by %s but was actually authorized by %s", sender.Addr, authority.Addr),
 					expected: simulation.Result{
 						Version: 1,
@@ -364,6 +367,68 @@ func TestAuthAddrTxn(t *testing.T) {
 							},
 						},
 						WouldSucceed: false,
+					},
+				}
+			})
+		})
+	}
+}
+
+func TestRekey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, signed := range []bool{true, false} {
+		signed := signed
+		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+				sender := accounts[0]
+				authority := accounts[1]
+
+				txn1 := txnInfo.NewTxn(txntest.Txn{
+					Type:     protocol.PaymentTx,
+					Sender:   sender.Addr,
+					Receiver: sender.Addr,
+					Amount:   1,
+					RekeyTo:  authority.Addr,
+				})
+				txn2 := txnInfo.NewTxn(txntest.Txn{
+					Type:     protocol.PaymentTx,
+					Sender:   sender.Addr,
+					Receiver: sender.Addr,
+					Amount:   2,
+				})
+
+				txntest.Group(&txn1, &txn2)
+
+				var stxn1 transactions.SignedTxn
+				var stxn2 transactions.SignedTxn
+				if signed {
+					stxn1 = txn1.Txn().Sign(sender.Sk)
+					stxn2 = txn2.Txn().Sign(authority.Sk)
+				} else {
+					stxn1 = txn1.SignedTxn()
+					stxn2 = txn2.SignedTxn()
+					stxn2.AuthAddr = authority.Addr
+				}
+				return simulationTestCase{
+					input: []transactions.SignedTxn{stxn1, stxn2},
+					expected: simulation.Result{
+						Version: 1,
+						TxnGroups: []simulation.TxnGroupResult{
+							{
+								Txns: []simulation.TxnResult{
+									{
+										MissingSignature: !signed,
+									},
+									{
+										MissingSignature: !signed,
+									},
+								},
+							},
+						},
+						WouldSucceed: signed,
 					},
 				}
 			})
@@ -653,102 +718,126 @@ func TestRejectAppCall(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	for _, signed := range []bool{true, false} {
+		signed := signed
+		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+				sender := accounts[0]
 
-		futureAppID := basics.AppIndex(1)
-		createTxn := txnInfo.NewTxn(txntest.Txn{
-			Type:          protocol.ApplicationCallTx,
-			Sender:        sender.Addr,
-			ApplicationID: 0,
-			ApprovalProgram: `#pragma version 6
+				futureAppID := basics.AppIndex(1)
+				createTxn := txnInfo.NewTxn(txntest.Txn{
+					Type:          protocol.ApplicationCallTx,
+					Sender:        sender.Addr,
+					ApplicationID: 0,
+					ApprovalProgram: `#pragma version 6
 byte "app creation"
 log
 int 0
 			`,
-			ClearStateProgram: `#pragma version 6
+					ClearStateProgram: `#pragma version 6
 int 0
 `,
-		})
-		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+				})
 
-		return simulationTestCase{
-			input:         []transactions.SignedTxn{signedCreateTxn},
-			expectedError: "transaction rejected by ApprovalProgram",
-			expected: simulation.Result{
-				Version: 1,
-				TxnGroups: []simulation.TxnGroupResult{
-					{
-						Txns: []simulation.TxnResult{
+				signedCreateTxn := createTxn.SignedTxn()
+
+				if signed {
+					signedCreateTxn = createTxn.Txn().Sign(sender.Sk)
+				}
+
+				return simulationTestCase{
+					input:         []transactions.SignedTxn{signedCreateTxn},
+					expectedError: "transaction rejected by ApprovalProgram",
+					expected: simulation.Result{
+						Version: 1,
+						TxnGroups: []simulation.TxnGroupResult{
 							{
-								Txn: transactions.SignedTxnWithAD{
-									ApplyData: transactions.ApplyData{
-										ApplicationID: futureAppID,
-										EvalDelta: transactions.EvalDelta{
-											Logs: []string{"app creation"},
+								Txns: []simulation.TxnResult{
+									{
+										Txn: transactions.SignedTxnWithAD{
+											ApplyData: transactions.ApplyData{
+												ApplicationID: futureAppID,
+												EvalDelta: transactions.EvalDelta{
+													Logs: []string{"app creation"},
+												},
+											},
 										},
+										MissingSignature: !signed,
 									},
 								},
+								FailedAt: simulation.TxnPath{0},
 							},
 						},
-						FailedAt: simulation.TxnPath{0},
+						WouldSucceed: false,
 					},
-				},
-				WouldSucceed: false,
-			},
-		}
-	})
+				}
+			})
+		})
+	}
 }
 
 func TestErrorAppCall(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	for _, signed := range []bool{true, false} {
+		signed := signed
+		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+				sender := accounts[0]
 
-		futureAppID := basics.AppIndex(1)
-		createTxn := txnInfo.NewTxn(txntest.Txn{
-			Type:          protocol.ApplicationCallTx,
-			Sender:        sender.Addr,
-			ApplicationID: 0,
-			ApprovalProgram: `#pragma version 6
+				futureAppID := basics.AppIndex(1)
+				createTxn := txnInfo.NewTxn(txntest.Txn{
+					Type:          protocol.ApplicationCallTx,
+					Sender:        sender.Addr,
+					ApplicationID: 0,
+					ApprovalProgram: `#pragma version 6
 byte "app creation"
 log
 err
 			`,
-			ClearStateProgram: `#pragma version 6
+					ClearStateProgram: `#pragma version 6
 int 0
 `,
-		})
-		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+				})
 
-		return simulationTestCase{
-			input:         []transactions.SignedTxn{signedCreateTxn},
-			expectedError: "err opcode executed",
-			expected: simulation.Result{
-				Version: 1,
-				TxnGroups: []simulation.TxnGroupResult{
-					{
-						Txns: []simulation.TxnResult{
+				signedCreateTxn := createTxn.SignedTxn()
+
+				if signed {
+					signedCreateTxn = createTxn.Txn().Sign(sender.Sk)
+				}
+
+				return simulationTestCase{
+					input:         []transactions.SignedTxn{signedCreateTxn},
+					expectedError: "err opcode executed",
+					expected: simulation.Result{
+						Version: 1,
+						TxnGroups: []simulation.TxnGroupResult{
 							{
-								Txn: transactions.SignedTxnWithAD{
-									ApplyData: transactions.ApplyData{
-										ApplicationID: futureAppID,
-										EvalDelta: transactions.EvalDelta{
-											Logs: []string{"app creation"},
+								Txns: []simulation.TxnResult{
+									{
+										Txn: transactions.SignedTxnWithAD{
+											ApplyData: transactions.ApplyData{
+												ApplicationID: futureAppID,
+												EvalDelta: transactions.EvalDelta{
+													Logs: []string{"app creation"},
+												},
+											},
 										},
+										MissingSignature: !signed,
 									},
 								},
+								FailedAt: simulation.TxnPath{0},
 							},
 						},
-						FailedAt: simulation.TxnPath{0},
+						WouldSucceed: false,
 					},
-				},
-				WouldSucceed: false,
-			},
-		}
-	})
+				}
+			})
+		})
+	}
 }
 
 func TestSignatureCheck(t *testing.T) {
@@ -830,88 +919,171 @@ func TestBalanceChangesWithApp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
-		senderBalance := sender.AcctData.MicroAlgos.Raw
-		sendAmount := senderBalance - 500_000 // Leave 0.5 Algos in the sender account
-		receiver := accounts[1]
-		receiverBalance := receiver.AcctData.MicroAlgos.Raw
+	for _, signed := range []bool{true, false} {
+		signed := signed
+		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+				sender := accounts[0]
+				senderBalance := sender.AcctData.MicroAlgos.Raw
+				sendAmount := senderBalance - 500_000 // Leave 0.5 Algos in the sender account
+				receiver := accounts[1]
+				receiverBalance := receiver.AcctData.MicroAlgos.Raw
 
-		futureAppID := basics.AppIndex(1)
-		createTxn := txnInfo.NewTxn(txntest.Txn{
-			Type:   protocol.ApplicationCallTx,
-			Sender: sender.Addr,
-			ApprovalProgram: `#pragma version 6
+				futureAppID := basics.AppIndex(1)
+				createTxn := txnInfo.NewTxn(txntest.Txn{
+					Type:   protocol.ApplicationCallTx,
+					Sender: sender.Addr,
+					ApprovalProgram: `#pragma version 6
 txn ApplicationID      // [appId]
-	bz end                 // []
+bz end                 // []
 int 1                  // [1]
 balance                // [bal[1]]
 itob                   // [itob(bal[1])]
 txn ApplicationArgs 0  // [itob(bal[1]), args[0]]
 ==                     // [itob(bal[1])=?=args[0]]
-	assert
-	b end
+assert
 end:
 int 1                  // [1]
 `,
-			ClearStateProgram: `#pragma version 6
+					ClearStateProgram: `#pragma version 6
 int 1`,
+				})
+				checkStartingBalanceTxn := txnInfo.NewTxn(txntest.Txn{
+					Type:            protocol.ApplicationCallTx,
+					Sender:          sender.Addr,
+					ApplicationID:   futureAppID,
+					Accounts:        []basics.Address{receiver.Addr},
+					ApplicationArgs: [][]byte{uint64ToBytes(receiverBalance)},
+				})
+				paymentTxn := txnInfo.NewTxn(txntest.Txn{
+					Type:     protocol.PaymentTx,
+					Sender:   sender.Addr,
+					Receiver: receiver.Addr,
+					Amount:   sendAmount,
+				})
+				checkEndingBalanceTxn := txnInfo.NewTxn(txntest.Txn{
+					Type:          protocol.ApplicationCallTx,
+					Sender:        sender.Addr,
+					ApplicationID: futureAppID,
+					Accounts:      []basics.Address{receiver.Addr},
+					// Receiver's balance should have increased by sendAmount
+					ApplicationArgs: [][]byte{uint64ToBytes(receiverBalance + sendAmount)},
+				})
+
+				txntest.Group(&createTxn, &checkStartingBalanceTxn, &paymentTxn, &checkEndingBalanceTxn)
+
+				signedCreateTxn := createTxn.SignedTxn()
+				signedCheckStartingBalanceTxn := checkStartingBalanceTxn.SignedTxn()
+				signedPaymentTxn := paymentTxn.SignedTxn()
+				signedCheckEndingBalanceTxn := checkEndingBalanceTxn.SignedTxn()
+
+				if signed {
+					signedCreateTxn = createTxn.Txn().Sign(sender.Sk)
+					signedCheckStartingBalanceTxn = checkStartingBalanceTxn.Txn().Sign(sender.Sk)
+					signedPaymentTxn = paymentTxn.Txn().Sign(sender.Sk)
+					signedCheckEndingBalanceTxn = checkEndingBalanceTxn.Txn().Sign(sender.Sk)
+				}
+
+				return simulationTestCase{
+					input: []transactions.SignedTxn{
+						signedCreateTxn,
+						signedCheckStartingBalanceTxn,
+						signedPaymentTxn,
+						signedCheckEndingBalanceTxn,
+					},
+					expected: simulation.Result{
+						Version: 1,
+						TxnGroups: []simulation.TxnGroupResult{
+							{
+								Txns: []simulation.TxnResult{
+									{
+										Txn: transactions.SignedTxnWithAD{
+											ApplyData: transactions.ApplyData{
+												ApplicationID: futureAppID,
+											},
+										},
+										MissingSignature: !signed,
+									},
+									{
+										MissingSignature: !signed,
+									},
+									{
+										MissingSignature: !signed,
+									},
+									{
+										MissingSignature: !signed,
+									},
+								},
+							},
+						},
+						WouldSucceed: signed,
+					},
+				}
+			})
 		})
-		checkStartingBalanceTxn := txnInfo.NewTxn(txntest.Txn{
-			Type:            protocol.ApplicationCallTx,
-			Sender:          sender.Addr,
-			ApplicationID:   futureAppID,
-			Accounts:        []basics.Address{receiver.Addr},
-			ApplicationArgs: [][]byte{uint64ToBytes(receiverBalance)},
+	}
+}
+
+func TestPartialMissingSignatures(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+		sender := accounts[0]
+
+		txn1 := txnInfo.NewTxn(txntest.Txn{
+			Type:   protocol.AssetConfigTx,
+			Sender: sender.Addr,
+			AssetParams: basics.AssetParams{
+				Total:    10,
+				Decimals: 0,
+				Manager:  sender.Addr,
+				UnitName: "A",
+			},
 		})
-		paymentTxn := txnInfo.NewTxn(txntest.Txn{
-			Type:     protocol.PaymentTx,
-			Sender:   sender.Addr,
-			Receiver: receiver.Addr,
-			Amount:   sendAmount,
-		})
-		checkEndingBalanceTxn := txnInfo.NewTxn(txntest.Txn{
-			Type:          protocol.ApplicationCallTx,
-			Sender:        sender.Addr,
-			ApplicationID: futureAppID,
-			Accounts:      []basics.Address{receiver.Addr},
-			// Receiver's balance should have increased by sendAmount
-			ApplicationArgs: [][]byte{uint64ToBytes(receiverBalance + sendAmount)},
+		txn2 := txnInfo.NewTxn(txntest.Txn{
+			Type:   protocol.AssetConfigTx,
+			Sender: sender.Addr,
+			AssetParams: basics.AssetParams{
+				Total:    10,
+				Decimals: 0,
+				Manager:  sender.Addr,
+				UnitName: "B",
+			},
 		})
 
-		txntest.Group(&createTxn, &checkStartingBalanceTxn, &paymentTxn, &checkEndingBalanceTxn)
+		txntest.Group(&txn1, &txn2)
 
-		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
-		signedCheckStartingBalanceTxn := checkStartingBalanceTxn.Txn().Sign(sender.Sk)
-		signedPaymentTxn := paymentTxn.Txn().Sign(sender.Sk)
-		signedCheckEndingBalanceTxn := checkEndingBalanceTxn.Txn().Sign(sender.Sk)
+		// add signature to second transaction only
+		signedTxn1 := txn1.SignedTxn()
+		signedTxn2 := txn2.Txn().Sign(sender.Sk)
 
 		return simulationTestCase{
-			input: []transactions.SignedTxn{
-				signedCreateTxn,
-				signedCheckStartingBalanceTxn,
-				signedPaymentTxn,
-				signedCheckEndingBalanceTxn,
-			},
+			input: []transactions.SignedTxn{signedTxn1, signedTxn2},
 			expected: simulation.Result{
 				Version: 1,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
 							{
+								MissingSignature: true,
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
-										ApplicationID: futureAppID,
+										ConfigAsset: 1,
+									},
+								},
+							}, {
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ConfigAsset: 2,
 									},
 								},
 							},
-							{},
-							{},
-							{},
 						},
 					},
 				},
-				WouldSucceed: true,
+				WouldSucceed: false,
 			},
 		}
 	})
@@ -969,161 +1141,6 @@ func TestPooledFeesAcrossSignedAndUnsigned(t *testing.T) {
 	})
 }
 
-func TestSimulateFailureInformation(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	// Test FailedAt for each program failure
-	for i := 0; i < 3; i++ {
-		i := i
-		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
-			t.Parallel()
-			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-				sender := accounts[0]
-
-				// The loop variable i indicates which inner transaction will fail.
-				// TODO: explain the setup for this test more
-				// TODO: additional failure conditions would be in the top-level app call before/between/after inners
-
-				futureAppID := basics.AppIndex(2)
-				fundApp := txnInfo.NewTxn(txntest.Txn{
-					Type:     protocol.PaymentTx,
-					Sender:   sender.Addr,
-					Receiver: futureAppID.Address(),
-					Amount:   403_000, // 400_000 min balance plus 3_000 for 3 txns
-				})
-				createApp := txnInfo.NewTxn(txntest.Txn{
-					Type:            protocol.ApplicationCallTx,
-					Sender:          sender.Addr,
-					ApplicationID:   0,
-					ApplicationArgs: [][]byte{uint64ToBytes(uint64(3 - i))},
-					ApprovalProgram: `#pragma version 6
-int 3                             // [index(3)]
-prepare_txn:
-	itxn_begin                    // [index]
-	int appl                      // [index, appl]
-	itxn_field TypeEnum           // [index]
-	int NoOp                      // [index, NoOp]
-	itxn_field OnCompletion       // [index]
-	byte 0x068101                 // [index, 0x068101]
-	itxn_field ClearStateProgram  // [index]
-app_arg_check:
-    // #pragma version 6; int 1;
-	byte 0x068101                 // [index, 0x068101]
-	// #pragma version 6; int 0;
-	byte 0x068100                 // [index, 0x068101, 0x068100]
-	dig 2                         // [index, 0x068101, 0x068100, index]
-	txn ApplicationArgs 0         // [index, 0x068101, 0x068100, index, args[0]]
-	btoi                          // [index, 0x068101, 0x068100, index, btoi(args[0])]
-	==                            // [index, 0x068101, 0x068100, index=?=btoi(args[0])]
-	select                        // [index, index==btoi(args[0]) ? 0x068100 : 0x068101]
-	itxn_field ApprovalProgram    // [index]
-	itxn_submit                   // [index]
-decrement_and_loop:
-	int 1                         // [index, 1]
-	-                             // [index - 1]
-	dup                           // [index - 1, index - 1]
-	bnz prepare_txn               // [index - 1]
-pop                               // []
-int 1                             // [1]
-`,
-					ClearStateProgram: `#pragma version 6
-int 1`,
-				})
-
-				txntest.Group(&fundApp, &createApp)
-
-				signedFundApp := fundApp.Txn().Sign(sender.Sk)
-				signedCreateApp := createApp.Txn().Sign(sender.Sk)
-
-				var expectedInnerTxns []transactions.SignedTxnWithAD
-				for innerIndex := 0; innerIndex <= i; innerIndex++ {
-					innerTxn := transactions.SignedTxnWithAD{
-						SignedTxn: txnInfo.InnerTxn(signedFundApp, txntest.Txn{
-							Type:              protocol.ApplicationCallTx,
-							Sender:            futureAppID.Address(),
-							ApprovalProgram:   []byte{0x06, 0x81, 0x01},
-							ClearStateProgram: []byte{0x06, 0x81, 0x01},
-						}).SignedTxn(),
-						ApplyData: transactions.ApplyData{
-							ApplicationID: futureAppID + basics.AppIndex(innerIndex+1),
-						},
-					}
-					if innerIndex == i {
-						innerTxn.SignedTxn.Txn.ApprovalProgram = []byte{0x06, 0x81, 0x00}
-					}
-					expectedInnerTxns = append(expectedInnerTxns, innerTxn)
-				}
-
-				return simulationTestCase{
-					input:         []transactions.SignedTxn{signedFundApp, signedCreateApp},
-					expectedError: "rejected by ApprovalProgram",
-					expected: simulation.Result{
-						Version: 1,
-						TxnGroups: []simulation.TxnGroupResult{
-							{
-								Txns: []simulation.TxnResult{
-									{}, {
-										Txn: transactions.SignedTxnWithAD{
-											ApplyData: transactions.ApplyData{
-												ApplicationID: futureAppID,
-												EvalDelta: transactions.EvalDelta{
-													InnerTxns: expectedInnerTxns,
-												},
-											},
-										},
-									},
-								},
-								FailedAt: simulation.TxnPath{1, uint64(i)},
-							},
-						},
-						WouldSucceed: false,
-					},
-				}
-			})
-		})
-	}
-}
-
-func TestSimulatePartialMissingSignatures(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
-	sender := accounts[0]
-	senderBalance := accounts[0].AcctData.MicroAlgos
-
-	txn1 := txnInfo.NewTxn(txntest.Txn{
-		Type:     protocol.PaymentTx,
-		Sender:   sender.Addr,
-		Receiver: sender.Addr,
-		Amount:   senderBalance.Raw - 1000,
-	})
-	txn2 := txnInfo.NewTxn(txntest.Txn{
-		Type:     protocol.PaymentTx,
-		Sender:   sender.Addr,
-		Receiver: sender.Addr,
-		Amount:   senderBalance.Raw - 2000,
-	})
-
-	txntest.Group(&txn1, &txn2)
-
-	// add signature to second transaction only
-	signedTxn1 := txn1.SignedTxn()
-	signedTxn2 := txn2.Txn().Sign(sender.Sk)
-
-	result, err := s.Simulate([]transactions.SignedTxn{signedTxn1, signedTxn2})
-	require.NoError(t, err)
-	require.Len(t, result.TxnGroups, 1)
-	require.Len(t, result.TxnGroups[0].Txns, 2)
-	require.Empty(t, result.TxnGroups[0].FailureMessage)
-	require.False(t, result.WouldSucceed)
-	require.True(t, result.TxnGroups[0].Txns[0].MissingSignature)
-	require.False(t, result.TxnGroups[0].Txns[1].MissingSignature)
-}
-
 const logAndFail = `#pragma version 6
 byte "message"
 log
@@ -1137,6 +1154,7 @@ func makeItxnSubmitToCallInner(t *testing.T, program string) string {
 	programBytesHex := hex.EncodeToString(ops.Program)
 	itxnSubmit := fmt.Sprintf(`byte "starting inner txn"
 log
+
 itxn_begin
 int appl
 itxn_field TypeEnum
@@ -1146,7 +1164,11 @@ byte 0x068101
 itxn_field ClearStateProgram
 byte 0x%s
 itxn_field ApprovalProgram
-itxn_submit`, programBytesHex)
+itxn_submit
+
+byte "finished inner txn"
+log
+`, programBytesHex)
 	return itxnSubmit
 }
 
@@ -1163,7 +1185,7 @@ func makeProgramToCallInner(t *testing.T, program string) string {
 	return wrapCodeWithVersionAndReturn(itxnSubmitCode)
 }
 
-func TestSimulateAccessInnerTxnApplyDataOnFail(t *testing.T) {
+func TestAppCallInnerTxnApplyDataOnFail(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -1178,14 +1200,14 @@ func TestSimulateAccessInnerTxnApplyDataOnFail(t *testing.T) {
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: basics.AppIndex(3).Address(),
-			Amount:   401_000, // 400000 min balance plus 1000 for 1 txn
+			Amount:   401_000, // 400_000 min balance plus 1_000 for 1 txn
 		})
 		// fund inner app
 		pay2 := txnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: basics.AppIndex(4).Address(),
-			Amount:   401_000, // 400000 min balance plus 1000 for 1 txn
+			Amount:   401_000, // 400_000 min balance plus 1_000 for 1 txn
 		})
 		// create app
 		appCall := txnInfo.NewTxn(txntest.Txn{
@@ -1254,13 +1276,17 @@ int 1`,
 
 const createAssetCode = `byte "starting asset create"
 log
+
 itxn_begin
 int acfg
 itxn_field TypeEnum
 itxn_submit
+
+byte "finished asset create"
+log
 `
 
-func TestSimulateAccessInnerTxnNonAppCallApplyDataOnFail(t *testing.T) {
+func TestNonAppCallInnerTxnApplyDataOnFail(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -1275,7 +1301,7 @@ func TestSimulateAccessInnerTxnNonAppCallApplyDataOnFail(t *testing.T) {
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: basics.AppIndex(2).Address(),
-			Amount:   401_000, // 400000 min balance plus 1000 for 1 txn
+			Amount:   401_000, // 400_000 min balance plus 1_000 for 1 txn
 		})
 		// create app
 		appCall := txnInfo.NewTxn(txntest.Txn{
@@ -1304,7 +1330,7 @@ int 1`,
 									ApplyData: transactions.ApplyData{
 										ApplicationID: 2,
 										EvalDelta: transactions.EvalDelta{
-											Logs: []string{"starting asset create", "starting inner txn"},
+											Logs: []string{"starting asset create", "finished asset create", "starting inner txn"},
 											InnerTxns: []transactions.SignedTxnWithAD{
 												{
 													ApplyData: transactions.ApplyData{
@@ -1335,31 +1361,36 @@ int 1`,
 	})
 }
 
-const invalidCreateAssetCode = `byte "starting invalid asset create"
+const configAssetCode = `byte "starting asset config"
 log
+
 itxn_begin
 int acfg
 itxn_field TypeEnum
-int 2
-itxn_field ConfigAssetDefaultFrozen
+int %d
+itxn_field ConfigAsset
 itxn_submit
+
+byte "finished asset config"
+log
 `
 
-func TestSimulateAccessInnerTxnWithNonAppCallsFailure(t *testing.T) {
+func TestInnerTxnNonAppCallFailure(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
 		sender := accounts[0]
 
-		approvalProgram := wrapCodeWithVersionAndReturn(createAssetCode + invalidCreateAssetCode)
+		// configAssetCode should fail because createAssetCode does not set an asset manager
+		approvalProgram := wrapCodeWithVersionAndReturn(createAssetCode + fmt.Sprintf(configAssetCode, 3))
 
 		// fund outer app
 		pay1 := txnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: basics.AppIndex(2).Address(),
-			Amount:   402_000, // 400000 min balance plus 2000 for 2 inners
+			Amount:   402_000, // 400_000 min balance plus 2_000 for 2 inners
 		})
 		// create app
 		appCall := txnInfo.NewTxn(txntest.Txn{
@@ -1375,7 +1406,7 @@ int 1`,
 
 		return simulationTestCase{
 			input:         txgroup,
-			expectedError: "boolean is neither 1 nor 0",
+			expectedError: "logic eval error: this transaction should be issued by the manager",
 			expected: simulation.Result{
 				Version: 1,
 				TxnGroups: []simulation.TxnGroupResult{
@@ -1388,13 +1419,14 @@ int 1`,
 									ApplyData: transactions.ApplyData{
 										ApplicationID: 2,
 										EvalDelta: transactions.EvalDelta{
-											Logs: []string{"starting asset create", "starting invalid asset create"},
+											Logs: []string{"starting asset create", "finished asset create", "starting asset config"},
 											InnerTxns: []transactions.SignedTxnWithAD{
 												{
 													ApplyData: transactions.ApplyData{
 														ConfigAsset: 3,
 													},
 												},
+												{},
 											},
 										},
 									},
@@ -1402,40 +1434,13 @@ int 1`,
 								MissingSignature: true,
 							},
 						},
-						FailedAt: simulation.TxnPath{1},
+						FailedAt: simulation.TxnPath{1, 1},
 					},
 				},
 				WouldSucceed: false,
 			},
 		}
 	})
-}
-
-func getMockTracerScenarioSimulationResult(scenario mocktracer.TestScenario) simulation.Result {
-	failedAt := scenario.FailedAt
-	if len(failedAt) != 0 {
-		// The mocktracer scenario txn is second in our group, so add 1 to the top-level index
-		failedAt[0]++
-	}
-
-	result := simulation.Result{
-		Version: 1,
-		TxnGroups: []simulation.TxnGroupResult{
-			{
-				FailedAt: failedAt,
-				Txns: []simulation.TxnResult{
-					{},
-					{
-						Txn: transactions.SignedTxnWithAD{
-							ApplyData: scenario.ExpectedSimulationAD,
-						},
-					},
-				},
-			},
-		},
-		WouldSucceed: scenario.Outcome == mocktracer.ApprovalOutcome,
-	}
-	return result
 }
 
 func TestMockTracerScenarios(t *testing.T) {
@@ -1476,10 +1481,33 @@ func TestMockTracerScenarios(t *testing.T) {
 				signedPayTxn := payTxn.Txn().Sign(sender.Sk)
 				signedAppCallTxn := appCallTxn.Txn().Sign(sender.Sk)
 
+				expectedFailedAt := scenario.FailedAt
+				if len(expectedFailedAt) != 0 {
+					// The mocktracer scenario txn is second in our group, so add 1 to the top-level index
+					expectedFailedAt[0]++
+				}
+				expected := simulation.Result{
+					Version: 1,
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							FailedAt: expectedFailedAt,
+							Txns: []simulation.TxnResult{
+								{},
+								{
+									Txn: transactions.SignedTxnWithAD{
+										ApplyData: scenario.ExpectedSimulationAD,
+									},
+								},
+							},
+						},
+					},
+					WouldSucceed: scenario.Outcome == mocktracer.ApprovalOutcome,
+				}
+
 				return simulationTestCase{
 					input:         []transactions.SignedTxn{signedPayTxn, signedAppCallTxn},
 					expectedError: scenario.ExpectedError,
-					expected:      getMockTracerScenarioSimulationResult(scenario),
+					expected:      expected,
 				}
 			})
 		})
