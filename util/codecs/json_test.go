@@ -17,9 +17,10 @@
 package codecs
 
 import (
+	"testing"
+
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 type testValue struct {

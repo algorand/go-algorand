@@ -239,9 +239,8 @@ func cleanupSqliteDb(t *testing.T, path string) {
 	}
 }
 
-func TestDBConcurrencyRW(t *testing.T) {
+func TestDBConcurrencyRW(t *testing.T) { //nolint:paralleltest // Don't parallelize tests that may have sensitive timing dependencies.
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	if testing.Short() {
 		// Since it is a long operation and can only be affected by the db package, we can skip this test when running short tests only.
@@ -490,17 +489,15 @@ func TestReadingWhileWriting(t *testing.T) {
 }
 
 // using Write-Ahead Logging (WAL)
-func TestLockingTableWhileWritingWAL(t *testing.T) {
+func TestLockingTableWhileWritingWAL(t *testing.T) { //nolint:paralleltest // Non-short tests may not be worth parallelizing yet.
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	testLockingTableWhileWriting(t, true)
 }
 
 // using the default Rollback Journal
-func TestLockingTableWhileWritingJournal(t *testing.T) {
+func TestLockingTableWhileWritingJournal(t *testing.T) { //nolint:paralleltest // Non-short tests may not be worth parallelizing yet.
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	testLockingTableWhileWriting(t, false)
 }

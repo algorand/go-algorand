@@ -278,12 +278,10 @@ func TestBinaryMarshalLength(t *testing.T) {
 	}
 }
 
-func TestBloomFilterMemoryConsumption(t *testing.T) {
+func TestBloomFilterMemoryConsumption(t *testing.T) { //nolint:paralleltest // Don't parallelize tests that run Benchmark().
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	t.Run("Set", func(t *testing.T) {
-		t.Parallel()
 		N := 1000000
 		sizeBits, numHashes := Optimal(N, 0.01)
 		prefix := uint32(0)
@@ -312,7 +310,6 @@ func TestBloomFilterMemoryConsumption(t *testing.T) {
 		require.LessOrEqual(t, uint64(result.MemBytes), uint64(result.N))
 	})
 	t.Run("Test", func(t *testing.T) {
-		t.Parallel()
 		N := 1000000
 		sizeBits, numHashes := Optimal(N, 0.01)
 		prefix := uint32(0)
