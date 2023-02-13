@@ -1138,7 +1138,6 @@ func TestAutoPublicAddress(t *testing.T) {
 	t.Parallel()
 
 	netA := makeTestWebsocketNode(t)
-	netA.identityTracker = newMockIdentityTracker()
 	netA.config.PublicAddress = "auto"
 	netA.config.GossipFanout = 1
 
@@ -1156,31 +1155,34 @@ func TestAutoPublicAddress(t *testing.T) {
 
 // mock an identityTracker
 type mockIdentityTracker struct {
-	shouldInsert bool
-	setCount     int
-	insertCount  int
-	removeCount  int
-	lock         deadlock.Mutex
+	isOccupied  bool
+	setCount    int
+	insertCount int
+	removeCount int
+	lock        deadlock.Mutex
+	realTracker identityTracker
 }
 
-func newMockIdentityTracker() *mockIdentityTracker {
+func newMockIdentityTracker(realTracker identityTracker) *mockIdentityTracker {
 	return &mockIdentityTracker{
-		shouldInsert: true,
-		setCount:     0,
-		insertCount:  0,
-		removeCount:  0,
+		isOccupied:  true,
+		setCount:    0,
+		insertCount: 0,
+		removeCount: 0,
+		realTracker: realTracker,
 	}
 }
 
-func (d *mockIdentityTracker) setShouldInsert(b bool) {
+func (d *mockIdentityTracker) setIsOccupied(b bool) {
 	d.lock.Lock()
 	defer d.lock.Unlock()
-	d.shouldInsert = b
+	d.isOccupied = b
 }
 func (d *mockIdentityTracker) removeIdentity(p *wsPeer) {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 	d.removeCount++
+	d.realTracker.removeIdentity(p)
 }
 func (d *mockIdentityTracker) getInsertCount() int {
 	d.lock.Lock()
@@ -1201,10 +1203,14 @@ func (d *mockIdentityTracker) setIdentity(p *wsPeer) bool {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 	d.setCount++
-	if d.shouldInsert {
+	if !d.isOccupied {
+		return false
+	}
+	ret := d.realTracker.setIdentity(p)
+	if ret {
 		d.insertCount++
 	}
-	return d.shouldInsert
+	return ret
 }
 
 func hostAndPort(u string) string {
@@ -1223,12 +1229,12 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
-	netA.identityTracker = newMockIdentityTracker()
+	netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
 	netA.config.PublicAddress = "auto"
 	netA.config.GossipFanout = 1
 
 	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
-	netB.identityTracker = newMockIdentityTracker()
+	netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
 	netB.config.PublicAddress = "auto"
 	netB.config.GossipFanout = 1
 
@@ -1273,10 +1279,6 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getInsertCount())
 
-	// tell the mock identity tracker that new identies should fail to insert
-	netA.identityTracker.(*mockIdentityTracker).setShouldInsert(false)
-	netB.identityTracker.(*mockIdentityTracker).setShouldInsert(false)
-
 	// bi-directional connection from B should not proceed
 	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
 		netB.wg.Add(1)
@@ -1319,6 +1321,47 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 2, netA.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getInsertCount())
+
+	// Now have A connect to node C, which has the same PublicAddress as B (e.g., because it shares the
+	// same public load balancer endpoint). C will have a different identity keypair and so will not be
+	// considered a duplicate.
+	netC := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netC"})
+	netC.identityTracker = newMockIdentityTracker(netC.identityTracker)
+	netC.config.PublicAddress = addrB
+	netC.config.GossipFanout = 1
+
+	netC.Start()
+	defer netC.Stop()
+
+	addrC, ok := netC.Address()
+	require.True(t, ok)
+	gossipC, err := netC.addrToGossipAddr(addrC)
+	require.NoError(t, err)
+	addrC = hostAndPort(addrC)
+
+	// A connects to C (but uses addrB here to simulate case where B & C have the same PublicAddress)
+	netA.wg.Add(1)
+	netA.tryConnect(addrB, gossipC)
+	// let the tryConnect go forward
+	time.Sleep(100 * time.Millisecond)
+
+	// A->B and A->C both open
+	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 2, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netC.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
+
+	// confirm identity map was added to for both hosts
+	assert.Equal(t, 3, netA.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 2, netA.identityTracker.(*mockIdentityTracker).getInsertCount())
+
+	// netC has to wait for a final verification message over WS Handler, so pause a moment
+	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, 1, netC.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netC.identityTracker.(*mockIdentityTracker).getInsertCount())
+
 }
 
 // TestPeeringSenderIdentityChallengeOnly will confirm that if only the Sender
@@ -1327,12 +1370,12 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
-	netA.identityTracker = newMockIdentityTracker()
+	netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
 	netA.config.PublicAddress = "auto"
 	netA.config.GossipFanout = 1
 
 	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
-	netB.identityTracker = newMockIdentityTracker()
+	netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
 	//netB.config.PublicAddress = "auto"
 	netB.config.GossipFanout = 1
 
@@ -1392,12 +1435,12 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
-	netA.identityTracker = newMockIdentityTracker()
+	netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
 	//netA.config.PublicAddress = "auto"
 	netA.config.GossipFanout = 1
 
 	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
-	netB.identityTracker = newMockIdentityTracker()
+	netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
 	netB.config.PublicAddress = "auto"
 	netB.config.GossipFanout = 1
 
@@ -1459,12 +1502,12 @@ func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
-	netA.identityTracker = newMockIdentityTracker()
+	netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
 	netA.config.PublicAddress = "auto"
 	netA.config.GossipFanout = 1
 
 	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
-	netB.identityTracker = newMockIdentityTracker()
+	netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
 	netB.config.PublicAddress = "no:3333"
 	netB.config.GossipFanout = 1
 
@@ -1648,7 +1691,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 	for _, tc := range testCases {
 		t.Logf("Running Peering with Identity Challenge Test: %s", tc.name)
 		netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
-		netA.identityTracker = newMockIdentityTracker()
+		netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
 		netA.config.PublicAddress = "auto"
 		netA.config.GossipFanout = 1
 
@@ -1657,7 +1700,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 		netA.identityScheme = scheme
 
 		netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
-		netB.identityTracker = newMockIdentityTracker()
+		netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
 		netB.config.PublicAddress = "auto"
 		netB.config.GossipFanout = 1
 
@@ -1791,12 +1834,12 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 	for _, tc := range testCases {
 		t.Logf("Running Peering with Identity Challenge Response Test: %s", tc.name)
 		netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
-		netA.identityTracker = newMockIdentityTracker()
+		netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
 		netA.config.PublicAddress = "auto"
 		netA.config.GossipFanout = 1
 
 		netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
-		netB.identityTracker = newMockIdentityTracker()
+		netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
 		netB.config.PublicAddress = "auto"
 		netB.config.GossipFanout = 1
 
@@ -1946,7 +1989,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 	for _, tc := range testCases {
 		t.Logf("Running Peering with Identity Verification Test: %s", tc.name)
 		netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
-		netA.identityTracker = newMockIdentityTracker()
+		netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
 		netA.config.PublicAddress = "auto"
 		netA.config.GossipFanout = 1
 
@@ -1955,13 +1998,13 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 		netA.identityScheme = scheme
 
 		netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
-		netB.identityTracker = newMockIdentityTracker()
+		netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
 		netB.config.PublicAddress = "auto"
 		netB.config.GossipFanout = 1
 		// if the key is occupied, make the tracker fail to insert the peer
 		if tc.occupied {
-			netB.identityTracker = newMockIdentityTracker()
-			netB.identityTracker.(*mockIdentityTracker).setShouldInsert(false)
+			netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
+			netB.identityTracker.(*mockIdentityTracker).setIsOccupied(false)
 		}
 
 		netA.Start()
