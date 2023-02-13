@@ -47,23 +47,6 @@ func ddrFromParams(dp *DebugParams) (ddr v2.DryrunRequest, err error) {
 	return
 }
 
-func convertAccounts(accounts []model.Account) (records []basics.BalanceRecord, err error) {
-	for _, a := range accounts {
-		var addr basics.Address
-		addr, err = basics.UnmarshalChecksumAddress(a.Address)
-		if err != nil {
-			return
-		}
-		var ad basics.AccountData
-		ad, err = v2.AccountToAccountData(&a)
-		if err != nil {
-			return
-		}
-		records = append(records, basics.BalanceRecord{Addr: addr, AccountData: ad})
-	}
-	return
-}
-
 func balanceRecordsFromDdr(ddr *v2.DryrunRequest) (records []basics.BalanceRecord, err error) {
 	accounts := make(map[basics.Address]basics.AccountData)
 	for _, a := range ddr.Accounts {

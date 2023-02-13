@@ -240,6 +240,7 @@ func TestEmptyMapDeserialization(t *testing.T) {
 }
 
 func TestDecodeFailures(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	ce := clock.Encode()
 	log := makeServiceLogger(logging.Base())

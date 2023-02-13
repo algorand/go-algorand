@@ -53,6 +53,11 @@ import (
 
 const sendBufferLength = 1000
 
+func init() {
+	// this allows test code to use out-of-protocol message tags and have them go through
+	allowCustomTags = true
+}
+
 func TestMain(m *testing.M) {
 	logging.Base().SetLevel(logging.Debug)
 	os.Exit(m.Run())
@@ -318,6 +323,40 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	counterDone := counter.done
 	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"), false, nil)
 	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"), false, nil)
+
+	select {
+	case <-counterDone:
+	case <-time.After(2 * time.Second):
+		t.Errorf("timeout, count=%d, wanted 2", counter.count)
+	}
+}
+
+// Set up two nodes, test that B drops invalid tags when A ends them.
+func TestWebsocketNetworkBasicInvalidTags(t *testing.T) { // nolint:paralleltest // changes global variable allowCustomTags
+	partitiontest.PartitionTest(t)
+	// disallow custom tags for this test
+	allowCustomTags = false
+	defaultSendMessageTags["XX"] = true
+	defer func() {
+		allowCustomTags = true
+		delete(defaultSendMessageTags, "XX")
+	}()
+
+	netA, netB, counter, closeFunc := setupWebsocketNetworkAB(t, 2)
+	defer closeFunc()
+	counterDone := counter.done
+	// register a handler that should never get called, because the message will
+	// be dropped before it gets to the handlers if allowCustomTags = false
+	netB.RegisterHandlers([]TaggedMessageHandler{
+		{Tag: "XX", MessageHandler: HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
+			require.Fail(t, "MessageHandler for out-of-protocol tag should not be called")
+			return OutgoingMessage{}
+		})}})
+	// send 2 valid and 2 invalid tags
+	netA.Broadcast(context.Background(), "TX", []byte("foo"), false, nil)
+	netA.Broadcast(context.Background(), "XX", []byte("foo"), false, nil)
+	netA.Broadcast(context.Background(), "TX", []byte("bar"), false, nil)
+	netA.Broadcast(context.Background(), "XX", []byte("bar"), false, nil)
 
 	select {
 	case <-counterDone:

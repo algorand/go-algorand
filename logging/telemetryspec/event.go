@@ -99,17 +99,6 @@ type BlockAcceptedEventDetails struct {
 	VoteBufLen   uint64
 }
 
-// TopAccountsEvent event
-const TopAccountsEvent Event = "TopAccounts"
-
-// TopAccountEventDetails contains details for the BlockAcceptedEvent
-type TopAccountEventDetails struct {
-	Round              uint64
-	OnlineAccounts     []map[string]interface{}
-	OnlineCirculation  uint64
-	OfflineCirculation uint64
-}
-
 // AccountRegisteredEvent event
 const AccountRegisteredEvent Event = "AccountRegistered"
 
@@ -307,7 +296,7 @@ type PeerConnectionDetails struct {
 	// DuplicateFilterCount is the number of times this peer has sent us a message hash to filter that it had already sent before.
 	DuplicateFilterCount uint64
 	// These message counters count received messages from this peer.
-	TXCount, MICount, AVCount, PPCount uint64
+	TXCount, MICount, AVCount, PPCount, UNKCount uint64
 	// TCPInfo provides connection measurements from TCP.
 	TCP util.TCPInfo `json:",omitempty"`
 }
