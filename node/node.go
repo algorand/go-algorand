@@ -433,7 +433,7 @@ func (node *AlgorandFullNode) Stop() {
 	defer func() {
 		node.mu.Unlock()
 		node.waitMonitoringRoutines()
-		node.stateProofWorker.Shutdown()
+		node.stateProofWorker.Stop()
 		node.stateProofWorker = nil
 	}()
 
@@ -1203,7 +1203,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			node.txPoolSyncerService.Stop()
 			node.blockService.Stop()
 			node.ledgerService.Stop()
-			node.stateProofWorker.Shutdown()
+			node.stateProofWorker.Stop()
 
 			prevNodeCancelFunc := node.cancelCtx
 

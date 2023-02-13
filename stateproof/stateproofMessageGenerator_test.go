@@ -223,7 +223,7 @@ func TestStateProofMessage(t *testing.T) {
 	s.addBlockWithStateProofHeaders(2 * basics.Round(proto.StateProofInterval))
 
 	w.Start()
-	defer w.Shutdown()
+	defer w.Stop()
 
 	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
 
@@ -372,7 +372,7 @@ func TestGenerateBlockProof(t *testing.T) {
 	s.addBlockWithStateProofHeaders(2 * basics.Round(proto.StateProofInterval))
 
 	w.Start()
-	defer w.Shutdown()
+	defer w.Stop()
 
 	s.advanceLatest(proto.StateProofInterval + proto.StateProofInterval/2)
 

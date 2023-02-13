@@ -118,8 +118,8 @@ func (spw *Worker) Start() {
 	go spw.builder(latest)
 }
 
-// Shutdown stops any goroutines associated with this worker.
-func (spw *Worker) Shutdown() {
+// Stop stops any goroutines associated with this worker.
+func (spw *Worker) Stop() {
 	spw.shutdown()
 	spw.wg.Wait()
 	spw.ledger.UnregisterVotersCommitListener()
