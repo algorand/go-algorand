@@ -102,111 +102,111 @@ workflows:
           context: slack-secrets
           <<: *slack-fail-post-step
 
-      # - test_nightly:
-      #     name: << matrix.platform >>_test_nightly
-      #     matrix:
-      #       <<: *matrix-nightly
-      #     requires:
-      #       - << matrix.platform >>_build_nightly
-      #     context: slack-secrets
-      #     <<: *slack-fail-post-step
+      - test_nightly:
+          name: << matrix.platform >>_test_nightly
+          matrix:
+            <<: *matrix-nightly
+          requires:
+            - << matrix.platform >>_build_nightly
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
-      # - integration:
-      #     name: << matrix.platform >>_integration
-      #     matrix:
-      #       <<: *matrix-default
-      #     filters:
-      #       <<: *filters-default
-      #     context: slack-secrets
-      #     <<: *slack-fail-post-step
+      - integration:
+          name: << matrix.platform >>_integration
+          matrix:
+            <<: *matrix-default
+          filters:
+            <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
-      # - integration_nightly:
-      #     name: << matrix.platform >>_integration_nightly
-      #     matrix:
-      #       <<: *matrix-nightly
-      #     requires:
-      #       - << matrix.platform >>_build_nightly
-      #     context: slack-secrets
-      #     <<: *slack-fail-post-step
+      - integration_nightly:
+          name: << matrix.platform >>_integration_nightly
+          matrix:
+            <<: *matrix-nightly
+          requires:
+            - << matrix.platform >>_build_nightly
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
-      # - e2e_expect:
-      #     name: << matrix.platform >>_e2e_expect
-      #     matrix:
-      #       <<: *matrix-default
-      #     filters:
-      #       <<: *filters-default
-      #     context: slack-secrets
-      #     <<: *slack-fail-post-step
+      - e2e_expect:
+          name: << matrix.platform >>_e2e_expect
+          matrix:
+            <<: *matrix-default
+          filters:
+            <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
-      # - e2e_expect_nightly:
-      #     name: << matrix.platform >>_e2e_expect_nightly
-      #     matrix:
-      #       <<: *matrix-nightly
-      #     requires:
-      #       - << matrix.platform >>_build_nightly
-      #     context: slack-secrets
-      #     <<: *slack-fail-post-step
+      - e2e_expect_nightly:
+          name: << matrix.platform >>_e2e_expect_nightly
+          matrix:
+            <<: *matrix-nightly
+          requires:
+            - << matrix.platform >>_build_nightly
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
-      # - e2e_subs:
-      #     name: << matrix.platform >>_e2e_subs
-      #     matrix:
-      #       <<: *matrix-default
-      #     filters:
-      #       <<: *filters-default
-      #     context: slack-secrets
-      #     <<: *slack-fail-post-step
+      - e2e_subs:
+          name: << matrix.platform >>_e2e_subs
+          matrix:
+            <<: *matrix-default
+          filters:
+            <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
-      # - e2e_subs_nightly:
-      #     name: << matrix.platform >>_e2e_subs_nightly
-      #     matrix:
-      #       <<: *matrix-nightly
-      #     requires:
-      #       - << matrix.platform >>_build_nightly
-      #     context:
-      #       - slack-secrets
-      #       - aws-secrets
-      #     <<: *slack-fail-post-step
+      - e2e_subs_nightly:
+          name: << matrix.platform >>_e2e_subs_nightly
+          matrix:
+            <<: *matrix-nightly
+          requires:
+            - << matrix.platform >>_build_nightly
+          context:
+            - slack-secrets
+            - aws-secrets
+          <<: *slack-fail-post-step
 
-      # - tests_verification_job:
-      #     name: << matrix.platform >>_<< matrix.job_type >>_verification
-      #     matrix:
-      #       parameters:
-      #         platform: ["amd64", "arm64"]
-      #         job_type: ["test", "integration", "e2e_expect"]
-      #     requires:
-      #       - << matrix.platform >>_<< matrix.job_type >>
-      #     context: slack-secrets
-      #     <<: *slack-fail-post-step
+      - tests_verification_job:
+          name: << matrix.platform >>_<< matrix.job_type >>_verification
+          matrix:
+            parameters:
+              platform: ["amd64", "arm64"]
+              job_type: ["test", "integration", "e2e_expect"]
+          requires:
+            - << matrix.platform >>_<< matrix.job_type >>
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
-      # - tests_verification_job_nightly:
-      #     name: << matrix.platform >>_<< matrix.job_type >>_verification
-      #     matrix:
-      #       parameters:
-      #         platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
-      #         job_type: ["test_nightly", "integration_nightly", "e2e_expect_nightly"]
-      #     requires:
-      #       - << matrix.platform >>_<< matrix.job_type >>
-      #     context: slack-secrets
-      #     <<: *slack-fail-post-step
+      - tests_verification_job_nightly:
+          name: << matrix.platform >>_<< matrix.job_type >>_verification
+          matrix:
+            parameters:
+              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+              job_type: ["test_nightly", "integration_nightly", "e2e_expect_nightly"]
+          requires:
+            - << matrix.platform >>_<< matrix.job_type >>
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
-      # - upload_binaries:
-      #     name: << matrix.platform >>_upload_binaries
-      #     matrix:
-      #       <<: *matrix-nightly
-      #     requires:
-      #       - << matrix.platform >>_test_nightly_verification
-      #       - << matrix.platform >>_integration_nightly_verification
-      #       - << matrix.platform >>_e2e_expect_nightly_verification
-      #       - << matrix.platform >>_e2e_subs_nightly
-      #     filters:
-      #       branches:
-      #         only:
-      #           - /rel\/.*/
-      #           - << pipeline.parameters.valid_nightly_branch >>
-      #     context:
-      #       - slack-secrets
-      #       - aws-secrets
-      #     <<: *slack-fail-post-step
+      - upload_binaries:
+          name: << matrix.platform >>_upload_binaries
+          matrix:
+            <<: *matrix-nightly
+          requires:
+            - << matrix.platform >>_test_nightly_verification
+            - << matrix.platform >>_integration_nightly_verification
+            - << matrix.platform >>_e2e_expect_nightly_verification
+            - << matrix.platform >>_e2e_subs_nightly
+          filters:
+            branches:
+              only:
+                - /rel\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
+          context:
+            - slack-secrets
+            - aws-secrets
+          <<: *slack-fail-post-step
 
       #- windows_x64_build
 
@@ -705,9 +705,7 @@ commands:
                 TestAlgohWithExpect \
                 TestGoalWithExpect \
                 TestTealdbgWithExpect
-      - store_artifacts:
-          path: << parameters.result_path >>/<< parameters.result_subdir >>
-          destination: << parameters.result_subdir >>/combined-test-results
+            sudo rm -rf << parameters.result_path >>
 
   upload_binaries_command:
     description: save build artifacts for potential deployments
