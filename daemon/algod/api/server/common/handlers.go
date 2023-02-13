@@ -90,14 +90,6 @@ func HealthCheck(ctx lib.ReqContext, context echo.Context) {
 	json.NewEncoder(w).Encode(nil)
 }
 
-func returnCode(ctx lib.ReqContext, w http.ResponseWriter, code int, internal error) {
-	if internal != nil {
-		ctx.Log.Info(internal)
-	}
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(nil)
-}
-
 // Ready is a httpHandler for route GET /ready
 // it serves as a "readiness" endpoint that tells if the current node is healthy and fully caught-up.
 func Ready(ctx lib.ReqContext, context echo.Context) {
@@ -132,9 +124,11 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 		err = fmt.Errorf("ready failed as the node is catching up")
 	}
 
-	// question is that: how can we test when ctx lib.ReqContext need a full node?
-	// do we want to separate out the logic and test the logic
-	returnCode(ctx, w, code, err)
+	if err != nil {
+		ctx.Log.Info(err)
+	}
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(nil)
 }
 
 // VersionsHandler is an httpHandler for route GET /versions

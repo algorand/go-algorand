@@ -173,7 +173,7 @@ func (m *mockNode) LedgerForAPI() v2.LedgerForAPI {
 	return m.ledger
 }
 
-func (m mockNode) Status() (s node.StatusReport, err error) {
+func (m *mockNode) Status() (s node.StatusReport, err error) {
 	if m.consensusUpgrade {
 		s = cannedStatusReportConsensusUpgradeGolden
 	} else {
