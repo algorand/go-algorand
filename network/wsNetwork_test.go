@@ -1165,7 +1165,7 @@ type mockIdentityTracker struct {
 
 func newMockIdentityTracker(realTracker identityTracker) *mockIdentityTracker {
 	return &mockIdentityTracker{
-		isOccupied:  true,
+		isOccupied:  false,
 		setCount:    0,
 		insertCount: 0,
 		removeCount: 0,
@@ -1203,8 +1203,8 @@ func (d *mockIdentityTracker) setIdentity(p *wsPeer) bool {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 	d.setCount++
-	if !d.isOccupied {
-		return false
+	if d.isOccupied {
+		return true
 	}
 	ret := d.realTracker.setIdentity(p)
 	if ret {
@@ -2004,7 +2004,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 		// if the key is occupied, make the tracker fail to insert the peer
 		if tc.occupied {
 			netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
-			netB.identityTracker.(*mockIdentityTracker).setIsOccupied(false)
+			netB.identityTracker.(*mockIdentityTracker).setIsOccupied(true)
 		}
 
 		netA.Start()
