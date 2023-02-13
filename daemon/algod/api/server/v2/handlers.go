@@ -965,7 +965,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	// Simulate transaction
 	simulationResult, err := v2.Node.Simulate(txgroup)
 	if err != nil {
-		var invalidTxErr *simulation.InvalidTxGroupError
+		var invalidTxErr simulation.InvalidTxGroupError
 		switch {
 		case errors.As(err, &invalidTxErr):
 			return badRequest(ctx, invalidTxErr, invalidTxErr.Error(), v2.Log)

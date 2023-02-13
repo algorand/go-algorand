@@ -899,7 +899,7 @@ func TestSimulateTransaction(t *testing.T) {
 				Type:     protocol.PaymentTx,
 				Sender:   sender.Address(),
 				Receiver: futureAppID.Address(),
-				Amount:   700_000, // don't have enough money to run this test >:(
+				Amount:   700_000,
 			})
 			appCallTxn := txnInfo.NewTxn(txntest.Txn{
 				Type:   protocol.ApplicationCallTx,
@@ -1013,6 +1013,57 @@ int 1`,
 			}
 		})
 	}
+}
+
+func TestSimulateTransactionInvalidGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// prepare node and handler
+	numAccounts := 5
+	offlineAccounts := true
+	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 1, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode.config.EnableExperimentalAPI = true
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+
+	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
+	require.NoError(t, err)
+	txnInfo := simulationtesting.TxnInfo{LatestHeader: hdr}
+
+	sender := roots[0]
+	receiver := roots[1]
+
+	txn := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Address(),
+		Receiver: receiver.Address(),
+		Amount:   0,
+	})
+
+	stxn := txn.Txn().Sign(sender.Secrets())
+	// make signature invalid
+	stxn.Sig[0] += byte(1) // will wrap if > 255
+
+	// build request body
+	bodyBytes := protocol.Encode(&stxn)
+	body := bytes.NewReader(bodyBytes)
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	rec := httptest.NewRecorder()
+
+	e := echo.New()
+	c := e.NewContext(req, rec)
+
+	// simulate transaction
+	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{})
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code, rec.Body.String())
 }
 
 func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expectedCode int) {
