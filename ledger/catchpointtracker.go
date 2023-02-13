@@ -482,7 +482,7 @@ func (ct *catchpointTracker) prepareCommit(dcc *deferredCommitContext) error {
 	return nil
 }
 
-func (ct *catchpointTracker) commitRound(ctx context.Context, ts store.TransactionScope, dcc *deferredCommitContext) (err error) {
+func (ct *catchpointTracker) commitRound(ctx context.Context, tx store.TransactionScope, dcc *deferredCommitContext) (err error) {
 	treeTargetRound := basics.Round(0)
 	offset := dcc.offset
 	dbRound := dcc.oldBase
@@ -493,18 +493,18 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, ts store.Transacti
 		}
 	}()
 
-	crw, err := ts.CreateCatchpointReaderWriter()
+	crw, err := tx.CreateCatchpointReaderWriter()
 	if err != nil {
 		return err
 	}
-	arw, err := ts.CreateAccountsReaderWriter()
+	arw, err := tx.CreateAccountsReaderWriter()
 	if err != nil {
 		return err
 	}
 
 	if ct.catchpointEnabled() {
 		var mc store.MerkleCommitter
-		mc, err = ts.CreateMerkleCommitter(false)
+		mc, err = tx.CreateMerkleCommitter(false)
 		if err != nil {
 			return
 		}

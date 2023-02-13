@@ -1658,7 +1658,7 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 
 // commitRound is called within the same transaction for all trackers it
 // receives current offset and dbRound
-func (au *accountUpdates) commitRound(ctx context.Context, ts store.TransactionScope, dcc *deferredCommitContext) (err error) {
+func (au *accountUpdates) commitRound(ctx context.Context, tx store.TransactionScope, dcc *deferredCommitContext) (err error) {
 	offset := dcc.offset
 	dbRound := dcc.oldBase
 
@@ -1670,7 +1670,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, ts store.TransactionS
 		}
 	}()
 
-	_, err = ts.ResetTransactionWarnDeadline(ctx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
+	_, err = tx.ResetTransactionWarnDeadline(ctx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 	if err != nil {
 		return err
 	}
@@ -1678,7 +1678,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, ts store.TransactionS
 	if dcc.updateStats {
 		dcc.stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano())
 	}
-	err = dcc.compactAccountDeltas.accountsLoadOld(ts)
+	err = dcc.compactAccountDeltas.accountsLoadOld(tx)
 	if err != nil {
 		return err
 	}
@@ -1688,7 +1688,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, ts store.TransactionS
 		knownAddresses[delta.oldAcct.Addr] = delta.oldAcct.Rowid
 	}
 
-	err = dcc.compactResourcesDeltas.resourcesLoadOld(ts, knownAddresses)
+	err = dcc.compactResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
 	if err != nil {
 		return err
 	}
@@ -1697,7 +1697,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, ts store.TransactionS
 		dcc.stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano()) - dcc.stats.OldAccountPreloadDuration
 	}
 
-	arw, err := ts.CreateAccountsReaderWriter()
+	arw, err := tx.CreateAccountsReaderWriter()
 	if err != nil {
 		return err
 	}
@@ -1713,7 +1713,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, ts store.TransactionS
 
 	// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 	// so that we can update the base account back.
-	dcc.updatedPersistedAccounts, dcc.updatedPersistedResources, dcc.updatedPersistedKVs, err = accountsNewRound(ts, dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.compactKvDeltas, dcc.compactCreatableDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
+	dcc.updatedPersistedAccounts, dcc.updatedPersistedResources, dcc.updatedPersistedKVs, err = accountsNewRound(tx, dcc.compactAccountDeltas, dcc.compactResourcesDeltas, dcc.compactKvDeltas, dcc.compactCreatableDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
 	if err != nil {
 		return err
 	}

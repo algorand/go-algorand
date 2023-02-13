@@ -401,28 +401,28 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 
 // commitRound closure is called within the same transaction for all trackers
 // it receives current offset and dbRound
-func (ao *onlineAccounts) commitRound(ctx context.Context, ts store.TransactionScope, dcc *deferredCommitContext) (err error) {
+func (ao *onlineAccounts) commitRound(ctx context.Context, tx store.TransactionScope, dcc *deferredCommitContext) (err error) {
 	offset := dcc.offset
 	dbRound := dcc.oldBase
 
-	_, err = ts.ResetTransactionWarnDeadline(ctx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
+	_, err = tx.ResetTransactionWarnDeadline(ctx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 	if err != nil {
 		return err
 	}
 
-	err = dcc.compactOnlineAccountDeltas.accountsLoadOld(ts)
+	err = dcc.compactOnlineAccountDeltas.accountsLoadOld(tx)
 	if err != nil {
 		return err
 	}
 
 	// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 	// so that we can update the base account back.
-	dcc.updatedPersistedOnlineAccounts, err = onlineAccountsNewRound(ts, dcc.compactOnlineAccountDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
+	dcc.updatedPersistedOnlineAccounts, err = onlineAccountsNewRound(tx, dcc.compactOnlineAccountDeltas, dcc.genesisProto, dbRound+basics.Round(offset))
 	if err != nil {
 		return err
 	}
 
-	arw, err := ts.CreateAccountsReaderWriter()
+	arw, err := tx.CreateAccountsReaderWriter()
 	if err != nil {
 		return err
 	}

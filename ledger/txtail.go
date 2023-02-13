@@ -272,8 +272,8 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 	return
 }
 
-func (t *txTail) commitRound(ctx context.Context, ts store.TransactionScope, dcc *deferredCommitContext) error {
-	arw, err := ts.CreateAccountsReaderWriter()
+func (t *txTail) commitRound(ctx context.Context, tx store.TransactionScope, dcc *deferredCommitContext) error {
+	arw, err := tx.CreateAccountsReaderWriter()
 	if err != nil {
 		return err
 	}
