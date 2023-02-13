@@ -705,7 +705,7 @@ commands:
                 TestAlgohWithExpect \
                 TestGoalWithExpect \
                 TestTealdbgWithExpect
-            sudo rm -rf << parameters.result_path >>
+            sudo rm -rf << parameters.result_path >>/<< parameters.result_subdir >>
 
   upload_binaries_command:
     description: save build artifacts for potential deployments
