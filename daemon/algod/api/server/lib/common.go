@@ -22,8 +22,8 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/algorand/go-algorand/crypto"
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/node"
 )
 
 // GenesisJSONText is initialized when the node starts.
@@ -33,7 +33,7 @@ var GenesisJSONText string
 type NodeInterface interface {
 	GenesisHash() crypto.Digest
 	GenesisID() string
-	v2.NodeInterface
+	Status() (s node.StatusReport, err error)
 }
 
 // HandlerFunc defines a wrapper for http.HandlerFunc that includes a context
