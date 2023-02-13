@@ -324,6 +324,7 @@ func convertInners(txn *node.TxnWithStatus) *[]PreEncodedTxInfo {
 	return &inner
 }
 
+// ConvertInnerTxn converts an inner SignedTxnWithAD to PreEncodedTxInfo for the REST API
 func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	// This copies from handlers.PendingTransactionInformation, with
 	// simplifications because we have a SignedTxnWithAD rather than

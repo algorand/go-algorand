@@ -886,7 +886,7 @@ func TestSimulateTransaction(t *testing.T) {
 
 	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
 	require.NoError(t, err)
-	txnInfo := simulationtesting.TxnInfo{hdr}
+	txnInfo := simulationtesting.TxnInfo{LatestHeader: hdr}
 
 	scenarios := mocktracer.GetTestScenarios()
 
