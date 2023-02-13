@@ -173,9 +173,8 @@ func TestMetricCounterMixed(t *testing.T) { //nolint:paralleltest // Modifies gl
 	}
 }
 
-func TestCounterWriteMetric(t *testing.T) {
+func TestCounterWriteMetric(t *testing.T) { //nolint:paralleltest // MakeCounter() and Deregister() touch global metric state
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	c := MakeCounter(MetricName{Name: "testname", Description: "testhelp"})
 	c.Deregister(nil)
@@ -200,9 +199,8 @@ testname{host="myhost"} 2
 	require.Equal(t, expected, sbOut.String())
 }
 
-func TestGetValue(t *testing.T) {
+func TestGetValue(t *testing.T) { //nolint:paralleltest // MakeCounter() and Deregister() touch global metric state
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	c := MakeCounter(MetricName{Name: "testname", Description: "testhelp"})
 	c.Deregister(nil)

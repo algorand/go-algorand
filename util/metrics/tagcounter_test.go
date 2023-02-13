@@ -26,9 +26,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTagCounter(t *testing.T) {
+func TestTagCounter(t *testing.T) { //nolint:paralleltest // Modifies default metric registry.
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	tags := make([]string, 17)
 	for i := range tags {
@@ -82,9 +81,8 @@ func TestTagCounter(t *testing.T) {
 	}
 }
 
-func TestTagCounterFilter(t *testing.T) {
+func TestTagCounterFilter(t *testing.T) { //nolint:paralleltest // Modifies default metric registry.
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	tags := make([]string, 17)
 	for i := range tags {
@@ -161,9 +159,8 @@ func TestTagCounterFilter(t *testing.T) {
 	require.Equal(t, badCount, endcount)
 }
 
-func TestTagCounterWriteMetric(t *testing.T) {
+func TestTagCounterWriteMetric(t *testing.T) { //nolint:paralleltest // Modifies default metric registry.
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	tc := NewTagCounter("count_msgs_{TAG}", "number of {TAG} messages")
 	DefaultRegistry().Deregister(tc)
