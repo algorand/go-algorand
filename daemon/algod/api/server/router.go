@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib/middlewares"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/data"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/experimental"
 	npprivate "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/nonparticipating/private"
 	nppublic "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/nonparticipating/public"
@@ -39,6 +40,12 @@ import (
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/util/tokens"
 )
+
+// APINodeInterface describes all the node methods required by common and v2 APIs, and the server/router
+type APINodeInterface interface {
+	lib.NodeInterface
+	v2.NodeInterface
+}
 
 const (
 	apiV1Tag = "/v1"
@@ -63,7 +70,7 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 }
 
 // NewRouter builds and returns a new router with our REST handlers registered.
-func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener, numConnectionsLimit uint64) *echo.Echo {
+func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener, numConnectionsLimit uint64) *echo.Echo {
 	if err := tokens.ValidateAPIToken(apiToken); err != nil {
 		logger.Errorf("Invalid apiToken was passed to NewRouter ('%s'): %v", apiToken, err)
 	}
@@ -104,7 +111,7 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 
 	// Registering v2 routes
 	v2Handler := v2.Handlers{
-		Node:     apiNode{node},
+		Node:     node,
 		Log:      logger,
 		Shutdown: shutdown,
 	}
@@ -113,6 +120,10 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	ppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
 	pprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
 
+	if node.Config().EnableFollowMode {
+		data.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+	}
+
 	if node.Config().EnableExperimentalAPI {
 		experimental.RegisterHandlers(e, &v2Handler, apiAuthenticator)
 	}
@@ -120,7 +131,14 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	return e
 }
 
-// apiNode wraps the AlgorandFullNode to provide v2.NodeInterface.
-type apiNode struct{ *node.AlgorandFullNode }
+// FollowerNode wraps the AlgorandFollowerNode to provide v2.NodeInterface.
+type FollowerNode struct{ *node.AlgorandFollowerNode }
 
-func (n apiNode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }
+// LedgerForAPI implements the v2.Handlers interface
+func (n FollowerNode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }
+
+// APINode wraps the AlgorandFullNode to provide v2.NodeInterface.
+type APINode struct{ *node.AlgorandFullNode }
+
+// LedgerForAPI implements the v2.Handlers interface
+func (n APINode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }

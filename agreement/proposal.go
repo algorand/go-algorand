@@ -59,6 +59,11 @@ type unauthenticatedProposal struct {
 
 	OriginalPeriod   period         `codec:"oper"`
 	OriginalProposer basics.Address `codec:"oprop"`
+
+	// receivedAt indicates the time at which this proposal was
+	// delivered to the agreement package (as a messageEvent),
+	// relative to the zero of that round.
+	receivedAt time.Duration
 }
 
 // TransmittedPayload exported for dumping textual versions of messages
