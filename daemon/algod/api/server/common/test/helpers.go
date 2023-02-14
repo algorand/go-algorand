@@ -18,11 +18,13 @@ package test
 
 import (
 	"fmt"
+
+	"github.com/stretchr/testify/mock"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/stretchr/testify/mock"
 )
 
 var cannedStatusReportCaughtUpAndReadyGolden = node.StatusReport{

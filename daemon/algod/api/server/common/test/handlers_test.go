@@ -22,35 +22,43 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/daemon/algod/api/server/common"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/labstack/echo/v4"
-	"github.com/stretchr/testify/require"
+	"github.com/algorand/go-algorand/node"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestMockNodeStatus(t *testing.T) {
-	node := makeMockNode(CaughtUpAndReady)
-	status, err := node.Status()
-	require.NoError(t, err)
-	require.Equal(t, cannedStatusReportCaughtUpAndReadyGolden, status)
-
-	node.catchupStatus = CatchingUp
-	status, err = node.Status()
-	require.NoError(t, err)
-	require.Equal(t, cannedStatusReportCatchingUpGolden, status)
-
-	node.catchupStatus = StoppedAtUnsupported
-	status, err = node.Status()
-	require.NoError(t, err)
-	require.Equal(t, cannedStatusReportStoppedAtUnsupportedGolden, status)
-
-	node.catchupStatus = 399
-	_, err = node.Status()
-	require.Error(t, err, fmt.Errorf("catchup status out of scope error"))
+func mockNodeStatusTestHelper(
+	t *testing.T, statusCode MockNodeCatchupStatus,
+	expectedErr error, expectedStatus node.StatusReport) {
+	mockNodeInstance := makeMockNode(statusCode)
+	status, err := mockNodeInstance.Status()
+	if expectedErr != nil {
+		require.Error(t, err, expectedErr)
+	} else {
+		require.Equal(t, expectedStatus, status)
+	}
 }
 
-func readyEndpointTestHelper(t *testing.T, node *mockNode, expectedCode int) {
+func TestMockNodeStatus(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	mockNodeStatusTestHelper(
+		t, CaughtUpAndReady, nil, cannedStatusReportCaughtUpAndReadyGolden)
+	mockNodeStatusTestHelper(
+		t, CatchingUp, nil, cannedStatusReportCatchingUpGolden)
+	mockNodeStatusTestHelper(
+		t, StoppedAtUnsupported, nil, cannedStatusReportStoppedAtUnsupportedGolden)
+	mockNodeStatusTestHelper(
+		t, 399, fmt.Errorf("catchup status out of scope error"), node.StatusReport{})
+}
+
+func readyEndpointTestHelper(
+	t *testing.T, node *mockNode, expectedCode int) {
 	reqCtx := lib.ReqContext{Node: node, Log: logging.NewLogger(), Shutdown: make(chan struct{})}
 
 	e := echo.New()
@@ -63,12 +71,14 @@ func readyEndpointTestHelper(t *testing.T, node *mockNode, expectedCode int) {
 }
 
 func TestReadyEndpoint(t *testing.T) {
-	node := makeMockNode(CaughtUpAndReady)
-	readyEndpointTestHelper(t, node, http.StatusOK)
+	partitiontest.PartitionTest(t)
 
-	node.catchupStatus = CatchingUp
-	readyEndpointTestHelper(t, node, http.StatusBadRequest)
+	mockNodeInstance := makeMockNode(CaughtUpAndReady)
+	readyEndpointTestHelper(t, mockNodeInstance, http.StatusOK)
 
-	node.catchupStatus = StoppedAtUnsupported
-	readyEndpointTestHelper(t, node, http.StatusInternalServerError)
+	mockNodeInstance.catchupStatus = CatchingUp
+	readyEndpointTestHelper(t, mockNodeInstance, http.StatusBadRequest)
+
+	mockNodeInstance.catchupStatus = StoppedAtUnsupported
+	readyEndpointTestHelper(t, mockNodeInstance, http.StatusInternalServerError)
 }
