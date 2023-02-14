@@ -17,6 +17,7 @@
 package test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -27,6 +28,27 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMockNodeStatus(t *testing.T) {
+	node := makeMockNode(CaughtUpAndReady)
+	status, err := node.Status()
+	require.NoError(t, err)
+	require.Equal(t, cannedStatusReportCaughtUpAndReadyGolden, status)
+
+	node.catchupStatus = CatchingUp
+	status, err = node.Status()
+	require.NoError(t, err)
+	require.Equal(t, cannedStatusReportCatchingUpGolden, status)
+
+	node.catchupStatus = StoppedAtUnsupported
+	status, err = node.Status()
+	require.NoError(t, err)
+	require.Equal(t, cannedStatusReportStoppedAtUnsupportedGolden, status)
+
+	node.catchupStatus = 399
+	_, err = node.Status()
+	require.Error(t, err, fmt.Errorf("catchup status out of scope error"))
+}
 
 func readyEndpointTestHelper(t *testing.T, node *mockNode, expectedCode int) {
 	reqCtx := lib.ReqContext{Node: node, Log: logging.NewLogger(), Shutdown: make(chan struct{})}
