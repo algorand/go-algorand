@@ -709,7 +709,7 @@ commands:
           name: Remove Results folder
           working_directory: /tmp
           command: |
-            rm -rf << parameters.result_path >>/<< parameters.result_subdir >>
+            sudo rm -rf << parameters.result_path >>/<< parameters.result_subdir >>
 
   upload_binaries_command:
     description: save build artifacts for potential deployments
