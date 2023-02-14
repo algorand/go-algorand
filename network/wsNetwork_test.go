@@ -1203,8 +1203,9 @@ func (d *mockIdentityTracker) setIdentity(p *wsPeer) bool {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 	d.setCount++
+	// isOccupied is true, meaning we're overloading the "ok" return to false
 	if d.isOccupied {
-		return true
+		return false
 	}
 	ret := d.realTracker.setIdentity(p)
 	if ret {
