@@ -457,7 +457,7 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 			if err != nil {
 				return
 			}
-			fmt.Printf("[%d] Added boostrap SRV Record: %s:%d\n", relay.ID, targetDomainAlias, port)
+			fmt.Printf("[%d] Added bootstrap SRV Record: %s:%d\n", relay.ID, targetDomainAlias, port)
 		}
 	} else {
 		if matchCount > 0 {
@@ -465,7 +465,7 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 			if err != nil {
 				return
 			}
-			fmt.Printf("[%d] Removed boostrap SRV Record: %s\n", relay.ID, targetDomainAlias)
+			fmt.Printf("[%d] Removed bootstrap SRV Record: %s\n", relay.ID, targetDomainAlias)
 		}
 	}
 
