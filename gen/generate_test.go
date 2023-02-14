@@ -19,13 +19,14 @@ package gen
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/algorand/go-algorand/data/basics"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/algorand/go-algorand/data/basics"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -129,9 +130,8 @@ func TestGenesisRoundoff(t *testing.T) {
 // * For each `testCase`, there is a corresponding `genesis.json` in `gen/resources` representing the known, valid output.
 // * When adding test cases, it's assumed folks peer review new artifacts in `gen/resources`.
 // * Since _some_ `genesis.json` values are non-deterministic, the test replaces these values with static values to facilitate equality checks.
-func TestGenesisJsonCreation(t *testing.T) {
+func TestGenesisJsonCreation(t *testing.T) { //nolint:paralleltest // Do not parallelize GenerateGenesisFiles().
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	type testCase struct {
 		name             string
@@ -234,14 +234,13 @@ func TestGenesisJsonCreation(t *testing.T) {
 		}
 	}
 
-	for _, tc := range []testCase{
+	for _, tc := range []testCase{ //nolint:paralleltest // Do not parallelize GenerateGenesisFiles().
 		base(),
 		balance(),
 		testnet(),
 	} {
 		tc := tc
 		t.Run(fmt.Sprintf("name=%v", tc.name), func(t *testing.T) {
-			t.Parallel()
 			gd := tc.gd
 			gd.LastPartKeyRound = uint64(quickLastPartKeyRound)
 
