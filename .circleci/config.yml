@@ -705,11 +705,6 @@ commands:
                 TestAlgohWithExpect \
                 TestGoalWithExpect \
                 TestTealdbgWithExpect
-      - run:
-          name: Remove Results folder
-          working_directory: /tmp
-          command: |
-            sudo rm -rf << parameters.result_path >>/<< parameters.result_subdir >>
 
   upload_binaries_command:
     description: save build artifacts for potential deployments
