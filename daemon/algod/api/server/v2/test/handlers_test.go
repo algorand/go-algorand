@@ -891,7 +891,7 @@ func TestSimulateTransaction(t *testing.T) {
 	scenarios := mocktracer.GetTestScenarios()
 
 	for name, scenarioFn := range scenarios {
-		t.Run(name, func(t *testing.T) { //nolint:paralleltest // Uses shared resources
+		t.Run(name, func(t *testing.T) { //nolint:paralleltest // Uses shared testing env
 			sender := roots[0]
 			futureAppID := basics.AppIndex(2)
 
@@ -950,7 +950,7 @@ int 1`,
 					handle: protocol.JSONStrictHandle,
 				},
 				{
-					name: "default (json)",
+					name: "default",
 					params: model.SimulateTransactionParams{
 						Format: nil, // should default to JSON
 					},
@@ -959,7 +959,7 @@ int 1`,
 			}
 
 			for _, responseFormat := range responseFormats {
-				t.Run(string(responseFormat.name), func(t *testing.T) { //nolint:paralleltest // Uses shared resources
+				t.Run(string(responseFormat.name), func(t *testing.T) { //nolint:paralleltest // Uses shared testing env
 					body = bytes.NewReader(bodyBytes)
 					req := httptest.NewRequest(http.MethodPost, "/", body)
 					rec := httptest.NewRecorder()
@@ -1015,7 +1015,7 @@ int 1`,
 	}
 }
 
-func TestSimulateTransactionInvalidGroup(t *testing.T) {
+func TestSimulateTransactionVerificationFailure(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
