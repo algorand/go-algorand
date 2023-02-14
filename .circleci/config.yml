@@ -706,7 +706,8 @@ commands:
                 TestGoalWithExpect \
                 TestTealdbgWithExpect
       - run:
-          name: Remove the tmp files
+          name: Remove Results folder
+          working_directory: /tmp
           command: |
             rm -rf << parameters.result_path >>/<< parameters.result_subdir >>
 
