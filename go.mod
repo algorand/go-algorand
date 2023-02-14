@@ -13,7 +13,7 @@ require (
 	github.com/algorand/msgp v1.1.53
 	github.com/algorand/oapi-codegen v1.12.0-algorand.0
 	github.com/algorand/websocket v1.4.5
-	github.com/aws/aws-sdk-go v1.33.0
+	github.com/aws/aws-sdk-go v1.34.0
 	github.com/consensys/gnark-crypto v0.7.0
 	github.com/davidlazar/go-crypto v0.0.0-20170701192655-dcfb0a7ac018
 	github.com/dchest/siphash v1.2.1
