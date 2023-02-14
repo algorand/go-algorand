@@ -765,7 +765,7 @@ func (c *Client) ApplicationBoxes(appID uint64, maxBoxNum uint64) (resp model.Bo
 }
 
 // GetApplicationBoxByName takes an app's index and box name and returns its value.
-// The box name should be of the form `encoding:value`. See logic.AppCallBytes for more information.
+// The box name should be of the form `encoding:value`. See apps.AppCallBytes for more information.
 func (c *Client) GetApplicationBoxByName(index uint64, name string) (resp model.BoxResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
@@ -1284,6 +1284,33 @@ func (c *Client) LightBlockHeaderProof(round uint64) (resp model.LightBlockHeade
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.LightBlockHeaderProof(round)
+	}
+	return
+}
+
+// SetSyncRound sets the sync round on a node w/ EnableFollowMode
+func (c *Client) SetSyncRound(round uint64) (err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.SetSyncRound(round)
+	}
+	return
+}
+
+// GetSyncRound gets the sync round on a node w/ EnableFollowMode
+func (c *Client) GetSyncRound() (rep model.GetSyncRoundResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.GetSyncRound()
+	}
+	return
+}
+
+// GetLedgerStateDelta gets the LedgerStateDelta on a node w/ EnableFollowMode
+func (c *Client) GetLedgerStateDelta(round uint64) (rep model.LedgerStateDeltaResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.GetLedgerStateDelta(round)
 	}
 	return
 }

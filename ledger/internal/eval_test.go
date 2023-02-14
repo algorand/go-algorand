@@ -33,11 +33,14 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -307,8 +310,203 @@ func TestPrivateTransactionGroup(t *testing.T) {
 	require.Error(t, err) // too many
 }
 
+func tealOpLogs(count int) []mocktracer.Event {
+	var log []mocktracer.Event
+
+	for i := 0; i < count; i++ {
+		log = append(log, mocktracer.BeforeOpcode(), mocktracer.AfterOpcode())
+	}
+
+	return log
+}
+
+func flatten(rows [][]mocktracer.Event) []mocktracer.Event {
+	var out []mocktracer.Event
+	for _, row := range rows {
+		out = append(out, row...)
+	}
+	return out
+}
+
+const innerTxnTestProgram string = `#pragma version 6
+itxn_begin
+int appl
+itxn_field TypeEnum
+int NoOp
+itxn_field OnCompletion
+byte 0x068101 // #pragma version 6; int 1;
+dup
+itxn_field ApprovalProgram
+itxn_field ClearStateProgram
+itxn_submit
+
+itxn_begin
+int pay
+itxn_field TypeEnum
+int 1
+itxn_field Amount
+global CurrentApplicationAddress
+itxn_field Receiver
+itxn_next
+int pay
+itxn_field TypeEnum
+int 2
+itxn_field Amount
+global CurrentApplicationAddress
+itxn_field Receiver
+itxn_submit
+
+int 1
+`
+
+func TestTransactionGroupWithTracer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
+
+	innerAppID := 3
+	innerAppAddress := basics.AppIndex(innerAppID).Address()
+	balances := genesisInitState.Accounts
+	balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1000000})
+
+	genesisBalances := bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+		Timestamp:   0,
+	}
+	l := newTestLedger(t, genesisBalances)
+
+	blkHeader, err := l.BlockHdr(basics.Round(0))
+	require.NoError(t, err)
+	newBlock := bookkeeping.MakeBlock(blkHeader)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	require.NoError(t, err)
+	eval.validate = true
+	eval.generate = true
+
+	basicProgram := `#pragma version 6
+byte "hello"
+log
+int 1`
+
+	genHash := l.GenesisHash()
+
+	// a basic app call
+	basicAppCallTxn := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            addrs[0],
+		ApprovalProgram:   basicProgram,
+		ClearStateProgram: basicProgram,
+
+		FirstValid:  newBlock.Round(),
+		LastValid:   newBlock.Round() + 1000,
+		Fee:         minFee,
+		GenesisHash: genHash,
+	}
+
+	// a non-app call txn
+	payTxn := txntest.Txn{
+		Type:             protocol.PaymentTx,
+		Sender:           addrs[1],
+		Receiver:         addrs[2],
+		CloseRemainderTo: addrs[3],
+		Amount:           1_000_000,
+
+		FirstValid:  newBlock.Round(),
+		LastValid:   newBlock.Round() + 1000,
+		Fee:         minFee,
+		GenesisHash: genHash,
+	}
+
+	// an app call that spawns inner txns
+	innerAppCallTxn := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            addrs[0],
+		ApprovalProgram:   innerTxnTestProgram,
+		ClearStateProgram: basicProgram,
+
+		FirstValid:  newBlock.Round(),
+		LastValid:   newBlock.Round() + 1000,
+		Fee:         minFee,
+		GenesisHash: genHash,
+	}
+
+	txntest.Group(&basicAppCallTxn, &payTxn, &innerAppCallTxn)
+
+	txgroup := transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
+		basicAppCallTxn.Txn().Sign(keys[0]),
+		payTxn.Txn().Sign(keys[1]),
+		innerAppCallTxn.Txn().Sign(keys[0]),
+	})
+
+	require.Len(t, eval.block.Payset, 0)
+
+	tracer := &mocktracer.Tracer{}
+	eval.Tracer = tracer
+	err = eval.TransactionGroup(txgroup)
+	require.NoError(t, err)
+
+	require.Len(t, eval.block.Payset, len(txgroup))
+
+	expectedADs := make([]transactions.ApplyData, len(txgroup))
+	for i, txn := range eval.block.Payset {
+		expectedADs[i] = txn.ApplyData
+	}
+
+	expectedEvents := flatten([][]mocktracer.Event{
+		{
+			mocktracer.BeforeTxnGroup(3),
+			mocktracer.BeforeTxn(protocol.ApplicationCallTx), // start basicAppCallTxn
+			mocktracer.BeforeProgram(logic.ModeApp),
+		},
+		tealOpLogs(3),
+		{
+			mocktracer.AfterProgram(logic.ModeApp),
+			mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedADs[0]), // end basicAppCallTxn
+			mocktracer.BeforeTxn(protocol.PaymentTx),                        // start payTxn
+			mocktracer.AfterTxn(protocol.PaymentTx, expectedADs[1]),         // end payTxn
+			mocktracer.BeforeTxn(protocol.ApplicationCallTx),                // start innerAppCallTxn
+			mocktracer.BeforeProgram(logic.ModeApp),
+		},
+		tealOpLogs(10),
+		{
+			mocktracer.BeforeOpcode(),
+			mocktracer.BeforeTxnGroup(1), // start first itxn group
+			mocktracer.BeforeTxn(protocol.ApplicationCallTx),
+			mocktracer.BeforeProgram(logic.ModeApp),
+		},
+		tealOpLogs(1),
+		{
+			mocktracer.AfterProgram(logic.ModeApp),
+			mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedADs[2].EvalDelta.InnerTxns[0].ApplyData),
+			mocktracer.AfterTxnGroup(1), // end first itxn group
+			mocktracer.AfterOpcode(),
+		},
+		tealOpLogs(14),
+		{
+			mocktracer.BeforeOpcode(),
+			mocktracer.BeforeTxnGroup(2), // start second itxn group
+			mocktracer.BeforeTxn(protocol.PaymentTx),
+			mocktracer.AfterTxn(protocol.PaymentTx, expectedADs[2].EvalDelta.InnerTxns[1].ApplyData),
+			mocktracer.BeforeTxn(protocol.PaymentTx),
+			mocktracer.AfterTxn(protocol.PaymentTx, expectedADs[2].EvalDelta.InnerTxns[2].ApplyData),
+			mocktracer.AfterTxnGroup(2), // end second itxn group
+			mocktracer.AfterOpcode(),
+		},
+		tealOpLogs(1),
+		{
+			mocktracer.AfterProgram(logic.ModeApp),
+			mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedADs[2]), // end innerAppCallTxn
+			mocktracer.AfterTxnGroup(3),
+		},
+	})
+	require.Equal(t, expectedEvents, tracer.Events)
+}
+
 // BlockEvaluator.workaroundOverspentRewards() fixed a couple issues on testnet.
-// This is now part of history and has to be re-created when running catchup on testnet. So, test to ensure it keeps happenning.
+// This is now part of history and has to be re-created when running catchup on testnet. So, test to ensure it keeps happening.
 func TestTestnetFixup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

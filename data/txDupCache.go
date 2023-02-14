@@ -228,6 +228,12 @@ func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
 			// already added to cache between RUnlock() and Lock(), return
 			return d, found
 		}
+	} else {
+		// Do another check to see if another copy of the transaction won the race to write it to the cache
+		// Only check current to save a lookup since swaps are rare and no need to re-hash
+		if _, found := c.cur[*d]; found {
+			return d, found
+		}
 	}
 
 	if len(c.cur) >= c.maxSize {

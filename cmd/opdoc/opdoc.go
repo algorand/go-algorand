@@ -225,8 +225,8 @@ func opsToMarkdown(out io.Writer) (err error) {
 	out.Write([]byte("# Opcodes\n\nOps have a 'cost' of 1 unless otherwise specified.\n\n"))
 	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
 	written := make(map[string]bool)
-	for _, spec := range opSpecs {
-		err = opToMarkdown(out, &spec, written)
+	for i := range opSpecs {
+		err = opToMarkdown(out, &opSpecs[i], written)
 		if err != nil {
 			return
 		}
