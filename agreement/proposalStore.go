@@ -86,6 +86,9 @@ func (a blockAssembler) bind(p proposal) (blockAssembler, error) {
 	a.Payload = p
 	a.Assembled = true
 
+	// remember when the original unauthenticatedProposal was received
+	a.Payload.receivedAt = a.Pipeline.receivedAt
+
 	return a, nil
 }
 

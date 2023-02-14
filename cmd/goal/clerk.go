@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
@@ -220,8 +221,8 @@ func createSignedTransaction(client libgoal.Client, signTx bool, dataDir string,
 
 func writeSignedTxnsToFile(stxns []transactions.SignedTxn, filename string) error {
 	var outData []byte
-	for _, stxn := range stxns {
-		outData = append(outData, protocol.Encode(&stxn)...)
+	for i := range stxns {
+		outData = append(outData, protocol.Encode(&stxns[i])...)
 	}
 
 	return writeFile(filename, outData, 0600)
@@ -321,7 +322,7 @@ var sendCmd = &cobra.Command{
 
 		checkTxValidityPeriodCmdFlags(cmd)
 
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		accountList := makeAccountsList(dataDir)
 
 		var fromAddressResolved string
@@ -543,7 +544,7 @@ var rawsendCmd = &cobra.Command{
 		}
 
 		dec := protocol.NewMsgpDecoderBytes(data)
-		client := ensureAlgodClient(ensureSingleDataDir())
+		client := ensureAlgodClient(datadir.EnsureSingleDataDir())
 
 		txnIDs := make(map[transactions.Txid]transactions.SignedTxn)
 		var txns []transactions.SignedTxn
@@ -710,7 +711,7 @@ func getProto(versArg string) (protocol.ConsensusVersion, config.ConsensusParams
 	if versArg != "" {
 		cvers = protocol.ConsensusVersion(versArg)
 	} else {
-		dataDir := maybeSingleDataDir()
+		dataDir := datadir.MaybeSingleDataDir()
 		if dataDir != "" {
 			client := ensureAlgodClient(dataDir)
 			params, err := client.SuggestedParams()
@@ -760,7 +761,7 @@ var signCmd = &cobra.Command{
 		}
 		if lsig.Logic == nil {
 			// sign the usual way
-			dataDir := ensureSingleDataDir()
+			dataDir := datadir.EnsureSingleDataDir()
 			client = ensureKmdClient(dataDir)
 			wh, pw = ensureWalletHandleMaybePassword(dataDir, walletName, true)
 		} else if signerAddress != "" {
@@ -962,7 +963,7 @@ func assembleFileImpl(fname string, printWarnings bool) *logic.OpStream {
 	}
 	ops, err := logic.AssembleString(string(text))
 	if err != nil {
-		ops.ReportProblems(fname, os.Stderr)
+		ops.ReportMultipleErrors(fname, os.Stderr)
 		reportErrorf("%s: %s", fname, err)
 	}
 	_, params := getProto(protoVersion)
@@ -1058,7 +1059,7 @@ var compileCmd = &cobra.Command{
 			program, sourceMap := assembleFileWithMap(fname, true)
 			outblob := program
 			if signProgram {
-				dataDir := ensureSingleDataDir()
+				dataDir := datadir.EnsureSingleDataDir()
 				accountList := makeAccountsList(dataDir)
 				client := ensureKmdClient(dataDir)
 				wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
@@ -1135,7 +1136,7 @@ var dryrunCmd = &cobra.Command{
 		proto, params := getProto(protoVersion)
 		if dumpForDryrun {
 			// Write dryrun data to file
-			dataDir := ensureSingleDataDir()
+			dataDir := datadir.EnsureSingleDataDir()
 			client := ensureFullClient(dataDir)
 			accts, err := unmarshalSlice(dumpForDryrunAccts)
 			if err != nil {
@@ -1192,7 +1193,7 @@ var dryrunRemoteCmd = &cobra.Command{
 			reportErrorf(fileReadError, txFilename, err)
 		}
 
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		resp, err := client.Dryrun(data)
 		if err != nil {

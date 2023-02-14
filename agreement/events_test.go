@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,6 +29,7 @@ import (
 // properly decoded from ConsensusVersionView.
 // This test is only needed for agreement state serialization switch from reflection to msgp.
 func TestSerializableErrorBackwardCompatibility(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	encodedEmpty, err := base64.StdEncoding.DecodeString("gqNFcnLAp1ZlcnNpb26jdjEw")
 	require.NoError(t, err)

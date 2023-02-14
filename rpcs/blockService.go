@@ -132,7 +132,6 @@ func (bs *BlockService) Start() {
 	defer bs.mu.Unlock()
 	if bs.enableServiceOverGossip {
 		handlers := []network.TaggedMessageHandler{
-			{Tag: protocol.UniCatchupReqTag, MessageHandler: network.HandlerFunc(bs.processIncomingMessage)},
 			{Tag: protocol.UniEnsBlockReqTag, MessageHandler: network.HandlerFunc(bs.processIncomingMessage)},
 		}
 
