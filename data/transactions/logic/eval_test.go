@@ -3145,7 +3145,7 @@ func withPanicOpcode(t *testing.T, version uint64, panicDuringCheck bool, f func
 	var foundEmptySpace bool
 	var hackedOpcode byte
 	var oldSpec OpSpec
-	// Find an unused opcode to temporarily convert to a panicing opcde,
+	// Find an unused opcode to temporarily convert to a panicing opcode,
 	// and append it to program.
 	for opcode, spec := range opsByOpcode[version] {
 		if spec.op == nil {
