@@ -705,6 +705,9 @@ commands:
                 TestAlgohWithExpect \
                 TestGoalWithExpect \
                 TestTealdbgWithExpect
+      - run:
+          name: Remove the tmp files
+          command: |
             rm -rf << parameters.result_path >>/<< parameters.result_subdir >>
 
   upload_binaries_command:
