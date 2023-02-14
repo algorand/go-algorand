@@ -110,6 +110,8 @@ type overlayTestStruct struct {
 // TestJsonOverlay ensures that encoding/json will only clobber fields present in the json and leave other fields unchanged
 func TestJsonOverlay(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	before := overlayTestStruct{A: "one", B: "two"}
 	setB := "{\"B\":\"other\"}"
 	dec := json.NewDecoder(strings.NewReader(setB))
