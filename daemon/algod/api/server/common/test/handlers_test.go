@@ -59,7 +59,11 @@ func TestMockNodeStatus(t *testing.T) {
 
 func readyEndpointTestHelper(
 	t *testing.T, node *mockNode, expectedCode int) {
-	reqCtx := lib.ReqContext{Node: node, Log: logging.NewLogger(), Shutdown: make(chan struct{})}
+	reqCtx := lib.ReqContext{
+		Node:     node,
+		Log:      logging.NewLogger(),
+		Shutdown: make(chan struct{}),
+	}
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)

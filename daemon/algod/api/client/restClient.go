@@ -284,10 +284,16 @@ func (client RestClient) WaitForBlock(round basics.Round) (response model.NodeSt
 	return
 }
 
-// HealthCheck does a health check on the the potentially running node,
+// HealthCheck does a health check on the potentially running node,
 // returning an error if the API is down
 func (client RestClient) HealthCheck() error {
 	return client.get(nil, "/health", nil)
+}
+
+// ReadyCheck does a readiness check on the potentially running node,
+// returning an error if the node is not ready (caught up and healthy)
+func (client RestClient) ReadyCheck() error {
+	return client.get(nil, "/ready", nil)
 }
 
 // StatusAfterBlock waits for a block to occur then returns the StatusResponse after that block
@@ -670,7 +676,6 @@ func (client RestClient) GetParticipationKeyByID(participationID string) (respon
 func (client RestClient) RemoveParticipationKeyByID(participationID string) (err error) {
 	err = client.delete(nil, fmt.Sprintf("/v2/participation/%s", participationID), nil, true)
 	return
-
 }
 
 /* Endpoint registered for follower nodes */

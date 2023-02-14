@@ -43,7 +43,7 @@ func TestBasicSyncMode(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	// Give the second node (which starts up last) all the stake so that its proposal always has better credentials,
-	// and so that its proposal isn't dropped. Otherwise the test burns 17s to recover. We don't care about stake
+	// and so that its proposal isn't dropped. Otherwise, the test burns 17s to recover. We don't care about stake
 	// distribution so this is fine.
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodesFollower100Second.json"))
 	defer fixture.Shutdown()
@@ -57,6 +57,10 @@ func TestBasicSyncMode(t *testing.T) {
 	waitForRound := uint64(5)
 	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
 	a.NoError(err)
+
+	// Get the catchpoint against current network
+	//currentStatus, err := primaryClient.Status()
+	//a.NoError(err)
 
 	// Get the follower client, and exercise the sync/ledger functionality
 	followControl, err := fixture.GetNodeController("Follower")
@@ -74,7 +78,14 @@ func TestBasicSyncMode(t *testing.T) {
 		gResp, err := followClient.GetLedgerStateDelta(round)
 		a.NoError(err)
 		a.NotNil(gResp)
+		// readiness check should err here, for it is not yet caught up
+		//err = followClient.ReadyCheck()
+		//a.Error(err)
 		// set sync round next
+		//followStatus, err := followClient.Status()
+		//a.NotNil(followStatus.Catchpoint)
+		//err = followClient.ReadyCheck()
+		//a.Error(err)
 		err = followClient.SetSyncRound(round + 1)
 		a.NoError(err)
 	}
