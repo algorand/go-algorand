@@ -22,7 +22,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"strings"
 	"sync"
 	"testing"
@@ -33,12 +34,10 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -76,6 +75,28 @@ func newWorkerStubsWithChannel(t *testing.T, keys []account.Participation, total
 	worker.sigmsg = make(chan []byte, 1024*1024)
 	worker.txmsg = make(chan transactions.SignedTxn, 1024)
 	return worker
+}
+
+func newWorkerStubAtGenesis(t *testing.T, keys []account.Participation, totalWeight int) *testWorkerStubs {
+	s := &testWorkerStubs{
+		t:                         t,
+		mu:                        deadlock.Mutex{},
+		listenerMu:                deadlock.RWMutex{},
+		latest:                    0,
+		waiters:                   make(map[basics.Round]chan struct{}),
+		waitersCount:              make(map[basics.Round]int),
+		blocks:                    make(map[basics.Round]bookkeeping.BlockHeader),
+		keys:                      keys,
+		keysForVoters:             keys,
+		sigmsg:                    nil,
+		txmsg:                     nil,
+		totalWeight:               totalWeight,
+		deletedKeysBeforeRoundMap: map[account.ParticipationID]basics.Round{},
+		version:                   protocol.ConsensusCurrentVersion,
+	}
+	s.latest--
+	s.addBlock(2 * basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
+	return s
 }
 
 func newWorkerStubsWithVersion(t *testing.T, keys []account.Participation, version protocol.ConsensusVersion, totalWeight int) *testWorkerStubs {
@@ -119,17 +140,17 @@ func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
 	hdr := bookkeeping.BlockHeader{}
 	hdr.Round = s.latest
 	hdr.CurrentProtocol = s.version
-
 	var stateProofBasic = bookkeeping.StateProofTrackingData{
 		StateProofVotersCommitment:  make([]byte, stateproof.HashSize),
 		StateProofOnlineTotalWeight: basics.MicroAlgos{},
 		StateProofNextRound:         0,
 	}
-	stateProofBasic.StateProofOnlineTotalWeight.Raw = uint64(s.totalWeight)
 
-	if hdr.Round > 0 {
-		// Just so it's not zero, since the signer logic checks for all-zeroes
-		stateProofBasic.StateProofVotersCommitment[1] = 0x12
+	spInterval := config.Consensus[s.version].StateProofInterval
+	if spInterval != 0 && (hdr.Round > 0 && uint64(hdr.Round)%spInterval == 0) {
+		vt, _ := s.VotersForStateProof(hdr.Round)
+		stateProofBasic.StateProofOnlineTotalWeight = vt.TotalWeight
+		stateProofBasic.StateProofVotersCommitment = vt.Tree.Root()
 	}
 
 	stateProofBasic.StateProofNextRound = spNextRound
@@ -454,13 +475,23 @@ func (s *testWorkerStubs) isRoundSigned(a *require.Assertions, w *Worker, round 
 	return false
 }
 
-func newTestWorkerDB(t testing.TB, s *testWorkerStubs, dba db.Accessor) *Worker {
-	return NewWorker(dba, logging.TestingLog(t), s, s, s, s)
-}
-
 func newTestWorker(t testing.TB, s *testWorkerStubs) *Worker {
-	dbs, _ := dbOpenTest(t, true)
-	return newTestWorkerDB(t, s, dbs.Wdb)
+	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Worker{
+		spDbFileName: fn,
+		log:          logging.TestingLog(t),
+		accts:        s,
+		ledger:       s,
+		net:          s,
+		txnSender:    s,
+		builders:     make(map[basics.Round]builder),
+		ctx:          ctx,
+		shutdown:     cancel,
+		signedCh:     make(chan struct{}, 1),
+	}
+
 }
 
 func newPartKey(t testing.TB, parent basics.Address) account.PersistedParticipation {
@@ -513,12 +544,7 @@ func createWorkerAndParticipants(t *testing.T, version protocol.ConsensusVersion
 	}
 
 	s := newWorkerStubsWithVersion(t, keys, version, 10)
-	dbs, _ := dbOpenTest(t, true)
-
-	logger := logging.NewLogger()
-	logger.SetOutput(io.Discard)
-
-	w := NewWorker(dbs.Wdb, logger, s, s, s, s)
+	w := newTestWorker(t, s)
 	w.Start()
 	return keys, s, w
 }
@@ -698,7 +724,7 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 	}
 }
 
-func TestWorkerRestart(t *testing.T) {
+func TestWorkerRestart2(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -711,38 +737,38 @@ func TestWorkerRestart(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	s := newWorkerStubsWithChannel(t, keys, 10)
+	s := newWorkerStubsWithChannel(t, keys, len(keys))
+	s.sigmsg = nil
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Stop()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	for r := uint64(0); r < 3*proto.StateProofInterval-1; r++ {
-		s.addBlock(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
-	}
-
-	dbRand := crypto.RandUint64()
-
-	formedAt := -1
-	for i := 0; formedAt < 0 && i < len(keys); i++ {
-		// Give one key at a time to the worker, and then shut it down,
-		// to make sure that it will correctly save and restore these
-		// signatures across restart.
-		s.keys = keys[i : i+1]
-		dbs, _ := dbOpenTestRand(t, true, dbRand)
-		w := newTestWorkerDB(t, s, dbs.Wdb)
+	s.advanceRoundsWithoutStateProof(t, 1)
+	lastRound := uint64(0)
+	for i := 0; i < 5; i++ {
+		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2-1)
+		w.Stop()
 		w.Start()
+		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2)
 
-		// Check if the cert formed
-		select {
-		case <-s.txmsg:
-			formedAt = i
-		case <-time.After(time.Second):
+		var tx transactions.SignedTxn
+		// there will be several state proof txn. we extract them
+		for {
+			var err error
+			tx, err = s.waitOnTxnWithTimeout(time.Second * 5)
+			a.NoError(err)
+			if lastRound == 0 || lastRound < tx.Txn.Message.LastAttestedRound {
+				break
+			}
+
 		}
 
-		w.Stop()
+		// since a state proof txn was created, we update the header with the next state proof round
+		// i.e network has accepted the state proof.
+		s.addBlock(basics.Round(tx.Txn.Message.LastAttestedRound + proto.StateProofInterval))
+		lastRound = tx.Txn.Message.LastAttestedRound
 	}
-
-	a.Greater(formedAt, 1)
-	a.Less(formedAt, 5)
 }
 
 func TestWorkerHandleSig(t *testing.T) {
@@ -1184,9 +1210,16 @@ func getSignaturesInDatabase(t *testing.T, numAddresses int, sigFrom sigOrigin) 
 
 	tns = newWorkerStubsWithChannel(t, keys, len(keys))
 	spw = newTestWorker(t, tns)
+	accessor, err := db.MakeAccessor(spw.spDbFileName, false, false)
+	if err != nil {
+		spw.log.Warnf("Cannot load state proof data: %v", err)
+		return
+	}
+	require.NoError(t, err)
+	spw.db = accessor
 
 	// Prepare the database
-	err := makeStateProofDB(spw.db)
+	err = makeStateProofDB(spw.db)
 	require.NoError(t, err)
 
 	// All the keys are for round 255. This way, starting the period at 256,
@@ -1384,6 +1417,7 @@ func setBlocksAndMessage(t *testing.T, sigRound basics.Round) (s *testWorkerStub
 
 	s = newWorkerStubsWithChannel(t, []account.Participation{p.Participation}, 10)
 	w = newTestWorker(t, s)
+	w.initDb()
 
 	s.addBlock(basics.Round(proto.StateProofInterval * 2))
 
@@ -1421,7 +1455,6 @@ func TestWorkerHandleSigRoundNotInLedger(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	intervalRound := basics.Round(proto.StateProofInterval)
 	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*10)
-	defer w.Stop()
 
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
@@ -1440,8 +1473,6 @@ func TestWorkerHandleSigWrongSignature(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	intervalRound := basics.Round(proto.StateProofInterval)
 	_, w, msg, msgBytes := setBlocksAndMessage(t, intervalRound*2)
-	err := makeStateProofDB(w.db)
-	require.NoError(t, err)
 
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
@@ -1474,8 +1505,7 @@ func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
 
 	s := newWorkerStubsWithChannel(t, keys[0:proto.StateProofTopVoters], 10)
 	w := newTestWorker(t, s)
-	err := makeStateProofDB(w.db)
-	require.NoError(t, err)
+	w.initDb()
 
 	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
 		s.addBlock(basics.Round(r))
@@ -1505,7 +1535,6 @@ func TestWorkerHandleSigAlreadyIn(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	lastRound := proto.StateProofInterval * 2
 	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
-	defer w.Stop()
 
 	stateproofMessage, err := GenerateStateProofMessage(w.ledger, basics.Round(lastRound))
 	require.NoError(t, err)
@@ -1545,7 +1574,11 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	lastRound := proto.StateProofInterval * 2
 	s, w, msg, _ := setBlocksAndMessage(t, basics.Round(lastRound))
-	defer w.Stop()
+
+	require.NoError(t, w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("drop table sigs ")
+		return err
+	}))
 
 	stateproofMessage, err := GenerateStateProofMessage(w.ledger, basics.Round(lastRound))
 	require.NoError(t, err)
@@ -1580,6 +1613,7 @@ func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 
 	s := newWorkerStubs(t, []account.Participation{p.Participation}, 10)
 	w := newTestWorker(t, s)
+	w.Start()
 	defer w.Stop()
 
 	s.mu.Lock()
@@ -1708,10 +1742,8 @@ func TestWorkerCacheAndDiskAfterRestart(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	dbRand := crypto.RandUint64()
-	dbs, _ := dbOpenTestRand(t, true, dbRand)
 	s := newWorkerStubs(t, keys, len(keys))
-	w := newTestWorkerDB(t, s, dbs.Wdb)
+	w := newTestWorker(t, s)
 	w.Start()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -1742,8 +1774,6 @@ func TestWorkerCacheAndDiskAfterRestart(t *testing.T) {
 	// we make sure that the worker will not be able to create a builder by disabling the mock ledger
 	s.keysForVoters = []account.Participation{}
 
-	dbs, _ = dbOpenTestRand(t, true, dbRand)
-	w = newTestWorkerDB(t, s, dbs.Wdb)
 	w.Start()
 	defer w.Stop()
 
@@ -1769,10 +1799,8 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	dbRand := crypto.RandUint64()
-	dbs, _ := dbOpenTestRand(t, true, dbRand)
 	s := newWorkerStubs(t, keys, len(keys))
-	w := newTestWorkerDB(t, s, dbs.Wdb)
+	w := newTestWorker(t, s)
 	w.Start()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -1801,13 +1829,14 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 	// restart worker
 	w.Stop()
 
-	dbs, _ = dbOpenTestRand(t, true, dbRand)
-	w = newTestWorkerDB(t, s, dbs.Wdb)
+	accessor, err := db.MakeAccessor(w.spDbFileName, false, false)
+	a.NoError(err)
 	// we now remove all builders from the table. This will cause the worker to create the builders from the ledger.
-	a.NoError(w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
+	a.NoError(accessor.Atomic(func(_ context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("DELETE  from builders")
 		return err
 	}))
+	accessor.Close()
 	w.Start()
 	defer w.Stop()
 
@@ -1938,11 +1967,8 @@ func TestSignerUsesPersistedBuilderLatestProto(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	dbRand := crypto.RandUint64()
-	dbs, _ := dbOpenTestRand(t, true, dbRand)
-
 	s := newWorkerStubs(t, keys, 10)
-	w := newTestWorkerDB(t, s, dbs.Wdb)
+	w := newTestWorker(t, s)
 	w.Start()
 
 	// We remove the signer's keys to stop it from generating builders and signing.
@@ -1961,8 +1987,7 @@ func TestSignerUsesPersistedBuilderLatestProto(t *testing.T) {
 	// We restart the signing process.
 	s.keys = prevKeys
 	w.Stop()
-	dbs, _ = dbOpenTestRand(t, true, dbRand)
-	w = newTestWorkerDB(t, s, dbs.Wdb)
+
 	w.Start()
 	defer w.Stop()
 
@@ -1987,12 +2012,10 @@ func TestRegisterCommitListener(t *testing.T) {
 		keys = append(keys, p.Participation)
 	}
 
-	dbRand := crypto.RandUint64()
-	dbs, _ := dbOpenTestRand(t, true, dbRand)
 	s := newWorkerStubs(t, keys, len(keys))
 	a.Nil(s.commitListener)
 
-	w := newTestWorkerDB(t, s, dbs.Wdb)
+	w := newTestWorker(t, s)
 	w.Start()
 
 	a.NotNil(s.commitListener)

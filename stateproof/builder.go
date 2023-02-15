@@ -211,6 +211,7 @@ func (spw *Worker) initBuilders() {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
+	spw.builders = make(map[basics.Round]builder)
 	rnds, err := spw.getAllOnlineBuilderRounds()
 	if err != nil {
 		spw.log.Errorf("initBuilders: failed to load rounds: %v", err)

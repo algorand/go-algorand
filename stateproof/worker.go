@@ -18,10 +18,14 @@ package stateproof
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -57,12 +61,13 @@ type Worker struct {
 	// from the network stack.
 	mu deadlock.Mutex
 
-	db        db.Accessor
-	log       logging.Logger
-	accts     Accounts
-	ledger    Ledger
-	net       Network
-	txnSender TransactionSender
+	spDbFileName string
+	db           db.Accessor
+	log          logging.Logger
+	accts        Accounts
+	ledger       Ledger
+	net          Network
+	txnSender    TransactionSender
 
 	// builders is indexed by the round of the block being signed.
 	builders map[basics.Round]builder
@@ -77,30 +82,42 @@ type Worker struct {
 }
 
 // NewWorker constructs a new Worker, as used by the node.
-func NewWorker(db db.Accessor, log logging.Logger, accts Accounts, ledger Ledger, net Network, txnSender TransactionSender) *Worker {
-	ctx, cancel := context.WithCancel(context.Background())
+func NewWorker(genesisDir string, log logging.Logger, accts Accounts, ledger Ledger, net Network, txnSender TransactionSender) *Worker {
+	// Delete the deprecated database file if it exists. This can be removed in future updates since this file should not exist by then.
+	oldCompactCertPath := filepath.Join(genesisDir, "compactcert.sqlite")
+	os.Remove(oldCompactCertPath)
 
+	// todo will config.StateProofFileName gets updated ?
+	stateProofPathname := filepath.Join(genesisDir, config.StateProofFileName)
+
+	// todo this might be a mistake aslo, start and stop should create a new ctx
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Worker{
-		db:        db,
-		log:       log,
-		accts:     accts,
-		ledger:    ledger,
-		net:       net,
-		txnSender: txnSender,
-		builders:  make(map[basics.Round]builder),
-		ctx:       ctx,
-		shutdown:  cancel,
-		signedCh:  make(chan struct{}, 1),
+		spDbFileName: stateProofPathname,
+		log:          log,
+		accts:        accts,
+		ledger:       ledger,
+		net:          net,
+		txnSender:    txnSender,
+		builders:     nil,
+		ctx:          ctx,
+		shutdown:     cancel,
+		signedCh:     make(chan struct{}, 1),
 	}
 }
 
 // Start starts the goroutines for the worker.
 func (spw *Worker) Start() {
-	err := makeStateProofDB(spw.db)
+	err := spw.initDb()
 	if err != nil {
-		spw.log.Warnf("spw.Start(): initDB: %v", err)
+		spw.log.Warn(err)
 		return
 	}
+
+	// todo this might be a mistake aslo, start and stop should create a new ctx
+	ctx, cancel := context.WithCancel(context.Background())
+	spw.ctx = ctx
+	spw.shutdown = cancel
 
 	spw.initBuilders()
 
@@ -118,11 +135,27 @@ func (spw *Worker) Start() {
 	go spw.builder(latest)
 }
 
+func (spw *Worker) initDb() error {
+	stateProofAccess, err := db.MakeAccessor(spw.spDbFileName, false, false)
+	if err != nil {
+		return fmt.Errorf("cannot load state proof data: %v", err)
+
+	}
+
+	spw.db = stateProofAccess
+	err = makeStateProofDB(spw.db)
+	if err != nil {
+		fmt.Errorf("spw.Start(): initDB: %v", err)
+	}
+	return nil
+}
+
 // Stop stops any goroutines associated with this worker.
 func (spw *Worker) Stop() {
 	spw.shutdown()
 	spw.wg.Wait()
 	spw.ledger.UnregisterVotersCommitListener()
+	spw.builders = nil
 	spw.db.Close()
 }
 

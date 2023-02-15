@@ -330,18 +330,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.tracer = messagetracer.NewTracer(log).Init(cfg)
 	gossip.SetTrace(agreementParameters.Network, node.tracer)
 
-	// Delete the deprecated database file if it exists. This can be removed in future updates since this file should not exist by then.
-	oldCompactCertPath := filepath.Join(genesisDir, "compactcert.sqlite")
-	os.Remove(oldCompactCertPath)
-
-	stateProofPathname := filepath.Join(genesisDir, config.StateProofFileName)
-	stateProofAccess, err := db.MakeAccessor(stateProofPathname, false, false)
-	if err != nil {
-		log.Errorf("Cannot load state proof data: %v", err)
-		return nil, err
-	}
-
-	node.stateProofWorker = stateproof.NewWorker(stateProofAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
+	node.stateProofWorker = stateproof.NewWorker(genesisDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 
 	return node, err
 }
