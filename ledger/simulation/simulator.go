@@ -30,10 +30,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// ==============================
-// > Simulator Ledger
-// ==============================
-
 // simulatorLedger patches the ledger interface to use a constant latest round.
 type simulatorLedger struct {
 	*data.Ledger
@@ -54,10 +50,6 @@ func (l simulatorLedger) LookupLatest(addr basics.Address) (basics.AccountData, 
 	err := errors.New("unexpected call to LookupLatest")
 	return basics.AccountData{}, 0, basics.MicroAlgos{}, err
 }
-
-// ==============================
-// > Simulator Errors
-// ==============================
 
 // SimulatorError is the base error type for all simulator errors.
 type SimulatorError struct {
@@ -81,10 +73,6 @@ type InvalidTxGroupError struct {
 type EvalFailureError struct {
 	SimulatorError
 }
-
-// ==============================
-// > Simulator
-// ==============================
 
 // Simulator is a transaction group simulator for the block evaluator.
 type Simulator struct {

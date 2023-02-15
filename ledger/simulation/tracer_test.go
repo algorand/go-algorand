@@ -27,16 +27,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ==============================
-// > Test Helpers
-// ==============================
-
-// ==============================
-// > Simulation Tests
-// ==============================
-
-// > Simulate Without Debugger
-
 func TestCursorEvalTracer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
