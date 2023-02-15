@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -135,6 +136,9 @@ func (s *testWorkerStubs) notifyPrepareVoterCommit(oldBase, newBase basics.Round
 }
 
 func (s *testWorkerStubs) addBlock(spNextRound basics.Round) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.latest++
 
 	hdr := bookkeeping.BlockHeader{}
@@ -396,9 +400,7 @@ func (s *testWorkerStubs) advanceRoundsBeforeFirstStateProof(proto *config.Conse
 
 func (s *testWorkerStubs) advanceRoundsWithoutStateProof(t *testing.T, delta uint64) {
 	for r := uint64(0); r < delta; r++ {
-		s.mu.Lock()
 		s.addBlock(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
-		s.mu.Unlock()
 		s.waitForSignerAndBuilder(t)
 	}
 }
@@ -413,9 +415,8 @@ func (s *testWorkerStubs) advanceRoundsAndCreateStateProofs(t *testing.T, delta 
 		if blk.Round%interval == 0 && stateProofNextRound-interval < blk.Round {
 			stateProofNextRound += interval
 		}
-
-		s.addBlock(stateProofNextRound)
 		s.mu.Unlock()
+		s.addBlock(stateProofNextRound)
 		s.waitForSignerAndBuilder(t)
 	}
 }
@@ -475,7 +476,7 @@ func (s *testWorkerStubs) isRoundSigned(a *require.Assertions, w *Worker, round 
 	return false
 }
 
-func newTestWorker(t testing.TB, s *testWorkerStubs) *Worker {
+func newTestWorkerOnDiskDb(t testing.TB, s *testWorkerStubs) *Worker {
 	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -492,6 +493,12 @@ func newTestWorker(t testing.TB, s *testWorkerStubs) *Worker {
 		signedCh:     make(chan struct{}, 1),
 	}
 
+}
+
+func newTestWorker(t testing.TB, s *testWorkerStubs) *Worker {
+	worker := newTestWorkerOnDiskDb(t, s)
+	worker.inMemory = true
+	return worker
 }
 
 func newPartKey(t testing.TB, parent basics.Address) account.PersistedParticipation {
@@ -724,7 +731,7 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 	}
 }
 
-func TestWorkerRestart2(t *testing.T) {
+func TestWorkerRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -1033,9 +1040,7 @@ func TestWorkersBuildersCacheAndSignatures(t *testing.T) {
 	/*
 		add block that confirm a state proof for interval: expectedStateProofs
 	*/
-	s.mu.Lock()
 	s.addBlock(basics.Round((expectedStateProofs) * config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
-	s.mu.Unlock()
 	s.waitForSignerAndBuilder(t)
 
 	count := expectedNumberOfBuilders(proto.StateProofInterval, s.latest, basics.Round((expectedStateProofs)*config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
@@ -1209,7 +1214,7 @@ func getSignaturesInDatabase(t *testing.T, numAddresses int, sigFrom sigOrigin) 
 	}
 
 	tns = newWorkerStubsWithChannel(t, keys, len(keys))
-	spw = newTestWorker(t, tns)
+	spw = newTestWorkerOnDiskDb(t, tns)
 	accessor, err := db.MakeAccessor(spw.spDbFileName, false, false)
 	if err != nil {
 		spw.log.Warnf("Cannot load state proof data: %v", err)
@@ -1270,6 +1275,8 @@ func getSignaturesInDatabase(t *testing.T, numAddresses int, sigFrom sigOrigin) 
 func TestSigBroacastTwoPerSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	signatureBcasted, fromThisNode, tns, spw := getSignaturesInDatabase(t, 10, sigAlternateOrigin)
+	defer os.Remove(spw.spDbFileName)
+	defer spw.db.Close()
 
 	for periods := 1; periods < 10; periods += 3 {
 		sendReceiveCountMessages(t, tns, signatureBcasted, fromThisNode, spw, periods)
@@ -1358,6 +1365,8 @@ func TestForwardNotFromThisNodeSecondHalf(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, _, tns, spw := getSignaturesInDatabase(t, 10, sigNotFromThisNode)
+	defer os.Remove(spw.spDbFileName)
+	defer spw.db.Close()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	for brnd := 0; brnd < int(proto.StateProofInterval*10); brnd++ {
@@ -1378,6 +1387,8 @@ func TestForwardNotFromThisNodeFirstHalf(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	signatureBcasted, fromThisNode, tns, spw := getSignaturesInDatabase(t, 10, sigAlternateOrigin)
+	defer os.Remove(spw.spDbFileName)
+	defer spw.db.Close()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	for brnd := 0; brnd < int(proto.StateProofInterval*10); brnd++ {
@@ -1417,7 +1428,7 @@ func setBlocksAndMessage(t *testing.T, sigRound basics.Round) (s *testWorkerStub
 
 	s = newWorkerStubsWithChannel(t, []account.Participation{p.Participation}, 10)
 	w = newTestWorker(t, s)
-	w.initDb()
+	w.initDb(w.inMemory)
 
 	s.addBlock(basics.Round(proto.StateProofInterval * 2))
 
@@ -1505,7 +1516,7 @@ func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
 
 	s := newWorkerStubsWithChannel(t, keys[0:proto.StateProofTopVoters], 10)
 	w := newTestWorker(t, s)
-	w.initDb()
+	w.initDb(w.inMemory)
 
 	for r := 0; r < int(proto.StateProofInterval)*2; r++ {
 		s.addBlock(basics.Round(r))
@@ -1616,9 +1627,7 @@ func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 	w.Start()
 	defer w.Stop()
 
-	s.mu.Lock()
 	s.addBlock(basics.Round(proto.StateProofInterval * 2))
-	s.mu.Unlock()
 
 	// remove the first block from the ledger
 	delete(s.blocks, 256)
@@ -1743,7 +1752,8 @@ func TestWorkerCacheAndDiskAfterRestart(t *testing.T) {
 	}
 
 	s := newWorkerStubs(t, keys, len(keys))
-	w := newTestWorker(t, s)
+	w := newTestWorkerOnDiskDb(t, s)
+	defer os.Remove(w.spDbFileName)
 	w.Start()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -1800,7 +1810,8 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 	}
 
 	s := newWorkerStubs(t, keys, len(keys))
-	w := newTestWorker(t, s)
+	w := newTestWorkerOnDiskDb(t, s)
+	defer os.Remove(w.spDbFileName)
 	w.Start()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -1968,7 +1979,8 @@ func TestSignerUsesPersistedBuilderLatestProto(t *testing.T) {
 	}
 
 	s := newWorkerStubs(t, keys, 10)
-	w := newTestWorker(t, s)
+	w := newTestWorkerOnDiskDb(t, s)
+	defer os.Remove(w.spDbFileName)
 	w.Start()
 
 	// We remove the signer's keys to stop it from generating builders and signing.

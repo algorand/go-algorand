@@ -79,6 +79,9 @@ type Worker struct {
 	signed           basics.Round
 	signedCh         chan struct{}
 	lastCleanupRound basics.Round
+
+	// inMemory indicates whether the state proof db should in memory. used for testing.
+	inMemory bool
 }
 
 // NewWorker constructs a new Worker, as used by the node.
@@ -90,8 +93,6 @@ func NewWorker(genesisDir string, log logging.Logger, accts Accounts, ledger Led
 	// todo will config.StateProofFileName gets updated ?
 	stateProofPathname := filepath.Join(genesisDir, config.StateProofFileName)
 
-	// todo this might be a mistake aslo, start and stop should create a new ctx
-	ctx, cancel := context.WithCancel(context.Background())
 	return &Worker{
 		spDbFileName: stateProofPathname,
 		log:          log,
@@ -99,25 +100,22 @@ func NewWorker(genesisDir string, log logging.Logger, accts Accounts, ledger Led
 		ledger:       ledger,
 		net:          net,
 		txnSender:    txnSender,
-		builders:     nil,
-		ctx:          ctx,
-		shutdown:     cancel,
-		signedCh:     make(chan struct{}, 1),
+		inMemory:     false,
 	}
 }
 
 // Start starts the goroutines for the worker.
 func (spw *Worker) Start() {
-	err := spw.initDb()
+	ctx, cancel := context.WithCancel(context.Background())
+	spw.ctx = ctx
+	spw.shutdown = cancel
+	spw.signedCh = make(chan struct{}, 1)
+
+	err := spw.initDb(spw.inMemory)
 	if err != nil {
 		spw.log.Warn(err)
 		return
 	}
-
-	// todo this might be a mistake aslo, start and stop should create a new ctx
-	ctx, cancel := context.WithCancel(context.Background())
-	spw.ctx = ctx
-	spw.shutdown = cancel
 
 	spw.initBuilders()
 
@@ -135,17 +133,17 @@ func (spw *Worker) Start() {
 	go spw.builder(latest)
 }
 
-func (spw *Worker) initDb() error {
-	stateProofAccess, err := db.MakeAccessor(spw.spDbFileName, false, false)
+func (spw *Worker) initDb(inMemory bool) error {
+	stateProofAccess, err := db.MakeAccessor(spw.spDbFileName, false, inMemory)
 	if err != nil {
-		return fmt.Errorf("cannot load state proof data: %v", err)
+		return fmt.Errorf("cannot load state proof data: %w", err)
 
 	}
 
 	spw.db = stateProofAccess
 	err = makeStateProofDB(spw.db)
 	if err != nil {
-		fmt.Errorf("spw.Start(): initDB: %v", err)
+		return fmt.Errorf("spw.initDb(): initDB: %w", err)
 	}
 	return nil
 }
@@ -156,6 +154,7 @@ func (spw *Worker) Stop() {
 	spw.wg.Wait()
 	spw.ledger.UnregisterVotersCommitListener()
 	spw.builders = nil
+	spw.signedCh = nil
 	spw.db.Close()
 }
 
