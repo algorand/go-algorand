@@ -422,11 +422,10 @@ func (node *AlgorandFullNode) Stop() {
 	defer func() {
 		node.mu.Unlock()
 		node.waitMonitoringRoutines()
-		node.stateProofWorker.Stop()
-		node.stateProofWorker = nil
 	}()
 
 	node.net.ClearHandlers()
+	node.stateProofWorker.Stop()
 	if !node.config.DisableNetworking {
 		node.net.Stop()
 	}
@@ -1186,13 +1185,13 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 				node.waitMonitoringRoutines()
 			}()
 			node.net.ClearHandlers()
+			node.stateProofWorker.Stop()
 			node.txHandler.Stop()
 			node.agreementService.Shutdown()
 			node.catchupService.Stop()
 			node.txPoolSyncerService.Stop()
 			node.blockService.Stop()
 			node.ledgerService.Stop()
-			node.stateProofWorker.Stop()
 
 			prevNodeCancelFunc := node.cancelCtx
 
