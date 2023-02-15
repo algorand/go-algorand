@@ -22,8 +22,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
-	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"os"
 	"strings"
 	"sync"
@@ -35,10 +33,12 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -734,6 +734,7 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 func TestWorkerRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
+	const expectedStateProofs = 5
 
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
@@ -753,7 +754,7 @@ func TestWorkerRestart(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceRoundsWithoutStateProof(t, 1)
 	lastRound := uint64(0)
-	for i := 0; i < 5; i++ {
+	for i := 0; i < expectedStateProofs; i++ {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2-1)
 		w.Stop()
 		w.Start()
@@ -776,6 +777,7 @@ func TestWorkerRestart(t *testing.T) {
 		s.addBlock(basics.Round(tx.Txn.Message.LastAttestedRound + proto.StateProofInterval))
 		lastRound = tx.Txn.Message.LastAttestedRound
 	}
+	a.Equal(uint64(expectedStateProofs+1), lastRound/proto.StateProofInterval)
 }
 
 func TestWorkerHandleSig(t *testing.T) {
@@ -1215,17 +1217,9 @@ func getSignaturesInDatabase(t *testing.T, numAddresses int, sigFrom sigOrigin) 
 
 	tns = newWorkerStubsWithChannel(t, keys, len(keys))
 	spw = newTestWorkerOnDiskDb(t, tns)
-	accessor, err := db.MakeAccessor(spw.spDbFileName, false, false)
-	if err != nil {
-		spw.log.Warnf("Cannot load state proof data: %v", err)
-		return
-	}
-	require.NoError(t, err)
-	spw.db = accessor
 
-	// Prepare the database
-	err = makeStateProofDB(spw.db)
-	require.NoError(t, err)
+	// we don't need go routines to run so just create the db
+	spw.initDb(false)
 
 	// All the keys are for round 255. This way, starting the period at 256,
 	// there will be no disqualified signatures from broadcasting because they are
@@ -1426,7 +1420,7 @@ func setBlocksAndMessage(t *testing.T, sigRound basics.Round) (s *testWorkerStub
 	p := newPartKey(t, address)
 	defer p.Close()
 
-	s = newWorkerStubsWithChannel(t, []account.Participation{p.Participation}, 10)
+	s = newWorkerStubs(t, []account.Participation{p.Participation}, 10)
 	w = newTestWorker(t, s)
 	w.initDb(w.inMemory)
 
@@ -1629,8 +1623,10 @@ func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
 
 	s.addBlock(basics.Round(proto.StateProofInterval * 2))
 
+	s.mu.Lock()
 	// remove the first block from the ledger
 	delete(s.blocks, 256)
+	s.mu.Unlock()
 
 	msg := sigFromAddr{
 		SignerAddress: address,
@@ -1837,7 +1833,6 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 	a.NoError(err)
 	a.Equal(buildersCacheLength, len(roundSigs)) // Number of broadcasted sigs should be the same as number of (online) cached builders.
 
-	// restart worker
 	w.Stop()
 
 	accessor, err := db.MakeAccessor(w.spDbFileName, false, false)
@@ -1848,6 +1843,7 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 		return err
 	}))
 	accessor.Close()
+
 	w.Start()
 	defer w.Stop()
 

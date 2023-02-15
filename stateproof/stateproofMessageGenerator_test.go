@@ -17,8 +17,6 @@
 package stateproof
 
 import (
-	"github.com/algorand/go-algorand/data/stateproofmsg"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
@@ -30,9 +28,11 @@ import (
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestStateProofMessage(t *testing.T) {
@@ -215,24 +215,28 @@ func TestGenerateBlockProof(t *testing.T) {
 		a.NoError(err)
 		a.Equal(proto.StateProofInterval, uint64(len(headers)))
 
-		// attempting to get block proof for every block in the interval
-		for j := tx.Txn.Message.FirstAttestedRound; j < tx.Txn.Message.LastAttestedRound; j++ {
-			headerIndex := j - tx.Txn.Message.FirstAttestedRound
-			proof, err := GenerateProofOfLightBlockHeaders(proto.StateProofInterval, headers, headerIndex)
-			a.NoError(err)
-			a.NotNil(proof)
-
-			lightheader := headers[headerIndex]
-			err = merklearray.VerifyVectorCommitment(
-				tx.Txn.Message.BlockHeadersCommitment,
-				map[uint64]crypto.Hashable{headerIndex: &lightheader},
-				proof.ToProof())
-
-			a.NoError(err)
-		}
+		verifyLightBlockHeaderProof(&tx, &proto, headers, a)
 
 		s.addBlock(basics.Round(tx.Txn.Message.LastAttestedRound + proto.StateProofInterval))
 		lastAttestedRound = basics.Round(tx.Txn.Message.LastAttestedRound)
+	}
+}
+
+func verifyLightBlockHeaderProof(tx *transactions.SignedTxn, proto *config.ConsensusParams, headers []bookkeeping.LightBlockHeader, a *require.Assertions) {
+	// attempting to get block proof for every block in the interval
+	for j := tx.Txn.Message.FirstAttestedRound; j < tx.Txn.Message.LastAttestedRound; j++ {
+		headerIndex := j - tx.Txn.Message.FirstAttestedRound
+		proof, err := GenerateProofOfLightBlockHeaders(proto.StateProofInterval, headers, headerIndex)
+		a.NoError(err)
+		a.NotNil(proof)
+
+		lightheader := headers[headerIndex]
+		err = merklearray.VerifyVectorCommitment(
+			tx.Txn.Message.BlockHeadersCommitment,
+			map[uint64]crypto.Hashable{headerIndex: &lightheader},
+			proof.ToProof())
+
+		a.NoError(err)
 	}
 }
 

@@ -231,8 +231,6 @@ func (spw *Worker) initBuilders() {
 		}
 		spw.builders[rnd] = buildr
 	}
-
-	spw.ledger.RegisterVotersCommitListener(spw)
 }
 
 func (spw *Worker) getAllOnlineBuilderRounds() ([]basics.Round, error) {

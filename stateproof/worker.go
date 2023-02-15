@@ -118,6 +118,8 @@ func (spw *Worker) Start() {
 
 	spw.initBuilders()
 
+	spw.ledger.RegisterVotersCommitListener(spw)
+
 	handlers := []network.TaggedMessageHandler{
 		{Tag: protocol.StateProofSigTag, MessageHandler: network.HandlerFunc(spw.handleSigMessage)},
 	}
