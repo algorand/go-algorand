@@ -719,9 +719,14 @@ func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
 func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	cfgLocal := config.GetDefaultLocal()
+	ledgertesting.WithAndWithoutLRUCache(t, cfgLocal, testAcctUpdatesUpdatesCorrectness)
+}
+
+func testAcctUpdatesUpdatesCorrectness(t *testing.T, cfg config.Local) {
 	// create new protocol version, which has lower look back.
 	testProtocolVersion := protocol.ConsensusCurrentVersion
-	maxAcctLookback := config.GetDefaultLocal().MaxAcctLookback
+	maxAcctLookback := cfg.MaxAcctLookback
 	inMemory := true
 
 	testFunction := func(t *testing.T) {
@@ -746,8 +751,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			accts[0][addr] = accountData
 		}
 
-		conf := config.GetDefaultLocal()
-		au, _ := newAcctUpdates(t, ml, conf)
+		au, _ := newAcctUpdates(t, ml, cfg)
 		defer au.close()
 
 		// cover 10 genesis blocks
