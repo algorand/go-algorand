@@ -90,7 +90,6 @@ func NewWorker(genesisDir string, log logging.Logger, accts Accounts, ledger Led
 	oldCompactCertPath := filepath.Join(genesisDir, "compactcert.sqlite")
 	os.Remove(oldCompactCertPath)
 
-	// todo will config.StateProofFileName gets updated ?
 	stateProofPathname := filepath.Join(genesisDir, config.StateProofFileName)
 
 	return &Worker{
@@ -136,14 +135,14 @@ func (spw *Worker) Start() {
 func (spw *Worker) initDb(inMemory bool) error {
 	stateProofAccess, err := db.MakeAccessor(spw.spDbFileName, false, inMemory)
 	if err != nil {
-		return fmt.Errorf("cannot load state proof data: %w", err)
+		return fmt.Errorf("spw.initDb(): cannot load state proof data: %w", err)
 
 	}
 
 	spw.db = stateProofAccess
 	err = makeStateProofDB(spw.db)
 	if err != nil {
-		return fmt.Errorf("spw.initDb(): initDB: %w", err)
+		return fmt.Errorf("spw.initDb(): makeStateProofDB failed: %w", err)
 	}
 	return nil
 }

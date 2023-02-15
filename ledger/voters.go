@@ -322,11 +322,7 @@ func (vt *votersTracker) unregisterPrepareCommitListener() {
 	vt.commitListenerMu.Lock()
 	defer vt.commitListenerMu.Unlock()
 
-	if vt.commitListener == nil {
-		vt.l.trackerLog().Warn("votersTracker.unregisterPrepareCommitListener: no listener was registered.")
-	} else {
-		vt.commitListener = nil
-	}
+	vt.commitListener = nil
 }
 
 func (vt *votersTracker) getVoters(round basics.Round) (*ledgercore.VotersForRound, bool) {
