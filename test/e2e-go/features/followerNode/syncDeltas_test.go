@@ -58,10 +58,6 @@ func TestBasicSyncMode(t *testing.T) {
 	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
 	a.NoError(err)
 
-	// Get the catchpoint against current network
-	//currentStatus, err := primaryClient.Status()
-	//a.NoError(err)
-
 	// Get the follower client, and exercise the sync/ledger functionality
 	followControl, err := fixture.GetNodeController("Follower")
 	a.NoError(err)
@@ -72,23 +68,24 @@ func TestBasicSyncMode(t *testing.T) {
 		rResp, err := followClient.GetSyncRound()
 		a.NoError(err)
 		a.Equal(round, rResp.Round)
+		// ready-ness endpoint check, should error here for still catching up
+		err = followClient.ReadyCheck()
+		a.Error(err)
+		// make some progress to round
 		err = fixture.ClientWaitForRoundWithTimeout(followClient, round)
 		a.NoError(err)
 		// retrieve state delta
 		gResp, err := followClient.GetLedgerStateDelta(round)
 		a.NoError(err)
 		a.NotNil(gResp)
-		// readiness check should err here, for it is not yet caught up
-		//err = followClient.ReadyCheck()
-		//a.Error(err)
 		// set sync round next
-		//followStatus, err := followClient.Status()
-		//a.NotNil(followStatus.Catchpoint)
-		//err = followClient.ReadyCheck()
-		//a.Error(err)
 		err = followClient.SetSyncRound(round + 1)
 		a.NoError(err)
 	}
+	// follow node post catchup test, should be caught up and ready
+	err = followClient.ReadyCheck()
+	a.NoError(err)
+
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(fixture.LibGoalClient, waitForRound)
 	a.NoError(err)
 }

@@ -119,7 +119,7 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 	} else if stat.StoppedAtUnsupportedRound {
 		code = http.StatusInternalServerError
 		err = fmt.Errorf("stopped at an unsupported round")
-	} else if stat.Catchpoint != "" {
+	} else if stat.Catchpoint != "" || stat.CatchupTime > 0 {
 		code = http.StatusBadRequest
 		err = fmt.Errorf("ready failed as the node is catching up")
 	}

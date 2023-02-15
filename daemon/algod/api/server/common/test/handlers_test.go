@@ -32,7 +32,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func mockNodeStatusTestHelper(
+func mockNodeStatusInRangeHelper(
 	t *testing.T, statusCode MockNodeCatchupStatus,
 	expectedErr error, expectedStatus node.StatusReport) {
 	mockNodeInstance := makeMockNode(statusCode)
@@ -47,13 +47,15 @@ func mockNodeStatusTestHelper(
 func TestMockNodeStatus(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	mockNodeStatusTestHelper(
+	mockNodeStatusInRangeHelper(
 		t, CaughtUpAndReady, nil, cannedStatusReportCaughtUpAndReadyGolden)
-	mockNodeStatusTestHelper(
-		t, CatchingUp, nil, cannedStatusReportCatchingUpGolden)
-	mockNodeStatusTestHelper(
+	mockNodeStatusInRangeHelper(
+		t, CatchingUpFast, nil, cannedStatusReportCatchingUpFastGolden)
+	mockNodeStatusInRangeHelper(
+		t, CatchingUpRoundByRound, nil, cannedStatusReportCatchingUpRoundByRoundGolden)
+	mockNodeStatusInRangeHelper(
 		t, StoppedAtUnsupported, nil, cannedStatusReportStoppedAtUnsupportedGolden)
-	mockNodeStatusTestHelper(
+	mockNodeStatusInRangeHelper(
 		t, 399, fmt.Errorf("catchup status out of scope error"), node.StatusReport{})
 }
 
@@ -80,7 +82,10 @@ func TestReadyEndpoint(t *testing.T) {
 	mockNodeInstance := makeMockNode(CaughtUpAndReady)
 	readyEndpointTestHelper(t, mockNodeInstance, http.StatusOK)
 
-	mockNodeInstance.catchupStatus = CatchingUp
+	mockNodeInstance.catchupStatus = CatchingUpFast
+	readyEndpointTestHelper(t, mockNodeInstance, http.StatusBadRequest)
+
+	mockNodeInstance.catchupStatus = CatchingUpRoundByRound
 	readyEndpointTestHelper(t, mockNodeInstance, http.StatusBadRequest)
 
 	mockNodeInstance.catchupStatus = StoppedAtUnsupported

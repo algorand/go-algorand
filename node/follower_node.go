@@ -389,7 +389,7 @@ func (node *AlgorandFollowerNode) SetCatchpointCatchupMode(catchpointCatchupMode
 	outCtxCh = ctxCh
 	go func() {
 		node.mu.Lock()
-		// check that the node wasn't canceled. If it have been canceled, it means that the node.Stop() was called, in which case
+		// check that the node wasn't canceled. If it has been canceled, it means that the node.Stop() was called, in which case
 		// we should close the channel.
 		if node.ctx.Err() == context.Canceled {
 			close(ctxCh)
