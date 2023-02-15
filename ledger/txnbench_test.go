@@ -35,8 +35,8 @@ import (
 // BenchmarkTxnTypes compares the execution time of various txn types
 func BenchmarkTxnTypes(b *testing.B) {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	ledgertesting.BenchConsensusRange(b, 30, 0, func(b *testing.B, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
-		l := newSimpleLedgerWithConsensusVersion(b, genBalances, cv, cfg)
+	ledgertesting.BenchConsensusRange(b, 30, 0, func(b *testing.B, ver int, cv protocol.ConsensusVersion) {
+		l := newSimpleLedgerWithConsensusVersion(b, genBalances, cv, config.GetDefaultLocal())
 		defer l.Close()
 
 		createasa := txntest.Txn{
