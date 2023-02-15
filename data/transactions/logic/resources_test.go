@@ -179,6 +179,31 @@ pop; pop; int 1
 	logic.TestApps(t, sources, txntest.Group(&appl0, &appl2), 9, nil)
 }
 
+// TestNewAppAccount checks whether a newly created app can put its own address
+// into `itxn_field Accounts`.
+func TestNewAppAccount(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, tx, ledger := logic.MakeSampleEnv()
+
+	accept := logic.TestProg(t, "int 1", 6)
+	alice := basics.Address{1, 1, 1, 1, 1}
+	ledger.NewApp(alice, 4, basics.AppParams{
+		ApprovalProgram: accept.Program,
+	})
+	callWithMyAccount := `
+itxn_begin
+	int appl;	                       itxn_field TypeEnum
+    int 4;	                           itxn_field ApplicationID
+    global CurrentApplicationAddress;  itxn_field Accounts
+itxn_submit
+int 1`
+	tx.ForeignApps = []basics.AppIndex{4}
+	ledger.NewAccount(appAddr(888), 50_000)
+	logic.TestApp(t, callWithMyAccount, ep)
+}
+
 // TestOtherTxSharing tests resource sharing across other kinds of transactions besides appl.
 func TestOtherTxSharing(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -432,7 +457,7 @@ int 1
 		// appl can pay the axfer sender
 		appl.ApplicationArgs = [][]byte{senderAcct[:], {asa1}}
 		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&axfer, &appl), 9, ledger)
-		// bur can't axfer to them, because appAcct doesn't have holding access
+		// but can't axfer to sender, because appAcct doesn't have holding access for the asa
 		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&axfer, &appl), 9, ledger,
 			logic.NewExpect(1, "invalid Holding access"))
 		// and to the receiver

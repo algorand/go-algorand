@@ -92,20 +92,22 @@ func (r *resources) fill(tx *transactions.Transaction, ep *EvalParams) {
 		r.fillAssetFreeze(&tx.Header, &tx.AssetFreezeTxnFields)
 	case protocol.ApplicationCallTx:
 		r.fillApplicationCall(ep, &tx.Header, &tx.ApplicationCallTxnFields)
+	default:
+		panic(tx.Type)
 	}
 }
 
-func (r *resources) allows(ep *EvalParams, tx *transactions.Transaction, callerVer, calleeVer uint64) error {
+func (cx *EvalContext) allows(tx *transactions.Transaction, calleeVer uint64) error {
 	switch tx.Type {
 	case protocol.PaymentTx, protocol.KeyRegistrationTx, protocol.AssetConfigTx:
 		// these transactions don't touch cross-product resources, so no error is possible
 		return nil
 	case protocol.AssetTransferTx:
-		return r.allowsAssetTransfer(&tx.Header, &tx.AssetTransferTxnFields)
+		return cx.allowsAssetTransfer(&tx.Header, &tx.AssetTransferTxnFields)
 	case protocol.AssetFreezeTx:
-		return r.allowsAssetFreeze(&tx.Header, &tx.AssetFreezeTxnFields)
+		return cx.allowsAssetFreeze(&tx.Header, &tx.AssetFreezeTxnFields)
 	case protocol.ApplicationCallTx:
-		return r.allowsApplicationCall(ep, &tx.Header, &tx.ApplicationCallTxnFields, callerVer, calleeVer)
+		return cx.allowsApplicationCall(&tx.Header, &tx.ApplicationCallTxnFields, cx.version, calleeVer)
 	default:
 		return fmt.Errorf("unknown inner transaction type %s", tx.Type)
 	}
@@ -147,70 +149,92 @@ func (r *resources) fillAssetTransfer(hdr *transactions.Header, tx *transactions
 }
 
 // allowsHolding checks if a holding is available under the txgroup sharing rules
-func (r *resources) allowsHolding(addr basics.Address, ai basics.AssetIndex) bool {
+func (cx *EvalContext) allowsHolding(addr basics.Address, ai basics.AssetIndex) bool {
+	r := cx.available
 	if _, ok := r.sharedHoldings[ledgercore.AccountAsset{Address: addr, Asset: ai}]; ok {
 		return true
 	}
-	// All holdings of created assets are available
+	// If an ASA was created in this group, then allow holding access for any allowed account.
 	for _, created := range r.createdAsas {
 		if created == ai {
-			return true
+			return cx.availableAccount(addr)
 		}
+	}
+	// If the address was "created" by making its app in this group, then allow for allowed assets.
+	for _, created := range r.createdApps {
+		if cx.getApplicationAddress(created) == addr {
+			return cx.availableAsset(ai)
+		}
+	}
+	// If the current txn is a creation, the new appID won't be in r.createdApps
+	// yet, but it should get the same special treatment.
+	if cx.txn.Txn.ApplicationID == 0 && cx.getApplicationAddress(cx.appID) == addr {
+		return cx.availableAsset(ai)
 	}
 	return false
 }
 
 // allowsLocals checks if a local state is available under the txgroup sharing rules
-func (r *resources) allowsLocals(addr basics.Address, ai basics.AppIndex) bool {
+func (cx *EvalContext) allowsLocals(addr basics.Address, ai basics.AppIndex) bool {
+	r := cx.available
 	if _, ok := r.sharedLocals[ledgercore.AccountApp{Address: addr, App: ai}]; ok {
 		return true
 	}
 	// All locals of created apps are available
 	for _, created := range r.createdApps {
 		if created == ai {
-			return true
+			return cx.availableAccount(addr)
 		}
+	}
+	// All locals of created app accounts are available
+	for _, created := range r.createdApps {
+		if cx.getApplicationAddress(created) == addr {
+			return cx.availableApp(ai)
+		}
+	}
+	if cx.txn.Txn.ApplicationID == 0 && cx.getApplicationAddress(cx.appID) == addr {
+		return cx.availableApp(ai)
 	}
 	return false
 }
 
-func (r *resources) requireHolding(acct basics.Address, id basics.AssetIndex) error {
+func (cx *EvalContext) requireHolding(acct basics.Address, id basics.AssetIndex) error {
 	/* Previous versions allowed inner appls with zeros in "required" places,
 	   even if that 0 resource should have be inaccessible, because the check
-	   was done at itxn_field time, and maybe the app siimply didn't set the
+	   was done at itxn_field time, and maybe the app simply didn't set the
 	   field. */
 	if id == 0 || acct.IsZero() {
 		return nil
 	}
-	if !r.allowsHolding(acct, id) {
-		return fmt.Errorf("invalid Holding access %s x %d", acct, id)
+	if !cx.allowsHolding(acct, id) {
+		return fmt.Errorf("invalid Holding access %s x %d would be possible", acct, id)
 	}
 	return nil
 }
 
-func (r *resources) requireLocals(acct basics.Address, id basics.AppIndex) error {
-	if !r.allowsLocals(acct, id) {
-		return fmt.Errorf("invalid Local State access %s x %d", acct, id)
+func (cx *EvalContext) requireLocals(acct basics.Address, id basics.AppIndex) error {
+	if !cx.allowsLocals(acct, id) {
+		return fmt.Errorf("invalid Local State access %s x %d would be possible", acct, id)
 	}
 	return nil
 }
 
-func (r *resources) allowsAssetTransfer(hdr *transactions.Header, tx *transactions.AssetTransferTxnFields) error {
-	err := r.requireHolding(hdr.Sender, tx.XferAsset)
+func (cx *EvalContext) allowsAssetTransfer(hdr *transactions.Header, tx *transactions.AssetTransferTxnFields) error {
+	err := cx.requireHolding(hdr.Sender, tx.XferAsset)
 	if err != nil {
-		return fmt.Errorf("axfer Sender: %v", err)
+		return fmt.Errorf("axfer Sender: %w", err)
 	}
-	err = r.requireHolding(tx.AssetReceiver, tx.XferAsset)
+	err = cx.requireHolding(tx.AssetReceiver, tx.XferAsset)
 	if err != nil {
-		return fmt.Errorf("axfer AssetReceiver: %v", err)
+		return fmt.Errorf("axfer AssetReceiver: %w", err)
 	}
-	err = r.requireHolding(tx.AssetSender, tx.XferAsset)
+	err = cx.requireHolding(tx.AssetSender, tx.XferAsset)
 	if err != nil {
-		return fmt.Errorf("axfer AssetSender: %v", err)
+		return fmt.Errorf("axfer AssetSender: %w", err)
 	}
-	err = r.requireHolding(tx.AssetCloseTo, tx.XferAsset)
+	err = cx.requireHolding(tx.AssetCloseTo, tx.XferAsset)
 	if err != nil {
-		return fmt.Errorf("axfer AssetCloseTo: %v", err)
+		return fmt.Errorf("axfer AssetCloseTo: %w", err)
 	}
 	return nil
 }
@@ -222,10 +246,10 @@ func (r *resources) fillAssetFreeze(hdr *transactions.Header, tx *transactions.A
 	r.shareAccountAndHolding(tx.FreezeAccount, id)
 }
 
-func (r *resources) allowsAssetFreeze(hdr *transactions.Header, tx *transactions.AssetFreezeTxnFields) error {
-	err := r.requireHolding(tx.FreezeAccount, tx.FreezeAsset)
+func (cx *EvalContext) allowsAssetFreeze(hdr *transactions.Header, tx *transactions.AssetFreezeTxnFields) error {
+	err := cx.requireHolding(tx.FreezeAccount, tx.FreezeAsset)
 	if err != nil {
-		return fmt.Errorf("afrz FreezeAccount: %v", err)
+		return fmt.Errorf("afrz FreezeAccount: %w", err)
 	}
 	return nil
 }
@@ -284,8 +308,8 @@ func (r *resources) fillApplicationCall(ep *EvalParams, hdr *transactions.Header
 	}
 }
 
-func (r *resources) allowsApplicationCall(ep *EvalParams, hdr *transactions.Header, tx *transactions.ApplicationCallTxnFields, callerVer, calleeVer uint64) error {
-	// If an old (pre resorce sharing) app is being called from an app that has
+func (cx *EvalContext) allowsApplicationCall(hdr *transactions.Header, tx *transactions.ApplicationCallTxnFields, callerVer, calleeVer uint64) error {
+	// If an old (pre resource sharing) app is being called from an app that has
 	// resource sharing enabled, we need to confirm that no new "cross-product"
 	// resources have become available.
 	if callerVer < resourceSharingVersion || calleeVer >= resourceSharingVersion {
@@ -299,28 +323,28 @@ func (r *resources) allowsApplicationCall(ep *EvalParams, hdr *transactions.Head
 	txAccounts = append(txAccounts, hdr.Sender)
 	txAccounts = append(txAccounts, tx.Accounts...)
 	if id := tx.ApplicationID; id != 0 {
-		txAccounts = append(txAccounts, ep.getApplicationAddress(id))
+		txAccounts = append(txAccounts, cx.getApplicationAddress(id))
 	}
 	for _, id := range tx.ForeignApps {
-		txAccounts = append(txAccounts, ep.getApplicationAddress(id))
+		txAccounts = append(txAccounts, cx.getApplicationAddress(id))
 	}
 	for _, address := range txAccounts {
 		for _, id := range tx.ForeignAssets {
-			err := r.requireHolding(address, id)
+			err := cx.requireHolding(address, id)
 			if err != nil {
-				return fmt.Errorf("appl ForeignAssets: %v", err)
+				return fmt.Errorf("appl ForeignAssets: %w", err)
 			}
 		}
 		if id := tx.ApplicationID; id != 0 {
-			err := r.requireLocals(address, id)
+			err := cx.requireLocals(address, id)
 			if err != nil {
-				return fmt.Errorf("appl ApplicationID: %v", err)
+				return fmt.Errorf("appl ApplicationID: %w", err)
 			}
 		}
 		for _, id := range tx.ForeignApps {
-			err := r.requireLocals(address, id)
+			err := cx.requireLocals(address, id)
 			if err != nil {
-				return fmt.Errorf("appl ForeignApps: %v", err)
+				return fmt.Errorf("appl ForeignApps: %w", err)
 			}
 		}
 	}

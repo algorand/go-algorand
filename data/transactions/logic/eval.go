@@ -4007,45 +4007,53 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 	if err != nil {
 		return addr, 0, err
 	}
-	idx, err := cx.txn.Txn.IndexByAddress(addr, cx.txn.Txn.Sender)
 
+	idx, err := cx.txn.Txn.IndexByAddress(addr, cx.txn.Txn.Sender)
+	if err == nil {
+		return addr, idx, nil
+	}
+
+	ok := cx.availableAccount(addr)
+	if !ok {
+		return addr, 0, err
+	}
 	invalidIndex := uint64(len(cx.txn.Txn.Accounts) + 1)
+	return addr, invalidIndex, nil
+}
+
+func (cx *EvalContext) availableAccount(addr basics.Address) bool {
 	// Allow an address for an app that was created in group
-	if err != nil && cx.version >= createdResourcesVersion {
+	if cx.version >= createdResourcesVersion {
 		for _, appID := range cx.available.createdApps {
 			createdAddress := cx.getApplicationAddress(appID)
 			if addr == createdAddress {
-				return addr, invalidIndex, nil
+				return true
 			}
 		}
 	}
 
 	// or some other txn mentioned it
-	if err != nil && cx.version >= resourceSharingVersion {
+	if cx.version >= resourceSharingVersion {
 		if _, ok := cx.available.sharedAccounts[addr]; ok {
-			return addr, invalidIndex, nil
+			return true
 		}
 	}
 
 	// Allow an address for an app that was provided in the foreign apps array.
-	if err != nil && cx.version >= appAddressAvailableVersion {
+	if cx.version >= appAddressAvailableVersion {
 		for _, appID := range cx.txn.Txn.ForeignApps {
 			foreignAddress := cx.getApplicationAddress(appID)
 			if addr == foreignAddress {
-				return addr, invalidIndex, nil
+				return true
 			}
 		}
 	}
 
-	// this app's address is also allowed
-	if err != nil {
-		appAddr := cx.getApplicationAddress(cx.appID)
-		if appAddr == addr {
-			return addr, invalidIndex, nil
-		}
+	if cx.getApplicationAddress(cx.appID) == addr {
+		return true
 	}
 
-	return addr, idx, err
+	return false
 }
 
 func (cx *EvalContext) mutableAccountReference(account stackValue) (basics.Address, uint64, error) {
@@ -4465,17 +4473,17 @@ func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.A
 			return basics.Address{}, 0, 0, err
 		}
 		aid := basics.AppIndex(ref)
-		if cx.available.allowsLocals(addr, aid) {
+		if cx.allowsLocals(addr, aid) {
 			return addr, aid, unused, nil
 		}
 		if ref == 0 {
 			aid := cx.appID
-			if cx.available.allowsLocals(addr, aid) {
+			if cx.allowsLocals(addr, aid) {
 				return addr, aid, unused, nil
 			}
 		} else if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
 			aid := cx.txn.Txn.ForeignApps[ref-1]
-			if cx.available.allowsLocals(addr, aid) {
+			if cx.allowsLocals(addr, aid) {
 				return addr, aid, unused, nil
 			}
 		}
@@ -4554,12 +4562,12 @@ func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.
 			return basics.Address{}, 0, err
 		}
 		aid := basics.AssetIndex(ref)
-		if cx.available.allowsHolding(addr, aid) {
+		if cx.allowsHolding(addr, aid) {
 			return addr, aid, nil
 		}
 		if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
 			aid := cx.txn.Txn.ForeignAssets[ref]
-			if cx.available.allowsHolding(addr, aid) {
+			if cx.allowsHolding(addr, aid) {
 				return addr, aid, nil
 			}
 		}
@@ -5340,7 +5348,7 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		// account and the asa or app, but not the holding or locals, because
 		// the caller gained access to the two top resources by group sharing
 		// from two different transactions.
-		err = cx.available.allows(cx.EvalParams, &cx.subtxns[itx].Txn, cx.version, calledVersion)
+		err = cx.allows(&cx.subtxns[itx].Txn, calledVersion)
 		if err != nil {
 			return err
 		}
