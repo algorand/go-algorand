@@ -683,18 +683,6 @@ type PanicError struct {
 	StackTrace string
 }
 
-func makePanicError(x interface{}, ep *EvalParams, location string) error {
-	buf := make([]byte, 16*1024)
-	stlen := runtime.Stack(buf, false)
-	errstr := string(buf[:stlen])
-	if ep.Trace != nil {
-		errstr += ep.Trace.String()
-	}
-	err := PanicError{x, errstr}
-	ep.log().Errorf("recovered panic in %s: %v", location, err)
-	return err
-}
-
 func (pe PanicError) Error() string {
 	return fmt.Sprintf("panic in TEAL Eval: %v\n%s", pe.PanicValue, pe.StackTrace)
 }
@@ -835,8 +823,15 @@ func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
 func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			err = makePanicError(x, cx.EvalParams, "Eval")
+			buf := make([]byte, 16*1024)
+			stlen := runtime.Stack(buf, false)
 			pass = false
+			errstr := string(buf[:stlen])
+			if cx.Trace != nil {
+				errstr += cx.Trace.String()
+			}
+			err = PanicError{x, errstr}
+			cx.EvalParams.log().Errorf("recovered panic in Eval: %v", err)
 		}
 	}()
 
@@ -859,23 +854,20 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 		cx.Tracer.BeforeProgram(cx)
 
 		defer func() {
-			if _, ok := err.(PanicError); ok {
+			x := recover()
+			tracerErr := err
+			if x != nil {
 				// A panic error occurred during the eval loop. Report it now.
-				cx.Tracer.AfterOpcode(cx, err)
+				tracerErr = fmt.Errorf("panic in TEAL Eval: %v", x)
+				cx.Tracer.AfterOpcode(cx, tracerErr)
 			}
 
 			// Ensure we update the tracer before exiting
-			cx.Tracer.AfterProgram(cx, err)
-		}()
+			cx.Tracer.AfterProgram(cx, tracerErr)
 
-		// Due to the LIFO behavior of defer statements, if we want the tracer to catch panics, we
-		// need to have a `recover` defer statement defined after the tracer-invoking defer
-		// statement. However, since it's possible for the tracer itself to panic, we still want to
-		// keep the outmost `recover` defer statement defined at the top of this function.
-		defer func() {
-			if x := recover(); x != nil {
-				err = makePanicError(x, cx.EvalParams, "Eval")
-				pass = false
+			if x != nil {
+				// Panic again to trigger higher-level recovery and error reporting
+				panic(x)
 			}
 		}()
 	}
@@ -942,7 +934,14 @@ func CheckSignature(gi int, params *EvalParams) error {
 func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			err = makePanicError(x, params, "Check")
+			buf := make([]byte, 16*1024)
+			stlen := runtime.Stack(buf, false)
+			errstr := string(buf[:stlen])
+			if params.Trace != nil {
+				errstr += params.Trace.String()
+			}
+			err = PanicError{x, errstr}
+			params.log().Errorf("recovered panic in Check: %s", err)
 		}
 	}()
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
