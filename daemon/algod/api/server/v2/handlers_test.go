@@ -178,7 +178,7 @@ func TestPendingTransactionResponseStruct(t *testing.T) {
 	generatedResponseGraph.AssertEquals(t, customResponseGraph)
 }
 
-// TestSimulateResponseStruct ensures that the hand-written EncodedSimulationResult has the same
+// TestSimulateResponseStruct ensures that the hand-written preEncodedSimulationResult has the same
 // encoding structure as the generated model.SimulationResponse
 func TestSimulateResponseStruct(t *testing.T) {
 	partitiontest.PartitionTest(t)

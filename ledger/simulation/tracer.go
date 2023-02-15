@@ -24,6 +24,8 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
+// cursorEvalTracer is responsible for maintaining a TxnPath that points to the currently executing
+// transaction. The absolutePath() function is used to get this path.
 type cursorEvalTracer struct {
 	logic.NullEvalTracer
 
@@ -70,13 +72,15 @@ func (tracer *cursorEvalTracer) absolutePath() TxnPath {
 	return path
 }
 
+// evalTracer is responsible for populating a Result during a simulation evaluation. It saves
+// EvalDelta & inner transaction changes as they happen, so if an error occurs during evaluation, we
+// can return a partially-built ApplyData with as much information as possible at the time of the
+// error.
 type evalTracer struct {
 	cursorEvalTracer
 
-	isAppRunning      bool
-	result            *Result
-	evalDeltaSnapshot transactions.EvalDelta
-	failedAt          TxnPath
+	result   *Result
+	failedAt TxnPath
 }
 
 func makeEvalTracer(txgroup []transactions.SignedTxn) *evalTracer {
@@ -156,11 +160,6 @@ func (tracer *evalTracer) saveEvalDelta(evalDelta transactions.EvalDelta, appIDT
 	inners := applyDataOfCurrentTxn.EvalDelta.InnerTxns
 	applyDataOfCurrentTxn.EvalDelta = evalDelta
 	applyDataOfCurrentTxn.EvalDelta.InnerTxns = inners
-
-	// TODO: remove
-	if len(inners) != len(evalDelta.InnerTxns) {
-		panic("inner lengths differ")
-	}
 }
 
 func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
@@ -178,11 +177,17 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 }
 
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
+	if cx.RunMode() != logic.ModeApp {
+		// do nothing for LogicSig ops
+		return
+	}
 	tracer.handleError(evalError)
-	tracer.cursorEvalTracer.AfterOpcode(cx, evalError)
 }
 
 func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
+	if cx.RunMode() != logic.ModeApp {
+		// do nothing for LogicSig programs
+		return
+	}
 	tracer.handleError(evalError)
-	tracer.cursorEvalTracer.AfterProgram(cx, evalError)
 }

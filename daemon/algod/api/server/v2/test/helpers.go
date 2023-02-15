@@ -280,7 +280,7 @@ var proto = config.Consensus[protocol.ConsensusCurrentVersion]
 
 func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
 	maxMoneyAtStart := 1000000 // max money start
-	minMoneyAtStart := 100000  // max money start
+	minMoneyAtStart := 100000  // min money start
 	return testingenvWithBalances(t, maxMoneyAtStart, minMoneyAtStart, numAccounts, numTxs, offlineAccounts)
 }
 
