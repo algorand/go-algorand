@@ -45,8 +45,8 @@ type lruOnlineAccounts struct {
 // init initializes the lruAccounts for use.
 // thread locking semantics : write lock
 func (m *lruOnlineAccounts) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
-	m.accountsList = newPersistedOnlineAccountList().allocateFreeNodes(pendingWrites)
 	if pendingWrites > 0 {
+		m.accountsList = newPersistedOnlineAccountList().allocateFreeNodes(pendingWrites)
 		m.accounts = make(map[basics.Address]*persistedOnlineAccountDataListNode, pendingWrites)
 		m.pendingAccounts = make(chan store.PersistedOnlineAccountData, pendingWrites)
 	}
@@ -116,6 +116,9 @@ func (m *lruOnlineAccounts) write(acctData store.PersistedOnlineAccountData) {
 // recently used entries.
 // thread locking semantics : write lock
 func (m *lruOnlineAccounts) prune(newSize int) (removed int) {
+	if m.accounts == nil {
+		return
+	}
 	for {
 		if len(m.accounts) <= newSize {
 			break

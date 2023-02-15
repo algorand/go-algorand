@@ -56,8 +56,8 @@ type lruKV struct {
 // init initializes the lruKV for use.
 // thread locking semantics : write lock
 func (m *lruKV) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
-	m.kvList = newPersistedKVList().allocateFreeNodes(pendingWrites)
 	if pendingWrites > 0 {
+		m.kvList = newPersistedKVList().allocateFreeNodes(pendingWrites)
 		m.kvs = make(map[string]*persistedKVDataListNode, pendingWrites)
 		m.pendingKVs = make(chan cachedKVData, pendingWrites)
 	}
@@ -127,6 +127,9 @@ func (m *lruKV) write(kvData store.PersistedKVData, key string) {
 // recently used entries.
 // thread locking semantics : write lock
 func (m *lruKV) prune(newSize int) (removed int) {
+	if m.kvs == nil {
+		return
+	}
 	for {
 		if len(m.kvs) <= newSize {
 			break

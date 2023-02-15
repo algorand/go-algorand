@@ -60,8 +60,8 @@ type lruResources struct {
 // init initializes the lruResources for use.
 // thread locking semantics : write lock
 func (m *lruResources) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
-	m.resourcesList = newPersistedResourcesList().allocateFreeNodes(pendingWrites)
 	if pendingWrites > 0 {
+		m.resourcesList = newPersistedResourcesList().allocateFreeNodes(pendingWrites)
 		m.resources = make(map[accountCreatable]*persistedResourcesDataListNode, pendingWrites)
 		m.pendingResources = make(chan cachedResourceData, pendingWrites)
 		m.notFound = make(map[accountCreatable]struct{}, pendingWrites)
@@ -174,6 +174,9 @@ func (m *lruResources) write(resData store.PersistedResourcesData, addr basics.A
 // recently used entries.
 // thread locking semantics : write lock
 func (m *lruResources) prune(newSize int) (removed int) {
+	if m.resources == nil {
+		return
+	}
 	for {
 		if len(m.resources) <= newSize {
 			break
