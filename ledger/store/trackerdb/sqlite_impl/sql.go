@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package store
+package sqlite_impl
 
 import (
 	"database/sql"
@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -251,7 +252,7 @@ func (qs *accountsDbQueries) ListCreatables(maxIdx basics.CreatableIndex, maxRes
 // After check source code, a []byte slice destination is definitely cloned.
 
 // LookupKeyValue returns the application boxed value associated with the key.
-func (qs *accountsDbQueries) LookupKeyValue(key string) (pv PersistedKVData, err error) {
+func (qs *accountsDbQueries) LookupKeyValue(key string) (pv trackerdb.PersistedKVData, err error) {
 	err = db.Retry(func() error {
 		var rawkey []byte
 		var val []byte
@@ -370,7 +371,7 @@ func (qs *accountsDbQueries) LookupCreator(cidx basics.CreatableIndex, ctype bas
 }
 
 // LookupResources returns the requested resource.
-func (qs *accountsDbQueries) LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data PersistedResourcesData, err error) {
+func (qs *accountsDbQueries) LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data trackerdb.PersistedResourcesData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
@@ -391,7 +392,7 @@ func (qs *accountsDbQueries) LookupResources(addr basics.Address, aidx basics.Cr
 				}
 				return nil
 			}
-			data.Data = MakeResourcesData(0)
+			data.Data = trackerdb.MakeResourcesData(0)
 			// we don't have that account, just return the database round.
 			return nil
 		}
@@ -407,7 +408,7 @@ func (qs *accountsDbQueries) LookupResources(addr basics.Address, aidx basics.Cr
 }
 
 // LookupAllResources returns all resources associated with the given address.
-func (qs *accountsDbQueries) LookupAllResources(addr basics.Address) (data []PersistedResourcesData, rnd basics.Round, err error) {
+func (qs *accountsDbQueries) LookupAllResources(addr basics.Address) (data []trackerdb.PersistedResourcesData, rnd basics.Round, err error) {
 	err = db.Retry(func() error {
 		// Query for all resources
 		rows, err := qs.lookupAllResourcesStmt.Query(addr[:])
@@ -434,12 +435,12 @@ func (qs *accountsDbQueries) LookupAllResources(addr basics.Address) (data []Per
 				rnd = dbRound
 				break
 			}
-			var resData ResourcesData
+			var resData trackerdb.ResourcesData
 			err = protocol.Decode(buf, &resData)
 			if err != nil {
 				return err
 			}
-			data = append(data, PersistedResourcesData{
+			data = append(data, trackerdb.PersistedResourcesData{
 				Addrid: addrid.Int64,
 				Aidx:   basics.CreatableIndex(aidx.Int64),
 				Data:   resData,
@@ -455,7 +456,7 @@ func (qs *accountsDbQueries) LookupAllResources(addr basics.Address) (data []Per
 // LookupAccount looks up for a the account data given it's address. It returns the persistedAccountData, which includes the current database round and the matching
 // account data, if such was found. If no matching account data could be found for the given address, an empty account data would
 // be retrieved.
-func (qs *accountsDbQueries) LookupAccount(addr basics.Address) (data PersistedAccountData, err error) {
+func (qs *accountsDbQueries) LookupAccount(addr basics.Address) (data trackerdb.PersistedAccountData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
@@ -483,7 +484,7 @@ func (qs *accountsDbQueries) LookupAccount(addr basics.Address) (data PersistedA
 }
 
 // LookupOnline returns the online account data for the given address.
-func (qs *onlineAccountsDbQueries) LookupOnline(addr basics.Address, rnd basics.Round) (data PersistedOnlineAccountData, err error) {
+func (qs *onlineAccountsDbQueries) LookupOnline(addr basics.Address, rnd basics.Round) (data trackerdb.PersistedOnlineAccountData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
@@ -530,7 +531,7 @@ func (qs *onlineAccountsDbQueries) LookupOnlineTotalsHistory(round basics.Round)
 	return basics.MicroAlgos{Raw: data.OnlineSupply}, err
 }
 
-func (qs *onlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (result []PersistedOnlineAccountData, rnd basics.Round, err error) {
+func (qs *onlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (result []trackerdb.PersistedOnlineAccountData, rnd basics.Round, err error) {
 	err = db.Retry(func() error {
 		rows, err := qs.lookupOnlineHistoryStmt.Query(addr[:])
 		if err != nil {
@@ -540,7 +541,7 @@ func (qs *onlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (res
 
 		for rows.Next() {
 			var buf []byte
-			data := PersistedOnlineAccountData{}
+			data := trackerdb.PersistedOnlineAccountData{}
 			err := rows.Scan(&data.Rowid, &data.UpdRound, &rnd, &buf)
 			if err != nil {
 				return err
@@ -613,7 +614,7 @@ func (w *onlineAccountsSQLWriter) Close() {
 	}
 }
 
-func (w accountsSQLWriter) InsertAccount(addr basics.Address, normBalance uint64, data BaseAccountData) (rowid int64, err error) {
+func (w accountsSQLWriter) InsertAccount(addr basics.Address, normBalance uint64, data trackerdb.BaseAccountData) (rowid int64, err error) {
 	result, err := w.insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data))
 	if err != nil {
 		return
@@ -631,7 +632,7 @@ func (w accountsSQLWriter) DeleteAccount(rowid int64) (rowsAffected int64, err e
 	return
 }
 
-func (w accountsSQLWriter) UpdateAccount(rowid int64, normBalance uint64, data BaseAccountData) (rowsAffected int64, err error) {
+func (w accountsSQLWriter) UpdateAccount(rowid int64, normBalance uint64, data trackerdb.BaseAccountData) (rowsAffected int64, err error) {
 	result, err := w.updateStmt.Exec(normBalance, protocol.Encode(&data), rowid)
 	if err != nil {
 		return
@@ -640,7 +641,7 @@ func (w accountsSQLWriter) UpdateAccount(rowid int64, normBalance uint64, data B
 	return
 }
 
-func (w accountsSQLWriter) InsertResource(addrid int64, aidx basics.CreatableIndex, data ResourcesData) (rowid int64, err error) {
+func (w accountsSQLWriter) InsertResource(addrid int64, aidx basics.CreatableIndex, data trackerdb.ResourcesData) (rowid int64, err error) {
 	result, err := w.insertResourceStmt.Exec(addrid, aidx, protocol.Encode(&data))
 	if err != nil {
 		return
@@ -658,7 +659,7 @@ func (w accountsSQLWriter) DeleteResource(addrid int64, aidx basics.CreatableInd
 	return
 }
 
-func (w accountsSQLWriter) UpdateResource(addrid int64, aidx basics.CreatableIndex, data ResourcesData) (rowsAffected int64, err error) {
+func (w accountsSQLWriter) UpdateResource(addrid int64, aidx basics.CreatableIndex, data trackerdb.ResourcesData) (rowsAffected int64, err error) {
 	result, err := w.updateResourceStmt.Exec(protocol.Encode(&data), addrid, aidx)
 	if err != nil {
 		return
@@ -710,7 +711,7 @@ func (w accountsSQLWriter) DeleteCreatable(cidx basics.CreatableIndex, ctype bas
 	return
 }
 
-func (w onlineAccountsSQLWriter) InsertOnlineAccount(addr basics.Address, normBalance uint64, data BaseOnlineAccountData, updRound uint64, voteLastValid uint64) (rowid int64, err error) {
+func (w onlineAccountsSQLWriter) InsertOnlineAccount(addr basics.Address, normBalance uint64, data trackerdb.BaseOnlineAccountData, updRound uint64, voteLastValid uint64) (rowid int64, err error) {
 	result, err := w.insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data), updRound, voteLastValid)
 	if err != nil {
 		return

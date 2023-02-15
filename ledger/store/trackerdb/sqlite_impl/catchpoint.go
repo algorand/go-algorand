@@ -14,106 +14,22 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package store
+package sqlite_impl
 
 import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/mattn/go-sqlite3"
 )
-
-// TrieMemoryConfig is the memory configuration setup used for the merkle trie.
-var TrieMemoryConfig = merkletrie.MemoryConfig{
-	NodesCountPerPage:         MerkleCommitterNodesPerPage,
-	CachedNodesCount:          TrieCachedNodesCount,
-	PageFillFactor:            0.95,
-	MaxChildrenPagesThreshold: 64,
-}
-
-// MerkleCommitterNodesPerPage controls how many nodes will be stored in a single page
-// value was calibrated using BenchmarkCalibrateNodesPerPage
-var MerkleCommitterNodesPerPage = int64(116)
-
-// TrieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory.
-// value was calibrated using BenchmarkCalibrateCacheNodeSize
-var TrieCachedNodesCount = 9000
-
-// CatchpointDirName represents the directory name in which all the catchpoints files are stored
-var CatchpointDirName = "catchpoints"
-
-// CatchpointState is used to store catchpoint related variables into the catchpointstate table.
-//
-//msgp:ignore CatchpointState
-type CatchpointState string
-
-const (
-	// CatchpointStateLastCatchpoint is written by a node once a catchpoint label is created for a round
-	CatchpointStateLastCatchpoint = CatchpointState("lastCatchpoint")
-	// CatchpointStateWritingFirstStageInfo state variable is set to 1 if catchpoint's first stage is unfinished,
-	// and is 0 otherwise. Used to clear / restart the first stage after a crash.
-	// This key is set in the same db transaction as the account updates, so the
-	// unfinished first stage corresponds to the current db round.
-	CatchpointStateWritingFirstStageInfo = CatchpointState("writingFirstStageInfo")
-	// catchpointStateWritingCatchpoint if there is an unfinished catchpoint, this state variable is set to
-	// the catchpoint's round. Otherwise, it is set to 0.
-	// DEPRECATED.
-	catchpointStateWritingCatchpoint = CatchpointState("writingCatchpoint")
-	// CatchpointStateCatchupState is the state of the catchup process. The variable is stored only during the catchpoint catchup process, and removed afterward.
-	CatchpointStateCatchupState = CatchpointState("catchpointCatchupState")
-	// CatchpointStateCatchupLabel is the label to which the currently catchpoint catchup process is trying to catchup to.
-	CatchpointStateCatchupLabel = CatchpointState("catchpointCatchupLabel")
-	// CatchpointStateCatchupBlockRound is the block round that is associated with the current running catchpoint catchup.
-	CatchpointStateCatchupBlockRound = CatchpointState("catchpointCatchupBlockRound")
-	// CatchpointStateCatchupBalancesRound is the balance round that is associated with the current running catchpoint catchup. Typically it would be
-	// equal to CatchpointStateCatchupBlockRound - 320.
-	CatchpointStateCatchupBalancesRound = CatchpointState("catchpointCatchupBalancesRound")
-	// CatchpointStateCatchupHashRound is the round that is associated with the hash of the merkle trie. Normally, it's identical to CatchpointStateCatchupBalancesRound,
-	// however, it could differ when we catchup from a catchpoint that was created using a different version : in this case,
-	// we set it to zero in order to reset the merkle trie. This would force the merkle trie to be re-build on startup ( if needed ).
-	CatchpointStateCatchupHashRound = CatchpointState("catchpointCatchupHashRound")
-	// CatchpointStateCatchpointLookback is the number of rounds we keep catchpoints for
-	CatchpointStateCatchpointLookback = CatchpointState("catchpointLookback")
-)
-
-// UnfinishedCatchpointRecord represents a stored record of an unfinished catchpoint.
-type UnfinishedCatchpointRecord struct {
-	Round     basics.Round
-	BlockHash crypto.Digest
-}
-
-// NormalizedAccountBalance is a staging area for a catchpoint file account information before it's being added to the catchpoint staging tables.
-type NormalizedAccountBalance struct {
-	// The public key address to which the account belongs.
-	Address basics.Address
-	// accountData contains the baseAccountData for that account.
-	AccountData BaseAccountData
-	// resources is a map, where the key is the creatable index, and the value is the resource data.
-	Resources map[basics.CreatableIndex]ResourcesData
-	// encodedAccountData contains the baseAccountData encoded bytes that are going to be written to the accountbase table.
-	EncodedAccountData []byte
-	// accountHashes contains a list of all the hashes that would need to be added to the merkle trie for that account.
-	// on V6, we could have multiple hashes, since we have separate account/resource hashes.
-	AccountHashes [][]byte
-	// normalizedBalance contains the normalized balance for the account.
-	NormalizedBalance uint64
-	// encodedResources provides the encoded form of the resources
-	EncodedResources map[basics.CreatableIndex][]byte
-	// partial balance indicates that the original account balance was split into multiple parts in catchpoint creation time
-	PartialBalance bool
-}
 
 type catchpointReader struct {
 	q db.Queryable
@@ -126,27 +42,6 @@ type catchpointWriter struct {
 type catchpointReaderWriter struct {
 	catchpointReader
 	catchpointWriter
-}
-
-// CatchpointFirstStageInfo For the `catchpointfirststageinfo` table.
-type CatchpointFirstStageInfo struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Totals           ledgercore.AccountTotals `codec:"accountTotals"`
-	TrieBalancesHash crypto.Digest            `codec:"trieBalancesHash"`
-	// Total number of accounts in the catchpoint data file. Only set when catchpoint
-	// data files are generated.
-	TotalAccounts uint64 `codec:"accountsCount"`
-
-	// Total number of accounts in the catchpoint data file. Only set when catchpoint
-	// data files are generated.
-	TotalKVs uint64 `codec:"kvsCount"`
-
-	// Total number of chunks in the catchpoint data file. Only set when catchpoint
-	// data files are generated.
-	TotalChunks uint64 `codec:"chunksCount"`
-	// BiggestChunkLen is the size in the bytes of the largest chunk, used when re-packing.
-	BiggestChunkLen uint64 `codec:"biggestChunk"`
 }
 
 // NewCatchpointSQLReaderWriter creates a Catchpoint SQL reader+writer
@@ -190,7 +85,7 @@ func (cr *catchpointReader) GetOldestCatchpointFiles(ctx context.Context, fileCo
 	return
 }
 
-func (cr *catchpointReader) ReadCatchpointStateUint64(ctx context.Context, stateName CatchpointState) (val uint64, err error) {
+func (cr *catchpointReader) ReadCatchpointStateUint64(ctx context.Context, stateName trackerdb.CatchpointState) (val uint64, err error) {
 	err = db.Retry(func() (err error) {
 		query := "SELECT intval FROM catchpointstate WHERE id=?"
 		var v sql.NullInt64
@@ -209,7 +104,7 @@ func (cr *catchpointReader) ReadCatchpointStateUint64(ctx context.Context, state
 	return val, err
 }
 
-func (cr *catchpointReader) ReadCatchpointStateString(ctx context.Context, stateName CatchpointState) (val string, err error) {
+func (cr *catchpointReader) ReadCatchpointStateString(ctx context.Context, stateName trackerdb.CatchpointState) (val string, err error) {
 	err = db.Retry(func() (err error) {
 		query := "SELECT strval FROM catchpointstate WHERE id=?"
 		var v sql.NullString
@@ -229,8 +124,8 @@ func (cr *catchpointReader) ReadCatchpointStateString(ctx context.Context, state
 	return val, err
 }
 
-func (cr *catchpointReader) SelectUnfinishedCatchpoints(ctx context.Context) ([]UnfinishedCatchpointRecord, error) {
-	var res []UnfinishedCatchpointRecord
+func (cr *catchpointReader) SelectUnfinishedCatchpoints(ctx context.Context) ([]trackerdb.UnfinishedCatchpointRecord, error) {
+	var res []trackerdb.UnfinishedCatchpointRecord
 
 	f := func() error {
 		query := "SELECT round, blockhash FROM unfinishedcatchpoints ORDER BY round"
@@ -242,7 +137,7 @@ func (cr *catchpointReader) SelectUnfinishedCatchpoints(ctx context.Context) ([]
 		// Clear `res` in case this function is repeated.
 		res = res[:0]
 		for rows.Next() {
-			var record UnfinishedCatchpointRecord
+			var record trackerdb.UnfinishedCatchpointRecord
 			var blockHash []byte
 			err = rows.Scan(&record.Round, &blockHash)
 			if err != nil {
@@ -262,7 +157,7 @@ func (cr *catchpointReader) SelectUnfinishedCatchpoints(ctx context.Context) ([]
 	return res, nil
 }
 
-func (cr *catchpointReader) SelectCatchpointFirstStageInfo(ctx context.Context, round basics.Round) (CatchpointFirstStageInfo, bool /*exists*/, error) {
+func (cr *catchpointReader) SelectCatchpointFirstStageInfo(ctx context.Context, round basics.Round) (trackerdb.CatchpointFirstStageInfo, bool /*exists*/, error) {
 	var data []byte
 	f := func() error {
 		query := "SELECT info FROM catchpointfirststageinfo WHERE round=?"
@@ -275,17 +170,17 @@ func (cr *catchpointReader) SelectCatchpointFirstStageInfo(ctx context.Context, 
 	}
 	err := db.Retry(f)
 	if err != nil {
-		return CatchpointFirstStageInfo{}, false, err
+		return trackerdb.CatchpointFirstStageInfo{}, false, err
 	}
 
 	if data == nil {
-		return CatchpointFirstStageInfo{}, false, nil
+		return trackerdb.CatchpointFirstStageInfo{}, false, nil
 	}
 
-	var res CatchpointFirstStageInfo
+	var res trackerdb.CatchpointFirstStageInfo
 	err = protocol.Decode(data, &res)
 	if err != nil {
-		return CatchpointFirstStageInfo{}, false, err
+		return trackerdb.CatchpointFirstStageInfo{}, false, err
 	}
 
 	return res, true, nil
@@ -337,7 +232,7 @@ func (cw *catchpointWriter) StoreCatchpoint(ctx context.Context, round basics.Ro
 	return
 }
 
-func (cw *catchpointWriter) WriteCatchpointStateUint64(ctx context.Context, stateName CatchpointState, setValue uint64) (err error) {
+func (cw *catchpointWriter) WriteCatchpointStateUint64(ctx context.Context, stateName trackerdb.CatchpointState, setValue uint64) (err error) {
 	err = db.Retry(func() (err error) {
 		if setValue == 0 {
 			return deleteCatchpointStateImpl(ctx, cw.e, stateName)
@@ -351,7 +246,7 @@ func (cw *catchpointWriter) WriteCatchpointStateUint64(ctx context.Context, stat
 	return err
 }
 
-func (cw *catchpointWriter) WriteCatchpointStateString(ctx context.Context, stateName CatchpointState, setValue string) (err error) {
+func (cw *catchpointWriter) WriteCatchpointStateString(ctx context.Context, stateName trackerdb.CatchpointState, setValue string) (err error) {
 	err = db.Retry(func() (err error) {
 		if setValue == "" {
 			return deleteCatchpointStateImpl(ctx, cw.e, stateName)
@@ -383,13 +278,13 @@ func (cw *catchpointWriter) DeleteUnfinishedCatchpoint(ctx context.Context, roun
 	return db.Retry(f)
 }
 
-func deleteCatchpointStateImpl(ctx context.Context, e db.Executable, stateName CatchpointState) error {
+func deleteCatchpointStateImpl(ctx context.Context, e db.Executable, stateName trackerdb.CatchpointState) error {
 	query := "DELETE FROM catchpointstate WHERE id=?"
 	_, err := e.ExecContext(ctx, query, stateName)
 	return err
 }
 
-func (cw *catchpointWriter) InsertOrReplaceCatchpointFirstStageInfo(ctx context.Context, round basics.Round, info *CatchpointFirstStageInfo) error {
+func (cw *catchpointWriter) InsertOrReplaceCatchpointFirstStageInfo(ctx context.Context, round basics.Round, info *trackerdb.CatchpointFirstStageInfo) error {
 	infoSerialized := protocol.Encode(info)
 	f := func() error {
 		query := "INSERT OR REPLACE INTO catchpointfirststageinfo(round, info) VALUES(?, ?)"
@@ -409,7 +304,7 @@ func (cw *catchpointWriter) DeleteOldCatchpointFirstStageInfo(ctx context.Contex
 }
 
 // WriteCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
-func (cw *catchpointWriter) WriteCatchpointStagingBalances(ctx context.Context, bals []NormalizedAccountBalance) error {
+func (cw *catchpointWriter) WriteCatchpointStagingBalances(ctx context.Context, bals []trackerdb.NormalizedAccountBalance) error {
 	selectAcctStmt, err := cw.e.PrepareContext(ctx, "SELECT rowid FROM catchpointbalances WHERE address = ?")
 	if err != nil {
 		return err
@@ -476,7 +371,7 @@ func (cw *catchpointWriter) WriteCatchpointStagingBalances(ctx context.Context, 
 }
 
 // WriteCatchpointStagingHashes inserts all the account hashes in the provided array into the catchpoint pending hashes table catchpointpendinghashes.
-func (cw *catchpointWriter) WriteCatchpointStagingHashes(ctx context.Context, bals []NormalizedAccountBalance) error {
+func (cw *catchpointWriter) WriteCatchpointStagingHashes(ctx context.Context, bals []trackerdb.NormalizedAccountBalance) error {
 	insertStmt, err := cw.e.PrepareContext(ctx, "INSERT INTO catchpointpendinghashes(data) VALUES(?)")
 	if err != nil {
 		return err
@@ -504,7 +399,7 @@ func (cw *catchpointWriter) WriteCatchpointStagingHashes(ctx context.Context, ba
 // WriteCatchpointStagingCreatable inserts all the creatables in the provided array into the catchpoint asset creator staging table catchpointassetcreators.
 // note that we cannot insert the resources here : in order to insert the resources, we need the rowid of the accountbase entry. This is being inserted by
 // writeCatchpointStagingBalances via a separate go-routine.
-func (cw *catchpointWriter) WriteCatchpointStagingCreatable(ctx context.Context, bals []NormalizedAccountBalance) error {
+func (cw *catchpointWriter) WriteCatchpointStagingCreatable(ctx context.Context, bals []trackerdb.NormalizedAccountBalance) error {
 	var insertCreatorsStmt *sql.Stmt
 	var err error
 	insertCreatorsStmt, err = cw.e.PrepareContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)")
@@ -670,7 +565,7 @@ func (crw *catchpointReaderWriter) DeleteStoredCatchpoints(ctx context.Context, 
 		}
 
 		for round, fileName := range fileNames {
-			err = RemoveSingleCatchpointFileFromDisk(dbDirectory, fileName)
+			err = trackerdb.RemoveSingleCatchpointFileFromDisk(dbDirectory, fileName)
 			if err != nil {
 				return err
 			}
@@ -681,52 +576,5 @@ func (crw *catchpointReaderWriter) DeleteStoredCatchpoints(ctx context.Context, 
 			}
 		}
 	}
-	return nil
-}
-
-// RemoveSingleCatchpointFileFromDisk removes a single catchpoint file from the disk. this function does not leave empty directories
-func RemoveSingleCatchpointFileFromDisk(dbDirectory, fileToDelete string) (err error) {
-	absCatchpointFileName := filepath.Join(dbDirectory, fileToDelete)
-	err = os.Remove(absCatchpointFileName)
-	if err == nil || os.IsNotExist(err) {
-		// it's ok if the file doesn't exist.
-		err = nil
-	} else {
-		// we can't delete the file, abort -
-		return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
-	}
-	splitedDirName := strings.Split(fileToDelete, string(os.PathSeparator))
-
-	var subDirectoriesToScan []string
-	//build a list of all the subdirs
-	currentSubDir := ""
-	for _, element := range splitedDirName {
-		currentSubDir = filepath.Join(currentSubDir, element)
-		subDirectoriesToScan = append(subDirectoriesToScan, currentSubDir)
-	}
-
-	// iterating over the list of directories. starting from the sub dirs and moving up.
-	// skipping the file itself.
-	for i := len(subDirectoriesToScan) - 2; i >= 0; i-- {
-		absSubdir := filepath.Join(dbDirectory, subDirectoriesToScan[i])
-		if _, err := os.Stat(absSubdir); os.IsNotExist(err) {
-			continue
-		}
-
-		isEmpty, err := isDirEmpty(absSubdir)
-		if err != nil {
-			return fmt.Errorf("unable to read old catchpoint directory '%s' : %v", subDirectoriesToScan[i], err)
-		}
-		if isEmpty {
-			err = os.Remove(absSubdir)
-			if err != nil {
-				if os.IsNotExist(err) {
-					continue
-				}
-				return fmt.Errorf("unable to delete old catchpoint directory '%s' : %v", subDirectoriesToScan[i], err)
-			}
-		}
-	}
-
 	return nil
 }

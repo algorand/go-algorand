@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package store
+package sqlite_impl
 
 import (
 	"context"
@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -35,89 +36,16 @@ type trackerSQLStore struct {
 	pair db.Pair
 }
 
-type batchFn func(ctx context.Context, tx BatchScope) error
-
-// BatchScope is the write scope to the store.
-type BatchScope interface {
-	MakeCatchpointWriter() (CatchpointWriter, error)
-	MakeAccountsWriter() (AccountsWriterExt, error)
-	MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
-
-	RunMigrations(ctx context.Context, params TrackerDBParams, log logging.Logger, targetVersion int32) (mgr TrackerDBInitParams, err error)
-	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
-
-	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
-	AccountsUpdateSchemaTest(ctx context.Context) (err error)
-}
 type sqlBatchScope struct {
 	tx *sql.Tx
 }
 
-type snapshotFn func(ctx context.Context, tx SnapshotScope) error
-
-// SnapshotScope is the read scope to the store.
-type SnapshotScope interface {
-	MakeAccountsReader() (AccountsReaderExt, error)
-	MakeCatchpointReader() (CatchpointReader, error)
-
-	MakeCatchpointPendingHashesIterator(hashCount int) *catchpointPendingHashesIterator
-}
 type sqlSnapshotScope struct {
 	tx *sql.Tx
 }
 
-type transactionFn func(ctx context.Context, tx TransactionScope) error
-
-// TransactionScope is the read/write scope to the store.
-type TransactionScope interface {
-	MakeCatchpointReaderWriter() (CatchpointReaderWriter, error)
-	MakeAccountsReaderWriter() (AccountsReaderWriter, error)
-	MakeAccountsOptimizedReader() (AccountsReader, error)
-	MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
-	MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (w OnlineAccountsWriter, err error)
-	MakeOnlineAccountsOptimizedReader() (OnlineAccountsReader, error)
-
-	MakeMerkleCommitter(staging bool) (MerkleCommitter, error)
-
-	MakeOrderedAccountsIter(accountCount int) *orderedAccountsIter
-	MakeKVsIter(ctx context.Context) (*kvsIter, error)
-	MakeEncodedAccoutsBatchIter() *encodedAccountsBatchIter
-
-	RunMigrations(ctx context.Context, params TrackerDBParams, log logging.Logger, targetVersion int32) (mgr TrackerDBInitParams, err error)
-	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
-
-	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
-	AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error)
-}
 type sqlTransactionScope struct {
 	tx *sql.Tx
-}
-
-// TrackerStore is the interface for the tracker db.
-type TrackerStore interface {
-	SetLogger(log logging.Logger)
-	SetSynchronousMode(ctx context.Context, mode db.SynchronousMode, fullfsync bool) (err error)
-	IsSharedCacheConnection() bool
-
-	Batch(fn batchFn) (err error)
-	BatchContext(ctx context.Context, fn batchFn) (err error)
-
-	Snapshot(fn snapshotFn) (err error)
-	SnapshotContext(ctx context.Context, fn snapshotFn) (err error)
-
-	Transaction(fn transactionFn) (err error)
-	TransactionContext(ctx context.Context, fn transactionFn) (err error)
-
-	MakeAccountsReader() (AccountsReader, error)
-	MakeOnlineAccountsReader() (OnlineAccountsReader, error)
-
-	MakeCatchpointReaderWriter() (CatchpointReaderWriter, error)
-
-	Vacuum(ctx context.Context) (stats db.VacuumStats, err error)
-	Close()
-	CleanupTest(dbName string, inMemory bool)
-
-	ResetToV6Test(ctx context.Context) error
 }
 
 // OpenTrackerSQLStore opens the sqlite database store
@@ -149,45 +77,45 @@ func (s *trackerSQLStore) IsSharedCacheConnection() bool {
 	return s.pair.Wdb.IsSharedCacheConnection()
 }
 
-func (s *trackerSQLStore) Batch(fn batchFn) (err error) {
+func (s *trackerSQLStore) Batch(fn trackerdb.BatchFn) (err error) {
 	return s.BatchContext(context.Background(), fn)
 }
 
-func (s *trackerSQLStore) BatchContext(ctx context.Context, fn batchFn) (err error) {
+func (s *trackerSQLStore) BatchContext(ctx context.Context, fn trackerdb.BatchFn) (err error) {
 	return s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, sqlBatchScope{tx})
 	})
 }
 
-func (s *trackerSQLStore) Snapshot(fn snapshotFn) (err error) {
+func (s *trackerSQLStore) Snapshot(fn trackerdb.SnapshotFn) (err error) {
 	return s.SnapshotContext(context.Background(), fn)
 }
 
-func (s *trackerSQLStore) SnapshotContext(ctx context.Context, fn snapshotFn) (err error) {
+func (s *trackerSQLStore) SnapshotContext(ctx context.Context, fn trackerdb.SnapshotFn) (err error) {
 	return s.pair.Rdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, sqlSnapshotScope{tx})
 	})
 }
 
-func (s *trackerSQLStore) Transaction(fn transactionFn) (err error) {
+func (s *trackerSQLStore) Transaction(fn trackerdb.TransactionFn) (err error) {
 	return s.TransactionContext(context.Background(), fn)
 }
 
-func (s *trackerSQLStore) TransactionContext(ctx context.Context, fn transactionFn) (err error) {
+func (s *trackerSQLStore) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) (err error) {
 	return s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, sqlTransactionScope{tx})
 	})
 }
 
-func (s *trackerSQLStore) MakeAccountsReader() (AccountsReader, error) {
+func (s *trackerSQLStore) MakeAccountsReader() (trackerdb.AccountsReader, error) {
 	return AccountsInitDbQueries(s.pair.Rdb.Handle)
 }
 
-func (s *trackerSQLStore) MakeOnlineAccountsReader() (OnlineAccountsReader, error) {
+func (s *trackerSQLStore) MakeOnlineAccountsReader() (trackerdb.OnlineAccountsReader, error) {
 	return OnlineAccountsInitDbQueries(s.pair.Rdb.Handle)
 }
 
-func (s *trackerSQLStore) MakeCatchpointReaderWriter() (CatchpointReaderWriter, error) {
+func (s *trackerSQLStore) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
 	w := NewCatchpointSQLReaderWriter(s.pair.Wdb.Handle)
 	return w, nil
 }
@@ -229,47 +157,47 @@ func (s *trackerSQLStore) Close() {
 	s.pair.Close()
 }
 
-func (txs sqlTransactionScope) MakeCatchpointReaderWriter() (CatchpointReaderWriter, error) {
+func (txs sqlTransactionScope) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
 	return NewCatchpointSQLReaderWriter(txs.tx), nil
 }
 
-func (txs sqlTransactionScope) MakeAccountsReaderWriter() (AccountsReaderWriter, error) {
+func (txs sqlTransactionScope) MakeAccountsReaderWriter() (trackerdb.AccountsReaderWriter, error) {
 	return NewAccountsSQLReaderWriter(txs.tx), nil
 }
 
-func (txs sqlTransactionScope) MakeAccountsOptimizedReader() (AccountsReader, error) {
+func (txs sqlTransactionScope) MakeAccountsOptimizedReader() (trackerdb.AccountsReader, error) {
 	return AccountsInitDbQueries(txs.tx)
 }
 
-func (txs sqlTransactionScope) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error) {
+func (txs sqlTransactionScope) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (trackerdb.AccountsWriter, error) {
 	return MakeAccountsSQLWriter(txs.tx, hasAccounts, hasResources, hasKvPairs, hasCreatables)
 }
 
-func (txs sqlTransactionScope) MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (w OnlineAccountsWriter, err error) {
+func (txs sqlTransactionScope) MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (w trackerdb.OnlineAccountsWriter, err error) {
 	return MakeOnlineAccountsSQLWriter(txs.tx, hasAccounts)
 }
 
-func (txs sqlTransactionScope) MakeOnlineAccountsOptimizedReader() (r OnlineAccountsReader, err error) {
+func (txs sqlTransactionScope) MakeOnlineAccountsOptimizedReader() (r trackerdb.OnlineAccountsReader, err error) {
 	return OnlineAccountsInitDbQueries(txs.tx)
 }
 
-func (txs sqlTransactionScope) MakeMerkleCommitter(staging bool) (MerkleCommitter, error) {
+func (txs sqlTransactionScope) MakeMerkleCommitter(staging bool) (trackerdb.MerkleCommitter, error) {
 	return MakeMerkleCommitter(txs.tx, staging)
 }
 
-func (txs sqlTransactionScope) MakeOrderedAccountsIter(accountCount int) *orderedAccountsIter {
+func (txs sqlTransactionScope) MakeOrderedAccountsIter(accountCount int) trackerdb.OrderedAccountsIter {
 	return MakeOrderedAccountsIter(txs.tx, accountCount)
 }
 
-func (txs sqlTransactionScope) MakeKVsIter(ctx context.Context) (*kvsIter, error) {
+func (txs sqlTransactionScope) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
 	return MakeKVsIter(ctx, txs.tx)
 }
 
-func (txs sqlTransactionScope) MakeEncodedAccoutsBatchIter() *encodedAccountsBatchIter {
+func (txs sqlTransactionScope) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAccountsBatchIter {
 	return MakeEncodedAccoutsBatchIter(txs.tx)
 }
 
-func (txs sqlTransactionScope) RunMigrations(ctx context.Context, params TrackerDBParams, log logging.Logger, targetVersion int32) (mgr TrackerDBInitParams, err error) {
+func (txs sqlTransactionScope) RunMigrations(ctx context.Context, params trackerdb.TrackerDBParams, log logging.Logger, targetVersion int32) (mgr trackerdb.TrackerDBInitParams, err error) {
 	return RunMigrations(ctx, txs.tx, params, log, targetVersion)
 }
 
@@ -285,19 +213,19 @@ func (txs sqlTransactionScope) AccountsInitLightTest(tb testing.TB, initAccounts
 	return AccountsInitLightTest(tb, txs.tx, initAccounts, proto)
 }
 
-func (bs sqlBatchScope) MakeCatchpointWriter() (CatchpointWriter, error) {
+func (bs sqlBatchScope) MakeCatchpointWriter() (trackerdb.CatchpointWriter, error) {
 	return NewCatchpointSQLReaderWriter(bs.tx), nil
 }
 
-func (bs sqlBatchScope) MakeAccountsWriter() (AccountsWriterExt, error) {
+func (bs sqlBatchScope) MakeAccountsWriter() (trackerdb.AccountsWriterExt, error) {
 	return NewAccountsSQLReaderWriter(bs.tx), nil
 }
 
-func (bs sqlBatchScope) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error) {
+func (bs sqlBatchScope) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (trackerdb.AccountsWriter, error) {
 	return MakeAccountsSQLWriter(bs.tx, hasAccounts, hasResources, hasKvPairs, hasCreatables)
 }
 
-func (bs sqlBatchScope) RunMigrations(ctx context.Context, params TrackerDBParams, log logging.Logger, targetVersion int32) (mgr TrackerDBInitParams, err error) {
+func (bs sqlBatchScope) RunMigrations(ctx context.Context, params trackerdb.TrackerDBParams, log logging.Logger, targetVersion int32) (mgr trackerdb.TrackerDBInitParams, err error) {
 	return RunMigrations(ctx, bs.tx, params, log, targetVersion)
 }
 
@@ -313,14 +241,14 @@ func (bs sqlBatchScope) AccountsUpdateSchemaTest(ctx context.Context) (err error
 	return AccountsUpdateSchemaTest(ctx, bs.tx)
 }
 
-func (ss sqlSnapshotScope) MakeAccountsReader() (AccountsReaderExt, error) {
+func (ss sqlSnapshotScope) MakeAccountsReader() (trackerdb.AccountsReaderExt, error) {
 	return NewAccountsSQLReaderWriter(ss.tx), nil
 }
 
-func (ss sqlSnapshotScope) MakeCatchpointReader() (CatchpointReader, error) {
+func (ss sqlSnapshotScope) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
 	return NewCatchpointSQLReaderWriter(ss.tx), nil
 }
 
-func (ss sqlSnapshotScope) MakeCatchpointPendingHashesIterator(hashCount int) *catchpointPendingHashesIterator {
+func (ss sqlSnapshotScope) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.CatchpointPendingHashesIterator {
 	return MakeCatchpointPendingHashesIterator(hashCount, ss.tx)
 }
