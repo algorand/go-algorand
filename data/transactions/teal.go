@@ -35,7 +35,10 @@ type EvalDelta struct {
 	// [txn.Sender, txn.Accounts[0], txn.Accounts[1], ..., SharedAccts[0], SharedAccts[1], ...]
 	LocalDeltas map[uint64]basics.StateDelta `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
 
-	SharedAccts []basics.Address `codec:"sa,allocbound=4"`
+	// If a program modifies the local of an account that is not the Sender, or
+	// in txn.Accounts, it must be recorded here, so that the key in LocalDeltas
+	// can refer to it.
+	SharedAccts []basics.Address `codec:"sa,allocbound=config.MaxEvalDeltaAccounts"`
 
 	Logs []string `codec:"lg,allocbound=config.MaxLogCalls"`
 

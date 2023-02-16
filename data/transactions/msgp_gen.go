@@ -2036,8 +2036,8 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "SharedAccts")
 				return
 			}
-			if zb0010 > 4 {
-				err = msgp.ErrOverflow(uint64(zb0010), uint64(4))
+			if zb0010 > config.MaxEvalDeltaAccounts {
+				err = msgp.ErrOverflow(uint64(zb0010), uint64(config.MaxEvalDeltaAccounts))
 				err = msgp.WrapError(err, "struct-from-array", "SharedAccts")
 				return
 			}
@@ -2185,8 +2185,8 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SharedAccts")
 					return
 				}
-				if zb0018 > 4 {
-					err = msgp.ErrOverflow(uint64(zb0018), uint64(4))
+				if zb0018 > config.MaxEvalDeltaAccounts {
+					err = msgp.ErrOverflow(uint64(zb0018), uint64(config.MaxEvalDeltaAccounts))
 					err = msgp.WrapError(err, "SharedAccts")
 					return
 				}
