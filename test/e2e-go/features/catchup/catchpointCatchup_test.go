@@ -407,13 +407,13 @@ func TestReadyEndpoint(t *testing.T) {
 	//////////
 	// This section is mostly CONSTs and helper function used in this ready endpoint test.
 	//
-	// prepareConsensus and prepareConfig tweak consensus and config to allow primary node on network
+	// prepareConsensus and preparePrimaryConfig tweak consensus and config to allow primary node on network
 	// `CatchpointCatchupTestNetwork.json` to generate new catchpoints over rounds.
 	const CatchpointInterval = uint64(4)
 	const CatchpointTracking = int64(2)
 	const MaxAcctLookback = uint64(2)
 	const ConfigArchival = true
-	const TargetRound = uint64(18)
+	const TargetRound = uint64(17)
 
 	prepareConsensus := func(consensusVersion protocol.ConsensusVersion) config.ConsensusProtocols {
 		consensus := make(config.ConsensusProtocols)
@@ -429,13 +429,25 @@ func TestReadyEndpoint(t *testing.T) {
 		return consensus
 	}
 
-	prepareConfig := func(a *require.Assertions, node nodecontrol.NodeController) {
+	preparePrimaryConfig := func(a *require.Assertions, node nodecontrol.NodeController) {
 		cfg, err := config.LoadConfigFromDisk(node.GetDataDir())
 		a.NoError(err)
 		cfg.CatchpointInterval = CatchpointInterval
 		cfg.CatchpointTracking = CatchpointTracking
 		cfg.Archival = ConfigArchival
 		cfg.MaxAcctLookback = MaxAcctLookback
+		a.NoError(cfg.SaveToDisk(node.GetDataDir()))
+	}
+
+	prepareSecondConfig := func(a *require.Assertions, node nodecontrol.NodeController) {
+		cfg, err := config.LoadConfigFromDisk(node.GetDataDir())
+		a.NoError(err)
+		cfg.Archival = false
+		cfg.CatchpointInterval = 0
+		cfg.NetAddress = ""
+		cfg.EnableLedgerService = false
+		cfg.EnableBlockService = false
+		cfg.BaseLoggerDebugLevel = uint32(logging.Debug)
 		a.NoError(cfg.SaveToDisk(node.GetDataDir()))
 	}
 
@@ -464,7 +476,7 @@ func TestReadyEndpoint(t *testing.T) {
 	// Get primary node controller
 	pnController, err := fixture.GetNodeController("Primary")
 	a.NoError(err)
-	prepareConfig(a, pnController)
+	preparePrimaryConfig(a, pnController)
 
 	// start the primary node (which means network starts at this point)
 	_, err = pnController.StartAlgod(nodecontrol.AlgodStartArgs{
@@ -481,6 +493,26 @@ func TestReadyEndpoint(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
+	// get second node controller
+	n2ndController, err := fixture.GetNodeController("Node")
+	a.NoError(err)
+	prepareSecondConfig(a, pnController)
+
+	// start the second node controller
+	_, err = n2ndController.StartAlgod(nodecontrol.AlgodStartArgs{
+		PeerAddress:       "",
+		ListenIP:          "",
+		RedirectOutput:    true,
+		RunUnderHost:      false,
+		TelemetryOverride: "",
+		ExitErrorCallback: errorsCollector.nodeExitWithError,
+	})
+	a.NoError(err)
+	defer func() {
+		err = n2ndController.StopAlgod()
+		require.NoError(t, err)
+	}()
+
 	// Let the network make some progress
 	primaryNodeRestClient := fixture.GetAlgodClientForController(pnController)
 	err = fixture.ClientWaitForRoundWithTimeout(primaryNodeRestClient, TargetRound)
@@ -493,12 +525,45 @@ func TestReadyEndpoint(t *testing.T) {
 	// so this confirms we generate catchpoint tags
 	// catchpoint file, should be activated by CatchpointTracking = int64(2)
 
-	//lastCatchpoint := *primaryNodeStatus.LastCatchpoint
+	// at this point, since the primary node is not catching up against some catchpoint
+	// it should be /ready 200 by definition
+	err = primaryNodeRestClient.ReadyCheck()
+	a.NoError(err)
+	a.Empty(*primaryNodeStatus.Catchpoint)
 
-	// maybe I should clone a node to catchup against that (first let it round by round catchup, test sv time != 0)
-	// A few questions:
-	// - the introduction of another node, should it be a follower mode node? what is the expected status when catching up?
-	// - how to get result of a node while it is fast catching up? (assuming the time window is short?)
+	// learn something from the latest catchpoint primary node generates
+	// should ensure that the catchpointRound tied to the catchpoint <= TargetRound, which is the current network round
+	catchpointRound, _, err := ledgercore.ParseCatchpointLabel(*primaryNodeStatus.LastCatchpoint)
+	a.NoError(err)
+	a.LessOrEqual(catchpointRound, TargetRound)
+
+	// roll up second node client, and catch up against catchpoint
+	n2ndClient := fixture.GetAlgodClientForController(n2ndController)
+	_, err = n2ndClient.Catchup(*primaryNodeStatus.LastCatchpoint)
+	a.NoError(err)
+
+	// the first (immediate) ready check should fail, for catch up against a catchpoint need some time
+	a.Error(n2ndClient.ReadyCheck())
+
+	// keep rolling and asking `/ready` if ready (catch up with the catchpoint)
+	timer := time.NewTimer(100 * time.Second)
+	for {
+		err = n2ndClient.ReadyCheck()
+		if err == nil {
+			n2ndStatus, err := n2ndClient.Status()
+			a.NoError(err)
+			a.Empty(*n2ndStatus.Catchpoint)
+			break
+		}
+		select {
+		case <-timer.C:
+			a.Fail("timeout")
+			break
+		default:
+			time.Sleep(250 * time.Millisecond)
+			continue
+		}
+	}
 }
 
 // TestNodeTxHandlerRestart starts a two-node and one relay network
