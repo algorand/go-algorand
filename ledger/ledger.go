@@ -410,6 +410,13 @@ func (l *Ledger) RegisterVotersCommitListener(listener ledgercore.VotersCommitLi
 	l.acctsOnline.voters.registerPrepareCommitListener(listener)
 }
 
+// UnregisterVotersCommitListener unregisters the commit listener.
+func (l *Ledger) UnregisterVotersCommitListener() {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	l.acctsOnline.voters.unregisterPrepareCommitListener()
+}
+
 // notifyCommit informs the trackers that all blocks up to r have been
 // written to disk.  Returns the minimum block number that must be kept
 // in the database.

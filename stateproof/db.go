@@ -48,7 +48,6 @@ const (
 	createSigsIdx = `CREATE INDEX IF NOT EXISTS sigs_from_this_node ON sigs (from_this_node)`
 
 	// builders table stored a serialization of each BuilderForRound data, without the sigs (stored separately)
-	// This table is only used when the TODO flag is specified in startup (relay nodes only)
 	createBuildersTable = `CREATE TABLE IF NOT EXISTS builders (
     	round INTEGER PRIMARY KEY NOT NULL,
     	builder BLOB NOT NULL

@@ -312,7 +312,17 @@ func (vt *votersTracker) registerPrepareCommitListener(commitListener ledgercore
 	vt.commitListenerMu.Lock()
 	defer vt.commitListenerMu.Unlock()
 
+	if vt.commitListener != nil {
+		vt.l.trackerLog().Error("votersTracker.registerPrepareCommitListener: overriding existing listener.")
+	}
 	vt.commitListener = commitListener
+}
+
+func (vt *votersTracker) unregisterPrepareCommitListener() {
+	vt.commitListenerMu.Lock()
+	defer vt.commitListenerMu.Unlock()
+
+	vt.commitListener = nil
 }
 
 func (vt *votersTracker) getVoters(round basics.Round) (*ledgercore.VotersForRound, bool) {

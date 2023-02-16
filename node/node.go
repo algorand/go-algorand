@@ -330,18 +330,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.tracer = messagetracer.NewTracer(log).Init(cfg)
 	gossip.SetTrace(agreementParameters.Network, node.tracer)
 
-	// Delete the deprecated database file if it exists. This can be removed in future updates since this file should not exist by then.
-	oldCompactCertPath := filepath.Join(genesisDir, "compactcert.sqlite")
-	os.Remove(oldCompactCertPath)
-
-	stateProofPathname := filepath.Join(genesisDir, config.StateProofFileName)
-	stateProofAccess, err := db.MakeAccessor(stateProofPathname, false, false)
-	if err != nil {
-		log.Errorf("Cannot load state proof data: %v", err)
-		return nil, err
-	}
-
-	node.stateProofWorker = stateproof.NewWorker(stateProofAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
+	node.stateProofWorker = stateproof.NewWorker(genesisDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 
 	return node, err
 }
@@ -433,11 +422,10 @@ func (node *AlgorandFullNode) Stop() {
 	defer func() {
 		node.mu.Unlock()
 		node.waitMonitoringRoutines()
-		node.stateProofWorker.Shutdown()
-		node.stateProofWorker = nil
 	}()
 
 	node.net.ClearHandlers()
+	node.stateProofWorker.Stop()
 	if !node.config.DisableNetworking {
 		node.net.Stop()
 	}
@@ -1197,14 +1185,13 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 				node.waitMonitoringRoutines()
 			}()
 			node.net.ClearHandlers()
+			node.stateProofWorker.Stop()
 			node.txHandler.Stop()
 			node.agreementService.Shutdown()
 			node.catchupService.Stop()
 			node.txPoolSyncerService.Stop()
 			node.blockService.Stop()
 			node.ledgerService.Stop()
-			// As for now, the state proof services handles catchpoint mode
-			// so we don't need to stop it.
 
 			prevNodeCancelFunc := node.cancelCtx
 
@@ -1224,6 +1211,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		node.blockService.Start()
 		node.ledgerService.Start()
 		node.txHandler.Start()
+		node.stateProofWorker.Start()
 
 		// start indexer
 		if idx, err := node.Indexer(); err == nil {
