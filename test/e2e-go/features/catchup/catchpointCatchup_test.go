@@ -410,6 +410,7 @@ func TestReadyEndpoint(t *testing.T) {
 	// prepareConsensus and prepareConfig tweak consensus and config to allow primary node on network
 	// `CatchpointCatchupTestNetwork.json` to generate new catchpoints over rounds.
 	const CatchpointInterval = uint64(4)
+	const CatchpointTracking = int64(2)
 	const MaxAcctLookback = uint64(2)
 	const ConfigArchival = true
 	const TargetRound = uint64(18)
@@ -432,6 +433,7 @@ func TestReadyEndpoint(t *testing.T) {
 		cfg, err := config.LoadConfigFromDisk(node.GetDataDir())
 		a.NoError(err)
 		cfg.CatchpointInterval = CatchpointInterval
+		cfg.CatchpointTracking = CatchpointTracking
 		cfg.Archival = ConfigArchival
 		cfg.MaxAcctLookback = MaxAcctLookback
 		a.NoError(cfg.SaveToDisk(node.GetDataDir()))
@@ -446,12 +448,13 @@ func TestReadyEndpoint(t *testing.T) {
 
 	// testLogger := logging.TestingLog(t)
 	a := require.New(fixtures.SynchronizedTest(t))
-
-	consensus := prepareConsensus("catchpointtestingprotocol")
-
 	var fixture fixtures.RestClientFixture
+
+	// set consensus range for the test fixture
+	consensus := prepareConsensus("catchpointtestingprotocol")
 	fixture.SetConsensus(consensus)
 
+	// errorsCollector is used only in primary node startup
 	errorsCollector := nodeExitErrorCollector{t: fixtures.SynchronizedTest(t)}
 	defer errorsCollector.Print()
 
@@ -481,14 +484,21 @@ func TestReadyEndpoint(t *testing.T) {
 	// Let the network make some progress
 	primaryNodeRestClient := fixture.GetAlgodClientForController(pnController)
 	err = fixture.ClientWaitForRoundWithTimeout(primaryNodeRestClient, TargetRound)
+
+	// asserting that the primary node is generating catchpoint tags
 	primaryNodeStatus, err := primaryNodeRestClient.Status()
 	a.NoError(err)
 	a.NotNil(primaryNodeStatus.LastCatchpoint)
-	a.NotEmpty(*primaryNodeStatus.LastCatchpoint) // so this confirms we generate catchpoint (but we want more, catchpoint file)
+	a.NotEmpty(*primaryNodeStatus.LastCatchpoint)
+	// so this confirms we generate catchpoint tags
+	// catchpoint file, should be activated by CatchpointTracking = int64(2)
 
 	//lastCatchpoint := *primaryNodeStatus.LastCatchpoint
 
-	// maybe I should generate a catchpoint file, and copy another node to catchup against that (first let it round by round catchup, test sv time != 0)
+	// maybe I should clone a node to catchup against that (first let it round by round catchup, test sv time != 0)
+	// A few questions:
+	// - the introduction of another node, should it be a follower mode node? what is the expected status when catching up?
+	// - how to get result of a node while it is fast catching up? (assuming the time window is short?)
 }
 
 // TestNodeTxHandlerRestart starts a two-node and one relay network
