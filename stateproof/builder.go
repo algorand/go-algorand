@@ -66,8 +66,7 @@ func (spw *Worker) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Rou
 		buildr, err := createBuilder(rnd, votersFetcher)
 		if err != nil {
 			if errors.Is(err, errVotersNotTracked) {
-				// Voters not tracked for that round.  Might not be a valid
-				// state proof round; state proofs might not be enabled; etc.
+				// Voters not tracked for that round. state proofs might not be enabled.
 				spw.log.Warnf("OnPrepareVoterCommit(%d): %v", rnd, err)
 				continue
 			}

@@ -159,7 +159,7 @@ func (cw *catchpointWriter) Abort() error {
 }
 
 func (cw *catchpointWriter) WriteStateProofVerificationContext() (crypto.Digest, error) {
-	rawData, err := store.CreateSPVerificationAccessor(cw.tx).GetAllSPContexts(cw.ctx)
+	rawData, err := store.MakeSPVerificationAccessor(cw.tx).GetAllSPContexts(cw.ctx)
 	if err != nil {
 		return crypto.Digest{}, err
 	}

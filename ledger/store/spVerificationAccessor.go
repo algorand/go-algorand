@@ -29,9 +29,9 @@ type SPVerificationAccessor struct {
 	e db.Executable
 }
 
-// CreateSPVerificationAccessor returns accessor that allows reading and writing of state proof verification
+// MakeSPVerificationAccessor returns accessor that allows reading and writing of state proof verification
 // contexts
-func CreateSPVerificationAccessor(e db.Executable) *SPVerificationAccessor {
+func MakeSPVerificationAccessor(e db.Executable) *SPVerificationAccessor {
 	return &SPVerificationAccessor{e: e}
 }
 
