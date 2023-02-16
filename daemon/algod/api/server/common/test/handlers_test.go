@@ -52,8 +52,6 @@ func TestMockNodeStatus(t *testing.T) {
 	mockNodeStatusInRangeHelper(
 		t, CatchingUpFast, nil, cannedStatusReportCatchingUpFastGolden)
 	mockNodeStatusInRangeHelper(
-		t, CatchingUpRoundByRound, nil, cannedStatusReportCatchingUpRoundByRoundGolden)
-	mockNodeStatusInRangeHelper(
 		t, StoppedAtUnsupported, nil, cannedStatusReportStoppedAtUnsupportedGolden)
 	mockNodeStatusInRangeHelper(
 		t, 399, fmt.Errorf("catchup status out of scope error"), node.StatusReport{})
@@ -83,9 +81,6 @@ func TestReadyEndpoint(t *testing.T) {
 	readyEndpointTestHelper(t, mockNodeInstance, http.StatusOK)
 
 	mockNodeInstance.catchupStatus = CatchingUpFast
-	readyEndpointTestHelper(t, mockNodeInstance, http.StatusBadRequest)
-
-	mockNodeInstance.catchupStatus = CatchingUpRoundByRound
 	readyEndpointTestHelper(t, mockNodeInstance, http.StatusBadRequest)
 
 	mockNodeInstance.catchupStatus = StoppedAtUnsupported

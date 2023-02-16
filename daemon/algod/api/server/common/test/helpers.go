@@ -72,31 +72,6 @@ var cannedStatusReportCatchingUpFastGolden = node.StatusReport{
 	CatchupTime:                        10000,
 }
 
-var cannedStatusReportCatchingUpRoundByRoundGolden = node.StatusReport{
-	LastRound:                          basics.Round(97000),
-	LastVersion:                        protocol.ConsensusCurrentVersion,
-	NextVersion:                        protocol.ConsensusCurrentVersion,
-	NextVersionRound:                   200000,
-	NextVersionSupported:               true,
-	StoppedAtUnsupportedRound:          false,
-	Catchpoint:                         "",
-	CatchpointCatchupAcquiredBlocks:    0,
-	CatchpointCatchupProcessedAccounts: 0,
-	CatchpointCatchupVerifiedAccounts:  0,
-	CatchpointCatchupTotalAccounts:     0,
-	CatchpointCatchupTotalKVs:          0,
-	CatchpointCatchupProcessedKVs:      0,
-	CatchpointCatchupVerifiedKVs:       0,
-	CatchpointCatchupTotalBlocks:       0,
-	LastCatchpoint:                     "",
-	UpgradePropose:                     "upgradePropose",
-	UpgradeApprove:                     false,
-	UpgradeDelay:                       0,
-	NextProtocolVoteBefore:             100000,
-	NextProtocolApprovals:              5000,
-	CatchupTime:                        10000,
-}
-
 var cannedStatusReportStoppedAtUnsupportedGolden = node.StatusReport{
 	LastRound:                          basics.Round(97000),
 	LastVersion:                        protocol.ConsensusCurrentVersion,
@@ -130,8 +105,6 @@ const (
 	CaughtUpAndReady = iota
 	// CatchingUpFast stands for mock node is mocking fast catch up state, /ready should return 400
 	CatchingUpFast
-	// CatchingUpRoundByRound stands for mock node is mocking round-by-round catch up state, /ready should return 400
-	CatchingUpRoundByRound
 	// StoppedAtUnsupported stands for mock node stopped at unsupported round, /ready should return 500
 	StoppedAtUnsupported
 )
@@ -153,8 +126,6 @@ func (m *mockNode) Status() (s node.StatusReport, err error) {
 		s = cannedStatusReportCaughtUpAndReadyGolden
 	case CatchingUpFast:
 		s = cannedStatusReportCatchingUpFastGolden
-	case CatchingUpRoundByRound:
-		s = cannedStatusReportCatchingUpRoundByRoundGolden
 	case StoppedAtUnsupported:
 		s = cannedStatusReportStoppedAtUnsupportedGolden
 	default:
