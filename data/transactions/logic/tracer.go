@@ -105,7 +105,7 @@ type EvalTracer interface {
 	// AfterTxnGroup is called after a transaction group has been executed. This includes both
 	// top-level and inner transaction groups. The argument ep is the EvalParams object for the
 	// group; if the group is an inner group, this is the EvalParams object for the inner group.
-	AfterTxnGroup(ep *EvalParams)
+	AfterTxnGroup(ep *EvalParams, evalError error)
 
 	// BeforeTxn is called before a transaction is executed.
 	//
@@ -117,7 +117,7 @@ type EvalTracer interface {
 	// groupIndex refers to the index of the transaction in the transaction group that was just executed.
 	// ad is the ApplyData result of the transaction; prefer using this instead of
 	// ep.TxnGroup[groupIndex].ApplyData, since it may not be populated at this point.
-	AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData)
+	AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData, evalError error)
 
 	// BeforeProgram is called before an app or LogicSig program is evaluated.
 	BeforeProgram(cx *EvalContext)
@@ -139,13 +139,14 @@ type NullEvalTracer struct{}
 func (n NullEvalTracer) BeforeTxnGroup(ep *EvalParams) {}
 
 // AfterTxnGroup does nothing
-func (n NullEvalTracer) AfterTxnGroup(ep *EvalParams) {}
+func (n NullEvalTracer) AfterTxnGroup(ep *EvalParams, evalError error) {}
 
 // BeforeTxn does nothing
 func (n NullEvalTracer) BeforeTxn(ep *EvalParams, groupIndex int) {}
 
 // AfterTxn does nothing
-func (n NullEvalTracer) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData) {}
+func (n NullEvalTracer) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
+}
 
 // BeforeProgram does nothing
 func (n NullEvalTracer) BeforeProgram(cx *EvalContext) {}
