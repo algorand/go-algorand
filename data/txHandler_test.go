@@ -1053,7 +1053,7 @@ loop:
 	handler.streamVerifier.Start(handler.ctx)
 	defer handler.streamVerifier.WaitForStop()
 	defer handler.ctxCancel()
-	handler.streamVerifierChan <- &verify.UnverifiedTxnElement{
+	handler.streamVerifierChan <- &verify.UnverifiedTxnSigJob{
 		TxnGroup: msg.unverifiedTxGroup, BacklogMessage: msg}
 	var currentCount uint64
 	for x := 0; x < 1000; x++ {
@@ -1213,7 +1213,7 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 					// this is not expected during the test
 					continue
 				}
-				handler.streamVerifierChan <- &verify.UnverifiedTxnElement{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}
+				handler.streamVerifierChan <- &verify.UnverifiedTxnSigJob{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}
 			case wi, ok := <-handler.postVerificationQueue:
 				if !ok {
 					return
@@ -1739,7 +1739,7 @@ func runHandlerBenchmarkWithBacklog(b *testing.B, txGen txGenIf, tps int, useBac
 						// this is not expected during the test
 						continue
 					}
-					handler.streamVerifierChan <- &verify.UnverifiedTxnElement{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}
+					handler.streamVerifierChan <- &verify.UnverifiedTxnSigJob{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}
 				case wi, ok := <-handler.postVerificationQueue:
 					if !ok {
 						return
@@ -1890,7 +1890,7 @@ func runHandlerBenchmarkWithBacklog(b *testing.B, txGen txGenIf, tps int, useBac
 			} else {
 				stxngrp := signedTransactionGroups[i]
 				blm := txBacklogMsg{rawmsg: nil, unverifiedTxGroup: stxngrp}
-				handler.streamVerifierChan <- &verify.UnverifiedTxnElement{TxnGroup: stxngrp, BacklogMessage: &blm}
+				handler.streamVerifierChan <- &verify.UnverifiedTxnSigJob{TxnGroup: stxngrp, BacklogMessage: &blm}
 			}
 			c++
 			if c == b.N {

@@ -567,12 +567,12 @@ func (w *worksetBuilder) completed() bool {
 	return w.idx >= len(w.payset)
 }
 
-// UnverifiedTxnElement is the element passed to the Stream verifier
+// UnverifiedTxnSigJob is the sig verification job passed to the Stream verifier
 // It represents an unverified txn whose signatures will be verified
 // BacklogMessage is a *txBacklogMsg from data/txHandler.go which needs to be
 // passed back to that context
-// Implements UnverifiedElement
-type UnverifiedTxnElement struct {
+// Implements UnverifiedSigJob
+type UnverifiedTxnSigJob struct {
 	TxnGroup       []transactions.SignedTxn
 	BacklogMessage interface{}
 }
@@ -613,35 +613,35 @@ func (nbw *NewBlockWatcher) getBlockHeader() (bh *bookkeeping.BlockHeader) {
 }
 
 type batchLoad struct {
-	txnGroups             [][]transactions.SignedTxn
-	groupCtxs             []*GroupContext
-	elementBacklogMessage []interface{}
-	messagesForTxn        []int
+	txnGroups      [][]transactions.SignedTxn
+	groupCtxs      []*GroupContext
+	backlogMessage []interface{}
+	messagesForTxn []int
 }
 
 func makeBatchLoad(l int) (bl *batchLoad) {
 	return &batchLoad{
-		txnGroups:             make([][]transactions.SignedTxn, 0, l),
-		groupCtxs:             make([]*GroupContext, 0, l),
-		elementBacklogMessage: make([]interface{}, 0, l),
-		messagesForTxn:        make([]int, 0, l),
+		txnGroups:      make([][]transactions.SignedTxn, 0, l),
+		groupCtxs:      make([]*GroupContext, 0, l),
+		backlogMessage: make([]interface{}, 0, l),
+		messagesForTxn: make([]int, 0, l),
 	}
 }
 
 func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext, backlogMsg interface{}, numBatchableSigs int) {
 	bl.txnGroups = append(bl.txnGroups, txngrp)
 	bl.groupCtxs = append(bl.groupCtxs, gctx)
-	bl.elementBacklogMessage = append(bl.elementBacklogMessage, backlogMsg)
+	bl.backlogMessage = append(bl.backlogMessage, backlogMsg)
 	bl.messagesForTxn = append(bl.messagesForTxn, numBatchableSigs)
 
 }
 
-type txnElementProcessor struct {
+type txnSigVerifyJobProcessor struct {
 	cache       VerifiedTransactionCache
 	nbw         *NewBlockWatcher
 	ledger      logic.LedgerForSignature
 	resultChan  chan<- *VerificationResult
-	droppedChan chan<- *UnverifiedTxnElement
+	droppedChan chan<- *UnverifiedTxnSigJob
 }
 
 // LedgerForStreamVerifier defines the ledger methods used by the StreamVerifier.
@@ -652,30 +652,21 @@ type LedgerForStreamVerifier interface {
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 }
 
-func (svh *txnElementProcessor) Cleanup(pending []UnverifiedElement, err error) {
+func (svh *txnSigVerifyJobProcessor) Cleanup(pending []UnverifiedSigJob, err error) {
 	// report an error for the unchecked txns
 	// drop the messages without reporting if the receiver does not consume
-	for _, uel := range pending {
-		svh.GetErredUnverified(uel, err)
+	for _, ue := range pending {
+		uelt := ue.(*UnverifiedTxnSigJob)
+		svh.sendResult(uelt.TxnGroup, uelt.BacklogMessage, err)
 	}
 }
 
-func (svh txnElementProcessor) GetErredUnverified(ue UnverifiedElement, err error) {
-	uelt := ue.(*UnverifiedTxnElement)
-	// send the txn result out the pipe
-	select {
-	case svh.resultChan <- &VerificationResult{
-		TxnGroup:       uelt.TxnGroup,
-		BacklogMessage: uelt.BacklogMessage,
-		Err:            err,
-	}:
-	default:
-		// we failed to write to the output queue, since the queue was full.
-		svh.droppedChan <- &UnverifiedTxnElement{uelt.TxnGroup, uelt.BacklogMessage}
-	}
+func (svh txnSigVerifyJobProcessor) GetErredUnverified(ue UnverifiedSigJob, err error) {
+	uelt := ue.(*UnverifiedTxnSigJob)
+	svh.sendResult(uelt.TxnGroup, uelt.BacklogMessage, err)
 }
 
-func (svh txnElementProcessor) sendResult(veTxnGroup []transactions.SignedTxn, veBacklogMessage interface{}, err error) {
+func (svh txnSigVerifyJobProcessor) sendResult(veTxnGroup []transactions.SignedTxn, veBacklogMessage interface{}, err error) {
 	// send the txn result out the pipe
 	select {
 	case svh.resultChan <- &VerificationResult{
@@ -685,13 +676,13 @@ func (svh txnElementProcessor) sendResult(veTxnGroup []transactions.SignedTxn, v
 	}:
 	default:
 		// we failed to write to the output queue, since the queue was full.
-		svh.droppedChan <- &UnverifiedTxnElement{veTxnGroup, veBacklogMessage}
+		svh.droppedChan <- &UnverifiedTxnSigJob{veTxnGroup, veBacklogMessage}
 	}
 }
 
-// MakeElementProcessor returns the object implementing the stream verifier Helper interface
-func MakeElementProcessor(ledger LedgerForStreamVerifier, cache VerifiedTransactionCache,
-	resultChan chan<- *VerificationResult, droppedChan chan<- *UnverifiedTxnElement) (svh ElementProcessor, err error) {
+// MakeSigVerifyJobProcessor returns the object implementing the stream verifier Helper interface
+func MakeSigVerifyJobProcessor(ledger LedgerForStreamVerifier, cache VerifiedTransactionCache,
+	resultChan chan<- *VerificationResult, droppedChan chan<- *UnverifiedTxnSigJob) (svp SigVerifyJobProcessor, err error) {
 	latest := ledger.Latest()
 	latestHdr, err := ledger.BlockHdr(latest)
 	if err != nil {
@@ -701,7 +692,7 @@ func MakeElementProcessor(ledger LedgerForStreamVerifier, cache VerifiedTransact
 	nbw := MakeNewBlockWatcher(latestHdr)
 	ledger.RegisterBlockListeners([]ledgercore.BlockListener{nbw})
 
-	return &txnElementProcessor{
+	return &txnSigVerifyJobProcessor{
 		cache:       cache,
 		nbw:         nbw,
 		ledger:      ledger,
@@ -710,28 +701,27 @@ func MakeElementProcessor(ledger LedgerForStreamVerifier, cache VerifiedTransact
 	}, nil
 }
 
-func (svh *txnElementProcessor) PreProcessUnverifiedElements(uelts []UnverifiedElement) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
-	batchVerifier = crypto.MakeBatchVerifier()
+func (svp *txnSigVerifyJobProcessor) AddSigsToBatch(uelts []UnverifiedSigJob, batchVerifier *crypto.BatchVerifier) (batchedJobCtx interface{}) {
 	bl := makeBatchLoad(len(uelts))
 	// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
-	blockHeader := svh.nbw.getBlockHeader()
+	blockHeader := svp.nbw.getBlockHeader()
 
 	for _, uelt := range uelts {
-		ue := uelt.(*UnverifiedTxnElement)
-		groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, blockHeader, svh.ledger, batchVerifier, nil)
+		ue := uelt.(*UnverifiedTxnSigJob)
+		groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, blockHeader, svp.ledger, batchVerifier, nil)
 		if err != nil {
 			// verification failed, no need to add the sig to the batch, report the error
-			svh.sendResult(ue.TxnGroup, ue.BacklogMessage, err)
+			svp.sendResult(ue.TxnGroup, ue.BacklogMessage, err)
 			continue
 		}
 		totalBatchCount := batchVerifier.GetNumberOfEnqueuedSignatures()
 		bl.addLoad(ue.TxnGroup, groupCtx, ue.BacklogMessage, totalBatchCount)
 	}
-	return batchVerifier, bl
+	return bl
 }
 
-// GetNumberOfBatchableSigsInGroup returns the number of batchable signatures in the element
-func (ue UnverifiedTxnElement) GetNumberOfBatchableSigsInGroup() (batchSigs uint64, err error) {
+// GetNumberOfBatchableSigsInGroup returns the number of batchable signatures in the txn group
+func (ue UnverifiedTxnSigJob) GetNumberOfBatchableSigsInGroup() (batchSigs uint64, err error) {
 	batchSigs = 0
 	for i := range ue.TxnGroup {
 		count, err := getNumberOfBatchableSigsInTxn(&ue.TxnGroup[i])
@@ -771,13 +761,13 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (uint64, error) 
 	}
 }
 
-func (svh *txnElementProcessor) PostProcessVerifiedElements(ctx interface{}, failed []bool, err error) {
-	bl := ctx.(*batchLoad)
+func (svp *txnSigVerifyJobProcessor) PostProcessVerifiedJobs(batchedJobCtx interface{}, failed []bool, err error) {
+	bl := batchedJobCtx.(*batchLoad)
 	if err == nil { // success, all signatures verified
 		for i := range bl.txnGroups {
-			svh.sendResult(bl.txnGroups[i], bl.elementBacklogMessage[i], nil)
+			svp.sendResult(bl.txnGroups[i], bl.backlogMessage[i], nil)
 		}
-		svh.cache.AddPayset(bl.txnGroups, bl.groupCtxs)
+		svp.cache.AddPayset(bl.txnGroups, bl.groupCtxs)
 		return
 	}
 
@@ -804,8 +794,8 @@ func (svh *txnElementProcessor) PostProcessVerifiedElements(ctx interface{}, fai
 		} else {
 			result = err
 		}
-		svh.sendResult(bl.txnGroups[txgIdx], bl.elementBacklogMessage[txgIdx], result)
+		svp.sendResult(bl.txnGroups[txgIdx], bl.backlogMessage[txgIdx], result)
 	}
 	// loading them all at once by locking the cache once
-	svh.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
+	svp.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
 }
