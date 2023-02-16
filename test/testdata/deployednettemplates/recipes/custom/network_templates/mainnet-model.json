@@ -1,0 +1,1080 @@
+{
+  "network": {
+    "wallets": 5,
+    "relays": 116,
+    "nodes": 5,
+    "npn": 5
+  },
+  "instances": {
+    "relays": {
+      "config": "./configs/relay.json",
+      "type": "c5.xlarge",
+      "count": 116
+    },
+    "participatingNodes": {
+      "config": "./configs/node.json",
+      "type": "c5.xlarge",
+      "count": 5
+    },
+    "nonParticipatingNodes": {
+      "config": "./configs/nonPartNode.json",
+      "type": "c5.xlarge",
+      "count": 5
+    }
+  },
+  "groups": [
+    {
+      "name": "r1",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r2",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r3",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r4",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r5",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r6",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r7",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r8",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r9",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r10",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r11",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r12",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r13",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r14",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r15",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r16",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r17",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r116",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r18",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r19",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r20",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r21",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r113",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r22",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r23",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r24",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r25",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r26",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r27",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r28",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r29",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r30",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r31",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r32",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r33",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r34",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r35",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r36",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r37",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r38",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r39",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r40",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r41",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r42",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r43",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r44",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r45",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r46",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r47",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r48",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r49",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r115",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r50",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r51",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r52",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r53",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r54",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r55",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r56",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r57",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r58",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r59",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r60",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r61",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r62",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r63",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r64",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r65",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r66",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r67",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r68",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r69",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r70",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r114",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r71",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r72",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r73",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r74",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r75",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r76",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r77",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r78",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r79",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r80",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r81",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r82",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r83",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r84",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r85",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r86",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r87",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r88",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r89",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r90",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r91",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r92",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r93",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r94",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r95",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r96",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r97",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r98",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r99",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r100",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r101",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r102",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r103",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r104",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r105",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r106",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r107",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r108",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r109",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r110",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r111",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r112",
+      "percent": {
+        "relays": 1,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "n",
+      "percent": {
+        "relays": 0,
+        "nonParticipatingNodes": 100,
+        "participatingNodes": 100
+      },
+      "region": "us-west-1"
+    }
+  ]
+}
