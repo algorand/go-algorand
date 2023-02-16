@@ -3244,29 +3244,35 @@ func TestPlayerRetainsReceivedValidatedAt(t *testing.T) {
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
 	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
 
-	// send a payload
-	// store an arbitrary proposal/payload
+	// create a PP message for an arbitrary proposal/payload similar to setupCompoundMessage
 	vVote := helper.MakeVerifiedVote(t, 0, r-1, p, propose, *pV)
-	inMsg := messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}}
+	voteMsg := message{Vote: vVote, UnauthenticatedVote: vVote.u()}
+	proposalMsg := message{UnauthenticatedProposal: pP.u()}
+	compoundMsg := messageEvent{T: votePresent, Input: voteMsg,
+		Tail: &messageEvent{T: payloadPresent, Input: proposalMsg}}
+	inMsg := compoundMsg.AttachReceivedAt(time.Second) // call AttachReceivedAt like demux would
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
-	// payloadPresent
-	m := message{UnauthenticatedProposal: pP.u()}
-	inMsg = messageEvent{T: payloadPresent, Input: m}
-	inMsg = inMsg.AttachReceivedAt(time.Second)
+	// make sure vote verify requests
+	verifyEvent := ev(cryptoAction{T: verifyVote, M: voteMsg, TaskIndex: 0})
+	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify vote")
+
+	// send voteVerified
+	inMsg = messageEvent{T: voteVerified, Input: voteMsg, TaskIndex: 1}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
-	// make sure payload verify request
-	verifyEvent := ev(cryptoAction{T: verifyPayload, M: m, TaskIndex: 0})
-	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify payload")
+	// make sure payload verify requests
+	verifyEvent = ev(cryptoAction{T: verifyPayload, M: proposalMsg})
+	tr := pM.getTrace()
+	require.Truef(t, tr.Contains(verifyEvent), "Player should verify payload: %s", tr.String())
 
 	// payloadVerified
 	inMsg = messageEvent{T: payloadVerified, Input: message{Proposal: *pP}, Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion}}
-	inMsg = inMsg.AttachValidatedAt(2 * time.Second)
+	inMsg = inMsg.AttachValidatedAt(2 * time.Second) // call AttachValidatedAt like demux would
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
