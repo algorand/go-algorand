@@ -66,8 +66,7 @@ func (spw *Worker) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Rou
 		buildr, err := createBuilder(rnd, votersFetcher)
 		if err != nil {
 			if errors.Is(err, errVotersNotTracked) {
-				// Voters not tracked for that round.  Might not be a valid
-				// state proof round; state proofs might not be enabled; etc.
+				// Voters not tracked for that round. state proofs might not be enabled.
 				spw.log.Warnf("OnPrepareVoterCommit(%d): %v", rnd, err)
 				continue
 			}
@@ -163,21 +162,20 @@ func createBuilder(rnd basics.Round, votersFetcher ledgercore.LedgerForSPBuilder
 
 	hdrProto := config.Consensus[hdr.CurrentProtocol]
 	votersRnd := rnd.SubSaturate(basics.Round(hdrProto.StateProofInterval))
-	votersHdr, err := votersFetcher.BlockHdr(votersRnd)
-	if err != nil {
-		return builder{}, err
-	}
-
 	lookback := votersRnd.SubSaturate(basics.Round(hdrProto.StateProofVotersLookback))
 	voters, err := votersFetcher.VotersForStateProof(lookback)
 	if err != nil {
 		return builder{}, err
 	}
-
 	if voters == nil {
 		// Voters not tracked for that round.  Might not be a valid
 		// state proof round; state proofs might not be enabled; etc.
 		return builder{}, fmt.Errorf("lookback round %d: %w", lookback, errVotersNotTracked)
+	}
+
+	votersHdr, err := votersFetcher.BlockHdr(votersRnd)
+	if err != nil {
+		return builder{}, err
 	}
 
 	msg, err := GenerateStateProofMessage(votersFetcher, rnd)
@@ -208,9 +206,6 @@ func createBuilder(rnd basics.Round, votersFetcher ledgercore.LedgerForSPBuilder
 }
 
 func (spw *Worker) initBuilders() {
-	spw.mu.Lock()
-	defer spw.mu.Unlock()
-
 	spw.builders = make(map[basics.Round]builder)
 	rnds, err := spw.getAllOnlineBuilderRounds()
 	if err != nil {

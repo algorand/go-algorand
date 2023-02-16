@@ -77,6 +77,9 @@ func (spt *spVerificationTracker) loadFromDisk(l ledgerForTracker, _ basics.Roun
 	spt.mu.Lock()
 	defer spt.mu.Unlock()
 
+	// reset the cache
+	spt.lastLookedUpVerificationContext = ledgercore.StateProofVerificationContext{}
+
 	const initialContextArraySize = 10
 	spt.trackedCommitContext = make([]verificationCommitContext, 0, initialContextArraySize)
 	spt.trackedDeleteContext = make([]verificationDeleteContext, 0, initialContextArraySize)
@@ -133,7 +136,7 @@ func (spt *spVerificationTracker) commitRound(ctx context.Context, tx *sql.Tx, d
 	}
 
 	if dcc.spVerification.LastDeleteIndex >= 0 {
-		err = store.CreateSPVerificationAccessor(tx).DeleteOldSPContexts(ctx, dcc.spVerification.EarliestLastAttestedRound)
+		err = store.MakeSPVerificationAccessor(tx).DeleteOldSPContexts(ctx, dcc.spVerification.EarliestLastAttestedRound)
 	}
 
 	return err
@@ -145,7 +148,7 @@ func commitSPContexts(ctx context.Context, tx *sql.Tx, commitData []verification
 		ptrToCtxs[i] = &commitData[i].verificationContext
 	}
 
-	return store.CreateSPVerificationAccessor(tx).StoreSPContexts(ctx, ptrToCtxs)
+	return store.MakeSPVerificationAccessor(tx).StoreSPContexts(ctx, ptrToCtxs)
 }
 
 func (spt *spVerificationTracker) postCommit(_ context.Context, dcc *deferredCommitContext) {
@@ -232,7 +235,7 @@ func (spt *spVerificationTracker) lookupContextInTrackedMemory(stateProofLastAtt
 func (spt *spVerificationTracker) lookupContextInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	var spContext *ledgercore.StateProofVerificationContext
 	err := spt.l.trackerDB().Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
-		spContext, err = store.CreateSPVerificationAccessor(tx).LookupSPContext(stateProofLastAttestedRound)
+		spContext, err = store.MakeSPVerificationAccessor(tx).LookupSPContext(stateProofLastAttestedRound)
 		if err != nil {
 			err = fmt.Errorf("%w for round %d: %s", errSPVerificationContextNotFound, stateProofLastAttestedRound, err)
 		}
