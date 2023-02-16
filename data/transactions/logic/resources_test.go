@@ -124,7 +124,7 @@ int 1
 	require.Equal(t, ep.TxnGroup[0].Txn.Sender, ed.SharedAccts[0])
 }
 
-// TestBetterLocalErrors convirms that we get specific errors about the missing
+// TestBetterLocalErrors confirms that we get specific errors about the missing
 // address or app when accessesing a Local State with only one available.
 func TestBetterLocalErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -219,7 +219,7 @@ pop; pop; int 1
 	logic.TestApps(t, sources, txntest.Group(&appl0, &appl2), 9, nil)
 }
 
-// TestBetterHoldingErrors convirms that we get specific errors about the missing
+// TestBetterHoldingErrors confirms that we get specific errors about the missing
 // address or asa when accessesing a holding with only one available.
 func TestBetterHoldingErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -257,29 +257,37 @@ pop; pop; int 1
 	logic.TestApp(t, getHoldingBalance, ep, "invalid Account reference "+joe.String())
 }
 
-// TestNewAppAccount checks whether a newly created app can put its own address
-// into `itxn_field Accounts`.
-func TestNewAppAccount(t *testing.T) {
+// TestAccountPassing checks that some special accounts can be passed in
+// txn.Accounts for a called app.
+func TestAccountPassing(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	ep, tx, ledger := logic.MakeSampleEnv()
+	for v := uint64(7); v <= logic.LogicVersion; v++ {
+		ep, tx, ledger := logic.MakeSampleEnvWithVersion(v)
 
-	accept := logic.TestProg(t, "int 1", 6)
-	alice := basics.Address{1, 1, 1, 1, 1}
-	ledger.NewApp(alice, 4, basics.AppParams{
-		ApprovalProgram: accept.Program,
-	})
-	callWithMyAccount := `
+		accept := logic.TestProg(t, "int 1", 6)
+		alice := basics.Address{1, 1, 1, 1, 1}
+		ledger.NewApp(alice, 4, basics.AppParams{
+			ApprovalProgram: accept.Program,
+		})
+		callWithAccount := `
 itxn_begin
 	int appl;	                       itxn_field TypeEnum
     int 4;	                           itxn_field ApplicationID
-    global CurrentApplicationAddress;  itxn_field Accounts
+    %s;  itxn_field Accounts
 itxn_submit
 int 1`
-	tx.ForeignApps = []basics.AppIndex{4}
-	ledger.NewAccount(appAddr(888), 50_000)
-	logic.TestApp(t, callWithMyAccount, ep)
+		tx.ForeignApps = []basics.AppIndex{4}
+		ledger.NewAccount(appAddr(888), 50_000)
+		// First show that we're not just letting anything get passed in
+		logic.TestApp(t, fmt.Sprintf(callWithAccount, "int 32; bzero; byte 0x07; b|"), ep,
+			"invalid Account reference AAAAA")
+		// Now show we can pass our own address
+		logic.TestApp(t, fmt.Sprintf(callWithAccount, "global CurrentApplicationAddress"), ep)
+		// Or the address of one of our ForeignApps
+		logic.TestApp(t, fmt.Sprintf(callWithAccount, "addr "+basics.AppIndex(4).Address().String()), ep)
+	}
 }
 
 // TestOtherTxSharing tests resource sharing across other kinds of transactions besides appl.

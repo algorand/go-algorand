@@ -160,7 +160,7 @@ func (cx *EvalContext) allowsHolding(addr basics.Address, ai basics.AssetIndex) 
 			return cx.availableAccount(addr)
 		}
 	}
-	// If the address was "created" by making its app in this group, then allow for allowed assets.
+	// If the address was "created" by making its app in this group, then allow for available assets.
 	for _, created := range r.createdApps {
 		if cx.getApplicationAddress(created) == addr {
 			return cx.availableAsset(ai)
