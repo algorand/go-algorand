@@ -110,9 +110,9 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	if testing.Short() {
-		t.Skip()
-	}
+	//if testing.Short() {
+	//	t.Skip()
+	//}
 	a := require.New(fixtures.SynchronizedTest(t))
 	log := logging.TestingLog(t)
 
@@ -540,24 +540,26 @@ func TestReadyEndpoint(t *testing.T) {
 	a.Error(n2ndClient.ReadyCheck())
 
 	// keep rolling and asking `/ready` if ready (catch up with the catchpoint)
-	//timer := time.NewTimer(100 * time.Second)
-	//for {
-	//	err = n2ndClient.ReadyCheck()
-	//	if err == nil {
-	//		n2ndStatus, err := n2ndClient.Status()
-	//		a.NoError(err)
-	//		a.Empty(*n2ndStatus.Catchpoint)
-	//		break
-	//	}
-	//	select {
-	//	case <-timer.C:
-	//		a.Fail("timeout")
-	//		break
-	//	default:
-	//		time.Sleep(250 * time.Millisecond)
-	//		continue
-	//	}
-	//}
+	timer := time.NewTimer(100 * time.Second)
+	for {
+		n2ndStatus, err := n2ndClient.Status()
+		a.NoError(err)
+
+		if len(*n2ndStatus.Catchpoint) > 0 {
+			a.Error(n2ndClient.ReadyCheck())
+
+			select {
+			case <-timer.C:
+				a.Fail("timeout")
+				break
+			default:
+				time.Sleep(200 * time.Millisecond)
+			}
+		} else {
+			a.NoError(n2ndClient.ReadyCheck())
+			break
+		}
+	}
 }
 
 // TestNodeTxHandlerRestart starts a two-node and one relay network
