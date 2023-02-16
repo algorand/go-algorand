@@ -116,6 +116,8 @@ type TrackerStore interface {
 	Vacuum(ctx context.Context) (stats db.VacuumStats, err error)
 	Close()
 	CleanupTest(dbName string, inMemory bool)
+
+	ResetToV6Test(ctx context.Context) error
 }
 
 // OpenTrackerSQLStore opens the sqlite database store
@@ -202,6 +204,25 @@ func (s *trackerSQLStore) CleanupTest(dbName string, inMemory bool) {
 	if !inMemory {
 		os.Remove(dbName)
 	}
+}
+
+func (s *trackerSQLStore) ResetToV6Test(ctx context.Context) error {
+	var resetExprs = []string{
+		`DROP TABLE IF EXISTS onlineaccounts`,
+		`DROP TABLE IF EXISTS txtail`,
+		`DROP TABLE IF EXISTS onlineroundparamstail`,
+		`DROP TABLE IF EXISTS catchpointfirststageinfo`,
+	}
+
+	return s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
+		for _, stmt := range resetExprs {
+			_, err := tx.ExecContext(ctx, stmt)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (s *trackerSQLStore) Close() {
