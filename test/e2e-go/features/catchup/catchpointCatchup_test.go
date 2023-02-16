@@ -110,9 +110,9 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	//if testing.Short() {
-	//	t.Skip()
-	//}
+	if testing.Short() {
+		t.Skip()
+	}
 	a := require.New(fixtures.SynchronizedTest(t))
 	log := logging.TestingLog(t)
 
