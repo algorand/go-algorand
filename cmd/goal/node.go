@@ -33,6 +33,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -152,7 +153,7 @@ var catchupCmd = &cobra.Command{
 	Example: "goal node catchup 6500000#1234567890ABCDEF01234567890ABCDEF0\tStart catching up to round 6500000 with the provided catchpoint\ngoal node catchup --abort\t\t\t\t\tAbort the current catchup",
 	Args:    catchpointCmdArgument,
 	Run: func(cmd *cobra.Command, args []string) {
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			if !abortCatchup && len(args) == 0 {
 				client := ensureAlgodClient(dataDir)
 				vers, err := client.AlgodVersions()
@@ -206,7 +207,7 @@ var startCmd = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
 				reportErrorf(errorNodeManagedBySystemd)
 			}
@@ -247,7 +248,7 @@ var shutdownCmd = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			nc := nodecontrol.MakeNodeController(binDir, dataDir)
 			err := nc.Shutdown()
 
@@ -278,7 +279,7 @@ var stopCmd = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
 				reportErrorf(errorNodeManagedBySystemd)
 			}
@@ -309,7 +310,7 @@ var restartCmd = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
 				reportErrorf(errorNodeManagedBySystemd)
 			}
@@ -366,7 +367,7 @@ var generateTokenCmd = &cobra.Command{
 	Short: "Generate and install a new API token",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			// Ensure the node is stopped -- HealthCheck should fail
 			clientConfig := libgoal.ClientConfig{
 				AlgodDataDir: dataDir,
@@ -399,7 +400,7 @@ var statusCmd = &cobra.Command{
 	Long:  `Show the current status of the running Algorand node.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		onDataDirs(getStatus)
+		datadir.OnDataDirs(getStatus)
 	},
 }
 
@@ -517,7 +518,7 @@ var lastroundCmd = &cobra.Command{
 	Long:  `Prints the most recent round confirmed by the Algorand node.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			round, err := ensureAlgodClient(dataDir).CurrentRound()
 			if err != nil {
 				reportErrorf(errorNodeStatus, err)
@@ -538,7 +539,7 @@ var cloneCmd = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
-		nc := nodecontrol.MakeNodeController(binDir, ensureSingleDataDir())
+		nc := nodecontrol.MakeNodeController(binDir, datadir.EnsureSingleDataDir())
 		err = nc.Clone(targetDir, !noLedger)
 		if err != nil {
 			reportErrorf(errorCloningNode, err)
@@ -555,7 +556,7 @@ var pendingTxnsCmd = &cobra.Command{
 	Long:  `Get a snapshot of current pending transactions on this node, cut off at MAX transactions (-m), default 0. If MAX=0, fetches as many transactions as possible.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			client := ensureAlgodClient(dataDir)
 			statusTxnPool, err := client.GetParsedPendingTransactions(maxPendingTransactions)
 			if err != nil {
@@ -589,7 +590,7 @@ var waitCmd = &cobra.Command{
 	Long:  "Waits for the node to make progress, which includes catching up.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		client := ensureAlgodClient(ensureSingleDataDir())
+		client := ensureAlgodClient(datadir.EnsureSingleDataDir())
 		stat, err := client.Status()
 		if err != nil {
 			reportErrorf(errorNodeStatus, err)
@@ -698,7 +699,7 @@ var createCmd = &cobra.Command{
 }
 
 func catchup(dataDir string, args []string) {
-	client := ensureAlgodClient(ensureSingleDataDir())
+	client := ensureAlgodClient(datadir.EnsureSingleDataDir())
 	if abortCatchup {
 		err := client.AbortCatchup()
 		if err != nil {

@@ -23,9 +23,9 @@ const (
 
 // Defines values for AddressRole.
 const (
-	FreezeTarget AddressRole = "freeze-target"
-	Receiver     AddressRole = "receiver"
-	Sender       AddressRole = "sender"
+	AddressRoleFreezeTarget AddressRole = "freeze-target"
+	AddressRoleReceiver     AddressRole = "receiver"
+	AddressRoleSender       AddressRole = "sender"
 )
 
 // Defines values for Format.
@@ -43,13 +43,13 @@ const (
 
 // Defines values for TxType.
 const (
-	Acfg   TxType = "acfg"
-	Afrz   TxType = "afrz"
-	Appl   TxType = "appl"
-	Axfer  TxType = "axfer"
-	Keyreg TxType = "keyreg"
-	Pay    TxType = "pay"
-	Stpf   TxType = "stpf"
+	TxTypeAcfg   TxType = "acfg"
+	TxTypeAfrz   TxType = "afrz"
+	TxTypeAppl   TxType = "appl"
+	TxTypeAxfer  TxType = "axfer"
+	TxTypeKeyreg TxType = "keyreg"
+	TxTypePay    TxType = "pay"
+	TxTypeStpf   TxType = "stpf"
 )
 
 // Defines values for TransactionProofResponseHashtype.
@@ -66,8 +66,8 @@ const (
 
 // Defines values for AccountInformationParamsExclude.
 const (
-	All  AccountInformationParamsExclude = "all"
-	None AccountInformationParamsExclude = "none"
+	AccountInformationParamsExcludeAll  AccountInformationParamsExclude = "all"
+	AccountInformationParamsExcludeNone AccountInformationParamsExclude = "none"
 )
 
 // Defines values for AccountApplicationInformationParamsFormat.
@@ -106,6 +106,12 @@ const (
 	GetTransactionProofParamsFormatMsgpack GetTransactionProofParamsFormat = "msgpack"
 )
 
+// Defines values for GetLedgerStateDeltaParamsFormat.
+const (
+	GetLedgerStateDeltaParamsFormatJson    GetLedgerStateDeltaParamsFormat = "json"
+	GetLedgerStateDeltaParamsFormatMsgpack GetLedgerStateDeltaParamsFormat = "msgpack"
+)
+
 // Defines values for GetPendingTransactionsParamsFormat.
 const (
 	GetPendingTransactionsParamsFormatJson    GetPendingTransactionsParamsFormat = "json"
@@ -114,8 +120,8 @@ const (
 
 // Defines values for PendingTransactionInformationParamsFormat.
 const (
-	Json    PendingTransactionInformationParamsFormat = "json"
-	Msgpack PendingTransactionInformationParamsFormat = "msgpack"
+	PendingTransactionInformationParamsFormatJson    PendingTransactionInformationParamsFormat = "json"
+	PendingTransactionInformationParamsFormatMsgpack PendingTransactionInformationParamsFormat = "msgpack"
 )
 
 // Account Account information at a given round.
@@ -218,30 +224,6 @@ type Account struct {
 // * lsig
 type AccountSigType string
 
-// AccountBalanceRecord Account and its address
-type AccountBalanceRecord struct {
-	// AccountData Account information at a given round.
-	//
-	// Definition:
-	// data/basics/userBalance.go : AccountData
-	AccountData Account `json:"account-data"`
-
-	// Address Address of the updated account.
-	Address string `json:"address"`
-}
-
-// AccountDeltas Exposes deltas for account based resources in a single round
-type AccountDeltas struct {
-	// Accounts Array of Account updates for the round
-	Accounts *[]AccountBalanceRecord `json:"accounts,omitempty"`
-
-	// Apps Array of App updates for the round.
-	Apps *[]AppResourceRecord `json:"apps,omitempty"`
-
-	// Assets Array of Asset updates for the round.
-	Assets *[]AssetResourceRecord `json:"assets,omitempty"`
-}
-
 // AccountParticipation AccountParticipation describes the parameters used by this account in consensus protocol.
 type AccountParticipation struct {
 	// SelectionParticipationKey \[sel\] Selection public key (if any) currently registered for this round.
@@ -269,42 +251,6 @@ type AccountStateDelta struct {
 
 	// Delta Application state delta.
 	Delta StateDelta `json:"delta"`
-}
-
-// AccountTotals Total Algos in the system grouped by account status
-type AccountTotals struct {
-	// NotParticipating Amount of stake in non-participating accounts
-	NotParticipating uint64 `json:"not-participating"`
-
-	// Offline Amount of stake in offline accounts
-	Offline uint64 `json:"offline"`
-
-	// Online Amount of stake in online accounts
-	Online uint64 `json:"online"`
-
-	// RewardsLevel Total number of algos received per reward unit since genesis
-	RewardsLevel uint64 `json:"rewards-level"`
-}
-
-// AppResourceRecord Represents AppParams and AppLocalStateDelta in deltas
-type AppResourceRecord struct {
-	// Address App account address
-	Address string `json:"address"`
-
-	// AppDeleted Whether the app was deleted
-	AppDeleted bool `json:"app-deleted"`
-
-	// AppIndex App index
-	AppIndex uint64 `json:"app-index"`
-
-	// AppLocalState Stores local state associated with an application.
-	AppLocalState *ApplicationLocalState `json:"app-local-state,omitempty"`
-
-	// AppLocalStateDeleted Whether the app local state was deleted
-	AppLocalStateDeleted bool `json:"app-local-state-deleted"`
-
-	// AppParams Stores the global information associated with an application.
-	AppParams *ApplicationParams `json:"app-params,omitempty"`
 }
 
 // Application Application index and its parameters
@@ -443,35 +389,6 @@ type AssetParams struct {
 	UrlB64 *[]byte `json:"url-b64,omitempty"`
 }
 
-// AssetResourceRecord Represents AssetParams and AssetHolding in deltas
-type AssetResourceRecord struct {
-	// Address Account address of the asset
-	Address string `json:"address"`
-
-	// AssetDeleted Whether the asset was deleted
-	AssetDeleted bool `json:"asset-deleted"`
-
-	// AssetHolding Describes an asset held by an account.
-	//
-	// Definition:
-	// data/basics/userBalance.go : AssetHolding
-	AssetHolding *AssetHolding `json:"asset-holding,omitempty"`
-
-	// AssetHoldingDeleted Whether the asset holding was deleted
-	AssetHoldingDeleted bool `json:"asset-holding-deleted"`
-
-	// AssetIndex Index of the asset
-	AssetIndex uint64 `json:"asset-index"`
-
-	// AssetParams AssetParams specifies the parameters for an asset.
-	//
-	// \[apar\] when part of an AssetConfig transaction.
-	//
-	// Definition:
-	// data/transactions/asset.go : AssetParams
-	AssetParams *AssetParams `json:"asset-params,omitempty"`
-}
-
 // Box Box name and its content.
 type Box struct {
 	// Name \[name\] box name, base64 encoded
@@ -598,32 +515,8 @@ type KvDelta struct {
 	Value *[]byte `json:"value,omitempty"`
 }
 
-// LedgerStateDelta Contains ledger updates.
-type LedgerStateDelta struct {
-	// Accts Exposes deltas for account based resources in a single round
-	Accts *AccountDeltas `json:"accts,omitempty"`
-
-	// KvMods Array of KV Deltas
-	KvMods *[]KvDelta `json:"kv-mods,omitempty"`
-
-	// ModifiedApps List of modified Apps
-	ModifiedApps *[]ModifiedApp `json:"modified-apps,omitempty"`
-
-	// ModifiedAssets List of modified Assets
-	ModifiedAssets *[]ModifiedAsset `json:"modified-assets,omitempty"`
-
-	// PrevTimestamp Previous block timestamp
-	PrevTimestamp *uint64 `json:"prev-timestamp,omitempty"`
-
-	// StateProofNext Next round for which we expect a state proof
-	StateProofNext *uint64 `json:"state-proof-next,omitempty"`
-
-	// Totals Total Algos in the system grouped by account status
-	Totals *AccountTotals `json:"totals,omitempty"`
-
-	// TxLeases List of transaction leases
-	TxLeases *[]TxLease `json:"tx-leases,omitempty"`
-}
+// LedgerStateDelta Ledger StateDelta object
+type LedgerStateDelta = map[string]interface{}
 
 // LightBlockHeaderProof Proof of membership and position of a light block header.
 type LightBlockHeaderProof struct {
@@ -635,30 +528,6 @@ type LightBlockHeaderProof struct {
 
 	// Treedepth Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
 	Treedepth uint64 `json:"treedepth"`
-}
-
-// ModifiedApp App which was created or deleted.
-type ModifiedApp struct {
-	// Created Created if true, deleted if false
-	Created bool `json:"created"`
-
-	// Creator Address of the creator.
-	Creator string `json:"creator"`
-
-	// Id App Id
-	Id uint64 `json:"id"`
-}
-
-// ModifiedAsset Asset which was created or deleted.
-type ModifiedAsset struct {
-	// Created Created if true, deleted if false
-	Created bool `json:"created"`
-
-	// Creator Address of the creator.
-	Creator string `json:"creator"`
-
-	// Id Asset Id
-	Id uint64 `json:"id"`
 }
 
 // ParticipationKey Represents a participation key used by the node.
@@ -784,18 +653,6 @@ type TealValue struct {
 
 	// Uint \[ui\] uint value.
 	Uint uint64 `json:"uint"`
-}
-
-// TxLease defines model for TxLease.
-type TxLease struct {
-	// Expiration Round that the lease expires
-	Expiration uint64 `json:"expiration"`
-
-	// Lease Lease data
-	Lease []byte `json:"lease"`
-
-	// Sender Address of the lease sender
-	Sender string `json:"sender"`
 }
 
 // Version algod version information.
@@ -984,7 +841,7 @@ type GetSyncRoundResponse struct {
 	Round uint64 `json:"round"`
 }
 
-// LedgerStateDeltaResponse Contains ledger updates.
+// LedgerStateDeltaResponse Ledger StateDelta object
 type LedgerStateDeltaResponse = LedgerStateDelta
 
 // LightBlockHeaderProofResponse Proof of membership and position of a light block header.
@@ -1259,6 +1116,15 @@ type GetTransactionProofParamsHashtype string
 
 // GetTransactionProofParamsFormat defines parameters for GetTransactionProof.
 type GetTransactionProofParamsFormat string
+
+// GetLedgerStateDeltaParams defines parameters for GetLedgerStateDelta.
+type GetLedgerStateDeltaParams struct {
+	// Format Configures whether the response object is JSON or MessagePack encoded.
+	Format *GetLedgerStateDeltaParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+}
+
+// GetLedgerStateDeltaParamsFormat defines parameters for GetLedgerStateDelta.
+type GetLedgerStateDeltaParamsFormat string
 
 // ShutdownNodeParams defines parameters for ShutdownNode.
 type ShutdownNodeParams struct {

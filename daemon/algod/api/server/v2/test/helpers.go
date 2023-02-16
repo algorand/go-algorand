@@ -107,34 +107,6 @@ var poolAddrResponseGolden = model.AccountResponse{
 	MinBalance:                  100000,
 }
 var txnPoolGolden = make([]transactions.SignedTxn, 2)
-var poolDeltaResponseGolden = model.LedgerStateDelta{
-	Accts: &model.AccountDeltas{
-		Accounts: &[]model.AccountBalanceRecord{
-			{
-				AccountData: model.Account{
-					Address:                     poolAddr.String(),
-					Amount:                      50000000000,
-					AmountWithoutPendingRewards: 50000000000,
-					MinBalance:                  100000,
-					CreatedApps:                 &[]model.Application{},
-					AppsTotalSchema:             &appsTotalSchema,
-					AppsLocalState:              &[]model.ApplicationLocalState{},
-					Status:                      "Not Participating",
-					RewardBase:                  &poolAddrRewardBaseGolden,
-					CreatedAssets:               &[]model.Asset{},
-					Assets:                      &[]model.AssetHolding{},
-				},
-				Address: poolAddr.String(),
-			},
-		},
-	},
-	Totals: &model.AccountTotals{
-		NotParticipating: 100000000000,
-		Offline:          0,
-		Online:           658511,
-		RewardsLevel:     0,
-	},
-}
 
 // ordinarily mockNode would live in `components/mocks`
 // but doing this would create an import cycle, as mockNode needs

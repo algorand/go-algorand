@@ -165,16 +165,16 @@ func loadTemplate(templateFile string) (NetworkTemplate, error) {
 	}
 	defer f.Close()
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		// for arm machines, use smaller key dilution
-		template.Genesis.PartKeyDilution = 100
-	}
-
 	err = loadTemplateFromReader(f, &template)
 	return template, err
 }
 
 func loadTemplateFromReader(reader io.Reader, template *NetworkTemplate) error {
+
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		// for arm machines, use smaller key dilution
+		template.Genesis.PartKeyDilution = 100
+	}
 	dec := json.NewDecoder(reader)
 	return dec.Decode(template)
 }
@@ -264,6 +264,14 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 
 	if node.DeadlockDetection != 0 {
 		cfg.DeadlockDetection = node.DeadlockDetection
+	}
+
+	if node.ConfigJSONOverride != "" {
+		reader := strings.NewReader(node.ConfigJSONOverride)
+		dec := json.NewDecoder(reader)
+		if err := dec.Decode(&cfg); err != nil {
+			return err
+		}
 	}
 	return cfg.SaveToFile(configFile)
 }

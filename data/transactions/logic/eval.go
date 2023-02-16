@@ -841,9 +841,23 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 
 	if cx.Tracer != nil {
 		cx.Tracer.BeforeProgram(cx)
+
 		defer func() {
+			x := recover()
+			tracerErr := err
+			if x != nil {
+				// A panic error occurred during the eval loop. Report it now.
+				tracerErr = fmt.Errorf("panic in TEAL Eval: %v", x)
+				cx.Tracer.AfterOpcode(cx, tracerErr)
+			}
+
 			// Ensure we update the tracer before exiting
-			cx.Tracer.AfterProgram(cx, err)
+			cx.Tracer.AfterProgram(cx, tracerErr)
+
+			if x != nil {
+				// Panic again to trigger higher-level recovery and error reporting
+				panic(x)
+			}
 		}()
 	}
 
@@ -5029,7 +5043,7 @@ func opItxnField(cx *EvalContext) error {
 	return err
 }
 
-func opItxnSubmit(cx *EvalContext) error {
+func opItxnSubmit(cx *EvalContext) (err error) {
 	// Should rarely trigger, since itxn_next checks these too. (but that check
 	// must be imperfect, see its comment) In contrast to that check, subtxns is
 	// already populated here.
@@ -5177,6 +5191,10 @@ func opItxnSubmit(cx *EvalContext) error {
 
 	if ep.Tracer != nil {
 		ep.Tracer.BeforeTxnGroup(ep)
+		// Ensure we update the tracer before exiting
+		defer func() {
+			ep.Tracer.AfterTxnGroup(ep, err)
+		}()
 	}
 
 	for i := range ep.TxnGroup {
@@ -5185,25 +5203,23 @@ func opItxnSubmit(cx *EvalContext) error {
 		}
 
 		err := cx.Ledger.Perform(i, ep)
+
+		if ep.Tracer != nil {
+			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData, err)
+		}
+
 		if err != nil {
 			return err
 		}
+
 		// This is mostly a no-op, because Perform does its work "in-place", but
 		// RecordAD has some further responsibilities.
 		ep.RecordAD(i, ep.TxnGroup[i].ApplyData)
-
-		if ep.Tracer != nil {
-			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData)
-		}
 	}
 	cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
 	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group
 	cx.innerTxidCache = nil
-
-	if ep.Tracer != nil {
-		ep.Tracer.AfterTxnGroup(ep)
-	}
 
 	return nil
 }
