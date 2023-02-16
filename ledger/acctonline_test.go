@@ -50,8 +50,6 @@ func commitSync(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracker, rnd 
 			ml.trackers.accountsWriting.Add(1)
 
 			// do not take any locks since all operations are synchronous
-			newBase := basics.Round(dcc.offset) + dcc.oldBase
-			dcc.newBase = newBase
 			err := ml.trackers.commitRound(dcc)
 			require.NoError(t, err)
 		}()
@@ -73,8 +71,7 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 			ml.trackers.accountsWriting.Add(1)
 
 			// do not take any locks since all operations are synchronous
-			newBase := basics.Round(dcc.offset) + dcc.oldBase
-			dcc.newBase = newBase
+			newBase := dcc.newBase()
 			dcc.flushTime = time.Now()
 
 			for _, lt := range ml.trackers.trackers {
@@ -102,7 +99,7 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 func commitSyncPartialComplete(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracker, dcc *deferredCommitContext) {
 	defer ml.trackers.accountsWriting.Done()
 
-	ml.trackers.dbRound = dcc.newBase
+	ml.trackers.dbRound = dcc.newBase()
 	for _, lt := range ml.trackers.trackers {
 		lt.postCommit(ml.trackers.ctx, dcc)
 	}

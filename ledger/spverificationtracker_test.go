@@ -73,7 +73,6 @@ func mockCommit(t *testing.T, spt *spVerificationTracker, ml *mockLedgerForTrack
 
 	dcc := deferredCommitContext{
 		deferredCommitRange: dcr,
-		newBase:             newBase,
 	}
 
 	spt.committedUpTo(newBase)

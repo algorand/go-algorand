@@ -112,11 +112,11 @@ func (spt *spVerificationTracker) prepareCommit(dcc *deferredCommitContext) erro
 	spt.mu.RLock()
 	defer spt.mu.RUnlock()
 
-	lastContextToCommitIndex := spt.roundToLatestCommitContextIndex(dcc.newBase)
+	lastContextToCommitIndex := spt.roundToLatestCommitContextIndex(dcc.newBase())
 	dcc.spVerification.CommitContext = make([]verificationCommitContext, lastContextToCommitIndex+1)
 	copy(dcc.spVerification.CommitContext, spt.trackedCommitContext[:lastContextToCommitIndex+1])
 
-	dcc.spVerification.LastDeleteIndex = spt.roundToLatestDeleteContextIndex(dcc.newBase)
+	dcc.spVerification.LastDeleteIndex = spt.roundToLatestDeleteContextIndex(dcc.newBase())
 	if dcc.spVerification.LastDeleteIndex >= 0 {
 		dcc.spVerification.EarliestLastAttestedRound = spt.trackedDeleteContext[dcc.spVerification.LastDeleteIndex].stateProofNextRound
 	}

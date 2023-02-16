@@ -229,15 +229,15 @@ func (vt *votersTracker) prepareCommit(dcc *deferredCommitContext) error {
 	vf := votersFetcher{vt: vt}
 	// In case the listener's function fails, we do not want to break the commit process.
 	// To implement this hierarchy we've decided to not include a return value in OnPrepareVoterCommit function
-	commitListener.OnPrepareVoterCommit(dcc.oldBase, dcc.newBase, &vf)
+	commitListener.OnPrepareVoterCommit(dcc.oldBase, dcc.newBase(), &vf)
 
 	return nil
 }
 
 func (vt *votersTracker) postCommit(dcc *deferredCommitContext) {
-	lastHeaderCommitted, err := vt.l.BlockHdr(dcc.newBase)
+	lastHeaderCommitted, err := vt.l.BlockHdr(dcc.newBase())
 	if err != nil {
-		vt.l.trackerLog().Errorf("votersTracker.postCommit: could not retrieve header for round %d: %v", dcc.newBase, err)
+		vt.l.trackerLog().Errorf("votersTracker.postCommit: could not retrieve header for round %d: %v", dcc.newBase(), err)
 		return
 	}
 
