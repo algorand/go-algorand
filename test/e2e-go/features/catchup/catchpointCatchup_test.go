@@ -400,6 +400,97 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 	}
 }
 
+// TestReadyEndpoint starts a two-node network
+func TestReadyEndpoint(t *testing.T) {
+	//////////
+	// NOTE //
+	//////////
+	// This section is mostly CONSTs and helper function used in this ready endpoint test.
+	//
+	// prepareConsensus and prepareConfig tweak consensus and config to allow primary node on network
+	// `CatchpointCatchupTestNetwork.json` to generate new catchpoints over rounds.
+	const CatchpointInterval = uint64(4)
+	const MaxAcctLookback = uint64(2)
+	const ConfigArchival = true
+	const TargetRound = uint64(18)
+
+	prepareConsensus := func(consensusVersion protocol.ConsensusVersion) config.ConsensusProtocols {
+		consensus := make(config.ConsensusProtocols)
+		newProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
+		// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
+		// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
+		newProtocol.SeedLookback = 2
+		newProtocol.SeedRefreshInterval = 2
+		newProtocol.MaxBalLookback = 2 * newProtocol.SeedLookback * newProtocol.SeedRefreshInterval // 8
+		newProtocol.CatchpointLookback = newProtocol.MaxBalLookback
+		newProtocol.EnableOnlineAccountCatchpoints = true
+		consensus[consensusVersion] = newProtocol
+		return consensus
+	}
+
+	prepareConfig := func(a *require.Assertions, node nodecontrol.NodeController) {
+		cfg, err := config.LoadConfigFromDisk(node.GetDataDir())
+		a.NoError(err)
+		cfg.CatchpointInterval = CatchpointInterval
+		cfg.Archival = ConfigArchival
+		cfg.MaxAcctLookback = MaxAcctLookback
+		a.NoError(cfg.SaveToDisk(node.GetDataDir()))
+	}
+
+	//////////
+	// NOTE //
+	//////////
+	// Following parts are test section
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	// testLogger := logging.TestingLog(t)
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	consensus := prepareConsensus("catchpointtestingprotocol")
+
+	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(consensus)
+
+	errorsCollector := nodeExitErrorCollector{t: fixtures.SynchronizedTest(t)}
+	defer errorsCollector.Print()
+
+	// Set up the network, but we do not want to run it for now
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
+
+	// Get primary node controller
+	pnController, err := fixture.GetNodeController("Primary")
+	a.NoError(err)
+	prepareConfig(a, pnController)
+
+	// start the primary node (which means network starts at this point)
+	_, err = pnController.StartAlgod(nodecontrol.AlgodStartArgs{
+		PeerAddress:       "",
+		ListenIP:          "",
+		RedirectOutput:    true,
+		RunUnderHost:      false,
+		TelemetryOverride: "",
+		ExitErrorCallback: errorsCollector.nodeExitWithError,
+	})
+	a.NoError(err)
+	defer func() {
+		err = pnController.StopAlgod()
+		require.NoError(t, err)
+	}()
+
+	// Let the network make some progress
+	primaryNodeRestClient := fixture.GetAlgodClientForController(pnController)
+	err = fixture.ClientWaitForRoundWithTimeout(primaryNodeRestClient, TargetRound)
+	primaryNodeStatus, err := primaryNodeRestClient.Status()
+	a.NoError(err)
+	a.NotNil(primaryNodeStatus.LastCatchpoint)
+	a.NotEmpty(*primaryNodeStatus.LastCatchpoint) // so this confirms we generate catchpoint (but we want more, catchpoint file)
+
+	//lastCatchpoint := *primaryNodeStatus.LastCatchpoint
+
+	// maybe I should generate a catchpoint file, and copy another node to catchup against that (first let it round by round catchup, test sv time != 0)
+}
+
 // TestNodeTxHandlerRestart starts a two-node and one relay network
 // Waits until a catchpoint is created
 // Lets the primary node have the majority of the stake

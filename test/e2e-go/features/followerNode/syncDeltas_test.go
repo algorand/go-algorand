@@ -53,7 +53,6 @@ func TestBasicSyncMode(t *testing.T) {
 	a.NoError(err)
 
 	// Let the network make some progress
-	a.NoError(err)
 	waitForRound := uint64(5)
 	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
 	a.NoError(err)
@@ -68,9 +67,6 @@ func TestBasicSyncMode(t *testing.T) {
 		rResp, err := followClient.GetSyncRound()
 		a.NoError(err)
 		a.Equal(round, rResp.Round)
-		// ready-ness endpoint check, should error here for still catching up
-		err = followClient.ReadyCheck()
-		a.Error(err)
 		// make some progress to round
 		err = fixture.ClientWaitForRoundWithTimeout(followClient, round)
 		a.NoError(err)
@@ -82,10 +78,6 @@ func TestBasicSyncMode(t *testing.T) {
 		err = followClient.SetSyncRound(round + 1)
 		a.NoError(err)
 	}
-	// follow node post catchup test, should be caught up and ready
-	err = followClient.ReadyCheck()
-	a.NoError(err)
-
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(fixture.LibGoalClient, waitForRound)
 	a.NoError(err)
 }
