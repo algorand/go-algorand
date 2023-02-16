@@ -77,6 +77,9 @@ func (spt *spVerificationTracker) loadFromDisk(l ledgerForTracker, _ basics.Roun
 	spt.mu.Lock()
 	defer spt.mu.Unlock()
 
+	// reset the cache
+	spt.lastLookedUpVerificationContext = ledgercore.StateProofVerificationContext{}
+
 	const initialContextArraySize = 10
 	spt.trackedCommitContext = make([]verificationCommitContext, 0, initialContextArraySize)
 	spt.trackedDeleteContext = make([]verificationDeleteContext, 0, initialContextArraySize)

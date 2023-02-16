@@ -177,7 +177,7 @@ func createBuilder(rnd basics.Round, votersFetcher ledgercore.LedgerForSPBuilder
 	if err != nil {
 		return builder{}, err
 	}
-	
+
 	msg, err := GenerateStateProofMessage(votersFetcher, rnd)
 	if err != nil {
 		return builder{}, err
