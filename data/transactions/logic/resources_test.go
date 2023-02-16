@@ -17,6 +17,7 @@
 package logic_test
 
 import (
+	"encoding/binary"
 	"fmt"
 	"testing"
 
@@ -123,6 +124,45 @@ int 1
 	require.Equal(t, ep.TxnGroup[0].Txn.Sender, ed.SharedAccts[0])
 }
 
+// TestBetterLocalErrors convirms that we get specific errors about the missing
+// address or app when accessesing a Local State with only one available.
+func TestBetterLocalErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	joe := basics.Address{9, 9, 9}
+
+	ep, tx, ledger := logic.MakeSampleEnv()
+	ledger.NewAccount(joe, 5000000)
+	ledger.NewApp(joe, 500, basics.AppParams{})
+	ledger.NewLocals(joe, 500)
+
+	getLocalEx := `
+txn ApplicationArgs 0
+txn ApplicationArgs 1; btoi
+byte "some-key"
+app_local_get_ex
+pop; pop; int 1
+`
+	app := make([]byte, 8)
+	binary.BigEndian.PutUint64(app, 500)
+
+	tx.ApplicationArgs = [][]byte{joe[:], app}
+	logic.TestApp(t, getLocalEx, ep, "invalid Local State")
+	tx.Accounts = []basics.Address{joe}
+	logic.TestApp(t, getLocalEx, ep, "invalid App reference 500")
+	tx.ForeignApps = []basics.AppIndex{500}
+	logic.TestApp(t, getLocalEx, ep)
+	binary.BigEndian.PutUint64(tx.ApplicationArgs[1], 1)
+	logic.TestApp(t, getLocalEx, ep)
+	binary.BigEndian.PutUint64(tx.ApplicationArgs[1], 2) // beyond the txn.ForeignApps array
+	logic.TestApp(t, getLocalEx, ep, "invalid App reference 2")
+
+	binary.BigEndian.PutUint64(tx.ApplicationArgs[1], 1)
+	tx.Accounts = []basics.Address{}
+	logic.TestApp(t, getLocalEx, ep, "invalid Account reference "+joe.String())
+}
+
 // TestAssetSharing confirms that as of v9, assets can be accessed across
 // groups, but that before then, they could not.
 func TestAssetSharing(t *testing.T) {
@@ -177,6 +217,44 @@ pop; pop; int 1
 	// But it's ok in appl2, because the same account is used, even though the
 	// foreign-asset is not repeated in appl2.
 	logic.TestApps(t, sources, txntest.Group(&appl0, &appl2), 9, nil)
+}
+
+// TestBetterHoldingErrors convirms that we get specific errors about the missing
+// address or asa when accessesing a holding with only one available.
+func TestBetterHoldingErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	joe := basics.Address{9, 9, 9}
+
+	ep, tx, ledger := logic.MakeSampleEnv()
+	ledger.NewAccount(joe, 5000000)
+	ledger.NewAsset(joe, 200, basics.AssetParams{})
+	// as creator, joe will also be opted in
+
+	getHoldingBalance := `
+txn ApplicationArgs 0
+txn ApplicationArgs 1; btoi
+asset_holding_get AssetBalance
+pop; pop; int 1
+`
+	asa := make([]byte, 8)
+	binary.BigEndian.PutUint64(asa, 200)
+
+	tx.ApplicationArgs = [][]byte{joe[:], asa}
+	logic.TestApp(t, getHoldingBalance, ep, "invalid Holding access "+joe.String())
+	tx.Accounts = []basics.Address{joe}
+	logic.TestApp(t, getHoldingBalance, ep, "invalid Asset reference 200")
+	tx.ForeignAssets = []basics.AssetIndex{200}
+	logic.TestApp(t, getHoldingBalance, ep)
+	binary.BigEndian.PutUint64(tx.ApplicationArgs[1], 0)
+	logic.TestApp(t, getHoldingBalance, ep)
+	binary.BigEndian.PutUint64(tx.ApplicationArgs[1], 1) // beyond the txn.ForeignAssets array
+	logic.TestApp(t, getHoldingBalance, ep, "invalid Asset reference 1")
+
+	binary.BigEndian.PutUint64(tx.ApplicationArgs[1], 0)
+	tx.Accounts = []basics.Address{}
+	logic.TestApp(t, getHoldingBalance, ep, "invalid Account reference "+joe.String())
 }
 
 // TestNewAppAccount checks whether a newly created app can put its own address

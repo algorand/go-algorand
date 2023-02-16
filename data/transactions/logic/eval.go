@@ -4236,9 +4236,9 @@ func opAppGlobalGetEx(cx *EvalContext) error {
 }
 
 // ensureLocalDelta is used to get accountIdx that is usable in the LocalDeltas
-// of the EvalDelta. The input accountIdx is "tentative" - if it's longer that
-// the txn.Accounts, then we may need to add the address into SharedAccounts,
-// and index into it.
+// of the EvalDelta. The input accountIdx is "tentative" - if it's longer than
+// txn.Accounts, then we may need to add the address into SharedAccounts, and
+// index into it.
 func (cx *EvalContext) ensureLocalDelta(accountIdx uint64, addr basics.Address) uint64 {
 	if accountIdx > uint64(len(cx.txn.Txn.Accounts)) {
 		// the returned accountIdx was just a signal that the account was
