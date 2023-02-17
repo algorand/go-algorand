@@ -49,13 +49,13 @@ type UnverifiedSigJob interface {
 
 // SigVerifyJobProcessor is the interface of the functions needed to extract signatures from the input jobs, post-process the results,
 // send the results and cleanup when shutting down.
-type ElementProcessor interface {
+type SigVerifyJobProcessor interface {
 	// ProcessElements processes a batch packed from the stream in the execpool
-	ProcessElements(uelts []UnverifiedElement)
+	ProcessElements(uelts []UnverifiedSigJob)
 	// GetErredUnverified returns an unverified jobs because of the err
-	GetErredUnverified(ue UnverifiedElement, err error)
-	// Cleanup called on the unverified elements when the verification shuts down
-	Cleanup(ue []UnverifiedElement, err error)
+	GetErredUnverified(ue UnverifiedSigJob, err error)
+	// Cleanup called on the unverified jobs when the verification shuts down
+	Cleanup(ue []UnverifiedSigJob, err error)
 }
 
 // StreamVerifier verifies signatures in input jobs received through the inputChan channel, and returns the
@@ -212,7 +212,7 @@ func (sv *StreamVerifier) addVerificationTaskToThePoolNow(unvrifiedElts []Unveri
 			return nil
 		}
 
-		sv.ep.ProcessElements(uElmts)
+		sv.verifyProcessor.ProcessElements(uElmts)
 		return nil
 	}
 

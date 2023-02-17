@@ -701,14 +701,14 @@ func MakeSigVerifyJobProcessor(ledger LedgerForStreamVerifier, cache VerifiedTra
 	}, nil
 }
 
-func (svh *txnElementProcessor) ProcessElements(uEmts []UnverifiedElement) {
+func (svh *txnSigVerifyJobProcessor) ProcessElements(uEmts []UnverifiedSigJob) {
 	batchVerifier, ctx := svh.preProcessUnverifiedElements(uEmts)
 	failed, err := batchVerifier.VerifyWithFeedback()
 	// this error can only be crypto.ErrBatchHasFailedSigs
-	svh.postProcessVerifiedElements(ctx, failed, err)
+	svh.postProcessVerifiedJobs(ctx, failed, err)
 }
 
-func (svp *txnElementProcessor) preProcessUnverifiedElements(uelts []UnverifiedSigJob) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
+func (svp *txnSigVerifyJobProcessor) preProcessUnverifiedElements(uelts []UnverifiedSigJob) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
 	batchVerifier = crypto.MakeBatchVerifier()
 	bl := makeBatchLoad(len(uelts))
 	// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
