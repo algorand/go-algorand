@@ -138,7 +138,7 @@ func RunMigrations(ctx context.Context, tx *sql.Tx, params trackerdb.Params, log
 		tu.log.Infof("trackerDBInitialize database schema upgrade complete")
 	}
 
-	return trackerdb.InitParams{tu.schemaVersion, tu.vacuumOnStartup}, nil
+	return trackerdb.InitParams{SchemaVersion: tu.schemaVersion, VacuumOnStartup: tu.vacuumOnStartup}, nil
 }
 
 func (tu *trackerDBSchemaInitializer) setVersion(ctx context.Context, tx *sql.Tx, version int32) (err error) {
