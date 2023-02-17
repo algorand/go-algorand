@@ -148,6 +148,7 @@ func (ard *hostIncomingRequests) countConnections(rateLimitingWindowStartTime ti
 	return uint(len(ard.requests) - i + len(ard.additionalHostRequests))
 }
 
+//msgp:ignore hostsIncomingMap
 type hostsIncomingMap map[string]*hostIncomingRequests
 
 // pruneRequests cleans stale items from the hostRequests maps

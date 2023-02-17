@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -361,8 +360,11 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
-	err = ml.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
-		arw := store.NewAccountsSQLReaderWriter(tx)
+	err = ml.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		arw, err := tx.MakeAccountsReaderWriter()
+		if err != nil {
+			return err
+		}
 
 		for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
 			var updates compactAccountDeltas
@@ -394,8 +396,9 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
+		t.Skip("This test is too slow on ARM and causes CI builds to time out")
 	}
+
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -581,7 +584,7 @@ func (bt *blockingTracker) prepareCommit(*deferredCommitContext) error {
 }
 
 // commitRound is not used by the blockingTracker
-func (bt *blockingTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+func (bt *blockingTracker) commitRound(context.Context, store.TransactionScope, *deferredCommitContext) error {
 	return nil
 }
 
@@ -1003,7 +1006,7 @@ func TestFirstStagePersistence(t *testing.T) {
 	defer ml2.Close()
 	ml.Close()
 
-	cps2, err := ml2.dbs.CreateCatchpointReaderWriter()
+	cps2, err := ml2.dbs.MakeCatchpointReaderWriter()
 	require.NoError(t, err)
 
 	// Insert unfinished first stage record.
@@ -1133,7 +1136,7 @@ func TestSecondStagePersistence(t *testing.T) {
 	err = os.WriteFile(catchpointDataFilePath, catchpointData, 0644)
 	require.NoError(t, err)
 
-	cps2, err := ml2.dbs.CreateCatchpointReaderWriter()
+	cps2, err := ml2.dbs.MakeCatchpointReaderWriter()
 	require.NoError(t, err)
 
 	// Restore the first stage database record.
@@ -1325,7 +1328,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 	defer ml2.Close()
 	ml.Close()
 
-	cps2, err := ml2.dbs.CreateCatchpointReaderWriter()
+	cps2, err := ml2.dbs.MakeCatchpointReaderWriter()
 	require.NoError(t, err)
 
 	// Sanity check: first stage record should be deleted.
@@ -1492,8 +1495,9 @@ func TestCatchpointFastUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
+		t.Skip("This test is too slow on ARM and causes CI builds to time out")
 	}
+
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
