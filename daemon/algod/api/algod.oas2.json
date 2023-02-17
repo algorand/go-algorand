@@ -3532,7 +3532,7 @@
         "msgpack"
       ],
       "type": "string",
-      "description": "Configures whether the response object is JSON or MessagePack encoded.",
+      "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
       "name": "format",
       "in": "query"
     },

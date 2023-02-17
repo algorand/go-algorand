@@ -103,7 +103,7 @@
         }
       },
       "format": {
-        "description": "Configures whether the response object is JSON or MessagePack encoded.",
+        "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
         "in": "query",
         "name": "format",
         "schema": {
@@ -2138,7 +2138,7 @@
         "operationId": "AccountInformation",
         "parameters": [
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -2251,7 +2251,7 @@
         "operationId": "AccountApplicationInformation",
         "parameters": [
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -2391,7 +2391,7 @@
         "operationId": "AccountAssetInformation",
         "parameters": [
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -2549,7 +2549,7 @@
             }
           },
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -3024,7 +3024,7 @@
         "operationId": "GetBlock",
         "parameters": [
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -3379,7 +3379,7 @@
             }
           },
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -3686,7 +3686,7 @@
             }
           },
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -5418,7 +5418,7 @@
             }
           },
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -5559,7 +5559,7 @@
             }
           },
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -5649,7 +5649,7 @@
         "operationId": "SimulateTransaction",
         "parameters": [
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {

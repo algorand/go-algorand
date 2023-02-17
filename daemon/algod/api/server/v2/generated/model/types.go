@@ -1066,7 +1066,7 @@ type VersionsResponse = Version
 
 // AccountInformationParams defines parameters for AccountInformation.
 type AccountInformationParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *AccountInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 
 	// Exclude When set to `all` will exclude asset holdings, application local state, created asset parameters, any created application parameters. Defaults to `none`.
@@ -1081,7 +1081,7 @@ type AccountInformationParamsExclude string
 
 // AccountApplicationInformationParams defines parameters for AccountApplicationInformation.
 type AccountApplicationInformationParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *AccountApplicationInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1090,7 +1090,7 @@ type AccountApplicationInformationParamsFormat string
 
 // AccountAssetInformationParams defines parameters for AccountAssetInformation.
 type AccountAssetInformationParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *AccountAssetInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1102,7 +1102,7 @@ type GetPendingTransactionsByAddressParams struct {
 	// Max Truncated number of transactions to display. If max=0, returns all pending txns.
 	Max *uint64 `form:"max,omitempty" json:"max,omitempty"`
 
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetPendingTransactionsByAddressParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1123,7 +1123,7 @@ type GetApplicationBoxesParams struct {
 
 // GetBlockParams defines parameters for GetBlock.
 type GetBlockParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetBlockParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1137,7 +1137,7 @@ type GetTransactionProofParams struct {
 	// * sha256
 	Hashtype *GetTransactionProofParamsHashtype `form:"hashtype,omitempty" json:"hashtype,omitempty"`
 
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetTransactionProofParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1149,7 +1149,7 @@ type GetTransactionProofParamsFormat string
 
 // GetLedgerStateDeltaParams defines parameters for GetLedgerStateDelta.
 type GetLedgerStateDeltaParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetLedgerStateDeltaParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1175,7 +1175,7 @@ type GetPendingTransactionsParams struct {
 	// Max Truncated number of transactions to display. If max=0, returns all pending txns.
 	Max *uint64 `form:"max,omitempty" json:"max,omitempty"`
 
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetPendingTransactionsParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1184,7 +1184,7 @@ type GetPendingTransactionsParamsFormat string
 
 // PendingTransactionInformationParams defines parameters for PendingTransactionInformation.
 type PendingTransactionInformationParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *PendingTransactionInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1193,7 +1193,7 @@ type PendingTransactionInformationParamsFormat string
 
 // SimulateTransactionParams defines parameters for SimulateTransaction.
 type SimulateTransactionParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *SimulateTransactionParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 

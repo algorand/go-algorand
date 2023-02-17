@@ -91,7 +91,7 @@ func byteOrNil(data []byte) *[]byte {
 	return &data
 }
 
-func boolOrNil(b bool) *bool {
+func trueOrNil(b bool) *bool {
 	if !b {
 		return nil
 	}
@@ -356,7 +356,7 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 func convertTxnResult(txnResult simulation.TxnResult) preEncodedTxnResult {
 	return preEncodedTxnResult{
 		Txn:              ConvertInnerTxn(&txnResult.Txn),
-		MissingSignature: boolOrNil(txnResult.MissingSignature),
+		MissingSignature: trueOrNil(txnResult.MissingSignature),
 	}
 }
 
