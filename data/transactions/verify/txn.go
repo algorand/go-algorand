@@ -701,7 +701,15 @@ func MakeSigVerifyJobProcessor(ledger LedgerForStreamVerifier, cache VerifiedTra
 	}, nil
 }
 
-func (svp *txnSigVerifyJobProcessor) AddSigsToBatch(uelts []UnverifiedSigJob, batchVerifier *crypto.BatchVerifier) (batchedJobCtx interface{}) {
+func (svh *txnElementProcessor) ProcessElements(uEmts []UnverifiedElement) {
+	batchVerifier, ctx := svh.preProcessUnverifiedElements(uEmts)
+	failed, err := batchVerifier.VerifyWithFeedback()
+	// this error can only be crypto.ErrBatchHasFailedSigs
+	svh.postProcessVerifiedElements(ctx, failed, err)
+}
+
+func (svp *txnElementProcessor) preProcessUnverifiedElements(uelts []UnverifiedSigJob) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
+	batchVerifier = crypto.MakeBatchVerifier()
 	bl := makeBatchLoad(len(uelts))
 	// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
 	blockHeader := svp.nbw.getBlockHeader()
@@ -717,7 +725,7 @@ func (svp *txnSigVerifyJobProcessor) AddSigsToBatch(uelts []UnverifiedSigJob, ba
 		totalBatchCount := batchVerifier.GetNumberOfEnqueuedSignatures()
 		bl.addLoad(ue.TxnGroup, groupCtx, ue.BacklogMessage, totalBatchCount)
 	}
-	return bl
+	return batchVerifier, bl
 }
 
 // GetNumberOfBatchableSigsInGroup returns the number of batchable signatures in the txn group
@@ -761,8 +769,8 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (uint64, error) 
 	}
 }
 
-func (svp *txnSigVerifyJobProcessor) PostProcessVerifiedJobs(batchedJobCtx interface{}, failed []bool, err error) {
-	bl := batchedJobCtx.(*batchLoad)
+func (svp *txnSigVerifyJobProcessor) postProcessVerifiedJobs(ctx interface{}, failed []bool, err error) {
+	bl := ctx.(*batchLoad)
 	if err == nil { // success, all signatures verified
 		for i := range bl.txnGroups {
 			svp.sendResult(bl.txnGroups[i], bl.backlogMessage[i], nil)

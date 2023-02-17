@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/execpool"
 )
@@ -50,16 +49,13 @@ type UnverifiedSigJob interface {
 
 // SigVerifyJobProcessor is the interface of the functions needed to extract signatures from the input jobs, post-process the results,
 // send the results and cleanup when shutting down.
-type SigVerifyJobProcessor interface {
-	// AddSigsToBatch adds the signaturs in the array of verification jobs to the batchVerifier
-	// batchedJobCtx is anything associated with the array of jobs, which will be passed to PostProcessVerifiedJobs
-	AddSigsToBatch(uelts []UnverifiedSigJob, batchVerifier *crypto.BatchVerifier) (batchedJobCtx interface{})
-	// PostProcessVerifiedJobs implments the passing of the results to their destination (batchedJobCtx from AddSigsToBatch)
-	PostProcessVerifiedJobs(batchedJobCtx interface{}, failed []bool, err error)
+type ElementProcessor interface {
+	// ProcessElements processes a batch packed from the stream in the execpool
+	ProcessElements(uelts []UnverifiedElement)
 	// GetErredUnverified returns an unverified jobs because of the err
-	GetErredUnverified(ue UnverifiedSigJob, err error)
-	// Cleanup called on the unverified jobs when the verification shuts down
-	Cleanup(ue []UnverifiedSigJob, err error)
+	GetErredUnverified(ue UnverifiedElement, err error)
+	// Cleanup called on the unverified elements when the verification shuts down
+	Cleanup(ue []UnverifiedElement, err error)
 }
 
 // StreamVerifier verifies signatures in input jobs received through the inputChan channel, and returns the
@@ -216,14 +212,7 @@ func (sv *StreamVerifier) addVerificationTaskToThePoolNow(unvrifiedElts []Unveri
 			return nil
 		}
 
-		batchVerifier := crypto.MakeBatchVerifier()
-
-		batchedJobCtx := sv.verifyProcessor.AddSigsToBatch(uElmts, batchVerifier)
-
-		failed, err := batchVerifier.VerifyWithFeedback()
-		// this error can only be crypto.ErrBatchHasFailedSigs
-
-		sv.verifyProcessor.PostProcessVerifiedJobs(batchedJobCtx, failed, err)
+		sv.ep.ProcessElements(uElmts)
 		return nil
 	}
 
