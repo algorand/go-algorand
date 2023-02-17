@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/execpool"
 )
@@ -53,9 +52,7 @@ type UnverifiedElement interface {
 type ElementProcessor interface {
 	// PreProcessUnverifiedElements prepares a BatchVerifier from an array of unverified elements
 	// ctx is anything associated with the array of elements, which will be passed to PostProcessVerifiedElements
-	PreProcessUnverifiedElements(uelts []UnverifiedElement) (batchVerifier *crypto.BatchVerifier, ctx interface{})
-	// PostProcessVerifiedElements implments the passing of the results to their destination (cts from PreProcessUnverifiedElements)
-	PostProcessVerifiedElements(ctx interface{}, failed []bool, err error)
+	ProcessElements(uelts []UnverifiedElement)
 	// GetErredUnverified returns an unverified element because of the err
 	GetErredUnverified(ue UnverifiedElement, err error)
 	// Cleanup called on the unverified elements when the verification shuts down
@@ -216,12 +213,7 @@ func (sv *StreamVerifier) addVerificationTaskToThePoolNow(unvrifiedElts []Unveri
 			return nil
 		}
 
-		batchVerifier, ctx := sv.ep.PreProcessUnverifiedElements(uElmts)
-
-		failed, err := batchVerifier.VerifyWithFeedback()
-		// this error can only be crypto.ErrBatchHasFailedSigs
-
-		sv.ep.PostProcessVerifiedElements(ctx, failed, err)
+		sv.ep.ProcessElements(uElmts)
 		return nil
 	}
 

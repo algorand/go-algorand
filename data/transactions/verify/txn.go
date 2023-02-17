@@ -710,7 +710,14 @@ func MakeElementProcessor(ledger LedgerForStreamVerifier, cache VerifiedTransact
 	}, nil
 }
 
-func (svh *txnElementProcessor) PreProcessUnverifiedElements(uelts []UnverifiedElement) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
+func (svh *txnElementProcessor) ProcessElements(uEmts []UnverifiedElement) {
+	batchVerifier, ctx := svh.preProcessUnverifiedElements(uEmts)
+	failed, err := batchVerifier.VerifyWithFeedback()
+	// this error can only be crypto.ErrBatchHasFailedSigs
+	svh.postProcessVerifiedElements(ctx, failed, err)
+}
+
+func (svh *txnElementProcessor) preProcessUnverifiedElements(uelts []UnverifiedElement) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
 	batchVerifier = crypto.MakeBatchVerifier()
 	bl := makeBatchLoad(len(uelts))
 	// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
@@ -771,7 +778,7 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (uint64, error) 
 	}
 }
 
-func (svh *txnElementProcessor) PostProcessVerifiedElements(ctx interface{}, failed []bool, err error) {
+func (svh *txnElementProcessor) postProcessVerifiedElements(ctx interface{}, failed []bool, err error) {
 	bl := ctx.(*batchLoad)
 	if err == nil { // success, all signatures verified
 		for i := range bl.txnGroups {
