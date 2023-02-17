@@ -3255,10 +3255,22 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 // Plan:
 // Network A will be sending messages to network B.
 // Network B will respond with another message for the first 4 messages. When it receive the 5th message, it would close the connection.
-// We want to get an event with disconnectRequestReceived
 func TestWebsocketDisconnection(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	// We want to get an event with disconnectRequestReceived
+	testWebsocketDisconnection(t, func(wn *WebsocketNetwork, _ *OutgoingMessage) {
+		wn.DisconnectPeers()
+	}, disconnectRequestReceived)
+
+	// We want to get an event with the provided reason
+	testWebsocketDisconnection(t, func(_ *WebsocketNetwork, out *OutgoingMessage) {
+		out.Action = Disconnect
+		out.reason = "MyCustomDisconnectReason"
+	}, "MyCustomDisconnectReason")
+}
+
+func testWebsocketDisconnection(t *testing.T, disconnectFunc func(wn *WebsocketNetwork, out *OutgoingMessage), expectedDisconnectReason disconnectReason) {
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
 	netA.config.EnablePingHandler = false
