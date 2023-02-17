@@ -181,7 +181,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
-	ao.accountsq, err = ao.dbs.MakeOnlineAccountsReader()
+	ao.accountsq, err = ao.dbs.MakeOnlineAccountsOptimizedReader()
 	if err != nil {
 		return
 	}

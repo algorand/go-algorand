@@ -107,11 +107,11 @@ func (s *trackerSQLStore) TransactionContext(ctx context.Context, fn trackerdb.T
 	})
 }
 
-func (s *trackerSQLStore) MakeAccountsReader() (trackerdb.AccountsReader, error) {
+func (s *trackerSQLStore) MakeAccountsOptimizedReader() (trackerdb.AccountsReader, error) {
 	return AccountsInitDbQueries(s.pair.Rdb.Handle)
 }
 
-func (s *trackerSQLStore) MakeOnlineAccountsReader() (trackerdb.OnlineAccountsReader, error) {
+func (s *trackerSQLStore) MakeOnlineAccountsOptimizedReader() (trackerdb.OnlineAccountsReader, error) {
 	return OnlineAccountsInitDbQueries(s.pair.Rdb.Handle)
 }
 

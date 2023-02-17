@@ -334,7 +334,7 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Rou
 		return err
 	}
 
-	ct.accountsq, err = ct.dbs.MakeAccountsReader()
+	ct.accountsq, err = ct.dbs.MakeAccountsOptimizedReader()
 	if err != nil {
 		return
 	}

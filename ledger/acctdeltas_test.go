@@ -655,7 +655,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		accounts := benchmarkInitBalances(b, b.N, tx, protocol.ConsensusCurrentVersion)
 
-		ar, err := dbs.MakeAccountsReader()
+		ar, err := dbs.MakeAccountsOptimizedReader()
 		require.NoError(b, err)
 		defer ar.Close()
 
@@ -825,7 +825,7 @@ func TestLookupKeysByPrefix(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	qs, err := dbs.MakeAccountsReader()
+	qs, err := dbs.MakeAccountsOptimizedReader()
 	require.NoError(t, err)
 	defer qs.Close()
 
@@ -1011,7 +1011,7 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 	})
 	require.NoError(b, err)
 
-	qs, err := dbs.MakeAccountsReader()
+	qs, err := dbs.MakeAccountsOptimizedReader()
 	require.NoError(b, err)
 	defer qs.Close()
 

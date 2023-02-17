@@ -951,7 +951,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
-	au.accountsq, err = au.dbs.MakeAccountsReader()
+	au.accountsq, err = au.dbs.MakeAccountsOptimizedReader()
 	if err != nil {
 		return
 	}

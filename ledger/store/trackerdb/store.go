@@ -95,8 +95,8 @@ type TrackerStore interface {
 	Transaction(fn TransactionFn) (err error)
 	TransactionContext(ctx context.Context, fn TransactionFn) (err error)
 
-	MakeAccountsReader() (AccountsReader, error)
-	MakeOnlineAccountsReader() (OnlineAccountsReader, error)
+	MakeAccountsOptimizedReader() (AccountsReader, error)
+	MakeOnlineAccountsOptimizedReader() (OnlineAccountsReader, error)
 
 	MakeCatchpointReaderWriter() (CatchpointReaderWriter, error)
 
