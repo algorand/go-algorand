@@ -458,7 +458,7 @@ func TestReadyEndpoint(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	// testLogger := logging.TestingLog(t)
+	testLogger := logging.TestingLog(t)
 	a := require.New(fixtures.SynchronizedTest(t))
 	var fixture fixtures.RestClientFixture
 
@@ -495,9 +495,24 @@ func TestReadyEndpoint(t *testing.T) {
 	a.NoError(err)
 	prepareSecondConfig(a, pnController)
 
+	primaryListeningAddress, err := pnController.GetListeningAddress()
+	a.NoError(err)
+
+	wp, err := fixtures.MakeWebProxy(primaryListeningAddress, testLogger, func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
+		// prevent requests for block #2 to go through.
+		if request.URL.String() == "/v1/test-v1/block/2" {
+			response.WriteHeader(http.StatusBadRequest)
+			response.Write([]byte("webProxy prevents block 2 from serving"))
+			return
+		}
+		next(response, request)
+	})
+	a.NoError(err)
+	defer wp.Close()
+
 	// start the second node controller
 	_, err = n2ndController.StartAlgod(nodecontrol.AlgodStartArgs{
-		PeerAddress:       "",
+		PeerAddress:       wp.GetListenAddress(),
 		ListenIP:          "",
 		RedirectOutput:    true,
 		RunUnderHost:      false,
