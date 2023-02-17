@@ -449,7 +449,7 @@ func printStateProofVerificationContext(databaseName string, outFile *os.File) e
 
 	var stateProofVerificationContext []ledgercore.StateProofVerificationContext
 	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		stateProofVerificationContext, err = store.MakeSPVerificationAccessor(tx).GetAllSPContextsFromCatchpointTbl(ctx)
+		stateProofVerificationContext, err = store.MakeStateProofVerificationReader(tx).GetAllSPContextsFromCatchpointTbl(ctx)
 		return err
 	})
 

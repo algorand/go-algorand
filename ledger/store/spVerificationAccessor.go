@@ -18,28 +18,51 @@ package store
 
 import (
 	"context"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
 
-// SPVerificationAccessor is used to read and write state proof verification contexts
-type SPVerificationAccessor struct {
+type stateProofVerificationReader struct {
+	q db.Queryable
+}
+
+type stateProofVerificationWriter struct {
 	e db.Executable
 }
 
-// MakeSPVerificationAccessor returns accessor that allows reading and writing of state proof verification
-// contexts
-func MakeSPVerificationAccessor(e db.Executable) *SPVerificationAccessor {
-	return &SPVerificationAccessor{e: e}
+type stateProofVerificationReaderWriter struct {
+	stateProofVerificationReader
+	stateProofVerificationWriter
+}
+
+func makeStateProofVerificationReader(q db.Queryable) *stateProofVerificationReader {
+	return &stateProofVerificationReader{q: q}
+}
+
+func makeStateProofVerificationWriter(e db.Executable) *stateProofVerificationWriter {
+	return &stateProofVerificationWriter{e: e}
+}
+
+func makeStateProofVerificationReaderWriter(q db.Queryable, e db.Executable) *stateProofVerificationReaderWriter {
+	return &stateProofVerificationReaderWriter{
+		stateProofVerificationReader{q: q},
+		stateProofVerificationWriter{e: e},
+	}
+}
+
+// MakeStateProofVerificationReader returns StateProofReader for accessing from outside of ledger
+func MakeStateProofVerificationReader(q db.Queryable) StateProofReader {
+	return makeStateProofVerificationReader(q)
 }
 
 // LookupSPContext retrieves stateproof verification context from the database.
-func (spa *SPVerificationAccessor) LookupSPContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+func (spa *stateProofVerificationReader) LookupSPContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	verificationContext := ledgercore.StateProofVerificationContext{}
 	queryFunc := func() error {
-		row := spa.e.QueryRow("SELECT verificationcontext FROM stateproofverification WHERE lastattestedround=?", stateProofLastAttestedRound)
+		row := spa.q.QueryRow("SELECT verificationcontext FROM stateproofverification WHERE lastattestedround=?", stateProofLastAttestedRound)
 		var buf []byte
 		err := row.Scan(&buf)
 		if err != nil {
@@ -57,13 +80,13 @@ func (spa *SPVerificationAccessor) LookupSPContext(stateProofLastAttestedRound b
 }
 
 // DeleteOldSPContexts removes a single state proof verification data from the database.
-func (spa *SPVerificationAccessor) DeleteOldSPContexts(ctx context.Context, earliestLastAttestedRound basics.Round) error {
+func (spa *stateProofVerificationWriter) DeleteOldSPContexts(ctx context.Context, earliestLastAttestedRound basics.Round) error {
 	_, err := spa.e.ExecContext(ctx, "DELETE FROM stateproofverification WHERE lastattestedround < ?", earliestLastAttestedRound)
 	return err
 }
 
 // StoreSPContexts stores a single state proof verification context to database
-func (spa *SPVerificationAccessor) StoreSPContexts(ctx context.Context, verificationContext []*ledgercore.StateProofVerificationContext) error {
+func (spa *stateProofVerificationWriter) StoreSPContexts(ctx context.Context, verificationContext []*ledgercore.StateProofVerificationContext) error {
 	spWriteStmt, err := spa.e.PrepareContext(ctx, "INSERT INTO stateProofVerification(lastattestedround, verificationContext) VALUES(?, ?)")
 	if err != nil {
 		return err
@@ -79,7 +102,7 @@ func (spa *SPVerificationAccessor) StoreSPContexts(ctx context.Context, verifica
 }
 
 // StoreSPContextsToCatchpointTbl stores state proof verification contexts to catchpoint staging table
-func (spa *SPVerificationAccessor) StoreSPContextsToCatchpointTbl(ctx context.Context, verificationContexts []ledgercore.StateProofVerificationContext) error {
+func (spa *stateProofVerificationWriter) StoreSPContextsToCatchpointTbl(ctx context.Context, verificationContexts []ledgercore.StateProofVerificationContext) error {
 	spWriteStmt, err := spa.e.PrepareContext(ctx, "INSERT INTO catchpointstateproofverification(lastattestedround, verificationContext) VALUES(?, ?)")
 	if err != nil {
 		return err
@@ -95,19 +118,19 @@ func (spa *SPVerificationAccessor) StoreSPContextsToCatchpointTbl(ctx context.Co
 }
 
 // GetAllSPContexts returns all contexts needed to verify state proofs.
-func (spa *SPVerificationAccessor) GetAllSPContexts(ctx context.Context) ([]ledgercore.StateProofVerificationContext, error) {
+func (spa *stateProofVerificationReader) GetAllSPContexts(ctx context.Context) ([]ledgercore.StateProofVerificationContext, error) {
 	return spa.getAllSPContextsInternal(ctx, "SELECT verificationContext FROM stateProofVerification ORDER BY lastattestedround")
 }
 
 // GetAllSPContextsFromCatchpointTbl returns all state proof verification data from the catchpointStateProofVerification table.
-func (spa *SPVerificationAccessor) GetAllSPContextsFromCatchpointTbl(ctx context.Context) ([]ledgercore.StateProofVerificationContext, error) {
+func (spa *stateProofVerificationReader) GetAllSPContextsFromCatchpointTbl(ctx context.Context) ([]ledgercore.StateProofVerificationContext, error) {
 	return spa.getAllSPContextsInternal(ctx, "SELECT verificationContext FROM catchpointStateProofVerification ORDER BY lastattestedround")
 }
 
-func (spa *SPVerificationAccessor) getAllSPContextsInternal(ctx context.Context, query string) ([]ledgercore.StateProofVerificationContext, error) {
+func (spa *stateProofVerificationReader) getAllSPContextsInternal(ctx context.Context, query string) ([]ledgercore.StateProofVerificationContext, error) {
 	var result []ledgercore.StateProofVerificationContext
 	queryFunc := func() error {
-		rows, err := spa.e.QueryContext(ctx, query)
+		rows, err := spa.q.QueryContext(ctx, query)
 		if err != nil {
 			return err
 		}

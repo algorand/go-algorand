@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -212,8 +211,8 @@ func verifyStateProofVerificationCatchupAccessor(t *testing.T, targetData []ledg
 	require.NoError(t, err)
 
 	var trackedStateProofVerificationContext []ledgercore.StateProofVerificationContext
-	err = l.trackerDBs.Snapshot(func(ctx context.Context, tx *sql.Tx) error {
-		dbData, err := store.MakeSPVerificationAccessor(tx).GetAllSPContexts(ctx)
+	err = l.trackerDBs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) error {
+		dbData, err := tx.MakeStateProofReader().GetAllSPContexts(ctx)
 		trackedStateProofVerificationContext = dbData
 		return err
 	})

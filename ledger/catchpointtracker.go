@@ -220,7 +220,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 			return err
 		}
 
-		err = ct.recordFirstStageInfo(ctx, tx, dbRound, totalKVs, totalAccounts, totalChunks, biggestChunkLen)
+		err = ct.recordFirstStageInfo(ctx, tx, dbRound, totalKVs, totalAccounts, totalChunks, biggestChunkLen, stateProofVerificationHash)
 		if err != nil {
 			return err
 		}
@@ -1195,7 +1195,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	return catchpointWriter.totalKVs, catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, stateProofVerificationContextHash, nil
 }
 
-func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx store.TransactionScope, accountsRound basics.Round, totalKVs uint64, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64) error {
+func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx store.TransactionScope, accountsRound basics.Round, totalKVs uint64, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64, stateProofVerificationHash crypto.Digest) error {
 	arw, err := tx.MakeAccountsReaderWriter()
 	if err != nil {
 		return err

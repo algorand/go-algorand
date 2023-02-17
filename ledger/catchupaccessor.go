@@ -368,8 +368,8 @@ func (c *catchpointCatchupAccessorImpl) processStagingStateProofVerificationCont
 
 	// 6 months of stuck state proofs should lead to about 1.5 MB of data, so we avoid redundant timers
 	// and progress reports.
-	err = c.ledger.trackerDB().Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
-		return store.MakeSPVerificationAccessor(tx).StoreSPContextsToCatchpointTbl(ctx, decodedData.Data)
+	err = c.ledger.trackerDB().Batch(func(ctx context.Context, tx store.BatchScope) (err error) {
+		return tx.MakeStateProofWriter().StoreSPContextsToCatchpointTbl(ctx, decodedData.Data)
 	})
 
 	return err
@@ -403,7 +403,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 		if err != nil {
 			return err
 		}
-		err = crw.WriteCatchpointStateUint64(ctx, store.CatchpointStateCatchupVersion, fileHeader.Version)
+		err = cw.WriteCatchpointStateUint64(ctx, store.CatchpointStateCatchupVersion, fileHeader.Version)
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup version '%s': %v", store.CatchpointStateCatchupVersion, err)
 		}
@@ -956,7 +956,7 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 			return fmt.Errorf("unable to get accounts totals: %v", err)
 		}
 
-		rawStateProofVerificationContext, err = store.MakeSPVerificationAccessor(tx).GetAllSPContextsFromCatchpointTbl(ctx)
+		rawStateProofVerificationContext, err = tx.MakeStateProofReaderWriter().GetAllSPContextsFromCatchpointTbl(ctx)
 		if err != nil {
 			return fmt.Errorf("unable to get state proof verification data: %v", err)
 		}

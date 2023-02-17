@@ -2861,7 +2861,7 @@ func triggerDeleteVoters(t *testing.T, l *Ledger, genesisInitState ledgercore.In
 	triggerTrackerFlush(t, l, genesisInitState)
 }
 
-func TestVotersReloadFromDisk(t *testing.T) {
+func testVotersReloadFromDisk(t *testing.T, cfg config.Local) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -2993,9 +2993,6 @@ func testVotersReloadFromDiskPassRecoveryPeriod(t *testing.T, cfg config.Local) 
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	const inMem = true
 
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = false
-	cfg.MaxAcctLookback = 0
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
@@ -3043,6 +3040,16 @@ func testVotersReloadFromDiskPassRecoveryPeriod(t *testing.T, cfg config.Local) 
 	_, found = l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
 	require.False(t, found)
 	require.Equal(t, beforeRemoveVotersLen, len(l.acctsOnline.voters.votersForRoundCache))
+}
+
+func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
+	cfg.MaxAcctLookback = 0
+
+	ledgertesting.WithAndWithoutLRUCache(t, cfg, testVotersReloadFromDiskPassRecoveryPeriod)
 }
 
 type mockCommitListener struct{}

@@ -48,6 +48,8 @@ type BatchScope interface {
 
 	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
 	AccountsUpdateSchemaTest(ctx context.Context) (err error)
+
+	MakeStateProofWriter() StateProofWriter
 }
 type sqlBatchScope struct {
 	tx *sql.Tx
@@ -61,6 +63,7 @@ type SnapshotScope interface {
 	MakeCatchpointReader() (CatchpointReader, error)
 
 	MakeCatchpointPendingHashesIterator(hashCount int) *catchpointPendingHashesIterator
+	MakeStateProofReader() StateProofReader
 }
 type sqlSnapshotScope struct {
 	tx *sql.Tx
@@ -88,7 +91,10 @@ type TransactionScope interface {
 
 	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
 	AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error)
+
+	MakeStateProofReaderWriter() StateProofReaderWriter
 }
+
 type sqlTransactionScope struct {
 	tx *sql.Tx
 }
@@ -269,6 +275,10 @@ func (txs sqlTransactionScope) MakeEncodedAccoutsBatchIter() *encodedAccountsBat
 	return MakeEncodedAccoutsBatchIter(txs.tx)
 }
 
+func (txs sqlTransactionScope) MakeStateProofReaderWriter() StateProofReaderWriter {
+	return makeStateProofVerificationReaderWriter(txs.tx, txs.tx)
+}
+
 func (txs sqlTransactionScope) RunMigrations(ctx context.Context, params TrackerDBParams, log logging.Logger, targetVersion int32) (mgr TrackerDBInitParams, err error) {
 	return RunMigrations(ctx, txs.tx, params, log, targetVersion)
 }
@@ -313,6 +323,10 @@ func (bs sqlBatchScope) AccountsUpdateSchemaTest(ctx context.Context) (err error
 	return AccountsUpdateSchemaTest(ctx, bs.tx)
 }
 
+func (txs sqlBatchScope) MakeStateProofWriter() StateProofWriter {
+	return makeStateProofVerificationWriter(txs.tx)
+}
+
 func (ss sqlSnapshotScope) MakeAccountsReader() (AccountsReaderExt, error) {
 	return NewAccountsSQLReaderWriter(ss.tx), nil
 }
@@ -323,4 +337,8 @@ func (ss sqlSnapshotScope) MakeCatchpointReader() (CatchpointReader, error) {
 
 func (ss sqlSnapshotScope) MakeCatchpointPendingHashesIterator(hashCount int) *catchpointPendingHashesIterator {
 	return MakeCatchpointPendingHashesIterator(hashCount, ss.tx)
+}
+
+func (txs sqlSnapshotScope) MakeStateProofReader() StateProofReader {
+	return makeStateProofVerificationReader(txs.tx)
 }

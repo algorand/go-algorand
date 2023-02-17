@@ -171,3 +171,20 @@ type CatchpointReaderWriter interface {
 	CatchpointReader
 	CatchpointWriter
 }
+
+type StateProofReader interface {
+	LookupSPContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
+	GetAllSPContexts(ctx context.Context) ([]ledgercore.StateProofVerificationContext, error)
+	GetAllSPContextsFromCatchpointTbl(ctx context.Context) ([]ledgercore.StateProofVerificationContext, error)
+}
+
+type StateProofWriter interface {
+	DeleteOldSPContexts(ctx context.Context, earliestLastAttestedRound basics.Round) error
+	StoreSPContexts(ctx context.Context, verificationContext []*ledgercore.StateProofVerificationContext) error
+	StoreSPContextsToCatchpointTbl(ctx context.Context, verificationContexts []ledgercore.StateProofVerificationContext) error
+}
+
+type StateProofReaderWriter interface {
+	StateProofReader
+	StateProofWriter
+}
