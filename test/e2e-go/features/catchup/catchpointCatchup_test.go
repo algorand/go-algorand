@@ -400,14 +400,23 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 	}
 }
 
-// TestReadyEndpoint starts a two-node network
+// TestReadyEndpoint starts a two-node network (configuration: `CatchpointCatchupTestNetwork.json`),
+// and execute following steps to bring up a testing scenario:
+// - set up the network with a set of consensus parameter (to allow for generating catchpoint every 4 rounds).
+// - set up primary node with config such that it generates catchpoint every 4 rounds.
+// - let network proceed for a certain rounds (in this test 17 rounds).
+// - retrieve the last catchpoint from the primary node, and let second node catch up against the catchpoint.
+//
+// The expected result would be:
+// while the second node is catching up against the catchpoint of the network,
+// `/ready` should encounter a slew of failures, then succeed with status indicating it is finishing fast-catchup.
 func TestReadyEndpoint(t *testing.T) {
 	//////////
 	// NOTE //
 	//////////
 	// This section is mostly CONSTs and helper function used in this ready endpoint test.
 	//
-	// prepareConsensus and preparePrimaryConfig tweak consensus and config to allow primary node on network
+	// prepareConsensus and prepareConfig tweak consensus and config to allow primary node on network
 	// `CatchpointCatchupTestNetwork.json` to generate new catchpoints over rounds.
 	const CatchpointInterval = uint64(4)
 	const CatchpointTracking = int64(2)
@@ -429,25 +438,13 @@ func TestReadyEndpoint(t *testing.T) {
 		return consensus
 	}
 
-	preparePrimaryConfig := func(a *require.Assertions, node nodecontrol.NodeController) {
+	prepareConfig := func(a *require.Assertions, node nodecontrol.NodeController) {
 		cfg, err := config.LoadConfigFromDisk(node.GetDataDir())
 		a.NoError(err)
 		cfg.CatchpointInterval = CatchpointInterval
 		cfg.CatchpointTracking = CatchpointTracking
 		cfg.Archival = ConfigArchival
 		cfg.MaxAcctLookback = MaxAcctLookback
-		a.NoError(cfg.SaveToDisk(node.GetDataDir()))
-	}
-
-	prepareSecondConfig := func(a *require.Assertions, node nodecontrol.NodeController) {
-		cfg, err := config.LoadConfigFromDisk(node.GetDataDir())
-		a.NoError(err)
-		cfg.Archival = false
-		cfg.CatchpointInterval = 0
-		cfg.NetAddress = ""
-		cfg.EnableLedgerService = false
-		cfg.EnableBlockService = false
-		cfg.BaseLoggerDebugLevel = uint32(logging.Debug)
 		a.NoError(cfg.SaveToDisk(node.GetDataDir()))
 	}
 
@@ -476,7 +473,7 @@ func TestReadyEndpoint(t *testing.T) {
 	// Get primary node controller
 	pnController, err := fixture.GetNodeController("Primary")
 	a.NoError(err)
-	preparePrimaryConfig(a, pnController)
+	prepareConfig(a, pnController)
 
 	// start the primary node (which means network starts at this point)
 	_, err = pnController.StartAlgod(nodecontrol.AlgodStartArgs{
@@ -493,20 +490,23 @@ func TestReadyEndpoint(t *testing.T) {
 	// get second node controller
 	n2ndController, err := fixture.GetNodeController("Node")
 	a.NoError(err)
-	prepareSecondConfig(a, pnController)
+	prepareConfig(a, pnController)
 
+	// make the second node listen to the primary node
 	primaryListeningAddress, err := pnController.GetListeningAddress()
 	a.NoError(err)
 
-	wp, err := fixtures.MakeWebProxy(primaryListeningAddress, testLogger, func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
-		// prevent requests for block #2 to go through.
-		if request.URL.String() == "/v1/test-v1/block/2" {
-			response.WriteHeader(http.StatusBadRequest)
-			response.Write([]byte("webProxy prevents block 2 from serving"))
-			return
-		}
-		next(response, request)
-	})
+	wp, err := fixtures.MakeWebProxy(
+		primaryListeningAddress, testLogger,
+		func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
+			// prevent requests for block #2 to go through.
+			if request.URL.String() == "/v1/test-v1/block/2" {
+				response.WriteHeader(http.StatusBadRequest)
+				response.Write([]byte("webProxy prevents block 2 from serving"))
+				return
+			}
+			next(response, request)
+		})
 	a.NoError(err)
 	defer wp.Close()
 
