@@ -61,7 +61,7 @@ const (
 	// This key is set in the same db transaction as the account updates, so the
 	// unfinished first stage corresponds to the current db round.
 	CatchpointStateWritingFirstStageInfo = CatchpointState("writingFirstStageInfo")
-	// catchpointStateWritingCatchpoint if there is an unfinished catchpoint, this state variable is set to
+	// CatchpointStateWritingCatchpoint if there is an unfinished catchpoint, this state variable is set to
 	// the catchpoint's round. Otherwise, it is set to 0.
 	// DEPRECATED.
 	CatchpointStateWritingCatchpoint = CatchpointState("writingCatchpoint")

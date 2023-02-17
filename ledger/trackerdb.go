@@ -26,7 +26,7 @@ import (
 // trackerDBInitialize initializes the accounts DB if needed and return current account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
-func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefix string) (mgr trackerdb.TrackerDBInitParams, err error) {
+func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefix string) (mgr trackerdb.InitParams, err error) {
 	dbs := l.trackerDB()
 	bdbs := l.blockDB()
 	log := l.trackerLog()
@@ -44,7 +44,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 			return err
 		}
 
-		tp := trackerdb.TrackerDBParams{
+		tp := trackerdb.Params{
 			InitAccounts:      l.GenesisAccounts(),
 			InitProto:         l.GenesisProtoVersion(),
 			GenesisHash:       l.GenesisHash(),

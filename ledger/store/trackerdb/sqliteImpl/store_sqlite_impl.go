@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package sqlite_impl
+package sqliteImpl
 
 import (
 	"context"
@@ -197,7 +197,7 @@ func (txs sqlTransactionScope) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAc
 	return MakeEncodedAccoutsBatchIter(txs.tx)
 }
 
-func (txs sqlTransactionScope) RunMigrations(ctx context.Context, params trackerdb.TrackerDBParams, log logging.Logger, targetVersion int32) (mgr trackerdb.TrackerDBInitParams, err error) {
+func (txs sqlTransactionScope) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
 	return RunMigrations(ctx, txs.tx, params, log, targetVersion)
 }
 
@@ -225,7 +225,7 @@ func (bs sqlBatchScope) MakeAccountsOptimizedWriter(hasAccounts, hasResources, h
 	return MakeAccountsSQLWriter(bs.tx, hasAccounts, hasResources, hasKvPairs, hasCreatables)
 }
 
-func (bs sqlBatchScope) RunMigrations(ctx context.Context, params trackerdb.TrackerDBParams, log logging.Logger, targetVersion int32) (mgr trackerdb.TrackerDBInitParams, err error) {
+func (bs sqlBatchScope) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
 	return RunMigrations(ctx, bs.tx, params, log, targetVersion)
 }
 
@@ -249,6 +249,6 @@ func (ss sqlSnapshotScope) MakeCatchpointReader() (trackerdb.CatchpointReader, e
 	return NewCatchpointSQLReaderWriter(ss.tx), nil
 }
 
-func (ss sqlSnapshotScope) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.CatchpointPendingHashesIterator {
+func (ss sqlSnapshotScope) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.CatchpointPendingHashesIter {
 	return MakeCatchpointPendingHashesIterator(hashCount, ss.tx)
 }

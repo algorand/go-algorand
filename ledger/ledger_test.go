@@ -2295,7 +2295,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 		if err0 != nil {
 			return err0
 		}
-		tp := trackerdb.TrackerDBParams{
+		tp := trackerdb.Params{
 			InitAccounts:      l.GenesisAccounts(),
 			InitProto:         l.GenesisProtoVersion(),
 			GenesisHash:       l.GenesisHash(),

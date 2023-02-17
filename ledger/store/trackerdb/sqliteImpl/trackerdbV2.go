@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package sqlite_impl
+package sqliteImpl
 
 import (
 	"context"
@@ -35,7 +35,7 @@ import (
 )
 
 type trackerDBSchemaInitializer struct {
-	trackerdb.TrackerDBParams
+	trackerdb.Params
 
 	// schemaVersion contains current db version
 	schemaVersion int32
@@ -50,17 +50,17 @@ type trackerDBSchemaInitializer struct {
 // RunMigrations initializes the accounts DB if needed and return current account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
-func RunMigrations(ctx context.Context, tx *sql.Tx, params trackerdb.TrackerDBParams, log logging.Logger, targetVersion int32) (mgr trackerdb.TrackerDBInitParams, err error) {
+func RunMigrations(ctx context.Context, tx *sql.Tx, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
 	// check current database version.
 	dbVersion, err := db.GetUserVersion(ctx, tx)
 	if err != nil {
-		return trackerdb.TrackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to read database schema version : %v", err)
+		return trackerdb.InitParams{}, fmt.Errorf("trackerDBInitialize unable to read database schema version : %v", err)
 	}
 
 	tu := trackerDBSchemaInitializer{
-		TrackerDBParams: params,
-		schemaVersion:   dbVersion,
-		log:             log,
+		Params:        params,
+		schemaVersion: dbVersion,
+		log:           log,
 	}
 
 	// if database version is greater than supported by current binary, write a warning. This would keep the existing
@@ -132,13 +132,13 @@ func RunMigrations(ctx context.Context, tx *sql.Tx, params trackerdb.TrackerDBPa
 					return
 				}
 			default:
-				return trackerdb.TrackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to upgrade database from schema version %d", tu.schemaVersion)
+				return trackerdb.InitParams{}, fmt.Errorf("trackerDBInitialize unable to upgrade database from schema version %d", tu.schemaVersion)
 			}
 		}
 		tu.log.Infof("trackerDBInitialize database schema upgrade complete")
 	}
 
-	return trackerdb.TrackerDBInitParams{tu.schemaVersion, tu.vacuumOnStartup}, nil
+	return trackerdb.InitParams{tu.schemaVersion, tu.vacuumOnStartup}, nil
 }
 
 func (tu *trackerDBSchemaInitializer) setVersion(ctx context.Context, tx *sql.Tx, version int32) (err error) {
@@ -234,7 +234,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 
 		tu.log.Infof("upgradeDatabaseSchema1 deleting stored catchpoints")
 		// delete catchpoints.
-		err = crw.DeleteStoredCatchpoints(ctx, tu.TrackerDBParams.DbPathPrefix)
+		err = crw.DeleteStoredCatchpoints(ctx, tu.Params.DbPathPrefix)
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema1 unable to delete stored catchpoints : %v", err)
 		}
@@ -339,7 +339,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 		return fmt.Errorf("upgradeDatabaseSchema5 unable to create resources table : %v", err)
 	}
 
-	err = removeEmptyDirsOnSchemaUpgrade(tu.TrackerDBParams.DbPathPrefix)
+	err = removeEmptyDirsOnSchemaUpgrade(tu.Params.DbPathPrefix)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema5 unable to clear empty catchpoint directories : %v", err)
 	}

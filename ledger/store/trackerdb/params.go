@@ -23,8 +23,8 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-// TrackerDBParams contains parameters for initializing trackerDB
-type TrackerDBParams struct {
+// Params contains parameters for initializing trackerDB
+type Params struct {
 	InitAccounts      map[basics.Address]basics.AccountData
 	InitProto         protocol.ConsensusVersion
 	GenesisHash       crypto.Digest
@@ -34,8 +34,8 @@ type TrackerDBParams struct {
 	BlockDb           db.Pair
 }
 
-// TrackerDBInitParams params used during db init
-type TrackerDBInitParams struct {
+// InitParams params used during db init
+type InitParams struct {
 	SchemaVersion   int32
 	VacuumOnStartup bool
 }

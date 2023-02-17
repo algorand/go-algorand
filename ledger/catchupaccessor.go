@@ -1093,7 +1093,7 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			return err
 		}
 		{
-			tp := trackerdb.TrackerDBParams{
+			tp := trackerdb.Params{
 				InitAccounts:      c.ledger.GenesisAccounts(),
 				InitProto:         c.ledger.GenesisProtoVersion(),
 				GenesisHash:       c.ledger.GenesisHash(),

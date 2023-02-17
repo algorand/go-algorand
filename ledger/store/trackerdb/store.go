@@ -34,7 +34,7 @@ type BatchScope interface {
 	MakeAccountsWriter() (AccountsWriterExt, error)
 	MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
 
-	RunMigrations(ctx context.Context, params TrackerDBParams, log logging.Logger, targetVersion int32) (mgr TrackerDBInitParams, err error)
+	RunMigrations(ctx context.Context, params Params, log logging.Logger, targetVersion int32) (mgr InitParams, err error)
 	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
 
 	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
@@ -46,7 +46,7 @@ type SnapshotScope interface {
 	MakeAccountsReader() (AccountsReaderExt, error)
 	MakeCatchpointReader() (CatchpointReader, error)
 
-	MakeCatchpointPendingHashesIterator(hashCount int) CatchpointPendingHashesIterator
+	MakeCatchpointPendingHashesIterator(hashCount int) CatchpointPendingHashesIter
 }
 
 // TransactionScope is the read/write scope to the store.
@@ -64,15 +64,20 @@ type TransactionScope interface {
 	MakeKVsIter(ctx context.Context) (KVsIter, error)
 	MakeEncodedAccoutsBatchIter() EncodedAccountsBatchIter
 
-	RunMigrations(ctx context.Context, params TrackerDBParams, log logging.Logger, targetVersion int32) (mgr TrackerDBInitParams, err error)
+	RunMigrations(ctx context.Context, params Params, log logging.Logger, targetVersion int32) (mgr InitParams, err error)
 	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
 
 	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
 	AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error)
 }
 
+// BatchFn is the callback lambda used in `Batch`.
 type BatchFn func(ctx context.Context, tx BatchScope) error
+
+// SnapshotFn is the callback lambda used in `Snapshot`.
 type SnapshotFn func(ctx context.Context, tx SnapshotScope) error
+
+// TransactionFn is the callback lambda used in `Transaction`.
 type TransactionFn func(ctx context.Context, tx TransactionScope) error
 
 // TrackerStore is the interface for the tracker db.

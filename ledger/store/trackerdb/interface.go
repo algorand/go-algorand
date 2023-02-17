@@ -179,6 +179,7 @@ type MerkleCommitter interface {
 	LoadPage(page uint64) (content []byte, err error)
 }
 
+// OrderedAccountsIter is an iterator for Ordered Accounts.
 type OrderedAccountsIter interface {
 	Next(ctx context.Context) (acct []AccountAddressHash, processedRecords int, err error)
 	Close(ctx context.Context) (err error)
@@ -190,18 +191,21 @@ type AccountAddressHash struct {
 	Digest []byte
 }
 
+// KVsIter is an iterator for an application Key/Values.
 type KVsIter interface {
 	Next() bool
 	KeyValue() (k []byte, v []byte, err error)
 	Close()
 }
 
+// EncodedAccountsBatchIter is an iterator for a accounts.
 type EncodedAccountsBatchIter interface {
 	Next(ctx context.Context, accountCount int, resourceCount int) (bals []encoded.BalanceRecordV6, numAccountsProcessed uint64, err error)
 	Close()
 }
 
-type CatchpointPendingHashesIterator interface {
+// CatchpointPendingHashesIter is an iterator for pending hashes.
+type CatchpointPendingHashesIter interface {
 	Next(ctx context.Context) (hashes [][]byte, err error)
 	Close()
 }
