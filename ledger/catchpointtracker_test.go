@@ -378,8 +378,9 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
+		t.Skip("This test is too slow on ARM and causes CI builds to time out")
 	}
+
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -1474,8 +1475,9 @@ func TestCatchpointFastUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
+		t.Skip("This test is too slow on ARM and causes CI builds to time out")
 	}
+
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}

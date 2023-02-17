@@ -475,20 +475,13 @@ func checkOnlineAcctUpdatesConsistency(t *testing.T, ao *onlineAccounts, rnd bas
 	}
 }
 
-func TestAcctUpdates(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
-	}
-
+func testAcctUpdates(t *testing.T, conf config.Local) {
 	// The next operations are heavy on the memory.
 	// Garbage collection helps prevent trashing
 	runtime.GC()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	conf := config.GetDefaultLocal()
 	for _, lookback := range []uint64{conf.MaxAcctLookback, proto.MaxBalLookback} {
 		t.Run(fmt.Sprintf("lookback=%d", lookback), func(t *testing.T) {
 
@@ -595,6 +588,13 @@ func TestAcctUpdates(t *testing.T) {
 			require.Equal(t, expectedTotals, actualTotals)
 		})
 	}
+}
+
+func TestAcctUpdates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	conf := config.GetDefaultLocal()
+	ledgertesting.WithAndWithoutLRUCache(t, conf, testAcctUpdates)
 }
 
 func BenchmarkBalancesChanges(b *testing.B) {
@@ -712,20 +712,21 @@ func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
 // The TestAcctUpdatesUpdatesCorrectness conduct a correctless test for the accounts update in the following way -
 // Each account is initialized with 100 algos.
 // On every round, each account move variable amount of funds to an accumulating account.
-// The deltas for each accounts are picked by using the lookup method.
+// The deltas for each account are picked by using the lookup method.
 // At the end of the test, we verify that each account has the expected amount of algos.
 // In addition, throughout the test, we check ( using lookup ) that the historical balances, *beyond* the
 // lookback are generating either an error, or returning the correct amount.
 func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
-	}
+	cfgLocal := config.GetDefaultLocal()
+	ledgertesting.WithAndWithoutLRUCache(t, cfgLocal, testAcctUpdatesUpdatesCorrectness)
+}
 
+func testAcctUpdatesUpdatesCorrectness(t *testing.T, cfg config.Local) {
 	// create new protocol version, which has lower look back.
 	testProtocolVersion := protocol.ConsensusCurrentVersion
-	maxAcctLookback := config.GetDefaultLocal().MaxAcctLookback
+	maxAcctLookback := cfg.MaxAcctLookback
 	inMemory := true
 
 	testFunction := func(t *testing.T) {
@@ -750,8 +751,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			accts[0][addr] = accountData
 		}
 
-		conf := config.GetDefaultLocal()
-		au, _ := newAcctUpdates(t, ml, conf)
+		au, _ := newAcctUpdates(t, ml, cfg)
 		defer au.close()
 
 		// cover 10 genesis blocks

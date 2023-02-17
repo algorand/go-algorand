@@ -117,12 +117,16 @@ type onlineAccounts struct {
 
 	// maxAcctLookback sets the minimim deltas size to keep in memory
 	acctLookback uint64
+
+	// disableCache (de)activates the LRU cache use in onlineAccounts
+	disableCache bool
 }
 
 // initialize initializes the accountUpdates structure
 func (ao *onlineAccounts) initialize(cfg config.Local) {
 	ao.accountsReadCond = sync.NewCond(ao.accountsMu.RLocker())
 	ao.acctLookback = cfg.MaxAcctLookback
+	ao.disableCache = cfg.DisableLedgerLRUCache
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the onlineAccounts becomes functional
@@ -184,7 +188,11 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	ao.accounts = make(map[basics.Address]modifiedOnlineAccount)
 	ao.deltasAccum = []int{0}
 
-	ao.baseOnlineAccounts.init(ao.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
+	if !ao.disableCache {
+		ao.baseOnlineAccounts.init(ao.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
+	} else {
+		ao.baseOnlineAccounts.init(ao.log, 0, 0)
+	}
 	return
 }
 

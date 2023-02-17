@@ -227,6 +227,9 @@ type accountUpdates struct {
 
 	// maxAcctLookback sets the minimim deltas size to keep in memory
 	acctLookback uint64
+
+	// disableCache (de)activates the LRU cache use in accountUpdates
+	disableCache bool
 }
 
 // RoundOffsetError is an error for when requested round is behind earliest stored db entry
@@ -296,6 +299,8 @@ func (au *accountUpdates) initialize(cfg config.Local) {
 	// log metrics
 	au.logAccountUpdatesMetrics = cfg.EnableAccountUpdatesStats
 	au.logAccountUpdatesInterval = cfg.AccountUpdatesStatsInterval
+
+	au.disableCache = cfg.DisableLedgerLRUCache
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
@@ -962,9 +967,15 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	au.deltasAccum = []int{0}
 
-	au.baseAccounts.init(au.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
-	au.baseResources.init(au.log, baseResourcesPendingAccountsBufferSize, baseResourcesPendingAccountsWarnThreshold)
-	au.baseKVs.init(au.log, baseKVPendingBufferSize, baseKVPendingWarnThreshold)
+	if !au.disableCache {
+		au.baseAccounts.init(au.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
+		au.baseResources.init(au.log, baseResourcesPendingAccountsBufferSize, baseResourcesPendingAccountsWarnThreshold)
+		au.baseKVs.init(au.log, baseKVPendingBufferSize, baseKVPendingWarnThreshold)
+	} else {
+		au.baseAccounts.init(au.log, 0, 0)
+		au.baseResources.init(au.log, 0, 0)
+		au.baseKVs.init(au.log, 0, 0)
+	}
 	return
 }
 

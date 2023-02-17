@@ -660,7 +660,8 @@ func TestExactAccountChunk(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture)
+	cfg := config.GetDefaultLocal()
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
 	defer dl.Close()
 
 	pay := txntest.Txn{
@@ -704,7 +705,8 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture)
+	cfg := config.GetDefaultLocal()
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
 	defer dl.Close()
 
 	boxApp := dl.fundedApp(addrs[1], 1_000_000, boxAppSource)
@@ -807,7 +809,8 @@ func TestCatchpointAfterBoxTxns(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture)
+	cfg := config.GetDefaultLocal()
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
 	defer dl.Close()
 
 	boxApp := dl.fundedApp(addrs[1], 1_000_000, boxAppSource)

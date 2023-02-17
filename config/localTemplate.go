@@ -493,6 +493,11 @@ type Local struct {
 	// guarantees in terms of functionality or future support.
 	EnableExperimentalAPI bool `version[26]:"false"`
 
+	// DisableLedgerLRUCache disables LRU caches in ledger.
+	// Setting it to TRUE might result in significant performance degradation
+	// and SHOULD NOT be used for other reasons than testing.
+	DisableLedgerLRUCache bool `version[27]:"false"`
+
 	// EnableFollowMode launches the node in "follower" mode. This turns off the agreement service,
 	// and APIs related to broadcasting transactions, and enables APIs which can retrieve detailed information
 	// from ledger caches and can control the ledger round.
