@@ -323,8 +323,8 @@ func (bs sqlBatchScope) AccountsUpdateSchemaTest(ctx context.Context) (err error
 	return AccountsUpdateSchemaTest(ctx, bs.tx)
 }
 
-func (txs sqlBatchScope) MakeStateProofWriter() StateProofWriter {
-	return makeStateProofVerificationWriter(txs.tx)
+func (bs sqlBatchScope) MakeStateProofWriter() StateProofWriter {
+	return makeStateProofVerificationWriter(bs.tx)
 }
 
 func (ss sqlSnapshotScope) MakeAccountsReader() (AccountsReaderExt, error) {
@@ -339,6 +339,6 @@ func (ss sqlSnapshotScope) MakeCatchpointPendingHashesIterator(hashCount int) *c
 	return MakeCatchpointPendingHashesIterator(hashCount, ss.tx)
 }
 
-func (txs sqlSnapshotScope) MakeStateProofReader() StateProofReader {
-	return makeStateProofVerificationReader(txs.tx)
+func (ss sqlSnapshotScope) MakeStateProofReader() StateProofReader {
+	return makeStateProofVerificationReader(ss.tx)
 }
