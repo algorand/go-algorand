@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
+//msgp:ignore pmStage
 type pmStage int
 
 const (

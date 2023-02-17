@@ -56,7 +56,11 @@ type Local struct {
 	// 1 * time.Minute = 60000000000 ns
 	ReconnectTime time.Duration `version[0]:"60" version[1]:"60000000000"`
 
-	// what we should tell people to connect to
+	// The public address to connect to that is advertised to other nodes.
+	// For MainNet relays, make sure this entry includes the full SRV host name
+	// plus the publicly-accessible port number.
+	// A valid entry will avoid "self-gossip" and is used for identity exchange
+	// to deduplicate redundant connections
 	PublicAddress string `version[0]:""`
 
 	MaxConnectionsPerIP int `version[3]:"30" version[27]:"15"`
