@@ -108,7 +108,7 @@ type stagingWriterImpl struct {
 
 func (w *stagingWriterImpl) writeBalances(ctx context.Context, balances []store.NormalizedAccountBalance) error {
 	return w.wdb.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
-		crw, err := tx.CreateCatchpointReaderWriter()
+		crw, err := tx.MakeCatchpointReaderWriter()
 		if err != nil {
 			return err
 		}
@@ -118,7 +118,7 @@ func (w *stagingWriterImpl) writeBalances(ctx context.Context, balances []store.
 
 func (w *stagingWriterImpl) writeKVs(ctx context.Context, kvrs []encoded.KVRecordV6) error {
 	return w.wdb.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
-		crw, err := tx.CreateCatchpointReaderWriter()
+		crw, err := tx.MakeCatchpointReaderWriter()
 		if err != nil {
 			return err
 		}
@@ -138,7 +138,7 @@ func (w *stagingWriterImpl) writeKVs(ctx context.Context, kvrs []encoded.KVRecor
 
 func (w *stagingWriterImpl) writeCreatables(ctx context.Context, balances []store.NormalizedAccountBalance) error {
 	return w.wdb.Transaction(func(ctx context.Context, tx store.TransactionScope) error {
-		crw, err := tx.CreateCatchpointReaderWriter()
+		crw, err := tx.MakeCatchpointReaderWriter()
 		if err != nil {
 			return err
 		}
@@ -149,7 +149,7 @@ func (w *stagingWriterImpl) writeCreatables(ctx context.Context, balances []stor
 
 func (w *stagingWriterImpl) writeHashes(ctx context.Context, balances []store.NormalizedAccountBalance) error {
 	return w.wdb.Transaction(func(ctx context.Context, tx store.TransactionScope) error {
-		crw, err := tx.CreateCatchpointReaderWriter()
+		crw, err := tx.MakeCatchpointReaderWriter()
 		if err != nil {
 			return err
 		}
@@ -217,7 +217,7 @@ type CatchupAccessorClientLedger interface {
 
 // MakeCatchpointCatchupAccessor creates a CatchpointCatchupAccessor given a ledger
 func MakeCatchpointCatchupAccessor(ledger *Ledger, log logging.Logger) CatchpointCatchupAccessor {
-	crw, _ := ledger.trackerDB().CreateCatchpointReaderWriter()
+	crw, _ := ledger.trackerDB().MakeCatchpointReaderWriter()
 	return &catchpointCatchupAccessorImpl{
 		ledger:          ledger,
 		catchpointStore: crw,
@@ -279,8 +279,12 @@ func (c *catchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context
 	}
 	start := time.Now()
 	ledgerResetstagingbalancesCount.Inc(nil)
-	err = c.ledger.trackerDB().Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
+	err = c.ledger.trackerDB().Batch(func(ctx context.Context, tx store.BatchScope) (err error) {
+		crw, err := tx.MakeCatchpointWriter()
+		if err != nil {
+			return err
+		}
+
 		err = crw.ResetCatchpointStagingBalances(ctx, newCatchup)
 		if err != nil {
 			return fmt.Errorf("unable to reset catchpoint catchup balances : %v", err)
@@ -368,21 +372,28 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	// TotalAccounts, TotalAccounts, Catchpoint, BlockHeaderDigest, BalancesRound
 	start := time.Now()
 	ledgerProcessstagingcontentCount.Inc(nil)
-	err = c.ledger.trackerDB().Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
-		arw := store.NewAccountsSQLReaderWriter(tx)
+	err = c.ledger.trackerDB().Batch(func(ctx context.Context, tx store.BatchScope) (err error) {
+		cw, err := tx.MakeCatchpointWriter()
+		if err != nil {
+			return err
+		}
 
-		err = crw.WriteCatchpointStateUint64(ctx, store.CatchpointStateCatchupBlockRound, uint64(fileHeader.BlocksRound))
+		aw, err := tx.MakeAccountsWriter()
+		if err != nil {
+			return err
+		}
+
+		err = cw.WriteCatchpointStateUint64(ctx, store.CatchpointStateCatchupBlockRound, uint64(fileHeader.BlocksRound))
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", store.CatchpointStateCatchupBlockRound, err)
 		}
 		if fileHeader.Version == CatchpointFileVersionV6 {
-			err = crw.WriteCatchpointStateUint64(ctx, store.CatchpointStateCatchupHashRound, uint64(fileHeader.BlocksRound))
+			err = cw.WriteCatchpointStateUint64(ctx, store.CatchpointStateCatchupHashRound, uint64(fileHeader.BlocksRound))
 			if err != nil {
 				return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", store.CatchpointStateCatchupHashRound, err)
 			}
 		}
-		err = arw.AccountsPutTotals(fileHeader.Totals, true)
+		err = aw.AccountsPutTotals(fileHeader.Totals, true)
 		return
 	})
 	ledgerProcessstagingcontentMicros.AddMicrosecondsSince(start, nil)
@@ -655,10 +666,18 @@ func countHashes(hashes [][]byte) (accountCount, kvCount uint64) {
 // BuildMerkleTrie would process the catchpointpendinghashes and insert all the items in it into the merkle trie
 func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64, uint64)) (err error) {
 	trackerdb := c.ledger.trackerDB()
-	err = trackerdb.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
+	err = trackerdb.Batch(func(ctx context.Context, tx store.BatchScope) (err error) {
+		crw, err := tx.MakeCatchpointWriter()
+		if err != nil {
+			return err
+		}
+
 		// creating the index can take a while, so ensure we don't generate false alerts for no good reason.
-		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(120*time.Second))
+		_, err = tx.ResetTransactionWarnDeadline(ctx, time.Now().Add(120*time.Second))
+		if err != nil {
+			return err
+		}
+
 		return crw.CreateCatchpointStagingHashesIndex(ctx)
 	})
 	if err != nil {
@@ -678,8 +697,8 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		defer wg.Done()
 		defer close(writerQueue)
 
-		err := trackerdb.Snapshot(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
-			it := store.MakeCatchpointPendingHashesIterator(trieRebuildAccountChunkSize, tx)
+		err := trackerdb.Snapshot(func(transactionCtx context.Context, tx store.SnapshotScope) (err error) {
+			it := tx.MakeCatchpointPendingHashesIterator(trieRebuildAccountChunkSize)
 			var hashes [][]byte
 			for {
 				hashes, err = it.Next(transactionCtx)
@@ -716,9 +735,9 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		accountHashesWritten, kvHashesWritten := uint64(0), uint64(0)
 		var mc store.MerkleCommitter
 
-		err := trackerdb.Batch(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
+		err := trackerdb.Transaction(func(transactionCtx context.Context, tx store.TransactionScope) (err error) {
 			// create the merkle trie for the balances
-			mc, err = store.MakeMerkleCommitter(tx, true)
+			mc, err = tx.MakeMerkleCommitter(true)
 			if err != nil {
 				return
 			}
@@ -745,8 +764,8 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 				continue
 			}
 
-			err = trackerdb.Snapshot(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
-				mc, err = store.MakeMerkleCommitter(tx, true)
+			err = trackerdb.Transaction(func(transactionCtx context.Context, tx store.TransactionScope) (err error) {
+				mc, err = tx.MakeMerkleCommitter(true)
 				if err != nil {
 					return
 				}
@@ -775,10 +794,13 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			}
 
 			if uncommitedHashesCount >= trieRebuildCommitFrequency {
-				err = trackerdb.Batch(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
+				err = trackerdb.Transaction(func(transactionCtx context.Context, tx store.TransactionScope) (err error) {
 					// set a long 30-second window for the evict before warning is generated.
-					db.ResetTransactionWarnDeadline(transactionCtx, tx, time.Now().Add(30*time.Second))
-					mc, err = store.MakeMerkleCommitter(tx, true)
+					_, err = tx.ResetTransactionWarnDeadline(transactionCtx, time.Now().Add(30*time.Second))
+					if err != nil {
+						return
+					}
+					mc, err = tx.MakeMerkleCommitter(true)
 					if err != nil {
 						return
 					}
@@ -805,10 +827,13 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			return
 		}
 		if uncommitedHashesCount > 0 {
-			err = trackerdb.Batch(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
+			err = trackerdb.Transaction(func(transactionCtx context.Context, tx store.TransactionScope) (err error) {
 				// set a long 30-second window for the evict before warning is generated.
-				db.ResetTransactionWarnDeadline(transactionCtx, tx, time.Now().Add(30*time.Second))
-				mc, err = store.MakeMerkleCommitter(tx, true)
+				_, err = tx.ResetTransactionWarnDeadline(transactionCtx, time.Now().Add(30*time.Second))
+				if err != nil {
+					return
+				}
+				mc, err = tx.MakeMerkleCommitter(true)
 				if err != nil {
 					return
 				}
@@ -865,10 +890,14 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 
 	start := time.Now()
 	ledgerVerifycatchpointCount.Inc(nil)
-	err = c.ledger.trackerDB().Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
-		arw := store.NewAccountsSQLReaderWriter(tx)
+	err = c.ledger.trackerDB().Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		arw, err := tx.MakeAccountsReaderWriter()
+		if err != nil {
+			return err
+		}
+
 		// create the merkle trie for the balances
-		mc, err0 := store.MakeMerkleCommitter(tx, true)
+		mc, err0 := tx.MakeMerkleCommitter(true)
 		if err0 != nil {
 			return fmt.Errorf("unable to make MerkleCommitter: %v", err0)
 		}
@@ -917,8 +946,12 @@ func (c *catchpointCatchupAccessorImpl) StoreBalancesRound(ctx context.Context, 
 	balancesRound := blk.Round() - basics.Round(catchpointLookback)
 	start := time.Now()
 	ledgerStorebalancesroundCount.Inc(nil)
-	err = c.ledger.trackerDB().Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
+	err = c.ledger.trackerDB().Batch(func(ctx context.Context, tx store.BatchScope) (err error) {
+		crw, err := tx.MakeCatchpointWriter()
+		if err != nil {
+			return err
+		}
+
 		err = crw.WriteCatchpointStateUint64(ctx, store.CatchpointStateCatchupBalancesRound, uint64(balancesRound))
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::StoreBalancesRound: unable to write catchpoint catchup state '%s': %v", store.CatchpointStateCatchupBalancesRound, err)
@@ -1013,9 +1046,16 @@ func (c *catchpointCatchupAccessorImpl) CompleteCatchup(ctx context.Context) (er
 func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err error) {
 	start := time.Now()
 	ledgerCatchpointFinishBalsCount.Inc(nil)
-	err = c.ledger.trackerDB().Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
-		arw := store.NewAccountsSQLReaderWriter(tx)
+	err = c.ledger.trackerDB().Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		crw, err := tx.MakeCatchpointReaderWriter()
+		if err != nil {
+			return err
+		}
+
+		arw, err := tx.MakeAccountsReaderWriter()
+		if err != nil {
+			return err
+		}
 
 		var balancesRound, hashRound uint64
 		var totals ledgercore.AccountTotals
@@ -1062,7 +1102,7 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 				DbPathPrefix:      c.ledger.catchpoint.dbDirectory,
 				BlockDb:           c.ledger.blockDBs,
 			}
-			_, err = store.RunMigrations(ctx, tx, tp, c.ledger.log, 6 /*target database version*/)
+			_, err = tx.RunMigrations(ctx, tp, c.ledger.log, 6 /*target database version*/)
 			if err != nil {
 				return err
 			}

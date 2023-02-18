@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/stretchr/testify/require"
@@ -39,6 +40,12 @@ func DbOpenTrackerTest(t testing.TB, inMemory bool) (TrackerStore, string) {
 	require.NoErrorf(t, err, "Filename : %s\nInMemory: %v", fn, inMemory)
 
 	return &trackerSQLStore{dbs}, fn
+}
+
+// SetDbTrackerTestLogging sets a testing logger on a database.
+func SetDbTrackerTestLogging(t testing.TB, dbs TrackerStore) {
+	dblogger := logging.TestingLog(t)
+	dbs.SetLogger(dblogger)
 }
 
 // AccountsInitLightTest initializes an empty database for testing without the extra methods being called.

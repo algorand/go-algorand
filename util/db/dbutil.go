@@ -321,7 +321,7 @@ func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, extras ...inte
 // however, the transaction context and transaction object can be used to uniquely associate the request
 // with a particular deadline.
 // the function fails if the given transaction is not on the stack of the provided context.
-func ResetTransactionWarnDeadline(ctx context.Context, tx *sql.Tx, deadline time.Time) (prevDeadline time.Time, err error) {
+func ResetTransactionWarnDeadline(ctx context.Context, tx interface{}, deadline time.Time) (prevDeadline time.Time, err error) {
 	txContextData, ok := ctx.Value(tx).(*txExecutionContext)
 	if !ok {
 		// it's not a valid call. just return an error.
