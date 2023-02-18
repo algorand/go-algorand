@@ -972,7 +972,7 @@ func TestReturnUnverified(t *testing.T) {
 		droppedChan: droppedChan,
 	}
 
-	svh.GetErredUnverified(&UnverifiedTxnSigJob{}, nil)
+	svh.GetErredUnprocessed(&UnverifiedTxnSigJob{}, nil)
 	dropped := <-droppedChan
 	require.Equal(t, *dropped, UnverifiedTxnSigJob{})
 }

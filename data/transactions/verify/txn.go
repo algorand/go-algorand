@@ -652,7 +652,7 @@ type LedgerForStreamVerifier interface {
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 }
 
-func (svh *txnSigVerifyJobProcessor) Cleanup(pending []UnverifiedSigJob, err error) {
+func (svh *txnSigVerifyJobProcessor) Cleanup(pending []InputJob, err error) {
 	// report an error for the unchecked txns
 	// drop the messages without reporting if the receiver does not consume
 	for _, ue := range pending {
@@ -661,7 +661,7 @@ func (svh *txnSigVerifyJobProcessor) Cleanup(pending []UnverifiedSigJob, err err
 	}
 }
 
-func (svh txnSigVerifyJobProcessor) GetErredUnverified(ue UnverifiedSigJob, err error) {
+func (svh txnSigVerifyJobProcessor) GetErredUnprocessed(ue InputJob, err error) {
 	uelt := ue.(*UnverifiedTxnSigJob)
 	svh.sendResult(uelt.TxnGroup, uelt.BacklogMessage, err)
 }
@@ -682,7 +682,7 @@ func (svh txnSigVerifyJobProcessor) sendResult(veTxnGroup []transactions.SignedT
 
 // MakeSigVerifyJobProcessor returns the object implementing the stream verifier Helper interface
 func MakeSigVerifyJobProcessor(ledger LedgerForStreamVerifier, cache VerifiedTransactionCache,
-	resultChan chan<- *VerificationResult, droppedChan chan<- *UnverifiedTxnSigJob) (svp SigVerifyJobProcessor, err error) {
+	resultChan chan<- *VerificationResult, droppedChan chan<- *UnverifiedTxnSigJob) (svp BatchProcessor, err error) {
 	latest := ledger.Latest()
 	latestHdr, err := ledger.BlockHdr(latest)
 	if err != nil {
@@ -701,14 +701,14 @@ func MakeSigVerifyJobProcessor(ledger LedgerForStreamVerifier, cache VerifiedTra
 	}, nil
 }
 
-func (svh *txnSigVerifyJobProcessor) ProcessElements(uEmts []UnverifiedSigJob) {
+func (svh *txnSigVerifyJobProcessor) ProcessBatch(uEmts []InputJob) {
 	batchVerifier, ctx := svh.preProcessUnverifiedElements(uEmts)
 	failed, err := batchVerifier.VerifyWithFeedback()
 	// this error can only be crypto.ErrBatchHasFailedSigs
 	svh.postProcessVerifiedJobs(ctx, failed, err)
 }
 
-func (svp *txnSigVerifyJobProcessor) preProcessUnverifiedElements(uelts []UnverifiedSigJob) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
+func (svp *txnSigVerifyJobProcessor) preProcessUnverifiedElements(uelts []InputJob) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
 	batchVerifier = crypto.MakeBatchVerifier()
 	bl := makeBatchLoad(len(uelts))
 	// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
@@ -728,8 +728,8 @@ func (svp *txnSigVerifyJobProcessor) preProcessUnverifiedElements(uelts []Unveri
 	return batchVerifier, bl
 }
 
-// GetNumberOfBatchableSigsInGroup returns the number of batchable signatures in the txn group
-func (ue UnverifiedTxnSigJob) GetNumberOfBatchableSigsInGroup() (batchSigs uint64, err error) {
+// GetNumberOfBatchableItems returns the number of batchable signatures in the txn group
+func (ue UnverifiedTxnSigJob) GetNumberOfBatchableItems() (batchSigs uint64, err error) {
 	batchSigs = 0
 	for i := range ue.TxnGroup {
 		count, err := getNumberOfBatchableSigsInTxn(&ue.TxnGroup[i])

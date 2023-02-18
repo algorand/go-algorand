@@ -31,118 +31,117 @@ var ErrShuttingDownError = errors.New("not verified, verifier is shutting down")
 
 // waitForNextElmtDuration is the time to wait before sending the batch to the exec pool
 // If the incoming rate is low, an input job in the batch may wait no less than
-// waitForNextElmtDuration before it is set for verification.
-// This can introduce a latency to the propagation of the sigs (e.g. in txn or vote) in the network,
+// waitForNextElmtDuration before it is sent for processing.
+// This can introduce a latency to the propagation in the network (e.g. sigs in txn or vote),
 // since every relay will go through this wait time before broadcasting the result.
 // However, when the incoming rate is high, the batch will fill up quickly and will send
 // for signature evaluation before waitForNextElmtDuration.
 const waitForNextElmtDuration = 2 * time.Millisecond
 
 // batchSizeBlockLimit is the limit when the batch exceeds, will be added to the exec pool, even if the pool is saturated
-// and the batch verifier will block until the exec pool accepts the batch
+// and the stream  will be blocked until the exec pool accepts the batch
 const batchSizeBlockLimit = 1024
 
-// UnverifiedSigJob is the interface the incoming sig verification elts need to implement
-type UnverifiedSigJob interface {
-	GetNumberOfBatchableSigsInGroup() (batchSigs uint64, err error)
+// InputJob is the interface the incoming jobs need to implement
+type InputJob interface {
+	GetNumberOfBatchableItems() (batchSigs uint64, err error)
 }
 
-// SigVerifyJobProcessor is the interface of the functions needed to extract signatures from the input jobs, post-process the results,
-// send the results and cleanup when shutting down.
-type SigVerifyJobProcessor interface {
-	// ProcessElements processes a batch packed from the stream in the execpool
-	ProcessElements(uelts []UnverifiedSigJob)
-	// GetErredUnverified returns an unverified jobs because of the err
-	GetErredUnverified(ue UnverifiedSigJob, err error)
-	// Cleanup called on the unverified jobs when the verification shuts down
-	Cleanup(ue []UnverifiedSigJob, err error)
+// BatchProcessor is the interface of the functions needed to prepare a batch from the stream,
+// process and return the results
+type BatchProcessor interface {
+	// ProcessBatch processes a batch packed from the stream in the execpool
+	ProcessBatch(uelts []InputJob)
+	// GetErredUnprocessed returns an unprocessed jobs because of an err
+	GetErredUnprocessed(ue InputJob, err error)
+	// Cleanup called on the unprocessed jobs when the service shuts down
+	Cleanup(ue []InputJob, err error)
 }
 
-// StreamVerifier verifies signatures in input jobs received through the inputChan channel, and returns the
-// results through the resultChan
-type StreamVerifier struct {
-	inputChan        <-chan UnverifiedSigJob
-	verificationPool execpool.BacklogPool
-	ctx              context.Context
-	activeLoopWg     sync.WaitGroup
-	verifyProcessor  SigVerifyJobProcessor
+// StreamToBatch makes batches from incoming stream of jobs, and submits the batches to the exec pool
+type StreamToBatch struct {
+	inputChan      <-chan InputJob
+	executionPool  execpool.BacklogPool
+	ctx            context.Context
+	activeLoopWg   sync.WaitGroup
+	batchProcessor BatchProcessor
 }
 
-// MakeStreamVerifier creates a new stream verifier to verify signatures in jobs received through inputChan
-func MakeStreamVerifier(inputChan <-chan UnverifiedSigJob, verificationPool execpool.BacklogPool,
-	verifyProcessor SigVerifyJobProcessor) *StreamVerifier {
+// MakeStreamToBatch creates a new stream to batch converter
+func MakeStreamToBatch(inputChan <-chan InputJob, verificationPool execpool.BacklogPool,
+	batchProcessor BatchProcessor) *StreamToBatch {
 
-	return &StreamVerifier{
-		inputChan:        inputChan,
-		verificationPool: verificationPool,
-		verifyProcessor:  verifyProcessor,
+	return &StreamToBatch{
+		inputChan:      inputChan,
+		executionPool:  verificationPool,
+		batchProcessor: batchProcessor,
 	}
 }
 
 // Start is called when the verifier is created and whenever it needs to restart after
 // the ctx is canceled
-func (sv *StreamVerifier) Start(ctx context.Context) {
+func (sv *StreamToBatch) Start(ctx context.Context) {
 	sv.ctx = ctx
 	sv.activeLoopWg.Add(1)
 	go sv.batchingLoop()
 }
 
 // WaitForStop waits until the batching loop terminates afer the ctx is canceled
-func (sv *StreamVerifier) WaitForStop() {
+func (sv *StreamToBatch) WaitForStop() {
 	sv.activeLoopWg.Wait()
 }
 
-func (sv *StreamVerifier) batchingLoop() {
+func (sv *StreamToBatch) batchingLoop() {
 	defer sv.activeLoopWg.Done()
 	timer := time.NewTicker(waitForNextElmtDuration)
 	defer timer.Stop()
 	var added bool
-	var numberOfSigsInCurrent uint64
+	var numberOfJobsInCurrent uint64
 	var numberOfBatchAttempts uint64
-	uElmts := make([]UnverifiedSigJob, 0, 8)
-	defer func() { sv.verifyProcessor.Cleanup(uElmts, ErrShuttingDownError) }()
+	uJobs := make([]InputJob, 0, 8)
+	defer func() { sv.batchProcessor.Cleanup(uJobs, ErrShuttingDownError) }()
 	for {
 		select {
 		case elem := <-sv.inputChan:
-			numberOfBatchableSigsInGroup, err := elem.GetNumberOfBatchableSigsInGroup()
+			numberOfBatchable, err := elem.GetNumberOfBatchableItems()
 			if err != nil {
-				sv.verifyProcessor.GetErredUnverified(elem, err)
+				sv.batchProcessor.GetErredUnprocessed(elem, err)
 				continue
 			}
 
-			// if no batchable signatures here, send this as a task of its own
-			if numberOfBatchableSigsInGroup == 0 {
-				err := sv.addVerificationTaskToThePoolNow([]UnverifiedSigJob{elem})
+			// if no batchable items here, send this as a task of its own
+			if numberOfBatchable == 0 {
+				err := sv.addVerificationTaskToThePoolNow([]InputJob{elem})
 				if err != nil {
 					return
 				}
 				continue // elem is handled, continue
 			}
 
-			// add this job to the list of batchable signatures
-			numberOfSigsInCurrent = numberOfSigsInCurrent + numberOfBatchableSigsInGroup
-			uElmts = append(uElmts, elem)
-			if numberOfSigsInCurrent > txnPerWorksetThreshold {
+			// add this job to the list of batchable jobs
+			numberOfJobsInCurrent = numberOfJobsInCurrent + numberOfBatchable
+			uJobs = append(uJobs, elem)
+			if numberOfJobsInCurrent > txnPerWorksetThreshold {
 				// enough signatures in the batch to efficiently verify
 
-				if numberOfSigsInCurrent > batchSizeBlockLimit {
+				if numberOfJobsInCurrent > batchSizeBlockLimit {
 					// do not consider adding more signatures to this batch.
 					// bypass the exec pool situation and queue anyway
 					// this is to prevent creation of very large batches
-					err := sv.addVerificationTaskToThePoolNow(uElmts)
+					err := sv.addVerificationTaskToThePoolNow(uJobs)
 					if err != nil {
 						return
 					}
 					added = true
 				} else {
-					added, err = sv.tryAddVerificationTaskToThePool(uElmts)
+					added, err = sv.tryAddVerificationTaskToThePool(uJobs)
 					if err != nil {
 						return
 					}
 				}
 				if added {
-					numberOfSigsInCurrent = 0
-					uElmts = make([]UnverifiedSigJob, 0, 8)
+					numberOfJobsInCurrent = 0
+					uJobs = make([]InputJob, 0, 8)
 					numberOfBatchAttempts = 0
 				} else {
 					// was not added because of the exec pool buffer length
@@ -151,26 +150,26 @@ func (sv *StreamVerifier) batchingLoop() {
 			}
 		case <-timer.C:
 			// timer ticked. it is time to send the batch even if it is not full
-			if numberOfSigsInCurrent == 0 {
+			if numberOfJobsInCurrent == 0 {
 				// nothing batched yet... wait some more
 				continue
 			}
 			var err error
 			if numberOfBatchAttempts > 1 {
 				// bypass the exec pool situation and queue anyway
-				// this is to prevent long delays in the propagation of the sigs (txn/vote)
+				// this is to prevent long delays in the propagation (sigs txn/vote)
 				// at least one job has waited 3 x waitForNextElmtDuration
-				err = sv.addVerificationTaskToThePoolNow(uElmts)
+				err = sv.addVerificationTaskToThePoolNow(uJobs)
 				added = true
 			} else {
-				added, err = sv.tryAddVerificationTaskToThePool(uElmts)
+				added, err = sv.tryAddVerificationTaskToThePool(uJobs)
 			}
 			if err != nil {
 				return
 			}
 			if added {
-				numberOfSigsInCurrent = 0
-				uElmts = make([]UnverifiedSigJob, 0, 8)
+				numberOfJobsInCurrent = 0
+				uJobs = make([]InputJob, 0, 8)
 				numberOfBatchAttempts = 0
 			} else {
 				// was not added because of the exec pool buffer length. wait for some more signatures
@@ -182,13 +181,13 @@ func (sv *StreamVerifier) batchingLoop() {
 	}
 }
 
-func (sv *StreamVerifier) tryAddVerificationTaskToThePool(uElmts []UnverifiedSigJob) (added bool, err error) {
+func (sv *StreamToBatch) tryAddVerificationTaskToThePool(uElmts []InputJob) (added bool, err error) {
 	// if the exec pool buffer is full, can go back and collect
-	// more signatures instead of waiting in the exec pool buffer
+	// more jobs instead of waiting in the exec pool buffer
 	// more signatures to the batch do not harm performance but introduce latency when delayed (see crypto.BenchmarkBatchVerifierBig)
 
 	// if the buffer is full
-	if l, c := sv.verificationPool.BufferSize(); l == c {
+	if l, c := sv.executionPool.BufferSize(); l == c {
 		return false, nil
 	}
 	err = sv.addVerificationTaskToThePoolNow(uElmts)
@@ -199,27 +198,27 @@ func (sv *StreamVerifier) tryAddVerificationTaskToThePool(uElmts []UnverifiedSig
 	return true, nil
 }
 
-func (sv *StreamVerifier) addVerificationTaskToThePoolNow(unvrifiedElts []UnverifiedSigJob) error {
+func (sv *StreamToBatch) addVerificationTaskToThePoolNow(unvrifiedElts []InputJob) error {
 	// if the context is canceled when the task is in the queue, it should be canceled
-	// copy the ctx here so that when the StreamVerifier is started again, and a new context
+	// copy the ctx here so that when the StreamToBatch is started again, and a new context
 	// is created, this task still gets canceled due to the ctx at the time of this task
 	taskCtx := sv.ctx
 	function := func(arg interface{}) interface{} {
-		uElmts := arg.([]UnverifiedSigJob)
+		uElmts := arg.([]InputJob)
 		if taskCtx.Err() != nil {
 			// ctx is canceled. the results will be returned
-			sv.verifyProcessor.Cleanup(uElmts, ErrShuttingDownError)
+			sv.batchProcessor.Cleanup(uElmts, ErrShuttingDownError)
 			return nil
 		}
 
-		sv.verifyProcessor.ProcessElements(uElmts)
+		sv.batchProcessor.ProcessBatch(uElmts)
 		return nil
 	}
 
 	// EnqueueBacklog returns an error when the context is canceled
-	err := sv.verificationPool.EnqueueBacklog(sv.ctx, function, unvrifiedElts, nil)
+	err := sv.executionPool.EnqueueBacklog(sv.ctx, function, unvrifiedElts, nil)
 	if err != nil {
-		logging.Base().Infof("addVerificationTaskToThePoolNow: EnqueueBacklog returned an error and StreamVerifier will stop: %v", err)
+		logging.Base().Infof("addVerificationTaskToThePoolNow: EnqueueBacklog returned an error and StreamToBatch will stop: %v", err)
 	}
 	return err
 }
