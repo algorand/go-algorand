@@ -2862,7 +2862,6 @@ func triggerDeleteVoters(t *testing.T, l *Ledger, genesisInitState ledgercore.In
 }
 
 func testVotersReloadFromDisk(t *testing.T, cfg config.Local) {
-	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
