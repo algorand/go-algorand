@@ -46,7 +46,7 @@ import (
 var droppedFromPool = metrics.MakeCounter(metrics.MetricName{Name: "test_streamVerifierTestCore_messages_dropped_pool", Description: "Test streamVerifierTestCore messages dropped from pool"})
 
 func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64]struct{},
-	expectedError error, t *testing.T) (sv *StreamVerifier) {
+	expectedError error, t *testing.T) (sv *StreamToBatch) {
 
 	numOfTxnGroups := len(txnGroups)
 	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
@@ -57,12 +57,12 @@ func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups m
 
 	defer cancel()
 
-	inputChan := make(chan UnverifiedElement)
+	inputChan := make(chan InputJob)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
-	droppedChan := make(chan *UnverifiedTxnElement)
-	ep, err := MakeElementProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
+	droppedChan := make(chan *UnverifiedTxnSigJob)
+	ep, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv = MakeStreamVerifier(inputChan, verificationPool, ep)
+	sv = MakeStreamToBatch(inputChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	wg := sync.WaitGroup{}
@@ -79,7 +79,7 @@ func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups m
 	go func() {
 		defer wg.Done()
 		for _, tg := range txnGroups {
-			inputChan <- &UnverifiedTxnElement{TxnGroup: tg, BacklogMessage: nil}
+			inputChan <- &UnverifiedTxnSigJob{TxnGroup: tg, BacklogMessage: nil}
 		}
 	}()
 
@@ -166,8 +166,8 @@ func getSignedTransactions(numOfTxns, maxGrpSize, noteOffset int, badTxnProb flo
 
 }
 
-// TestStreamVerifier tests the basic functionality
-func TestStreamVerifier(t *testing.T) {
+// TestStreamToBatch tests the basic functionality
+func TestStreamToBatch(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 4000
@@ -177,8 +177,8 @@ func TestStreamVerifier(t *testing.T) {
 	sv.WaitForStop()
 }
 
-// TestStreamVerifierCases tests various valid and invalid transaction signature cases
-func TestStreamVerifierCases(t *testing.T) {
+// TestStreamToBatchCases tests various valid and invalid transaction signature cases
+func TestStreamToBatchCases(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 10
@@ -279,8 +279,8 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	sv.WaitForStop()
 }
 
-// TestStreamVerifierIdel starts the verifer and sends nothing, to trigger the timer, then sends a txn
-func TestStreamVerifierIdel(t *testing.T) {
+// TestStreamToBatchIdel starts the verifer and sends nothing, to trigger the timer, then sends a txn
+func TestStreamToBatchIdel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 1
@@ -299,13 +299,13 @@ func TestGetNumberOfBatchableSigsInGroup(t *testing.T) {
 
 	// txn with 0 sigs
 	txnGroups[mod][0].Sig = crypto.Signature{}
-	batchSigs, err := UnverifiedTxnElement{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableSigsInGroup()
+	batchSigs, err := UnverifiedTxnSigJob{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableItems()
 	require.ErrorIs(t, err, errTxnSigHasNoSig)
 	mod++
 
 	_, signedTxns, secrets, addrs := generateTestObjects(numOfTxns, 20, 0, 50)
 	txnGroups = generateTransactionGroups(1, signedTxns, secrets, addrs)
-	batchSigs, err = UnverifiedTxnElement{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableSigsInGroup()
+	batchSigs, err = UnverifiedTxnSigJob{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableItems()
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), batchSigs)
 
@@ -313,7 +313,7 @@ func TestGetNumberOfBatchableSigsInGroup(t *testing.T) {
 	txnGroups[mod][0].Sig = crypto.Signature{}
 	txnGroups[mod][0].Txn.Type = protocol.StateProofTx
 	txnGroups[mod][0].Txn.Header.Sender = transactions.StateProofSender
-	batchSigs, err = UnverifiedTxnElement{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableSigsInGroup()
+	batchSigs, err = UnverifiedTxnSigJob{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableItems()
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), batchSigs)
 	mod++
@@ -321,7 +321,7 @@ func TestGetNumberOfBatchableSigsInGroup(t *testing.T) {
 	// multisig
 	_, mSigTxn, _, _ := generateMultiSigTxn(1, 6, 50, t)
 
-	batchSigs, err = UnverifiedTxnElement{TxnGroup: mSigTxn}.GetNumberOfBatchableSigsInGroup()
+	batchSigs, err = UnverifiedTxnSigJob{TxnGroup: mSigTxn}.GetNumberOfBatchableItems()
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), batchSigs)
 	mod++
@@ -342,7 +342,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[mod][0].Lsig.Logic = op.Program
 	program := logic.Program(op.Program)
 	txnGroups[mod][0].Lsig.Sig = secrets[s].Sign(program)
-	batchSigs, err = UnverifiedTxnElement{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableSigsInGroup()
+	batchSigs, err = UnverifiedTxnSigJob{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableItems()
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), batchSigs)
 	mod++
@@ -351,12 +351,12 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	_, signedTxn, secrets, addrs = generateTestObjects(numOfTxns, 20, 0, 50)
 	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
 	txnGroups[mod][0].Msig = mSigTxn[0].Msig
-	batchSigs, err = UnverifiedTxnElement{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableSigsInGroup()
+	batchSigs, err = UnverifiedTxnSigJob{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableItems()
 	require.ErrorIs(t, err, errTxnSigNotWellFormed)
 }
 
-// TestStreamVerifierPoolShutdown tests what happens when the exec pool shuts down
-func TestStreamVerifierPoolShutdown(t *testing.T) { //nolint:paralleltest // Not parallel because it depends on the default logger
+// TestStreamToBatchPoolShutdown tests what happens when the exec pool shuts down
+func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not parallel because it depends on the default logger
 	partitiontest.PartitionTest(t)
 
 	// only one transaction should be sufficient for the batch verifier
@@ -406,12 +406,12 @@ func TestStreamVerifierPoolShutdown(t *testing.T) { //nolint:paralleltest // Not
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50000)
 
-	inputChan := make(chan UnverifiedElement)
+	inputChan := make(chan InputJob)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
-	droppedChan := make(chan *UnverifiedTxnElement)
-	ep, err := MakeElementProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
+	droppedChan := make(chan *UnverifiedTxnSigJob)
+	ep, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamVerifier(inputChan, verificationPool, ep)
+	sv := MakeStreamToBatch(inputChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	errChan := make(chan error)
@@ -439,18 +439,18 @@ func TestStreamVerifierPoolShutdown(t *testing.T) { //nolint:paralleltest // Not
 			select {
 			case <-ctx.Done():
 				break
-			case inputChan <- &UnverifiedTxnElement{TxnGroup: tg, BacklogMessage: nil}:
+			case inputChan <- &UnverifiedTxnSigJob{TxnGroup: tg, BacklogMessage: nil}:
 			}
 		}
 	}()
 	for err := range errChan {
 		require.ErrorIs(t, err, ErrShuttingDownError)
 	}
-	require.Contains(t, logBuffer.String(), "addVerificationTaskToThePoolNow: EnqueueBacklog returned an error and StreamVerifier will stop: context canceled")
+	require.Contains(t, logBuffer.String(), "addVerificationTaskToThePoolNow: EnqueueBacklog returned an error and StreamToBatch will stop: context canceled")
 }
 
-// TestStreamVerifierRestart tests what happens when the context is canceled
-func TestStreamVerifierRestart(t *testing.T) {
+// TestStreamToBatchRestart tests what happens when the context is canceled
+func TestStreamToBatchRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numOfTxns := 1000
@@ -463,14 +463,14 @@ func TestStreamVerifierRestart(t *testing.T) {
 
 	cache := MakeVerifiedTransactionCache(50)
 
-	inputChan := make(chan UnverifiedElement)
+	inputChan := make(chan InputJob)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
-	droppedChan := make(chan *UnverifiedTxnElement)
+	droppedChan := make(chan *UnverifiedTxnSigJob)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	ep, err := MakeElementProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
+	ep, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamVerifier(inputChan, verificationPool, ep)
+	sv := MakeStreamToBatch(inputChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	errChan := make(chan error)
@@ -498,7 +498,7 @@ func TestStreamVerifierRestart(t *testing.T) {
 			select {
 			case <-ctx2.Done():
 				break
-			case inputChan <- &UnverifiedTxnElement{TxnGroup: tg, BacklogMessage: nil}:
+			case inputChan <- &UnverifiedTxnSigJob{TxnGroup: tg, BacklogMessage: nil}:
 			}
 		}
 		cancel()
@@ -512,7 +512,7 @@ func TestStreamVerifierRestart(t *testing.T) {
 }
 
 // TestBlockWatcher runs multiple goroutines to check the concurency and correctness of the block watcher
-func TestStreamVerifierBlockWatcher(t *testing.T) {
+func TestStreamToBatchBlockWatcher(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	blkHdr := createDummyBlockHeader()
 	nbw := MakeNewBlockWatcher(blkHdr)
@@ -569,24 +569,24 @@ func getSaturatedExecPool(t *testing.T) (execpool.BacklogPool, chan interface{})
 	return verificationPool, holdTasks
 }
 
-// TestStreamVerifierCtxCancel tests the termination when the ctx is canceled
+// TestStreamToBatchCtxCancel tests the termination when the ctx is canceled
 // To make sure that the batchingLoop is still working on a batch when the
 // ctx is cancled, this test first saturates the exec pool buffer, then
 // sends a txn and immediately cancels the ctx so that the batch is not
 // passed to the exec pool yet, but is in batchingLoop
-func TestStreamVerifierCtxCancel(t *testing.T) {
+func TestStreamToBatchCtxCancel(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	verificationPool, holdTasks := getSaturatedExecPool(t)
 	defer verificationPool.Shutdown()
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50)
-	inputChan := make(chan UnverifiedElement)
+	inputChan := make(chan InputJob)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
-	droppedChan := make(chan *UnverifiedTxnElement)
-	ep, err := MakeElementProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
+	droppedChan := make(chan *UnverifiedTxnSigJob)
+	ep, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamVerifier(inputChan, verificationPool, ep)
+	sv := MakeStreamToBatch(inputChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	var result *VerificationResult
@@ -602,7 +602,7 @@ func TestStreamVerifierCtxCancel(t *testing.T) {
 	// send batchSizeBlockLimit after the exec pool buffer is full
 	numOfTxns := 1
 	txnGroups, _ := getSignedTransactions(numOfTxns, 1, 0, 0.5)
-	inputChan <- &UnverifiedTxnElement{TxnGroup: txnGroups[0], BacklogMessage: nil}
+	inputChan <- &UnverifiedTxnSigJob{TxnGroup: txnGroups[0], BacklogMessage: nil}
 	// cancel the ctx before the sig is sent to the exec pool
 	cancel()
 
@@ -616,14 +616,14 @@ func TestStreamVerifierCtxCancel(t *testing.T) {
 	require.ErrorIs(t, result.Err, ErrShuttingDownError)
 }
 
-// TestStreamVerifierCtxCancelPoolQueue tests the termination when the ctx is canceled
+// TestStreamToBatchCtxCancelPoolQueue tests the termination when the ctx is canceled
 // To make sure that the batchingLoop is still working on a batch when the
 // ctx is cancled, this test first saturates the exec pool buffer, then
 // sends a txn and cancels the ctx after multiple waitForNextTxnDuration
 // so that the batch is sent to the pool. Since the pool is saturated,
 // the task will be stuck waiting to be queued when the context is canceled
 // everything should be gracefully terminated
-func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest // Not parallel because it depends on the default logger
+func TestStreamToBatchCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest // Not parallel because it depends on the default logger
 	partitiontest.PartitionTest(t)
 
 	verificationPool, holdTasks := getSaturatedExecPool(t)
@@ -636,12 +636,12 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest 
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50)
-	inputChan := make(chan UnverifiedElement)
+	inputChan := make(chan InputJob)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
-	droppedChan := make(chan *UnverifiedTxnElement)
-	ep, err := MakeElementProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
+	droppedChan := make(chan *UnverifiedTxnSigJob)
+	ep, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamVerifier(inputChan, verificationPool, ep)
+	sv := MakeStreamToBatch(inputChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	var result *VerificationResult
@@ -674,7 +674,7 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest 
 			// the single transaction slips through and passes the batch verifier before the exec pool shuts down.
 			// this happens when close(holdTasks) runs and frees the exec pool, and lets the txns get verified, before
 			// verificationPool.Shutdown() executes.
-			case inputChan <- &UnverifiedTxnElement{TxnGroup: txnGroups[0], BacklogMessage: nil}:
+			case inputChan <- &UnverifiedTxnSigJob{TxnGroup: txnGroups[0], BacklogMessage: nil}:
 			case <-ctx.Done():
 				return
 			}
@@ -697,12 +697,12 @@ func TestStreamVerifierCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest 
 
 	wg.Wait()
 	require.ErrorIs(t, result.Err, ErrShuttingDownError)
-	require.Contains(t, logBuffer.String(), "addVerificationTaskToThePoolNow: EnqueueBacklog returned an error and StreamVerifier will stop: context canceled")
+	require.Contains(t, logBuffer.String(), "addVerificationTaskToThePoolNow: EnqueueBacklog returned an error and StreamToBatch will stop: context canceled")
 }
 
-// TestStreamVerifierPostVBlocked tests the behavior when the return channel (result chan) of verified
+// TestStreamToBatchPostVBlocked tests the behavior when the return channel (result chan) of verified
 // transactions is blocked, and checks droppedFromPool counter to confirm the drops
-func TestStreamVerifierPostVBlocked(t *testing.T) {
+func TestStreamToBatchPostVBlocked(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// prepare the stream verifier
@@ -718,12 +718,12 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 
 	txBacklogSizeMod := txBacklogSize / 20
 
-	inputChan := make(chan UnverifiedElement)
+	inputChan := make(chan InputJob)
 	resultChan := make(chan *VerificationResult, txBacklogSizeMod)
-	droppedChan := make(chan *UnverifiedTxnElement)
-	ep, err := MakeElementProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
+	droppedChan := make(chan *UnverifiedTxnSigJob)
+	ep, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamVerifier(inputChan, verificationPool, ep)
+	sv := MakeStreamToBatch(inputChan, verificationPool, ep)
 
 	defer close(droppedChan)
 	go func() {
@@ -740,7 +740,7 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0, 0.5)
 	numOfTxnGroups := len(txnGroups)
 	for _, tg := range txnGroups {
-		inputChan <- &UnverifiedTxnElement{TxnGroup: tg, BacklogMessage: nil}
+		inputChan <- &UnverifiedTxnSigJob{TxnGroup: tg, BacklogMessage: nil}
 	}
 
 	var droppedPool uint64
@@ -778,7 +778,7 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 	go processResults(ctx, errChan, resultChan, numOfTxnGroups, badTxnGroups, &badSigResultCounter, &goodSigResultCounter, &wg)
 
 	for _, tg := range txnGroups {
-		inputChan <- &UnverifiedTxnElement{TxnGroup: tg, BacklogMessage: nil}
+		inputChan <- &UnverifiedTxnSigJob{TxnGroup: tg, BacklogMessage: nil}
 	}
 
 	for err := range errChan {
@@ -789,15 +789,15 @@ func TestStreamVerifierPostVBlocked(t *testing.T) {
 	wg.Wait()
 }
 
-func TestStreamVerifierMakeStreamVerifierErr(t *testing.T) {
+func TestStreamToBatchMakeStreamToBatchErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	_, err := MakeElementProcessor(&DummyLedgerForSignature{badHdr: true}, nil, nil, nil)
+	_, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{badHdr: true}, nil, nil, nil)
 	require.Error(t, err)
 }
 
-// TestStreamVerifierCancelWhenPooled tests the case where the ctx is cancled after the verification
+// TestStreamToBatchCancelWhenPooled tests the case where the ctx is cancled after the verification
 // task is queued to the exec pool and before the task is executed in the pool
-func TestStreamVerifierCancelWhenPooled(t *testing.T) {
+func TestStreamToBatchCancelWhenPooled(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	numOfTxns := 1000
 	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, 1, 0, 0.5)
@@ -811,13 +811,13 @@ func TestStreamVerifierCancelWhenPooled(t *testing.T) {
 
 	cache := MakeVerifiedTransactionCache(50)
 
-	inputChan := make(chan UnverifiedElement)
+	inputChan := make(chan InputJob)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
-	droppedChan := make(chan *UnverifiedTxnElement)
+	droppedChan := make(chan *UnverifiedTxnSigJob)
 	ctx, cancel := context.WithCancel(context.Background())
-	ep, err := MakeElementProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
+	ep, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamVerifier(inputChan, verificationPool, ep)
+	sv := MakeStreamToBatch(inputChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	errChan := make(chan error)
@@ -836,7 +836,7 @@ func TestStreamVerifierCancelWhenPooled(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for _, tg := range txnGroups {
-			inputChan <- &UnverifiedTxnElement{TxnGroup: tg, BacklogMessage: nil}
+			inputChan <- &UnverifiedTxnSigJob{TxnGroup: tg, BacklogMessage: nil}
 		}
 		// cancel the ctx, and expect at least one task queued to the pool but not yet executed
 		cancel()

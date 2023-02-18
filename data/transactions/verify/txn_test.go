@@ -966,13 +966,13 @@ func BenchmarkTxn(b *testing.B) {
 func TestReturnUnverified(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	droppedChan := make(chan *UnverifiedTxnElement, 1)
-	svh := txnElementProcessor{
+	droppedChan := make(chan *UnverifiedTxnSigJob, 1)
+	svh := txnSigVerifyJobProcessor{
 		resultChan:  make(chan<- *VerificationResult, 0),
 		droppedChan: droppedChan,
 	}
 
-	svh.GetErredUnverified(&UnverifiedTxnElement{}, nil)
+	svh.GetErredUnprocessed(&UnverifiedTxnSigJob{}, nil)
 	dropped := <-droppedChan
-	require.Equal(t, *dropped, UnverifiedTxnElement{})
+	require.Equal(t, *dropped, UnverifiedTxnSigJob{})
 }
