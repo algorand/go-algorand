@@ -636,7 +636,7 @@ func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext
 
 }
 
-type txnSigVerifyJobProcessor struct {
+type txnSigBatchProcessor struct {
 	cache       VerifiedTransactionCache
 	nbw         *NewBlockWatcher
 	ledger      logic.LedgerForSignature
@@ -652,31 +652,31 @@ type LedgerForStreamVerifier interface {
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 }
 
-func (svh *txnSigVerifyJobProcessor) Cleanup(pending []InputJob, err error) {
+func (tbp *txnSigBatchProcessor) Cleanup(pending []InputJob, err error) {
 	// report an error for the unchecked txns
 	// drop the messages without reporting if the receiver does not consume
 	for _, ue := range pending {
 		uelt := ue.(*UnverifiedTxnSigJob)
-		svh.sendResult(uelt.TxnGroup, uelt.BacklogMessage, err)
+		tbp.sendResult(uelt.TxnGroup, uelt.BacklogMessage, err)
 	}
 }
 
-func (svh txnSigVerifyJobProcessor) GetErredUnprocessed(ue InputJob, err error) {
+func (tbp txnSigBatchProcessor) GetErredUnprocessed(ue InputJob, err error) {
 	uelt := ue.(*UnverifiedTxnSigJob)
-	svh.sendResult(uelt.TxnGroup, uelt.BacklogMessage, err)
+	tbp.sendResult(uelt.TxnGroup, uelt.BacklogMessage, err)
 }
 
-func (svh txnSigVerifyJobProcessor) sendResult(veTxnGroup []transactions.SignedTxn, veBacklogMessage interface{}, err error) {
+func (tbp txnSigBatchProcessor) sendResult(veTxnGroup []transactions.SignedTxn, veBacklogMessage interface{}, err error) {
 	// send the txn result out the pipe
 	select {
-	case svh.resultChan <- &VerificationResult{
+	case tbp.resultChan <- &VerificationResult{
 		TxnGroup:       veTxnGroup,
 		BacklogMessage: veBacklogMessage,
 		Err:            err,
 	}:
 	default:
 		// we failed to write to the output queue, since the queue was full.
-		svh.droppedChan <- &UnverifiedTxnSigJob{veTxnGroup, veBacklogMessage}
+		tbp.droppedChan <- &UnverifiedTxnSigJob{veTxnGroup, veBacklogMessage}
 	}
 }
 
@@ -692,7 +692,7 @@ func MakeSigVerifyJobProcessor(ledger LedgerForStreamVerifier, cache VerifiedTra
 	nbw := MakeNewBlockWatcher(latestHdr)
 	ledger.RegisterBlockListeners([]ledgercore.BlockListener{nbw})
 
-	return &txnSigVerifyJobProcessor{
+	return &txnSigBatchProcessor{
 		cache:       cache,
 		nbw:         nbw,
 		ledger:      ledger,
@@ -701,25 +701,25 @@ func MakeSigVerifyJobProcessor(ledger LedgerForStreamVerifier, cache VerifiedTra
 	}, nil
 }
 
-func (svh *txnSigVerifyJobProcessor) ProcessBatch(uEmts []InputJob) {
-	batchVerifier, ctx := svh.preProcessUnverifiedElements(uEmts)
+func (tbp *txnSigBatchProcessor) ProcessBatch(uEmts []InputJob) {
+	batchVerifier, ctx := tbp.preProcessUnverifiedElements(uEmts)
 	failed, err := batchVerifier.VerifyWithFeedback()
 	// this error can only be crypto.ErrBatchHasFailedSigs
-	svh.postProcessVerifiedJobs(ctx, failed, err)
+	tbp.postProcessVerifiedJobs(ctx, failed, err)
 }
 
-func (svp *txnSigVerifyJobProcessor) preProcessUnverifiedElements(uelts []InputJob) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
+func (tbp *txnSigBatchProcessor) preProcessUnverifiedElements(uelts []InputJob) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
 	batchVerifier = crypto.MakeBatchVerifier()
 	bl := makeBatchLoad(len(uelts))
 	// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
-	blockHeader := svp.nbw.getBlockHeader()
+	blockHeader := tbp.nbw.getBlockHeader()
 
 	for _, uelt := range uelts {
 		ue := uelt.(*UnverifiedTxnSigJob)
-		groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, blockHeader, svp.ledger, batchVerifier, nil)
+		groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, blockHeader, tbp.ledger, batchVerifier, nil)
 		if err != nil {
 			// verification failed, no need to add the sig to the batch, report the error
-			svp.sendResult(ue.TxnGroup, ue.BacklogMessage, err)
+			tbp.sendResult(ue.TxnGroup, ue.BacklogMessage, err)
 			continue
 		}
 		totalBatchCount := batchVerifier.GetNumberOfEnqueuedSignatures()
@@ -769,13 +769,13 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (uint64, error) 
 	}
 }
 
-func (svp *txnSigVerifyJobProcessor) postProcessVerifiedJobs(ctx interface{}, failed []bool, err error) {
+func (tbp *txnSigBatchProcessor) postProcessVerifiedJobs(ctx interface{}, failed []bool, err error) {
 	bl := ctx.(*batchLoad)
 	if err == nil { // success, all signatures verified
 		for i := range bl.txnGroups {
-			svp.sendResult(bl.txnGroups[i], bl.backlogMessage[i], nil)
+			tbp.sendResult(bl.txnGroups[i], bl.backlogMessage[i], nil)
 		}
-		svp.cache.AddPayset(bl.txnGroups, bl.groupCtxs)
+		tbp.cache.AddPayset(bl.txnGroups, bl.groupCtxs)
 		return
 	}
 
@@ -802,8 +802,8 @@ func (svp *txnSigVerifyJobProcessor) postProcessVerifiedJobs(ctx interface{}, fa
 		} else {
 			result = err
 		}
-		svp.sendResult(bl.txnGroups[txgIdx], bl.backlogMessage[txgIdx], result)
+		tbp.sendResult(bl.txnGroups[txgIdx], bl.backlogMessage[txgIdx], result)
 	}
 	// loading them all at once by locking the cache once
-	svp.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
+	tbp.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
 }

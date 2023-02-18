@@ -967,7 +967,7 @@ func TestReturnUnverified(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	droppedChan := make(chan *UnverifiedTxnSigJob, 1)
-	svh := txnSigVerifyJobProcessor{
+	svh := txnSigBatchProcessor{
 		resultChan:  make(chan<- *VerificationResult, 0),
 		droppedChan: droppedChan,
 	}
