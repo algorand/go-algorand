@@ -433,6 +433,9 @@ func TestOtherTxSharing(t *testing.T) {
 
 // TestSharedInnerTxns checks how inner txns access resources.
 func TestSharedInnerTxns(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	_, _, ledger := logic.MakeSampleEnv()
 
 	const asa1 = 201

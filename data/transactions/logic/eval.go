@@ -3983,6 +3983,18 @@ func opExtract64Bits(cx *EvalContext) error {
 	return opExtractNBytes(cx, 8) // extract 8 bytes
 }
 
+// assignAccount is used to convert a stackValue into a 32-byte account value,
+// enforcing any "availability" restrictions in force.
+func (cx *EvalContext) assignAccount(sv stackValue) (basics.Address, error) {
+	_, err := sv.address()
+	if err != nil {
+		return basics.Address{}, err
+	}
+
+	addr, _, err := cx.accountReference(sv)
+	return addr, err
+}
+
 // accountReference yields the address and Accounts offset designated by a
 // stackValue. If the stackValue is the app account, an account of an app in
 // created.apps, an account of an app in foreignApps, or an account made
@@ -3993,8 +4005,8 @@ func opExtract64Bits(cx *EvalContext) error {
 // we can set/del it. Return the proper index.
 
 // Starting in v9, apps can change local state on these accounts by adding the
-// address to EvalDelta.ShardAccounts and indexing it there. But at this level,
-// we still report the "failure" to find an index with `invalidIndex=len+1` That
+// address to EvalDelta.SharedAccounts and indexing it there. But at this level,
+// we still report the "failure" to find an index with `len(Accounts)+1` That
 // value allows mutableAccountReference to decide whether to report an error or
 // not, based on version.
 
@@ -4017,8 +4029,7 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 	if !ok {
 		return addr, 0, err
 	}
-	invalidIndex := uint64(len(cx.txn.Txn.Accounts) + 1)
-	return addr, invalidIndex, nil
+	return addr, uint64(len(cx.txn.Txn.Accounts) + 1), nil
 }
 
 func (cx *EvalContext) availableAccount(addr basics.Address) bool {
@@ -4848,18 +4859,6 @@ func opItxnNext(cx *EvalContext) error {
 	return addInnerTxn(cx)
 }
 
-// assignAccount is used to convert a stackValue into a 32-byte account value,
-// enforcing any "availability" restrictions in force.
-func (cx *EvalContext) assignAccount(sv stackValue) (basics.Address, error) {
-	_, err := sv.address()
-	if err != nil {
-		return basics.Address{}, err
-	}
-
-	addr, _, err := cx.accountReference(sv)
-	return addr, err
-}
-
 // assignAsset is used to convert a stackValue to a uint64 assetIndex, reporting
 // any errors due to availability rules or type checking.
 func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
@@ -4877,7 +4876,7 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 }
 
 // availableAsset determines whether an asset is "available". Before
-// resourceSharingVersion, an asset had to be available for for asset param
+// resourceSharingVersion, an asset had to be available for asset param
 // lookups, asset holding lookups, and asset id assignments to inner
 // transactions. After resourceSharingVersion, the distinction must be more fine
 // grained. It must be available for asset param lookups, or use in an asset
