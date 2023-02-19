@@ -1686,8 +1686,8 @@ func TestListAssetsAndApplications(t *testing.T) {
 func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// since the first state proof is expected to happen on stateproofInterval*2 we would start give-up on state proofs we would
-	// give up on old state proofs only after stateproofInterval*3
+	// since the first state proof is expected to happen on stateproofInterval*2 we would start
+	// give-up on state proofs only after stateproofInterval*3
 	maxBlocks := int((config.Consensus[protocol.ConsensusFuture].StateProofMaxRecoveryIntervals + 2) * config.Consensus[protocol.ConsensusFuture].StateProofInterval)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 10000000000)
@@ -1707,14 +1707,18 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	}
 	genesisInitState.Accounts = accountsWithValid
 
-	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
+	const inMem = false
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
-	defer l.Close()
+	defer func() {
+		l.Close()
+		os.Remove(dbName + ".block.sqlite")
+		os.Remove(dbName + ".tracker.sqlite")
+	}()
 
 	lastBlock, err := l.Block(l.Latest())
 	require.NoError(t, err)
@@ -1724,7 +1728,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	// regular addresses: all init accounts minus pools
 
 	addresses := make([]basics.Address, len(genesisInitState.Accounts)-2, len(genesisInitState.Accounts)+maxBlocks)
-	i := 0
+	i := uint64(0)
 	for addr := range genesisInitState.Accounts {
 		if addr != testPoolAddr && addr != testSinkAddr {
 			addresses[i] = addr
@@ -1734,43 +1738,40 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 		keys[addr] = initKeys[addr]
 	}
 
-	for i := 0; i < maxBlocks; i++ {
+	for i = 0; i < uint64(maxBlocks)+proto.StateProofInterval; i++ {
 		addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
 	}
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	// On this round there is no give up on any state proof - so we would be able to verify an old state proof txn.
-
-	// We now create block with stateproof transaction. since we don't want to complicate the test and create
-	// a cryptographically correct stateproof we would make sure that only the crypto part of the verification fails.
+	triggerTrackerFlush(t, l, genesisInitState)
+	l.WaitForCommit(l.Latest())
 	blk := createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
 	_, err = l.Validate(context.Background(), blk, backlogPool)
 	require.ErrorContains(t, err, "state proof crypto error")
 
-	// We advance the ledger up to the point it should forget the first votersForRound
-	for i := uint64(0); i < proto.StateProofInterval+cfg.MaxAcctLookback; i++ {
+	for i = 0; i < proto.StateProofInterval; i++ {
 		addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
 	}
 
-	// We make the ledger flush tracker data to allow votersTracker to advance lowestRound
 	triggerTrackerFlush(t, l, genesisInitState)
-
-	// We add another block to make the block queue query the voter's tracker lowest round again, which allows it to forget
-	// rounds based on the new lowest round.
-	addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
 	l.WaitForCommit(l.Latest())
 
-	// at this point the ledger has removed the voters block header. However, since
-	// the ledger uses the stateproof verification tracker the state proof be validated (or at least fail on the crypto part)
-	blk = createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
-
-	votersRound := basics.Round(proto.StateProofInterval)
-	_, err = l.BlockHdr(votersRound)
+	// we make sure that the voters header does not exist and that the voters tracker
+	// lost tracking of the top voters.
+	_, err = l.BlockHdr(basics.Round(proto.StateProofInterval))
 	require.Error(t, err)
 	expectedErr := &ledgercore.ErrNoEntry{}
 	require.True(t, errors.As(err, expectedErr), fmt.Sprintf("got error %s", err))
 
+	l.acctsOnline.voters.votersMu.Lock()
+	for k, _ := range l.acctsOnline.voters.votersForRoundCache {
+		require.NotEqual(t, k, basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback), "found voters for round 200, it should have been removed")
+	}
+	l.acctsOnline.voters.votersMu.Unlock()
+
+	// However, we are still able to very a state proof sicne we use the tracker
+	blk = createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
 	_, err = l.Validate(context.Background(), blk, backlogPool)
 	require.ErrorContains(t, err, "state proof crypto error")
 }
