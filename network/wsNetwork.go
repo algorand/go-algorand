@@ -2455,6 +2455,13 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 }
 
 func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
+	// guard against peers which are already closing
+	select {
+	case <-peer.closing:
+		wn.log.Errorf("peer already closing %#v", peer)
+		return
+	default:
+	}
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
 	// simple duplicate *pointer* check. should never trigger given the callers to addPeer
