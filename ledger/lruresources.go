@@ -29,19 +29,21 @@ type cachedResourceData struct {
 	address basics.Address
 }
 
-// lruResources provides a storage class for the most recently used resources data.
-// It doesn't have any synchronization primitive on it's own and require to be
-// syncronized by the caller.
+// lruResources provides a storage class for the most recently used resources' data.
+// It doesn't have any synchronization primitive on its own and require to be
+// synchronized by the caller.
 type lruResources struct {
 	// resourcesList contain the list of persistedResourceData, where the front ones are the most "fresh"
 	// and the ones on the back are the oldest.
 	resourcesList *persistedResourcesDataList
 
 	// resources provides fast access to the various elements in the list by using the account address
+	// if lruResources is set with pendingWrites 0, then resources is nil
 	resources map[accountCreatable]*persistedResourcesDataListNode
 
 	// pendingResources are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the resources/resourcesList
+	// if lruResources is set with pendingWrites 0, then pendingResources is nil
 	pendingResources chan cachedResourceData
 
 	// log interface; used for logging the threshold event.
@@ -50,6 +52,7 @@ type lruResources struct {
 	// pendingWritesWarnThreshold is the threshold beyond we would write a warning for exceeding the number of pendingResources entries
 	pendingWritesWarnThreshold int
 
+	// if lruResources is set with pendingWrites 0, then pendingNotFound and notFound is nil
 	pendingNotFound chan accountCreatable
 	notFound        map[accountCreatable]struct{}
 }
@@ -57,11 +60,13 @@ type lruResources struct {
 // init initializes the lruResources for use.
 // thread locking semantics : write lock
 func (m *lruResources) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
-	m.resourcesList = newPersistedResourcesList().allocateFreeNodes(pendingWrites)
-	m.resources = make(map[accountCreatable]*persistedResourcesDataListNode, pendingWrites)
-	m.pendingResources = make(chan cachedResourceData, pendingWrites)
-	m.notFound = make(map[accountCreatable]struct{}, pendingWrites)
-	m.pendingNotFound = make(chan accountCreatable, pendingWrites)
+	if pendingWrites > 0 {
+		m.resourcesList = newPersistedResourcesList().allocateFreeNodes(pendingWrites)
+		m.resources = make(map[accountCreatable]*persistedResourcesDataListNode, pendingWrites)
+		m.pendingResources = make(chan cachedResourceData, pendingWrites)
+		m.notFound = make(map[accountCreatable]struct{}, pendingWrites)
+		m.pendingNotFound = make(chan accountCreatable, pendingWrites)
+	}
 	m.log = log
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
 }
@@ -149,6 +154,9 @@ func (m *lruResources) writeNotFoundPending(addr basics.Address, idx basics.Crea
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
 func (m *lruResources) write(resData store.PersistedResourcesData, addr basics.Address) {
+	if m.resources == nil {
+		return
+	}
 	if el := m.resources[accountCreatable{address: addr, index: resData.Aidx}]; el != nil {
 		// already exists; is it a newer ?
 		if el.Value.Before(&resData) {
@@ -166,6 +174,9 @@ func (m *lruResources) write(resData store.PersistedResourcesData, addr basics.A
 // recently used entries.
 // thread locking semantics : write lock
 func (m *lruResources) prune(newSize int) (removed int) {
+	if m.resources == nil {
+		return
+	}
 	for {
 		if len(m.resources) <= newSize {
 			break
