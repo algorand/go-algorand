@@ -3255,21 +3255,43 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 // Plan:
 // Network A will be sending messages to network B.
 // Network B will respond with another message for the first 4 messages. When it receive the 5th message, it would close the connection.
-// We want to get an event with disconnectRequestReceived
 func TestWebsocketDisconnection(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	// We want to get an event with disconnectRequestReceived from netA
+	testWebsocketDisconnection(t, func(wn *WebsocketNetwork, _ *OutgoingMessage) {
+		wn.DisconnectPeers()
+	}, nil)
+
+	// We want to get an event with the default reason from netB
+	defaultReason := disconnectBadData
+	testWebsocketDisconnection(t, func(_ *WebsocketNetwork, out *OutgoingMessage) {
+		out.Action = Disconnect
+	}, &defaultReason)
+
+	// We want to get an event with the provided reason from netB
+	customReason := disconnectReason("MyCustomDisconnectReason")
+	testWebsocketDisconnection(t, func(_ *WebsocketNetwork, out *OutgoingMessage) {
+		out.Action = Disconnect
+		out.reason = customReason
+	}, &customReason)
+}
+
+func testWebsocketDisconnection(t *testing.T, disconnectFunc func(wn *WebsocketNetwork, out *OutgoingMessage), expectedNetBReason *disconnectReason) {
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
 	netA.config.EnablePingHandler = false
-	dl := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
-	netA.log = dl
+	dlNetA := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
+	netA.log = dlNetA
 
 	netA.Start()
 	defer netStop(t, netA, "A")
 	netB := makeTestWebsocketNode(t)
 	netB.config.GossipFanout = 1
 	netB.config.EnablePingHandler = false
+	dlNetB := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
+	netB.log = dlNetB
+
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
@@ -3289,7 +3311,7 @@ func TestWebsocketDisconnection(t *testing.T) {
 	msgHandlerB := func(msg IncomingMessage) (out OutgoingMessage) {
 		if atomic.AddUint32(&msgCounterNetB, 1) == 5 {
 			// disconnect
-			netB.DisconnectPeers()
+			disconnectFunc(netB, &out)
 		} else {
 			// if we received a message, send a message back.
 			netB.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{msg.Data[0] + 1}, true, nil)
@@ -3331,16 +3353,31 @@ func TestWebsocketDisconnection(t *testing.T) {
 	}
 
 	select {
-	case eventDetails := <-dl.eventReceived:
+	case eventDetails := <-dlNetA.eventReceived:
 		switch disconnectPeerEventDetails := eventDetails.(type) {
 		case telemetryspec.DisconnectPeerEventDetails:
-			require.Equal(t, disconnectPeerEventDetails.Reason, string(disconnectRequestReceived))
+			require.Equal(t, string(disconnectRequestReceived), disconnectPeerEventDetails.Reason)
 		default:
 			require.FailNow(t, "Unexpected event was send : %v", eventDetails)
 		}
 
 	default:
-		require.FailNow(t, "The DisconnectPeerEvent was missing")
+		require.FailNow(t, "The NetA DisconnectPeerEvent was missing")
+	}
+
+	if expectedNetBReason != nil {
+		select {
+		case eventDetails := <-dlNetB.eventReceived:
+			switch disconnectPeerEventDetails := eventDetails.(type) {
+			case telemetryspec.DisconnectPeerEventDetails:
+				require.Equal(t, string(*expectedNetBReason), disconnectPeerEventDetails.Reason)
+			default:
+				require.FailNow(t, "Unexpected event was send : %v", eventDetails)
+			}
+
+		default:
+			require.FailNow(t, "The NetB DisconnectPeerEvent was missing")
+		}
 	}
 }
 
