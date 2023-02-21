@@ -873,7 +873,7 @@ func TestSimulateTransaction(t *testing.T) {
 	// prepare node and handler
 	numAccounts := 5
 	offlineAccounts := true
-	mockLedger, roots, _, _, releasefunc := testingenvWithBalances(t, 999_999, 999_998, numAccounts, 1, offlineAccounts)
+	mockLedger, roots, _, _, releasefunc := testingenvWithBalances(t, 999_998, 999_999, numAccounts, 1, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
