@@ -1322,7 +1322,7 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	assert.Equal(t, 2, netA.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getInsertCount())
 	// it is possible for NetB to be in the process of doing addPeer while
-	// the underlying conneciton is being closed. In this case, the read loop
+	// the underlying connection is being closed. In this case, the read loop
 	// on the peer will detect and close the peer. Since this is asynchronous,
 	// we wait and check regularly to allow the connection to settle
 	assert.Eventually(
@@ -1879,7 +1879,7 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
 		assert.Equal(t, tc.totalOutB, len(netB.GetPeers(PeersConnectedOut)))
 		// it is possible for NetB to be in the process of doing addPeer while
-		// the underlying conneciton is being closed. In this case, the read loop
+		// the underlying connection is being closed. In this case, the read loop
 		// on the peer will detect and close the peer. Since this is asynchronous,
 		// we wait and check regularly to allow the connection to settle
 		assert.Eventually(
@@ -2038,7 +2038,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
 		assert.Equal(t, tc.totalOutB, len(netB.GetPeers(PeersConnectedOut)))
 		// it is possible for NetB to be in the process of doing addPeer while
-		// the underlying conneciton is being closed. In this case, the read loop
+		// the underlying connection is being closed. In this case, the read loop
 		// on the peer will detect and close the peer. Since this is asynchronous,
 		// we wait and check regularly to allow the connection to settle
 		assert.Eventually(
