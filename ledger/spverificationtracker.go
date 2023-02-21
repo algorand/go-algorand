@@ -18,9 +18,9 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
+
 	"github.com/algorand/go-algorand/ledger/store"
 
 	"github.com/algorand/go-deadlock"
@@ -127,7 +127,7 @@ func (spt *spVerificationTracker) prepareCommit(dcc *deferredCommitContext) erro
 	return nil
 }
 
-func (spt *spVerificationTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
+func (spt *spVerificationTracker) commitRound(ctx context.Context, tx store.TransactionScope, dcc *deferredCommitContext) (err error) {
 	if len(dcc.spVerification.CommitContext) != 0 {
 		err = commitSPContexts(ctx, tx, dcc.spVerification.CommitContext)
 		if err != nil {
@@ -136,19 +136,19 @@ func (spt *spVerificationTracker) commitRound(ctx context.Context, tx *sql.Tx, d
 	}
 
 	if dcc.spVerification.LastDeleteIndex >= 0 {
-		err = store.MakeSPVerificationAccessor(tx).DeleteOldSPContexts(ctx, dcc.spVerification.EarliestLastAttestedRound)
+		err = tx.MakeSpVerificationCtxReaderWriter().DeleteOldSPContexts(ctx, dcc.spVerification.EarliestLastAttestedRound)
 	}
 
 	return err
 }
 
-func commitSPContexts(ctx context.Context, tx *sql.Tx, commitData []verificationCommitContext) error {
+func commitSPContexts(ctx context.Context, tx store.TransactionScope, commitData []verificationCommitContext) error {
 	ptrToCtxs := make([]*ledgercore.StateProofVerificationContext, len(commitData))
 	for i := 0; i < len(commitData); i++ {
 		ptrToCtxs[i] = &commitData[i].verificationContext
 	}
 
-	return store.MakeSPVerificationAccessor(tx).StoreSPContexts(ctx, ptrToCtxs)
+	return tx.MakeSpVerificationCtxReaderWriter().StoreSPContexts(ctx, ptrToCtxs)
 }
 
 func (spt *spVerificationTracker) postCommit(_ context.Context, dcc *deferredCommitContext) {
@@ -234,8 +234,8 @@ func (spt *spVerificationTracker) lookupContextInTrackedMemory(stateProofLastAtt
 
 func (spt *spVerificationTracker) lookupContextInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	var spContext *ledgercore.StateProofVerificationContext
-	err := spt.l.trackerDB().Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
-		spContext, err = store.MakeSPVerificationAccessor(tx).LookupSPContext(stateProofLastAttestedRound)
+	err := spt.l.trackerDB().Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
+		spContext, err = tx.MakeSpVerificationCtxReader().LookupSPContext(stateProofLastAttestedRound)
 		if err != nil {
 			err = fmt.Errorf("%w for round %d: %s", errSPVerificationContextNotFound, stateProofLastAttestedRound, err)
 		}

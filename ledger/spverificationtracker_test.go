@@ -18,13 +18,13 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -80,7 +80,7 @@ func mockCommit(t *testing.T, spt *spVerificationTracker, ml *mockLedgerForTrack
 	err := spt.prepareCommit(&dcc)
 	a.NoError(err)
 
-	err = ml.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = ml.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
 		return spt.commitRound(ctx, tx, &dcc)
 	})
 	a.NoError(err)

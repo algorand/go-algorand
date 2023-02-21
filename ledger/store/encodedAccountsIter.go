@@ -27,6 +27,7 @@ import (
 
 // encodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.
 type encodedAccountsBatchIter struct {
+	tx              *sql.Tx
 	accountsRows    *sql.Rows
 	resourcesRows   *sql.Rows
 	nextBaseRow     pendingBaseRow
@@ -43,21 +44,21 @@ type catchpointAccountResourceCounter struct {
 }
 
 // MakeEncodedAccoutsBatchIter creates an empty accounts batch iterator.
-func MakeEncodedAccoutsBatchIter() *encodedAccountsBatchIter {
-	return &encodedAccountsBatchIter{}
+func MakeEncodedAccoutsBatchIter(tx *sql.Tx) *encodedAccountsBatchIter {
+	return &encodedAccountsBatchIter{tx: tx}
 }
 
 // Next returns an array containing the account data, in the same way it appear in the database
 // returning accountCount accounts data at a time.
-func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int, resourceCount int) (bals []encoded.BalanceRecordV6, numAccountsProcessed uint64, err error) {
+func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, accountCount int, resourceCount int) (bals []encoded.BalanceRecordV6, numAccountsProcessed uint64, err error) {
 	if iterator.accountsRows == nil {
-		iterator.accountsRows, err = tx.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid")
+		iterator.accountsRows, err = iterator.tx.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid")
 		if err != nil {
 			return
 		}
 	}
 	if iterator.resourcesRows == nil {
-		iterator.resourcesRows, err = tx.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources ORDER BY addrid, aidx")
+		iterator.resourcesRows, err = iterator.tx.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources ORDER BY addrid, aidx")
 		if err != nil {
 			return
 		}

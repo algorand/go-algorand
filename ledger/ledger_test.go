@@ -19,7 +19,6 @@ package ledger
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -199,17 +198,21 @@ func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.A
 	return l.AddBlock(blk, agreement.Certificate{})
 }
 
-func TestLedgerBasic(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
+func testLedgerBasic(t *testing.T, cfg config.Local) {
 	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
 	log := logging.TestingLog(t)
 	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer l.Close()
+}
+
+func TestLedgerBasic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+
+	ledgertesting.WithAndWithoutLRUCache(t, cfg, testLedgerBasic)
 }
 
 func TestLedgerBlockHeaders(t *testing.T) {
@@ -1505,14 +1508,10 @@ func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.In
 	l.trackers.waitAccountsWriting()
 }
 
-func TestLedgerReload(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
+func testLedgerReload(t *testing.T, cfg config.Local) {
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
 	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
@@ -1539,6 +1538,13 @@ func TestLedgerReload(t *testing.T) {
 			l.WaitForCommit(blk.Round())
 		}
 	}
+}
+
+func TestLedgerReload(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledgertesting.WithAndWithoutLRUCache(t, cfg, testLedgerReload)
 }
 
 // TestGetLastCatchpointLabel tests ledger.GetLastCatchpointLabel is returning the correct value.
@@ -2264,8 +2270,12 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 
 	// reset tables and re-init again, similary to the catchpount apply code
 	// since the ledger has only genesis accounts, this recreates them
-	err = l.trackerDBs.Batch(func(ctx context.Context, tx *sql.Tx) error {
-		arw := store.NewAccountsSQLReaderWriter(tx)
+	err = l.trackerDBs.Batch(func(ctx context.Context, tx store.BatchScope) error {
+		arw, err := tx.MakeAccountsWriter()
+		if err != nil {
+			return err
+		}
+
 		err0 := arw.AccountsReset(ctx)
 		if err0 != nil {
 			return err0
@@ -2279,12 +2289,12 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 			DbPathPrefix:      l.catchpoint.dbDirectory,
 			BlockDb:           l.blockDBs,
 		}
-		_, err0 = store.RunMigrations(ctx, tx, tp, l.log, preReleaseDBVersion /*target database version*/)
+		_, err0 = tx.RunMigrations(ctx, tp, l.log, preReleaseDBVersion /*target database version*/)
 		if err0 != nil {
 			return err0
 		}
 
-		if err0 := store.AccountsUpdateSchemaTest(ctx, tx); err != nil {
+		if err0 := tx.AccountsUpdateSchemaTest(ctx); err != nil {
 			return err0
 		}
 
@@ -2320,21 +2330,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 
 	// drop new tables
 	// reloadLedger should migrate db properly
-	err = l.trackerDBs.Batch(func(ctx context.Context, tx *sql.Tx) error {
-		var resetExprs = []string{
-			`DROP TABLE IF EXISTS onlineaccounts`,
-			`DROP TABLE IF EXISTS txtail`,
-			`DROP TABLE IF EXISTS onlineroundparamstail`,
-			`DROP TABLE IF EXISTS catchpointfirststageinfo`,
-		}
-		for _, stmt := range resetExprs {
-			_, err0 := tx.ExecContext(ctx, stmt)
-			if err0 != nil {
-				return err0
-			}
-		}
-		return nil
-	})
+	err = l.trackerDBs.ResetToV6Test(context.Background())
 	require.NoError(t, err)
 
 	err = l.reloadLedger()
@@ -2443,8 +2439,8 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		blockDB.Close()
 	}()
 	// create tables so online accounts can still be written
-	err = trackerDB.Batch(func(ctx context.Context, tx *sql.Tx) error {
-		if err := store.AccountsUpdateSchemaTest(ctx, tx); err != nil {
+	err = trackerDB.Batch(func(ctx context.Context, tx store.BatchScope) error {
+		if err := tx.AccountsUpdateSchemaTest(ctx); err != nil {
 			return err
 		}
 		return nil
@@ -2620,18 +2616,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	cfg.MaxAcctLookback = shorterLookback
 	store.AccountDBVersion = 7
 	// delete tables since we want to check they can be made from other data
-	err = trackerDB.Batch(func(ctx context.Context, tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineaccounts"); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS txtail"); err != nil {
-			return err
-		}
-		if _, err = tx.ExecContext(ctx, "DROP TABLE IF EXISTS onlineroundparamstail"); err != nil {
-			return err
-		}
-		return nil
-	})
+	err = trackerDB.ResetToV6Test(context.Background())
 	require.NoError(t, err)
 
 	l2, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
@@ -2877,17 +2862,14 @@ func triggerDeleteVoters(t *testing.T, l *Ledger, genesisInitState ledgercore.In
 	triggerTrackerFlush(t, l, genesisInitState)
 }
 
-func TestVotersReloadFromDisk(t *testing.T) {
-	partitiontest.PartitionTest(t)
+func testVotersReloadFromDisk(t *testing.T, cfg config.Local) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = false
-	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
+
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
@@ -2925,17 +2907,26 @@ func TestVotersReloadFromDisk(t *testing.T) {
 	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
 }
 
-func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
+func TestVotersReloadFromDisk(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
+	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
+
+	ledgertesting.WithAndWithoutLRUCache(t, cfg, testVotersReloadFromDisk)
+}
+
+func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg config.Local) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = false
-	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
+
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
@@ -2983,17 +2974,25 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
 }
 
-func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
+func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
+	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
+
+	ledgertesting.WithAndWithoutLRUCache(t, cfg, testVotersReloadFromDiskAfterOneStateProofCommitted)
+}
+
+func testVotersReloadFromDiskPassRecoveryPeriod(t *testing.T, cfg config.Local) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = false
-	cfg.MaxAcctLookback = 0
+
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
@@ -3041,6 +3040,16 @@ func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	_, found = l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
 	require.False(t, found)
 	require.Equal(t, beforeRemoveVotersLen, len(l.acctsOnline.voters.votersForRoundCache))
+}
+
+func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
+	cfg.MaxAcctLookback = 0
+
+	ledgertesting.WithAndWithoutLRUCache(t, cfg, testVotersReloadFromDiskPassRecoveryPeriod)
 }
 
 type mockCommitListener struct{}
