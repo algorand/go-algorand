@@ -353,20 +353,20 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
-func convertTxnResult(txnResult simulation.TxnResult) preEncodedTxnResult {
-	return preEncodedTxnResult{
+func convertTxnResult(txnResult simulation.TxnResult) preEncodedSimulateTxnResult {
+	return preEncodedSimulateTxnResult{
 		Txn:              ConvertInnerTxn(&txnResult.Txn),
 		MissingSignature: trueOrNil(txnResult.MissingSignature),
 	}
 }
 
-func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) preEncodedTxnGroupResult {
-	txnResults := make([]preEncodedTxnResult, len(txnGroupResult.Txns))
+func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) preEncodedSimulateTxnGroupResult {
+	txnResults := make([]preEncodedSimulateTxnResult, len(txnGroupResult.Txns))
 	for i, txnResult := range txnGroupResult.Txns {
 		txnResults[i] = convertTxnResult(txnResult)
 	}
 
-	encoded := preEncodedTxnGroupResult{
+	encoded := preEncodedSimulateTxnGroupResult{
 		Txns:           txnResults,
 		FailureMessage: strOrNil(txnGroupResult.FailureMessage),
 	}
@@ -380,11 +380,11 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) preEncodedT
 	return encoded
 }
 
-func convertSimulationResult(result simulation.Result) preEncodedSimulationResult {
-	encodedSimulationResult := preEncodedSimulationResult{
+func convertSimulationResult(result simulation.Result) preEncodedSimulateResponse {
+	encodedSimulationResult := preEncodedSimulateResponse{
 		Version:      result.Version,
 		WouldSucceed: result.WouldSucceed,
-		TxnGroups:    make([]preEncodedTxnGroupResult, len(result.TxnGroups)),
+		TxnGroups:    make([]preEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
 	}
 
 	for i, txnGroup := range result.TxnGroups {

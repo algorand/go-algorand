@@ -803,7 +803,7 @@ func copyInnerTxnGroupIDs(t *testing.T, dst, src *model.PendingTransactionRespon
 	}
 }
 
-func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, actual model.SimulationResponse) {
+func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, actual model.SimulateResponse) {
 	t.Helper()
 
 	if len(expectedError) != 0 {
@@ -973,7 +973,7 @@ int 1`,
 					require.Equal(t, 200, rec.Code, rec.Body.String())
 
 					// decode actual response
-					var actualBody model.SimulationResponse
+					var actualBody model.SimulateResponse
 					decoder := codec.NewDecoderBytes(rec.Body.Bytes(), responseFormat.handle)
 					err = decoder.Decode(&actualBody)
 					require.NoError(t, err)
@@ -985,12 +985,12 @@ int 1`,
 						clone[0]++
 						expectedFailedAt = &clone
 					}
-					expectedBody := model.SimulationResponse{
+					expectedBody := model.SimulateResponse{
 						Version: 1,
-						TxnGroups: []model.SimulationTransactionGroupResult{
+						TxnGroups: []model.SimulateTransactionGroupResult{
 							{
 								FailedAt: expectedFailedAt,
-								TxnResults: []model.SimulationTransactionResult{
+								TxnResults: []model.SimulateTransactionResult{
 									{
 										TxnResult: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
 											SignedTxn: stxns[0],

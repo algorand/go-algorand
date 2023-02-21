@@ -1240,7 +1240,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/responses/SimulationResponse"
+            "$ref": "#/responses/SimulateResponse"
           },
           "400": {
             "description": "Bad Request - Malformed Algorand transaction",
@@ -3325,7 +3325,7 @@
         }
       }
     },
-    "SimulationTransactionGroupResult": {
+    "SimulateTransactionGroupResult": {
       "description": "Simulation result for an atomic transaction group",
       "type": "object",
       "required": [
@@ -3336,7 +3336,7 @@
           "description": "Simulation result for individual transactions",
           "type": "array",
           "items": {
-            "$ref": "#/definitions/SimulationTransactionResult"
+            "$ref": "#/definitions/SimulateTransactionResult"
           }
         },
         "failure-message": {
@@ -3352,7 +3352,7 @@
         }
       }
     },
-    "SimulationTransactionResult": {
+    "SimulateTransactionResult": {
       "description": "Simulation result for an individual transaction",
       "type": "object",
       "required": [
@@ -4011,7 +4011,7 @@
         }
       }
     },
-    "SimulationResponse": {
+    "SimulateResponse": {
       "description": "Result of a transaction group simulation.",
       "tags": [
         "experimental"
@@ -4032,7 +4032,7 @@
             "description": "A result object for each transaction group that was simulated.",
             "type": "array",
             "items": {
-              "$ref": "#/definitions/SimulationTransactionGroupResult"
+              "$ref": "#/definitions/SimulateTransactionGroupResult"
             }
           },
           "would-succeed": {

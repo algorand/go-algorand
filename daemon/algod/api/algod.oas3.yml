@@ -753,7 +753,7 @@
         },
         "description": "Transaction ID of the submission."
       },
-      "SimulationResponse": {
+      "SimulateResponse": {
         "content": {
           "application/json": {
             "schema": {
@@ -761,7 +761,7 @@
                 "txn-groups": {
                   "description": "A result object for each transaction group that was simulated.",
                   "items": {
-                    "$ref": "#/components/schemas/SimulationTransactionGroupResult"
+                    "$ref": "#/components/schemas/SimulateTransactionGroupResult"
                   },
                   "type": "array"
                 },
@@ -1830,7 +1830,7 @@
         ],
         "type": "object"
       },
-      "SimulationTransactionGroupResult": {
+      "SimulateTransactionGroupResult": {
         "description": "Simulation result for an atomic transaction group",
         "properties": {
           "failed-at": {
@@ -1847,7 +1847,7 @@
           "txn-results": {
             "description": "Simulation result for individual transactions",
             "items": {
-              "$ref": "#/components/schemas/SimulationTransactionResult"
+              "$ref": "#/components/schemas/SimulateTransactionResult"
             },
             "type": "array"
           }
@@ -1857,7 +1857,7 @@
         ],
         "type": "object"
       },
-      "SimulationTransactionResult": {
+      "SimulateTransactionResult": {
         "description": "Simulation result for an individual transaction",
         "properties": {
           "missing-signature": {
@@ -5682,7 +5682,7 @@
                     "txn-groups": {
                       "description": "A result object for each transaction group that was simulated.",
                       "items": {
-                        "$ref": "#/components/schemas/SimulationTransactionGroupResult"
+                        "$ref": "#/components/schemas/SimulateTransactionGroupResult"
                       },
                       "type": "array"
                     },
@@ -5709,7 +5709,7 @@
                     "txn-groups": {
                       "description": "A result object for each transaction group that was simulated.",
                       "items": {
-                        "$ref": "#/components/schemas/SimulationTransactionGroupResult"
+                        "$ref": "#/components/schemas/SimulateTransactionGroupResult"
                       },
                       "type": "array"
                     },

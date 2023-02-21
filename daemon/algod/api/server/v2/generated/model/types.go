@@ -608,8 +608,8 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
-// SimulationTransactionGroupResult Simulation result for an atomic transaction group
-type SimulationTransactionGroupResult struct {
+// SimulateTransactionGroupResult Simulation result for an atomic transaction group
+type SimulateTransactionGroupResult struct {
 	// FailedAt If present, indicates which transaction in this group caused the failure
 	FailedAt *[]uint64 `json:"failed-at,omitempty"`
 
@@ -617,11 +617,11 @@ type SimulationTransactionGroupResult struct {
 	FailureMessage *string `json:"failure-message,omitempty"`
 
 	// TxnResults Simulation result for individual transactions
-	TxnResults []SimulationTransactionResult `json:"txn-results"`
+	TxnResults []SimulateTransactionResult `json:"txn-results"`
 }
 
-// SimulationTransactionResult Simulation result for an individual transaction
-type SimulationTransactionResult struct {
+// SimulateTransactionResult Simulation result for an individual transaction
+type SimulateTransactionResult struct {
 	// MissingSignature A boolean indicating whether this transaction is missing signatures
 	MissingSignature *bool `json:"missing-signature,omitempty"`
 
@@ -982,10 +982,10 @@ type PostTransactionsResponse struct {
 	TxId string `json:"txId"`
 }
 
-// SimulationResponse defines model for SimulationResponse.
-type SimulationResponse struct {
+// SimulateResponse defines model for SimulateResponse.
+type SimulateResponse struct {
 	// TxnGroups A result object for each transaction group that was simulated.
-	TxnGroups []SimulationTransactionGroupResult `json:"txn-groups"`
+	TxnGroups []SimulateTransactionGroupResult `json:"txn-groups"`
 
 	// Version The version of this response object.
 	Version uint64 `json:"version"`
