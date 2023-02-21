@@ -4488,12 +4488,12 @@ func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.A
 			return addr, aid, unused, nil
 		}
 		if ref == 0 {
-			aid := cx.appID
+			aid = cx.appID
 			if cx.allowsLocals(addr, aid) {
 				return addr, aid, unused, nil
 			}
 		} else if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
-			aid := cx.txn.Txn.ForeignApps[ref-1]
+			aid = cx.txn.Txn.ForeignApps[ref-1]
 			if cx.allowsLocals(addr, aid) {
 				return addr, aid, unused, nil
 			}

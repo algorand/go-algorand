@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/protocol"
@@ -663,5 +664,49 @@ int 1
 			logic.NewExpect(1, fmt.Sprintf("invalid Asset reference %d", asa2)))
 
 	})
+
+}
+
+// TestAccessMyLocals confirms that apps can access their OWN locals if they opt
+// in at creation time.
+func TestAccessMyLocals(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, tx, ledger := logic.MakeSampleEnv()
+
+	sender := basics.Address{1, 2, 3, 4}
+	ledger.NewAccount(sender, 1_000_000)
+	// we don't really process transactions in these tests, so despite the
+	// OptInOC below, we must manually opt the sender into the app that
+	// will get created for this test.
+	ledger.NewLocals(sender, 888)
+
+	*tx = txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender,
+		ApplicationID: 0,
+		OnCompletion:  transactions.OptInOC,
+		LocalStateSchema: basics.StateSchema{
+			NumUint: 1,
+		},
+	}.Txn()
+	source := `
+  int 0
+  byte "X"
+  app_local_get
+  !
+  assert
+  int 0
+  byte "X"
+  int 7
+  app_local_put
+  int 0
+  byte "X"
+  app_local_get
+  int 7
+  ==
+`
+	logic.TestApp(t, source, ep)
 
 }

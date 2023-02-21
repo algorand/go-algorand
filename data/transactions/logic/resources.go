@@ -186,6 +186,10 @@ func (cx *EvalContext) allowsLocals(addr basics.Address, ai basics.AppIndex) boo
 			return cx.availableAccount(addr)
 		}
 	}
+	if cx.txn.Txn.ApplicationID == 0 && cx.appID == ai {
+		return cx.availableAccount(addr)
+	}
+
 	// All locals of created app accounts are available
 	for _, created := range r.createdApps {
 		if cx.getApplicationAddress(created) == addr {

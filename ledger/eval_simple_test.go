@@ -222,8 +222,8 @@ func TestHoldingGet(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// 24 is first version with apps
-	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		makegold := txntest.Txn{
@@ -317,8 +317,8 @@ func TestLocalGetEx(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// 24 is first version with apps
-	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		makeapp := txntest.Txn{

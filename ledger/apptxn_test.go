@@ -1843,8 +1843,8 @@ func TestSelfCheckHoldingNewApp(t *testing.T) {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
 	// 31 allowed inner appls.
-	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		asset := txntest.Txn{
@@ -1892,8 +1892,8 @@ func TestCheckHoldingNewApp(t *testing.T) {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
 	// 31 allowed inner appls.
-	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		asset := txntest.Txn{
