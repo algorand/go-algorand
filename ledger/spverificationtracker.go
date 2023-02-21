@@ -136,7 +136,7 @@ func (spt *spVerificationTracker) commitRound(ctx context.Context, tx store.Tran
 	}
 
 	if dcc.spVerification.LastDeleteIndex >= 0 {
-		err = tx.MakeStateProofReaderWriter().DeleteOldSPContexts(ctx, dcc.spVerification.EarliestLastAttestedRound)
+		err = tx.MakeSpVerificationCtxReaderWriter().DeleteOldSPContexts(ctx, dcc.spVerification.EarliestLastAttestedRound)
 	}
 
 	return err
@@ -148,7 +148,7 @@ func commitSPContexts(ctx context.Context, tx store.TransactionScope, commitData
 		ptrToCtxs[i] = &commitData[i].verificationContext
 	}
 
-	return tx.MakeStateProofReaderWriter().StoreSPContexts(ctx, ptrToCtxs)
+	return tx.MakeSpVerificationCtxReaderWriter().StoreSPContexts(ctx, ptrToCtxs)
 }
 
 func (spt *spVerificationTracker) postCommit(_ context.Context, dcc *deferredCommitContext) {
@@ -235,7 +235,7 @@ func (spt *spVerificationTracker) lookupContextInTrackedMemory(stateProofLastAtt
 func (spt *spVerificationTracker) lookupContextInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	var spContext *ledgercore.StateProofVerificationContext
 	err := spt.l.trackerDB().Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
-		spContext, err = tx.MakeStateProofReader().LookupSPContext(stateProofLastAttestedRound)
+		spContext, err = tx.MakeSpVerificationCtxReader().LookupSPContext(stateProofLastAttestedRound)
 		if err != nil {
 			err = fmt.Errorf("%w for round %d: %s", errSPVerificationContextNotFound, stateProofLastAttestedRound, err)
 		}

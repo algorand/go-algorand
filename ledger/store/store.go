@@ -49,7 +49,7 @@ type BatchScope interface {
 	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
 	AccountsUpdateSchemaTest(ctx context.Context) (err error)
 
-	MakeStateProofWriter() StateProofWriter
+	MakeSpVerificationCtxWriter() SpVerificationCtxWriter
 }
 type sqlBatchScope struct {
 	tx *sql.Tx
@@ -63,7 +63,7 @@ type SnapshotScope interface {
 	MakeCatchpointReader() (CatchpointReader, error)
 
 	MakeCatchpointPendingHashesIterator(hashCount int) *catchpointPendingHashesIterator
-	MakeStateProofReader() StateProofReader
+	MakeSpVerificationCtxReader() SpVerificationCtxReader
 }
 type sqlSnapshotScope struct {
 	tx *sql.Tx
@@ -92,7 +92,7 @@ type TransactionScope interface {
 	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
 	AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error)
 
-	MakeStateProofReaderWriter() StateProofReaderWriter
+	MakeSpVerificationCtxReaderWriter() SpVerificationCtxReaderWriter
 }
 
 type sqlTransactionScope struct {
@@ -275,7 +275,7 @@ func (txs sqlTransactionScope) MakeEncodedAccoutsBatchIter() *encodedAccountsBat
 	return MakeEncodedAccoutsBatchIter(txs.tx)
 }
 
-func (txs sqlTransactionScope) MakeStateProofReaderWriter() StateProofReaderWriter {
+func (txs sqlTransactionScope) MakeSpVerificationCtxReaderWriter() SpVerificationCtxReaderWriter {
 	return makeStateProofVerificationReaderWriter(txs.tx, txs.tx)
 }
 
@@ -323,7 +323,7 @@ func (bs sqlBatchScope) AccountsUpdateSchemaTest(ctx context.Context) (err error
 	return AccountsUpdateSchemaTest(ctx, bs.tx)
 }
 
-func (bs sqlBatchScope) MakeStateProofWriter() StateProofWriter {
+func (bs sqlBatchScope) MakeSpVerificationCtxWriter() SpVerificationCtxWriter {
 	return makeStateProofVerificationWriter(bs.tx)
 }
 
@@ -339,6 +339,6 @@ func (ss sqlSnapshotScope) MakeCatchpointPendingHashesIterator(hashCount int) *c
 	return MakeCatchpointPendingHashesIterator(hashCount, ss.tx)
 }
 
-func (ss sqlSnapshotScope) MakeStateProofReader() StateProofReader {
+func (ss sqlSnapshotScope) MakeSpVerificationCtxReader() SpVerificationCtxReader {
 	return makeStateProofVerificationReader(ss.tx)
 }

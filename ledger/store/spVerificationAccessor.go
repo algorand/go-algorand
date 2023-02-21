@@ -53,8 +53,8 @@ func makeStateProofVerificationReaderWriter(q db.Queryable, e db.Executable) *st
 	}
 }
 
-// MakeStateProofVerificationReader returns StateProofReader for accessing from outside of ledger
-func MakeStateProofVerificationReader(q db.Queryable) StateProofReader {
+// MakeStateProofVerificationReader returns SpVerificationCtxReader for accessing from outside of ledger
+func MakeStateProofVerificationReader(q db.Queryable) SpVerificationCtxReader {
 	return makeStateProofVerificationReader(q)
 }
 

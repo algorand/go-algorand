@@ -172,25 +172,25 @@ type CatchpointReaderWriter interface {
 	CatchpointWriter
 }
 
-// StateProofReader is a reader abstraction for stateproof verification tracker
+// SpVerificationCtxReader is a reader abstraction for stateproof verification tracker
 // Use with SnapshotScope
-type StateProofReader interface {
+type SpVerificationCtxReader interface {
 	LookupSPContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
 	GetAllSPContexts(ctx context.Context) ([]ledgercore.StateProofVerificationContext, error)
 	GetAllSPContextsFromCatchpointTbl(ctx context.Context) ([]ledgercore.StateProofVerificationContext, error)
 }
 
-// StateProofWriter is a writer abstraction for stateproof verification tracker
+// SpVerificationCtxWriter is a writer abstraction for stateproof verification tracker
 // Use with BatchScope
-type StateProofWriter interface {
+type SpVerificationCtxWriter interface {
 	DeleteOldSPContexts(ctx context.Context, earliestLastAttestedRound basics.Round) error
 	StoreSPContexts(ctx context.Context, verificationContext []*ledgercore.StateProofVerificationContext) error
 	StoreSPContextsToCatchpointTbl(ctx context.Context, verificationContexts []ledgercore.StateProofVerificationContext) error
 }
 
-// StateProofReaderWriter is StateProofReader+StateProofWriter
+// SpVerificationCtxReaderWriter is SpVerificationCtxReader+SpVerificationCtxWriter
 // Use with TransactionScope
-type StateProofReaderWriter interface {
-	StateProofReader
-	StateProofWriter
+type SpVerificationCtxReaderWriter interface {
+	SpVerificationCtxReader
+	SpVerificationCtxWriter
 }
