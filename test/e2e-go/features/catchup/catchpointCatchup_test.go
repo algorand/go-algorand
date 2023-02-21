@@ -534,6 +534,9 @@ func TestReadyEndpoint(t *testing.T) {
 	// so this confirms we generate catchpoint tags
 	// catchpoint file, should be activated by CatchpointTracking = int64(2)
 
+	//////////
+	// NOTE //
+	//////////
 	// at this point, since the primary node is not catching up against some catchpoint
 	// it should be /ready 200 by definition
 	err = primaryNodeRestClient.ReadyCheck()
