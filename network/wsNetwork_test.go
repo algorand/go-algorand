@@ -1318,10 +1318,18 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	// still just one A->B connection
 	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
-	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 2, netA.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getInsertCount())
+	// it is possible for NetB to be in the process of doing addPeer while
+	// the underlying conneciton is being closed. In this case, the read loop
+	// on the peer will detect and close the peer. Since this is asynchronous,
+	// we wait and check regularly to allow the connection to settle
+	assert.Eventually(
+		t,
+		func() bool { return len(netB.GetPeers(PeersConnectedIn)) == 1 },
+		5*time.Second,
+		100*time.Millisecond)
 
 	// Now have A connect to node C, which has the same PublicAddress as B (e.g., because it shares the
 	// same public load balancer endpoint). C will have a different identity keypair and so will not be
@@ -1869,8 +1877,16 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 		}
 		assert.Equal(t, tc.totalInA, len(netA.GetPeers(PeersConnectedIn)))
 		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
-		assert.Equal(t, tc.totalInB, len(netB.GetPeers(PeersConnectedIn)))
 		assert.Equal(t, tc.totalOutB, len(netB.GetPeers(PeersConnectedOut)))
+		// it is possible for NetB to be in the process of doing addPeer while
+		// the underlying conneciton is being closed. In this case, the read loop
+		// on the peer will detect and close the peer. Since this is asynchronous,
+		// we wait and check regularly to allow the connection to settle
+		assert.Eventually(
+			t,
+			func() bool { return len(netB.GetPeers(PeersConnectedIn)) == tc.totalInB },
+			5*time.Second,
+			100*time.Millisecond)
 	}
 
 }
@@ -2020,8 +2036,16 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 
 		assert.Equal(t, tc.totalInA, len(netA.GetPeers(PeersConnectedIn)))
 		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
-		assert.Equal(t, tc.totalInB, len(netB.GetPeers(PeersConnectedIn)))
 		assert.Equal(t, tc.totalOutB, len(netB.GetPeers(PeersConnectedOut)))
+		// it is possible for NetB to be in the process of doing addPeer while
+		// the underlying conneciton is being closed. In this case, the read loop
+		// on the peer will detect and close the peer. Since this is asynchronous,
+		// we wait and check regularly to allow the connection to settle
+		assert.Eventually(
+			t,
+			func() bool { return len(netB.GetPeers(PeersConnectedIn)) == tc.totalInB },
+			5*time.Second,
+			100*time.Millisecond)
 	}
 }
 
