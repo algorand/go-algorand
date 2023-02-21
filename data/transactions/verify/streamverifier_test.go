@@ -386,13 +386,15 @@ func TestStreamVerifierPoolShutdown(t *testing.T) { //nolint:paralleltest // Not
 		// Shutdown will block until all tasks held by holdTasks is released
 		verificationPool.Shutdown()
 	}()
-	// Send more tasks to break the backlog worker  after b.pool.Enqueue returns the error
+	// release the tasks
+	close(holdTasks)
+	wg.Wait()
+
+	// Send more tasks to fill the queueof the backlog worker after the consumer shuts down
 	for x := 0; x < 100; x++ {
 		verificationPool.EnqueueBacklog(context.Background(),
 			func(arg interface{}) interface{} { <-holdTasks; return nil }, nil, nil)
 	}
-	// release the tasks
-	close(holdTasks)
 
 	// make sure the EnqueueBacklogis returning err
 	for x := 0; x < 10; x++ {
@@ -444,6 +446,7 @@ func TestStreamVerifierPoolShutdown(t *testing.T) { //nolint:paralleltest // Not
 		require.ErrorIs(t, err, errShuttingDownError)
 	}
 	require.Contains(t, logBuffer.String(), "addVerificationTaskToThePoolNow: EnqueueBacklog returned an error and StreamVerifier will stop: context canceled")
+	wg.Wait()
 }
 
 // TestStreamVerifierRestart tests what happens when the context is canceled
