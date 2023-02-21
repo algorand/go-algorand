@@ -4020,12 +4020,17 @@
         "type": "object",
         "required": [
           "version",
+          "last-round",
           "txn-groups",
           "would-succeed"
         ],
         "properties": {
           "version": {
             "description": "The version of this response object.",
+            "type": "integer"
+          },
+          "last-round": {
+            "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
             "type": "integer"
           },
           "txn-groups": {

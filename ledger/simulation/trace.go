@@ -19,6 +19,7 @@ package simulation
 import (
 	"fmt"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
@@ -58,12 +59,13 @@ const ResultLatestVersion = uint64(1)
 // Result contains the result from a call to Simulator.Simulate
 type Result struct {
 	Version      uint64
+	LastRound    basics.Round
 	TxnGroups    []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
 	WouldSucceed bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
 	Block        *ledgercore.ValidatedBlock
 }
 
-func makeSimulationResultWithVersion(txgroups [][]transactions.SignedTxn, version uint64) (Result, error) {
+func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transactions.SignedTxn, version uint64) (Result, error) {
 	if version != ResultLatestVersion {
 		return Result{}, fmt.Errorf("invalid SimulationResult version: %d", version)
 	}
@@ -74,11 +76,16 @@ func makeSimulationResultWithVersion(txgroups [][]transactions.SignedTxn, versio
 		groups[i] = makeTxnGroupResult(txgroup)
 	}
 
-	return Result{Version: version, TxnGroups: groups, WouldSucceed: true}, nil
+	return Result{
+		Version:      version,
+		LastRound:    lastRound,
+		TxnGroups:    groups,
+		WouldSucceed: true,
+	}, nil
 }
 
-func makeSimulationResult(txgroups [][]transactions.SignedTxn) Result {
-	result, err := makeSimulationResultWithVersion(txgroups, ResultLatestVersion)
+func makeSimulationResult(lastRound basics.Round, txgroups [][]transactions.SignedTxn) Result {
+	result, err := makeSimulationResultWithVersion(lastRound, txgroups, ResultLatestVersion)
 	if err != nil {
 		// this should never happen, since we pass in ResultLatestVersion
 		panic(err)

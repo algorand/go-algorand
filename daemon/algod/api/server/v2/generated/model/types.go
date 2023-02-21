@@ -984,6 +984,9 @@ type PostTransactionsResponse struct {
 
 // SimulateResponse defines model for SimulateResponse.
 type SimulateResponse struct {
+	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
+	LastRound uint64 `json:"last-round"`
+
 	// TxnGroups A result object for each transaction group that was simulated.
 	TxnGroups []SimulateTransactionGroupResult `json:"txn-groups"`
 

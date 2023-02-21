@@ -383,6 +383,7 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) preEncodedS
 func convertSimulationResult(result simulation.Result) preEncodedSimulateResponse {
 	encodedSimulationResult := preEncodedSimulateResponse{
 		Version:      result.Version,
+		LastRound:    uint64(result.LastRound),
 		WouldSucceed: result.WouldSucceed,
 		TxnGroups:    make([]preEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
 	}

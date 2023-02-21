@@ -758,6 +758,10 @@
           "application/json": {
             "schema": {
               "properties": {
+                "last-round": {
+                  "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+                  "type": "integer"
+                },
                 "txn-groups": {
                   "description": "A result object for each transaction group that was simulated.",
                   "items": {
@@ -775,6 +779,7 @@
                 }
               },
               "required": [
+                "last-round",
                 "txn-groups",
                 "version",
                 "would-succeed"
@@ -5679,6 +5684,10 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "last-round": {
+                      "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+                      "type": "integer"
+                    },
                     "txn-groups": {
                       "description": "A result object for each transaction group that was simulated.",
                       "items": {
@@ -5696,6 +5705,7 @@
                     }
                   },
                   "required": [
+                    "last-round",
                     "txn-groups",
                     "version",
                     "would-succeed"
@@ -5706,6 +5716,10 @@
               "application/msgpack": {
                 "schema": {
                   "properties": {
+                    "last-round": {
+                      "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+                      "type": "integer"
+                    },
                     "txn-groups": {
                       "description": "A result object for each transaction group that was simulated.",
                       "items": {
@@ -5723,6 +5737,7 @@
                     }
                   },
                   "required": [
+                    "last-round",
                     "txn-groups",
                     "version",
                     "would-succeed"

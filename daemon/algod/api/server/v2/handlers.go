@@ -934,6 +934,7 @@ type preEncodedSimulateTxnGroupResult struct {
 // preEncodedSimulateResponse mirrors model.SimulateResponse
 type preEncodedSimulateResponse struct {
 	Version      uint64                             `codec:"version"`
+	LastRound    uint64                             `codec:"last-round"`
 	TxnGroups    []preEncodedSimulateTxnGroupResult `codec:"txn-groups"`
 	WouldSucceed bool                               `codec:"would-succeed"`
 }
