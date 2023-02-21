@@ -1771,7 +1771,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	require.True(t, errors.As(err, expectedErr), fmt.Sprintf("got error %s", err))
 
 	l.acctsOnline.voters.votersMu.Lock()
-	for k, _ := range l.acctsOnline.voters.votersForRoundCache {
+	for k := range l.acctsOnline.voters.votersForRoundCache {
 		require.NotEqual(t, k, basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback), "found voters for round 200, it should have been removed")
 	}
 	l.acctsOnline.voters.votersMu.Unlock()
