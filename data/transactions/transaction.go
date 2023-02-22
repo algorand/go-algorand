@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -184,6 +184,7 @@ func (tx Transaction) ID() Txid {
 }
 
 // IDSha256 returns the digest (i.e., hash) of the transaction.
+// This is different from the canonical ID computed with Sum512_256 hashing function.
 func (tx Transaction) IDSha256() crypto.Digest {
 	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
 	defer protocol.PutEncodingBuf(enc)
@@ -234,10 +235,11 @@ func (tx Header) Alive(tc TxnContext) error {
 	// Check round validity
 	round := tc.Round()
 	if round < tx.FirstValid || round > tx.LastValid {
-		return TxnDeadError{
+		return &TxnDeadError{
 			Round:      round,
 			FirstValid: tx.FirstValid,
 			LastValid:  tx.LastValid,
+			Early:      round < tx.FirstValid,
 		}
 	}
 
@@ -377,12 +379,8 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 		// Ensure requested action is valid
 		switch tx.OnCompletion {
-		case NoOpOC:
-		case OptInOC:
-		case CloseOutOC:
-		case ClearStateOC:
-		case UpdateApplicationOC:
-		case DeleteApplicationOC:
+		case NoOpOC, OptInOC, CloseOutOC, ClearStateOC, UpdateApplicationOC, DeleteApplicationOC:
+			/* ok */
 		default:
 			return fmt.Errorf("invalid application OnCompletion")
 		}
@@ -448,8 +446,12 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
 		}
 
+		if len(tx.Boxes) > proto.MaxAppBoxReferences {
+			return fmt.Errorf("tx.Boxes too long, max number of box references is %d", proto.MaxAppBoxReferences)
+		}
+
 		// Limit the sum of all types of references that bring in account records
-		if len(tx.Accounts)+len(tx.ForeignApps)+len(tx.ForeignAssets) > proto.MaxAppTotalTxnReferences {
+		if len(tx.Accounts)+len(tx.ForeignApps)+len(tx.ForeignAssets)+len(tx.Boxes) > proto.MaxAppTotalTxnReferences {
 			return fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = %d", proto.MaxAppTotalTxnReferences)
 		}
 
@@ -468,6 +470,13 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 		if lap+lcs > pages*proto.MaxAppTotalProgramLen {
 			return fmt.Errorf("app programs too long. max total len %d bytes", pages*proto.MaxAppTotalProgramLen)
+		}
+
+		for i, br := range tx.Boxes {
+			// recall 0 is the current app so indexes are shifted, thus test is for greater than, not gte.
+			if br.Index > uint64(len(tx.ForeignApps)) {
+				return fmt.Errorf("tx.Boxes[%d].Index is %d. Exceeds len(tx.ForeignApps)", i, br.Index)
+			}
 		}
 
 		if tx.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {

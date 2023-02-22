@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,9 +33,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/network"
@@ -153,7 +153,7 @@ var catchupCmd = &cobra.Command{
 	Example: "goal node catchup 6500000#1234567890ABCDEF01234567890ABCDEF0\tStart catching up to round 6500000 with the provided catchpoint\ngoal node catchup --abort\t\t\t\t\tAbort the current catchup",
 	Args:    catchpointCmdArgument,
 	Run: func(cmd *cobra.Command, args []string) {
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			if !abortCatchup && len(args) == 0 {
 				client := ensureAlgodClient(dataDir)
 				vers, err := client.AlgodVersions()
@@ -207,7 +207,7 @@ var startCmd = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
 				reportErrorf(errorNodeManagedBySystemd)
 			}
@@ -248,7 +248,7 @@ var shutdownCmd = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			nc := nodecontrol.MakeNodeController(binDir, dataDir)
 			err := nc.Shutdown()
 
@@ -279,7 +279,7 @@ var stopCmd = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
 				reportErrorf(errorNodeManagedBySystemd)
 			}
@@ -310,7 +310,7 @@ var restartCmd = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			if libgoal.AlgorandDaemonSystemdManaged(dataDir) {
 				reportErrorf(errorNodeManagedBySystemd)
 			}
@@ -367,7 +367,7 @@ var generateTokenCmd = &cobra.Command{
 	Short: "Generate and install a new API token",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			// Ensure the node is stopped -- HealthCheck should fail
 			clientConfig := libgoal.ClientConfig{
 				AlgodDataDir: dataDir,
@@ -400,7 +400,7 @@ var statusCmd = &cobra.Command{
 	Long:  `Show the current status of the running Algorand node.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		onDataDirs(getStatus)
+		datadir.OnDataDirs(getStatus)
 	},
 }
 
@@ -437,10 +437,11 @@ func getStatus(dataDir string) {
 	}
 }
 
-func makeStatusString(stat generatedV2.NodeStatusResponse) string {
+func makeStatusString(stat model.NodeStatusResponse) string {
 	lastRoundTime := fmt.Sprintf("%.1fs", time.Duration(stat.TimeSinceLastRound).Seconds())
 	catchupTime := fmt.Sprintf("%.1fs", time.Duration(stat.CatchupTime).Seconds())
 	var statusString string
+
 	if stat.Catchpoint == nil || (*stat.Catchpoint) == "" {
 		statusString = fmt.Sprintf(
 			infoNodeStatus,
@@ -459,6 +460,37 @@ func makeStatusString(stat generatedV2.NodeStatusResponse) string {
 		if stat.StoppedAtUnsupportedRound {
 			statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
 		}
+
+		upgradeNextProtocolVoteBefore := uint64(0)
+		if stat.UpgradeNextProtocolVoteBefore != nil {
+			upgradeNextProtocolVoteBefore = *stat.UpgradeNextProtocolVoteBefore
+		}
+
+		if upgradeNextProtocolVoteBefore > stat.LastRound {
+			upgradeVotesRequired := uint64(0)
+			upgradeNoVotes := uint64(0)
+			upgradeYesVotes := uint64(0)
+			if stat.UpgradeVotesRequired != nil {
+				upgradeVotesRequired = *stat.UpgradeVotesRequired
+			}
+			if stat.UpgradeNoVotes != nil {
+				upgradeNoVotes = *stat.UpgradeNoVotes
+			}
+			if stat.UpgradeYesVotes != nil {
+				upgradeYesVotes = *stat.UpgradeYesVotes
+			}
+			statusString = statusString + "\n" + fmt.Sprintf(
+				infoNodeStatusConsensusUpgradeVoting,
+				upgradeYesVotes,
+				upgradeNoVotes,
+				upgradeNextProtocolVoteBefore-stat.LastRound,
+				upgradeVotesRequired,
+				upgradeNextProtocolVoteBefore,
+			)
+		} else if upgradeNextProtocolVoteBefore > 0 {
+			statusString = statusString + "\n" + infoNodeStatusConsensusUpgradeScheduled
+		}
+
 	} else {
 		statusString = fmt.Sprintf(
 			infoNodeCatchpointCatchupStatus,
@@ -468,7 +500,8 @@ func makeStatusString(stat generatedV2.NodeStatusResponse) string {
 
 		if stat.CatchpointTotalAccounts != nil && (*stat.CatchpointTotalAccounts > 0) && stat.CatchpointProcessedAccounts != nil {
 			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupAccounts, *stat.CatchpointTotalAccounts,
-				*stat.CatchpointProcessedAccounts, *stat.CatchpointVerifiedAccounts)
+				*stat.CatchpointProcessedAccounts, *stat.CatchpointVerifiedAccounts,
+				*stat.CatchpointTotalKvs, *stat.CatchpointProcessedKvs, *stat.CatchpointVerifiedKvs)
 		}
 		if stat.CatchpointAcquiredBlocks != nil && stat.CatchpointTotalBlocks != nil && (*stat.CatchpointAcquiredBlocks+*stat.CatchpointTotalBlocks > 0) {
 			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupBlocks, *stat.CatchpointTotalBlocks,
@@ -485,7 +518,7 @@ var lastroundCmd = &cobra.Command{
 	Long:  `Prints the most recent round confirmed by the Algorand node.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			round, err := ensureAlgodClient(dataDir).CurrentRound()
 			if err != nil {
 				reportErrorf(errorNodeStatus, err)
@@ -506,7 +539,7 @@ var cloneCmd = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
-		nc := nodecontrol.MakeNodeController(binDir, ensureSingleDataDir())
+		nc := nodecontrol.MakeNodeController(binDir, datadir.EnsureSingleDataDir())
 		err = nc.Clone(targetDir, !noLedger)
 		if err != nil {
 			reportErrorf(errorCloningNode, err)
@@ -523,25 +556,25 @@ var pendingTxnsCmd = &cobra.Command{
 	Long:  `Get a snapshot of current pending transactions on this node, cut off at MAX transactions (-m), default 0. If MAX=0, fetches as many transactions as possible.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			client := ensureAlgodClient(dataDir)
-			statusTxnPool, err := client.GetPendingTransactions(maxPendingTransactions)
+			statusTxnPool, err := client.GetParsedPendingTransactions(maxPendingTransactions)
 			if err != nil {
 				reportErrorf(errorNodeStatus, err)
 			}
 
-			pendingTxns := statusTxnPool.TruncatedTxns
+			pendingTxns := statusTxnPool.TopTransactions
 
 			// do this inline for now, break it out when we need to reuse a Txn->String function
-			reportInfof(infoNodePendingTxnsDescription, maxPendingTransactions, statusTxnPool.TotalTxns)
-			if pendingTxns.Transactions == nil || len(pendingTxns.Transactions) == 0 {
+			reportInfof(infoNodePendingTxnsDescription, maxPendingTransactions, statusTxnPool.TotalTransactions)
+			if len(statusTxnPool.TopTransactions) == 0 {
 				reportInfof(infoNodeNoPendingTxnsDescription)
 			} else {
-				for _, pendingTxn := range pendingTxns.Transactions {
+				for _, pendingTxn := range pendingTxns {
 					pendingTxnStr, err := json.MarshalIndent(pendingTxn, "", "    ")
 					if err != nil {
 						// json parsing of the txn failed, so let's just skip printing it
-						fmt.Printf("Unparseable Transaction %s\n", pendingTxn.TxID)
+						fmt.Printf("Unparseable Transaction %s\n", pendingTxn.Txn.ID().String())
 						continue
 					}
 					fmt.Printf("%s\n", string(pendingTxnStr))
@@ -557,7 +590,7 @@ var waitCmd = &cobra.Command{
 	Long:  "Waits for the node to make progress, which includes catching up.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		client := ensureAlgodClient(ensureSingleDataDir())
+		client := ensureAlgodClient(datadir.EnsureSingleDataDir())
 		stat, err := client.Status()
 		if err != nil {
 			reportErrorf(errorNodeStatus, err)
@@ -666,7 +699,7 @@ var createCmd = &cobra.Command{
 }
 
 func catchup(dataDir string, args []string) {
-	client := ensureAlgodClient(ensureSingleDataDir())
+	client := ensureAlgodClient(datadir.EnsureSingleDataDir())
 	if abortCatchup {
 		err := client.AbortCatchup()
 		if err != nil {

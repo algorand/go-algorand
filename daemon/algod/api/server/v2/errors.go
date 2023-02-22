@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,17 +21,20 @@ var (
 	errAssetDoesNotExist                       = "asset does not exist"
 	errAccountAppDoesNotExist                  = "account application info not found"
 	errAccountAssetDoesNotExist                = "account asset info not found"
+	errBoxDoesNotExist                         = "box not found"
 	errFailedLookingUpLedger                   = "failed to retrieve information from the ledger"
 	errFailedLookingUpTransactionPool          = "failed to retrieve information from the transaction pool"
+	errFailedRetrievingStateDelta              = "failed retrieving State Delta"
 	errFailedRetrievingNodeStatus              = "failed retrieving node status"
 	errFailedRetrievingLatestBlockHeaderStatus = "failed retrieving latests block header"
+	errFailedRetrievingSyncRound               = "failed retrieving sync round from ledger"
+	errFailedSettingSyncRound                  = "failed to set sync round on the ledger"
 	errFailedParsingFormatOption               = "failed to parse the format option"
 	errFailedToParseAddress                    = "failed to parse the address"
 	errFailedToParseExclude                    = "failed to parse exclude"
 	errFailedToParseTransaction                = "failed to parse transaction"
 	errFailedToParseBlock                      = "failed to parse block"
 	errFailedToParseCert                       = "failed to parse cert"
-	errFailedToParseSourcemap                  = "failed to parse sourcemap"
 	errFailedToEncodeResponse                  = "failed to encode response"
 	errInternalFailure                         = "internal failure"
 	errNoValidTxnSpecified                     = "no valid transaction ID was specified"

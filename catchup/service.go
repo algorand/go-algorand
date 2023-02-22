@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,6 +43,9 @@ const blockQueryPeerLimit = 10
 // this should be at least the number of relays
 const catchupRetryLimit = 500
 
+// ErrSyncRoundInvalid is returned when the sync round requested is behind the current ledger round
+var ErrSyncRoundInvalid = errors.New("requested sync round cannot be less than the latest round")
+
 // PendingUnmatchedCertificate is a single certificate that is being waited upon to have its corresponding block fetched.
 type PendingUnmatchedCertificate struct {
 	Cert         agreement.Certificate
@@ -64,7 +67,10 @@ type Ledger interface {
 
 // Service represents the catchup service. Once started and until it is stopped, it ensures that the ledger is up to date with network.
 type Service struct {
-	syncStartNS         int64 // at top of struct to keep 64 bit aligned for atomic.* ops
+	syncStartNS int64 // at top of struct to keep 64 bit aligned for atomic.* ops
+	// disableSyncRound, provided externally, is the first round we will _not_ fetch from the network
+	// any round >= disableSyncRound will not be fetched. If set to 0, it will be disregarded.
+	disableSyncRound    uint64
 	cfg                 config.Local
 	ledger              Ledger
 	ctx                 context.Context
@@ -89,6 +95,9 @@ type Service struct {
 	protocolErrorLogged          bool
 	lastSupportedRound           basics.Round
 	unmatchedPendingCertificates <-chan PendingUnmatchedCertificate
+	// This channel signals periodSync to attempt catchup immediately. This allows us to start fetching rounds from
+	// the network as soon as disableSyncRound is modified.
+	syncNow chan struct{}
 }
 
 // A BlockAuthenticator authenticates blocks given a certificate.
@@ -116,6 +125,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 	s.parallelBlocks = config.CatchupParallelBlocks
 	s.deadlineTimeout = agreement.DeadlineTimeout()
 	s.blockValidationPool = blockValidationPool
+	s.syncNow = make(chan struct{})
 
 	return s
 }
@@ -124,6 +134,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 func (s *Service) Start() {
 	s.done = make(chan struct{})
 	s.ctx, s.cancel = context.WithCancel(context.Background())
+	atomic.StoreUint32(&s.initialSyncNotified, 0)
 	s.InitialSyncDone = make(chan struct{})
 	go s.periodicSync()
 }
@@ -144,6 +155,32 @@ func (s *Service) IsSynchronizing() (synchronizing bool, initialSync bool) {
 	synchronizing = atomic.LoadInt64(&s.syncStartNS) != 0
 	initialSync = atomic.LoadUint32(&s.initialSyncNotified) == 0
 	return
+}
+
+// SetDisableSyncRound attempts to set the first round we _do_not_ want to fetch from the network
+// Blocks from disableSyncRound or any round after disableSyncRound will not be fetched while this is set
+func (s *Service) SetDisableSyncRound(rnd uint64) error {
+	if basics.Round(rnd) < s.ledger.LastRound() {
+		return ErrSyncRoundInvalid
+	}
+	atomic.StoreUint64(&s.disableSyncRound, rnd)
+	if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
+		s.syncNow <- struct{}{}
+	}
+	return nil
+}
+
+// UnsetDisableSyncRound removes any previously set disabled sync round
+func (s *Service) UnsetDisableSyncRound() {
+	atomic.StoreUint64(&s.disableSyncRound, 0)
+	if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
+		s.syncNow <- struct{}{}
+	}
+}
+
+// GetDisableSyncRound returns the disabled sync round
+func (s *Service) GetDisableSyncRound() uint64 {
+	return atomic.LoadUint64(&s.disableSyncRound)
 }
 
 // SynchronizingTime returns the time we've been performing a catchup operation (0 if not currently catching up)
@@ -201,6 +238,10 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 //  - If the block is already in the ledger (e.g. if agreement service has already written it)
 //  - If the retrieval of the previous block was unsuccessful
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
+	// If sync-ing this round is not intended, don't fetch it
+	if dontSyncRound := s.GetDisableSyncRound(); dontSyncRound != 0 && r >= basics.Round(dontSyncRound) {
+		return false
+	}
 	i := 0
 	hasLookback := false
 	for true {
@@ -544,6 +585,13 @@ func (s *Service) periodicSync() {
 			// we want to sleep for a random duration since it would "de-syncronize" us from the ledger advance sync
 			sleepDuration = time.Duration(crypto.RandUint63()) % s.deadlineTimeout
 			continue
+		case <-s.syncNow:
+			if s.parallelBlocks == 0 || s.ledger.IsWritingCatchpointDataFile() {
+				continue
+			}
+			s.suspendForCatchpointWriting = false
+			s.log.Info("Immediate resync triggered; resyncing")
+			s.sync()
 		case <-time.After(sleepDuration):
 			if sleepDuration < s.deadlineTimeout || s.cfg.DisableNetworking {
 				sleepDuration = s.deadlineTimeout

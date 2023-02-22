@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,11 +33,14 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -307,8 +310,222 @@ func TestPrivateTransactionGroup(t *testing.T) {
 	require.Error(t, err) // too many
 }
 
+func TestTransactionGroupWithTracer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// In all cases, a group of three transactions is tested. They are:
+	//   1. A basic app call transaction
+	//   2. A payment transaction
+	//   3. An app call transaction that spawns inners. This is from the mocktracer scenarios.
+
+	scenarios := mocktracer.GetTestScenarios()
+
+	type tracerTestCase struct {
+		name                 string
+		firstTxnBehavior     string
+		innerAppCallScenario mocktracer.TestScenarioGenerator
+	}
+	var testCases []tracerTestCase
+
+	firstIteration := true
+	for scenarioName, scenario := range scenarios {
+		firstTxnBehaviors := []string{"approve"}
+		if firstIteration {
+			// When the first transaction rejects or errors, the behavior of the later transactions
+			// don't matter, so we only want to test these cases with any one mocktracer scenario.
+			firstTxnBehaviors = append(firstTxnBehaviors, "reject", "error")
+			firstIteration = false
+		}
+
+		for _, firstTxnTxnBehavior := range firstTxnBehaviors {
+			testCases = append(testCases, tracerTestCase{
+				name:                 fmt.Sprintf("firstTxnBehavior=%s,scenario=%s", firstTxnTxnBehavior, scenarioName),
+				firstTxnBehavior:     firstTxnTxnBehavior,
+				innerAppCallScenario: scenario,
+			})
+		}
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			genesisInitState, addrs, keys := ledgertesting.Genesis(10)
+
+			innerAppID := basics.AppIndex(3)
+			innerAppAddress := innerAppID.Address()
+			balances := genesisInitState.Accounts
+			balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000})
+
+			genesisBalances := bookkeeping.GenesisBalances{
+				Balances:    genesisInitState.Accounts,
+				FeeSink:     testSinkAddr,
+				RewardsPool: testPoolAddr,
+				Timestamp:   0,
+			}
+			l := newTestLedger(t, genesisBalances)
+
+			blkHeader, err := l.BlockHdr(basics.Round(0))
+			require.NoError(t, err)
+			newBlock := bookkeeping.MakeBlock(blkHeader)
+			eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+			require.NoError(t, err)
+			eval.validate = true
+			eval.generate = true
+
+			genHash := l.GenesisHash()
+
+			var basicAppCallReturn string
+			switch testCase.firstTxnBehavior {
+			case "approve":
+				basicAppCallReturn = "int 1"
+			case "reject":
+				basicAppCallReturn = "int 0"
+			case "error":
+				basicAppCallReturn = "err"
+			default:
+				require.Fail(t, "Unexpected firstTxnBehavior")
+			}
+			// a basic app call
+			basicAppCallTxn := txntest.Txn{
+				Type:   protocol.ApplicationCallTx,
+				Sender: addrs[0],
+				ApprovalProgram: fmt.Sprintf(`#pragma version 6
+byte "hello"
+log
+%s`, basicAppCallReturn),
+				ClearStateProgram: `#pragma version 6
+int 1`,
+
+				FirstValid:  newBlock.Round(),
+				LastValid:   newBlock.Round() + 1000,
+				Fee:         minFee,
+				GenesisHash: genHash,
+			}
+
+			// a non-app call txn
+			payTxn := txntest.Txn{
+				Type:             protocol.PaymentTx,
+				Sender:           addrs[1],
+				Receiver:         addrs[2],
+				CloseRemainderTo: addrs[3],
+				Amount:           1_000_000,
+
+				FirstValid:  newBlock.Round(),
+				LastValid:   newBlock.Round() + 1000,
+				Fee:         minFee,
+				GenesisHash: genHash,
+			}
+			// an app call with inner txn
+			innerAppCallTxn := txntest.Txn{
+				Type:   protocol.ApplicationCallTx,
+				Sender: addrs[0],
+				ClearStateProgram: `#pragma version 6
+int 1`,
+
+				FirstValid:  newBlock.Round(),
+				LastValid:   newBlock.Round() + 1000,
+				Fee:         minFee,
+				GenesisHash: genHash,
+			}
+			scenario := testCase.innerAppCallScenario(mocktracer.TestScenarioInfo{
+				CallingTxn:   innerAppCallTxn.Txn(),
+				MinFee:       minFee,
+				CreatedAppID: innerAppID,
+			})
+			innerAppCallTxn.ApprovalProgram = scenario.Program
+
+			txntest.Group(&basicAppCallTxn, &payTxn, &innerAppCallTxn)
+
+			txgroup := transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
+				basicAppCallTxn.Txn().Sign(keys[0]),
+				payTxn.Txn().Sign(keys[1]),
+				innerAppCallTxn.Txn().Sign(keys[0]),
+			})
+
+			require.Len(t, eval.block.Payset, 0)
+
+			tracer := &mocktracer.Tracer{}
+			eval.Tracer = tracer
+			err = eval.TransactionGroup(txgroup)
+			switch testCase.firstTxnBehavior {
+			case "approve":
+				if len(scenario.ExpectedError) != 0 {
+					require.ErrorContains(t, err, scenario.ExpectedError)
+					require.Len(t, eval.block.Payset, 0)
+				} else {
+					require.NoError(t, err)
+					require.Len(t, eval.block.Payset, 3)
+				}
+			case "reject":
+				require.ErrorContains(t, err, "transaction rejected by ApprovalProgram")
+				require.Len(t, eval.block.Payset, 0)
+			case "error":
+				require.ErrorContains(t, err, "logic eval error: err opcode executed")
+				require.Len(t, eval.block.Payset, 0)
+			}
+
+			expectedBasicAppCallAD := transactions.ApplyData{
+				ApplicationID: 1,
+				EvalDelta: transactions.EvalDelta{
+					GlobalDelta: basics.StateDelta{},
+					LocalDeltas: map[uint64]basics.StateDelta{},
+					Logs:        []string{"hello"},
+				},
+			}
+			expectedPayTxnAD :=
+				transactions.ApplyData{
+					ClosingAmount: basics.MicroAlgos{
+						Raw: balances[payTxn.Sender].MicroAlgos.Raw - payTxn.Amount - txgroup[1].Txn.Fee.Raw,
+					},
+				}
+
+			var expectedEvents []mocktracer.Event
+			if testCase.firstTxnBehavior == "approve" {
+				expectedEvents = mocktracer.FlattenEvents([][]mocktracer.Event{
+					{
+						mocktracer.BeforeTxnGroup(3),
+						mocktracer.BeforeTxn(protocol.ApplicationCallTx), // start basicAppCallTxn
+						mocktracer.BeforeProgram(logic.ModeApp),
+					},
+					mocktracer.OpcodeEvents(3, false),
+					{
+						mocktracer.AfterProgram(logic.ModeApp, false),
+						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, false), // end basicAppCallTxn
+						mocktracer.BeforeTxn(protocol.PaymentTx),                                       // start payTxn
+						mocktracer.AfterTxn(protocol.PaymentTx, expectedPayTxnAD, false),               // end payTxn
+					},
+					scenario.ExpectedEvents,
+					{
+						mocktracer.AfterTxnGroup(3, scenario.Outcome != mocktracer.ApprovalOutcome),
+					},
+				})
+			} else {
+				hasError := testCase.firstTxnBehavior == "error"
+				// EvalDeltas are removed from failed app call transactions
+				expectedBasicAppCallAD.EvalDelta = transactions.EvalDelta{}
+				expectedEvents = mocktracer.FlattenEvents([][]mocktracer.Event{
+					{
+						mocktracer.BeforeTxnGroup(3),
+						mocktracer.BeforeTxn(protocol.ApplicationCallTx), // start basicAppCallTxn
+						mocktracer.BeforeProgram(logic.ModeApp),
+					},
+					mocktracer.OpcodeEvents(3, hasError),
+					{
+						mocktracer.AfterProgram(logic.ModeApp, hasError),
+						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, true), // end basicAppCallTxn
+						mocktracer.AfterTxnGroup(3, true),
+					},
+				})
+			}
+			require.Equal(t, expectedEvents, mocktracer.StripInnerTxnGroupIDsFromEvents(tracer.Events))
+		})
+	}
+}
+
 // BlockEvaluator.workaroundOverspentRewards() fixed a couple issues on testnet.
-// This is now part of history and has to be re-created when running catchup on testnet. So, test to ensure it keeps happenning.
+// This is now part of history and has to be re-created when running catchup on testnet. So, test to ensure it keeps happening.
 func TestTestnetFixup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -519,6 +736,8 @@ func (ledger *evalTestLedger) StartEvaluator(hdr bookkeeping.BlockHeader, payset
 		})
 }
 
+func (ledger *evalTestLedger) FlushCaches() {}
+
 // GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
 // look up a creator address, setting ok to false if the query succeeded but no
 // creator was found.
@@ -575,6 +794,10 @@ func (ledger *evalTestLedger) LookupAsset(rnd basics.Round, addr basics.Address,
 		res.AssetHolding = &h
 	}
 	return res, nil
+}
+
+func (ledger *evalTestLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
+	panic("unimplemented")
 }
 
 // GenesisHash returns the genesis hash for this ledger.
@@ -670,7 +893,7 @@ func (ledger *evalTestLedger) CheckDup(currentProto config.ConsensusParams, curr
 			}
 			currentTxid := txn.Txn.ID()
 			if bytes.Equal(txid[:], currentTxid[:]) {
-				return &ledgercore.TransactionInLedgerError{Txid: txid}
+				return &ledgercore.TransactionInLedgerError{Txid: txid, InBlockEvaluator: false}
 			}
 		}
 	}
@@ -766,6 +989,10 @@ func (l *testCowBaseLedger) LookupApplication(rnd basics.Round, addr basics.Addr
 
 func (l *testCowBaseLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
 	return ledgercore.AssetResource{}, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
+	return nil, errors.New("not implemented")
 }
 
 func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {

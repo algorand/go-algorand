@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2019-2022 Algorand, Inc.
+# Copyright (C) 2019-2023 Algorand, Inc.
 # This file is part of go-algorand
 #
 # go-algorand is free software: you can redistribute it and/or modify
@@ -191,7 +191,7 @@ class summary:
     def blockinfo(self, curtime):
         return self.biByTime.get(curtime)
 
-    def byMsg(self):
+    def byMsg(self, html=False):
         txPSums = {}
         rxPSums = {}
         secondsSum = 0
@@ -209,10 +209,14 @@ class summary:
             dictMax(rxMax, ns.rxPLists)
             dictMin(txMin, ns.txPLists)
             dictMin(rxMin, ns.rxPLists)
-        lines = [
-            '{} nodes: {}'.format(len(nicks), nicks),
-            '\ttx B/s\trx B/s',
-        ]
+        nodesummary = '{} nodes: {}'.format(len(nicks), nicks)
+        lines = []
+        if html:
+            lines.append('<div>{}</div>'.format(nodesummary))
+            lines.append('<table><tr><th></th><th>tx B/s</th><th>rx B/s</th></tr>')
+        else:
+            lines.append(nodesummary)
+            lines.append('\ttx B/s\trx B/s')
         for msg, txB in txPSums.items():
             if msg not in rxPSums:
                 rxPSums[msg] = 0
@@ -220,7 +224,12 @@ class summary:
             txBps = txPSums.get(msg,0)/secondsSum
             if (txBps < 0.5) and (rxBps < 0.5):
                 continue
-            lines.append('{}\t{:.0f}\t{:.0f}'.format(msg, txBps, rxBps))
+            if html:
+                lines.append('<tr><td>{}</td><td>{:.0f}</td><td>{:.0f}</td></tr>'.format(msg, txBps, rxBps))
+            else:
+                lines.append('{}\t{:.0f}\t{:.0f}'.format(msg, txBps, rxBps))
+        if html:
+            lines.append('</table>')
         return '\n'.join(lines)
 
     def txPool(self):
@@ -242,6 +251,12 @@ class summary:
         )
 
     def __str__(self):
+        return self.str(html=False)
+
+    def html(self):
+        return self.str(html=True)
+
+    def str(self, html=False):
         if not self.sumsCount:
             tps, txbps, rxbps = math.nan, math.nan, math.nan
             blockTimes = math.nan
@@ -256,9 +271,17 @@ class summary:
             labelspace = self.label + " "
         if self.verifyMillis:
             verifyMillis = labelspace + 'verify ms ({:.0f}/{:.0f}/{:.0f})\n'.format(min(self.verifyMillis), meanOrZero(self.verifyMillis), max(self.verifyMillis))
+            if html:
+                verifyMillis = '<div>' + verifyMillis + '</div>'
         else:
             verifyMillis = ''
-        return '{byMsg}\n{verifyMillis}{labelspace}{txPool}\n{labelspace}summary: {TPS:0.2f} TPS, {bt:1.2f}s/block, tx {txBps}B/s, rx {rxBps}B/s'.format(labelspace=labelspace, byMsg=self.byMsg(), txPool=self.txPool(), TPS=tps, txBps=hunum(txbps), rxBps=hunum(rxbps), bt=blockTimes, verifyMillis=verifyMillis)
+        if html:
+            fmt = '{byMsg}\n{verifyMillis}<div>{labelspace}{txPool}</div>\n<div>{labelspace}summary: {TPS:0.2f} TPS, {bt:1.2f}s/block, tx {txBps}B/s, rx {rxBps}B/s</div>'
+            if self.label:
+                fmt = '<div class="lh">' + self.label + '</div>' + fmt
+        else:
+            fmt = '{byMsg}\n{verifyMillis}{labelspace}{txPool}\n{labelspace}summary: {TPS:0.2f} TPS, {bt:1.2f}s/block, tx {txBps}B/s, rx {rxBps}B/s'
+        return fmt.format(labelspace=labelspace, byMsg=self.byMsg(html), txPool=self.txPool(), TPS=tps, txBps=hunum(txbps), rxBps=hunum(rxbps), bt=blockTimes, verifyMillis=verifyMillis)
 
     def plot_pool(self, outpath):
         from matplotlib import pyplot as plt
@@ -278,6 +301,28 @@ class summary:
             logger.error('no txPool in {}'.format(list(self.nodes.keys())))
             return
         plt.legend(loc='upper right')
+        plt.savefig(outpath + '.svg', format='svg')
+        plt.savefig(outpath + '.png', format='png')
+
+    def heap_xy(self):
+        # data from algod_go_memory_classes_heap_objects_bytes
+        x = []
+        y = []
+        for nick, ns in self.nodes.items():
+            if not ns.objectBytes:
+                continue
+            for curtime, nbytes in ns.objectBytes:
+                x.append(curtime)
+                y.append(nbytes)
+        return x, y
+
+    def plot_heaps(self, outpath):
+        # data from algod_go_memory_classes_heap_objects_bytes
+        from matplotlib import pyplot as plt
+        x, y = self.heap_xy()
+        if (not x) or (not y):
+            return
+        plt.scatter(x, y)
         plt.savefig(outpath + '.svg', format='svg')
         plt.savefig(outpath + '.png', format='png')
 
@@ -320,6 +365,12 @@ def process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args, grsum):
         if anynickre(nretup, (rnick,nick)):
             rsum(process_files(args, nick, paths, grsum), nick)
 
+label_colors = {
+    'relay': (1.0,0,0),
+    'pn': (0,0,1.0),
+    'npn': (.7,.7,0),
+}
+
 def main():
     os.environ['TZ'] = 'UTC'
     time.tzset()
@@ -330,9 +381,11 @@ def main():
     ap.add_argument('--mintps', default=None, type=float, help="records below min TPS don't add into summary")
     ap.add_argument('--deltas', default=None, help='path to write csv deltas')
     ap.add_argument('--report', default=None, help='path to write csv report')
+    ap.add_argument('--html-summary', default=None, help='path to write html summary')
     ap.add_argument('--nick-re', action='append', default=[], help='regexp to filter node names, may be repeated')
     ap.add_argument('--nick-lre', action='append', default=[], help='label:regexp to filter node names, may be repeated')
     ap.add_argument('--pool-plot-root', help='write to foo.svg and .png')
+    ap.add_argument('--heap-plot-root', help='write to foo.svg and .png')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
 
@@ -396,6 +449,9 @@ def main():
     if args.pool_plot_root:
         grsum.plot_pool(args.pool_plot_root)
 
+    htmlout = None
+    if args.html_summary:
+        htmlout = open(args.html_summary, 'wt')
     # maybe subprocess for stats across named groups
     if args.nick_re:
         # use each --nick-re=foo as a group
@@ -404,18 +460,36 @@ def main():
             process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args, grsum)
             print(rsum)
             print('\n')
+            if htmlout:
+                htmlout.write(rsum.html())
         return 0
     if args.nick_lre:
+        heaps_xy_color = []
         for lnre in args.nick_lre:
             label, nre = lnre.split(':', maxsplit=1)
             rsum = summary(label)
             process_nick_re(nre, filesByNick, nick_to_tfname, rsum, args, grsum)
             print(rsum)
             print('\n')
+            if htmlout:
+                htmlout.write(rsum.html())
+            x, y = rsum.heap_xy()
+            c = label_colors.get(label)
+            heaps_xy_color.append((x, y, c))
+        if args.heap_plot_root:
+            from matplotlib import pyplot as plt
+            for x,y,c in heaps_xy_color:
+                plt.scatter(x, y, color=c)
+                plt.savefig(args.heap_plot_root + '.svg', format='svg')
+                plt.savefig(args.heap_plot_root + '.png', format='png')
         return 0
+    elif args.heap_plot_root:
+        grsum.plot_heaps(args.heap_plot_root)
 
     # no filters, print global result
     print(grsum)
+    if htmlout:
+        htmlout.write(grsum.html())
     return 0
 
 def perProtocol(prefix, lists, sums, deltas, dt):
@@ -464,6 +538,8 @@ class nodestats:
         self.times = []
         # algod_tx_pool_count{}
         self.txPool = []
+        # objectBytes = [(curtime, algod_go_memory_classes_heap_objects_bytes), ...]
+        self.objectBytes = []
         # total across all measurements
         self.tps = 0
         self.blockTime = 0
@@ -473,6 +549,8 @@ class nodestats:
 
     def process_files(self, args, nick=None, metrics_files=None, bisource=None):
         "returns self, a nodestats object"
+        if bisource is not None:
+            logger.debug('process_files %r external bisource', nick)
         if bisource is None:
             bisource = {}
         self.args = args
@@ -513,9 +591,15 @@ class nodestats:
                 with open(bijsonpath, 'rt', encoding="utf-8") as fin:
                     bi = json.load(fin)
                     self.biByTime[curtime] = bi
+                    logger.debug('bi r=%d %s', bi.get('block',{}).get('rnd', 0), bijsonpath)
             if bi is None:
                 bi = bisource.get(curtime)
+            if bi is None:
+                logger.warning('%s no blockinfo', path)
             self.txPool.append(cur.get('algod_tx_pool_count{}'))
+            objectBytes = cur.get('algod_go_memory_classes_heap_objects_bytes')
+            if objectBytes:
+                self.objectBytes.append((curtime, objectBytes))
             #logger.debug('%s: %r', path, cur)
             verifyGood = cur.get('algod_agreement_proposal_verify_good{}')
             verifyMs = cur.get('algod_agreement_proposal_verify_ms{}')
@@ -527,7 +611,7 @@ class nodestats:
                 dt = curtime - prevtime
                 #print("{} ->\n{}".format(prevPath, path))
                 #print(json.dumps(d, indent=2, sort_keys=True))
-                self.deltas.append((curtime, d))
+                self.deltas.append((curtime, dt, d))
                 tps = None
                 blocktime = None
                 txnCount = 0
@@ -572,8 +656,14 @@ class nodestats:
             prevbi = bi
         if prevbi is None or firstBi is None:
             return self
+        if prevbi is firstBi:
+            logger.warning('only one blockinfo for %s', nick)
+            return self
         txnCount = prevbi.get('block',{}).get('tc',0) - firstBi.get('block',{}).get('tc',0)
         rounds = prevbi.get('block',{}).get('rnd',0) - firstBi.get('block',{}).get('rnd',0)
+        if rounds == 0:
+            logger.warning('no rounds for %s', nick)
+            return self
         totalDt = prevtime - firstTime
         self.tps = txnCount / totalDt
         self.blockTime = totalDt / rounds
@@ -590,7 +680,7 @@ class nodestats:
             reportf.close()
         if self.deltas and args.deltas:
             keys = set()
-            for ct, d in self.deltas:
+            for ct, dt, d in self.deltas:
                 keys.update(set(d.keys()))
             keys = sorted(keys)
             deltapath = args.deltas
@@ -598,9 +688,9 @@ class nodestats:
                 deltapath = deltapath.replace('.csv', '.{}.csv'.format(nick))
             with sopen(deltapath, 'wt') as fout:
                 writer = csv.writer(fout)
-                writer.writerow(['when'] + keys)
+                writer.writerow(['when', 'dt'] + keys)
                 for ct, d in self.deltas:
-                    row = [time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(ct))]
+                    row = [time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(ct)), dt]
                     for k in keys:
                         row.append(d.get(k, None))
                     writer.writerow(row)

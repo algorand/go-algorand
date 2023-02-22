@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -273,6 +273,7 @@ func TestWellFormedErrors(t *testing.T) {
 	futureProto := config.Consensus[protocol.ConsensusFuture]
 	protoV27 := config.Consensus[protocol.ConsensusV27]
 	protoV28 := config.Consensus[protocol.ConsensusV28]
+	protoV32 := config.Consensus[protocol.ConsensusV32]
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
 	v5 := []byte{0x05}
@@ -284,7 +285,6 @@ func TestWellFormedErrors(t *testing.T) {
 	}
 	usecases := []struct {
 		tx            Transaction
-		spec          SpecialAddresses
 		proto         config.ConsensusParams
 		expectedError error
 	}{
@@ -296,7 +296,6 @@ func TestWellFormedErrors(t *testing.T) {
 					Fee:    basics.MicroAlgos{Raw: 100},
 				},
 			},
-			spec:          specialAddr,
 			proto:         protoV27,
 			expectedError: makeMinFeeErrorf("transaction had fee %d, which is less than the minimum %d", 100, curProto.MinTxnFee),
 		},
@@ -308,7 +307,6 @@ func TestWellFormedErrors(t *testing.T) {
 					Fee:    basics.MicroAlgos{Raw: 100},
 				},
 			},
-			spec:  specialAddr,
 			proto: curProto,
 		},
 		{
@@ -321,7 +319,6 @@ func TestWellFormedErrors(t *testing.T) {
 					FirstValid: 105,
 				},
 			},
-			spec:          specialAddr,
 			proto:         curProto,
 			expectedError: fmt.Errorf("transaction invalid range (%d--%d)", 105, 100),
 		},
@@ -339,7 +336,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ExtraProgramPages: 1,
 				},
 			},
-			spec:          specialAddr,
 			proto:         protoV27,
 			expectedError: fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", protoV27.MaxExtraAppProgramPages),
 		},
@@ -353,7 +349,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ClearStateProgram: []byte("Xjunk"),
 				},
 			},
-			spec:          specialAddr,
 			proto:         protoV27,
 			expectedError: fmt.Errorf("approval program too long. max len 1024 bytes"),
 		},
@@ -367,7 +362,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ClearStateProgram: []byte("Xjunk"),
 				},
 			},
-			spec:  specialAddr,
 			proto: futureProto,
 		},
 		{
@@ -380,7 +374,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
 				},
 			},
-			spec:          specialAddr,
 			proto:         futureProto,
 			expectedError: fmt.Errorf("app programs too long. max total len 2048 bytes"),
 		},
@@ -395,7 +388,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ExtraProgramPages: 1,
 				},
 			},
-			spec:  specialAddr,
 			proto: futureProto,
 		},
 		{
@@ -410,7 +402,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ExtraProgramPages: 1,
 				},
 			},
-			spec:          specialAddr,
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx.ExtraProgramPages is immutable"),
 		},
@@ -428,7 +419,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ExtraProgramPages: 4,
 				},
 			},
-			spec:          specialAddr,
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", futureProto.MaxExtraAppProgramPages),
 		},
@@ -441,7 +431,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ForeignApps:   []basics.AppIndex{10, 11},
 				},
 			},
-			spec:  specialAddr,
 			proto: protoV27,
 		},
 		{
@@ -453,7 +442,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ForeignApps:   []basics.AppIndex{10, 11, 12},
 				},
 			},
-			spec:          specialAddr,
 			proto:         protoV27,
 			expectedError: fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is 2"),
 		},
@@ -466,7 +454,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ForeignApps:   []basics.AppIndex{10, 11, 12, 13, 14, 15, 16, 17},
 				},
 			},
-			spec:  specialAddr,
 			proto: futureProto,
 		},
 		{
@@ -478,7 +465,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17, 18, 19, 20, 21, 22},
 				},
 			},
-			spec:          specialAddr,
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is 8"),
 		},
@@ -493,7 +479,6 @@ func TestWellFormedErrors(t *testing.T) {
 					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17},
 				},
 			},
-			spec:          specialAddr,
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = 8"),
 		},
@@ -509,7 +494,6 @@ func TestWellFormedErrors(t *testing.T) {
 					OnCompletion:      UpdateApplicationOC,
 				},
 			},
-			spec:          specialAddr,
 			proto:         protoV28,
 			expectedError: fmt.Errorf("app programs too long. max total len %d bytes", curProto.MaxAppProgramLen),
 		},
@@ -525,7 +509,6 @@ func TestWellFormedErrors(t *testing.T) {
 					OnCompletion:      UpdateApplicationOC,
 				},
 			},
-			spec:  specialAddr,
 			proto: futureProto,
 		},
 		{
@@ -543,13 +526,49 @@ func TestWellFormedErrors(t *testing.T) {
 					OnCompletion:      UpdateApplicationOC,
 				},
 			},
-			spec:          specialAddr,
 			proto:         protoV28,
 			expectedError: fmt.Errorf("tx.ExtraProgramPages is immutable"),
 		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.Boxes[0].Index is 1. Exceeds len(tx.ForeignApps)"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
+					ForeignApps:   []basics.AppIndex{1},
+				},
+			},
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
+					ForeignApps:   []basics.AppIndex{1},
+				},
+			},
+			proto:         protoV32,
+			expectedError: fmt.Errorf("tx.Boxes too long, max number of box references is 0"),
+		},
 	}
 	for _, usecase := range usecases {
-		err := usecase.tx.WellFormed(usecase.spec, usecase.proto)
+		err := usecase.tx.WellFormed(specialAddr, usecase.proto)
 		require.Equal(t, usecase.expectedError, err)
 	}
 }

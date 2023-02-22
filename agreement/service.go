@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -88,7 +88,7 @@ type externalDemuxSignals struct {
 // MakeService creates a new Agreement Service instance given a set of Parameters.
 //
 // Call Start to start execution and Shutdown to finish execution.
-func MakeService(p Parameters) *Service {
+func MakeService(p Parameters) (*Service, error) {
 	s := new(Service)
 
 	s.parameters = parameters(p)
@@ -97,12 +97,16 @@ func MakeService(p Parameters) *Service {
 
 	// GOAL2-541: tracer is not concurrency safe. It should only ever be
 	// accessed by main state machine loop.
-	s.tracer = makeTracer(s.log, defaultCadaverName, p.CadaverSizeTarget,
+	var err error
+	s.tracer, err = makeTracer(s.log, defaultCadaverName, p.CadaverSizeTarget, p.CadaverDirectory,
 		s.Local.EnableAgreementReporting, s.Local.EnableAgreementTimeMetrics)
+	if err != nil {
+		return nil, err
+	}
 
 	s.persistenceLoop = makeAsyncPersistenceLoop(s.log, s.Accessor, s.Ledger)
 
-	return s
+	return s, nil
 }
 
 // SetTracerFilename updates the tracer filename used.
@@ -191,7 +195,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 	var err error
 	raw, err := restore(s.log, s.Accessor)
 	if err == nil {
-		clock, router, status, a, err = decode(raw, s.Clock, s.log)
+		clock, router, status, a, err = decode(raw, s.Clock, s.log, false)
 		if err != nil {
 			reset(s.log, s.Accessor)
 		} else {
@@ -246,7 +250,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 // usage semantics : caller should ensure to call this function only when we have participation
 // keys for the given voting round.
 func (s *Service) persistState(done chan error) (events <-chan externalEvent) {
-	raw := encode(s.Clock, s.persistRouter, s.persistStatus, s.persistActions)
+	raw := encode(s.Clock, s.persistRouter, s.persistStatus, s.persistActions, false)
 	return s.persistenceLoop.Enqueue(s.Clock, s.persistStatus.Round, s.persistStatus.Period, s.persistStatus.Step, raw, done)
 }
 

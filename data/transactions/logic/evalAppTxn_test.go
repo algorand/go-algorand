@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,6 +35,7 @@ import (
 
 func TestInnerTypesV5(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	v5, _, _ := MakeSampleEnvWithVersion(5)
 	// not alllowed in v5
@@ -47,6 +48,7 @@ func TestInnerTypesV5(t *testing.T) {
 
 func TestCurrentInnerTypes(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	TestApp(t, "itxn_submit; int 1;", ep, "itxn_submit without itxn_begin")
@@ -99,6 +101,7 @@ func TestCurrentInnerTypes(t *testing.T) {
 
 func TestFieldTypes(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, _, _ := MakeSampleEnv()
 	TestApp(t, "itxn_begin; byte \"pay\"; itxn_field Sender;", ep, "not an address")
@@ -117,6 +120,10 @@ func TestFieldTypes(t *testing.T) {
 	TestApp(t, NoTrack("itxn_begin; byte 0x01; itxn_field XferAsset;"), ep, "not a uint64")
 	TestApp(t, NoTrack("itxn_begin; byte 0x01; itxn_field AssetAmount;"), ep, "not a uint64")
 
+	// get coverage on uintMaxed()
+	TestApp(t, NoTrack("itxn_begin; byte \"pay\"; itxn_field ExtraProgramPages;"), ep, "not a uint64")
+	// get coverage on bool()
+	TestApp(t, NoTrack("itxn_begin; byte \"pay\"; itxn_field Nonparticipation;"), ep, "not a uint64")
 }
 
 func appAddr(id int) basics.Address {
@@ -125,6 +132,7 @@ func appAddr(id int) basics.Address {
 
 func TestAppPay(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	pay := `
   itxn_begin
@@ -172,6 +180,7 @@ func TestAppPay(t *testing.T) {
 
 func TestAppAssetOptIn(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	// Establish 888 as the app id, and fund it.
@@ -233,6 +242,7 @@ int 1
 
 func TestRekeyPay(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	pay := `
   itxn_begin
@@ -253,11 +263,12 @@ func TestRekeyPay(t *testing.T) {
 	TestApp(t, "txn Sender; txn Accounts 1; int 100"+pay+"; int 1", ep)
 	// Note that the Sender would fail min balance check if we did it here.
 	// It seems proper to wait until end of txn though.
-	// See explanation in logicLedger's Perform()
+	// See explanation in cowRoundState's Perform()
 }
 
 func TestRekeyBack(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	payAndUnkey := `
   itxn_begin
@@ -284,6 +295,7 @@ func TestRekeyBack(t *testing.T) {
 
 func TestDefaultSender(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	pay := `
   itxn_begin
@@ -305,6 +317,7 @@ func TestDefaultSender(t *testing.T) {
 
 func TestAppAxfer(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	axfer := `
   itxn_begin
@@ -368,6 +381,7 @@ func TestAppAxfer(t *testing.T) {
 
 func TestExtraFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	pay := `
   itxn_begin
@@ -390,6 +404,7 @@ func TestExtraFields(t *testing.T) {
 
 func TestBadFieldV5(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	pay := `
   itxn_begin
@@ -414,6 +429,7 @@ func TestBadFieldV5(t *testing.T) {
 
 func TestBadField(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	pay := `
   itxn_begin
@@ -439,6 +455,7 @@ func TestBadField(t *testing.T) {
 
 func TestNumInnerShallow(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	pay := `
   itxn_begin
@@ -481,6 +498,7 @@ func TestNumInnerShallow(t *testing.T) {
 // in a group.
 func TestNumInnerPooled(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	pay := `
   itxn_begin
@@ -496,7 +514,7 @@ func TestNumInnerPooled(t *testing.T) {
 	tx := txntest.Txn{
 		Type: protocol.ApplicationCallTx,
 	}.SignedTxn()
-	ledger := MakeLedger(nil)
+	ledger := NewLedger(nil)
 	ledger.NewApp(tx.Txn.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 1000000)
 	short := pay + ";int 1"
@@ -519,6 +537,7 @@ func TestNumInnerPooled(t *testing.T) {
 
 func TestAssetCreate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	create := `
   itxn_begin
@@ -547,6 +566,7 @@ func TestAssetCreate(t *testing.T) {
 
 func TestAssetFreeze(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	create := `
   itxn_begin
@@ -595,6 +615,7 @@ func TestAssetFreeze(t *testing.T) {
 
 func TestKeyReg(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	keyreg := `
   store 6 // StateProofPK
@@ -651,6 +672,7 @@ func TestKeyReg(t *testing.T) {
 `
 
 	t.Run("nonparticipating", func(t *testing.T) {
+		t.Parallel()
 		params := `
   int 0 // VoteFirst
   int 0 // VoteLast
@@ -667,6 +689,7 @@ func TestKeyReg(t *testing.T) {
 	})
 
 	t.Run("offline", func(t *testing.T) {
+		t.Parallel()
 		params := `
   int 0 // VoteFirst
   int 0 // VoteLast
@@ -683,6 +706,7 @@ func TestKeyReg(t *testing.T) {
 	})
 
 	t.Run("online without StateProofPK", func(t *testing.T) {
+		t.Parallel()
 		params := `
   int 100 // VoteFirst
   int 200 // VoteLast
@@ -700,6 +724,7 @@ func TestKeyReg(t *testing.T) {
 	})
 
 	t.Run("online with StateProofPK", func(t *testing.T) {
+		t.Parallel()
 		params := `
   int 100 // VoteFirst
   int 16777315 // VoteLast
@@ -718,6 +743,7 @@ func TestKeyReg(t *testing.T) {
 	})
 
 	t.Run("online with StateProofPK and too long validity period", func(t *testing.T) {
+		t.Parallel()
 		params := `
   int 100 // VoteFirst
   int 16777316 // VoteLast
@@ -738,6 +764,7 @@ func TestKeyReg(t *testing.T) {
 
 func TestFieldSetting(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -770,6 +797,8 @@ func TestFieldSetting(t *testing.T) {
 		"not an address")
 
 	TestApp(t, "itxn_begin; int 6; bzero; itxn_field ConfigAssetUnitName; int 1", ep)
+	TestApp(t, NoTrack("itxn_begin; int 6; itxn_field ConfigAssetUnitName; int 1"), ep,
+		"not a byte array")
 	TestApp(t, "itxn_begin; int 7; bzero; itxn_field ConfigAssetUnitName; int 1", ep,
 		"value is too long")
 
@@ -780,8 +809,11 @@ func TestFieldSetting(t *testing.T) {
 
 func TestInnerGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
+	ep.FeeCredit = nil // default sample env starts at 401
+
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	// Need both fees and both payments
 	ledger.NewAccount(appAddr(888), 999+2*MakeTestProto().MinTxnFee)
@@ -800,8 +832,11 @@ txn Sender; itxn_field Receiver;
 
 func TestInnerFeePooling(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
+	ep.FeeCredit = nil // default sample env starts at 401
+
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
 	pay := `
@@ -868,6 +903,7 @@ txn Sender; itxn_field Receiver;
 // immediate failures.
 func TestApplCreation(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, _ := MakeSampleEnv()
 
@@ -953,8 +989,6 @@ func TestBigApplCreation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	ep, _, _ := MakeSampleEnv()
-
 	p := "itxn_begin;"
 	s := "; int 1"
 
@@ -964,7 +998,12 @@ func TestBigApplCreation(t *testing.T) {
 
 	// First, test normal accummulation
 	for _, pgm := range []string{"Approval", "ClearState"} {
+		pgm := pgm
 		t.Run(pgm, func(t *testing.T) {
+			t.Parallel()
+
+			ep, _, _ := MakeSampleEnv()
+
 			basic := "itxn_field " + pgm + "Program"
 			pages := "itxn_field " + pgm + "ProgramPages"
 			TestApp(t, p+`int 1000; bzero; `+pages+`
@@ -1052,6 +1091,7 @@ func TestApplSubmission(t *testing.T) {
 
 func TestInnerApplCreate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -1119,6 +1159,7 @@ int 5000; app_params_get AppGlobalNumByteSlice; !; assert; !; assert; int 1
 
 func TestCreateOldAppFails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -1181,6 +1222,7 @@ int 1
 
 func TestSelfReentrancy(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -1197,6 +1239,7 @@ int 1
 
 func TestIndirectReentrancy(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	call888 := TestProg(t, `itxn_begin
@@ -1226,6 +1269,7 @@ int 1
 // needlessly picky to test, but the appID used to be stored outside the cx.
 func TestInnerAppID(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	logID := TestProg(t, `global CurrentApplicationID; itob; log; int 1`, AssemblerMaxVersion)
@@ -1254,6 +1298,7 @@ int 222
 // about 690 (see next test).
 func TestInnerBudgetIncrement(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	gasup := TestProg(t, "pushint 1", AssemblerMaxVersion)
@@ -1283,6 +1328,7 @@ itxn_submit;
 
 func TestIncrementCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	gasup := TestProg(t, "pushint 1", AssemblerMaxVersion)
@@ -1316,6 +1362,7 @@ int 1
 // TestInnerTxIDs confirms that TxIDs are available and different
 func TestInnerTxIDs(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	txid := TestProg(t, "txn TxID; log; int 1", AssemblerMaxVersion)
@@ -1411,6 +1458,7 @@ gitxn 1 TxID
 // but set and unique on non-singletons
 func TestInnerGroupIDs(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	gid := TestProg(t, "global GroupID; log; int 1", AssemblerMaxVersion)
@@ -1751,11 +1799,18 @@ int 1
 `
 
 	for _, unified := range []bool{true, false} {
+		unified := unified
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
-			// t.Parallel() NO! unified variable is actually shared
-
+			t.Parallel()
 			ep, parentTx, ledger := MakeSampleEnv()
 			ep.Proto.UnifyInnerTxIDs = unified
+
+			// Whenever MakeSampleEnv() is changed to create a different
+			// transaction, we must reverse those changes here, so that the
+			// historic test is correct.
+			parentTx.Type = protocol.PaymentTx
+			parentTx.Boxes = nil
+			ep.FeeCredit = nil // else inner's fee will change
 
 			parentTx.ApplicationID = parentAppID
 			parentTx.ForeignApps = []basics.AppIndex{
@@ -2072,11 +2127,18 @@ int 1
 `
 
 	for _, unified := range []bool{true, false} {
+		unified := unified
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
 			t.Parallel()
-
 			ep, parentTx, ledger := MakeSampleEnv()
 			ep.Proto.UnifyInnerTxIDs = unified
+
+			// Whenever MakeSampleEnv() is changed to create a different
+			// transaction, we must reverse those changes here, so that the
+			// historic test is correct.
+			parentTx.Type = protocol.PaymentTx
+			parentTx.Boxes = nil
+			ep.FeeCredit = nil // else inner's fee will change
 
 			parentTx.ApplicationID = parentAppID
 			parentTx.ForeignApps = []basics.AppIndex{
@@ -2203,9 +2265,9 @@ func TestInnerTxIDCaching(t *testing.T) {
 	childAppID := basics.AppIndex(222)
 
 	for _, unified := range []bool{true, false} {
+		unified := unified
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
-			// t.Parallel() NO! unified variable is actually shared
-
+			t.Parallel()
 			ep, parentTx, ledger := MakeSampleEnv()
 			ep.Proto.UnifyInnerTxIDs = unified
 
@@ -2301,6 +2363,7 @@ btoi
 // TestGtixn confirms access to itxn groups
 func TestGtixn(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	two := TestProg(t, "byte 0x22; log; int 1", AssemblerMaxVersion)
@@ -2387,6 +2450,7 @@ int 1
 // TestGtxnLog confirms that gtxn can now access previous txn's Logs.
 func TestGtxnLog(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	two := TestProg(t, "byte 0x22; log; int 1", AssemblerMaxVersion)
@@ -2416,6 +2480,7 @@ int 1
 // TestGtxnApps confirms that gtxn can now access previous txn's created app id.
 func TestGtxnApps(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	appcheck := TestProg(t, `
@@ -2463,6 +2528,7 @@ int 5001
 // TestGtxnAsa confirms that gtxn can now access previous txn's created asa id.
 func TestGtxnAsa(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	appcheck := TestProg(t, `
@@ -2500,6 +2566,7 @@ int 5001
 // TestCallerGlobals checks that a called app can see its caller.
 func TestCallerGlobals(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	globals := TestProg(t, fmt.Sprintf(`
@@ -2530,6 +2597,7 @@ int 1
 // transactions.
 func TestNumInnerDeep(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	pay := `
   itxn_begin
@@ -2548,7 +2616,7 @@ func TestNumInnerDeep(t *testing.T) {
 		ForeignApps:   []basics.AppIndex{basics.AppIndex(222)},
 	}.SignedTxnWithAD()
 	require.Equal(t, 888, int(tx.Txn.ApplicationID))
-	ledger := MakeLedger(nil)
+	ledger := NewLedger(nil)
 
 	pay3 := TestProg(t, pay+pay+pay+"int 1;", AssemblerMaxVersion).Program
 	ledger.NewApp(tx.Txn.Receiver, 222, basics.AppParams{
@@ -2580,6 +2648,7 @@ itxn_submit
 // foreign-arrays rules.
 func TestCreateAndUse(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	axfer := `
   itxn_begin
@@ -2695,6 +2764,7 @@ func hexProgram(t *testing.T, source string) string {
 // the address for it can be looked up.
 func TestCreateUseApp(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	pay5back := main(`
 itxn_begin
@@ -2729,6 +2799,7 @@ int 1
 // because of the strict adherence to the foreign-accounts rules.
 func TestCreateAndPay(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	pay5back := main(`
 itxn_begin
@@ -2772,6 +2843,7 @@ int 1
 // across multiple inner transaction groups
 func TestInnerGaid(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	ep.Proto.MaxInnerTransactions = 100
@@ -2929,6 +3001,7 @@ done:
 
 func TestInfiniteRecursion(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	source := `
@@ -2962,6 +3035,7 @@ itxn_submit
 
 func TestForeignAppAccountAccess(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewAccount(appAddr(888), 50_000)

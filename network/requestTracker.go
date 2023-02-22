@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -148,6 +148,7 @@ func (ard *hostIncomingRequests) countConnections(rateLimitingWindowStartTime ti
 	return uint(len(ard.requests) - i + len(ard.additionalHostRequests))
 }
 
+//msgp:ignore hostsIncomingMap
 type hostsIncomingMap map[string]*hostIncomingRequests
 
 // pruneRequests cleans stale items from the hostRequests maps
@@ -252,6 +253,10 @@ func makeRequestsTracker(downstreamHandler http.Handler, log logging.Logger, con
 type requestTrackedConnection struct {
 	net.Conn
 	tracker *RequestTracker
+}
+
+func (c *requestTrackedConnection) UnderlyingConn() net.Conn {
+	return c.Conn
 }
 
 // Close removes the connection from the tracker's connections map and call the underlaying Close function.

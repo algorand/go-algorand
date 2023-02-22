@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -192,6 +192,11 @@ const ConsensusV35 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/433d8e9a7274b6fca703d91213e05c7e6a589e69",
 )
 
+// ConsensusV36 adds box storage
+const ConsensusV36 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/44fa607d6051730f5264526bf3c108d51f0eadb6",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -212,13 +217,16 @@ const ConsensusVAlpha3 = ConsensusVersion("alpha3")
 // ConsensusVAlpha4 uses the same parameters as ConsensusV34.
 const ConsensusVAlpha4 = ConsensusVersion("alpha4")
 
+// ConsensusVAlpha5 uses the same parameters as ConsensusV36.
+const ConsensusVAlpha5 = ConsensusVersion("alpha5")
+
 // !!! ********************* !!!
 // !!! *** Please update ConsensusCurrentVersion when adding new protocol versions *** !!!
 // !!! ********************* !!!
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV35
+const ConsensusCurrentVersion = ConsensusV36
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion

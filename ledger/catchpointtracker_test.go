@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -38,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -91,7 +93,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	filesToCreate := 4
 
 	temporaryDirectory := t.TempDir()
-	catchpointsDirectory := filepath.Join(temporaryDirectory, CatchpointDirName)
+	catchpointsDirectory := filepath.Join(temporaryDirectory, store.CatchpointDirName)
 	err := os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(t, err)
 
@@ -99,13 +101,13 @@ func TestGetCatchpointStream(t *testing.T) {
 
 	// Create the catchpoint files with dummy data
 	for i := 0; i < filesToCreate; i++ {
-		fileName := filepath.Join(CatchpointDirName, fmt.Sprintf("%d.catchpoint", i))
+		fileName := filepath.Join(store.CatchpointDirName, fmt.Sprintf("%d.catchpoint", i))
 		data := []byte{byte(i), byte(i + 1), byte(i + 2)}
 		err = os.WriteFile(filepath.Join(temporaryDirectory, fileName), data, 0666)
 		require.NoError(t, err)
 
 		// Store the catchpoint into the database
-		err := storeCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(i), fileName, "", int64(len(data)))
+		err := ct.catchpointStore.StoreCatchpoint(context.Background(), basics.Round(i), fileName, "", int64(len(data)))
 		require.NoError(t, err)
 	}
 
@@ -125,14 +127,14 @@ func TestGetCatchpointStream(t *testing.T) {
 	require.Equal(t, int64(3), len)
 
 	// File deleted, but record in the database
-	err = os.Remove(filepath.Join(temporaryDirectory, CatchpointDirName, "2.catchpoint"))
+	err = os.Remove(filepath.Join(temporaryDirectory, store.CatchpointDirName, "2.catchpoint"))
 	require.NoError(t, err)
 	reader, err = ct.GetCatchpointStream(basics.Round(2))
 	require.Equal(t, ledgercore.ErrNoEntry{}, err)
 	require.Nil(t, reader)
 
 	// File on disk, but database lost the record
-	err = storeCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(3), "", "", 0)
+	err = ct.catchpointStore.StoreCatchpoint(context.Background(), basics.Round(3), "", "", 0)
 	require.NoError(t, err)
 	reader, err = ct.GetCatchpointStream(basics.Round(3))
 	require.NoError(t, err)
@@ -142,7 +144,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	outData = []byte{3, 4, 5}
 	require.Equal(t, outData, dataRead)
 
-	err = deleteStoredCatchpoints(context.Background(), ml.dbs.Wdb.Handle, ct.dbDirectory)
+	err = ct.catchpointStore.DeleteStoredCatchpoints(context.Background(), ct.dbDirectory)
 	require.NoError(t, err)
 }
 
@@ -171,7 +173,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	dummyCatchpointFiles := make([]string, dummyCatchpointFilesToCreate)
 	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
 		file := fmt.Sprintf("%s%c%d%c%d%cdummy_catchpoint_file-%d",
-			CatchpointDirName, os.PathSeparator,
+			store.CatchpointDirName, os.PathSeparator,
 			i/10, os.PathSeparator,
 			i/2, os.PathSeparator,
 			i)
@@ -183,11 +185,11 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 		require.NoError(t, err)
 		err = f.Close()
 		require.NoError(t, err)
-		err = storeCatchpoint(context.Background(), ml.dbs.Wdb.Handle, basics.Round(i), file, "", 0)
+		err = ct.catchpointStore.StoreCatchpoint(context.Background(), basics.Round(i), file, "", 0)
 		require.NoError(t, err)
 	}
 
-	err := deleteStoredCatchpoints(context.Background(), ml.dbs.Wdb.Handle, ct.dbDirectory)
+	err := ct.catchpointStore.DeleteStoredCatchpoints(context.Background(), ct.dbDirectory)
 	require.NoError(t, err)
 
 	// ensure that all the files were deleted.
@@ -195,7 +197,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 		_, err := os.Open(file)
 		require.True(t, os.IsNotExist(err))
 	}
-	fileNames, err := getOldestCatchpointFiles(context.Background(), ml.dbs.Rdb.Handle, dummyCatchpointFilesToCreate, 0)
+	fileNames, err := ct.catchpointStore.GetOldestCatchpointFiles(context.Background(), dummyCatchpointFilesToCreate, 0)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fileNames))
 }
@@ -207,11 +209,11 @@ func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// we don't want to run this test before the binary is compiled against the latest database upgrade schema.
-	if accountDBVersion < 6 {
+	if store.AccountDBVersion < 6 {
 		return
 	}
 	temporaryDirectroy := t.TempDir()
-	tempCatchpointDir := filepath.Join(temporaryDirectroy, CatchpointDirName)
+	tempCatchpointDir := filepath.Join(temporaryDirectroy, store.CatchpointDirName)
 
 	// creating empty catchpoint directories
 	emptyDirPath := path.Join(tempCatchpointDir, "2f", "e1")
@@ -248,7 +250,7 @@ func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 	_, err = trackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
 
-	emptyDirs, err := getEmptyDirs(tempCatchpointDir)
+	emptyDirs, err := store.GetEmptyDirs(tempCatchpointDir)
 	require.NoError(t, err)
 	onlyTempDirEmpty := len(emptyDirs) == 0
 	require.Equal(t, onlyTempDirEmpty, true)
@@ -296,11 +298,11 @@ func TestRecordCatchpointFile(t *testing.T) {
 	for _, round := range []basics.Round{2000000, 3000010, 3000015, 3000020} {
 		accountsRound := round - 1
 
-		_, _, biggestChunkLen, err := ct.generateCatchpointData(
+		_, _, _, biggestChunkLen, err := ct.generateCatchpointData(
 			context.Background(), accountsRound, time.Second)
 		require.NoError(t, err)
 
-		err = ct.createCatchpoint(context.Background(), accountsRound, round, catchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
+		err = ct.createCatchpoint(context.Background(), accountsRound, round, store.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
 		require.NoError(t, err)
 	}
 
@@ -308,7 +310,7 @@ func TestRecordCatchpointFile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, conf.CatchpointFileHistoryLength, numberOfCatchpointFiles)
 
-	emptyDirs, err := getEmptyDirs(temporaryDirectory)
+	emptyDirs, err := store.GetEmptyDirs(temporaryDirectory)
 	require.NoError(t, err)
 	onlyCatchpointDirEmpty := len(emptyDirs) == 0 ||
 		(len(emptyDirs) == 1 && emptyDirs[0] == temporaryDirectory)
@@ -319,16 +321,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(5, true)}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
+	addSinkAndPoolAccounts(accts)
 
 	ml := makeMockLedgerForTracker(b, true, 10, protocol.ConsensusCurrentVersion, accts)
 	defer ml.Close()
@@ -339,7 +332,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	ct.initialize(cfg, ".")
 
 	temporaryDirectroy := b.TempDir()
-	catchpointsDirectory := filepath.Join(temporaryDirectroy, CatchpointDirName)
+	catchpointsDirectory := filepath.Join(temporaryDirectroy, store.CatchpointDirName)
 	err := os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(b, err)
 
@@ -351,24 +344,29 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
-	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = ml.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		arw, err := tx.MakeAccountsReaderWriter()
+		if err != nil {
+			return err
+		}
+
 		for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
 			var updates compactAccountDeltas
 			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 				addr := ledgertesting.RandomAddress()
-				acctData := baseAccountData{}
+				acctData := store.BaseAccountData{}
 				acctData.MicroAlgos.Raw = 1
 				updates.upsert(addr, accountDelta{newAcct: acctData})
 				i++
 			}
 
-			_, _, err = accountsNewRound(tx, updates, compactResourcesDeltas{}, nil, proto, basics.Round(1))
+			_, _, _, err = accountsNewRound(tx, updates, compactResourcesDeltas{}, nil, nil, proto, basics.Round(1))
 			if err != nil {
 				return
 			}
 		}
 
-		return updateAccountsHashRound(ctx, tx, 1)
+		return arw.UpdateAccountsHashRound(ctx, 1)
 	})
 	require.NoError(b, err)
 
@@ -382,8 +380,9 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
+		t.Skip("This test is too slow on ARM and causes CI builds to time out")
 	}
+
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -395,17 +394,8 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	}()
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	addSinkAndPoolAccounts(accts)
 	rewardsLevels := []uint64{0}
-
-	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
-	pooldata.Status = basics.NotParticipating
-	accts[0][testPoolAddr] = pooldata
-
-	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-	sinkdata.Status = basics.NotParticipating
-	accts[0][testSinkAddr] = sinkdata
 
 	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion, accts)
 	defer ml.Close()
@@ -576,7 +566,7 @@ func (bt *blockingTracker) prepareCommit(*deferredCommitContext) error {
 }
 
 // commitRound is not used by the blockingTracker
-func (bt *blockingTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+func (bt *blockingTracker) commitRound(context.Context, store.TransactionScope, *deferredCommitContext) error {
 	return nil
 }
 
@@ -863,7 +853,7 @@ func TestFirstStageInfoPruning(t *testing.T) {
 	defer ct.close()
 
 	temporaryDirectory := t.TempDir()
-	catchpointsDirectory := filepath.Join(temporaryDirectory, CatchpointDirName)
+	catchpointsDirectory := filepath.Join(temporaryDirectory, store.CatchpointDirName)
 	err := os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(t, err)
 
@@ -909,8 +899,7 @@ func TestFirstStageInfoPruning(t *testing.T) {
 	numEntries := uint64(0)
 	i -= basics.Round(cfg.MaxAcctLookback)
 	for i > 0 {
-		_, recordExists, err := selectCatchpointFirstStageInfo(
-			context.Background(), ct.dbs.Rdb.Handle, i)
+		_, recordExists, err := ct.catchpointStore.SelectCatchpointFirstStageInfo(context.Background(), i)
 		require.NoError(t, err)
 
 		catchpointDataFilePath :=
@@ -952,7 +941,7 @@ func TestFirstStagePersistence(t *testing.T) {
 	defer ml.Close()
 
 	tempDirectory := t.TempDir()
-	catchpointsDirectory := filepath.Join(tempDirectory, CatchpointDirName)
+	catchpointsDirectory := filepath.Join(tempDirectory, store.CatchpointDirName)
 
 	cfg := config.GetDefaultLocal()
 	cfg.CatchpointInterval = 4
@@ -999,14 +988,16 @@ func TestFirstStagePersistence(t *testing.T) {
 	defer ml2.Close()
 	ml.Close()
 
+	cps2, err := ml2.dbs.MakeCatchpointReaderWriter()
+	require.NoError(t, err)
+
 	// Insert unfinished first stage record.
-	err = writeCatchpointStateUint64(
-		context.Background(), ml2.dbs.Wdb.Handle, catchpointStateWritingFirstStageInfo, 1)
+	err = cps2.WriteCatchpointStateUint64(
+		context.Background(), store.CatchpointStateWritingFirstStageInfo, 1)
 	require.NoError(t, err)
 
 	// Delete the database record.
-	err = deleteOldCatchpointFirstStageInfo(
-		context.Background(), ml2.dbs.Wdb.Handle, firstStageRound)
+	err = cps2.DeleteOldCatchpointFirstStageInfo(context.Background(), firstStageRound)
 	require.NoError(t, err)
 
 	// Create a catchpoint tracker and let it restart catchpoint's first stage.
@@ -1020,14 +1011,13 @@ func TestFirstStagePersistence(t *testing.T) {
 	require.Greater(t, info.Size(), int64(1))
 
 	// Check that the database record exists.
-	_, exists, err := selectCatchpointFirstStageInfo(
-		context.Background(), ml2.dbs.Rdb.Handle, firstStageRound)
+	_, exists, err := ct2.catchpointStore.SelectCatchpointFirstStageInfo(context.Background(), firstStageRound)
 	require.NoError(t, err)
 	require.True(t, exists)
 
 	// Check that the unfinished first stage record is deleted.
-	v, err := readCatchpointStateUint64(
-		context.Background(), ml2.dbs.Rdb.Handle, catchpointStateWritingFirstStageInfo)
+	v, err := ct2.catchpointStore.ReadCatchpointStateUint64(
+		context.Background(), store.CatchpointStateWritingFirstStageInfo)
 	require.NoError(t, err)
 	require.Zero(t, v)
 }
@@ -1054,7 +1044,7 @@ func TestSecondStagePersistence(t *testing.T) {
 	defer ml.Close()
 
 	tempDirectory := t.TempDir()
-	catchpointsDirectory := filepath.Join(tempDirectory, CatchpointDirName)
+	catchpointsDirectory := filepath.Join(tempDirectory, store.CatchpointDirName)
 
 	cfg := config.GetDefaultLocal()
 	cfg.CatchpointInterval = 4
@@ -1068,7 +1058,7 @@ func TestSecondStagePersistence(t *testing.T) {
 	firstStageRound := secondStageRound - basics.Round(protoParams.CatchpointLookback)
 	catchpointDataFilePath :=
 		filepath.Join(catchpointsDirectory, makeCatchpointDataFilePath(firstStageRound))
-	var firstStageInfo catchpointFirstStageInfo
+	var firstStageInfo store.CatchpointFirstStageInfo
 	var catchpointData []byte
 
 	// Add blocks until the first catchpoint round.
@@ -1077,8 +1067,7 @@ func TestSecondStagePersistence(t *testing.T) {
 			// Save first stage info and data file.
 			var exists bool
 			var err error
-			firstStageInfo, exists, err = selectCatchpointFirstStageInfo(
-				context.Background(), ml.dbs.Rdb.Handle, firstStageRound)
+			firstStageInfo, exists, err = ct.catchpointStore.SelectCatchpointFirstStageInfo(context.Background(), firstStageRound)
 			require.NoError(t, err)
 			require.True(t, exists)
 
@@ -1110,7 +1099,7 @@ func TestSecondStagePersistence(t *testing.T) {
 
 	// Check that the data file exists.
 	catchpointFilePath :=
-		filepath.Join(catchpointsDirectory, makeCatchpointFilePath(secondStageRound))
+		filepath.Join(catchpointsDirectory, store.MakeCatchpointFilePath(secondStageRound))
 	info, err := os.Stat(catchpointFilePath)
 	require.NoError(t, err)
 
@@ -1129,19 +1118,21 @@ func TestSecondStagePersistence(t *testing.T) {
 	err = os.WriteFile(catchpointDataFilePath, catchpointData, 0644)
 	require.NoError(t, err)
 
+	cps2, err := ml2.dbs.MakeCatchpointReaderWriter()
+	require.NoError(t, err)
+
 	// Restore the first stage database record.
-	err = insertOrReplaceCatchpointFirstStageInfo(
-		context.Background(), ml2.dbs.Wdb.Handle, firstStageRound, &firstStageInfo)
+	err = cps2.InsertOrReplaceCatchpointFirstStageInfo(context.Background(), firstStageRound, &firstStageInfo)
 	require.NoError(t, err)
 
 	// Insert unfinished catchpoint record.
-	err = insertUnfinishedCatchpoint(
-		context.Background(), ml2.dbs.Wdb.Handle, secondStageRound, crypto.Digest{})
+	err = cps2.InsertUnfinishedCatchpoint(
+		context.Background(), secondStageRound, crypto.Digest{})
 	require.NoError(t, err)
 
 	// Delete the catchpoint file database record.
-	err = storeCatchpoint(
-		context.Background(), ml2.dbs.Wdb.Handle, secondStageRound, "", "", 0)
+	err = cps2.StoreCatchpoint(
+		context.Background(), secondStageRound, "", "", 0)
 	require.NoError(t, err)
 
 	// Create a catchpoint tracker and let it restart catchpoint's second stage.
@@ -1155,14 +1146,14 @@ func TestSecondStagePersistence(t *testing.T) {
 	require.Greater(t, info.Size(), int64(1))
 
 	// Check that the database record exists.
-	filename, _, _, err := getCatchpoint(
-		context.Background(), ml2.dbs.Rdb.Handle, secondStageRound)
+	filename, _, _, err := ct2.catchpointStore.GetCatchpoint(
+		context.Background(), secondStageRound)
 	require.NoError(t, err)
 	require.NotEmpty(t, filename)
 
 	// Check that the unfinished catchpoint database record is deleted.
-	unfinishedCatchpoints, err := selectUnfinishedCatchpoints(
-		context.Background(), ml2.dbs.Rdb.Handle)
+	unfinishedCatchpoints, err := ct2.catchpointStore.SelectUnfinishedCatchpoints(
+		context.Background())
 	require.NoError(t, err)
 	require.Empty(t, unfinishedCatchpoints)
 }
@@ -1251,8 +1242,8 @@ func TestSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 	ml2.trackers.waitAccountsWriting()
 
 	// Check that the unfinished catchpoint database record is deleted.
-	unfinishedCatchpoints, err := selectUnfinishedCatchpoints(
-		context.Background(), ml2.dbs.Rdb.Handle)
+	unfinishedCatchpoints, err := ct2.catchpointStore.SelectUnfinishedCatchpoints(
+		context.Background())
 	require.NoError(t, err)
 	require.Empty(t, unfinishedCatchpoints)
 }
@@ -1319,15 +1310,17 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 	defer ml2.Close()
 	ml.Close()
 
+	cps2, err := ml2.dbs.MakeCatchpointReaderWriter()
+	require.NoError(t, err)
+
 	// Sanity check: first stage record should be deleted.
-	_, exists, err := selectCatchpointFirstStageInfo(
-		context.Background(), ml2.dbs.Rdb.Handle, firstStageRound)
+	_, exists, err := cps2.SelectCatchpointFirstStageInfo(context.Background(), firstStageRound)
 	require.NoError(t, err)
 	require.False(t, exists)
 
 	// Insert unfinished catchpoint record.
-	err = insertUnfinishedCatchpoint(
-		context.Background(), ml2.dbs.Wdb.Handle, secondStageRound, crypto.Digest{})
+	err = cps2.InsertUnfinishedCatchpoint(
+		context.Background(), secondStageRound, crypto.Digest{})
 	require.NoError(t, err)
 
 	// Create a catchpoint tracker and let it restart catchpoint's second stage.
@@ -1335,8 +1328,333 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 	defer ct2.close()
 
 	// Check that the unfinished catchpoint database record is deleted.
-	unfinishedCatchpoints, err := selectUnfinishedCatchpoints(
-		context.Background(), ml2.dbs.Rdb.Handle)
+	unfinishedCatchpoints, err := ct2.catchpointStore.SelectUnfinishedCatchpoints(
+		context.Background())
 	require.NoError(t, err)
 	require.Empty(t, unfinishedCatchpoints)
+}
+
+// TestHashContract confirms the account, resource, and KV hashing algorithm
+// remains unchanged by comparing a newly calculated hash against a
+// known-to-be-correct hex-encoded hash.
+//
+// When the test fails a hash equality check, it implies a hash calculated
+// before the change != hash calculated now.  Accepting the new hash risks
+// breaking backwards compatibility.
+//
+// The test also confirms each HashKind has at least 1 test case.  The check
+// defends against the addition of a hashed data type without test coverage.
+func TestHashContract(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	type testCase struct {
+		genHash          func() []byte
+		expectedHex      string
+		expectedHashKind store.HashKind
+	}
+
+	accountCase := func(genHash func() []byte, expectedHex string) testCase {
+		return testCase{
+			genHash, expectedHex, store.AccountHK,
+		}
+	}
+
+	resourceAssetCase := func(genHash func() []byte, expectedHex string) testCase {
+		return testCase{
+			genHash, expectedHex, store.AssetHK,
+		}
+	}
+
+	resourceAppCase := func(genHash func() []byte, expectedHex string) testCase {
+		return testCase{
+			genHash, expectedHex, store.AppHK,
+		}
+	}
+
+	kvCase := func(genHash func() []byte, expectedHex string) testCase {
+		return testCase{
+			genHash, expectedHex, store.KvHK,
+		}
+	}
+
+	a := basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
+
+	accounts := []testCase{
+		accountCase(
+			func() []byte {
+				b := store.BaseAccountData{
+					UpdateRound: 1024,
+				}
+				return store.AccountHashBuilderV6(a, &b, protocol.Encode(&b))
+			},
+			"0000040000c3c39a72c146dc6bcb87b499b63ef730145a8fe4a187c96e9a52f74ef17f54",
+		),
+		accountCase(
+			func() []byte {
+				b := store.BaseAccountData{
+					RewardsBase: 10000,
+				}
+				return store.AccountHashBuilderV6(a, &b, protocol.Encode(&b))
+			},
+			"0000271000804b58bcc81190c3c7343c1db9c737621ff0438104bdd20a25d12aa4e9b6e5",
+		),
+	}
+
+	resourceAssets := []testCase{
+		resourceAssetCase(
+			func() []byte {
+				r := store.ResourcesData{
+					Amount:    1000,
+					Decimals:  3,
+					AssetName: "test",
+					Manager:   a,
+				}
+
+				bytes, err := store.ResourcesHashBuilderV6(&r, a, 7, 1024, protocol.Encode(&r))
+				require.NoError(t, err)
+				return bytes
+			},
+			"0000040001ca4157130516bd7f120cef4b3a28715e464d9a29f7575db9b2173b4eccd18e",
+		),
+	}
+
+	resourceApps := []testCase{
+		resourceAppCase(
+			func() []byte {
+				r := store.ResourcesData{
+					ApprovalProgram:          []byte{1, 3, 10, 15},
+					ClearStateProgram:        []byte{15, 10, 3, 1},
+					LocalStateSchemaNumUint:  2,
+					GlobalStateSchemaNumUint: 2,
+				}
+
+				bytes, err := store.ResourcesHashBuilderV6(&r, a, 7, 1024, protocol.Encode(&r))
+				require.NoError(t, err)
+				return bytes
+			},
+			"00000400023547567f3234873b48fd4152f296a92ae260b024b93c2408f35caccff57c32",
+		),
+	}
+
+	kvs := []testCase{
+		kvCase(
+			func() []byte {
+				return store.KvHashBuilderV6("sample key", []byte("sample value"))
+			},
+			"0000000003cca3d1a8d7d724daa445c795ad277a7a64b351b4b9407f738841282f9c348b",
+		),
+	}
+
+	allCases := append(append(append(accounts, resourceAssets...), resourceApps...), kvs...)
+	for i, tc := range allCases {
+		t.Run(fmt.Sprintf("index=%d", i), func(t *testing.T) {
+			h := tc.genHash()
+			require.Equal(t, byte(tc.expectedHashKind), h[store.HashKindEncodingIndex])
+			require.Equal(t, tc.expectedHex, hex.EncodeToString(h))
+		})
+	}
+
+	hasTestCoverageForKind := func(hk store.HashKind) bool {
+		for _, c := range allCases {
+			if c.expectedHashKind == hk {
+				return true
+			}
+		}
+		return false
+	}
+
+	require.True(t, strings.HasPrefix(store.HashKind(255).String(), "HashKind("))
+	for i := byte(0); i < 255; i++ {
+		if !strings.HasPrefix(store.HashKind(i).String(), "HashKind(") {
+			require.True(t, hasTestCoverageForKind(store.HashKind(i)), fmt.Sprintf("Missing test coverage for HashKind ordinal value = %d", i))
+		}
+	}
+}
+
+// TestCatchpoint_FastUpdates tests catchpoint label writing data race
+func TestCatchpointFastUpdates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		t.Skip("This test is too slow on ARM and causes CI builds to time out")
+	}
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	addSinkAndPoolAccounts(accts)
+	rewardsLevels := []uint64{0}
+
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	conf.CatchpointTracking = 1
+	initialBlocksCount := int(conf.MaxAcctLookback)
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
+
+	ct := newCatchpointTracker(t, ml, conf, ".")
+	au := ml.trackers.accts
+	ao := ml.trackers.acctsOnline
+
+	// Remove the txtail from the list of trackers since it causes a data race that
+	// wouldn't be observed under normal execution because commitedUpTo and newBlock
+	// are protected by the tracker mutex.
+	trackers := make([]ledgerTracker, 0, len(ml.trackers.trackers))
+	for _, tracker := range ml.trackers.trackers {
+		if _, ok := tracker.(*txTail); !ok {
+			trackers = append(trackers, tracker)
+		}
+	}
+	ml.trackers.trackers = trackers
+
+	// cover 10 genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < initialBlocksCount; i++ {
+		accts = append(accts, accts[0])
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+
+	checkAcctUpdates(t, au, ao, 0, basics.Round(initialBlocksCount)-1, accts, rewardsLevels, proto)
+
+	wg := sync.WaitGroup{}
+
+	for i := basics.Round(initialBlocksCount); i < basics.Round(proto.CatchpointLookback+15); i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		updates, totals := ledgertesting.RandomDeltasBalanced(1, accts[i-1], rewardLevel)
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
+		require.NoError(t, err)
+
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates.Upsert(testPoolAddr, newPool)
+		totals[testPoolAddr] = newPool
+		newAccts := applyPartialDeltas(accts[i-1], updates)
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
+
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta.Accts.MergeAccounts(updates)
+		ml.trackers.newBlock(blk, delta)
+		accts = append(accts, newAccts)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+
+		wg.Add(1)
+		go func(round basics.Round) {
+			defer wg.Done()
+			ml.trackers.committedUpTo(round)
+		}(i)
+	}
+	ml.trackers.waitAccountsWriting()
+	wg.Wait()
+
+	require.NotEmpty(t, ct.GetLastCatchpointLabel())
+}
+
+// TestCatchpoint_LargeAccountCountCatchpointGeneration creates a ledger containing a large set of accounts ( i.e. 100K accounts )
+// and attempts to have the catchpoint tracker create the associated catchpoint. It's designed precisely around setting an
+// environment which would quickly ( i.e. after 32 rounds ) would start producing catchpoints.
+func TestCatchpointLargeAccountCountCatchpointGeneration(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" || testing.Short() {
+		t.Skip("This test is too slow on CI executors: cannot repack catchpoint")
+	}
+
+	// The next operations are heavy on the memory.
+	// Garbage collection helps prevent trashing
+	runtime.GC()
+
+	// create new protocol version, which has lower lookback
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLargeAccountCountCatchpointGeneration")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.CatchpointLookback = 16
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(100000, true)}
+	addSinkAndPoolAccounts(accts)
+	rewardsLevels := []uint64{0}
+
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 32
+	conf.CatchpointTracking = 1
+	conf.Archival = true
+	initialBlocksCount := int(conf.MaxAcctLookback)
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, testProtocolVersion, accts)
+	defer ml.Close()
+
+	ct := newCatchpointTracker(t, ml, conf, ".")
+	temporaryDirectory := t.TempDir()
+	catchpointsDirectory := filepath.Join(temporaryDirectory, store.CatchpointDirName)
+	err := os.Mkdir(catchpointsDirectory, 0777)
+	require.NoError(t, err)
+	defer os.RemoveAll(catchpointsDirectory)
+
+	ct.dbDirectory = temporaryDirectory
+
+	au := ml.trackers.accts
+
+	// cover 10 genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < initialBlocksCount; i++ {
+		accts = append(accts, accts[0])
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+
+	start := basics.Round(initialBlocksCount)
+	min := conf.CatchpointInterval
+	if min < protoParams.CatchpointLookback {
+		min = protoParams.CatchpointLookback
+	}
+	end := basics.Round(min + conf.MaxAcctLookback + 3) // few more rounds to commit and generate the second stage
+	for i := start; i < end; i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		updates, totals := ledgertesting.RandomDeltasBalanced(1, accts[i-1], rewardLevel)
+
+		prevRound, prevTotals, err := au.LatestTotals()
+		require.Equal(t, i-1, prevRound)
+		require.NoError(t, err)
+
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates.Upsert(testPoolAddr, newPool)
+		totals[testPoolAddr] = newPool
+		newAccts := applyPartialDeltas(accts[i-1], updates)
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = testProtocolVersion
+
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta.Accts.MergeAccounts(updates)
+		ml.trackers.newBlock(blk, delta)
+		accts = append(accts, newAccts)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+
+		ml.trackers.committedUpTo(i)
+		if i%2 == 1 || i == end-1 {
+			ml.trackers.waitAccountsWriting()
+		}
+	}
+
+	require.NotEmpty(t, ct.GetLastCatchpointLabel())
+
+	// Garbage collection helps prevent trashing for next tests
+	runtime.GC()
 }

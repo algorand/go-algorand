@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -75,6 +75,7 @@ var opDocByName = map[string]string{
 	"intc_2":     "constant 2 from intcblock",
 	"intc_3":     "constant 3 from intcblock",
 	"pushint":    "immediate UINT",
+	"pushints":   "push sequence of immediate uints to stack in the order they appear (first uint being deepest)",
 	"bytecblock": "prepare block of byte-array constants for use by bytec",
 	"bytec":      "Ith constant from bytecblock",
 	"bytec_0":    "constant 0 from bytecblock",
@@ -82,6 +83,7 @@ var opDocByName = map[string]string{
 	"bytec_2":    "constant 2 from bytecblock",
 	"bytec_3":    "constant 3 from bytecblock",
 	"pushbytes":  "immediate BYTES",
+	"pushbytess": "push sequences of immediate byte arrays to stack (first byte array being deepest)",
 
 	"bzero":   "zero filled byte-array of length A",
 	"arg":     "Nth LogicSig argument",
@@ -126,30 +128,31 @@ var opDocByName = map[string]string{
 	"pop":     "discard A",
 	"dup":     "duplicate A",
 	"dup2":    "duplicate A and B",
+	"dupn":    "duplicate A, N times",
 	"dig":     "Nth value from the top of the stack. dig 0 is equivalent to dup",
+	"bury":    "replace the Nth value from the top of the stack with A. bury 0 fails.",
 	"cover":   "remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth <= N.",
 	"uncover": "remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth <= N.",
 	"swap":    "swaps A and B on stack",
 	"select":  "selects one of two values based on top-of-stack: B if C != 0, else A",
 
-	"concat":         "join A and B",
-	"substring":      "A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails",
-	"substring3":     "A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails",
-	"getbit":         "Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails",
-	"setbit":         "Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails",
-	"getbyte":        "Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails",
-	"setbyte":        "Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails",
-	"extract":        "A range of bytes from A starting at S up to but not including S+L. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails",
-	"extract3":       "A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails",
-	"extract_uint16": "A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails",
-	"extract_uint32": "A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails",
-	"extract_uint64": "A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails",
-	"replace2":       "Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)",
-	"replace3":       "Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)",
-	"base64_decode":  "decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E",
-
-	"balance":           "get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.",
-	"min_balance":       "get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.",
+	"concat":            "join A and B",
+	"substring":         "A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails",
+	"substring3":        "A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails",
+	"getbit":            "Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails",
+	"setbit":            "Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails",
+	"getbyte":           "Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails",
+	"setbyte":           "Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails",
+	"extract":           "A range of bytes from A starting at S up to but not including S+L. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails",
+	"extract3":          "A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails",
+	"extract_uint16":    "A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails",
+	"extract_uint32":    "A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails",
+	"extract_uint64":    "A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails",
+	"replace2":          "Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)",
+	"replace3":          "Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)",
+	"base64_decode":     "decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E",
+	"balance":           "balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. Changes caused by inner transactions are observable immediately following `itxn_submit`",
+	"min_balance":       "minimum required balance for account A, in microalgos. Required balance is affected by ASA, App, and Box usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. Changes caused by inner transactions or box usage are observable immediately following the opcode effecting the change.",
 	"app_opted_in":      "1 if account A is opted in to application B, else 0",
 	"app_local_get":     "local state of the key B in the current application in account A",
 	"app_local_get_ex":  "X is the local state of application B, key C in account A. Y is 1 if key existed, else 0",
@@ -165,6 +168,7 @@ var opDocByName = map[string]string{
 	"acct_params_get":   "X is field F from account A. Y is 1 if A owns positive algos, else 0",
 	"assert":            "immediately fail unless A is a non-zero number",
 	"callsub":           "branch unconditionally to TARGET, saving the next instruction on the call stack",
+	"proto":             "Prepare top call frame for a retsub that will assume A args and R return values.",
 	"retsub":            "pop the top instruction from the call stack and branch to it",
 
 	"b+":  "A plus B. A and B are interpreted as big-endian unsigned integers",
@@ -193,6 +197,21 @@ var opDocByName = map[string]string{
 
 	"vrf_verify": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
 	"block":      "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
+
+	"switch": "branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.",
+	"match":  "given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.",
+
+	"frame_dig":  "Nth (signed) value from the frame pointer.",
+	"frame_bury": "replace the Nth (signed) value from the frame pointer in the stack with A",
+	"popn":       "remove N values from the top of the stack",
+
+	"box_create":  "create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1",
+	"box_extract": "read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
+	"box_replace": "write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.",
+	"box_del":     "delete box named A if it exists. Return 1 if A existed, 0 otherwise",
+	"box_len":     "X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.",
+	"box_get":     "X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.",
+	"box_put":     "replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist",
 }
 
 // OpDoc returns a description of the op
@@ -201,14 +220,16 @@ func OpDoc(opName string) string {
 }
 
 var opcodeImmediateNotes = map[string]string{
-	"intcblock":  "{varuint length} [{varuint value}, ...]",
+	"intcblock":  "{varuint count} [{varuint value}, ...]",
 	"intc":       "{uint8 int constant index}",
 	"pushint":    "{varuint int}",
-	"bytecblock": "{varuint length} [({varuint value length} bytes), ...]",
+	"pushints":   "{varuint count} [{varuint value}, ...]",
+	"bytecblock": "{varuint count} [({varuint length} bytes), ...]",
 	"bytec":      "{uint8 byte constant index}",
 	"pushbytes":  "{varuint length} {bytes}",
+	"pushbytess": "{varuint count} [({varuint length} bytes), ...]",
 
-	"arg":    "{uint8 arg index N}",
+	"arg":    "{uint8 arg index}",
 	"global": "{uint8 global field index}",
 
 	"txn":     "{uint8 transaction field index}",
@@ -236,6 +257,7 @@ var opcodeImmediateNotes = map[string]string{
 	"extract":   "{uint8 start position} {uint8 length}",
 	"replace2":  "{uint8 start position}",
 	"dig":       "{uint8 depth}",
+	"bury":      "{uint8 depth}",
 	"cover":     "{uint8 depth}",
 	"uncover":   "{uint8 depth}",
 
@@ -257,10 +279,19 @@ var opcodeImmediateNotes = map[string]string{
 	"ecdsa_pk_recover":    "{uint8 curve index}",
 
 	"base64_decode": "{uint8 encoding index}",
-	"json_ref":      "{string return type}",
+	"json_ref":      "{uint8 return type index}",
 
 	"vrf_verify": "{uint8 parameters index}",
-	"block":      "{uint8 block field}",
+	"block":      "{uint8 block field index}",
+
+	"switch": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
+	"match":  "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
+
+	"proto":      "{uint8 arguments} {uint8 return values}",
+	"frame_dig":  "{int8 frame slot}",
+	"frame_bury": "{int8 frame slot}",
+	"popn":       "{uint8 stack depth}",
+	"dupn":       "{uint8 copy count}",
 }
 
 // OpImmediateNote returns a short string about immediate data which follows the op byte
@@ -281,8 +312,9 @@ var opDocExtras = map[string]string{
 	"bnz":                 "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.\n\nAt v2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before v2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)",
 	"bz":                  "See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.",
 	"b":                   "See `bnz` for details on how branches work. `b` always jumps to the offset.",
-	"callsub":             "The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.",
-	"retsub":              "The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.",
+	"callsub":             "The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it.",
+	"proto":               "Fails unless the last instruction executed was a `callsub`.",
+	"retsub":              "If the current frame was prepared by `proto A R`, `retsub` will remove the 'A' arguments from the stack, move the `R` return values down, and pop any stack locations above the relocated return values.",
 	"intcblock":           "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script.",
 	"bytecblock":          "`bytecblock` loads the following program bytes into an array of byte-array constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script.",
 	"*":                   "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`.",
@@ -300,7 +332,9 @@ var opDocExtras = map[string]string{
 	"btoi":                "`btoi` fails if the input is longer than 8 bytes.",
 	"concat":              "`concat` fails if the result would be greater than 4096 bytes.",
 	"pushbytes":           "pushbytes args are not added to the bytecblock during assembly processes",
+	"pushbytess":          "pushbytess args are not added to the bytecblock during assembly processes",
 	"pushint":             "pushint args are not added to the intcblock during assembly processes",
+	"pushints":            "pushints args are not added to the intcblock during assembly processes",
 	"getbit":              "see explanation of bit ordering in setbit",
 	"setbit":              "When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on the integer 0 yields 8, or 2^3. When A is a byte array, index 0 is the leftmost bit of the leftmost byte. Setting bits 0 through 11 to 1 in a 4-byte-array of 0s yields the byte array 0xfff00000. Setting bit 3 to 1 on the 1-byte-array 0x00 yields the byte array 0x10.",
 	"balance":             "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
@@ -321,8 +355,15 @@ var opDocExtras = map[string]string{
 	"itxn_next":           "`itxn_next` initializes the transaction exactly as `itxn_begin` does",
 	"itxn_field":          "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)",
 	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
+
 	"base64_decode": "*Warning*: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings.	This opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.\n\n Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See [RFC 4648 sections 4 and 5](https://rfc-editor.org/rfc/rfc4648.html#section-4). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
 	"json_ref": "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
+
+	"match": "`match` consumes N+1 values from the stack. Let the top stack value be B. The following N values represent an ordered list of match cases/constants (A), where the first value (A[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (T). `match` will branch to target T[I], where A[I] = B. If there are no matches then execution continues on to the next instruction.",
+
+	"box_create": "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.",
+	"box_get":    "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
+	"box_put":    "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`",
 }
 
 // OpDocExtra returns extra documentation text about an op
@@ -338,9 +379,10 @@ var OpGroups = map[string][]string{
 	"Byte Array Manipulation": {"substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "replace2", "replace3", "base64_decode", "json_ref"},
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
-	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
-	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "cover", "uncover", "swap", "select", "assert", "callsub", "retsub"},
+	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "pushints", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "pushbytess", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
+	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "popn", "dup", "dup2", "dupn", "dig", "bury", "cover", "uncover", "frame_dig", "frame_bury", "swap", "select", "assert", "callsub", "proto", "retsub", "switch", "match"},
 	"State Access":            {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "acct_params_get", "log", "block"},
+	"Box Access":              {"box_create", "box_extract", "box_replace", "box_del", "box_len", "box_get", "box_put"},
 	"Inner Transactions":      {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "itxnas", "gitxn", "gitxna", "gitxnas"},
 }
 

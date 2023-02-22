@@ -1,20 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
-// This file is part of go-algorand
-//
-// go-algorand is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as
-// published by the Free Software Foundation, either version 3 of the
-// License, or (at your option) any later version.
-//
-// go-algorand is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
-
-// Copyright (C) 2021 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -95,6 +79,7 @@ type Txn struct {
 	Accounts          []basics.Address
 	ForeignApps       []basics.AppIndex
 	ForeignAssets     []basics.AssetIndex
+	Boxes             []transactions.BoxRef
 	LocalStateSchema  basics.StateSchema
 	GlobalStateSchema basics.StateSchema
 	ApprovalProgram   interface{} // string, nil, or []bytes if already compiled
@@ -106,12 +91,50 @@ type Txn struct {
 	StateProofMsg  stateproofmsg.Message
 }
 
+// internalCopy "finishes" a shallow copy done by a simple Go assignment by
+// copying all of the slice fields
+func (tx *Txn) internalCopy() {
+	tx.Note = append([]byte(nil), tx.Note...)
+	if tx.ApplicationArgs != nil {
+		tx.ApplicationArgs = append([][]byte(nil), tx.ApplicationArgs...)
+		for i := range tx.ApplicationArgs {
+			tx.ApplicationArgs[i] = append([]byte(nil), tx.ApplicationArgs[i]...)
+		}
+	}
+	tx.Accounts = append([]basics.Address(nil), tx.Accounts...)
+	tx.ForeignApps = append([]basics.AppIndex(nil), tx.ForeignApps...)
+	tx.ForeignAssets = append([]basics.AssetIndex(nil), tx.ForeignAssets...)
+	tx.Boxes = append([]transactions.BoxRef(nil), tx.Boxes...)
+	for i := 0; i < len(tx.Boxes); i++ {
+		tx.Boxes[i].Name = append([]byte(nil), tx.Boxes[i].Name...)
+	}
+
+	// Programs may or may not actually be byte slices.  The other
+	// possibilitiues don't require copies.
+	if program, ok := tx.ApprovalProgram.([]byte); ok {
+		tx.ApprovalProgram = append([]byte(nil), program...)
+	}
+	if program, ok := tx.ClearStateProgram.([]byte); ok {
+		tx.ClearStateProgram = append([]byte(nil), program...)
+	}
+}
+
 // Noted returns a new Txn with the given note field.
-func (tx *Txn) Noted(note string) *Txn {
-	copy := &Txn{}
-	*copy = *tx
-	copy.Note = []byte(note)
-	return copy
+func (tx Txn) Noted(note string) *Txn {
+	tx.internalCopy()
+	tx.Note = []byte(note)
+	return &tx
+}
+
+// Args returns a new Txn with the given strings as app args
+func (tx Txn) Args(strings ...string) *Txn {
+	tx.internalCopy()
+	bytes := make([][]byte, len(strings))
+	for i, s := range strings {
+		bytes[i] = []byte(s)
+	}
+	tx.ApplicationArgs = bytes
+	return &tx
 }
 
 // FillDefaults populates some obvious defaults from config params,
@@ -235,6 +258,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			Accounts:          tx.Accounts,
 			ForeignApps:       tx.ForeignApps,
 			ForeignAssets:     tx.ForeignAssets,
+			Boxes:             tx.Boxes,
 			LocalStateSchema:  tx.LocalStateSchema,
 			GlobalStateSchema: tx.GlobalStateSchema,
 			ApprovalProgram:   assemble(tx.ApprovalProgram),
@@ -263,10 +287,10 @@ func (tx Txn) SignedTxnWithAD() transactions.SignedTxnWithAD {
 	return transactions.SignedTxnWithAD{SignedTxn: tx.SignedTxn()}
 }
 
-// SignedTxns turns a list of Txns into a slice of SignedTxns with
-// GroupIDs set properly to make them a transaction group. Maybe
-// another name is more approrpriate
-func SignedTxns(txns ...*Txn) []transactions.SignedTxn {
+// Group turns a list of Txns into a slice of SignedTxns with
+// GroupIDs set properly to make them a transaction group. The input
+// Txns are modified with the calculated GroupID.
+func Group(txns ...*Txn) []transactions.SignedTxn {
 	txgroup := transactions.TxGroup{
 		TxGroupHashes: make([]crypto.Digest, len(txns)),
 	}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -53,8 +53,9 @@ func (nc NodeConfig) IsRelay() bool {
 
 // NodeConfigGoal represents is a simplified version of NodeConfig used with 'goal network' commands
 type NodeConfigGoal struct {
-	Name              string
-	IsRelay           bool `json:",omitempty"`
-	Wallets           []NodeWalletData
-	DeadlockDetection int `json:"-"`
+	Name               string
+	IsRelay            bool `json:",omitempty"`
+	Wallets            []NodeWalletData
+	DeadlockDetection  int    `json:"-"`
+	ConfigJSONOverride string `json:",omitempty"` // Raw json to merge into config.json after other modifications are complete
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -537,7 +537,7 @@ var GlobalFieldNames [invalidGlobalField]string
 type globalFieldSpec struct {
 	field   GlobalField
 	ftype   StackType
-	mode    runMode
+	mode    RunMode
 	version uint64
 	doc     string
 }
@@ -556,7 +556,7 @@ func (fs globalFieldSpec) Version() uint64 {
 }
 func (fs globalFieldSpec) Note() string {
 	note := fs.doc
-	if fs.mode == modeApp {
+	if fs.mode == ModeApp {
 		note = addExtra(note, "Application mode only.")
 	}
 	// There are no Signature mode only globals
@@ -572,21 +572,21 @@ var globalFieldSpecs = [...]globalFieldSpec{
 	{GroupSize, StackUint64, modeAny, 0,
 		"Number of transactions in this atomic transaction group. At least 1"},
 	{LogicSigVersion, StackUint64, modeAny, 2, "Maximum supported version"},
-	{Round, StackUint64, modeApp, 2, "Current round number"},
-	{LatestTimestamp, StackUint64, modeApp, 2,
+	{Round, StackUint64, ModeApp, 2, "Current round number"},
+	{LatestTimestamp, StackUint64, ModeApp, 2,
 		"Last confirmed block UNIX timestamp. Fails if negative"},
-	{CurrentApplicationID, StackUint64, modeApp, 2, "ID of current application executing"},
-	{CreatorAddress, StackBytes, modeApp, 3,
+	{CurrentApplicationID, StackUint64, ModeApp, 2, "ID of current application executing"},
+	{CreatorAddress, StackBytes, ModeApp, 3,
 		"Address of the creator of the current application"},
-	{CurrentApplicationAddress, StackBytes, modeApp, 5,
+	{CurrentApplicationAddress, StackBytes, ModeApp, 5,
 		"Address that the current application controls"},
 	{GroupID, StackBytes, modeAny, 5,
 		"ID of the transaction group. 32 zero bytes if the transaction is not part of a group."},
 	{OpcodeBudget, StackUint64, modeAny, 6,
 		"The remaining cost that can be spent by opcodes in this program."},
-	{CallerApplicationID, StackUint64, modeApp, 6,
+	{CallerApplicationID, StackUint64, ModeApp, 6,
 		"The application ID of the application that called this application. 0 if this application is at the top-level."},
-	{CallerApplicationAddress, StackBytes, modeApp, 6,
+	{CallerApplicationAddress, StackBytes, ModeApp, 6,
 		"The application address of the application that called this application. ZeroAddress if this application is at the top-level."},
 }
 
@@ -1202,8 +1202,31 @@ const (
 	AcctBalance AcctParamsField = iota
 	// AcctMinBalance is algos needed for this accounts apps and assets
 	AcctMinBalance
-	//AcctAuthAddr is the rekeyed address if any, else ZeroAddress
+	// AcctAuthAddr is the rekeyed address if any, else ZeroAddress
 	AcctAuthAddr
+
+	// AcctTotalNumUint is the count of all uints from created global apps or opted in locals
+	AcctTotalNumUint
+	// AcctTotalNumByteSlice is the count of all byte slices from created global apps or opted in locals
+	AcctTotalNumByteSlice
+
+	// AcctTotalExtraAppPages is the extra code pages across all apps
+	AcctTotalExtraAppPages
+
+	// AcctTotalAppsCreated is the number of apps created by this account
+	AcctTotalAppsCreated
+	// AcctTotalAppsOptedIn is the number of apps opted in by this account
+	AcctTotalAppsOptedIn
+	// AcctTotalAssetsCreated is the number of ASAs created by this account
+	AcctTotalAssetsCreated
+	// AcctTotalAssets is the number of ASAs opted in by this account (always includes AcctTotalAssetsCreated)
+	AcctTotalAssets
+	// AcctTotalBoxes is the number of boxes created by the app this account is associated with
+	AcctTotalBoxes
+	// AcctTotalBoxBytes is the number of bytes in all boxes of this app account
+	AcctTotalBoxBytes
+
+	// AcctTotalAppSchema - consider how to expose
 
 	invalidAcctParamsField // compile-time constant for number of fields
 )
@@ -1235,8 +1258,18 @@ func (fs acctParamsFieldSpec) Note() string {
 
 var acctParamsFieldSpecs = [...]acctParamsFieldSpec{
 	{AcctBalance, StackUint64, 6, "Account balance in microalgos"},
-	{AcctMinBalance, StackUint64, 6, "Minimum required blance for account, in microalgos"},
+	{AcctMinBalance, StackUint64, 6, "Minimum required balance for account, in microalgos"},
 	{AcctAuthAddr, StackBytes, 6, "Address the account is rekeyed to."},
+
+	{AcctTotalNumUint, StackUint64, 8, "The total number of uint64 values allocated by this account in Global and Local States."},
+	{AcctTotalNumByteSlice, StackUint64, 8, "The total number of byte array values allocated by this account in Global and Local States."},
+	{AcctTotalExtraAppPages, StackUint64, 8, "The number of extra app code pages used by this account."},
+	{AcctTotalAppsCreated, StackUint64, 8, "The number of existing apps created by this account."},
+	{AcctTotalAppsOptedIn, StackUint64, 8, "The number of apps this account is opted into."},
+	{AcctTotalAssetsCreated, StackUint64, 8, "The number of existing ASAs created by this account."},
+	{AcctTotalAssets, StackUint64, 8, "The numbers of ASAs held by this account (including ASAs this account created)."},
+	{AcctTotalBoxes, StackUint64, boxVersion, "The number of existing boxes created by this account's app."},
+	{AcctTotalBoxBytes, StackUint64, boxVersion, "The total number of bytes used by this account's app's box keys and values."},
 }
 
 func acctParamsFieldSpecByField(f AcctParamsField) (acctParamsFieldSpec, bool) {

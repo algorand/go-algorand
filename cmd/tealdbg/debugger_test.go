@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -102,7 +102,7 @@ func TestDebuggerSimple(t *testing.T) {
 	debugger.AddAdapter(da)
 
 	ep := logic.NewEvalParams(make([]transactions.SignedTxnWithAD, 1), &proto, nil)
-	ep.Debugger = debugger
+	ep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(debugger)
 	ep.SigLedger = logic.NoHeaderLedger{}
 
 	source := `int 0

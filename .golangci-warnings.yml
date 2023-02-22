@@ -6,14 +6,15 @@ linters:
   disable-all: true
   enable:
     - deadcode
+    - gosec
     - partitiontest
     - structcheck
-    - typecheck
     - varcheck
     - unused
 
-
 linters-settings:
+  gosec: # we are mostly only interested in G601
+    excludes: [G101, G103, G104, G107, G202, G301, G302, G303, G304, G306, G307, G404]
   custom:
     partitiontest:
       path: cmd/partitiontest_linter/plugin.so
@@ -52,24 +53,18 @@ issues:
     # be more lenient with test code
     - path: _test\.go
       linters:
-        - staticcheck
-        - structcheck
-        - typecheck
-        - varcheck
         - deadcode
-        - gosimple
+        - gosec
+        - structcheck
+        - varcheck
         - unused
     # Add all linters here -- Comment this block out for testing linters
     - path: test/linttest/lintissues\.go
       linters:
-        - staticcheck
-        - structcheck
-        - typecheck
-        - varcheck
         - deadcode
-        - gosimple
+        - structcheck
+        - varcheck
         - unused
-        - partitiontest
     - path: crypto/secp256k1/secp256_test\.go
       linters:
         - partitiontest

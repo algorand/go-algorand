@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -187,8 +187,8 @@ func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) 
 	return blockCertBytes, nil
 }
 
-// set max fetcher size to 5MB, this is enough to fit the block and certificate
-const fetcherMaxBlockBytes = 5 << 20
+// set max fetcher size to 10MB, this is enough to fit the block and certificate
+const fetcherMaxBlockBytes = 10 << 20
 
 var errNoBlockForRound = errors.New("No block available for given round")
 

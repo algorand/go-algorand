@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"reflect"
@@ -31,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -107,7 +107,7 @@ type ledgerTracker interface {
 	// commitRound is called for each of the trackers after a deferredCommitContext was agreed upon
 	// by all the prepareCommit calls. The commitRound is being executed within a single transactional
 	// context, and so, if any of the tracker's commitRound calls fails, the transaction is rolled back.
-	commitRound(context.Context, *sql.Tx, *deferredCommitContext) error
+	commitRound(context.Context, store.TransactionScope, *deferredCommitContext) error
 	// postCommit is called only on a successful commitRound. In that case, each of the trackers have
 	// the chance to update it's internal data structures, knowing that the given deferredCommitContext
 	// has completed. An optional context is provided for long-running operations.
@@ -133,7 +133,7 @@ type ledgerTracker interface {
 // ledgerForTracker defines the part of the ledger that a tracker can
 // access.  This is particularly useful for testing trackers in isolation.
 type ledgerForTracker interface {
-	trackerDB() db.Pair
+	trackerDB() store.TrackerStore
 	blockDB() db.Pair
 	trackerLog() logging.Logger
 	trackerEvalVerified(bookkeeping.Block, internal.LedgerForEvaluator) (ledgercore.StateDelta, error)
@@ -173,7 +173,7 @@ type trackerRegistry struct {
 	// cached to avoid SQL queries.
 	dbRound basics.Round
 
-	dbs db.Pair
+	dbs store.TrackerStore
 	log logging.Logger
 
 	// the synchronous mode that would be used for the account database.
@@ -227,12 +227,11 @@ type deferredCommitRange struct {
 	catchpointSecondStage bool
 }
 
-// deferredCommitContext is used in order to syncornize the persistence of a given deferredCommitRange.
+// deferredCommitContext is used in order to synchronize the persistence of a given deferredCommitRange.
 // prepareCommit, commitRound and postCommit are all using it to exchange data.
 type deferredCommitContext struct {
 	deferredCommitRange
 
-	newBase   basics.Round
 	flushTime time.Time
 
 	genesisProto config.ConsensusParams
@@ -243,13 +242,15 @@ type deferredCommitContext struct {
 
 	compactAccountDeltas   compactAccountDeltas
 	compactResourcesDeltas compactResourcesDeltas
+	compactKvDeltas        map[string]modifiedKvValue
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 
-	updatedPersistedAccounts  []persistedAccountData
-	updatedPersistedResources map[basics.Address][]persistedResourcesData
+	updatedPersistedAccounts  []store.PersistedAccountData
+	updatedPersistedResources map[basics.Address][]store.PersistedResourcesData
+	updatedPersistedKVs       map[string]store.PersistedKVData
 
 	compactOnlineAccountDeltas     compactOnlineAccountDeltas
-	updatedPersistedOnlineAccounts []persistedOnlineAccountData
+	updatedPersistedOnlineAccounts []store.PersistedOnlineAccountData
 
 	updatingBalancesDuration time.Duration
 
@@ -270,14 +271,23 @@ type deferredCommitContext struct {
 	updateStats bool
 }
 
+func (dcc deferredCommitContext) newBase() basics.Round {
+	return dcc.oldBase + basics.Round(dcc.offset)
+}
+
 var errMissingAccountUpdateTracker = errors.New("initializeTrackerCaches : called without a valid accounts update tracker")
 
 func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTracker, cfg config.Local) (err error) {
 	tr.dbs = l.trackerDB()
 	tr.log = l.trackerLog()
 
-	err = tr.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		tr.dbRound, err = accountsRound(tx)
+	err = tr.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
+		ar, err := tx.MakeAccountsReader()
+		if err != nil {
+			return err
+		}
+
+		tr.dbRound, err = ar.AccountsRound()
 		return err
 	})
 
@@ -439,7 +449,7 @@ func (tr *trackerRegistry) commitSyncer(deferredCommits chan *deferredCommitCont
 			}
 			err := tr.commitRound(commit)
 			if err != nil {
-				tr.log.Warnf("Could not commit round: %w", err)
+				tr.log.Warnf("Could not commit round: %v", err)
 			}
 		case <-tr.ctx.Done():
 			// drain the pending commits queue:
@@ -491,7 +501,6 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 
 	dcc.offset = offset
 	dcc.oldBase = dbRound
-	dcc.newBase = newBase
 	dcc.flushTime = time.Now()
 
 	for _, lt := range tr.trackers {
@@ -506,7 +515,12 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	err := tr.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := tr.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+		arw, err := tx.MakeAccountsReaderWriter()
+		if err != nil {
+			return err
+		}
+
 		for _, lt := range tr.trackers {
 			err0 := lt.commitRound(ctx, tx, dcc)
 			if err0 != nil {
@@ -514,7 +528,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 			}
 		}
 
-		return updateAccountsRound(tx, dbRound+basics.Round(offset))
+		return arw.UpdateAccountsRound(dbRound + basics.Round(offset))
 	})
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 
@@ -626,7 +640,7 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 	defer func() {
 		if rollbackSynchronousMode {
 			// restore default synchronous mode
-			err0 := tr.dbs.Wdb.SetSynchronousMode(context.Background(), tr.synchronousMode, tr.synchronousMode >= db.SynchronousModeFull)
+			err0 := tr.dbs.SetSynchronousMode(context.Background(), tr.synchronousMode, tr.synchronousMode >= db.SynchronousModeFull)
 			// override the returned error only in case there is no error - since this
 			// operation has a lower criticality.
 			if err == nil {
@@ -657,7 +671,7 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 
 			if !rollbackSynchronousMode {
 				// switch to rebuild synchronous mode to improve performance
-				err0 := tr.dbs.Wdb.SetSynchronousMode(context.Background(), tr.accountsRebuildSynchronousMode, tr.accountsRebuildSynchronousMode >= db.SynchronousModeFull)
+				err0 := tr.dbs.SetSynchronousMode(context.Background(), tr.accountsRebuildSynchronousMode, tr.accountsRebuildSynchronousMode >= db.SynchronousModeFull)
 				if err0 != nil {
 					tr.log.Warnf("trackerRegistry.replay was unable to switch to rbuild synchronous mode : %v", err0)
 				} else {

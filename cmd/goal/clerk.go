@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,10 +27,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -156,44 +156,43 @@ var clerkCmd = &cobra.Command{
 	},
 }
 
-func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound uint64) (txn v1.Transaction, err error) {
+func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound uint64) (txn model.PendingTransactionResponse, err error) {
 	// Get current round information
 	stat, err := client.Status()
 	if err != nil {
-		return v1.Transaction{}, fmt.Errorf(errorRequestFail, err)
+		return model.PendingTransactionResponse{}, fmt.Errorf(errorRequestFail, err)
 	}
 
 	for {
 		// Check if we know about the transaction yet
 		txn, err = client.PendingTransactionInformation(txid)
 		if err != nil {
-			return v1.Transaction{}, fmt.Errorf(errorRequestFail, err)
+			return model.PendingTransactionResponse{}, fmt.Errorf(errorRequestFail, err)
 		}
 
-		if txn.ConfirmedRound > 0 {
-			reportInfof(infoTxCommitted, txid, txn.ConfirmedRound)
+		if txn.ConfirmedRound != nil && *txn.ConfirmedRound > 0 {
+			reportInfof(infoTxCommitted, txid, *txn.ConfirmedRound)
 			break
 		}
 
 		if txn.PoolError != "" {
-			return v1.Transaction{}, fmt.Errorf(txPoolError, txid, txn.PoolError)
+			return model.PendingTransactionResponse{}, fmt.Errorf(txPoolError, txid, txn.PoolError)
 		}
 
 		// check if we've already committed to the block number equals to the transaction's last valid round.
 		// if this is the case, the transaction would not be included in the blockchain, and we can exit right
 		// here.
 		if transactionLastValidRound > 0 && stat.LastRound >= transactionLastValidRound {
-			return v1.Transaction{}, fmt.Errorf(errorTransactionExpired, txid)
+			return model.PendingTransactionResponse{}, fmt.Errorf(errorTransactionExpired, txid)
 		}
 
 		reportInfof(infoTxPending, txid, stat.LastRound)
 		// WaitForRound waits until round "stat.LastRound+1" is committed
 		stat, err = client.WaitForRound(stat.LastRound)
 		if err != nil {
-			return v1.Transaction{}, fmt.Errorf(errorRequestFail, err)
+			return model.PendingTransactionResponse{}, fmt.Errorf(errorRequestFail, err)
 		}
 	}
-
 	return
 }
 
@@ -222,8 +221,8 @@ func createSignedTransaction(client libgoal.Client, signTx bool, dataDir string,
 
 func writeSignedTxnsToFile(stxns []transactions.SignedTxn, filename string) error {
 	var outData []byte
-	for _, stxn := range stxns {
-		outData = append(outData, protocol.Encode(&stxn)...)
+	for i := range stxns {
+		outData = append(outData, protocol.Encode(&stxns[i])...)
 	}
 
 	return writeFile(filename, outData, 0600)
@@ -323,7 +322,7 @@ var sendCmd = &cobra.Command{
 
 		checkTxValidityPeriodCmdFlags(cmd)
 
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		accountList := makeAccountsList(dataDir)
 
 		var fromAddressResolved string
@@ -424,7 +423,7 @@ var sendCmd = &cobra.Command{
 					CurrentProtocol: proto,
 				},
 			}
-			groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, blockHeader, nil)
+			groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, &blockHeader, nil)
 			if err == nil {
 				err = verify.LogicSigSanityCheck(&uncheckedTxn, 0, groupCtx)
 			}
@@ -545,7 +544,7 @@ var rawsendCmd = &cobra.Command{
 		}
 
 		dec := protocol.NewMsgpDecoderBytes(data)
-		client := ensureAlgodClient(ensureSingleDataDir())
+		client := ensureAlgodClient(datadir.EnsureSingleDataDir())
 
 		txnIDs := make(map[transactions.Txid]transactions.SignedTxn)
 		var txns []transactions.SignedTxn
@@ -610,7 +609,7 @@ var rawsendCmd = &cobra.Command{
 					continue
 				}
 
-				if txn.ConfirmedRound > 0 {
+				if txn.ConfirmedRound != nil && *txn.ConfirmedRound > 0 {
 					reportInfof(infoTxCommitted, txidStr, txn.ConfirmedRound)
 					break
 				}
@@ -712,7 +711,7 @@ func getProto(versArg string) (protocol.ConsensusVersion, config.ConsensusParams
 	if versArg != "" {
 		cvers = protocol.ConsensusVersion(versArg)
 	} else {
-		dataDir := maybeSingleDataDir()
+		dataDir := datadir.MaybeSingleDataDir()
 		if dataDir != "" {
 			client := ensureAlgodClient(dataDir)
 			params, err := client.SuggestedParams()
@@ -762,7 +761,7 @@ var signCmd = &cobra.Command{
 		}
 		if lsig.Logic == nil {
 			// sign the usual way
-			dataDir := ensureSingleDataDir()
+			dataDir := datadir.EnsureSingleDataDir()
 			client = ensureKmdClient(dataDir)
 			wh, pw = ensureWalletHandleMaybePassword(dataDir, walletName, true)
 		} else if signerAddress != "" {
@@ -825,7 +824,7 @@ var signCmd = &cobra.Command{
 			}
 			var groupCtx *verify.GroupContext
 			if lsig.Logic != nil {
-				groupCtx, err = verify.PrepareGroupContext(txnGroup, contextHdr, nil)
+				groupCtx, err = verify.PrepareGroupContext(txnGroup, &contextHdr, nil)
 				if err != nil {
 					// this error has to be unsupported protocol
 					reportErrorf("%s: %v", txFilename, err)
@@ -964,7 +963,7 @@ func assembleFileImpl(fname string, printWarnings bool) *logic.OpStream {
 	}
 	ops, err := logic.AssembleString(string(text))
 	if err != nil {
-		ops.ReportProblems(fname, os.Stderr)
+		ops.ReportMultipleErrors(fname, os.Stderr)
 		reportErrorf("%s: %s", fname, err)
 	}
 	_, params := getProto(protoVersion)
@@ -1060,7 +1059,7 @@ var compileCmd = &cobra.Command{
 			program, sourceMap := assembleFileWithMap(fname, true)
 			outblob := program
 			if signProgram {
-				dataDir := ensureSingleDataDir()
+				dataDir := datadir.EnsureSingleDataDir()
 				accountList := makeAccountsList(dataDir)
 				client := ensureKmdClient(dataDir)
 				wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
@@ -1137,7 +1136,7 @@ var dryrunCmd = &cobra.Command{
 		proto, params := getProto(protoVersion)
 		if dumpForDryrun {
 			// Write dryrun data to file
-			dataDir := ensureSingleDataDir()
+			dataDir := datadir.EnsureSingleDataDir()
 			client := ensureFullClient(dataDir)
 			accts, err := unmarshalSlice(dumpForDryrunAccts)
 			if err != nil {
@@ -1194,7 +1193,7 @@ var dryrunRemoteCmd = &cobra.Command{
 			reportErrorf(fileReadError, txFilename, err)
 		}
 
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		resp, err := client.Dryrun(data)
 		if err != nil {
@@ -1205,7 +1204,7 @@ var dryrunRemoteCmd = &cobra.Command{
 			return
 		}
 
-		stackToString := func(stack []generatedV2.TealValue) string {
+		stackToString := func(stack []model.TealValue) string {
 			result := make([]string, len(stack))
 			for i, sv := range stack {
 				if sv.Type == uint64(basics.TealBytesType) {
@@ -1219,7 +1218,7 @@ var dryrunRemoteCmd = &cobra.Command{
 		if len(resp.Txns) > 0 {
 			for i, txnResult := range resp.Txns {
 				var msgs []string
-				var trace []generatedV2.DryrunState
+				var trace []model.DryrunState
 				if txnResult.AppCallMessages != nil && len(*txnResult.AppCallMessages) > 0 {
 					msgs = *txnResult.AppCallMessages
 					if txnResult.AppCallTrace != nil {
@@ -1230,9 +1229,6 @@ var dryrunRemoteCmd = &cobra.Command{
 					if txnResult.LogicSigTrace != nil {
 						trace = *txnResult.LogicSigTrace
 					}
-				}
-				if txnResult.Cost != nil {
-					fmt.Fprintf(os.Stdout, "tx[%d] cost: %d\n", i, *txnResult.Cost)
 				}
 				if txnResult.BudgetConsumed != nil {
 					fmt.Fprintf(os.Stdout, "tx[%d] budget consumed: %d\n", i, *txnResult.BudgetConsumed)

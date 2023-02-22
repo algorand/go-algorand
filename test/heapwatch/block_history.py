@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2019-2022 Algorand, Inc.
+# Copyright (C) 2019-2023 Algorand, Inc.
 # This file is part of go-algorand
 #
 # go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@
 # pip install py-algorand-sdk
 
 import argparse
+import atexit
 import base64
 import logging
 import os
@@ -47,6 +48,19 @@ def addr_token_from_algod(algorand_data):
 
 def loads(blob):
     return msgpack.loads(base64.b64decode(blob), strict_map_key=False)
+
+def bstr(x):
+    if isinstance(x, bytes):
+        try:
+            return x.decode()
+        except:
+            pass
+    return x
+
+def obnice(ob):
+    if isinstance(ob, dict):
+        return {bstr(k):obnice(v) for k,v in ob.items()}
+    return ob
 
 def dumps(blob):
     return base64.b64encode(msgpack.dumps(blob))
@@ -180,8 +194,10 @@ class Fetcher:
             if b is None:
                 print("got None nextblock. exiting")
                 return
-            b = msgpack.loads(b, strict_map_key=False)
+            b = msgpack.loads(b, strict_map_key=False, raw=True)
+            b = obnice(b)
             nowround = b['block'].get('rnd', 0)
+            logger.debug('r%d', nowround)
             if (lastround is not None) and (nowround != lastround + 1):
                 logger.info('round jump %d to %d', lastround, nowround)
             self._block_handler(b)
@@ -216,6 +232,7 @@ def main():
     ap.add_argument('-t', '--token', default=None, help='algod API access token')
     ap.add_argument('--header', dest='headers', nargs='*', help='"Name: value" HTTP header (repeatable)')
     ap.add_argument('--all', default=False, action='store_true', help='fetch all blocks from 0')
+    ap.add_argument('--pid')
     ap.add_argument('--verbose', default=False, action='store_true')
     ap.add_argument('-o', '--out', default=None, help='file to append json lines to')
     args = ap.parse_args()
@@ -225,8 +242,13 @@ def main():
     else:
         logging.basicConfig(level=logging.INFO)
 
+    if args.pid:
+        with open(args.pid, 'w') as fout:
+            fout.write('{}'.format(os.getpid()))
+        atexit.register(os.remove, args.pid)
+
     algorand_data = args.algod or os.getenv('ALGORAND_DATA')
-    if not algorand_data and not (args.token and args.addr):
+    if not algorand_data and not ((args.token or args.headers) and args.addr):
         sys.stderr.write('must specify algod data dir by $ALGORAND_DATA or -d/--algod; OR --a/--addr and -t/--token\n')
         sys.exit(1)
 

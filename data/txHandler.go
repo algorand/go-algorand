@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,9 +19,11 @@ package data
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -29,28 +31,82 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
-// The size txBacklogSize used to determine the size of the backlog that is used to store incoming transaction messages before starting dropping them.
-// It should be configured to be higher then the number of CPU cores, so that the execution pool get saturated, but not too high to avoid lockout of the
-// execution pool for a long duration of time.
-// Set backlog at 'approximately one block' by dividing block size by a typical transaction size.
-var txBacklogSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnBytesPerBlock / 200
-
 var transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessagesHandled)
 var transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
 var transactionMessagesDroppedFromPool = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromPool)
+var transactionMessagesAlreadyCommitted = metrics.MakeCounter(metrics.TransactionMessagesAlreadyCommitted)
+var transactionMessagesTxGroupInvalidFee = metrics.MakeCounter(metrics.TransactionMessagesTxGroupInvalidFee)
+var transactionMessagesTxnNotWellFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnNotWellFormed)
+var transactionMessagesTxnSigNotWellFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigNotWellFormed)
+var transactionMessagesTxnMsigNotWellFormed = metrics.MakeCounter(metrics.TransactionMessagesTxnMsigNotWellFormed)
+var transactionMessagesTxnLogicSig = metrics.MakeCounter(metrics.TransactionMessagesTxnLogicSig)
+var transactionMessagesTxnSigVerificationFailed = metrics.MakeCounter(metrics.TransactionMessagesTxnSigVerificationFailed)
+var transactionMessagesBacklogErr = metrics.MakeCounter(metrics.TransactionMessagesBacklogErr)
+var transactionMessagesRemember = metrics.MakeCounter(metrics.TransactionMessagesRemember)
+var transactionMessageTxGroupExcessive = metrics.MakeCounter(metrics.TransactionMessageTxGroupExcessive)
+var transactionMessageTxGroupFull = metrics.MakeCounter(metrics.TransactionMessageTxGroupFull)
+var transactionMessagesDupRawMsg = metrics.MakeCounter(metrics.TransactionMessagesDupRawMsg)
+var transactionMessagesDupCanonical = metrics.MakeCounter(metrics.TransactionMessagesDupCanonical)
+var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionMessagesBacklogSize)
+
+var transactionGroupTxSyncHandled = metrics.MakeCounter(metrics.TransactionGroupTxSyncHandled)
+var transactionGroupTxSyncRemember = metrics.MakeCounter(metrics.TransactionGroupTxSyncRemember)
+var transactionGroupTxSyncAlreadyCommitted = metrics.MakeCounter(metrics.TransactionGroupTxSyncAlreadyCommitted)
+var txBacklogDroppedCongestionManagement = metrics.MakeCounter(metrics.TransactionMessagesTxnDroppedCongestionManagement)
+
+// ErrInvalidTxPool is reported when nil is passed for the tx pool
+var ErrInvalidTxPool = errors.New("MakeTxHandler: txPool is nil on initialization")
+
+// ErrInvalidLedger is reported when nil is passed for the ledger
+var ErrInvalidLedger = errors.New("MakeTxHandler: ledger is nil on initialization")
+
+var transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
+	"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
+	txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+	txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+)
+
+var transactionMessageTxPoolCheckCounter = metrics.NewTagCounter(
+	"algod_transaction_messages_txpool_check_err_{TAG}", "Number of transaction messages that didn't pass check by txpool b/c of {TAG}",
+	txPoolRememberTagTxnNotWellFormed, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+	txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+)
+
+const (
+	txPoolRememberTagCap         = "cap"
+	txPoolRememberPendingEval    = "pending_eval"
+	txPoolRememberTagNoSpace     = "no_space"
+	txPoolRememberTagFee         = "fee"
+	txPoolRememberTagTxnDead     = "txn_dead"
+	txPoolRememberTagTxnEarly    = "txn_early"
+	txPoolRememberTagTooLarge    = "too_large"
+	txPoolRememberTagGroupID     = "groupid"
+	txPoolRememberTagTxID        = "txid"
+	txPoolRememberTagLease       = "lease"
+	txPoolRememberTagTxIDEval    = "txid_eval"
+	txPoolRememberTagLeaseEval   = "lease_eval"
+	txPoolRememberTagEvalGeneric = "eval"
+
+	txPoolRememberTagTxnNotWellFormed = "not_well"
+)
 
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
-	rawmsg            *network.IncomingMessage // the raw message from the network
-	unverifiedTxGroup []transactions.SignedTxn // the unverified ( and signed ) transaction group
-	verificationErr   error                    // The verification error generated by the verification function, if any.
+	rawmsg                *network.IncomingMessage // the raw message from the network
+	unverifiedTxGroup     []transactions.SignedTxn // the unverified ( and signed ) transaction group
+	rawmsgDataHash        *crypto.Digest           // hash (if any) of raw message data from the network
+	unverifiedTxGroupHash *crypto.Digest           // hash (if any) of the unverifiedTxGroup
+	verificationErr       error                    // The verification error generated by the verification function, if any.
+	capguard              *util.ErlCapacityGuard   // the structure returned from the elastic rate limiter, to be released when dequeued
 }
 
 // TxHandler handles transaction messages
@@ -61,67 +117,159 @@ type TxHandler struct {
 	genesisHash           crypto.Digest
 	txVerificationPool    execpool.BacklogPool
 	backlogQueue          chan *txBacklogMsg
-	postVerificationQueue chan *txBacklogMsg
+	postVerificationQueue chan *verify.VerificationResult
 	backlogWg             sync.WaitGroup
 	net                   network.GossipNode
+	msgCache              *txSaltedCache
+	txCanonicalCache      *digestCache
+	cacheConfig           txHandlerConfig
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
+	streamVerifier        *verify.StreamVerifier
+	streamVerifierChan    chan *verify.UnverifiedElement
+	streamVerifierDropped chan *verify.UnverifiedElement
+	erl                   *util.ElasticRateLimiter
+}
+
+// TxHandlerOpts is TxHandler configuration options
+type TxHandlerOpts struct {
+	TxPool        *pools.TransactionPool
+	ExecutionPool execpool.BacklogPool
+	Ledger        *Ledger
+	Net           network.GossipNode
+	GenesisID     string
+	GenesisHash   crypto.Digest
+	Config        config.Local
+}
+
+// txHandlerConfig is a subset of tx handler related options from config.Local
+type txHandlerConfig struct {
+	enableFilteringRawMsg    bool
+	enableFilteringCanonical bool
 }
 
 // MakeTxHandler makes a new handler for transaction messages
-func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.GossipNode, genesisID string, genesisHash crypto.Digest, executionPool execpool.BacklogPool) *TxHandler {
+func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 
-	if txPool == nil {
-		logging.Base().Fatal("MakeTxHandler: txPool is nil on initialization")
-		return nil
+	if opts.TxPool == nil {
+		return nil, ErrInvalidTxPool
 	}
 
-	if ledger == nil {
-		logging.Base().Fatal("MakeTxHandler: ledger is nil on initialization")
-		return nil
+	if opts.Ledger == nil {
+		return nil, ErrInvalidLedger
+	}
+
+	// backlog size is big enough for each peer to have its reserved capacity in the backlog, plus the config's backlogSize as a shared capacity
+	txBacklogSize := opts.Config.TxBacklogSize
+	if opts.Config.EnableTxBacklogRateLimiting {
+		txBacklogSize += (opts.Config.IncomingConnectionsLimit * opts.Config.TxBacklogReservedCapacityPerPeer)
 	}
 
 	handler := &TxHandler{
-		txPool:                txPool,
-		genesisID:             genesisID,
-		genesisHash:           genesisHash,
-		ledger:                ledger,
-		txVerificationPool:    executionPool,
+		txPool:                opts.TxPool,
+		genesisID:             opts.GenesisID,
+		genesisHash:           opts.GenesisHash,
+		ledger:                opts.Ledger,
+		txVerificationPool:    opts.ExecutionPool,
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
-		postVerificationQueue: make(chan *txBacklogMsg, txBacklogSize),
-		net:                   net,
+		postVerificationQueue: make(chan *verify.VerificationResult, txBacklogSize),
+		net:                   opts.Net,
+		msgCache:              makeSaltedCache(2 * txBacklogSize),
+		txCanonicalCache:      makeDigestCache(2 * txBacklogSize),
+		cacheConfig:           txHandlerConfig{opts.Config.TxFilterRawMsgEnabled(), opts.Config.TxFilterCanonicalEnabled()},
+		streamVerifierChan:    make(chan *verify.UnverifiedElement),
+		streamVerifierDropped: make(chan *verify.UnverifiedElement),
 	}
 
-	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
-	return handler
+	if opts.Config.EnableTxBacklogRateLimiting {
+		rateLimiter := util.NewElasticRateLimiter(
+			txBacklogSize,
+			opts.Config.TxBacklogReservedCapacityPerPeer,
+			time.Duration(opts.Config.TxBacklogServiceRateWindowSeconds)*time.Second,
+			txBacklogDroppedCongestionManagement,
+		)
+		handler.erl = rateLimiter
+	}
+
+	// prepare the transaction stream verifer
+	var err error
+	handler.streamVerifier, err = verify.MakeStreamVerifier(handler.streamVerifierChan,
+		handler.postVerificationQueue, handler.streamVerifierDropped, handler.ledger,
+		handler.txVerificationPool, handler.ledger.VerifiedTransactionCache())
+	if err != nil {
+		return nil, err
+	}
+	go handler.droppedTxnWatcher()
+	return handler, nil
+}
+
+func (handler *TxHandler) droppedTxnWatcher() {
+	for unverified := range handler.streamVerifierDropped {
+		// we failed to write to the output queue, since the queue was full.
+		// adding the metric here allows us to monitor how frequently it happens.
+		transactionMessagesDroppedFromPool.Inc(nil)
+
+		tx := unverified.BacklogMessage.(*txBacklogMsg)
+
+		// delete from duplicate caches to give it a chance to be re-submitted
+		handler.deleteFromCaches(tx.rawmsgDataHash, tx.unverifiedTxGroupHash)
+	}
 }
 
 // Start enables the processing of incoming messages at the transaction handler
 func (handler *TxHandler) Start() {
+	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
+	handler.msgCache.Start(handler.ctx, 60*time.Second)
 	handler.net.RegisterHandlers([]network.TaggedMessageHandler{
 		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
 	})
-	handler.backlogWg.Add(1)
+	handler.backlogWg.Add(2)
 	go handler.backlogWorker()
+	go handler.backlogGaugeThread()
+	handler.streamVerifier.Start(handler.ctx)
+	if handler.erl != nil {
+		handler.erl.Start()
+	}
 }
 
 // Stop suspends the processing of incoming messages at the transaction handler
 func (handler *TxHandler) Stop() {
 	handler.ctxCancel()
+	if handler.erl != nil {
+		handler.erl.Stop()
+	}
 	handler.backlogWg.Wait()
+	handler.streamVerifier.WaitForStop()
+	handler.msgCache.WaitForStop()
 }
 
 func reencode(stxns []transactions.SignedTxn) []byte {
 	var result [][]byte
-	for _, stxn := range stxns {
-		result = append(result, protocol.Encode(&stxn))
+	for i := range stxns {
+		result = append(result, protocol.Encode(&stxns[i]))
 	}
 	return bytes.Join(result, nil)
+}
+
+func (handler *TxHandler) backlogGaugeThread() {
+	defer handler.backlogWg.Done()
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			transactionMessagesBacklogSizeGauge.Set(uint64(len(handler.backlogQueue)))
+		case <-handler.ctx.Done():
+			return
+		}
+	}
 }
 
 // backlogWorker is the worker go routine that process the incoming messages from the postVerificationQueue and backlogQueue channels
 // and dispatches them further.
 func (handler *TxHandler) backlogWorker() {
+	// Note: TestIncomingTxHandle and TestIncomingTxGroupHandle emulate this function.
+	// Changes to the behavior in this function should be reflected in the test.
 	defer handler.backlogWg.Done()
 	for {
 		// prioritize the postVerificationQueue
@@ -130,7 +278,9 @@ func (handler *TxHandler) backlogWorker() {
 			if !ok {
 				return
 			}
-			handler.postprocessCheckedTxn(wi)
+			m := wi.BacklogMessage.(*txBacklogMsg)
+			m.verificationErr = wi.Err
+			handler.postProcessCheckedTxn(m)
 
 			// restart the loop so that we could empty out the post verification queue.
 			continue
@@ -141,20 +291,39 @@ func (handler *TxHandler) backlogWorker() {
 		select {
 		case wi, ok := <-handler.backlogQueue:
 			if !ok {
+				// this is never happening since handler.backlogQueue is never closed
 				return
+			}
+			if wi.capguard != nil {
+				if err := wi.capguard.Release(); err != nil {
+					logging.Base().Warnf("Failed to release capacity to ElasticRateLimiter: %v", err)
+				}
 			}
 			if handler.checkAlreadyCommitted(wi) {
+				transactionMessagesAlreadyCommitted.Inc(nil)
+				if wi.capguard != nil {
+					wi.capguard.Served()
+				}
 				continue
 			}
-
-			// enqueue the task to the verification pool.
-			handler.txVerificationPool.EnqueueBacklog(handler.ctx, handler.asyncVerifySignature, wi, nil)
-
-		case wi, ok := <-handler.postVerificationQueue:
-			if !ok {
+			// handler.streamVerifierChan does not receive if ctx is cancled
+			select {
+			case handler.streamVerifierChan <- &verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}:
+			case <-handler.ctx.Done():
+				transactionMessagesDroppedFromBacklog.Inc(nil)
 				return
 			}
-			handler.postprocessCheckedTxn(wi)
+			if wi.capguard != nil {
+				wi.capguard.Served()
+			}
+		case wi, ok := <-handler.postVerificationQueue:
+			if !ok {
+				// this is never happening since handler.postVerificationQueue is never closed
+				return
+			}
+			m := wi.BacklogMessage.(*txBacklogMsg)
+			m.verificationErr = wi.Err
+			handler.postProcessCheckedTxn(m)
 
 		case <-handler.ctx.Done():
 			return
@@ -162,9 +331,140 @@ func (handler *TxHandler) backlogWorker() {
 	}
 }
 
-func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
+func (handler *TxHandler) postProcessReportErrors(err error) {
+	if errors.Is(err, crypto.ErrBatchHasFailedSigs) {
+		transactionMessagesTxnSigVerificationFailed.Inc(nil)
+		return
+	}
+
+	var txGroupErr *verify.TxGroupError
+	if errors.As(err, &txGroupErr) {
+		switch txGroupErr.Reason {
+		case verify.TxGroupErrorReasonNotWellFormed:
+			transactionMessagesTxnNotWellFormed.Inc(nil)
+		case verify.TxGroupErrorReasonInvalidFee:
+			transactionMessagesTxGroupInvalidFee.Inc(nil)
+		case verify.TxGroupErrorReasonHasNoSig:
+			fallthrough
+		case verify.TxGroupErrorReasonSigNotWellFormed:
+			transactionMessagesTxnSigNotWellFormed.Inc(nil)
+		case verify.TxGroupErrorReasonMsigNotWellFormed:
+			transactionMessagesTxnMsigNotWellFormed.Inc(nil)
+		case verify.TxGroupErrorReasonLogicSigFailed:
+			transactionMessagesTxnLogicSig.Inc(nil)
+		default:
+			transactionMessagesBacklogErr.Inc(nil)
+		}
+	} else {
+		transactionMessagesBacklogErr.Inc(nil)
+	}
+}
+
+func (handler *TxHandler) checkReportErrors(err error) {
+	switch err := err.(type) {
+	case *ledgercore.TxnNotWellFormedError:
+		transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxnNotWellFormed, 1)
+		return
+	case *transactions.TxnDeadError:
+		if err.Early {
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxnEarly, 1)
+		} else {
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxnDead, 1)
+		}
+		return
+	case *ledgercore.TransactionInLedgerError:
+		if err.InBlockEvaluator {
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxIDEval, 1)
+		} else {
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxID, 1)
+		}
+		return
+	case *ledgercore.LeaseInLedgerError:
+		if err.InBlockEvaluator {
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagLeaseEval, 1)
+		} else {
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagLease, 1)
+		}
+		return
+	case *ledgercore.TxGroupMalformedError:
+		switch err.Reason {
+		case ledgercore.TxGroupMalformedErrorReasonExceedMaxSize:
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTooLarge, 1)
+		default:
+			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagGroupID, 1)
+		}
+		return
+	}
+
+	transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagEvalGeneric, 1)
+}
+
+func (handler *TxHandler) rememberReportErrors(err error) {
+	if errors.Is(err, pools.ErrPendingQueueReachedMaxCap) {
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagCap, 1)
+		return
+	}
+
+	if errors.Is(err, pools.ErrNoPendingBlockEvaluator) {
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberPendingEval, 1)
+		return
+	}
+
+	if errors.Is(err, ledgercore.ErrNoSpace) {
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagNoSpace, 1)
+		return
+	}
+
+	// it is possible to call errors.As but it requires additional allocations
+	// instead, unwrap and type assert.
+	underlyingErr := errors.Unwrap(err)
+	if underlyingErr == nil {
+		// something went wrong
+		return
+	}
+
+	switch err := underlyingErr.(type) {
+	case *pools.ErrTxPoolFeeError:
+		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagFee, 1)
+		return
+	case *transactions.TxnDeadError:
+		if err.Early {
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxnEarly, 1)
+		} else {
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxnDead, 1)
+		}
+		return
+	case *ledgercore.TransactionInLedgerError:
+		if err.InBlockEvaluator {
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxIDEval, 1)
+		} else {
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxID, 1)
+		}
+		return
+	case *ledgercore.LeaseInLedgerError:
+		if err.InBlockEvaluator {
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagLeaseEval, 1)
+		} else {
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagLease, 1)
+		}
+		return
+	case *ledgercore.TxGroupMalformedError:
+		switch err.Reason {
+		case ledgercore.TxGroupMalformedErrorReasonExceedMaxSize:
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTooLarge, 1)
+		default:
+			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagGroupID, 1)
+		}
+		return
+	}
+
+	transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagEvalGeneric, 1)
+}
+
+func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 	if wi.verificationErr != nil {
 		// disconnect from peer.
+		handler.postProcessReportErrors(wi.verificationErr)
 		logging.Base().Warnf("Received a malformed tx group %v: %v", wi.unverifiedTxGroup, wi.verificationErr)
 		handler.net.Disconnect(wi.rawmsg.Sender)
 		return
@@ -179,9 +479,12 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 	// save the transaction, if it has high enough fee and not already in the cache
 	err := handler.txPool.Remember(verifiedTxGroup)
 	if err != nil {
+		handler.rememberReportErrors(err)
 		logging.Base().Debugf("could not remember tx: %v", err)
 		return
 	}
+
+	transactionMessagesRemember.Inc(nil)
 
 	// if we remembered without any error ( i.e. txpool wasn't full ), then we should pin these transactions.
 	err = handler.ledger.VerifiedTransactionCache().Pin(verifiedTxGroup)
@@ -193,67 +496,169 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 	handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, wi.rawmsg.Sender)
 }
 
-// asyncVerifySignature verifies that the given transaction group is valid, and update the txBacklogMsg data structure accordingly.
-func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
-	tx := arg.(*txBacklogMsg)
-
-	// build the transaction verification context
-	latest := handler.ledger.Latest()
-	latestHdr, err := handler.ledger.BlockHdr(latest)
-	if err != nil {
-		tx.verificationErr = fmt.Errorf("Could not get header for previous block %d: %w", latest, err)
-		logging.Base().Warnf("Could not get header for previous block %d: %v", latest, err)
-	} else {
-		// we can't use PaysetGroups here since it's using a execpool like this go-routine and we don't want to deadlock.
-		_, tx.verificationErr = verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache(), handler.ledger)
+func (handler *TxHandler) deleteFromCaches(msgKey *crypto.Digest, canonicalKey *crypto.Digest) {
+	if handler.cacheConfig.enableFilteringCanonical && canonicalKey != nil {
+		handler.txCanonicalCache.Delete(canonicalKey)
 	}
 
-	select {
-	case handler.postVerificationQueue <- tx:
-	default:
-		// we failed to write to the output queue, since the queue was full.
-		// adding the metric here allows us to monitor how frequently it happens.
-		transactionMessagesDroppedFromPool.Inc(nil)
+	if handler.cacheConfig.enableFilteringRawMsg && msgKey != nil {
+		handler.msgCache.DeleteByKey(msgKey)
 	}
-	return nil
 }
 
+// dedupCanonical checks if the transaction group has been seen before after reencoding to canonical representation.
+// returns a key used for insertion if the group was not found.
+func (handler *TxHandler) dedupCanonical(ntx int, unverifiedTxGroup []transactions.SignedTxn, consumed int) (key *crypto.Digest, isDup bool) {
+	// consider situations where someone want to censor transactions A
+	// 1. Txn A is not part of a group => txn A with a valid signature is OK
+	// Censorship attempts are:
+	//  - txn A with an invalid signature => cache/dedup canonical txn with its signature
+	//  - txn A with a valid/invalid signature and part of a valid or invalid group => cache/dedup the entire group
+	//
+	// 2. Txn A is part of a group => txn A with valid GroupID and signature is OK
+	// Censorship attempts are:
+	// - txn A with a valid or invalid signature => cache/dedup canonical txn with its signature.
+	// - txn A as part of a group => cache/dedup the entire group
+	//
+	// caching approaches that would not work:
+	// - using txid: {A} could be poisoned by {A, B} where B is invalid
+	// - using individual txn from a group: {A, Z} could be poisoned by {A, B}, where B is invalid
+
+	var d crypto.Digest
+	if ntx == 1 {
+		// a single transaction => cache/dedup canonical txn with its signature
+		enc := unverifiedTxGroup[0].MarshalMsg(nil)
+		d = crypto.Hash(enc)
+		if handler.txCanonicalCache.CheckAndPut(&d) {
+			return nil, true
+		}
+	} else {
+		// a transaction group => cache/dedup the entire group canonical group
+		encodeBuf := make([]byte, 0, unverifiedTxGroup[0].Msgsize()*ntx)
+		for i := range unverifiedTxGroup {
+			encodeBuf = unverifiedTxGroup[i].MarshalMsg(encodeBuf)
+		}
+		if len(encodeBuf) != consumed {
+			// reallocated, some assumption on size was wrong
+			// log and skip
+			logging.Base().Warnf("Decoded size %d does not match to encoded %d", consumed, len(encodeBuf))
+			return nil, false
+		}
+		d = crypto.Hash(encodeBuf)
+		if handler.txCanonicalCache.CheckAndPut(&d) {
+			return nil, true
+		}
+	}
+	return &d, false
+}
+
+// processIncomingTxn decodes a transaction group from incoming message and enqueues into the back log for processing.
+// The function also performs some input data pre-validation;
+//  - txn groups are cut to MaxTxGroupSize size
+//  - message are checked for duplicates
+//  - transactions are checked for duplicates
+
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
+	var msgKey *crypto.Digest
+	var isDup bool
+	if handler.cacheConfig.enableFilteringRawMsg {
+		// check for duplicate messages
+		// this helps against relaying duplicates
+		if msgKey, isDup = handler.msgCache.CheckAndPut(rawmsg.Data); isDup {
+			transactionMessagesDupRawMsg.Inc(nil)
+			return network.OutgoingMessage{Action: network.Ignore}
+		}
+	}
+
+	unverifiedTxGroup := make([]transactions.SignedTxn, 1)
 	dec := protocol.NewMsgpDecoderBytes(rawmsg.Data)
 	ntx := 0
-	unverifiedTxGroup := make([]transactions.SignedTxn, 1)
+	consumed := 0
+
+	var err error
+	var capguard *util.ErlCapacityGuard
+	if handler.erl != nil {
+		// consume a capacity unit
+		// if the elastic rate limiter cannot vend a capacity, the error it returns
+		// is sufficient to indicate that we should enable Congestion Control, because
+		// an issue in vending capacity indicates the underlying resource (TXBacklog) is full
+		capguard, err = handler.erl.ConsumeCapacity(rawmsg.Sender.(util.ErlClient))
+		if err != nil {
+			handler.erl.EnableCongestionControl()
+			// if there is no capacity, it is the same as if we failed to put the item onto the backlog, so report such
+			transactionMessagesDroppedFromBacklog.Inc(nil)
+			return network.OutgoingMessage{Action: network.Ignore}
+		}
+		// if the backlog Queue has 50% of its buffer back, turn congestion control off
+		if float64(cap(handler.backlogQueue))*0.5 > float64(len(handler.backlogQueue)) {
+			handler.erl.DisableCongestionControl()
+		}
+	}
+
 	for {
 		if len(unverifiedTxGroup) == ntx {
 			n := make([]transactions.SignedTxn, len(unverifiedTxGroup)*2)
 			copy(n, unverifiedTxGroup)
 			unverifiedTxGroup = n
 		}
-
 		err := dec.Decode(&unverifiedTxGroup[ntx])
-		if err == io.EOF {
-			break
-		}
 		if err != nil {
+			if err == io.EOF {
+				break
+			}
 			logging.Base().Warnf("Received a non-decodable txn: %v", err)
 			return network.OutgoingMessage{Action: network.Disconnect}
 		}
+		consumed = dec.Consumed()
 		ntx++
+		if ntx >= config.MaxTxGroupSize {
+			// max ever possible group size reached, done reading input.
+			if dec.Remaining() > 0 {
+				// if something else left in the buffer - this is an error, drop
+				transactionMessageTxGroupExcessive.Inc(nil)
+				return network.OutgoingMessage{Action: network.Disconnect}
+			}
+		}
 	}
 	if ntx == 0 {
 		logging.Base().Warnf("Received empty tx group")
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
+
 	unverifiedTxGroup = unverifiedTxGroup[:ntx]
+
+	if ntx == config.MaxTxGroupSize {
+		transactionMessageTxGroupFull.Inc(nil)
+	}
+
+	var canonicalKey *crypto.Digest
+	if handler.cacheConfig.enableFilteringCanonical {
+		if canonicalKey, isDup = handler.dedupCanonical(ntx, unverifiedTxGroup, consumed); isDup {
+			transactionMessagesDupCanonical.Inc(nil)
+			return network.OutgoingMessage{Action: network.Ignore}
+		}
+	}
 
 	select {
 	case handler.backlogQueue <- &txBacklogMsg{
-		rawmsg:            &rawmsg,
-		unverifiedTxGroup: unverifiedTxGroup,
+		rawmsg:                &rawmsg,
+		unverifiedTxGroup:     unverifiedTxGroup,
+		rawmsgDataHash:        msgKey,
+		unverifiedTxGroupHash: canonicalKey,
+		capguard:              capguard,
 	}:
 	default:
 		// if we failed here we want to increase the corresponding metric. It might suggest that we
 		// want to increase the queue size.
 		transactionMessagesDroppedFromBacklog.Inc(nil)
+
+		// additionally, remove the txn from duplicate caches to ensure it can be re-submitted
+		if canonicalKey != nil {
+			handler.txCanonicalCache.Delete(canonicalKey)
+		}
+		if msgKey != nil {
+			handler.msgCache.DeleteByKey(msgKey)
+		}
 	}
 
 	return network.OutgoingMessage{Action: network.Ignore}
@@ -276,6 +681,7 @@ func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDon
 	// do a quick test to check that this transaction could potentially be committed, to reject dup pending transactions
 	err := handler.txPool.Test(tx.unverifiedTxGroup)
 	if err != nil {
+		handler.checkReportErrors(err)
 		logging.Base().Debugf("txPool rejected transaction: %v", err)
 		return true
 	}
@@ -286,7 +692,10 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	tx := &txBacklogMsg{
 		unverifiedTxGroup: unverifiedTxGroup,
 	}
+	transactionGroupTxSyncHandled.Inc(nil)
+
 	if handler.checkAlreadyCommitted(tx) {
+		transactionGroupTxSyncAlreadyCommitted.Inc(nil)
 		return network.OutgoingMessage{}, true
 	}
 
@@ -316,6 +725,8 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 		logging.Base().Debugf("could not remember tx: %v", err)
 		return network.OutgoingMessage{}, true
 	}
+
+	transactionGroupTxSyncRemember.Inc(nil)
 
 	// if we remembered without any error ( i.e. txpool wasn't full ), then we should pin these transactions.
 	err = handler.ledger.VerifiedTransactionCache().Pin(verifiedTxGroup)

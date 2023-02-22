@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"sync/atomic"
 
 	"github.com/algorand/go-deadlock"
@@ -26,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 )
 
 // notifier is a struct that encapsulates a single-shot channel; it will only be signaled once.
@@ -81,7 +81,10 @@ func (b *bulletin) Wait(round basics.Round) chan struct{} {
 }
 
 func (b *bulletin) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
-	b.pendingNotificationRequests = make(map[basics.Round]notifier)
+	// We want to keep existing notification requests in memory if this flow is triggered by reloadLedger.
+	if b.pendingNotificationRequests == nil {
+		b.pendingNotificationRequests = make(map[basics.Round]notifier)
+	}
 	b.latestRound = l.Latest()
 	return nil
 }
@@ -113,7 +116,7 @@ func (b *bulletin) prepareCommit(dcc *deferredCommitContext) error {
 	return nil
 }
 
-func (b *bulletin) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+func (b *bulletin) commitRound(context.Context, store.TransactionScope, *deferredCommitContext) error {
 	return nil
 }
 

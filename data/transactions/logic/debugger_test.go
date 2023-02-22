@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package logic
 
 import (
 	"encoding/base64"
-	"os"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -26,105 +25,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var testProgram string = `intcblock 0 1 1 1 1 5 100
-bytecblock 0x414c474f 0x1337 0x2001 0xdeadbeef 0x70077007
-bytec 0
-sha256
-keccak256
-sha512_256
-len
-intc_0
-+
-intc_1
--
-intc_2
-/
-intc_3
-*
-intc 4
-<
-intc_1
->
-intc_1
-<=
-intc_1
->=
-intc_1
-&&
-intc_1
-||
-bytec_1
-bytec_2
-!=
-bytec_3
-bytec 4
-!=
-&&
-&&
-`
-
-func TestWebDebuggerManual(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	debugURL := os.Getenv("TEAL_DEBUGGER_URL")
-	if len(debugURL) == 0 {
-		t.Skip("this must be run manually")
-	}
-
-	ep, tx, _ := makeSampleEnv()
-	ep.TxnGroup[0].Lsig.Args = [][]byte{
-		tx.Sender[:],
-		tx.Receiver[:],
-		tx.CloseRemainderTo[:],
-		tx.VotePK[:],
-		tx.SelectionPK[:],
-		tx.Note,
-	}
-	ep.Debugger = &WebDebuggerHook{URL: debugURL}
-	testLogic(t, testProgram, AssemblerMaxVersion, ep)
-}
-
-type testDbgHook struct {
-	register int
-	update   int
-	complete int
-	state    *DebugState
-}
-
-func (d *testDbgHook) Register(state *DebugState) error {
-	d.register++
-	d.state = state
-	return nil
-}
-
-func (d *testDbgHook) Update(state *DebugState) error {
-	d.update++
-	d.state = state
-	return nil
-}
-
-func (d *testDbgHook) Complete(state *DebugState) error {
-	d.complete++
-	d.state = state
-	return nil
-}
-
-func TestDebuggerHook(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	testDbg := testDbgHook{}
-	ep := defaultEvalParams(nil)
-	ep.Debugger = &testDbg
-	testLogic(t, testProgram, AssemblerMaxVersion, ep)
-
-	require.Equal(t, 1, testDbg.register)
-	require.Equal(t, 1, testDbg.complete)
-	require.Greater(t, testDbg.update, 1)
-	require.Len(t, testDbg.state.Stack, 1)
-}
-
 func TestLineToPC(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	dState := DebugState{
 		Disassembly: "abc\ndef\nghi",
@@ -162,6 +65,7 @@ func TestLineToPC(t *testing.T) {
 
 func TestValueDeltaToValueDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	vDelta := basics.ValueDelta{
 		Action: basics.SetUintAction,
@@ -175,7 +79,7 @@ func TestValueDeltaToValueDelta(t *testing.T) {
 	require.Equal(t, vDelta.Uint, ans.Uint)
 }
 
-var testCallStackProgram string = `intcblock 1
+const testCallStackProgram string = `intcblock 1
 callsub label1
 intc_0
 label1:
@@ -186,6 +90,7 @@ intc_0
 
 func TestParseCallstack(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	expectedCallFrames := []CallFrame{
 		{
@@ -202,34 +107,8 @@ func TestParseCallstack(t *testing.T) {
 		Disassembly: testCallStackProgram,
 		PCOffset:    []PCOffset{{PC: 1, Offset: 18}, {PC: 4, Offset: 30}, {PC: 7, Offset: 45}, {PC: 8, Offset: 65}, {PC: 11, Offset: 88}},
 	}
-	callstack := []int{4, 8}
+	callstack := []frame{{retpc: 4}, {retpc: 8}}
 
 	cfs := dState.parseCallstack(callstack)
 	require.Equal(t, expectedCallFrames, cfs)
-}
-
-func TestCallStackUpdate(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	expectedCallFrames := []CallFrame{
-		{
-			FrameLine: 2,
-			LabelName: "label1",
-		},
-		{
-			FrameLine: 5,
-			LabelName: "label2",
-		},
-	}
-
-	testDbg := testDbgHook{}
-	ep := defaultEvalParams(nil)
-	ep.Debugger = &testDbg
-	testLogic(t, testCallStackProgram, AssemblerMaxVersion, ep)
-
-	require.Equal(t, 1, testDbg.register)
-	require.Equal(t, 1, testDbg.complete)
-	require.Greater(t, testDbg.update, 1)
-	require.Len(t, testDbg.state.Stack, 1)
-	require.Equal(t, testDbg.state.CallStack, expectedCallFrames)
 }
