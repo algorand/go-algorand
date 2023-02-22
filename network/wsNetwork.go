@@ -2455,13 +2455,13 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 }
 
 func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
+	wn.peersLock.Lock()
+	defer wn.peersLock.Unlock()
 	// guard against peers which are closed or closing
 	if atomic.LoadInt32(&peer.didSignalClose) == 1 {
 		wn.log.Debugf("peer closing %s", peer.conn.RemoteAddr().String())
 		return
 	}
-	wn.peersLock.Lock()
-	defer wn.peersLock.Unlock()
 	// simple duplicate *pointer* check. should never trigger given the callers to addPeer
 	// TODO: remove this after making sure it is safe to do so
 	for _, p := range wn.peers {
