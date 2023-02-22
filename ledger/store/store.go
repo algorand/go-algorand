@@ -43,11 +43,7 @@ type BatchScope interface {
 	MakeAccountsWriter() (AccountsWriterExt, error)
 	MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
 
-	RunMigrations(ctx context.Context, params TrackerDBParams, log logging.Logger, targetVersion int32) (mgr TrackerDBInitParams, err error)
 	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
-
-	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
-	AccountsUpdateSchemaTest(ctx context.Context) (err error)
 }
 type sqlBatchScope struct {
 	tx *sql.Tx
@@ -297,20 +293,8 @@ func (bs sqlBatchScope) MakeAccountsOptimizedWriter(hasAccounts, hasResources, h
 	return MakeAccountsSQLWriter(bs.tx, hasAccounts, hasResources, hasKvPairs, hasCreatables)
 }
 
-func (bs sqlBatchScope) RunMigrations(ctx context.Context, params TrackerDBParams, log logging.Logger, targetVersion int32) (mgr TrackerDBInitParams, err error) {
-	return RunMigrations(ctx, bs.tx, params, log, targetVersion)
-}
-
 func (bs sqlBatchScope) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
 	return db.ResetTransactionWarnDeadline(ctx, bs.tx, deadline)
-}
-
-func (bs sqlBatchScope) AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
-	return AccountsInitTest(tb, bs.tx, initAccounts, proto)
-}
-
-func (bs sqlBatchScope) AccountsUpdateSchemaTest(ctx context.Context) (err error) {
-	return AccountsUpdateSchemaTest(ctx, bs.tx)
 }
 
 func (ss sqlSnapshotScope) MakeAccountsReader() (AccountsReaderExt, error) {

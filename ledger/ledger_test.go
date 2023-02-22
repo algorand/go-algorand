@@ -2286,6 +2286,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 	// reset tables and re-init again, similary to the catchpount apply code
 	// since the ledger has only genesis accounts, this recreates them
 	err = l.trackerDBs.Batch(func(ctx context.Context, tx store.BatchScope) error {
+		testTx := tx.(store.BatchTestScope)
 		arw, err := tx.MakeAccountsWriter()
 		if err != nil {
 			return err
@@ -2304,12 +2305,12 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 			DbPathPrefix:      l.catchpoint.dbDirectory,
 			BlockDb:           l.blockDBs,
 		}
-		_, err0 = tx.RunMigrations(ctx, tp, l.log, preReleaseDBVersion /*target database version*/)
+		_, err0 = testTx.RunMigrations(ctx, tp, l.log, preReleaseDBVersion /*target database version*/)
 		if err0 != nil {
 			return err0
 		}
 
-		if err0 := tx.AccountsUpdateSchemaTest(ctx); err != nil {
+		if err0 := testTx.AccountsUpdateSchemaTest(ctx); err != nil {
 			return err0
 		}
 
@@ -2455,7 +2456,8 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	}()
 	// create tables so online accounts can still be written
 	err = trackerDB.Batch(func(ctx context.Context, tx store.BatchScope) error {
-		if err := tx.AccountsUpdateSchemaTest(ctx); err != nil {
+		testTx := tx.(store.BatchTestScope)
+		if err := testTx.AccountsUpdateSchemaTest(ctx); err != nil {
 			return err
 		}
 		return nil
