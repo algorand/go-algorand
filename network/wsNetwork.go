@@ -263,6 +263,7 @@ type OutgoingMessage struct {
 	Tag     Tag
 	Payload []byte
 	Topics  Topics
+	reason  disconnectReason // used when Action == Disconnect
 }
 
 // ForwardingPolicy is an enum indicating to whom we should send a message
@@ -309,7 +310,7 @@ type TaggedMessageHandler struct {
 // Propagate is a convenience function to save typing in the common case of a message handler telling us to propagate an incoming message
 // "return network.Propagate(msg)" instead of "return network.OutgoingMsg{network.Broadcast, msg.Tag, msg.Data}"
 func Propagate(msg IncomingMessage) OutgoingMessage {
-	return OutgoingMessage{Broadcast, msg.Tag, msg.Data, nil}
+	return OutgoingMessage{Action: Broadcast, Tag: msg.Tag, Payload: msg.Data, Topics: nil}
 }
 
 // GossipNetworkPath is the URL path to connect to the websocket gossip node at.
@@ -1286,7 +1287,11 @@ func (wn *WebsocketNetwork) messageHandlerThread(peersConnectivityCheckCh <-chan
 			switch outmsg.Action {
 			case Disconnect:
 				wn.wg.Add(1)
-				go wn.disconnectThread(msg.Sender, disconnectBadData)
+				reason := disconnectBadData
+				if outmsg.reason != disconnectReasonNone {
+					reason = outmsg.reason
+				}
+				go wn.disconnectThread(msg.Sender, reason)
 			case Broadcast:
 				err := wn.Broadcast(wn.ctx, msg.Tag, msg.Data, false, msg.Sender)
 				if err != nil && err != errBcastQFull {
