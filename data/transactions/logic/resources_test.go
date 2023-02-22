@@ -194,7 +194,7 @@ asset_params_get AssetTotal
 pop; pop; int 1
 `
 	sources := []string{getTotal, getTotal}
-	// In v8, the first tx can read asset 400, because it's in its foreign arry,
+	// In v8, the first tx can read asset 400, because it's in its foreign array,
 	// but the second can't
 	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 8, nil,
 		logic.NewExpect(1, "invalid Asset reference 400"))
@@ -264,9 +264,9 @@ func TestAccountPassing(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	for v := uint64(7); v <= logic.LogicVersion; v++ {
-		ep, tx, ledger := logic.MakeSampleEnvWithVersion(v)
-
+	// appAddressVersion=7
+	logic.TestLogicRange(t, 7, 0, func(t *testing.T, ep *logic.EvalParams, tx *transactions.Transaction, ledger *logic.Ledger) {
+		t.Parallel()
 		accept := logic.TestProg(t, "int 1", 6)
 		alice := basics.Address{1, 1, 1, 1, 1}
 		ledger.NewApp(alice, 4, basics.AppParams{
@@ -288,7 +288,7 @@ int 1`
 		logic.TestApp(t, fmt.Sprintf(callWithAccount, "global CurrentApplicationAddress"), ep)
 		// Or the address of one of our ForeignApps
 		logic.TestApp(t, fmt.Sprintf(callWithAccount, "addr "+basics.AppIndex(4).Address().String()), ep)
-	}
+	})
 }
 
 // TestOtherTxSharing tests resource sharing across other kinds of transactions besides appl.
@@ -673,25 +673,25 @@ func TestAccessMyLocals(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	ep, tx, ledger := logic.MakeSampleEnv()
+	// start at 3, needs assert
+	logic.TestLogicRange(t, 3, 0, func(t *testing.T, ep *logic.EvalParams, tx *transactions.Transaction, ledger *logic.Ledger) {
+		sender := basics.Address{1, 2, 3, 4}
+		ledger.NewAccount(sender, 1_000_000)
+		// we don't really process transactions in these tests, so despite the
+		// OptInOC below, we must manually opt the sender into the app that
+		// will get created for this test.
+		ledger.NewLocals(sender, 888)
 
-	sender := basics.Address{1, 2, 3, 4}
-	ledger.NewAccount(sender, 1_000_000)
-	// we don't really process transactions in these tests, so despite the
-	// OptInOC below, we must manually opt the sender into the app that
-	// will get created for this test.
-	ledger.NewLocals(sender, 888)
-
-	*tx = txntest.Txn{
-		Type:          protocol.ApplicationCallTx,
-		Sender:        sender,
-		ApplicationID: 0,
-		OnCompletion:  transactions.OptInOC,
-		LocalStateSchema: basics.StateSchema{
-			NumUint: 1,
-		},
-	}.Txn()
-	source := `
+		*tx = txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender,
+			ApplicationID: 0,
+			OnCompletion:  transactions.OptInOC,
+			LocalStateSchema: basics.StateSchema{
+				NumUint: 1,
+			},
+		}.Txn()
+		source := `
   int 0
   byte "X"
   app_local_get
@@ -707,6 +707,7 @@ func TestAccessMyLocals(t *testing.T) {
   int 7
   ==
 `
-	logic.TestApp(t, source, ep)
+		logic.TestApp(t, source, ep)
+	})
 
 }

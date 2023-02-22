@@ -510,6 +510,30 @@ func testAppFull(t *testing.T, program []byte, gi int, aid basics.AppIndex, ep *
 	return delta
 }
 
+// testLogicRange allows for running tests against a range of avm
+// versions. Generally `start` will be the version that introduced the feature,
+// and `stop` will be 0 to indicate it should work right on up through the
+// current version.  `stop` will be an actual version number if we're confirming
+// that something STOPS working as of a particular version. Note that this does
+// *not* use different consensus versions. It is tempting to make it find the
+// lowest possible consensus version in the loop in order to support the `v` it
+// it working on.  For super confidence, one might argue this should be a nested
+// loop over all of the consensus versions that work with the `v`, from the
+// first possible, to vFuture.
+func testLogicRange(t *testing.T, start, stop int, test func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger)) {
+	t.Helper()
+	if stop == 0 { // Treat 0 as current max
+		stop = LogicVersion
+	}
+
+	for v := uint64(start); v <= uint64(stop); v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ep, tx, ledger := makeSampleEnvWithVersion(v)
+			test(t, ep, tx, ledger)
+		})
+	}
+}
+
 func TestMinBalance(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1152,16 +1176,18 @@ intc_1
 func TestAppParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	ep, tx, ledger := makeSampleEnv()
-	ledger.NewAccount(tx.Sender, 1)
-	ledger.NewApp(tx.Sender, 100, basics.AppParams{})
+	// start at 5 for app_params_get
+	testLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		ledger.NewAccount(tx.Sender, 1)
+		ledger.NewApp(tx.Sender, 100, basics.AppParams{})
 
-	/* app id is in ForeignApps, but does not exist */
-	source := "int 56; app_params_get AppExtraProgramPages; int 0; ==; assert; int 0; =="
-	testApp(t, source, ep)
-	/* app id is in ForeignApps, but has zero ExtraProgramPages */
-	source = "int 100; app_params_get AppExtraProgramPages; int 1; ==; assert; int 0; =="
-	testApp(t, source, ep)
+		/* app id is in ForeignApps, but does not exist */
+		source := "int 56; app_params_get AppExtraProgramPages; int 0; ==; assert; int 0; =="
+		testApp(t, source, ep)
+		/* app id is in ForeignApps, but has zero ExtraProgramPages */
+		source = "int 100; app_params_get AppExtraProgramPages; int 1; ==; assert; int 0; =="
+		testApp(t, source, ep)
+	})
 }
 
 func TestAcctParams(t *testing.T) {
@@ -1240,6 +1266,7 @@ func TestAcctParams(t *testing.T) {
 	testApp(t, source, ep)
 }
 
+// TestGlobalNonDelete ensures that a deletion is not inserted in the delta if the global didn't exist
 func TestGlobalNonDelete(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1256,6 +1283,7 @@ int 1
 	require.Empty(t, delta.LocalDeltas)
 }
 
+// TestLocalNonDelete ensures that a deletion is not inserted in the delta if the local didn't exist
 func TestLocalNonDelete(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1916,24 +1944,26 @@ byte "myval"
 ==
 `
 
-	ep, txn, ledger := makeSampleEnv()
-	txn.ApplicationID = 100
-	txn.ForeignApps = []basics.AppIndex{txn.ApplicationID, 101}
-	ledger.NewAccount(txn.Sender, 1)
-	ledger.NewApp(txn.Sender, 100, basics.AppParams{})
+	// app_global_get_ex starts in v2
+	testLogicRange(t, 2, 0, func(t *testing.T, ep *EvalParams, txn *transactions.Transaction, ledger *Ledger) {
+		txn.ApplicationID = 100
+		txn.ForeignApps = []basics.AppIndex{txn.ApplicationID, 101}
+		ledger.NewAccount(txn.Sender, 1)
+		ledger.NewApp(txn.Sender, 100, basics.AppParams{})
 
-	delta := testApp(t, source, ep, "no app 101")
-	require.Empty(t, delta.GlobalDelta)
-	require.Empty(t, delta.LocalDeltas)
+		delta := testApp(t, source, ep, "no app 101")
+		require.Empty(t, delta.GlobalDelta)
+		require.Empty(t, delta.LocalDeltas)
 
-	ledger.NewApp(txn.Receiver, 101, basics.AppParams{})
-	ledger.NewApp(txn.Receiver, 100, basics.AppParams{}) // this keeps current app id = 100
-	algoValue := basics.TealValue{Type: basics.TealBytesType, Bytes: "myval"}
-	ledger.NewGlobal(101, "mykey", algoValue)
+		ledger.NewApp(txn.Receiver, 101, basics.AppParams{})
+		ledger.NewApp(txn.Receiver, 100, basics.AppParams{}) // this keeps current app id = 100
+		algoValue := basics.TealValue{Type: basics.TealBytesType, Bytes: "myval"}
+		ledger.NewGlobal(101, "mykey", algoValue)
 
-	delta = testApp(t, source, ep)
-	require.Empty(t, delta.GlobalDelta)
-	require.Empty(t, delta.LocalDeltas)
+		delta = testApp(t, source, ep)
+		require.Empty(t, delta.GlobalDelta)
+		require.Empty(t, delta.LocalDeltas)
+	})
 }
 
 func TestBlankKey(t *testing.T) {
@@ -2318,7 +2348,7 @@ int 1
 	require.Equal(t, 1, len(delta.LocalDeltas[0]))
 }
 
-func TestEnumFieldErrors(t *testing.T) { // nolint:paralleltest // manipulates globalFieldSpecs
+func TestEnumFieldErrors(t *testing.T) { // nolint:paralleltest // manipulates txnFieldSpecs
 	partitiontest.PartitionTest(t)
 
 	source := `txn Amount`
@@ -2855,64 +2885,64 @@ func TestSelfMutateCurrent(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	ep, tx, ledger := makeSampleEnv()
+	// start at 9, when such mutation became legal
+	testLogicRange(t, 9, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		/* In order to test that apps can now mutate their own app's local state,
+		   we're going to set up a ledger in which an app account is opted into
+		   itself. */
+		ledger.NewLocals(basics.AppIndex(888).Address(), 888)
+		ledger.NewLocal(basics.AppIndex(888).Address(), 888, "hey",
+			basics.TealValue{Type: basics.TealUintType, Uint: 77})
 
-	/* In order to test that apps can now mutate their own app's local state,
-	   we're going to set up a ledger in which an app account is opted into
-	   itself. */
-	ledger.NewLocals(basics.AppIndex(888).Address(), 888)
-	ledger.NewLocal(basics.AppIndex(888).Address(), 888, "hey",
-		basics.TealValue{Type: basics.TealUintType, Uint: 77})
-
-	source := `
+		source := `
 global CurrentApplicationAddress
 byte "hey"
 int 42
 app_local_put
 int 1
 `
-	ed := testApp(t, source, ep)
-	require.Len(t, ed.LocalDeltas, 1)
-	require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
+		ed := testApp(t, source, ep)
+		require.Len(t, ed.LocalDeltas, 1)
+		require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
 
-	require.Contains(t, ed.LocalDeltas, uint64(2))
-	sd := ed.LocalDeltas[2]
-	require.Len(t, sd, 1)
-	require.Contains(t, sd, "hey")
-	require.EqualValues(t, 42, sd["hey"].Uint)
-	require.Len(t, ed.SharedAccts, 1)
-	require.Equal(t, tx.ApplicationID.Address(), ed.SharedAccts[0])
+		require.Contains(t, ed.LocalDeltas, uint64(2))
+		sd := ed.LocalDeltas[2]
+		require.Len(t, sd, 1)
+		require.Contains(t, sd, "hey")
+		require.EqualValues(t, 42, sd["hey"].Uint)
+		require.Len(t, ed.SharedAccts, 1)
+		require.Equal(t, tx.ApplicationID.Address(), ed.SharedAccts[0])
 
-	/* Confirm it worked. */
-	source = `
+		/* Confirm it worked. */
+		source = `
 global CurrentApplicationAddress
 byte "hey"
 app_local_get
 int 42
 ==
 `
-	testApp(t, source, ep)
+		testApp(t, source, ep)
 
-	source = `
+		source = `
 global CurrentApplicationAddress
 byte "hey"
 app_local_del
 int 1
 `
-	ed = testApp(t, source, ep)
-	require.Len(t, ed.LocalDeltas, 1)
-	require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
+		ed = testApp(t, source, ep)
+		require.Len(t, ed.LocalDeltas, 1)
+		require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
 
-	require.Contains(t, ed.LocalDeltas, uint64(2))
-	sd = ed.LocalDeltas[2]
-	require.Len(t, sd, 1)
-	require.Contains(t, sd, "hey")
-	require.EqualValues(t, basics.DeleteAction, sd["hey"].Action)
-	require.Len(t, ed.SharedAccts, 1)
-	require.Equal(t, tx.ApplicationID.Address(), ed.SharedAccts[0])
+		require.Contains(t, ed.LocalDeltas, uint64(2))
+		sd = ed.LocalDeltas[2]
+		require.Len(t, sd, 1)
+		require.Contains(t, sd, "hey")
+		require.EqualValues(t, basics.DeleteAction, sd["hey"].Action)
+		require.Len(t, ed.SharedAccts, 1)
+		require.Equal(t, tx.ApplicationID.Address(), ed.SharedAccts[0])
 
-	// Now, repeat the "put" test with multiple keys, to ensure only one address is added to SharedAccts
-	source = `
+		// Now, repeat the "put" test with multiple keys, to ensure only one address is added to SharedAccts
+		source = `
 global CurrentApplicationAddress
 byte "hey"
 int 42
@@ -2923,17 +2953,18 @@ int 21
 app_local_put
 int 1
 `
-	ed = testApp(t, source, ep)
-	require.Len(t, ed.LocalDeltas, 1)
-	require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
+		ed = testApp(t, source, ep)
+		require.Len(t, ed.LocalDeltas, 1)
+		require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
 
-	require.Contains(t, ed.LocalDeltas, uint64(2))
-	sd = ed.LocalDeltas[2]
-	require.Len(t, sd, 2)
-	require.Contains(t, sd, "hey")
-	require.EqualValues(t, 42, sd["hey"].Uint)
-	require.Contains(t, sd, "joe")
-	require.EqualValues(t, 21, sd["joe"].Uint)
-	require.Len(t, ed.SharedAccts, 1)
-	require.Equal(t, tx.ApplicationID.Address(), ed.SharedAccts[0])
+		require.Contains(t, ed.LocalDeltas, uint64(2))
+		sd = ed.LocalDeltas[2]
+		require.Len(t, sd, 2)
+		require.Contains(t, sd, "hey")
+		require.EqualValues(t, 42, sd["hey"].Uint)
+		require.Contains(t, sd, "joe")
+		require.EqualValues(t, 21, sd["joe"].Uint)
+		require.Len(t, ed.SharedAccts, 1)
+		require.Equal(t, tx.ApplicationID.Address(), ed.SharedAccts[0])
+	})
 }
