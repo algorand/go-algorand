@@ -85,8 +85,30 @@ pop; pop; int 1
 
 	_, _, ledger := logic.MakeSampleEnv()
 	ledger.NewAccount(appl0.Sender, 100_000)
+	ledger.NewAccount(appl1.Sender, 100_000)
 	ledger.NewApp(appl0.Sender, 500, basics.AppParams{})
 	ledger.NewLocals(appl0.Sender, 500) // opt in
+	// Now txn0 passes, but txn1 has an error because it can't see app 500
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
+		logic.NewExpect(1, "invalid Local State access"))
+
+	// But it's ok in appl2, because appl2 uses the same Sender, even though the
+	// foreign-app is not repeated in appl2 because the holding being accessed
+	// is the one from tx0.
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl2), 9, ledger)
+
+	// Checking if an account is opted in has pretty much the same rules
+	optInCheck := `
+int 0							// Sender
+int 500
+app_opted_in
+`
+
+	sources = []string{optInCheck, optInCheck}
+	// app_opted_in requires the address and the app exist, else the program fails
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 8, nil,
+		logic.NewExpect(0, "no account"))
+
 	// Now txn0 passes, but txn1 has an error because it can't see app 500
 	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
 		logic.NewExpect(1, "invalid Local State access"))
@@ -706,6 +728,14 @@ func TestAccessMyLocals(t *testing.T) {
   app_local_get
   int 7
   ==
+`
+		logic.TestApp(t, source, ep)
+
+		// They can also see that they are opted in, though it's a weird question to ask.
+		source = `
+  int 0
+  int 0
+  app_opted_in
 `
 		logic.TestApp(t, source, ep)
 	})

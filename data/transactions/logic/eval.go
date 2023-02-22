@@ -4127,12 +4127,7 @@ func opAppOptedIn(cx *EvalContext) error {
 	last := len(cx.stack) - 1 // app
 	prev := last - 1          // account
 
-	addr, _, err := cx.accountReference(cx.stack[prev])
-	if err != nil {
-		return err
-	}
-
-	app, err := cx.appReference(cx.stack[last].Uint, false)
+	addr, app, _, err := cx.localsReference(cx.stack[prev], cx.stack[last].Uint)
 	if err != nil {
 		return err
 	}
