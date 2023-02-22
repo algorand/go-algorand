@@ -89,6 +89,48 @@ func TestLRUBasicResources(t *testing.T) {
 	}
 }
 
+func TestLRUResourcesDisable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var baseRes lruResources
+	baseRes.init(logging.TestingLog(t), 0, 1)
+
+	resourceNum := 5
+
+	for i := 1; i <= resourceNum; i++ {
+		go func(i int) {
+			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
+			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
+			res := store.PersistedResourcesData{
+				Addrid: int64(i),
+				Aidx:   basics.CreatableIndex(i),
+				Round:  basics.Round(i),
+				Data:   store.ResourcesData{Total: uint64(i)},
+			}
+			baseRes.writePending(res, addr)
+			baseRes.writeNotFoundPending(addr, basics.CreatableIndex(i))
+		}(i)
+	}
+	require.Empty(t, baseRes.pendingResources)
+	require.Empty(t, baseRes.pendingNotFound)
+	baseRes.flushPendingWrites()
+	require.Empty(t, baseRes.resources)
+	require.Empty(t, baseRes.notFound)
+
+	for i := 0; i < resourceNum; i++ {
+		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
+		res := store.PersistedResourcesData{
+			Addrid: int64(i),
+			Aidx:   basics.CreatableIndex(i),
+			Round:  basics.Round(i),
+			Data:   store.ResourcesData{Total: uint64(i)},
+		}
+		baseRes.write(res, addr)
+	}
+
+	require.Empty(t, baseRes.resources)
+}
+
 func TestLRUResourcesPendingWrites(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

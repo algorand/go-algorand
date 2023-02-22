@@ -59,6 +59,9 @@ type Event struct {
 
 	// only for BeforeTxnGroup and AfterTxnGroup
 	GroupSize int
+
+	// only for AfterOpcode, AfterProgram, AfterTxn, and AfterTxnGroup
+	HasError bool
 }
 
 // BeforeTxnGroup creates a new Event with the type BeforeTxnGroupEvent
@@ -67,8 +70,8 @@ func BeforeTxnGroup(groupSize int) Event {
 }
 
 // AfterTxnGroup creates a new Event with the type AfterTxnGroupEvent
-func AfterTxnGroup(groupSize int) Event {
-	return Event{Type: AfterTxnGroupEvent, GroupSize: groupSize}
+func AfterTxnGroup(groupSize int, hasError bool) Event {
+	return Event{Type: AfterTxnGroupEvent, GroupSize: groupSize, HasError: hasError}
 }
 
 // BeforeProgram creates a new Event with the type BeforeProgramEvent
@@ -82,13 +85,13 @@ func BeforeTxn(txnType protocol.TxType) Event {
 }
 
 // AfterTxn creates a new Event with the type AfterTxnEvent
-func AfterTxn(txnType protocol.TxType, ad transactions.ApplyData) Event {
-	return Event{Type: AfterTxnEvent, TxnType: txnType, TxnApplyData: ad}
+func AfterTxn(txnType protocol.TxType, ad transactions.ApplyData, hasError bool) Event {
+	return Event{Type: AfterTxnEvent, TxnType: txnType, TxnApplyData: ad, HasError: hasError}
 }
 
 // AfterProgram creates a new Event with the type AfterProgramEvent
-func AfterProgram(mode logic.RunMode) Event {
-	return Event{Type: AfterProgramEvent, LogicEvalMode: mode}
+func AfterProgram(mode logic.RunMode, hasError bool) Event {
+	return Event{Type: AfterProgramEvent, LogicEvalMode: mode, HasError: hasError}
 }
 
 // BeforeOpcode creates a new Event with the type BeforeOpcodeEvent
@@ -97,8 +100,30 @@ func BeforeOpcode() Event {
 }
 
 // AfterOpcode creates a new Event with the type AfterOpcodeEvent
-func AfterOpcode() Event {
-	return Event{Type: AfterOpcodeEvent}
+func AfterOpcode(hasError bool) Event {
+	return Event{Type: AfterOpcodeEvent, HasError: hasError}
+}
+
+// OpcodeEvents returns a slice of events that represent calling `count` opcodes
+func OpcodeEvents(count int, endsWithError bool) []Event {
+	events := make([]Event, 0, count*2)
+	for i := 0; i < count; i++ {
+		hasError := false
+		if endsWithError && i+1 == count {
+			hasError = true
+		}
+		events = append(events, BeforeOpcode(), AfterOpcode(hasError))
+	}
+	return events
+}
+
+// FlattenEvents flattens a slice of slices into a single slice of Events
+func FlattenEvents(rows [][]Event) []Event {
+	var out []Event
+	for _, row := range rows {
+		out = append(out, row...)
+	}
+	return out
 }
 
 // Tracer is a mock tracer that implements logic.EvalTracer
@@ -112,8 +137,8 @@ func (d *Tracer) BeforeTxnGroup(ep *logic.EvalParams) {
 }
 
 // AfterTxnGroup mocks the logic.EvalTracer.AfterTxnGroup method
-func (d *Tracer) AfterTxnGroup(ep *logic.EvalParams) {
-	d.Events = append(d.Events, AfterTxnGroup(len(ep.TxnGroup)))
+func (d *Tracer) AfterTxnGroup(ep *logic.EvalParams, evalError error) {
+	d.Events = append(d.Events, AfterTxnGroup(len(ep.TxnGroup), evalError != nil))
 }
 
 // BeforeTxn mocks the logic.EvalTracer.BeforeTxn method
@@ -122,8 +147,8 @@ func (d *Tracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 }
 
 // AfterTxn mocks the logic.EvalTracer.AfterTxn method
-func (d *Tracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData) {
-	d.Events = append(d.Events, AfterTxn(ep.TxnGroup[groupIndex].Txn.Type, ad))
+func (d *Tracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
+	d.Events = append(d.Events, AfterTxn(ep.TxnGroup[groupIndex].Txn.Type, ad, evalError != nil))
 }
 
 // BeforeProgram mocks the logic.EvalTracer.BeforeProgram method
@@ -133,7 +158,7 @@ func (d *Tracer) BeforeProgram(cx *logic.EvalContext) {
 
 // AfterProgram mocks the logic.EvalTracer.AfterProgram method
 func (d *Tracer) AfterProgram(cx *logic.EvalContext, evalError error) {
-	d.Events = append(d.Events, AfterProgram(cx.RunMode()))
+	d.Events = append(d.Events, AfterProgram(cx.RunMode(), evalError != nil))
 }
 
 // BeforeOpcode mocks the logic.EvalTracer.BeforeOpcode method
@@ -143,5 +168,5 @@ func (d *Tracer) BeforeOpcode(cx *logic.EvalContext) {
 
 // AfterOpcode mocks the logic.EvalTracer.AfterOpcode method
 func (d *Tracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
-	d.Events = append(d.Events, AfterOpcode())
+	d.Events = append(d.Events, AfterOpcode(evalError != nil))
 }

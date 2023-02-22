@@ -25,16 +25,17 @@ type Tag string
 // are encoded using a comma separator (see network/msgOfInterest.go).
 // The tags must be 2 bytes long.
 const (
-	AgreementVoteTag   Tag = "AV"
-	MsgOfInterestTag   Tag = "MI"
-	MsgDigestSkipTag   Tag = "MS"
-	NetPrioResponseTag Tag = "NP"
-	PingTag            Tag = "pi"
-	PingReplyTag       Tag = "pj"
-	ProposalPayloadTag Tag = "PP"
-	StateProofSigTag   Tag = "SP"
-	TopicMsgRespTag    Tag = "TS"
-	TxnTag             Tag = "TX"
+	AgreementVoteTag     Tag = "AV"
+	MsgOfInterestTag     Tag = "MI"
+	MsgDigestSkipTag     Tag = "MS"
+	NetPrioResponseTag   Tag = "NP"
+	NetIDVerificationTag Tag = "NI"
+	PingTag              Tag = "pi"
+	PingReplyTag         Tag = "pj"
+	ProposalPayloadTag   Tag = "PP"
+	StateProofSigTag     Tag = "SP"
+	TopicMsgRespTag      Tag = "TS"
+	TxnTag               Tag = "TX"
 	//UniCatchupReqTag   Tag = "UC" was replaced by UniEnsBlockReqTag
 	UniEnsBlockReqTag Tag = "UE"
 	//UniEnsBlockResTag  Tag = "US" was used for wsfetcherservice
@@ -47,6 +48,7 @@ var TagList = []Tag{
 	AgreementVoteTag,
 	MsgOfInterestTag,
 	MsgDigestSkipTag,
+	NetIDVerificationTag,
 	NetPrioResponseTag,
 	PingTag,
 	PingReplyTag,
