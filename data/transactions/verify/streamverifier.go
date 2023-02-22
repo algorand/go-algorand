@@ -198,7 +198,7 @@ func (sv *StreamToBatch) tryAddVerificationTaskToThePool(uElmts []InputJob) (add
 	return true, nil
 }
 
-func (sv *StreamToBatch) addVerificationTaskToThePoolNow(unvrifiedElts []InputJob) error {
+func (sv *StreamToBatch) addVerificationTaskToThePoolNow(unverified []InputJob) error {
 	// if the context is canceled when the task is in the queue, it should be canceled
 	// copy the ctx here so that when the StreamToBatch is started again, and a new context
 	// is created, this task still gets canceled due to the ctx at the time of this task
@@ -216,7 +216,7 @@ func (sv *StreamToBatch) addVerificationTaskToThePoolNow(unvrifiedElts []InputJo
 	}
 
 	// EnqueueBacklog returns an error when the context is canceled
-	err := sv.executionPool.EnqueueBacklog(sv.ctx, function, unvrifiedElts, nil)
+	err := sv.executionPool.EnqueueBacklog(sv.ctx, function, unverified, nil)
 	if err != nil {
 		logging.Base().Infof("addVerificationTaskToThePoolNow: EnqueueBacklog returned an error and StreamToBatch will stop: %v", err)
 	}
