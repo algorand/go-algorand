@@ -162,29 +162,29 @@ func MakeSigVerifyJobProcessor(ledger LedgerForStreamVerifier, cache VerifiedTra
 	}, nil
 }
 
-func (tbp *txnSigBatchProcessor) ProcessBatch(uEmts []InputJob) {
-	batchVerifier, ctx := tbp.preProcessUnverifiedElements(uEmts)
+func (tbp *txnSigBatchProcessor) ProcessBatch(txns []InputJob) {
+	batchVerifier, ctx := tbp.preProcessUnverifiedTxns(txns)
 	failed, err := batchVerifier.VerifyWithFeedback()
 	// this error can only be crypto.ErrBatchHasFailedSigs
 	tbp.postProcessVerifiedJobs(ctx, failed, err)
 }
 
-func (tbp *txnSigBatchProcessor) preProcessUnverifiedElements(uelts []InputJob) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
+func (tbp *txnSigBatchProcessor) preProcessUnverifiedTxns(uTxns []InputJob) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
 	batchVerifier = crypto.MakeBatchVerifier()
-	bl := makeBatchLoad(len(uelts))
+	bl := makeBatchLoad(len(uTxns))
 	// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
 	blockHeader := tbp.nbw.getBlockHeader()
 
-	for _, uelt := range uelts {
-		ue := uelt.(*UnverifiedTxnSigJob)
-		groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, blockHeader, tbp.ledger, batchVerifier, nil)
+	for _, uTxn := range uTxns {
+		ut := uTxn.(*UnverifiedTxnSigJob)
+		groupCtx, err := txnGroupBatchPrep(ut.TxnGroup, blockHeader, tbp.ledger, batchVerifier, nil)
 		if err != nil {
 			// verification failed, no need to add the sig to the batch, report the error
-			tbp.sendResult(ue.TxnGroup, ue.BacklogMessage, err)
+			tbp.sendResult(ut.TxnGroup, ut.BacklogMessage, err)
 			continue
 		}
 		totalBatchCount := batchVerifier.GetNumberOfEnqueuedSignatures()
-		bl.addLoad(ue.TxnGroup, groupCtx, ue.BacklogMessage, totalBatchCount)
+		bl.addLoad(ut.TxnGroup, groupCtx, ut.BacklogMessage, totalBatchCount)
 	}
 	return batchVerifier, bl
 }
