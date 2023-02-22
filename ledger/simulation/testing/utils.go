@@ -124,7 +124,7 @@ func PrepareSimulatorTest(t *testing.T) (l *data.Ledger, accounts []Account, txn
 
 		// round has advanced by 1
 		require.Equal(t, latest+1, l.Latest())
-		latest += 1
+		latest++
 
 		latestHeader = nextBlock.BlockHeader
 	}
