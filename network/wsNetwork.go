@@ -2455,12 +2455,10 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 }
 
 func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
-	// guard against peers which are already closing
-	select {
-	case <-peer.closing:
-		wn.log.Errorf("peer already closing %#v", peer)
+	// guard against peers which are closed or closing
+	if atomic.LoadInt32(&peer.didSignalClose) == 1 {
+		wn.log.Debugf("peer closing %s", peer.conn.RemoteAddr().String())
 		return
-	default:
 	}
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
