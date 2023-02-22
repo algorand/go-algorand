@@ -19,6 +19,7 @@ package simulationtesting
 import (
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -111,6 +112,8 @@ func PrepareSimulatorTest(t *testing.T) (l *data.Ledger, accounts []Account, txn
 	latest := l.Latest()
 	latestHeader, err := l.BlockHdr(latest)
 	require.NoError(t, err)
+
+	rand.Seed(time.Now().UnixNano())
 
 	// append a random number of blocks to ensure simulation results have a valid LastRound field
 	numBlocks := rand.Intn(4)
