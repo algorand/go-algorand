@@ -17,8 +17,10 @@
 package simulationtesting
 
 import (
+	"math/rand"
 	"testing"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
@@ -43,6 +45,11 @@ type Account struct {
 // TxnInfo contains information about the network used for instantiating txntest.Txns
 type TxnInfo struct {
 	LatestHeader bookkeeping.BlockHeader
+}
+
+// LatestRound returns the round number of the most recently committed block
+func (info TxnInfo) LatestRound() basics.Round {
+	return info.LatestHeader.Round
 }
 
 // CurrentProtocolParams returns the consensus parameters that the network is currently using
@@ -101,9 +108,25 @@ func PrepareSimulatorTest(t *testing.T) (l *data.Ledger, accounts []Account, txn
 		i++
 	}
 
-	hdr, err := l.BlockHdr(l.Latest())
+	latest := l.Latest()
+	latestHeader, err := l.BlockHdr(latest)
 	require.NoError(t, err)
-	txnInfo = TxnInfo{hdr}
+
+	// append a random number of blocks to ensure simulation results have a valid LastRound field
+	numBlocks := rand.Intn(4)
+	for i := 0; i < numBlocks; i++ {
+		nextBlock := bookkeeping.MakeBlock(latestHeader)
+		err = l.AddBlock(nextBlock, agreement.Certificate{})
+		require.NoError(t, err)
+
+		// round has advanced by 1
+		require.Equal(t, latest+1, l.Latest())
+		latest += 1
+
+		latestHeader = nextBlock.BlockHeader
+	}
+
+	txnInfo = TxnInfo{latestHeader}
 
 	return
 }

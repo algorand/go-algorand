@@ -207,7 +207,8 @@ func TestPayTxn(t *testing.T) {
 					return simulationTestCase{
 						input: []transactions.SignedTxn{txn},
 						expected: simulation.Result{
-							Version: 1,
+							Version:   1,
+							LastRound: txnInfo.LatestRound(),
 							TxnGroups: []simulation.TxnGroupResult{
 								{
 									Txns: []simulation.TxnResult{
@@ -255,7 +256,8 @@ func TestPayTxn(t *testing.T) {
 					return simulationTestCase{
 						input: []transactions.SignedTxn{txn},
 						expected: simulation.Result{
-							Version: 1,
+							Version:   1,
+							LastRound: txnInfo.LatestRound(),
 							TxnGroups: []simulation.TxnGroupResult{
 								{
 									Txns: []simulation.TxnResult{
@@ -304,7 +306,8 @@ func TestPayTxn(t *testing.T) {
 						input:         []transactions.SignedTxn{txn},
 						expectedError: fmt.Sprintf("tried to spend {%d}", amount),
 						expected: simulation.Result{
-							Version: 1,
+							Version:   1,
+							LastRound: txnInfo.LatestRound(),
 							TxnGroups: []simulation.TxnGroupResult{
 								{
 									Txns: []simulation.TxnResult{
@@ -355,7 +358,8 @@ func TestWrongAuthorizerTxn(t *testing.T) {
 					input:         []transactions.SignedTxn{stxn},
 					expectedError: fmt.Sprintf("should have been authorized by %s but was actually authorized by %s", sender.Addr, authority.Addr),
 					expected: simulation.Result{
-						Version: 1,
+						Version:   1,
+						LastRound: txnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
 								Txns: []simulation.TxnResult{
@@ -415,7 +419,8 @@ func TestRekey(t *testing.T) {
 				return simulationTestCase{
 					input: []transactions.SignedTxn{stxn1, stxn2},
 					expected: simulation.Result{
-						Version: 1,
+						Version:   1,
+						LastRound: txnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
 								Txns: []simulation.TxnResult{
@@ -604,7 +609,8 @@ int 1`,
 					input:         []transactions.SignedTxn{signedPayTxn, signedAppCallTxn},
 					expectedError: testCase.expectedError,
 					expected: simulation.Result{
-						Version: 1,
+						Version:   1,
+						LastRound: txnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
 								Txns: []simulation.TxnResult{
@@ -678,7 +684,8 @@ int 0
 				return simulationTestCase{
 					input: []transactions.SignedTxn{signedCreateTxn, signedCallTxn},
 					expected: simulation.Result{
-						Version: 1,
+						Version:   1,
+						LastRound: txnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
 								Txns: []simulation.TxnResult{
@@ -750,7 +757,8 @@ int 0
 					input:         []transactions.SignedTxn{signedCreateTxn},
 					expectedError: "transaction rejected by ApprovalProgram",
 					expected: simulation.Result{
-						Version: 1,
+						Version:   1,
+						LastRound: txnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
 								Txns: []simulation.TxnResult{
@@ -813,7 +821,8 @@ int 0
 					input:         []transactions.SignedTxn{signedCreateTxn},
 					expectedError: "err opcode executed",
 					expected: simulation.Result{
-						Version: 1,
+						Version:   1,
+						LastRound: txnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
 								Txns: []simulation.TxnResult{
@@ -993,7 +1002,8 @@ int 1`,
 						signedCheckEndingBalanceTxn,
 					},
 					expected: simulation.Result{
-						Version: 1,
+						Version:   1,
+						LastRound: txnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
 								Txns: []simulation.TxnResult{
@@ -1062,7 +1072,8 @@ func TestPartialMissingSignatures(t *testing.T) {
 		return simulationTestCase{
 			input: []transactions.SignedTxn{signedTxn1, signedTxn2},
 			expected: simulation.Result{
-				Version: 1,
+				Version:   1,
+				LastRound: txnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -1125,7 +1136,8 @@ func TestPooledFeesAcrossSignedAndUnsigned(t *testing.T) {
 		return simulationTestCase{
 			input: []transactions.SignedTxn{signedPay1, signedPay2},
 			expected: simulation.Result{
-				Version: 1,
+				Version:   1,
+				LastRound: txnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -1225,7 +1237,8 @@ int 1`,
 			input:         txgroup,
 			expectedError: "rejected by ApprovalProgram",
 			expected: simulation.Result{
-				Version: 1,
+				Version:   1,
+				LastRound: txnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -1319,7 +1332,8 @@ int 1`,
 			input:         txgroup,
 			expectedError: "rejected by ApprovalProgram",
 			expected: simulation.Result{
-				Version: 1,
+				Version:   1,
+				LastRound: txnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -1408,7 +1422,8 @@ int 1`,
 			input:         txgroup,
 			expectedError: "logic eval error: this transaction should be issued by the manager",
 			expected: simulation.Result{
-				Version: 1,
+				Version:   1,
+				LastRound: txnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -1487,7 +1502,8 @@ func TestMockTracerScenarios(t *testing.T) {
 					expectedFailedAt[0]++
 				}
 				expected := simulation.Result{
-					Version: 1,
+					Version:   1,
+					LastRound: txnInfo.LatestRound(),
 					TxnGroups: []simulation.TxnGroupResult{
 						{
 							FailedAt: expectedFailedAt,
