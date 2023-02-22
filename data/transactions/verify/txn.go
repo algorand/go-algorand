@@ -564,4 +564,3 @@ func (w *worksetBuilder) next() (txnGroups [][]transactions.SignedTxn) {
 func (w *worksetBuilder) completed() bool {
 	return w.idx >= len(w.payset)
 }
-

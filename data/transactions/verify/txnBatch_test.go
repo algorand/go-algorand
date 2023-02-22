@@ -848,3 +848,17 @@ func TestStreamToBatchCancelWhenPooled(t *testing.T) {
 	sv.WaitForStop()
 	cancel2() // not necessary, but the golint will want to see this
 }
+
+func TestGetErredUnprocessed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	droppedChan := make(chan *UnverifiedTxnSigJob, 1)
+	svh := txnSigBatchProcessor{
+		resultChan:  make(chan<- *VerificationResult, 0),
+		droppedChan: droppedChan,
+	}
+
+	svh.GetErredUnprocessed(&UnverifiedTxnSigJob{}, nil)
+	dropped := <-droppedChan
+	require.Equal(t, *dropped, UnverifiedTxnSigJob{})
+}
