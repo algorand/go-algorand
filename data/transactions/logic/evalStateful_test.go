@@ -2902,16 +2902,16 @@ app_local_put
 int 1
 `
 		ed := testApp(t, source, ep)
-		require.Len(t, ed.LocalDeltas, 1)
 		require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
-
-		require.Contains(t, ed.LocalDeltas, uint64(2))
-		sd := ed.LocalDeltas[2]
-		require.Len(t, sd, 1)
-		require.Contains(t, sd, "hey")
-		require.EqualValues(t, 42, sd["hey"].Uint)
-		require.Len(t, ed.SharedAccts, 1)
-		require.Equal(t, tx.ApplicationID.Address(), ed.SharedAccts[0])
+		require.Equal(t, map[uint64]basics.StateDelta{
+			2: {
+				"hey": {
+					Action: basics.SetUintAction,
+					Uint:   42,
+				},
+			},
+		}, ed.LocalDeltas)
+		require.Equal(t, []basics.Address{tx.ApplicationID.Address()}, ed.SharedAccts)
 
 		/* Confirm it worked. */
 		source = `
@@ -2930,16 +2930,15 @@ app_local_del
 int 1
 `
 		ed = testApp(t, source, ep)
-		require.Len(t, ed.LocalDeltas, 1)
 		require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
-
-		require.Contains(t, ed.LocalDeltas, uint64(2))
-		sd = ed.LocalDeltas[2]
-		require.Len(t, sd, 1)
-		require.Contains(t, sd, "hey")
-		require.EqualValues(t, basics.DeleteAction, sd["hey"].Action)
-		require.Len(t, ed.SharedAccts, 1)
-		require.Equal(t, tx.ApplicationID.Address(), ed.SharedAccts[0])
+		require.Equal(t, map[uint64]basics.StateDelta{
+			2: {
+				"hey": {
+					Action: basics.DeleteAction,
+				},
+			},
+		}, ed.LocalDeltas)
+		require.Equal(t, []basics.Address{tx.ApplicationID.Address()}, ed.SharedAccts)
 
 		// Now, repeat the "put" test with multiple keys, to ensure only one address is added to SharedAccts
 		source = `
@@ -2954,17 +2953,20 @@ app_local_put
 int 1
 `
 		ed = testApp(t, source, ep)
-		require.Len(t, ed.LocalDeltas, 1)
 		require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
+		require.Equal(t, map[uint64]basics.StateDelta{
+			2: {
+				"hey": {
+					Action: basics.SetUintAction,
+					Uint:   42,
+				},
+				"joe": {
+					Action: basics.SetUintAction,
+					Uint:   21,
+				},
+			},
+		}, ed.LocalDeltas)
 
-		require.Contains(t, ed.LocalDeltas, uint64(2))
-		sd = ed.LocalDeltas[2]
-		require.Len(t, sd, 2)
-		require.Contains(t, sd, "hey")
-		require.EqualValues(t, 42, sd["hey"].Uint)
-		require.Contains(t, sd, "joe")
-		require.EqualValues(t, 21, sd["joe"].Uint)
-		require.Len(t, ed.SharedAccts, 1)
-		require.Equal(t, tx.ApplicationID.Address(), ed.SharedAccts[0])
+		require.Equal(t, []basics.Address{tx.ApplicationID.Address()}, ed.SharedAccts)
 	})
 }

@@ -72,7 +72,9 @@ update = goal.app_call(joe, app_id,
 update_info, err = goal.send(update)
 assert not err, err
 
-# Won't work this time, because v8 program
+# Works now, because a v9 program is allowed to modify a "non-local"
+# account. Under the covers, the txn gets a "SharedAccts" array, and
+# the index points there.  But the REST API hides that.
 grp1 = goal.app_call(goal.account, app_id,
                      on_complete=txn.OnComplete.OptInOC,
                      app_args=[enc.decode_address(goal.account), 60])

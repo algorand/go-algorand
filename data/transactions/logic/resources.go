@@ -34,10 +34,10 @@ type resources struct {
 	createdAsas []basics.AssetIndex
 	createdApps []basics.AppIndex
 
-	// These resources have been mentioned by some txn in the group, so they are
-	// available. But only their "main" data is available. For example, if an
-	// account is mentioned, its algo balance is available, but not necessarily
-	// its asset balance for any old ASA.
+	// These resources have been used by some txn in the group, so they are
+	// available. These maps track the availability of the basic objects (often
+	// called "params"), not the "cross-product" objects (which are tracked
+	// below)
 	sharedAccounts map[basics.Address]struct{}
 	sharedAsas     map[basics.AssetIndex]struct{}
 	sharedApps     map[basics.AppIndex]struct{}
@@ -92,6 +92,9 @@ func (r *resources) fill(tx *transactions.Transaction, ep *EvalParams) {
 		r.fillAssetFreeze(&tx.Header, &tx.AssetFreezeTxnFields)
 	case protocol.ApplicationCallTx:
 		r.fillApplicationCall(ep, &tx.Header, &tx.ApplicationCallTxnFields)
+	case protocol.StateProofTx:
+		// state proof txns add nothing to availability (they can't even appear
+		// in a group with an appl. but still.)
 	default:
 		panic(tx.Type)
 	}

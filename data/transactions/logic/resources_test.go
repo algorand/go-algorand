@@ -148,7 +148,7 @@ int 1
 }
 
 // TestBetterLocalErrors confirms that we get specific errors about the missing
-// address or app when accessesing a Local State with only one available.
+// address or app when accessing a Local State with only one available.
 func TestBetterLocalErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -332,6 +332,10 @@ func TestOtherTxSharing(t *testing.T) {
 	ledger.NewAccount(otherAcct, 2003)
 	otherBalance := "txn ApplicationArgs 0; balance; int 2003; =="
 
+	other2Acct := basics.Address{1, 2, 3, 4, 5, 6, 4}
+	ledger.NewAccount(other2Acct, 2004)
+	other2Balance := "txn ApplicationArgs 0; balance; int 2004; =="
+
 	appl := txntest.Txn{
 		Type:            protocol.ApplicationCallTx,
 		Sender:          basics.Address{5, 5, 5, 5}, // different from all other accounts used
@@ -433,16 +437,29 @@ func TestOtherTxSharing(t *testing.T) {
 		appl.ApplicationArgs = [][]byte{otherAcct[:]}
 		logic.TestApps(t, []string{"", otherBalance}, txntest.Group(&axfer, &appl), 9, ledger)
 
+		// sender holding is available
+		appl.ApplicationArgs = [][]byte{senderAcct[:], {byte(axfer.XferAsset)}}
+		logic.TestApps(t, []string{"", holdingAccess}, txntest.Group(&axfer, &appl), 9, ledger)
+
 		// receiver holding is available
 		appl.ApplicationArgs = [][]byte{receiverAcct[:], {byte(axfer.XferAsset)}}
 		logic.TestApps(t, []string{"", holdingAccess}, txntest.Group(&axfer, &appl), 9, ledger)
 
-		// The other account becomes accessible because used in CloseRemainderTo
-		// (for asa and algo)
-		withClose := axfer
-		withClose.AssetCloseTo = otherAcct
+		// asset sender (other) account is available
 		appl.ApplicationArgs = [][]byte{otherAcct[:], {byte(axfer.XferAsset)}}
-		logic.TestApps(t, []string{"", otherBalance}, txntest.Group(&withClose, &appl), 9, ledger)
+		logic.TestApps(t, []string{"", holdingAccess}, txntest.Group(&axfer, &appl), 9, ledger)
+
+		// AssetCloseTo holding becomes available when set
+		appl.ApplicationArgs = [][]byte{other2Acct[:], {byte(axfer.XferAsset)}}
+		logic.TestApps(t, []string{"", other2Balance}, txntest.Group(&axfer, &appl), 9, ledger,
+			logic.NewExpect(1, "invalid Account reference "+other2Acct.String()))
+		logic.TestApps(t, []string{"", holdingAccess}, txntest.Group(&axfer, &appl), 9, ledger,
+			logic.NewExpect(1, "invalid Account reference "+other2Acct.String()))
+
+		withClose := axfer
+		withClose.AssetCloseTo = other2Acct
+		appl.ApplicationArgs = [][]byte{other2Acct[:], {byte(axfer.XferAsset)}}
+		logic.TestApps(t, []string{"", other2Balance}, txntest.Group(&withClose, &appl), 9, ledger)
 		logic.TestApps(t, []string{"", holdingAccess}, txntest.Group(&withClose, &appl), 9, ledger)
 	})
 
@@ -451,6 +468,12 @@ func TestOtherTxSharing(t *testing.T) {
 		appl.ApplicationArgs = [][]byte{otherAcct[:], {byte(afrz.FreezeAsset)}}
 		logic.TestApps(t, []string{"", otherBalance}, txntest.Group(&afrz, &appl), 9, ledger)
 		logic.TestApps(t, []string{"", holdingAccess}, txntest.Group(&afrz, &appl), 9, ledger)
+
+		// The sender holding is _not_ (because the freezeaccount's holding is irrelevant to afrz)
+		appl.ApplicationArgs = [][]byte{senderAcct[:], {byte(afrz.FreezeAsset)}}
+		logic.TestApps(t, []string{"", senderBalance}, txntest.Group(&afrz, &appl), 9, ledger)
+		logic.TestApps(t, []string{"", holdingAccess}, txntest.Group(&afrz, &appl), 9, ledger,
+			logic.NewExpect(1, "invalid Holding access "+senderAcct.String()))
 	})
 }
 

@@ -211,16 +211,17 @@ _available_.
    resources available to group-level resource sharing. The following
    resources are made available other transaction types.
 
-     1. `pay` - `txn.Sender`, `txn.Receiver`, and `txn.CloseRemainderTo`
+     1. `pay` - `txn.Sender`, `txn.Receiver`, and
+        `txn.CloseRemainderTo` (if set)
 
      1. `keyreg` - `txn.Sender`
 
      1. `acfg` - `txn.Sender`, `txn.ConfigAsset`, and the
         `txn.ConfigAsset` holding of `txn.Sender`.
 
-     1. `axfer` - `txn.Sender`, `txn.AssetSender`, `txnAssetCloseTo`,
-        `txn.XferAsset` and the `txn.XferAsset` holding of each of
-        those accounts.
+     1. `axfer` - `txn.Sender`, `txn.AssetReceiver`, `txn.AssetSender`
+        (if set), `txnAssetCloseTo` (if set), `txn.XferAsset` and the
+        `txn.XferAsset` holding of each of those accounts.
 
      1. `afrz` - `txn.Sender`, `txn.FreezeAccount`, `txn.FreezeAsset`,
         and the `txn.FreezeAsset` holding of `txn.FreezeAccount`. The
