@@ -449,7 +449,7 @@ func printStateProofVerificationContext(databaseName string, stagingTables bool,
 
 	var stateProofVerificationContext []ledgercore.StateProofVerificationContext
 	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		if stagingTables == true {
+		if stagingTables {
 			stateProofVerificationContext, err = store.MakeStateProofVerificationReader(tx).GetAllSPContextsFromCatchpointTbl(ctx)
 		} else {
 			stateProofVerificationContext, err = store.MakeStateProofVerificationReader(tx).GetAllSPContexts(ctx)
