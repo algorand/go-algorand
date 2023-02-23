@@ -295,6 +295,8 @@ func (b *builder) insertSig(s *pendingSig, verify bool) error {
 }
 
 func (spw *Worker) handleSigMessage(msg network.IncomingMessage) network.OutgoingMessage {
+	spw.networkMu.Lock()
+	defer spw.networkMu.Unlock()
 	var ssig sigFromAddr
 	err := protocol.Decode(msg.Data, &ssig)
 	if err != nil {
