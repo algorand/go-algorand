@@ -116,8 +116,8 @@ type LedgerForStreamVerifier interface {
 func (tbp *txnSigBatchProcessor) Cleanup(pending []InputJob, err error) {
 	// report an error for the unchecked txns
 	// drop the messages without reporting if the receiver does not consume
-	for _, ue := range pending {
-		uelt := ue.(*UnverifiedTxnSigJob)
+	for i := range pending {
+		uelt := pending[i].(*UnverifiedTxnSigJob)
 		tbp.sendResult(uelt.TxnGroup, uelt.BacklogMessage, err)
 	}
 }
