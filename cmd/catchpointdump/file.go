@@ -135,7 +135,7 @@ var fileCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("Unable to print key value store : %v", err)
 			}
-			err = printStateProofVerificationContext("./ledger.tracker.sqlite", outFile)
+			err = printStateProofVerificationContext("./ledger.tracker.sqlite", true, outFile)
 			if err != nil {
 				reportErrorf("Unable to print state proof verification database : %v", err)
 			}
@@ -437,7 +437,7 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 	})
 }
 
-func printStateProofVerificationContext(databaseName string, outFile *os.File) error {
+func printStateProofVerificationContext(databaseName string, stagingTables bool, outFile *os.File) error {
 	fileWriter := bufio.NewWriterSize(outFile, 1024*1024)
 	defer fileWriter.Flush()
 
@@ -449,7 +449,11 @@ func printStateProofVerificationContext(databaseName string, outFile *os.File) e
 
 	var stateProofVerificationContext []ledgercore.StateProofVerificationContext
 	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		stateProofVerificationContext, err = store.MakeStateProofVerificationReader(tx).GetAllSPContextsFromCatchpointTbl(ctx)
+		if stagingTables == true {
+			stateProofVerificationContext, err = store.MakeStateProofVerificationReader(tx).GetAllSPContextsFromCatchpointTbl(ctx)
+		} else {
+			stateProofVerificationContext, err = store.MakeStateProofVerificationReader(tx).GetAllSPContexts(ctx)
+		}
 		return err
 	})
 
