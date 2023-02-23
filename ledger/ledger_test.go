@@ -3275,11 +3275,11 @@ func feedBlocksUntilRound(t *testing.T, l *Ledger, prevBlk bookkeeping.Block, ta
 
 func TestLedgerCatchpointSPVerificationTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto := config.Consensus[protocol.ConsensusFuture]
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState, initkeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
-	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
+	genesisInitState, initkeys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 100)
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true

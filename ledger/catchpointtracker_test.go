@@ -1501,7 +1501,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 		t.Skip("This test is too slow on ARM and causes CI builds to time out")
 	}
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto := config.Consensus[protocol.ConsensusFuture]
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 	addSinkAndPoolAccounts(accts)
@@ -1511,7 +1511,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 	conf.CatchpointInterval = 1
 	conf.CatchpointTracking = 1
 	initialBlocksCount := int(conf.MaxAcctLookback)
-	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusFuture, accts)
 	defer ml.Close()
 
 	ct := newCatchpointTracker(t, ml, conf, ".")
@@ -1560,7 +1560,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 			},
 		}
 		blk.RewardsLevel = rewardLevel
-		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
+		blk.CurrentProtocol = protocol.ConsensusFuture
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
