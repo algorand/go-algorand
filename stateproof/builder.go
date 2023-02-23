@@ -84,6 +84,9 @@ func (spw *Worker) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Rou
 			continue
 		}
 
+		// At this point, there is a possibility that the signer has already created this specific builder
+		// (signer created  the builder after builderExistInDB was called and was fast enough to persist it).
+		// In this case we will rewrite the new builder
 		err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
 			return persistBuilder(tx, rnd, &buildr)
 		})
