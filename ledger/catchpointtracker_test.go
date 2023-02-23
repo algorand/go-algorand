@@ -42,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -312,8 +313,9 @@ func TestRecordCatchpointFile(t *testing.T) {
 	for _, round := range []basics.Round{2000000, 3000010, 3000015, 3000020} {
 		accountsRound := round - 1
 
+		var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
 		_, _, _, biggestChunkLen, stateProofVerificationHash, err := ct.generateCatchpointData(
-			context.Background(), accountsRound, time.Second)
+			context.Background(), accountsRound, &catchpointGenerationStats)
 		require.NoError(t, err)
 
 		require.Equal(t, calculateStateProofVerificationHash(t, ml), stateProofVerificationHash)
@@ -386,8 +388,9 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	})
 	require.NoError(b, err)
 
+	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
 	b.ResetTimer()
-	ct.generateCatchpointData(context.Background(), basics.Round(0), time.Second)
+	ct.generateCatchpointData(context.Background(), basics.Round(0), &catchpointGenerationStats)
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "accounts")
 }

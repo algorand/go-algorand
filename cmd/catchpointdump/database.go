@@ -110,8 +110,8 @@ func getVersion(filename string, staging bool) (uint64, error) {
 	var version uint64
 	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		if staging {
-			// writting the version of the catchpoint file start only on ver >= CatchpointFileVersionV7.
-			// in case the catchpoint version does not exsists ReadCatchpointStateUint64 returns 0
+			// writing the version of the catchpoint file start only on ver >= CatchpointFileVersionV7.
+			// in case the catchpoint version does not exists ReadCatchpointStateUint64 returns 0
 			cw := store.NewCatchpointSQLReaderWriter(tx)
 			version, err = cw.ReadCatchpointStateUint64(ctx, store.CatchpointStateCatchupVersion)
 			return err
