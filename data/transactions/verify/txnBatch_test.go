@@ -450,6 +450,8 @@ func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not 
 	}
 	require.Contains(t, logBuffer.String(), "addBatchToThePoolNow: EnqueueBacklog returned an error and StreamToBatch will stop: context canceled")
 	wg.Wait()
+
+	verifyResults(txnGroups, badTxnGroups, cache, badSigResultCounter, goodSigResultCounter, t)
 }
 
 // TestStreamToBatchRestart tests what happens when the context is canceled
@@ -512,6 +514,8 @@ func TestStreamToBatchRestart(t *testing.T) {
 	wg.Wait()
 	sv.WaitForStop()
 	cancel2() // not necessary, but the golint will want to see this
+
+	verifyResults(txnGroups, badTxnGroups, cache, badSigResultCounter, goodSigResultCounter, t)
 }
 
 // TestBlockWatcher runs multiple goroutines to check the concurency and correctness of the block watcher
@@ -850,6 +854,8 @@ func TestStreamToBatchCancelWhenPooled(t *testing.T) {
 	wg.Wait()
 	sv.WaitForStop()
 	cancel2() // not necessary, but the golint will want to see this
+
+	verifyResults(txnGroups, badTxnGroups, cache, badSigResultCounter, goodSigResultCounter, t)
 }
 
 func TestGetErredUnprocessed(t *testing.T) {
