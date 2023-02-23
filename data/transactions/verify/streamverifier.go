@@ -20,219 +20,128 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"sync/atomic"
 	"time"
 
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
+// ErrShuttingDownError is the error returned when a job is not processed because the service is shutting down
+var ErrShuttingDownError = errors.New("not processed, execpool service is shutting down")
+
+// waitForNextJobDuration is the time to wait before sending the batch to the exec pool
+// If the incoming rate is low, an input job in the batch may wait no less than
+// waitForNextJobDuration before it is sent for processing.
+// This can introduce a latency to the propagation in the network (e.g. sigs in txn or vote),
+// since every relay will go through this wait time before broadcasting the result.
+// However, when the incoming rate is high, the batch will fill up quickly and will send
+// for processing before waitForNextJobDuration.
+const waitForNextJobDuration = 2 * time.Millisecond
+
 // batchSizeBlockLimit is the limit when the batch exceeds, will be added to the exec pool, even if the pool is saturated
-// and the batch verifier will block until the exec pool accepts the batch
+// and the stream  will be blocked until the exec pool accepts the batch
 const batchSizeBlockLimit = 1024
 
-// waitForNextTxnDuration is the time to wait before sending the batch to the exec pool
-// If the incoming txn rate is low, a txn in the batch may  wait no less than
-// waitForNextTxnDuration before it is set for verification.
-// This can introduce a latency to the propagation of a transaction in the network,
-// since every relay will go through this wait time before broadcasting the txn.
-// However, when the incoming txn rate is high, the batch will fill up quickly and will send
-// for signature evaluation before waitForNextTxnDuration.
-const waitForNextTxnDuration = 2 * time.Millisecond
-
-// UnverifiedElement is the element passed to the Stream verifier
-// BacklogMessage is a *txBacklogMsg from data/txHandler.go which needs to be
-// passed back to that context
-type UnverifiedElement struct {
-	TxnGroup       []transactions.SignedTxn
-	BacklogMessage interface{}
+// InputJob is the interface the incoming jobs need to implement
+type InputJob interface {
+	GetNumberOfBatchableItems() (count uint64, err error)
 }
 
-// VerificationResult is the result of the txn group verification
-// BacklogMessage is the reference associated with the txn group which was
-// initially passed to the stream verifier
-type VerificationResult struct {
-	TxnGroup       []transactions.SignedTxn
-	BacklogMessage interface{}
-	Err            error
+// BatchProcessor is the interface of the functions needed to prepare a batch from the stream,
+// process and return the results
+type BatchProcessor interface {
+	// ProcessBatch processes a batch packed from the stream in the execpool
+	ProcessBatch(jobs []InputJob)
+	// GetErredUnprocessed returns an unprocessed jobs because of an err
+	GetErredUnprocessed(ue InputJob, err error)
+	// Cleanup called on the unprocessed jobs when the service shuts down
+	Cleanup(ue []InputJob, err error)
 }
 
-// StreamVerifier verifies txn groups received through the stxnChan channel, and returns the
-// results through the resultChan
-type StreamVerifier struct {
-	resultChan       chan<- *VerificationResult
-	droppedChan      chan<- *UnverifiedElement
-	stxnChan         <-chan *UnverifiedElement
-	verificationPool execpool.BacklogPool
-	ctx              context.Context
-	cache            VerifiedTransactionCache
-	activeLoopWg     sync.WaitGroup
-	nbw              *NewBlockWatcher
-	ledger           logic.LedgerForSignature
+// StreamToBatch makes batches from incoming stream of jobs, and submits the batches to the exec pool
+type StreamToBatch struct {
+	inputChan      <-chan InputJob
+	executionPool  execpool.BacklogPool
+	ctx            context.Context
+	activeLoopWg   sync.WaitGroup
+	batchProcessor BatchProcessor
 }
 
-// NewBlockWatcher is a struct used to provide a new block header to the
-// stream verifier
-type NewBlockWatcher struct {
-	blkHeader atomic.Value
-}
+// MakeStreamToBatch creates a new stream to batch converter
+func MakeStreamToBatch(inputChan <-chan InputJob, execPool execpool.BacklogPool,
+	batchProcessor BatchProcessor) *StreamToBatch {
 
-// MakeNewBlockWatcher construct a new block watcher with the initial blkHdr
-func MakeNewBlockWatcher(blkHdr bookkeeping.BlockHeader) (nbw *NewBlockWatcher) {
-	nbw = &NewBlockWatcher{}
-	nbw.blkHeader.Store(&blkHdr)
-	return nbw
-}
-
-// OnNewBlock implements the interface to subscribe to new block notifications from the ledger
-func (nbw *NewBlockWatcher) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
-	bh := nbw.blkHeader.Load().(*bookkeeping.BlockHeader)
-	if bh.Round >= block.BlockHeader.Round {
-		return
+	return &StreamToBatch{
+		inputChan:      inputChan,
+		executionPool:  execPool,
+		batchProcessor: batchProcessor,
 	}
-	nbw.blkHeader.Store(&block.BlockHeader)
 }
 
-func (nbw *NewBlockWatcher) getBlockHeader() (bh *bookkeeping.BlockHeader) {
-	return nbw.blkHeader.Load().(*bookkeeping.BlockHeader)
-}
-
-type batchLoad struct {
-	txnGroups             [][]transactions.SignedTxn
-	groupCtxs             []*GroupContext
-	elementBacklogMessage []interface{}
-	messagesForTxn        []int
-}
-
-func makeBatchLoad(l int) (bl batchLoad) {
-	bl.txnGroups = make([][]transactions.SignedTxn, 0, l)
-	bl.groupCtxs = make([]*GroupContext, 0, l)
-	bl.elementBacklogMessage = make([]interface{}, 0, l)
-	bl.messagesForTxn = make([]int, 0, l)
-	return bl
-}
-
-func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext, backlogMsg interface{}, numBatchableSigs int) {
-	bl.txnGroups = append(bl.txnGroups, txngrp)
-	bl.groupCtxs = append(bl.groupCtxs, gctx)
-	bl.elementBacklogMessage = append(bl.elementBacklogMessage, backlogMsg)
-	bl.messagesForTxn = append(bl.messagesForTxn, numBatchableSigs)
-
-}
-
-// LedgerForStreamVerifier defines the ledger methods used by the StreamVerifier.
-type LedgerForStreamVerifier interface {
-	logic.LedgerForSignature
-	RegisterBlockListeners([]ledgercore.BlockListener)
-	Latest() basics.Round
-	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
-}
-
-// MakeStreamVerifier creates a new stream verifier and returns the chans used to send txn groups
-// to it and obtain the txn signature verification result from
-func MakeStreamVerifier(stxnChan <-chan *UnverifiedElement, resultChan chan<- *VerificationResult,
-	droppedChan chan<- *UnverifiedElement, ledger LedgerForStreamVerifier,
-	verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (*StreamVerifier, error) {
-
-	latest := ledger.Latest()
-	latestHdr, err := ledger.BlockHdr(latest)
-	if err != nil {
-		return nil, errors.New("MakeStreamVerifier: Could not get header for previous block")
-	}
-
-	nbw := MakeNewBlockWatcher(latestHdr)
-	ledger.RegisterBlockListeners([]ledgercore.BlockListener{nbw})
-
-	return &StreamVerifier{
-		resultChan:       resultChan,
-		stxnChan:         stxnChan,
-		droppedChan:      droppedChan,
-		verificationPool: verificationPool,
-		cache:            cache,
-		nbw:              nbw,
-		ledger:           ledger,
-	}, nil
-}
-
-// Start is called when the verifier is created and whenever it needs to restart after
+// Start is called when the StreamToBatch is created and whenever it needs to restart after
 // the ctx is canceled
-func (sv *StreamVerifier) Start(ctx context.Context) {
+func (sv *StreamToBatch) Start(ctx context.Context) {
 	sv.ctx = ctx
 	sv.activeLoopWg.Add(1)
 	go sv.batchingLoop()
 }
 
 // WaitForStop waits until the batching loop terminates afer the ctx is canceled
-func (sv *StreamVerifier) WaitForStop() {
+func (sv *StreamToBatch) WaitForStop() {
 	sv.activeLoopWg.Wait()
 }
 
-func (sv *StreamVerifier) cleanup(pending []*UnverifiedElement) {
-	// report an error for the unchecked txns
-	// drop the messages without reporting if the receiver does not consume
-	for _, uel := range pending {
-		sv.sendResult(uel.TxnGroup, uel.BacklogMessage, errShuttingDownError)
-	}
-}
-
-func (sv *StreamVerifier) batchingLoop() {
+func (sv *StreamToBatch) batchingLoop() {
 	defer sv.activeLoopWg.Done()
-	timer := time.NewTicker(waitForNextTxnDuration)
+	timer := time.NewTicker(waitForNextJobDuration)
 	defer timer.Stop()
 	var added bool
-	var numberOfSigsInCurrent uint64
+	var numberOfJobsInCurrent uint64
 	var numberOfBatchAttempts uint64
-	ue := make([]*UnverifiedElement, 0, 8)
-	defer func() { sv.cleanup(ue) }()
+	uJobs := make([]InputJob, 0, 8)
+	defer func() { sv.batchProcessor.Cleanup(uJobs, ErrShuttingDownError) }()
 	for {
 		select {
-		case stx := <-sv.stxnChan:
-			numberOfBatchableSigsInGroup, err := getNumberOfBatchableSigsInGroup(stx.TxnGroup)
+		case job := <-sv.inputChan:
+			numberOfBatchable, err := job.GetNumberOfBatchableItems()
 			if err != nil {
-				// wrong number of signatures
-				sv.sendResult(stx.TxnGroup, stx.BacklogMessage, err)
+				sv.batchProcessor.GetErredUnprocessed(job, err)
 				continue
 			}
 
-			// if no batchable signatures here, send this as a task of its own
-			if numberOfBatchableSigsInGroup == 0 {
-				err := sv.addVerificationTaskToThePoolNow([]*UnverifiedElement{stx})
+			// if no batchable items here, send this as a task of its own
+			if numberOfBatchable == 0 {
+				err := sv.addBatchToThePoolNow([]InputJob{job})
 				if err != nil {
 					return
 				}
-				continue // stx is handled, continue
+				continue // job is handled, continue
 			}
 
-			// add this txngrp to the list of batchable txn groups
-			numberOfSigsInCurrent = numberOfSigsInCurrent + numberOfBatchableSigsInGroup
-			ue = append(ue, stx)
-			if numberOfSigsInCurrent > txnPerWorksetThreshold {
-				// enough transaction in the batch to efficiently verify
+			// add this job to the list of batchable jobs
+			numberOfJobsInCurrent = numberOfJobsInCurrent + numberOfBatchable
+			uJobs = append(uJobs, job)
+			if numberOfJobsInCurrent > txnPerWorksetThreshold {
+				// enough jobs in the batch to efficiently process
 
-				if numberOfSigsInCurrent > batchSizeBlockLimit {
-					// do not consider adding more txns to this batch.
+				if numberOfJobsInCurrent > batchSizeBlockLimit {
+					// do not consider adding more jobs to this batch.
 					// bypass the exec pool situation and queue anyway
 					// this is to prevent creation of very large batches
-					err := sv.addVerificationTaskToThePoolNow(ue)
+					err := sv.addBatchToThePoolNow(uJobs)
 					if err != nil {
 						return
 					}
 					added = true
 				} else {
-					added, err = sv.tryAddVerificationTaskToThePool(ue)
+					added, err = sv.tryAddBatchToThePool(uJobs)
 					if err != nil {
 						return
 					}
 				}
 				if added {
-					numberOfSigsInCurrent = 0
-					ue = make([]*UnverifiedElement, 0, 8)
+					numberOfJobsInCurrent = 0
+					uJobs = make([]InputJob, 0, 8)
 					numberOfBatchAttempts = 0
 				} else {
 					// was not added because of the exec pool buffer length
@@ -241,29 +150,29 @@ func (sv *StreamVerifier) batchingLoop() {
 			}
 		case <-timer.C:
 			// timer ticked. it is time to send the batch even if it is not full
-			if numberOfSigsInCurrent == 0 {
+			if numberOfJobsInCurrent == 0 {
 				// nothing batched yet... wait some more
 				continue
 			}
 			var err error
 			if numberOfBatchAttempts > 1 {
 				// bypass the exec pool situation and queue anyway
-				// this is to prevent long delays in transaction propagation
-				// at least one transaction here has waited 3 x waitForNextTxnDuration
-				err = sv.addVerificationTaskToThePoolNow(ue)
+				// this is to prevent long delays in the propagation (sigs txn/vote)
+				// at least one job has waited 3 x waitForNextJobDuration
+				err = sv.addBatchToThePoolNow(uJobs)
 				added = true
 			} else {
-				added, err = sv.tryAddVerificationTaskToThePool(ue)
+				added, err = sv.tryAddBatchToThePool(uJobs)
 			}
 			if err != nil {
 				return
 			}
 			if added {
-				numberOfSigsInCurrent = 0
-				ue = make([]*UnverifiedElement, 0, 8)
+				numberOfJobsInCurrent = 0
+				uJobs = make([]InputJob, 0, 8)
 				numberOfBatchAttempts = 0
 			} else {
-				// was not added because of the exec pool buffer length. wait for some more txns
+				// was not added because of the exec pool buffer length. wait for some more
 				numberOfBatchAttempts++
 			}
 		case <-sv.ctx.Done():
@@ -272,30 +181,16 @@ func (sv *StreamVerifier) batchingLoop() {
 	}
 }
 
-func (sv *StreamVerifier) sendResult(veTxnGroup []transactions.SignedTxn, veBacklogMessage interface{}, err error) {
-	// send the txn result out the pipe
-	select {
-	case sv.resultChan <- &VerificationResult{
-		TxnGroup:       veTxnGroup,
-		BacklogMessage: veBacklogMessage,
-		Err:            err,
-	}:
-	default:
-		// we failed to write to the output queue, since the queue was full.
-		sv.droppedChan <- &UnverifiedElement{veTxnGroup, veBacklogMessage}
-	}
-}
-
-func (sv *StreamVerifier) tryAddVerificationTaskToThePool(ue []*UnverifiedElement) (added bool, err error) {
+func (sv *StreamToBatch) tryAddBatchToThePool(uJobs []InputJob) (added bool, err error) {
 	// if the exec pool buffer is full, can go back and collect
-	// more signatures instead of waiting in the exec pool buffer
-	// more signatures to the batch do not harm performance but introduce latency when delayed (see crypto.BenchmarkBatchVerifierBig)
+	// more jobs instead of waiting in the exec pool buffer
+	// e.g. more signatures to the batch do not harm performance but introduce latency when delayed (see crypto.BenchmarkBatchVerifierBig)
 
 	// if the buffer is full
-	if l, c := sv.verificationPool.BufferSize(); l == c {
+	if l, c := sv.executionPool.BufferSize(); l == c {
 		return false, nil
 	}
-	err = sv.addVerificationTaskToThePoolNow(ue)
+	err = sv.addBatchToThePoolNow(uJobs)
 	if err != nil {
 		// An error is returned when the context of the pool expires
 		return false, err
@@ -303,119 +198,27 @@ func (sv *StreamVerifier) tryAddVerificationTaskToThePool(ue []*UnverifiedElemen
 	return true, nil
 }
 
-func (sv *StreamVerifier) addVerificationTaskToThePoolNow(ue []*UnverifiedElement) error {
+func (sv *StreamToBatch) addBatchToThePoolNow(unprocessed []InputJob) error {
 	// if the context is canceled when the task is in the queue, it should be canceled
-	// copy the ctx here so that when the StreamVerifier is started again, and a new context
+	// copy the ctx here so that when the StreamToBatch is started again, and a new context
 	// is created, this task still gets canceled due to the ctx at the time of this task
 	taskCtx := sv.ctx
 	function := func(arg interface{}) interface{} {
+		uJobs := arg.([]InputJob)
 		if taskCtx.Err() != nil {
 			// ctx is canceled. the results will be returned
-			sv.cleanup(ue)
+			sv.batchProcessor.Cleanup(uJobs, ErrShuttingDownError)
 			return nil
 		}
 
-		ue := arg.([]*UnverifiedElement)
-		batchVerifier := crypto.MakeBatchVerifier()
-
-		bl := makeBatchLoad(len(ue))
-		// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
-		blockHeader := sv.nbw.getBlockHeader()
-		for _, ue := range ue {
-			groupCtx, err := txnGroupBatchPrep(ue.TxnGroup, blockHeader, sv.ledger, batchVerifier, nil)
-			if err != nil {
-				// verification failed, no need to add the sig to the batch, report the error
-				sv.sendResult(ue.TxnGroup, ue.BacklogMessage, err)
-				continue
-			}
-			totalBatchCount := batchVerifier.GetNumberOfEnqueuedSignatures()
-			bl.addLoad(ue.TxnGroup, groupCtx, ue.BacklogMessage, totalBatchCount)
-		}
-
-		failed, err := batchVerifier.VerifyWithFeedback()
-		// this error can only be crypto.ErrBatchHasFailedSigs
-		if err == nil { // success, all signatures verified
-			for i := range bl.txnGroups {
-				sv.sendResult(bl.txnGroups[i], bl.elementBacklogMessage[i], nil)
-			}
-			sv.cache.AddPayset(bl.txnGroups, bl.groupCtxs)
-			return nil
-		}
-
-		verifiedTxnGroups := make([][]transactions.SignedTxn, 0, len(bl.txnGroups))
-		verifiedGroupCtxs := make([]*GroupContext, 0, len(bl.groupCtxs))
-		failedSigIdx := 0
-		for txgIdx := range bl.txnGroups {
-			txGroupSigFailed := false
-			for failedSigIdx < bl.messagesForTxn[txgIdx] {
-				if failed[failedSigIdx] {
-					// if there is a failed sig check, then no need to check the rest of the
-					// sigs for this txnGroup
-					failedSigIdx = bl.messagesForTxn[txgIdx]
-					txGroupSigFailed = true
-				} else {
-					// proceed to check the next sig belonging to this txnGroup
-					failedSigIdx++
-				}
-			}
-			var result error
-			if !txGroupSigFailed {
-				verifiedTxnGroups = append(verifiedTxnGroups, bl.txnGroups[txgIdx])
-				verifiedGroupCtxs = append(verifiedGroupCtxs, bl.groupCtxs[txgIdx])
-			} else {
-				result = err
-			}
-			sv.sendResult(bl.txnGroups[txgIdx], bl.elementBacklogMessage[txgIdx], result)
-		}
-		// loading them all at once by locking the cache once
-		sv.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
+		sv.batchProcessor.ProcessBatch(uJobs)
 		return nil
 	}
 
 	// EnqueueBacklog returns an error when the context is canceled
-	err := sv.verificationPool.EnqueueBacklog(sv.ctx, function, ue, nil)
+	err := sv.executionPool.EnqueueBacklog(sv.ctx, function, unprocessed, nil)
 	if err != nil {
-		logging.Base().Infof("addVerificationTaskToThePoolNow: EnqueueBacklog returned an error and StreamVerifier will stop: %v", err)
+		logging.Base().Infof("addBatchToThePoolNow: EnqueueBacklog returned an error and StreamToBatch will stop: %v", err)
 	}
 	return err
-}
-
-func getNumberOfBatchableSigsInGroup(stxs []transactions.SignedTxn) (batchSigs uint64, err error) {
-	batchSigs = 0
-	for i := range stxs {
-		count, err := getNumberOfBatchableSigsInTxn(&stxs[i])
-		if err != nil {
-			return 0, err
-		}
-		batchSigs = batchSigs + count
-	}
-	return
-}
-
-func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (uint64, error) {
-	sigType, err := checkTxnSigTypeCounts(stx)
-	if err != nil {
-		return 0, err
-	}
-	switch sigType {
-	case regularSig:
-		return 1, nil
-	case multiSig:
-		sig := stx.Msig
-		batchSigs := uint64(0)
-		for _, subsigi := range sig.Subsigs {
-			if (subsigi.Sig != crypto.Signature{}) {
-				batchSigs++
-			}
-		}
-		return batchSigs, nil
-	case logicSig:
-		// Currently the sigs in here are not batched. Something to consider later.
-		return 0, nil
-	case stateProofTxn:
-		return 0, nil
-	default:
-		// this case is impossible
-		return 0, nil
-	}
 }
