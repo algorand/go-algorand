@@ -610,7 +610,7 @@ type PendingTransactionResponse struct {
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
 type SimulateTransactionGroupResult struct {
-	// FailedAt If present, indicates which transaction in this group caused the failure
+	// FailedAt If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.
 	FailedAt *[]uint64 `json:"failed-at,omitempty"`
 
 	// FailureMessage If present, indicates that the transaction group failed and specifies why that happened
@@ -993,7 +993,7 @@ type SimulateResponse struct {
 	// Version The version of this response object.
 	Version uint64 `json:"version"`
 
-	// WouldSucceed Indicates whether the simulated transactions would have succeeded during an actual submission.
+	// WouldSucceed Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.
 	WouldSucceed bool `json:"would-succeed"`
 }
 
