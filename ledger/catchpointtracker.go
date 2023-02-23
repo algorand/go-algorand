@@ -364,7 +364,7 @@ func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.St
 
 	ct.roundDigest = append(ct.roundDigest, blk.Digest())
 
-	if (config.Consensus[blk.CurrentProtocol].EnableOnlineAccountCatchpoints || ct.forceCatchpointFileWriting) && ct.reenableCatchpointsRound == 0 {
+	if (config.Consensus[blk.CurrentProtocol].EnableCatchpointsWithSPContexts || ct.forceCatchpointFileWriting) && ct.reenableCatchpointsRound == 0 {
 		catchpointLookback := config.Consensus[blk.CurrentProtocol].CatchpointLookback
 		if catchpointLookback == 0 {
 			catchpointLookback = config.Consensus[blk.CurrentProtocol].MaxBalLookback

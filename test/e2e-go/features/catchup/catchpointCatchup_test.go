@@ -114,7 +114,7 @@ func applyCatchpointConsensusChanges(consensusParams *config.ConsensusParams) {
 	consensusParams.MaxBalLookback = 2 * consensusParams.SeedLookback * consensusParams.SeedRefreshInterval // 8
 	consensusParams.MaxTxnLife = 13
 	consensusParams.CatchpointLookback = consensusParams.MaxBalLookback
-	consensusParams.EnableOnlineAccountCatchpoints = true
+	consensusParams.EnableCatchpointsWithSPContexts = true
 	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
 		// amd64 and arm64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
 		consensusParams.AgreementFilterTimeoutPeriod0 = 1 * time.Second
