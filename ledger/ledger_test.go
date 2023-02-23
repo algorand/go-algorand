@@ -2346,7 +2346,8 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 
 	// drop new tables
 	// reloadLedger should migrate db properly
-	err = l.trackerDBs.ResetToV6Test(context.Background())
+	testStore := l.trackerDBs.(store.TestTrackerStore)
+	err = testStore.ResetToV6Test(context.Background())
 	require.NoError(t, err)
 
 	err = l.reloadLedger()
@@ -2633,7 +2634,8 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	cfg.MaxAcctLookback = shorterLookback
 	store.AccountDBVersion = 7
 	// delete tables since we want to check they can be made from other data
-	err = trackerDB.ResetToV6Test(context.Background())
+	testTrackerDB := trackerDB.(store.TestTrackerStore)
+	err = testTrackerDB.ResetToV6Test(context.Background())
 	require.NoError(t, err)
 
 	l2, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)

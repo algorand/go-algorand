@@ -19,14 +19,9 @@ package store
 import (
 	"context"
 	"database/sql"
-	"os"
-	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -68,10 +63,8 @@ type transactionFn func(ctx context.Context, tx TransactionScope) error
 type TransactionScope interface {
 	MakeCatchpointReaderWriter() (CatchpointReaderWriter, error)
 	MakeAccountsReaderWriter() (AccountsReaderWriter, error)
-	MakeAccountsOptimizedReader() (AccountsReader, error)
 	MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
 	MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (w OnlineAccountsWriter, err error)
-	MakeOnlineAccountsOptimizedReader() (OnlineAccountsReader, error)
 
 	MakeMerkleCommitter(staging bool) (MerkleCommitter, error)
 
@@ -81,9 +74,6 @@ type TransactionScope interface {
 
 	RunMigrations(ctx context.Context, params TrackerDBParams, log logging.Logger, targetVersion int32) (mgr TrackerDBInitParams, err error)
 	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
-
-	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
-	AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error)
 }
 type sqlTransactionScope struct {
 	tx *sql.Tx
@@ -111,9 +101,6 @@ type TrackerStore interface {
 
 	Vacuum(ctx context.Context) (stats db.VacuumStats, err error)
 	Close()
-	CleanupTest(dbName string, inMemory bool)
-
-	ResetToV6Test(ctx context.Context) error
 }
 
 // OpenTrackerSQLStore opens the sqlite database store
@@ -195,32 +182,6 @@ func (s *trackerSQLStore) Vacuum(ctx context.Context) (stats db.VacuumStats, err
 	return
 }
 
-func (s *trackerSQLStore) CleanupTest(dbName string, inMemory bool) {
-	s.pair.Close()
-	if !inMemory {
-		os.Remove(dbName)
-	}
-}
-
-func (s *trackerSQLStore) ResetToV6Test(ctx context.Context) error {
-	var resetExprs = []string{
-		`DROP TABLE IF EXISTS onlineaccounts`,
-		`DROP TABLE IF EXISTS txtail`,
-		`DROP TABLE IF EXISTS onlineroundparamstail`,
-		`DROP TABLE IF EXISTS catchpointfirststageinfo`,
-	}
-
-	return s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
-		for _, stmt := range resetExprs {
-			_, err := tx.ExecContext(ctx, stmt)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-}
-
 func (s *trackerSQLStore) Close() {
 	s.pair.Close()
 }
@@ -233,20 +194,12 @@ func (txs sqlTransactionScope) MakeAccountsReaderWriter() (AccountsReaderWriter,
 	return NewAccountsSQLReaderWriter(txs.tx), nil
 }
 
-func (txs sqlTransactionScope) MakeAccountsOptimizedReader() (AccountsReader, error) {
-	return AccountsInitDbQueries(txs.tx)
-}
-
 func (txs sqlTransactionScope) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error) {
 	return MakeAccountsSQLWriter(txs.tx, hasAccounts, hasResources, hasKvPairs, hasCreatables)
 }
 
 func (txs sqlTransactionScope) MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (w OnlineAccountsWriter, err error) {
 	return MakeOnlineAccountsSQLWriter(txs.tx, hasAccounts)
-}
-
-func (txs sqlTransactionScope) MakeOnlineAccountsOptimizedReader() (r OnlineAccountsReader, err error) {
-	return OnlineAccountsInitDbQueries(txs.tx)
 }
 
 func (txs sqlTransactionScope) MakeMerkleCommitter(staging bool) (MerkleCommitter, error) {
@@ -271,14 +224,6 @@ func (txs sqlTransactionScope) RunMigrations(ctx context.Context, params Tracker
 
 func (txs sqlTransactionScope) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
 	return db.ResetTransactionWarnDeadline(ctx, txs.tx, deadline)
-}
-
-func (txs sqlTransactionScope) AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
-	return AccountsInitTest(tb, txs.tx, initAccounts, proto)
-}
-
-func (txs sqlTransactionScope) AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
-	return AccountsInitLightTest(tb, txs.tx, initAccounts, proto)
 }
 
 func (bs sqlBatchScope) MakeCatchpointWriter() (CatchpointWriter, error) {

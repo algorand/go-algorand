@@ -58,7 +58,8 @@ func checkAccounts(t *testing.T, tx store.TransactionScope, rnd basics.Round, ac
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 
-	aor, err := tx.MakeAccountsOptimizedReader()
+	testTx := tx.(store.TransactionTestScope)
+	aor, err := testTx.MakeAccountsOptimizedReader()
 	require.NoError(t, err)
 
 	var totalOnline, totalOffline, totalNotPart uint64
@@ -82,7 +83,8 @@ func checkAccounts(t *testing.T, tx store.TransactionScope, rnd basics.Round, ac
 		}
 	}
 
-	all, err := arw.AccountsAllTest()
+	testArw := arw.(store.TestAccountsReaderExt)
+	all, err := testArw.AccountsAllTest()
 	require.NoError(t, err)
 	require.Equal(t, all, accts)
 
@@ -154,12 +156,13 @@ func TestAccountDBInit(t *testing.T) {
 
 	err := dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
 		accts := ledgertesting.RandomAccounts(20, true)
-		newDB := tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+		testTx := tx.(store.TransactionTestScope)
+		newDB := testTx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
 		require.True(t, newDB)
 
 		checkAccounts(t, tx, 0, accts)
 
-		newDB, err = tx.AccountsInitLightTest(t, accts, proto)
+		newDB, err = testTx.AccountsInitLightTest(t, accts, proto)
 		require.NoError(t, err)
 		require.False(t, newDB)
 		checkAccounts(t, tx, 0, accts)
@@ -218,7 +221,8 @@ func TestAccountDBRound(t *testing.T) {
 		require.NoError(t, err)
 
 		accts := ledgertesting.RandomAccounts(20, true)
-		tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+		testTx := tx.(store.TransactionTestScope)
+		testTx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
 		checkAccounts(t, tx, 0, accts)
 		totals, err := arw.AccountsTotals(context.Background(), false)
 		require.NoError(t, err)
@@ -296,7 +300,8 @@ func TestAccountDBRound(t *testing.T) {
 			require.NotEmpty(t, updatedOnlineAccts)
 
 			checkAccounts(t, tx, basics.Round(i), accts)
-			arw.CheckCreatablesTest(t, i, expectedDbImage)
+			testArw := arw.(store.TestAccountsReaderExt)
+			testArw.CheckCreatablesTest(t, i, expectedDbImage)
 		}
 
 		// test the accounts totals
@@ -371,7 +376,8 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 
 		dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) error {
 			accts := ledgertesting.RandomAccounts(1, true)
-			tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+			testTx := tx.(store.TransactionTestScope)
+			testTx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
 			addr := ledgertesting.RandomAddress()
 
 			// lastCreatableID stores asset or app max used index to get rid of conflicts
@@ -442,7 +448,8 @@ func TestAccountStorageWithStateProofID(t *testing.T) {
 
 	dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
 		accts := ledgertesting.RandomAccounts(20, false)
-		_ = tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+		testTx := tx.(store.TransactionTestScope)
+		_ = testTx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
 		checkAccounts(t, tx, 0, accts)
 		require.True(t, allAccountsHaveStateProofPKs(accts))
 		return nil
@@ -599,7 +606,8 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 
 func benchmarkInitBalances(b testing.TB, numAccounts int, tx store.TransactionScope, proto protocol.ConsensusVersion) (updates map[basics.Address]basics.AccountData) {
 	updates = generateRandomTestingAccountBalances(numAccounts)
-	tx.AccountsInitTest(b, updates, proto)
+	testTx := tx.(store.TransactionTestScope)
+	testTx.AccountsInitTest(b, updates, proto)
 	return
 }
 
@@ -625,7 +633,8 @@ func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 		b.ResetTimer()
 		// read all the balances in the database.
 		var err2 error
-		bal, err2 = arw.AccountsAllTest()
+		testArw := arw.(store.TestAccountsReaderExt)
+		bal, err2 = testArw.AccountsAllTest()
 		require.NoError(b, err2)
 		return nil
 	})
@@ -649,7 +658,8 @@ func BenchmarkReadingAllBalancesDisk(b *testing.B) {
 func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 	dbs, fn := store.DbOpenTrackerTest(b, true)
 	dbs.SetLogger(logging.TestingLog(b))
-	defer dbs.CleanupTest(fn, inMemory)
+	testDbs := dbs.(store.TestTrackerStore)
+	defer testDbs.CleanupTest(fn, inMemory)
 
 	err := dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
 		accounts := benchmarkInitBalances(b, b.N, tx, protocol.ConsensusCurrentVersion)
@@ -814,7 +824,8 @@ func TestLookupKeysByPrefix(t *testing.T) {
 
 	dbs, fn := store.DbOpenTrackerTest(t, false)
 	dbs.SetLogger(logging.TestingLog(t))
-	defer dbs.CleanupTest(fn, false)
+	testDbs := dbs.(store.TestTrackerStore)
+	defer testDbs.CleanupTest(fn, false)
 
 	err := dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
 		// return account data, initialize DB tables from AccountsInitTest
@@ -1000,7 +1011,8 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 
 	dbs, fn := store.DbOpenTrackerTest(b, false)
 	dbs.SetLogger(logging.TestingLog(b))
-	defer dbs.CleanupTest(fn, false)
+	testDbs := dbs.(store.TestTrackerStore)
+	defer testDbs.CleanupTest(fn, false)
 
 	err := dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
 		// return account data, initialize DB tables from AccountsInitTest
@@ -2090,7 +2102,8 @@ func TestAccountOnlineQueries(t *testing.T) {
 		}
 
 		var accts map[basics.Address]basics.AccountData
-		tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+		testTx := tx.(store.TransactionTestScope)
+		testTx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
 		totals, err := arw.AccountsTotals(context.Background(), false)
 		require.NoError(t, err)
 
@@ -2193,7 +2206,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 		addRound(2, ledgercore.StateDelta{Accts: delta2})
 		addRound(3, ledgercore.StateDelta{Accts: delta3})
 
-		queries, err := tx.MakeOnlineAccountsOptimizedReader()
+		queries, err := testTx.MakeOnlineAccountsOptimizedReader()
 		require.NoError(t, err)
 
 		// check round 1
