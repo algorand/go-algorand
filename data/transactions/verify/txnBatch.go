@@ -175,8 +175,8 @@ func (tbp *txnSigBatchProcessor) preProcessUnverifiedTxns(uTxns []InputJob) (bat
 	// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
 	blockHeader := tbp.nbw.getBlockHeader()
 
-	for _, uTxn := range uTxns {
-		ut := uTxn.(*UnverifiedTxnSigJob)
+	for i := range uTxns {
+		ut := uTxns[i].(*UnverifiedTxnSigJob)
 		groupCtx, err := txnGroupBatchPrep(ut.TxnGroup, blockHeader, tbp.ledger, batchVerifier, nil)
 		if err != nil {
 			// verification failed, no need to add the sig to the batch, report the error
