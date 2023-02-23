@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 # shellcheck disable=2009,2093,2164
 
 UPDATER_MIN_VERSION="3.12.2"
