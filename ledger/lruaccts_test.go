@@ -88,6 +88,42 @@ func TestLRUBasicAccounts(t *testing.T) {
 	}
 }
 
+func TestLRUAccountsDisable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var baseAcct lruAccounts
+	baseAcct.init(logging.TestingLog(t), 0, 1)
+
+	accountsNum := 5
+
+	for i := 0; i < accountsNum; i++ {
+		go func(i int) {
+			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
+			acct := store.PersistedAccountData{
+				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
+				Round:       basics.Round(i),
+				Rowid:       int64(i),
+				AccountData: store.BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+			}
+			baseAcct.writePending(acct)
+		}(i)
+	}
+	require.Empty(t, baseAcct.pendingAccounts)
+	baseAcct.flushPendingWrites()
+	require.Empty(t, baseAcct.accounts)
+
+	for i := 0; i < accountsNum; i++ {
+		acct := store.PersistedAccountData{
+			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
+			Round:       basics.Round(i),
+			Rowid:       int64(i),
+			AccountData: store.BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+		}
+		baseAcct.write(acct)
+	}
+	require.Empty(t, baseAcct.accounts)
+}
+
 func TestLRUAccountsPendingWrites(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
