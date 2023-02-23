@@ -295,8 +295,6 @@ func (b *builder) insertSig(s *pendingSig, verify bool) error {
 }
 
 func (spw *Worker) handleSigMessage(msg network.IncomingMessage) network.OutgoingMessage {
-	spw.networkMu.Lock()
-	defer spw.networkMu.Unlock()
 	var ssig sigFromAddr
 	err := protocol.Decode(msg.Data, &ssig)
 	if err != nil {
@@ -330,6 +328,11 @@ func (spw *Worker) meetsBroadcastPolicy(sfa sigFromAddr, latestRound basics.Roun
 func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.ForwardingPolicy, error) {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
+
+	// might happen if the state proof worker is stopping
+	if spw.builders == nil {
+		return network.Ignore, fmt.Errorf("handleSig: no builders loaded")
+	}
 
 	builderForRound, ok := spw.builders[sfa.Round]
 	if !ok {

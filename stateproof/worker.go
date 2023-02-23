@@ -61,10 +61,6 @@ type Worker struct {
 	// from the network stack.
 	mu deadlock.Mutex
 
-	// networkMu used to sync the message handle callback (from the network service)
-	// with stop operation
-	networkMu deadlock.Mutex
-
 	spDbFileName string
 	db           db.Accessor
 	log          logging.Logger
@@ -159,10 +155,12 @@ func (spw *Worker) Stop() {
 	spw.shutdown()
 	spw.wg.Wait()
 
-	spw.networkMu.Lock()
-	defer spw.networkMu.Unlock()
-
 	spw.ledger.UnregisterVotersCommitListener()
+
+	// we take the lock in case the network handler currently running handleSig
+	spw.mu.Lock()
+	defer spw.mu.Unlock()
+
 	spw.builders = nil
 	spw.signedCh = nil
 

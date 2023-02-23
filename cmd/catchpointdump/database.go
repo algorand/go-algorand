@@ -78,14 +78,14 @@ var databaseCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Unable to print key value store : %v", err)
 		}
-		// state proof verification can be found on tracker db version > 9 or
-		// catchpoint file version > 6 (i.e staging tables)
+		// state proof verification can be found on tracker db version >= 10 or
+		// catchpoint file version >= 7 (i.e staging tables)
 		if !ledgerTrackerStaging && version < 10 || ledgerTrackerStaging && version < ledger.CatchpointFileVersionV7 {
 			return
 		}
 		err = printStateProofVerificationContext(ledgerTrackerFilename, ledgerTrackerStaging, outFile)
 		if err != nil {
-			reportWarnf("Unable to print state proof verification database : %v", err)
+			reportErrorf("Unable to print state proof verification database : %v", err)
 		}
 	},
 }
@@ -97,7 +97,7 @@ func printDbVersion(staging bool, version uint64, outFile *os.File) {
 	if staging {
 		fmt.Fprintf(outFile, "Catchpoint version: %d \n", version)
 	} else {
-		fmt.Fprintf(outFile, "ledger db version: %d \n", version)
+		fmt.Fprintf(outFile, "Ledger db version: %d \n", version)
 	}
 }
 
