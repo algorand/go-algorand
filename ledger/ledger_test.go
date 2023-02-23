@@ -3367,13 +3367,13 @@ func TestLedgerSPTrackerAfterReplay(t *testing.T) {
 
 	// 1024
 	verifyStateProofVerificationTracking(t, &l.spVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
-	a.Equal(0, len(l.spVerification.trackedDeleteContext))
+	a.Equal(0, len(l.spVerification.pendingDeleteContexts))
 
 	// Add StateProof transaction (for round 512) and apply without validating, advancing the NextStateProofRound to 768
 	spblk := createBlkWithStateproof(t, int(blk.BlockHeader.Round), proto, genesisInitState, l, genesisInitState.Accounts)
 	err = l.AddBlock(spblk, agreement.Certificate{})
 	a.NoError(err)
-	a.Equal(1, len(l.spVerification.trackedDeleteContext))
+	a.Equal(1, len(l.spVerification.pendingDeleteContexts))
 	// To be deleted, but not yet deleted (waiting for commit)
 	verifyStateProofVerificationTracking(t, &l.spVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
 
@@ -3382,6 +3382,6 @@ func TestLedgerSPTrackerAfterReplay(t *testing.T) {
 	err = l.reloadLedger()
 	a.NoError(err)
 
-	a.Equal(1, len(l.spVerification.trackedDeleteContext))
+	a.Equal(1, len(l.spVerification.pendingDeleteContexts))
 	verifyStateProofVerificationTracking(t, &l.spVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
 }
