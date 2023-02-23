@@ -66,7 +66,16 @@ func (spw *Worker) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Rou
 		buildr, err := createBuilder(rnd, votersFetcher)
 		if err != nil {
 			if errors.Is(err, errVotersNotTracked) {
-				// Voters not tracked for that round. state proofs might not be enabled.
+				// There are few reasons why we might encounter a situation where we don't
+				// have voters for a state proof round.
+				//
+				// 1 - When state proof chain starts, the first round s.t round  % proto.stateproofInterval == 0  will not
+				// have voters (since they are not enable). For this round we will not create a state proof.
+				// e.g if  proto.stateproofInterval == 10, and round = 10. We skip the state proof for that round
+				// (since there are not voters on round 0)
+				//
+				// 2 - When a node uses fastcatchup to some round, and immediately tries to create a builder.
+				// Node might fail to create the builder since MaxBalLookback (in catchpoint) might not be large enough
 				spw.log.Warnf("OnPrepareVoterCommit(%d): %v", rnd, err)
 				continue
 			}
@@ -168,8 +177,6 @@ func createBuilder(rnd basics.Round, votersFetcher ledgercore.LedgerForSPBuilder
 		return builder{}, err
 	}
 	if voters == nil {
-		// Voters not tracked for that round.  Might not be a valid
-		// state proof round; state proofs might not be enabled; etc.
 		return builder{}, fmt.Errorf("lookback round %d: %w", lookback, errVotersNotTracked)
 	}
 
