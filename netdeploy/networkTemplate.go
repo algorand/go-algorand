@@ -27,12 +27,15 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/algorand/go-codec/codec"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/netdeploy/remote"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
 )
 
@@ -209,7 +212,6 @@ func (t NetworkTemplate) Validate() error {
 	}
 
 	// No wallet can be assigned to more than one node
-	// At least one relay is required
 	wallets := make(map[string]bool)
 	for _, cfg := range t.Nodes {
 		for _, wallet := range cfg.Wallets {
@@ -221,15 +223,47 @@ func (t NetworkTemplate) Validate() error {
 		}
 	}
 
+	// At least one relay is required
 	if len(t.Nodes) > 1 && countRelayNodes(t.Nodes) == 0 {
 		return fmt.Errorf("invalid template: at least one relay is required when more than a single node presents")
 	}
 
+	// Validate JSONOverride decoding
+	for _, cfg := range t.Nodes {
+		local := config.GetDefaultLocal()
+		err := decodeJSONOverride(cfg.ConfigJSONOverride, &local)
+		if err != nil {
+			return fmt.Errorf("invalid template: unable to decode JSONOverride: %w", err)
+		}
+	}
+
+	// Follow nodes cannot be relays
+	for _, cfg := range t.Nodes {
+		if cfg.IsRelay && isEnableFollowMode(cfg.ConfigJSONOverride) {
+			return fmt.Errorf("invalid template: follow nodes may not be relays")
+		}
+	}
+
 	if t.Genesis.DevMode && len(t.Nodes) != 1 {
-		return fmt.Errorf("invalid template: DevMode should only have a single node")
+		if countRelayNodes(t.Nodes) != 1 {
+			return fmt.Errorf("invalid template: devmode configurations may have at most one relay")
+		}
+
+		for _, cfg := range t.Nodes {
+			if !cfg.IsRelay && !isEnableFollowMode(cfg.ConfigJSONOverride) {
+				return fmt.Errorf("invalid template: devmode configurations may only contain 1 relay and follow nodes")
+			}
+		}
 	}
 
 	return nil
+}
+
+func isEnableFollowMode(JSONOverride string) bool {
+	local := config.GetDefaultLocal()
+	// decode error is checked elsewhere
+	_ = decodeJSONOverride(JSONOverride, &local)
+	return local.EnableFollowMode
 }
 
 // countRelayNodes counts the total number of relays
@@ -240,6 +274,17 @@ func countRelayNodes(nodeCfgs []remote.NodeConfigGoal) (relayCount int) {
 		}
 	}
 	return
+}
+
+func decodeJSONOverride(override string, cfg *config.Local) error {
+	if override != "" {
+		reader := strings.NewReader(override)
+		dec := codec.NewDecoder(reader, protocol.JSONHandle)
+		if err := dec.Decode(&cfg); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes int, relaysCount int) error {
@@ -266,12 +311,7 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 		cfg.DeadlockDetection = node.DeadlockDetection
 	}
 
-	if node.ConfigJSONOverride != "" {
-		reader := strings.NewReader(node.ConfigJSONOverride)
-		dec := json.NewDecoder(reader)
-		if err := dec.Decode(&cfg); err != nil {
-			return err
-		}
-	}
+	decodeJSONOverride(node.ConfigJSONOverride, &cfg)
+
 	return cfg.SaveToFile(configFile)
 }

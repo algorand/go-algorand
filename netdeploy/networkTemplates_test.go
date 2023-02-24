@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/gen"
+	"github.com/algorand/go-algorand/netdeploy/remote"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -96,6 +98,111 @@ func TestValidate(t *testing.T) {
 	template, _ = loadTemplate(filepath.Join(templateDir, "TwoNodesOneRelay1000Accounts.json"))
 	err = template.Validate()
 	a.NoError(err)
+}
+
+func TestDevModeValidate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// same genesis configuration for all tests.
+	devmodeGenesis := gen.GenesisData{
+		DevMode: true,
+		Wallets: []gen.WalletData{
+			{
+				Stake: 100,
+			},
+		},
+	}
+
+	t.Run("DevMode two relays", func(t *testing.T) {
+		t.Parallel()
+		tmpl := NetworkTemplate{
+			Genesis: devmodeGenesis,
+			Nodes: []remote.NodeConfigGoal{
+				{
+					IsRelay: true,
+				},
+				{
+					IsRelay: true,
+				},
+			},
+		}
+		require.ErrorContains(t, tmpl.Validate(), "devmode configurations may have at most one relay")
+	})
+
+	t.Run("FollowMode relay", func(t *testing.T) {
+		t.Parallel()
+		tmpl := NetworkTemplate{
+			Genesis: devmodeGenesis,
+			Nodes: []remote.NodeConfigGoal{
+				{
+					IsRelay:            true,
+					ConfigJSONOverride: "{\"EnableFollowMode\":true}",
+				},
+			},
+		}
+		require.ErrorContains(t, tmpl.Validate(), "follow nodes may not be relays")
+	})
+
+	t.Run("DevMode multiple regular nodes", func(t *testing.T) {
+		t.Parallel()
+		tmpl := NetworkTemplate{
+			Genesis: devmodeGenesis,
+			Nodes: []remote.NodeConfigGoal{
+				{
+					IsRelay: true,
+				},
+				{},
+			},
+		}
+		require.ErrorContains(t, tmpl.Validate(), "devmode configurations may only contain 1 relay and follow nodes")
+	})
+
+	t.Run("ConfigJSONOverride does not parse", func(t *testing.T) {
+		t.Parallel()
+		tmpl := NetworkTemplate{
+			Genesis: devmodeGenesis,
+			Nodes: []remote.NodeConfigGoal{
+				{
+					IsRelay:            false,
+					ConfigJSONOverride: "DOES NOT PARSE",
+				},
+			},
+		}
+		require.ErrorContains(t, tmpl.Validate(), "unable to decode JSONOverride")
+	})
+
+	t.Run("ConfigJSONOverride unknown key", func(t *testing.T) {
+		t.Parallel()
+		tmpl := NetworkTemplate{
+			Genesis: devmodeGenesis,
+			Nodes: []remote.NodeConfigGoal{
+				{
+					IsRelay:            false,
+					ConfigJSONOverride: "{\"Unknown Key\": \"Valid JSON\"}",
+				},
+			},
+		}
+		require.ErrorContains(t, tmpl.Validate(), "no matching struct field found")
+	})
+
+	t.Run("Valid multi-node DevMode", func(t *testing.T) {
+		t.Parallel()
+		tmpl := NetworkTemplate{
+			Genesis: devmodeGenesis,
+			Nodes: []remote.NodeConfigGoal{
+				{
+					IsRelay: true,
+				},
+				{
+					IsRelay:            false,
+					ConfigJSONOverride: "{\"EnableFollowMode\":true}",
+				},
+			},
+		}
+		// this one is fine.
+		require.NoError(t, tmpl.Validate())
+	})
 }
 
 type overlayTestStruct struct {

@@ -183,10 +183,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.genesisID = genesis.ID()
 	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
-
-	if node.devMode {
-		cfg.DisableNetworking = true
-	}
 	node.config = cfg
 
 	// tie network, block fetcher, and agreement services together
@@ -485,7 +481,7 @@ func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 	}
 
 	// add the newly generated block to the ledger
-	err = node.ledger.AddValidatedBlock(*vb, agreement.Certificate{})
+	err = node.ledger.AddValidatedBlock(*vb, agreement.Certificate{Round: vb.Block().Round()})
 	return err
 }
 
