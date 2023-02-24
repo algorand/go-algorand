@@ -203,6 +203,28 @@ func TestDevModeValidate(t *testing.T) {
 		// this one is fine.
 		require.NoError(t, tmpl.Validate())
 	})
+
+	t.Run("Valid two-follower DevMode", func(t *testing.T) {
+		t.Parallel()
+		tmpl := NetworkTemplate{
+			Genesis: devmodeGenesis,
+			Nodes: []remote.NodeConfigGoal{
+				{
+					IsRelay: true,
+				},
+				{
+					IsRelay:            false,
+					ConfigJSONOverride: "{\"EnableFollowMode\":true}",
+				},
+				{
+					IsRelay:            false,
+					ConfigJSONOverride: "{\"EnableFollowMode\":true}",
+				},
+			},
+		}
+		// this one is fine.
+		require.NoError(t, tmpl.Validate())
+	})
 }
 
 type overlayTestStruct struct {
