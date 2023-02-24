@@ -118,6 +118,7 @@ var networkPeerBroadcastDropped = metrics.MakeCounter(metrics.MetricName{Name: "
 
 var networkPeerIdentityDisconnect = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_identity_duplicate", Description: "number of times identity challenge cause us to disconnect a peer"})
 var networkPeerIdentityError = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_identity_error", Description: "number of times an error occurs (besides expected) when processing identity challenges"})
+var networkPeerAlreadyClosed = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_peer_already_closed", Description: "number of times a peer would be added but the peer connection is already closed"})
 
 var networkSlowPeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_slow_drops_total", Description: "number of peers dropped for being slow to send to"})
 var networkIdlePeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_idle_drops_total", Description: "number of peers dropped due to idle connection"})
@@ -2459,6 +2460,7 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 	defer wn.peersLock.Unlock()
 	// guard against peers which are closed or closing
 	if atomic.LoadInt32(&peer.didSignalClose) == 1 {
+		networkPeerAlreadyClosed.Inc(nil)
 		wn.log.Debugf("peer closing %s", peer.conn.RemoteAddr().String())
 		return
 	}
