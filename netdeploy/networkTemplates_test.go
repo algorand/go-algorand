@@ -141,7 +141,7 @@ func TestDevModeValidate(t *testing.T) {
 				},
 			},
 		}
-		require.ErrorContains(t, tmpl.Validate(), "follow nodes may not be relays")
+		require.ErrorContains(t, tmpl.Validate(), "follower nodes may not be relays")
 	})
 
 	t.Run("DevMode multiple regular nodes", func(t *testing.T) {
@@ -155,7 +155,7 @@ func TestDevModeValidate(t *testing.T) {
 				{},
 			},
 		}
-		require.ErrorContains(t, tmpl.Validate(), "devmode configurations may only contain 1 relay and follow nodes")
+		require.ErrorContains(t, tmpl.Validate(), "devmode configurations may only contain one relay and follower nodes")
 	})
 
 	t.Run("ConfigJSONOverride does not parse", func(t *testing.T) {
@@ -183,7 +183,7 @@ func TestDevModeValidate(t *testing.T) {
 				},
 			},
 		}
-		require.ErrorContains(t, tmpl.Validate(), "no matching struct field found")
+		require.ErrorContains(t, tmpl.Validate(), "json: unknown field \"Unknown Key\"")
 	})
 
 	t.Run("Valid multi-node DevMode", func(t *testing.T) {

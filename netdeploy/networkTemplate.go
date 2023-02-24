@@ -27,15 +27,12 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/algorand/go-codec/codec"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/netdeploy/remote"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
 )
 
@@ -240,7 +237,7 @@ func (t NetworkTemplate) Validate() error {
 	// Follow nodes cannot be relays
 	for _, cfg := range t.Nodes {
 		if cfg.IsRelay && isEnableFollowMode(cfg.ConfigJSONOverride) {
-			return fmt.Errorf("invalid template: follow nodes may not be relays")
+			return fmt.Errorf("invalid template: follower nodes may not be relays")
 		}
 	}
 
@@ -251,7 +248,7 @@ func (t NetworkTemplate) Validate() error {
 
 		for _, cfg := range t.Nodes {
 			if !cfg.IsRelay && !isEnableFollowMode(cfg.ConfigJSONOverride) {
-				return fmt.Errorf("invalid template: devmode configurations may only contain 1 relay and follow nodes")
+				return fmt.Errorf("invalid template: devmode configurations may only contain one relay and follower nodes")
 			}
 		}
 	}
@@ -279,7 +276,8 @@ func countRelayNodes(nodeCfgs []remote.NodeConfigGoal) (relayCount int) {
 func decodeJSONOverride(override string, cfg *config.Local) error {
 	if override != "" {
 		reader := strings.NewReader(override)
-		dec := codec.NewDecoder(reader, protocol.JSONHandle)
+		dec := json.NewDecoder(reader)
+		dec.DisallowUnknownFields()
 		if err := dec.Decode(&cfg); err != nil {
 			return err
 		}
