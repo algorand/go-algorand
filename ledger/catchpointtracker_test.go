@@ -42,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -312,8 +313,9 @@ func TestRecordCatchpointFile(t *testing.T) {
 	for _, round := range []basics.Round{2000000, 3000010, 3000015, 3000020} {
 		accountsRound := round - 1
 
+		var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
 		_, _, _, biggestChunkLen, stateProofVerificationHash, err := ct.generateCatchpointData(
-			context.Background(), accountsRound, time.Second)
+			context.Background(), accountsRound, &catchpointGenerationStats)
 		require.NoError(t, err)
 
 		require.Equal(t, calculateStateProofVerificationHash(t, ml), stateProofVerificationHash)
@@ -386,8 +388,9 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	})
 	require.NoError(b, err)
 
+	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
 	b.ResetTimer()
-	ct.generateCatchpointData(context.Background(), basics.Round(0), time.Second)
+	ct.generateCatchpointData(context.Background(), basics.Round(0), &catchpointGenerationStats)
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "accounts")
 }
@@ -403,7 +406,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
-	protoParams.EnableOnlineAccountCatchpoints = true
+	protoParams.EnableCatchpointsWithSPContexts = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -617,7 +620,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.EnableOnlineAccountCatchpoints = true
+	protoParams.EnableCatchpointsWithSPContexts = true
 	protoParams.CatchpointLookback = protoParams.MaxBalLookback
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
@@ -853,7 +856,7 @@ func TestFirstStageInfoPruning(t *testing.T) {
 		protocol.ConsensusVersion("test-protocol-TestFirstStageInfoPruning")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
-	protoParams.EnableOnlineAccountCatchpoints = true
+	protoParams.EnableCatchpointsWithSPContexts = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -947,7 +950,7 @@ func TestFirstStagePersistence(t *testing.T) {
 		protocol.ConsensusVersion("test-protocol-TestFirstStagePersistence")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
-	protoParams.EnableOnlineAccountCatchpoints = true
+	protoParams.EnableCatchpointsWithSPContexts = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -1050,7 +1053,7 @@ func TestSecondStagePersistence(t *testing.T) {
 		protocol.ConsensusVersion("test-protocol-TestFirstStagePersistence")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
-	protoParams.EnableOnlineAccountCatchpoints = true
+	protoParams.EnableCatchpointsWithSPContexts = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -1187,7 +1190,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 		protocol.ConsensusVersion("test-protocol-TestFirstStagePersistence")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
-	protoParams.EnableOnlineAccountCatchpoints = true
+	protoParams.EnableCatchpointsWithSPContexts = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -1276,7 +1279,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) 
 		protocol.ConsensusVersion("test-protocol-TestFirstStagePersistence")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
-	protoParams.EnableOnlineAccountCatchpoints = true
+	protoParams.EnableCatchpointsWithSPContexts = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -1498,7 +1501,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 		t.Skip("This test is too slow on ARM and causes CI builds to time out")
 	}
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto := config.Consensus[protocol.ConsensusFuture]
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 	addSinkAndPoolAccounts(accts)
@@ -1508,7 +1511,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 	conf.CatchpointInterval = 1
 	conf.CatchpointTracking = 1
 	initialBlocksCount := int(conf.MaxAcctLookback)
-	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusFuture, accts)
 	defer ml.Close()
 
 	ct := newCatchpointTracker(t, ml, conf, ".")
@@ -1557,7 +1560,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 			},
 		}
 		blk.RewardsLevel = rewardLevel
-		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
+		blk.CurrentProtocol = protocol.ConsensusFuture
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
@@ -1595,6 +1598,7 @@ func TestCatchpointLargeAccountCountCatchpointGeneration(t *testing.T) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLargeAccountCountCatchpointGeneration")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 16
+	protoParams.EnableCatchpointsWithSPContexts = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)

@@ -154,9 +154,16 @@ func (spw *Worker) initDb(inMemory bool) error {
 func (spw *Worker) Stop() {
 	spw.shutdown()
 	spw.wg.Wait()
+
 	spw.ledger.UnregisterVotersCommitListener()
+
+	// we take the lock in case the network handler currently running handleSig
+	spw.mu.Lock()
+	defer spw.mu.Unlock()
+
 	spw.builders = nil
 	spw.signedCh = nil
+
 	spw.db.Close()
 }
 

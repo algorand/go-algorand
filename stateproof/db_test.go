@@ -272,3 +272,33 @@ func TestBuildersDB(t *testing.T) {
 	a.NoError(err)
 	a.Equal(uint64(35), bldr.Round)
 }
+
+func TestDbBuilderAlreadyExists(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	defer dbs.Close()
+	err := makeStateProofDB(dbs.Wdb)
+	a.NoError(err)
+
+	var bldr builder
+	var outBldr builder
+
+	bldr.Builder = &stateproof.Builder{}
+	bldr.Round = 2
+	bldr.Data[3] = 5
+
+	for i := 0; i < 2; i++ {
+		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			return persistBuilder(tx, basics.Round(2), &bldr)
+		})
+		a.NoError(err)
+		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			outBldr, err = getBuilder(tx, basics.Round(2))
+			return err
+		})
+		a.NoError(err)
+		a.Equal(bldr.BuilderPersistedFields, outBldr.BuilderPersistedFields)
+	}
+}

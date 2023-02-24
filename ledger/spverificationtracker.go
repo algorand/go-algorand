@@ -49,16 +49,16 @@ type verificationCommitContext struct {
 // spVerificationTracker is in charge of tracking context required to verify state proofs until such a time
 // as the context is no longer needed.
 type spVerificationTracker struct {
-	// trackedCommitContext represents the part of the tracked verification context currently in memory. Each element in this
+	// pendingCommitContexts represents the part of the tracked verification context currently in memory. Each element in this
 	// array contains both the context required to verify a single state proof and context to decide whether it's possible to
 	// commit the verification context to the database.
-	trackedCommitContext []verificationCommitContext
+	pendingCommitContexts []verificationCommitContext
 
-	// trackedDeleteContext represents the context required to delete committed state proof verification context from the
+	// pendingDeleteContexts represents the context required to delete committed state proof verification context from the
 	// database.
-	trackedDeleteContext []verificationDeleteContext
+	pendingDeleteContexts []verificationDeleteContext
 
-	// mu protects trackedCommitContext and trackedDeleteContext.
+	// mu protects pendingCommitContexts and pendingDeleteContexts.
 	mu deadlock.RWMutex
 
 	// log copied from ledger
@@ -81,8 +81,8 @@ func (spt *spVerificationTracker) loadFromDisk(l ledgerForTracker, _ basics.Roun
 	spt.lastLookedUpVerificationContext = ledgercore.StateProofVerificationContext{}
 
 	const initialContextArraySize = 10
-	spt.trackedCommitContext = make([]verificationCommitContext, 0, initialContextArraySize)
-	spt.trackedDeleteContext = make([]verificationDeleteContext, 0, initialContextArraySize)
+	spt.pendingCommitContexts = make([]verificationCommitContext, 0, initialContextArraySize)
+	spt.pendingDeleteContexts = make([]verificationDeleteContext, 0, initialContextArraySize)
 
 	return nil
 }
@@ -117,11 +117,11 @@ func (spt *spVerificationTracker) prepareCommit(dcc *deferredCommitContext) erro
 
 	lastContextToCommitIndex := spt.roundToLatestCommitContextIndex(dcc.newBase())
 	dcc.spVerification.CommitContext = make([]verificationCommitContext, lastContextToCommitIndex+1)
-	copy(dcc.spVerification.CommitContext, spt.trackedCommitContext[:lastContextToCommitIndex+1])
+	copy(dcc.spVerification.CommitContext, spt.pendingCommitContexts[:lastContextToCommitIndex+1])
 
 	dcc.spVerification.LastDeleteIndex = spt.roundToLatestDeleteContextIndex(dcc.newBase())
 	if dcc.spVerification.LastDeleteIndex >= 0 {
-		dcc.spVerification.EarliestLastAttestedRound = spt.trackedDeleteContext[dcc.spVerification.LastDeleteIndex].stateProofNextRound
+		dcc.spVerification.EarliestLastAttestedRound = spt.pendingDeleteContexts[dcc.spVerification.LastDeleteIndex].stateProofNextRound
 	}
 
 	return nil
@@ -155,8 +155,8 @@ func (spt *spVerificationTracker) postCommit(_ context.Context, dcc *deferredCom
 	spt.mu.Lock()
 	defer spt.mu.Unlock()
 
-	spt.trackedCommitContext = spt.trackedCommitContext[len(dcc.spVerification.CommitContext):]
-	spt.trackedDeleteContext = spt.trackedDeleteContext[dcc.spVerification.LastDeleteIndex+1:]
+	spt.pendingCommitContexts = spt.pendingCommitContexts[len(dcc.spVerification.CommitContext):]
+	spt.pendingDeleteContexts = spt.pendingDeleteContexts[dcc.spVerification.LastDeleteIndex+1:]
 }
 
 func (spt *spVerificationTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
@@ -204,24 +204,24 @@ func (spt *spVerificationTracker) lookupVerificationContext(stateProofLastAttest
 	spt.mu.RLock()
 	defer spt.mu.RUnlock()
 
-	if len(spt.trackedCommitContext) > 0 &&
-		stateProofLastAttestedRound >= spt.trackedCommitContext[0].verificationContext.LastAttestedRound &&
-		stateProofLastAttestedRound <= spt.trackedCommitContext[len(spt.trackedCommitContext)-1].verificationContext.LastAttestedRound {
+	if len(spt.pendingCommitContexts) > 0 &&
+		stateProofLastAttestedRound >= spt.pendingCommitContexts[0].verificationContext.LastAttestedRound &&
+		stateProofLastAttestedRound <= spt.pendingCommitContexts[len(spt.pendingCommitContexts)-1].verificationContext.LastAttestedRound {
 		return spt.lookupContextInTrackedMemory(stateProofLastAttestedRound)
 	}
 
-	if len(spt.trackedCommitContext) == 0 || stateProofLastAttestedRound < spt.trackedCommitContext[0].verificationContext.LastAttestedRound {
+	if len(spt.pendingCommitContexts) == 0 || stateProofLastAttestedRound < spt.pendingCommitContexts[0].verificationContext.LastAttestedRound {
 		return spt.lookupContextInDB(stateProofLastAttestedRound)
 	}
 
 	return &ledgercore.StateProofVerificationContext{}, fmt.Errorf("requested context for round %d, greater than maximum context round %d: %w",
 		stateProofLastAttestedRound,
-		spt.trackedCommitContext[len(spt.trackedCommitContext)-1].verificationContext.LastAttestedRound,
+		spt.pendingCommitContexts[len(spt.pendingCommitContexts)-1].verificationContext.LastAttestedRound,
 		errSPVerificationContextNotFound)
 }
 
 func (spt *spVerificationTracker) lookupContextInTrackedMemory(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	for _, commitContext := range spt.trackedCommitContext {
+	for _, commitContext := range spt.pendingCommitContexts {
 		if commitContext.verificationContext.LastAttestedRound == stateProofLastAttestedRound {
 			verificationContextCopy := commitContext.verificationContext
 			return &verificationContextCopy, nil
@@ -249,7 +249,7 @@ func (spt *spVerificationTracker) lookupContextInDB(stateProofLastAttestedRound 
 func (spt *spVerificationTracker) roundToLatestCommitContextIndex(committedRound basics.Round) int {
 	latestCommittedContextIndex := -1
 
-	for index, ctx := range spt.trackedCommitContext {
+	for index, ctx := range spt.pendingCommitContexts {
 		if ctx.confirmedRound > committedRound {
 			break
 		}
@@ -263,7 +263,7 @@ func (spt *spVerificationTracker) roundToLatestCommitContextIndex(committedRound
 func (spt *spVerificationTracker) roundToLatestDeleteContextIndex(committedRound basics.Round) int {
 	latestCommittedContextIndex := -1
 
-	for index, ctx := range spt.trackedDeleteContext {
+	for index, ctx := range spt.pendingDeleteContexts {
 		if ctx.confirmedRound > committedRound {
 			break
 		}
@@ -287,8 +287,8 @@ func (spt *spVerificationTracker) appendCommitContext(blk *bookkeeping.Block) {
 	spt.mu.Lock()
 	defer spt.mu.Unlock()
 
-	if len(spt.trackedCommitContext) > 0 {
-		lastCommitConfirmedRound := spt.trackedCommitContext[len(spt.trackedCommitContext)-1].confirmedRound
+	if len(spt.pendingCommitContexts) > 0 {
+		lastCommitConfirmedRound := spt.pendingCommitContexts[len(spt.pendingCommitContexts)-1].confirmedRound
 		if blk.Round() <= lastCommitConfirmedRound {
 			spt.log.Panicf("state proof verification: attempted to append commit context confirmed earlier than latest"+
 				"commit context, round: %d, last confirmed commit context round: %d", blk.Round(), lastCommitConfirmedRound)
@@ -300,15 +300,15 @@ func (spt *spVerificationTracker) appendCommitContext(blk *bookkeeping.Block) {
 		verificationContext: getVerificationContext(blk),
 	}
 
-	spt.trackedCommitContext = append(spt.trackedCommitContext, commitContext)
+	spt.pendingCommitContexts = append(spt.pendingCommitContexts, commitContext)
 }
 
 func (spt *spVerificationTracker) appendDeleteContext(blk *bookkeeping.Block, delta *ledgercore.StateDelta) {
 	spt.mu.Lock()
 	defer spt.mu.Unlock()
 
-	if len(spt.trackedDeleteContext) > 0 {
-		lastDeleteConfirmedRound := spt.trackedDeleteContext[len(spt.trackedDeleteContext)-1].confirmedRound
+	if len(spt.pendingDeleteContexts) > 0 {
+		lastDeleteConfirmedRound := spt.pendingDeleteContexts[len(spt.pendingDeleteContexts)-1].confirmedRound
 		if blk.Round() <= lastDeleteConfirmedRound {
 			spt.log.Panicf("state proof verification: attempted to append delete context confirmed earlier than latest"+
 				"delete context, round: %d, last confirmed delete context round: %d", blk.Round(), lastDeleteConfirmedRound)
@@ -320,5 +320,5 @@ func (spt *spVerificationTracker) appendDeleteContext(blk *bookkeeping.Block, de
 		stateProofNextRound: delta.StateProofNext,
 	}
 
-	spt.trackedDeleteContext = append(spt.trackedDeleteContext, deletionContext)
+	spt.pendingDeleteContexts = append(spt.pendingDeleteContexts, deletionContext)
 }

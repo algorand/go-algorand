@@ -359,7 +359,7 @@ func TestStateProofVerificationTracker_CommitNoDbPruning(t *testing.T) {
 	mockCommit(t, spt, ml, 0, lastStuckBlockRound)
 
 	verifyStateProofVerificationTracking(t, spt, defaultFirstStateProofContextRound, contextToAdd, defaultStateProofInterval, true, trackerDB)
-	a.Equal(maxStateProofsToGenerate, uint64(len(spt.trackedDeleteContext)))
+	a.Equal(maxStateProofsToGenerate, uint64(len(spt.pendingDeleteContexts)))
 }
 
 func TestStateProofVerificationTracker_StateProofIntervalChange(t *testing.T) {
@@ -443,7 +443,7 @@ func TestStateProofVerificationTracker_LookupVerificationContext(t *testing.T) {
 	a.Equal(memoryContextRound, memoryContext.LastAttestedRound)
 
 	// This error shouldn't happen in normal flow - we force it to happen for the test.
-	spt.trackedCommitContext[0].verificationContext.LastAttestedRound = 0
+	spt.pendingCommitContexts[0].verificationContext.LastAttestedRound = 0
 	spt.lastLookedUpVerificationContext = ledgercore.StateProofVerificationContext{}
 	_, err = spt.LookupVerificationContext(memoryContextRound)
 	a.ErrorIs(err, errSPVerificationContextNotFound)

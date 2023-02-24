@@ -66,7 +66,16 @@ func (spw *Worker) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Rou
 		buildr, err := createBuilder(rnd, votersFetcher)
 		if err != nil {
 			if errors.Is(err, errVotersNotTracked) {
-				// Voters not tracked for that round. state proofs might not be enabled.
+				// There are few reasons why we might encounter a situation where we don't
+				// have voters for a state proof round.
+				//
+				// 1 - When state proof chain starts, the first round s.t round  % proto.stateproofInterval == 0  will not
+				// have voters (since they are not enable). For this round we will not create a state proof.
+				// e.g if  proto.stateproofInterval == 10, and round = 10. We skip the state proof for that round
+				// (since there are not voters on round 0)
+				//
+				// 2 - When a node uses fastcatchup to some round, and immediately tries to create a builder.
+				// Node might fail to create the builder since MaxBalLookback (in catchpoint) might not be large enough
 				spw.log.Warnf("OnPrepareVoterCommit(%d): %v", rnd, err)
 				continue
 			}
@@ -75,6 +84,9 @@ func (spw *Worker) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Rou
 			continue
 		}
 
+		// At this point, there is a possibility that the signer has already created this specific builder
+		// (signer created  the builder after builderExistInDB was called and was fast enough to persist it).
+		// In this case we will rewrite the new builder
 		err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
 			return persistBuilder(tx, rnd, &buildr)
 		})
@@ -168,8 +180,6 @@ func createBuilder(rnd basics.Round, votersFetcher ledgercore.LedgerForSPBuilder
 		return builder{}, err
 	}
 	if voters == nil {
-		// Voters not tracked for that round.  Might not be a valid
-		// state proof round; state proofs might not be enabled; etc.
 		return builder{}, fmt.Errorf("lookback round %d: %w", lookback, errVotersNotTracked)
 	}
 
@@ -318,6 +328,11 @@ func (spw *Worker) meetsBroadcastPolicy(sfa sigFromAddr, latestRound basics.Roun
 func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.ForwardingPolicy, error) {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
+
+	// might happen if the state proof worker is stopping
+	if spw.builders == nil {
+		return network.Ignore, fmt.Errorf("handleSig: no builders loaded")
+	}
 
 	builderForRound, ok := spw.builders[sfa.Round]
 	if !ok {

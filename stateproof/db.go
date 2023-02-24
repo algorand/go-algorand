@@ -53,7 +53,7 @@ const (
     	builder BLOB NOT NULL
     )`
 
-	insertBuilderForRound = `INSERT INTO builders (round,builder) VALUES (?,?)`
+	insertOrReplaceBuilderForRound = `INSERT OR REPLACE INTO builders (round,builder) VALUES (?,?)`
 
 	selectBuilderForRound = `SELECT builder FROM builders WHERE round=?`
 
@@ -185,7 +185,7 @@ func rowsToPendingSigs(rows *sql.Rows) (map[basics.Round][]pendingSig, error) {
 
 //#region Builders Operations
 func persistBuilder(tx *sql.Tx, rnd basics.Round, b *builder) error {
-	_, err := tx.Exec(insertBuilderForRound, rnd, protocol.Encode(b))
+	_, err := tx.Exec(insertOrReplaceBuilderForRound, rnd, protocol.Encode(b))
 	return err
 }
 

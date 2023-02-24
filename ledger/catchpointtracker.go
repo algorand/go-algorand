@@ -22,6 +22,7 @@ import (
 	"compress/gzip"
 	"context"
 	"database/sql"
+	"encoding/base32"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -199,6 +200,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 	var totalChunks uint64
 	var biggestChunkLen uint64
 	var stateProofVerificationHash crypto.Digest
+	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
 
 	if ct.enableGeneratingCatchpointFiles {
 		// Generate the catchpoint file. This is done inline so that it will
@@ -206,8 +208,10 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		// expects that the accounts data would not be modified in the
 		// background during its execution.
 		var err error
+
+		catchpointGenerationStats.BalancesWriteTime = uint64(updatingBalancesDuration.Nanoseconds())
 		totalKVs, totalAccounts, totalChunks, biggestChunkLen, stateProofVerificationHash, err = ct.generateCatchpointData(
-			ctx, dbRound, updatingBalancesDuration)
+			ctx, dbRound, &catchpointGenerationStats)
 		atomic.StoreInt32(&ct.catchpointDataWriting, 0)
 		if err != nil {
 			return err
@@ -220,7 +224,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 			return err
 		}
 
-		err = ct.recordFirstStageInfo(ctx, tx, dbRound, totalKVs, totalAccounts, totalChunks, biggestChunkLen, stateProofVerificationHash)
+		err = ct.recordFirstStageInfo(ctx, tx, &catchpointGenerationStats, dbRound, totalKVs, totalAccounts, totalChunks, biggestChunkLen, stateProofVerificationHash)
 		if err != nil {
 			return err
 		}
@@ -360,7 +364,7 @@ func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.St
 
 	ct.roundDigest = append(ct.roundDigest, blk.Digest())
 
-	if (config.Consensus[blk.CurrentProtocol].EnableOnlineAccountCatchpoints || ct.forceCatchpointFileWriting) && ct.reenableCatchpointsRound == 0 {
+	if (config.Consensus[blk.CurrentProtocol].EnableCatchpointsWithSPContexts || ct.forceCatchpointFileWriting) && ct.reenableCatchpointsRound == 0 {
 		catchpointLookback := config.Consensus[blk.CurrentProtocol].CatchpointLookback
 		if catchpointLookback == 0 {
 			catchpointLookback = config.Consensus[blk.CurrentProtocol].MaxBalLookback
@@ -1086,13 +1090,10 @@ func (ct *catchpointTracker) IsWritingCatchpointDataFile() bool {
 // - Balance and KV chunk (named balances.x.msgpack).
 // 	 ...
 // - Balance and KV chunk (named balances.x.msgpack).
-func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, updatingBalancesDuration time.Duration) (totalKVs, totalAccounts, totalChunks, biggestChunkLen uint64, stateProofVerificationContextHash crypto.Digest, err error) {
+func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails) (totalKVs, totalAccounts, totalChunks, biggestChunkLen uint64, stateProofVerificationContextHash crypto.Digest, err error) {
 	ct.log.Debugf("catchpointTracker.generateCatchpointData() writing catchpoint accounts for round %d", accountsRound)
 
 	startTime := time.Now()
-	catchpointGenerationStats := telemetryspec.CatchpointGenerationEventDetails{
-		BalancesWriteTime: uint64(updatingBalancesDuration.Nanoseconds()),
-	}
 
 	catchpointDataFilePath := filepath.Join(ct.dbDirectory, store.CatchpointDirName)
 	catchpointDataFilePath =
@@ -1181,21 +1182,12 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	catchpointGenerationStats.WritingDuration = uint64(time.Since(startTime).Nanoseconds())
 	catchpointGenerationStats.AccountsCount = catchpointWriter.totalAccounts
 	catchpointGenerationStats.KVsCount = catchpointWriter.totalKVs
-	ct.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointGenerationEvent, catchpointGenerationStats)
-	ct.log.With("accountsRound", accountsRound).
-		With("writingDuration", catchpointGenerationStats.WritingDuration).
-		With("CPUTime", catchpointGenerationStats.CPUTime).
-		With("balancesWriteTime", catchpointGenerationStats.BalancesWriteTime).
-		With("accountsCount", catchpointGenerationStats.AccountsCount).
-		With("kvsCount", catchpointGenerationStats.KVsCount).
-		With("fileSize", catchpointGenerationStats.FileSize).
-		With("catchpointLabel", catchpointGenerationStats.CatchpointLabel).
-		Infof("Catchpoint data file was generated")
+	catchpointGenerationStats.AccountsRound = uint64(accountsRound)
 
 	return catchpointWriter.totalKVs, catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, stateProofVerificationContextHash, nil
 }
 
-func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx store.TransactionScope, accountsRound basics.Round, totalKVs uint64, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64, stateProofVerificationHash crypto.Digest) error {
+func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx store.TransactionScope, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails, accountsRound basics.Round, totalKVs uint64, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64, stateProofVerificationHash crypto.Digest) error {
 	arw, err := tx.MakeAccountsReaderWriter()
 	if err != nil {
 		return err
@@ -1240,7 +1232,26 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx store.
 		TrieBalancesHash:           trieBalancesHash,
 		StateProofVerificationHash: stateProofVerificationHash,
 	}
-	return crw.InsertOrReplaceCatchpointFirstStageInfo(ctx, accountsRound, &info)
+
+	err = crw.InsertOrReplaceCatchpointFirstStageInfo(ctx, accountsRound, &info)
+	if err != nil {
+		return err
+	}
+
+	catchpointGenerationStats.MerkleTrieRootHash = base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(trieBalancesHash[:])
+	catchpointGenerationStats.SPVerificationCtxsHash = base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(stateProofVerificationHash[:])
+	ct.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointGenerationEvent, catchpointGenerationStats)
+	ct.log.With("accountsRound", catchpointGenerationStats.AccountsRound).
+		With("writingDuration", catchpointGenerationStats.WritingDuration).
+		With("CPUTime", catchpointGenerationStats.CPUTime).
+		With("balancesWriteTime", catchpointGenerationStats.BalancesWriteTime).
+		With("accountsCount", catchpointGenerationStats.AccountsCount).
+		With("kvsCount", catchpointGenerationStats.KVsCount).
+		With("fileSize", catchpointGenerationStats.FileSize).
+		With("MerkleTrieRootHash", catchpointGenerationStats.MerkleTrieRootHash).
+		With("SPVerificationCtxsHash", catchpointGenerationStats.SPVerificationCtxsHash).
+		Infof("Catchpoint data file was generated")
+	return nil
 }
 
 func makeCatchpointDataFilePath(accountsRound basics.Round) string {
