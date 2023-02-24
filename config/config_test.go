@@ -663,3 +663,26 @@ func TestLocal_RecalculateConnectionLimits(t *testing.T) {
 		})
 	}
 }
+
+func TestCatchupBlockValidateFlags(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := GetDefaultLocal()
+	assert.True(t, cfg.CatchupVerifyCertificate())
+	assert.True(t, cfg.CatchupVerifyPaysetHash())
+	assert.True(t, cfg.CatchupVerifyTransactionSignatures())
+	assert.True(t, cfg.CatchupVerifyApplyData())
+
+	cfg.CatchupBlockValidateMode = 3
+	assert.False(t, cfg.CatchupVerifyCertificate())
+	assert.False(t, cfg.CatchupVerifyPaysetHash())
+	assert.False(t, cfg.CatchupVerifyTransactionSignatures())
+	assert.False(t, cfg.CatchupVerifyApplyData())
+
+	cfg.CatchupBlockValidateMode = 0
+	assert.True(t, cfg.CatchupVerifyCertificate())
+	assert.True(t, cfg.CatchupVerifyPaysetHash())
+	assert.False(t, cfg.CatchupVerifyTransactionSignatures())
+	assert.False(t, cfg.CatchupVerifyApplyData())
+}

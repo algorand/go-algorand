@@ -41,7 +41,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitely, otherwise, only the most recent blocks
@@ -405,14 +405,14 @@ type Local struct {
 	// This field is a bit-field with:
 	// bit 0: (default 0) 0: verify the block certificate; 1: skip this validation
 	// bit 1: (default 0) 0: verify payset committed hash in block header matches payset hash; 1: skip this validation
-	// bit 2: (default 0) 0: don't verify the transaction signatures on the block are valid; 1: verify the transaction signatures on block
-	// bit 3: (default 0) 0: don't verify that the hash of the recomputed payset matches the hash of the payset committed in the block header; 1: do perform the above verification
+	// bit 2: (default 1) 0: don't verify the transaction signatures on the block are valid; 1: verify the transaction signatures on block
+	// bit 3: (default 1) 0: don't verify that the hash of the recomputed payset matches the hash of the payset committed in the block header; 1: do perform the above verification
 	// Note: not all permutations of the above bitset are currently functional. In particular, the ones that are functional are:
 	// 0  : default behavior.
 	// 3  : speed up catchup by skipping necessary validations
 	// 12 : perform all validation methods (normal and additional). These extra tests helps to verify the integrity of the compiled executable against
-	//      previously used executabled, and would not provide any additional security guarantees.
-	CatchupBlockValidateMode int `version[16]:"0"`
+	//      previously used executabled, and blocks a node from progressing if it does not fully validate the contents of each block.
+	CatchupBlockValidateMode int `version[16]:"0" version[28]:"12"`
 
 	// Generate AccountUpdates telemetry event
 	EnableAccountUpdatesStats bool `version[16]:"false"`
