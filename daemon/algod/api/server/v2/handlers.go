@@ -1661,6 +1661,7 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// ExperimentalCheck is only available when EnabledExperimentalAPI is true
 func (vs *Handlers) ExperimentalCheck(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, true)
 }

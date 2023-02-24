@@ -1844,3 +1844,19 @@ func TestStateproofTransactionForRoundShutsDown(t *testing.T) {
 	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, stoppedChan)
 	a.ErrorIs(err, v2.ErrShutdown)
 }
+
+func TestExperimentalCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	defer releasefunc()
+
+	// Since we are invoking the method directly, it doesn't matter if EnableExperimentalAPI is true.
+	// When this is false, the router never even registers this endpoint.
+	err := handler.ExperimentalCheck(c)
+	require.NoError(t, err)
+
+	require.Equal(t, 200, rec.Code)
+	require.Equal(t, "true\n", string(rec.Body.Bytes()))
+}
