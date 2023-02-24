@@ -44,8 +44,6 @@ var msigLsigLessOrEqual4 = metrics.MakeCounter(metrics.MetricName{Name: "algod_v
 var msigLsigLessOrEqual10 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_lsig_5_10", Description: "Total transaction scripts with 5-10 msigs"})
 var msigLsigMore10 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_lsig_10", Description: "Total transaction scripts with 11+ msigs"})
 
-var errShuttingDownError = errors.New("not verified, verifier is shutting down")
-
 // The PaysetGroups is taking large set of transaction groups and attempt to verify their validity using multiple go-routines.
 // When doing so, it attempts to break these into smaller "worksets" where each workset takes about 2ms of execution time in order
 // to avoid context switching overhead while providing good validation cancellation responsiveness. Each one of these worksets is
