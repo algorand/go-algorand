@@ -398,6 +398,31 @@ func TestAppAxfer(t *testing.T) {
 	})
 }
 
+func TestInnerAppl(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	appl := `
+  itxn_begin
+   int appl;   itxn_field TypeEnum
+   int 56						// present in ForeignApps of sample txn
+   itxn_field ApplicationID
+  itxn_submit
+  int 1
+`
+
+	// v6 added inner appls
+	TestLogicRange(t, 6, 0, func(t *testing.T, ep *logic.EvalParams, tx *transactions.Transaction, ledger *logic.Ledger) {
+		// Establish 888 as the app id, and fund it.
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(basics.AppIndex(888).Address(), 200000)
+
+		ops := TestProg(t, "int 1", 5)
+		ledger.NewApp(basics.Address{0x01}, 56, basics.AppParams{ApprovalProgram: ops.Program})
+		TestApp(t, appl, ep)
+	})
+}
+
 func TestExtraFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

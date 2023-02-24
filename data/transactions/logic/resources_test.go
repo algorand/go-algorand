@@ -30,8 +30,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestAppSharing confirms that as of v9, apps can be accessed across
-// groups, but that before then, they could not.
+// TestAppSharing confirms that as of v9, apps can be accessed across groups,
+// but that before then, they could not.
 func TestAppSharing(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -39,19 +39,22 @@ func TestAppSharing(t *testing.T) {
 	// Create some sample transactions. The main reason this a blackbox test
 	// (_test package) is to have access to txntest.
 	appl0 := txntest.Txn{
-		Type:        protocol.ApplicationCallTx,
-		Sender:      basics.Address{1, 2, 3, 4},
-		ForeignApps: []basics.AppIndex{500},
+		Type:          protocol.ApplicationCallTx,
+		ApplicationID: 900,
+		Sender:        basics.Address{1, 2, 3, 4},
+		ForeignApps:   []basics.AppIndex{500},
 	}
 
 	appl1 := txntest.Txn{
-		Type:   protocol.ApplicationCallTx,
-		Sender: basics.Address{4, 3, 2, 1},
+		Type:          protocol.ApplicationCallTx,
+		ApplicationID: 901,
+		Sender:        basics.Address{4, 3, 2, 1},
 	}
 
 	appl2 := txntest.Txn{
-		Type:   protocol.ApplicationCallTx,
-		Sender: basics.Address{1, 2, 3, 4},
+		Type:          protocol.ApplicationCallTx,
+		ApplicationID: 902,
+		Sender:        basics.Address{1, 2, 3, 4},
 	}
 
 	getSchema := `
@@ -96,27 +99,46 @@ pop; pop; int 1
 	// foreign-app is not repeated in appl2 because the holding being accessed
 	// is the one from tx0.
 	logic.TestApps(t, sources, txntest.Group(&appl0, &appl2), 9, ledger)
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl2), 8, ledger, // version 8 does not get sharing
+		logic.NewExpect(1, "invalid App reference 500"))
 
 	// Checking if an account is opted in has pretty much the same rules
-	optInCheck := `
+	optInCheck500 := `
 int 0							// Sender
 int 500
 app_opted_in
 `
 
-	sources = []string{optInCheck, optInCheck}
+	sources = []string{optInCheck500, optInCheck500}
 	// app_opted_in requires the address and the app exist, else the program fails
-	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 8, nil,
-		logic.NewExpect(0, "no account"))
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, nil, // nil ledger, no account
+		logic.NewExpect(0, "no account: "+appl0.Sender.String()))
 
-	// Now txn0 passes, but txn1 has an error because it can't see app 500
+	// Now txn0 passes, but txn1 has an error because it can't see app 500 locals for appl1.Sender
 	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
-		logic.NewExpect(1, "invalid Local State access"))
+		logic.NewExpect(1, "invalid Local State access "+appl1.Sender.String()))
 
 	// But it's ok in appl2, because appl2 uses the same Sender, even though the
 	// foreign-app is not repeated in appl2 because the holding being accessed
 	// is the one from tx0.
 	logic.TestApps(t, sources, txntest.Group(&appl0, &appl2), 9, ledger)
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl2), 8, ledger, // version 8 does not get sharing
+		logic.NewExpect(1, "invalid App reference 500"))
+
+	// Confirm sharing applies to the app id called in tx0, not just foreign app array
+	optInCheck900 := `
+int 0							// Sender
+int 900
+app_opted_in
+!								// we did not opt any senders into 900
+`
+	sources = []string{optInCheck900, optInCheck900}
+	// as above, appl1 can't see the local state, but appl2 can b/c sender is same as appl0
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
+		logic.NewExpect(1, "invalid Local State access "+appl1.Sender.String()))
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl2), 9, ledger)
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl2), 8, ledger, // version 8 does not get sharing
+		logic.NewExpect(1, "invalid App reference 900"))
 
 	// Now, confirm that *setting* a local state in tx1 that was made available
 	// in tx0 works.  The extra check here is that the change is recorded
@@ -132,17 +154,19 @@ int 1
 	sources = []string{noop, putLocal}
 	appl1.ApplicationArgs = [][]byte{appl0.Sender[:]} // tx1 will try to modify local state exposed in tx0
 	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
-		logic.NewExpect(1, "account "+appl0.Sender.String()+" is not opted into 888"))
-	ledger.NewLocals(appl0.Sender, 888) // opt in
+		logic.NewExpect(1, "account "+appl0.Sender.String()+" is not opted into 901"))
+	ledger.NewLocals(appl0.Sender, 901) // opt in
 	ep := logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger)
 	require.Len(t, ep.TxnGroup, 2)
 	ed := ep.TxnGroup[1].ApplyData.EvalDelta
-	require.Len(t, ed.LocalDeltas, 1)
-	require.Contains(t, ed.LocalDeltas, uint64(1)) // no tx.Accounts, 1 indicates first in SharedAccts
-	sd := ed.LocalDeltas[1]
-	require.Len(t, sd, 1)
-	require.Contains(t, sd, "X")
-	require.EqualValues(t, 74, sd["X"].Uint)
+	require.Equal(t, map[uint64]basics.StateDelta{
+		1: { // no tx.Accounts, 1 indicates first in SharedAccts
+			"X": {
+				Action: basics.SetUintAction,
+				Uint:   74,
+			},
+		},
+	}, ed.LocalDeltas)
 	require.Len(t, ed.SharedAccts, 1)
 	require.Equal(t, ep.TxnGroup[0].Txn.Sender, ed.SharedAccts[0])
 }
@@ -280,8 +304,8 @@ pop; pop; int 1
 	logic.TestApp(t, getHoldingBalance, ep, "invalid Account reference "+joe.String())
 }
 
-// TestAccountPassing checks that some special accounts can be passed in
-// txn.Accounts for a called app.
+// TestAccountPassing checks that the current app account and foreign app's
+// accounts can be passed in txn.Accounts for a called app.
 func TestAccountPassing(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -592,6 +616,8 @@ int 1
 		// appl can pay the axfer sender
 		appl.ApplicationArgs = [][]byte{senderAcct[:], {asa1}}
 		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&axfer, &appl), 9, ledger)
+		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&axfer, &appl), 8, ledger,
+			logic.NewExpect(1, "invalid Account reference "+senderAcct.String()))
 		// but can't axfer to sender, because appAcct doesn't have holding access for the asa
 		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&axfer, &appl), 9, ledger,
 			logic.NewExpect(1, "invalid Holding access"))
@@ -655,7 +681,7 @@ int 1
 	})
 
 	t.Run("afrz", func(t *testing.T) {
-		appl.ForeignAssets = []basics.AssetIndex{} // reset after previous test
+		appl.ForeignAssets = []basics.AssetIndex{} // reset after previous tests
 		afrz := txntest.Txn{
 			Type:          protocol.AssetFreezeTx,
 			FreezeAsset:   asa1,
@@ -707,6 +733,102 @@ int 1
 		appl.ApplicationArgs = [][]byte{{asa2}} // but not asa2
 		logic.TestApps(t, []string{"", acfgArg}, txntest.Group(&afrz, &appl), 9, ledger,
 			logic.NewExpect(1, fmt.Sprintf("invalid Asset reference %d", asa2)))
+
+	})
+
+	t.Run("appl", func(t *testing.T) {
+		appl.ForeignAssets = []basics.AssetIndex{} // reset after previous test
+		appl.Accounts = []basics.Address{}         // reset after previous tests
+		appl0 := txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        senderAcct,
+			Accounts:      []basics.Address{otherAcct},
+			ForeignAssets: []basics.AssetIndex{asa1},
+		}
+
+		// appl can pay to the otherAcct because it was in tx0
+		appl.ApplicationArgs = [][]byte{otherAcct[:], {asa1}}
+		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&appl0, &appl), 9, ledger)
+		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&appl0, &appl), 8, ledger, // version 8 does not get sharing
+			logic.NewExpect(1, "invalid Account reference "+otherAcct.String()))
+		// appl can (almost) axfer asa1 to the otherAcct because both are in tx0
+		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&appl0, &appl), 9, ledger,
+			logic.NewExpect(1, "axfer Sender: invalid Holding"))
+		// but it can't take access it's OWN asa1, unless added to ForeignAssets
+		appl.ForeignAssets = []basics.AssetIndex{asa1}
+		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&appl0, &appl), 9, ledger)
+
+		// but it can't use 202 at all. notice the error is more direct that
+		// above, as the problem is not the axfer Sender, only, it's that 202
+		// can't be used at all.
+		appl.ApplicationArgs = [][]byte{otherAcct[:], {asa2}}
+		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&appl0, &appl), 9, ledger,
+			logic.NewExpect(1, "invalid Asset reference 202"))
+		// And adding asa2 does not fix this problem, because the other x 202 holding is unavailable
+		appl.ForeignAssets = []basics.AssetIndex{asa2}
+		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&appl0, &appl), 9, ledger,
+			logic.NewExpect(1, "axfer AssetReceiver: invalid Holding access "+otherAcct.String()+" x 202"))
+
+		// Now, conduct similar tests, but with the apps performing the
+		// pays/axfers invoked from an outer app. Use various versions to check
+		// cross version sharing.
+
+		// add v8 and v9 versions of the pay app to the ledger for inner calling
+		payToArgV8 := logic.TestProg(t, payToArg, 8)
+		ledger.NewApp(senderAcct, 88, basics.AppParams{ApprovalProgram: payToArgV8.Program})
+		ledger.NewAccount(appAddr(88), 1_000_000)
+		payToArgV9 := logic.TestProg(t, payToArg, 9)
+		ledger.NewApp(senderAcct, 99, basics.AppParams{ApprovalProgram: payToArgV9.Program})
+		ledger.NewAccount(appAddr(99), 1_000_000)
+
+		approvalV8 := logic.TestProg(t, "int 1", 8)
+		ledger.NewApp(senderAcct, 11, basics.AppParams{ApprovalProgram: approvalV8.Program})
+
+		innerCallTemplate := `
+itxn_begin
+int appl;                     itxn_field TypeEnum;
+txn ApplicationArgs 0; btoi;  itxn_field ApplicationID
+txn ApplicationArgs 1;        itxn_field ApplicationArgs
+txn ApplicationArgs 2;        itxn_field ApplicationArgs
+%s
+itxn_submit
+int 1
+`
+		innerCall := fmt.Sprintf(innerCallTemplate, "")
+
+		appl.ForeignApps = []basics.AppIndex{11, 88, 99}
+
+		appl.ApplicationArgs = [][]byte{{99}, otherAcct[:], {asa1}}
+		logic.TestApps(t, []string{"", innerCall}, txntest.Group(&appl0, &appl), 9, ledger)
+		// when the inner program is v8, it can't perform the pay
+		appl.ApplicationArgs = [][]byte{{88}, otherAcct[:], {asa1}}
+		logic.TestApps(t, []string{"", innerCall}, txntest.Group(&appl0, &appl), 9, ledger,
+			logic.NewExpect(1, "invalid Account reference "+otherAcct.String()))
+		// unless the caller passes in the account, but it can't because that
+		// would give the called app access to the passed account's locate state
+		innerCallWithAccount := fmt.Sprintf(innerCallTemplate, "addr "+otherAcct.String()+"; itxn_field Accounts")
+		logic.TestApps(t, []string{"", innerCallWithAccount}, txntest.Group(&appl0, &appl), 9, ledger,
+			logic.NewExpect(1, "appl ApplicationID: invalid Local State access "+otherAcct.String()))
+		// the caller can't fix by passing 88 as a foreign app, because doing so
+		// gives the v8 app access to that local state that the caller does not
+		// have access to.
+		innerCallWithBoth := fmt.Sprintf(innerCallTemplate,
+			"addr "+otherAcct.String()+"; itxn_field Accounts; int 88; itxn_field Applications")
+		logic.TestApps(t, []string{"", innerCallWithBoth}, txntest.Group(&appl0, &appl), 9, ledger,
+			logic.NewExpect(1, "appl ApplicationID: invalid Local State access "+otherAcct.String()))
+
+		// the caller *can* do it if it originally had access to that 88 holding.
+		appl0.ForeignApps = []basics.AppIndex{88}
+		logic.TestApps(t, []string{"", innerCallWithAccount}, txntest.Group(&appl0, &appl), 9, ledger)
+
+		// here we confirm that even if we try calling another, simple app, we
+		// can't pass in other and 88, because that would give the app accesss
+		// to that local state. (this is confirming we check the cross product
+		// of the foreign arrays, not just the accounts against called app id)
+		appl.ApplicationArgs = [][]byte{{11}, otherAcct[:], {asa1}}
+		appl0.ForeignApps = []basics.AppIndex{11}
+		logic.TestApps(t, []string{"", innerCallWithBoth}, txntest.Group(&appl0, &appl), 9, ledger,
+			logic.NewExpect(1, "appl ForeignApps: invalid Local State access "+otherAcct.String()))
 
 	})
 
@@ -762,5 +884,4 @@ func TestAccessMyLocals(t *testing.T) {
 `
 		logic.TestApp(t, source, ep)
 	})
-
 }
