@@ -377,3 +377,14 @@ func (dbg *WebDebugger) Complete(state *DebugState) {
 		logging.Base().Errorf("Failed to post state to exec/complete: %s", err.Error())
 	}
 }
+
+// optionally set at init() time by code under `debugteal` build flag in debug_receiver.go
+var debugTealDebuggerFactory func() DebuggerHook
+
+// DebugTealDebugger normally returns nil, but if compiled with tag `debugteal` it will return a DebuggerHook that collects a trace which can be printed by the .String() method on it.
+func DebugTealDebugger() DebuggerHook {
+	if debugTealDebuggerFactory == nil {
+		return nil
+	}
+	return debugTealDebuggerFactory()
+}

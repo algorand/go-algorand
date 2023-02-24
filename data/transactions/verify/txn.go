@@ -433,13 +433,20 @@ func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *Group
 		SigLedger:     groupCtx.ledger,
 		Tracer:        evalTracer,
 	}
+	ep.Debugger = logic.DebugTealDebugger()
 	pass, cx, err := logic.EvalSignatureFull(groupIndex, &ep)
 	if err != nil {
 		logicErrTotal.Inc(nil)
+		if ep.Debugger != nil {
+			logging.Base().Info(txn.ID(), " LogicSig err trace\n", ep.Debugger)
+		}
 		return fmt.Errorf("transaction %v: rejected by logic err=%v", txn.ID(), err)
 	}
 	if !pass {
 		logicRejTotal.Inc(nil)
+		if ep.Debugger != nil {
+			logging.Base().Info(txn.ID(), " LogicSig rejection trace\n", ep.Debugger)
+		}
 		return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
 	}
 	logicGoodTotal.Inc(nil)
