@@ -416,6 +416,20 @@ func logicSigSanityCheckBatchPrep(txn *transactions.SignedTxn, groupIndex int, g
 	return nil
 }
 
+// LogicSigError represents a LogicSig evaluation which rejected or errored
+type LogicSigError struct {
+	GroupIndex int
+	err        error
+}
+
+func (e LogicSigError) Error() string {
+	return e.err.Error()
+}
+
+func (e LogicSigError) Unwrap() error {
+	return e.err
+}
+
 // logicSigVerify checks that the signature is valid, executing the program.
 func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext, evalTracer logic.EvalTracer) error {
 	err := LogicSigSanityCheck(txn, groupIndex, groupCtx)
@@ -436,11 +450,11 @@ func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *Group
 	pass, cx, err := logic.EvalSignatureFull(groupIndex, &ep)
 	if err != nil {
 		logicErrTotal.Inc(nil)
-		return fmt.Errorf("transaction %v: rejected by logic err=%v", txn.ID(), err)
+		return LogicSigError{groupIndex, fmt.Errorf("transaction %v: rejected by logic err=%w", txn.ID(), err)}
 	}
 	if !pass {
 		logicRejTotal.Inc(nil)
-		return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
+		return LogicSigError{groupIndex, fmt.Errorf("transaction %v: rejected by logic", txn.ID())}
 	}
 	logicGoodTotal.Inc(nil)
 	logicCostTotal.AddUint64(uint64(cx.Cost()), nil)

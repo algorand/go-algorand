@@ -86,7 +86,7 @@ func TestErrors(t *testing.T) {
 	node := setupFollowNode(t)
 	require.Error(t, node.BroadcastSignedTxGroup([]transactions.SignedTxn{}))
 	require.Error(t, node.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{}))
-	_, _, err := node.Simulate([]transactions.SignedTxn{})
+	_, err := node.Simulate([]transactions.SignedTxn{})
 	require.Error(t, err)
 	_, err = node.GetParticipationKey(account.ParticipationID{})
 	require.Error(t, err)

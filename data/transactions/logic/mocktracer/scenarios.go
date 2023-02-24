@@ -17,6 +17,7 @@
 package mocktracer
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math"
 
@@ -29,6 +30,9 @@ import (
 )
 
 const programTemplate string = `#pragma version 6
+pushbytes "a"
+log
+
 %s
 
 itxn_begin
@@ -41,6 +45,9 @@ itxn_field ApprovalProgram
 pushbytes 0x068101 // #pragma version 6; int 1;
 itxn_field ClearStateProgram
 itxn_submit
+
+pushbytes "b"
+log
 
 %s
 
@@ -60,7 +67,14 @@ global CurrentApplicationAddress
 itxn_field Receiver
 itxn_submit
 
+pushbytes "c"
+log
+
 %s`
+
+func fillProgramTemplate(beforeInnersOps, innerApprovalProgram, betweenInnersOps string, innerPay1Amount, innerPay2Amount uint64, afterInnersOps string) string {
+	return fmt.Sprintf(programTemplate, beforeInnersOps, innerApprovalProgram, betweenInnersOps, innerPay1Amount, innerPay2Amount, afterInnersOps)
+}
 
 // TestScenarioInfo holds arguments used to call a TestScenarioGenerator
 type TestScenarioInfo struct {
@@ -74,9 +88,11 @@ func expectedApplyData(info TestScenarioInfo) transactions.ApplyData {
 		Type:   protocol.ApplicationCallTx,
 		Sender: info.CreatedAppID.Address(),
 		ApprovalProgram: `#pragma version 6
-int 1`,
+pushbytes "x"
+log
+pushint 1`,
 		ClearStateProgram: `#pragma version 6
-int 1`,
+pushint 1`,
 
 		FirstValid: info.CallingTxn.FirstValid,
 		LastValid:  info.CallingTxn.LastValid,
@@ -87,6 +103,7 @@ int 1`,
 		EvalDelta: transactions.EvalDelta{
 			GlobalDelta: basics.StateDelta{},
 			LocalDeltas: map[uint64]basics.StateDelta{},
+			Logs:        []string{"x"},
 		},
 	}
 	expectedInnerPay1 := txntest.Txn{
@@ -130,6 +147,7 @@ int 1`,
 					ApplyData: expectedInnerPay2AD,
 				},
 			},
+			Logs: []string{"a", "b", "c"},
 		},
 	}
 }
@@ -148,10 +166,12 @@ const (
 
 // TestScenario represents a testing scenario. See GetTestScenarios for more details.
 type TestScenario struct {
-	Outcome        TestScenarioOutcome
-	Program        string
-	ExpectedError  string
-	ExpectedEvents []Event
+	Outcome              TestScenarioOutcome
+	Program              string
+	ExpectedError        string
+	FailedAt             []uint64
+	ExpectedEvents       []Event
+	ExpectedSimulationAD transactions.ApplyData
 }
 
 // TestScenarioGenerator is a function which instantiates a TestScenario
@@ -171,34 +191,38 @@ type TestScenarioGenerator func(info TestScenarioInfo) TestScenario
 // groups, and after all inners. For app call failures, there are scenarios for both rejection and
 // runtime errors, which should invoke tracer hooks slightly differently.
 func GetTestScenarios() map[string]TestScenarioGenerator {
+	successInnerProgramBytes := []byte{0x06, 0x80, 0x01, 0x78, 0xb0, 0x81, 0x01} // #pragma version 6; pushbytes "x"; log; pushint 1
+	successInnerProgram := "0x" + hex.EncodeToString(successInnerProgramBytes)
+
 	noFailureName := "none"
 	noFailure := func(info TestScenarioInfo) TestScenario {
 		expectedAD := expectedApplyData(info)
-		program := fmt.Sprintf(programTemplate, "", "0x068101", "", 1, 2, "pushint 1")
+		program := fillProgramTemplate("", successInnerProgram, "", 1, 2, "pushint 1")
 		return TestScenario{
 			Outcome:       ApprovalOutcome,
 			Program:       program,
+			FailedAt:      nil,
 			ExpectedError: "", // no error
 			ExpectedEvents: FlattenEvents([][]Event{
 				{
 					BeforeTxn(protocol.ApplicationCallTx),
 					BeforeProgram(logic.ModeApp),
 				},
-				OpcodeEvents(9, false),
+				OpcodeEvents(11, false),
 				{
 					BeforeOpcode(),
 					BeforeTxnGroup(1), // start first itxn group
 					BeforeTxn(protocol.ApplicationCallTx),
 					BeforeProgram(logic.ModeApp),
 				},
-				OpcodeEvents(1, false),
+				OpcodeEvents(3, false),
 				{
 					AfterProgram(logic.ModeApp, false),
 					AfterTxn(protocol.ApplicationCallTx, expectedAD.EvalDelta.InnerTxns[0].ApplyData, false),
 					AfterTxnGroup(1, false), // end first itxn group
 					AfterOpcode(false),
 				},
-				OpcodeEvents(14, false),
+				OpcodeEvents(16, false),
 				{
 					BeforeOpcode(),
 					BeforeTxnGroup(2), // start second itxn group
@@ -209,12 +233,13 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					AfterTxnGroup(2, false), // end second itxn group
 					AfterOpcode(false),
 				},
-				OpcodeEvents(1, false),
+				OpcodeEvents(3, false),
 				{
 					AfterProgram(logic.ModeApp, false),
 					AfterTxn(protocol.ApplicationCallTx, expectedAD, false),
 				},
 			}),
+			ExpectedSimulationAD: expectedAD,
 		}
 	}
 
@@ -226,7 +251,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 		shouldError := shouldError
 		failureOps := "pushint 0\nreturn"
 		singleFailureOp := "pushint 0"
-		failureInnerProgram := "0x068100"
+		failureInnerProgramBytes := []byte{0x06, 0x80, 0x01, 0x78, 0xb0, 0x81, 0x00} // #pragma version 6; pushbytes "x"; log; pushint 0
 		failureMessage := "transaction rejected by ApprovalProgram"
 		outcome := RejectionOutcome
 		if shouldError {
@@ -234,32 +259,39 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 			// trace event consistency with rejections.
 			failureOps = "pushint 0\nerr"
 			singleFailureOp = "err"
-			failureInnerProgram = "0x0600"
+			failureInnerProgramBytes = []byte{0x06, 0x80, 0x01, 0x78, 0xb0, 0x00} // #pragma version 6; pushbytes "x"; log; err
 			failureMessage = "err opcode executed"
 			outcome = ErrorOutcome
 		}
+		failureInnerProgram := "0x" + hex.EncodeToString(failureInnerProgramBytes)
 
 		beforeInnersName := fmt.Sprintf("before inners,error=%t", shouldError)
 		beforeInners := func(info TestScenarioInfo) TestScenario {
 			expectedAD := expectedApplyData(info)
-			program := fmt.Sprintf(programTemplate, failureOps, "0x068101", "", 1, 2, "pushint 1")
+			program := fillProgramTemplate(failureOps, successInnerProgram, "", 1, 2, "pushint 1")
 			// EvalDeltas are removed from failed app call transactions
-			expectedAD.EvalDelta = transactions.EvalDelta{}
+			expectedADNoED := expectedAD
+			expectedADNoED.EvalDelta = transactions.EvalDelta{}
+			// Only first log happens
+			expectedAD.EvalDelta.Logs = expectedAD.EvalDelta.Logs[:1]
+			expectedAD.EvalDelta.InnerTxns = nil
 			return TestScenario{
 				Outcome:       outcome,
 				Program:       program,
 				ExpectedError: failureMessage,
+				FailedAt:      []uint64{0},
 				ExpectedEvents: FlattenEvents([][]Event{
 					{
 						BeforeTxn(protocol.ApplicationCallTx),
 						BeforeProgram(logic.ModeApp),
 					},
-					OpcodeEvents(2, shouldError),
+					OpcodeEvents(4, shouldError),
 					{
 						AfterProgram(logic.ModeApp, shouldError),
-						AfterTxn(protocol.ApplicationCallTx, expectedAD, true),
+						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 					},
 				}),
+				ExpectedSimulationAD: expectedAD,
 			}
 		}
 		scenarios[beforeInnersName] = beforeInners
@@ -267,37 +299,48 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 		firstInnerName := fmt.Sprintf("first inner,error=%t", shouldError)
 		firstInner := func(info TestScenarioInfo) TestScenario {
 			expectedAD := expectedApplyData(info)
+
 			// EvalDeltas are removed from failed app call transactions
 			expectedInnerAppCallADNoEvalDelta := expectedAD.EvalDelta.InnerTxns[0].ApplyData
 			expectedInnerAppCallADNoEvalDelta.EvalDelta = transactions.EvalDelta{}
-			expectedAD.EvalDelta = transactions.EvalDelta{}
-			program := fmt.Sprintf(programTemplate, "", failureInnerProgram, "", 1, 2, "pushint 1")
+			expectedADNoED := expectedAD
+			expectedADNoED.EvalDelta = transactions.EvalDelta{}
+
+			// Only first log happens
+			expectedAD.EvalDelta.Logs = expectedAD.EvalDelta.Logs[:1]
+
+			expectedAD.EvalDelta.InnerTxns = expectedAD.EvalDelta.InnerTxns[:1]
+			expectedAD.EvalDelta.InnerTxns[0].Txn.ApprovalProgram = failureInnerProgramBytes
+
+			program := fillProgramTemplate("", failureInnerProgram, "", 1, 2, "pushint 1")
 			return TestScenario{
 				Outcome:       outcome,
 				Program:       program,
 				ExpectedError: failureMessage,
+				FailedAt:      []uint64{0, 0},
 				ExpectedEvents: FlattenEvents([][]Event{
 					{
 						BeforeTxn(protocol.ApplicationCallTx),
 						BeforeProgram(logic.ModeApp),
 					},
-					OpcodeEvents(9, false),
+					OpcodeEvents(11, false),
 					{
 						BeforeOpcode(),
 						BeforeTxnGroup(1), // start first itxn group
 						BeforeTxn(protocol.ApplicationCallTx),
 						BeforeProgram(logic.ModeApp),
 					},
-					OpcodeEvents(1, shouldError),
+					OpcodeEvents(3, shouldError),
 					{
 						AfterProgram(logic.ModeApp, shouldError),
 						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallADNoEvalDelta, true),
 						AfterTxnGroup(1, true), // end first itxn group
 						AfterOpcode(true),
 						AfterProgram(logic.ModeApp, true),
-						AfterTxn(protocol.ApplicationCallTx, expectedAD, true),
+						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 					},
 				}),
+				ExpectedSimulationAD: expectedAD,
 			}
 		}
 		scenarios[firstInnerName] = firstInner
@@ -306,38 +349,48 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 		betweenInners := func(info TestScenarioInfo) TestScenario {
 			expectedAD := expectedApplyData(info)
 			expectedInnerAppCallAD := expectedAD.EvalDelta.InnerTxns[0].ApplyData
+
 			// EvalDeltas are removed from failed app call transactions
-			expectedAD.EvalDelta = transactions.EvalDelta{}
-			program := fmt.Sprintf(programTemplate, "", "0x068101", failureOps, 1, 2, "pushint 1")
+			expectedADNoED := expectedAD
+			expectedADNoED.EvalDelta = transactions.EvalDelta{}
+
+			// Only first two logs happen
+			expectedAD.EvalDelta.Logs = expectedAD.EvalDelta.Logs[:2]
+
+			expectedAD.EvalDelta.InnerTxns = expectedAD.EvalDelta.InnerTxns[:1]
+
+			program := fillProgramTemplate("", successInnerProgram, failureOps, 1, 2, "pushint 1")
 			return TestScenario{
 				Outcome:       outcome,
 				Program:       program,
 				ExpectedError: failureMessage,
+				FailedAt:      []uint64{0},
 				ExpectedEvents: FlattenEvents([][]Event{
 					{
 						BeforeTxn(protocol.ApplicationCallTx),
 						BeforeProgram(logic.ModeApp),
 					},
-					OpcodeEvents(9, false),
+					OpcodeEvents(11, false),
 					{
 						BeforeOpcode(),
 						BeforeTxnGroup(1), // start first itxn group
 						BeforeTxn(protocol.ApplicationCallTx),
 						BeforeProgram(logic.ModeApp),
 					},
-					OpcodeEvents(1, false),
+					OpcodeEvents(3, false),
 					{
 						AfterProgram(logic.ModeApp, false),
 						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
 						AfterTxnGroup(1, false), // end first itxn group
 						AfterOpcode(false),
 					},
-					OpcodeEvents(2, shouldError),
+					OpcodeEvents(4, shouldError),
 					{
 						AfterProgram(logic.ModeApp, shouldError),
-						AfterTxn(protocol.ApplicationCallTx, expectedAD, true),
+						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 					},
 				}),
+				ExpectedSimulationAD: expectedAD,
 			}
 		}
 		scenarios[betweenInnersName] = betweenInners
@@ -348,33 +401,42 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				expectedAD := expectedApplyData(info)
 				expectedInnerAppCallAD := expectedAD.EvalDelta.InnerTxns[0].ApplyData
 				expectedInnerPay1AD := expectedAD.EvalDelta.InnerTxns[1].ApplyData
+
 				// EvalDeltas are removed from failed app call transactions
-				expectedAD.EvalDelta = transactions.EvalDelta{}
-				program := fmt.Sprintf(programTemplate, "", "0x068101", "", uint64(math.MaxUint64), 2, "pushint 1")
+				expectedADNoED := expectedAD
+				expectedADNoED.EvalDelta = transactions.EvalDelta{}
+
+				// Only first two logs happen
+				expectedAD.EvalDelta.Logs = expectedAD.EvalDelta.Logs[:2]
+
+				expectedAD.EvalDelta.InnerTxns[1].Txn.Amount.Raw = math.MaxUint64
+
+				program := fillProgramTemplate("", successInnerProgram, "", math.MaxUint64, 2, "pushint 1")
 				return TestScenario{
 					Outcome:       ErrorOutcome,
 					Program:       program,
 					ExpectedError: "overspend",
+					FailedAt:      []uint64{0, 1},
 					ExpectedEvents: FlattenEvents([][]Event{
 						{
 							BeforeTxn(protocol.ApplicationCallTx),
 							BeforeProgram(logic.ModeApp),
 						},
-						OpcodeEvents(9, false),
+						OpcodeEvents(11, false),
 						{
 							BeforeOpcode(),
 							BeforeTxnGroup(1), // start first itxn group
 							BeforeTxn(protocol.ApplicationCallTx),
 							BeforeProgram(logic.ModeApp),
 						},
-						OpcodeEvents(1, false),
+						OpcodeEvents(3, false),
 						{
 							AfterProgram(logic.ModeApp, false),
 							AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
 							AfterTxnGroup(1, false), // end first itxn group
 							AfterOpcode(false),
 						},
-						OpcodeEvents(14, false),
+						OpcodeEvents(16, false),
 						{
 							BeforeOpcode(),
 							BeforeTxnGroup(2), // start second itxn group
@@ -383,9 +445,10 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 							AfterTxnGroup(2, true), // end second itxn group
 							AfterOpcode(true),
 							AfterProgram(logic.ModeApp, true),
-							AfterTxn(protocol.ApplicationCallTx, expectedAD, true),
+							AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 						},
 					}),
+					ExpectedSimulationAD: expectedAD,
 				}
 			}
 			scenarios[secondInnerName] = secondInner
@@ -393,36 +456,46 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 			thirdInnerName := "third inner"
 			thirdInner := func(info TestScenarioInfo) TestScenario {
 				expectedAD := expectedApplyData(info)
+
 				expectedInnerAppCallAD := expectedAD.EvalDelta.InnerTxns[0].ApplyData
 				expectedInnerPay1AD := expectedAD.EvalDelta.InnerTxns[1].ApplyData
 				expectedInnerPay2AD := expectedAD.EvalDelta.InnerTxns[2].ApplyData
+
 				// EvalDeltas are removed from failed app call transactions
-				expectedAD.EvalDelta = transactions.EvalDelta{}
-				program := fmt.Sprintf(programTemplate, "", "0x068101", "", 1, uint64(math.MaxUint64), "pushint 1")
+				expectedADNoED := expectedAD
+				expectedADNoED.EvalDelta = transactions.EvalDelta{}
+
+				// Only first two logs happen
+				expectedAD.EvalDelta.Logs = expectedAD.EvalDelta.Logs[:2]
+
+				expectedAD.EvalDelta.InnerTxns[2].Txn.Amount.Raw = math.MaxUint64
+
+				program := fillProgramTemplate("", successInnerProgram, "", 1, math.MaxUint64, "pushint 1")
 				return TestScenario{
 					Outcome:       ErrorOutcome,
 					Program:       program,
 					ExpectedError: "overspend",
+					FailedAt:      []uint64{0, 2},
 					ExpectedEvents: FlattenEvents([][]Event{
 						{
 							BeforeTxn(protocol.ApplicationCallTx),
 							BeforeProgram(logic.ModeApp),
 						},
-						OpcodeEvents(9, false),
+						OpcodeEvents(11, false),
 						{
 							BeforeOpcode(),
 							BeforeTxnGroup(1), // start first itxn group
 							BeforeTxn(protocol.ApplicationCallTx),
 							BeforeProgram(logic.ModeApp),
 						},
-						OpcodeEvents(1, false),
+						OpcodeEvents(3, false),
 						{
 							AfterProgram(logic.ModeApp, false),
 							AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
 							AfterTxnGroup(1, false), // end first itxn group
 							AfterOpcode(false),
 						},
-						OpcodeEvents(14, false),
+						OpcodeEvents(16, false),
 						{
 							BeforeOpcode(),
 							BeforeTxnGroup(2), // start second itxn group
@@ -433,9 +506,10 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 							AfterTxnGroup(2, true), // end second itxn group
 							AfterOpcode(true),
 							AfterProgram(logic.ModeApp, true),
-							AfterTxn(protocol.ApplicationCallTx, expectedAD, true),
+							AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 						},
 					}),
+					ExpectedSimulationAD: expectedAD,
 				}
 			}
 			scenarios[thirdInnerName] = thirdInner
@@ -448,32 +522,34 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 			expectedInnerPay1AD := expectedAD.EvalDelta.InnerTxns[1].ApplyData
 			expectedInnerPay2AD := expectedAD.EvalDelta.InnerTxns[2].ApplyData
 			// EvalDeltas are removed from failed app call transactions
-			expectedAD.EvalDelta = transactions.EvalDelta{}
-			program := fmt.Sprintf(programTemplate, "", "0x068101", "", 1, 2, singleFailureOp)
+			expectedADNoED := expectedAD
+			expectedADNoED.EvalDelta = transactions.EvalDelta{}
+			program := fillProgramTemplate("", successInnerProgram, "", 1, 2, singleFailureOp)
 			return TestScenario{
 				Outcome:       outcome,
 				Program:       program,
 				ExpectedError: failureMessage,
+				FailedAt:      []uint64{0},
 				ExpectedEvents: FlattenEvents([][]Event{
 					{
 						BeforeTxn(protocol.ApplicationCallTx),
 						BeforeProgram(logic.ModeApp),
 					},
-					OpcodeEvents(9, false),
+					OpcodeEvents(11, false),
 					{
 						BeforeOpcode(),
 						BeforeTxnGroup(1), // start first itxn group
 						BeforeTxn(protocol.ApplicationCallTx),
 						BeforeProgram(logic.ModeApp),
 					},
-					OpcodeEvents(1, false),
+					OpcodeEvents(3, false),
 					{
 						AfterProgram(logic.ModeApp, false),
 						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
 						AfterTxnGroup(1, false), // end first itxn group
 						AfterOpcode(false),
 					},
-					OpcodeEvents(14, false),
+					OpcodeEvents(16, false),
 					{
 						BeforeOpcode(),
 						BeforeTxnGroup(2), // start second itxn group
@@ -484,12 +560,13 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 						AfterTxnGroup(2, false), // end second itxn group
 						AfterOpcode(false),
 					},
-					OpcodeEvents(1, shouldError),
+					OpcodeEvents(3, shouldError),
 					{
 						AfterProgram(logic.ModeApp, shouldError),
-						AfterTxn(protocol.ApplicationCallTx, expectedAD, true),
+						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 					},
 				}),
+				ExpectedSimulationAD: expectedAD,
 			}
 		}
 		scenarios[afterInnersName] = afterInners
