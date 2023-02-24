@@ -311,7 +311,10 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 		cfg.DeadlockDetection = node.DeadlockDetection
 	}
 
-	decodeJSONOverride(node.ConfigJSONOverride, &cfg)
+	err := decodeJSONOverride(node.ConfigJSONOverride, &cfg)
+	if err != nil {
+		return err
+	}
 
 	return cfg.SaveToFile(configFile)
 }
