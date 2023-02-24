@@ -37,7 +37,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
-	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqliteImpl"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -298,7 +298,7 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs trackerdb.Tracker
 	outErr := make(chan error, 2)
 	go func() {
 		var lerr error
-		trackerDBs, lerr = sqliteImpl.OpenTrackerSQLStore(trackerDBFilename, dbMem)
+		trackerDBs, lerr = sqlitedriver.OpenTrackerSQLStore(trackerDBFilename, dbMem)
 		outErr <- lerr
 	}()
 

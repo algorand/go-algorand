@@ -38,7 +38,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
-	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqliteImpl"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -93,7 +93,7 @@ func setupAccts(niter int) []map[basics.Address]basics.AccountData {
 }
 
 func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, l logging.Logger) *mockLedgerForTracker {
-	dbs, fileName := sqliteImpl.DbOpenTrackerTest(t, inMemory)
+	dbs, fileName := sqlitedriver.DbOpenTrackerTest(t, inMemory)
 	dbs.SetLogger(l)
 
 	blocks := randomInitChain(consensusVersion, initialBlocksCount)
@@ -165,7 +165,7 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 	dbs.Rdb.SetLogger(dblogger)
 	dbs.Wdb.SetLogger(dblogger)
 
-	newLedgerTracker.dbs = sqliteImpl.CreateTrackerSQLStore(dbs)
+	newLedgerTracker.dbs = sqlitedriver.CreateTrackerSQLStore(dbs)
 	return newLedgerTracker
 }
 
@@ -997,7 +997,7 @@ func TestListCreatables(t *testing.T) {
 	numElementsPerSegement := 25
 
 	// set up the database
-	dbs, _ := sqliteImpl.DbOpenTrackerTest(t, true)
+	dbs, _ := sqlitedriver.DbOpenTrackerTest(t, true)
 	dblogger := logging.TestingLog(t)
 	dbs.SetLogger(dblogger)
 	defer dbs.Close()

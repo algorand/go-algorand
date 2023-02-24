@@ -43,7 +43,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
-	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqliteImpl"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -149,7 +149,7 @@ func TestAccountDBInit(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	dbs, _ := sqliteImpl.DbOpenTrackerTest(t, true)
+	dbs, _ := sqlitedriver.DbOpenTrackerTest(t, true)
 	dbs.SetLogger(logging.TestingLog(t))
 	defer dbs.Close()
 
@@ -210,7 +210,7 @@ func TestAccountDBRound(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	dbs, _ := sqliteImpl.DbOpenTrackerTest(t, true)
+	dbs, _ := sqlitedriver.DbOpenTrackerTest(t, true)
 	dbs.SetLogger(logging.TestingLog(t))
 	defer dbs.Close()
 
@@ -366,7 +366,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 
 	for i, test := range tests {
 
-		dbs, _ := sqliteImpl.DbOpenTrackerTest(t, true)
+		dbs, _ := sqlitedriver.DbOpenTrackerTest(t, true)
 		dbs.SetLogger(logging.TestingLog(t))
 		defer dbs.Close()
 
@@ -437,7 +437,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 func TestAccountStorageWithStateProofID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := sqliteImpl.DbOpenTrackerTest(t, true)
+	dbs, _ := sqlitedriver.DbOpenTrackerTest(t, true)
 	dbs.SetLogger(logging.TestingLog(t))
 	defer dbs.Close()
 
@@ -612,7 +612,7 @@ func cleanupTestDb(dbs db.Pair, dbName string, inMemory bool) {
 }
 
 func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
-	dbs, _ := sqliteImpl.DbOpenTrackerTest(b, true)
+	dbs, _ := sqlitedriver.DbOpenTrackerTest(b, true)
 	dbs.SetLogger(logging.TestingLog(b))
 	defer dbs.Close()
 	bal := make(map[basics.Address]basics.AccountData)
@@ -648,7 +648,7 @@ func BenchmarkReadingAllBalancesDisk(b *testing.B) {
 }
 
 func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
-	dbs, fn := sqliteImpl.DbOpenTrackerTest(b, true)
+	dbs, fn := sqlitedriver.DbOpenTrackerTest(b, true)
 	dbs.SetLogger(logging.TestingLog(b))
 	defer dbs.CleanupTest(fn, inMemory)
 
@@ -697,11 +697,11 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	defer dbs.Close()
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		sqliteImpl.AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		sqlitedriver.AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
 		return nil
 	})
 	require.NoError(t, err)
-	qs, err := sqliteImpl.AccountsInitDbQueries(dbs.Rdb.Handle)
+	qs, err := sqlitedriver.AccountsInitDbQueries(dbs.Rdb.Handle)
 	require.NoError(t, err)
 	// TODO[store-refactor]: internals are opaque, once we move the the remainder of accountdb we can mvoe this too
 	// require.NotNil(t, qs.listCreatablesStmt)
@@ -813,7 +813,7 @@ func TestLookupKeysByPrefix(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	dbs, fn := sqliteImpl.DbOpenTrackerTest(t, false)
+	dbs, fn := sqlitedriver.DbOpenTrackerTest(t, false)
 	dbs.SetLogger(logging.TestingLog(t))
 	defer dbs.CleanupTest(fn, false)
 
@@ -999,7 +999,7 @@ func TestLookupKeysByPrefix(t *testing.T) {
 func BenchmarkLookupKeyByPrefix(b *testing.B) {
 	// learn something from BenchmarkWritingRandomBalancesDisk
 
-	dbs, fn := sqliteImpl.DbOpenTrackerTest(b, false)
+	dbs, fn := sqlitedriver.DbOpenTrackerTest(b, false)
 	dbs.SetLogger(logging.TestingLog(b))
 	defer dbs.CleanupTest(fn, false)
 
@@ -1292,7 +1292,7 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	}
 	addrsids := make(map[basics.Address]int64)
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		sqliteImpl.AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		sqlitedriver.AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
 
 		for i := range addrs {
 			res, err := tx.ExecContext(ctx, "INSERT INTO accountbase (address, data) VALUES (?, ?)", addrs[i][:], []byte{12, 3, 4})
@@ -1310,7 +1310,7 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	require.NoError(t, err)
 
 	err = dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		arw := sqliteImpl.NewAccountsSQLReaderWriter(tx)
+		arw := sqlitedriver.NewAccountsSQLReaderWriter(tx)
 
 		for addr, addrid := range addrsids {
 			retAddr, err := arw.LookupAccountAddressFromAddressID(ctx, addrid)
@@ -1948,7 +1948,7 @@ func initBoxDatabase(b *testing.B, totalBoxes, boxSize int) (db.Pair, func(), er
 
 	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(b, err)
-	_, err = sqliteImpl.AccountsInitLightTest(b, tx, make(map[basics.Address]basics.AccountData), proto)
+	_, err = sqlitedriver.AccountsInitLightTest(b, tx, make(map[basics.Address]basics.AccountData), proto)
 	require.NoError(b, err)
 	err = tx.Commit()
 	require.NoError(b, err)
@@ -1959,7 +1959,7 @@ func initBoxDatabase(b *testing.B, totalBoxes, boxSize int) (db.Pair, func(), er
 	for batch := 0; batch <= batchCount; batch++ {
 		tx, err = dbs.Wdb.Handle.Begin()
 		require.NoError(b, err)
-		writer, err := sqliteImpl.MakeAccountsSQLWriter(tx, false, false, true, false)
+		writer, err := sqlitedriver.MakeAccountsSQLWriter(tx, false, false, true, false)
 		require.NoError(b, err)
 		for boxIdx := 0; boxIdx < totalBoxes/batchCount; boxIdx++ {
 			err = writer.UpsertKvPair(fmt.Sprintf("%d", cnt), make([]byte, boxSize))
@@ -2079,7 +2079,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	dbs, _ := sqliteImpl.DbOpenTrackerTest(t, true)
+	dbs, _ := sqlitedriver.DbOpenTrackerTest(t, true)
 	dbs.SetLogger(logging.TestingLog(t))
 	defer dbs.Close()
 
@@ -2596,10 +2596,10 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback()
 
-	arw := sqliteImpl.NewAccountsSQLReaderWriter(tx)
+	arw := sqlitedriver.NewAccountsSQLReaderWriter(tx)
 
 	var accts map[basics.Address]basics.AccountData
-	sqliteImpl.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	sqlitedriver.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 
 	// entry i is for round i+1 since db initialized with entry for round 0
 	const maxRounds = 40 // any number
@@ -2650,9 +2650,9 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 	defer tx.Rollback()
 
 	var accts map[basics.Address]basics.AccountData
-	sqliteImpl.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+	sqlitedriver.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
 
-	arw := sqliteImpl.NewAccountsSQLReaderWriter(tx)
+	arw := sqlitedriver.NewAccountsSQLReaderWriter(tx)
 
 	updates := compactOnlineAccountDeltas{}
 	addrA := ledgertesting.RandomAddress()
@@ -2694,7 +2694,7 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 	}
 
 	updates.deltas = append(updates.deltas, deltaA, deltaB)
-	writer, err := sqliteImpl.MakeOnlineAccountsSQLWriter(tx, updates.len() > 0)
+	writer, err := sqlitedriver.MakeOnlineAccountsSQLWriter(tx, updates.len() > 0)
 	if err != nil {
 		return
 	}
@@ -2706,7 +2706,7 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, updated, 5)
 
-	queries, err := sqliteImpl.OnlineAccountsInitDbQueries(tx)
+	queries, err := sqlitedriver.OnlineAccountsInitDbQueries(tx)
 	require.NoError(t, err)
 
 	var count int64

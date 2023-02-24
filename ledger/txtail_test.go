@@ -32,7 +32,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
-	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqliteImpl"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -151,7 +151,7 @@ func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.Conse
 	// create a corresponding blockdb.
 	inMemory := true
 	t.blockDBs, _ = storetesting.DbOpenTest(ts, inMemory)
-	t.trackerDBs, _ = sqliteImpl.DbOpenTrackerTest(ts, inMemory)
+	t.trackerDBs, _ = sqlitedriver.DbOpenTrackerTest(ts, inMemory)
 	t.protoVersion = protoVersion
 
 	err := t.trackerDBs.Batch(func(transactionCtx context.Context, tx trackerdb.BatchScope) (err error) {
