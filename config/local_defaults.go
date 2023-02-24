@@ -74,6 +74,7 @@ var defaultLocal = Local{
 	EnableRequestLogger:                        false,
 	EnableRuntimeMetrics:                       false,
 	EnableTopAccountsReporting:                 false,
+	EnableTransactionSimulator:                 false,
 	EnableTxBacklogRateLimiting:                false,
 	EnableUsageLog:                             false,
 	EnableVerbosedTransactionSyncLogging:       false,

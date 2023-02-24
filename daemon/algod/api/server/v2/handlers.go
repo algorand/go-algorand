@@ -942,10 +942,8 @@ type preEncodedSimulateResponse struct {
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
 // (POST /v2/transactions/simulate)
 func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateTransactionParams) error {
-	if !v2.Node.Config().EnableExperimentalAPI {
-		// Right now this is a redundant/useless check at runtime, since experimental APIs are not registered when EnableExperimentalAPI=false.
-		// However, this endpoint won't always be experimental, so I've left this here as a reminder to have some other flag guarding its usage.
-		return ctx.String(http.StatusNotFound, fmt.Sprintf("%s was not enabled in the configuration file by setting EnableExperimentalAPI to true", ctx.Request().URL.Path))
+	if !v2.Node.Config().EnableTransactionSimulator {
+		return ctx.String(http.StatusNotFound, fmt.Sprintf("%s was not enabled in the configuration file by setting EnableTransactionSimulator to true", ctx.Request().URL.Path))
 	}
 
 	stat, err := v2.Node.Status()
@@ -1661,4 +1659,8 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 		Result: program,
 	}
 	return ctx.JSON(http.StatusOK, response)
+}
+
+func (vs *Handlers) ExperimentalCheck(ctx echo.Context) error {
+	return ctx.JSON(http.StatusOK, true)
 }

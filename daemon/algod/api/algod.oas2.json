@@ -1209,7 +1209,7 @@
       "post": {
         "tags": [
           "public",
-          "experimental"
+          "nonparticipating"
         ],
         "consumes": [
           "application/x-binary"
@@ -1221,7 +1221,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. WARNING: This endpoint is experimental and under active development. There are no guarantees in terms of functionality or future support.",
+        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. The simulation will use blockchain state from the latest committed round. This endpoint is only enabled when a node's configuration file sets EnableTransactionSimulator to true.",
         "operationId": "SimulateTransaction",
         "parameters": [
           {
@@ -1253,6 +1253,9 @@
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
+          },
+          "404": {
+            "description": "Transaction simulator not enabled"
           },
           "500": {
             "description": "Internal Error",
@@ -2365,6 +2368,33 @@
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/experimental": {
+      "get": {
+        "tags": [
+          "public",
+          "experimental"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Returns OK if experimental API is enabled.",
+        "operationId": "ExperimentalCheck",
+        "responses": {
+          "200": {
+            "description": "Experimental API enabled"
+          },
+          "404": {
+            "description": "Experimental API not enabled"
           },
           "default": {
             "description": "Unknown Error"
@@ -4013,9 +4043,6 @@
     },
     "SimulateResponse": {
       "description": "Result of a transaction group simulation.",
-      "tags": [
-        "experimental"
-      ],
       "schema": {
         "type": "object",
         "required": [

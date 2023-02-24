@@ -506,6 +506,10 @@ type Local struct {
 	// and APIs related to broadcasting transactions, and enables APIs which can retrieve detailed information
 	// from ledger caches and can control the ledger round.
 	EnableFollowMode bool `version[27]:"false"`
+
+	// EnableTransactionSimulator enables the /v2/transaction/simulate endpoint. This functionality
+	// is disabled by default.
+	EnableTransactionSimulator bool `version[27]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
