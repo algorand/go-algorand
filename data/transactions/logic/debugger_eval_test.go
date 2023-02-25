@@ -248,22 +248,22 @@ func TestDebuggerInnerAppEval(t *testing.T) {
 			expectedStack := []basics.TealValue{}
 			switch {
 			case scenarioName == "none":
-				expectedUpdateCount = 26
+				expectedUpdateCount = 32
 				expectedStack = []basics.TealValue{{Type: basics.TealUintType, Uint: 1}}
 			case strings.HasPrefix(scenarioName, "before inners"):
-				expectedUpdateCount = 2
+				expectedUpdateCount = 4
 				expectedStack = []basics.TealValue{{Type: basics.TealUintType}}
 			case strings.HasPrefix(scenarioName, "first inner"):
-				expectedUpdateCount = 10
-			case strings.HasPrefix(scenarioName, "between inners"):
 				expectedUpdateCount = 12
+			case strings.HasPrefix(scenarioName, "between inners"):
+				expectedUpdateCount = 16
 				expectedStack = []basics.TealValue{{Type: basics.TealUintType}}
 			case scenarioName == "second inner":
-				expectedUpdateCount = 25
+				expectedUpdateCount = 29
 			case scenarioName == "third inner":
-				expectedUpdateCount = 25
+				expectedUpdateCount = 29
 			case strings.HasPrefix(scenarioName, "after inners"):
-				expectedUpdateCount = 26
+				expectedUpdateCount = 32
 				if scenario.Outcome == mocktracer.RejectionOutcome {
 					expectedStack = []basics.TealValue{{Type: basics.TealUintType}}
 				}
