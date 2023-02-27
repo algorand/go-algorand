@@ -21,13 +21,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/algorand/go-algorand/ledger/store"
-
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -127,7 +126,7 @@ func (spt *spVerificationTracker) prepareCommit(dcc *deferredCommitContext) erro
 	return nil
 }
 
-func (spt *spVerificationTracker) commitRound(ctx context.Context, tx store.TransactionScope, dcc *deferredCommitContext) (err error) {
+func (spt *spVerificationTracker) commitRound(ctx context.Context, tx trackerdb.TransactionScope, dcc *deferredCommitContext) (err error) {
 	if len(dcc.spVerification.CommitContext) != 0 {
 		err = commitSPContexts(ctx, tx, dcc.spVerification.CommitContext)
 		if err != nil {
@@ -142,7 +141,7 @@ func (spt *spVerificationTracker) commitRound(ctx context.Context, tx store.Tran
 	return err
 }
 
-func commitSPContexts(ctx context.Context, tx store.TransactionScope, commitData []verificationCommitContext) error {
+func commitSPContexts(ctx context.Context, tx trackerdb.TransactionScope, commitData []verificationCommitContext) error {
 	ptrToCtxs := make([]*ledgercore.StateProofVerificationContext, len(commitData))
 	for i := 0; i < len(commitData); i++ {
 		ptrToCtxs[i] = &commitData[i].verificationContext
@@ -234,7 +233,7 @@ func (spt *spVerificationTracker) lookupContextInTrackedMemory(stateProofLastAtt
 
 func (spt *spVerificationTracker) lookupContextInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	var spContext *ledgercore.StateProofVerificationContext
-	err := spt.l.trackerDB().Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
+	err := spt.l.trackerDB().Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
 		spContext, err = tx.MakeSpVerificationCtxReader().LookupSPContext(stateProofLastAttestedRound)
 		if err != nil {
 			err = fmt.Errorf("%w for round %d: %s", errSPVerificationContextNotFound, stateProofLastAttestedRound, err)

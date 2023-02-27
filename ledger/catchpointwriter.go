@@ -27,7 +27,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -53,7 +53,7 @@ const (
 // has the option of throttling the CPU utilization in between the calls.
 type catchpointWriter struct {
 	ctx                  context.Context
-	tx                   store.TransactionScope
+	tx                   trackerdb.TransactionScope
 	filePath             string
 	totalAccounts        uint64
 	totalKVs             uint64
@@ -107,7 +107,7 @@ func (data catchpointStateProofVerificationContext) ToBeHashed() (protocol.HashI
 	return protocol.StateProofVerCtx, protocol.Encode(&data)
 }
 
-func makeCatchpointWriter(ctx context.Context, filePath string, tx store.TransactionScope, maxResourcesPerChunk int) (*catchpointWriter, error) {
+func makeCatchpointWriter(ctx context.Context, filePath string, tx trackerdb.TransactionScope, maxResourcesPerChunk int) (*catchpointWriter, error) {
 	arw, err := tx.MakeAccountsReaderWriter()
 	if err != nil {
 		return nil, err

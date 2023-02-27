@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package store
+package sqlitedriver
 
 import (
 	"context"
@@ -24,6 +24,7 @@ import (
 	"math"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -71,7 +72,7 @@ const (
 type pendingBaseRow struct {
 	addr               basics.Address
 	rowid              int64
-	accountData        *BaseAccountData
+	accountData        *trackerdb.BaseAccountData
 	encodedAccountData []byte
 }
 
@@ -91,12 +92,6 @@ func MakeOrderedAccountsIter(tx *sql.Tx, accountCount int) *orderedAccountsIter 
 	}
 }
 
-// accountAddressHash is used by Next to return a single account address and the associated hash.
-type accountAddressHash struct {
-	Addrid int64
-	Digest []byte
-}
-
 // Next returns an array containing the account address and hash
 // the Next function works in multiple processing stages, where it first processes the current accounts and order them
 // followed by returning the ordered accounts. In the first phase, it would return empty accountAddressHash array
@@ -105,7 +100,7 @@ type accountAddressHash struct {
 // the processedRecords would be zero. If err is sql.ErrNoRows it means that the iterator have completed it's work and no further
 // accounts exists. Otherwise, the caller is expected to keep calling "Next" to retrieve the next set of accounts
 // ( or let the Next function make some progress toward that goal )
-func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAddressHash, processedRecords int, err error) {
+func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []trackerdb.AccountAddressHash, processedRecords int, err error) {
 	if iterator.step == oaiStepDeleteOldOrderingTable {
 		// although we're going to delete this table anyway when completing the iterator execution, we'll try to
 		// clean up any intermediate table.
@@ -146,8 +141,8 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepInsertAccountData {
 		var lastAddrID int64
-		baseCb := func(addr basics.Address, rowid int64, accountData *BaseAccountData, encodedAccountData []byte) (err error) {
-			hash := AccountHashBuilderV6(addr, accountData, encodedAccountData)
+		baseCb := func(addr basics.Address, rowid int64, accountData *trackerdb.BaseAccountData, encodedAccountData []byte) (err error) {
+			hash := trackerdb.AccountHashBuilderV6(addr, accountData, encodedAccountData)
 			_, err = iterator.insertStmt.ExecContext(ctx, rowid, hash)
 			if err != nil {
 				return
@@ -156,9 +151,9 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			return nil
 		}
 
-		resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *ResourcesData, encodedResourceData []byte, lastResource bool) error {
+		resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *trackerdb.ResourcesData, encodedResourceData []byte, lastResource bool) error {
 			if resData != nil {
-				hash, err := ResourcesHashBuilderV6(resData, addr, cidx, resData.UpdateRound, encodedResourceData)
+				hash, err := trackerdb.ResourcesHashBuilderV6(resData, addr, cidx, resData.UpdateRound, encodedResourceData)
 				if err != nil {
 					return err
 				}
@@ -226,7 +221,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 
 	if iterator.step == oaiStepIterateOverOrderedTable {
-		acct = make([]accountAddressHash, iterator.accountCount)
+		acct = make([]trackerdb.AccountAddressHash, iterator.accountCount)
 		acctIdx := 0
 		for iterator.hashesRows.Next() {
 			err = iterator.hashesRows.Scan(&(acct[acctIdx].Addrid), &(acct[acctIdx].Digest))
@@ -282,8 +277,8 @@ func (iterator *orderedAccountsIter) Close(ctx context.Context) (err error) {
 func processAllBaseAccountRecords(
 	baseRows *sql.Rows,
 	resRows *sql.Rows,
-	baseCb func(addr basics.Address, rowid int64, accountData *BaseAccountData, encodedAccountData []byte) error,
-	resCb func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *ResourcesData, encodedResourceData []byte, lastResource bool) error,
+	baseCb func(addr basics.Address, rowid int64, accountData *trackerdb.BaseAccountData, encodedAccountData []byte) error,
+	resCb func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *trackerdb.ResourcesData, encodedResourceData []byte, lastResource bool) error,
 	pendingBase pendingBaseRow, pendingResource pendingResourceRow, accountCount int, resourceCount int,
 ) (int, pendingBaseRow, pendingResourceRow, error) {
 	var addr basics.Address
@@ -291,7 +286,7 @@ func processAllBaseAccountRecords(
 	var err error
 	count := 0
 
-	var accountData BaseAccountData
+	var accountData trackerdb.BaseAccountData
 	var addrbuf []byte
 	var buf []byte
 	var rowid int64
@@ -319,7 +314,7 @@ func processAllBaseAccountRecords(
 
 			copy(addr[:], addrbuf)
 
-			accountData = BaseAccountData{}
+			accountData = trackerdb.BaseAccountData{}
 			err = protocol.Decode(buf, &accountData)
 			if err != nil {
 				return 0, pendingBaseRow{}, pendingResourceRow{}, err
@@ -363,8 +358,8 @@ func processAllBaseAccountRecords(
 
 func processAllResources(
 	resRows *sql.Rows,
-	addr basics.Address, accountData *BaseAccountData, acctRowid int64, pr pendingResourceRow, resourceCount int,
-	callback func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *ResourcesData, encodedResourceData []byte, lastResource bool) error,
+	addr basics.Address, accountData *trackerdb.BaseAccountData, acctRowid int64, pr pendingResourceRow, resourceCount int,
+	callback func(addr basics.Address, creatableIdx basics.CreatableIndex, resData *trackerdb.ResourcesData, encodedResourceData []byte, lastResource bool) error,
 ) (pendingResourceRow, int, error) {
 	var err error
 	count := 0
@@ -374,7 +369,7 @@ func processAllResources(
 	var buf []byte
 	var addrid int64
 	var aidx basics.CreatableIndex
-	var resData ResourcesData
+	var resData trackerdb.ResourcesData
 	for {
 		if pr.addrid != 0 {
 			// some accounts may not have resources, consider the following case:
@@ -413,7 +408,7 @@ func processAllResources(
 				return pendingResourceRow{addrid, aidx, buf}, count, err
 			}
 		}
-		resData = ResourcesData{}
+		resData = trackerdb.ResourcesData{}
 		err = protocol.Decode(buf, &resData)
 		if err != nil {
 			return pendingResourceRow{}, count, err

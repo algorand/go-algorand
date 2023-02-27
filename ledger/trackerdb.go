@@ -20,13 +20,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
 // trackerDBInitialize initializes the accounts DB if needed and return current account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
-func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefix string) (mgr store.TrackerDBInitParams, err error) {
+func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefix string) (mgr trackerdb.InitParams, err error) {
 	dbs := l.trackerDB()
 	bdbs := l.blockDB()
 	log := l.trackerLog()
@@ -38,13 +38,13 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 		return
 	}
 
-	err = dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) error {
+	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 		arw, err := tx.MakeAccountsReaderWriter()
 		if err != nil {
 			return err
 		}
 
-		tp := store.TrackerDBParams{
+		tp := trackerdb.Params{
 			InitAccounts:      l.GenesisAccounts(),
 			InitProto:         l.GenesisProtoVersion(),
 			GenesisHash:       l.GenesisHash(),
@@ -54,7 +54,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 			BlockDb:           bdbs,
 		}
 		var err0 error
-		mgr, err0 = tx.RunMigrations(ctx, tp, log, store.AccountDBVersion)
+		mgr, err0 = tx.RunMigrations(ctx, tp, log, trackerdb.AccountDBVersion)
 		if err0 != nil {
 			return err0
 		}
@@ -69,7 +69,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 			if err0 != nil {
 				return err0
 			}
-			mgr, err0 = tx.RunMigrations(ctx, tp, log, store.AccountDBVersion)
+			mgr, err0 = tx.RunMigrations(ctx, tp, log, trackerdb.AccountDBVersion)
 			if err0 != nil {
 				return err0
 			}

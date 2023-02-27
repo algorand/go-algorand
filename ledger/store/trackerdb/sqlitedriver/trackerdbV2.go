@@ -14,41 +14,28 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package store
+package sqlitedriver
 
 import (
 	"context"
 	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
 
-// TrackerDBParams contains parameters for initializing trackerDB
-type TrackerDBParams struct {
-	InitAccounts      map[basics.Address]basics.AccountData
-	InitProto         protocol.ConsensusVersion
-	GenesisHash       crypto.Digest
-	FromCatchpoint    bool
-	CatchpointEnabled bool
-	DbPathPrefix      string
-	BlockDb           db.Pair
-}
-
 type trackerDBSchemaInitializer struct {
-	TrackerDBParams
+	trackerdb.Params
 
 	// schemaVersion contains current db version
 	schemaVersion int32
@@ -60,26 +47,20 @@ type trackerDBSchemaInitializer struct {
 	log logging.Logger
 }
 
-// TrackerDBInitParams params used during db init
-type TrackerDBInitParams struct {
-	SchemaVersion   int32
-	VacuumOnStartup bool
-}
-
 // RunMigrations initializes the accounts DB if needed and return current account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
-func RunMigrations(ctx context.Context, tx *sql.Tx, params TrackerDBParams, log logging.Logger, targetVersion int32) (mgr TrackerDBInitParams, err error) {
+func RunMigrations(ctx context.Context, tx *sql.Tx, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
 	// check current database version.
 	dbVersion, err := db.GetUserVersion(ctx, tx)
 	if err != nil {
-		return TrackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to read database schema version : %v", err)
+		return trackerdb.InitParams{}, fmt.Errorf("trackerDBInitialize unable to read database schema version : %v", err)
 	}
 
 	tu := trackerDBSchemaInitializer{
-		TrackerDBParams: params,
-		schemaVersion:   dbVersion,
-		log:             log,
+		Params:        params,
+		schemaVersion: dbVersion,
+		log:           log,
 	}
 
 	// if database version is greater than supported by current binary, write a warning. This would keep the existing
@@ -157,13 +138,13 @@ func RunMigrations(ctx context.Context, tx *sql.Tx, params TrackerDBParams, log 
 					return
 				}
 			default:
-				return TrackerDBInitParams{}, fmt.Errorf("trackerDBInitialize unable to upgrade database from schema version %d", tu.schemaVersion)
+				return trackerdb.InitParams{}, fmt.Errorf("trackerDBInitialize unable to upgrade database from schema version %d", tu.schemaVersion)
 			}
 		}
 		tu.log.Infof("trackerDBInitialize database schema upgrade complete")
 	}
 
-	return TrackerDBInitParams{tu.schemaVersion, tu.vacuumOnStartup}, nil
+	return trackerdb.InitParams{SchemaVersion: tu.schemaVersion, VacuumOnStartup: tu.vacuumOnStartup}, nil
 }
 
 func (tu *trackerDBSchemaInitializer) setVersion(ctx context.Context, tx *sql.Tx, version int32) (err error) {
@@ -252,14 +233,14 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 		tu.log.Infof("upgradeDatabaseSchema1 preparing queries")
 		tu.log.Infof("upgradeDatabaseSchema1 resetting prior catchpoints")
 		// delete the last catchpoint label if we have any.
-		err = crw.WriteCatchpointStateString(ctx, CatchpointStateLastCatchpoint, "")
+		err = crw.WriteCatchpointStateString(ctx, trackerdb.CatchpointStateLastCatchpoint, "")
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema1 unable to clear prior catchpoint : %v", err)
 		}
 
 		tu.log.Infof("upgradeDatabaseSchema1 deleting stored catchpoints")
 		// delete catchpoints.
-		err = crw.DeleteStoredCatchpoints(ctx, tu.TrackerDBParams.DbPathPrefix)
+		err = crw.DeleteStoredCatchpoints(ctx, tu.Params.DbPathPrefix)
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema1 unable to delete stored catchpoints : %v", err)
 		}
@@ -320,7 +301,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema4(ctx context.Context
 			tu.log.Errorf("upgradeDatabaseSchema4: failed to create merkle committer: %v", err)
 			goto done
 		}
-		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+		trie, err := merkletrie.MakeTrie(mc, trackerdb.TrieMemoryConfig)
 		if err != nil {
 			tu.log.Errorf("upgradeDatabaseSchema4: failed to create merkle trie: %v", err)
 			goto done
@@ -328,7 +309,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema4(ctx context.Context
 
 		var totalHashesDeleted int
 		for _, addr := range addresses {
-			hash := AccountHashBuilder(addr, basics.AccountData{}, []byte{0x80})
+			hash := trackerdb.AccountHashBuilder(addr, basics.AccountData{}, []byte{0x80})
 			deleted, err := trie.Delete(hash)
 			if err != nil {
 				tu.log.Errorf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v: %v", hex.EncodeToString(hash), addr, err)
@@ -364,7 +345,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 		return fmt.Errorf("upgradeDatabaseSchema5 unable to create resources table : %v", err)
 	}
 
-	err = removeEmptyDirsOnSchemaUpgrade(tu.TrackerDBParams.DbPathPrefix)
+	err = removeEmptyDirsOnSchemaUpgrade(tu.Params.DbPathPrefix)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema5 unable to clear empty catchpoint directories : %v", err)
 	}
@@ -397,7 +378,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 func (tu *trackerDBSchemaInitializer) deleteUnfinishedCatchpoint(ctx context.Context, tx *sql.Tx) error {
 	cts := NewCatchpointSQLReaderWriter(tx)
 	// Delete an unfinished catchpoint if there is one.
-	round, err := cts.ReadCatchpointStateUint64(ctx, catchpointStateWritingCatchpoint)
+	round, err := cts.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateWritingCatchpoint)
 	if err != nil {
 		return err
 	}
@@ -406,26 +387,14 @@ func (tu *trackerDBSchemaInitializer) deleteUnfinishedCatchpoint(ctx context.Con
 	}
 
 	relCatchpointFilePath := filepath.Join(
-		CatchpointDirName,
-		MakeCatchpointFilePath(basics.Round(round)))
-	err = RemoveSingleCatchpointFileFromDisk(tu.DbPathPrefix, relCatchpointFilePath)
+		trackerdb.CatchpointDirName,
+		trackerdb.MakeCatchpointFilePath(basics.Round(round)))
+	err = trackerdb.RemoveSingleCatchpointFileFromDisk(tu.DbPathPrefix, relCatchpointFilePath)
 	if err != nil {
 		return err
 	}
 
-	return cts.WriteCatchpointStateUint64(ctx, catchpointStateWritingCatchpoint, 0)
-}
-
-// MakeCatchpointFilePath builds the path of a catchpoint file.
-func MakeCatchpointFilePath(round basics.Round) string {
-	irnd := int64(round) / 256
-	outStr := ""
-	for irnd > 0 {
-		outStr = filepath.Join(outStr, fmt.Sprintf("%02x", irnd%256))
-		irnd = irnd / 256
-	}
-	outStr = filepath.Join(outStr, strconv.FormatInt(int64(round), 10)+".catchpoint")
-	return outStr
+	return cts.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateWritingCatchpoint, 0)
 }
 
 // upgradeDatabaseSchema6 upgrades the database schema from version 6 to version 7,
@@ -528,54 +497,13 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema9(ctx context.Context
 	return tu.setVersion(ctx, tx, 10)
 }
 
-// Review: this is an odd method to have here
-
-// isDirEmpty returns if a given directory is empty or not.
-func isDirEmpty(path string) (bool, error) {
-	dir, err := os.Open(path)
-	if err != nil {
-		return false, err
-	}
-	defer dir.Close()
-	_, err = dir.Readdirnames(1)
-	if err != io.EOF {
-		return false, err
-	}
-	return true, nil
-}
-
-// GetEmptyDirs returns a slice of paths for empty directories which are located in PathToScan arg
-func GetEmptyDirs(PathToScan string) ([]string, error) {
-	var emptyDir []string
-	err := filepath.Walk(PathToScan, func(path string, f os.FileInfo, errIn error) error {
-		if errIn != nil {
-			return errIn
-		}
-		if !f.IsDir() {
-			return nil
-		}
-		isEmpty, err := isDirEmpty(path)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return filepath.SkipDir
-			}
-			return err
-		}
-		if isEmpty {
-			emptyDir = append(emptyDir, path)
-		}
-		return nil
-	})
-	return emptyDir, err
-}
-
 func removeEmptyDirsOnSchemaUpgrade(dbDirectory string) (err error) {
-	catchpointRootDir := filepath.Join(dbDirectory, CatchpointDirName)
+	catchpointRootDir := filepath.Join(dbDirectory, trackerdb.CatchpointDirName)
 	if _, err := os.Stat(catchpointRootDir); os.IsNotExist(err) {
 		return nil
 	}
 	for {
-		emptyDirs, err := GetEmptyDirs(catchpointRootDir)
+		emptyDirs, err := trackerdb.GetEmptyDirs(catchpointRootDir)
 		if err != nil {
 			return err
 		}
