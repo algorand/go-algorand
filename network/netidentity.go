@@ -336,20 +336,17 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	if err != nil {
 		networkPeerIdentityError.Inc(nil)
 		peer.net.log.With("err", err).With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity verification could not be decoded, disconnecting")
-		peer.net.disconnect(peer, disconnectBadIdentityData)
-		return OutgoingMessage{}
+		return OutgoingMessage{Action: Disconnect, reason: disconnectBadIdentityData}
 	}
 	if peer.identityChallenge != msg.Msg.ResponseChallenge {
 		networkPeerIdentityError.Inc(nil)
 		peer.net.log.With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity verification challenge does not match, disconnecting")
-		peer.net.disconnect(peer, disconnectBadIdentityData)
-		return OutgoingMessage{}
+		return OutgoingMessage{Action: Disconnect, reason: disconnectBadIdentityData}
 	}
 	if !msg.Verify(peer.identity) {
 		networkPeerIdentityError.Inc(nil)
 		peer.net.log.With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity verification is incorrectly signed, disconnecting")
-		peer.net.disconnect(peer, disconnectBadIdentityData)
-		return OutgoingMessage{}
+		return OutgoingMessage{Action: Disconnect, reason: disconnectBadIdentityData}
 	}
 	atomic.StoreUint32(&peer.identityVerified, 1)
 	// if the identity could not be claimed by this peer, it means the identity is in use
@@ -359,7 +356,7 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	if !ok {
 		networkPeerIdentityDisconnect.Inc(nil)
 		peer.net.log.With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity already in use, disconnecting")
-		peer.net.disconnect(peer, disconnectDuplicateConnection)
+		return OutgoingMessage{Action: Disconnect, reason: disconnectDuplicateConnection}
 	}
 	return OutgoingMessage{}
 }

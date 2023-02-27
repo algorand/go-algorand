@@ -14,13 +14,14 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package store
+package sqlitedriver
 
 import (
 	"context"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -54,7 +55,7 @@ func makeStateProofVerificationReaderWriter(q db.Queryable, e db.Executable) *st
 }
 
 // MakeStateProofVerificationReader returns SpVerificationCtxReader for accessing from outside of ledger
-func MakeStateProofVerificationReader(q db.Queryable) SpVerificationCtxReader {
+func MakeStateProofVerificationReader(q db.Queryable) trackerdb.SpVerificationCtxReader {
 	return makeStateProofVerificationReader(q)
 }
 

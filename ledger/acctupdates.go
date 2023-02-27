@@ -35,7 +35,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -152,10 +152,10 @@ type modifiedKvValue struct {
 
 type accountUpdates struct {
 	// Connection to the database.
-	dbs store.TrackerStore
+	dbs trackerdb.TrackerStore
 
 	// Optimized reader for fast accounts DB lookups.
-	accountsq store.AccountsReader
+	accountsq trackerdb.AccountsReader
 
 	// cachedDBRound is always exactly tracker DB round (and therefore, accountsRound()),
 	// cached to use in lookup functions
@@ -936,7 +936,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
-	err = au.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) error {
+	err = au.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
 		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
@@ -956,7 +956,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
-	au.accountsq, err = au.dbs.MakeAccountsReader()
+	au.accountsq, err = au.dbs.MakeAccountsOptimizedReader()
 	if err != nil {
 		return
 	}
@@ -1080,8 +1080,8 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 	var offset uint64
 	var rewardsProto config.ConsensusParams
 	var rewardsLevel uint64
-	var persistedData store.PersistedAccountData
-	var persistedResources []store.PersistedResourcesData
+	var persistedData trackerdb.PersistedAccountData
+	var persistedResources []trackerdb.PersistedResourcesData
 	var resourceDbRound basics.Round
 	withRewards := true
 
@@ -1305,7 +1305,7 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 		}
 	}()
 	var offset uint64
-	var persistedData store.PersistedResourcesData
+	var persistedData trackerdb.PersistedResourcesData
 	for {
 		currentDbRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
@@ -1427,7 +1427,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		}
 	}()
 	var offset uint64
-	var persistedData store.PersistedAccountData
+	var persistedData trackerdb.PersistedAccountData
 	for {
 		currentDbRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
@@ -1674,7 +1674,7 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 
 // commitRound is called within the same transaction for all trackers it
 // receives current offset and dbRound
-func (au *accountUpdates) commitRound(ctx context.Context, tx store.TransactionScope, dcc *deferredCommitContext) (err error) {
+func (au *accountUpdates) commitRound(ctx context.Context, tx trackerdb.TransactionScope, dcc *deferredCommitContext) (err error) {
 	offset := dcc.offset
 	dbRound := dcc.oldBase
 

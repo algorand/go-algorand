@@ -27,7 +27,8 @@ import (
 
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/ledger"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -112,8 +113,8 @@ func getVersion(filename string, staging bool) (uint64, error) {
 		if staging {
 			// writing the version of the catchpoint file start only on ver >= CatchpointFileVersionV7.
 			// in case the catchpoint version does not exists ReadCatchpointStateUint64 returns 0
-			cw := store.NewCatchpointSQLReaderWriter(tx)
-			version, err = cw.ReadCatchpointStateUint64(ctx, store.CatchpointStateCatchupVersion)
+			cw := sqlitedriver.NewCatchpointSQLReaderWriter(tx)
+			version, err = cw.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupVersion)
 			return err
 		}
 
@@ -162,11 +163,11 @@ func checkDatabase(databaseName string, outFile *os.File) error {
 
 	var stats merkletrie.Stats
 	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		committer, err := store.MakeMerkleCommitter(tx, ledgerTrackerStaging)
+		committer, err := sqlitedriver.MakeMerkleCommitter(tx, ledgerTrackerStaging)
 		if err != nil {
 			return err
 		}
-		trie, err := merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
+		trie, err := merkletrie.MakeTrie(committer, trackerdb.TrieMemoryConfig)
 		if err != nil {
 			return err
 		}

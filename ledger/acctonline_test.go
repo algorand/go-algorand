@@ -29,7 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -78,7 +78,7 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 				err := lt.prepareCommit(dcc)
 				require.NoError(t, err)
 			}
-			err := ml.trackers.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+			err := ml.trackers.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 				arw, err := tx.MakeAccountsReaderWriter()
 				if err != nil {
 					return err
@@ -810,7 +810,7 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
 	var endRound basics.Round
-	err := ao.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
+	err := ao.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
 		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
@@ -1299,7 +1299,7 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	// DB has all the required history tho
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
 	var endRound basics.Round
-	err = oa.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
+	err = oa.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
 		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err

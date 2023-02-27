@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package store
+package sqlitedriver
 
 import (
 	"bytes"
@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -170,11 +171,6 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS unfinishedcatchpoints`,
 	`DROP TABLE IF EXISTS stateproofverification`,
 }
-
-// AccountDBVersion is the database version that this binary would know how to support and how to upgrade to.
-// details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
-// and their descriptions.
-var AccountDBVersion = int32(10)
 
 // accountsInit fills the database using tx with initAccounts if the
 // database has not been initialized yet.
@@ -470,7 +466,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 		if err != nil {
 			return err
 		}
-		var newAccountData BaseAccountData
+		var newAccountData trackerdb.BaseAccountData
 		newAccountData.SetAccountData(&accountData)
 		encodedAcctData = protocol.Encode(&newAccountData)
 
@@ -494,7 +490,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 		if err != nil {
 			return err
 		}
-		insertResourceCallback := func(ctx context.Context, rowID int64, cidx basics.CreatableIndex, rd *ResourcesData) error {
+		insertResourceCallback := func(ctx context.Context, rowID int64, cidx basics.CreatableIndex, rd *trackerdb.ResourcesData) error {
 			var err error
 			if rd != nil {
 				encodedData := protocol.Encode(rd)
@@ -502,7 +498,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 			}
 			return err
 		}
-		err = AccountDataResources(ctx, &accountData, rowID, insertResourceCallback)
+		err = trackerdb.AccountDataResources(ctx, &accountData, rowID, insertResourceCallback)
 		if err != nil {
 			return err
 		}
@@ -575,7 +571,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 				return fmt.Errorf("block for round %d ( %d - %d ) cannot be retrieved : %w", rnd, firstRound, dbRound, err)
 			}
 
-			tail, err := TxTailRoundFromBlock(blk)
+			tail, err := trackerdb.TxTailRoundFromBlock(blk)
 			if err != nil {
 				return err
 			}
@@ -683,9 +679,9 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 	}
 
 	type acctState struct {
-		old    BaseAccountData
+		old    trackerdb.BaseAccountData
 		oldEnc []byte
-		new    BaseAccountData
+		new    trackerdb.BaseAccountData
 		newEnc []byte
 	}
 	acctRehash := make(map[basics.Address]acctState)
@@ -704,7 +700,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return err
 		}
-		var ba BaseAccountData
+		var ba trackerdb.BaseAccountData
 		err = protocol.Decode(encodedAcctData, &ba)
 		if err != nil {
 			return err
@@ -716,7 +712,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 				copy(addr[:], addrbuf)
 				return fmt.Errorf("non valid norm balance for online account %s", addr.String())
 			}
-			var baseOnlineAD BaseOnlineAccountData
+			var baseOnlineAD trackerdb.BaseOnlineAccountData
 			baseOnlineAD.BaseVotingData = ba.BaseVotingData
 			baseOnlineAD.MicroAlgos = ba.MicroAlgos
 			baseOnlineAD.RewardsBase = ba.RewardsBase
@@ -771,12 +767,12 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 			return nil
 		}
 
-		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+		trie, err := merkletrie.MakeTrie(mc, trackerdb.TrieMemoryConfig)
 		if err != nil {
 			return fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 		}
 		for addr, state := range acctRehash {
-			deleteHash := AccountHashBuilderV6(addr, &state.old, state.oldEnc)
+			deleteHash := trackerdb.AccountHashBuilderV6(addr, &state.old, state.oldEnc)
 			deleted, err := trie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
@@ -785,7 +781,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 				log.Warnf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
 			}
 
-			addHash := AccountHashBuilderV6(addr, &state.new, state.newEnc)
+			addHash := trackerdb.AccountHashBuilderV6(addr, &state.new, state.newEnc)
 			added, err := trie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("performOnlineAccountsTableMigration attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)

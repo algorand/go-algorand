@@ -118,6 +118,7 @@ var networkPeerBroadcastDropped = metrics.MakeCounter(metrics.MetricName{Name: "
 
 var networkPeerIdentityDisconnect = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_identity_duplicate", Description: "number of times identity challenge cause us to disconnect a peer"})
 var networkPeerIdentityError = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_identity_error", Description: "number of times an error occurs (besides expected) when processing identity challenges"})
+var networkPeerAlreadyClosed = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_peer_already_closed", Description: "number of times a peer would be added but the peer connection is already closed"})
 
 var networkSlowPeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_slow_drops_total", Description: "number of peers dropped for being slow to send to"})
 var networkIdlePeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_idle_drops_total", Description: "number of peers dropped due to idle connection"})
@@ -263,6 +264,7 @@ type OutgoingMessage struct {
 	Tag     Tag
 	Payload []byte
 	Topics  Topics
+	reason  disconnectReason // used when Action == Disconnect
 }
 
 // ForwardingPolicy is an enum indicating to whom we should send a message
@@ -309,7 +311,7 @@ type TaggedMessageHandler struct {
 // Propagate is a convenience function to save typing in the common case of a message handler telling us to propagate an incoming message
 // "return network.Propagate(msg)" instead of "return network.OutgoingMsg{network.Broadcast, msg.Tag, msg.Data}"
 func Propagate(msg IncomingMessage) OutgoingMessage {
-	return OutgoingMessage{Broadcast, msg.Tag, msg.Data, nil}
+	return OutgoingMessage{Action: Broadcast, Tag: msg.Tag, Payload: msg.Data, Topics: nil}
 }
 
 // GossipNetworkPath is the URL path to connect to the websocket gossip node at.
@@ -1286,7 +1288,11 @@ func (wn *WebsocketNetwork) messageHandlerThread(peersConnectivityCheckCh <-chan
 			switch outmsg.Action {
 			case Disconnect:
 				wn.wg.Add(1)
-				go wn.disconnectThread(msg.Sender, disconnectBadData)
+				reason := disconnectBadData
+				if outmsg.reason != disconnectReasonNone {
+					reason = outmsg.reason
+				}
+				go wn.disconnectThread(msg.Sender, reason)
 			case Broadcast:
 				err := wn.Broadcast(wn.ctx, msg.Tag, msg.Data, false, msg.Sender)
 				if err != nil && err != errBcastQFull {
@@ -2457,6 +2463,12 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
+	// guard against peers which are closed or closing
+	if atomic.LoadInt32(&peer.didSignalClose) == 1 {
+		networkPeerAlreadyClosed.Inc(nil)
+		wn.log.Debugf("peer closing %s", peer.conn.RemoteAddr().String())
+		return
+	}
 	// simple duplicate *pointer* check. should never trigger given the callers to addPeer
 	// TODO: remove this after making sure it is safe to do so
 	for _, p := range wn.peers {

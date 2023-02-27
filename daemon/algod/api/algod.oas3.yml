@@ -103,7 +103,7 @@
         }
       },
       "format": {
-        "description": "Configures whether the response object is JSON or MessagePack encoded.",
+        "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
         "in": "query",
         "name": "format",
         "schema": {
@@ -753,23 +753,36 @@
         },
         "description": "Transaction ID of the submission."
       },
-      "SimulationResponse": {
+      "SimulateResponse": {
         "content": {
           "application/json": {
             "schema": {
               "properties": {
-                "failure-message": {
-                  "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
-                  "type": "string"
+                "last-round": {
+                  "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+                  "type": "integer"
                 },
-                "missing-signatures": {
-                  "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+                "txn-groups": {
+                  "description": "A result object for each transaction group that was simulated.",
+                  "items": {
+                    "$ref": "#/components/schemas/SimulateTransactionGroupResult"
+                  },
+                  "type": "array"
+                },
+                "version": {
+                  "description": "The version of this response object.",
+                  "type": "integer"
+                },
+                "would-succeed": {
+                  "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",
                   "type": "boolean"
                 }
               },
               "required": [
-                "failure-message",
-                "missing-signatures"
+                "last-round",
+                "txn-groups",
+                "version",
+                "would-succeed"
               ],
               "type": "object"
             }
@@ -1822,6 +1835,49 @@
         ],
         "type": "object"
       },
+      "SimulateTransactionGroupResult": {
+        "description": "Simulation result for an atomic transaction group",
+        "properties": {
+          "failed-at": {
+            "description": "If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "failure-message": {
+            "description": "If present, indicates that the transaction group failed and specifies why that happened",
+            "type": "string"
+          },
+          "txn-results": {
+            "description": "Simulation result for individual transactions",
+            "items": {
+              "$ref": "#/components/schemas/SimulateTransactionResult"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "txn-results"
+        ],
+        "type": "object"
+      },
+      "SimulateTransactionResult": {
+        "description": "Simulation result for an individual transaction",
+        "properties": {
+          "missing-signature": {
+            "description": "A boolean indicating whether this transaction is missing signatures",
+            "type": "boolean"
+          },
+          "txn-result": {
+            "$ref": "#/components/schemas/PendingTransactionResponse"
+          }
+        },
+        "required": [
+          "txn-result"
+        ],
+        "type": "object"
+      },
       "StateDelta": {
         "description": "Application state delta.",
         "items": {
@@ -2087,7 +2143,7 @@
         "operationId": "AccountInformation",
         "parameters": [
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -2200,7 +2256,7 @@
         "operationId": "AccountApplicationInformation",
         "parameters": [
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -2340,7 +2396,7 @@
         "operationId": "AccountAssetInformation",
         "parameters": [
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -2498,7 +2554,7 @@
             }
           },
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -2973,7 +3029,7 @@
         "operationId": "GetBlock",
         "parameters": [
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -3328,7 +3384,7 @@
             }
           },
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -3635,7 +3691,7 @@
             }
           },
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -5367,7 +5423,7 @@
             }
           },
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -5508,7 +5564,7 @@
             }
           },
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -5596,6 +5652,20 @@
     "/v2/transactions/simulate": {
       "post": {
         "operationId": "SimulateTransaction",
+        "parameters": [
+          {
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "msgpack"
+              ],
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/x-binary": {
@@ -5611,21 +5681,66 @@
         "responses": {
           "200": {
             "content": {
-              "application/msgpack": {
+              "application/json": {
                 "schema": {
                   "properties": {
-                    "failure-message": {
-                      "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
-                      "type": "string"
+                    "last-round": {
+                      "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+                      "type": "integer"
                     },
-                    "missing-signatures": {
-                      "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+                    "txn-groups": {
+                      "description": "A result object for each transaction group that was simulated.",
+                      "items": {
+                        "$ref": "#/components/schemas/SimulateTransactionGroupResult"
+                      },
+                      "type": "array"
+                    },
+                    "version": {
+                      "description": "The version of this response object.",
+                      "type": "integer"
+                    },
+                    "would-succeed": {
+                      "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",
                       "type": "boolean"
                     }
                   },
                   "required": [
-                    "failure-message",
-                    "missing-signatures"
+                    "last-round",
+                    "txn-groups",
+                    "version",
+                    "would-succeed"
+                  ],
+                  "type": "object"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "properties": {
+                    "last-round": {
+                      "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+                      "type": "integer"
+                    },
+                    "txn-groups": {
+                      "description": "A result object for each transaction group that was simulated.",
+                      "items": {
+                        "$ref": "#/components/schemas/SimulateTransactionGroupResult"
+                      },
+                      "type": "array"
+                    },
+                    "version": {
+                      "description": "The version of this response object.",
+                      "type": "integer"
+                    },
+                    "would-succeed": {
+                      "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "last-round",
+                    "txn-groups",
+                    "version",
+                    "would-succeed"
                   ],
                   "type": "object"
                 }
@@ -5635,6 +5750,11 @@
           },
           "400": {
             "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
@@ -5645,6 +5765,11 @@
           },
           "401": {
             "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
@@ -5655,6 +5780,11 @@
           },
           "500": {
             "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
@@ -5665,6 +5795,11 @@
           },
           "503": {
             "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"

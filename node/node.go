@@ -183,10 +183,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.genesisID = genesis.ID()
 	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
-
-	if node.devMode {
-		cfg.DisableNetworking = true
-	}
 	node.config = cfg
 
 	// tie network, block fetcher, and agreement services together
@@ -474,7 +470,7 @@ func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 	}
 
 	// add the newly generated block to the ledger
-	err = node.ledger.AddValidatedBlock(*vb, agreement.Certificate{})
+	err = node.ledger.AddValidatedBlock(*vb, agreement.Certificate{Round: vb.Block().Round()})
 	return err
 }
 
@@ -546,7 +542,7 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 
 // Simulate speculatively runs a transaction group against the current
 // blockchain state and returns the effects and/or errors that would result.
-func (node *AlgorandFullNode) Simulate(txgroup []transactions.SignedTxn) (vb *ledgercore.ValidatedBlock, missingSignatures bool, err error) {
+func (node *AlgorandFullNode) Simulate(txgroup []transactions.SignedTxn) (result simulation.Result, err error) {
 	simulator := simulation.MakeSimulator(node.ledger)
 	return simulator.Simulate(txgroup)
 }
