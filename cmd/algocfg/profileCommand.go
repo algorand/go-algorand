@@ -19,10 +19,11 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/spf13/cobra"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
@@ -30,27 +31,49 @@ import (
 )
 
 // profileConfigUpdater updates the provided config for non-defaults in a given profile
-type profileConfigUpdater func(cfg config.Local) config.Local
+type profileConfigUpdater struct {
+	updateFunc  func(cfg config.Local) config.Local
+	description string
+}
 
-// defaultConfigUpdater leaves all default values in place
-func defaultConfigUpdater(cfg config.Local) config.Local {
-	return cfg
+// validatorConfigUpdater leaves all default values in place
+var validatorConfigUpdater = profileConfigUpdater{
+	description: "Help ensure chain health by validating all blocks and transactions.",
+	updateFunc: func(cfg config.Local) config.Local {
+		cfg.CatchupBlockValidateMode = 0b1100
+		return cfg
+	},
 }
 
 // relayConfigUpdater alters config values to set up a relay node
-func relayConfigUpdater(cfg config.Local) config.Local {
-	cfg.Archival = true
-	cfg.EnableLedgerService = true
-	cfg.EnableBlockService = true
-	cfg.NetAddress = "4160"
-	return cfg
+var relayConfigUpdater = profileConfigUpdater{
+	description: "Archival node with catchpoint tracking that accepts connections.",
+	updateFunc: func(cfg config.Local) config.Local {
+		cfg.Archival = true
+		cfg.EnableLedgerService = true
+		cfg.EnableBlockService = true
+		cfg.NetAddress = "4160"
+		return cfg
+	},
+}
+
+// developmentConfigUpdater alters config values to set up a relay node
+var developmentConfigUpdater = profileConfigUpdater{
+	description: "Features useful for building on Algorand.",
+	updateFunc: func(cfg config.Local) config.Local {
+		cfg.EnableExperimentalAPI = true
+		cfg.EnableDeveloperAPI = true
+		cfg.IncomingConnectionsLimit = 0
+		return cfg
+	},
 }
 
 var (
 	// profileNames are the supported pre-configurations of config values
 	profileNames = map[string]profileConfigUpdater{
-		"relay":   relayConfigUpdater,
-		"default": defaultConfigUpdater,
+		"validator":   validatorConfigUpdater,
+		"development": developmentConfigUpdater,
+		"relay":       relayConfigUpdater,
 	}
 	forceUpdate bool
 )
@@ -76,11 +99,16 @@ var listProfileCmd = &cobra.Command{
 	Short: "List config profiles",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		var profiles string
+		longest := 0
 		for key := range profileNames {
-			profiles += fmt.Sprintf("%s ", key)
+			if len(key) > longest {
+				longest = len(key)
+			}
 		}
-		reportInfof(profiles)
+
+		for key, value := range profileNames {
+			reportInfof("%-*s  %s", longest, key, value.description)
+		}
 	},
 }
 
@@ -120,7 +148,7 @@ var setProfileCmd = &cobra.Command{
 func getConfigForArg(configType string) (config.Local, error) {
 	cfg := config.GetDefaultLocal()
 	if updater, ok := profileNames[configType]; ok {
-		return updater(cfg), nil
+		return updater.updateFunc(cfg), nil
 	}
 	return config.Local{}, fmt.Errorf("invalid profile type %v", configType)
 }
