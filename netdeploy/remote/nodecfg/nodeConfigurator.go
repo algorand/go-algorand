@@ -214,7 +214,11 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 	}
 
 	fmt.Fprintf(os.Stdout, "...... Adding DNS Record '%s' -> '%s' .\n", networkHostName, nc.DNSName)
-	cloudflareDNS.SetDNSRecord(context.Background(), recordType, networkHostName, nc.DNSName, cloudflare.AutomaticTTL, priority, proxied)
+	err = cloudflareDNS.SetDNSRecord(context.Background(), recordType, networkHostName, nc.DNSName, cloudflare.AutomaticTTL, priority, proxied)
+	if err != nil {
+		fmt.Fprintf(os.Stdout, "Error creating %s record for %s: %v\n", recordType, nc.DNSName, err)
+		return
+	}
 
 	for _, entry := range nc.relayEndpoints {
 		port, parseErr := strconv.ParseInt(strings.Split(entry.port, ":")[1], 10, 64)
