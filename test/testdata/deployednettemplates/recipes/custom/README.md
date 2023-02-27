@@ -39,11 +39,12 @@ If you have a network_performance_Rules file in the following format on each lin
 first generate a template and then generate the recipe. You will need netgoal set up in your local environment/path.
 1. Generate the template:
 ```
-python3 go-algorand/test/testdata/deployednettemplates/generate-recipe/generate_network_tpl.py --network-rules-file example/npr/five-relays.txt --out network_templates/five-relays.json
+cd go-algorand
+python3 test/testdata/deployednettemplates/generate-recipe/generate_network_tpl.py --network-rules-file example/npr/five-relays.txt --out test/testdata/deployednettemplates/recipes/custom/network_templates/five-relays.json
 ```
 2. Generate the recipe:
 ```
-cp network_templates/five-relays.json .
+cp test/testdata/deployednettemplates/recipes/custom/network_templates/five-relays.json test/testdata/deployednettemplates/recipes/custom/.
 cd go-algorand
 python3 test/testdata/deployednettemplates/generate-recipe/generate_network.py -f test/testdata/deployednettemplates/recipes/custom/five-relays.json
 ```
