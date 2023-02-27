@@ -134,6 +134,9 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 		if source.GossipFanout == defaultLocal.GossipFanout {
 			source.GossipFanout = defaultRelayGossipFanout
 		}
+
+		// Disable the /v2/transaction/simulate endpoint on relays
+		source.EnableTransactionSimulator = false
 	}
 
 	return source, err
