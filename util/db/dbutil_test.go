@@ -479,6 +479,16 @@ func TestReadingWhileWriting(t *testing.T) {
 
 }
 
+func TestDoubleClose(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	acc, err := MakeAccessor("fn.db", false, true)
+	require.NoError(t, err)
+
+	acc.Close()
+	acc.Close()
+}
+
 // using Write-Ahead Logging (WAL)
 func TestLockingTableWhileWritingWAL(t *testing.T) {
 	testLockingTableWhileWriting(t, true)

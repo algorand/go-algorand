@@ -152,6 +152,9 @@ func (db *Accessor) logger() logging.Logger {
 
 // Close closes the connection.
 func (db *Accessor) Close() {
+	if db.Handle == nil {
+		return
+	}
 	db.Handle.Close()
 	db.Handle = nil
 }
