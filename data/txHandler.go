@@ -125,9 +125,9 @@ type TxHandler struct {
 	cacheConfig           txHandlerConfig
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
-	streamVerifier        *verify.StreamVerifier
-	streamVerifierChan    chan *verify.UnverifiedElement
-	streamVerifierDropped chan *verify.UnverifiedElement
+	streamVerifier        *verify.StreamToBatch
+	streamVerifierChan    chan verify.InputJob
+	streamVerifierDropped chan *verify.UnverifiedTxnSigJob
 	erl                   *util.ElasticRateLimiter
 }
 
@@ -177,8 +177,8 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		msgCache:              makeSaltedCache(2 * txBacklogSize),
 		txCanonicalCache:      makeDigestCache(2 * txBacklogSize),
 		cacheConfig:           txHandlerConfig{opts.Config.TxFilterRawMsgEnabled(), opts.Config.TxFilterCanonicalEnabled()},
-		streamVerifierChan:    make(chan *verify.UnverifiedElement),
-		streamVerifierDropped: make(chan *verify.UnverifiedElement),
+		streamVerifierChan:    make(chan verify.InputJob),
+		streamVerifierDropped: make(chan *verify.UnverifiedTxnSigJob),
 	}
 
 	if opts.Config.EnableTxBacklogRateLimiting {
@@ -193,12 +193,12 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 
 	// prepare the transaction stream verifer
 	var err error
-	handler.streamVerifier, err = verify.MakeStreamVerifier(handler.streamVerifierChan,
-		handler.postVerificationQueue, handler.streamVerifierDropped, handler.ledger,
-		handler.txVerificationPool, handler.ledger.VerifiedTransactionCache())
+	txnElementProcessor, err := verify.MakeSigVerifyJobProcessor(handler.ledger, handler.ledger.VerifiedTransactionCache(),
+		handler.postVerificationQueue, handler.streamVerifierDropped)
 	if err != nil {
 		return nil, err
 	}
+	handler.streamVerifier = verify.MakeStreamToBatch(handler.streamVerifierChan, handler.txVerificationPool, txnElementProcessor)
 	go handler.droppedTxnWatcher()
 	return handler, nil
 }
@@ -308,7 +308,7 @@ func (handler *TxHandler) backlogWorker() {
 			}
 			// handler.streamVerifierChan does not receive if ctx is cancled
 			select {
-			case handler.streamVerifierChan <- &verify.UnverifiedElement{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}:
+			case handler.streamVerifierChan <- &verify.UnverifiedTxnSigJob{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}:
 			case <-handler.ctx.Done():
 				transactionMessagesDroppedFromBacklog.Inc(nil)
 				return

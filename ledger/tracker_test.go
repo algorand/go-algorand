@@ -19,7 +19,6 @@ package ledger
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"sync"
 	"testing"
 	"time"
@@ -32,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -180,7 +180,7 @@ func (bt *producePrepareBlockingTracker) prepareCommit(*deferredCommitContext) e
 }
 
 // commitRound is not used by the blockingTracker
-func (bt *producePrepareBlockingTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+func (bt *producePrepareBlockingTracker) commitRound(context.Context, store.TransactionScope, *deferredCommitContext) error {
 	return nil
 }
 

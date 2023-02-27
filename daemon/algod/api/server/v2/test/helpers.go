@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/node/indexer"
@@ -193,8 +194,9 @@ func (m *mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) erro
 	return m.err
 }
 
-func (m *mockNode) Simulate(txgroup []transactions.SignedTxn) (*ledgercore.ValidatedBlock, bool, error) {
-	return nil, false, m.err
+func (m *mockNode) Simulate(txgroup []transactions.SignedTxn) (simulation.Result, error) {
+	simulator := simulation.MakeSimulator(m.ledger.(*data.Ledger))
+	return simulator.Simulate(txgroup)
 }
 
 func (m *mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {
@@ -277,10 +279,14 @@ var retOneProgram = []byte{2, 0x20, 1, 1, 0x22}
 var proto = config.Consensus[protocol.ConsensusCurrentVersion]
 
 func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
+	minMoneyAtStart := 100000  // min money start
+	maxMoneyAtStart := 1000000 // max money start
+	return testingenvWithBalances(t, minMoneyAtStart, maxMoneyAtStart, numAccounts, numTxs, offlineAccounts)
+}
+
+func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numAccounts, numTxs int, offlineAccounts bool) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
 	P := numAccounts               // n accounts
 	TXs := numTxs                  // n txns
-	maxMoneyAtStart := 1000000     // max money start
-	minMoneyAtStart := 100000      // max money start
 	transferredMoney := 100        // max money/txn
 	maxFee := 10                   // max maxFee/txn
 	lastValid := basics.Round(500) // max round

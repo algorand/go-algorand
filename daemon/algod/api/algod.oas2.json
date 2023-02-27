@@ -1245,6 +1245,7 @@
           "application/x-binary"
         ],
         "produces": [
+          "application/json",
           "application/msgpack"
         ],
         "schemes": [
@@ -1262,11 +1263,14 @@
               "type": "string",
               "format": "binary"
             }
+          },
+          {
+            "$ref": "#/parameters/format"
           }
         ],
         "responses": {
           "200": {
-            "$ref": "#/responses/SimulationResponse"
+            "$ref": "#/responses/SimulateResponse"
           },
           "400": {
             "description": "Bad Request - Malformed Algorand transaction",
@@ -3351,6 +3355,49 @@
         }
       }
     },
+    "SimulateTransactionGroupResult": {
+      "description": "Simulation result for an atomic transaction group",
+      "type": "object",
+      "required": [
+        "txn-results"
+      ],
+      "properties": {
+        "txn-results": {
+          "description": "Simulation result for individual transactions",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateTransactionResult"
+          }
+        },
+        "failure-message": {
+          "description": "If present, indicates that the transaction group failed and specifies why that happened",
+          "type": "string"
+        },
+        "failed-at": {
+          "description": "If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "SimulateTransactionResult": {
+      "description": "Simulation result for an individual transaction",
+      "type": "object",
+      "required": [
+        "txn-result"
+      ],
+      "properties": {
+        "txn-result": {
+          "$ref": "#/definitions/PendingTransactionResponse"
+        },
+        "missing-signature": {
+          "description": "A boolean indicating whether this transaction is missing signatures",
+          "type": "boolean"
+        }
+      }
+    },
     "StateProof": {
       "description": "Represents a state proof and its corresponding message",
       "type": "object",
@@ -3515,7 +3562,7 @@
         "msgpack"
       ],
       "type": "string",
-      "description": "Configures whether the response object is JSON or MessagePack encoded.",
+      "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
       "name": "format",
       "in": "query"
     },
@@ -3994,7 +4041,7 @@
         }
       }
     },
-    "SimulationResponse": {
+    "SimulateResponse": {
       "description": "Result of a transaction group simulation.",
       "tags": [
         "experimental"
@@ -4002,16 +4049,29 @@
       "schema": {
         "type": "object",
         "required": [
-          "failure-message",
-          "missing-signatures"
+          "version",
+          "last-round",
+          "txn-groups",
+          "would-succeed"
         ],
         "properties": {
-          "failure-message": {
-            "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
-            "type": "string"
+          "version": {
+            "description": "The version of this response object.",
+            "type": "integer"
           },
-          "missing-signatures": {
-            "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+          "last-round": {
+            "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+            "type": "integer"
+          },
+          "txn-groups": {
+            "description": "A result object for each transaction group that was simulated.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/SimulateTransactionGroupResult"
+            }
+          },
+          "would-succeed": {
+            "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",
             "type": "boolean"
           }
         }
