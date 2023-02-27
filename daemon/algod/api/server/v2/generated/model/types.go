@@ -124,6 +124,12 @@ const (
 	PendingTransactionInformationParamsFormatMsgpack PendingTransactionInformationParamsFormat = "msgpack"
 )
 
+// Defines values for SimulateTransactionParamsFormat.
+const (
+	SimulateTransactionParamsFormatJson    SimulateTransactionParamsFormat = "json"
+	SimulateTransactionParamsFormatMsgpack SimulateTransactionParamsFormat = "msgpack"
+)
+
 // Account Account information at a given round.
 //
 // Definition:
@@ -602,6 +608,27 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
+// SimulateTransactionGroupResult Simulation result for an atomic transaction group
+type SimulateTransactionGroupResult struct {
+	// FailedAt If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.
+	FailedAt *[]uint64 `json:"failed-at,omitempty"`
+
+	// FailureMessage If present, indicates that the transaction group failed and specifies why that happened
+	FailureMessage *string `json:"failure-message,omitempty"`
+
+	// TxnResults Simulation result for individual transactions
+	TxnResults []SimulateTransactionResult `json:"txn-results"`
+}
+
+// SimulateTransactionResult Simulation result for an individual transaction
+type SimulateTransactionResult struct {
+	// MissingSignature A boolean indicating whether this transaction is missing signatures
+	MissingSignature *bool `json:"missing-signature,omitempty"`
+
+	// TxnResult Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.
+	TxnResult PendingTransactionResponse `json:"txn-result"`
+}
+
 // StateDelta Application state delta.
 type StateDelta = []EvalDeltaKeyValue
 
@@ -955,13 +982,19 @@ type PostTransactionsResponse struct {
 	TxId string `json:"txId"`
 }
 
-// SimulationResponse defines model for SimulationResponse.
-type SimulationResponse struct {
-	// FailureMessage \[fm\] Failure message, if the transaction would have failed during a live broadcast.
-	FailureMessage string `json:"failure-message"`
+// SimulateResponse defines model for SimulateResponse.
+type SimulateResponse struct {
+	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
+	LastRound uint64 `json:"last-round"`
 
-	// MissingSignatures \[ms\] Whether any transactions would have failed during a live broadcast because they were missing signatures.
-	MissingSignatures bool `json:"missing-signatures"`
+	// TxnGroups A result object for each transaction group that was simulated.
+	TxnGroups []SimulateTransactionGroupResult `json:"txn-groups"`
+
+	// Version The version of this response object.
+	Version uint64 `json:"version"`
+
+	// WouldSucceed Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.
+	WouldSucceed bool `json:"would-succeed"`
 }
 
 // StateProofResponse Represents a state proof and its corresponding message
@@ -1036,7 +1069,7 @@ type VersionsResponse = Version
 
 // AccountInformationParams defines parameters for AccountInformation.
 type AccountInformationParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *AccountInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 
 	// Exclude When set to `all` will exclude asset holdings, application local state, created asset parameters, any created application parameters. Defaults to `none`.
@@ -1051,7 +1084,7 @@ type AccountInformationParamsExclude string
 
 // AccountApplicationInformationParams defines parameters for AccountApplicationInformation.
 type AccountApplicationInformationParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *AccountApplicationInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1060,7 +1093,7 @@ type AccountApplicationInformationParamsFormat string
 
 // AccountAssetInformationParams defines parameters for AccountAssetInformation.
 type AccountAssetInformationParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *AccountAssetInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1072,7 +1105,7 @@ type GetPendingTransactionsByAddressParams struct {
 	// Max Truncated number of transactions to display. If max=0, returns all pending txns.
 	Max *uint64 `form:"max,omitempty" json:"max,omitempty"`
 
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetPendingTransactionsByAddressParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1093,7 +1126,7 @@ type GetApplicationBoxesParams struct {
 
 // GetBlockParams defines parameters for GetBlock.
 type GetBlockParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetBlockParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1107,7 +1140,7 @@ type GetTransactionProofParams struct {
 	// * sha256
 	Hashtype *GetTransactionProofParamsHashtype `form:"hashtype,omitempty" json:"hashtype,omitempty"`
 
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetTransactionProofParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1119,7 +1152,7 @@ type GetTransactionProofParamsFormat string
 
 // GetLedgerStateDeltaParams defines parameters for GetLedgerStateDelta.
 type GetLedgerStateDeltaParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetLedgerStateDeltaParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1145,7 +1178,7 @@ type GetPendingTransactionsParams struct {
 	// Max Truncated number of transactions to display. If max=0, returns all pending txns.
 	Max *uint64 `form:"max,omitempty" json:"max,omitempty"`
 
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetPendingTransactionsParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1154,12 +1187,21 @@ type GetPendingTransactionsParamsFormat string
 
 // PendingTransactionInformationParams defines parameters for PendingTransactionInformation.
 type PendingTransactionInformationParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *PendingTransactionInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
 // PendingTransactionInformationParamsFormat defines parameters for PendingTransactionInformation.
 type PendingTransactionInformationParamsFormat string
+
+// SimulateTransactionParams defines parameters for SimulateTransaction.
+type SimulateTransactionParams struct {
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
+	Format *SimulateTransactionParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+}
+
+// SimulateTransactionParamsFormat defines parameters for SimulateTransaction.
+type SimulateTransactionParamsFormat string
 
 // TealCompileTextRequestBody defines body for TealCompile for text/plain ContentType.
 type TealCompileTextRequestBody = TealCompileTextBody
