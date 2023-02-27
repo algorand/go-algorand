@@ -26,14 +26,14 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 // resourceDelta is used as part of the compactResourcesDeltas to describe a change to a single resource.
 type resourceDelta struct {
-	oldResource store.PersistedResourcesData
-	newResource store.ResourcesData
+	oldResource trackerdb.PersistedResourcesData
+	newResource trackerdb.ResourcesData
 	nAcctDeltas int
 	address     basics.Address
 }
@@ -51,8 +51,8 @@ type compactResourcesDeltas struct {
 }
 
 type accountDelta struct {
-	oldAcct     store.PersistedAccountData
-	newAcct     store.BaseAccountData
+	oldAcct     trackerdb.PersistedAccountData
+	newAcct     trackerdb.BaseAccountData
 	nAcctDeltas int
 	address     basics.Address
 }
@@ -74,8 +74,8 @@ type compactAccountDeltas struct {
 // oldAcct represents the "old" state of the account in the DB, and compared against newAcct[0]
 // to determine if the acct became online or went offline.
 type onlineAccountDelta struct {
-	oldAcct           store.PersistedOnlineAccountData
-	newAcct           []store.BaseOnlineAccountData
+	oldAcct           trackerdb.PersistedOnlineAccountData
+	newAcct           []trackerdb.BaseOnlineAccountData
 	nOnlineAcctDeltas int
 	address           basics.Address
 	updRound          []uint64
@@ -100,8 +100,8 @@ const MaxEncodedBaseAccountDataSize = 350
 const MaxEncodedBaseResourceDataSize = 20000
 
 // prepareNormalizedBalancesV5 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
-func prepareNormalizedBalancesV5(bals []encoded.BalanceRecordV5, proto config.ConsensusParams) (normalizedAccountBalances []store.NormalizedAccountBalance, err error) {
-	normalizedAccountBalances = make([]store.NormalizedAccountBalance, len(bals))
+func prepareNormalizedBalancesV5(bals []encoded.BalanceRecordV5, proto config.ConsensusParams) (normalizedAccountBalances []trackerdb.NormalizedAccountBalance, err error) {
+	normalizedAccountBalances = make([]trackerdb.NormalizedAccountBalance, len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].Address = balance.Address
 		var accountDataV5 basics.AccountData
@@ -113,20 +113,20 @@ func prepareNormalizedBalancesV5(bals []encoded.BalanceRecordV5, proto config.Co
 		normalizedAccountBalances[i].NormalizedBalance = accountDataV5.NormalizedOnlineBalance(proto)
 		type resourcesRow struct {
 			aidx basics.CreatableIndex
-			store.ResourcesData
+			trackerdb.ResourcesData
 		}
 		var resources []resourcesRow
-		addResourceRow := func(_ context.Context, _ int64, aidx basics.CreatableIndex, rd *store.ResourcesData) error {
+		addResourceRow := func(_ context.Context, _ int64, aidx basics.CreatableIndex, rd *trackerdb.ResourcesData) error {
 			resources = append(resources, resourcesRow{aidx: aidx, ResourcesData: *rd})
 			return nil
 		}
-		if err = store.AccountDataResources(context.Background(), &accountDataV5, 0, addResourceRow); err != nil {
+		if err = trackerdb.AccountDataResources(context.Background(), &accountDataV5, 0, addResourceRow); err != nil {
 			return nil, err
 		}
 		normalizedAccountBalances[i].AccountHashes = make([][]byte, 1)
-		normalizedAccountBalances[i].AccountHashes[0] = store.AccountHashBuilder(balance.Address, accountDataV5, balance.AccountData)
+		normalizedAccountBalances[i].AccountHashes[0] = trackerdb.AccountHashBuilder(balance.Address, accountDataV5, balance.AccountData)
 		if len(resources) > 0 {
-			normalizedAccountBalances[i].Resources = make(map[basics.CreatableIndex]store.ResourcesData, len(resources))
+			normalizedAccountBalances[i].Resources = make(map[basics.CreatableIndex]trackerdb.ResourcesData, len(resources))
 			normalizedAccountBalances[i].EncodedResources = make(map[basics.CreatableIndex][]byte, len(resources))
 		}
 		for _, resource := range resources {
@@ -139,8 +139,8 @@ func prepareNormalizedBalancesV5(bals []encoded.BalanceRecordV5, proto config.Co
 }
 
 // prepareNormalizedBalancesV6 converts an array of encoded.BalanceRecordV6 into an equal size array of normalizedAccountBalances.
-func prepareNormalizedBalancesV6(bals []encoded.BalanceRecordV6, proto config.ConsensusParams) (normalizedAccountBalances []store.NormalizedAccountBalance, err error) {
-	normalizedAccountBalances = make([]store.NormalizedAccountBalance, len(bals))
+func prepareNormalizedBalancesV6(bals []encoded.BalanceRecordV6, proto config.ConsensusParams) (normalizedAccountBalances []trackerdb.NormalizedAccountBalance, err error) {
+	normalizedAccountBalances = make([]trackerdb.NormalizedAccountBalance, len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].Address = balance.Address
 		err = protocol.Decode(balance.AccountData, &(normalizedAccountBalances[i].AccountData))
@@ -163,19 +163,19 @@ func prepareNormalizedBalancesV6(bals []encoded.BalanceRecordV6, proto config.Co
 			normalizedAccountBalances[i].PartialBalance = true
 		} else {
 			normalizedAccountBalances[i].AccountHashes = make([][]byte, 1+len(balance.Resources))
-			normalizedAccountBalances[i].AccountHashes[0] = store.AccountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].AccountData, balance.AccountData)
+			normalizedAccountBalances[i].AccountHashes[0] = trackerdb.AccountHashBuilderV6(balance.Address, &normalizedAccountBalances[i].AccountData, balance.AccountData)
 			curHashIdx++
 		}
 		if len(balance.Resources) > 0 {
-			normalizedAccountBalances[i].Resources = make(map[basics.CreatableIndex]store.ResourcesData, len(balance.Resources))
+			normalizedAccountBalances[i].Resources = make(map[basics.CreatableIndex]trackerdb.ResourcesData, len(balance.Resources))
 			normalizedAccountBalances[i].EncodedResources = make(map[basics.CreatableIndex][]byte, len(balance.Resources))
 			for cidx, res := range balance.Resources {
-				var resData store.ResourcesData
+				var resData trackerdb.ResourcesData
 				err = protocol.Decode(res, &resData)
 				if err != nil {
 					return nil, err
 				}
-				normalizedAccountBalances[i].AccountHashes[curHashIdx], err = store.ResourcesHashBuilderV6(&resData, balance.Address, basics.CreatableIndex(cidx), resData.UpdateRound, res)
+				normalizedAccountBalances[i].AccountHashes[curHashIdx], err = trackerdb.ResourcesHashBuilderV6(&resData, balance.Address, basics.CreatableIndex(cidx), resData.UpdateRound, res)
 				if err != nil {
 					return nil, err
 				}
@@ -232,7 +232,7 @@ func makeCompactResourceDeltas(stateDeltas []ledgercore.StateDelta, baseRound ba
 				newEntry := resourceDelta{
 					nAcctDeltas: 1,
 					address:     res.Addr,
-					newResource: store.MakeResourcesData(deltaRound * updateRoundMultiplier),
+					newResource: trackerdb.MakeResourcesData(deltaRound * updateRoundMultiplier),
 				}
 				newEntry.newResource.SetAssetData(res.Params, res.Holding)
 				// baseResources caches deleted entries, and they have addrid = 0
@@ -244,7 +244,7 @@ func makeCompactResourceDeltas(stateDeltas []ledgercore.StateDelta, baseRound ba
 					outResourcesDeltas.insert(newEntry)
 				} else {
 					if pad, has := baseAccounts.read(res.Addr); has {
-						newEntry.oldResource = store.PersistedResourcesData{Addrid: pad.Rowid}
+						newEntry.oldResource = trackerdb.PersistedResourcesData{Addrid: pad.Rowid}
 					}
 					newEntry.oldResource.Aidx = basics.CreatableIndex(res.Aidx)
 					outResourcesDeltas.insertMissing(newEntry)
@@ -270,7 +270,7 @@ func makeCompactResourceDeltas(stateDeltas []ledgercore.StateDelta, baseRound ba
 				newEntry := resourceDelta{
 					nAcctDeltas: 1,
 					address:     res.Addr,
-					newResource: store.MakeResourcesData(deltaRound * updateRoundMultiplier),
+					newResource: trackerdb.MakeResourcesData(deltaRound * updateRoundMultiplier),
 				}
 				newEntry.newResource.SetAppData(res.Params, res.State)
 				baseResourceData, has := baseResources.read(res.Addr, basics.CreatableIndex(res.Aidx))
@@ -280,7 +280,7 @@ func makeCompactResourceDeltas(stateDeltas []ledgercore.StateDelta, baseRound ba
 					outResourcesDeltas.insert(newEntry)
 				} else {
 					if pad, has := baseAccounts.read(res.Addr); has {
-						newEntry.oldResource = store.PersistedResourcesData{Addrid: pad.Rowid}
+						newEntry.oldResource = trackerdb.PersistedResourcesData{Addrid: pad.Rowid}
 					}
 					newEntry.oldResource.Aidx = basics.CreatableIndex(res.Aidx)
 					outResourcesDeltas.insertMissing(newEntry)
@@ -294,7 +294,7 @@ func makeCompactResourceDeltas(stateDeltas []ledgercore.StateDelta, baseRound ba
 // resourcesLoadOld updates the entries on the deltas.oldResource map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
-func (a *compactResourcesDeltas) resourcesLoadOld(tx store.TransactionScope, knownAddresses map[basics.Address]int64) (err error) {
+func (a *compactResourcesDeltas) resourcesLoadOld(tx trackerdb.TransactionScope, knownAddresses map[basics.Address]int64) (err error) {
 	if len(a.misses) == 0 {
 		return nil
 	}
@@ -334,7 +334,7 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx store.TransactionScope, kno
 		switch err {
 		case nil:
 			if len(resDataBuf) > 0 {
-				persistedResData := store.PersistedResourcesData{Addrid: addrid, Aidx: aidx}
+				persistedResData := trackerdb.PersistedResourcesData{Addrid: addrid, Aidx: aidx}
 				err = protocol.Decode(resDataBuf, &persistedResData.Data)
 				if err != nil {
 					return err
@@ -346,7 +346,7 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx store.TransactionScope, kno
 			}
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
-			a.updateOld(missIdx, store.PersistedResourcesData{Addrid: addrid, Aidx: aidx})
+			a.updateOld(missIdx, trackerdb.PersistedResourcesData{Addrid: addrid, Aidx: aidx})
 			err = nil
 		default:
 			// unexpected error - let the caller know that we couldn't complete the operation.
@@ -395,7 +395,7 @@ func (a *compactResourcesDeltas) insertMissing(delta resourceDelta) {
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
-func (a *compactResourcesDeltas) updateOld(idx int, old store.PersistedResourcesData) {
+func (a *compactResourcesDeltas) updateOld(idx int, old trackerdb.PersistedResourcesData) {
 	a.deltas[idx].oldResource = old
 }
 
@@ -440,7 +440,7 @@ func makeCompactAccountDeltas(stateDeltas []ledgercore.StateDelta, baseRound bas
 				// it's a new entry.
 				newEntry := accountDelta{
 					nAcctDeltas: 1,
-					newAcct: store.BaseAccountData{
+					newAcct: trackerdb.BaseAccountData{
 						UpdateRound: deltaRound * updateRoundMultiplier,
 					},
 					address: addr,
@@ -461,7 +461,7 @@ func makeCompactAccountDeltas(stateDeltas []ledgercore.StateDelta, baseRound bas
 // accountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
-func (a *compactAccountDeltas) accountsLoadOld(tx store.TransactionScope) (err error) {
+func (a *compactAccountDeltas) accountsLoadOld(tx trackerdb.TransactionScope) (err error) {
 	// TODO: this function only needs a reader's scope to the datastore
 	if len(a.misses) == 0 {
 		return nil
@@ -480,7 +480,7 @@ func (a *compactAccountDeltas) accountsLoadOld(tx store.TransactionScope) (err e
 		switch err {
 		case nil:
 			if len(acctDataBuf) > 0 {
-				persistedAcctData := &store.PersistedAccountData{Addr: addr, Rowid: rowid}
+				persistedAcctData := &trackerdb.PersistedAccountData{Addr: addr, Rowid: rowid}
 				err = protocol.Decode(acctDataBuf, &persistedAcctData.AccountData)
 				if err != nil {
 					return err
@@ -488,11 +488,11 @@ func (a *compactAccountDeltas) accountsLoadOld(tx store.TransactionScope) (err e
 				a.updateOld(idx, *persistedAcctData)
 			} else {
 				// to retain backward compatibility, we will treat this condition as if we don't have the account.
-				a.updateOld(idx, store.PersistedAccountData{Addr: addr, Rowid: rowid})
+				a.updateOld(idx, trackerdb.PersistedAccountData{Addr: addr, Rowid: rowid})
 			}
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
-			a.updateOld(idx, store.PersistedAccountData{Addr: addr})
+			a.updateOld(idx, trackerdb.PersistedAccountData{Addr: addr})
 			// Note: the err will be ignored in this case since `err` is being shadowed.
 			// this behaviour is equivalent to `err = nil`
 		default:
@@ -543,12 +543,12 @@ func (a *compactAccountDeltas) insertMissing(delta accountDelta) {
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
-func (a *compactAccountDeltas) updateOld(idx int, old store.PersistedAccountData) {
+func (a *compactAccountDeltas) updateOld(idx int, old trackerdb.PersistedAccountData) {
 	a.deltas[idx].oldAcct = old
 }
 
 func (c *onlineAccountDelta) append(acctDelta ledgercore.AccountData, deltaRound basics.Round) {
-	var baseEntry store.BaseOnlineAccountData
+	var baseEntry trackerdb.BaseOnlineAccountData
 	baseEntry.SetCoreAccountData(&acctDelta)
 	c.newAcct = append(c.newAcct, baseEntry)
 	c.updRound = append(c.updRound, uint64(deltaRound))
@@ -603,7 +603,7 @@ func makeCompactOnlineAccountDeltas(accountDeltas []ledgercore.AccountDeltas, ba
 // accountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
-func (a *compactOnlineAccountDeltas) accountsLoadOld(tx store.TransactionScope) (err error) {
+func (a *compactOnlineAccountDeltas) accountsLoadOld(tx trackerdb.TransactionScope) (err error) {
 	if len(a.misses) == 0 {
 		return nil
 	}
@@ -620,7 +620,7 @@ func (a *compactOnlineAccountDeltas) accountsLoadOld(tx store.TransactionScope) 
 		switch err {
 		case nil:
 			if len(acctDataBuf) > 0 {
-				persistedAcctData := &store.PersistedOnlineAccountData{Addr: addr, Rowid: rowid}
+				persistedAcctData := &trackerdb.PersistedOnlineAccountData{Addr: addr, Rowid: rowid}
 				err = protocol.Decode(acctDataBuf, &persistedAcctData.AccountData)
 				if err != nil {
 					return err
@@ -628,11 +628,11 @@ func (a *compactOnlineAccountDeltas) accountsLoadOld(tx store.TransactionScope) 
 				a.updateOld(idx, *persistedAcctData)
 			} else {
 				// empty data means offline account
-				a.updateOld(idx, store.PersistedOnlineAccountData{Addr: addr, Rowid: rowid})
+				a.updateOld(idx, trackerdb.PersistedOnlineAccountData{Addr: addr, Rowid: rowid})
 			}
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
-			a.updateOld(idx, store.PersistedOnlineAccountData{Addr: addr})
+			a.updateOld(idx, trackerdb.PersistedOnlineAccountData{Addr: addr})
 		default:
 			// unexpected error - let the caller know that we couldn't complete the operation.
 			return err
@@ -681,7 +681,7 @@ func (a *compactOnlineAccountDeltas) insertMissing(delta onlineAccountDelta) {
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
-func (a *compactOnlineAccountDeltas) updateOld(idx int, old store.PersistedOnlineAccountData) {
+func (a *compactOnlineAccountDeltas) updateOld(idx int, old trackerdb.PersistedOnlineAccountData) {
 	a.deltas[idx].oldAcct = old
 }
 
@@ -704,10 +704,10 @@ func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, pro
 
 // accountsNewRound is a convenience wrapper for accountsNewRoundImpl
 func accountsNewRound(
-	tx store.TransactionScope,
+	tx trackerdb.TransactionScope,
 	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedKvValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []store.PersistedAccountData, updatedResources map[basics.Address][]store.PersistedResourcesData, updatedKVs map[string]store.PersistedKVData, err error) {
+) (updatedAccounts []trackerdb.PersistedAccountData, updatedResources map[basics.Address][]trackerdb.PersistedResourcesData, updatedKVs map[string]trackerdb.PersistedKVData, err error) {
 	hasAccounts := updates.len() > 0
 	hasResources := resources.len() > 0
 	hasKvPairs := len(kvPairs) > 0
@@ -723,10 +723,10 @@ func accountsNewRound(
 }
 
 func onlineAccountsNewRound(
-	tx store.TransactionScope,
+	tx trackerdb.TransactionScope,
 	updates compactOnlineAccountDeltas,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []store.PersistedOnlineAccountData, err error) {
+) (updatedAccounts []trackerdb.PersistedOnlineAccountData, err error) {
 	hasAccounts := updates.len() > 0
 
 	writer, err := tx.MakeOnlineAccountsOptimizedWriter(hasAccounts)
@@ -742,11 +742,11 @@ func onlineAccountsNewRound(
 // accountsNewRoundImpl updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
 // The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
 func accountsNewRoundImpl(
-	writer store.AccountsWriter,
+	writer trackerdb.AccountsWriter,
 	updates compactAccountDeltas, resources compactResourcesDeltas, kvPairs map[string]modifiedKvValue, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []store.PersistedAccountData, updatedResources map[basics.Address][]store.PersistedResourcesData, updatedKVs map[string]store.PersistedKVData, err error) {
-	updatedAccounts = make([]store.PersistedAccountData, updates.len())
+) (updatedAccounts []trackerdb.PersistedAccountData, updatedResources map[basics.Address][]trackerdb.PersistedResourcesData, updatedKVs map[string]trackerdb.PersistedKVData, err error) {
+	updatedAccounts = make([]trackerdb.PersistedAccountData, updates.len())
 	updatedAccountIdx := 0
 	newAddressesRowIDs := make(map[basics.Address]int64)
 	for i := 0; i < updates.len(); i++ {
@@ -777,7 +777,7 @@ func accountsNewRoundImpl(
 				if err == nil {
 					// we deleted the entry successfully.
 					updatedAccounts[updatedAccountIdx].Rowid = 0
-					updatedAccounts[updatedAccountIdx].AccountData = store.BaseAccountData{}
+					updatedAccounts[updatedAccountIdx].AccountData = trackerdb.BaseAccountData{}
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", data.address, data.oldAcct.Rowid)
 					}
@@ -807,7 +807,7 @@ func accountsNewRoundImpl(
 		updatedAccountIdx++
 	}
 
-	updatedResources = make(map[basics.Address][]store.PersistedResourcesData)
+	updatedResources = make(map[basics.Address][]trackerdb.PersistedResourcesData)
 
 	// the resources update is going to be made in three parts:
 	// on the first loop, we will find out all the entries that need to be deleted, and parepare a pendingResourcesDeletion map.
@@ -832,7 +832,7 @@ func accountsNewRoundImpl(
 		}
 		pendingResourcesDeletion[resourceKey{addrid: data.oldResource.Addrid, aidx: data.oldResource.Aidx}] = struct{}{}
 
-		entry := store.PersistedResourcesData{Addrid: 0, Aidx: data.oldResource.Aidx, Data: store.MakeResourcesData(0), Round: lastUpdateRound}
+		entry := trackerdb.PersistedResourcesData{Addrid: 0, Aidx: data.oldResource.Aidx, Data: trackerdb.MakeResourcesData(0), Round: lastUpdateRound}
 		deltas := updatedResources[data.address]
 		deltas = append(deltas, entry)
 		updatedResources[data.address] = deltas
@@ -854,7 +854,7 @@ func accountsNewRoundImpl(
 				return
 			}
 		}
-		var entry store.PersistedResourcesData
+		var entry trackerdb.PersistedResourcesData
 		if data.oldResource.Data.IsEmpty() {
 			// IsEmpty means we don't have a previous value. Note, can't use oldResource.data.MsgIsZero
 			// because of possibility of empty asset holdings or app local state after opting in,
@@ -863,7 +863,7 @@ func accountsNewRoundImpl(
 				// if we didn't had it before, and we don't have anything now, just skip it.
 				// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
 				// because the base account might gone.
-				entry = store.PersistedResourcesData{Addrid: 0, Aidx: aidx, Data: store.MakeResourcesData(0), Round: lastUpdateRound}
+				entry = trackerdb.PersistedResourcesData{Addrid: 0, Aidx: aidx, Data: trackerdb.MakeResourcesData(0), Round: lastUpdateRound}
 			} else {
 				// create a new entry.
 				if !data.newResource.IsApp() && !data.newResource.IsAsset() {
@@ -880,7 +880,7 @@ func accountsNewRoundImpl(
 					rowsAffected, err = writer.UpdateResource(addrid, aidx, data.newResource)
 					if err == nil {
 						// rowid doesn't change on update.
-						entry = store.PersistedResourcesData{Addrid: addrid, Aidx: aidx, Data: data.newResource, Round: lastUpdateRound}
+						entry = trackerdb.PersistedResourcesData{Addrid: addrid, Aidx: aidx, Data: data.newResource, Round: lastUpdateRound}
 						if rowsAffected != 1 {
 							err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, addrid, aidx)
 						}
@@ -889,7 +889,7 @@ func accountsNewRoundImpl(
 					_, err = writer.InsertResource(addrid, aidx, data.newResource)
 					if err == nil {
 						// set the returned persisted account states so that we could store that as the baseResources in commitRound
-						entry = store.PersistedResourcesData{Addrid: addrid, Aidx: aidx, Data: data.newResource, Round: lastUpdateRound}
+						entry = trackerdb.PersistedResourcesData{Addrid: addrid, Aidx: aidx, Data: data.newResource, Round: lastUpdateRound}
 					}
 				}
 			}
@@ -908,7 +908,7 @@ func accountsNewRoundImpl(
 				rowsAffected, err = writer.UpdateResource(addrid, aidx, data.newResource)
 				if err == nil {
 					// rowid doesn't change on update.
-					entry = store.PersistedResourcesData{Addrid: addrid, Aidx: aidx, Data: data.newResource, Round: lastUpdateRound}
+					entry = trackerdb.PersistedResourcesData{Addrid: addrid, Aidx: aidx, Data: data.newResource, Round: lastUpdateRound}
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, addrid, aidx)
 					}
@@ -943,7 +943,7 @@ func accountsNewRoundImpl(
 		}
 	}
 
-	updatedKVs = make(map[string]store.PersistedKVData, len(kvPairs))
+	updatedKVs = make(map[string]trackerdb.PersistedKVData, len(kvPairs))
 	for key, mv := range kvPairs {
 		if mv.data != nil {
 			// reminder: check oldData for nil here, b/c bytes.Equal conflates nil and "".
@@ -951,13 +951,13 @@ func accountsNewRoundImpl(
 				continue // changed back within the delta span
 			}
 			err = writer.UpsertKvPair(key, mv.data)
-			updatedKVs[key] = store.PersistedKVData{Value: mv.data, Round: lastUpdateRound}
+			updatedKVs[key] = trackerdb.PersistedKVData{Value: mv.data, Round: lastUpdateRound}
 		} else {
 			if mv.oldData == nil { // Came and went within the delta span
 				continue
 			}
 			err = writer.DeleteKvPair(key)
-			updatedKVs[key] = store.PersistedKVData{Value: nil, Round: lastUpdateRound}
+			updatedKVs[key] = trackerdb.PersistedKVData{Value: nil, Round: lastUpdateRound}
 		}
 		if err != nil {
 			return
@@ -979,9 +979,9 @@ func accountsNewRoundImpl(
 }
 
 func onlineAccountsNewRoundImpl(
-	writer store.OnlineAccountsWriter, updates compactOnlineAccountDeltas,
+	writer trackerdb.OnlineAccountsWriter, updates compactOnlineAccountDeltas,
 	proto config.ConsensusParams, lastUpdateRound basics.Round,
-) (updatedAccounts []store.PersistedOnlineAccountData, err error) {
+) (updatedAccounts []trackerdb.PersistedOnlineAccountData, err error) {
 
 	for i := 0; i < updates.len(); i++ {
 		data := updates.getByIdx(i)
@@ -1005,7 +1005,7 @@ func onlineAccountsNewRoundImpl(
 							normBalance := newAcct.NormalizedOnlineBalance(proto)
 							rowid, err = writer.InsertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
 							if err == nil {
-								updated := store.PersistedOnlineAccountData{
+								updated := trackerdb.PersistedOnlineAccountData{
 									Addr:        data.address,
 									AccountData: newAcct,
 									Round:       lastUpdateRound,
@@ -1028,11 +1028,11 @@ func onlineAccountsNewRoundImpl(
 						err = fmt.Errorf("empty voting data but online account %s: %v", data.address.String(), newAcct)
 					} else {
 						var rowid int64
-						rowid, err = writer.InsertOnlineAccount(data.address, 0, store.BaseOnlineAccountData{}, updRound, 0)
+						rowid, err = writer.InsertOnlineAccount(data.address, 0, trackerdb.BaseOnlineAccountData{}, updRound, 0)
 						if err == nil {
-							updated := store.PersistedOnlineAccountData{
+							updated := trackerdb.PersistedOnlineAccountData{
 								Addr:        data.address,
-								AccountData: store.BaseOnlineAccountData{},
+								AccountData: trackerdb.BaseOnlineAccountData{},
 								Round:       lastUpdateRound,
 								Rowid:       rowid,
 								UpdRound:    basics.Round(updRound),
@@ -1048,7 +1048,7 @@ func onlineAccountsNewRoundImpl(
 						normBalance := newAcct.NormalizedOnlineBalance(proto)
 						rowid, err = writer.InsertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
 						if err == nil {
-							updated := store.PersistedOnlineAccountData{
+							updated := trackerdb.PersistedOnlineAccountData{
 								Addr:        data.address,
 								AccountData: newAcct,
 								Round:       lastUpdateRound,

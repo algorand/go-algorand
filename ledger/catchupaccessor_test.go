@@ -34,7 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -61,7 +61,7 @@ func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]
 		chunk.Balances = make([]encoded.BalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
 			var randomAccount encoded.BalanceRecordV6
-			accountData := store.BaseAccountData{}
+			accountData := trackerdb.BaseAccountData{}
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)
 			// have the first account be the zero address
@@ -409,7 +409,7 @@ func TestCatchupAccessorResourceCountMismatch(t *testing.T) {
 	var balances catchpointFileChunkV6
 	balances.Balances = make([]encoded.BalanceRecordV6, 1)
 	var randomAccount encoded.BalanceRecordV6
-	accountData := store.BaseAccountData{}
+	accountData := trackerdb.BaseAccountData{}
 	accountData.MicroAlgos.Raw = crypto.RandUint63()
 	accountData.TotalAppParams = 1
 	randomAccount.AccountData = protocol.Encode(&accountData)
@@ -428,11 +428,11 @@ type testStagingWriter struct {
 	hashes map[[4 + crypto.DigestSize]byte]int
 }
 
-func (w *testStagingWriter) writeBalances(ctx context.Context, balances []store.NormalizedAccountBalance) error {
+func (w *testStagingWriter) writeBalances(ctx context.Context, balances []trackerdb.NormalizedAccountBalance) error {
 	return nil
 }
 
-func (w *testStagingWriter) writeCreatables(ctx context.Context, balances []store.NormalizedAccountBalance) error {
+func (w *testStagingWriter) writeCreatables(ctx context.Context, balances []trackerdb.NormalizedAccountBalance) error {
 	return nil
 }
 
@@ -440,7 +440,7 @@ func (w *testStagingWriter) writeKVs(ctx context.Context, kvrs []encoded.KVRecor
 	return nil
 }
 
-func (w *testStagingWriter) writeHashes(ctx context.Context, balances []store.NormalizedAccountBalance) error {
+func (w *testStagingWriter) writeHashes(ctx context.Context, balances []trackerdb.NormalizedAccountBalance) error {
 	for _, bal := range balances {
 		for _, hash := range bal.AccountHashes {
 			var key [4 + crypto.DigestSize]byte
@@ -477,8 +477,8 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 	}
 	catchpointAccessor := makeTestCatchpointCatchupAccessor(&l, log, writer)
 
-	randomSimpleBaseAcct := func() store.BaseAccountData {
-		accountData := store.BaseAccountData{
+	randomSimpleBaseAcct := func() trackerdb.BaseAccountData {
+		accountData := trackerdb.BaseAccountData{
 			RewardsBase: crypto.RandUint63(),
 			MicroAlgos:  basics.MicroAlgos{Raw: crypto.RandUint63()},
 			AuthAddr:    ledgertesting.RandomAddress(),
@@ -486,7 +486,7 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 		return accountData
 	}
 
-	encodedBalanceRecordFromBase := func(addr basics.Address, base store.BaseAccountData, resources map[uint64]msgp.Raw, more bool) encoded.BalanceRecordV6 {
+	encodedBalanceRecordFromBase := func(addr basics.Address, base trackerdb.BaseAccountData, resources map[uint64]msgp.Raw, more bool) encoded.BalanceRecordV6 {
 		ebr := encoded.BalanceRecordV6{
 			Address:              addr,
 			AccountData:          protocol.Encode(&base),
@@ -518,7 +518,7 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 	acctX.TotalAssets = acctXNumRes
 	acctXRes1 := make(map[uint64]msgp.Raw, acctXNumRes/2+1)
 	acctXRes2 := make(map[uint64]msgp.Raw, acctXNumRes/2)
-	emptyRes := store.ResourcesData{ResourceFlags: store.ResourceFlagsEmptyAsset}
+	emptyRes := trackerdb.ResourcesData{ResourceFlags: trackerdb.ResourceFlagsEmptyAsset}
 	emptyResEnc := protocol.Encode(&emptyRes)
 	for i := 0; i < acctXNumRes; i++ {
 		if i <= acctXNumRes/2 {

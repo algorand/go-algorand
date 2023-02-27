@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package store
+package sqlitedriver
 
 import (
 	"context"
@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -43,7 +44,7 @@ func TestCatchpointFirstStageInfoTable(t *testing.T) {
 	crw := NewCatchpointSQLReaderWriter(dbs.Wdb.Handle)
 
 	for _, round := range []basics.Round{4, 6, 8} {
-		info := CatchpointFirstStageInfo{
+		info := trackerdb.CatchpointFirstStageInfo{
 			TotalAccounts: uint64(round) * 10,
 		}
 		err = crw.InsertOrReplaceCatchpointFirstStageInfo(ctx, round, &info)
@@ -55,7 +56,7 @@ func TestCatchpointFirstStageInfoTable(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, exists)
 
-		infoExpected := CatchpointFirstStageInfo{
+		infoExpected := trackerdb.CatchpointFirstStageInfo{
 			TotalAccounts: uint64(round) * 10,
 		}
 		require.Equal(t, infoExpected, info)
@@ -101,7 +102,7 @@ func TestUnfinishedCatchpointsTable(t *testing.T) {
 
 	ret, err := cts.SelectUnfinishedCatchpoints(context.Background())
 	require.NoError(t, err)
-	expected := []UnfinishedCatchpointRecord{
+	expected := []trackerdb.UnfinishedCatchpointRecord{
 		{
 			Round:     3,
 			BlockHash: d3,
@@ -118,7 +119,7 @@ func TestUnfinishedCatchpointsTable(t *testing.T) {
 
 	ret, err = cts.SelectUnfinishedCatchpoints(context.Background())
 	require.NoError(t, err)
-	expected = []UnfinishedCatchpointRecord{
+	expected = []trackerdb.UnfinishedCatchpointRecord{
 		{
 			Round:     5,
 			BlockHash: d5,
