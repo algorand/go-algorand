@@ -69,7 +69,7 @@ const (
 	infoNodeCatchpointCatchupAccounts       = "Catchpoint total accounts: %d\nCatchpoint accounts processed: %d\nCatchpoint accounts verified: %d\nCatchpoint total KVs: %d\nCatchpoint KVs processed: %d\nCatchpoint KVs verified: %d"
 	infoNodeCatchpointCatchupBlocks         = "Catchpoint total blocks: %d\nCatchpoint downloaded blocks: %d"
 	nodeLastCatchpoint                      = "Last Catchpoint: %s"
-	nodeConfirmImplicitCatchpoint           = "Fast catchup to %s is about to start.\nUsing untrusted catchpoints or peers might compromise your node.\nType 'yes' accept the risk and continue: "
+	nodeConfirmImplicitCatchpoint           = "Fast catchup to %s is about to start.\nUsing untrusted catchpoints or peers might compromise your node.\nType 'yes' to accept the risk and continue: "
 	errorAbortedPerUserRequest              = "Aborted"
 	errorNodeCreationIPFailure              = "Parsing passed IP %v failed: need a valid IPv4 or IPv6 address with a specified port number"
 	errorNodeNotDetected                    = "Algorand node does not appear to be running: %s"
