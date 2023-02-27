@@ -19,6 +19,7 @@ package main
 //go:generate ./bundle_genesis_json.sh
 
 import (
+	"bufio"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -60,6 +61,7 @@ var newNodeRelay string
 var newNodeFullConfig bool
 var watchMillisecond uint64
 var abortCatchup bool
+var noPrompt bool
 
 const catchpointURL = "https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/%s/latest.catchpoint"
 
@@ -108,6 +110,7 @@ func init() {
 	statusCmd.Flags().Uint64VarP(&watchMillisecond, "watch", "w", 0, "Time (in milliseconds) between two successive status updates")
 
 	catchupCmd.Flags().BoolVarP(&abortCatchup, "abort", "x", false, "Aborts the current catchup process")
+	catchupCmd.Flags().BoolVarP(&noPrompt, "no-prompt", "y", false, "No prompting for implicit catchpoint")
 
 }
 
@@ -164,9 +167,18 @@ var catchupCmd = &cobra.Command{
 				URL := fmt.Sprintf(catchpointURL, genesis)
 				label, err := getMissingCatchpointLabel(URL)
 				if err != nil {
-					reportErrorf(errorCatchpointLabelMissing, errorUnableToLookupCatchpointLabel)
+					reportErrorf(errorCatchpointLabelMissing, errorUnableToLookupCatchpointLabel, err.Error())
 				}
 				args = append(args, label)
+				if !noPrompt {
+					fmt.Printf(nodeConfirmImplicitCatchpoint, label)
+					reader := bufio.NewReader(os.Stdin)
+					text, _ := reader.ReadString('\n')
+					text = strings.Replace(text, "\n", "", -1)
+					if text != "yes" {
+						reportErrorf(errorAbortedPerUserRequest)
+					}
+				}
 			}
 			catchup(dataDir, args)
 		})
