@@ -35,6 +35,7 @@ var applyRootNodeDir string
 var applyPublicAddress string
 var nodeConfigBucket string
 var disableDNS bool
+var skipMetricsDNS bool
 
 func init() {
 	applyCmd.Flags().StringVarP(&applyChannel, "channel", "c", "", "Channel for the nodes we are configuring")
@@ -52,6 +53,9 @@ func init() {
 	applyCmd.Flags().StringVarP(&nodeConfigBucket, "bucket", "b", "", "S3 bucket to get node configuration from.")
 
 	applyCmd.Flags().BoolVarP(&disableDNS, "disable-dns", "N", false, "disable setting DNS entries")
+
+	applyCmd.Flags().BoolVarP(&skipMetricsDNS, "skip-metrics-dns", "M", false, "do not set metrics DNS entries")
+
 }
 
 var applyCmd = &cobra.Command{
@@ -130,7 +134,7 @@ func doApply(rootDir string, rootNodeDir, channel string, hostName string, dnsNa
 	}
 
 	fmt.Fprintf(os.Stdout, "Applying config for host '%s' (%d nodes)...\n", hostName, len(hostCfg.Nodes))
-	err = nodecfg.ApplyConfigurationToHost(hostCfg, rootDir, rootNodeDir, dnsName)
+	err = nodecfg.ApplyConfigurationToHost(hostCfg, rootDir, rootNodeDir, nodecfg.DNSOpts{DNSName: dnsName, SkipMetricsSrv: skipMetricsDNS})
 
 	return
 }

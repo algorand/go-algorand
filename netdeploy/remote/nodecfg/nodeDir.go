@@ -33,10 +33,11 @@ import (
 
 type nodeDir struct {
 	remote.NodeConfig
-	dataDir      string
-	config       config.Local
-	delaySave    bool
-	configurator *nodeConfigurator
+	dataDir        string
+	config         config.Local
+	delaySave      bool
+	skipMetricsSrv bool // no not populate/register metrics DNS
+	configurator   *nodeConfigurator
 }
 
 // * Configure:
@@ -245,11 +246,14 @@ func (nd *nodeDir) configureMetrics(enable bool, address string) (err error) {
 	if metricsPort != "" {
 		nd.config.NodeExporterListenAddress = ":" + metricsPort
 	}
-	metricsSRV := metricsURL.Hostname()
 
-	fmt.Fprintf(os.Stdout, " - Configuring metrics (%v) => %s - %s\n", enable, metricsSRV, nd.config.NodeExporterListenAddress)
-	if nd.config.NodeExporterListenAddress != "" && nd.config.NodeExporterListenAddress[0] == ':' {
-		nd.configurator.registerMetricsSrv(metricsSRV, nd.config.NodeExporterListenAddress)
+	if !nd.skipMetricsSrv {
+		metricsSRV := metricsURL.Hostname()
+
+		fmt.Fprintf(os.Stdout, " - Configuring metrics (%v) => %s - %s\n", enable, metricsSRV, nd.config.NodeExporterListenAddress)
+		if nd.config.NodeExporterListenAddress != "" && nd.config.NodeExporterListenAddress[0] == ':' {
+			nd.configurator.registerMetricsSrv(metricsSRV, nd.config.NodeExporterListenAddress)
+		}
 	}
 	err = nd.saveConfig()
 	return

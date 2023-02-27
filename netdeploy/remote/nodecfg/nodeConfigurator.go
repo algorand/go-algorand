@@ -34,13 +34,19 @@ import (
 
 type nodeConfigurator struct {
 	config                  remote.HostConfig
-	dnsName                 string
 	genesisFile             string
 	genesisData             bookkeeping.Genesis
 	bootstrappedBlockFile   string
 	bootstrappedTrackerFile string
 	relayEndpoints          []srvEntry
 	metricsEndpoints        []srvEntry
+	DNSOpts
+}
+
+// DNSOpts for ApplyConfigurationToHost
+type DNSOpts struct {
+	DNSName        string
+	SkipMetricsSrv bool
 }
 
 type srvEntry struct {
@@ -51,10 +57,10 @@ type srvEntry struct {
 // ApplyConfigurationToHost attempts to apply the provided configuration to the local host,
 // based on the configuration specified for the provided hostName, with node
 // directories being created / updated under the specified rootNodeDir
-func ApplyConfigurationToHost(cfg remote.HostConfig, rootConfigDir, rootNodeDir string, dnsName string) (err error) {
+func ApplyConfigurationToHost(cfg remote.HostConfig, rootConfigDir, rootNodeDir string, dnsOpts DNSOpts) (err error) {
 	nc := nodeConfigurator{
 		config:  cfg,
-		dnsName: dnsName,
+		DNSOpts: dnsOpts,
 	}
 
 	return nc.apply(rootConfigDir, rootNodeDir)
@@ -80,6 +86,9 @@ func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error)
 
 	nc.genesisFile = filepath.Join(rootConfigDir, "genesisdata", config.GenesisJSONFile)
 	nc.genesisData, err = bookkeeping.LoadGenesisFromFile(nc.genesisFile)
+	if err != nil {
+		return fmt.Errorf("error loading genesis file: %v", err)
+	}
 	nodeDirs, err := nc.prepareNodeDirs(nc.config.Nodes, rootConfigDir, rootNodeDir)
 	if err != nil {
 		return fmt.Errorf("error preparing node directories: %v", err)
@@ -87,6 +96,9 @@ func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error)
 
 	for _, nodeDir := range nodeDirs {
 		nodeDir.delaySave = true
+		if nc.SkipMetricsSrv {
+			nodeDir.skipMetricsSrv = true
+		}
 		err = nodeDir.configure()
 		if err != nil {
 			break
@@ -96,7 +108,7 @@ func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error)
 		nodeDir.saveConfig()
 	}
 
-	if err == nil && nc.dnsName != "" {
+	if err == nil && nc.DNSName != "" {
 		fmt.Fprint(os.Stdout, "... registering DNS / SRV records\n")
 		err = nc.registerDNSRecords()
 	}
@@ -193,7 +205,7 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 	// to map our network DNS name to our public name (or IP) provided to nodecfg
 	// Network HostName = eg r1.testnet.algodev.network
 	networkHostName := nc.config.Name + "." + string(nc.genesisData.Network) + ".algodev.network"
-	isIP := net.ParseIP(nc.dnsName) != nil
+	isIP := net.ParseIP(nc.DNSName) != nil
 	var recordType string
 	if isIP {
 		recordType = "A"
@@ -201,8 +213,8 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 		recordType = "CNAME"
 	}
 
-	fmt.Fprintf(os.Stdout, "...... Adding DNS Record '%s' -> '%s' .\n", networkHostName, nc.dnsName)
-	cloudflareDNS.SetDNSRecord(context.Background(), recordType, networkHostName, nc.dnsName, cloudflare.AutomaticTTL, priority, proxied)
+	fmt.Fprintf(os.Stdout, "...... Adding DNS Record '%s' -> '%s' .\n", networkHostName, nc.DNSName)
+	cloudflareDNS.SetDNSRecord(context.Background(), recordType, networkHostName, nc.DNSName, cloudflare.AutomaticTTL, priority, proxied)
 
 	for _, entry := range nc.relayEndpoints {
 		port, parseErr := strconv.ParseInt(strings.Split(entry.port, ":")[1], 10, 64)
