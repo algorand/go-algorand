@@ -14,40 +14,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package store
+package trackerdb
 
-import (
-	"context"
-	"database/sql"
-)
-
-type kvsIter struct {
-	tx   *sql.Tx
-	rows *sql.Rows
-}
-
-// MakeKVsIter creates a KV iterator.
-func MakeKVsIter(ctx context.Context, tx *sql.Tx) (*kvsIter, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT key, value FROM kvstore")
-	if err != nil {
-		return nil, err
-	}
-
-	return &kvsIter{
-		tx:   tx,
-		rows: rows,
-	}, nil
-}
-
-func (iter *kvsIter) Next() bool {
-	return iter.rows.Next()
-}
-
-func (iter *kvsIter) KeyValue() (k []byte, v []byte, err error) {
-	err = iter.rows.Scan(&k, &v)
-	return k, v, err
-}
-
-func (iter *kvsIter) Close() {
-	iter.rows.Close()
-}
+// AccountDBVersion is the database version that this binary would know how to support and how to upgrade to.
+// details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
+// and their descriptions.
+var AccountDBVersion = int32(9)
