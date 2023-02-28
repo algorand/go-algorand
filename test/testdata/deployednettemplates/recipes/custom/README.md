@@ -45,7 +45,6 @@ python3 test/testdata/deployednettemplates/generate-recipe/generate_network_tpl.
 2. Generate the recipe:
 ```
 cp test/testdata/deployednettemplates/recipes/custom/network_templates/five-relays.json test/testdata/deployednettemplates/recipes/custom/.
-cd go-algorand
 python3 test/testdata/deployednettemplates/generate-recipe/generate_network.py -f test/testdata/deployednettemplates/recipes/custom/five-relays.json
 ```
 
