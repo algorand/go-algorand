@@ -3802,7 +3802,8 @@
         "summary": "Get a LedgerStateDelta object for a given round",
         "tags": [
           "public",
-          "data"
+          "data",
+          "experimental"
         ]
       }
     },
