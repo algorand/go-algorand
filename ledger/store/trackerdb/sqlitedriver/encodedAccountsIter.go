@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package store
+package sqlitedriver
 
 import (
 	"context"
@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -67,9 +68,9 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, accountCount
 	// gather up to accountCount encoded accounts.
 	bals = make([]encoded.BalanceRecordV6, 0, accountCount)
 	var encodedRecord encoded.BalanceRecordV6
-	var baseAcct BaseAccountData
+	var baseAcct trackerdb.BaseAccountData
 	var numAcct int
-	baseCb := func(addr basics.Address, rowid int64, accountData *BaseAccountData, encodedAccountData []byte) (err error) {
+	baseCb := func(addr basics.Address, rowid int64, accountData *trackerdb.BaseAccountData, encodedAccountData []byte) (err error) {
 		encodedRecord = encoded.BalanceRecordV6{Address: addr, AccountData: encodedAccountData}
 		baseAcct = *accountData
 		numAcct++
@@ -79,7 +80,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, accountCount
 	var totalResources int
 
 	// emptyCount := 0
-	resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *ResourcesData, encodedResourceData []byte, lastResource bool) error {
+	resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *trackerdb.ResourcesData, encodedResourceData []byte, lastResource bool) error {
 
 		emptyBaseAcct := baseAcct.TotalAppParams == 0 && baseAcct.TotalAppLocalStates == 0 && baseAcct.TotalAssetParams == 0 && baseAcct.TotalAssets == 0
 		if !emptyBaseAcct && resData != nil {

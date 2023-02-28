@@ -18,7 +18,7 @@ package ledger
 
 import (
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 )
 
@@ -35,7 +35,7 @@ type lruAccounts struct {
 	// pendingAccounts are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the accounts/accountsList
 	// if lruAccounts is set with pendingWrites 0, then pendingAccounts is nil
-	pendingAccounts chan store.PersistedAccountData
+	pendingAccounts chan trackerdb.PersistedAccountData
 	// log interface; used for logging the threshold event.
 	log logging.Logger
 	// pendingWritesWarnThreshold is the threshold beyond we would write a warning for exceeding the number of pendingAccounts entries
@@ -52,7 +52,7 @@ func (m *lruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesW
 	if pendingWrites > 0 {
 		m.accountsList = newPersistedAccountList().allocateFreeNodes(pendingWrites)
 		m.accounts = make(map[basics.Address]*persistedAccountDataListNode, pendingWrites)
-		m.pendingAccounts = make(chan store.PersistedAccountData, pendingWrites)
+		m.pendingAccounts = make(chan trackerdb.PersistedAccountData, pendingWrites)
 		m.notFound = make(map[basics.Address]struct{}, pendingWrites)
 		m.pendingNotFound = make(chan basics.Address, pendingWrites)
 	}
@@ -62,11 +62,11 @@ func (m *lruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesW
 
 // read the persistedAccountData object that the lruAccounts has for the given address.
 // thread locking semantics : read lock
-func (m *lruAccounts) read(addr basics.Address) (data store.PersistedAccountData, has bool) {
+func (m *lruAccounts) read(addr basics.Address) (data trackerdb.PersistedAccountData, has bool) {
 	if el := m.accounts[addr]; el != nil {
 		return *el.Value, true
 	}
-	return store.PersistedAccountData{}, false
+	return trackerdb.PersistedAccountData{}, false
 }
 
 // readNotFound returns whether we have attempted to read this address but it did not exist in the db.
@@ -109,7 +109,7 @@ outer2:
 // writePending write a single persistedAccountData entry to the pendingAccounts buffer.
 // the function doesn't block, and in case of a buffer overflow the entry would not be added.
 // thread locking semantics : no lock is required.
-func (m *lruAccounts) writePending(acct store.PersistedAccountData) {
+func (m *lruAccounts) writePending(acct trackerdb.PersistedAccountData) {
 	select {
 	case m.pendingAccounts <- acct:
 	default:
@@ -131,7 +131,7 @@ func (m *lruAccounts) writeNotFoundPending(addr basics.Address) {
 // version of what's already on the cache or not. In all cases, the entry is going
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
-func (m *lruAccounts) write(acctData store.PersistedAccountData) {
+func (m *lruAccounts) write(acctData trackerdb.PersistedAccountData) {
 	if m.accounts == nil {
 		return
 	}

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package store
+package sqlitedriver
 
 import (
 	"context"
@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -33,7 +34,7 @@ import (
 )
 
 // DbOpenTrackerTest opens a sqlite db file for testing purposes.
-func DbOpenTrackerTest(t testing.TB, inMemory bool) (TrackerStore, string) {
+func DbOpenTrackerTest(t testing.TB, inMemory bool) (trackerdb.TrackerStore, string) {
 	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
 
 	dbs, err := db.OpenPair(fn, inMemory)
@@ -43,7 +44,7 @@ func DbOpenTrackerTest(t testing.TB, inMemory bool) (TrackerStore, string) {
 }
 
 // SetDbTrackerTestLogging sets a testing logger on a database.
-func SetDbTrackerTestLogging(t testing.TB, dbs TrackerStore) {
+func SetDbTrackerTestLogging(t testing.TB, dbs trackerdb.TrackerStore) {
 	dblogger := logging.TestingLog(t)
 	dbs.SetLogger(dblogger)
 }
