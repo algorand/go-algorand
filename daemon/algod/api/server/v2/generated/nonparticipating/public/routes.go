@@ -78,7 +78,7 @@ type ServerInterface interface {
 	// Get parameters for constructing a new transaction
 	// (GET /v2/transactions/params)
 	TransactionParams(ctx echo.Context) error
-	// Simulates a raw transaction or transaction group as it would be evaluated on the network. The simulation will use blockchain state from the latest committed round. This endpoint is only enabled when a node's configuration file sets EnableTransactionSimulator to true.
+	// Simulates a raw transaction or transaction group as it would be evaluated on the network. The simulation will use blockchain state from the latest committed round.
 	// (POST /v2/transactions/simulate)
 	SimulateTransaction(ctx echo.Context, params SimulateTransactionParams) error
 }
@@ -798,9 +798,9 @@ var swaggerSpec = []string{
 	"Mk0h5qFxHPWaqpbaFOBwLCu7uQEhI1kpbWVsQlNdYg2aKebFFLbkFOXr5vWPtbuEDPJnEkoUm3OqSwlj",
 	"uzb0FJsCQYPjJOI+07rcG9d0sPM1Stuo2Ed5gdtjcHsM/nzHoHPpvHVEMmupEixlhAT4pyoMUWeOO3Il",
 	"Ntq50f6sRSL61clus4W8TtXZ9Zdi+JTPi0+9mk/1WvFsXBGK9X5DTtDKpmgZA1WEacctp0DgnOYlclOX",
-	"L9694SfktOa1lZd4qVwa03RBGXfZa6p4BoRDu1TL2ud23KfpKCD6k4rmAxPSPhSn9EKvuNObWvaMClOD",
-	"dUhLyfQaH0y0YL+dgfn/e/PisHVO7VuqlPnocLTQujg8OMhFSvOFUPpg9HEcflOtj+8r8D/4Z1Ah2TlW",
-	"Cnr/8f8HAAD///tgp0wqSgEA",
+	"L9694SfktOa1lZd4qVwa03RBGXfZa6p4BoRDu1TL2ud23JdCk17oFXf6TMs2UZFpsAFpKZle40OGFuy3",
+	"MzD/f29eArb+qH3jlDIfHY4WWheHBwdYsn8hlD4YfRyH31Tr4/sK/A/+eVJIdo4VfN5//P8BAAD//6G6",
+	"O0DCSQEA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

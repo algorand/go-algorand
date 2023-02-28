@@ -942,10 +942,6 @@ type preEncodedSimulateResponse struct {
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
 // (POST /v2/transactions/simulate)
 func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateTransactionParams) error {
-	if !v2.Node.Config().EnableTransactionSimulator {
-		return ctx.String(http.StatusNotFound, fmt.Sprintf("%s was not enabled in the configuration file by setting EnableTransactionSimulator to true", ctx.Request().URL.Path))
-	}
-
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
