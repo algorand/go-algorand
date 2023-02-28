@@ -720,21 +720,6 @@ func TestPostSimulateTransaction(t *testing.T) {
 		{
 			txnIndex:       0,
 			format:         "json",
-			expectedStatus: 404,
-		},
-		{
-			txnIndex:       0,
-			format:         "msgpack",
-			expectedStatus: 404,
-		},
-		{
-			txnIndex:       0,
-			format:         "bad format",
-			expectedStatus: 404,
-		},
-		{
-			txnIndex:       0,
-			format:         "json",
 			expectedStatus: 200,
 		},
 		{
