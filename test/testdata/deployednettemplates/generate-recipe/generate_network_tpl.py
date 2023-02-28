@@ -17,8 +17,6 @@ import argparse
 import json
 import math
 
-
-# DEFAULT_NETWORK_TPL = 'network-tpl.default.json'
 DEFAULT_NUM_N = 5
 DEFAULT_NUM_NPN = 5
 DEFAULT_REGION = 'us-west-1'
