@@ -25,7 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
 // notifier is a struct that encapsulates a single-shot channel; it will only be signaled once.
@@ -116,7 +116,7 @@ func (b *bulletin) prepareCommit(dcc *deferredCommitContext) error {
 	return nil
 }
 
-func (b *bulletin) commitRound(context.Context, store.TransactionScope, *deferredCommitContext) error {
+func (b *bulletin) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
 	return nil
 }
 

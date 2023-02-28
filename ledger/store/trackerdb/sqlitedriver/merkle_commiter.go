@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package store
+package sqlitedriver
 
 import "database/sql"
 
@@ -24,12 +24,6 @@ type merkleCommitter struct {
 	deleteStmt *sql.Stmt
 	insertStmt *sql.Stmt
 	selectStmt *sql.Stmt
-}
-
-// MerkleCommitter allows storing and loading merkletrie pages from a sqlite database.
-type MerkleCommitter interface {
-	StorePage(page uint64, content []byte) error
-	LoadPage(page uint64) (content []byte, err error)
 }
 
 // MakeMerkleCommitter creates a MerkleCommitter object that implements the merkletrie.Committer interface allowing storing and loading
