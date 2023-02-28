@@ -46,7 +46,7 @@ import (
 var droppedFromPool = metrics.MakeCounter(metrics.MetricName{Name: "test_streamVerifierTestCore_messages_dropped_pool", Description: "Test streamVerifierTestCore messages dropped from pool"})
 
 func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64]struct{},
-	expectedError error, t *testing.T) (sv *StreamToBatch) {
+	expectedError error, t *testing.T) (sv *execpool.StreamToBatch) {
 
 	numOfTxnGroups := len(txnGroups)
 	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
@@ -57,12 +57,12 @@ func streamVerifierTestCore(txnGroups [][]transactions.SignedTxn, badTxnGroups m
 
 	defer cancel()
 
-	inputChan := make(chan InputJob)
+	inputChan := make(chan execpool.InputJob)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
 	droppedChan := make(chan *UnverifiedTxnSigJob)
 	ep, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv = MakeStreamToBatch(inputChan, verificationPool, ep)
+	sv = execpool.MakeStreamToBatch(inputChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	wg := sync.WaitGroup{}
@@ -408,12 +408,12 @@ func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not 
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50000)
 
-	inputChan := make(chan InputJob)
+	inputChan := make(chan execpool.InputJob)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
 	droppedChan := make(chan *UnverifiedTxnSigJob)
 	ep, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamToBatch(inputChan, verificationPool, ep)
+	sv := execpool.MakeStreamToBatch(inputChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	errChan := make(chan error)
@@ -446,7 +446,7 @@ func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not 
 		}
 	}()
 	for err := range errChan {
-		require.ErrorIs(t, err, ErrShuttingDownError)
+		require.ErrorIs(t, err, execpool.ErrShuttingDownError)
 	}
 	require.Contains(t, logBuffer.String(), "addBatchToThePoolNow: EnqueueBacklog returned an error and StreamToBatch will stop: context canceled")
 	wg.Wait()
@@ -468,14 +468,14 @@ func TestStreamToBatchRestart(t *testing.T) {
 
 	cache := MakeVerifiedTransactionCache(50)
 
-	inputChan := make(chan InputJob)
+	inputChan := make(chan execpool.InputJob)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
 	droppedChan := make(chan *UnverifiedTxnSigJob)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	ep, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamToBatch(inputChan, verificationPool, ep)
+	sv := execpool.MakeStreamToBatch(inputChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	errChan := make(chan error)
@@ -509,7 +509,7 @@ func TestStreamToBatchRestart(t *testing.T) {
 		cancel()
 	}()
 	for err := range errChan {
-		require.ErrorIs(t, err, ErrShuttingDownError)
+		require.ErrorIs(t, err, execpool.ErrShuttingDownError)
 	}
 	wg.Wait()
 	sv.WaitForStop()
@@ -588,12 +588,12 @@ func TestStreamToBatchCtxCancel(t *testing.T) {
 	defer verificationPool.Shutdown()
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50)
-	inputChan := make(chan InputJob)
+	inputChan := make(chan execpool.InputJob)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
 	droppedChan := make(chan *UnverifiedTxnSigJob)
 	ep, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamToBatch(inputChan, verificationPool, ep)
+	sv := execpool.MakeStreamToBatch(inputChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	var result *VerificationResult
@@ -620,7 +620,7 @@ func TestStreamToBatchCtxCancel(t *testing.T) {
 	close(holdTasks)
 
 	wg.Wait()
-	require.ErrorIs(t, result.Err, ErrShuttingDownError)
+	require.ErrorIs(t, result.Err, execpool.ErrShuttingDownError)
 }
 
 // TestStreamToBatchCtxCancelPoolQueue tests the termination when the ctx is canceled
@@ -643,12 +643,12 @@ func TestStreamToBatchCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest /
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cache := MakeVerifiedTransactionCache(50)
-	inputChan := make(chan InputJob)
+	inputChan := make(chan execpool.InputJob)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
 	droppedChan := make(chan *UnverifiedTxnSigJob)
 	ep, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamToBatch(inputChan, verificationPool, ep)
+	sv := execpool.MakeStreamToBatch(inputChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	var result *VerificationResult
@@ -659,7 +659,7 @@ func TestStreamToBatchCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest /
 		for {
 			result = <-resultChan
 			// at least one ErrShuttingDownError is expected
-			if result.Err != ErrShuttingDownError {
+			if result.Err != execpool.ErrShuttingDownError {
 				continue
 			}
 			break
@@ -690,7 +690,7 @@ func TestStreamToBatchCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest /
 	// cancel the ctx as the sig is not yet sent to the exec pool
 	// the test might sporadically fail if between sending the txn above
 	// and the cancelation, 2 x waitForNextTxnDuration elapses (10ms)
-	time.Sleep(6 * waitForNextJobDuration)
+	time.Sleep(12)
 	go func() {
 		// wait a bit before releasing the tasks, so that the verificationPool ctx first gets canceled
 		time.Sleep(20 * time.Millisecond)
@@ -703,7 +703,7 @@ func TestStreamToBatchCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest /
 	cancel()
 
 	wg.Wait()
-	require.ErrorIs(t, result.Err, ErrShuttingDownError)
+	require.ErrorIs(t, result.Err, execpool.ErrShuttingDownError)
 	require.Contains(t, logBuffer.String(), "addBatchToThePoolNow: EnqueueBacklog returned an error and StreamToBatch will stop: context canceled")
 }
 
@@ -725,12 +725,12 @@ func TestStreamToBatchPostVBlocked(t *testing.T) {
 
 	txBacklogSizeMod := txBacklogSize / 20
 
-	inputChan := make(chan InputJob)
+	inputChan := make(chan execpool.InputJob)
 	resultChan := make(chan *VerificationResult, txBacklogSizeMod)
 	droppedChan := make(chan *UnverifiedTxnSigJob)
 	ep, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamToBatch(inputChan, verificationPool, ep)
+	sv := execpool.MakeStreamToBatch(inputChan, verificationPool, ep)
 
 	defer close(droppedChan)
 	go func() {
@@ -768,7 +768,7 @@ func TestStreamToBatchPostVBlocked(t *testing.T) {
 	go processResults(ctx, errChan, resultChan, numOfTxnGroups-overflow, badTxnGroups, &badSigResultCounter, &goodSigResultCounter, &wg)
 
 	for err := range errChan {
-		require.ErrorIs(t, err, ErrShuttingDownError)
+		require.ErrorIs(t, err, execpool.ErrShuttingDownError)
 		fmt.Println(badTxnGroups)
 	}
 
@@ -789,7 +789,7 @@ func TestStreamToBatchPostVBlocked(t *testing.T) {
 	}
 
 	for err := range errChan {
-		require.ErrorIs(t, err, ErrShuttingDownError)
+		require.ErrorIs(t, err, execpool.ErrShuttingDownError)
 		fmt.Println(badTxnGroups)
 	}
 
@@ -818,13 +818,13 @@ func TestStreamToBatchCancelWhenPooled(t *testing.T) {
 
 	cache := MakeVerifiedTransactionCache(50)
 
-	inputChan := make(chan InputJob)
+	inputChan := make(chan execpool.InputJob)
 	resultChan := make(chan *VerificationResult, txBacklogSize)
 	droppedChan := make(chan *UnverifiedTxnSigJob)
 	ctx, cancel := context.WithCancel(context.Background())
 	ep, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{}, cache, resultChan, droppedChan)
 	require.NoError(t, err)
-	sv := MakeStreamToBatch(inputChan, verificationPool, ep)
+	sv := execpool.MakeStreamToBatch(inputChan, verificationPool, ep)
 	sv.Start(ctx)
 
 	errChan := make(chan error)
@@ -849,7 +849,7 @@ func TestStreamToBatchCancelWhenPooled(t *testing.T) {
 		cancel()
 	}()
 	for err := range errChan {
-		require.ErrorIs(t, err, ErrShuttingDownError)
+		require.ErrorIs(t, err, execpool.ErrShuttingDownError)
 	}
 	wg.Wait()
 	sv.WaitForStop()
