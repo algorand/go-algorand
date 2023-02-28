@@ -297,9 +297,10 @@ func (s *Server) Start() {
 
 	addr = listener.Addr().String()
 	server = http.Server{
-		Addr:         addr,
-		ReadTimeout:  time.Duration(cfg.RestReadTimeoutSeconds) * time.Second,
-		WriteTimeout: time.Duration(cfg.RestWriteTimeoutSeconds) * time.Second,
+		Addr:           addr,
+		ReadTimeout:    time.Duration(cfg.RestReadTimeoutSeconds) * time.Second,
+		WriteTimeout:   time.Duration(cfg.RestWriteTimeoutSeconds) * time.Second,
+		MaxHeaderBytes: 4096,
 	}
 
 	e := apiServer.NewRouter(
