@@ -164,7 +164,9 @@ func (spw *Worker) Stop() {
 	spw.builders = nil
 	spw.signedCh = nil
 
-	spw.db.Close()
+	if spw.db.Handle != nil {
+		spw.db.Close()
+	}
 }
 
 // SortAddress implements sorting by Address keys for

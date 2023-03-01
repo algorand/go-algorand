@@ -421,13 +421,13 @@ func (node *AlgorandFullNode) Stop() {
 	}()
 
 	node.net.ClearHandlers()
-	node.stateProofWorker.Stop()
 	if !node.config.DisableNetworking {
 		node.net.Stop()
 	}
 	if node.catchpointCatchupService != nil {
 		node.catchpointCatchupService.Stop()
 	} else {
+		node.stateProofWorker.Stop()
 		node.txHandler.Stop()
 		node.agreementService.Shutdown()
 		node.catchupService.Stop()

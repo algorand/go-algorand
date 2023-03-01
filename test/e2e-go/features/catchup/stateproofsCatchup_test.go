@@ -19,13 +19,16 @@ package catchup
 import (
 	"context"
 	"database/sql"
-	"github.com/stretchr/testify/require"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -54,7 +57,7 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 	// Start a two-node network (primary has 100%, using has 0%)
 	// create a web proxy, have the using node use it as a peer, blocking all requests for round #2. ( and allowing everything else )
 	// Let it run until the first usable catchpoint, as computed in getFirstCatchpointRound, is generated.
-	// instruct the using node to catchpoint catchup from the proxy.
+	// instruct the using node to catchpoint catchup from the proxy, and restart the using node.
 	// wait until the using node is caught up to catchpointRound+1, skipping the "impossible" hole of round #2 and
 	// participating in consensus.
 	// Verify that the blocks replayed to the using node contained a state proof transaction.
@@ -93,6 +96,48 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 
 	_, err = usingNodeRestClient.Catchup(catchpointLabel)
 	a.NoError(err)
+
+	// restart the usingNode to double check stateproof service survives restarts during fast catchup
+	// 1. ensure the fast catchup started
+	attempt := 0
+	const sleepTime = 1 * time.Millisecond // too large duration makes catchup to complete
+	const maxAttempts = 500
+	for {
+		status, err := usingNodeRestClient.Status()
+		a.NoError(err)
+		t.Logf("status.Catchpoint = %v", status.Catchpoint)
+		if status.Catchpoint != nil && len(*status.Catchpoint) > 0 {
+			break
+		}
+		if attempt > maxAttempts {
+			a.FailNow("Failed to start fast catchup in %d seconds", sleepTime*maxAttempts/1000)
+		}
+		time.Sleep(sleepTime)
+		attempt++
+	}
+
+	// restart the node
+	err = usingNode.StopAlgod()
+	a.NoError(err)
+
+	alreadyRunning, err := usingNode.StartAlgod(nodecontrol.AlgodStartArgs{
+		PeerAddress:       wp.GetListenAddress(),
+		ListenIP:          "",
+		RedirectOutput:    true,
+		RunUnderHost:      false,
+		TelemetryOverride: "",
+		ExitErrorCallback: usingNodeErrorsCollector.nodeExitWithError,
+	})
+	a.NoError(err)
+	a.False(alreadyRunning)
+
+	usingNodeRestClient = fixture.GetAlgodClientForController(usingNode)
+	// ensure the node restores the previous fast catchup state
+	st, err := usingNodeRestClient.Status()
+	a.NoError(err)
+	a.NotNil(st.Catchpoint)
+	a.NotEmpty(*st.Catchpoint)
+	t.Logf("Fast catchup from %d to %s is in progress", st.LastRound, *st.Catchpoint)
 
 	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetCatchpointRound+1))
 	a.NoError(err)
