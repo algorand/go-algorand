@@ -36,7 +36,7 @@ type nodeDir struct {
 	dataDir        string
 	config         config.Local
 	delaySave      bool
-	skipMetricsSrv bool // no not populate/register metrics DNS
+	skipMetricsSrv bool // do not populate/register metrics DNS
 	configurator   *nodeConfigurator
 }
 
