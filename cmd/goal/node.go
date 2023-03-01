@@ -61,7 +61,7 @@ var newNodeRelay string
 var newNodeFullConfig bool
 var watchMillisecond uint64
 var abortCatchup bool
-var noPrompt bool
+var fastCatchupForce bool
 
 const catchpointURL = "https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/%s/latest.catchpoint"
 
@@ -110,7 +110,7 @@ func init() {
 	statusCmd.Flags().Uint64VarP(&watchMillisecond, "watch", "w", 0, "Time (in milliseconds) between two successive status updates")
 
 	catchupCmd.Flags().BoolVarP(&abortCatchup, "abort", "x", false, "Aborts the current catchup process")
-	catchupCmd.Flags().BoolVarP(&noPrompt, "no-prompt", "y", false, "No prompting for implicit catchpoint")
+	catchupCmd.Flags().BoolVar(&fastCatchupForce, "force", false, "Forces fast catchup with implicit catchpoint to start without a consent prompt")
 
 }
 
@@ -170,7 +170,7 @@ var catchupCmd = &cobra.Command{
 					reportErrorf(errorCatchpointLabelMissing, errorUnableToLookupCatchpointLabel, err.Error())
 				}
 				args = append(args, label)
-				if !noPrompt {
+				if !fastCatchupForce {
 					fmt.Printf(nodeConfirmImplicitCatchpoint, label)
 					reader := bufio.NewReader(os.Stdin)
 					text, _ := reader.ReadString('\n')
