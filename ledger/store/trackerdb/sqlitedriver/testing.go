@@ -50,18 +50,22 @@ func SetDbTrackerTestLogging(t testing.TB, dbs trackerdb.TrackerStore) {
 }
 
 // AccountsInitLightTest initializes an empty database for testing without the extra methods being called.
+// implements Testing interface, test function only
 func AccountsInitLightTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
 	newDB, err := accountsInit(tx, initAccounts, proto)
 	require.NoError(tb, err)
 	return newDB, err
 }
 
+// ModifyAcctBaseTest tweaks the database to move backards.
+// implements Testing interface, test function only
 func ModifyAcctBaseTest(tx *sql.Tx) error {
 	_, err := tx.Exec("update acctrounds set rnd = 1 WHERE id='acctbase' ")
 	return err
 }
 
 // AccountsInitTest initializes an empty database for testing.
+// implements Testing interface, test function only
 func AccountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
 	newDB, err := accountsInit(tx, initAccounts, config.Consensus[proto])
 	require.NoError(tb, err)
