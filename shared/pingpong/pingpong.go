@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
+// Package pingpong provides a transaction generating utility for performance testing.
+//
+//nolint:unused,structcheck,deadcode,varcheck // ignore unused pingpong code
 package pingpong
 
 import (

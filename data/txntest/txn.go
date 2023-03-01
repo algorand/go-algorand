@@ -287,10 +287,10 @@ func (tx Txn) SignedTxnWithAD() transactions.SignedTxnWithAD {
 	return transactions.SignedTxnWithAD{SignedTxn: tx.SignedTxn()}
 }
 
-// SignedTxns turns a list of Txns into a slice of SignedTxns with
-// GroupIDs set properly to make them a transaction group. Maybe
-// another name is more approrpriate
-func SignedTxns(txns ...*Txn) []transactions.SignedTxn {
+// Group turns a list of Txns into a slice of SignedTxns with
+// GroupIDs set properly to make them a transaction group. The input
+// Txns are modified with the calculated GroupID.
+func Group(txns ...*Txn) []transactions.SignedTxn {
 	txgroup := transactions.TxGroup{
 		TxGroupHashes: make([]crypto.Digest, len(txns)),
 	}

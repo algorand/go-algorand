@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"testing"
@@ -34,7 +35,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -2753,7 +2753,7 @@ func TestGload(t *testing.T) {
 	// for more complex group transaction cases
 	type failureCase struct {
 		firstTxn    transactions.SignedTxn
-		runMode     runMode
+		runMode     RunMode
 		errContains string
 	}
 
@@ -2763,7 +2763,7 @@ func TestGload(t *testing.T) {
 				Type: protocol.PaymentTx,
 			},
 		},
-		runMode:     modeApp,
+		runMode:     ModeApp,
 		errContains: "can't use gload on non-app call txn with index 0",
 	}
 
@@ -2773,7 +2773,7 @@ func TestGload(t *testing.T) {
 				Type: protocol.ApplicationCallTx,
 			},
 		},
-		runMode:     modeSig,
+		runMode:     ModeSig,
 		errContains: "gload not allowed in current mode",
 	}
 
@@ -2794,7 +2794,7 @@ func TestGload(t *testing.T) {
 
 			program := testProg(t, "gload 0 0", AssemblerMaxVersion).Program
 			switch failCase.runMode {
-			case modeApp:
+			case ModeApp:
 				testAppBytes(t, program, ep, failCase.errContains)
 			default:
 				testLogicBytes(t, program, ep, failCase.errContains, failCase.errContains)
@@ -3134,62 +3134,108 @@ func checkPanic(cx *EvalContext) error {
 	panic(panicString)
 }
 
-func TestPanic(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
+// withPanicOpcode temporarily modifies the opsByOpcode array to include an additional panic opcode.
+// This opcode will be named "panic".
+//
+// WARNING: do not call this in a parallel test, since it's not safe for concurrent use.
+func withPanicOpcode(t *testing.T, version uint64, panicDuringCheck bool, f func(opcode byte)) {
+	t.Helper()
+	const name = "panic"
 
-	log := logging.TestingLog(t)
+	var foundEmptySpace bool
+	var hackedOpcode byte
+	var oldSpec OpSpec
+	// Find an unused opcode to temporarily convert to a panicing opcode,
+	// and append it to program.
+	for opcode, spec := range opsByOpcode[version] {
+		if spec.op == nil {
+			foundEmptySpace = true
+			require.LessOrEqual(t, opcode, math.MaxUint8)
+			hackedOpcode = byte(opcode)
+			oldSpec = spec
+
+			details := detDefault()
+			if panicDuringCheck {
+				details.check = checkPanic
+			}
+			panicSpec := OpSpec{
+				Opcode:    hackedOpcode,
+				Name:      name,
+				op:        opPanic,
+				OpDetails: details,
+			}
+
+			opsByOpcode[version][opcode] = panicSpec
+			OpsByName[version][name] = panicSpec
+			break
+		}
+	}
+	require.True(t, foundEmptySpace, "could not find an empty space for the panic opcode")
+	defer func() {
+		opsByOpcode[version][hackedOpcode] = oldSpec
+		delete(OpsByName[version], name)
+	}()
+	f(hackedOpcode)
+}
+
+func TestPanic(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
+	partitiontest.PartitionTest(t)
+
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		v := v
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			t.Parallel()
-			ops := testProg(t, `int 1`, v)
-			var hackedOpcode int
-			var oldSpec OpSpec
-			// Find an unused opcode to temporarily convert to a panicing opcde,
-			// and append it to program.
-			for opcode, spec := range opsByOpcode[v] {
-				if spec.op == nil {
-					hackedOpcode = opcode
-					oldSpec = spec
-					opsByOpcode[v][opcode].op = opPanic
-					opsByOpcode[v][opcode].Modes = modeAny
-					opsByOpcode[v][opcode].OpDetails.FullCost.baseCost = 1
-					opsByOpcode[v][opcode].OpDetails.check = checkPanic
-					ops.Program = append(ops.Program, byte(opcode))
-					break
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
+			withPanicOpcode(t, v, true, func(opcode byte) {
+				ops := testProg(t, `int 1`, v)
+				ops.Program = append(ops.Program, opcode)
+
+				params := defaultEvalParams()
+				params.TxnGroup[0].Lsig.Logic = ops.Program
+				err := CheckSignature(0, params)
+				require.Error(t, err)
+				if pe, ok := err.(PanicError); ok {
+					require.Equal(t, panicString, pe.PanicValue)
+					pes := pe.Error()
+					require.True(t, strings.Contains(pes, "panic"))
+				} else {
+					t.Errorf("expected PanicError object but got %T %#v", err, err)
 				}
-			}
-			params := defaultEvalParams()
-			params.logger = log
-			params.TxnGroup[0].Lsig.Logic = ops.Program
-			err := CheckSignature(0, params)
-			require.Error(t, err)
-			if pe, ok := err.(PanicError); ok {
-				require.Equal(t, panicString, pe.PanicValue)
-				pes := pe.Error()
-				require.True(t, strings.Contains(pes, "panic"))
-			} else {
-				t.Errorf("expected PanicError object but got %T %#v", err, err)
-			}
-			var txn transactions.SignedTxn
-			txn.Lsig.Logic = ops.Program
-			params = defaultEvalParams(txn)
-			params.logger = log
-			pass, err := EvalSignature(0, params)
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(params.Trace.String())
-			}
-			require.False(t, pass)
-			if pe, ok := err.(PanicError); ok {
-				require.Equal(t, panicString, pe.PanicValue)
-				pes := pe.Error()
-				require.True(t, strings.Contains(pes, "panic"))
-			} else {
-				t.Errorf("expected PanicError object but got %T %#v", err, err)
-			}
-			opsByOpcode[v][hackedOpcode] = oldSpec
+
+				var txn transactions.SignedTxn
+				txn.Lsig.Logic = ops.Program
+				params = defaultEvalParams(txn)
+				pass, err := EvalSignature(0, params)
+				if pass {
+					t.Log(hex.EncodeToString(ops.Program))
+					t.Log(params.Trace.String())
+				}
+				require.False(t, pass)
+				if pe, ok := err.(PanicError); ok {
+					require.Equal(t, panicString, pe.PanicValue)
+					pes := pe.Error()
+					require.True(t, strings.Contains(pes, "panic"))
+				} else {
+					t.Errorf("expected PanicError object but got %T %#v", err, err)
+				}
+
+				if v >= appsEnabledVersion {
+					txn = transactions.SignedTxn{
+						Txn: transactions.Transaction{
+							Type: protocol.ApplicationCallTx,
+						},
+					}
+					params = defaultEvalParams(txn)
+					params.Ledger = NewLedger(nil)
+					pass, err = EvalApp(ops.Program, 0, 1, params)
+					require.False(t, pass)
+					if pe, ok := err.(PanicError); ok {
+						require.Equal(t, panicString, pe.PanicValue)
+						pes := pe.Error()
+						require.True(t, strings.Contains(pes, "panic"))
+					} else {
+						t.Errorf("expected PanicError object but got %T %#v", err, err)
+					}
+				}
+			})
 		})
 	}
 }
@@ -4918,6 +4964,9 @@ func TestBytesCompare(t *testing.T) {
 	testPanics(t, "byte 0x10; int 65; bzero; b>", 4)
 	testAccepts(t, "byte 0x1010; byte 0x10; b<; !", 4)
 
+	testAccepts(t, "byte 0x2000; byte 0x70; b<; !", 4)
+	testAccepts(t, "byte 0x7000; byte 0x20; b<; !", 4)
+
 	// All zero input are interesting, because they lead to bytes.Compare being
 	// called with nils.  Show that is correct.
 	testAccepts(t, "byte 0x10; byte 0x00; b<; !", 4)
@@ -5038,7 +5087,7 @@ func TestLog(t *testing.T) {
 	msg := strings.Repeat("a", 400)
 	failCases := []struct {
 		source      string
-		runMode     runMode
+		runMode     RunMode
 		errContains string
 		// For cases where assembly errors, we manually put in the bytes
 		assembledBytes []byte
@@ -5046,44 +5095,44 @@ func TestLog(t *testing.T) {
 		{
 			source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", maxLogSize+1)),
 			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
-			runMode:     modeApp,
+			runMode:     ModeApp,
 		},
 		{
 			source:      fmt.Sprintf(`byte  "%s"; log; byte  "%s"; log; byte  "%s"; log; int 1`, msg, msg, msg),
 			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
-			runMode:     modeApp,
+			runMode:     ModeApp,
 		},
 		{
 			source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log; `, maxLogCalls+1)),
 			errContains: "too many log calls",
-			runMode:     modeApp,
+			runMode:     ModeApp,
 		},
 		{
 			source:      `int 1; loop: byte "a"; log; int 1; +; dup; int 35; <; bnz loop;`,
 			errContains: "too many log calls",
-			runMode:     modeApp,
+			runMode:     ModeApp,
 		},
 		{
 			source:      fmt.Sprintf(`int 1; loop: byte "%s"; log; int 1; +; dup; int 6; <; bnz loop;`, strings.Repeat(`a`, 400)),
 			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
-			runMode:     modeApp,
+			runMode:     ModeApp,
 		},
 		{
 			source:         `load 0; log`,
 			errContains:    "log arg 0 wanted []byte but got uint64",
-			runMode:        modeApp,
+			runMode:        ModeApp,
 			assembledBytes: []byte{byte(ep.Proto.LogicSigVersion), 0x34, 0x00, 0xb0},
 		},
 		{
 			source:      `byte  "a logging message"; log; int 1`,
 			errContains: "log not allowed in current mode",
-			runMode:     modeSig,
+			runMode:     ModeSig,
 		},
 	}
 
 	for _, c := range failCases {
 		switch c.runMode {
-		case modeApp:
+		case ModeApp:
 			if c.assembledBytes == nil {
 				testApp(t, c.source, ep, c.errContains)
 			} else {
