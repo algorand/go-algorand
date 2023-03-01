@@ -56,6 +56,11 @@ func NewAccountsSQLReaderWriter(e db.Executable) *accountsV2ReaderWriter {
 	}
 }
 
+// Testing returns this reader, exposed as an interface with test functions
+func (r *accountsV2Reader) Testing() trackerdb.TestAccountsReaderExt {
+	return r
+}
+
 func (r *accountsV2Reader) getOrPrepare(queryString string) (stmt *sql.Stmt, err error) {
 	// fetch statement (use the query as the key)
 	if stmt, ok := r.preparedStatements[queryString]; ok {

@@ -268,7 +268,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 		if err != nil {
 			return err
 		}
-		bals, err0 = arw.AccountsAllTest()
+		bals, err0 = arw.Testing().AccountsAllTest()
 		return err0
 	})
 	if err != nil {
@@ -1006,11 +1006,11 @@ func TestListCreatables(t *testing.T) {
 		proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 		accts := make(map[basics.Address]basics.AccountData)
-		_ = tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+		_ = tx.Testing().AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
 		require.NoError(t, err)
 
 		au := &accountUpdates{}
-		au.accountsq, err = tx.MakeAccountsOptimizedReader()
+		au.accountsq, err = tx.Testing().MakeAccountsOptimizedReader()
 		require.NoError(t, err)
 
 		// ******* All results are obtained from the cache. Empty database *******

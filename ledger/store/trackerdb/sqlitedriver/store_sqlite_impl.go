@@ -157,6 +157,11 @@ func (s *trackerSQLStore) Close() {
 	s.pair.Close()
 }
 
+// Testing returns this scope, exposed as an interface with test functions
+func (txs sqlTransactionScope) Testing() trackerdb.TestTransactionScope {
+	return txs
+}
+
 func (txs sqlTransactionScope) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
 	return NewCatchpointSQLReaderWriter(txs.tx), nil
 }
@@ -211,6 +216,11 @@ func (txs sqlTransactionScope) AccountsInitTest(tb testing.TB, initAccounts map[
 
 func (txs sqlTransactionScope) AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
 	return AccountsInitLightTest(tb, txs.tx, initAccounts, proto)
+}
+
+// Testing returns this scope, exposed as an interface with test functions
+func (s sqlBatchScope) Testing() trackerdb.TestBatchScope {
+	return s
 }
 
 func (bs sqlBatchScope) MakeCatchpointWriter() (trackerdb.CatchpointWriter, error) {
