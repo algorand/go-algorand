@@ -95,7 +95,7 @@ def gen_network_tpl_from_rules_v2(path):
     with open(path) as network_performance_rules:
         npr = network_performance_rules.readlines()
 
-    found = set()
+    found = {}
     num_relays = 0
     num_npn = 0
     num_n = 0
@@ -111,7 +111,7 @@ def gen_network_tpl_from_rules_v2(path):
         if name in found:
             continue
 
-        found.add(name)
+        found[name] = None
 
         if name.startswith('r'):
             num_relays += 1
