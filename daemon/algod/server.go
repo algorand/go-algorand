@@ -300,7 +300,7 @@ func (s *Server) Start() {
 		Addr:           addr,
 		ReadTimeout:    time.Duration(cfg.RestReadTimeoutSeconds) * time.Second,
 		WriteTimeout:   time.Duration(cfg.RestWriteTimeoutSeconds) * time.Second,
-		MaxHeaderBytes: 4096,
+		MaxHeaderBytes: 4096, // enough room to hold an api token
 	}
 
 	e := apiServer.NewRouter(
