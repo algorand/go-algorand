@@ -224,7 +224,9 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []trackerdb
 		acct = make([]trackerdb.AccountAddressHash, iterator.accountCount)
 		acctIdx := 0
 		for iterator.hashesRows.Next() {
-			err = iterator.hashesRows.Scan(&(acct[acctIdx].Addrid), &(acct[acctIdx].Digest))
+			var addrid int64
+			err = iterator.hashesRows.Scan(&addrid, &(acct[acctIdx].Digest))
+			acct[acctIdx].AccountRef = sqlRowRef{addrid}
 			if err != nil {
 				iterator.Close(ctx)
 				return

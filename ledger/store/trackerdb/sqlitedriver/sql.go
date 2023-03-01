@@ -56,6 +56,10 @@ type onlineAccountsSQLWriter struct {
 	insertStmt, updateStmt *sql.Stmt
 }
 
+type sqlRowRef struct {
+	rowid int64
+}
+
 // AccountsInitDbQueries constructs an AccountsReader backed by sql queries.
 func AccountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 	var err error
@@ -614,16 +618,17 @@ func (w *onlineAccountsSQLWriter) Close() {
 	}
 }
 
-func (w accountsSQLWriter) InsertAccount(addr basics.Address, normBalance uint64, data trackerdb.BaseAccountData) (rowid int64, err error) {
+func (w accountsSQLWriter) InsertAccount(addr basics.Address, normBalance uint64, data trackerdb.BaseAccountData) (ref trackerdb.AccountRef, err error) {
 	result, err := w.insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data))
 	if err != nil {
 		return
 	}
-	rowid, err = result.LastInsertId()
-	return
+	rowid, err := result.LastInsertId()
+	return sqlRowRef{rowid}, err
 }
 
-func (w accountsSQLWriter) DeleteAccount(rowid int64) (rowsAffected int64, err error) {
+func (w accountsSQLWriter) DeleteAccount(ref trackerdb.AccountRef) (rowsAffected int64, err error) {
+	rowid := ref.(sqlRowRef).rowid
 	result, err := w.deleteByRowIDStmt.Exec(rowid)
 	if err != nil {
 		return
@@ -632,7 +637,8 @@ func (w accountsSQLWriter) DeleteAccount(rowid int64) (rowsAffected int64, err e
 	return
 }
 
-func (w accountsSQLWriter) UpdateAccount(rowid int64, normBalance uint64, data trackerdb.BaseAccountData) (rowsAffected int64, err error) {
+func (w accountsSQLWriter) UpdateAccount(ref trackerdb.AccountRef, normBalance uint64, data trackerdb.BaseAccountData) (rowsAffected int64, err error) {
+	rowid := ref.(sqlRowRef).rowid
 	result, err := w.updateStmt.Exec(normBalance, protocol.Encode(&data), rowid)
 	if err != nil {
 		return
@@ -641,16 +647,18 @@ func (w accountsSQLWriter) UpdateAccount(rowid int64, normBalance uint64, data t
 	return
 }
 
-func (w accountsSQLWriter) InsertResource(addrid int64, aidx basics.CreatableIndex, data trackerdb.ResourcesData) (rowid int64, err error) {
+func (w accountsSQLWriter) InsertResource(accountRef trackerdb.AccountRef, aidx basics.CreatableIndex, data trackerdb.ResourcesData) (ref trackerdb.ResourceRef, err error) {
+	addrid := accountRef.(sqlRowRef).rowid
 	result, err := w.insertResourceStmt.Exec(addrid, aidx, protocol.Encode(&data))
 	if err != nil {
 		return
 	}
-	rowid, err = result.LastInsertId()
-	return
+	rowid, err := result.LastInsertId()
+	return sqlRowRef{rowid}, err
 }
 
-func (w accountsSQLWriter) DeleteResource(addrid int64, aidx basics.CreatableIndex) (rowsAffected int64, err error) {
+func (w accountsSQLWriter) DeleteResource(accountRef trackerdb.AccountRef, aidx basics.CreatableIndex) (rowsAffected int64, err error) {
+	addrid := accountRef.(sqlRowRef).rowid
 	result, err := w.deleteResourceStmt.Exec(addrid, aidx)
 	if err != nil {
 		return
@@ -659,7 +667,8 @@ func (w accountsSQLWriter) DeleteResource(addrid int64, aidx basics.CreatableInd
 	return
 }
 
-func (w accountsSQLWriter) UpdateResource(addrid int64, aidx basics.CreatableIndex, data trackerdb.ResourcesData) (rowsAffected int64, err error) {
+func (w accountsSQLWriter) UpdateResource(accountRef trackerdb.AccountRef, aidx basics.CreatableIndex, data trackerdb.ResourcesData) (rowsAffected int64, err error) {
+	addrid := accountRef.(sqlRowRef).rowid
 	result, err := w.updateResourceStmt.Exec(protocol.Encode(&data), addrid, aidx)
 	if err != nil {
 		return
@@ -693,13 +702,13 @@ func (w accountsSQLWriter) DeleteKvPair(key string) error {
 	return err
 }
 
-func (w accountsSQLWriter) InsertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (rowid int64, err error) {
+func (w accountsSQLWriter) InsertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (ref trackerdb.CreatableRef, err error) {
 	result, err := w.insertCreatableIdxStmt.Exec(cidx, creator, ctype)
 	if err != nil {
 		return
 	}
-	rowid, err = result.LastInsertId()
-	return
+	rowid, err := result.LastInsertId()
+	return sqlRowRef{rowid}, err
 }
 
 func (w accountsSQLWriter) DeleteCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType) (rowsAffected int64, err error) {
@@ -711,11 +720,11 @@ func (w accountsSQLWriter) DeleteCreatable(cidx basics.CreatableIndex, ctype bas
 	return
 }
 
-func (w onlineAccountsSQLWriter) InsertOnlineAccount(addr basics.Address, normBalance uint64, data trackerdb.BaseOnlineAccountData, updRound uint64, voteLastValid uint64) (rowid int64, err error) {
+func (w onlineAccountsSQLWriter) InsertOnlineAccount(addr basics.Address, normBalance uint64, data trackerdb.BaseOnlineAccountData, updRound uint64, voteLastValid uint64) (ref trackerdb.OnlineAccountRef, err error) {
 	result, err := w.insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data), updRound, voteLastValid)
 	if err != nil {
 		return
 	}
-	rowid, err = result.LastInsertId()
-	return
+	rowid, err := result.LastInsertId()
+	return sqlRowRef{rowid}, err
 }
