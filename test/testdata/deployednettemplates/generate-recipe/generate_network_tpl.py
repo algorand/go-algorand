@@ -95,7 +95,7 @@ def gen_network_tpl_from_rules_v2(path):
     with open(path) as network_performance_rules:
         npr = network_performance_rules.readlines()
 
-    found = []
+    found = {}
     num_relays = 0
     num_npn = 0
     num_n = 0
@@ -111,7 +111,7 @@ def gen_network_tpl_from_rules_v2(path):
         if name in found:
             continue
 
-        found.append(name)
+        found[name] = None
 
         if name.startswith('r'):
             num_relays += 1
@@ -124,32 +124,32 @@ def gen_network_tpl_from_rules_v2(path):
     if num_n == 0:
         num_n = DEFAULT_NUM_N
         group = {
-                'name': 'n',
-                'percent': {
-                    'relays': 0,
-                    'nonParticipatingNodes': 0,
-                    'participatingNodes': 100
-                }
+            'name': 'n',
+            'region': DEFAULT_REGION,
+            'percent': {
+                'relays': 0,
+                'nonParticipatingNodes': 0,
+            'participatingNodes': 100
+            }
         }
-        group['region'] = DEFAULT_REGION
         groups.append(group)
 
     # If no non-participation nodes are defined in the network_performance_rules file, set the default group.
     if num_npn == 0:
         num_npn = DEFAULT_NUM_NPN
         group = {
-                'name': 'npn',
-                'percent': {
-                    'relays': 0,
-                    'nonParticipatingNodes': 100,
-                    'participatingNodes': 0
-                }
+            'name': 'npn',
+            'region': DEFAULT_REGION,
+            'percent': {
+                'relays': 0,
+                'nonParticipatingNodes': 100,
+                'participatingNodes': 0
+            }
         }
-        group['region'] = DEFAULT_REGION
         groups.append(group)
 
     for item in found:
-        group = {'name': item}
+        group = {'name': item, 'region': DEFAULT_REGION}
         percent = {}
         if item.startswith('r'):
             percent = {
@@ -171,8 +171,6 @@ def gen_network_tpl_from_rules_v2(path):
             }
 
         group['percent'] = percent
-        group['region'] = DEFAULT_REGION
-
         groups.append(group)
 
     network = {
