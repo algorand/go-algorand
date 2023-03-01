@@ -56,7 +56,11 @@ type Local struct {
 	// 1 * time.Minute = 60000000000 ns
 	ReconnectTime time.Duration `version[0]:"60" version[1]:"60000000000"`
 
-	// what we should tell people to connect to
+	// The public address to connect to that is advertised to other nodes.
+	// For MainNet relays, make sure this entry includes the full SRV host name
+	// plus the publicly-accessible port number.
+	// A valid entry will avoid "self-gossip" and is used for identity exchange
+	// to deduplicate redundant connections
 	PublicAddress string `version[0]:""`
 
 	MaxConnectionsPerIP int `version[3]:"30" version[27]:"15"`
@@ -492,6 +496,11 @@ type Local struct {
 	// EnableExperimentalAPI enables experimental API endpoint. Note that these endpoints have no
 	// guarantees in terms of functionality or future support.
 	EnableExperimentalAPI bool `version[26]:"false"`
+
+	// DisableLedgerLRUCache disables LRU caches in ledger.
+	// Setting it to TRUE might result in significant performance degradation
+	// and SHOULD NOT be used for other reasons than testing.
+	DisableLedgerLRUCache bool `version[27]:"false"`
 
 	// EnableFollowMode launches the node in "follower" mode. This turns off the agreement service,
 	// and APIs related to broadcasting transactions, and enables APIs which can retrieve detailed information

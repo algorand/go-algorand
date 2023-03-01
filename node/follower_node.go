@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -86,8 +87,7 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	node.devMode = genesis.DevMode
 
 	if node.devMode {
-		log.Errorf("Cannot run follower node in devMode--submitting txns won't work")
-		return nil, fmt.Errorf("cannot run with both EnableFollowMode and DevMode")
+		log.Warn("Follower running on a devMode network. Must submit txns to a different node.")
 	}
 	node.config = cfg
 
@@ -240,7 +240,7 @@ func (node *AlgorandFollowerNode) BroadcastInternalSignedTxGroup(_ []transaction
 
 // Simulate speculatively runs a transaction group against the current
 // blockchain state and returns the effects and/or errors that would result.
-func (node *AlgorandFollowerNode) Simulate(_ []transactions.SignedTxn) (vb *ledgercore.ValidatedBlock, missingSignatures bool, err error) {
+func (node *AlgorandFollowerNode) Simulate(_ []transactions.SignedTxn) (result simulation.Result, err error) {
 	err = fmt.Errorf("cannot simulate in data mode")
 	return
 }
@@ -251,18 +251,26 @@ func (node *AlgorandFollowerNode) GetPendingTransaction(_ transactions.Txid) (re
 }
 
 // Status returns a StatusReport structure reporting our status as Active and with our ledger's LastRound
-func (node *AlgorandFollowerNode) Status() (s StatusReport, err error) {
+func (node *AlgorandFollowerNode) Status() (StatusReport, error) {
 	node.syncStatusMu.Lock()
-	s.LastRoundTimestamp = node.lastRoundTimestamp
-	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
+	lastRoundTimestamp := node.lastRoundTimestamp
+	hasSyncedSinceStartup := node.hasSyncedSinceStartup
 	node.syncStatusMu.Unlock()
 
 	node.mu.Lock()
 	defer node.mu.Unlock()
+	var s StatusReport
+	var err error
 	if node.catchpointCatchupService != nil {
-		return catchpointCatchupStatus(node.catchpointCatchupService.GetLatestBlockHeader(), node.catchpointCatchupService.GetStatistics()), nil
+		s = catchpointCatchupStatus(node.catchpointCatchupService.GetLatestBlockHeader(), node.catchpointCatchupService.GetStatistics())
+	} else {
+		s, err = latestBlockStatus(node.ledger, node.catchupService)
 	}
-	return latestBlockStatus(node.ledger, node.catchupService)
+
+	s.LastRoundTimestamp = lastRoundTimestamp
+	s.HasSyncedSinceStartup = hasSyncedSinceStartup
+
+	return s, err
 }
 
 // GenesisID returns the ID of the genesis node.

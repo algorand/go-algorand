@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"reflect"
@@ -31,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -108,7 +107,7 @@ type ledgerTracker interface {
 	// commitRound is called for each of the trackers after a deferredCommitContext was agreed upon
 	// by all the prepareCommit calls. The commitRound is being executed within a single transactional
 	// context, and so, if any of the tracker's commitRound calls fails, the transaction is rolled back.
-	commitRound(context.Context, *sql.Tx, *deferredCommitContext) error
+	commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error
 	// postCommit is called only on a successful commitRound. In that case, each of the trackers have
 	// the chance to update it's internal data structures, knowing that the given deferredCommitContext
 	// has completed. An optional context is provided for long-running operations.
@@ -134,7 +133,7 @@ type ledgerTracker interface {
 // ledgerForTracker defines the part of the ledger that a tracker can
 // access.  This is particularly useful for testing trackers in isolation.
 type ledgerForTracker interface {
-	trackerDB() store.TrackerStore
+	trackerDB() trackerdb.TrackerStore
 	blockDB() db.Pair
 	trackerLog() logging.Logger
 	trackerEvalVerified(bookkeeping.Block, internal.LedgerForEvaluator) (ledgercore.StateDelta, error)
@@ -174,7 +173,7 @@ type trackerRegistry struct {
 	// cached to avoid SQL queries.
 	dbRound basics.Round
 
-	dbs store.TrackerStore
+	dbs trackerdb.TrackerStore
 	log logging.Logger
 
 	// the synchronous mode that would be used for the account database.
@@ -246,12 +245,12 @@ type deferredCommitContext struct {
 	compactKvDeltas        map[string]modifiedKvValue
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 
-	updatedPersistedAccounts  []store.PersistedAccountData
-	updatedPersistedResources map[basics.Address][]store.PersistedResourcesData
-	updatedPersistedKVs       map[string]store.PersistedKVData
+	updatedPersistedAccounts  []trackerdb.PersistedAccountData
+	updatedPersistedResources map[basics.Address][]trackerdb.PersistedResourcesData
+	updatedPersistedKVs       map[string]trackerdb.PersistedKVData
 
 	compactOnlineAccountDeltas     compactOnlineAccountDeltas
-	updatedPersistedOnlineAccounts []store.PersistedOnlineAccountData
+	updatedPersistedOnlineAccounts []trackerdb.PersistedOnlineAccountData
 
 	updatingBalancesDuration time.Duration
 
@@ -282,9 +281,13 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 	tr.dbs = l.trackerDB()
 	tr.log = l.trackerLog()
 
-	err = tr.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
-		arw := store.NewAccountsSQLReaderWriter(tx)
-		tr.dbRound, err = arw.AccountsRound()
+	err = tr.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
+		ar, err := tx.MakeAccountsReader()
+		if err != nil {
+			return err
+		}
+
+		tr.dbRound, err = ar.AccountsRound()
 		return err
 	})
 
@@ -512,8 +515,12 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	err := tr.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
-		arw := store.NewAccountsSQLReaderWriter(tx)
+	err := tr.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		arw, err := tx.MakeAccountsReaderWriter()
+		if err != nil {
+			return err
+		}
+
 		for _, lt := range tr.trackers {
 			err0 := lt.commitRound(ctx, tx, dcc)
 			if err0 != nil {

@@ -52,6 +52,15 @@ proc ::AlgorandGoal::Abort { ERROR } {
         puts "GLOBAL_TEST_ROOT_DIR $::GLOBAL_TEST_ROOT_DIR"
         puts "GLOBAL_NETWORK_NAME $::GLOBAL_NETWORK_NAME"
 
+        # dump system and processes information to check memory consumption and if algod procs are still alive
+        if { $::tcl_platform(os) == "Darwin" } {
+            exec >@stdout 2>@stderr top -l 1
+        } elseif { $::tcl_platform(os) == "Linux" } {
+            exec >@stdout 2>@stderr top -n 1
+        } else {
+            # no logging for other platforms
+        }
+
         ::AlgorandGoal::StopNetwork $::GLOBAL_NETWORK_NAME $::GLOBAL_TEST_ROOT_DIR
 
         log_user 1
@@ -935,7 +944,7 @@ proc ::AlgorandGoal::StartCatchup { NODE_DATA_DIR CATCHPOINT } {
     return $CATCHPOINT
 }
 
-# Wait for node to get into catchup mode
+# Wait for node to get into fast catchup mode
 proc ::AlgorandGoal::WaitCatchup { TEST_PRIMARY_NODE_DIR WAIT_DURATION_SEC } {
     if { [catch {
         set i 0
