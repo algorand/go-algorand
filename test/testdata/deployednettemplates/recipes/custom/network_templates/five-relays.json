@@ -1,0 +1,81 @@
+{
+  "network": {
+    "wallets": 5,
+    "relays": 5,
+    "nodes": 5,
+    "npn": 5
+  },
+  "instances": {
+    "relays": {
+      "config": "./configs/relay.json",
+      "type": "c5.xlarge",
+      "count": 5
+    },
+    "participatingNodes": {
+      "config": "./configs/node.json",
+      "type": "c5.xlarge",
+      "count": 5
+    },
+    "nonParticipatingNodes": {
+      "config": "./configs/nonPartNode.json",
+      "type": "c5.xlarge",
+      "count": 5
+    }
+  },
+  "groups": [
+    {
+      "name": "r1",
+      "percent": {
+        "relays": 20,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r2",
+      "percent": {
+        "relays": 20,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r3",
+      "percent": {
+        "relays": 20,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r4",
+      "percent": {
+        "relays": 20,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "r5",
+      "percent": {
+        "relays": 20,
+        "nonParticipatingNodes": 0,
+        "participatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "n",
+      "percent": {
+        "relays": 0,
+        "nonParticipatingNodes": 100,
+        "participatingNodes": 100
+      },
+      "region": "us-west-1"
+    }
+  ]
+}
