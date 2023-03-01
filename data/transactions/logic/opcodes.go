@@ -58,7 +58,7 @@ const txnEffectsVersion = 6
 const createdResourcesVersion = 6
 
 // resourceSharingVersion is the first version in which apps are allowed to
-// access resource referenced in other transactions.
+// access resources referenced in other transactions.
 const resourceSharingVersion = 9
 
 // appAddressAvailableVersion is the first version that allows access to the

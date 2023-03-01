@@ -74,7 +74,7 @@ func (cs *roundCowState) GetAssetHolding(addr basics.Address, aidx basics.AssetI
 	}
 	if d.Holding == nil {
 		// found and not deleted => must exist. Err if not
-		err = fmt.Errorf("GetAssetHoilding got a nil entry for (%s, %d): %p, %v", addr, aidx, d.Holding, d.Deleted)
+		err = fmt.Errorf("GetAssetHolding got a nil entry for (%s, %d): %p, %v", addr, aidx, d.Holding, d.Deleted)
 	}
 	ret = *d.Holding
 	return
