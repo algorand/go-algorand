@@ -57,9 +57,9 @@ func AccountsInitLightTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Ad
 	return newDB, err
 }
 
-// ModifyAcctBaseTest tweaks the database to move backards.
+// modifyAcctBaseTest tweaks the database to move backards.
 // implements Testing interface, test function only
-func ModifyAcctBaseTest(tx *sql.Tx) error {
+func modifyAcctBaseTest(tx *sql.Tx) error {
 	_, err := tx.Exec("update acctrounds set rnd = 1 WHERE id='acctbase' ")
 	return err
 }

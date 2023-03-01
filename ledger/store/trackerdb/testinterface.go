@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2023 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package trackerdb
 
 import (
@@ -11,9 +27,12 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// testinterfaces.go contains interface extensions for the store package
-// to use test-only functionality, cast your Interface to the test-version, eg:
-// testTx := tx.(TransactionTestScope)
+// testinterface.go contains interface extensions specific to testing
+// testing interfaces should be made accessable by calling the Testing() method
+// on the related interface. Example:
+// testTx := tx.Testing()
+// these can also be inlined:
+// tx.Testing.AccountsInitTest(...)
 
 type TestBatchScope interface {
 	BatchScope

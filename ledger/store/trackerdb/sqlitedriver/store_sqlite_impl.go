@@ -255,7 +255,7 @@ func (bs sqlBatchScope) AccountsInitTest(tb testing.TB, initAccounts map[basics.
 
 // implements Testing interface
 func (bs sqlBatchScope) ModifyAcctBaseTest() error {
-	return ModifyAcctBaseTest(bs.tx)
+	return modifyAcctBaseTest(bs.tx)
 }
 
 // implements Testing interface
