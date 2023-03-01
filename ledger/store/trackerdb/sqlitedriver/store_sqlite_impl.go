@@ -170,6 +170,7 @@ func (txs sqlTransactionScope) MakeAccountsReaderWriter() (trackerdb.AccountsRea
 	return NewAccountsSQLReaderWriter(txs.tx), nil
 }
 
+// implements Testing interface
 func (txs sqlTransactionScope) MakeAccountsOptimizedReader() (trackerdb.AccountsReader, error) {
 	return AccountsInitDbQueries(txs.tx)
 }
@@ -182,6 +183,7 @@ func (txs sqlTransactionScope) MakeOnlineAccountsOptimizedWriter(hasAccounts boo
 	return MakeOnlineAccountsSQLWriter(txs.tx, hasAccounts)
 }
 
+// implements Testing interface
 func (txs sqlTransactionScope) MakeOnlineAccountsOptimizedReader() (r trackerdb.OnlineAccountsReader, err error) {
 	return OnlineAccountsInitDbQueries(txs.tx)
 }
@@ -210,10 +212,12 @@ func (txs sqlTransactionScope) ResetTransactionWarnDeadline(ctx context.Context,
 	return db.ResetTransactionWarnDeadline(ctx, txs.tx, deadline)
 }
 
+// implements Testing interface
 func (txs sqlTransactionScope) AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
 	return AccountsInitTest(tb, txs.tx, initAccounts, proto)
 }
 
+// implements Testing interface
 func (txs sqlTransactionScope) AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
 	return AccountsInitLightTest(tb, txs.tx, initAccounts, proto)
 }
@@ -235,6 +239,7 @@ func (bs sqlBatchScope) MakeAccountsOptimizedWriter(hasAccounts, hasResources, h
 	return MakeAccountsSQLWriter(bs.tx, hasAccounts, hasResources, hasKvPairs, hasCreatables)
 }
 
+// implements Testing interface
 func (bs sqlBatchScope) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
 	return RunMigrations(ctx, bs.tx, params, log, targetVersion)
 }
@@ -243,10 +248,17 @@ func (bs sqlBatchScope) ResetTransactionWarnDeadline(ctx context.Context, deadli
 	return db.ResetTransactionWarnDeadline(ctx, bs.tx, deadline)
 }
 
+// implements Testing interface
 func (bs sqlBatchScope) AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
 	return AccountsInitTest(tb, bs.tx, initAccounts, proto)
 }
 
+// implements Testing interface
+func (bs sqlBatchScope) ModifyAcctBaseTest() error {
+	return ModifyAcctBaseTest(bs.tx)
+}
+
+// implements Testing interface
 func (bs sqlBatchScope) AccountsUpdateSchemaTest(ctx context.Context) (err error) {
 	return AccountsUpdateSchemaTest(ctx, bs.tx)
 }

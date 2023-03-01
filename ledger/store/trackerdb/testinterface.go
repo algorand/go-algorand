@@ -21,6 +21,7 @@ type TestBatchScope interface {
 	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
 	AccountsUpdateSchemaTest(ctx context.Context) (err error)
 	RunMigrations(ctx context.Context, params Params, log logging.Logger, targetVersion int32) (mgr InitParams, err error)
+	ModifyAcctBaseTest() error
 }
 
 type TestTransactionScope interface {

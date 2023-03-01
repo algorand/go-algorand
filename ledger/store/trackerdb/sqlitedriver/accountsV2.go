@@ -94,6 +94,7 @@ func (r *accountsV2Reader) AccountsTotals(ctx context.Context, catchpointStaging
 
 // AccountsAllTest iterates the account table and returns a map of the data
 // It is meant only for testing purposes - it is heavy and has no production use case.
+// implements Testing interface
 func (r *accountsV2Reader) AccountsAllTest() (bals map[basics.Address]basics.AccountData, err error) {
 	rows, err := r.q.Query("SELECT rowid, address, data FROM accountbase")
 	if err != nil {
@@ -137,6 +138,7 @@ func (r *accountsV2Reader) AccountsAllTest() (bals map[basics.Address]basics.Acc
 	return
 }
 
+// implements Testing interface
 func (r *accountsV2Reader) CheckCreatablesTest(t *testing.T,
 	iteration int,
 	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {

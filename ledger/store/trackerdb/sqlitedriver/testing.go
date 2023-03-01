@@ -56,6 +56,11 @@ func AccountsInitLightTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Ad
 	return newDB, err
 }
 
+func ModifyAcctBaseTest(tx *sql.Tx) error {
+	_, err := tx.Exec("update acctrounds set rnd = 1 WHERE id='acctbase' ")
+	return err
+}
+
 // AccountsInitTest initializes an empty database for testing.
 func AccountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
 	newDB, err := accountsInit(tx, initAccounts, config.Consensus[proto])
