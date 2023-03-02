@@ -176,7 +176,8 @@ def gen_network_tpl_from_rules_v2(path):
     network = {
         'relays': num_relays,
         'nodes': num_n,
-        'npn': num_npn
+        'npn': num_npn,
+        'wallets': num_n,
     }
 
     instances = {
