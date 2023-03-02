@@ -18,13 +18,13 @@ package ledger
 
 import (
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 )
 
 //msgp:ignore cachedResourceData
 type cachedResourceData struct {
-	store.PersistedResourcesData
+	trackerdb.PersistedResourcesData
 
 	address basics.Address
 }
@@ -73,11 +73,11 @@ func (m *lruResources) init(log logging.Logger, pendingWrites int, pendingWrites
 
 // read the persistedResourcesData object that the lruResources has for the given address and creatable index.
 // thread locking semantics : read lock
-func (m *lruResources) read(addr basics.Address, aidx basics.CreatableIndex) (data store.PersistedResourcesData, has bool) {
+func (m *lruResources) read(addr basics.Address, aidx basics.CreatableIndex) (data trackerdb.PersistedResourcesData, has bool) {
 	if el := m.resources[accountCreatable{address: addr, index: aidx}]; el != nil {
 		return el.Value.PersistedResourcesData, true
 	}
-	return store.PersistedResourcesData{}, false
+	return trackerdb.PersistedResourcesData{}, false
 }
 
 // readNotFound returns whether we have attempted to read this address but it did not exist in the db.
@@ -89,7 +89,7 @@ func (m *lruResources) readNotFound(addr basics.Address, idx basics.CreatableInd
 
 // read the persistedResourcesData object that the lruResources has for the given address.
 // thread locking semantics : read lock
-func (m *lruResources) readAll(addr basics.Address) (ret []store.PersistedResourcesData) {
+func (m *lruResources) readAll(addr basics.Address) (ret []trackerdb.PersistedResourcesData) {
 	for ac, pd := range m.resources {
 		if ac.address == addr {
 			ret = append(ret, pd.Value.PersistedResourcesData)
@@ -131,7 +131,7 @@ outer2:
 // writePending write a single persistedAccountData entry to the pendingResources buffer.
 // the function doesn't block, and in case of a buffer overflow the entry would not be added.
 // thread locking semantics : no lock is required.
-func (m *lruResources) writePending(acct store.PersistedResourcesData, addr basics.Address) {
+func (m *lruResources) writePending(acct trackerdb.PersistedResourcesData, addr basics.Address) {
 	select {
 	case m.pendingResources <- cachedResourceData{PersistedResourcesData: acct, address: addr}:
 	default:
@@ -153,7 +153,7 @@ func (m *lruResources) writeNotFoundPending(addr basics.Address, idx basics.Crea
 // version of what's already on the cache or not. In all cases, the entry is going
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
-func (m *lruResources) write(resData store.PersistedResourcesData, addr basics.Address) {
+func (m *lruResources) write(resData trackerdb.PersistedResourcesData, addr basics.Address) {
 	if m.resources == nil {
 		return
 	}

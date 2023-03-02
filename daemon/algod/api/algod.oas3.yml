@@ -3830,7 +3830,32 @@
         "summary": "Get a LedgerStateDelta object for a given round",
         "tags": [
           "public",
-          "data"
+          "data",
+          "experimental"
+        ]
+      }
+    },
+    "/v2/experimental": {
+      "get": {
+        "operationId": "ExperimentalCheck",
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "Experimental API enabled"
+          },
+          "404": {
+            "content": {},
+            "description": "Experimental API not enabled"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Returns OK if experimental API is enabled.",
+        "tags": [
+          "public",
+          "experimental"
         ]
       }
     },
@@ -5806,6 +5831,10 @@
             },
             "description": "Invalid API Token"
           },
+          "404": {
+            "content": {},
+            "description": "Transaction simulator not enabled"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -5841,10 +5870,10 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. WARNING: This endpoint is experimental and under active development. There are no guarantees in terms of functionality or future support.",
+        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. The simulation will use blockchain state from the latest committed round.",
         "tags": [
           "public",
-          "experimental"
+          "nonparticipating"
         ],
         "x-codegen-request-body-name": "rawtxn"
       }

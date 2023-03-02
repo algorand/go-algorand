@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package store
+package trackerdb
 
 import (
 	"context"
@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
@@ -170,4 +171,41 @@ type CatchpointReader interface {
 type CatchpointReaderWriter interface {
 	CatchpointReader
 	CatchpointWriter
+}
+
+// MerkleCommitter allows storing and loading merkletrie pages from a sqlite database.
+type MerkleCommitter interface {
+	StorePage(page uint64, content []byte) error
+	LoadPage(page uint64) (content []byte, err error)
+}
+
+// OrderedAccountsIter is an iterator for Ordered Accounts.
+type OrderedAccountsIter interface {
+	Next(ctx context.Context) (acct []AccountAddressHash, processedRecords int, err error)
+	Close(ctx context.Context) (err error)
+}
+
+// AccountAddressHash is used by Next to return a single account address and the associated hash.
+type AccountAddressHash struct {
+	Addrid int64
+	Digest []byte
+}
+
+// KVsIter is an iterator for an application Key/Values.
+type KVsIter interface {
+	Next() bool
+	KeyValue() (k []byte, v []byte, err error)
+	Close()
+}
+
+// EncodedAccountsBatchIter is an iterator for a accounts.
+type EncodedAccountsBatchIter interface {
+	Next(ctx context.Context, accountCount int, resourceCount int) (bals []encoded.BalanceRecordV6, numAccountsProcessed uint64, err error)
+	Close()
+}
+
+// CatchpointPendingHashesIter is an iterator for pending hashes.
+type CatchpointPendingHashesIter interface {
+	Next(ctx context.Context) (hashes [][]byte, err error)
+	Close()
 }

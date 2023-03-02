@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package store
+package sqlitedriver
 
 import (
 	"bytes"
@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/stretchr/testify/require"
@@ -105,7 +106,7 @@ func (r *accountsV2Reader) AccountsAllTest() (bals map[basics.Address]basics.Acc
 			return
 		}
 
-		var data BaseAccountData
+		var data trackerdb.BaseAccountData
 		err = protocol.Decode(buf, &data)
 		if err != nil {
 			return
@@ -216,7 +217,7 @@ ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, o
 			return nil, err
 		}
 
-		var data BaseOnlineAccountData
+		var data trackerdb.BaseOnlineAccountData
 		err = protocol.Decode(buf, &data)
 		if err != nil {
 			return nil, err
@@ -246,20 +247,20 @@ ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, o
 }
 
 // OnlineAccountsAll returns all online accounts
-func (r *accountsV2Reader) OnlineAccountsAll(maxAccounts uint64) ([]PersistedOnlineAccountData, error) {
+func (r *accountsV2Reader) OnlineAccountsAll(maxAccounts uint64) ([]trackerdb.PersistedOnlineAccountData, error) {
 	rows, err := r.q.Query("SELECT rowid, address, updround, data FROM onlineaccounts ORDER BY address, updround ASC")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	result := make([]PersistedOnlineAccountData, 0, maxAccounts)
+	result := make([]trackerdb.PersistedOnlineAccountData, 0, maxAccounts)
 	var numAccounts uint64
 	seenAddr := make([]byte, len(basics.Address{}))
 	for rows.Next() {
 		var addrbuf []byte
 		var buf []byte
-		data := PersistedOnlineAccountData{}
+		data := trackerdb.PersistedOnlineAccountData{}
 		err := rows.Scan(&data.Rowid, &addrbuf, &data.UpdRound, &buf)
 		if err != nil {
 			return nil, err
@@ -321,7 +322,7 @@ func (r *accountsV2Reader) TotalKVs(ctx context.Context) (total uint64, err erro
 }
 
 // LoadTxTail returns the tx tails
-func (r *accountsV2Reader) LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error) {
+func (r *accountsV2Reader) LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*trackerdb.TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error) {
 	rows, err := r.q.QueryContext(ctx, "SELECT rnd, data FROM txtail ORDER BY rnd DESC")
 	if err != nil {
 		return nil, nil, 0, err
@@ -339,7 +340,7 @@ func (r *accountsV2Reader) LoadTxTail(ctx context.Context, dbRound basics.Round)
 		if round != expectedRound {
 			return nil, nil, 0, fmt.Errorf("txtail table contain unexpected round %d; round %d was expected", round, expectedRound)
 		}
-		tail := &TxTailRound{}
+		tail := &trackerdb.TxTailRound{}
 		err = protocol.Decode(data, tail)
 		if err != nil {
 			return nil, nil, 0, err
@@ -459,7 +460,7 @@ func (r *accountsV2Reader) LoadAllFullAccounts(
 			return
 		}
 
-		var data BaseAccountData
+		var data trackerdb.BaseAccountData
 		err = protocol.Decode(buf, &data)
 		if err != nil {
 			return
@@ -486,7 +487,7 @@ func (r *accountsV2Reader) LoadAllFullAccounts(
 }
 
 // LoadFullAccount converts BaseAccountData into basics.AccountData and loads all resources as needed
-func (r *accountsV2Reader) LoadFullAccount(ctx context.Context, resourcesTable string, addr basics.Address, addrid int64, data BaseAccountData) (ad basics.AccountData, err error) {
+func (r *accountsV2Reader) LoadFullAccount(ctx context.Context, resourcesTable string, addr basics.Address, addrid int64, data trackerdb.BaseAccountData) (ad basics.AccountData, err error) {
 	ad = data.GetAccountData()
 
 	hasResources := false
@@ -526,12 +527,12 @@ func (r *accountsV2Reader) LoadFullAccount(ctx context.Context, resourcesTable s
 		if err != nil {
 			return
 		}
-		var resData ResourcesData
+		var resData trackerdb.ResourcesData
 		err = protocol.Decode(buf, &resData)
 		if err != nil {
 			return
 		}
-		if resData.ResourceFlags == ResourceFlagsNotHolding {
+		if resData.ResourceFlags == trackerdb.ResourceFlagsNotHolding {
 			err = fmt.Errorf("addr %s (%d) aidx = %d resourceFlagsNotHolding should not be persisted", addr.String(), addrid, aidx)
 			return
 		}
@@ -667,7 +668,7 @@ func (w *accountsV2Writer) OnlineAccountsDelete(forgetBefore basics.Round) (err 
 			// reset the state
 			prevAddr = addrbuf
 
-			var oad BaseOnlineAccountData
+			var oad trackerdb.BaseOnlineAccountData
 			err = protocol.Decode(buf, &oad)
 			if err != nil {
 				return

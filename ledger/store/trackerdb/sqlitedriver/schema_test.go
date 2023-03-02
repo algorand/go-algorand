@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package store
+package sqlitedriver
 
 import (
 	"context"
@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -148,7 +149,7 @@ func TestAccountDBTxTailLoad(t *testing.T) {
 	roundData := make([][]byte, 1500)
 	const retainSize = 1001
 	for i := startRound; i <= endRound; i++ {
-		data := TxTailRound{Hdr: bookkeeping.BlockHeader{TimeStamp: int64(i)}}
+		data := trackerdb.TxTailRound{Hdr: bookkeeping.BlockHeader{TimeStamp: int64(i)}}
 		roundData[i-1] = protocol.Encode(&data)
 	}
 	forgetBefore := (endRound + 1).SubSaturate(retainSize)
@@ -223,7 +224,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 
 		mc, err := MakeMerkleCommitter(tx, false)
 		require.NoError(t, err)
-		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+		trie, err := merkletrie.MakeTrie(mc, trackerdb.TrieMemoryConfig)
 		require.NoError(t, err)
 
 		var addr basics.Address
@@ -233,13 +234,13 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 			err = rows.Scan(&addrbuf, &encodedAcctData)
 			require.NoError(t, err)
 			copy(addr[:], addrbuf)
-			var ba BaseAccountData
+			var ba trackerdb.BaseAccountData
 			err = protocol.Decode(encodedAcctData, &ba)
 			require.NoError(t, err)
 			if expected && ba.Status != basics.Online {
 				require.Equal(t, merklesignature.Commitment{}, ba.StateProofID)
 			}
-			addHash := AccountHashBuilderV6(addr, &ba, encodedAcctData)
+			addHash := trackerdb.AccountHashBuilderV6(addr, &ba, encodedAcctData)
 			added, err := trie.Add(addHash)
 			require.NoError(t, err)
 			require.True(t, added)
@@ -264,7 +265,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 	// get the new hash and ensure it does not match to the old one (data migrated)
 	mc, err := MakeMerkleCommitter(tx, false)
 	require.NoError(t, err)
-	trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+	trie, err := merkletrie.MakeTrie(mc, trackerdb.TrieMemoryConfig)
 	require.NoError(t, err)
 
 	newRoot, err := trie.RootHash()
@@ -283,7 +284,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 		var encodedAcctData []byte
 		err = rows.Scan(&addrid, &encodedAcctData)
 		require.NoError(t, err)
-		var ba BaseAccountData
+		var ba trackerdb.BaseAccountData
 		err = protocol.Decode(encodedAcctData, &ba)
 		require.NoError(t, err)
 		if ba.Status != basics.Online {
