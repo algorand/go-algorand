@@ -18,7 +18,7 @@ import json
 import math
 
 DEFAULT_NUM_N = 5
-DEFAULT_NUM_NPN = 5
+DEFAULT_NUM_NPN = 10
 DEFAULT_REGION = 'us-west-1'
 
 def main():
@@ -176,7 +176,8 @@ def gen_network_tpl_from_rules_v2(path):
     network = {
         'relays': num_relays,
         'nodes': num_n,
-        'npn': num_npn
+        'npn': num_npn,
+        'wallets': num_n,
     }
 
     instances = {
