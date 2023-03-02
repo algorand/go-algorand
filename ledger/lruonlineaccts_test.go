@@ -41,7 +41,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 		acct := trackerdb.PersistedOnlineAccountData{
 			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			Round:       basics.Round(i),
-			Rowid:       int64(i),
+			Ref:         int64(i),
 			AccountData: trackerdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 		baseOnlineAcct.write(acct)
@@ -55,7 +55,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 		require.Equal(t, basics.Round(i), acct.Round)
 		require.Equal(t, addr, acct.Addr)
 		require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
-		require.Equal(t, int64(i), acct.Rowid)
+		require.Equal(t, int64(i), acct.Ref)
 	}
 
 	// verify expected missing entries
@@ -79,7 +79,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 			require.Equal(t, basics.Round(i), acct.Round)
 			require.Equal(t, addr, acct.Addr)
 			require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
-			require.Equal(t, int64(i), acct.Rowid)
+			require.Equal(t, int64(i), acct.Ref)
 		} else {
 			require.False(t, has)
 			require.Equal(t, trackerdb.PersistedOnlineAccountData{}, acct)
@@ -101,7 +101,7 @@ func TestLRUOnlineAccountsDisable(t *testing.T) {
 			acct := trackerdb.PersistedOnlineAccountData{
 				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				Round:       basics.Round(i),
-				Rowid:       int64(i),
+				Ref:         int64(i),
 				AccountData: trackerdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 			}
 			baseOnlineAcct.writePending(acct)
@@ -115,7 +115,7 @@ func TestLRUOnlineAccountsDisable(t *testing.T) {
 		acct := trackerdb.PersistedOnlineAccountData{
 			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			Round:       basics.Round(i),
-			Rowid:       int64(i),
+			Ref:         int64(i),
 			AccountData: trackerdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 		baseOnlineAcct.write(acct)
@@ -136,7 +136,7 @@ func TestLRUOnlineAccountsPendingWrites(t *testing.T) {
 			acct := trackerdb.PersistedOnlineAccountData{
 				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				Round:       basics.Round(i),
-				Rowid:       int64(i),
+				Ref:         int64(i),
 				AccountData: trackerdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 			}
 			baseOnlineAcct.writePending(acct)
@@ -178,7 +178,7 @@ func TestLRUOnlineAccountsPendingWritesWarning(t *testing.T) {
 			acct := trackerdb.PersistedOnlineAccountData{
 				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				Round:       basics.Round(i),
-				Rowid:       int64(i),
+				Ref:         int64(i),
 				AccountData: trackerdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 			}
 			baseOnlineAcct.writePending(acct)
@@ -204,7 +204,7 @@ func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 		acct := trackerdb.PersistedOnlineAccountData{
 			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			Round:       basics.Round(i),
-			Rowid:       int64(i),
+			Ref:         int64(i),
 			AccountData: trackerdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 		baseOnlineAcct.writePending(acct)
@@ -220,7 +220,7 @@ func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 		require.Equal(t, basics.Round(i), acct.Round)
 		require.Equal(t, addr, acct.Addr)
 		require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
-		require.Equal(t, int64(i), acct.Rowid)
+		require.Equal(t, int64(i), acct.Ref)
 	}
 
 	// verify expected missing entries

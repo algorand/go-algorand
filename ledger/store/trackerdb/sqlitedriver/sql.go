@@ -383,7 +383,7 @@ func (qs *accountsDbQueries) LookupResources(addr basics.Address, aidx basics.Cr
 		if err == nil {
 			data.Aidx = aidx
 			if len(buf) > 0 && rowid.Valid {
-				data.Addrid = rowid.Int64
+				data.AcctRef = sqlRowRef{rowid.Int64}
 				err = protocol.Decode(buf, &data.Data)
 				if err != nil {
 					return err
@@ -445,10 +445,10 @@ func (qs *accountsDbQueries) LookupAllResources(addr basics.Address) (data []tra
 				return err
 			}
 			data = append(data, trackerdb.PersistedResourcesData{
-				Addrid: addrid.Int64,
-				Aidx:   basics.CreatableIndex(aidx.Int64),
-				Data:   resData,
-				Round:  dbRound,
+				AcctRef: sqlRowRef{addrid.Int64},
+				Aidx:    basics.CreatableIndex(aidx.Int64),
+				Data:    resData,
+				Round:   dbRound,
 			})
 			rnd = dbRound
 		}
@@ -468,7 +468,7 @@ func (qs *accountsDbQueries) LookupAccount(addr basics.Address) (data trackerdb.
 		if err == nil {
 			data.Addr = addr
 			if len(buf) > 0 && rowid.Valid {
-				data.Rowid = rowid.Int64
+				data.Ref = sqlRowRef{rowid.Int64}
 				err = protocol.Decode(buf, &data.AccountData)
 				return err
 			}
@@ -497,7 +497,7 @@ func (qs *onlineAccountsDbQueries) LookupOnline(addr basics.Address, rnd basics.
 		if err == nil {
 			data.Addr = addr
 			if len(buf) > 0 && rowid.Valid && updround.Valid {
-				data.Rowid = rowid.Int64
+				data.Ref = sqlRowRef{rowid.Int64}
 				data.UpdRound = basics.Round(updround.Int64)
 				err = protocol.Decode(buf, &data.AccountData)
 				return err
@@ -546,10 +546,12 @@ func (qs *onlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (res
 		for rows.Next() {
 			var buf []byte
 			data := trackerdb.PersistedOnlineAccountData{}
-			err := rows.Scan(&data.Rowid, &data.UpdRound, &rnd, &buf)
+			var rowid int64
+			err := rows.Scan(&rowid, &data.UpdRound, &rnd, &buf)
 			if err != nil {
 				return err
 			}
+			data.Ref = sqlRowRef{rowid}
 			err = protocol.Decode(buf, &data.AccountData)
 			if err != nil {
 				return err
@@ -628,6 +630,9 @@ func (w accountsSQLWriter) InsertAccount(addr basics.Address, normBalance uint64
 }
 
 func (w accountsSQLWriter) DeleteAccount(ref trackerdb.AccountRef) (rowsAffected int64, err error) {
+	if ref == nil {
+		return 0, nil
+	}
 	rowid := ref.(sqlRowRef).rowid
 	result, err := w.deleteByRowIDStmt.Exec(rowid)
 	if err != nil {
@@ -638,6 +643,9 @@ func (w accountsSQLWriter) DeleteAccount(ref trackerdb.AccountRef) (rowsAffected
 }
 
 func (w accountsSQLWriter) UpdateAccount(ref trackerdb.AccountRef, normBalance uint64, data trackerdb.BaseAccountData) (rowsAffected int64, err error) {
+	if ref == nil {
+		return 0, nil
+	}
 	rowid := ref.(sqlRowRef).rowid
 	result, err := w.updateStmt.Exec(normBalance, protocol.Encode(&data), rowid)
 	if err != nil {

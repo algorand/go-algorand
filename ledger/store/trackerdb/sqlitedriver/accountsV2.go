@@ -267,11 +267,13 @@ func (r *accountsV2Reader) OnlineAccountsAll(maxAccounts uint64) ([]trackerdb.Pe
 	for rows.Next() {
 		var addrbuf []byte
 		var buf []byte
+		var rowid int64
 		data := trackerdb.PersistedOnlineAccountData{}
-		err := rows.Scan(&data.Rowid, &addrbuf, &data.UpdRound, &buf)
+		err := rows.Scan(&rowid, &addrbuf, &data.UpdRound, &buf)
 		if err != nil {
 			return nil, err
 		}
+		data.Ref = sqlRowRef{rowid}
 		if len(addrbuf) != len(data.Addr) {
 			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(data.Addr))
 			return nil, err
@@ -366,6 +368,9 @@ func (r *accountsV2Reader) LoadTxTail(ctx context.Context, dbRound basics.Round)
 
 // LookupAccountAddressFromAddressID looks up an account based on a rowid
 func (r *accountsV2Reader) LookupAccountAddressFromAddressID(ctx context.Context, accountRef trackerdb.AccountRef) (address basics.Address, err error) {
+	if accountRef == nil {
+		return address, sql.ErrNoRows
+	}
 	addrid := accountRef.(sqlRowRef).rowid
 	var addrbuf []byte
 	err = r.q.QueryRowContext(ctx, "SELECT address FROM accountbase WHERE rowid = ?", addrid).Scan(&addrbuf)
@@ -432,6 +437,9 @@ func (r *accountsV2Reader) LookupAccountRowID(addr basics.Address) (ref trackerd
 
 // LookupResourceDataByAddrID looks up the resource data by account rowid + resource aidx.
 func (r *accountsV2Reader) LookupResourceDataByAddrID(accountRef trackerdb.AccountRef, aidx basics.CreatableIndex) (data []byte, err error) {
+	if accountRef == nil {
+		return data, sql.ErrNoRows
+	}
 	addrid := accountRef.(sqlRowRef).rowid
 	// optimize this query for repeated usage
 	selectStmt, err := r.getOrPrepare("SELECT data FROM resources WHERE addrid = ? AND aidx = ?")
