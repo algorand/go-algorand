@@ -170,7 +170,7 @@ func (cw *catchpointWriter) WriteStateProofVerificationContext() (crypto.Digest,
 	dataHash, encodedData := crypto.EncodeAndHash(wrappedData)
 
 	err = cw.tar.WriteHeader(&tar.Header{
-		Name: "stateProofVerificationContext.msgpack",
+		Name: CatchpointSPVerificationFileName,
 		Mode: 0600,
 		Size: int64(len(encodedData)),
 	})
@@ -294,7 +294,7 @@ func (cw *catchpointWriter) asyncWriter(chunks chan catchpointFileChunkV6, respo
 		}
 		encodedChunk := protocol.Encode(&chk)
 		err := cw.tar.WriteHeader(&tar.Header{
-			Name: fmt.Sprintf("balances.%d.msgpack", chunkNum),
+			Name: fmt.Sprintf(CatchpointBalancesFileNameTemplate, chunkNum),
 			Mode: 0600,
 			Size: int64(len(encodedChunk)),
 		})

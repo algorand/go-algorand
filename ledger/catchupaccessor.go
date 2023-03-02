@@ -340,13 +340,13 @@ type CatchpointCatchupAccessorProgress struct {
 // ProcessStagingBalances deserialize the given bytes as a temporary staging balances
 func (c *catchpointCatchupAccessorImpl) ProcessStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error) {
 	// content.msgpack comes first, followed by stateProofVerificationContext.msgpack and then by balances.x.msgpack.
-	if sectionName == "content.msgpack" {
+	if sectionName == CatchpointContentFileName {
 		return c.processStagingContent(ctx, bytes, progress)
 	}
-	if sectionName == "stateProofVerificationContext.msgpack" {
+	if sectionName == CatchpointSPVerificationFileName {
 		return c.processStagingStateProofVerificationContext(bytes)
 	}
-	if strings.HasPrefix(sectionName, "balances.") && strings.HasSuffix(sectionName, ".msgpack") {
+	if strings.HasPrefix(sectionName, CatchpointBalancesFileNamePrefix) && strings.HasSuffix(sectionName, CatchpointBalancesFileNameSuffix) {
 		return c.processStagingBalances(ctx, bytes, progress)
 	}
 	// we want to allow undefined sections to support backward compatibility.
