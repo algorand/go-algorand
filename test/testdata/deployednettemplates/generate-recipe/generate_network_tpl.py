@@ -18,7 +18,7 @@ import json
 import math
 
 DEFAULT_NUM_N = 5
-DEFAULT_NUM_NPN = 5
+DEFAULT_NUM_NPN = 10
 DEFAULT_REGION = 'us-west-1'
 
 def main():
