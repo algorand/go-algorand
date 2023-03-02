@@ -594,6 +594,8 @@ type BlockEvaluator struct {
 	l LedgerForEvaluator
 
 	maxTxnBytesPerBlock int
+
+	Tracer logic.EvalTracer
 }
 
 // LedgerForEvaluator defines the ledger interface needed by the evaluator.
@@ -925,14 +927,7 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transacti
 // TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD) error {
-	return eval.transactionGroup(txads)
-}
-
-// transactionGroup tentatively executes a group of transactions as part of this block evaluation.
-// If the transaction group cannot be added to the block without violating some constraints,
-// an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD) error {
+func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWithAD) (err error) {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -953,13 +948,31 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	defer cow.recycle()
 
 	evalParams := logic.NewEvalParams(txgroup, &eval.proto, &eval.specials)
+	evalParams.Tracer = eval.Tracer
+
+	if eval.Tracer != nil {
+		eval.Tracer.BeforeTxnGroup(evalParams)
+		// Ensure we update the tracer before exiting
+		defer func() {
+			eval.Tracer.AfterTxnGroup(evalParams, err)
+		}()
+	}
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
+		if eval.Tracer != nil {
+			eval.Tracer.BeforeTxn(evalParams, gi)
+		}
+
 		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
+
+		if eval.Tracer != nil {
+			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData, err)
+		}
+
 		if err != nil {
 			return err
 		}
@@ -1095,6 +1108,10 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	// Apply the transaction, updating the cow balances
 	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, gi, cow.Counter())
 	if err != nil {
+		if eval.Tracer != nil {
+			// If there is a tracer, save the ApplyData so that it's viewable by the tracer
+			txib.ApplyData = applyData
+		}
 		return fmt.Errorf("transaction %v: %w", txid, err)
 	}
 

@@ -56,10 +56,14 @@ type Local struct {
 	// 1 * time.Minute = 60000000000 ns
 	ReconnectTime time.Duration `version[0]:"60" version[1]:"60000000000"`
 
-	// what we should tell people to connect to
+	// The public address to connect to that is advertised to other nodes.
+	// For MainNet relays, make sure this entry includes the full SRV host name
+	// plus the publicly-accessible port number.
+	// A valid entry will avoid "self-gossip" and is used for identity exchange
+	// to deduplicate redundant connections
 	PublicAddress string `version[0]:""`
 
-	MaxConnectionsPerIP int `version[3]:"30"`
+	MaxConnectionsPerIP int `version[3]:"30" version[27]:"15"`
 
 	// 0 == disable
 	PeerPingPeriodSeconds int `version[0]:"0"`
@@ -76,8 +80,8 @@ type Local struct {
 
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
 	// connections. 0 means no connections allowed. Must be non-negative.
-	// Estimating 5MB per incoming connection, 5MB*800 = 4GB
-	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000" version[17]:"800"`
+	// Estimating 1.5MB per incoming connection, 1.5MB*2400 = 3.6GB
+	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000" version[17]:"800" version[27]:"2400"`
 
 	// BroadcastConnectionsLimit specifies the number of connections that
 	// will receive broadcast (gossip) messages from this node.  If the
@@ -103,6 +107,8 @@ type Local struct {
 	// that RLIMIT_NOFILE >= IncomingConnectionsLimit + RestConnectionsHardLimit +
 	// ReservedFDs. ReservedFDs are meant to leave room for short-lived FDs like
 	// DNS queries, SQLite files, etc. This parameter shouldn't be changed.
+	// If RLIMIT_NOFILE < IncomingConnectionsLimit + RestConnectionsHardLimit + ReservedFDs
+	// then either RestConnectionsHardLimit or IncomingConnectionsLimit decreased.
 	ReservedFDs uint64 `version[2]:"256"`
 
 	// local server
@@ -460,13 +466,13 @@ type Local struct {
 	MaxAPIResourcesPerAccount uint64 `version[21]:"100000"`
 
 	// AgreementIncomingVotesQueueLength sets the size of the buffer holding incoming votes.
-	AgreementIncomingVotesQueueLength uint64 `version[21]:"10000"`
+	AgreementIncomingVotesQueueLength uint64 `version[21]:"10000" version[27]:"20000"`
 
 	// AgreementIncomingProposalsQueueLength sets the size of the buffer holding incoming proposals.
-	AgreementIncomingProposalsQueueLength uint64 `version[21]:"25"`
+	AgreementIncomingProposalsQueueLength uint64 `version[21]:"25" version[27]:"50"`
 
 	// AgreementIncomingBundlesQueueLength sets the size of the buffer holding incoming bundles.
-	AgreementIncomingBundlesQueueLength uint64 `version[21]:"7"`
+	AgreementIncomingBundlesQueueLength uint64 `version[21]:"7" version[27]:"15"`
 
 	// MaxAcctLookback sets the maximum lookback range for account states,
 	// i.e. the ledger can answer account states questions for the range Latest-MaxAcctLookback...Latest
@@ -490,6 +496,16 @@ type Local struct {
 	// EnableExperimentalAPI enables experimental API endpoint. Note that these endpoints have no
 	// guarantees in terms of functionality or future support.
 	EnableExperimentalAPI bool `version[26]:"false"`
+
+	// DisableLedgerLRUCache disables LRU caches in ledger.
+	// Setting it to TRUE might result in significant performance degradation
+	// and SHOULD NOT be used for other reasons than testing.
+	DisableLedgerLRUCache bool `version[27]:"false"`
+
+	// EnableFollowMode launches the node in "follower" mode. This turns off the agreement service,
+	// and APIs related to broadcasting transactions, and enables APIs which can retrieve detailed information
+	// from ledger caches and can control the ledger round.
+	EnableFollowMode bool `version[27]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
@@ -587,4 +603,38 @@ func (cfg Local) TxFilterRawMsgEnabled() bool {
 // TxFilterCanonicalEnabled returns true if canonical tx group filtering is enabled
 func (cfg Local) TxFilterCanonicalEnabled() bool {
 	return cfg.TxIncomingFilteringFlags&txFilterCanonical != 0
+}
+
+// IsGossipServer returns true if NetAddress is set and this node supposed
+// to start websocket server
+func (cfg Local) IsGossipServer() bool {
+	return cfg.NetAddress != ""
+}
+
+// AdjustConnectionLimits updates RestConnectionsSoftLimit, RestConnectionsHardLimit, IncomingConnectionsLimit
+// if requiredFDs greater than maxFDs
+func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
+	if maxFDs >= requiredFDs {
+		return false
+	}
+	const reservedRESTConns = 10
+	diff := requiredFDs - maxFDs
+
+	if cfg.RestConnectionsHardLimit <= diff+reservedRESTConns {
+		restDelta := diff + reservedRESTConns - cfg.RestConnectionsHardLimit
+		cfg.RestConnectionsHardLimit = reservedRESTConns
+		if cfg.IncomingConnectionsLimit > int(restDelta) {
+			cfg.IncomingConnectionsLimit -= int(restDelta)
+		} else {
+			cfg.IncomingConnectionsLimit = 0
+		}
+	} else {
+		cfg.RestConnectionsHardLimit -= diff
+	}
+
+	if cfg.RestConnectionsSoftLimit > cfg.RestConnectionsHardLimit {
+		cfg.RestConnectionsSoftLimit = cfg.RestConnectionsHardLimit
+	}
+
+	return true
 }

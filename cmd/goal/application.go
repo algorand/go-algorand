@@ -32,6 +32,7 @@ import (
 
 	"github.com/algorand/avm-abi/abi"
 	"github.com/algorand/avm-abi/apps"
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/crypto"
 	apiclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/data/basics"
@@ -398,7 +399,7 @@ func mustParseOnCompletion(ocString string) (oc transactions.OnCompletion) {
 }
 
 func getDataDirAndClient() (dataDir string, client libgoal.Client) {
-	dataDir = ensureSingleDataDir()
+	dataDir = datadir.EnsureSingleDataDir()
 	client = ensureFullClient(dataDir)
 	return
 }
