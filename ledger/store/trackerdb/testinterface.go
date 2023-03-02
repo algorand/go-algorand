@@ -28,12 +28,13 @@ import (
 )
 
 // testinterface.go contains interface extensions specific to testing
-// testing interfaces should be made accessable by calling the Testing() method
+// testing interfaces should be made accessible by calling the Testing() method
 // on the related interface. Example:
 // testTx := tx.Testing()
 // these can also be inlined:
 // tx.Testing.AccountsInitTest(...)
 
+// TestBatchScope is an interface to extend BatchScope with test-only methods
 type TestBatchScope interface {
 	BatchScope
 
@@ -43,6 +44,7 @@ type TestBatchScope interface {
 	ModifyAcctBaseTest() error
 }
 
+// TestTransactionScope is an interface to extend TransactionScope with test-only methods
 type TestTransactionScope interface {
 	TransactionScope
 
@@ -52,6 +54,7 @@ type TestTransactionScope interface {
 	AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error)
 }
 
+// TestAccountsReaderExt is an interface to extend AccountsReaderExt with test-only methods
 type TestAccountsReaderExt interface {
 	AccountsReaderExt
 

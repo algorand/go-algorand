@@ -223,8 +223,8 @@ func (txs sqlTransactionScope) AccountsInitLightTest(tb testing.TB, initAccounts
 }
 
 // Testing returns this scope, exposed as an interface with test functions
-func (s sqlBatchScope) Testing() trackerdb.TestBatchScope {
-	return s
+func (bs sqlBatchScope) Testing() trackerdb.TestBatchScope {
+	return bs
 }
 
 func (bs sqlBatchScope) MakeCatchpointWriter() (trackerdb.CatchpointWriter, error) {
