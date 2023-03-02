@@ -835,8 +835,8 @@ func (z *catchpointStateProofVerificationContext) UnmarshalMsg(bts []byte) (o []
 				err = msgp.WrapError(err, "struct-from-array", "Data")
 				return
 			}
-			if zb0004 > StateProofVerificationContextPerCatchpointFile {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(StateProofVerificationContextPerCatchpointFile))
+			if zb0004 > SPContextPerCatchpointFile {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(SPContextPerCatchpointFile))
 				err = msgp.WrapError(err, "struct-from-array", "Data")
 				return
 			}
@@ -886,8 +886,8 @@ func (z *catchpointStateProofVerificationContext) UnmarshalMsg(bts []byte) (o []
 					err = msgp.WrapError(err, "Data")
 					return
 				}
-				if zb0006 > StateProofVerificationContextPerCatchpointFile {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(StateProofVerificationContextPerCatchpointFile))
+				if zb0006 > SPContextPerCatchpointFile {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(SPContextPerCatchpointFile))
 					err = msgp.WrapError(err, "Data")
 					return
 				}
