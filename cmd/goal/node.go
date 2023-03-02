@@ -19,6 +19,7 @@ package main
 //go:generate ./bundle_genesis_json.sh
 
 import (
+	"bufio"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -60,6 +61,7 @@ var newNodeRelay string
 var newNodeFullConfig bool
 var watchMillisecond uint64
 var abortCatchup bool
+var fastCatchupForce bool
 
 const catchpointURL = "https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/%s/latest.catchpoint"
 
@@ -108,6 +110,7 @@ func init() {
 	statusCmd.Flags().Uint64VarP(&watchMillisecond, "watch", "w", 0, "Time (in milliseconds) between two successive status updates")
 
 	catchupCmd.Flags().BoolVarP(&abortCatchup, "abort", "x", false, "Aborts the current catchup process")
+	catchupCmd.Flags().BoolVar(&fastCatchupForce, "force", false, "Forces fast catchup with implicit catchpoint to start without a consent prompt")
 
 }
 
@@ -149,7 +152,7 @@ func getMissingCatchpointLabel(URL string) (label string, err error) {
 var catchupCmd = &cobra.Command{
 	Use:     "catchup",
 	Short:   "Catchup the Algorand node to a specific catchpoint",
-	Long:    "Catchup allows making large jumps over round ranges without the need to incrementally validate each individual round. If no catchpoint is provided, this command attempts to lookup the latest catchpoint from algorand-catchpoints.s3.us-east-2.amazonaws.com.",
+	Long:    "Catchup allows making large jumps over round ranges without the need to incrementally validate each individual round. Using external catchpoints is not a secure practice and should not be done for consensus participating nodes.\nIf no catchpoint is provided, this command attempts to lookup the latest catchpoint from algorand-catchpoints.s3.us-east-2.amazonaws.com.",
 	Example: "goal node catchup 6500000#1234567890ABCDEF01234567890ABCDEF0\tStart catching up to round 6500000 with the provided catchpoint\ngoal node catchup --abort\t\t\t\t\tAbort the current catchup",
 	Args:    catchpointCmdArgument,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -164,9 +167,18 @@ var catchupCmd = &cobra.Command{
 				URL := fmt.Sprintf(catchpointURL, genesis)
 				label, err := getMissingCatchpointLabel(URL)
 				if err != nil {
-					reportErrorf(errorCatchpointLabelMissing, errorUnableToLookupCatchpointLabel)
+					reportErrorf(errorCatchpointLabelMissing, errorUnableToLookupCatchpointLabel, err.Error())
 				}
 				args = append(args, label)
+				if !fastCatchupForce {
+					fmt.Printf(nodeConfirmImplicitCatchpoint, label)
+					reader := bufio.NewReader(os.Stdin)
+					text, _ := reader.ReadString('\n')
+					text = strings.Replace(text, "\n", "", -1)
+					if text != "yes" {
+						reportErrorf(errorAbortedPerUserRequest)
+					}
+				}
 			}
 			catchup(dataDir, args)
 		})
