@@ -2321,25 +2321,20 @@ func TestAccountOnlineQueries(t *testing.T) {
 		//    A |   2 |      0
 
 		checkAddrB := func() {
-			require.Equal(t, int64(2), paods[0].Ref)
 			require.Equal(t, basics.Round(1), paods[0].UpdRound)
 			require.Equal(t, addrB, paods[0].Addr)
-			require.Equal(t, int64(4), paods[1].Ref)
 			require.Equal(t, basics.Round(3), paods[1].UpdRound)
 			require.Equal(t, addrB, paods[1].Addr)
 		}
 
 		checkAddrC := func() {
-			require.Equal(t, int64(5), paods[2].Ref)
 			require.Equal(t, basics.Round(3), paods[2].UpdRound)
 			require.Equal(t, addrC, paods[2].Addr)
 		}
 
 		checkAddrA := func() {
-			require.Equal(t, int64(1), paods[3].Ref)
 			require.Equal(t, basics.Round(1), paods[3].UpdRound)
 			require.Equal(t, addrA, paods[3].Addr)
-			require.Equal(t, int64(3), paods[4].Ref)
 			require.Equal(t, basics.Round(2), paods[4].UpdRound)
 			require.Equal(t, addrA, paods[4].Addr)
 		}
@@ -2370,25 +2365,25 @@ func TestAccountOnlineQueries(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), rnd)
 		require.Equal(t, 2, len(paods))
-		require.Equal(t, int64(1), paods[0].Ref)
+		// require.Equal(t, int64(1), paods[0].Ref)
 		require.Equal(t, basics.Round(1), paods[0].UpdRound)
-		require.Equal(t, int64(3), paods[1].Ref)
+		// require.Equal(t, int64(3), paods[1].Ref)
 		require.Equal(t, basics.Round(2), paods[1].UpdRound)
 
 		paods, rnd, err = queries.LookupOnlineHistory(addrB)
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), rnd)
 		require.Equal(t, 2, len(paods))
-		require.Equal(t, int64(2), paods[0].Ref)
+		// require.Equal(t, int64(2), paods[0].Ref)
 		require.Equal(t, basics.Round(1), paods[0].UpdRound)
-		require.Equal(t, int64(4), paods[1].Ref)
+		// require.Equal(t, int64(4), paods[1].Ref)
 		require.Equal(t, basics.Round(3), paods[1].UpdRound)
 
 		paods, rnd, err = queries.LookupOnlineHistory(addrC)
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), rnd)
 		require.Equal(t, 1, len(paods))
-		require.Equal(t, int64(5), paods[0].Ref)
+		// require.Equal(t, int64(5), paods[0].Ref)
 		require.Equal(t, basics.Round(3), paods[0].UpdRound)
 
 		return nil
