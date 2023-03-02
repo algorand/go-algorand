@@ -184,6 +184,10 @@ func (cw *catchpointWriter) WriteStateProofVerificationContext() (crypto.Digest,
 		return crypto.Digest{}, err
 	}
 
+	if chunkLen := uint64(len(encodedData)); cw.biggestChunkLen < chunkLen {
+		cw.biggestChunkLen = chunkLen
+	}
+
 	return dataHash, nil
 }
 
