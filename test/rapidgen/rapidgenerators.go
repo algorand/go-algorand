@@ -46,7 +46,7 @@ func DomainOf(maxLength, maxElementLength int) *rapid.Generator {
 	})
 }
 
-var tldGenerator = rapid.SampledFrom(tlds)
+var tldGenerator = rapid.SampledFrom(tlds) //nolint:golint,typecheck
 
 func assertf(ok bool, format string, args ...interface{}) {
 	if !ok {

@@ -1,6 +1,8 @@
 run:
   timeout: 5m
   tests: true
+  build-tags:
+    - codeanalysis
   
 linters:
   # default: deadcode, errcheck, gosimple, govet, ineffassign, staticcheck, typecheck, unused, varcheck

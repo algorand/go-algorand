@@ -1,3 +1,6 @@
+//go:build !codeanalysis
+// +build !codeanalysis
+
 package rapidgen
 
 import "strings"
@@ -1487,4 +1490,4 @@ ZUERICH
 ZW
 `
 
-var tlds = strings.Split(strings.TrimSpace(tldsByAlpha), "\n")
+var tlds []string = strings.Split(strings.TrimSpace(tldsByAlpha), "\n")
