@@ -42,7 +42,9 @@ type ResourceRef interface {
 }
 
 // CreatableRef is an opaque ref to a creatable in the db.
-type CreatableRef interface{}
+type CreatableRef interface {
+	CreatableRefMarker()
+}
 
 // AccountsWriter is the write interface for:
 // - accounts, resources, app kvs, creatables

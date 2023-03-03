@@ -1367,6 +1367,7 @@ type mockEntryRef struct {
 func (ref mockEntryRef) AccountRefMarker()       {}
 func (ref mockEntryRef) OnlineAccountRefMarker() {}
 func (ref mockEntryRef) ResourceRefMarker()      {}
+func (ref mockEntryRef) CreatableRefMarker()     {}
 
 func makeMockAccountWriter() (m mockAccountWriter) {
 	m.accounts = make(map[trackerdb.AccountRef]ledgercore.AccountData)
@@ -1565,7 +1566,7 @@ func (m *mockAccountWriter) DeleteKvPair(key string) error {
 }
 
 func (m *mockAccountWriter) InsertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (ref trackerdb.CreatableRef, err error) {
-	return 0, fmt.Errorf("insertCreatable: not implemented")
+	return nil, fmt.Errorf("insertCreatable: not implemented")
 }
 
 func (m *mockAccountWriter) DeleteCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType) (rowsAffected int64, err error) {

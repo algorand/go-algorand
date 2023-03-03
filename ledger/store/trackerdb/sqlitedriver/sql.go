@@ -63,6 +63,7 @@ type sqlRowRef struct {
 func (ref sqlRowRef) AccountRefMarker()       {}
 func (ref sqlRowRef) OnlineAccountRefMarker() {}
 func (ref sqlRowRef) ResourceRefMarker()      {}
+func (ref sqlRowRef) CreatableRefMarker()     {}
 
 // AccountsInitDbQueries constructs an AccountsReader backed by sql queries.
 func AccountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
