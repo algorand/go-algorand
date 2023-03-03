@@ -27,13 +27,19 @@ import (
 )
 
 // AccountRef is an opaque ref to an account in the db.
-type AccountRef interface{}
+type AccountRef interface {
+	AccountRefMarker()
+}
 
 // OnlineAccountRef is an opaque ref to an "online" account in the db.
-type OnlineAccountRef interface{}
+type OnlineAccountRef interface {
+	OnlineAccountRefMarker()
+}
 
 // ResourceRef is an opaque ref to a resource in the db.
-type ResourceRef interface{}
+type ResourceRef interface {
+	ResourceRefMarker()
+}
 
 // CreatableRef is an opaque ref to a creatable in the db.
 type CreatableRef interface{}

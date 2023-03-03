@@ -41,7 +41,7 @@ func TestLRUBasicResources(t *testing.T) {
 	for i := 0; i < resourcesNum; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		res := trackerdb.PersistedResourcesData{
-			AcctRef: int64(i),
+			AcctRef: mockEntryRef{int64(i)},
 			Aidx:    basics.CreatableIndex(i),
 			Round:   basics.Round(i),
 			Data:    trackerdb.ResourcesData{Total: uint64(i)},
@@ -102,7 +102,7 @@ func TestLRUResourcesDisable(t *testing.T) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
 			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 			res := trackerdb.PersistedResourcesData{
-				AcctRef: int64(i),
+				AcctRef: mockEntryRef{int64(i)},
 				Aidx:    basics.CreatableIndex(i),
 				Round:   basics.Round(i),
 				Data:    trackerdb.ResourcesData{Total: uint64(i)},
@@ -120,7 +120,7 @@ func TestLRUResourcesDisable(t *testing.T) {
 	for i := 0; i < resourceNum; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		res := trackerdb.PersistedResourcesData{
-			AcctRef: int64(i),
+			AcctRef: mockEntryRef{int64(i)},
 			Aidx:    basics.CreatableIndex(i),
 			Round:   basics.Round(i),
 			Data:    trackerdb.ResourcesData{Total: uint64(i)},
@@ -143,7 +143,7 @@ func TestLRUResourcesPendingWrites(t *testing.T) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
 			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 			res := trackerdb.PersistedResourcesData{
-				AcctRef: int64(i),
+				AcctRef: mockEntryRef{int64(i)},
 				Aidx:    basics.CreatableIndex(i),
 				Round:   basics.Round(i),
 				Data:    trackerdb.ResourcesData{Total: uint64(i)},
@@ -196,7 +196,7 @@ func TestLRUResourcesPendingWritesWarning(t *testing.T) {
 		for i := 0; i < j; i++ {
 			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 			res := trackerdb.PersistedResourcesData{
-				AcctRef: int64(i),
+				AcctRef: mockEntryRef{int64(i)},
 				Aidx:    basics.CreatableIndex(i),
 				Round:   basics.Round(i),
 				Data:    trackerdb.ResourcesData{Total: uint64(i)},
@@ -223,7 +223,7 @@ func TestLRUResourcesOmittedPendingWrites(t *testing.T) {
 	for i := 0; i < pendingWritesBuffer*2; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		res := trackerdb.PersistedResourcesData{
-			AcctRef: int64(i),
+			AcctRef: mockEntryRef{int64(i)},
 			Aidx:    basics.CreatableIndex(i),
 			Round:   basics.Round(i),
 			Data:    trackerdb.ResourcesData{Total: uint64(i)},
@@ -295,7 +295,7 @@ func generatePersistedResourcesData(startRound, endRound int) []cachedResourceDa
 
 		accounts[i-startRound] = cachedResourceData{
 			PersistedResourcesData: trackerdb.PersistedResourcesData{
-				AcctRef: int64(i),
+				AcctRef: mockEntryRef{int64(i)},
 				Aidx:    basics.CreatableIndex(i),
 				Round:   basics.Round(i + startRound),
 				Data:    trackerdb.ResourcesData{Total: uint64(i)},

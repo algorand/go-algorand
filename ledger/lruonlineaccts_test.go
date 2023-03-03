@@ -41,7 +41,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 		acct := trackerdb.PersistedOnlineAccountData{
 			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			Round:       basics.Round(i),
-			Ref:         int64(i),
+			Ref:         mockEntryRef{int64(i)},
 			AccountData: trackerdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 		baseOnlineAcct.write(acct)
@@ -101,7 +101,7 @@ func TestLRUOnlineAccountsDisable(t *testing.T) {
 			acct := trackerdb.PersistedOnlineAccountData{
 				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				Round:       basics.Round(i),
-				Ref:         int64(i),
+				Ref:         mockEntryRef{int64(i)},
 				AccountData: trackerdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 			}
 			baseOnlineAcct.writePending(acct)
@@ -115,7 +115,7 @@ func TestLRUOnlineAccountsDisable(t *testing.T) {
 		acct := trackerdb.PersistedOnlineAccountData{
 			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			Round:       basics.Round(i),
-			Ref:         int64(i),
+			Ref:         mockEntryRef{int64(i)},
 			AccountData: trackerdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 		baseOnlineAcct.write(acct)
@@ -136,7 +136,7 @@ func TestLRUOnlineAccountsPendingWrites(t *testing.T) {
 			acct := trackerdb.PersistedOnlineAccountData{
 				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				Round:       basics.Round(i),
-				Ref:         int64(i),
+				Ref:         mockEntryRef{int64(i)},
 				AccountData: trackerdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 			}
 			baseOnlineAcct.writePending(acct)
@@ -178,7 +178,7 @@ func TestLRUOnlineAccountsPendingWritesWarning(t *testing.T) {
 			acct := trackerdb.PersistedOnlineAccountData{
 				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				Round:       basics.Round(i),
-				Ref:         int64(i),
+				Ref:         mockEntryRef{int64(i)},
 				AccountData: trackerdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 			}
 			baseOnlineAcct.writePending(acct)
@@ -204,7 +204,7 @@ func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 		acct := trackerdb.PersistedOnlineAccountData{
 			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			Round:       basics.Round(i),
-			Ref:         int64(i),
+			Ref:         mockEntryRef{int64(i)},
 			AccountData: trackerdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 		baseOnlineAcct.writePending(acct)

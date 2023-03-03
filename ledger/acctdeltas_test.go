@@ -1240,7 +1240,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(addr, data.address)
 	a.Equal(sample2, data)
 
-	old1 := trackerdb.PersistedResourcesData{AcctRef: 111, Aidx: 1, Data: trackerdb.ResourcesData{Total: 789}}
+	old1 := trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{111}, Aidx: 1, Data: trackerdb.ResourcesData{Total: 789}}
 	ad.upsertOld(addr, old1)
 	a.Equal(1, ad.len())
 	data = ad.getByIdx(0)
@@ -1248,7 +1248,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(resourceDelta{newResource: sample2.newResource, oldResource: old1, address: addr}, data)
 
 	addr1 := ledgertesting.RandomAddress()
-	old2 := trackerdb.PersistedResourcesData{AcctRef: 222, Aidx: 2, Data: trackerdb.ResourcesData{Total: 789}}
+	old2 := trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{222}, Aidx: 2, Data: trackerdb.ResourcesData{Total: 789}}
 	ad.upsertOld(addr1, old2)
 	a.Equal(2, ad.len())
 	data = ad.getByIdx(0)
@@ -1358,6 +1358,16 @@ type mockAccountWriter struct {
 	availAcctRefs []trackerdb.AccountRef
 }
 
+// mockEntryRef is to be used exclusively with mock implementations
+// any attempt to pass this ref to an actual db implementation during a test will result in a runtime error.
+type mockEntryRef struct {
+	id int64
+}
+
+func (ref mockEntryRef) AccountRefMarker()       {}
+func (ref mockEntryRef) OnlineAccountRefMarker() {}
+func (ref mockEntryRef) ResourceRefMarker()      {}
+
 func makeMockAccountWriter() (m mockAccountWriter) {
 	m.accounts = make(map[trackerdb.AccountRef]ledgercore.AccountData)
 	m.resources = make(map[mockResourcesKey]ledgercore.AccountResource)
@@ -1394,7 +1404,7 @@ func (m *mockAccountWriter) nextAcctRef() (ref trackerdb.AccountRef) {
 		m.availAcctRefs = m.availAcctRefs[:len(m.availAcctRefs)-1]
 	} else {
 		m.lastAcctRef++
-		ref = m.lastAcctRef
+		ref = mockEntryRef{m.lastAcctRef}
 	}
 	return
 }
@@ -1510,13 +1520,13 @@ func (m *mockAccountWriter) UpdateAccount(ref trackerdb.AccountRef, normBalance 
 func (m *mockAccountWriter) InsertResource(acctRef trackerdb.AccountRef, aidx basics.CreatableIndex, data trackerdb.ResourcesData) (ref trackerdb.ResourceRef, err error) {
 	key := mockResourcesKey{acctRef, aidx}
 	if _, ok := m.resources[key]; ok {
-		return 0, fmt.Errorf("insertResource: (%d, %d): UNIQUE constraint failed", acctRef, aidx)
+		return nil, fmt.Errorf("insertResource: (%d, %d): UNIQUE constraint failed", acctRef, aidx)
 	}
 	// use persistedResourcesData.AccountResource for conversion
 	prd := trackerdb.PersistedResourcesData{Data: data}
 	new := prd.AccountResource()
 	m.resources[key] = new
-	return 1, nil
+	return mockEntryRef{1}, nil
 }
 
 func (m *mockAccountWriter) DeleteResource(acctRef trackerdb.AccountRef, aidx basics.CreatableIndex) (rowsAffected int64, err error) {
@@ -2397,7 +2407,7 @@ type mockOnlineAccountsWriter struct {
 
 func (w *mockOnlineAccountsWriter) InsertOnlineAccount(addr basics.Address, normBalance uint64, data trackerdb.BaseOnlineAccountData, updRound uint64, voteLastValid uint64) (ref trackerdb.OnlineAccountRef, err error) {
 	w.rowid++
-	return w.rowid, nil
+	return mockEntryRef{w.rowid}, nil
 }
 
 func (w *mockOnlineAccountsWriter) Close() {}
@@ -2447,7 +2457,7 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 				MicroAlgos:     basics.MicroAlgos{Raw: 400_000_000},
 				BaseVotingData: trackerdb.BaseVotingData{VoteFirstValid: 500},
 			},
-			Ref: 1,
+			Ref: mockEntryRef{1},
 		},
 		newAcct: []trackerdb.BaseOnlineAccountData{{
 			MicroAlgos: basics.MicroAlgos{Raw: 400_000_000},
@@ -2465,7 +2475,7 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 				MicroAlgos:     basics.MicroAlgos{Raw: 500_000_000},
 				BaseVotingData: trackerdb.BaseVotingData{VoteFirstValid: 500},
 			},
-			Ref: 2,
+			Ref: mockEntryRef{2},
 		},
 		newAcct: []trackerdb.BaseOnlineAccountData{{
 			MicroAlgos:     basics.MicroAlgos{Raw: 500_000_000},
@@ -2556,7 +2566,7 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 				MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
 				BaseVotingData: trackerdb.BaseVotingData{VoteFirstValid: 300},
 			},
-			Ref: 1,
+			Ref: mockEntryRef{1},
 		},
 		newAcct: []trackerdb.BaseOnlineAccountData{
 			{

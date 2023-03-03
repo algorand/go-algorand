@@ -1628,9 +1628,9 @@ func TestCompactDeltasResources(t *testing.T) {
 
 	// check deltas without missing accounts
 	for i := int64(0); i < 4; i++ {
-		baseResources.write(trackerdb.PersistedResourcesData{AcctRef: i + 1, Aidx: basics.CreatableIndex(100 + i)}, addrs[i])
+		baseResources.write(trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{i + 1}, Aidx: basics.CreatableIndex(100 + i)}, addrs[i])
 		if i%2 == 0 {
-			baseResources.write(trackerdb.PersistedResourcesData{AcctRef: i + 1, Aidx: basics.CreatableIndex(200 + i)}, addrs[i])
+			baseResources.write(trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{i + 1}, Aidx: basics.CreatableIndex(200 + i)}, addrs[i])
 		}
 	}
 
@@ -1642,11 +1642,11 @@ func TestCompactDeltasResources(t *testing.T) {
 	for i := int64(0); i < 4; i++ {
 		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
 		require.NotEqual(t, -1, idx)
-		require.Equal(t, trackerdb.PersistedResourcesData{AcctRef: i + 1, Aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
+		require.Equal(t, trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{i + 1}, Aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
 		if i%2 == 0 {
 			delta, idx = outResourcesDeltas.get(addrs[i], basics.CreatableIndex(200+i))
 			require.NotEqual(t, -1, idx)
-			require.Equal(t, trackerdb.PersistedResourcesData{AcctRef: i + 1, Aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
+			require.Equal(t, trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{i + 1}, Aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
 		}
 	}
 
@@ -1662,7 +1662,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	appLocalState204 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"204": basics.TealValue{Type: basics.TealBytesType, Bytes: "204"}}}
 	stateDeltas[1].Accts.UpsertAppResource(addrs[4], 104, ledgercore.AppParamsDelta{Params: &appParams104}, ledgercore.AppLocalStateDelta{LocalState: &appLocalState204})
 
-	baseResources.write(trackerdb.PersistedResourcesData{AcctRef: 5 /* 4+1 */, Aidx: basics.CreatableIndex(104)}, addrs[4])
+	baseResources.write(trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{5} /* 4+1 */, Aidx: basics.CreatableIndex(104)}, addrs[4])
 	outResourcesDeltas = makeCompactResourceDeltas(stateDeltas, basics.Round(1), true, baseAccounts, baseResources)
 
 	require.Equal(t, 0, len(outResourcesDeltas.misses))
