@@ -1292,7 +1292,7 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	}
 	addrsids := make(map[basics.Address]trackerdb.AccountRef)
 	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		tx.AccountsInitTest(t, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		tx.Testing().AccountsInitTest(t, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
 
 		aw, err := tx.MakeAccountsOptimizedWriter(true, false, false, false)
 		if err != nil {
