@@ -171,8 +171,8 @@ type PersistedAccountData struct {
 	Addr basics.Address
 	// The underlaying account data
 	AccountData BaseAccountData
-	// The rowid, when available. If the entry was loaded from the disk, then we have the rowid for it. Entries
-	// that doesn't have rowid ( hence, rowid == 0 ) represent either deleted accounts or non-existing accounts.
+	// The reference to the stored object, when available. If the entry was loaded from the disk, then we have the ref for it. Entries
+	// that dont have ref ( hence, ref == nil ) represent either deleted accounts or non-existing accounts.
 	Ref AccountRef
 	// the round number that is associated with the accountData. This field is needed so that we can maintain a correct
 	// lruAccounts cache. We use it to ensure that the entries on the lruAccounts.accountsList are the latest ones.
@@ -185,7 +185,7 @@ type PersistedAccountData struct {
 
 // PersistedResourcesData is exported view of persistedResourcesData
 type PersistedResourcesData struct {
-	// addrid is the rowid of the account address that holds this resource.
+	// AcctRef is the stored object reference of the account address that holds this resource.
 	// it is used in update/delete operations so must be filled for existing records.
 	// resolution is a multi stage process:
 	// - baseResources cache might have valid entries
