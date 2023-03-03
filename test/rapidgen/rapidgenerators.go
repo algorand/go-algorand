@@ -33,7 +33,7 @@ func DomainOf(maxLength, maxElementLength int) *rapid.Generator {
 
 		expr := fmt.Sprintf(`[a-zA-Z]([a-zA-Z0-9\-]{0,%d}[a-zA-Z0-9])?`, domainMaxElementLength-2)
 
-		el := rapid.Int8Range(1, 126).Example().(int)
+		el := rapid.IntRange(1, 126).Example().(int)
 		for i := 0; i < el; i++ {
 			subDomain := fmt.Sprint(rapid.StringMatching(expr).Draw(t, "subdomain"))
 			if len(domain)+len(subDomain) >= domainMaxLength {

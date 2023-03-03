@@ -30,6 +30,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"pgregory.net/rapid"
 	"runtime"
 	"sort"
 	"strings"
@@ -50,6 +51,7 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/test/rapidgen"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -3944,4 +3946,31 @@ func TestTryConnectEarlyWrite(t *testing.T) {
 	assert.Len(t, netA.peers, 1)
 	fmt.Printf("MI Message Count: %v\n", netA.peers[0].miMessageCount)
 	assert.Equal(t, uint64(1), netA.peers[0].miMessageCount)
+}
+
+// TODO: here
+func TestUpdatePhonebookAddresses(t *testing.T) {
+	var netA *WebsocketNetwork
+
+	rapid.Check(t, func(t1 *rapid.T) {
+		netA = makeTestWebsocketNode(t)
+		aPeers := netA.GetPeers(PeersPhonebookRelays)
+		//assert.Equal(t, 1, len(aPeers))
+
+		dgen := rapidgen.Domain()
+		domain := fmt.Sprintf("%v", dgen.Example())
+		netA.updatePhonebookAddresses([]string{domain}, nil)
+
+		// Check that new entry is in fact in phonebook
+		aPeers = netA.GetPeers(PeersPhonebookRelays)
+		assert.Equal(t, 1, len(aPeers))
+		peerAddrs := make([]string, len(aPeers))
+		for pi, peer := range aPeers {
+			peerAddrs[pi] = peer.(HTTPPeer).GetAddress()
+		}
+		sort.Strings(peerAddrs)
+		expectAddrs := []string{domain}
+		//sort.Strings(expectAddrs)
+		assert.Equal(t, expectAddrs, peerAddrs)
+	})
 }
