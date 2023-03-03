@@ -3948,29 +3948,105 @@ func TestTryConnectEarlyWrite(t *testing.T) {
 	assert.Equal(t, uint64(1), netA.peers[0].miMessageCount)
 }
 
-// TODO: here
+/*
+Exercises the updatePhonebookAddresses function, notably with different variations of valid relay and
+archival addresses.
+*/
 func TestUpdatePhonebookAddresses(t *testing.T) {
 	var netA *WebsocketNetwork
 
 	rapid.Check(t, func(t1 *rapid.T) {
 		netA = makeTestWebsocketNode(t)
-		aPeers := netA.GetPeers(PeersPhonebookRelays)
-		//assert.Equal(t, 1, len(aPeers))
+		relayPeers := netA.GetPeers(PeersPhonebookRelays)
+		assert.Equal(t, 0, len(relayPeers))
 
-		dgen := rapidgen.Domain()
-		domain := fmt.Sprintf("%v", dgen.Example())
-		netA.updatePhonebookAddresses([]string{domain}, nil)
+		archivePeers := netA.GetPeers(PeersPhonebookArchivers)
+		assert.Equal(t, 0, len(archivePeers))
 
-		// Check that new entry is in fact in phonebook
-		aPeers = netA.GetPeers(PeersPhonebookRelays)
-		assert.Equal(t, 1, len(aPeers))
-		peerAddrs := make([]string, len(aPeers))
-		for pi, peer := range aPeers {
-			peerAddrs[pi] = peer.(HTTPPeer).GetAddress()
+		domainGen := rapidgen.Domain()
+
+		// Generate between 0 and N examples - if no dups, should end up in phonebook
+		domainsGen := rapid.SliceOfN(domainGen, 0, 200)
+
+		relayDomains := domainsGen.Draw(t1, "relayDomains").([]string)
+		archiveDomains := domainsGen.Draw(t1, "archiveDomains").([]string)
+		netA.updatePhonebookAddresses(relayDomains, archiveDomains)
+
+		// Check that entries are in fact in phonebook less any duplicates
+		dedupedRelayDomains := removeDuplicateStr(relayDomains)
+		dedupedArchiveDomains := removeDuplicateStr(archiveDomains)
+
+		relayPeers = netA.GetPeers(PeersPhonebookRelays)
+		assert.Equal(t, len(dedupedRelayDomains), len(relayPeers))
+
+		relayAddrs := make([]string, len(relayPeers))
+		for pi, peer := range relayPeers {
+			relayAddrs[pi] = peer.(HTTPPeer).GetAddress()
 		}
-		sort.Strings(peerAddrs)
-		expectAddrs := []string{domain}
-		//sort.Strings(expectAddrs)
-		assert.Equal(t, expectAddrs, peerAddrs)
+		sort.Strings(relayAddrs)
+		sort.Strings(dedupedRelayDomains)
+		assert.Equal(t, dedupedRelayDomains, relayAddrs)
+
+		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
+		assert.Equal(t, len(dedupedArchiveDomains), len(archivePeers))
+
+		archiveAddrs := make([]string, len(archivePeers))
+		for pi, peer := range archivePeers {
+			archiveAddrs[pi] = peer.(HTTPPeer).GetAddress()
+		}
+		sort.Strings(archiveAddrs)
+		sort.Strings(dedupedArchiveDomains)
+		assert.Equal(t, dedupedArchiveDomains, archiveAddrs)
+
+		// Generate fresh set of addresses with a duplicate from original batch if warranted,
+		// assert phonebook reflects fresh list / prior peers other than selected duplicate
+		// are not present
+		var priorRelayDomains = relayDomains
+		relayDomains = domainsGen.Draw(t1, "relayDomains").([]string)
+
+		// Randomly select a prior relay domain
+		if len(priorRelayDomains) > 0 {
+			priorIdx := rapid.IntRange(0, len(priorRelayDomains)-1).Draw(t1, "").(int)
+			relayDomains = append(relayDomains, priorRelayDomains[priorIdx])
+		}
+
+		netA.updatePhonebookAddresses(relayDomains, nil)
+
+		// Check that entries are in fact in phonebook less any duplicates
+		dedupedRelayDomains = removeDuplicateStr(relayDomains)
+
+		relayPeers = netA.GetPeers(PeersPhonebookRelays)
+		assert.Equal(t, len(dedupedRelayDomains), len(relayPeers))
+
+		relayAddrs = make([]string, len(relayPeers))
+		for pi, peer := range relayPeers {
+			relayAddrs[pi] = peer.(HTTPPeer).GetAddress()
+		}
+		sort.Strings(relayAddrs)
+		sort.Strings(dedupedRelayDomains)
+		assert.Equal(t, dedupedRelayDomains, relayAddrs)
+
+		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
+		assert.Equal(t, len(dedupedArchiveDomains), len(archivePeers))
+
+		archiveAddrs = make([]string, len(archivePeers))
+		for pi, peer := range archivePeers {
+			archiveAddrs[pi] = peer.(HTTPPeer).GetAddress()
+		}
+		sort.Strings(archiveAddrs)
+		sort.Strings(dedupedArchiveDomains)
+		assert.Equal(t, dedupedArchiveDomains, archiveAddrs)
 	})
+}
+
+func removeDuplicateStr(strSlice []string) []string {
+	allKeys := make(map[string]bool)
+	dedupStrSlice := []string{}
+	for _, item := range strSlice {
+		if _, value := allKeys[item]; !value {
+			allKeys[item] = true
+			dedupStrSlice = append(dedupStrSlice, item)
+		}
+	}
+	return dedupStrSlice
 }
