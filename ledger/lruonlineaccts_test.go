@@ -55,7 +55,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 		require.Equal(t, basics.Round(i), acct.Round)
 		require.Equal(t, addr, acct.Addr)
 		require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
-		require.Equal(t, int64(i), acct.Ref)
+		require.Equal(t, mockEntryRef{int64(i)}, acct.Ref)
 	}
 
 	// verify expected missing entries
@@ -79,7 +79,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 			require.Equal(t, basics.Round(i), acct.Round)
 			require.Equal(t, addr, acct.Addr)
 			require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
-			require.Equal(t, int64(i), acct.Ref)
+			require.Equal(t, mockEntryRef{int64(i)}, acct.Ref)
 		} else {
 			require.False(t, has)
 			require.Equal(t, trackerdb.PersistedOnlineAccountData{}, acct)
@@ -220,7 +220,7 @@ func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 		require.Equal(t, basics.Round(i), acct.Round)
 		require.Equal(t, addr, acct.Addr)
 		require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
-		require.Equal(t, int64(i), acct.Ref)
+		require.Equal(t, mockEntryRef{int64(i)}, acct.Ref)
 	}
 
 	// verify expected missing entries

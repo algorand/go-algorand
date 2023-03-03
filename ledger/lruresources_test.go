@@ -55,7 +55,7 @@ func TestLRUBasicResources(t *testing.T) {
 		res, has := baseRes.read(addr, basics.CreatableIndex(i))
 		require.True(t, has)
 		require.Equal(t, basics.Round(i), res.Round)
-		require.Equal(t, int64(i), res.AcctRef)
+		require.Equal(t, mockEntryRef{int64(i)}, res.AcctRef)
 		require.Equal(t, uint64(i), res.Data.Total)
 		require.Equal(t, basics.CreatableIndex(i), res.Aidx)
 	}
@@ -79,7 +79,7 @@ func TestLRUBasicResources(t *testing.T) {
 			// expected to have it.
 			require.True(t, has)
 			require.Equal(t, basics.Round(i), res.Round)
-			require.Equal(t, int64(i), res.AcctRef)
+			require.Equal(t, mockEntryRef{int64(i)}, res.AcctRef)
 			require.Equal(t, uint64(i), res.Data.Total)
 			require.Equal(t, basics.CreatableIndex(i), res.Aidx)
 		} else {
@@ -239,7 +239,7 @@ func TestLRUResourcesOmittedPendingWrites(t *testing.T) {
 		res, has := baseRes.read(addr, basics.CreatableIndex(i))
 		require.True(t, has)
 		require.Equal(t, basics.Round(i), res.Round)
-		require.Equal(t, int64(i), res.AcctRef)
+		require.Equal(t, mockEntryRef{int64(i)}, res.AcctRef)
 		require.Equal(t, uint64(i), res.Data.Total)
 		require.Equal(t, basics.CreatableIndex(i), res.Aidx)
 	}
