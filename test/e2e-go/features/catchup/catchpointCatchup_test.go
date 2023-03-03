@@ -571,7 +571,7 @@ func TestReadyEndpoint(t *testing.T) {
 				a.Fail("timeout")
 				break
 			default:
-				time.Sleep(200 * time.Millisecond)
+				time.Sleep(50 * time.Millisecond)
 			}
 		} else {
 			a.NoError(n2ndClient.ReadyCheck())
