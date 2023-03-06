@@ -369,7 +369,8 @@ func (r *accountsV2Reader) LoadTxTail(ctx context.Context, dbRound basics.Round)
 // LookupAccountAddressFromAddressID looks up an account based on a rowid
 func (r *accountsV2Reader) LookupAccountAddressFromAddressID(ctx context.Context, accountRef trackerdb.AccountRef) (address basics.Address, err error) {
 	if accountRef == nil {
-		return address, sql.ErrNoRows
+		err = sql.ErrNoRows
+		return address, fmt.Errorf("no matching address could be found for rowid = nil: %w", err)
 	}
 	addrid := accountRef.(sqlRowRef).rowid
 	var addrbuf []byte

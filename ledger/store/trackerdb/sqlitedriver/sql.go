@@ -649,7 +649,8 @@ func (w accountsSQLWriter) DeleteAccount(ref trackerdb.AccountRef) (rowsAffected
 
 func (w accountsSQLWriter) UpdateAccount(ref trackerdb.AccountRef, normBalance uint64, data trackerdb.BaseAccountData) (rowsAffected int64, err error) {
 	if ref == nil {
-		return 0, nil
+		err = sql.ErrNoRows
+		return 0, fmt.Errorf("no account could be found for rowid = nil: %w", err)
 	}
 	rowid := ref.(sqlRowRef).rowid
 	result, err := w.updateStmt.Exec(normBalance, protocol.Encode(&data), rowid)
