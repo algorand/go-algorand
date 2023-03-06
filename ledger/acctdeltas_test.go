@@ -2232,6 +2232,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 		require.Equal(t, dataB1.AccountBaseData.MicroAlgos, onlineAcctB.MicroAlgos)
 
 		paod, err := queries.LookupOnline(addrA, rnd)
+		refoaA1 := paod.Ref
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), paod.Round)
 		require.Equal(t, addrA, paod.Addr)
@@ -2239,6 +2240,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 		require.Equal(t, voteIDA, paod.AccountData.VoteID)
 
 		paod, err = queries.LookupOnline(addrB, rnd)
+		refoaB1 := paod.Ref
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), paod.Round)
 		require.Equal(t, addrB, paod.Addr)
@@ -2266,6 +2268,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 		require.Equal(t, dataB1.AccountBaseData.MicroAlgos, onlineAcctB.MicroAlgos)
 
 		paod, err = queries.LookupOnline(addrA, rnd)
+		refoaA2 := paod.Ref
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), paod.Round)
 		require.Equal(t, addrA, paod.Addr)
@@ -2305,12 +2308,14 @@ func TestAccountOnlineQueries(t *testing.T) {
 		require.Empty(t, paod.AccountData)
 
 		paod, err = queries.LookupOnline(addrB, rnd)
+		refoaB3 := paod.Ref
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), paod.Round)
 		require.Equal(t, addrB, paod.Addr)
 		require.Empty(t, paod.AccountData)
 
 		paod, err = queries.LookupOnline(addrC, rnd)
+		refoaC3 := paod.Ref
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), paod.Round)
 		require.Equal(t, addrC, paod.Addr)
@@ -2377,20 +2382,25 @@ func TestAccountOnlineQueries(t *testing.T) {
 		require.Equal(t, basics.Round(3), rnd)
 		require.Equal(t, 2, len(paods))
 		require.Equal(t, basics.Round(1), paods[0].UpdRound)
+		require.Equal(t, refoaA1, paods[0].Ref)
 		require.Equal(t, basics.Round(2), paods[1].UpdRound)
+		require.Equal(t, refoaA2, paods[1].Ref)
 
 		paods, rnd, err = queries.LookupOnlineHistory(addrB)
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), rnd)
 		require.Equal(t, 2, len(paods))
 		require.Equal(t, basics.Round(1), paods[0].UpdRound)
+		require.Equal(t, refoaB1, paods[0].Ref)
 		require.Equal(t, basics.Round(3), paods[1].UpdRound)
+		require.Equal(t, refoaB3, paods[1].Ref)
 
 		paods, rnd, err = queries.LookupOnlineHistory(addrC)
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), rnd)
 		require.Equal(t, 1, len(paods))
 		require.Equal(t, basics.Round(3), paods[0].UpdRound)
+		require.Equal(t, refoaC3, paods[0].Ref)
 
 		return nil
 	})
