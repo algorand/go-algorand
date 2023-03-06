@@ -30,50 +30,68 @@ import (
 	"github.com/algorand/go-algorand/util/codecs"
 )
 
-// profileConfigUpdater updates the provided config for non-defaults in a given profile
-type profileConfigUpdater struct {
+// configUpdater updates the provided config for non-defaults in a given profile
+type configUpdater struct {
 	updateFunc  func(cfg config.Local) config.Local
 	description string
 }
 
-// validatorConfigUpdater leaves all default values in place
-var validatorConfigUpdater = profileConfigUpdater{
-	description: "Help ensure chain health by validating all blocks and transactions.",
-	updateFunc: func(cfg config.Local) config.Local {
-		cfg.CatchupBlockValidateMode = 0b1100
-		return cfg
-	},
-}
-
-// relayConfigUpdater alters config values to set up a relay node
-var relayConfigUpdater = profileConfigUpdater{
-	description: "Archival node with catchpoint tracking that accepts connections.",
-	updateFunc: func(cfg config.Local) config.Local {
-		cfg.Archival = true
-		cfg.EnableLedgerService = true
-		cfg.EnableBlockService = true
-		cfg.NetAddress = "4160"
-		return cfg
-	},
-}
-
-// developmentConfigUpdater alters config values to set up a relay node
-var developmentConfigUpdater = profileConfigUpdater{
-	description: "Features useful for building on Algorand.",
-	updateFunc: func(cfg config.Local) config.Local {
-		cfg.EnableExperimentalAPI = true
-		cfg.EnableDeveloperAPI = true
-		cfg.IncomingConnectionsLimit = 0
-		return cfg
-	},
-}
-
 var (
+	archival = configUpdater{
+		description: "Store all historic blocks for the API.",
+		updateFunc: func(cfg config.Local) config.Local {
+			cfg.Archival = true
+			cfg.CatchpointTracking = -1
+			return cfg
+		},
+	}
+
+	development = configUpdater{
+		description: "Features useful for building on Algorand.",
+		updateFunc: func(cfg config.Local) config.Local {
+			cfg.EnableExperimentalAPI = true
+			cfg.EnableDeveloperAPI = true
+			cfg.IncomingConnectionsLimit = 0
+			return cfg
+		},
+	}
+
+	follower = configUpdater{
+		description: "A node which can be synchronized with an external application.",
+		updateFunc: func(cfg config.Local) config.Local {
+			cfg.EnableFollowMode = true
+			cfg.MaxAcctLookback = 16
+			cfg.CatchupParallelBlocks = 16
+			return cfg
+		},
+	}
+
+	participation = configUpdater{
+		description: "Participate in consensus or simply ensure chain health by validating blocks.",
+		updateFunc: func(cfg config.Local) config.Local {
+			cfg.CatchupBlockValidateMode = 0b1100
+			return cfg
+		},
+	}
+
+	relay = configUpdater{
+		description: "Archival node with catchpoint tracking that accepts connections.",
+		updateFunc: func(cfg config.Local) config.Local {
+			cfg.Archival = true
+			cfg.EnableLedgerService = true
+			cfg.EnableBlockService = true
+			cfg.NetAddress = "4160"
+			return cfg
+		},
+	}
+
 	// profileNames are the supported pre-configurations of config values
-	profileNames = map[string]profileConfigUpdater{
-		"validator":   validatorConfigUpdater,
-		"development": developmentConfigUpdater,
-		"relay":       relayConfigUpdater,
+	profileNames = map[string]configUpdater{
+		"participation": participation,
+		"relay":         relay,
+		"archival":      archival,
+		"follower":      follower,
+		"development":   development,
 	}
 	forceUpdate bool
 )
