@@ -662,6 +662,10 @@ func (w accountsSQLWriter) UpdateAccount(ref trackerdb.AccountRef, normBalance u
 }
 
 func (w accountsSQLWriter) InsertResource(accountRef trackerdb.AccountRef, aidx basics.CreatableIndex, data trackerdb.ResourcesData) (ref trackerdb.ResourceRef, err error) {
+	if accountRef == nil {
+		err = sql.ErrNoRows
+		return nil, fmt.Errorf("no account could be found for rowid = nil: %w", err)
+	}
 	addrid := accountRef.(sqlRowRef).rowid
 	result, err := w.insertResourceStmt.Exec(addrid, aidx, protocol.Encode(&data))
 	if err != nil {
@@ -672,6 +676,10 @@ func (w accountsSQLWriter) InsertResource(accountRef trackerdb.AccountRef, aidx 
 }
 
 func (w accountsSQLWriter) DeleteResource(accountRef trackerdb.AccountRef, aidx basics.CreatableIndex) (rowsAffected int64, err error) {
+	if accountRef == nil {
+		err = sql.ErrNoRows
+		return 0, fmt.Errorf("no account could be found for rowid = nil: %w", err)
+	}
 	addrid := accountRef.(sqlRowRef).rowid
 	result, err := w.deleteResourceStmt.Exec(addrid, aidx)
 	if err != nil {
@@ -682,6 +690,10 @@ func (w accountsSQLWriter) DeleteResource(accountRef trackerdb.AccountRef, aidx 
 }
 
 func (w accountsSQLWriter) UpdateResource(accountRef trackerdb.AccountRef, aidx basics.CreatableIndex, data trackerdb.ResourcesData) (rowsAffected int64, err error) {
+	if accountRef == nil {
+		err = sql.ErrNoRows
+		return 0, fmt.Errorf("no account could be found for rowid = nil: %w", err)
+	}
 	addrid := accountRef.(sqlRowRef).rowid
 	result, err := w.updateResourceStmt.Exec(protocol.Encode(&data), addrid, aidx)
 	if err != nil {
