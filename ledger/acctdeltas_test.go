@@ -2177,7 +2177,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 		delta3.Upsert(addrB, dataB2)
 		delta3.Upsert(addrC, dataC3)
 
-		addRound := func(rnd basics.Round, updates ledgercore.StateDelta) {
+		addRound := func(rnd basics.Round, updates ledgercore.StateDelta) (updatedOnlineAccts []trackerdb.PersistedOnlineAccountData) {
 			totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates.Accts, 0, proto, accts, totals)
 			accts = applyPartialDeltas(accts, updates.Accts)
 
@@ -2197,17 +2197,37 @@ func TestAccountOnlineQueries(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, updatesCnt.len(), len(updatedAccts))
 
-			updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, rnd)
+			updatedOnlineAccts, err = onlineAccountsNewRound(tx, updatesOnlineCnt, proto, rnd)
 			require.NoError(t, err)
 			require.NotEmpty(t, updatedOnlineAccts)
 
 			err = arw.UpdateAccountsRound(rnd)
 			require.NoError(t, err)
+
+			return
 		}
 
-		addRound(1, ledgercore.StateDelta{Accts: delta1})
-		addRound(2, ledgercore.StateDelta{Accts: delta2})
-		addRound(3, ledgercore.StateDelta{Accts: delta3})
+		// add round 1
+		round1poads := addRound(1, ledgercore.StateDelta{Accts: delta1})
+		require.Equal(t, 2, len(round1poads))
+		require.Equal(t, addrA, round1poads[0].Addr)
+		require.Equal(t, addrB, round1poads[1].Addr)
+		refoaA1 := round1poads[0].Ref
+		refoaB1 := round1poads[1].Ref
+
+		// add round 2
+		round2poads := addRound(2, ledgercore.StateDelta{Accts: delta2})
+		require.Equal(t, 1, len(round2poads))
+		require.Equal(t, addrA, round2poads[0].Addr)
+		refoaA2 := round2poads[0].Ref
+
+		// add round 3
+		round3poads := addRound(3, ledgercore.StateDelta{Accts: delta3})
+		require.Equal(t, 2, len(round3poads))
+		require.Equal(t, addrB, round3poads[0].Addr)
+		require.Equal(t, addrC, round3poads[1].Addr)
+		refoaB3 := round3poads[0].Ref
+		refoaC3 := round3poads[1].Ref
 
 		queries, err := tx.Testing().MakeOnlineAccountsOptimizedReader()
 		require.NoError(t, err)
@@ -2232,7 +2252,6 @@ func TestAccountOnlineQueries(t *testing.T) {
 		require.Equal(t, dataB1.AccountBaseData.MicroAlgos, onlineAcctB.MicroAlgos)
 
 		paod, err := queries.LookupOnline(addrA, rnd)
-		refoaA1 := paod.Ref
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), paod.Round)
 		require.Equal(t, addrA, paod.Addr)
@@ -2240,7 +2259,6 @@ func TestAccountOnlineQueries(t *testing.T) {
 		require.Equal(t, voteIDA, paod.AccountData.VoteID)
 
 		paod, err = queries.LookupOnline(addrB, rnd)
-		refoaB1 := paod.Ref
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), paod.Round)
 		require.Equal(t, addrB, paod.Addr)
@@ -2268,7 +2286,6 @@ func TestAccountOnlineQueries(t *testing.T) {
 		require.Equal(t, dataB1.AccountBaseData.MicroAlgos, onlineAcctB.MicroAlgos)
 
 		paod, err = queries.LookupOnline(addrA, rnd)
-		refoaA2 := paod.Ref
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), paod.Round)
 		require.Equal(t, addrA, paod.Addr)
@@ -2308,14 +2325,12 @@ func TestAccountOnlineQueries(t *testing.T) {
 		require.Empty(t, paod.AccountData)
 
 		paod, err = queries.LookupOnline(addrB, rnd)
-		refoaB3 := paod.Ref
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), paod.Round)
 		require.Equal(t, addrB, paod.Addr)
 		require.Empty(t, paod.AccountData)
 
 		paod, err = queries.LookupOnline(addrC, rnd)
-		refoaC3 := paod.Ref
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), paod.Round)
 		require.Equal(t, addrC, paod.Addr)
