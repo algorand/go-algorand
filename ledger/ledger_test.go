@@ -2289,12 +2289,12 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 			DbPathPrefix:      l.catchpoint.dbDirectory,
 			BlockDb:           l.blockDBs,
 		}
-		_, err0 = tx.RunMigrations(ctx, tp, l.log, preReleaseDBVersion /*target database version*/)
+		_, err0 = tx.Testing().RunMigrations(ctx, tp, l.log, preReleaseDBVersion /*target database version*/)
 		if err0 != nil {
 			return err0
 		}
 
-		if err0 := tx.AccountsUpdateSchemaTest(ctx); err != nil {
+		if err0 := tx.Testing().AccountsUpdateSchemaTest(ctx); err != nil {
 			return err0
 		}
 
@@ -2440,7 +2440,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	}()
 	// create tables so online accounts can still be written
 	err = trackerDB.Batch(func(ctx context.Context, tx trackerdb.BatchScope) error {
-		if err := tx.AccountsUpdateSchemaTest(ctx); err != nil {
+		if err := tx.Testing().AccountsUpdateSchemaTest(ctx); err != nil {
 			return err
 		}
 		return nil
