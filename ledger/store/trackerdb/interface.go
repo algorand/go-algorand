@@ -18,7 +18,6 @@ package trackerdb
 
 import (
 	"context"
-	"testing"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -91,14 +90,13 @@ type AccountsReaderExt interface {
 	TotalAccounts(ctx context.Context) (total uint64, err error)
 	TotalKVs(ctx context.Context) (total uint64, err error)
 	AccountsRound() (rnd basics.Round, err error)
-	AccountsAllTest() (bals map[basics.Address]basics.AccountData, err error)
-	CheckCreatablesTest(t *testing.T, iteration int, expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	LookupOnlineAccountDataByAddress(addr basics.Address) (rowid int64, data []byte, err error)
 	AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error)
 	AccountsOnlineRoundParams() (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error)
 	OnlineAccountsAll(maxAccounts uint64) ([]PersistedOnlineAccountData, error)
 	LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error)
 	LoadAllFullAccounts(ctx context.Context, balancesTable string, resourcesTable string, acctCb func(basics.Address, basics.AccountData)) (count int, err error)
+	Testing() TestAccountsReaderExt
 }
 
 // AccountsReaderWriter is AccountsReader+AccountsWriter

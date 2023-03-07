@@ -162,7 +162,7 @@ func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.Conse
 
 		accts := ledgertesting.RandomAccounts(20, true)
 		proto := config.Consensus[protoVersion]
-		newDB := tx.AccountsInitTest(ts, accts, protoVersion)
+		newDB := tx.Testing().AccountsInitTest(ts, accts, protoVersion)
 		require.True(ts, newDB)
 
 		roundData := make([][]byte, 0, proto.MaxTxnLife)

@@ -49,6 +49,9 @@ import (
 
 var server http.Server
 
+// maxHeaderBytes must have enough room to hold an api token
+const maxHeaderBytes = 4096
+
 // ServerNode is the required methods for any node the server fronts
 type ServerNode interface {
 	apiServer.APINodeInterface
@@ -297,9 +300,10 @@ func (s *Server) Start() {
 
 	addr = listener.Addr().String()
 	server = http.Server{
-		Addr:         addr,
-		ReadTimeout:  time.Duration(cfg.RestReadTimeoutSeconds) * time.Second,
-		WriteTimeout: time.Duration(cfg.RestWriteTimeoutSeconds) * time.Second,
+		Addr:           addr,
+		ReadTimeout:    time.Duration(cfg.RestReadTimeoutSeconds) * time.Second,
+		WriteTimeout:   time.Duration(cfg.RestWriteTimeoutSeconds) * time.Second,
+		MaxHeaderBytes: maxHeaderBytes,
 	}
 
 	e := apiServer.NewRouter(
