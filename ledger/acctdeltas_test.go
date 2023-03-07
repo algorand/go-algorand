@@ -261,9 +261,9 @@ func TestAccountDBRound(t *testing.T) {
 			err = updatesOnlineCnt.accountsLoadOld(tx)
 			require.NoError(t, err)
 
-			knownAddresses := make(map[basics.Address]int64)
+			knownAddresses := make(map[basics.Address]trackerdb.AccountRef)
 			for _, delta := range updatesCnt.deltas {
-				knownAddresses[delta.oldAcct.Addr] = delta.oldAcct.Rowid
+				knownAddresses[delta.oldAcct.Addr] = delta.oldAcct.Ref
 			}
 
 			err = resourceUpdatesCnt.resourcesLoadOld(tx, knownAddresses)
@@ -405,9 +405,9 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 				err := outAccountDeltas.accountsLoadOld(tx)
 				require.NoError(t, err)
 
-				knownAddresses := make(map[basics.Address]int64)
+				knownAddresses := make(map[basics.Address]trackerdb.AccountRef)
 				for _, delta := range outAccountDeltas.deltas {
-					knownAddresses[delta.oldAcct.Addr] = delta.oldAcct.Rowid
+					knownAddresses[delta.oldAcct.Addr] = delta.oldAcct.Ref
 				}
 
 				err = outResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
@@ -423,7 +423,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 
 				require.Equal(t, 1, len(updatesResources[addr])) // we store empty even for deleted resources
 				require.Equal(t,
-					trackerdb.PersistedResourcesData{Addrid: 0, Aidx: 100, Data: trackerdb.MakeResourcesData(0), Round: basics.Round(lastRound)},
+					trackerdb.PersistedResourcesData{AcctRef: nil, Aidx: 100, Data: trackerdb.MakeResourcesData(0), Round: basics.Round(lastRound)},
 					updatesResources[addr][0],
 				)
 
@@ -1240,7 +1240,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(addr, data.address)
 	a.Equal(sample2, data)
 
-	old1 := trackerdb.PersistedResourcesData{Addrid: 111, Aidx: 1, Data: trackerdb.ResourcesData{Total: 789}}
+	old1 := trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{111}, Aidx: 1, Data: trackerdb.ResourcesData{Total: 789}}
 	ad.upsertOld(addr, old1)
 	a.Equal(1, ad.len())
 	data = ad.getByIdx(0)
@@ -1248,7 +1248,7 @@ func TestCompactResourceDeltas(t *testing.T) {
 	a.Equal(resourceDelta{newResource: sample2.newResource, oldResource: old1, address: addr}, data)
 
 	addr1 := ledgertesting.RandomAddress()
-	old2 := trackerdb.PersistedResourcesData{Addrid: 222, Aidx: 2, Data: trackerdb.ResourcesData{Total: 789}}
+	old2 := trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{222}, Aidx: 2, Data: trackerdb.ResourcesData{Total: 789}}
 	ad.upsertOld(addr1, old2)
 	a.Equal(2, ad.len())
 	data = ad.getByIdx(0)
@@ -1282,35 +1282,39 @@ func TestCompactResourceDeltas(t *testing.T) {
 func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := storetesting.DbOpenTest(t, true)
-	storetesting.SetDbLogging(t, dbs)
+	dbs, _ := sqlitedriver.DbOpenTrackerTest(t, true)
+	dbs.SetLogger(logging.TestingLog(t))
 	defer dbs.Close()
 
 	addrs := make([]basics.Address, 100)
 	for i := range addrs {
 		addrs[i] = ledgertesting.RandomAddress()
 	}
-	addrsids := make(map[basics.Address]int64)
-	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		sqlitedriver.AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+	addrsids := make(map[basics.Address]trackerdb.AccountRef)
+	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		tx.Testing().AccountsInitTest(t, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+
+		aw, err := tx.MakeAccountsOptimizedWriter(true, false, false, false)
+		if err != nil {
+			return err
+		}
 
 		for i := range addrs {
-			res, err := tx.ExecContext(ctx, "INSERT INTO accountbase (address, data) VALUES (?, ?)", addrs[i][:], []byte{12, 3, 4})
+			ref, err := aw.InsertAccount(addrs[i], 0, trackerdb.BaseAccountData{})
 			if err != nil {
 				return err
 			}
-			rowid, err := res.LastInsertId()
-			if err != nil {
-				return err
-			}
-			addrsids[addrs[i]] = rowid
+			addrsids[addrs[i]] = ref
 		}
 		return nil
 	})
 	require.NoError(t, err)
 
-	err = dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		arw := sqlitedriver.NewAccountsSQLReaderWriter(tx)
+	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		arw, err := tx.MakeAccountsReaderWriter()
+		if err != nil {
+			return nil
+		}
 
 		for addr, addrid := range addrsids {
 			retAddr, err := arw.LookupAccountAddressFromAddressID(ctx, addrid)
@@ -1322,7 +1326,7 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 			}
 		}
 		// test fail case:
-		retAddr, err := arw.LookupAccountAddressFromAddressID(ctx, -1)
+		retAddr, err := arw.LookupAccountAddressFromAddressID(ctx, nil)
 
 		if !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("unexpected error : %w", err)
@@ -1336,37 +1340,48 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 }
 
 type mockResourcesKey struct {
-	addrid int64
-	aidx   basics.CreatableIndex
+	acctRef trackerdb.AccountRef
+	aidx    basics.CreatableIndex
 }
 type mockAccountWriter struct {
 	// rowid to data
-	accounts map[int64]ledgercore.AccountData
+	accounts map[trackerdb.AccountRef]ledgercore.AccountData
 	// addr to rowid
-	addresses map[basics.Address]int64
+	addresses map[basics.Address]trackerdb.AccountRef
 	// rowid to addr
-	rowids    map[int64]basics.Address
+	rowids    map[trackerdb.AccountRef]basics.Address
 	resources map[mockResourcesKey]ledgercore.AccountResource
 
 	kvStore map[string][]byte
 
-	lastRowid   int64
-	availRowIds []int64
+	lastAcctRef   int64
+	availAcctRefs []trackerdb.AccountRef
 }
 
+// mockEntryRef is to be used exclusively with mock implementations
+// any attempt to pass this ref to an actual db implementation during a test will result in a runtime error.
+type mockEntryRef struct {
+	id int64
+}
+
+func (ref mockEntryRef) AccountRefMarker()       {}
+func (ref mockEntryRef) OnlineAccountRefMarker() {}
+func (ref mockEntryRef) ResourceRefMarker()      {}
+func (ref mockEntryRef) CreatableRefMarker()     {}
+
 func makeMockAccountWriter() (m mockAccountWriter) {
-	m.accounts = make(map[int64]ledgercore.AccountData)
+	m.accounts = make(map[trackerdb.AccountRef]ledgercore.AccountData)
 	m.resources = make(map[mockResourcesKey]ledgercore.AccountResource)
-	m.addresses = make(map[basics.Address]int64)
-	m.rowids = make(map[int64]basics.Address)
+	m.addresses = make(map[basics.Address]trackerdb.AccountRef)
+	m.rowids = make(map[trackerdb.AccountRef]basics.Address)
 	return
 }
 
 func (m mockAccountWriter) clone() (m2 mockAccountWriter) {
-	m2.accounts = make(map[int64]ledgercore.AccountData, len(m.accounts))
+	m2.accounts = make(map[trackerdb.AccountRef]ledgercore.AccountData, len(m.accounts))
 	m2.resources = make(map[mockResourcesKey]ledgercore.AccountResource, len(m.resources))
-	m2.addresses = make(map[basics.Address]int64, len(m.resources))
-	m2.rowids = make(map[int64]basics.Address, len(m.rowids))
+	m2.addresses = make(map[basics.Address]trackerdb.AccountRef, len(m.resources))
+	m2.rowids = make(map[trackerdb.AccountRef]basics.Address, len(m.rowids))
 	for k, v := range m.accounts {
 		m2.accounts[k] = v
 	}
@@ -1379,67 +1394,67 @@ func (m mockAccountWriter) clone() (m2 mockAccountWriter) {
 	for k, v := range m.rowids {
 		m2.rowids[k] = v
 	}
-	m2.lastRowid = m.lastRowid
-	m2.availRowIds = m.availRowIds
+	m2.lastAcctRef = m.lastAcctRef
+	m2.availAcctRefs = m.availAcctRefs
 	return m2
 }
 
-func (m *mockAccountWriter) nextRowid() (rowid int64) {
-	if len(m.availRowIds) > 0 {
-		rowid = m.availRowIds[len(m.availRowIds)-1]
-		m.availRowIds = m.availRowIds[:len(m.availRowIds)-1]
+func (m *mockAccountWriter) nextAcctRef() (ref trackerdb.AccountRef) {
+	if len(m.availAcctRefs) > 0 {
+		ref = m.availAcctRefs[len(m.availAcctRefs)-1]
+		m.availAcctRefs = m.availAcctRefs[:len(m.availAcctRefs)-1]
 	} else {
-		m.lastRowid++
-		rowid = m.lastRowid
+		m.lastAcctRef++
+		ref = mockEntryRef{m.lastAcctRef}
 	}
 	return
 }
 
 func (m *mockAccountWriter) setAccount(addr basics.Address, data ledgercore.AccountData) {
-	var rowid int64
+	var acctRef trackerdb.AccountRef
 	var ok bool
-	if rowid, ok = m.addresses[addr]; !ok {
-		rowid = m.nextRowid()
-		m.rowids[rowid] = addr
-		m.addresses[addr] = rowid
+	if acctRef, ok = m.addresses[addr]; !ok {
+		acctRef = m.nextAcctRef()
+		m.rowids[acctRef] = addr
+		m.addresses[addr] = acctRef
 	}
-	m.accounts[rowid] = data
+	m.accounts[acctRef] = data
 }
 
 func (m *mockAccountWriter) setResource(addr basics.Address, cidx basics.CreatableIndex, data ledgercore.AccountResource) error {
-	var rowid int64
+	var acctRef trackerdb.AccountRef
 	var ok bool
-	if rowid, ok = m.addresses[addr]; !ok {
+	if acctRef, ok = m.addresses[addr]; !ok {
 		return fmt.Errorf("account %s does not exist", addr.String())
 	}
-	key := mockResourcesKey{rowid, cidx}
+	key := mockResourcesKey{acctRef, cidx}
 	m.resources[key] = data
 
 	return nil
 }
 
 func (m *mockAccountWriter) Lookup(addr basics.Address) (pad trackerdb.PersistedAccountData, ok bool, err error) {
-	rowid, ok := m.addresses[addr]
+	ref, ok := m.addresses[addr]
 	if !ok {
 		return
 	}
-	data, ok := m.accounts[rowid]
+	data, ok := m.accounts[ref]
 	if !ok {
 		err = fmt.Errorf("not found %s", addr.String())
 		return
 	}
 	pad.AccountData.SetCoreAccountData(&data)
 	pad.Addr = addr
-	pad.Rowid = rowid
+	pad.Ref = ref
 	return
 }
 
 func (m *mockAccountWriter) LookupResource(addr basics.Address, cidx basics.CreatableIndex) (prd trackerdb.PersistedResourcesData, ok bool, err error) {
-	rowid, ok := m.addresses[addr]
+	acctRef, ok := m.addresses[addr]
 	if !ok {
 		return
 	}
-	res, ok := m.resources[mockResourcesKey{rowid, cidx}]
+	res, ok := m.resources[mockResourcesKey{acctRef, cidx}]
 	if !ok {
 		err = fmt.Errorf("not found (%s, %d)", addr.String(), cidx)
 		return
@@ -1456,67 +1471,67 @@ func (m *mockAccountWriter) LookupResource(addr basics.Address, cidx basics.Crea
 	if res.AssetParams != nil {
 		prd.Data.SetAssetParams(*res.AssetParams, prd.Data.IsHolding())
 	}
-	prd.Addrid = rowid
+	prd.AcctRef = acctRef
 	prd.Aidx = cidx
 	return
 }
 
-func (m *mockAccountWriter) InsertAccount(addr basics.Address, normBalance uint64, data trackerdb.BaseAccountData) (rowid int64, err error) {
-	rowid, ok := m.addresses[addr]
+func (m *mockAccountWriter) InsertAccount(addr basics.Address, normBalance uint64, data trackerdb.BaseAccountData) (ref trackerdb.AccountRef, err error) {
+	ref, ok := m.addresses[addr]
 	if ok {
-		err = fmt.Errorf("insertAccount: addr %s, rowid %d: UNIQUE constraint failed", addr.String(), rowid)
+		err = fmt.Errorf("insertAccount: addr %s, rowid %d: UNIQUE constraint failed", addr.String(), ref)
 		return
 	}
-	rowid = m.nextRowid()
-	m.addresses[addr] = rowid
-	m.rowids[rowid] = addr
-	m.accounts[rowid] = data.GetLedgerCoreAccountData()
+	ref = m.nextAcctRef()
+	m.addresses[addr] = ref
+	m.rowids[ref] = addr
+	m.accounts[ref] = data.GetLedgerCoreAccountData()
 	return
 }
 
-func (m *mockAccountWriter) DeleteAccount(rowid int64) (rowsAffected int64, err error) {
+func (m *mockAccountWriter) DeleteAccount(ref trackerdb.AccountRef) (rowsAffected int64, err error) {
 	var addr basics.Address
 	var ok bool
-	if addr, ok = m.rowids[rowid]; !ok {
+	if addr, ok = m.rowids[ref]; !ok {
 		return 0, nil
 	}
 
 	delete(m.addresses, addr)
-	delete(m.rowids, rowid)
-	delete(m.accounts, rowid)
-	m.availRowIds = append(m.availRowIds, rowid)
+	delete(m.rowids, ref)
+	delete(m.accounts, ref)
+	m.availAcctRefs = append(m.availAcctRefs, ref)
 	return 1, nil
 }
 
-func (m *mockAccountWriter) UpdateAccount(rowid int64, normBalance uint64, data trackerdb.BaseAccountData) (rowsAffected int64, err error) {
-	if _, ok := m.rowids[rowid]; !ok {
-		return 0, fmt.Errorf("updateAccount: not found rowid %d", rowid)
+func (m *mockAccountWriter) UpdateAccount(ref trackerdb.AccountRef, normBalance uint64, data trackerdb.BaseAccountData) (rowsAffected int64, err error) {
+	if _, ok := m.rowids[ref]; !ok {
+		return 0, fmt.Errorf("updateAccount: not found rowid %d", ref)
 	}
-	old, ok := m.accounts[rowid]
+	old, ok := m.accounts[ref]
 	if !ok {
-		return 0, fmt.Errorf("updateAccount: not found data for %d", rowid)
+		return 0, fmt.Errorf("updateAccount: not found data for %d", ref)
 	}
 	if old == data.GetLedgerCoreAccountData() {
 		return 0, nil
 	}
-	m.accounts[rowid] = data.GetLedgerCoreAccountData()
+	m.accounts[ref] = data.GetLedgerCoreAccountData()
 	return 1, nil
 }
 
-func (m *mockAccountWriter) InsertResource(addrid int64, aidx basics.CreatableIndex, data trackerdb.ResourcesData) (rowid int64, err error) {
-	key := mockResourcesKey{addrid, aidx}
+func (m *mockAccountWriter) InsertResource(acctRef trackerdb.AccountRef, aidx basics.CreatableIndex, data trackerdb.ResourcesData) (ref trackerdb.ResourceRef, err error) {
+	key := mockResourcesKey{acctRef, aidx}
 	if _, ok := m.resources[key]; ok {
-		return 0, fmt.Errorf("insertResource: (%d, %d): UNIQUE constraint failed", addrid, aidx)
+		return nil, fmt.Errorf("insertResource: (%d, %d): UNIQUE constraint failed", acctRef, aidx)
 	}
 	// use persistedResourcesData.AccountResource for conversion
 	prd := trackerdb.PersistedResourcesData{Data: data}
 	new := prd.AccountResource()
 	m.resources[key] = new
-	return 1, nil
+	return mockEntryRef{1}, nil
 }
 
-func (m *mockAccountWriter) DeleteResource(addrid int64, aidx basics.CreatableIndex) (rowsAffected int64, err error) {
-	key := mockResourcesKey{addrid, aidx}
+func (m *mockAccountWriter) DeleteResource(acctRef trackerdb.AccountRef, aidx basics.CreatableIndex) (rowsAffected int64, err error) {
+	key := mockResourcesKey{acctRef, aidx}
 	if _, ok := m.resources[key]; !ok {
 		return 0, nil
 	}
@@ -1524,11 +1539,11 @@ func (m *mockAccountWriter) DeleteResource(addrid int64, aidx basics.CreatableIn
 	return 1, nil
 }
 
-func (m *mockAccountWriter) UpdateResource(addrid int64, aidx basics.CreatableIndex, data trackerdb.ResourcesData) (rowsAffected int64, err error) {
-	key := mockResourcesKey{addrid, aidx}
+func (m *mockAccountWriter) UpdateResource(acctRef trackerdb.AccountRef, aidx basics.CreatableIndex, data trackerdb.ResourcesData) (rowsAffected int64, err error) {
+	key := mockResourcesKey{acctRef, aidx}
 	old, ok := m.resources[key]
 	if !ok {
-		return 0, fmt.Errorf("updateResource: not found (%d, %d)", addrid, aidx)
+		return 0, fmt.Errorf("updateResource: not found (%d, %d)", acctRef, aidx)
 	}
 	// use persistedResourcesData.AccountResource for conversion
 	prd := trackerdb.PersistedResourcesData{Data: data}
@@ -1550,8 +1565,8 @@ func (m *mockAccountWriter) DeleteKvPair(key string) error {
 	return nil
 }
 
-func (m *mockAccountWriter) InsertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (rowid int64, err error) {
-	return 0, fmt.Errorf("insertCreatable: not implemented")
+func (m *mockAccountWriter) InsertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (ref trackerdb.CreatableRef, err error) {
+	return nil, fmt.Errorf("insertCreatable: not implemented")
 }
 
 func (m *mockAccountWriter) DeleteCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType) (rowsAffected int64, err error) {
@@ -1890,7 +1905,7 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	matches := 0
 	for _, upd := range updatedAccounts {
 		if addressesToCheck[upd.Addr] {
-			a.Equal(int64(0), upd.Rowid)
+			a.Nil(upd.Ref)
 			a.Empty(upd.AccountData)
 			matches++
 		}
@@ -1900,7 +1915,7 @@ func TestAccountsNewRoundDeletedResourceEntries(t *testing.T) {
 	for addr := range addressesToCheck {
 		upd := updatedResources[addr]
 		a.Equal(1, len(upd))
-		a.Equal(int64(0), upd[0].Addrid)
+		a.Nil(upd[0].AcctRef)
 		a.Equal(basics.CreatableIndex(aidx), upd[0].Aidx)
 		a.Equal(trackerdb.MakeResourcesData(uint64(0)), upd[0].Data)
 	}
@@ -2162,7 +2177,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 		delta3.Upsert(addrB, dataB2)
 		delta3.Upsert(addrC, dataC3)
 
-		addRound := func(rnd basics.Round, updates ledgercore.StateDelta) {
+		addRound := func(rnd basics.Round, updates ledgercore.StateDelta) (updatedOnlineAccts []trackerdb.PersistedOnlineAccountData) {
 			totals = ledgertesting.CalculateNewRoundAccountTotals(t, updates.Accts, 0, proto, accts, totals)
 			accts = applyPartialDeltas(accts, updates.Accts)
 
@@ -2182,17 +2197,37 @@ func TestAccountOnlineQueries(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, updatesCnt.len(), len(updatedAccts))
 
-			updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, rnd)
+			updatedOnlineAccts, err = onlineAccountsNewRound(tx, updatesOnlineCnt, proto, rnd)
 			require.NoError(t, err)
 			require.NotEmpty(t, updatedOnlineAccts)
 
 			err = arw.UpdateAccountsRound(rnd)
 			require.NoError(t, err)
+
+			return
 		}
 
-		addRound(1, ledgercore.StateDelta{Accts: delta1})
-		addRound(2, ledgercore.StateDelta{Accts: delta2})
-		addRound(3, ledgercore.StateDelta{Accts: delta3})
+		// add round 1
+		round1poads := addRound(1, ledgercore.StateDelta{Accts: delta1})
+		require.Equal(t, 2, len(round1poads))
+		require.Equal(t, addrA, round1poads[0].Addr)
+		require.Equal(t, addrB, round1poads[1].Addr)
+		refoaA1 := round1poads[0].Ref
+		refoaB1 := round1poads[1].Ref
+
+		// add round 2
+		round2poads := addRound(2, ledgercore.StateDelta{Accts: delta2})
+		require.Equal(t, 1, len(round2poads))
+		require.Equal(t, addrA, round2poads[0].Addr)
+		refoaA2 := round2poads[0].Ref
+
+		// add round 3
+		round3poads := addRound(3, ledgercore.StateDelta{Accts: delta3})
+		require.Equal(t, 2, len(round3poads))
+		require.Equal(t, addrB, round3poads[0].Addr)
+		require.Equal(t, addrC, round3poads[1].Addr)
+		refoaB3 := round3poads[0].Ref
+		refoaC3 := round3poads[1].Ref
 
 		queries, err := tx.Testing().MakeOnlineAccountsOptimizedReader()
 		require.NoError(t, err)
@@ -2317,25 +2352,20 @@ func TestAccountOnlineQueries(t *testing.T) {
 		//    A |   2 |      0
 
 		checkAddrB := func() {
-			require.Equal(t, int64(2), paods[0].Rowid)
 			require.Equal(t, basics.Round(1), paods[0].UpdRound)
 			require.Equal(t, addrB, paods[0].Addr)
-			require.Equal(t, int64(4), paods[1].Rowid)
 			require.Equal(t, basics.Round(3), paods[1].UpdRound)
 			require.Equal(t, addrB, paods[1].Addr)
 		}
 
 		checkAddrC := func() {
-			require.Equal(t, int64(5), paods[2].Rowid)
 			require.Equal(t, basics.Round(3), paods[2].UpdRound)
 			require.Equal(t, addrC, paods[2].Addr)
 		}
 
 		checkAddrA := func() {
-			require.Equal(t, int64(1), paods[3].Rowid)
 			require.Equal(t, basics.Round(1), paods[3].UpdRound)
 			require.Equal(t, addrA, paods[3].Addr)
-			require.Equal(t, int64(3), paods[4].Rowid)
 			require.Equal(t, basics.Round(2), paods[4].UpdRound)
 			require.Equal(t, addrA, paods[4].Addr)
 		}
@@ -2366,26 +2396,26 @@ func TestAccountOnlineQueries(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), rnd)
 		require.Equal(t, 2, len(paods))
-		require.Equal(t, int64(1), paods[0].Rowid)
 		require.Equal(t, basics.Round(1), paods[0].UpdRound)
-		require.Equal(t, int64(3), paods[1].Rowid)
+		require.Equal(t, refoaA1, paods[0].Ref)
 		require.Equal(t, basics.Round(2), paods[1].UpdRound)
+		require.Equal(t, refoaA2, paods[1].Ref)
 
 		paods, rnd, err = queries.LookupOnlineHistory(addrB)
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), rnd)
 		require.Equal(t, 2, len(paods))
-		require.Equal(t, int64(2), paods[0].Rowid)
 		require.Equal(t, basics.Round(1), paods[0].UpdRound)
-		require.Equal(t, int64(4), paods[1].Rowid)
+		require.Equal(t, refoaB1, paods[0].Ref)
 		require.Equal(t, basics.Round(3), paods[1].UpdRound)
+		require.Equal(t, refoaB3, paods[1].Ref)
 
 		paods, rnd, err = queries.LookupOnlineHistory(addrC)
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(3), rnd)
 		require.Equal(t, 1, len(paods))
-		require.Equal(t, int64(5), paods[0].Rowid)
 		require.Equal(t, basics.Round(3), paods[0].UpdRound)
+		require.Equal(t, refoaC3, paods[0].Ref)
 
 		return nil
 	})
@@ -2396,9 +2426,9 @@ type mockOnlineAccountsWriter struct {
 	rowid int64
 }
 
-func (w *mockOnlineAccountsWriter) InsertOnlineAccount(addr basics.Address, normBalance uint64, data trackerdb.BaseOnlineAccountData, updRound uint64, voteLastValid uint64) (rowid int64, err error) {
+func (w *mockOnlineAccountsWriter) InsertOnlineAccount(addr basics.Address, normBalance uint64, data trackerdb.BaseOnlineAccountData, updRound uint64, voteLastValid uint64) (ref trackerdb.OnlineAccountRef, err error) {
 	w.rowid++
-	return w.rowid, nil
+	return mockEntryRef{w.rowid}, nil
 }
 
 func (w *mockOnlineAccountsWriter) Close() {}
@@ -2448,7 +2478,7 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 				MicroAlgos:     basics.MicroAlgos{Raw: 400_000_000},
 				BaseVotingData: trackerdb.BaseVotingData{VoteFirstValid: 500},
 			},
-			Rowid: 1,
+			Ref: mockEntryRef{1},
 		},
 		newAcct: []trackerdb.BaseOnlineAccountData{{
 			MicroAlgos: basics.MicroAlgos{Raw: 400_000_000},
@@ -2466,7 +2496,7 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 				MicroAlgos:     basics.MicroAlgos{Raw: 500_000_000},
 				BaseVotingData: trackerdb.BaseVotingData{VoteFirstValid: 500},
 			},
-			Rowid: 2,
+			Ref: mockEntryRef{2},
 		},
 		newAcct: []trackerdb.BaseOnlineAccountData{{
 			MicroAlgos:     basics.MicroAlgos{Raw: 500_000_000},
@@ -2557,7 +2587,7 @@ func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
 				MicroAlgos:     basics.MicroAlgos{Raw: 300_000_000},
 				BaseVotingData: trackerdb.BaseVotingData{VoteFirstValid: 300},
 			},
-			Rowid: 1,
+			Ref: mockEntryRef{1},
 		},
 		newAcct: []trackerdb.BaseOnlineAccountData{
 			{
