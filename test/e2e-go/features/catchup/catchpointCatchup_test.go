@@ -408,8 +408,8 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 // - retrieve the last catchpoint from the primary node, and let second node catch up against the catchpoint.
 //
 // The expected result would be:
-// while the second node is catching up against the catchpoint of the network,
-// `/ready` should encounter a slew of failures, then succeed with status indicating it is finishing fast-catchup.
+// while the second node is catching up against the catchpoint of the network, then round-by-round catching up,
+// `/ready` should encounter a slew of failures, then succeed with status indicating it is finishing full catchup.
 func TestReadyEndpoint(t *testing.T) {
 	//////////
 	// NOTE //
