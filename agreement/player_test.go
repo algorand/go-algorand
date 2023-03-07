@@ -3286,7 +3286,7 @@ func TestPlayerRetainsReceivedValidatedAtPP(t *testing.T) {
 	require.NoError(t, panicErr)
 
 	// make sure vote verify requests
-	verifyEvent := ev(cryptoAction{T: verifyVote, M: voteMsg, TaskIndex: 0})
+	verifyEvent := ev(cryptoAction{T: verifyVote, M: voteMsg, Round: r - 1, Period: p, Step: propose, TaskIndex: 1})
 	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify vote")
 
 	// send voteVerified
@@ -3301,7 +3301,7 @@ func TestPlayerRetainsReceivedValidatedAtPP(t *testing.T) {
 func assertCorrectReceivedAtSet(t *testing.T, pWhite *player, pM ioAutomata, helper *voteMakerHelper,
 	r round, p period, pP *proposal, pV *proposalValue, m message) {
 	// make sure payload verify request
-	verifyEvent := ev(cryptoAction{T: verifyPayload, M: m}) // , TaskIndex: 0}
+	verifyEvent := ev(cryptoAction{T: verifyPayload, M: m, Round: r - 1, Period: p, Step: propose, TaskIndex: 0})
 	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify payload")
 
 	// payloadVerified
