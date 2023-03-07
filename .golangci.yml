@@ -149,9 +149,6 @@ issues:
     - path: ^logging.*_test\.go
       linters:
         - paralleltest
-    - path: ^netdeploy.*_test\.go
-      linters:
-        - paralleltest
     - path: ^network.*_test\.go
       linters:
         - paralleltest
