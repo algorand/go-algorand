@@ -59,7 +59,7 @@ func checkAccounts(t *testing.T, tx trackerdb.TransactionScope, rnd basics.Round
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 
-	aor, err := tx.MakeAccountsOptimizedReader()
+	aor, err := tx.Testing().MakeAccountsOptimizedReader()
 	require.NoError(t, err)
 
 	var totalOnline, totalOffline, totalNotPart uint64
@@ -83,7 +83,7 @@ func checkAccounts(t *testing.T, tx trackerdb.TransactionScope, rnd basics.Round
 		}
 	}
 
-	all, err := arw.AccountsAllTest()
+	all, err := arw.Testing().AccountsAllTest()
 	require.NoError(t, err)
 	require.Equal(t, all, accts)
 
@@ -155,12 +155,12 @@ func TestAccountDBInit(t *testing.T) {
 
 	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		accts := ledgertesting.RandomAccounts(20, true)
-		newDB := tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+		newDB := tx.Testing().AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
 		require.True(t, newDB)
 
 		checkAccounts(t, tx, 0, accts)
 
-		newDB, err = tx.AccountsInitLightTest(t, accts, proto)
+		newDB, err = tx.Testing().AccountsInitLightTest(t, accts, proto)
 		require.NoError(t, err)
 		require.False(t, newDB)
 		checkAccounts(t, tx, 0, accts)
@@ -219,7 +219,7 @@ func TestAccountDBRound(t *testing.T) {
 		require.NoError(t, err)
 
 		accts := ledgertesting.RandomAccounts(20, true)
-		tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+		tx.Testing().AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
 		checkAccounts(t, tx, 0, accts)
 		totals, err := arw.AccountsTotals(context.Background(), false)
 		require.NoError(t, err)
@@ -297,7 +297,7 @@ func TestAccountDBRound(t *testing.T) {
 			require.NotEmpty(t, updatedOnlineAccts)
 
 			checkAccounts(t, tx, basics.Round(i), accts)
-			arw.CheckCreatablesTest(t, i, expectedDbImage)
+			arw.Testing().CheckCreatablesTest(t, i, expectedDbImage)
 		}
 
 		// test the accounts totals
@@ -372,7 +372,7 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 
 		dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 			accts := ledgertesting.RandomAccounts(1, true)
-			tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+			tx.Testing().AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
 			addr := ledgertesting.RandomAddress()
 
 			// lastCreatableID stores asset or app max used index to get rid of conflicts
@@ -443,7 +443,7 @@ func TestAccountStorageWithStateProofID(t *testing.T) {
 
 	dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		accts := ledgertesting.RandomAccounts(20, false)
-		_ = tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+		_ = tx.Testing().AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
 		checkAccounts(t, tx, 0, accts)
 		require.True(t, allAccountsHaveStateProofPKs(accts))
 		return nil
@@ -600,7 +600,7 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 
 func benchmarkInitBalances(b testing.TB, numAccounts int, tx trackerdb.TransactionScope, proto protocol.ConsensusVersion) (updates map[basics.Address]basics.AccountData) {
 	updates = generateRandomTestingAccountBalances(numAccounts)
-	tx.AccountsInitTest(b, updates, proto)
+	tx.Testing().AccountsInitTest(b, updates, proto)
 	return
 }
 
@@ -626,7 +626,7 @@ func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 		b.ResetTimer()
 		// read all the balances in the database.
 		var err2 error
-		bal, err2 = arw.AccountsAllTest()
+		bal, err2 = arw.Testing().AccountsAllTest()
 		require.NoError(b, err2)
 		return nil
 	})
@@ -2091,7 +2091,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 		}
 
 		var accts map[basics.Address]basics.AccountData
-		tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+		tx.Testing().AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
 		totals, err := arw.AccountsTotals(context.Background(), false)
 		require.NoError(t, err)
 
@@ -2194,7 +2194,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 		addRound(2, ledgercore.StateDelta{Accts: delta2})
 		addRound(3, ledgercore.StateDelta{Accts: delta3})
 
-		queries, err := tx.MakeOnlineAccountsOptimizedReader()
+		queries, err := tx.Testing().MakeOnlineAccountsOptimizedReader()
 		require.NoError(t, err)
 
 		// check round 1
