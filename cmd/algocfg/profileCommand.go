@@ -123,7 +123,7 @@ Profiles are subject to change or removal.`,
 
 var listProfileCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List config profiles",
+	Short: "A list of valid config profiles and a short description.",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		longest := 0
@@ -141,7 +141,7 @@ var listProfileCmd = &cobra.Command{
 
 var setProfileCmd = &cobra.Command{
 	Use:   "set",
-	Short: "Set preconfigured config defaults",
+	Short: "Create or update config.json files with a specified profile.",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		datadir.OnDataDirs(func(dataDir string) {
