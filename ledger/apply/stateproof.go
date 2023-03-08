@@ -86,11 +86,6 @@ func gatherVerificationContextUsingBlockHeaders(sp StateProofsApplier, lastRound
 		return nil, err
 	}
 
-	verificationContext := ledgercore.StateProofVerificationContext{
-		LastAttestedRound: lastRoundInInterval,
-		VotersCommitment:  votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
-		OnlineTotalWeight: votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
-		Version:           votersHdr.CurrentProtocol,
-	}
-	return &verificationContext, nil
+	verificationContext := ledgercore.MakeStateProofVerificationContext(votersHdr, lastRoundInInterval)
+	return verificationContext, nil
 }

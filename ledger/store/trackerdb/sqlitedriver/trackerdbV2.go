@@ -493,6 +493,13 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema9(ctx context.Context
 		return err
 	}
 
+	if !tu.newDatabase {
+		err = initializeStateProofVerificationTable(ctx, tx, tu.BlockDb.Rdb)
+		if err != nil {
+			return err
+		}
+	}
+
 	// update version
 	return tu.setVersion(ctx, tx, 10)
 }

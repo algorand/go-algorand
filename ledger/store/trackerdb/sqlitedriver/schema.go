@@ -921,3 +921,42 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 	updateStmt.Close()
 	return
 }
+
+// initializeStateProofVerificationTable add inital records into stateproof verification table
+// to be able to apply stateproof transactions
+func initializeStateProofVerificationTable(ctx context.Context, tx *sql.Tx, blockDb db.Accessor) error {
+	// roundsLookback sents the max number of rounds to look back when populating the table
+	// archival nodes have all history and it does not make sense to process all of it
+	var roundsLookback = config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval * 10
+	var commitData []*ledgercore.StateProofVerificationContext
+	err := blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
+		latestBlockRound, err := blockdb.BlockLatest(blockTx)
+		if err != nil {
+			return fmt.Errorf("latest block number cannot be retrieved : %w", err)
+		}
+		earliestBlockRound, err := blockdb.BlockEarliest(blockTx)
+		if err != nil {
+			return fmt.Errorf("earliest block number cannot be retrieved : %w", err)
+		}
+		archivalLookbackRound := latestBlockRound.SubSaturate(basics.Round(roundsLookback))
+		if earliestBlockRound < archivalLookbackRound {
+			earliestBlockRound = archivalLookbackRound
+		}
+
+		for rnd := earliestBlockRound; rnd < latestBlockRound; rnd++ {
+			hdr, err := blockdb.BlockGetHdr(blockTx, rnd)
+			if err != nil {
+				return fmt.Errorf("latest block header %d cannot be retrieved : %w", rnd, err)
+			}
+			currentStateProofInterval := config.Consensus[hdr.CurrentProtocol].StateProofInterval
+			lastAttested := hdr.Round + basics.Round(currentStateProofInterval)
+			if uint64(rnd)%currentStateProofInterval == 0 {
+				commitData = append(commitData, ledgercore.MakeStateProofVerificationContext(hdr, lastAttested))
+			}
+		}
+		sqlBatchScope{tx}.MakeSpVerificationCtxWriter().StoreSPContexts(ctx, commitData)
+		return nil
+	})
+
+	return err
+}

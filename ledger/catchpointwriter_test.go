@@ -136,8 +136,8 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 	fileName := filepath.Join(temporaryDirectory, "15.data")
 
 	mockCommitData := make([]verificationCommitContext, 0)
-	for _, element := range data {
-		mockCommitData = append(mockCommitData, verificationCommitContext{verificationContext: element})
+	for i := range data {
+		mockCommitData = append(mockCommitData, verificationCommitContext{verificationContext: &data[i]})
 	}
 
 	err = ml.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
@@ -164,6 +164,7 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 		}
 		return
 	})
+	require.NoError(t, err)
 
 	catchpointData := readCatchpointDataFile(t, fileName)
 	require.Equal(t, "stateProofVerificationContext.msgpack", catchpointData[0].headerName)
@@ -273,6 +274,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		}
 		return
 	})
+	require.NoError(t, err)
 
 	catchpointContent := readCatchpointDataFile(t, fileName)
 	require.Equal(t, "balances.1.msgpack", catchpointContent[1].headerName)
@@ -480,12 +482,13 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 	accts := ledgertesting.RandomAccounts(5, false)
 	// force each acct to have overflowing number of resources
 	assetIndex := 1000
+	const numAssetParams = 20
 	for addr, acct := range accts {
 		if acct.AssetParams == nil {
-			acct.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, 0)
+			acct.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, numAssetParams)
 			accts[addr] = acct
 		}
-		for i := uint64(0); i < 20; i++ {
+		for i := uint64(0); i < numAssetParams; i++ {
 			ap := ledgertesting.RandomAssetParams()
 			acct.AssetParams[basics.AssetIndex(assetIndex)] = ap
 			assetIndex++
