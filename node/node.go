@@ -499,6 +499,8 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 			}
 			node.mu.Unlock()
 		}()
+		// Broadcasting txns in devmode doesn't (shouldn't) work
+		return nil
 	}
 	return node.broadcastSignedTxGroup(txgroup)
 }
