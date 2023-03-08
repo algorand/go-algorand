@@ -499,8 +499,6 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 			}
 			node.mu.Unlock()
 		}()
-		// Broadcasting txns in devmode doesn't (shouldn't) work
-		return nil
 	}
 	return node.broadcastSignedTxGroup(txgroup)
 }
@@ -537,13 +535,17 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 	if err != nil {
 		logging.Base().Infof("unable to pin transaction: %v", err)
 	}
-
+	// DevMode nodes do not broadcast txns to the network
+	if node.devMode {
+		return nil
+	}
 	var enc []byte
 	var txids []transactions.Txid
 	for _, tx := range txgroup {
 		enc = append(enc, protocol.Encode(&tx)...)
 		txids = append(txids, tx.ID())
 	}
+
 	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, false, nil)
 	if err != nil {
 		node.log.Infof("failure broadcasting transaction to network: %v - transaction group was %+v", err, txgroup)
