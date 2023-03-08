@@ -545,7 +545,6 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 		enc = append(enc, protocol.Encode(&tx)...)
 		txids = append(txids, tx.ID())
 	}
-
 	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, false, nil)
 	if err != nil {
 		node.log.Infof("failure broadcasting transaction to network: %v - transaction group was %+v", err, txgroup)
