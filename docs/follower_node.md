@@ -15,18 +15,24 @@ including new account balances, changes to application and asset states,
 and new box information. Such information was previously unavailable to
 application developers.
 
+This mode has a number of [restrictions](#restrictions), which are described
+below.
+
+Follower mode was initially created to be a data source for [Conduit](https://github.com/algorand/conduit).
+
 ## Configuration
 
-Several options in the `config.json` file are needed:
+Behavior is controlled with the `config.json` file:
 
 | property | description |
 | EnableFollowMode | When set to `true` the node starts as a network follower. | 
-| MaxAcctLookback | The number of additional `Ledger State Delta` objects available. |
-| CatchupParallelBlocks | This is useful for performance tuning. |
+| MaxAcctLookback | The number of additional `Ledger State Delta` objects available. The default can be used, increasing to 64 or higher could help performance. |
+| CatchupParallelBlocks | The number of blocks that are fetched concurrently. The default can be used, increasing to 64 or higher could help performance. |
 
 ## Usage
 
-New public endpoints are available to control the node:
+New public endpoints are available to control which round the node is
+synchronized with (a.k.a. the sync round):
 * `GET /v2/ledger/sync` - fetch the current minimum sync round.
 * `DELETE /v2/ledger/sync` - resume normal catchup by deleting the sync round.
 * `POST /v2/ledger/sync/{round}` - set the sync round.
@@ -34,13 +40,6 @@ New public endpoints are available to control the node:
 The `Ledger State Delta` object is not designed for external consumption,
 but may still be useful for advanced applications:
 * `GET /v2/deltas/{round}` - Fetch the raw Ledger State Delta, optionally provide `format=msgp` for the internal msgp encoded object.
-
-## Performance
-
-Increasing `MaxAcctLookback` and `CatchupParallelBlocks` is helpful for
-increasing performance. We have found `64` to be a good value which allows
-algod to at near full speed while a fast synchronous application processes
-`Ledger State Delta` objects.
 
 ## Restrictions
 
