@@ -80,6 +80,9 @@ func (m *lruAccounts) readNotFound(addr basics.Address) bool {
 // thread locking semantics : write lock
 func (m *lruAccounts) flushPendingWrites() {
 	pendingEntriesCount := len(m.pendingAccounts)
+	if pendingEntriesCount == 0 {
+		return
+	}
 	if pendingEntriesCount >= m.pendingWritesWarnThreshold {
 		m.log.Warnf("lruAccounts: number of entries in pendingAccounts(%d) exceed the warning threshold of %d", pendingEntriesCount, m.pendingWritesWarnThreshold)
 	}

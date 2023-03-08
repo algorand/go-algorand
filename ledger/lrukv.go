@@ -78,6 +78,9 @@ func (m *lruKV) read(key string) (data trackerdb.PersistedKVData, has bool) {
 // thread locking semantics : write lock
 func (m *lruKV) flushPendingWrites() {
 	pendingEntriesCount := len(m.pendingKVs)
+	if pendingEntriesCount == 0 {
+		return
+	}
 	if pendingEntriesCount >= m.pendingWritesWarnThreshold {
 		m.log.Warnf("lruKV: number of entries in pendingKVs(%d) exceed the warning threshold of %d", pendingEntriesCount, m.pendingWritesWarnThreshold)
 	}

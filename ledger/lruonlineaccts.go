@@ -67,6 +67,9 @@ func (m *lruOnlineAccounts) read(addr basics.Address) (data trackerdb.PersistedO
 // thread locking semantics : write lock
 func (m *lruOnlineAccounts) flushPendingWrites() {
 	pendingEntriesCount := len(m.pendingAccounts)
+	if pendingEntriesCount == 0 {
+		return
+	}
 	if pendingEntriesCount >= m.pendingWritesWarnThreshold {
 		m.log.Warnf("lruOnlineAccounts: number of entries in pendingAccounts(%d) exceed the warning threshold of %d", pendingEntriesCount, m.pendingWritesWarnThreshold)
 	}
