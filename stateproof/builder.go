@@ -267,9 +267,11 @@ func (spw *Worker) builder(latest basics.Round) {
 
 		// See if any new state proofs were formed, according to
 		// the new block, which would mean we can clean up some builders.
-		hdr, err := spw.ledger.BlockHdr(nextrnd)
+		newLatest := spw.ledger.Latest()
+		hdr, err := spw.ledger.BlockHdr(newLatest)
+
 		if err != nil {
-			spw.log.Warnf("spw.builder: BlockHdr(%d): %v", nextrnd, err)
+			spw.log.Warnf("spw.builder: BlockHdr(%d): %v", newLatest, err)
 			continue
 		}
 
@@ -281,7 +283,6 @@ func (spw *Worker) builder(latest basics.Round) {
 		// for block R, nodes will have already verified block R, because
 		// block R+1 has been formed.
 		proto := config.Consensus[hdr.CurrentProtocol]
-		newLatest := spw.ledger.Latest()
 		for r := latest; r < newLatest; r++ {
 			// Wait for the signer to catch up; mostly relevant in tests.
 			spw.waitForSignature(r)
