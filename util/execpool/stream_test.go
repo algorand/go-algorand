@@ -70,6 +70,24 @@ func (mj *mockJob) GetNumberOfBatchableItems() (count uint64, err error) {
 	return mj.numberOfItems, mj.jobError
 }
 
+type mockPool struct {
+	pool
+	hold chan struct{}
+	err  error
+	l    int
+	c    int
+}
+
+func (mp *mockPool) EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg interface{}, out chan interface{}) error {
+	<-mp.hold
+	t(arg)
+	return mp.err
+}
+
+func (mp *mockPool) BufferSize() (length, capacity int) {
+	return mp.l, mp.c
+}
+
 func testStreamToBatchCore(mockJobs <-chan *mockJob, done <-chan struct{}, t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	verificationPool := MakeBacklog(nil, 0, LowPriority, t)
@@ -93,10 +111,17 @@ func TestStreamToBatchBasic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numJobs := 400
+	// for GetNumberOfBatchableItems errors: 400 / 99
+	numJobsToProcess := 400 - (400/99 + 1)
+	// processedChan will notify whenn all the jobs are processed
+	processedChan := make(chan struct{}, numJobsToProcess-1)
 	done := make(chan struct{})
 	// callback is needed to know when the processing should stop
 	callback := func(id int) {
-		if id == numJobs-1 {
+		select {
+		case processedChan <- struct{}{}:
+		default:
+			// this was the last job
 			close(done)
 		}
 	}
@@ -143,13 +168,17 @@ func TestStreamToBatchBasic(t *testing.T) {
 		}
 		if i%5 == 0 {
 			// this should be processed alone
-			require.Equal(t, 1, mockJobs[i].batchSize)
+			if 1 != mockJobs[i].batchSize {
+				require.Equal(t, 1, mockJobs[i].batchSize)
+			}
 		}
 		if i%101 == 0 {
 			// this should be the last in the batch
 			require.Equal(t, mockJobs[i].batchSize-1, mockJobs[i].batchOrder)
 		}
-		require.Nil(t, mockJobs[i].returnError)
+		if mockJobs[i].returnError != nil {
+			require.Nil(t, mockJobs[i].returnError)
+		}
 		require.True(t, mockJobs[i].processed)
 	}
 }
@@ -179,4 +208,64 @@ func TestNoInputYet(t *testing.T) {
 	require.Nil(t, mockJob.returnError)
 	require.True(t, mockJob.processed)
 	require.Equal(t, 1, mockJob.batchSize)
+}
+
+// TestMutipleBatchAttempts tests the behavior when multiple batch attempts will fail and the stream blocks
+func TestMutipleBatchAttempts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	mp := mockPool{
+		hold: make(chan struct{}),
+		err:  nil,
+		l:    5,
+		c:    5,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	inputChan := make(chan InputJob)
+	mbp := mockBatchProcessor{}
+	sv := MakeStreamToBatch(inputChan, &mp, &mbp)
+	sv.Start(ctx)
+
+	var jobCalled int
+	jobCalledRef := &jobCalled
+
+	mj := mockJob{
+		numberOfItems: uint64(txnPerWorksetThreshold + 1),
+		id:            1,
+		callback: func(id int) {
+			<-mp.hold
+			*jobCalledRef = *jobCalledRef + id
+		},
+	}
+	inputChan <- &mj
+
+	// wait for the job to be submitted to the pool
+	// since this is only a signe job with 1 task, and the pool is at capacity (l == c == 5), this will only happen when
+	// the numberOfBatchAttempts == 1
+	mp.hold <- struct{}{}
+
+	// here, the pool is saturated, and the stream should be blocked
+	select {
+	case inputChan <- &mj:
+		require.Fail(t, "the stream should be blocked here")
+	default:
+	}
+
+	// now let the blocked job go forward and execute
+	mp.hold <- struct{}{}
+
+	inputChan <- &mj
+
+	// now the next job should go forward
+	mp.hold <- struct{}{}
+	require.Equal(t, 1, jobCalled)
+	// wait until the next job is ready to execute before canceling
+	mp.hold <- struct{}{}
+
+	// should shut down now
+	cancel()
+	sv.WaitForStop()
+	require.Equal(t, 2, jobCalled)
 }
