@@ -974,9 +974,9 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		au.baseResources.init(au.log, baseResourcesPendingAccountsBufferSize, baseResourcesPendingAccountsWarnThreshold)
 		au.baseKVs.init(au.log, baseKVPendingBufferSize, baseKVPendingWarnThreshold)
 	} else {
-		au.baseAccounts.init(au.log, 0, 0)
-		au.baseResources.init(au.log, 0, 0)
-		au.baseKVs.init(au.log, 0, 0)
+		au.baseAccounts.init(au.log, 0, 1)
+		au.baseResources.init(au.log, 0, 1)
+		au.baseKVs.init(au.log, 0, 1)
 	}
 	return
 }
