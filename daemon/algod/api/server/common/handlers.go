@@ -23,10 +23,12 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
+	"github.com/algorand/go-algorand/node"
 )
 
 // GenesisJSON is an httpHandler for route GET /genesis
@@ -114,13 +116,24 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 	stat, err := ctx.Node.Status()
 	code := http.StatusOK
 
+	// isReadyFromStat checks the `Node.Status()` result and decide if the node is at the latest round
+	// must satisfy following sub conditions:
+	// 1. the node is not in a fast-catchup stage
+	// 2. the node's time since last round should be [0, deadline), while deadline = bigLambda + smallLambda = 17s
+	// 3. the node's catchup time is 0
+	isReadyFromStat := func(status node.StatusReport) bool {
+		timeSinceLastRound := status.TimeSinceLastRound()
+		return len(status.Catchpoint) == 0 &&
+			timeSinceLastRound >= 0 && timeSinceLastRound < agreement.DeadlineTimeout() &&
+			status.CatchupTime == 0
+	}
+
 	if err != nil {
 		code = http.StatusInternalServerError
 	} else if stat.StoppedAtUnsupportedRound {
 		code = http.StatusInternalServerError
 		err = fmt.Errorf("stopped at an unsupported round")
-	} else if len(stat.Catchpoint) > 0 ||
-		fmt.Sprintf("%.1f", stat.CatchupTime.Seconds()) != "0.0" {
+	} else if !isReadyFromStat(stat) {
 		code = http.StatusBadRequest
 		err = fmt.Errorf("ready failed as the node is catching up")
 	}
