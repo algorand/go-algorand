@@ -569,7 +569,6 @@ func (spw *Worker) deleteStaleKeys(retainRound basics.Round) {
 			spw.log.Warnf("deleteStaleKeys: could not remove key for account %v on round %d: %v", key.ParticipationID, firstRoundAtKeyLifeTime, err)
 		}
 	}
-	spw.accts.DeleteStateProofKeysForExpiredAccounts(retainRound)
 }
 
 func (spw *Worker) deleteStaleBuilders(retainRound basics.Round) {

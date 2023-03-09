@@ -211,17 +211,6 @@ func (s *testWorkerStubs) StateProofKeys(rnd basics.Round) (out []account.StateP
 	return
 }
 
-func (s *testWorkerStubs) DeleteStateProofKeysForExpiredAccounts(currentRound basics.Round) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, part := range s.keys {
-		if currentRound <= part.LastValid {
-			continue
-		}
-		s.deletedKeysBeforeRoundMap[part.ID()] = currentRound
-	}
-}
-
 func (s *testWorkerStubs) DeleteStateProofKey(id account.ParticipationID, round basics.Round) error {
 	s.mu.Lock()
 	s.deletedKeysBeforeRoundMap[id] = round
