@@ -125,9 +125,6 @@ issues:
     - path: ^catchup.*_test\.go
       linters:
         - paralleltest
-    - path: ^cmd.*_test\.go
-      linters:
-        - paralleltest
     - path: ^config.*_test\.go
       linters:
         - paralleltest
@@ -147,9 +144,6 @@ issues:
       linters:
         - paralleltest
     - path: ^logging.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^netdeploy.*_test\.go
       linters:
         - paralleltest
     - path: ^network.*_test\.go

@@ -33,6 +33,8 @@ import (
 
 func TestRemoteAdapterHandlers(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	d := MakeDebugger()
 	a := MakeRemoteHook(d)
 	router := mux.NewRouter()
