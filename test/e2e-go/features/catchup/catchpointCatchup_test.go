@@ -296,6 +296,31 @@ outer:
 		currentRound++
 	}
 	log.Infof("done catching up!\n")
+
+	timer = time.NewTimer(10 * time.Second)
+	for {
+		status, err = secondNodeRestClient.Status()
+		a.NoError(err)
+		primStatus, err := primaryNodeRestClient.Status()
+		a.NoError(err)
+		log.Infof("currend round: %d, primary round: %d, current-sync time and time since last round %d, %d, prim-sync time and time since last round: %d, %d",
+			status.LastRound, primStatus.LastRound, status.CatchupTime, status.TimeSinceLastRound, primStatus.CatchupTime, primStatus.TimeSinceLastRound)
+
+		err = secondNodeRestClient.ReadyCheck()
+
+		select {
+		case <-timer.C:
+			a.Fail("readiness endpoint timeout")
+			break
+		default:
+			if err != nil {
+				time.Sleep(250 * time.Millisecond)
+				continue
+			} else {
+				break
+			}
+		}
+	}
 }
 
 func TestCatchpointLabelGeneration(t *testing.T) {
@@ -422,7 +447,7 @@ func TestReadyEndpoint(t *testing.T) {
 	const CatchpointTracking = int64(2)
 	const MaxAcctLookback = uint64(2)
 	const ConfigArchival = true
-	const TargetRound = uint64(17)
+	const TargetRound = uint64(15)
 
 	prepareConsensus := func(consensusVersion protocol.ConsensusVersion) config.ConsensusProtocols {
 		consensus := make(config.ConsensusProtocols)
@@ -487,6 +512,21 @@ func TestReadyEndpoint(t *testing.T) {
 	a.NoError(err)
 	defer pnController.StopAlgod()
 
+	// Let the network make some progress
+	primaryNodeRestClient := fixture.GetAlgodClientForController(pnController)
+	testLogger.Infof("Building ledger history..")
+	primaryNodeRound := uint64(1)
+	for {
+		err = fixture.ClientWaitForRound(primaryNodeRestClient, primaryNodeRound, 45*time.Second)
+		a.NoError(err)
+		if TargetRound <= primaryNodeRound {
+			break
+		}
+		primaryNodeRound++
+	}
+	testLogger.Infof("done building!\n")
+	err = fixture.ClientWaitForRoundWithTimeout(primaryNodeRestClient, TargetRound)
+
 	// get second node controller
 	n2ndController, err := fixture.GetNodeController("Node")
 	a.NoError(err)
@@ -522,10 +562,6 @@ func TestReadyEndpoint(t *testing.T) {
 	a.NoError(err)
 	defer n2ndController.StopAlgod()
 
-	// Let the network make some progress
-	primaryNodeRestClient := fixture.GetAlgodClientForController(pnController)
-	err = fixture.ClientWaitForRoundWithTimeout(primaryNodeRestClient, TargetRound)
-
 	// asserting that the primary node is generating catchpoint tags
 	primaryNodeStatus, err := primaryNodeRestClient.Status()
 	a.NoError(err)
@@ -557,25 +593,36 @@ func TestReadyEndpoint(t *testing.T) {
 	// the first (immediate) ready check should fail, for catch up against a catchpoint need some time
 	a.Error(n2ndClient.ReadyCheck())
 
-	// keep rolling and asking `/ready` if ready (catch up with the catchpoint)
-	timer := time.NewTimer(100 * time.Second)
+	testLogger.Info("second node catching up")
+
 	for {
-		n2ndStatus, err := n2ndClient.Status()
+		primaryNodeStatus, err = primaryNodeRestClient.Status()
 		a.NoError(err)
 
-		if len(*n2ndStatus.Catchpoint) > 0 {
-			a.Error(n2ndClient.ReadyCheck())
+		primaryRound := primaryNodeStatus.LastRound
 
-			select {
-			case <-timer.C:
-				a.Fail("timeout")
-				break
-			default:
-				time.Sleep(50 * time.Millisecond)
-			}
+		n2ndCurrentStatus, err := n2ndClient.Status()
+		a.NoError(err)
+
+		n2ndCurrentRound := n2ndCurrentStatus.LastRound
+
+		err = fixture.ClientWaitForRound(n2ndClient, n2ndCurrentRound+1, 10*time.Second)
+		a.NoError(err)
+
+		var catchPointRepr string
+		if n2ndCurrentStatus.Catchpoint != nil {
+			catchPointRepr = *n2ndCurrentStatus.Catchpoint
 		} else {
+			catchPointRepr = "nil"
+		}
+		testLogger.Infof("catchpoint %v, curr-round %d, prim-round: %d, catchuptime %d, timesincelastround %f",
+			catchPointRepr, n2ndCurrentStatus.LastRound, primaryRound, n2ndCurrentStatus.CatchupTime, time.Duration(n2ndCurrentStatus.TimeSinceLastRound).Seconds())
+
+		if n2ndCurrentRound+1 == primaryRound {
 			a.NoError(n2ndClient.ReadyCheck())
 			break
+		} else {
+			a.Error(n2ndClient.ReadyCheck())
 		}
 	}
 }

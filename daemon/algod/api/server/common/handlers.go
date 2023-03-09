@@ -119,12 +119,14 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 	// isReadyFromStat checks the `Node.Status()` result and decide if the node is at the latest round
 	// must satisfy following sub conditions:
 	// 1. the node is not in a fast-catchup stage
-	// 2. the node's time since last round should be [0, deadline), while deadline = bigLambda + smallLambda = 17s
+	// 2. the node's time since last round should be [0, deadline),
+	//    while deadline = bigLambda + smallLambda = 17s
 	// 3. the node's catchup time is 0
 	isReadyFromStat := func(status node.StatusReport) bool {
 		timeSinceLastRound := status.TimeSinceLastRound()
 		return len(status.Catchpoint) == 0 &&
-			timeSinceLastRound >= 0 && timeSinceLastRound < agreement.DeadlineTimeout() &&
+			timeSinceLastRound >= 0 &&
+			timeSinceLastRound < agreement.DeadlineTimeout() &&
 			status.CatchupTime == 0
 	}
 
