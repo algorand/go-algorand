@@ -1000,8 +1000,9 @@ func onlineAccountsNewRoundImpl(
 							err = fmt.Errorf("empty voting data for online account %s: %v", data.address.String(), newAcct)
 						} else {
 							// create a new entry.
+							var ref trackerdb.OnlineAccountRef
 							normBalance := newAcct.NormalizedOnlineBalance(proto)
-							ref, err := writer.InsertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
+							ref, err = writer.InsertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
 							if err == nil {
 								updated := trackerdb.PersistedOnlineAccountData{
 									Addr:        data.address,
@@ -1025,7 +1026,8 @@ func onlineAccountsNewRoundImpl(
 					if newStatus == basics.Online {
 						err = fmt.Errorf("empty voting data but online account %s: %v", data.address.String(), newAcct)
 					} else {
-						ref, err := writer.InsertOnlineAccount(data.address, 0, trackerdb.BaseOnlineAccountData{}, updRound, 0)
+						var ref trackerdb.OnlineAccountRef
+						ref, err = writer.InsertOnlineAccount(data.address, 0, trackerdb.BaseOnlineAccountData{}, updRound, 0)
 						if err == nil {
 							updated := trackerdb.PersistedOnlineAccountData{
 								Addr:        data.address,
@@ -1041,8 +1043,9 @@ func onlineAccountsNewRoundImpl(
 					}
 				} else {
 					if prevAcct.AccountData != newAcct {
+						var ref trackerdb.OnlineAccountRef
 						normBalance := newAcct.NormalizedOnlineBalance(proto)
-						ref, err := writer.InsertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
+						ref, err = writer.InsertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
 						if err == nil {
 							updated := trackerdb.PersistedOnlineAccountData{
 								Addr:        data.address,
