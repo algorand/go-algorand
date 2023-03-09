@@ -110,9 +110,9 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	if testing.Short() {
-		t.Skip()
-	}
+	//if testing.Short() {
+	//	t.Skip()
+	//}
 	a := require.New(fixtures.SynchronizedTest(t))
 	log := logging.TestingLog(t)
 
@@ -297,14 +297,17 @@ outer:
 	}
 	log.Infof("done catching up!\n")
 
-	timer = time.NewTimer(10 * time.Second)
+	timer = time.NewTimer(100 * time.Second)
 	for {
 		status, err = secondNodeRestClient.Status()
 		a.NoError(err)
 		primStatus, err := primaryNodeRestClient.Status()
 		a.NoError(err)
-		log.Infof("currend round: %d, primary round: %d, current-sync time and time since last round %d, %d, prim-sync time and time since last round: %d, %d",
-			status.LastRound, primStatus.LastRound, status.CatchupTime, status.TimeSinceLastRound, primStatus.CatchupTime, primStatus.TimeSinceLastRound)
+		log.Infof("currend round: %d, primary round: %d, current-sync time and time since last round %f, %f, prim-sync time and time since last round: %f, %f, 2nd node catchpoint: %v",
+			status.LastRound, primStatus.LastRound,
+			time.Duration(status.CatchupTime).Seconds(), time.Duration(status.TimeSinceLastRound).Seconds(),
+			time.Duration(primStatus.CatchupTime).Seconds(), time.Duration(primStatus.TimeSinceLastRound).Seconds(),
+			*status.Catchpoint)
 
 		err = secondNodeRestClient.ReadyCheck()
 

@@ -93,7 +93,7 @@ func HealthCheck(ctx lib.ReqContext, context echo.Context) {
 }
 
 // Ready is a httpHandler for route GET /ready
-// it serves as a "readiness" endpoint that tells if the current node is healthy and fully caught-up.
+// it serves "readiness" probe on if the node is healthy and fully caught-up.
 func Ready(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /ready Ready
 	//---
@@ -116,18 +116,20 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 	stat, err := ctx.Node.Status()
 	code := http.StatusOK
 
-	// isReadyFromStat checks the `Node.Status()` result and decide if the node is at the latest round
+	// isReadyFromStat checks the `Node.Status()` result
+	// and decide if the node is at the latest round
 	// must satisfy following sub conditions:
 	// 1. the node is not in a fast-catchup stage
 	// 2. the node's time since last round should be [0, deadline),
 	//    while deadline = bigLambda + smallLambda = 17s
 	// 3. the node's catchup time is 0
 	isReadyFromStat := func(status node.StatusReport) bool {
-		timeSinceLastRound := status.TimeSinceLastRound()
+		timeSinceLastRound := status.TimeSinceLastRound().Milliseconds()
+
 		return len(status.Catchpoint) == 0 &&
 			timeSinceLastRound >= 0 &&
-			timeSinceLastRound < agreement.DeadlineTimeout() &&
-			status.CatchupTime == 0
+			timeSinceLastRound < agreement.DeadlineTimeout().Milliseconds() &&
+			status.CatchupTime.Milliseconds() == 0
 	}
 
 	if err != nil {
