@@ -25,15 +25,18 @@ Follower mode was initially created to be a data source for [Conduit](https://gi
 Behavior is controlled with the `config.json` file:
 
 | property | description |
-| EnableFollowMode | When set to `true` the node starts as a network follower. | 
+| EnableFollowMode | When set to `true` the node starts as a network follower. |
 | MaxAcctLookback | The number of additional `Ledger State Delta` objects available. The default can be used, increasing to 64 or higher could help performance. |
 | CatchupParallelBlocks | The number of blocks that are fetched concurrently. The default can be used, increasing to 64 or higher could help performance. |
 
 ## Usage
 
-On startup, the node will be paused (synchronized) with the current ledger
-round. This is also referred to as the "sync round". For a new deployment
-configured as a follower node, the initial sync round is 0.
+On startup, a follower node will be paused (synchronized) with its ledger's
+current round. For a new deployment configured as a follower node, the
+initial sync round is 0. When a sync round is set, the node advance
+`MaxAcctLookback-1` rounds. The node is synchronized for the availability
+of `Ledger State Delta` data. This means the minimum sync round is provided
+and the node advances to cache future rounds.
 
 New public endpoints are available to control the sync round:
 * `GET /v2/ledger/sync` - fetch the current sync round.
