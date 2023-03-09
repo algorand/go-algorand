@@ -34,10 +34,14 @@ var base32Encoder = base32.StdEncoding.WithPadding(base32.NoPadding)
 // ErrCatchpointParsingFailed is used when we attempt to parse and catchpoint label and failing doing so.
 var ErrCatchpointParsingFailed = errors.New("catchpoint parsing failed")
 
-// CatchpointLabelMaker represents an interface for creating a label maker. Labels can be "assembled" based on its components.
+// CatchpointLabelMaker is used for abstract the creation of different catchpoints versions.
+// Different catchpoint version might hash different fields.
 type CatchpointLabelMaker interface {
+	// buffer returns a image used for hashing. (concatenating all fields in the label)
 	buffer() []byte
+	// round returns the catchpoint label round
 	round() basics.Round
+	// message returns a printable string containing all the relevant fields in the label.
 	message() string
 }
 
