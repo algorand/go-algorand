@@ -31,14 +31,19 @@ Behavior is controlled with the `config.json` file:
 
 ## Usage
 
-New public endpoints are available to control which round the node is
-synchronized with (a.k.a. the sync round):
-* `GET /v2/ledger/sync` - fetch the current minimum sync round.
+On startup, the node will be paused (synchronized) with the current ledger
+round. This is also referred to as the "sync round". For a new deployment
+configured as a follower node, the initial sync round is 0.
+
+New public endpoints are available to control the sync round:
+* `GET /v2/ledger/sync` - fetch the current sync round.
 * `DELETE /v2/ledger/sync` - resume normal catchup by deleting the sync round.
 * `POST /v2/ledger/sync/{round}` - set the sync round.
 
-The `Ledger State Delta` object is not designed for external consumption,
-but may still be useful for advanced applications:
+The `Ledger State Delta` is not designed for external consumption, but may
+still be useful for advanced applications. When the sync round is set, this
+endpoint can be used to fetch the `Ledger State Delta` for that round and up
+to `MaxAcctLookback - 1` ahead of it:
 * `GET /v2/deltas/{round}` - Fetch the raw Ledger State Delta, optionally provide `format=msgp` for the internal msgp encoded object.
 
 ## Restrictions
