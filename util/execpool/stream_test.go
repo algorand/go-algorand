@@ -29,6 +29,7 @@ import (
 
 // implements BatchProcessor interface for testing purposes
 type mockBatchProcessor struct {
+	notify chan struct{} // notify the test that cleanup was called
 }
 
 func (mbp *mockBatchProcessor) ProcessBatch(jobs []InputJob) {
@@ -52,6 +53,9 @@ func (mbp *mockBatchProcessor) Cleanup(ue []InputJob, err error) {
 	for i := range ue {
 		mbp.GetErredUnprocessed(ue[i], err)
 	}
+	if mbp.notify != nil && len(ue) > 0 {
+		mbp.notify <- struct{}{}
+	}
 }
 
 // implements InputJob interface
@@ -72,23 +76,34 @@ func (mj *mockJob) GetNumberOfBatchableItems() (count uint64, err error) {
 
 type mockPool struct {
 	pool
-	hold chan struct{}
-	err  error
-	l    int
-	c    int
+	hold         chan struct{} // used to sync the EnqueueBacklog call with the test
+	err          error         // when not nil, EnqueueBacklog will return the err instead of executing the task
+	poolCapacity chan struct{} // mimics the pool capacity which blocks EnqueueBacklog
+	asyncDelay   chan struct{} // used to control when the task gets executed after EnqueueBacklog queues and returns
 }
 
 func (mp *mockPool) EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg interface{}, out chan interface{}) error {
+	// allow the test to know when the exec pool is executing the job
 	<-mp.hold
-	t(arg)
-	return mp.err
+	// simulate the execution of the job by the pool
+	if mp.err != nil {
+		// return the mock error
+		return mp.err
+	}
+	mp.poolCapacity <- struct{}{}
+	go func() {
+		mp.asyncDelay <- struct{}{}
+		t(arg)
+	}()
+	return nil
 }
 
 func (mp *mockPool) BufferSize() (length, capacity int) {
-	return mp.l, mp.c
+	return len(mp.poolCapacity), cap(mp.poolCapacity)
 }
 
-func testStreamToBatchCore(mockJobs <-chan *mockJob, done <-chan struct{}, t *testing.T) {
+func testStreamToBatchCore(wg *sync.WaitGroup, mockJobs <-chan *mockJob, done <-chan struct{}, t *testing.T) {
+	defer wg.Done()
 	ctx, cancel := context.WithCancel(context.Background())
 	verificationPool := MakeBacklog(nil, 0, LowPriority, t)
 	defer verificationPool.Shutdown()
@@ -146,10 +161,8 @@ func TestStreamToBatchBasic(t *testing.T) {
 	jobChan := make(chan *mockJob)
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		testStreamToBatchCore(jobChan, done, t)
-	}()
+	go testStreamToBatchCore(&wg, jobChan, done, t)
+
 	go func() {
 		defer wg.Done()
 		for i := range mockJobs {
@@ -190,7 +203,9 @@ func TestNoInputYet(t *testing.T) {
 	numJobs := 1
 	done := make(chan struct{})
 	jobChan := make(chan *mockJob)
-	go testStreamToBatchCore(jobChan, done, t)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go testStreamToBatchCore(&wg, jobChan, done, t)
 	callback := func(id int) {
 		if id == numJobs-1 {
 			close(done)
@@ -208,6 +223,8 @@ func TestNoInputYet(t *testing.T) {
 	require.Nil(t, mockJob.returnError)
 	require.True(t, mockJob.processed)
 	require.Equal(t, 1, mockJob.batchSize)
+	close(jobChan)
+	wg.Wait()
 }
 
 // TestMutipleBatchAttempts tests the behavior when multiple batch attempts will fail and the stream blocks
@@ -215,10 +232,10 @@ func TestMutipleBatchAttempts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	mp := mockPool{
-		hold: make(chan struct{}),
-		err:  nil,
-		l:    5,
-		c:    5,
+		hold:         make(chan struct{}),
+		err:          nil,
+		poolCapacity: make(chan struct{}, 1),
+		asyncDelay:   make(chan struct{}, 10),
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -230,20 +247,23 @@ func TestMutipleBatchAttempts(t *testing.T) {
 
 	var jobCalled int
 	jobCalledRef := &jobCalled
+	callbackFeedback := make(chan struct{})
 
 	mj := mockJob{
 		numberOfItems: uint64(txnPerWorksetThreshold + 1),
 		id:            1,
 		callback: func(id int) {
-			<-mp.hold
 			*jobCalledRef = *jobCalledRef + id
+			<-callbackFeedback
 		},
 	}
+	// first saturate the pool
+	mp.poolCapacity <- struct{}{}
 	inputChan <- &mj
 
 	// wait for the job to be submitted to the pool
-	// since this is only a signe job with 1 task, and the pool is at capacity (l == c == 5), this will only happen when
-	// the numberOfBatchAttempts == 1
+	// since this is only a single job with 1 task, and the pool is at capacity,
+	// this will only happen when the numberOfBatchAttempts == 1
 	mp.hold <- struct{}{}
 
 	// here, the pool is saturated, and the stream should be blocked
@@ -253,19 +273,170 @@ func TestMutipleBatchAttempts(t *testing.T) {
 	default:
 	}
 
-	// now let the blocked job go forward and execute
-	mp.hold <- struct{}{}
+	// now let the pool regian capacity
+	<-mp.poolCapacity
 
+	// make sure it is processed before reading the value
+	callbackFeedback <- struct{}{}
+	require.Equal(t, 1, jobCalled)
+
+	// the stream should be unblocked now
 	inputChan <- &mj
 
-	// now the next job should go forward
+	// let the next job go through
 	mp.hold <- struct{}{}
-	require.Equal(t, 1, jobCalled)
-	// wait until the next job is ready to execute before canceling
-	mp.hold <- struct{}{}
+	// give the pool the capacity for it to process
+	<-mp.poolCapacity
 
-	// should shut down now
+	// make sure it is processed before reading the value
+	callbackFeedback <- struct{}{}
+	require.Equal(t, 2, jobCalled)
+
 	cancel()
 	sv.WaitForStop()
-	require.Equal(t, 2, jobCalled)
+}
+
+// TestErrors tests all the cases where exec pool returned error is handled
+// by ending the stream processing
+func TestErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	mp := mockPool{
+		hold:         make(chan struct{}),
+		err:          fmt.Errorf("Test error"),
+		poolCapacity: make(chan struct{}, 5),
+		asyncDelay:   make(chan struct{}, 10),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	inputChan := make(chan InputJob)
+	mbp := mockBatchProcessor{}
+	sv := MakeStreamToBatch(inputChan, &mp, &mbp)
+
+	/***************************************************/
+	// error adding to the pool when numberOfBatchable=0
+	/***************************************************/
+	sv.Start(ctx)
+	mj := mockJob{
+		numberOfItems: 0,
+	}
+	inputChan <- &mj
+	// let the enqueue pool process and return an error
+	mp.hold <- struct{}{}
+	// if errored, should not process the callback on the job
+	// This is based on the mockPool EnqueueBacklog behavior
+	require.False(t, mj.processed)
+	// the service should end
+	sv.WaitForStop()
+
+	/***************************************************/
+	// error adding to the pool when < txnPerWorksetThreshold
+	/***************************************************/
+	// Case where the timer ticks
+	sv.Start(ctx)
+	mj.numberOfItems = txnPerWorksetThreshold - 1
+	inputChan <- &mj
+	// let the enqueue pool process and return an error
+	mp.hold <- struct{}{}
+	require.False(t, mj.processed)
+	// the service should end
+	sv.WaitForStop()
+
+	/***************************************************/
+	// error adding to the pool when <= batchSizeBlockLimit
+	/***************************************************/
+	// Case where the timer ticks
+	sv.Start(ctx)
+	mj.numberOfItems = batchSizeBlockLimit
+	inputChan <- &mj
+	// let the enqueue pool process and return an error
+	mp.hold <- struct{}{}
+	require.False(t, mj.processed)
+	// the service should end
+	sv.WaitForStop()
+
+	/***************************************************/
+	// error adding to the pool when > batchSizeBlockLimit
+	/***************************************************/
+	// Case where the timer ticks
+	sv.Start(ctx)
+	mj.numberOfItems = batchSizeBlockLimit + 1
+	inputChan <- &mj
+	// let the enqueue pool process and return an error
+	mp.hold <- struct{}{}
+	require.False(t, mj.processed)
+	// the service should end
+	sv.WaitForStop()
+}
+
+// TestPendingJobOnRestart makes sure a pending job in the exec pool is cancled
+// when the Stream ctx is cancled, and a now one started with a new ctx
+func TestPendingJobOnRestart(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	mp := mockPool{
+		hold:         make(chan struct{}),
+		poolCapacity: make(chan struct{}, 2),
+		asyncDelay:   make(chan struct{}),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	inputChan := make(chan InputJob)
+	mbp := mockBatchProcessor{
+		notify: make(chan struct{}, 1),
+	}
+	sv := MakeStreamToBatch(inputChan, &mp, &mbp)
+
+	// start with a saturated pool so that the job will not go through before
+	// the ctx is cancled
+	mp.poolCapacity <- struct{}{}
+
+	sv.Start(ctx)
+	mj := mockJob{
+		numberOfItems: 1,
+	}
+	inputChan <- &mj
+	// wait for the job to be submitted to the exec pool, waiting for capacity
+	mp.hold <- struct{}{}
+
+	// now the job should be waiting in the exec pool queue waiting to be executed
+
+	// cancel the ctx
+	cancel()
+	// make sure EnqueueBacklog has returned and the stream can terminate
+	sv.WaitForStop()
+
+	// start a new session
+	ctx, cancel = context.WithCancel(context.Background())
+	sv.Start(ctx)
+
+	// submit a new job
+	callbackFeedback := make(chan struct{}, 1)
+	mjNew := mockJob{
+		numberOfItems: 1,
+		callback: func(id int) {
+			callbackFeedback <- struct{}{}
+		},
+	}
+	inputChan <- &mjNew
+	mp.hold <- struct{}{}
+	<-mp.poolCapacity
+
+	// when the exec pool tries to execute the jobs,
+	// the function in addBatchToThePoolNow should abort the old and process the new
+	<-mp.asyncDelay
+	<-mp.asyncDelay
+
+	// wait for the notifiation from cleanup before checking the TestPendingJobOnRestart
+	<-mbp.notify
+	require.Error(t, mj.returnError)
+	require.False(t, mj.processed)
+
+	<-callbackFeedback
+	require.True(t, mjNew.processed)
+
+	cancel()
+	sv.WaitForStop()
 }
