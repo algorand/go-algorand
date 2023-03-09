@@ -78,8 +78,8 @@ func (s step) nextVoteRanges() (lower, upper time.Duration) {
 		upper = lower + extra
 	}
 
-	// e.g. if s == 14
-	// extra = 2 ^ 11 * 2000ms = 2048 * 2.0 = 4096s
+	// e.g. if s == 11
+	// extra = 2 ^ 8 * 2000ms = 256 * 2.0 = 512s
 
 	return lower, upper
 }
