@@ -478,6 +478,7 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 
 	for _, persistedAcct := range dcc.updatedPersistedOnlineAccounts {
 		ao.baseOnlineAccounts.write(persistedAcct)
+		// add account into onlineAccountsCache only if prior history exists
 		ao.onlineAccountsCache.writeFrontIfExist(
 			persistedAcct.Addr,
 			cachedOnlineAccount{
