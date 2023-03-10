@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
@@ -35,7 +36,7 @@ import (
 func BenchmarkTxnTypes(b *testing.B) {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	ledgertesting.BenchConsensusRange(b, 30, 0, func(b *testing.B, ver int, cv protocol.ConsensusVersion) {
-		l := newSimpleLedgerWithConsensusVersion(b, genBalances, cv)
+		l := newSimpleLedgerWithConsensusVersion(b, genBalances, cv, config.GetDefaultLocal())
 		defer l.Close()
 
 		createasa := txntest.Txn{

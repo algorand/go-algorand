@@ -98,7 +98,7 @@ type NodeInterface interface {
 	GenesisID() string
 	GenesisHash() crypto.Digest
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
-	Simulate(txgroup []transactions.SignedTxn) (vb *ledgercore.ValidatedBlock, missingSignatures bool, err error)
+	Simulate(txgroup []transactions.SignedTxn) (result simulation.Result, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
 	SuggestedFee() basics.MicroAlgos
@@ -341,7 +341,7 @@ func (v2 *Handlers) ShutdownNode(ctx echo.Context, params model.ShutdownNodePara
 // AccountInformation gets account information for a given account.
 // (GET /v2/accounts/{address})
 func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params model.AccountInformationParams) error {
-	handle, contentType, err := getCodecHandle((*model.Format)(params.Format))
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -488,7 +488,7 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 // AccountAssetInformation gets account information about a given asset.
 // (GET /v2/accounts/{address}/assets/{asset-id})
 func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, assetID uint64, params model.AccountAssetInformationParams) error {
-	handle, contentType, err := getCodecHandle((*model.Format)(params.Format))
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -541,7 +541,7 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, as
 // AccountApplicationInformation gets account information about a given app.
 // (GET /v2/accounts/{address}/applications/{application-id})
 func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address string, applicationID uint64, params model.AccountApplicationInformationParams) error {
-	handle, contentType, err := getCodecHandle((*model.Format)(params.Format))
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -598,7 +598,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address stri
 // GetBlock gets the block for the given round.
 // (GET /v2/blocks/{round})
 func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlockParams) error {
-	handle, contentType, err := getCodecHandle((*model.Format)(params.Format))
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -918,15 +918,30 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, model.PostTransactionsResponse{TxId: txid.String()})
 }
 
+// preEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
+type preEncodedSimulateTxnResult struct {
+	Txn              PreEncodedTxInfo `codec:"txn-result"`
+	MissingSignature *bool            `codec:"missing-signature,omitempty"`
+}
+
+// preEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
+type preEncodedSimulateTxnGroupResult struct {
+	Txns           []preEncodedSimulateTxnResult `codec:"txn-results"`
+	FailureMessage *string                       `codec:"failure-message,omitempty"`
+	FailedAt       *[]uint64                     `codec:"failed-at,omitempty"`
+}
+
+// preEncodedSimulateResponse mirrors model.SimulateResponse
+type preEncodedSimulateResponse struct {
+	Version      uint64                             `codec:"version"`
+	LastRound    uint64                             `codec:"last-round"`
+	TxnGroups    []preEncodedSimulateTxnGroupResult `codec:"txn-groups"`
+	WouldSucceed bool                               `codec:"would-succeed"`
+}
+
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
 // (POST /v2/transactions/simulate)
-func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
-	if !v2.Node.Config().EnableExperimentalAPI {
-		// Right now this is a redundant/useless check at runtime, since experimental APIs are not registered when EnableExperimentalAPI=false.
-		// However, this endpoint won't always be experimental, so I've left this here as a reminder to have some other flag guarding its usage.
-		return ctx.String(http.StatusNotFound, fmt.Sprintf("%s was not enabled in the configuration file by setting EnableExperimentalAPI to true", ctx.Request().URL.Path))
-	}
-
+func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateTransactionParams) error {
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
@@ -942,31 +957,30 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	var res model.SimulationResponse
-
 	// Simulate transaction
-	_, missingSignatures, err := v2.Node.Simulate(txgroup)
+	simulationResult, err := v2.Node.Simulate(txgroup)
 	if err != nil {
-		var invalidTxErr *simulation.InvalidTxGroupError
-		var evalErr *simulation.EvalFailureError
+		var invalidTxErr simulation.InvalidTxGroupError
 		switch {
 		case errors.As(err, &invalidTxErr):
 			return badRequest(ctx, invalidTxErr, invalidTxErr.Error(), v2.Log)
-		case errors.As(err, &evalErr):
-			res.FailureMessage = evalErr.Error()
 		default:
 			return internalError(ctx, err, err.Error(), v2.Log)
 		}
 	}
-	res.MissingSignatures = missingSignatures
 
-	// Return msgpack response
-	msgpack, err := encode(protocol.CodecHandle, &res)
+	response := convertSimulationResult(simulationResult)
+
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+	data, err := encode(handle, &response)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
 
-	return ctx.Blob(http.StatusOK, "application/msgpack", msgpack)
+	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
 // TealDryrun takes transactions and additional simulated ledger state and returns debugging information.
@@ -1072,26 +1086,20 @@ func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
 // GetLedgerStateDelta returns the deltas for a given round.
 // This should be a representation of the ledgercore.StateDelta object.
 // (GET /v2/deltas/{round})
-func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64) error {
+func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64, params model.GetLedgerStateDeltaParams) error {
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
 	sDelta, err := v2.Node.LedgerForAPI().GetStateDeltaForRound(basics.Round(round))
 	if err != nil {
-		return internalError(ctx, err, errFailedRetrievingStateDelta, v2.Log)
+		return notFound(ctx, err, errFailedRetrievingStateDelta, v2.Log)
 	}
-	consensusParams, err := v2.Node.LedgerForAPI().ConsensusParams(basics.Round(round))
+	data, err := encode(handle, sDelta)
 	if err != nil {
-		return internalError(ctx, fmt.Errorf("unable to retrieve consensus params for round %d", round), errInternalFailure, v2.Log)
+		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
-	hdr, err := v2.Node.LedgerForAPI().BlockHdr(basics.Round(round))
-	if err != nil {
-		return internalError(ctx, fmt.Errorf("unable to retrieve block header for round %d", round), errInternalFailure, v2.Log)
-	}
-
-	response, err := stateDeltaToLedgerDelta(sDelta, consensusParams, hdr.RewardsLevel, round)
-	if err != nil {
-		return internalError(ctx, err, errInternalFailure, v2.Log)
-	}
-
-	return ctx.JSON(http.StatusOK, response)
+	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
 // TransactionParams returns the suggested parameters for constructing a new transaction.
@@ -1190,7 +1198,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.Inners = convertInners(&txn)
 	}
 
-	handle, contentType, err := getCodecHandle((*model.Format)(params.Format))
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -1224,7 +1232,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		addrPtr = &addr
 	}
 
-	handle, contentType, err := getCodecHandle((*model.Format)(format))
+	handle, contentType, err := getCodecHandle(format)
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -1295,6 +1303,8 @@ func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string) error {
 		code = http.StatusOK
 	case *node.CatchpointUnableToStartError:
 		return badRequest(ctx, err, err.Error(), v2.Log)
+	case *node.CatchpointSyncRoundFailure:
+		return badRequest(ctx, err, fmt.Sprintf(errFailedToStartCatchup, err), v2.Log)
 	default:
 		return internalError(ctx, err, fmt.Sprintf(errFailedToStartCatchup, err), v2.Log)
 	}
@@ -1645,4 +1655,9 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 		Result: program,
 	}
 	return ctx.JSON(http.StatusOK, response)
+}
+
+// ExperimentalCheck is only available when EnabledExperimentalAPI is true
+func (v2 *Handlers) ExperimentalCheck(ctx echo.Context) error {
+	return ctx.JSON(http.StatusOK, true)
 }

@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -757,12 +757,12 @@ return`
 
 	pad, err := l.accts.accountsq.LookupAccount(userLocal)
 	a.NoError(err)
-	a.Equal(store.BaseAccountData{}, pad.AccountData)
-	a.Zero(pad.Rowid)
+	a.Equal(trackerdb.BaseAccountData{}, pad.AccountData)
+	a.Nil(pad.Ref)
 	prd, err := l.accts.accountsq.LookupResources(userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Zero(prd.Addrid)
-	emptyResourceData := store.MakeResourcesData(0)
+	a.Nil(prd.AcctRef)
+	emptyResourceData := trackerdb.MakeResourcesData(0)
 	a.Equal(emptyResourceData, prd.Data)
 }
 
@@ -894,11 +894,11 @@ return`
 	pad, err := l.accts.accountsq.LookupAccount(creator)
 	a.NoError(err)
 	a.Empty(pad.AccountData)
-	a.Zero(pad.Rowid)
+	a.Nil(pad.Ref)
 	prd, err := l.accts.accountsq.LookupResources(creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Zero(prd.Addrid)
-	emptyResourceData := store.MakeResourcesData(0)
+	a.Nil(prd.AcctRef)
+	emptyResourceData := trackerdb.MakeResourcesData(0)
 	a.Equal(emptyResourceData, prd.Data)
 }
 

@@ -362,6 +362,7 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 	}
 	ledger.Reset()
 	ep.Ledger = ledger
+	ep.SigLedger = ledger
 	testAppsBytes(t, codes, ep, expected...)
 }
 
@@ -1301,6 +1302,7 @@ intc_1
 				},
 			)
 			ep.Ledger = ledger
+			ep.SigLedger = ledger
 
 			saved := ops.Program[firstCmdOffset]
 			require.Equal(t, OpsByName[0]["intc_0"].Opcode, saved)
@@ -1353,6 +1355,7 @@ func TestAppLocalStateReadWrite(t *testing.T) {
 		},
 	)
 	ep.Ledger = ledger
+	ep.SigLedger = ledger
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
 	ledger.NewLocals(txn.Txn.Sender, 100)
 
@@ -1733,6 +1736,7 @@ int 0x77
 		},
 	)
 	ep.Ledger = ledger
+	ep.SigLedger = ledger
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
 
 	delta := testApp(t, source, ep)
@@ -1908,6 +1912,7 @@ int 7
 	ledger := NewLedger(nil)
 	ledger.NewAccount(txn.Txn.Sender, 1)
 	ep.Ledger = ledger
+	ep.SigLedger = ledger
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
 
 	delta := testApp(t, source, ep)
@@ -2111,6 +2116,7 @@ int 1
 		},
 	)
 	ep.Ledger = ledger
+	ep.SigLedger = ledger
 	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
 	ledger.NewLocals(txn.Txn.Sender, 100)
 	ledger.NewAccount(txn.Txn.Receiver, 1)
