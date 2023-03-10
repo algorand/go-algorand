@@ -457,7 +457,7 @@ func (cb *roundCowState) StatefulEval(gi int, params *logic.EvalParams, aidx bas
 	// Make a child cow to eval our program in
 	calf := cb.child(1)
 	defer func() {
-        // get rid of references to the object that is about to be recycled
+		// get rid of references to the object that is about to be recycled
 		params.Ledger = nil 
 		params.SigLedger = nil
 		calf.recycle()
