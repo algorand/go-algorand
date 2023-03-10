@@ -193,7 +193,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	if !ao.disableCache {
 		ao.baseOnlineAccounts.init(ao.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
 	} else {
-		ao.baseOnlineAccounts.init(ao.log, 0, 0)
+		ao.baseOnlineAccounts.init(ao.log, 0, 1)
 	}
 	return
 }
@@ -693,7 +693,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
 		persistedData, err = ao.accountsq.LookupOnline(addr, rnd)
-		if err != nil || persistedData.Rowid == 0 {
+		if err != nil || persistedData.Ref == nil {
 			// no such online account, return empty
 			return ledgercore.OnlineAccountData{}, err
 		}
