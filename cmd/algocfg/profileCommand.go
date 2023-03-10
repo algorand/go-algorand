@@ -70,7 +70,7 @@ var (
 			cfg.Archival = true
 			cfg.EnableLedgerService = true
 			cfg.EnableBlockService = true
-			cfg.NetAddress = "4160"
+			cfg.NetAddress = ":4160"
 			return cfg
 		},
 	}
