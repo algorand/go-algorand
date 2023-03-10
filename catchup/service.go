@@ -233,10 +233,10 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 
 // fetchAndWrite fetches a block, checks the cert, and writes it to the ledger. Cert checking and ledger writing both wait for the ledger to advance if necessary.
 // Returns false if we should stop trying to catch up.  This may occur for several reasons:
-//  - If the context is canceled (e.g. if the node is shutting down)
-//  - If we couldn't fetch the block (e.g. if there are no peers available or we've reached the catchupRetryLimit)
-//  - If the block is already in the ledger (e.g. if agreement service has already written it)
-//  - If the retrieval of the previous block was unsuccessful
+//   - If the context is canceled (e.g. if the node is shutting down)
+//   - If we couldn't fetch the block (e.g. if there are no peers available or we've reached the catchupRetryLimit)
+//   - If the block is already in the ledger (e.g. if agreement service has already written it)
+//   - If the retrieval of the previous block was unsuccessful
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
 	// If sync-ing this round is not intended, don't fetch it
 	if dontSyncRound := s.GetDisableSyncRound(); dontSyncRound != 0 && r >= basics.Round(dontSyncRound) {

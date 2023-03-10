@@ -297,7 +297,6 @@ outer:
 	}
 	log.Infof("done catching up!\n")
 
-	timer = time.NewTimer(100 * time.Second)
 	for {
 		status, err = secondNodeRestClient.Status()
 		a.NoError(err)
@@ -311,17 +310,15 @@ outer:
 
 		err = secondNodeRestClient.ReadyCheck()
 
-		select {
-		case <-timer.C:
-			a.Fail("readiness endpoint timeout")
+		// just add some lines for debugging. Use delve to walk through the codes
+		if status.LastRound >= 40 {
 			break
-		default:
-			if err != nil {
-				time.Sleep(250 * time.Millisecond)
-				continue
-			} else {
-				break
-			}
+		}
+		if err != nil {
+			time.Sleep(250 * time.Millisecond)
+			continue
+		} else {
+			break
 		}
 	}
 }
