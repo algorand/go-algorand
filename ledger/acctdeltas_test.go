@@ -2797,6 +2797,107 @@ func TestOnlineAccountsDeletion(t *testing.T) {
 	}
 }
 
+type mockOnlineAccountsErrorWriter struct {
+}
+
+var errMockOnlineAccountsErrorWriter = errors.New("synthetic err")
+
+func (w *mockOnlineAccountsErrorWriter) InsertOnlineAccount(addr basics.Address, normBalance uint64, data trackerdb.BaseOnlineAccountData, updRound uint64, voteLastValid uint64) (ref trackerdb.OnlineAccountRef, err error) {
+	return nil, errMockOnlineAccountsErrorWriter
+}
+
+func (w *mockOnlineAccountsErrorWriter) Close() {}
+
+// TestOnlineAccountsNewRoundError checks onlineAccountsNewRoundImpl propagates errors to the caller
+func TestOnlineAccountsNewRoundError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	writer := &mockOnlineAccountsErrorWriter{}
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	addrA := ledgertesting.RandomAddress()
+
+	// acct A is new, offline and then online => exercise new entry for account
+	deltaA := onlineAccountDelta{
+		address: addrA,
+		newAcct: []trackerdb.BaseOnlineAccountData{
+			{
+				MicroAlgos: basics.MicroAlgos{Raw: 100_000_000},
+			},
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
+				BaseVotingData: trackerdb.BaseVotingData{VoteFirstValid: 100},
+			},
+		},
+		updRound:  []uint64{1, 2},
+		newStatus: []basics.Status{basics.Offline, basics.Online},
+	}
+	updates := compactOnlineAccountDeltas{}
+	updates.deltas = append(updates.deltas, deltaA)
+	lastUpdateRound := basics.Round(1)
+	updated, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.Error(t, err)
+	require.Equal(t, errMockOnlineAccountsErrorWriter, err)
+	require.Empty(t, updated)
+
+	// update acct A => exercise "update"
+	deltaA2 := onlineAccountDelta{
+		address: addrA,
+		newAcct: []trackerdb.BaseOnlineAccountData{
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
+				BaseVotingData: trackerdb.BaseVotingData{VoteFirstValid: 200},
+			},
+		},
+		updRound:  []uint64{3},
+		newStatus: []basics.Status{basics.Online},
+		oldAcct: trackerdb.PersistedOnlineAccountData{
+			Addr: addrA,
+			Ref:  &mockEntryRef{},
+			AccountData: trackerdb.BaseOnlineAccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
+				BaseVotingData: trackerdb.BaseVotingData{VoteFirstValid: 100},
+			},
+		},
+	}
+	updates = compactOnlineAccountDeltas{}
+	updates.deltas = append(updates.deltas, deltaA2)
+	lastUpdateRound = basics.Round(3)
+	updated, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.Error(t, err)
+	require.Equal(t, errMockOnlineAccountsErrorWriter, err)
+	require.Empty(t, updated)
+
+	// make acct A offline => exercise "deletion"
+	deltaA3 := onlineAccountDelta{
+		address: addrA,
+		newAcct: []trackerdb.BaseOnlineAccountData{
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
+				BaseVotingData: trackerdb.BaseVotingData{}, // empty
+			},
+		},
+		updRound:  []uint64{4},
+		newStatus: []basics.Status{basics.Offline},
+		oldAcct: trackerdb.PersistedOnlineAccountData{
+			Addr: addrA,
+			Ref:  &mockEntryRef{},
+			AccountData: trackerdb.BaseOnlineAccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
+				BaseVotingData: trackerdb.BaseVotingData{VoteFirstValid: 200},
+			},
+		},
+	}
+	updates = compactOnlineAccountDeltas{}
+	updates.deltas = append(updates.deltas, deltaA3)
+	lastUpdateRound = basics.Round(4)
+	updated, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.Error(t, err)
+	require.Equal(t, errMockOnlineAccountsErrorWriter, err)
+	require.Empty(t, updated)
+}
+
 func randomBaseAccountData() trackerdb.BaseAccountData {
 	vd := trackerdb.BaseVotingData{
 		VoteFirstValid:  basics.Round(crypto.RandUint64()),

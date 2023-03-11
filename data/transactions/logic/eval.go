@@ -709,7 +709,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		return false, nil, errors.New("no ledger in contract eval")
 	}
 	if params.SigLedger == nil {
-		params.SigLedger = params.Ledger
+		return false, nil, errors.New("no sig ledger in contract eval")
 	}
 	if aid == 0 {
 		return false, nil, errors.New("0 appId in contract eval")
