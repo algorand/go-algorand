@@ -196,7 +196,7 @@ func TestStreamToBatchBasic(t *testing.T) {
 	}
 }
 
-// TestNoInputYet let the servicd start and get to the timeout without any inputs
+// TestNoInputYet let the service start and get to the timeout without any inputs
 func TestNoInputYet(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
