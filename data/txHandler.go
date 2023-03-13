@@ -125,8 +125,8 @@ type TxHandler struct {
 	cacheConfig           txHandlerConfig
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
-	streamVerifier        *verify.StreamToBatch
-	streamVerifierChan    chan verify.InputJob
+	streamVerifier        *execpool.StreamToBatch
+	streamVerifierChan    chan execpool.InputJob
 	streamVerifierDropped chan *verify.UnverifiedTxnSigJob
 	erl                   *util.ElasticRateLimiter
 }
@@ -177,7 +177,7 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		msgCache:              makeSaltedCache(2 * txBacklogSize),
 		txCanonicalCache:      makeDigestCache(2 * txBacklogSize),
 		cacheConfig:           txHandlerConfig{opts.Config.TxFilterRawMsgEnabled(), opts.Config.TxFilterCanonicalEnabled()},
-		streamVerifierChan:    make(chan verify.InputJob),
+		streamVerifierChan:    make(chan execpool.InputJob),
 		streamVerifierDropped: make(chan *verify.UnverifiedTxnSigJob),
 	}
 
@@ -198,7 +198,7 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 	if err != nil {
 		return nil, err
 	}
-	handler.streamVerifier = verify.MakeStreamToBatch(handler.streamVerifierChan, handler.txVerificationPool, txnElementProcessor)
+	handler.streamVerifier = execpool.MakeStreamToBatch(handler.streamVerifierChan, handler.txVerificationPool, txnElementProcessor)
 	go handler.droppedTxnWatcher()
 	return handler, nil
 }
