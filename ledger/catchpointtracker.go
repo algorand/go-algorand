@@ -65,11 +65,14 @@ const (
 	// This version introduced state proof verification data and versioning for CatchpointLabel.
 	CatchpointFileVersionV7 = uint64(0202)
 
-	CatchpointContentFileName          = "content.msgpack"
-	CatchpointSPVerificationFileName   = "stateProofVerificationContext.msgpack"
-	CatchpointBalancesFileNameTemplate = "balances.%d.msgpack"
-	CatchpointBalancesFileNamePrefix   = "balances."
-	CatchpointBalancesFileNameSuffix   = ".msgpack"
+	// CatchpointContentFileName is a name of a file with catchpoint header info inside tar archive
+	CatchpointContentFileName = "content.msgpack"
+	// catchpointSPVerificationFileName is a name of a file with stateproof verification data
+	catchpointSPVerificationFileName = "stateProofVerificationContext.msgpack"
+	// catchpointBalancesFileNameTemplate is a template name of files with balances data
+	catchpointBalancesFileNameTemplate = "balances.%d.msgpack"
+	catchpointBalancesFileNamePrefix   = "balances."
+	catchpointBalancesFileNameSuffix   = ".msgpack"
 )
 
 func catchpointStage1Encoder(w io.Writer) (io.WriteCloser, error) {
@@ -1452,9 +1455,9 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx trackerdb.
 					if !added {
 						// we need to translate the "addrid" into actual account address so that
 						// we can report the failure.
-						addr, err := arw.LookupAccountAddressFromAddressID(ctx, acct.Addrid)
+						addr, err := arw.LookupAccountAddressFromAddressID(ctx, acct.AccountRef)
 						if err != nil {
-							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account id %d : %v", hex.EncodeToString(acct.Digest), acct.Addrid, err)
+							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account id %d : %v", hex.EncodeToString(acct.Digest), acct.AccountRef, err)
 						} else {
 							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account %v", hex.EncodeToString(acct.Digest), addr)
 						}

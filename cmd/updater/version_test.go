@@ -27,6 +27,8 @@ import (
 
 func TestGetVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	testValidVersion(t, "algonode_update_0.1.0.log", uint64(0x00010000))
 	testValidVersion(t, "algo_update_0.1.0", uint64(0x00010000))
 	testValidVersion(t, "algo_update_65535.1.0", uint64(0xFFFF00010000))

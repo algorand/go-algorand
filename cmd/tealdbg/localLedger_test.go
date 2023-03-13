@@ -36,6 +36,8 @@ import (
 // intermediate changes.
 func TestBalanceAdapterStateChanges(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	source := `#pragma version 2
