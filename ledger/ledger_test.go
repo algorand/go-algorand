@@ -1752,7 +1752,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 
 	triggerTrackerFlush(t, l, genesisInitState)
 	l.WaitForCommit(l.Latest())
-	blk := createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
+	blk := createBlkWithStateproof(t, basics.Round(maxBlocks), proto, genesisInitState, l, accounts)
 	_, err = l.Validate(context.Background(), blk, backlogPool)
 	require.ErrorContains(t, err, "state proof crypto error")
 
@@ -1776,23 +1776,30 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	}
 	l.acctsOnline.voters.votersMu.Unlock()
 
-	// However, we are still able to very a state proof sicne we use the tracker
-	blk = createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
+	// However, we are still able to very a state proof since we use the tracker
+	blk = createBlkWithStateproof(t, basics.Round(maxBlocks), proto, genesisInitState, l, accounts)
 	_, err = l.Validate(context.Background(), blk, backlogPool)
 	require.ErrorContains(t, err, "state proof crypto error")
 }
 
-func createBlkWithStateproof(t *testing.T, maxBlocks int, proto config.ConsensusParams, genesisInitState ledgercore.InitState, l *Ledger, accounts map[basics.Address]basics.AccountData) bookkeeping.Block {
-	sp := stateproof.StateProof{SignedWeight: 5000000000000000}
+func createStateProofTxn(lastBlockRound basics.Round, proto config.ConsensusParams, genesisInitState ledgercore.InitState) transactions.SignedTxn {
 	var stxn transactions.SignedTxn
+
+	sp := stateproof.StateProof{SignedWeight: 5000000000000000}
 	stxn.Txn.Type = protocol.StateProofTx
 	stxn.Txn.Sender = transactions.StateProofSender
-	stxn.Txn.FirstValid = basics.Round(uint64(maxBlocks) - proto.StateProofInterval)
+	stxn.Txn.FirstValid = lastBlockRound - basics.Round(proto.StateProofInterval)
 	stxn.Txn.LastValid = stxn.Txn.FirstValid + basics.Round(proto.MaxTxnLife)
 	stxn.Txn.GenesisHash = genesisInitState.GenesisHash
 	stxn.Txn.StateProofType = protocol.StateProofBasic
 	stxn.Txn.Message.LastAttestedRound = 512
 	stxn.Txn.StateProof = sp
+
+	return stxn
+}
+
+func createBlkWithStateproof(t *testing.T, lastBlockRound basics.Round, proto config.ConsensusParams, genesisInitState ledgercore.InitState, l *Ledger, accounts map[basics.Address]basics.AccountData) bookkeeping.Block {
+	stxn := createStateProofTxn(lastBlockRound, proto, genesisInitState)
 
 	blk := makeNewEmptyBlock(t, l, t.Name(), accounts)
 	proto = config.Consensus[blk.CurrentProtocol]
@@ -3370,7 +3377,7 @@ func TestLedgerSPTrackerAfterReplay(t *testing.T) {
 	a.Equal(0, len(l.spVerification.pendingDeleteContexts))
 
 	// Add StateProof transaction (for round 512) and apply without validating, advancing the NextStateProofRound to 768
-	spblk := createBlkWithStateproof(t, int(blk.BlockHeader.Round), proto, genesisInitState, l, genesisInitState.Accounts)
+	spblk := createBlkWithStateproof(t, blk.BlockHeader.Round, proto, genesisInitState, l, genesisInitState.Accounts)
 	err = l.AddBlock(spblk, agreement.Certificate{})
 	a.NoError(err)
 	a.Equal(1, len(l.spVerification.pendingDeleteContexts))
@@ -3384,4 +3391,90 @@ func TestLedgerSPTrackerAfterReplay(t *testing.T) {
 
 	a.Equal(1, len(l.spVerification.pendingDeleteContexts))
 	verifyStateProofVerificationTracking(t, &l.spVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
+}
+
+// TestLedgerSPUpgrade check ledger accepts stateproof transactions right after the protocol with StateProofUseTrackerVerification in effect
+// To simulate the use case when a upgraded node starts right before the protocol switch or right after,
+// receives a stateproof transaction and have to use the new stateproof tracker data to apply it:
+//   open ledger with DB version = 9, consensus=future
+//   remove sp ver tracker
+//   add blocks
+//   reload ledger with version=10
+//   eval a stateproof txn
+//   ensure it, ensure it fails with stateproof crypto error and not "not found" ledger error
+func TestLedgerSPUpgrade(t *testing.T) { //nolint:paralleltest // Not parallel because it AccountDBVersion
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	consensusVersion := protocol.ConsensusFuture
+	proto := config.Consensus[consensusVersion]
+
+	var origDBVersion = trackerdb.AccountDBVersion
+	trackerdb.AccountDBVersion = 9
+	defer func() {
+		trackerdb.AccountDBVersion = origDBVersion
+	}()
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, consensusVersion, 100)
+	genesisInitState.Block.CurrentProtocol = consensusVersion
+	const inMem = false
+	cfg := config.GetDefaultLocal()
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	a.NoError(err)
+	// remove the stateproof tracker
+	l.trackerMu.Lock()
+	spVerTrackerIdx := -1
+	for i := range l.trackers.trackers {
+		if _, ok := l.trackers.trackers[i].(*spVerificationTracker); ok {
+			spVerTrackerIdx = i
+		}
+	}
+	a.GreaterOrEqual(spVerTrackerIdx, 0)
+	l.trackers.trackers = append(l.trackers.trackers[:spVerTrackerIdx], l.trackers.trackers[spVerTrackerIdx+1:]...)
+	l.trackerMu.Unlock()
+
+	defer l.Close()
+
+	// Add 1024 empty block without advancing NextStateProofRound
+	firstStateProofRound := basics.Round(proto.StateProofInterval * 2) // 512
+	blk := genesisInitState.Block
+	var sp bookkeeping.StateProofTrackingData
+	sp.StateProofNextRound = firstStateProofRound // 512
+	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+		protocol.StateProofBasic: sp,
+	}
+
+	for i := uint64(0); i < proto.StateProofInterval*4; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += 10
+		err = l.AddBlock(blk, agreement.Certificate{})
+		a.NoError(err)
+	}
+	commitRoundLookback(basics.Round(cfg.MaxAcctLookback), l)
+	l.WaitForCommit(l.Latest())
+
+	// restore the stateproof vefification tracker
+	trackerdb.AccountDBVersion = origDBVersion
+	err = l.reloadLedger()
+	a.NoError(err)
+
+	// Add StateProof transaction (for round 512) and apply without validating, advancing the NextStateProofRound to 768
+	spblkHdr := blk.BlockHeader
+	spblkHdr.Round++
+	spblkHdr.TimeStamp = blk.BlockHeader.TimeStamp + 1
+	spblkHdr.Branch = blk.Hash()
+	txgroup := []transactions.SignedTxnWithAD{
+		{SignedTxn: createStateProofTxn(spblkHdr.Round, proto, genesisInitState), ApplyData: transactions.ApplyData{}},
+	}
+	eval, err := l.StartEvaluator(spblkHdr, 1, 1000)
+	a.NoError(err)
+	err = eval.TransactionGroup(txgroup)
+
+	// expect "cannot calculate a ln integer"... error and not "requested state proof verification context not found"
+	a.NotErrorIs(err, errSPVerificationContextNotFound)
+	a.ErrorIs(err, stateproof.ErrIllegalInputForLnApprox)
+
 }
