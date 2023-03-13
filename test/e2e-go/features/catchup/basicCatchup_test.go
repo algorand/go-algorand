@@ -57,7 +57,7 @@ func TestBasicCatchup(t *testing.T) {
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes100Second.json"))
 	defer fixture.Shutdown()
 
-	// Get 2nd node so we wait until we know they're at target block
+	// Get 2nd node, so we wait until we know they're at target block
 	nc, err := fixture.GetNodeController("Node")
 	a.NoError(err)
 

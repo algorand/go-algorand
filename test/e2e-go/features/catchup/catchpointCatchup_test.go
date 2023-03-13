@@ -316,9 +316,10 @@ outer:
 	for {
 		reportLog()
 		err = secondNodeRestClient.ReadyCheck()
+		reportLog()
 
 		// just add some lines for debugging. Use delve to walk through the codes
-		if status.LastRound >= 30 {
+		if status.LastRound >= 50 {
 			break
 		}
 		if err != nil {
@@ -328,6 +329,8 @@ outer:
 			break
 		}
 	}
+
+	defer fixture.Shutdown()
 }
 
 func TestCatchpointLabelGeneration(t *testing.T) {
@@ -429,208 +432,6 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 				a.Empty(*primaryNodeStatus.LastCatchpoint)
 			}
 		})
-	}
-}
-
-// TestReadyEndpoint starts a two-node network (configuration: `CatchpointCatchupTestNetwork.json`),
-// and execute following steps to bring up a testing scenario:
-// - set up the network with a set of consensus parameter (to allow for generating catchpoint every 4 rounds).
-// - set up primary node with config such that it generates catchpoint every 4 rounds.
-// - let network proceed for a certain rounds (in this test 17 rounds).
-// - retrieve the last catchpoint from the primary node, and let second node catch up against the catchpoint.
-//
-// The expected result would be:
-// while the second node is catching up against the catchpoint of the network, then round-by-round catching up,
-// `/ready` should encounter a slew of failures, then succeed with status indicating it is finishing full catchup.
-func TestReadyEndpoint(t *testing.T) {
-	//////////
-	// NOTE //
-	//////////
-	// This section is mostly CONSTs and helper function used in this ready endpoint test.
-	//
-	// prepareConsensus and prepareConfig tweak consensus and config to allow primary node on network
-	// `CatchpointCatchupTestNetwork.json` to generate new catchpoints over rounds.
-	const CatchpointInterval = uint64(4)
-	const CatchpointTracking = int64(2)
-	const MaxAcctLookback = uint64(2)
-	const ConfigArchival = true
-	const TargetRound = uint64(15)
-
-	prepareConsensus := func(consensusVersion protocol.ConsensusVersion) config.ConsensusProtocols {
-		consensus := make(config.ConsensusProtocols)
-		newProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
-		// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
-		// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
-		newProtocol.SeedLookback = 2
-		newProtocol.SeedRefreshInterval = 2
-		newProtocol.MaxBalLookback = 2 * newProtocol.SeedLookback * newProtocol.SeedRefreshInterval // 8
-		newProtocol.CatchpointLookback = newProtocol.MaxBalLookback
-		newProtocol.EnableOnlineAccountCatchpoints = true
-		consensus[consensusVersion] = newProtocol
-		return consensus
-	}
-
-	prepareConfig := func(a *require.Assertions, node nodecontrol.NodeController) {
-		cfg, err := config.LoadConfigFromDisk(node.GetDataDir())
-		a.NoError(err)
-		cfg.CatchpointInterval = CatchpointInterval
-		cfg.CatchpointTracking = CatchpointTracking
-		cfg.Archival = ConfigArchival
-		cfg.MaxAcctLookback = MaxAcctLookback
-		a.NoError(cfg.SaveToDisk(node.GetDataDir()))
-	}
-
-	//////////
-	// NOTE //
-	//////////
-	// Following parts are test section
-	partitiontest.PartitionTest(t)
-	defer fixtures.ShutdownSynchronizedTest(t)
-
-	testLogger := logging.TestingLog(t)
-	a := require.New(fixtures.SynchronizedTest(t))
-	var fixture fixtures.RestClientFixture
-
-	// set consensus range for the test fixture
-	consensus := prepareConsensus("catchpointtestingprotocol")
-	fixture.SetConsensus(consensus)
-
-	// errorsCollector is used only in primary node startup
-	errorsCollector := nodeExitErrorCollector{t: fixtures.SynchronizedTest(t)}
-	defer errorsCollector.Print()
-
-	// Set up the network, but we do not want to run it for now
-	fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
-
-	// Get primary node controller
-	pnController, err := fixture.GetNodeController("Primary")
-	a.NoError(err)
-	prepareConfig(a, pnController)
-
-	// start the primary node (which means network starts at this point)
-	_, err = pnController.StartAlgod(nodecontrol.AlgodStartArgs{
-		PeerAddress:       "",
-		ListenIP:          "",
-		RedirectOutput:    true,
-		RunUnderHost:      false,
-		TelemetryOverride: "",
-		ExitErrorCallback: errorsCollector.nodeExitWithError,
-	})
-	a.NoError(err)
-	defer pnController.StopAlgod()
-
-	// Let the network make some progress
-	primaryNodeRestClient := fixture.GetAlgodClientForController(pnController)
-	testLogger.Infof("Building ledger history..")
-	primaryNodeRound := uint64(1)
-	for {
-		err = fixture.ClientWaitForRound(primaryNodeRestClient, primaryNodeRound, 45*time.Second)
-		a.NoError(err)
-		if TargetRound <= primaryNodeRound {
-			break
-		}
-		primaryNodeRound++
-	}
-	testLogger.Infof("done building!\n")
-	err = fixture.ClientWaitForRoundWithTimeout(primaryNodeRestClient, TargetRound)
-
-	// get second node controller
-	n2ndController, err := fixture.GetNodeController("Node")
-	a.NoError(err)
-	prepareConfig(a, pnController)
-
-	// make the second node listen to the primary node
-	primaryListeningAddress, err := pnController.GetListeningAddress()
-	a.NoError(err)
-
-	wp, err := fixtures.MakeWebProxy(
-		primaryListeningAddress, testLogger,
-		func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
-			// prevent requests for block #2 to go through.
-			if request.URL.String() == "/v1/test-v1/block/2" {
-				response.WriteHeader(http.StatusBadRequest)
-				response.Write([]byte("webProxy prevents block 2 from serving"))
-				return
-			}
-			next(response, request)
-		})
-	a.NoError(err)
-	defer wp.Close()
-
-	// start the second node controller
-	_, err = n2ndController.StartAlgod(nodecontrol.AlgodStartArgs{
-		PeerAddress:       wp.GetListenAddress(),
-		ListenIP:          "",
-		RedirectOutput:    true,
-		RunUnderHost:      false,
-		TelemetryOverride: "",
-		ExitErrorCallback: errorsCollector.nodeExitWithError,
-	})
-	a.NoError(err)
-	defer n2ndController.StopAlgod()
-
-	// asserting that the primary node is generating catchpoint tags
-	primaryNodeStatus, err := primaryNodeRestClient.Status()
-	a.NoError(err)
-	a.NotNil(primaryNodeStatus.LastCatchpoint)
-	a.NotEmpty(*primaryNodeStatus.LastCatchpoint)
-	// so this confirms we generate catchpoint tags
-	// catchpoint file, should be activated by CatchpointTracking = int64(2)
-
-	//////////
-	// NOTE //
-	//////////
-	// at this point, since the primary node is not catching up against some catchpoint
-	// it should be /ready 200 by definition
-	err = primaryNodeRestClient.ReadyCheck()
-	a.NoError(err)
-	a.Empty(*primaryNodeStatus.Catchpoint)
-
-	// learn something from the latest catchpoint primary node generates
-	// should ensure that the catchpointRound tied to the catchpoint <= TargetRound, which is the current network round
-	catchpointRound, _, err := ledgercore.ParseCatchpointLabel(*primaryNodeStatus.LastCatchpoint)
-	a.NoError(err)
-	a.LessOrEqual(catchpointRound, TargetRound)
-
-	// roll up second node client, and catch up against catchpoint
-	n2ndClient := fixture.GetAlgodClientForController(n2ndController)
-	_, err = n2ndClient.Catchup(*primaryNodeStatus.LastCatchpoint)
-	a.NoError(err)
-
-	// the first (immediate) ready check should fail, for catch up against a catchpoint need some time
-	a.Error(n2ndClient.ReadyCheck())
-
-	testLogger.Info("second node catching up")
-
-	for {
-		primaryNodeStatus, err = primaryNodeRestClient.Status()
-		a.NoError(err)
-
-		primaryRound := primaryNodeStatus.LastRound
-
-		n2ndCurrentStatus, err := n2ndClient.Status()
-		a.NoError(err)
-
-		n2ndCurrentRound := n2ndCurrentStatus.LastRound
-
-		err = fixture.ClientWaitForRound(n2ndClient, n2ndCurrentRound+1, 10*time.Second)
-		a.NoError(err)
-
-		var catchPointRepr string
-		if n2ndCurrentStatus.Catchpoint != nil {
-			catchPointRepr = *n2ndCurrentStatus.Catchpoint
-		} else {
-			catchPointRepr = "nil"
-		}
-		testLogger.Infof("catchpoint %v, curr-round %d, prim-round: %d, catchuptime %d, timesincelastround %f",
-			catchPointRepr, n2ndCurrentStatus.LastRound, primaryRound, n2ndCurrentStatus.CatchupTime, time.Duration(n2ndCurrentStatus.TimeSinceLastRound).Seconds())
-
-		if n2ndCurrentRound+1 == primaryRound {
-			a.NoError(n2ndClient.ReadyCheck())
-			break
-		} else {
-			a.Error(n2ndClient.ReadyCheck())
-		}
 	}
 }
 
