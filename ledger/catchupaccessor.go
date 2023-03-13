@@ -343,10 +343,10 @@ func (c *catchpointCatchupAccessorImpl) ProcessStagingBalances(ctx context.Conte
 	if sectionName == CatchpointContentFileName {
 		return c.processStagingContent(ctx, bytes, progress)
 	}
-	if sectionName == CatchpointSPVerificationFileName {
+	if sectionName == catchpointSPVerificationFileName {
 		return c.processStagingStateProofVerificationContext(bytes)
 	}
-	if strings.HasPrefix(sectionName, CatchpointBalancesFileNamePrefix) && strings.HasSuffix(sectionName, CatchpointBalancesFileNameSuffix) {
+	if strings.HasPrefix(sectionName, catchpointBalancesFileNamePrefix) && strings.HasSuffix(sectionName, catchpointBalancesFileNameSuffix) {
 		return c.processStagingBalances(ctx, bytes, progress)
 	}
 	// we want to allow undefined sections to support backward compatibility.
