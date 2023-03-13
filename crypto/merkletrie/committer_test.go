@@ -140,18 +140,18 @@ func TestNoRedundentPages(t *testing.T) {
 	require.Equal(t, nodesCount, mt1.cache.cachedNodeCount)
 }
 
-// decodePage decodes a byte array into a page content
+// decodePageHeaderSize decodes a page header at the start of a byte array
 func decodePageHeaderSize(bytes []byte) (headerSize int, err error) {
 	version, versionLength := binary.Uvarint(bytes[:])
 	if versionLength <= 0 {
-		return 0, ErrPageDecodingFailuire
+		return 0, ErrPageDecodingFailure
 	}
-	if version != NodePageVersion {
-		return 0, ErrPageDecodingFailuire
+	if version != nodePageVersion {
+		return 0, ErrPageDecodingFailure
 	}
 	_, nodesCountLength := binary.Varint(bytes[versionLength:])
 	if nodesCountLength <= 0 {
-		return 0, ErrPageDecodingFailuire
+		return 0, ErrPageDecodingFailure
 	}
 	return nodesCountLength + versionLength, nil
 }
