@@ -312,16 +312,7 @@ func TestRecordCatchpointFile(t *testing.T) {
 
 	for _, round := range []basics.Round{2000000, 3000010, 3000015, 3000020} {
 		accountsRound := round - 1
-
-		var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
-		_, _, _, biggestChunkLen, stateProofVerificationHash, err := ct.generateCatchpointData(
-			context.Background(), accountsRound, &catchpointGenerationStats)
-		require.NoError(t, err)
-
-		require.Equal(t, calculateStateProofVerificationHash(t, ml), stateProofVerificationHash)
-
-		err = ct.createCatchpoint(context.Background(), accountsRound, round, trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
-		require.NoError(t, err)
+		createCatchpoint(t, ct, accountsRound, ml, round)
 	}
 
 	numberOfCatchpointFiles, err := getNumberOfCatchpointFilesInDir(temporaryDirectory)
@@ -333,6 +324,87 @@ func TestRecordCatchpointFile(t *testing.T) {
 	onlyCatchpointDirEmpty := len(emptyDirs) == 0 ||
 		(len(emptyDirs) == 1 && emptyDirs[0] == temporaryDirectory)
 	require.Equalf(t, onlyCatchpointDirEmpty, true, "Directories: %v", emptyDirs)
+}
+
+func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.Round, ml *mockLedgerForTracker, round basics.Round) {
+	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
+	_, _, _, biggestChunkLen, stateProofVerificationHash, err := ct.generateCatchpointData(
+		context.Background(), accountsRound, &catchpointGenerationStats)
+	require.NoError(t, err)
+
+	require.Equal(t, calculateStateProofVerificationHash(t, ml), stateProofVerificationHash)
+
+	err = ct.createCatchpoint(context.Background(), accountsRound, round, trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
+	require.NoError(t, err)
+}
+
+// TestCatchpointFileWithLargeSpVerification makes sure that CatchpointFirstStageInfo.BiggestChunkLen is calculated based on state proof verification contexts
+// as well as other chunks in the catchpoint files.
+func TestCatchpointFileWithLargeSpVerification(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	temporaryDirectory := t.TempDir()
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
+
+	ct := &catchpointTracker{}
+	conf := config.GetDefaultLocal()
+
+	conf.Archival = true
+	ct.initialize(conf, ".")
+	defer ct.close()
+	ct.dbDirectory = temporaryDirectory
+
+	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
+	require.NoError(t, err)
+
+	err = ct.loadFromDisk(ml, ml.Latest())
+	require.NoError(t, err)
+
+	//  create catpoint with no sp verification data
+	round := basics.Round(2000000)
+	createCatchpoint(t, ct, round-1, ml, round)
+
+	numberOfCatchpointFiles, err := getNumberOfCatchpointFilesInDir(temporaryDirectory)
+	require.NoError(t, err)
+	require.Equal(t, 1, numberOfCatchpointFiles)
+	//  create catpoint with 2 sp verification data
+	writeDummySpVerification(t, 0, 3, ml)
+
+	round = basics.Round(3000000)
+	createCatchpoint(t, ct, round-1, ml, round)
+
+	numberOfCatchpointFiles, err = getNumberOfCatchpointFilesInDir(temporaryDirectory)
+	require.NoError(t, err)
+	require.Equal(t, 2, numberOfCatchpointFiles)
+
+	//  create catpoint with 500 sp verification data - the sp verification chunk should be the largest
+	writeDummySpVerification(t, 4, 500, ml)
+
+	round = basics.Round(4000000)
+	createCatchpoint(t, ct, round-1, ml, round)
+
+	numberOfCatchpointFiles, err = getNumberOfCatchpointFilesInDir(temporaryDirectory)
+	require.NoError(t, err)
+	require.Equal(t, 3, numberOfCatchpointFiles)
+}
+
+func writeDummySpVerification(t *testing.T, nextIndexForContext uint64, numberOfContexts uint64, ml *mockLedgerForTracker) {
+	err := ml.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+
+		contexts := make([]*ledgercore.StateProofVerificationContext, numberOfContexts)
+		for i := uint64(0); i < numberOfContexts; i++ {
+			e := ledgercore.StateProofVerificationContext{}
+			e.LastAttestedRound = basics.Round(nextIndexForContext + i)
+			contexts[i] = &e
+		}
+		writer := tx.MakeSpVerificationCtxReaderWriter()
+
+		return writer.StoreSPContexts(ctx, contexts[:])
+	})
+	require.NoError(t, err)
 }
 
 func BenchmarkLargeCatchpointDataWriting(b *testing.B) {

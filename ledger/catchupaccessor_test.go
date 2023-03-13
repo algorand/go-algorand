@@ -112,7 +112,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 	}
 	encodedFileHeader := protocol.Encode(&fileHeader)
 	var progress CatchpointCatchupAccessorProgress
-	err = catchpointAccessor.ProcessStagingBalances(context.Background(), "content.msgpack", encodedFileHeader, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(context.Background(), CatchpointContentFileName, encodedFileHeader, &progress)
 	require.NoError(b, err)
 
 	// pre-create all encoded chunks.
@@ -128,7 +128,8 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 			last64KStart = time.Now()
 		}
 
-		err = catchpointAccessor.ProcessStagingBalances(context.Background(), "balances.XX.msgpack", encodedAccounts, &progress)
+		balancesFileName := fmt.Sprintf("%s%s%s", CatchpointBalancesFileNamePrefix, "XX", CatchpointBalancesFileNameSuffix)
+		err = catchpointAccessor.ProcessStagingBalances(context.Background(), balancesFileName, encodedAccounts, &progress)
 		require.NoError(b, err)
 		last64KIndex--
 	}
@@ -176,7 +177,7 @@ func initializeTestCatchupAccessor(t *testing.T, l *Ledger, accountsCount uint64
 		BlockHeaderDigest: crypto.Digest{},
 	}
 	encodedFileHeader := protocol.Encode(&fileHeader)
-	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, CatchpointContentFileName, encodedFileHeader, &progress)
 
 	return catchpointAccessor, progress
 }
@@ -204,7 +205,7 @@ func verifyStateProofVerificationCatchupAccessor(t *testing.T, targetData []ledg
 	blob := protocol.Encode(&wrappedData)
 
 	ctx := context.Background()
-	err = catchpointAccessor.ProcessStagingBalances(ctx, "stateProofVerificationContext.msgpack", blob, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, CatchpointSPVerificationFileName, blob, &progress)
 	require.NoError(t, err)
 
 	err = catchpointAccessor.CompleteCatchup(ctx)
@@ -324,10 +325,11 @@ func TestBuildMerkleTrie(t *testing.T) {
 	err = catchpointAccessor.ProcessStagingBalances(ctx, "ignoredContent", blob, &progress)
 	require.NoError(t, err)
 	// this shouldn't work yet
-	err = catchpointAccessor.ProcessStagingBalances(ctx, "balances.FAKE.msgpack", blob, &progress)
+	balancesFileName := fmt.Sprintf("%s%s%s", CatchpointBalancesFileNamePrefix, "FAKE", CatchpointBalancesFileNameSuffix)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, balancesFileName, blob, &progress)
 	require.Error(t, err)
 	// this needs content
-	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", blob, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, CatchpointContentFileName, blob, &progress)
 	require.Error(t, err)
 
 	// content.msgpack from this:
@@ -343,14 +345,15 @@ func TestBuildMerkleTrie(t *testing.T) {
 		BlockHeaderDigest: crypto.Digest{},
 	}
 	encodedFileHeader := protocol.Encode(&fileHeader)
-	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, CatchpointContentFileName, encodedFileHeader, &progress)
 	require.NoError(t, err)
 	// shouldn't work a second time
-	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, CatchpointContentFileName, encodedFileHeader, &progress)
 	require.Error(t, err)
 
 	// This should still fail, but slightly different coverage path
-	err = catchpointAccessor.ProcessStagingBalances(ctx, "balances.FAKE.msgpack", blob, &progress)
+	balancesFileName = fmt.Sprintf("%s%s%s", CatchpointBalancesFileNamePrefix, "FAKE", CatchpointBalancesFileNameSuffix)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, balancesFileName, blob, &progress)
 	require.Error(t, err)
 
 	// create some catchpoint data
@@ -498,7 +501,7 @@ func TestCatchupAccessorResourceCountMismatch(t *testing.T) {
 		BlockHeaderDigest: crypto.Digest{},
 	}
 	encodedFileHeader := protocol.Encode(&fileHeader)
-	err = catchpointAccessor.ProcessStagingBalances(ctx, "content.msgpack", encodedFileHeader, &progress)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, CatchpointContentFileName, encodedFileHeader, &progress)
 	require.NoError(t, err)
 
 	var balances catchpointFileChunkV6
@@ -514,7 +517,8 @@ func TestCatchupAccessorResourceCountMismatch(t *testing.T) {
 	encodedAccounts := protocol.Encode(&balances)
 
 	// expect error since there is a resource count mismatch
-	err = catchpointAccessor.ProcessStagingBalances(ctx, "balances.XX.msgpack", encodedAccounts, &progress)
+	balancesFileName := fmt.Sprintf("%s%s%s", CatchpointBalancesFileNamePrefix, "XX", CatchpointBalancesFileNameSuffix)
+	err = catchpointAccessor.ProcessStagingBalances(ctx, balancesFileName, encodedAccounts, &progress)
 	require.Error(t, err)
 }
 

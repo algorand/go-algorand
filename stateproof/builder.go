@@ -569,7 +569,6 @@ func (spw *Worker) deleteStaleKeys(retainRound basics.Round) {
 			spw.log.Warnf("deleteStaleKeys: could not remove key for account %v on round %d: %v", key.ParticipationID, firstRoundAtKeyLifeTime, err)
 		}
 	}
-	spw.accts.DeleteStateProofKeysForExpiredAccounts(retainRound)
 }
 
 func (spw *Worker) deleteStaleBuilders(retainRound basics.Round) {
@@ -630,30 +629,32 @@ func (spw *Worker) tryBroadcast() {
 	}
 	sort.Slice(sortedRounds, func(i, j int) bool { return sortedRounds[i] < sortedRounds[j] })
 
-	for _, rnd := range sortedRounds { // Iterate over the builders in a sequential manner
+	for _, rnd := range sortedRounds {
+		// Iterate over the builders in a sequential manner. If the earlist state proof is not ready/rejected
+		// it won't be possible to add a later one. For that reason, we break the loop
 		b := spw.builders[rnd]
 		firstValid := spw.ledger.Latest()
 		acceptableWeight := verify.AcceptableStateProofWeight(&b.VotersHdr, firstValid, logging.Base())
 		if b.SignedWeight() < acceptableWeight {
 			// Haven't signed enough to build the state proof at this time..
-			continue
+			break
 		}
 
 		if !b.Ready() {
 			// Haven't gotten enough signatures to get past ProvenWeight
-			continue
+			break
 		}
 
 		sp, err := b.Build()
 		if err != nil {
 			spw.log.Warnf("spw.tryBroadcast: building state proof for %d failed: %v", rnd, err)
-			continue
+			break
 		}
 
 		latestHeader, err := spw.ledger.BlockHdr(firstValid)
 		if err != nil {
 			spw.log.Warnf("spw.tryBroadcast: could not fetch block header for round %d failed: %v", firstValid, err)
-			continue
+			break
 		}
 
 		spw.log.Infof("spw.tryBroadcast: building state proof transaction for round %d", rnd)

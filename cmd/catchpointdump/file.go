@@ -226,7 +226,7 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 		if err != nil {
 			return fileHeader, err
 		}
-		if header.Name == "content.msgpack" {
+		if header.Name == ledger.CatchpointContentFileName {
 			// we already know it's valid, since we validated that above.
 			protocol.Decode(balancesBlockBytes, &fileHeader)
 		}

@@ -34,10 +34,14 @@ var base32Encoder = base32.StdEncoding.WithPadding(base32.NoPadding)
 // ErrCatchpointParsingFailed is used when we attempt to parse and catchpoint label and failing doing so.
 var ErrCatchpointParsingFailed = errors.New("catchpoint parsing failed")
 
-// CatchpointLabelMaker represents an interface for creating a label maker. Labels can be "assembled" based on its components.
+// CatchpointLabelMaker is used for abstract the creation of different catchpoints versions.
+// Different catchpoint version might hash different fields.
 type CatchpointLabelMaker interface {
+	// buffer returns a image used for hashing. (concatenating all fields in the label)
 	buffer() []byte
+	// round returns the catchpoint label round
 	round() basics.Round
+	// message returns a printable string containing all the relevant fields in the label.
 	message() string
 }
 
@@ -80,23 +84,23 @@ func (l *CatchpointLabelMakerV6) message() string {
 
 // CatchpointLabelMakerCurrent represent a single catchpoint maker, matching catchpoints of version V7 and above.
 type CatchpointLabelMakerCurrent struct {
-	v6Label                           CatchpointLabelMakerV6
-	stateProofVerificationContextHash crypto.Digest
+	v6Label            CatchpointLabelMakerV6
+	spVerificationHash crypto.Digest
 }
 
 // MakeCatchpointLabelMakerCurrent creates a catchpoint label given the catchpoint label parameters.
 func MakeCatchpointLabelMakerCurrent(ledgerRound basics.Round, ledgerRoundBlockHash *crypto.Digest,
-	balancesMerkleRoot *crypto.Digest, totals AccountTotals, stateProofVerificationContextHash *crypto.Digest) *CatchpointLabelMakerCurrent {
+	balancesMerkleRoot *crypto.Digest, totals AccountTotals, spVerificationContextHash *crypto.Digest) *CatchpointLabelMakerCurrent {
 	return &CatchpointLabelMakerCurrent{
-		v6Label:                           *MakeCatchpointLabelMakerV6(ledgerRound, ledgerRoundBlockHash, balancesMerkleRoot, totals),
-		stateProofVerificationContextHash: *stateProofVerificationContextHash,
+		v6Label:            *MakeCatchpointLabelMakerV6(ledgerRound, ledgerRoundBlockHash, balancesMerkleRoot, totals),
+		spVerificationHash: *spVerificationContextHash,
 	}
 }
 
 func (l *CatchpointLabelMakerCurrent) buffer() []byte {
 	v6Buffer := l.v6Label.buffer()
 
-	return append(v6Buffer, l.stateProofVerificationContextHash[:]...)
+	return append(v6Buffer, l.spVerificationHash[:]...)
 }
 
 func (l *CatchpointLabelMakerCurrent) round() basics.Round {
@@ -104,7 +108,7 @@ func (l *CatchpointLabelMakerCurrent) round() basics.Round {
 }
 
 func (l *CatchpointLabelMakerCurrent) message() string {
-	return fmt.Sprintf("%s spver digest=%s", l.v6Label.message(), l.stateProofVerificationContextHash)
+	return fmt.Sprintf("%s spver digest=%s", l.v6Label.message(), l.spVerificationHash)
 }
 
 // MakeLabel returns the user-facing representation of this catchpoint label. ( i.e. the "label" )

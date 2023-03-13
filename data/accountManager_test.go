@@ -287,7 +287,8 @@ func TestAccountManagerRemoveStateProofKeysForExpiredAccounts(t *testing.T) {
 		a.Equal(1, len(res))
 	}
 
-	acctManager.DeleteStateProofKeysForExpiredAccounts(part1.LastValid + 1)
+	b := bookkeeping.BlockHeader{Round: part1.LastValid + 1}
+	acctManager.DeleteOldKeys(b, config.Consensus[protocol.ConsensusCurrentVersion])
 	err = acctManager.registry.Flush(10 * time.Second)
 	a.NoError(err)
 
@@ -295,7 +296,6 @@ func TestAccountManagerRemoveStateProofKeysForExpiredAccounts(t *testing.T) {
 		res := acctManager.StateProofKeys(basics.Round(i * merklesignature.KeyLifetimeDefault))
 		a.Equal(0, len(res))
 	}
-
 }
 
 func TestGetStateProofKeysDontLogErrorOnNilStateProof(t *testing.T) {

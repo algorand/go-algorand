@@ -64,6 +64,12 @@ const (
 	// CatchpointFileVersionV7 is the catchpoint file version that is matching database schema V10.
 	// This version introduced state proof verification data and versioning for CatchpointLabel.
 	CatchpointFileVersionV7 = uint64(0202)
+
+	CatchpointContentFileName          = "content.msgpack"
+	CatchpointSPVerificationFileName   = "stateProofVerificationContext.msgpack"
+	CatchpointBalancesFileNameTemplate = "balances.%d.msgpack"
+	CatchpointBalancesFileNamePrefix   = "balances."
+	CatchpointBalancesFileNameSuffix   = ".msgpack"
 )
 
 func catchpointStage1Encoder(w io.Writer) (io.WriteCloser, error) {
@@ -199,7 +205,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 	var totalAccounts uint64
 	var totalChunks uint64
 	var biggestChunkLen uint64
-	var stateProofVerificationHash crypto.Digest
+	var spVerificationHash crypto.Digest
 	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
 
 	if ct.enableGeneratingCatchpointFiles {
@@ -210,7 +216,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		var err error
 
 		catchpointGenerationStats.BalancesWriteTime = uint64(updatingBalancesDuration.Nanoseconds())
-		totalKVs, totalAccounts, totalChunks, biggestChunkLen, stateProofVerificationHash, err = ct.generateCatchpointData(
+		totalKVs, totalAccounts, totalChunks, biggestChunkLen, spVerificationHash, err = ct.generateCatchpointData(
 			ctx, dbRound, &catchpointGenerationStats)
 		atomic.StoreInt32(&ct.catchpointDataWriting, 0)
 		if err != nil {
@@ -224,7 +230,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 			return err
 		}
 
-		err = ct.recordFirstStageInfo(ctx, tx, &catchpointGenerationStats, dbRound, totalKVs, totalAccounts, totalChunks, biggestChunkLen, stateProofVerificationHash)
+		err = ct.recordFirstStageInfo(ctx, tx, &catchpointGenerationStats, dbRound, totalKVs, totalAccounts, totalChunks, biggestChunkLen, spVerificationHash)
 		if err != nil {
 			return err
 		}
@@ -595,7 +601,7 @@ func doRepackCatchpoint(ctx context.Context, header CatchpointFileHeader, bigges
 	bytes := protocol.Encode(&header)
 
 	err := out.WriteHeader(&tar.Header{
-		Name: "content.msgpack",
+		Name: CatchpointContentFileName,
 		Mode: 0600,
 		Size: int64(len(bytes)),
 	})
@@ -1090,7 +1096,7 @@ func (ct *catchpointTracker) IsWritingCatchpointDataFile() bool {
 // - Balance and KV chunk (named balances.x.msgpack).
 // 	 ...
 // - Balance and KV chunk (named balances.x.msgpack).
-func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails) (totalKVs, totalAccounts, totalChunks, biggestChunkLen uint64, stateProofVerificationContextHash crypto.Digest, err error) {
+func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails) (totalKVs, totalAccounts, totalChunks, biggestChunkLen uint64, spVerificationHash crypto.Digest, err error) {
 	ct.log.Debugf("catchpointTracker.generateCatchpointData() writing catchpoint accounts for round %d", accountsRound)
 
 	startTime := time.Now()
@@ -1120,7 +1126,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 			return
 		}
 
-		stateProofVerificationContextHash, err = catchpointWriter.WriteStateProofVerificationContext()
+		spVerificationHash, err = catchpointWriter.WriteStateProofVerificationContext()
 		if err != nil {
 			return
 		}
@@ -1184,7 +1190,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	catchpointGenerationStats.KVsCount = catchpointWriter.totalKVs
 	catchpointGenerationStats.AccountsRound = uint64(accountsRound)
 
-	return catchpointWriter.totalKVs, catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, stateProofVerificationContextHash, nil
+	return catchpointWriter.totalKVs, catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, spVerificationHash, nil
 }
 
 func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx trackerdb.TransactionScope, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails, accountsRound basics.Round, totalKVs uint64, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64, stateProofVerificationHash crypto.Digest) error {

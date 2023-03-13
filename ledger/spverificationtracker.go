@@ -28,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/protocol"
 )
 
 var (
@@ -97,7 +96,7 @@ func (spt *spVerificationTracker) newBlock(blk bookkeeping.Block, delta ledgerco
 		spt.appendCommitContext(&blk)
 	}
 
-	if delta.StateProofNext != 0 {
+	if delta.ModStateProofNextRound != 0 {
 		spt.appendDeleteContext(&blk, &delta)
 	}
 }
@@ -115,27 +114,27 @@ func (spt *spVerificationTracker) prepareCommit(dcc *deferredCommitContext) erro
 	defer spt.mu.RUnlock()
 
 	lastContextToCommitIndex := spt.roundToLatestCommitContextIndex(dcc.newBase())
-	dcc.spVerification.CommitContext = make([]verificationCommitContext, lastContextToCommitIndex+1)
-	copy(dcc.spVerification.CommitContext, spt.pendingCommitContexts[:lastContextToCommitIndex+1])
+	dcc.spVerification.commitContext = make([]verificationCommitContext, lastContextToCommitIndex+1)
+	copy(dcc.spVerification.commitContext, spt.pendingCommitContexts[:lastContextToCommitIndex+1])
 
-	dcc.spVerification.LastDeleteIndex = spt.roundToLatestDeleteContextIndex(dcc.newBase())
-	if dcc.spVerification.LastDeleteIndex >= 0 {
-		dcc.spVerification.EarliestLastAttestedRound = spt.pendingDeleteContexts[dcc.spVerification.LastDeleteIndex].stateProofNextRound
+	dcc.spVerification.lastDeleteIndex = spt.roundToLatestDeleteContextIndex(dcc.newBase())
+	if dcc.spVerification.lastDeleteIndex >= 0 {
+		dcc.spVerification.earliestLastAttestedRound = spt.pendingDeleteContexts[dcc.spVerification.lastDeleteIndex].stateProofNextRound
 	}
 
 	return nil
 }
 
 func (spt *spVerificationTracker) commitRound(ctx context.Context, tx trackerdb.TransactionScope, dcc *deferredCommitContext) (err error) {
-	if len(dcc.spVerification.CommitContext) != 0 {
-		err = commitSPContexts(ctx, tx, dcc.spVerification.CommitContext)
+	if len(dcc.spVerification.commitContext) != 0 {
+		err = commitSPContexts(ctx, tx, dcc.spVerification.commitContext)
 		if err != nil {
 			return err
 		}
 	}
 
-	if dcc.spVerification.LastDeleteIndex >= 0 {
-		err = tx.MakeSpVerificationCtxReaderWriter().DeleteOldSPContexts(ctx, dcc.spVerification.EarliestLastAttestedRound)
+	if dcc.spVerification.lastDeleteIndex >= 0 {
+		err = tx.MakeSpVerificationCtxReaderWriter().DeleteOldSPContexts(ctx, dcc.spVerification.earliestLastAttestedRound)
 	}
 
 	return err
@@ -154,8 +153,8 @@ func (spt *spVerificationTracker) postCommit(_ context.Context, dcc *deferredCom
 	spt.mu.Lock()
 	defer spt.mu.Unlock()
 
-	spt.pendingCommitContexts = spt.pendingCommitContexts[len(dcc.spVerification.CommitContext):]
-	spt.pendingDeleteContexts = spt.pendingDeleteContexts[dcc.spVerification.LastDeleteIndex+1:]
+	spt.pendingCommitContexts = spt.pendingCommitContexts[len(dcc.spVerification.commitContext):]
+	spt.pendingDeleteContexts = spt.pendingDeleteContexts[dcc.spVerification.lastDeleteIndex+1:]
 }
 
 func (spt *spVerificationTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
@@ -273,15 +272,6 @@ func (spt *spVerificationTracker) roundToLatestDeleteContextIndex(committedRound
 	return latestCommittedContextIndex
 }
 
-func getVerificationContext(blk *bookkeeping.Block) ledgercore.StateProofVerificationContext {
-	return ledgercore.StateProofVerificationContext{
-		VotersCommitment:  blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
-		OnlineTotalWeight: blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
-		LastAttestedRound: blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval),
-		Version:           blk.CurrentProtocol,
-	}
-}
-
 func (spt *spVerificationTracker) appendCommitContext(blk *bookkeeping.Block) {
 	spt.mu.Lock()
 	defer spt.mu.Unlock()
@@ -293,10 +283,10 @@ func (spt *spVerificationTracker) appendCommitContext(blk *bookkeeping.Block) {
 				"commit context, round: %d, last confirmed commit context round: %d", blk.Round(), lastCommitConfirmedRound)
 		}
 	}
-
+	latestRound := blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval)
 	commitContext := verificationCommitContext{
 		confirmedRound:      blk.Round(),
-		verificationContext: getVerificationContext(blk),
+		verificationContext: *ledgercore.MakeStateProofVerificationContext(&blk.BlockHeader, latestRound),
 	}
 
 	spt.pendingCommitContexts = append(spt.pendingCommitContexts, commitContext)
@@ -316,7 +306,7 @@ func (spt *spVerificationTracker) appendDeleteContext(blk *bookkeeping.Block, de
 
 	deletionContext := verificationDeleteContext{
 		confirmedRound:      blk.Round(),
-		stateProofNextRound: delta.StateProofNext,
+		stateProofNextRound: delta.ModStateProofNextRound,
 	}
 
 	spt.pendingDeleteContexts = append(spt.pendingDeleteContexts, deletionContext)

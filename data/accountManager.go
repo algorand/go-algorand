@@ -62,19 +62,6 @@ func MakeAccountManager(log logging.Logger, registry account.ParticipationRegist
 	return manager
 }
 
-// DeleteStateProofKeysForExpiredAccounts removes ephemeral keys for every expired account
-func (manager *AccountManager) DeleteStateProofKeysForExpiredAccounts(currentRound basics.Round) {
-	for _, part := range manager.registry.GetAll() {
-		if currentRound <= part.LastValid {
-			continue
-		}
-		// since DeleteStateProofKeys doesn't remove the last round, we add one to make sure all secrets are being removed
-		if err := manager.DeleteStateProofKey(part.ParticipationID, part.LastValid+1); err != nil {
-			manager.log.Warnf("error while removing state proof keys for participant %v on round %v: %v", part.ParticipationID, part.LastValid+1, err)
-		}
-	}
-}
-
 // Keys returns a list of Participation accounts, and their keys/secrets for requested round.
 func (manager *AccountManager) Keys(rnd basics.Round) (out []account.ParticipationRecordForRound) {
 	for _, part := range manager.registry.GetAll() {

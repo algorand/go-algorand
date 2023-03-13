@@ -3189,7 +3189,7 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 	// to the ledger.
 	delta, err := internal.Eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
 	require.NoError(t, err)
-	delta.StateProofNext = stateProofReceived.StateProofNextRound
+	delta.ModStateProofNextRound = stateProofReceived.StateProofNextRound
 	vb := ledgercore.MakeValidatedBlock(blk, delta)
 	err = l.AddValidatedBlock(vb, agreement.Certificate{})
 	require.NoError(t, err)

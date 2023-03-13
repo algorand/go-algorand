@@ -166,7 +166,7 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 	})
 
 	catchpointData := readCatchpointDataFile(t, fileName)
-	require.Equal(t, "stateProofVerificationContext.msgpack", catchpointData[0].headerName)
+	require.Equal(t, CatchpointSPVerificationFileName, catchpointData[0].headerName)
 	var wrappedData catchpointStateProofVerificationContext
 	err = protocol.Decode(catchpointData[0].data, &wrappedData)
 	require.NoError(t, err)
@@ -275,7 +275,8 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	})
 
 	catchpointContent := readCatchpointDataFile(t, fileName)
-	require.Equal(t, "balances.1.msgpack", catchpointContent[1].headerName)
+	balanceFileName := fmt.Sprintf(CatchpointBalancesFileNameTemplate, 1)
+	require.Equal(t, balanceFileName, catchpointContent[1].headerName)
 
 	var chunk catchpointFileChunkV6
 	err = protocol.Decode(catchpointContent[1].data, &chunk)

@@ -41,10 +41,10 @@ const (
 	// In reality most entries are asset holdings, and they are very small.
 	ResourcesPerCatchpointFileChunk = 100_000
 
-	// StateProofVerificationContextPerCatchpointFile defines the maximum number of state proof verification data stored
+	// SPContextPerCatchpointFile defines the maximum number of state proof verification data stored
 	// in the catchpoint file.
 	// (2 years * 31536000 seconds per year) / (256 rounds per state proof verification data * 3.6 seconds per round) ~= 70000
-	StateProofVerificationContextPerCatchpointFile = 70000
+	SPContextPerCatchpointFile = 70000
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
@@ -100,7 +100,7 @@ func (chunk catchpointFileChunkV6) empty() bool {
 
 type catchpointStateProofVerificationContext struct {
 	_struct struct{}                                   `codec:",omitempty,omitemptyarray"`
-	Data    []ledgercore.StateProofVerificationContext `codec:"spd,allocbound=StateProofVerificationContextPerCatchpointFile"`
+	Data    []ledgercore.StateProofVerificationContext `codec:"spd,allocbound=SPContextPerCatchpointFile"`
 }
 
 func (data catchpointStateProofVerificationContext) ToBeHashed() (protocol.HashID, []byte) {
@@ -170,7 +170,7 @@ func (cw *catchpointWriter) WriteStateProofVerificationContext() (crypto.Digest,
 	dataHash, encodedData := crypto.EncodeAndHash(wrappedData)
 
 	err = cw.tar.WriteHeader(&tar.Header{
-		Name: "stateProofVerificationContext.msgpack",
+		Name: CatchpointSPVerificationFileName,
 		Mode: 0600,
 		Size: int64(len(encodedData)),
 	})
@@ -182,6 +182,10 @@ func (cw *catchpointWriter) WriteStateProofVerificationContext() (crypto.Digest,
 	_, err = cw.tar.Write(encodedData)
 	if err != nil {
 		return crypto.Digest{}, err
+	}
+
+	if chunkLen := uint64(len(encodedData)); cw.biggestChunkLen < chunkLen {
+		cw.biggestChunkLen = chunkLen
 	}
 
 	return dataHash, nil
@@ -290,7 +294,7 @@ func (cw *catchpointWriter) asyncWriter(chunks chan catchpointFileChunkV6, respo
 		}
 		encodedChunk := protocol.Encode(&chk)
 		err := cw.tar.WriteHeader(&tar.Header{
-			Name: fmt.Sprintf("balances.%d.msgpack", chunkNum),
+			Name: fmt.Sprintf(CatchpointBalancesFileNameTemplate, chunkNum),
 			Mode: 0600,
 			Size: int64(len(encodedChunk)),
 		})
