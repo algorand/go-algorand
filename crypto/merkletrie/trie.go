@@ -24,12 +24,12 @@ import (
 )
 
 const (
-	// MerkleTreeVersion is the version of the encoded trie. If we ever want to make changes and want to have upgrade path,
+	// merkleTreeVersion is the version of the encoded trie. If we ever want to make changes and want to have upgrade path,
 	// this would give us the ability to do so.
-	MerkleTreeVersion = uint64(0x1000000010000000)
-	// NodePageVersion is the version of the encoded node. If we ever want to make changes and want to have upgrade path,
+	merkleTreeVersion = uint64(0x1000000010000000)
+	// nodePageVersion is the version of the encoded node. If we ever want to make changes and want to have upgrade path,
 	// this would give us the ability to do so.
-	NodePageVersion = uint64(0x1000000010000000)
+	nodePageVersion = uint64(0x1000000010000000)
 )
 
 // ErrRootPageDecodingFailure is returned if the decoding the root page has failed.
@@ -250,7 +250,7 @@ func (mt *Trie) Evict(commit bool) (int, error) {
 // serialize serializes the trie root
 func (mt *Trie) serialize() []byte {
 	serializedBuffer := make([]byte, 5*binary.MaxVarintLen64) // allocate the worst-case scenario for the trie header.
-	version := binary.PutUvarint(serializedBuffer[:], MerkleTreeVersion)
+	version := binary.PutUvarint(serializedBuffer[:], merkleTreeVersion)
 	root := binary.PutUvarint(serializedBuffer[version:], uint64(mt.root))
 	next := binary.PutUvarint(serializedBuffer[version+root:], uint64(mt.nextNodeID))
 	elementLength := binary.PutUvarint(serializedBuffer[version+root+next:], uint64(mt.elementLength))
@@ -264,7 +264,7 @@ func (mt *Trie) deserialize(bytes []byte) (int64, error) {
 	if versionLen <= 0 {
 		return 0, ErrRootPageDecodingFailure
 	}
-	if version != MerkleTreeVersion {
+	if version != merkleTreeVersion {
 		return 0, ErrRootPageDecodingFailure
 	}
 	root, rootLen := binary.Uvarint(bytes[versionLen:])

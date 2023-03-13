@@ -39,8 +39,8 @@ const (
 // be found in neither the in-memory cache or on the persistent storage.
 var ErrLoadedPageMissingNode = errors.New("loaded page is missing a node")
 
-// ErrPageDecodingFailuire is returned if the decoding of a page has failed.
-var ErrPageDecodingFailuire = errors.New("error encountered while decoding page")
+// ErrPageDecodingFailure is returned if the decoding of a page has failed.
+var ErrPageDecodingFailure = errors.New("error encountered while decoding page")
 
 type merkleTrieCache struct {
 	// mt is a pointer to the originating trie
@@ -669,26 +669,26 @@ func (mtc *merkleTrieCache) reallocateNode(nid storedNodeIdentifier) storedNodeI
 func decodePage(bytes []byte) (nodesMap map[storedNodeIdentifier]*node, err error) {
 	version, versionLength := binary.Uvarint(bytes[:])
 	if versionLength <= 0 {
-		return nil, ErrPageDecodingFailuire
+		return nil, ErrPageDecodingFailure
 	}
-	if version != NodePageVersion {
-		return nil, ErrPageDecodingFailuire
+	if version != nodePageVersion {
+		return nil, ErrPageDecodingFailure
 	}
 	nodesCount, nodesCountLength := binary.Varint(bytes[versionLength:])
 	if nodesCountLength <= 0 {
-		return nil, ErrPageDecodingFailuire
+		return nil, ErrPageDecodingFailure
 	}
 	nodesMap = make(map[storedNodeIdentifier]*node)
 	walk := nodesCountLength + versionLength
 	for i := int64(0); i < nodesCount; i++ {
 		nodeID, nodesIDLength := binary.Uvarint(bytes[walk:])
 		if nodesIDLength <= 0 {
-			return nil, ErrPageDecodingFailuire
+			return nil, ErrPageDecodingFailure
 		}
 		walk += nodesIDLength
 		pnode, nodeLength := deserializeNode(bytes[walk:])
 		if nodeLength <= 0 {
-			return nil, ErrPageDecodingFailuire
+			return nil, ErrPageDecodingFailure
 		}
 		walk += nodeLength
 		nodesMap[storedNodeIdentifier(nodeID)] = pnode
@@ -699,7 +699,7 @@ func decodePage(bytes []byte) (nodesMap map[storedNodeIdentifier]*node, err erro
 
 // decodePage encodes a page contents into a byte array
 func (mtc *merkleTrieCache) encodePage(nodeIDs map[storedNodeIdentifier]*node, serializedBuffer []byte) []byte {
-	version := binary.PutUvarint(serializedBuffer[:], NodePageVersion)
+	version := binary.PutUvarint(serializedBuffer[:], nodePageVersion)
 	length := binary.PutVarint(serializedBuffer[version:], int64(len(nodeIDs)))
 	walk := version + length
 	for nodeID, pnode := range nodeIDs {
