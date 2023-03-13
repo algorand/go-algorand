@@ -569,7 +569,6 @@ func (s *Service) periodicSync() {
 		// The following request might be redundant, but it ensures we wait long enough for the DNS records to be loaded,
 		// which are required for the sync operation.
 		s.net.RequestConnectOutgoing(false, s.ctx.Done())
-		s.log.Info("sync here at 572")
 		s.sync()
 	}
 	stuckInARow := 0
@@ -592,7 +591,6 @@ func (s *Service) periodicSync() {
 			}
 			s.suspendForCatchpointWriting = false
 			s.log.Info("Immediate resync triggered; resyncing")
-			s.log.Info("sync here at 595")
 			s.sync()
 		case <-time.After(sleepDuration):
 			if sleepDuration < s.deadlineTimeout || s.cfg.DisableNetworking {
@@ -640,13 +638,9 @@ func (s *Service) sync() {
 	// Store start time of sync - in NS, so we can compute time.Duration (which is based on NS)
 	start := time.Now()
 
-	s.log.Infof("current s.suspendForCatchPointWriting: %v", s.suspendForCatchpointWriting)
-
 	timeInNS := start.UnixNano()
 	if !atomic.CompareAndSwapInt64(&s.syncStartNS, 0, timeInNS) {
 		s.log.Infof("resuming previous sync from %d (now=%d)", atomic.LoadInt64(&s.syncStartNS), timeInNS)
-	} else {
-		s.log.Infof("swapped to %d", atomic.LoadInt64(&s.syncStartNS))
 	}
 
 	pr := s.ledger.LastRound()
@@ -668,7 +662,6 @@ func (s *Service) sync() {
 
 	// if the catchupWriting flag is set, it means that we aborted the sync due to the ledger writing the catchup file.
 	if !s.suspendForCatchpointWriting {
-		s.log.Infof("reset sync start ns")
 		// in that case, don't change the timer so that the "timer" would keep running.
 		atomic.StoreInt64(&s.syncStartNS, 0)
 

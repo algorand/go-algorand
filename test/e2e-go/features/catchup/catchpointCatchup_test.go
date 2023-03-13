@@ -110,9 +110,9 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	//if testing.Short() {
-	//	t.Skip()
-	//}
+	if testing.Short() {
+		t.Skip()
+	}
 	a := require.New(fixtures.SynchronizedTest(t))
 	log := logging.TestingLog(t)
 
@@ -167,7 +167,6 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	cfg.CatchpointInterval = catchpointInterval
 	cfg.MaxAcctLookback = 2
 	cfg.SaveToDisk(primaryNode.GetDataDir())
-
 	cfg.Archival = false
 	cfg.CatchpointInterval = 0
 	cfg.NetAddress = ""
@@ -288,23 +287,8 @@ outer:
 	a.LessOrEqual(targetRound, currentRound)
 	fixtureTargetRound := targetRound + 1
 	log.Infof("Second node catching up to round %v", currentRound)
-
-	reportLog := func() {
-		status, err = secondNodeRestClient.Status()
-		a.NoError(err)
-		primStatus, err := primaryNodeRestClient.Status()
-		a.NoError(err)
-		log.Infof("currend round: %d, primary round: %d, current-sync time and time since last round %f, %f, prim-sync time and time since last round: %f, %f, 2nd node catchpoint: %v",
-			status.LastRound, primStatus.LastRound,
-			time.Duration(status.CatchupTime).Seconds(), time.Duration(status.TimeSinceLastRound).Seconds(),
-			time.Duration(primStatus.CatchupTime).Seconds(), time.Duration(primStatus.TimeSinceLastRound).Seconds(),
-			*status.Catchpoint)
-	}
-
 	for {
-		reportLog()
 		err = fixture.ClientWaitForRound(secondNodeRestClient, currentRound, 10*time.Second)
-		reportLog()
 		a.NoError(err)
 		if fixtureTargetRound <= currentRound {
 			break
@@ -312,25 +296,6 @@ outer:
 		currentRound++
 	}
 	log.Infof("done catching up!\n")
-
-	for {
-		reportLog()
-		err = secondNodeRestClient.ReadyCheck()
-		reportLog()
-
-		// just add some lines for debugging. Use delve to walk through the codes
-		if status.LastRound >= 50 {
-			break
-		}
-		if err != nil {
-			time.Sleep(250 * time.Millisecond)
-			continue
-		} else {
-			break
-		}
-	}
-
-	defer fixture.Shutdown()
 }
 
 func TestCatchpointLabelGeneration(t *testing.T) {

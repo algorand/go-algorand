@@ -195,7 +195,7 @@ build: buildsrc
 buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN
 	mkdir -p "${GOCACHE}" && \
 	touch "${GOCACHE}"/file.txt && \
-	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -gcflags="all=-N -l" -ldflags="$(GOLDFLAGS)" ./...
+	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 check-go-version:
 	./scripts/check_golang_version.sh build
