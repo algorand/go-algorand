@@ -19,6 +19,7 @@ package ledgercore
 import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -37,4 +38,14 @@ type StateProofVerificationContext struct {
 
 	// Version is the protocol version that would be used to verify the state proof
 	Version protocol.ConsensusVersion `codec:"v"`
+}
+
+// MakeStateProofVerificationContext produces a new StateProofVerificationContext instance from a block header and last attested round
+func MakeStateProofVerificationContext(votersHdr *bookkeeping.BlockHeader, lastAttested basics.Round) *StateProofVerificationContext {
+	return &StateProofVerificationContext{
+		VotersCommitment:  votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+		OnlineTotalWeight: votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+		LastAttestedRound: lastAttested,
+		Version:           votersHdr.CurrentProtocol,
+	}
 }

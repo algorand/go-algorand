@@ -28,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/protocol"
 )
 
 var (
@@ -273,15 +272,6 @@ func (spt *spVerificationTracker) roundToLatestDeleteContextIndex(committedRound
 	return latestCommittedContextIndex
 }
 
-func getVerificationContext(blk *bookkeeping.Block) ledgercore.StateProofVerificationContext {
-	return ledgercore.StateProofVerificationContext{
-		VotersCommitment:  blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
-		OnlineTotalWeight: blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
-		LastAttestedRound: blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval),
-		Version:           blk.CurrentProtocol,
-	}
-}
-
 func (spt *spVerificationTracker) appendCommitContext(blk *bookkeeping.Block) {
 	spt.mu.Lock()
 	defer spt.mu.Unlock()
@@ -293,10 +283,10 @@ func (spt *spVerificationTracker) appendCommitContext(blk *bookkeeping.Block) {
 				"commit context, round: %d, last confirmed commit context round: %d", blk.Round(), lastCommitConfirmedRound)
 		}
 	}
-
+	latestRound := blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval)
 	commitContext := verificationCommitContext{
 		confirmedRound:      blk.Round(),
-		verificationContext: getVerificationContext(blk),
+		verificationContext: *ledgercore.MakeStateProofVerificationContext(&blk.BlockHeader, latestRound),
 	}
 
 	spt.pendingCommitContexts = append(spt.pendingCommitContexts, commitContext)
