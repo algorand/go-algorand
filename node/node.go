@@ -524,7 +524,10 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 	if err != nil {
 		logging.Base().Infof("unable to pin transaction: %v", err)
 	}
-
+	// DevMode nodes do not broadcast txns to the network
+	if node.devMode {
+		return nil
+	}
 	var enc []byte
 	var txids []transactions.Txid
 	for _, tx := range txgroup {

@@ -105,6 +105,30 @@ func TestReservations(t *testing.T) {
 	assert.Equal(t, 0, len(erl.capacityByClient))
 }
 
+// When there is no reservation per client, the reservation map is not used
+// This is so we never wait on a capacity queue which would not ever vend
+func TestZeroSizeReservations(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	client1 := mockClient("client1")
+	client2 := mockClient("client2")
+	erl := NewElasticRateLimiter(4, 0, time.Second, nil)
+
+	_, err := erl.ConsumeCapacity(client1)
+	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, 0, len(erl.capacityByClient))
+	assert.NoError(t, err)
+
+	_, err = erl.ConsumeCapacity(client2)
+	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, 0, len(erl.capacityByClient))
+	assert.NoError(t, err)
+
+	erl.closeReservation(client1)
+	assert.Equal(t, 0, len(erl.capacityByClient))
+	erl.closeReservation(client2)
+	assert.Equal(t, 0, len(erl.capacityByClient))
+}
+
 func TestConsumeReleaseCapacity(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	client := mockClient("client")

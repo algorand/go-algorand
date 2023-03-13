@@ -1452,9 +1452,9 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx trackerdb.
 					if !added {
 						// we need to translate the "addrid" into actual account address so that
 						// we can report the failure.
-						addr, err := arw.LookupAccountAddressFromAddressID(ctx, acct.Addrid)
+						addr, err := arw.LookupAccountAddressFromAddressID(ctx, acct.AccountRef)
 						if err != nil {
-							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account id %d : %v", hex.EncodeToString(acct.Digest), acct.Addrid, err)
+							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account id %d : %v", hex.EncodeToString(acct.Digest), acct.AccountRef, err)
 						} else {
 							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account %v", hex.EncodeToString(acct.Digest), addr)
 						}
