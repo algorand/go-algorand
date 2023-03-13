@@ -338,6 +338,8 @@ func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.
 	require.NoError(t, err)
 }
 
+// TestCatchpointFileWithLargeSpVerification makes sure that CatchpointFirstStageInfo.BiggestChunkLen is calculated based on state proof verification contexts
+// as well as other chunks in the catchpoint files.
 func TestCatchpointFileWithLargeSpVerification(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
