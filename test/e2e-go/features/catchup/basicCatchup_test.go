@@ -25,6 +25,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -41,6 +43,8 @@ func TestBasicCatchup(t *testing.T) {
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
+	log := logging.TestingLog(t)
+
 	// Overview of this test:
 	// Start a two-node network (primary has 0%, secondary has 100%)
 	// Let it run for a few blocks.
@@ -48,7 +52,7 @@ func TestBasicCatchup(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	// Give the second node (which starts up last) all the stake so that its proposal always has better credentials,
-	// and so that its proposal isn't dropped. Otherwise the test burns 17s to recover. We don't care about stake
+	// and so that its proposal isn't dropped. Otherwise, the test burns 17s to recover. We don't care about stake
 	// distribution for catchup so this is fine.
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes100Second.json"))
 	defer fixture.Shutdown()
@@ -75,6 +79,37 @@ func TestBasicCatchup(t *testing.T) {
 	// Now, catch up
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(cloneClient, waitForRound)
 	a.NoError(err)
+
+	var status model.NodeStatusResponse
+
+	cloneNC := fixture.GetNodeControllerForDataDir(cloneDataDir)
+	cloneRestClient := fixture.GetAlgodClientForController(cloneNC)
+
+	reportLog := func() {
+		status, err = cloneRestClient.Status()
+		a.NoError(err)
+		primStatus, err := fixture.GetAlgodClientForController(nc).Status()
+		a.NoError(err)
+		log.Infof("currend round: %d, primary round: %d, current-sync time and time since last round %f, %f, prim-sync time and time since last round: %f, %f",
+			status.LastRound, primStatus.LastRound,
+			time.Duration(status.CatchupTime).Seconds(), time.Duration(status.TimeSinceLastRound).Seconds(),
+			time.Duration(primStatus.CatchupTime).Seconds(), time.Duration(primStatus.TimeSinceLastRound).Seconds())
+	}
+
+	// an immediate call for ready will error, for sync time != 0
+	a.Error(cloneRestClient.ReadyCheck())
+
+	for {
+		reportLog()
+		err = cloneRestClient.ReadyCheck()
+
+		if status.LastRound < 10 {
+			time.Sleep(250 * time.Millisecond)
+			continue
+		}
+		a.NoError(err)
+		break
+	}
 }
 
 // TestCatchupOverGossip tests catchup across network versions

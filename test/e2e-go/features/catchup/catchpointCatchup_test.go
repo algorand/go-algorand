@@ -160,13 +160,14 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	secondNode, err := fixture.GetNodeController("Node")
 	a.NoError(err)
 
-	// prepare it's configuration file to set it to generate a catchpoint every 4 rounds.
+	// prepare its configuration file to set it to generate a catchpoint every 4 rounds.
 	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
 	a.NoError(err)
 	const catchpointInterval = 4
 	cfg.CatchpointInterval = catchpointInterval
 	cfg.MaxAcctLookback = 2
 	cfg.SaveToDisk(primaryNode.GetDataDir())
+
 	cfg.Archival = false
 	cfg.CatchpointInterval = 0
 	cfg.NetAddress = ""
@@ -287,17 +288,8 @@ outer:
 	a.LessOrEqual(targetRound, currentRound)
 	fixtureTargetRound := targetRound + 1
 	log.Infof("Second node catching up to round %v", currentRound)
-	for {
-		err = fixture.ClientWaitForRound(secondNodeRestClient, currentRound, 10*time.Second)
-		a.NoError(err)
-		if fixtureTargetRound <= currentRound {
-			break
-		}
-		currentRound++
-	}
-	log.Infof("done catching up!\n")
 
-	for {
+	reportLog := func() {
 		status, err = secondNodeRestClient.Status()
 		a.NoError(err)
 		primStatus, err := primaryNodeRestClient.Status()
@@ -307,11 +299,26 @@ outer:
 			time.Duration(status.CatchupTime).Seconds(), time.Duration(status.TimeSinceLastRound).Seconds(),
 			time.Duration(primStatus.CatchupTime).Seconds(), time.Duration(primStatus.TimeSinceLastRound).Seconds(),
 			*status.Catchpoint)
+	}
 
+	for {
+		reportLog()
+		err = fixture.ClientWaitForRound(secondNodeRestClient, currentRound, 10*time.Second)
+		reportLog()
+		a.NoError(err)
+		if fixtureTargetRound <= currentRound {
+			break
+		}
+		currentRound++
+	}
+	log.Infof("done catching up!\n")
+
+	for {
+		reportLog()
 		err = secondNodeRestClient.ReadyCheck()
 
 		// just add some lines for debugging. Use delve to walk through the codes
-		if status.LastRound >= 40 {
+		if status.LastRound >= 30 {
 			break
 		}
 		if err != nil {
