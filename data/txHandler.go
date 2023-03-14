@@ -122,7 +122,6 @@ type TxHandler struct {
 	net                   network.GossipNode
 	msgCache              *txSaltedCache
 	txCanonicalCache      *digestCache
-	cacheConfig           txHandlerConfig
 	ctx                   context.Context
 	ctxCancel             context.CancelFunc
 	streamVerifier        *execpool.StreamToBatch
@@ -140,12 +139,6 @@ type TxHandlerOpts struct {
 	GenesisID     string
 	GenesisHash   crypto.Digest
 	Config        config.Local
-}
-
-// txHandlerConfig is a subset of tx handler related options from config.Local
-type txHandlerConfig struct {
-	enableFilteringRawMsg    bool
-	enableFilteringCanonical bool
 }
 
 // MakeTxHandler makes a new handler for transaction messages
@@ -174,17 +167,16 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *verify.VerificationResult, txBacklogSize),
 		net:                   opts.Net,
-		cacheConfig:           txHandlerConfig{opts.Config.TxFilterRawMsgEnabled(), opts.Config.TxFilterCanonicalEnabled()},
 		streamVerifierChan:    make(chan execpool.InputJob),
 		streamVerifierDropped: make(chan *verify.UnverifiedTxnSigJob),
 	}
 
 	// use defaultBacklogSize = approx number of txns in a full block as a parameter for the dedup cache size
 	defaultBacklogSize := config.GetDefaultLocal().TxBacklogSize
-	if handler.cacheConfig.enableFilteringRawMsg {
+	if opts.Config.TxFilterRawMsgEnabled() {
 		handler.msgCache = makeSaltedCache(2 * defaultBacklogSize)
 	}
-	if handler.cacheConfig.enableFilteringCanonical {
+	if opts.Config.TxFilterCanonicalEnabled() {
 		handler.txCanonicalCache = makeDigestCache(2 * defaultBacklogSize)
 	}
 
@@ -508,11 +500,11 @@ func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 }
 
 func (handler *TxHandler) deleteFromCaches(msgKey *crypto.Digest, canonicalKey *crypto.Digest) {
-	if handler.cacheConfig.enableFilteringCanonical && canonicalKey != nil {
+	if handler.txCanonicalCache != nil && canonicalKey != nil {
 		handler.txCanonicalCache.Delete(canonicalKey)
 	}
 
-	if handler.cacheConfig.enableFilteringRawMsg && msgKey != nil {
+	if handler.msgCache != nil && msgKey != nil {
 		handler.msgCache.DeleteByKey(msgKey)
 	}
 }
@@ -572,7 +564,7 @@ func (handler *TxHandler) dedupCanonical(ntx int, unverifiedTxGroup []transactio
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
 	var msgKey *crypto.Digest
 	var isDup bool
-	if handler.cacheConfig.enableFilteringRawMsg {
+	if handler.msgCache != nil {
 		// check for duplicate messages
 		// this helps against relaying duplicates
 		if msgKey, isDup = handler.msgCache.CheckAndPut(rawmsg.Data); isDup {
@@ -643,7 +635,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	}
 
 	var canonicalKey *crypto.Digest
-	if handler.cacheConfig.enableFilteringCanonical {
+	if handler.txCanonicalCache != nil {
 		if canonicalKey, isDup = handler.dedupCanonical(ntx, unverifiedTxGroup, consumed); isDup {
 			transactionMessagesDupCanonical.Inc(nil)
 			return network.OutgoingMessage{Action: network.Ignore}
@@ -664,10 +656,10 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		transactionMessagesDroppedFromBacklog.Inc(nil)
 
 		// additionally, remove the txn from duplicate caches to ensure it can be re-submitted
-		if handler.cacheConfig.enableFilteringCanonical && canonicalKey != nil {
+		if handler.txCanonicalCache != nil && canonicalKey != nil {
 			handler.txCanonicalCache.Delete(canonicalKey)
 		}
-		if handler.cacheConfig.enableFilteringRawMsg && msgKey != nil {
+		if handler.msgCache != nil && msgKey != nil {
 			handler.msgCache.DeleteByKey(msgKey)
 		}
 	}
