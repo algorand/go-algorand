@@ -227,3 +227,26 @@ type CatchpointPendingHashesIter interface {
 	Next(ctx context.Context) (hashes [][]byte, err error)
 	Close()
 }
+
+// SpVerificationCtxReader is a reader abstraction for stateproof verification tracker
+// Use with SnapshotScope
+type SpVerificationCtxReader interface {
+	LookupSPContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
+	GetAllSPContexts(ctx context.Context) ([]ledgercore.StateProofVerificationContext, error)
+	GetAllSPContextsFromCatchpointTbl(ctx context.Context) ([]ledgercore.StateProofVerificationContext, error)
+}
+
+// SpVerificationCtxWriter is a writer abstraction for stateproof verification tracker
+// Use with BatchScope
+type SpVerificationCtxWriter interface {
+	DeleteOldSPContexts(ctx context.Context, earliestLastAttestedRound basics.Round) error
+	StoreSPContexts(ctx context.Context, verificationContext []*ledgercore.StateProofVerificationContext) error
+	StoreSPContextsToCatchpointTbl(ctx context.Context, verificationContexts []ledgercore.StateProofVerificationContext) error
+}
+
+// SpVerificationCtxReaderWriter is SpVerificationCtxReader+SpVerificationCtxWriter
+// Use with TransactionScope
+type SpVerificationCtxReaderWriter interface {
+	SpVerificationCtxReader
+	SpVerificationCtxWriter
+}

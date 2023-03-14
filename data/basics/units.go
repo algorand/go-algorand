@@ -135,3 +135,8 @@ func (round Round) SubSaturate(x Round) Round {
 func (round Round) RoundUpToMultipleOf(n Round) Round {
 	return (round + n - 1) / n * n
 }
+
+// RoundDownToMultipleOf rounds down round to a multiple of n.
+func (round Round) RoundDownToMultipleOf(n Round) Round {
+	return (round / n) * n
+}

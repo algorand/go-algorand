@@ -468,6 +468,7 @@ func (cw *catchpointWriter) ResetCatchpointStagingBalances(ctx context.Context, 
 		"DROP TABLE IF EXISTS catchpointpendinghashes",
 		"DROP TABLE IF EXISTS catchpointresources",
 		"DROP TABLE IF EXISTS catchpointkvstore",
+		"DROP TABLE IF EXISTS catchpointstateproofverification",
 		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
 
@@ -489,6 +490,7 @@ func (cw *catchpointWriter) ResetCatchpointStagingBalances(ctx context.Context, 
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
 			"CREATE TABLE IF NOT EXISTS catchpointkvstore (key blob primary key, value blob)",
+			"CREATE TABLE IF NOT EXISTS catchpointstateproofverification (lastattestedround INTEGER PRIMARY KEY NOT NULL, verificationContext BLOB NOT NULL)",
 
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
 			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
@@ -514,12 +516,14 @@ func (cw *catchpointWriter) ApplyCatchpointStagingBalances(ctx context.Context, 
 		"DROP TABLE IF EXISTS accounthashes",
 		"DROP TABLE IF EXISTS resources",
 		"DROP TABLE IF EXISTS kvstore",
+		"DROP TABLE IF EXISTS stateproofverification",
 
 		"ALTER TABLE catchpointbalances RENAME TO accountbase",
 		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
 		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
 		"ALTER TABLE catchpointresources RENAME TO resources",
 		"ALTER TABLE catchpointkvstore RENAME TO kvstore",
+		"ALTER TABLE catchpointstateproofverification RENAME TO stateproofverification",
 	}
 
 	for _, stmt := range stmts {

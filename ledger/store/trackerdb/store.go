@@ -31,6 +31,7 @@ type BatchScope interface {
 	MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
 	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
 	Testing() TestBatchScope
+	MakeSpVerificationCtxWriter() SpVerificationCtxWriter
 }
 
 // SnapshotScope is the read scope to the store.
@@ -38,6 +39,8 @@ type SnapshotScope interface {
 	MakeAccountsReader() (AccountsReaderExt, error)
 	MakeCatchpointReader() (CatchpointReader, error)
 	MakeCatchpointPendingHashesIterator(hashCount int) CatchpointPendingHashesIter
+
+	MakeSpVerificationCtxReader() SpVerificationCtxReader
 }
 
 // TransactionScope is the read/write scope to the store.
@@ -53,6 +56,7 @@ type TransactionScope interface {
 	RunMigrations(ctx context.Context, params Params, log logging.Logger, targetVersion int32) (mgr InitParams, err error)
 	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
 	Testing() TestTransactionScope
+	MakeSpVerificationCtxReaderWriter() SpVerificationCtxReaderWriter
 }
 
 // BatchFn is the callback lambda used in `Batch`.

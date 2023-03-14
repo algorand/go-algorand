@@ -28,6 +28,7 @@ import (
 
 	"github.com/algorand/falcon"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
@@ -496,12 +497,12 @@ func TestBuildAndReady(t *testing.T) {
 	_, err = builder.Build()
 	a.ErrorIs(err, ErrSignedWeightLessThanProvenWeight)
 
-	builder.signedWeight = builder.provenWeight
+	builder.signedWeight = builder.ProvenWeight
 	a.False(builder.Ready())
 	_, err = builder.Build()
 	a.ErrorIs(err, ErrSignedWeightLessThanProvenWeight)
 
-	builder.signedWeight = builder.provenWeight + 1
+	builder.signedWeight = builder.ProvenWeight + 1
 	a.True(builder.Ready())
 	_, err = builder.Build()
 	a.NotErrorIs(err, ErrSignedWeightLessThanProvenWeight)
@@ -516,7 +517,7 @@ func TestErrorCases(t *testing.T) {
 	_, err := builder.Present(1)
 	a.ErrorIs(err, ErrPositionOutOfBound)
 
-	builder.participants = make([]basics.Participant, 1, 1)
+	builder.Participants = make([]basics.Participant, 1, 1)
 	builder.sigs = make([]sigslot, 1, 1)
 	err = builder.IsValid(1, &merklesignature.Signature{}, false)
 	a.ErrorIs(err, ErrPositionOutOfBound)
@@ -524,11 +525,11 @@ func TestErrorCases(t *testing.T) {
 	err = builder.IsValid(0, &merklesignature.Signature{}, false)
 	require.ErrorIs(t, err, ErrPositionWithZeroWeight)
 
-	builder.participants[0].Weight = 1
+	builder.Participants[0].Weight = 1
 	err = builder.IsValid(0, &merklesignature.Signature{}, true)
 	a.ErrorIs(err, merklesignature.ErrKeyLifetimeIsZero)
 
-	builder.participants[0].PK.KeyLifetime = 20
+	builder.Participants[0].PK.KeyLifetime = 20
 	err = builder.IsValid(0, &merklesignature.Signature{}, true)
 	a.ErrorIs(err, merklesignature.ErrSignatureSchemeVerificationFailed)
 
@@ -629,6 +630,13 @@ func TestBuilder_BuildStateProofCache(t *testing.T) {
 	a.Equal(sp3, sp4)
 
 	return
+}
+
+// Verifies that the VotersAllocBound constant is equal to the current consensus parameters.
+// It is used for msgpack allocbound (needs to be static)
+func TestBuilder_StateProofTopVoters(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	require.Equal(t, config.Consensus[protocol.ConsensusCurrentVersion].StateProofTopVoters, uint64(VotersAllocBound))
 }
 
 func BenchmarkBuildVerify(b *testing.B) {

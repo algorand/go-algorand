@@ -487,6 +487,14 @@ type ConsensusParams struct {
 	// EnablePrecheckECDSACurve means that ecdsa_verify opcode will bail early,
 	// returning false, if pubkey is not on the curve.
 	EnablePrecheckECDSACurve bool
+
+	// StateProofUseTrackerVerification specifies whether the node will use data from state proof verification tracker
+	// in order to verify state proofs.
+	StateProofUseTrackerVerification bool
+
+	// EnableCatchpointsWithSPContexts specifies when to re-enable version 7 catchpoints.
+	// Version 7 includes state proof verification contexts
+	EnableCatchpointsWithSPContexts bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1254,6 +1262,9 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 9 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnablePrecheckECDSACurve = true
+
+	vFuture.StateProofUseTrackerVerification = true
+	vFuture.EnableCatchpointsWithSPContexts = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
