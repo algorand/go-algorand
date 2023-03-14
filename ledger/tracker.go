@@ -269,6 +269,15 @@ type deferredCommitContext struct {
 
 	stats       telemetryspec.AccountsUpdateMetrics
 	updateStats bool
+
+	spVerification struct {
+		// state proof verification deletion information
+		lastDeleteIndex           int
+		earliestLastAttestedRound basics.Round
+
+		// state proof verification commit information
+		commitContext []verificationCommitContext
+	}
 }
 
 func (dcc deferredCommitContext) newBase() basics.Round {

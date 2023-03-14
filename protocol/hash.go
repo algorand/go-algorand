@@ -68,6 +68,7 @@ const (
 	StateProofMessage HashID = "spm"
 	StateProofPart    HashID = "spp"
 	StateProofSig     HashID = "sps"
+	StateProofVerCtx  HashID = "spv"
 
 	TestHashable  HashID = "TE"
 	TxGroup       HashID = "TG"

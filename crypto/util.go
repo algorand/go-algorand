@@ -94,3 +94,10 @@ func HashObj(h Hashable) Digest {
 func NewHash() hash.Hash {
 	return sha512.New512_256()
 }
+
+// EncodeAndHash returns both the packed representation of the object and its hash.
+func EncodeAndHash(h Hashable) (Digest, []byte) {
+	hashid, encodedData := h.ToBeHashed()
+	hashrep := append([]byte(hashid), encodedData...)
+	return Hash(hashrep), encodedData
+}

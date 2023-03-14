@@ -149,6 +149,11 @@ const createUnfinishedCatchpointsTable = `
 	round integer primary key NOT NULL,
 	blockhash blob NOT NULL)`
 
+const createStateProofVerificationTableQuery = `
+	CREATE TABLE IF NOT EXISTS stateproofverification (
+	lastattestedround integer primary key NOT NULL,
+	verificationcontext blob NOT NULL)`
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -164,6 +169,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS onlineroundparamstail`,
 	`DROP TABLE IF EXISTS catchpointfirststageinfo`,
 	`DROP TABLE IF EXISTS unfinishedcatchpoints`,
+	`DROP TABLE IF EXISTS stateproofverification`,
 }
 
 // accountsInit fills the database using tx with initAccounts if the
@@ -371,6 +377,11 @@ func accountsCreateCatchpointFirstStageInfoTable(ctx context.Context, e db.Execu
 
 func accountsCreateUnfinishedCatchpointsTable(ctx context.Context, e db.Executable) error {
 	_, err := e.ExecContext(ctx, createUnfinishedCatchpointsTable)
+	return err
+}
+
+func createStateProofVerificationTable(ctx context.Context, e db.Executable) error {
+	_, err := e.ExecContext(ctx, createStateProofVerificationTableQuery)
 	return err
 }
 

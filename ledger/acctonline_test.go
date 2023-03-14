@@ -129,6 +129,8 @@ func newBlock(t *testing.T, ml *mockLedgerForTracker, testProtocolVersion protoc
 	delta.Accts.MergeAccounts(updates)
 	delta.Totals = newTotals
 
+	err := ml.addMockBlock(blockEntry{block: blk}, delta)
+	require.NoError(t, err)
 	ml.trackers.newBlock(blk, delta)
 
 	return newTotals
@@ -225,13 +227,13 @@ func TestAcctOnline(t *testing.T) {
 			data, err := oa.accountsq.LookupOnline(bal.Addr, rnd)
 			require.NoError(t, err)
 			require.Equal(t, bal.Addr, data.Addr)
-			require.NotEmpty(t, data.Rowid)
+			require.NotEmpty(t, data.Ref)
 			require.Equal(t, oa.cachedDBRoundOnline, data.Round)
 			require.Empty(t, data.AccountData)
 
 			data, has := oa.baseOnlineAccounts.read(bal.Addr)
 			require.True(t, has)
-			require.NotEmpty(t, data.Rowid)
+			require.NotEmpty(t, data.Ref)
 			require.Empty(t, data.AccountData)
 
 			oad, err := oa.lookupOnlineAccountData(rnd, bal.Addr)
@@ -242,7 +244,7 @@ func TestAcctOnline(t *testing.T) {
 			data, err = oa.accountsq.LookupOnline(bal.Addr, rnd-1)
 			require.NoError(t, err)
 			require.Equal(t, bal.Addr, data.Addr)
-			require.NotEmpty(t, data.Rowid)
+			require.NotEmpty(t, data.Ref)
 			require.Equal(t, oa.cachedDBRoundOnline, data.Round)
 			require.NotEmpty(t, data.AccountData)
 		}
@@ -258,13 +260,13 @@ func TestAcctOnline(t *testing.T) {
 			data, err := oa.accountsq.LookupOnline(bal.Addr, rnd)
 			require.NoError(t, err)
 			require.Equal(t, bal.Addr, data.Addr)
-			require.Empty(t, data.Rowid)
+			require.Empty(t, data.Ref)
 			require.Equal(t, oa.cachedDBRoundOnline, data.Round)
 			require.Empty(t, data.AccountData)
 
 			data, has := oa.baseOnlineAccounts.read(bal.Addr)
 			require.True(t, has)
-			require.NotEmpty(t, data.Rowid) // TODO: FIXME: set rowid to empty for these items
+			require.NotEmpty(t, data.Ref) // TODO: FIXME: set rowid to empty for these items
 			require.Empty(t, data.AccountData)
 
 			// committed round i => dbRound = i - maxDeltaLookback (= 13 for the account 0)
@@ -283,14 +285,14 @@ func TestAcctOnline(t *testing.T) {
 				data, err := oa.accountsq.LookupOnline(bal.Addr, rnd)
 				require.NoError(t, err)
 				require.Equal(t, bal.Addr, data.Addr)
-				require.NotEmpty(t, data.Rowid)
+				require.NotEmpty(t, data.Ref)
 				require.Equal(t, oa.cachedDBRoundOnline, data.Round)
 				require.NotEmpty(t, data.AccountData)
 
 				// the most recent value is empty because the account is scheduled for removal
 				data, has := oa.baseOnlineAccounts.read(bal.Addr)
 				require.True(t, has)
-				require.NotEmpty(t, data.Rowid) // TODO: FIXME: set rowid to empty for these items
+				require.NotEmpty(t, data.Ref) // TODO: FIXME: set rowid to empty for these items
 				require.Empty(t, data.AccountData)
 
 				// account 1 went offline at round 2 => it offline at requested round 1+1=2
@@ -307,14 +309,14 @@ func TestAcctOnline(t *testing.T) {
 				data, err := oa.accountsq.LookupOnline(bal.Addr, rnd)
 				require.NoError(t, err)
 				require.Equal(t, bal.Addr, data.Addr)
-				require.NotEmpty(t, data.Rowid)
+				require.NotEmpty(t, data.Ref)
 				require.Equal(t, oa.cachedDBRoundOnline, data.Round)
 				require.NotEmpty(t, data.AccountData)
 
 				// the most recent value is empty because the account is scheduled for removal
 				data, has := oa.baseOnlineAccounts.read(bal.Addr)
 				require.True(t, has)
-				require.NotEmpty(t, data.Rowid) // TODO: FIXME: set rowid to empty for these items
+				require.NotEmpty(t, data.Ref) // TODO: FIXME: set rowid to empty for these items
 				require.Empty(t, data.AccountData)
 
 				// account 2 went offline at round 3 => it online at requested round 1+1=2
@@ -337,13 +339,13 @@ func TestAcctOnline(t *testing.T) {
 		data, err := oa.accountsq.LookupOnline(bal.Addr, basics.Round(i+1))
 		require.NoError(t, err)
 		require.Equal(t, bal.Addr, data.Addr)
-		require.NotEmpty(t, data.Rowid)
+		require.NotEmpty(t, data.Ref)
 		require.Equal(t, oa.cachedDBRoundOnline, data.Round)
 		require.Empty(t, data.AccountData)
 
 		data, has := oa.baseOnlineAccounts.read(bal.Addr)
 		require.True(t, has)
-		require.NotEmpty(t, data.Rowid)
+		require.NotEmpty(t, data.Ref)
 		require.Empty(t, data.AccountData)
 
 		oad, err := oa.lookupOnlineAccountData(basics.Round(i+1), bal.Addr)
@@ -354,7 +356,7 @@ func TestAcctOnline(t *testing.T) {
 		data, err = oa.accountsq.LookupOnline(bal.Addr, basics.Round(i))
 		require.NoError(t, err)
 		require.Equal(t, bal.Addr, data.Addr)
-		require.NotEmpty(t, data.Rowid)
+		require.NotEmpty(t, data.Ref)
 		require.Equal(t, oa.cachedDBRoundOnline, data.Round)
 		require.NotEmpty(t, data.AccountData)
 	}
@@ -370,7 +372,7 @@ func TestAcctOnline(t *testing.T) {
 		data, err := oa.accountsq.LookupOnline(bal.Addr, basics.Round(i))
 		require.NoError(t, err)
 		require.Equal(t, bal.Addr, data.Addr)
-		require.NotEmpty(t, data.Rowid)
+		require.NotEmpty(t, data.Ref)
 		require.Equal(t, oa.cachedDBRoundOnline, data.Round)
 		require.NotEmpty(t, data.AccountData)
 
@@ -513,7 +515,7 @@ func TestAcctOnlineCache(t *testing.T) {
 					data, err := oa.accountsq.LookupOnline(bal.Addr, rnd)
 					require.NoError(t, err)
 					require.Equal(t, bal.Addr, data.Addr)
-					require.NotEmpty(t, data.Rowid)
+					require.NotEmpty(t, data.Ref)
 					require.Equal(t, oa.cachedDBRoundOnline, data.Round)
 					if (rnd-1)%(numAccts*2) >= numAccts {
 						require.Empty(t, data.AccountData)
@@ -549,9 +551,9 @@ func TestAcctOnlineCache(t *testing.T) {
 					require.Equal(t, oa.cachedDBRoundOnline, data.Round)
 					if (rnd-1)%(numAccts*2) >= numAccts {
 						require.Empty(t, data.AccountData)
-						require.Empty(t, data.Rowid)
+						require.Empty(t, data.Ref)
 					} else {
-						require.NotEmpty(t, data.Rowid)
+						require.NotEmpty(t, data.Ref)
 						require.NotEmpty(t, data.AccountData)
 					}
 
@@ -1049,7 +1051,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		pad, err := oa.accountsq.LookupOnline(addrA, 1)
 		require.NoError(t, err)
 		require.Equal(t, addrA, pad.Addr)
-		require.NotEmpty(t, pad.Rowid)
+		require.NotEmpty(t, pad.Ref)
 		require.Empty(t, pad.AccountData.VoteLastValid)
 
 		// commit a block to get these entries removed
@@ -1082,7 +1084,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 			pad, err = oa.accountsq.LookupOnline(addrB, 1)
 			require.NoError(t, err)
 			require.Equal(t, addrB, pad.Addr)
-			require.NotEmpty(t, pad.Rowid)
+			require.NotEmpty(t, pad.Ref)
 			require.NotEmpty(t, pad.AccountData.VoteLastValid)
 		}()
 
@@ -1098,7 +1100,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		pad, err = oa.accountsq.LookupOnline(addrA, 1)
 		require.NoError(t, err)
 		require.Equal(t, addrA, pad.Addr)
-		require.Empty(t, pad.Rowid)
+		require.Empty(t, pad.Ref)
 		require.Empty(t, pad.AccountData.VoteLastValid)
 
 		_, has = oa.accounts[addrB]
@@ -1114,7 +1116,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		pad, err = oa.accountsq.LookupOnline(addrB, 1)
 		require.NoError(t, err)
 		require.Equal(t, addrB, pad.Addr)
-		require.NotEmpty(t, pad.Rowid)
+		require.NotEmpty(t, pad.Ref)
 		require.NotEmpty(t, pad.AccountData.VoteLastValid)
 	})
 }
@@ -1606,6 +1608,99 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 		allAccts[numAccts-1] = accountToBeUpdated
 
 		compareTopAccounts(a, top, allAccts)
+	case <-time.After(1 * time.Minute):
+		a.FailNow("timedout while waiting for post commit")
+	}
+}
+
+func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	const numAccts = 20
+	allAccts := make([]basics.BalanceRecord, numAccts)
+	genesisAccts := []map[basics.Address]basics.AccountData{{}}
+	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
+
+	for i := 0; i < numAccts; i++ {
+		allAccts[i] = basics.BalanceRecord{
+			Addr: ledgertesting.RandomAddress(),
+			AccountData: basics.AccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
+				Status:         basics.Online,
+				VoteLastValid:  1000,
+				VoteFirstValid: 0,
+				RewardsBase:    0},
+		}
+		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
+	}
+	addSinkAndPoolAccounts(genesisAccts)
+
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, genesisAccts)
+	defer ml.Close()
+
+	stallingTracker := &blockingTracker{
+		postCommitUnlockedEntryLock:   make(chan struct{}),
+		postCommitUnlockedReleaseLock: make(chan struct{}),
+		postCommitEntryLock:           make(chan struct{}),
+		postCommitReleaseLock:         make(chan struct{}),
+		alwaysLock:                    false,
+		shouldLockPostCommit:          false,
+	}
+
+	conf := config.GetDefaultLocal()
+	au, oa := newAcctUpdates(t, ml, conf)
+	defer oa.close()
+	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	top, _, err := oa.TopOnlineAccounts(0, 0, 5, &proto, 0)
+	a.NoError(err)
+	compareTopAccounts(a, top, allAccts)
+
+	_, totals, err := au.LatestTotals()
+	require.NoError(t, err)
+
+	// apply some rounds so the db round will make progress (not be 0) - i.e since the max lookback in memory is 8. deltas
+	// will get committed at round 9
+	i := 1
+	for ; i < 10; i++ {
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
+	}
+
+	stallingTracker.shouldLockPostCommit = true
+
+	updateAccountsRoutine := func() {
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
+	}
+
+	// This go routine will trigger a commit producer. we added a special blockingTracker that will case our
+	// onlineAccoutsTracker to be "stuck" between commit and Post commit .
+	// thus, when we call onlineTop - it should wait for the post commit to happen.
+	// in a different go routine we will wait 2 sec and release the commit.
+	go updateAccountsRoutine()
+
+	select {
+	case <-stallingTracker.postCommitEntryLock:
+		go func() {
+			time.Sleep(2 * time.Second)
+			// tweak the database to move backwards
+			err = oa.dbs.Batch(func(ctx context.Context, tx trackerdb.BatchScope) (err error) {
+				return tx.Testing().ModifyAcctBaseTest()
+			})
+			stallingTracker.postCommitReleaseLock <- struct{}{}
+		}()
+
+		_, _, err = oa.TopOnlineAccounts(2, 2, 5, &proto, 0)
+		a.Error(err)
+		a.Contains(err.Error(), "is behind in-memory round")
+
 	case <-time.After(1 * time.Minute):
 		a.FailNow("timedout while waiting for post commit")
 	}

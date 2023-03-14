@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-deadlock"
 	"os"
 	"runtime"
 	"strings"
@@ -59,6 +60,8 @@ type mockLedgerForTracker struct {
 	consensusParams  config.ConsensusParams
 	consensusVersion protocol.ConsensusVersion
 	accts            map[basics.Address]basics.AccountData
+
+	mu deadlock.RWMutex
 
 	// trackerRegistry manages persistence into DB so we have to have it here even for a single tracker test
 	trackers trackerRegistry
@@ -182,16 +185,24 @@ func (ml *mockLedgerForTracker) Close() {
 }
 
 func (ml *mockLedgerForTracker) Latest() basics.Round {
+	ml.mu.RLock()
+	defer ml.mu.RUnlock()
 	return basics.Round(len(ml.blocks)) - 1
 }
 
 func (ml *mockLedgerForTracker) addMockBlock(be blockEntry, delta ledgercore.StateDelta) error {
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
+
 	ml.blocks = append(ml.blocks, be)
 	ml.deltas = append(ml.deltas, delta)
 	return nil
 }
 
 func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger internal.LedgerForEvaluator) (ledgercore.StateDelta, error) {
+	ml.mu.RLock()
+	defer ml.mu.RUnlock()
+
 	// support returning the deltas if the client explicitly provided them by calling addMockBlock, otherwise,
 	// just return an empty state delta ( since the client clearly didn't care about these )
 	if len(ml.deltas) > int(blk.Round()) {
@@ -207,6 +218,9 @@ func (ml *mockLedgerForTracker) Block(rnd basics.Round) (bookkeeping.Block, erro
 		return bookkeeping.Block{}, fmt.Errorf("rnd %d out of bounds", rnd)
 	}
 
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
+
 	return ml.blocks[int(rnd)].block, nil
 }
 
@@ -214,6 +228,9 @@ func (ml *mockLedgerForTracker) BlockHdr(rnd basics.Round) (bookkeeping.BlockHea
 	if rnd > ml.Latest() {
 		return bookkeeping.BlockHeader{}, fmt.Errorf("rnd %d out of bounds", rnd)
 	}
+
+	ml.mu.RLock()
+	defer ml.mu.RUnlock()
 
 	return ml.blocks[int(rnd)].block.BlockHeader, nil
 }
@@ -268,7 +285,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 		if err != nil {
 			return err
 		}
-		bals, err0 = arw.AccountsAllTest()
+		bals, err0 = arw.Testing().AccountsAllTest()
 		return err0
 	})
 	if err != nil {
@@ -1006,11 +1023,11 @@ func TestListCreatables(t *testing.T) {
 		proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 		accts := make(map[basics.Address]basics.AccountData)
-		_ = tx.AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+		_ = tx.Testing().AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
 		require.NoError(t, err)
 
 		au := &accountUpdates{}
-		au.accountsq, err = tx.MakeAccountsOptimizedReader()
+		au.accountsq, err = tx.Testing().MakeAccountsOptimizedReader()
 		require.NoError(t, err)
 
 		// ******* All results are obtained from the cache. Empty database *******
@@ -1628,9 +1645,9 @@ func TestCompactDeltasResources(t *testing.T) {
 
 	// check deltas without missing accounts
 	for i := int64(0); i < 4; i++ {
-		baseResources.write(trackerdb.PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(100 + i)}, addrs[i])
+		baseResources.write(trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{i + 1}, Aidx: basics.CreatableIndex(100 + i)}, addrs[i])
 		if i%2 == 0 {
-			baseResources.write(trackerdb.PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(200 + i)}, addrs[i])
+			baseResources.write(trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{i + 1}, Aidx: basics.CreatableIndex(200 + i)}, addrs[i])
 		}
 	}
 
@@ -1642,11 +1659,11 @@ func TestCompactDeltasResources(t *testing.T) {
 	for i := int64(0); i < 4; i++ {
 		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
 		require.NotEqual(t, -1, idx)
-		require.Equal(t, trackerdb.PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
+		require.Equal(t, trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{i + 1}, Aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
 		if i%2 == 0 {
 			delta, idx = outResourcesDeltas.get(addrs[i], basics.CreatableIndex(200+i))
 			require.NotEqual(t, -1, idx)
-			require.Equal(t, trackerdb.PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
+			require.Equal(t, trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{i + 1}, Aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
 		}
 	}
 
@@ -1662,7 +1679,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	appLocalState204 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"204": basics.TealValue{Type: basics.TealBytesType, Bytes: "204"}}}
 	stateDeltas[1].Accts.UpsertAppResource(addrs[4], 104, ledgercore.AppParamsDelta{Params: &appParams104}, ledgercore.AppLocalStateDelta{LocalState: &appLocalState204})
 
-	baseResources.write(trackerdb.PersistedResourcesData{Addrid: 5 /* 4+1 */, Aidx: basics.CreatableIndex(104)}, addrs[4])
+	baseResources.write(trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{5} /* 4+1 */, Aidx: basics.CreatableIndex(104)}, addrs[4])
 	outResourcesDeltas = makeCompactResourceDeltas(stateDeltas, basics.Round(1), true, baseAccounts, baseResources)
 
 	require.Equal(t, 0, len(outResourcesDeltas.misses))

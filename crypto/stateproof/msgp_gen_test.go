@@ -14,6 +14,126 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+func TestMarshalUnmarshalBuilder(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := Builder{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingBuilder(t *testing.T) {
+	protocol.RunEncodingTest(t, &Builder{})
+}
+
+func BenchmarkMarshalMsgBuilder(b *testing.B) {
+	v := Builder{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgBuilder(b *testing.B) {
+	v := Builder{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalBuilder(b *testing.B) {
+	v := Builder{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestMarshalUnmarshalBuilderPersistedFields(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := BuilderPersistedFields{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingBuilderPersistedFields(t *testing.T) {
+	protocol.RunEncodingTest(t, &BuilderPersistedFields{})
+}
+
+func BenchmarkMarshalMsgBuilderPersistedFields(b *testing.B) {
+	v := BuilderPersistedFields{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgBuilderPersistedFields(b *testing.B) {
+	v := BuilderPersistedFields{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshalBuilderPersistedFields(b *testing.B) {
+	v := BuilderPersistedFields{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestMarshalUnmarshalMessageHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	v := MessageHash{}

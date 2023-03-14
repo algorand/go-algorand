@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEnsureDataDirReturnsWhenDataDirIsProvided(t *testing.T) {
+func TestEnsureDataDirReturnsWhenDataDirIsProvided(t *testing.T) { // nolint:paralleltest // Sets shared OS environment variable.
 	partitiontest.PartitionTest(t)
 	expectedDir := "~/.algorand"
 	os.Setenv("ALGORAND_DATA", expectedDir)
@@ -33,7 +33,7 @@ func TestEnsureDataDirReturnsWhenDataDirIsProvided(t *testing.T) {
 	require.Equal(t, expectedDir, actualDir)
 }
 
-func TestEnsureDataDirReturnsWhenWorkDirIsProvided(t *testing.T) {
+func TestEnsureDataDirReturnsWhenWorkDirIsProvided(t *testing.T) { // nolint:paralleltest // Sets shared OS environment variable.
 	partitiontest.PartitionTest(t)
 	expectedDir, err := os.Getwd()
 	if err != nil {
@@ -44,7 +44,7 @@ func TestEnsureDataDirReturnsWhenWorkDirIsProvided(t *testing.T) {
 	require.Equal(t, expectedDir, actualDir)
 }
 
-func TestEnsureDataDirReturnsWhenRelPath1IsProvided(t *testing.T) {
+func TestEnsureDataDirReturnsWhenRelPath1IsProvided(t *testing.T) { // nolint:paralleltest // Sets shared OS environment variable.
 	partitiontest.PartitionTest(t)
 	expectedDir, err := os.Getwd()
 	if err != nil {
@@ -55,7 +55,7 @@ func TestEnsureDataDirReturnsWhenRelPath1IsProvided(t *testing.T) {
 	require.Equal(t, expectedDir, actualDir)
 }
 
-func TestEnsureDataDirReturnsWhenRelPath2IsProvided(t *testing.T) {
+func TestEnsureDataDirReturnsWhenRelPath2IsProvided(t *testing.T) { // nolint:paralleltest // Sets shared OS environment variable.
 	partitiontest.PartitionTest(t)
 	expectedDir, err := os.Getwd()
 	if err != nil {
@@ -66,7 +66,7 @@ func TestEnsureDataDirReturnsWhenRelPath2IsProvided(t *testing.T) {
 	require.Equal(t, expectedDir, actualDir)
 }
 
-func TestEnsureDataDirReturnsWhenRelPath3IsProvided(t *testing.T) {
+func TestEnsureDataDirReturnsWhenRelPath3IsProvided(t *testing.T) { // nolint:paralleltest // Sets shared OS environment variable.
 	partitiontest.PartitionTest(t)
 	expectedDir, err := os.Getwd()
 	if err != nil {

@@ -18,13 +18,9 @@ package trackerdb
 
 import (
 	"context"
-	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -33,42 +29,34 @@ type BatchScope interface {
 	MakeCatchpointWriter() (CatchpointWriter, error)
 	MakeAccountsWriter() (AccountsWriterExt, error)
 	MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
-
-	RunMigrations(ctx context.Context, params Params, log logging.Logger, targetVersion int32) (mgr InitParams, err error)
 	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
-
-	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
-	AccountsUpdateSchemaTest(ctx context.Context) (err error)
+	Testing() TestBatchScope
+	MakeSpVerificationCtxWriter() SpVerificationCtxWriter
 }
 
 // SnapshotScope is the read scope to the store.
 type SnapshotScope interface {
 	MakeAccountsReader() (AccountsReaderExt, error)
 	MakeCatchpointReader() (CatchpointReader, error)
-
 	MakeCatchpointPendingHashesIterator(hashCount int) CatchpointPendingHashesIter
+
+	MakeSpVerificationCtxReader() SpVerificationCtxReader
 }
 
 // TransactionScope is the read/write scope to the store.
 type TransactionScope interface {
 	MakeCatchpointReaderWriter() (CatchpointReaderWriter, error)
 	MakeAccountsReaderWriter() (AccountsReaderWriter, error)
-	MakeAccountsOptimizedReader() (AccountsReader, error)
 	MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
 	MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (w OnlineAccountsWriter, err error)
-	MakeOnlineAccountsOptimizedReader() (OnlineAccountsReader, error)
-
 	MakeMerkleCommitter(staging bool) (MerkleCommitter, error)
-
 	MakeOrderedAccountsIter(accountCount int) OrderedAccountsIter
 	MakeKVsIter(ctx context.Context) (KVsIter, error)
 	MakeEncodedAccoutsBatchIter() EncodedAccountsBatchIter
-
 	RunMigrations(ctx context.Context, params Params, log logging.Logger, targetVersion int32) (mgr InitParams, err error)
 	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
-
-	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
-	AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error)
+	Testing() TestTransactionScope
+	MakeSpVerificationCtxReaderWriter() SpVerificationCtxReaderWriter
 }
 
 // BatchFn is the callback lambda used in `Batch`.

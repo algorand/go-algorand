@@ -157,6 +157,11 @@ func (s *trackerSQLStore) Close() {
 	s.pair.Close()
 }
 
+// Testing returns this scope, exposed as an interface with test functions
+func (txs sqlTransactionScope) Testing() trackerdb.TestTransactionScope {
+	return txs
+}
+
 func (txs sqlTransactionScope) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
 	return NewCatchpointSQLReaderWriter(txs.tx), nil
 }
@@ -165,6 +170,7 @@ func (txs sqlTransactionScope) MakeAccountsReaderWriter() (trackerdb.AccountsRea
 	return NewAccountsSQLReaderWriter(txs.tx), nil
 }
 
+// implements Testing interface
 func (txs sqlTransactionScope) MakeAccountsOptimizedReader() (trackerdb.AccountsReader, error) {
 	return AccountsInitDbQueries(txs.tx)
 }
@@ -177,6 +183,7 @@ func (txs sqlTransactionScope) MakeOnlineAccountsOptimizedWriter(hasAccounts boo
 	return MakeOnlineAccountsSQLWriter(txs.tx, hasAccounts)
 }
 
+// implements Testing interface
 func (txs sqlTransactionScope) MakeOnlineAccountsOptimizedReader() (r trackerdb.OnlineAccountsReader, err error) {
 	return OnlineAccountsInitDbQueries(txs.tx)
 }
@@ -197,6 +204,10 @@ func (txs sqlTransactionScope) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAc
 	return MakeEncodedAccoutsBatchIter(txs.tx)
 }
 
+func (txs sqlTransactionScope) MakeSpVerificationCtxReaderWriter() trackerdb.SpVerificationCtxReaderWriter {
+	return makeStateProofVerificationReaderWriter(txs.tx, txs.tx)
+}
+
 func (txs sqlTransactionScope) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
 	return RunMigrations(ctx, txs.tx, params, log, targetVersion)
 }
@@ -205,12 +216,19 @@ func (txs sqlTransactionScope) ResetTransactionWarnDeadline(ctx context.Context,
 	return db.ResetTransactionWarnDeadline(ctx, txs.tx, deadline)
 }
 
+// implements Testing interface
 func (txs sqlTransactionScope) AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
 	return AccountsInitTest(tb, txs.tx, initAccounts, proto)
 }
 
+// implements Testing interface
 func (txs sqlTransactionScope) AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
 	return AccountsInitLightTest(tb, txs.tx, initAccounts, proto)
+}
+
+// Testing returns this scope, exposed as an interface with test functions
+func (bs sqlBatchScope) Testing() trackerdb.TestBatchScope {
+	return bs
 }
 
 func (bs sqlBatchScope) MakeCatchpointWriter() (trackerdb.CatchpointWriter, error) {
@@ -225,6 +243,7 @@ func (bs sqlBatchScope) MakeAccountsOptimizedWriter(hasAccounts, hasResources, h
 	return MakeAccountsSQLWriter(bs.tx, hasAccounts, hasResources, hasKvPairs, hasCreatables)
 }
 
+// implements Testing interface
 func (bs sqlBatchScope) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
 	return RunMigrations(ctx, bs.tx, params, log, targetVersion)
 }
@@ -233,12 +252,23 @@ func (bs sqlBatchScope) ResetTransactionWarnDeadline(ctx context.Context, deadli
 	return db.ResetTransactionWarnDeadline(ctx, bs.tx, deadline)
 }
 
+// implements Testing interface
 func (bs sqlBatchScope) AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
 	return AccountsInitTest(tb, bs.tx, initAccounts, proto)
 }
 
+// implements Testing interface
+func (bs sqlBatchScope) ModifyAcctBaseTest() error {
+	return modifyAcctBaseTest(bs.tx)
+}
+
+// implements Testing interface
 func (bs sqlBatchScope) AccountsUpdateSchemaTest(ctx context.Context) (err error) {
 	return AccountsUpdateSchemaTest(ctx, bs.tx)
+}
+
+func (bs sqlBatchScope) MakeSpVerificationCtxWriter() trackerdb.SpVerificationCtxWriter {
+	return makeStateProofVerificationWriter(bs.tx)
 }
 
 func (ss sqlSnapshotScope) MakeAccountsReader() (trackerdb.AccountsReaderExt, error) {
@@ -251,4 +281,8 @@ func (ss sqlSnapshotScope) MakeCatchpointReader() (trackerdb.CatchpointReader, e
 
 func (ss sqlSnapshotScope) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.CatchpointPendingHashesIter {
 	return MakeCatchpointPendingHashesIterator(hashCount, ss.tx)
+}
+
+func (ss sqlSnapshotScope) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
+	return makeStateProofVerificationReader(ss.tx)
 }

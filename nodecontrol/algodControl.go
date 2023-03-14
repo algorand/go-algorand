@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -84,6 +85,13 @@ func (nc NodeController) ServerURL() (url.URL, error) {
 	addr, err := nc.GetHostAddress()
 	if err != nil {
 		return url.URL{}, err
+	}
+	if strings.HasPrefix(addr, "http:") || strings.HasPrefix(addr, "https:") {
+		u, err := url.Parse(addr)
+		if err != nil {
+			return url.URL{}, err
+		}
+		return *u, nil
 	}
 	return url.URL{Scheme: "http", Host: addr}, nil
 }

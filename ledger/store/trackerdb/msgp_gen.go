@@ -1134,8 +1134,8 @@ func (z *BaseVotingData) MsgIsZero() bool {
 func (z *CatchpointFirstStageInfo) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(6)
-	var zb0001Mask uint8 /* 7 bits */
+	zb0001Len := uint32(7)
+	var zb0001Mask uint8 /* 8 bits */
 	if (*z).Totals.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -1156,9 +1156,13 @@ func (z *CatchpointFirstStageInfo) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x20
 	}
-	if (*z).TrieBalancesHash.MsgIsZero() {
+	if (*z).StateProofVerificationHash.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x40
+	}
+	if (*z).TrieBalancesHash.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x80
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -1189,6 +1193,11 @@ func (z *CatchpointFirstStageInfo) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendUint64(o, (*z).TotalKVs)
 		}
 		if (zb0001Mask & 0x40) == 0 { // if not empty
+			// string "spVerificationHash"
+			o = append(o, 0xb2, 0x73, 0x70, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x48, 0x61, 0x73, 0x68)
+			o = (*z).StateProofVerificationHash.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x80) == 0 { // if not empty
 			// string "trieBalancesHash"
 			o = append(o, 0xb0, 0x74, 0x72, 0x69, 0x65, 0x42, 0x61, 0x6c, 0x61, 0x6e, 0x63, 0x65, 0x73, 0x48, 0x61, 0x73, 0x68)
 			o = (*z).TrieBalancesHash.MarshalMsg(o)
@@ -1264,6 +1273,14 @@ func (z *CatchpointFirstStageInfo) UnmarshalMsg(bts []byte) (o []byte, err error
 			}
 		}
 		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).StateProofVerificationHash.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "StateProofVerificationHash")
+				return
+			}
+		}
+		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -1322,6 +1339,12 @@ func (z *CatchpointFirstStageInfo) UnmarshalMsg(bts []byte) (o []byte, err error
 					err = msgp.WrapError(err, "BiggestChunkLen")
 					return
 				}
+			case "spVerificationHash":
+				bts, err = (*z).StateProofVerificationHash.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "StateProofVerificationHash")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -1342,13 +1365,13 @@ func (_ *CatchpointFirstStageInfo) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *CatchpointFirstStageInfo) Msgsize() (s int) {
-	s = 1 + 14 + (*z).Totals.Msgsize() + 17 + (*z).TrieBalancesHash.Msgsize() + 14 + msgp.Uint64Size + 9 + msgp.Uint64Size + 12 + msgp.Uint64Size + 13 + msgp.Uint64Size
+	s = 1 + 14 + (*z).Totals.Msgsize() + 17 + (*z).TrieBalancesHash.Msgsize() + 14 + msgp.Uint64Size + 9 + msgp.Uint64Size + 12 + msgp.Uint64Size + 13 + msgp.Uint64Size + 19 + (*z).StateProofVerificationHash.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *CatchpointFirstStageInfo) MsgIsZero() bool {
-	return ((*z).Totals.MsgIsZero()) && ((*z).TrieBalancesHash.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalKVs == 0) && ((*z).TotalChunks == 0) && ((*z).BiggestChunkLen == 0)
+	return ((*z).Totals.MsgIsZero()) && ((*z).TrieBalancesHash.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalKVs == 0) && ((*z).TotalChunks == 0) && ((*z).BiggestChunkLen == 0) && ((*z).StateProofVerificationHash.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
