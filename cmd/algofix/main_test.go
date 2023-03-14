@@ -76,6 +76,8 @@ func parseFixPrint(t *testing.T, fn func(*ast.File) bool, desc, in string, mustB
 
 func TestRewrite(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	for _, tt := range testCases {
 		// Apply fix: should get tt.Out.
 		out, fixed, ok := parseFixPrint(t, tt.Fn, tt.Name, tt.In, true)

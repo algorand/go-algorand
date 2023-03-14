@@ -33,6 +33,7 @@ import (
 
 func TestLoadConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -46,6 +47,7 @@ func TestLoadConfig(t *testing.T) {
 
 func TestLoadMissingConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -57,6 +59,7 @@ func TestLoadMissingConfig(t *testing.T) {
 
 func TestGenerateGenesis(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -76,6 +79,7 @@ func TestGenerateGenesis(t *testing.T) {
 
 func TestValidate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -235,6 +239,8 @@ type overlayTestStruct struct {
 // TestJsonOverlay ensures that encoding/json will only clobber fields present in the json and leave other fields unchanged
 func TestJsonOverlay(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	before := overlayTestStruct{A: "one", B: "two"}
 	setB := "{\"B\":\"other\"}"
 	dec := json.NewDecoder(strings.NewReader(setB))

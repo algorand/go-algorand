@@ -30,6 +30,8 @@ import (
 
 func TestWebPageFrontendHandlers(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	params := WebPageFrontendParams{
 		router:     mux.NewRouter(),
 		apiAddress: "127.0.0.1:12345",

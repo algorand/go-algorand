@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package verify
+package execpool
 
 import (
 	"context"
@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/util/execpool"
 )
 
 // ErrShuttingDownError is the error returned when a job is not processed because the service is shutting down
@@ -37,6 +36,8 @@ var ErrShuttingDownError = errors.New("not processed, execpool service is shutti
 // However, when the incoming rate is high, the batch will fill up quickly and will send
 // for processing before waitForNextJobDuration.
 const waitForNextJobDuration = 2 * time.Millisecond
+
+const txnPerWorksetThreshold = 32
 
 // batchSizeBlockLimit is the limit when the batch exceeds, will be added to the exec pool, even if the pool is saturated
 // and the stream  will be blocked until the exec pool accepts the batch
@@ -61,14 +62,14 @@ type BatchProcessor interface {
 // StreamToBatch makes batches from incoming stream of jobs, and submits the batches to the exec pool
 type StreamToBatch struct {
 	inputChan      <-chan InputJob
-	executionPool  execpool.BacklogPool
+	executionPool  BacklogPool
 	ctx            context.Context
 	activeLoopWg   sync.WaitGroup
 	batchProcessor BatchProcessor
 }
 
 // MakeStreamToBatch creates a new stream to batch converter
-func MakeStreamToBatch(inputChan <-chan InputJob, execPool execpool.BacklogPool,
+func MakeStreamToBatch(inputChan <-chan InputJob, execPool BacklogPool,
 	batchProcessor BatchProcessor) *StreamToBatch {
 
 	return &StreamToBatch{

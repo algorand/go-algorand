@@ -974,9 +974,9 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		au.baseResources.init(au.log, baseResourcesPendingAccountsBufferSize, baseResourcesPendingAccountsWarnThreshold)
 		au.baseKVs.init(au.log, baseKVPendingBufferSize, baseKVPendingWarnThreshold)
 	} else {
-		au.baseAccounts.init(au.log, 0, 0)
-		au.baseResources.init(au.log, 0, 0)
-		au.baseKVs.init(au.log, 0, 0)
+		au.baseAccounts.init(au.log, 0, 1)
+		au.baseResources.init(au.log, 0, 1)
+		au.baseKVs.init(au.log, 0, 1)
 	}
 	return
 }
@@ -1210,7 +1210,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				// we don't technically need this, since it's already in the baseResources, however, writing this over
 				// would ensure that we promote this field.
 				au.baseResources.writePending(prd, addr)
-				if prd.Addrid != 0 {
+				if prd.AcctRef != nil {
 					if err := addResource(prd.Aidx, rnd, prd.AccountResource()); err != nil {
 						return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 					}
@@ -1235,7 +1235,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 			}
 			if persistedData.Round == currentDbRound {
-				if persistedData.Rowid != 0 {
+				if persistedData.Ref != nil {
 					// if we read actual data return it
 					au.baseAccounts.writePending(persistedData)
 					ad = persistedData.AccountData.GetLedgerCoreAccountData()
@@ -1365,7 +1365,7 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 			return ledgercore.AccountResource{}, basics.Round(0), err
 		}
 		if persistedData.Round == currentDbRound {
-			if persistedData.Addrid != 0 {
+			if persistedData.AcctRef != nil {
 				// if we read actual data return it
 				au.baseResources.writePending(persistedData, addr)
 				return persistedData.AccountResource(), rnd, nil
@@ -1490,7 +1490,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			return ledgercore.AccountData{}, basics.Round(0), "", 0, err
 		}
 		if persistedData.Round == currentDbRound {
-			if persistedData.Rowid != 0 {
+			if persistedData.Ref != nil {
 				// if we read actual data return it
 				au.baseAccounts.writePending(persistedData)
 				return persistedData.AccountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
@@ -1694,9 +1694,9 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx trackerdb.Transact
 		return err
 	}
 
-	knownAddresses := make(map[basics.Address]int64, len(dcc.compactAccountDeltas.deltas))
+	knownAddresses := make(map[basics.Address]trackerdb.AccountRef, len(dcc.compactAccountDeltas.deltas))
 	for _, delta := range dcc.compactAccountDeltas.deltas {
-		knownAddresses[delta.oldAcct.Addr] = delta.oldAcct.Rowid
+		knownAddresses[delta.oldAcct.Addr] = delta.oldAcct.Ref
 	}
 
 	err = dcc.compactResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
