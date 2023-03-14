@@ -464,6 +464,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 		close(taskCh)
 		wg.Wait()
 		close(completed)
+		s.log.Infof("out of pipelined fetch")
 	}()
 
 	peerSelector := createPeerSelector(s.net, s.cfg, true)
@@ -542,6 +543,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			completedRounds[round] = true
 			// fetch rounds we can validate
 			for completedRounds[nextRound-basics.Round(parallelRequests)] {
+				s.log.Infof("next round %d, supported?: %v", nextRound, s.nextRoundIsNotSupported(nextRound))
 				// If the next round is not supported
 				if s.nextRoundIsNotSupported(nextRound) {
 					s.handleUnsupportedRound(nextRound)
@@ -556,6 +558,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 				nextRound++
 			}
 		case <-s.ctx.Done():
+			s.log.Infof("ctx done here")
 			return
 		}
 	}

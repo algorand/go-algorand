@@ -296,6 +296,32 @@ outer:
 		currentRound++
 	}
 	log.Infof("done catching up!\n")
+
+	reportLog := func() {
+		status, err = secondNodeRestClient.Status()
+		a.NoError(err)
+		primStatus, err := primaryNodeRestClient.Status()
+		a.NoError(err)
+		log.Infof("currend round: %d, primary round: %d, current-sync time and time since last round %f, %f, prim-sync time and time since last round: %f, %f",
+			status.LastRound, primStatus.LastRound,
+			time.Duration(status.CatchupTime).Seconds(), time.Duration(status.TimeSinceLastRound).Seconds(),
+			time.Duration(primStatus.CatchupTime).Seconds(), time.Duration(primStatus.TimeSinceLastRound).Seconds())
+	}
+
+	// an immediate call for ready will error, for sync time != 0
+	a.Error(secondNodeRestClient.ReadyCheck())
+
+	for {
+		reportLog()
+		err = secondNodeRestClient.ReadyCheck()
+
+		if status.LastRound < 35 {
+			time.Sleep(250 * time.Millisecond)
+			continue
+		}
+		a.NoError(err)
+		break
+	}
 }
 
 func TestCatchpointLabelGeneration(t *testing.T) {
