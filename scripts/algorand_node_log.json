@@ -1,6 +1,6 @@
 {
     "algorand_node_log" : {
-        "title" : "Algornad Node Log Format",
+        "title" : "Algorand Node Log Format",
         "description" : "Log format for logrus, used by go-algorand.",
         "url" : "https://github.com/sirupsen/logrus",
         "level-field" : "level",
