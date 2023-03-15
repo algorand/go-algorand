@@ -35,8 +35,12 @@ function start_public_network() {
     catchup &
   fi
 
-  # redirect output to stdout
-  algod -o
+  if [ "$PEER_ADDRESS" != "" ]; then
+       algod -o -p $PEER_ADDRESS
+  else
+    # redirect output to stdout
+    algod -o
+  fi
 }
 
 function configure_data_dir() {
@@ -142,8 +146,12 @@ function start_private_network() {
 
 function start_new_private_network() {
   local TEMPLATE="template.json"
-  if [ "$DEV_MODE" = "1" ]; then
-    TEMPLATE="devmode_template.json"
+  if [ -f "/etc/algorand/template.json" ]; then
+      cp /etc/algorand/template.json template.json
+  else
+      if [ "$DEV_MODE" = "1" ]; then
+          TEMPLATE="devmode_template.json"
+      fi
   fi
   sed -i "s/NUM_ROUNDS/${NUM_ROUNDS:-30000}/" "/node/run/$TEMPLATE"
   goal network create --noclean -n dockernet -r "${ALGORAND_DATA}/.." -t "/node/run/$TEMPLATE"
