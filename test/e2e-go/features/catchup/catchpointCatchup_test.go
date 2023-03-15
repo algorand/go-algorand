@@ -435,9 +435,9 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	if testing.Short() {
-		t.Skip()
-	}
+	//if testing.Short() {
+	//	t.Skip()
+	//}
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensus := make(config.ConsensusProtocols)
@@ -539,19 +539,34 @@ outer:
 		}
 	}
 
+	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
+
 	// let the primary node catchup
 	err = client1.Catchup(*status.LastCatchpoint)
 	a.NoError(err)
+
+	// The primary node is catching up with its previous catchpoint
+	// Its status contain a catchpoint it is catching-up against,
+	// so it should not be ready, and ready-ness endpoint should 400 err.
+	a.Error(primaryNodeRestClient.ReadyCheck())
 
 	status1, err := client1.Status()
 	a.NoError(err)
 	targetRound := status1.LastRound + 5
 
 	// Wait for the network to start making progress again
-	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 	err = fixture.ClientWaitForRound(primaryNodeRestClient, targetRound,
 		10*catchpointCatchupProtocol.AgreementFilterTimeout)
 	a.NoError(err)
+
+	// The primary node is reaching the target round,
+	// - the sync-time (aka catchup time should be 0.0)
+	// - the catchpoint should be empty (len == 0)
+	a.NoError(primaryNodeRestClient.ReadyCheck())
+	primaryStatus, err := primaryNodeRestClient.Status()
+	a.NoError(err)
+	a.Equal(primaryStatus.CatchupTime, uint64(0))
+	a.Empty(primaryStatus.Catchpoint)
 
 	// let the 2nd client send a transaction
 	tx, err = client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 50000, nil)
