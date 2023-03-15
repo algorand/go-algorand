@@ -843,7 +843,7 @@ func (wn *WebsocketNetwork) Start() {
 		wn.scheme = "http"
 	}
 
-	// if PublicAddress set to automatic, pull the name from Address()
+	// if PublicAddress set to testing, pull the name from Address()
 	if wn.config.PublicAddress == testingPublicAddress {
 		addr, ok := wn.Address()
 		if ok {
