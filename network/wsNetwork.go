@@ -101,8 +101,9 @@ const slowWritingPeerMonitorInterval = 5 * time.Second
 // to the log file. Note that the log file itself would also json-encode these before placing them in the log file.
 const unprintableCharacterGlyph = "▯"
 
-// match config.PublicAddress to this string to automatically set PublicAddress from Address()
-const autoconfigPublicAddress = "auto"
+// testingPublicAddress is used in identity exchange tests for a predictable
+// PublicAddress (which will match HTTP Listener's Address) in tests only.
+const testingPublicAddress = "testing"
 
 var networkIncomingConnections = metrics.MakeGauge(metrics.NetworkIncomingConnections)
 var networkOutgoingConnections = metrics.MakeGauge(metrics.NetworkOutgoingConnections)
@@ -843,7 +844,7 @@ func (wn *WebsocketNetwork) Start() {
 	}
 
 	// if PublicAddress set to automatic, pull the name from Address()
-	if wn.config.PublicAddress == autoconfigPublicAddress {
+	if wn.config.PublicAddress == testingPublicAddress {
 		addr, ok := wn.Address()
 		if ok {
 			url, err := url.Parse(addr)
