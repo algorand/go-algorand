@@ -25,8 +25,16 @@ import (
 	"os"
 	"strings"
 
+	"github.com/fatih/color"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+)
+
+const (
+	red    = color.FgRed
+	green  = color.FgGreen
+	yellow = color.FgYellow
 )
 
 var help = flag.Bool("help", false, "Show help")
@@ -98,12 +106,24 @@ func main() {
 		}
 	}
 	fmt.Printf("Roots in first: %d, second: %d\n", len(forest1), len(forest2))
-	fmt.Printf("Matched roots: %d\n", matched)
+
+	const matchedStr = "Matched roots: %d"
+	c := yellow
+	if matched > 0 {
+		c = green
+	}
+	fmt.Println(color.New(c).Sprintf(matchedStr, matched))
+
+	const mismatchedStr = "Mismatched roots: %d"
+	c = green
 	if len(mismatched) > 0 {
-		fmt.Printf("Mismatched roots: %d\n", len(mismatched))
+		c = red
+	}
+	fmt.Println(color.New(c).Sprintf(mismatchedStr, len(mismatched)))
+	if len(mismatched) > 0 {
 		for _, entry := range mismatched {
 			fmt.Printf("NewBase: %d, first: (%d, %s), second (%d,%s)\n", entry[0].NewBase, entry[0].OldBase, entry[0].Root, entry[1].OldBase, entry[1].Root)
 		}
 	}
-	fmt.Printf("non-matched rounds in first: %d, second: %d\n", len(forest1)-matched-len(mismatched), len(forest2)-matched-len(mismatched))
+	fmt.Printf("Other roots in first: %d, second: %d\n", len(forest1)-matched-len(mismatched), len(forest2)-matched-len(mismatched))
 }
