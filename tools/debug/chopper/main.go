@@ -23,6 +23,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/fatih/color"
@@ -39,6 +41,8 @@ const (
 
 var help = flag.Bool("help", false, "Show help")
 var helpShort = flag.Bool("h", false, "Show help")
+var labels = flag.Bool("labels", false, "Compare catchpoint labels in addition to roots")
+var labelsShort = flag.Bool("l", false, "Compare catchpoint labels in addition to roots")
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `Utility to extract and compare balance root messages from algod log files (node.log)
@@ -49,7 +53,12 @@ type logEntry struct {
 	Details telemetryspec.CatchpointRootUpdateEventDetails
 }
 
-func extractEntries(filename string) map[basics.Round]*telemetryspec.CatchpointRootUpdateEventDetails {
+type rootLabelInfo struct {
+	roots  map[basics.Round]*telemetryspec.CatchpointRootUpdateEventDetails
+	labels map[basics.Round]string
+}
+
+func extractEntries(filename string, checkLabels bool) rootLabelInfo {
 	f, err := os.Open(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening %s: %s\n", filename, err.Error())
@@ -57,16 +66,44 @@ func extractEntries(filename string) map[basics.Round]*telemetryspec.CatchpointR
 	}
 	s := bufio.NewScanner(f)
 
-	result := make(map[basics.Round]*telemetryspec.CatchpointRootUpdateEventDetails)
+	var re *regexp.Regexp
+	if checkLabels {
+		re = regexp.MustCompile(`Creating a catchpoint label (\d+#[A-Z0-9]+)\s+for round=(\d+).*`)
+	}
+
+	result := rootLabelInfo{
+		roots: make(map[basics.Round]*telemetryspec.CatchpointRootUpdateEventDetails),
+	}
+	if checkLabels {
+		result.labels = make(map[basics.Round]string)
+	}
+
 	for s.Scan() {
 		line := s.Text()
 		if line[0] == '{' && strings.Contains(line[:20], "Root") {
 			var entry logEntry
 			if err := json.Unmarshal([]byte(line), &entry); err != nil {
-				fmt.Fprintf(os.Stderr, "Error reading catchpoint root entry %s: %s", filename, err.Error())
-			} else {
-				result[basics.Round(entry.Details.NewBase)] = &entry.Details
+				fmt.Fprintf(os.Stderr, "Error reading catchpoint root entry %s: %s\n", filename, err.Error())
+				continue
 			}
+			result.roots[basics.Round(entry.Details.NewBase)] = &entry.Details
+		} else if checkLabels && strings.HasPrefix(line, `{"file":"catchpointlabel.go"`) {
+			entry := map[string]interface{}{}
+			if err := json.Unmarshal([]byte(line), &entry); err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading catchpoint label entry %s: %s\n", filename, err.Error())
+				continue
+			}
+			matches := re.FindStringSubmatch(entry["msg"].(string))
+			if len(matches) != 3 {
+				fmt.Fprintf(os.Stderr, "No catchpoint label match %s: %s %s\n", filename, matches, entry["msg"])
+				continue
+			}
+			uintRound, err := strconv.ParseUint(matches[2], 10, 64)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Cannot parse round %s: %s\n", filename, matches[1])
+				continue
+			}
+			result.labels[basics.Round(uintRound)] = matches[1]
 		}
 	}
 
@@ -78,6 +115,39 @@ func extractEntries(filename string) map[basics.Round]*telemetryspec.CatchpointR
 	return result
 }
 
+type reportData struct {
+	what        string
+	size1       int
+	size2       int
+	matched     int
+	mismatched  []interface{}
+	errReporter func(interface{})
+}
+
+func report(rd reportData) {
+	fmt.Printf("%s in first: %d, second: %d\n", strings.Title(rd.what), rd.size1, rd.size2)
+
+	const matchedStr = "Matched %s: %d"
+	c := yellow
+	if rd.matched > 0 {
+		c = green
+	}
+	fmt.Println(color.New(c).Sprintf(matchedStr, rd.what, rd.matched))
+
+	const mismatchedStr = "Mismatched %s: %d"
+	c = green
+	if len(rd.mismatched) > 0 {
+		c = red
+	}
+	fmt.Println(color.New(c).Sprintf(mismatchedStr, rd.what, len(rd.mismatched)))
+	if len(rd.mismatched) > 0 {
+		for _, entry := range rd.mismatched {
+			rd.errReporter(entry)
+		}
+	}
+	fmt.Printf("Other %s in first: %d, second: %d\n", rd.what, rd.size1-rd.matched-len(rd.mismatched), rd.size2-rd.matched-len(rd.mismatched))
+}
+
 func main() {
 	flag.Parse()
 
@@ -86,44 +156,67 @@ func main() {
 		os.Exit(1)
 	}
 
+	checkLabels := *labels || *labelsShort
+
 	file1 := flag.Args()[0]
 	file2 := flag.Args()[1]
 
-	fmt.Printf("%s %s\n", file1, file2)
+	info1 := extractEntries(file1, checkLabels)
+	info2 := extractEntries(file2, checkLabels)
 
-	forest1 := extractEntries(file1)
-	forest2 := extractEntries(file2)
-
-	matched := 0
-	var mismatched [][2]*telemetryspec.CatchpointRootUpdateEventDetails
-	for rnd, tree1 := range forest1 {
-		if tree2, ok := forest2[rnd]; ok {
+	matchedRoots := 0
+	var mismatchedRoots []interface{}
+	for rnd, tree1 := range info1.roots {
+		if tree2, ok := info2.roots[rnd]; ok {
 			if tree1.Root == tree2.Root {
-				matched++
+				matchedRoots++
 			} else {
-				mismatched = append(mismatched, [2]*telemetryspec.CatchpointRootUpdateEventDetails{tree1, tree2})
+				mismatchedRoots = append(mismatchedRoots, [2]*telemetryspec.CatchpointRootUpdateEventDetails{tree1, tree2})
 			}
 		}
 	}
-	fmt.Printf("Roots in first: %d, second: %d\n", len(forest1), len(forest2))
 
-	const matchedStr = "Matched roots: %d"
-	c := yellow
-	if matched > 0 {
-		c = green
-	}
-	fmt.Println(color.New(c).Sprintf(matchedStr, matched))
-
-	const mismatchedStr = "Mismatched roots: %d"
-	c = green
-	if len(mismatched) > 0 {
-		c = red
-	}
-	fmt.Println(color.New(c).Sprintf(mismatchedStr, len(mismatched)))
-	if len(mismatched) > 0 {
-		for _, entry := range mismatched {
-			fmt.Printf("NewBase: %d, first: (%d, %s), second (%d,%s)\n", entry[0].NewBase, entry[0].OldBase, entry[0].Root, entry[1].OldBase, entry[1].Root)
+	matchedLabels := 0
+	var mismatchedLabels []interface{}
+	if checkLabels {
+		for rnd, label1 := range info1.labels {
+			if label2, ok := info2.labels[rnd]; ok {
+				if label1 == label2 {
+					matchedLabels++
+				} else {
+					mismatchedLabels = append(mismatchedLabels, [2]string{label1, label2})
+				}
+			}
 		}
+
 	}
-	fmt.Printf("Other roots in first: %d, second: %d\n", len(forest1)-matched-len(mismatched), len(forest2)-matched-len(mismatched))
+
+	rootErrLine := func(e interface{}) {
+		entry := e.([2]*telemetryspec.CatchpointRootUpdateEventDetails)
+		fmt.Printf("NewBase: %d, first: (%d, %s), second (%d,%s)\n", entry[0].NewBase, entry[0].OldBase, entry[0].Root, entry[1].OldBase, entry[1].Root)
+
+	}
+	report(reportData{
+		what:        "roots",
+		size1:       len(info1.roots),
+		size2:       len(info2.roots),
+		matched:     matchedRoots,
+		mismatched:  mismatchedRoots,
+		errReporter: rootErrLine,
+	})
+
+	if checkLabels {
+		rootErrLine := func(e interface{}) {
+			entry := e.([2]string)
+			fmt.Printf("first: %s != %s second\n", entry[0], entry[1])
+		}
+		report(reportData{
+			what:        "labels",
+			size1:       len(info1.labels),
+			size2:       len(info2.labels),
+			matched:     matchedLabels,
+			mismatched:  mismatchedLabels,
+			errReporter: rootErrLine,
+		})
+	}
 }
