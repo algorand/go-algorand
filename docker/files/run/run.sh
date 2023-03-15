@@ -63,7 +63,13 @@ function configure_data_dir() {
 
   # check for token overrides
   if [ "$TOKEN" != "" ]; then
+    # set token for relay node
     echo "$TOKEN" >algod.token
+    # set token for follower node
+    if [ -d "${ALGORAND_DATA}/../follower/" ]; then
+      printf "follower dir!"
+       echo "$TOKEN" >"${ALGORAND_DATA}/../follower/algod.token"
+    fi
   fi
   if [ "$ADMIN_TOKEN" != "" ]; then
     echo "$ADMIN_TOKEN" >algod.admin.token
@@ -147,7 +153,7 @@ function start_private_network() {
 function start_new_private_network() {
   local TEMPLATE="template.json"
   if [ -f "/etc/algorand/template.json" ]; then
-      cp /etc/algorand/template.json template.json
+      cp /etc/algorand/template.json "/node/run/$TEMPLATE"
   else
       if [ "$DEV_MODE" = "1" ]; then
           TEMPLATE="devmode_template.json"
