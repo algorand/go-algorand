@@ -1,13 +1,12 @@
 {
     "Genesis": {
-        "ConsensusProtocol": "future",
-        "NetworkName": "followermodenet",
+        "NetworkName": "",
         "FirstPartKeyRound": 0,
         "LastPartKeyRound":  NUM_ROUNDS,
         "Wallets": [
             {
                 "Name": "Wallet1",
-                "Stake": 40,
+                "Stake": 10,
                 "Online": true
             },
             {
@@ -17,16 +16,19 @@
             },
             {
                 "Name": "Wallet3",
-                "Stake": 20,
-                "Online": true
+                "Stake": 40,
+                "Online": false
+            },
+            {
+                "Name": "Wallet4",
+                "Stake": 10,
+                "Online": false
             }
-        ],
-        "DevMode": true
+        ]
     },
     "Nodes": [
         {
-            "Name": "R1",
-            "IsRelay": true,
+            "Name": "data",
             "Wallets": [
                 {
                     "Name": "Wallet1",
@@ -39,13 +41,12 @@
                 {
                     "Name": "Wallet3",
                     "ParticipationOnly": false
+                },
+                {
+                    "Name": "Wallet4",
+                    "ParticipationOnly": false
                 }
             ]
-        },
-        {
-            "Name": "data",
-            "IsRelay": false,
-            "ConfigJSONOverride": "{\"EnableFollowMode\":true}"
         }
     ]
 }
