@@ -25,8 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -39,8 +37,6 @@ func TestBasicCatchup(t *testing.T) {
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
-
-	log := logging.TestingLog(t)
 
 	// Overview of this test:
 	// Start a two-node network (primary has 0%, secondary has 100%)
@@ -77,34 +73,21 @@ func TestBasicCatchup(t *testing.T) {
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(cloneClient, waitForRound)
 	a.NoError(err)
 
-	var status model.NodeStatusResponse
-
 	cloneNC := fixture.GetNodeControllerForDataDir(cloneDataDir)
 	cloneRestClient := fixture.GetAlgodClientForController(cloneNC)
-
-	reportLog := func() {
-		status, err = cloneRestClient.Status()
-		a.NoError(err)
-		primStatus, err := fixture.GetAlgodClientForController(nc).Status()
-		a.NoError(err)
-		log.Infof("currend round: %d, primary round: %d, current-sync time and time since last round %f, %f, prim-sync time and time since last round: %f, %f",
-			status.LastRound, primStatus.LastRound,
-			time.Duration(status.CatchupTime).Seconds(), time.Duration(status.TimeSinceLastRound).Seconds(),
-			time.Duration(primStatus.CatchupTime).Seconds(), time.Duration(primStatus.TimeSinceLastRound).Seconds())
-	}
 
 	// an immediate call for ready will error, for sync time != 0
 	a.Error(cloneRestClient.ReadyCheck())
 
 	for {
-		reportLog()
-		err = cloneRestClient.ReadyCheck()
+		status, err := cloneRestClient.Status()
+		a.NoError(err)
 
 		if status.LastRound < 10 {
 			time.Sleep(250 * time.Millisecond)
 			continue
 		}
-		a.NoError(err)
+		a.NoError(cloneRestClient.ReadyCheck())
 		break
 	}
 }
