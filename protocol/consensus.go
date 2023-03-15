@@ -220,6 +220,12 @@ const ConsensusVAlpha4 = ConsensusVersion("alpha4")
 // ConsensusVAlpha5 uses the same parameters as ConsensusV36.
 const ConsensusVAlpha5 = ConsensusVersion("alpha5")
 
+// ConsensusVAlpha6 a prerequisite for enabling state proof recoverability feature
+const ConsensusVAlpha6 = ConsensusVersion("alpha6")
+
+// ConsensusVAlpha7 enables state proof recoverability feature
+const ConsensusVAlpha7 = ConsensusVersion("alpha7")
+
 // !!! ********************* !!!
 // !!! *** Please update ConsensusCurrentVersion when adding new protocol versions *** !!!
 // !!! ********************* !!!

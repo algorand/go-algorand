@@ -1298,6 +1298,18 @@ func initConsensusProtocols() {
 	vAlpha5.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusVAlpha5] = vAlpha5
 	vAlpha4.ApprovedUpgrades[protocol.ConsensusVAlpha5] = 10000
+
+	vAlpha6 := vAlpha5
+	vAlpha6.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	Consensus[protocol.ConsensusVAlpha6] = vAlpha6
+	vAlpha5.ApprovedUpgrades[protocol.ConsensusVAlpha6] = 10000
+
+	vAlpha7 := vAlpha5
+	vAlpha7.StateProofUseTrackerVerification = true
+	vAlpha7.EnableCatchpointsWithSPContexts = true
+	vAlpha7.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	Consensus[protocol.ConsensusVAlpha7] = vAlpha7
+	vAlpha6.ApprovedUpgrades[protocol.ConsensusVAlpha7] = 10000
 }
 
 // Global defines global Algorand protocol parameters which should not be overridden.
