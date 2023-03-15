@@ -36,6 +36,7 @@ function start_public_network() {
   fi
 
   if [ "$PEER_ADDRESS" != "" ]; then
+       printf "$PEER_ADDRESS"
        algod -o -p $PEER_ADDRESS
   else
     # redirect output to stdout
@@ -67,7 +68,6 @@ function configure_data_dir() {
     echo "$TOKEN" >algod.token
     # set token for follower node
     if [ -d "${ALGORAND_DATA}/../follower/" ]; then
-      printf "follower dir!"
        echo "$TOKEN" >"${ALGORAND_DATA}/../follower/algod.token"
     fi
   fi
