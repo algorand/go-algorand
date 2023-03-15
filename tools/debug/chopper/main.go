@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// carpenter builds meaningful patterns out of raw Algorand logs
+// chopper compares raw Algorand logs for matching catchpoint (balance trie) roots and labels
 package main
 
 import (
@@ -45,25 +45,30 @@ var labels = flag.Bool("labels", false, "Compare catchpoint labels in addition t
 var labelsShort = flag.Bool("l", false, "Compare catchpoint labels in addition to roots")
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `Utility to extract and compare balance root messages from algod log files (node.log)
-Usage: ./chopper file1 file2`)
+	fmt.Fprintln(os.Stderr, `Utility to extract and compare balance root and catchpoint labels messages from algod log files (node.log)
+Usage: ./chopper [--labels] file1 file2`)
 }
 
+// logEntry is json representing catchpoint root message telemetry
 type logEntry struct {
 	Details telemetryspec.CatchpointRootUpdateEventDetails
 }
 
+// rootLabelInfo is parsed roots/labels from a log file
 type rootLabelInfo struct {
 	roots  map[basics.Round]*telemetryspec.CatchpointRootUpdateEventDetails
 	labels map[basics.Round]string
 }
 
+// extractEntries reads the log file line by line and collects root and labels entries
 func extractEntries(filename string, checkLabels bool) rootLabelInfo {
 	f, err := os.Open(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening %s: %s\n", filename, err.Error())
 		os.Exit(1)
 	}
+	defer f.Close()
+
 	s := bufio.NewScanner(f)
 
 	var re *regexp.Regexp
@@ -124,6 +129,7 @@ type reportData struct {
 	errReporter func(interface{})
 }
 
+// report prints out stats about matched and mismatched roots or labels
 func report(rd reportData) {
 	fmt.Printf("%s in first: %d, second: %d\n", strings.Title(rd.what), rd.size1, rd.size2)
 
@@ -161,9 +167,11 @@ func main() {
 	file1 := flag.Args()[0]
 	file2 := flag.Args()[1]
 
+	// load data
 	info1 := extractEntries(file1, checkLabels)
 	info2 := extractEntries(file2, checkLabels)
 
+	// match roots
 	matchedRoots := 0
 	var mismatchedRoots []interface{}
 	for rnd, tree1 := range info1.roots {
@@ -176,6 +184,7 @@ func main() {
 		}
 	}
 
+	// match labels
 	matchedLabels := 0
 	var mismatchedLabels []interface{}
 	if checkLabels {
@@ -191,32 +200,29 @@ func main() {
 
 	}
 
-	rootErrLine := func(e interface{}) {
-		entry := e.([2]*telemetryspec.CatchpointRootUpdateEventDetails)
-		fmt.Printf("NewBase: %d, first: (%d, %s), second (%d,%s)\n", entry[0].NewBase, entry[0].OldBase, entry[0].Root, entry[1].OldBase, entry[1].Root)
-
-	}
 	report(reportData{
-		what:        "roots",
-		size1:       len(info1.roots),
-		size2:       len(info2.roots),
-		matched:     matchedRoots,
-		mismatched:  mismatchedRoots,
-		errReporter: rootErrLine,
+		what:       "roots",
+		size1:      len(info1.roots),
+		size2:      len(info2.roots),
+		matched:    matchedRoots,
+		mismatched: mismatchedRoots,
+		errReporter: func(e interface{}) {
+			entry := e.([2]*telemetryspec.CatchpointRootUpdateEventDetails)
+			fmt.Printf("NewBase: %d, first: (%d, %s), second (%d,%s)\n", entry[0].NewBase, entry[0].OldBase, entry[0].Root, entry[1].OldBase, entry[1].Root)
+		},
 	})
 
 	if checkLabels {
-		rootErrLine := func(e interface{}) {
-			entry := e.([2]string)
-			fmt.Printf("first: %s != %s second\n", entry[0], entry[1])
-		}
 		report(reportData{
-			what:        "labels",
-			size1:       len(info1.labels),
-			size2:       len(info2.labels),
-			matched:     matchedLabels,
-			mismatched:  mismatchedLabels,
-			errReporter: rootErrLine,
+			what:       "labels",
+			size1:      len(info1.labels),
+			size2:      len(info2.labels),
+			matched:    matchedLabels,
+			mismatched: mismatchedLabels,
+			errReporter: func(e interface{}) {
+				entry := e.([2]string)
+				fmt.Printf("first: %s != %s second\n", entry[0], entry[1])
+			},
 		})
 	}
 }
