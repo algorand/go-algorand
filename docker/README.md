@@ -43,7 +43,7 @@ Configuration can be modified by specifying certain files. These can be changed 
 | /etc/algorand/algod.token | Override default randomized REST API token. |
 | /etc/algorand/algod.admin.token | Override default randomized REST API admin token. |
 | /etc/algorand/logging.config | Use a custom [logging.config](https://developer.algorand.org/docs/run-a-node/reference/telemetry-config/#configuration) file for configuring telemetry. |
- | /etc/algorand/template.json | Override default private network topology. | 
+ | /etc/algorand/template.json | Override default private network topology. One of the nodes in the template must be named "data".| 
 
 ## Example Configuration
 

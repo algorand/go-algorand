@@ -64,12 +64,9 @@ function configure_data_dir() {
 
   # check for token overrides
   if [ "$TOKEN" != "" ]; then
-    # set token for relay node
-    echo "$TOKEN" >algod.token
-    # set token for follower node
-    if [ -d "${ALGORAND_DATA}/../follower/" ]; then
-       echo "$TOKEN" >"${ALGORAND_DATA}/../follower/algod.token"
-    fi
+    for dir in ${ALGORAND_DATA}/../*/; do
+      echo "$TOKEN" > "$dir/algod.token"
+    done
   fi
   if [ "$ADMIN_TOKEN" != "" ]; then
     echo "$ADMIN_TOKEN" >algod.admin.token
