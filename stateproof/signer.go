@@ -154,7 +154,7 @@ func (spw *Worker) signStateProofMessage(message *stateproofmsg.Message, round b
 		}
 
 		if key.StateProofSecrets == nil {
-			spw.log.Warnf("spw.signBlock(%d): empty state proof secrets for round", round)
+			spw.log.Warnf("spw.signStateProofMessage(%d): empty state proof secrets for round", round)
 			continue
 		}
 
@@ -164,14 +164,14 @@ func (spw *Worker) signStateProofMessage(message *stateproofmsg.Message, round b
 			return err
 		})
 		if err != nil {
-			spw.log.Warnf("spw.signBlock(%d): couldn't figure if sig exists in DB: %v", round, err)
+			spw.log.Warnf("spw.signStateProofMessage(%d): couldn't figure if sig exists in DB: %v", round, err)
 		} else if exists {
 			continue
 		}
 
 		sig, err := key.StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 		if err != nil {
-			spw.log.Warnf("spw.signBlock(%d): StateProofSecrets.Sign: %v", round, err)
+			spw.log.Warnf("spw.signStateProofMessage(%d): StateProofSecrets.Sign: %v", round, err)
 			continue
 		}
 
@@ -185,9 +185,9 @@ func (spw *Worker) signStateProofMessage(message *stateproofmsg.Message, round b
 	// any error in handle sig indicates the signature wasn't stored in disk, thus we cannot delete the key.
 	for _, sfa := range sigs {
 		if _, err := spw.handleSig(sfa, nil); err != nil {
-			spw.log.Warnf("spw.signBlock(%d): handleSig: %v", round, err)
+			spw.log.Warnf("spw.signStateProofMessage(%d): handleSig: %v", round, err)
 			continue
 		}
-		spw.log.Infof("spw.signBlock(%d): sp message was signed with address %v", round, sfa.SignerAddress)
+		spw.log.Infof("spw.signStateProofMessage(%d): sp message was signed with address %v", round, sfa.SignerAddress)
 	}
 }
