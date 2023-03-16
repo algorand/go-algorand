@@ -504,11 +504,10 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 //
 // validRounds | lastValid | result (lastValid)
 // -------------------------------------------------
-// 	  	 0     |     0     | firstValid + maxTxnLife
-// 		 0     |     N     | lastValid
-// 		 M     |     0     | first + validRounds - 1
-// 		 M     |     M     | error
-//
+// 0           |     0     | firstValid + maxTxnLife
+// 0           |     N     | lastValid
+// M           |     0     | first + validRounds - 1
+// M           |     M     | error
 func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64) (first, last, latest uint64, err error) {
 	params, err := c.cachedSuggestedParams()
 	if err != nil {
@@ -1266,6 +1265,19 @@ func (c *Client) Dryrun(data []byte) (resp model.DryrunResponse, err error) {
 			return
 		}
 		err = json.Unmarshal(data, &resp)
+	}
+	return
+}
+
+// MakeTransactionSimulation takes raw transaction or raw transaction group, and returns relevant simulation results.
+func (c *Client) MakeTransactionSimulation(data []byte) (resp model.SimulateResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return
+	}
+	resp, err = algod.RawTransactionSimulate(data)
+	if err != nil {
+		return
 	}
 	return
 }

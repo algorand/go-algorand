@@ -284,7 +284,7 @@ func (client RestClient) WaitForBlock(round basics.Round) (response model.NodeSt
 	return
 }
 
-// HealthCheck does a health check on the the potentially running node,
+// HealthCheck does a health check on the potentially running node,
 // returning an error if the API is down
 func (client RestClient) HealthCheck() error {
 	return client.get(nil, "/health", nil)
@@ -626,6 +626,12 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	var blob Blob
 	err = client.submitForm(&blob, "/v2/teal/dryrun", data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
 	response = blob
+	return
+}
+
+// RawTransactionSimulate gets the raw transaction or raw transaction group, and returns relevant simulation results.
+func (client RestClient) RawTransactionSimulate(data []byte) (response model.SimulateResponse, err error) {
+	err = client.post(&response, "/v2/transactions/simulate", data, false)
 	return
 }
 

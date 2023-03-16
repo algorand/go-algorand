@@ -76,6 +76,8 @@ func init() {
 	clerkCmd.AddCommand(compileCmd)
 	clerkCmd.AddCommand(dryrunCmd)
 	clerkCmd.AddCommand(dryrunRemoteCmd)
+	clerkCmd.AddCommand(simulateCmd)
+	clerkCmd.AddCommand(simulateRemoteCmd)
 
 	// Wallet to be used for the clerk operation
 	clerkCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
@@ -1250,6 +1252,56 @@ var dryrunRemoteCmd = &cobra.Command{
 				}
 			}
 		}
+	},
+}
+
+var simulateCmd = &cobra.Command{
+	Use:   "simulate",
+	Short: "Simulate a transaction or transaction group offline",
+	Long:  `Simulate a transaction or transaction group offline under various conditions and verbosity.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		data, err := readFile(txFilename)
+		if err != nil {
+			reportErrorf(fileReadError, txFilename, err)
+		}
+		dec := protocol.NewMsgpDecoderBytes(data)
+		stxns := make([]transactions.SignedTxn, 0, 16)
+		for {
+			var txn transactions.SignedTxn
+			err = dec.Decode(&txn)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				reportErrorf(txDecodeError, txFilename, err)
+			}
+			stxns = append(stxns, txn)
+		}
+		
+	},
+}
+
+var simulateRemoteCmd = &cobra.Command{
+	Use:   "simulate-remote",
+	Short: "Simulate a transaction or transaction group with algod's simulate REST endpoint",
+	Long:  `Simulate a transaction or transaction group with algod's simulate REST endpoint under various conditions and verbosity.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		data, err := readFile(txFilename)
+		if err != nil {
+			reportErrorf(fileReadError, txFilename, err)
+		}
+
+		dataDir := datadir.EnsureSingleDataDir()
+		client := ensureFullClient(dataDir)
+		resp, err := client.MakeTransactionSimulation(data)
+		if err != nil {
+			reportErrorf("simulate-remote: %s", err.Error())
+		}
+		if rawOutput {
+			fmt.Fprintf(os.Stdout, string(protocol.EncodeJSON(&resp)))
+			return
+		}
+
 	},
 }
 
