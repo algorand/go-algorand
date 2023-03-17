@@ -47,7 +47,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestIsWritingCatchpointFile(t *testing.T) {
+func TestCatchpointIsWritingCatchpointFile(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	ct := &catchpointTracker{}
@@ -78,7 +78,7 @@ func newCatchpointTracker(tb testing.TB, l *mockLedgerForTracker, conf config.Lo
 	return ct
 }
 
-func TestGetCatchpointStream(t *testing.T) {
+func TestCatchpointGetCatchpointStream(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
@@ -149,12 +149,12 @@ func TestGetCatchpointStream(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestAcctUpdatesDeleteStoredCatchpoints - The goal of this test is to verify that the deleteStoredCatchpoints function works correctly.
+// TestCatchpointsDeleteStored - The goal of this test is to verify that the deleteStoredCatchpoints function works correctly.
 // It does so by filling up the storedcatchpoints with dummy catchpoint file entries, as well as creating these dummy files on disk.
 // ( the term dummy is only because these aren't real catchpoint files, but rather a zero-length file ). Then, the test calls the function
 // and ensures that it did not error, the catchpoint files were correctly deleted, and that deleteStoredCatchpoints contains no more
 // entries.
-func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
+func TestCatchpointsDeleteStored(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
@@ -206,7 +206,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 // The test validate that when algod boots up it cleans empty catchpoint directories.
 // It is done by creating empty directories in the catchpoint root directory.
 // When algod boots up it should remove those directories.
-func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
+func TestCatchpointsDeleteStoredOnSchemaUpdate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// we don't want to run this test before the binary is compiled against the latest database upgrade schema.
@@ -377,7 +377,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	b.ReportMetric(float64(accountsNumber), "accounts")
 }
 
-func TestReproducibleCatchpointLabels(t *testing.T) {
+func TestCatchpointReproducibleLabels(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
@@ -402,6 +402,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	defer ml.Close()
 
 	cfg := config.GetDefaultLocal()
+	cfg.MaxAcctLookback = 2
 	cfg.CatchpointInterval = 50
 	cfg.CatchpointTracking = 1
 	ct := newCatchpointTracker(t, ml, cfg, ".")
@@ -418,10 +419,19 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	catchpointLabels := make(map[basics.Round]string)
 	ledgerHistory := make(map[basics.Round]*mockLedgerForTracker)
 	roundDeltas := make(map[basics.Round]ledgercore.StateDelta)
-	numCatchpointsCreated := 0
-	i := basics.Round(0)
-	lastCatchpointLabel := ""
 
+	isCatchpointRound := func(rnd basics.Round) bool {
+		return (uint64(rnd) >= cfg.MaxAcctLookback) &&
+			(uint64(rnd)-cfg.MaxAcctLookback > protoParams.CatchpointLookback) &&
+			((uint64(rnd)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0)
+	}
+	isDataFileRound := func(rnd basics.Round) bool {
+		return ((uint64(rnd)-cfg.MaxAcctLookback+protoParams.CatchpointLookback)%cfg.CatchpointInterval == 0)
+	}
+
+	i := basics.Round(0)
+	numCatchpointsCreated := 0
+	lastCatchpointLabel := ""
 	for numCatchpointsCreated < testCatchpointLabelsCount {
 		i++
 		rewardLevelDelta := crypto.RandUint64() % 5
@@ -458,15 +468,24 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		delta.Totals = newTotals
 
 		ml.trackers.newBlock(blk, delta)
-		ml.trackers.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 		roundDeltas[i] = delta
 
-		// If we made a catchpoint, save the label.
-		if (uint64(i) >= cfg.MaxAcctLookback) && (uint64(i)-cfg.MaxAcctLookback > protoParams.CatchpointLookback) && ((uint64(i)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0) {
+		// determine if there is a data file round and commit
+		if isDataFileRound(i) || isCatchpointRound(i) {
+			ml.trackers.committedUpTo(i)
 			ml.trackers.waitAccountsWriting()
+
+			// Let catchpoint data generation finish so that nothing gets skipped.
+			for ct.IsWritingCatchpointDataFile() {
+				time.Sleep(time.Millisecond)
+			}
+		}
+
+		// If we made a catchpoint, save the label.
+		if isCatchpointRound(i) {
 			catchpointLabels[i] = ct.GetLastCatchpointLabel()
 			require.NotEmpty(t, catchpointLabels[i])
 			require.NotEqual(t, lastCatchpointLabel, catchpointLabels[i])
@@ -475,24 +494,20 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			defer ledgerHistory[i].Close()
 			numCatchpointsCreated++
 		}
-
-		// Let catchpoint data generation finish so that nothing gets skipped.
-		for ct.IsWritingCatchpointDataFile() {
-			time.Sleep(time.Millisecond)
-		}
 	}
 	lastRound := i
+	fmt.Println(catchpointLabels)
 
 	// Test in reverse what happens when we try to repeat the exact same blocks.
 	// Start off with the catchpoint before the last one.
-	for startingRound := lastRound - basics.Round(cfg.CatchpointInterval); uint64(startingRound) > protoParams.CatchpointLookback; startingRound -= basics.Round(cfg.CatchpointInterval) {
+	for rnd := lastRound - basics.Round(cfg.CatchpointInterval); uint64(rnd) > protoParams.CatchpointLookback; rnd -= basics.Round(cfg.CatchpointInterval) {
 		au.close()
-		ml2 := ledgerHistory[startingRound]
+		ml2 := ledgerHistory[rnd]
 		require.NotNil(t, ml2)
 
 		ct2 := newCatchpointTracker(t, ml2, cfg, ".")
 		defer ct2.close()
-		for i := startingRound + 1; i <= lastRound; i++ {
+		for i := rnd + 1; i <= lastRound; i++ {
 			blk := bookkeeping.Block{
 				BlockHeader: bookkeeping.BlockHeader{
 					Round: basics.Round(i),
@@ -503,17 +518,20 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			delta := roundDeltas[i]
 
 			ml2.trackers.newBlock(blk, delta)
-			ml2.trackers.committedUpTo(i)
 
-			// if this is a catchpoint round, check the label.
-			if (uint64(i) >= cfg.MaxAcctLookback) && (uint64(i)-cfg.MaxAcctLookback > protoParams.CatchpointLookback) && ((uint64(i)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0) {
+			if isDataFileRound(i) || isCatchpointRound(i) {
+				fmt.Printf("isDataFileRound/isCatchpointRound rnd=%d\n", i)
+				ml2.trackers.committedUpTo(i)
 				ml2.trackers.waitAccountsWriting()
-				require.Equal(t, catchpointLabels[i], ct2.GetLastCatchpointLabel())
+				// Let catchpoint data generation finish so that nothing gets skipped.
+				for ct.IsWritingCatchpointDataFile() {
+					time.Sleep(time.Millisecond)
+				}
 			}
-
-			// Let catchpoint data generation finish so that nothing gets skipped.
-			for ct.IsWritingCatchpointDataFile() {
-				time.Sleep(time.Millisecond)
+			// if this is a catchpoint round, check the label.
+			if isCatchpointRound(i) {
+				fmt.Printf("isCatchpointRound rnd=%d\n", i)
+				require.Equal(t, catchpointLabels[i], ct2.GetLastCatchpointLabel())
 			}
 		}
 	}
@@ -915,7 +933,7 @@ func TestCalculateCatchpointRounds(t *testing.T) {
 
 // Test that pruning first stage catchpoint database records and catchpoint data files
 // works.
-func TestFirstStageInfoPruning(t *testing.T) {
+func TestCatchpointFirstStageInfoPruning(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// create new protocol version, which has lower lookback
@@ -949,6 +967,15 @@ func TestFirstStageInfoPruning(t *testing.T) {
 
 	expectedNumEntries := protoParams.CatchpointLookback / cfg.CatchpointInterval
 
+	isCatchpointRound := func(rnd basics.Round) bool {
+		return (uint64(rnd) >= cfg.MaxAcctLookback) &&
+			(uint64(rnd)-cfg.MaxAcctLookback > protoParams.CatchpointLookback) &&
+			((uint64(rnd)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0)
+	}
+	isDataFileRound := func(rnd basics.Round) bool {
+		return ((uint64(rnd)-cfg.MaxAcctLookback+protoParams.CatchpointLookback)%cfg.CatchpointInterval == 0)
+	}
+
 	numCatchpointsCreated := uint64(0)
 	i := basics.Round(0)
 	lastCatchpointLabel := ""
@@ -967,20 +994,22 @@ func TestFirstStageInfoPruning(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
 
 		ml.trackers.newBlock(blk, delta)
-		ml.trackers.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 
-		if (uint64(i) >= cfg.MaxAcctLookback) && (uint64(i)-cfg.MaxAcctLookback > protoParams.CatchpointLookback) && ((uint64(i)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0) {
+		if isDataFileRound(i) || isCatchpointRound(i) {
+			ml.trackers.committedUpTo(i)
 			ml.trackers.waitAccountsWriting()
+			// Let catchpoint data generation finish so that nothing gets skipped.
+			for ct.IsWritingCatchpointDataFile() {
+				time.Sleep(time.Millisecond)
+			}
+		}
+
+		if isCatchpointRound(i) {
 			catchpointLabel := ct.GetLastCatchpointLabel()
 			require.NotEqual(t, lastCatchpointLabel, catchpointLabel)
 			lastCatchpointLabel = catchpointLabel
 			numCatchpointsCreated++
-		}
-
-		// Let catchpoint data generation finish so that nothing gets skipped.
-		for ct.IsWritingCatchpointDataFile() {
-			time.Sleep(time.Millisecond)
 		}
 	}
 
@@ -1009,7 +1038,7 @@ func TestFirstStageInfoPruning(t *testing.T) {
 
 // Test that on startup the catchpoint tracker restarts catchpoint's first stage if
 // there is an unfinished first stage record in the database.
-func TestFirstStagePersistence(t *testing.T) {
+func TestCatchpointFirstStagePersistence(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// create new protocol version, which has lower lookback
@@ -1053,10 +1082,9 @@ func TestFirstStagePersistence(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
 
 		ml.trackers.newBlock(blk, delta)
-		ml.trackers.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 	}
-
+	ml.trackers.committedUpTo(firstStageRound)
 	ml.trackers.waitAccountsWriting()
 
 	// Check that the data file exists.
@@ -1112,7 +1140,7 @@ func TestFirstStagePersistence(t *testing.T) {
 
 // Test that on startup the catchpoint tracker restarts catchpoint's second stage if
 // there is an unfinished catchpoint record in the database.
-func TestSecondStagePersistence(t *testing.T) {
+func TestCatchpointSecondStagePersistence(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// create new protocol version, which has lower lookback
@@ -1141,6 +1169,15 @@ func TestSecondStagePersistence(t *testing.T) {
 	ct := newCatchpointTracker(
 		t, ml, cfg, filepath.Join(tempDirectory, config.LedgerFilenamePrefix))
 	defer ct.close()
+
+	isCatchpointRound := func(rnd basics.Round) bool {
+		return (uint64(rnd) >= cfg.MaxAcctLookback) &&
+			(uint64(rnd)-cfg.MaxAcctLookback > protoParams.CatchpointLookback) &&
+			((uint64(rnd)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0)
+	}
+	isDataFileRound := func(rnd basics.Round) bool {
+		return ((uint64(rnd)-cfg.MaxAcctLookback+protoParams.CatchpointLookback)%cfg.CatchpointInterval == 0)
+	}
 
 	secondStageRound := basics.Round(36)
 	firstStageRound := secondStageRound - basics.Round(protoParams.CatchpointLookback)
@@ -1174,16 +1211,17 @@ func TestSecondStagePersistence(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
 
 		ml.trackers.newBlock(blk, delta)
-		ml.trackers.committedUpTo(i)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 
-		// Let catchpoint data generation finish so that nothing gets skipped.
-		for ct.IsWritingCatchpointDataFile() {
-			time.Sleep(time.Millisecond)
+		if isDataFileRound(i) || isCatchpointRound(i) {
+			ml.trackers.committedUpTo(i)
+			ml.trackers.waitAccountsWriting()
+			// Let catchpoint data generation finish so that nothing gets skipped.
+			for ct.IsWritingCatchpointDataFile() {
+				time.Sleep(time.Millisecond)
+			}
 		}
 	}
-
-	ml.trackers.waitAccountsWriting()
 
 	// Check that the data file exists.
 	catchpointFilePath :=
@@ -1249,7 +1287,7 @@ func TestSecondStagePersistence(t *testing.T) {
 // Test that when catchpoint's first stage record is unavailable
 // (e.g. catchpoints were disabled at first stage), the unfinished catchpoint
 // database record is deleted.
-func TestSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
+func TestCatchpointSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// create new protocol version, which has lower lookback
@@ -1338,7 +1376,7 @@ func TestSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 
 // Test that on startup the catchpoint tracker deletes the unfinished catchpoint
 // database record when the first stage database record is missing.
-func TestSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) {
+func TestCatchpointSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// create new protocol version, which has lower lookback
