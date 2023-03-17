@@ -33,6 +33,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -539,6 +540,7 @@ type blockingTracker struct {
 	committedUpToRound            int64
 	alwaysLock                    bool
 	shouldLockPostCommit          bool
+	shouldLockPostCommitUnlocked  bool
 }
 
 // loadFromDisk is not implemented in the blockingTracker.
@@ -581,7 +583,7 @@ func (bt *blockingTracker) postCommit(ctx context.Context, dcc *deferredCommitCo
 
 // postCommitUnlocked implements entry/exit blockers, designed for testing.
 func (bt *blockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-	if bt.alwaysLock || dcc.catchpointFirstStage {
+	if bt.alwaysLock || dcc.catchpointFirstStage || bt.shouldLockPostCommitUnlocked {
 		bt.postCommitUnlockedEntryLock <- struct{}{}
 		<-bt.postCommitUnlockedReleaseLock
 	}
@@ -598,7 +600,7 @@ func (bt *blockingTracker) close() {
 func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestCatchpointTrackerNonblockingCatchpointWriting")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.EnableOnlineAccountCatchpoints = true
 	protoParams.CatchpointLookback = protoParams.MaxBalLookback
@@ -738,6 +740,91 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 		// the LookupAgreement call.
 	case <-time.After(30 * time.Second):
 		require.FailNow(t, "The LookupAgreement wasn't getting release as expected by the blocked tracker")
+	}
+}
+
+// TestCatchpointTrackerWaitNotBlocking checks a tracker with long postCommitUnlocked does not block blockq (notifyCommit) goroutine
+func TestCatchpointTrackerWaitNotBlocking(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10)
+	const inMem = true
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Warn)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer ledger.Close()
+
+	writeStallingTracker := &blockingTracker{
+		postCommitUnlockedEntryLock:   make(chan struct{}),
+		postCommitUnlockedReleaseLock: make(chan struct{}),
+		shouldLockPostCommitUnlocked:  true,
+	}
+	ledger.trackerMu.Lock()
+	ledger.trackers.mu.Lock()
+	ledger.trackers.trackers = append(ledger.trackers.trackers, writeStallingTracker)
+	ledger.trackers.mu.Unlock()
+	ledger.trackerMu.Unlock()
+
+	startRound := ledger.Latest() + 1
+	endRound := basics.Round(20)
+	addBlockDone := make(chan struct{})
+
+	// release the blocking tracker when the test is done
+	defer func() {
+		// unblocking from another goroutine is a bit complicated:
+		// this function should not quit until postCommitUnlockedReleaseLock is consumed
+		// to do that, write to it first and do not exit until consumed,
+		// otherwise we might exit and leave the tracker registry's syncer goroutine blocked
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			writeStallingTracker.postCommitUnlockedReleaseLock <- struct{}{}
+			wg.Done()
+		}()
+
+		// consume to unblock
+		<-writeStallingTracker.postCommitUnlockedEntryLock
+		// disable further blocking
+		writeStallingTracker.shouldLockPostCommitUnlocked = false
+
+		// wait the writeStallingTracker.postCommitUnlockedReleaseLock passes
+		wg.Wait()
+
+		// at the end, what while the addBlock goroutine finishes
+		// consume to unblock
+		<-addBlockDone
+	}()
+
+	// tracker commits are now  blocked, add some blocks
+	timer := time.NewTimer(1 * time.Second)
+	go func() {
+		defer close(addBlockDone)
+		blk := genesisInitState.Block
+		for rnd := startRound; rnd <= endRound; rnd++ {
+			blk.BlockHeader.Round = rnd
+			blk.BlockHeader.TimeStamp = int64(blk.BlockHeader.Round)
+			err := ledger.AddBlock(blk, agreement.Certificate{})
+			require.NoError(t, err)
+		}
+	}()
+
+	select {
+	case <-timer.C:
+		require.FailNow(t, "timeout")
+	case <-addBlockDone:
+	}
+
+	// ensure Ledger.Wait() is non-blocked for all rounds except the last one (due to possible races)
+	for rnd := startRound; rnd < endRound; rnd++ {
+		done := ledger.Wait(rnd)
+		select {
+		case <-done:
+		default:
+			require.FailNow(t, fmt.Sprintf("Wait(%d) is blocked", rnd))
+		}
 	}
 }
 
