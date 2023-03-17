@@ -195,7 +195,7 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 	if isCompressed {
 		// gzip'ed file is about 3-6 times smaller than tar
 		// modify catchpointFileSize to make the progress bar more-less reflecting the state
-		catchpointFileSize = 3 * catchpointFileSize
+		catchpointFileSize = 4 * catchpointFileSize
 	}
 
 	var downloadProgress ledger.CatchpointCatchupAccessorProgress
@@ -236,8 +236,6 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 			lastProgressUpdate = time.Now()
 			progressRatio := int(float64(progress) * barLength / float64(catchpointFileSize))
 			if progressRatio > barLength {
-				// gzip'ed file: adjust if read more than the estimated file size
-				catchpointFileSize = int64(progress)
 				progressRatio = barLength
 			}
 			printLoadCatchpointProgressLine(progressRatio, barLength, int64(progress))
