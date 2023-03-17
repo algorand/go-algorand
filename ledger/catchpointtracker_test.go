@@ -1679,8 +1679,8 @@ func TestCatchpointFastUpdates(t *testing.T) {
 			ml.trackers.committedUpTo(round)
 		}(i)
 	}
-	ml.trackers.waitAccountsWriting()
 	wg.Wait()
+	ml.trackers.waitAccountsWriting()
 
 	require.NotEmpty(t, ct.GetLastCatchpointLabel())
 }
