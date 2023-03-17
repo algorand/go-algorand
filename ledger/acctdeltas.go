@@ -466,7 +466,7 @@ func (a *compactAccountDeltas) accountsLoadOld(tx trackerdb.TransactionScope) (e
 	if len(a.misses) == 0 {
 		return nil
 	}
-	arw, err := tx.MakeAccountsReaderWriter()
+	arw, err := tx.Testing().MakeAccountsOptimizedReader()
 	if err != nil {
 		return err
 	}
@@ -476,29 +476,13 @@ func (a *compactAccountDeltas) accountsLoadOld(tx trackerdb.TransactionScope) (e
 	}()
 	for _, idx := range a.misses {
 		addr := a.deltas[idx].address
-		ref, acctDataBuf, err := arw.LookupAccountDataByAddress(addr)
-		switch err {
-		case nil:
-			if len(acctDataBuf) > 0 {
-				persistedAcctData := &trackerdb.PersistedAccountData{Addr: addr, Ref: ref}
-				err = protocol.Decode(acctDataBuf, &persistedAcctData.AccountData)
-				if err != nil {
-					return err
-				}
-				a.updateOld(idx, *persistedAcctData)
-			} else {
-				// to retain backward compatibility, we will treat this condition as if we don't have the account.
-				a.updateOld(idx, trackerdb.PersistedAccountData{Addr: addr, Ref: ref})
-			}
-		case sql.ErrNoRows:
-			// we don't have that account, just return an empty record.
-			a.updateOld(idx, trackerdb.PersistedAccountData{Addr: addr})
-			// Note: the err will be ignored in this case since `err` is being shadowed.
-			// this behaviour is equivalent to `err = nil`
-		default:
+		data, err := arw.LookupAccount(addr)
+		if err != nil {
 			// unexpected error - let the caller know that we couldn't complete the operation.
 			return err
 		}
+		// update the account
+		a.updateOld(idx, data)
 	}
 	return
 }
