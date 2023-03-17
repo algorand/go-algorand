@@ -77,7 +77,6 @@ func init() {
 	clerkCmd.AddCommand(dryrunCmd)
 	clerkCmd.AddCommand(dryrunRemoteCmd)
 	clerkCmd.AddCommand(simulateCmd)
-	clerkCmd.AddCommand(simulateRemoteCmd)
 
 	// Wallet to be used for the clerk operation
 	clerkCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
@@ -145,6 +144,9 @@ func init() {
 	dryrunRemoteCmd.Flags().BoolVarP(&rawOutput, "raw", "r", false, "output raw response from algod")
 	dryrunRemoteCmd.MarkFlagRequired("dryrun-state")
 
+	simulateCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "transaction or transaction-group to test")
+	simulateCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing simulation result")
+	panicIfErr(simulateCmd.MarkFlagRequired("txfile"))
 }
 
 var clerkCmd = &cobra.Command{
@@ -1264,44 +1266,22 @@ var simulateCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf(fileReadError, txFilename, err)
 		}
-		dec := protocol.NewMsgpDecoderBytes(data)
-		stxns := make([]transactions.SignedTxn, 0, 16)
-		for {
-			var txn transactions.SignedTxn
-			err = dec.Decode(&txn)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				reportErrorf(txDecodeError, txFilename, err)
-			}
-			stxns = append(stxns, txn)
-		}
-		
-	},
-}
-
-var simulateRemoteCmd = &cobra.Command{
-	Use:   "simulate-remote",
-	Short: "Simulate a transaction or transaction group with algod's simulate REST endpoint",
-	Long:  `Simulate a transaction or transaction group with algod's simulate REST endpoint under various conditions and verbosity.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		data, err := readFile(txFilename)
-		if err != nil {
-			reportErrorf(fileReadError, txFilename, err)
-		}
 
 		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
-		resp, err := client.MakeTransactionSimulation(data)
+		resp, err := client.TransactionSimulation(data)
 		if err != nil {
-			reportErrorf("simulate-remote: %s", err.Error())
-		}
-		if rawOutput {
-			fmt.Fprintf(os.Stdout, string(protocol.EncodeJSON(&resp)))
-			return
+			reportErrorf("simulation error: %s", err.Error())
 		}
 
+		if outFilename != "" {
+			err = writeFile(outFilename, protocol.EncodeJSON(&resp), 0600)
+			if err != nil {
+				reportErrorf("write file error: %s", err.Error())
+			}
+		} else {
+			fmt.Fprintf(os.Stdout, string(protocol.EncodeJSON(&resp)))
+		}
 	},
 }
 
