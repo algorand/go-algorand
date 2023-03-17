@@ -420,10 +420,14 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 		// the next attempt will include these rounds plus some extra rounds.
 		// the main reason for slow commits is catchpoint file creation,
 		// and blocking the producer thread does not make much sense since it has other work to do.
+
+		// increment the waitgroup first, otherwise this goroutine can be interrupted
+		// and commitSyncer attempts calling Done() on empty wait group.
+		tr.accountsWriting.Add(1)
 		select {
 		case tr.deferredCommits <- dcc:
-			tr.accountsWriting.Add(1)
 		default:
+			tr.accountsWriting.Done()
 		}
 	}
 }
