@@ -1280,7 +1280,7 @@ var simulateCmd = &cobra.Command{
 				reportErrorf("write file error: %s", err.Error())
 			}
 		} else {
-			fmt.Fprintf(os.Stdout, string(protocol.EncodeJSON(&resp)))
+			fmt.Println(string(protocol.EncodeJSON(&resp)))
 		}
 	},
 }
