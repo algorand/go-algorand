@@ -466,7 +466,7 @@ func (a *compactAccountDeltas) accountsLoadOld(tx trackerdb.TransactionScope) (e
 	if len(a.misses) == 0 {
 		return nil
 	}
-	arw, err := tx.Testing().MakeAccountsOptimizedReader()
+	arw, err := tx.MakeAccountsOptimizedReader()
 	if err != nil {
 		return err
 	}
