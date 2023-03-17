@@ -1010,7 +1010,7 @@ func TestListCreatables(t *testing.T) {
 		require.NoError(t, err)
 
 		au := &accountUpdates{}
-		au.accountsq, err = tx.Testing().MakeAccountsOptimizedReader()
+		au.accountsq, err = tx.MakeAccountsOptimizedReader()
 		require.NoError(t, err)
 
 		// ******* All results are obtained from the cache. Empty database *******

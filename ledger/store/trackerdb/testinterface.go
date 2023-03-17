@@ -48,7 +48,6 @@ type TestBatchScope interface {
 type TestTransactionScope interface {
 	TransactionScope
 
-	MakeAccountsOptimizedReader() (AccountsReader, error)
 	MakeOnlineAccountsOptimizedReader() (OnlineAccountsReader, error)
 	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
 	AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error)
