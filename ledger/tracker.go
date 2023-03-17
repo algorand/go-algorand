@@ -409,9 +409,6 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 		flushIntervalPassed := flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval))
 		flushForCatchpoint := dcc.catchpointFirstStage || dcc.catchpointSecondStage
 		flushAccounts := dcc.pendingDeltas >= pendingDeltasFlushThreshold
-		// if deferredCommits cannot accept this task, skip it.
-		// the next attempt will include these rounds plus some extra rounds.
-		// the main reason for slow commits is catchpoint file creation.
 		if !flushIntervalPassed && !flushForCatchpoint && !flushAccounts {
 			dcc = nil
 		}
@@ -419,6 +416,10 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	tr.mu.RUnlock()
 
 	if dcc != nil {
+		// if deferredCommits cannot accept this task, skip it.
+		// the next attempt will include these rounds plus some extra rounds.
+		// the main reason for slow commits is catchpoint file creation,
+		// and blocking the producer thread does not make much sense since it has other work to do.
 		select {
 		case tr.deferredCommits <- dcc:
 			tr.accountsWriting.Add(1)
