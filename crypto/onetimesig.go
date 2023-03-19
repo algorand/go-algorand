@@ -327,6 +327,47 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 	return allValid
 }
 
+// BatchVerifyOneTimeSignatures has the same function as Verify, but it operates on a batch of signatures.
+func BatchVerifyOneTimeSignatures(vs []OneTimeSignatureVerifier, ids []OneTimeSignatureIdentifier,
+	messages []Hashable, sigs []OneTimeSignature) (failed []bool) {
+
+	messageBytes := make([][]byte, len(ids)*3, len(ids)*3)
+	publicKeys := make([]PublicKey, len(ids)*3, len(ids)*3)
+	signatures := make([]Signature, len(ids)*3, len(ids)*3)
+
+	for i := range ids {
+		offsetID := OneTimeSignatureSubkeyOffsetID{
+			SubKeyPK: sigs[i].PK,
+			Batch:    ids[i].Batch,
+			Offset:   ids[i].Offset,
+		}
+		batchID := OneTimeSignatureSubkeyBatchID{
+			SubKeyPK: sigs[i].PK2,
+			Batch:    ids[i].Batch,
+		}
+		messageBytes[i*3] = HashRep(batchID)
+		messageBytes[i*3+1] = HashRep(offsetID)
+		messageBytes[i*3+2] = HashRep(messages[i])
+
+		publicKeys[i*3] = PublicKey(vs[i])
+		publicKeys[i*3+1] = PublicKey(batchID.SubKeyPK)
+		publicKeys[i*3+2] = PublicKey(offsetID.SubKeyPK)
+
+		signatures[i*3] = Signature(sigs[i].PK2Sig)
+		signatures[i*3+1] = Signature(sigs[i].PK1Sig)
+		signatures[i*3+2] = Signature(sigs[i].Sig)
+	}
+	allPass, results := batchVerificationImpl(messageBytes, publicKeys, signatures)
+	sigResults := make([]bool, len(ids), len(ids))
+	if allPass {
+		return sigResults
+	}
+	for i := range sigResults {
+		sigResults[i] = results[i*3] || results[i*3+1] || results[i*3+2]
+	}
+	return sigResults
+}
+
 // DeleteBeforeFineGrained deletes ephemeral keys before (but not including) the given id.
 func (s *OneTimeSignatureSecrets) DeleteBeforeFineGrained(current OneTimeSignatureIdentifier, numKeysPerBatch uint64) {
 	s.mu.Lock()
