@@ -76,8 +76,11 @@ type Worker struct {
 	shutdown context.CancelFunc
 	wg       sync.WaitGroup
 
-	signed           basics.Round
-	signedCh         chan struct{}
+	// Mutex for protecting access to the signed field
+	signedMu deadlock.Mutex
+	signed   basics.Round
+	signedCh chan struct{}
+
 	lastCleanupRound basics.Round
 
 	// inMemory indicates whether the state proof db should in memory. used for testing.
