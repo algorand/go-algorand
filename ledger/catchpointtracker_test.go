@@ -496,7 +496,6 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 		}
 	}
 	lastRound := i
-	fmt.Println(catchpointLabels)
 
 	// Test in reverse what happens when we try to repeat the exact same blocks.
 	// Start off with the catchpoint before the last one.
@@ -520,7 +519,6 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 			ml2.trackers.newBlock(blk, delta)
 
 			if isDataFileRound(i) || isCatchpointRound(i) {
-				fmt.Printf("isDataFileRound/isCatchpointRound rnd=%d\n", i)
 				ml2.trackers.committedUpTo(i)
 				ml2.trackers.waitAccountsWriting()
 				// Let catchpoint data generation finish so that nothing gets skipped.
@@ -530,7 +528,6 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 			}
 			// if this is a catchpoint round, check the label.
 			if isCatchpointRound(i) {
-				fmt.Printf("isCatchpointRound rnd=%d\n", i)
 				require.Equal(t, catchpointLabels[i], ct2.GetLastCatchpointLabel())
 			}
 		}
