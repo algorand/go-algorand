@@ -20,6 +20,10 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 CONST_TRUE="true"
 CONST_FALSE="false"
 
+##############################################
+# WE FIRST TEST TRANSACTION GROUP SIMULATION #
+##############################################
+
 ${gcmd} clerk send -a 10000 -f ${ACCOUNT} -t ${ACCOUNT} -o pay1.tx
 ${gcmd} clerk send -a 10000 -f ${ACCOUNT} -t ${ACCOUNT} -o pay2.tx
 
@@ -35,13 +39,13 @@ fi
 
 # check the simulation failing reason, first transaction has no signature
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."missing-signature"') != $CONST_TRUE ]]; then
-    date '+app-simulate-test FAIL the simulation transaction group first transaction has NO signature %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the simulation transaction group FAIL for first transaction has NO signature %Y%m%d_%H%M%S'
     false
 fi
 
 # check the simulation failing reason, second transaction has no signature
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[1]."missing-signature"') != $CONST_TRUE ]]; then
-    date '+app-simulate-test FAIL the simulation transaction group second transaction has NO signature %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the simulation transaction group FAIL for second transaction has NO signature %Y%m%d_%H%M%S'
     false
 fi
 
@@ -57,6 +61,36 @@ RES=$(${gcmd} clerk simulate -t grouped.stx | jq '."would-succeed"')
 
 if [[ $RES != $CONST_TRUE ]]; then
     date '+app-simulate-test FAIL should pass to simulate self pay transaction group %Y%m%d_%H%M%S'
+    false
+fi
+
+###############################################
+# WE ALSO TEST OVERSPEND IN TRANSACTION GROUP #
+###############################################
+
+${gcmd} clerk send -a 1000000000000 -f ${ACCOUNT} -t ${ACCOUNT} -o pay1.tx
+${gcmd} clerk send -a 10000 -f ${ACCOUNT} -t ${ACCOUNT} -o pay2.tx
+
+cat pay1.tx pay2.tx | ${gcmd} clerk group -i - -o grouped.tx
+
+${gcmd} clerk split -i grouped.tx -o grouped.tx
+
+${gcmd} clerk sign -i grouped-0.tx -o grouped-0.stx
+${gcmd} clerk sign -i grouped-1.tx -o grouped-1.stx
+
+cat grouped-0.stx grouped-1.stx > grouped.stx
+
+RES=$(${gcmd} clerk simulate -t grouped.stx)
+
+if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_FALSE ]]; then
+    data '+app-simulate-test FAIL should FAIL for overspending in simulate self pay transaction group %Y%m%d_%H%M%S'
+    false
+fi
+
+OVERSPEND_INFO="overspend"
+
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"$OVERSPEND_INFO"* ]]; then
+    data '+app-simulate-test FAIL first overspending transaction in transaction group should contain message OVERSPEND %Y%m%d_%H%M%S'
     false
 fi
 
