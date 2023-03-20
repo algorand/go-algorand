@@ -30,6 +30,8 @@ import (
 
 func TestInspect(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	var err error
 
 	var empty transactions.SignedTxn

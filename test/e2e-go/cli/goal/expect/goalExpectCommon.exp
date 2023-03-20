@@ -52,6 +52,15 @@ proc ::AlgorandGoal::Abort { ERROR } {
         puts "GLOBAL_TEST_ROOT_DIR $::GLOBAL_TEST_ROOT_DIR"
         puts "GLOBAL_NETWORK_NAME $::GLOBAL_NETWORK_NAME"
 
+        # dump system and processes information to check memory consumption and if algod procs are still alive
+        if { $::tcl_platform(os) == "Darwin" } {
+            exec >@stdout 2>@stderr top -l 1
+        } elseif { $::tcl_platform(os) == "Linux" } {
+            exec >@stdout 2>@stderr top -n 1
+        } else {
+            # no logging for other platforms
+        }
+
         ::AlgorandGoal::StopNetwork $::GLOBAL_NETWORK_NAME $::GLOBAL_TEST_ROOT_DIR
 
         log_user 1
@@ -64,6 +73,13 @@ proc ::AlgorandGoal::Abort { ERROR } {
             set nodeLog [exec -- tail -n 50 $NODE_DATA_DIR/node.log]
             puts "\n$NODE_DATA_DIR/node.log:\r\n$nodeLog"
             set LOGS_COLLECTED 1
+
+            set outLog [exec cat $NODE_DATA_DIR/kmd-v0.5/kmd-out.log]
+            puts "\n$NODE_DATA_DIR/kmd-v0.5/kmd-out.log:\r\n$outLog"
+            set errLog [exec cat $NODE_DATA_DIR/kmd-v0.5/kmd-err.log]
+            puts "\n$NODE_DATA_DIR/kmd-v0.5/kmd-err.log:\r\n$errLog"
+            set kmdLog [exec -- tail -n 50 $NODE_DATA_DIR/kmd-v0.5/kmd.log]
+            puts "\n$NODE_DATA_DIR/kmd-v0.5/kmd.log:\r\n$kmdLog"
         }
         set NODE_DATA_DIR $::GLOBAL_TEST_ROOT_DIR/Node
         puts "Node path $NODE_DATA_DIR"
@@ -75,6 +91,13 @@ proc ::AlgorandGoal::Abort { ERROR } {
             set nodeLog [exec -- tail -n 50 $NODE_DATA_DIR/node.log]
             puts "\n$NODE_DATA_DIR/node.log:\r\n$nodeLog"
             set LOGS_COLLECTED 1
+
+            set outLog [exec cat $NODE_DATA_DIR/kmd-v0.5/kmd-out.log]
+            puts "\n$NODE_DATA_DIR/kmd-v0.5/kmd-out.log:\r\n$outLog"
+            set errLog [exec cat $NODE_DATA_DIR/kmd-v0.5/kmd-err.log]
+            puts "\n$NODE_DATA_DIR/kmd-v0.5/kmd-err.log:\r\n$errLog"
+            set kmdLog [exec -- tail -n 50 $NODE_DATA_DIR/kmd-v0.5/kmd.log]
+            puts "\n$NODE_DATA_DIR/kmd-v0.5/kmd.log:\r\n$kmdLog"
         }
     }
 
@@ -91,6 +114,13 @@ proc ::AlgorandGoal::Abort { ERROR } {
             puts "\n$::GLOBAL_TEST_ALGO_DIR/algod-err.log:\r\n$errLog"
             set nodeLog [exec -- tail -n 50 $::GLOBAL_TEST_ALGO_DIR/node.log]
             puts "\n$::GLOBAL_TEST_ALGO_DIR/node.log:\r\n$nodeLog"
+
+            set outLog [exec cat $GLOBAL_TEST_ALGO_DIR/kmd-v0.5/kmd-out.log]
+            puts "\n$GLOBAL_TEST_ALGO_DIR/kmd-v0.5/kmd-out.log:\r\n$outLog"
+            set errLog [exec cat $GLOBAL_TEST_ALGO_DIR/kmd-v0.5/kmd-err.log]
+            puts "\n$GLOBAL_TEST_ALGO_DIR/kmd-v0.5/kmd-err.log:\r\n$errLog"
+            set kmdLog [exec -- tail -n 50 $GLOBAL_TEST_ALGO_DIR/kmd-v0.5/kmd.log]
+            puts "\n$GLOBAL_TEST_ALGO_DIR/kmd-v0.5/kmd.log:\r\n$kmdLog"
         }
     }
 
@@ -914,7 +944,7 @@ proc ::AlgorandGoal::StartCatchup { NODE_DATA_DIR CATCHPOINT } {
     return $CATCHPOINT
 }
 
-# Wait for node to get into catchup mode
+# Wait for node to get into fast catchup mode
 proc ::AlgorandGoal::WaitCatchup { TEST_PRIMARY_NODE_DIR WAIT_DURATION_SEC } {
     if { [catch {
         set i 0

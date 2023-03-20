@@ -94,6 +94,8 @@ func (d *testDbgAdapter) eventLoop() {
 
 func TestDebuggerSimple(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	proto := config.Consensus[protocol.ConsensusV18]
 	require.Greater(t, proto.LogicSigVersion, uint64(0))
 	debugger := MakeDebugger()
@@ -148,6 +150,8 @@ func createSessionFromSource(t *testing.T, program string) *session {
 
 func TestSession(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	s := createSessionFromSource(t, "#pragma version %d\nint 1\ndup\n+\n")
 	err := s.SetBreakpoint(2)
 	require.NoError(t, err)
@@ -199,6 +203,7 @@ func TestSession(t *testing.T) {
 // that call stack is inspected correctly.
 func TestCallStackControl(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	newTestCase := func() (*session, chan struct{}, func(), *int) {
 		s := createSessionFromSource(t, "#pragma version %d\nlab1:\nint 1\ncallsub lab1\ndup\n+\n")
@@ -344,6 +349,7 @@ func TestCallStackControl(t *testing.T) {
 		},
 	}
 
+	// nolint:paralleltest // Linter is not following formulation of subtests.
 	for name, f := range cases {
 		t.Run(name, f)
 	}
@@ -351,6 +357,8 @@ func TestCallStackControl(t *testing.T) {
 
 func TestSourceMaps(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	s := createSessionFromSource(t, "#pragma version %d\nint 1\n")
 
 	// Source and source map checks

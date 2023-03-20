@@ -30,6 +30,7 @@ import (
 
 func TestCreateSignedTxBasic(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var networkState netState
 	networkState.nApplications = 2
@@ -90,6 +91,7 @@ func TestCreateSignedTxBasic(t *testing.T) {
 func TestCreateSignedTxAssets(t *testing.T) {
 	//	assets per account should not exceed limit
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	params := config.Consensus[protocol.ConsensusCurrentVersion]
 	secretDst := keypair()
@@ -127,6 +129,7 @@ func TestCreateSignedTxAssets(t *testing.T) {
 
 func TestAccountsNeeded(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	params := config.Consensus[protocol.ConsensusCurrentVersion]
 	params.MaxAppsCreated = 10

@@ -39,7 +39,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -319,7 +319,7 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 			totals.RewardsLevel)
 	}
 	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		arw := store.NewAccountsSQLReaderWriter(tx)
+		arw := sqlitedriver.NewAccountsSQLReaderWriter(tx)
 
 		fmt.Printf("\n")
 		printDumpingCatchpointProgressLine(0, 50, 0)

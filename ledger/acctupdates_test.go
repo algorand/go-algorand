@@ -19,7 +19,6 @@ package ledger
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -38,8 +37,8 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
-	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -51,7 +50,7 @@ var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
 var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
 
 type mockLedgerForTracker struct {
-	dbs              db.Pair
+	dbs              trackerdb.TrackerStore
 	blocks           []blockEntry
 	deltas           []ledgercore.StateDelta
 	log              logging.Logger
@@ -94,9 +93,8 @@ func setupAccts(niter int) []map[basics.Address]basics.AccountData {
 }
 
 func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, l logging.Logger) *mockLedgerForTracker {
-	dbs, fileName := storetesting.DbOpenTest(t, inMemory)
-	dbs.Rdb.SetLogger(l)
-	dbs.Wdb.SetLogger(l)
+	dbs, fileName := sqlitedriver.DbOpenTrackerTest(t, inMemory)
+	dbs.SetLogger(l)
 
 	blocks := randomInitChain(consensusVersion, initialBlocksCount)
 	deltas := make([]ledgercore.StateDelta, initialBlocksCount)
@@ -154,7 +152,7 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 	copy(newLedgerTracker.deltas, ml.deltas)
 
 	// calling Vacuum implies flushing the database content to disk..
-	ml.dbs.Wdb.Vacuum(context.Background())
+	ml.dbs.Vacuum(context.Background())
 	// copy the database files.
 	for _, ext := range []string{"", "-shm", "-wal"} {
 		bytes, err := os.ReadFile(ml.filename + ext)
@@ -167,7 +165,7 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 	dbs.Rdb.SetLogger(dblogger)
 	dbs.Wdb.SetLogger(dblogger)
 
-	newLedgerTracker.dbs = dbs
+	newLedgerTracker.dbs = sqlitedriver.CreateTrackerSQLStore(dbs)
 	return newLedgerTracker
 }
 
@@ -220,7 +218,7 @@ func (ml *mockLedgerForTracker) BlockHdr(rnd basics.Round) (bookkeeping.BlockHea
 	return ml.blocks[int(rnd)].block.BlockHeader, nil
 }
 
-func (ml *mockLedgerForTracker) trackerDB() db.Pair {
+func (ml *mockLedgerForTracker) trackerDB() trackerdb.TrackerStore {
 	return ml.dbs
 }
 
@@ -264,9 +262,13 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 		return
 	}
 
-	err = au.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = au.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 		var err0 error
-		bals, err0 = accountsAll(tx)
+		arw, err := tx.MakeAccountsReaderWriter()
+		if err != nil {
+			return err
+		}
+		bals, err0 = arw.Testing().AccountsAllTest()
 		return err0
 	})
 	if err != nil {
@@ -301,6 +303,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	latest := au.latest()
 	require.Equal(t, latestRnd, latest)
 
+	// the log has "onlineAccounts failed to fetch online totals for rnd" warning that is expected
 	_, err := ao.onlineTotals(latest + 1)
 	require.Error(t, err)
 
@@ -475,20 +478,13 @@ func checkOnlineAcctUpdatesConsistency(t *testing.T, ao *onlineAccounts, rnd bas
 	}
 }
 
-func TestAcctUpdates(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
-	}
-
+func testAcctUpdates(t *testing.T, conf config.Local) {
 	// The next operations are heavy on the memory.
 	// Garbage collection helps prevent trashing
 	runtime.GC()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	conf := config.GetDefaultLocal()
 	for _, lookback := range []uint64{conf.MaxAcctLookback, proto.MaxBalLookback} {
 		t.Run(fmt.Sprintf("lookback=%d", lookback), func(t *testing.T) {
 
@@ -572,9 +568,13 @@ func TestAcctUpdates(t *testing.T) {
 
 			// check the account totals.
 			var dbRound basics.Round
-			err := ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				arw := store.NewAccountsSQLReaderWriter(tx)
-				dbRound, err = arw.AccountsRound()
+			err := ml.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
+				ar, err := tx.MakeAccountsReader()
+				if err != nil {
+					return err
+				}
+
+				dbRound, err = ar.AccountsRound()
 				return
 			})
 			require.NoError(t, err)
@@ -586,9 +586,13 @@ func TestAcctUpdates(t *testing.T) {
 
 			expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardsLevels[dbRound], proto, nil, ledgercore.AccountTotals{})
 			var actualTotals ledgercore.AccountTotals
-			err = ml.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				arw := store.NewAccountsSQLReaderWriter(tx)
-				actualTotals, err = arw.AccountsTotals(ctx, false)
+			err = ml.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
+				ar, err := tx.MakeAccountsReader()
+				if err != nil {
+					return err
+				}
+
+				actualTotals, err = ar.AccountsTotals(ctx, false)
 				return
 			})
 			require.NoError(t, err)
@@ -597,80 +601,11 @@ func TestAcctUpdates(t *testing.T) {
 	}
 }
 
-// TestAcctUpdatesFastUpdates tests catchpoint label writing datarace
-func TestAcctUpdatesFastUpdates(t *testing.T) {
+func TestAcctUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
-	}
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	accts := setupAccts(20)
-	rewardsLevels := []uint64{0}
-
 	conf := config.GetDefaultLocal()
-	conf.CatchpointInterval = 1
-	initialBlocksCount := int(conf.MaxAcctLookback)
-	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
-	defer ml.Close()
-
-	au, ao := newAcctUpdates(t, ml, conf)
-	defer au.close()
-	defer ao.close()
-
-	// Remove the txtail from the list of trackers since it causes a data race that
-	// wouldn't be observed under normal execution because commitedUpTo and newBlock
-	// are protected by the tracker mutex.
-	ml.trackers.trackers = ml.trackers.trackers[:2]
-
-	// cover 10 genesis blocks
-	rewardLevel := uint64(0)
-	for i := 1; i < initialBlocksCount; i++ {
-		accts = append(accts, accts[0])
-		rewardsLevels = append(rewardsLevels, rewardLevel)
-	}
-
-	checkAcctUpdates(t, au, ao, 0, basics.Round(initialBlocksCount)-1, accts, rewardsLevels, proto)
-
-	wg := sync.WaitGroup{}
-
-	for i := basics.Round(initialBlocksCount); i < basics.Round(proto.CatchpointLookback+15); i++ {
-		rewardLevelDelta := crypto.RandUint64() % 5
-		rewardLevel += rewardLevelDelta
-		updates, totals := ledgertesting.RandomDeltasBalanced(1, accts[i-1], rewardLevel)
-		prevRound, prevTotals, err := au.LatestTotals()
-		require.Equal(t, i-1, prevRound)
-		require.NoError(t, err)
-
-		newPool := totals[testPoolAddr]
-		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates.Upsert(testPoolAddr, newPool)
-		totals[testPoolAddr] = newPool
-		newAccts := applyPartialDeltas(accts[i-1], updates)
-
-		blk := bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
-			},
-		}
-		blk.RewardsLevel = rewardLevel
-		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
-
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.Accts.MergeAccounts(updates)
-		ml.trackers.newBlock(blk, delta)
-		accts = append(accts, newAccts)
-		rewardsLevels = append(rewardsLevels, rewardLevel)
-
-		wg.Add(1)
-		go func(round basics.Round) {
-			defer wg.Done()
-			ml.trackers.committedUpTo(round)
-		}(i)
-	}
-	ml.trackers.waitAccountsWriting()
-	wg.Wait()
+	ledgertesting.WithAndWithoutLRUCache(t, conf, testAcctUpdates)
 }
 
 func BenchmarkBalancesChanges(b *testing.B) {
@@ -763,133 +698,46 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 func BenchmarkCalibrateNodesPerPage(b *testing.B) {
 	b.Skip("This benchmark was used to tune up the NodesPerPage; it's not really useful otherwise")
-	defaultNodesPerPage := store.MerkleCommitterNodesPerPage
+	defaultNodesPerPage := trackerdb.MerkleCommitterNodesPerPage
 	for nodesPerPage := 32; nodesPerPage < 300; nodesPerPage++ {
 		b.Run(fmt.Sprintf("Test_merkleCommitterNodesPerPage_%d", nodesPerPage), func(b *testing.B) {
-			store.MerkleCommitterNodesPerPage = int64(nodesPerPage)
+			trackerdb.MerkleCommitterNodesPerPage = int64(nodesPerPage)
 			BenchmarkBalancesChanges(b)
 		})
 	}
-	store.MerkleCommitterNodesPerPage = defaultNodesPerPage
+	trackerdb.MerkleCommitterNodesPerPage = defaultNodesPerPage
 }
 
 func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
 	//b.Skip("This benchmark was used to tune up the TrieCachedNodesCount; it's not really useful otherwise")
-	defaultTrieCachedNodesCount := store.TrieCachedNodesCount
+	defaultTrieCachedNodesCount := trackerdb.TrieCachedNodesCount
 	for cacheSize := 3000; cacheSize < 50000; cacheSize += 1000 {
 		b.Run(fmt.Sprintf("Test_cacheSize_%d", cacheSize), func(b *testing.B) {
-			store.TrieCachedNodesCount = cacheSize
+			trackerdb.TrieCachedNodesCount = cacheSize
 			BenchmarkBalancesChanges(b)
 		})
 	}
-	store.TrieCachedNodesCount = defaultTrieCachedNodesCount
-}
-
-// TestLargeAccountCountCatchpointGeneration creates a ledger containing a large set of accounts ( i.e. 100K accounts )
-// and attempts to have the accountUpdates create the associated catchpoint. It's designed precisely around setting an
-// environment which would quickly ( i.e. after 32 rounds ) would start producing catchpoints.
-func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	t.Skip("TODO: move to catchpointtracker_test and add catchpoint tracker into trackers list")
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
-	}
-
-	// The next operations are heavy on the memory.
-	// Garbage collection helps prevent trashing
-	runtime.GC()
-
-	// create new protocol version, which has lower lookback
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLargeAccountCountCatchpointGeneration")
-	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	// TODO: fix MaxBalLookback after updating catchpoint round
-	protoParams.MaxBalLookback = 32
-	protoParams.SeedLookback = 2
-	protoParams.SeedRefreshInterval = 8
-	config.Consensus[testProtocolVersion] = protoParams
-	defer func() {
-		delete(config.Consensus, testProtocolVersion)
-		os.RemoveAll(store.CatchpointDirName)
-	}()
-
-	accts := setupAccts(100000)
-	rewardsLevels := []uint64{0}
-	conf := config.GetDefaultLocal()
-	conf.CatchpointInterval = 1
-	conf.Archival = true
-	initialBlocksCount := int(conf.MaxAcctLookback)
-	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, testProtocolVersion, accts)
-	defer ml.Close()
-
-	au, _ := newAcctUpdates(t, ml, conf)
-	defer au.close()
-
-	// cover 10 genesis blocks
-	rewardLevel := uint64(0)
-	for i := 1; i < initialBlocksCount; i++ {
-		accts = append(accts, accts[0])
-		rewardsLevels = append(rewardsLevels, rewardLevel)
-	}
-
-	start := basics.Round(initialBlocksCount)
-	end := basics.Round(protoParams.MaxBalLookback + 5)
-	for i := start; i < end; i++ {
-		rewardLevelDelta := crypto.RandUint64() % 5
-		rewardLevel += rewardLevelDelta
-		updates, totals := ledgertesting.RandomDeltasBalanced(1, accts[i-1], rewardLevel)
-
-		prevRound, prevTotals, err := au.LatestTotals()
-		require.Equal(t, i-1, prevRound)
-		require.NoError(t, err)
-
-		newPool := totals[testPoolAddr]
-		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates.Upsert(testPoolAddr, newPool)
-		totals[testPoolAddr] = newPool
-		newAccts := applyPartialDeltas(accts[i-1], updates)
-
-		blk := bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
-			},
-		}
-		blk.RewardsLevel = rewardLevel
-		blk.CurrentProtocol = testProtocolVersion
-
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
-		delta.Accts.MergeAccounts(updates)
-		ml.trackers.newBlock(blk, delta)
-		accts = append(accts, newAccts)
-		rewardsLevels = append(rewardsLevels, rewardLevel)
-
-		ml.trackers.committedUpTo(i)
-		if i%2 == 1 || i == end-1 {
-			ml.trackers.waitAccountsWriting()
-		}
-	}
-
-	// Garbage collection helps prevent trashing for next tests
-	runtime.GC()
+	trackerdb.TrieCachedNodesCount = defaultTrieCachedNodesCount
 }
 
 // The TestAcctUpdatesUpdatesCorrectness conduct a correctless test for the accounts update in the following way -
 // Each account is initialized with 100 algos.
 // On every round, each account move variable amount of funds to an accumulating account.
-// The deltas for each accounts are picked by using the lookup method.
+// The deltas for each account are picked by using the lookup method.
 // At the end of the test, we verify that each account has the expected amount of algos.
 // In addition, throughout the test, we check ( using lookup ) that the historical balances, *beyond* the
 // lookback are generating either an error, or returning the correct amount.
 func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes travis builds to time out")
-	}
+	cfgLocal := config.GetDefaultLocal()
+	ledgertesting.WithAndWithoutLRUCache(t, cfgLocal, testAcctUpdatesUpdatesCorrectness)
+}
 
+func testAcctUpdatesUpdatesCorrectness(t *testing.T, cfg config.Local) {
 	// create new protocol version, which has lower look back.
 	testProtocolVersion := protocol.ConsensusCurrentVersion
-	maxAcctLookback := config.GetDefaultLocal().MaxAcctLookback
+	maxAcctLookback := cfg.MaxAcctLookback
 	inMemory := true
 
 	testFunction := func(t *testing.T) {
@@ -914,8 +762,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			accts[0][addr] = accountData
 		}
 
-		conf := config.GetDefaultLocal()
-		au, _ := newAcctUpdates(t, ml, conf)
+		au, _ := newAcctUpdates(t, ml, cfg)
 		defer au.close()
 
 		// cover 10 genesis blocks
@@ -1150,62 +997,64 @@ func TestListCreatables(t *testing.T) {
 	numElementsPerSegement := 25
 
 	// set up the database
-	dbs, _ := storetesting.DbOpenTest(t, true)
-	storetesting.SetDbLogging(t, dbs)
+	dbs, _ := sqlitedriver.DbOpenTrackerTest(t, true)
+	dblogger := logging.TestingLog(t)
+	dbs.SetLogger(dblogger)
 	defer dbs.Close()
 
-	tx, err := dbs.Wdb.Handle.Begin()
+	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+		accts := make(map[basics.Address]basics.AccountData)
+		_ = tx.Testing().AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
+		require.NoError(t, err)
+
+		au := &accountUpdates{}
+		au.accountsq, err = tx.Testing().MakeAccountsOptimizedReader()
+		require.NoError(t, err)
+
+		// ******* All results are obtained from the cache. Empty database *******
+		// ******* No deletes                                              *******
+		// get random data. Initial batch, no deletes
+		ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
+		expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
+		ctbsWithDeletes := randomCreatableSampling(1, ctbsList, randomCtbs,
+			expectedDbImage, numElementsPerSegement)
+		// set the cache
+		au.creatables = ctbsWithDeletes
+		listAndCompareComb(t, au, expectedDbImage)
+
+		// ******* All results are obtained from the database. Empty cache *******
+		// ******* No deletes	                                           *******
+		// sync with the database
+		var updates compactAccountDeltas
+		var resUpdates compactResourcesDeltas
+		_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, ctbsWithDeletes, proto, basics.Round(1))
+		require.NoError(t, err)
+		// nothing left in cache
+		au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
+		listAndCompareComb(t, au, expectedDbImage)
+
+		// ******* Results are obtained from the database and from the cache *******
+		// ******* No deletes in the database.                               *******
+		// ******* Data in the database deleted in the cache                 *******
+		au.creatables = randomCreatableSampling(2, ctbsList, randomCtbs,
+			expectedDbImage, numElementsPerSegement)
+		listAndCompareComb(t, au, expectedDbImage)
+
+		// ******* Results are obtained from the database and from the cache *******
+		// ******* Deletes are in the database and in the cache              *******
+		// sync with the database. This has deletes synced to the database.
+		_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, au.creatables, proto, basics.Round(1))
+		require.NoError(t, err)
+		// get new creatables in the cache. There will be deleted in the cache from the previous batch.
+		au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
+			expectedDbImage, numElementsPerSegement)
+		listAndCompareComb(t, au, expectedDbImage)
+
+		return
+	})
 	require.NoError(t, err)
-	defer tx.Rollback()
-
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	accts := make(map[basics.Address]basics.AccountData)
-	_ = store.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
-	require.NoError(t, err)
-
-	au := &accountUpdates{}
-	au.accountsq, err = store.AccountsInitDbQueries(tx)
-	require.NoError(t, err)
-
-	// ******* All results are obtained from the cache. Empty database *******
-	// ******* No deletes                                              *******
-	// get random data. Initial batch, no deletes
-	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
-	expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-	ctbsWithDeletes := randomCreatableSampling(1, ctbsList, randomCtbs,
-		expectedDbImage, numElementsPerSegement)
-	// set the cache
-	au.creatables = ctbsWithDeletes
-	listAndCompareComb(t, au, expectedDbImage)
-
-	// ******* All results are obtained from the database. Empty cache *******
-	// ******* No deletes	                                           *******
-	// sync with the database
-	var updates compactAccountDeltas
-	var resUpdates compactResourcesDeltas
-	_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, ctbsWithDeletes, proto, basics.Round(1))
-	require.NoError(t, err)
-	// nothing left in cache
-	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-	listAndCompareComb(t, au, expectedDbImage)
-
-	// ******* Results are obtained from the database and from the cache *******
-	// ******* No deletes in the database.                               *******
-	// ******* Data in the database deleted in the cache                 *******
-	au.creatables = randomCreatableSampling(2, ctbsList, randomCtbs,
-		expectedDbImage, numElementsPerSegement)
-	listAndCompareComb(t, au, expectedDbImage)
-
-	// ******* Results are obtained from the database and from the cache *******
-	// ******* Deletes are in the database and in the cache              *******
-	// sync with the database. This has deletes synced to the database.
-	_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, au.creatables, proto, basics.Round(1))
-	require.NoError(t, err)
-	// get new creatables in the cache. There will be deleted in the cache from the previous batch.
-	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
-		expectedDbImage, numElementsPerSegement)
-	listAndCompareComb(t, au, expectedDbImage)
 }
 
 func TestBoxNamesByAppIDs(t *testing.T) {
@@ -1509,51 +1358,6 @@ func TestKVCache(t *testing.T) {
 	}
 }
 
-func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
-	arw := store.NewAccountsSQLReaderWriter(tx)
-
-	rows, err := tx.Query("SELECT rowid, address, data FROM accountbase")
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-
-	bals = make(map[basics.Address]basics.AccountData)
-	for rows.Next() {
-		var addrbuf []byte
-		var buf []byte
-		var rowid sql.NullInt64
-		err = rows.Scan(&rowid, &addrbuf, &buf)
-		if err != nil {
-			return
-		}
-
-		var data store.BaseAccountData
-		err = protocol.Decode(buf, &data)
-		if err != nil {
-			return
-		}
-
-		var addr basics.Address
-		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-			return
-		}
-		copy(addr[:], addrbuf)
-
-		var ad basics.AccountData
-		ad, err = arw.LoadFullAccount(context.Background(), "resources", addr, rowid.Int64, data)
-		if err != nil {
-			return
-		}
-
-		bals[addr] = ad
-	}
-
-	err = rows.Err()
-	return
-}
-
 func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -1572,22 +1376,26 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 		var updates compactAccountDeltas
 		for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 			addr := ledgertesting.RandomAddress()
-			acctData := store.BaseAccountData{}
+			acctData := trackerdb.BaseAccountData{}
 			acctData.MicroAlgos.Raw = 1
 			updates.upsert(addr, accountDelta{newAcct: acctData})
 			i++
 		}
 
-		err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		err := ml.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 			_, _, _, err = accountsNewRound(tx, updates, compactResourcesDeltas{}, nil, nil, proto, basics.Round(1))
 			return
 		})
 		require.NoError(b, err)
 	}
 
-	err := ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		arw := store.NewAccountsSQLReaderWriter(tx)
-		return arw.UpdateAccountsHashRound(ctx, 1)
+	err := ml.dbs.Batch(func(ctx context.Context, tx trackerdb.BatchScope) (err error) {
+		aw, err := tx.MakeAccountsWriter()
+		if err != nil {
+			return err
+		}
+
+		return aw.UpdateAccountsHashRound(ctx, 1)
 	})
 	require.NoError(b, err)
 
@@ -1653,17 +1461,17 @@ func TestCompactDeltas(t *testing.T) {
 
 	// check deltas with missing accounts
 	delta, _ := outAccountDeltas.get(addrs[0])
-	require.Equal(t, store.PersistedAccountData{}, delta.oldAcct)
+	require.Equal(t, trackerdb.PersistedAccountData{}, delta.oldAcct)
 	require.NotEmpty(t, delta.newAcct)
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
 
 	// check deltas without missing accounts
-	baseAccounts.write(store.PersistedAccountData{Addr: addrs[0], AccountData: store.BaseAccountData{}})
+	baseAccounts.write(trackerdb.PersistedAccountData{Addr: addrs[0], AccountData: trackerdb.BaseAccountData{}})
 	outAccountDeltas = makeCompactAccountDeltas(stateDeltas, basics.Round(1), true, baseAccounts)
 	require.Equal(t, 0, len(outAccountDeltas.misses))
 	delta, _ = outAccountDeltas.get(addrs[0])
-	require.Equal(t, store.PersistedAccountData{Addr: addrs[0]}, delta.oldAcct)
-	require.Equal(t, store.BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}, UpdateRound: 2}, delta.newAcct)
+	require.Equal(t, trackerdb.PersistedAccountData{Addr: addrs[0]}, delta.oldAcct)
+	require.Equal(t, trackerdb.BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}, UpdateRound: 2}, delta.newAcct)
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
 	baseAccounts.init(nil, 100, 80)
 
@@ -1675,8 +1483,8 @@ func TestCompactDeltas(t *testing.T) {
 	stateDeltas[1].Creatables[100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: false}
 	stateDeltas[1].Creatables[101] = ledgercore.ModifiedCreatable{Creator: addrs[4], Created: true}
 
-	baseAccounts.write(store.PersistedAccountData{Addr: addrs[0], AccountData: store.BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
-	baseAccounts.write(store.PersistedAccountData{Addr: addrs[3], AccountData: store.BaseAccountData{}})
+	baseAccounts.write(trackerdb.PersistedAccountData{Addr: addrs[0], AccountData: trackerdb.BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
+	baseAccounts.write(trackerdb.PersistedAccountData{Addr: addrs[3], AccountData: trackerdb.BaseAccountData{}})
 	outAccountDeltas = makeCompactAccountDeltas(stateDeltas, basics.Round(1), true, baseAccounts)
 	outCreatableDeltas = compactCreatableDeltas(stateDeltas)
 
@@ -1723,22 +1531,22 @@ func TestCompactDeltasResources(t *testing.T) {
 	delta, _ := outResourcesDeltas.get(addrs[0], 100)
 	require.NotEmpty(t, delta.newResource)
 	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
-	require.Equal(t, store.ResourceFlagsNotHolding, delta.newResource.ResourceFlags)
+	require.Equal(t, trackerdb.ResourceFlagsNotHolding, delta.newResource.ResourceFlags)
 
 	delta, _ = outResourcesDeltas.get(addrs[1], 101)
 	require.NotEmpty(t, delta.newResource)
 	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
-	require.Equal(t, store.ResourceFlagsNotHolding, delta.newResource.ResourceFlags)
+	require.Equal(t, trackerdb.ResourceFlagsNotHolding, delta.newResource.ResourceFlags)
 
 	delta, _ = outResourcesDeltas.get(addrs[2], 102)
 	require.NotEmpty(t, delta.newResource)
 	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
-	require.Equal(t, store.ResourceFlagsNotHolding, delta.newResource.ResourceFlags)
+	require.Equal(t, trackerdb.ResourceFlagsNotHolding, delta.newResource.ResourceFlags)
 
 	delta, _ = outResourcesDeltas.get(addrs[3], 103)
 	require.NotEmpty(t, delta.newResource)
 	require.True(t, !delta.newResource.IsApp() && !delta.newResource.IsAsset())
-	require.Equal(t, store.ResourceFlagsNotHolding, delta.newResource.ResourceFlags)
+	require.Equal(t, trackerdb.ResourceFlagsNotHolding, delta.newResource.ResourceFlags)
 
 	// check actual data on non-empty input
 	stateDeltas = make([]ledgercore.StateDelta, 1)
@@ -1810,19 +1618,19 @@ func TestCompactDeltasResources(t *testing.T) {
 	for i := int64(0); i < 4; i++ {
 		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
 		require.NotEqual(t, -1, idx)
-		require.Equal(t, store.PersistedResourcesData{Aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
+		require.Equal(t, trackerdb.PersistedResourcesData{Aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
 		if i%2 == 0 {
 			delta, idx = outResourcesDeltas.get(addrs[i], basics.CreatableIndex(200+i))
 			require.NotEqual(t, -1, idx)
-			require.Equal(t, store.PersistedResourcesData{Aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
+			require.Equal(t, trackerdb.PersistedResourcesData{Aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
 		}
 	}
 
 	// check deltas without missing accounts
 	for i := int64(0); i < 4; i++ {
-		baseResources.write(store.PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(100 + i)}, addrs[i])
+		baseResources.write(trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{i + 1}, Aidx: basics.CreatableIndex(100 + i)}, addrs[i])
 		if i%2 == 0 {
-			baseResources.write(store.PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(200 + i)}, addrs[i])
+			baseResources.write(trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{i + 1}, Aidx: basics.CreatableIndex(200 + i)}, addrs[i])
 		}
 	}
 
@@ -1834,11 +1642,11 @@ func TestCompactDeltasResources(t *testing.T) {
 	for i := int64(0); i < 4; i++ {
 		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
 		require.NotEqual(t, -1, idx)
-		require.Equal(t, store.PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
+		require.Equal(t, trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{i + 1}, Aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
 		if i%2 == 0 {
 			delta, idx = outResourcesDeltas.get(addrs[i], basics.CreatableIndex(200+i))
 			require.NotEqual(t, -1, idx)
-			require.Equal(t, store.PersistedResourcesData{Addrid: i + 1, Aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
+			require.Equal(t, trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{i + 1}, Aidx: basics.CreatableIndex(200 + i)}, delta.oldResource)
 		}
 	}
 
@@ -1854,7 +1662,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	appLocalState204 := basics.AppLocalState{KeyValue: basics.TealKeyValue{"204": basics.TealValue{Type: basics.TealBytesType, Bytes: "204"}}}
 	stateDeltas[1].Accts.UpsertAppResource(addrs[4], 104, ledgercore.AppParamsDelta{Params: &appParams104}, ledgercore.AppLocalStateDelta{LocalState: &appLocalState204})
 
-	baseResources.write(store.PersistedResourcesData{Addrid: 5 /* 4+1 */, Aidx: basics.CreatableIndex(104)}, addrs[4])
+	baseResources.write(trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{5} /* 4+1 */, Aidx: basics.CreatableIndex(104)}, addrs[4])
 	outResourcesDeltas = makeCompactResourceDeltas(stateDeltas, basics.Round(1), true, baseAccounts, baseResources)
 
 	require.Equal(t, 0, len(outResourcesDeltas.misses))
@@ -2347,13 +2155,16 @@ func TestAcctUpdatesResources(t *testing.T) {
 				defer ml.trackers.accountsWriting.Done()
 
 				// do not take any locks since all operations are synchronous
-				newBase := basics.Round(dcc.offset) + dcc.oldBase
-				dcc.newBase = newBase
+				newBase := dcc.newBase()
 
 				err := au.prepareCommit(dcc)
 				require.NoError(t, err)
-				err = ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-					arw := store.NewAccountsSQLReaderWriter(tx)
+				err = ml.trackers.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+					arw, err := tx.MakeAccountsReaderWriter()
+					if err != nil {
+						return err
+					}
+
 					err = au.commitRound(ctx, tx, dcc)
 					if err != nil {
 						return err
@@ -2631,13 +2442,16 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 			defer ml.trackers.accountsWriting.Done()
 
 			// do not take any locks since all operations are synchronous
-			newBase := basics.Round(dcc.offset) + dcc.oldBase
-			dcc.newBase = newBase
+			newBase := dcc.newBase()
 
 			err := au.prepareCommit(dcc)
 			require.NoError(t, err)
-			err = ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				arw := store.NewAccountsSQLReaderWriter(tx)
+			err = ml.trackers.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+				arw, err := tx.MakeAccountsReaderWriter()
+				if err != nil {
+					return err
+				}
+
 				err = au.commitRound(ctx, tx, dcc)
 				if err != nil {
 					return err
@@ -2933,7 +2747,7 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 	// Stores KVMods for each round. These are used as the source of truth for comparing retireved StateDeltas.
 	var roundMods = make(map[basics.Round]map[string]ledgercore.KvValueDelta)
 
-	// Sets up random keys & values to store.
+	// Sets up random keys & values to trackerdb.
 	kvCnt := 1000
 	kvsPerBlock := 100
 	curKV := 0
