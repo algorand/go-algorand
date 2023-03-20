@@ -409,7 +409,7 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 		flushIntervalPassed := flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval))
 		flushForCatchpoint := dcc.catchpointFirstStage || dcc.catchpointSecondStage
 		flushAccounts := dcc.pendingDeltas >= pendingDeltasFlushThreshold
-		if !flushIntervalPassed && !flushForCatchpoint && !flushAccounts {
+		if !(flushIntervalPassed || flushForCatchpoint || flushAccounts) {
 			dcc = nil
 		}
 	}
