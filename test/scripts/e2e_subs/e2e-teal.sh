@@ -23,7 +23,7 @@ ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 TIMEOUT_ROUND=$((${ROUND} + 14))
 
 # timeout after 14 rounds
-python tlhc.py --from ${ACCOUNT} --to ${ACCOUNTB} --timeout-round ${TIMEOUT_ROUND} > ${TEMPDIR}/tlhc.teal 2> ${TEMPDIR}/tlhc.teal.secret
+python test/scripts/tlhc.py --from ${ACCOUNT} --to ${ACCOUNTB} --timeout-round ${TIMEOUT_ROUND} > ${TEMPDIR}/tlhc.teal 2> ${TEMPDIR}/tlhc.teal.secret
 
 cat ${TEMPDIR}/tlhc.teal
 
