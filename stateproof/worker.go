@@ -77,7 +77,7 @@ type Worker struct {
 	wg       sync.WaitGroup
 
 	// Mutex for protecting access to the signed field
-	signedMu deadlock.Mutex
+	signedMu deadlock.RWMutex
 	signed   basics.Round
 	signedCh chan struct{}
 

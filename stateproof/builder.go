@@ -154,8 +154,8 @@ func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
 		return err
 	}
 
-	for _, sig := range sigs {
-		err = buildr.insertSig(&sig, false)
+	for i := range sigs {
+		err = buildr.insertSig(&sigs[i], false)
 		if err != nil {
 			spw.log.Warn(err)
 		}
@@ -689,8 +689,8 @@ func (spw *Worker) invokeBuilder(r basics.Round) {
 }
 
 func (spw *Worker) lastSignedBlock() basics.Round {
-	spw.signedMu.Lock()
-	defer spw.signedMu.Unlock()
+	spw.signedMu.RLock()
+	defer spw.signedMu.RUnlock()
 	return spw.signed
 }
 
