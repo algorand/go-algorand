@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store"
+	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -148,35 +149,38 @@ func (t *txTailTestLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.ConsensusVersion) error {
 	// create a corresponding blockdb.
 	inMemory := true
-	t.blockDBs, _ = dbOpenTest(ts, inMemory)
-	t.trackerDBs, _ = dbOpenTest(ts, inMemory)
+	t.blockDBs, _ = storetesting.DbOpenTest(ts, inMemory)
+	t.trackerDBs, _ = store.DbOpenTrackerTest(ts, inMemory)
 	t.protoVersion = protoVersion
 
-	tx, err := t.trackerDBs.Wdb.Handle.Begin()
-	require.NoError(ts, err)
+	err := t.trackerDBs.Batch(func(transactionCtx context.Context, tx store.BatchScope) (err error) {
+		arw, err := tx.MakeAccountsWriter()
+		if err != nil {
+			return err
+		}
 
-	arw := store.NewAccountsSQLReaderWriter(tx)
+		accts := ledgertesting.RandomAccounts(20, true)
+		proto := config.Consensus[protoVersion]
+		newDB := tx.AccountsInitTest(ts, accts, protoVersion)
+		require.True(ts, newDB)
 
-	accts := ledgertesting.RandomAccounts(20, true)
-	proto := config.Consensus[protoVersion]
-	newDB := accountsInitTest(ts, tx, accts, protoVersion)
-	require.True(ts, newDB)
-	_, err = accountsInit(tx, accts, proto)
-	require.NoError(ts, err)
-
-	roundData := make([][]byte, 0, proto.MaxTxnLife)
-	startRound := t.Latest() - basics.Round(proto.MaxTxnLife) + 1
-	for i := startRound; i <= t.Latest(); i++ {
-		blk, err := t.Block(i)
+		roundData := make([][]byte, 0, proto.MaxTxnLife)
+		startRound := t.Latest() - basics.Round(proto.MaxTxnLife) + 1
+		for i := startRound; i <= t.Latest(); i++ {
+			blk, err := t.Block(i)
+			require.NoError(ts, err)
+			tail, err := store.TxTailRoundFromBlock(blk)
+			require.NoError(ts, err)
+			encoded, _ := tail.Encode()
+			roundData = append(roundData, encoded)
+		}
+		err = arw.TxtailNewRound(context.Background(), startRound, roundData, 0)
 		require.NoError(ts, err)
-		tail, err := store.TxTailRoundFromBlock(blk)
-		require.NoError(ts, err)
-		encoded, _ := tail.Encode()
-		roundData = append(roundData, encoded)
-	}
-	err = arw.TxtailNewRound(context.Background(), startRound, roundData, 0)
+
+		return nil
+	})
 	require.NoError(ts, err)
-	tx.Commit()
+
 	return nil
 }
 
@@ -219,7 +223,7 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 				txn.Txn.FirstValid, txn.Txn.LastValid, txn.Txn.ID(),
 				txl)
 			if r >= ledger.Latest()-testTxTailValidityRange {
-				require.Equal(t, ledgercore.MakeLeaseInLedgerError(txn.Txn.ID(), txl), dupResult)
+				require.Equal(t, ledgercore.MakeLeaseInLedgerError(txn.Txn.ID(), txl, false), dupResult)
 			} else {
 				require.Equal(t, &errTxTailMissingRound{round: txn.Txn.LastValid}, dupResult)
 			}
@@ -292,17 +296,17 @@ func TestTxTailDeltaTracking(t *testing.T) {
 						offset:               1,
 						catchpointFirstStage: true,
 					},
-					newBase: basics.Round(i),
 				}
 				err = txtail.prepareCommit(dcc)
 				require.NoError(t, err)
 
-				tx, err := ledger.trackerDBs.Wdb.Handle.Begin()
+				err := ledger.trackerDBs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+					err = txtail.commitRound(context.Background(), tx, dcc)
+					require.NoError(t, err)
+					return nil
+				})
 				require.NoError(t, err)
 
-				err = txtail.commitRound(context.Background(), tx, dcc)
-				require.NoError(t, err)
-				tx.Commit()
 				proto := config.Consensus[protoVersion]
 				retainSize := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory
 				if uint64(i) > proto.MaxTxnLife*2 {
@@ -360,12 +364,11 @@ func BenchmarkTxTailBlockHeaderCache(b *testing.B) {
 					oldBase:  dbRound,
 					lookback: lookback,
 				},
-				newBase: dbRound + basics.Round(offset),
 			}
 			err := tail.prepareCommit(dcc)
 			require.NoError(b, err)
 			tail.postCommit(context.Background(), dcc)
-			dbRound = dcc.newBase
+			dbRound = dcc.newBase()
 			require.Less(b, len(tail.blockHeaderData), 1001+10)
 		}
 	}

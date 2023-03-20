@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
 	"github.com/algorand/go-deadlock"
@@ -91,16 +90,19 @@ type txTail struct {
 }
 
 func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
-	rdb := l.trackerDB().Rdb
 	t.log = l.trackerLog()
 
 	var roundData []*store.TxTailRound
 	var roundTailHashes []crypto.Digest
 	var baseRound basics.Round
 	if dbRound > 0 {
-		err := rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			arw := store.NewAccountsSQLReaderWriter(tx)
-			roundData, roundTailHashes, baseRound, err = arw.LoadTxTail(ctx, dbRound)
+		err := l.trackerDB().Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
+			ar, err := tx.MakeAccountsReader()
+			if err != nil {
+				return err
+			}
+
+			roundData, roundTailHashes, baseRound, err = ar.LoadTxTail(ctx, dbRound)
 			return
 		})
 		if err != nil {
@@ -250,10 +252,10 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 		dcc.txTailDeltas = append(dcc.txTailDeltas, t.roundTailSerializedDeltas[i])
 	}
 	lowest := t.lowestBlockHeaderRound
-	proto, ok := config.Consensus[t.blockHeaderData[dcc.newBase].CurrentProtocol]
+	proto, ok := config.Consensus[t.blockHeaderData[dcc.newBase()].CurrentProtocol]
 	t.tailMu.RUnlock()
 	if !ok {
-		return fmt.Errorf("round %d not found in blockHeaderData: lowest=%d, base=%d", dcc.newBase, lowest, dcc.oldBase)
+		return fmt.Errorf("round %d not found in blockHeaderData: lowest=%d, base=%d", dcc.newBase(), lowest, dcc.oldBase)
 	}
 	// get the MaxTxnLife from the consensus params of the latest round in this commit range
 	// preserve data for MaxTxnLife + DeeperBlockHeaderHistory
@@ -270,12 +272,15 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 	return
 }
 
-func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) error {
-	arw := store.NewAccountsSQLReaderWriter(tx)
+func (t *txTail) commitRound(ctx context.Context, tx store.TransactionScope, dcc *deferredCommitContext) error {
+	arw, err := tx.MakeAccountsReaderWriter()
+	if err != nil {
+		return err
+	}
 
 	// determine the round to remove data
 	// the formula is similar to the committedUpTo: rnd + 1 - retain size
-	forgetBeforeRound := (dcc.newBase + 1).SubSaturate(basics.Round(dcc.txTailRetainSize))
+	forgetBeforeRound := (dcc.newBase() + 1).SubSaturate(basics.Round(dcc.txTailRetainSize))
 	baseRound := dcc.oldBase + 1
 	if err := arw.TxtailNewRound(ctx, baseRound, dcc.txTailDeltas, forgetBeforeRound); err != nil {
 		return fmt.Errorf("txTail: unable to persist new round %d : %w", baseRound, err)
@@ -291,7 +296,7 @@ func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 
 	// get the MaxTxnLife from the consensus params of the latest round in this commit range
 	// preserve data for MaxTxnLife + DeeperBlockHeaderHistory rounds
-	newLowestRound := (dcc.newBase + 1).SubSaturate(basics.Round(dcc.txTailRetainSize))
+	newLowestRound := (dcc.newBase() + 1).SubSaturate(basics.Round(dcc.txTailRetainSize))
 	for t.lowestBlockHeaderRound < newLowestRound {
 		delete(t.blockHeaderData, t.lowestBlockHeaderRound)
 		t.lowestBlockHeaderRound++
@@ -343,13 +348,13 @@ func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, fi
 		for rnd := firstChecked; rnd <= lastChecked; rnd++ {
 			expires, ok := t.recent[rnd].txleases[txl]
 			if ok && current <= expires {
-				return ledgercore.MakeLeaseInLedgerError(txid, txl)
+				return ledgercore.MakeLeaseInLedgerError(txid, txl, false)
 			}
 		}
 	}
 
 	if _, confirmed := t.lastValid[lastValid][txid]; confirmed {
-		return &ledgercore.TransactionInLedgerError{Txid: txid}
+		return &ledgercore.TransactionInLedgerError{Txid: txid, InBlockEvaluator: false}
 	}
 	return nil
 }

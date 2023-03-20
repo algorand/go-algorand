@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,23 +35,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newSimpleLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
-	return newSimpleLedgerWithConsensusVersion(t, balances, protocol.ConsensusFuture)
-}
-
-func newSimpleLedgerWithConsensusVersion(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion) *Ledger {
+func newSimpleLedgerWithConsensusVersion(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, cfg config.Local) *Ledger {
 	var genHash crypto.Digest
 	crypto.RandBytes(genHash[:])
-	return newSimpleLedgerFull(t, balances, cv, genHash)
+	return newSimpleLedgerFull(t, balances, cv, genHash, cfg)
 }
 
-func newSimpleLedgerFull(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, genHash crypto.Digest) *Ledger {
+func newSimpleLedgerFull(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, genHash crypto.Digest, cfg config.Local) *Ledger {
 	genBlock, err := bookkeeping.MakeGenesisBlock(cv, balances, "test", genHash)
 	require.NoError(t, err)
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
 		Block:       genBlock,
@@ -116,7 +111,7 @@ func txgroup(t testing.TB, ledger *Ledger, eval *internal.BlockEvaluator, txns .
 	for _, txn := range txns {
 		fillDefaults(t, ledger, eval, txn)
 	}
-	txgroup := txntest.SignedTxns(txns...)
+	txgroup := txntest.Group(txns...)
 
 	return eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
 }

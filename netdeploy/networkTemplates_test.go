@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,8 +17,10 @@
 package netdeploy
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -94,4 +96,23 @@ func TestValidate(t *testing.T) {
 	template, _ = loadTemplate(filepath.Join(templateDir, "TwoNodesOneRelay1000Accounts.json"))
 	err = template.Validate()
 	a.NoError(err)
+}
+
+type overlayTestStruct struct {
+	A string
+	B string
+}
+
+// TestJsonOverlay ensures that encoding/json will only clobber fields present in the json and leave other fields unchanged
+func TestJsonOverlay(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	before := overlayTestStruct{A: "one", B: "two"}
+	setB := "{\"B\":\"other\"}"
+	dec := json.NewDecoder(strings.NewReader(setB))
+	after := before
+	err := dec.Decode(&after)
+	a := require.New(t)
+	a.NoError(err)
+	a.Equal("one", after.A)
+	a.Equal("other", after.B)
 }

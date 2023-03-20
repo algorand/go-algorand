@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,8 +50,6 @@ func commitSync(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracker, rnd 
 			ml.trackers.accountsWriting.Add(1)
 
 			// do not take any locks since all operations are synchronous
-			newBase := basics.Round(dcc.offset) + dcc.oldBase
-			dcc.newBase = newBase
 			err := ml.trackers.commitRound(dcc)
 			require.NoError(t, err)
 		}()
@@ -73,16 +71,19 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 			ml.trackers.accountsWriting.Add(1)
 
 			// do not take any locks since all operations are synchronous
-			newBase := basics.Round(dcc.offset) + dcc.oldBase
-			dcc.newBase = newBase
+			newBase := dcc.newBase()
 			dcc.flushTime = time.Now()
 
 			for _, lt := range ml.trackers.trackers {
 				err := lt.prepareCommit(dcc)
 				require.NoError(t, err)
 			}
-			err := ml.trackers.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				arw := store.NewAccountsSQLReaderWriter(tx)
+			err := ml.trackers.dbs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+				arw, err := tx.MakeAccountsReaderWriter()
+				if err != nil {
+					return err
+				}
+
 				for _, lt := range ml.trackers.trackers {
 					err0 := lt.commitRound(ctx, tx, dcc)
 					if err0 != nil {
@@ -102,7 +103,7 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 func commitSyncPartialComplete(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracker, dcc *deferredCommitContext) {
 	defer ml.trackers.accountsWriting.Done()
 
-	ml.trackers.dbRound = dcc.newBase
+	ml.trackers.dbRound = dcc.newBase()
 	for _, lt := range ml.trackers.trackers {
 		lt.postCommit(ml.trackers.ctx, dcc)
 	}
@@ -807,8 +808,13 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
 	var endRound basics.Round
-	err := ao.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		dbOnlineRoundParams, endRound, err = accountsOnlineRoundParams(tx)
+	err := ao.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
+		ar, err := tx.MakeAccountsReader()
+		if err != nil {
+			return err
+		}
+
+		dbOnlineRoundParams, endRound, err = ar.AccountsOnlineRoundParams()
 		return err
 	})
 	require.NoError(t, err)
@@ -1291,8 +1297,13 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	// DB has all the required history tho
 	var dbOnlineRoundParams []ledgercore.OnlineRoundParamsData
 	var endRound basics.Round
-	err = oa.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		dbOnlineRoundParams, endRound, err = accountsOnlineRoundParams(tx)
+	err = oa.dbs.Snapshot(func(ctx context.Context, tx store.SnapshotScope) (err error) {
+		ar, err := tx.MakeAccountsReader()
+		if err != nil {
+			return err
+		}
+
+		dbOnlineRoundParams, endRound, err = ar.AccountsOnlineRoundParams()
 		return err
 	})
 
@@ -1595,100 +1606,6 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 		allAccts[numAccts-1] = accountToBeUpdated
 
 		compareTopAccounts(a, top, allAccts)
-	case <-time.After(1 * time.Minute):
-		a.FailNow("timedout while waiting for post commit")
-	}
-}
-
-func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	const numAccts = 20
-	allAccts := make([]basics.BalanceRecord, numAccts)
-	genesisAccts := []map[basics.Address]basics.AccountData{{}}
-	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
-
-	for i := 0; i < numAccts; i++ {
-		allAccts[i] = basics.BalanceRecord{
-			Addr: ledgertesting.RandomAddress(),
-			AccountData: basics.AccountData{
-				MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
-				Status:         basics.Online,
-				VoteLastValid:  1000,
-				VoteFirstValid: 0,
-				RewardsBase:    0},
-		}
-		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
-	}
-	addSinkAndPoolAccounts(genesisAccts)
-
-	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, genesisAccts)
-	defer ml.Close()
-
-	stallingTracker := &blockingTracker{
-		postCommitUnlockedEntryLock:   make(chan struct{}),
-		postCommitUnlockedReleaseLock: make(chan struct{}),
-		postCommitEntryLock:           make(chan struct{}),
-		postCommitReleaseLock:         make(chan struct{}),
-		alwaysLock:                    false,
-		shouldLockPostCommit:          false,
-	}
-
-	conf := config.GetDefaultLocal()
-	au, oa := newAcctUpdates(t, ml, conf)
-	defer oa.close()
-	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
-
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	top, _, err := oa.TopOnlineAccounts(0, 0, 5, &proto, 0)
-	a.NoError(err)
-	compareTopAccounts(a, top, allAccts)
-
-	_, totals, err := au.LatestTotals()
-	require.NoError(t, err)
-
-	// apply some rounds so the db round will make progress (not be 0) - i.e since the max lookback in memory is 8. deltas
-	// will get committed at round 9
-	i := 1
-	for ; i < 10; i++ {
-		var updates ledgercore.AccountDeltas
-		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
-			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
-		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
-	}
-
-	stallingTracker.shouldLockPostCommit = true
-
-	updateAccountsRoutine := func() {
-		var updates ledgercore.AccountDeltas
-		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
-			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
-		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
-	}
-
-	// This go routine will trigger a commit producer. we added a special blockingTracker that will case our
-	// onlineAccoutsTracker to be "stuck" between commit and Post commit .
-	// thus, when we call onlineTop - it should wait for the post commit to happen.
-	// in a different go routine we will wait 2 sec and release the commit.
-	go updateAccountsRoutine()
-
-	select {
-	case <-stallingTracker.postCommitEntryLock:
-		go func() {
-			time.Sleep(2 * time.Second)
-			// tweak the database to move backwards
-			err = oa.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-				_, err = tx.Exec("update acctrounds set rnd = 1 WHERE id='acctbase' ")
-				return
-			})
-			stallingTracker.postCommitReleaseLock <- struct{}{}
-		}()
-
-		_, _, err = oa.TopOnlineAccounts(2, 2, 5, &proto, 0)
-		a.Error(err)
-		a.Contains(err.Error(), "is behind in-memory round")
-
 	case <-time.After(1 * time.Minute):
 		a.FailNow("timedout while waiting for post commit")
 	}

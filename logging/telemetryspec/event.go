@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -97,17 +97,6 @@ type BlockAcceptedEventDetails struct {
 	PreValidated bool
 	PropBufLen   uint64
 	VoteBufLen   uint64
-}
-
-// TopAccountsEvent event
-const TopAccountsEvent Event = "TopAccounts"
-
-// TopAccountEventDetails contains details for the BlockAcceptedEvent
-type TopAccountEventDetails struct {
-	Round              uint64
-	OnlineAccounts     []map[string]interface{}
-	OnlineCirculation  uint64
-	OfflineCirculation uint64
 }
 
 // AccountRegisteredEvent event
@@ -307,7 +296,7 @@ type PeerConnectionDetails struct {
 	// DuplicateFilterCount is the number of times this peer has sent us a message hash to filter that it had already sent before.
 	DuplicateFilterCount uint64
 	// These message counters count received messages from this peer.
-	TXCount, MICount, AVCount, PPCount uint64
+	TXCount, MICount, AVCount, PPCount, UNKCount uint64
 	// TCPInfo provides connection measurements from TCP.
 	TCP util.TCPInfo `json:",omitempty"`
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -190,6 +190,9 @@ type multicastParams struct {
 	exclude nodeID
 }
 
+// UnknownMsgTag ensures the testingNetwork implementation below will drop a message.
+const UnknownMsgTag protocol.Tag = "??"
+
 func (n *testingNetwork) multicast(tag protocol.Tag, data []byte, source nodeID, exclude nodeID) {
 	// fmt.Println("mc", source, "x", exclude)
 	n.mu.Lock()
@@ -262,7 +265,7 @@ func (n *testingNetwork) multicast(tag protocol.Tag, data []byte, source nodeID,
 		msgChans = n.bundleMessages
 	case protocol.ProposalPayloadTag:
 		msgChans = n.payloadMessages
-	case protocol.UnknownMsgTag:
+	case UnknownMsgTag:
 		// We use this intentionally - just drop it
 		return
 	default:
@@ -752,7 +755,8 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 		os.Remove(cadaverFilename + ".cdv")
 		os.Remove(cadaverFilename + ".cdv.archive")
 
-		services[i] = MakeService(params)
+		services[i], err = MakeService(params)
+		require.NoError(t, err)
 		services[i].tracer.cadaver.baseFilename = cadaverFilename
 		services[i].tracer.level = traceLevel
 		services[i].tracer.tag = strconv.Itoa(i)
@@ -1681,7 +1685,7 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 		// intercept all proposals for the next period; replace with unexpected
 		baseNetwork.intercept(func(params multicastParams) multicastParams {
 			if params.tag == protocol.ProposalPayloadTag {
-				params.tag = protocol.UnknownMsgTag
+				params.tag = UnknownMsgTag
 			}
 			return params
 		})
@@ -2280,7 +2284,7 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 					return params
 				}
 			}
-			params.tag = protocol.UnknownMsgTag
+			params.tag = UnknownMsgTag
 		}
 
 		return params

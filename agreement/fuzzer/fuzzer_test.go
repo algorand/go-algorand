@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -150,7 +150,10 @@ func (n *Fuzzer) initAgreementNode(nodeID int, filters ...NetworkFilterFactory) 
 		cadaverFilename = ""
 	}
 
-	n.agreements[nodeID] = agreement.MakeService(n.agreementParams[nodeID])
+	n.agreements[nodeID], err = agreement.MakeService(n.agreementParams[nodeID])
+	if err != nil {
+		return false
+	}
 
 	n.agreements[nodeID].SetTracerFilename(cadaverFilename)
 
@@ -578,7 +581,11 @@ func (n *Fuzzer) CrashNode(nodeID int) {
 	n.ledgers[nodeID].ClearNotifications()
 
 	n.agreementParams[nodeID].Network = gossip.WrapNetwork(n.facades[nodeID], n.log, config.GetDefaultLocal())
-	n.agreements[nodeID] = agreement.MakeService(n.agreementParams[nodeID])
+	var err error
+	n.agreements[nodeID], err = agreement.MakeService(n.agreementParams[nodeID])
+	if err != nil {
+		panic(err)
+	}
 
 	cadaverFilename := fmt.Sprintf("%v-%v", n.networkName, nodeID)
 	if n.disableTraces == true {

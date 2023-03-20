@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -85,6 +85,42 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 			require.Equal(t, store.PersistedOnlineAccountData{}, acct)
 		}
 	}
+}
+
+func TestLRUOnlineAccountsDisable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var baseOnlineAcct lruOnlineAccounts
+	baseOnlineAcct.init(logging.TestingLog(t), 0, 1)
+
+	accountsNum := 5
+
+	for i := 0; i < accountsNum; i++ {
+		go func(i int) {
+			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
+			acct := store.PersistedOnlineAccountData{
+				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
+				Round:       basics.Round(i),
+				Rowid:       int64(i),
+				AccountData: store.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+			}
+			baseOnlineAcct.writePending(acct)
+		}(i)
+	}
+	require.Empty(t, baseOnlineAcct.pendingAccounts)
+	baseOnlineAcct.flushPendingWrites()
+	require.Empty(t, baseOnlineAcct.accounts)
+
+	for i := 0; i < accountsNum; i++ {
+		acct := store.PersistedOnlineAccountData{
+			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
+			Round:       basics.Round(i),
+			Rowid:       int64(i),
+			AccountData: store.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+		}
+		baseOnlineAcct.write(acct)
+	}
+	require.Empty(t, baseOnlineAcct.accounts)
 }
 
 func TestLRUOnlineAccountsPendingWrites(t *testing.T) {

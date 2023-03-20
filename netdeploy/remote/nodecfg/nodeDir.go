@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -52,7 +52,7 @@ type nodeDir struct {
 //		* EnableBlockStats
 //		* DashboardEndpoint
 //		* DeadlockOverride
-func (nd *nodeDir) configure(dnsName string) (err error) {
+func (nd *nodeDir) configure() (err error) {
 	fmt.Fprintf(os.Stdout, "Configuring Node %s\n", nd.Name)
 	if err = nd.configureRelay(nd.IsRelay()); err != nil {
 		fmt.Fprintf(os.Stdout, "Error during configureRelay: %s\n", err)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -163,7 +163,8 @@ type RawResponse interface {
 }
 
 // submitForm is a helper used for submitting (ex.) GETs and POSTs to the server
-func (client RestClient) submitForm(response interface{}, path string, request interface{}, requestMethod string, encodeJSON bool, decodeJSON bool) error {
+// if expectNoContent is true, then it is expected that the response received will have a content length of zero
+func (client RestClient) submitForm(response interface{}, path string, request interface{}, requestMethod string, encodeJSON bool, decodeJSON bool, expectNoContent bool) error {
 	var err error
 	queryURL := client.serverURL
 	queryURL.Path = path
@@ -218,6 +219,13 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 		return err
 	}
 
+	if expectNoContent {
+		if resp.ContentLength == 0 {
+			return nil
+		}
+		return fmt.Errorf("expected empty response but got response of %d bytes", resp.ContentLength)
+	}
+
 	if decodeJSON {
 		dec := json.NewDecoder(resp.Body)
 		return dec.Decode(&response)
@@ -240,20 +248,26 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 
 // get performs a GET request to the specific path against the server
 func (client RestClient) get(response interface{}, path string, request interface{}) error {
-	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, true /* decodeJSON */)
+	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, true /* decodeJSON */, false)
+}
+
+// delete performs a DELETE request to the specific path against the server
+// when expectNoContent is true, then no content is expected to be returned from the endpoint
+func (client RestClient) delete(response interface{}, path string, request interface{}, expectNoContent bool) error {
+	return client.submitForm(response, path, request, "DELETE", false /* encodeJSON */, true /* decodeJSON */, expectNoContent)
 }
 
 // getRaw behaves identically to get but doesn't json decode the response, and
 // the response must implement the RawResponse interface
 func (client RestClient) getRaw(response RawResponse, path string, request interface{}) error {
-	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, false /* decodeJSON */)
+	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, false /* decodeJSON */, false)
 }
 
 // post sends a POST request to the given path with the given request object.
 // No query parameters will be sent if request is nil.
 // response must be a pointer to an object as post writes the response there.
-func (client RestClient) post(response interface{}, path string, request interface{}) error {
-	return client.submitForm(response, path, request, "POST", true /* encodeJSON */, true /* decodeJSON */)
+func (client RestClient) post(response interface{}, path string, request interface{}, expectNoContent bool) error {
+	return client.submitForm(response, path, request, "POST", true /* encodeJSON */, true /* decodeJSON */, expectNoContent)
 }
 
 // Status retrieves the StatusResponse from the running node
@@ -490,7 +504,7 @@ func (client RestClient) SuggestedParams() (response model.TransactionParameters
 
 // SendRawTransaction gets a SignedTxn and broadcasts it to the network
 func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response model.PostTransactionsResponse, err error) {
-	err = client.post(&response, "/v2/transactions", protocol.Encode(&txn))
+	err = client.post(&response, "/v2/transactions", protocol.Encode(&txn), false)
 	return
 }
 
@@ -504,7 +518,7 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 	}
 
 	var response model.PostTransactionsResponse
-	return client.post(&response, "/v2/transactions", enc)
+	return client.post(&response, "/v2/transactions", enc, false)
 }
 
 // Block gets the block info for the given round
@@ -524,19 +538,19 @@ func (client RestClient) RawBlock(round uint64) (response []byte, err error) {
 // Shutdown requests the node to shut itself down
 func (client RestClient) Shutdown() (err error) {
 	response := 1
-	err = client.post(&response, "/v2/shutdown", nil)
+	err = client.post(&response, "/v2/shutdown", nil, false)
 	return
 }
 
 // AbortCatchup aborts the currently running catchup
 func (client RestClient) AbortCatchup(catchpointLabel string) (response model.CatchpointAbortResponse, err error) {
-	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "DELETE", false, true)
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "DELETE", false, true, false)
 	return
 }
 
 // Catchup start catching up to the give catchpoint label
 func (client RestClient) Catchup(catchpointLabel string) (response model.CatchpointStartResponse, err error) {
-	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "POST", false, true)
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "POST", false, true, false)
 	return
 }
 
@@ -554,7 +568,7 @@ func (client RestClient) GetGoRoutines(ctx context.Context) (goRoutines string, 
 // Compile compiles the given program and returned the compiled program
 func (client RestClient) Compile(program []byte) (compiledProgram []byte, programHash crypto.Digest, err error) {
 	var compileResponse model.CompileResponse
-	err = client.submitForm(&compileResponse, "/v2/teal/compile", program, "POST", false, true)
+	err = client.submitForm(&compileResponse, "/v2/teal/compile", program, "POST", false, true, false)
 	if err != nil {
 		return nil, crypto.Digest{}, err
 	}
@@ -610,7 +624,7 @@ func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryA
 // RawDryrun gets the raw DryrunResponse associated with the passed address
 func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	var blob Blob
-	err = client.submitForm(&blob, "/v2/teal/dryrun", data, "POST", false /* encodeJSON */, false /* decodeJSON */)
+	err = client.submitForm(&blob, "/v2/teal/dryrun", data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
 	response = blob
 	return
 }
@@ -636,7 +650,7 @@ func (client RestClient) TransactionProof(txid string, round uint64, hashType cr
 
 // PostParticipationKey sends a key file to the node.
 func (client RestClient) PostParticipationKey(file []byte) (response model.PostParticipationResponse, err error) {
-	err = client.post(&response, "/v2/participation", file)
+	err = client.post(&response, "/v2/participation", file, false)
 	return
 }
 
@@ -649,5 +663,38 @@ func (client RestClient) GetParticipationKeys() (response model.ParticipationKey
 // GetParticipationKeyByID gets a single participation key
 func (client RestClient) GetParticipationKeyByID(participationID string) (response model.ParticipationKeyResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/participation/%s", participationID), nil)
+	return
+}
+
+// RemoveParticipationKeyByID removes a particiption key by its ID
+func (client RestClient) RemoveParticipationKeyByID(participationID string) (err error) {
+	err = client.delete(nil, fmt.Sprintf("/v2/participation/%s", participationID), nil, true)
+	return
+
+}
+
+/* Endpoint registered for follower nodes */
+
+// SetSyncRound sets the sync round for the catchup service
+func (client RestClient) SetSyncRound(round uint64) (err error) {
+	err = client.post(nil, fmt.Sprintf("/v2/ledger/sync/%d", round), nil, true)
+	return
+}
+
+// UnsetSyncRound deletes the sync round constraint
+func (client RestClient) UnsetSyncRound() (err error) {
+	err = client.delete(nil, "/v2/ledger/sync", nil, true)
+	return
+}
+
+// GetSyncRound retrieves the sync round (if set)
+func (client RestClient) GetSyncRound() (response model.GetSyncRoundResponse, err error) {
+	err = client.get(&response, "/v2/ledger/sync", nil)
+	return
+}
+
+// GetLedgerStateDelta retrieves the ledger state delta for the round
+func (client RestClient) GetLedgerStateDelta(round uint64) (response model.LedgerStateDeltaResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/deltas/%d", round), nil)
 	return
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -594,6 +594,8 @@ type BlockEvaluator struct {
 	l LedgerForEvaluator
 
 	maxTxnBytesPerBlock int
+
+	Tracer logic.EvalTracer
 }
 
 // LedgerForEvaluator defines the ledger interface needed by the evaluator.
@@ -835,7 +837,10 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 	}
 
 	if len(txgroup) > eval.proto.MaxTxGroupSize {
-		return fmt.Errorf("group size %d exceeds maximum %d", len(txgroup), eval.proto.MaxTxGroupSize)
+		return &ledgercore.TxGroupMalformedError{
+			Msg:    fmt.Sprintf("group size %d exceeds maximum %d", len(txgroup), eval.proto.MaxTxGroupSize),
+			Reason: ledgercore.TxGroupMalformedErrorReasonExceedMaxSize,
+		}
 	}
 
 	var group transactions.TxGroup
@@ -847,8 +852,11 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 
 		// Make sure all transactions in group have the same group value
 		if txn.Txn.Group != txgroup[0].Txn.Group {
-			return fmt.Errorf("transactionGroup: inconsistent group values: %v != %v",
-				txn.Txn.Group, txgroup[0].Txn.Group)
+			return &ledgercore.TxGroupMalformedError{
+				Msg: fmt.Sprintf("transactionGroup: inconsistent group values: %v != %v",
+					txn.Txn.Group, txgroup[0].Txn.Group),
+				Reason: ledgercore.TxGroupMalformedErrorReasonInconsistentGroupID,
+			}
 		}
 
 		if !txn.Txn.Group.IsZero() {
@@ -857,15 +865,21 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 
 			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txWithoutGroup.ID()))
 		} else if len(txgroup) > 1 {
-			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
+			return &ledgercore.TxGroupMalformedError{
+				Msg:    fmt.Sprintf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup)),
+				Reason: ledgercore.TxGroupMalformedErrorReasonEmptyGroupID,
+			}
 		}
 	}
 
 	// If we had a non-zero Group value, check that all group members are present.
 	if group.TxGroupHashes != nil {
 		if txgroup[0].Txn.Group != crypto.HashObj(group) {
-			return fmt.Errorf("transactionGroup: incomplete group: %v != %v (%v)",
-				txgroup[0].Txn.Group, crypto.HashObj(group), group)
+			return &ledgercore.TxGroupMalformedError{
+				Msg: fmt.Sprintf("transactionGroup: incomplete group: %v != %v (%v)",
+					txgroup[0].Txn.Group, crypto.HashObj(group), group),
+				Reason: ledgercore.TxGroupMalformedErrorReasonIncompleteGroup,
+			}
 		}
 	}
 
@@ -884,7 +898,8 @@ func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
 
 	err = txn.Txn.WellFormed(eval.specials, eval.proto)
 	if err != nil {
-		return fmt.Errorf("transaction %v: malformed: %v", txn.ID(), err)
+		txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), err))
+		return &txnErr
 	}
 
 	// Transaction already in the ledger?
@@ -912,21 +927,17 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transacti
 // TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD) error {
-	return eval.transactionGroup(txads)
-}
-
-// transactionGroup tentatively executes a group of transactions as part of this block evaluation.
-// If the transaction group cannot be added to the block without violating some constraints,
-// an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD) error {
+func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWithAD) (err error) {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
 	}
 
 	if len(txgroup) > eval.proto.MaxTxGroupSize {
-		return fmt.Errorf("group size %d exceeds maximum %d", len(txgroup), eval.proto.MaxTxGroupSize)
+		return &ledgercore.TxGroupMalformedError{
+			Msg:    fmt.Sprintf("group size %d exceeds maximum %d", len(txgroup), eval.proto.MaxTxGroupSize),
+			Reason: ledgercore.TxGroupMalformedErrorReasonExceedMaxSize,
+		}
 	}
 
 	var txibs []transactions.SignedTxnInBlock
@@ -937,13 +948,31 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	defer cow.recycle()
 
 	evalParams := logic.NewEvalParams(txgroup, &eval.proto, &eval.specials)
+	evalParams.Tracer = eval.Tracer
+
+	if eval.Tracer != nil {
+		eval.Tracer.BeforeTxnGroup(evalParams)
+		// Ensure we update the tracer before exiting
+		defer func() {
+			eval.Tracer.AfterTxnGroup(evalParams, err)
+		}()
+	}
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
+		if eval.Tracer != nil {
+			eval.Tracer.BeforeTxn(evalParams, gi)
+		}
+
 		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
+
+		if eval.Tracer != nil {
+			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData, err)
+		}
+
 		if err != nil {
 			return err
 		}
@@ -959,8 +988,11 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 		// Make sure all transactions in group have the same group value
 		if txad.SignedTxn.Txn.Group != txgroup[0].SignedTxn.Txn.Group {
-			return fmt.Errorf("transactionGroup: inconsistent group values: %v != %v",
-				txad.SignedTxn.Txn.Group, txgroup[0].SignedTxn.Txn.Group)
+			return &ledgercore.TxGroupMalformedError{
+				Msg: fmt.Sprintf("transactionGroup: inconsistent group values: %v != %v",
+					txad.SignedTxn.Txn.Group, txgroup[0].SignedTxn.Txn.Group),
+				Reason: ledgercore.TxGroupMalformedErrorReasonInconsistentGroupID,
+			}
 		}
 
 		if !txad.SignedTxn.Txn.Group.IsZero() {
@@ -969,15 +1001,21 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 			group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(txWithoutGroup.ID()))
 		} else if len(txgroup) > 1 {
-			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
+			return &ledgercore.TxGroupMalformedError{
+				Msg:    fmt.Sprintf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup)),
+				Reason: ledgercore.TxGroupMalformedErrorReasonEmptyGroupID,
+			}
 		}
 	}
 
 	// If we had a non-zero Group value, check that all group members are present.
 	if group.TxGroupHashes != nil {
 		if txgroup[0].SignedTxn.Txn.Group != crypto.HashObj(group) {
-			return fmt.Errorf("transactionGroup: incomplete group: %v != %v (%v)",
-				txgroup[0].SignedTxn.Txn.Group, crypto.HashObj(group), group)
+			return &ledgercore.TxGroupMalformedError{
+				Msg: fmt.Sprintf("transactionGroup: incomplete group: %v != %v (%v)",
+					txgroup[0].SignedTxn.Txn.Group, crypto.HashObj(group), group),
+				Reason: ledgercore.TxGroupMalformedErrorReasonIncompleteGroup,
+			}
 		}
 	}
 
@@ -1070,6 +1108,10 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	// Apply the transaction, updating the cow balances
 	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, gi, cow.Counter())
 	if err != nil {
+		if eval.Tracer != nil {
+			// If there is a tracer, save the ApplyData so that it's viewable by the tracer
+			txib.ApplyData = applyData
+		}
 		return fmt.Errorf("transaction %v: %w", txid, err)
 	}
 

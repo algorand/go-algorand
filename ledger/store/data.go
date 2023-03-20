@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,8 @@
 package store
 
 import (
+	"context"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
@@ -794,6 +796,8 @@ func (t *TxTailRound) Encode() ([]byte, crypto.Digest) {
 	return tailData, hash
 }
 
+// TODO: this is currently public just for a test in txtail_test.go
+
 // TxTailRoundFromBlock creates a TxTailRound for the given block
 func TxTailRoundFromBlock(blk bookkeeping.Block) (*TxTailRound, error) {
 	payset, err := blk.DecodePaysetFlat()
@@ -819,4 +823,57 @@ func TxTailRoundFromBlock(blk bookkeeping.Block) (*TxTailRound, error) {
 		}
 	}
 	return tail, nil
+}
+
+// AccountDataResources calls outputResourceCb with the data resources for the specified account.
+func AccountDataResources(
+	ctx context.Context,
+	accountData *basics.AccountData, rowid int64,
+	outputResourceCb func(ctx context.Context, rowid int64, cidx basics.CreatableIndex, rd *ResourcesData) error,
+) error {
+	// handle all the assets we can find:
+	for aidx, holding := range accountData.Assets {
+		var rd ResourcesData
+		rd.SetAssetHolding(holding)
+		if ap, has := accountData.AssetParams[aidx]; has {
+			rd.SetAssetParams(ap, true)
+			delete(accountData.AssetParams, aidx)
+		}
+		err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
+		if err != nil {
+			return err
+		}
+	}
+	for aidx, aparams := range accountData.AssetParams {
+		var rd ResourcesData
+		rd.SetAssetParams(aparams, false)
+		err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
+		if err != nil {
+			return err
+		}
+	}
+
+	// handle all the applications we can find:
+	for aidx, localState := range accountData.AppLocalStates {
+		var rd ResourcesData
+		rd.SetAppLocalState(localState)
+		if ap, has := accountData.AppParams[aidx]; has {
+			rd.SetAppParams(ap, true)
+			delete(accountData.AppParams, aidx)
+		}
+		err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
+		if err != nil {
+			return err
+		}
+	}
+	for aidx, aparams := range accountData.AppParams {
+		var rd ResourcesData
+		rd.SetAppParams(aparams, false)
+		err := outputResourceCb(ctx, rowid, basics.CreatableIndex(aidx), &rd)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

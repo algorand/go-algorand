@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,6 +31,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/algorand/avm-abi/abi"
 	"github.com/algorand/go-algorand/data/basics"
@@ -256,6 +257,8 @@ type OpStream struct {
 
 	// Need new copy for each opstream
 	versionedPseudoOps map[string]map[int]OpSpec
+
+	macros map[string][]string
 }
 
 // newOpStream constructs OpStream instances ready to invoke assemble. A new
@@ -266,6 +269,7 @@ func newOpStream(version uint64) OpStream {
 		OffsetToLine: make(map[int]int),
 		typeTracking: true,
 		Version:      version,
+		macros:       make(map[string][]string),
 		known:        ProgramKnowledge{fp: -1},
 	}
 
@@ -1622,7 +1626,7 @@ func isFullSpec(spec OpSpec) bool {
 }
 
 // mergeProtos allows us to support typetracking of pseudo-ops which are given an improper number of immediates
-//by creating a new proto that is a combination of all the pseudo-op's possibilities
+// by creating a new proto that is a combination of all the pseudo-op's possibilities
 func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 	var args StackTypes
 	var returns StackTypes
@@ -1845,9 +1849,17 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 	}
 }
 
-// splitTokens breaks tokens into two slices at the first semicolon.
-func splitTokens(tokens []string) (current, rest []string) {
-	for i, token := range tokens {
+// nextStatement breaks tokens into two slices at the first semicolon and expands macros along the way.
+func nextStatement(ops *OpStream, tokens []string) (current, rest []string) {
+	for i := 0; i < len(tokens); i++ {
+		token := tokens[i]
+		replacement, ok := ops.macros[token]
+		if ok {
+			tokens = append(tokens[0:i], append(replacement, tokens[i+1:]...)...)
+			// backup to handle potential re-expansion of the first token in the expansion
+			i--
+			continue
+		}
 		if token == ";" {
 			return tokens[:i], tokens[i+1:]
 		}
@@ -1855,12 +1867,19 @@ func splitTokens(tokens []string) (current, rest []string) {
 	return tokens, nil
 }
 
+type directiveFunc func(*OpStream, []string) error
+
+var directives = map[string]directiveFunc{"pragma": pragma, "define": define}
+
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
-	fin := strings.NewReader(text)
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
 		return ops.errorf("Can not assemble version %d", ops.Version)
 	}
+	if strings.TrimSpace(text) == "" {
+		return ops.errorf("Cannot assemble empty program text")
+	}
+	fin := strings.NewReader(text)
 	scanner := bufio.NewScanner(fin)
 	for scanner.Scan() {
 		ops.sourceLine++
@@ -1869,30 +1888,35 @@ func (ops *OpStream) assemble(text string) error {
 		if len(tokens) > 0 {
 			if first := tokens[0]; first[0] == '#' {
 				directive := first[1:]
-				switch directive {
-				case "pragma":
-					ops.pragma(tokens) //nolint:errcheck // report bad pragma line error, but continue assembling
-					ops.trace("%3d: #pragma line\n", ops.sourceLine)
-				default:
+				if dFunc, ok := directives[directive]; ok {
+					_ = dFunc(ops, tokens)
+					ops.trace("%3d: %s line\n", ops.sourceLine, first)
+				} else {
 					ops.errorf("Unknown directive: %s", directive)
 				}
 				continue
 			}
 		}
-		for current, next := splitTokens(tokens); len(current) > 0 || len(next) > 0; current, next = splitTokens(next) {
+		for current, next := nextStatement(ops, tokens); len(current) > 0 || len(next) > 0; current, next = nextStatement(ops, next) {
 			if len(current) == 0 {
 				continue
 			}
 			// we're about to begin processing opcodes, so settle the Version
 			if ops.Version == assemblerNoVersion {
 				ops.Version = AssemblerDefaultVersion
+				_ = ops.recheckMacroNames()
 			}
 			if ops.versionedPseudoOps == nil {
 				ops.versionedPseudoOps = prepareVersionedPseudoTable(ops.Version)
 			}
 			opstring := current[0]
 			if opstring[len(opstring)-1] == ':' {
-				ops.createLabel(opstring[:len(opstring)-1])
+				labelName := opstring[:len(opstring)-1]
+				if _, ok := ops.macros[labelName]; ok {
+					ops.errorf("Cannot create label with same name as macro: %s", labelName)
+				} else {
+					ops.createLabel(opstring[:len(opstring)-1])
+				}
 				current = current[1:]
 				if len(current) == 0 {
 					ops.trace("%3d: label only\n", ops.sourceLine)
@@ -1904,7 +1928,7 @@ func (ops *OpStream) assemble(text string) error {
 			if ok {
 				ops.trace("%3d: %s\t", ops.sourceLine, opstring)
 				ops.recordSourceLine()
-				if spec.Modes == modeApp {
+				if spec.Modes == ModeApp {
 					ops.HasStatefulOps = true
 				}
 				args, returns := spec.Arg.Types, spec.Return.Types
@@ -1970,7 +1994,121 @@ func (ops *OpStream) assemble(text string) error {
 	return nil
 }
 
-func (ops *OpStream) pragma(tokens []string) error {
+func (ops *OpStream) cycle(macro string, previous ...string) bool {
+	replacement, ok := ops.macros[macro]
+	if !ok {
+		return false
+	}
+	if len(previous) > 0 && macro == previous[0] {
+		ops.errorf("Macro cycle discovered: %s", strings.Join(append(previous, macro), " -> "))
+		return true
+	}
+	for _, token := range replacement {
+		if ops.cycle(token, append(previous, macro)...) {
+			return true
+		}
+	}
+	return false
+}
+
+// recheckMacroNames goes through previously defined macros and ensures they
+// don't use opcodes/fields from newly obtained version. Therefore it repeats
+// some checks that don't need to be repeated, in the interest of simplicity.
+func (ops *OpStream) recheckMacroNames() error {
+	errored := false
+	for macroName := range ops.macros {
+		err := checkMacroName(macroName, ops.Version, ops.labels)
+		if err != nil {
+			delete(ops.macros, macroName)
+			ops.error(err)
+			errored = true
+		}
+	}
+	if errored {
+		return errors.New("version is incompatible with defined macros")
+	}
+	return nil
+}
+
+var otherAllowedChars = [256]bool{'+': true, '-': true, '*': true, '/': true, '^': true, '%': true, '&': true, '|': true, '~': true, '!': true, '>': true, '<': true, '=': true, '?': true, '_': true}
+
+func checkMacroName(macroName string, version uint64, labels map[string]int) error {
+	var firstRune rune
+	var secondRune rune
+	count := 0
+	for _, r := range macroName {
+		if count == 0 {
+			firstRune = r
+		} else if count == 1 {
+			secondRune = r
+		}
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && !otherAllowedChars[r] {
+			return fmt.Errorf("%s character not allowed in macro name", string(r))
+		}
+		count++
+	}
+	if unicode.IsDigit(firstRune) {
+		return fmt.Errorf("Cannot begin macro name with number: %s", macroName)
+	}
+	if len(macroName) > 1 && (firstRune == '-' || firstRune == '+') {
+		if unicode.IsDigit(secondRune) {
+			return fmt.Errorf("Cannot begin macro name with number: %s", macroName)
+		}
+	}
+	// Note parentheses are not allowed characters, so we don't have to check for b64(AAA) syntax
+	if macroName == "b64" || macroName == "base64" {
+		return fmt.Errorf("Cannot use %s as macro name", macroName)
+	}
+	if macroName == "b32" || macroName == "base32" {
+		return fmt.Errorf("Cannot use %s as macro name", macroName)
+	}
+	_, isTxnType := txnTypeMap[macroName]
+	_, isOnCompletion := onCompletionMap[macroName]
+	if isTxnType || isOnCompletion {
+		return fmt.Errorf("Named constants cannot be used as macro names: %s", macroName)
+	}
+	if _, ok := pseudoOps[macroName]; ok {
+		return fmt.Errorf("Macro names cannot be pseudo-ops: %s", macroName)
+	}
+	if version != assemblerNoVersion {
+		if _, ok := OpsByName[version][macroName]; ok {
+			return fmt.Errorf("Macro names cannot be opcodes: %s", macroName)
+		}
+		if fieldNames[version][macroName] {
+			return fmt.Errorf("Macro names cannot be field names: %s", macroName)
+		}
+	}
+	if _, ok := labels[macroName]; ok {
+		return fmt.Errorf("Labels cannot be used as macro names: %s", macroName)
+	}
+	return nil
+}
+
+func define(ops *OpStream, tokens []string) error {
+	if tokens[0] != "#define" {
+		return ops.errorf("invalid syntax: %s", tokens[0])
+	}
+	if len(tokens) < 3 {
+		return ops.errorf("define directive requires a name and body")
+	}
+	name := tokens[1]
+	err := checkMacroName(name, ops.Version, ops.labels)
+	if err != nil {
+		return ops.error(err)
+	}
+	saved, ok := ops.macros[name]
+	ops.macros[name] = tokens[2:len(tokens):len(tokens)]
+	if ops.cycle(tokens[1]) {
+		if ok {
+			ops.macros[tokens[1]] = saved
+		} else {
+			delete(ops.macros, tokens[1])
+		}
+	}
+	return nil
+}
+
+func pragma(ops *OpStream, tokens []string) error {
 	if tokens[0] != "#pragma" {
 		return ops.errorf("invalid syntax: %s", tokens[0])
 	}
@@ -2001,11 +2139,12 @@ func (ops *OpStream) pragma(tokens []string) error {
 		// version for v1.
 		if ops.Version == assemblerNoVersion {
 			ops.Version = ver
-		} else if ops.Version != ver {
-			return ops.errorf("version mismatch: assembling v%d with v%d assembler", ver, ops.Version)
-		} else {
-			// ops.Version is already correct, or needed to be upped.
+			return ops.recheckMacroNames()
 		}
+		if ops.Version != ver {
+			return ops.errorf("version mismatch: assembling v%d with v%d assembler", ver, ops.Version)
+		}
+		// ops.Version is already correct, or needed to be upped.
 		return nil
 	case "typetrack":
 		if len(tokens) < 3 {
@@ -2411,8 +2550,19 @@ func (ops *OpStream) warnf(format string, a ...interface{}) error {
 	return ops.warn(fmt.Errorf(format, a...))
 }
 
-// ReportProblems issues accumulated warnings and outputs errors to an io.Writer.
-func (ops *OpStream) ReportProblems(fname string, writer io.Writer) {
+// ReportMultipleErrors issues accumulated warnings and outputs errors to an io.Writer.
+// In the case of exactly 1 error and no warnings, a slightly different format is provided
+// to handle the cases when the original error is or isn't reported elsewhere.
+// In the case of > 10 errors, only the first 10 errors will be reported.
+func (ops *OpStream) ReportMultipleErrors(fname string, writer io.Writer) {
+	if len(ops.Errors) == 1 && len(ops.Warnings) == 0 {
+		prefix := ""
+		if fname != "" {
+			prefix = fmt.Sprintf("%s: ", fname)
+		}
+		fmt.Fprintf(writer, "%s1 error: %s\n", prefix, ops.Errors[0])
+		return
+	}
 	for i, e := range ops.Errors {
 		if i > 9 {
 			break
@@ -2789,7 +2939,7 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 			return
 		}
 		op := opsByOpcode[version][program[dis.pc]]
-		if op.Modes == modeApp {
+		if op.Modes == ModeApp {
 			ds.hasStatefulOps = true
 		}
 		if op.Name == "" {

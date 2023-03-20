@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -50,6 +51,9 @@ const averageMessageLength = 2 * 1024    // Most of the messages are smaller tha
 const msgsInReadBufferPerPeer = 10
 
 var tagStringList []string
+
+// allowCustomTags is set by tests to allow non-protocol-defined message tags. It is false in non-test code.
+var allowCustomTags bool
 
 func init() {
 	tagStringList = make([]string, len(protocol.TagList))
@@ -96,22 +100,23 @@ var duplicateNetworkMessageReceivedBytesTotal = metrics.MakeCounter(metrics.Dupl
 var duplicateNetworkFilterReceivedTotal = metrics.MakeCounter(metrics.DuplicateNetworkFilterReceivedTotal)
 var outgoingNetworkMessageFilteredOutTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutTotal)
 var outgoingNetworkMessageFilteredOutBytesTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutBytesTotal)
+var unknownProtocolTagMessagesTotal = metrics.MakeCounter(metrics.UnknownProtocolTagMessagesTotal)
 
 // defaultSendMessageTags is the default list of messages which a peer would
 // allow to be sent without receiving any explicit request.
 var defaultSendMessageTags = map[protocol.Tag]bool{
-	protocol.AgreementVoteTag:   true,
-	protocol.MsgDigestSkipTag:   true,
-	protocol.NetPrioResponseTag: true,
-	protocol.PingTag:            true,
-	protocol.PingReplyTag:       true,
-	protocol.ProposalPayloadTag: true,
-	protocol.TopicMsgRespTag:    true,
-	protocol.MsgOfInterestTag:   true,
-	protocol.TxnTag:             true,
-	protocol.UniCatchupReqTag:   true,
-	protocol.UniEnsBlockReqTag:  true,
-	protocol.VoteBundleTag:      true,
+	protocol.AgreementVoteTag:     true,
+	protocol.MsgDigestSkipTag:     true,
+	protocol.NetPrioResponseTag:   true,
+	protocol.NetIDVerificationTag: true,
+	protocol.PingTag:              true,
+	protocol.PingReplyTag:         true,
+	protocol.ProposalPayloadTag:   true,
+	protocol.TopicMsgRespTag:      true,
+	protocol.MsgOfInterestTag:     true,
+	protocol.TxnTag:               true,
+	protocol.UniEnsBlockReqTag:    true,
+	protocol.VoteBundleTag:        true,
 }
 
 // interface allows substituting debug implementation for *websocket.Conn
@@ -161,6 +166,8 @@ const disconnectLeastPerformingPeer disconnectReason = "LeastPerformingPeer"
 const disconnectCliqueResolve disconnectReason = "CliqueResolving"
 const disconnectRequestReceived disconnectReason = "DisconnectRequest"
 const disconnectStaleWrite disconnectReason = "DisconnectStaleWrite"
+const disconnectDuplicateConnection disconnectReason = "DuplicateConnection"
+const disconnectBadIdentityData disconnectReason = "BadIdentityData"
 
 // Response is the structure holding the response from the server
 type Response struct {
@@ -191,7 +198,7 @@ type wsPeer struct {
 	duplicateFilterCount uint64
 
 	// These message counters need to be 64-bit aligned as well.
-	txMessageCount, miMessageCount, ppMessageCount, avMessageCount uint64
+	txMessageCount, miMessageCount, ppMessageCount, avMessageCount, unkMessageCount uint64
 
 	wsPeerCore
 
@@ -228,6 +235,12 @@ type wsPeer struct {
 	// Hint about position in wn.peers.  Definitely valid if the peer
 	// is present in wn.peers.
 	peerIndex int
+
+	// the peer's identity key which it uses for identityChallenge exchanges
+	identity         crypto.PublicKey
+	identityVerified uint32
+	// the identityChallenge is recorded to the peer so it may verify its identity at a later time
+	identityChallenge identityChallengeValue
 
 	// Challenge sent to the peer on an incoming connection
 	prioChallenge string
@@ -275,6 +288,9 @@ type wsPeer struct {
 
 	// clientDataStoreMu synchronizes access to clientDataStore
 	clientDataStoreMu deadlock.Mutex
+
+	// closers is a slice of functions to run when the peer is closed
+	closers []func()
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -294,6 +310,12 @@ type UnicastPeer interface {
 	Version() string
 	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
 	Respond(ctx context.Context, reqMsg IncomingMessage, topics Topics) (e error)
+}
+
+// TCPInfoUnicastPeer exposes information about the underlying connection if available on the platform
+type TCPInfoUnicastPeer interface {
+	UnicastPeer
+	GetUnderlyingConnTCPInfo() (*util.TCPInfo, error)
 }
 
 // Create a wsPeerCore object
@@ -323,7 +345,7 @@ func (wp *wsPeer) Version() string {
 	return wp.version
 }
 
-// 	Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
+// Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
 // (Implements UnicastPeer)
 func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
 	var err error
@@ -344,6 +366,22 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 	}
 
 	return err
+}
+
+// GetUnderlyingConnTCPInfo unwraps the connection and returns statistics about it on supported underlying implementations
+//
+// (Implements TCPInfoUnicastPeer)
+func (wp *wsPeer) GetUnderlyingConnTCPInfo() (*util.TCPInfo, error) {
+	// unwrap websocket.Conn, requestTrackedConnection, rejectingLimitListenerConn
+	var uconn net.Conn = wp.conn.UnderlyingConn()
+	for i := 0; i < 10; i++ {
+		wconn, ok := uconn.(wrappedConn)
+		if !ok {
+			break
+		}
+		uconn = wconn.UnderlyingConn()
+	}
+	return util.GetConnTCPInfo(uconn)
 }
 
 // Respond sends the response of a request message
@@ -539,6 +577,15 @@ func (wp *wsPeer) readLoop() {
 			atomic.AddUint64(&wp.avMessageCount, 1)
 		case protocol.ProposalPayloadTag:
 			atomic.AddUint64(&wp.ppMessageCount, 1)
+		// the remaining valid tags: no special handling here
+		case protocol.NetPrioResponseTag, protocol.PingTag, protocol.PingReplyTag,
+			protocol.StateProofSigTag, protocol.UniEnsBlockReqTag, protocol.VoteBundleTag, protocol.NetIDVerificationTag:
+		default: // unrecognized tag
+			unknownProtocolTagMessagesTotal.Inc(nil)
+			atomic.AddUint64(&wp.unkMessageCount, 1)
+			if !allowCustomTags {
+				continue // drop message, skip adding it to queue
+			}
 		}
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {
@@ -843,6 +890,10 @@ func (wp *wsPeer) Close(deadline time.Time) {
 			wp.net.log.Infof("failed to CloseWithoutFlush to connection for %s", wp.conn.RemoteAddr().String())
 		}
 	}
+	// now call all registered closers
+	for _, f := range wp.closers {
+		f()
+	}
 }
 
 // CloseAndWait internally calls Close() then waits for all peer activity to stop
@@ -963,6 +1014,14 @@ func (wp *wsPeer) pfProposalCompressionSupported() bool {
 	return wp.features&pfCompressedProposal != 0
 }
 
+func (wp *wsPeer) OnClose(f func()) {
+	if wp.closers == nil {
+		wp.closers = []func(){}
+	}
+	wp.closers = append(wp.closers, f)
+}
+
+//msgp:ignore peerFeatureFlag
 type peerFeatureFlag int
 
 const pfCompressedProposal peerFeatureFlag = 1

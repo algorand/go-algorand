@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -765,7 +765,7 @@ func (c *Client) ApplicationBoxes(appID uint64, maxBoxNum uint64) (resp model.Bo
 }
 
 // GetApplicationBoxByName takes an app's index and box name and returns its value.
-// The box name should be of the form `encoding:value`. See logic.AppCallBytes for more information.
+// The box name should be of the form `encoding:value`. See apps.AppCallBytes for more information.
 func (c *Client) GetApplicationBoxByName(index uint64, name string) (resp model.BoxResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
@@ -1021,6 +1021,16 @@ func (c *Client) VerifyParticipationKey(timeout time.Duration, participationID s
 	}
 }
 
+// RemoveParticipationKey removes a participation key by its id
+func (c *Client) RemoveParticipationKey(participationID string) error {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return nil
+	}
+
+	return algod.RemoveParticipationKeyByID(participationID)
+}
+
 // AddParticipationKey takes a participation key file and sends it to the node.
 // The key will be loaded into the system when the function returns successfully.
 func (c *Client) AddParticipationKey(keyfile string) (resp model.PostParticipationResponse, err error) {
@@ -1274,6 +1284,33 @@ func (c *Client) LightBlockHeaderProof(round uint64) (resp model.LightBlockHeade
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.LightBlockHeaderProof(round)
+	}
+	return
+}
+
+// SetSyncRound sets the sync round on a node w/ EnableFollowMode
+func (c *Client) SetSyncRound(round uint64) (err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.SetSyncRound(round)
+	}
+	return
+}
+
+// GetSyncRound gets the sync round on a node w/ EnableFollowMode
+func (c *Client) GetSyncRound() (rep model.GetSyncRoundResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.GetSyncRound()
+	}
+	return
+}
+
+// GetLedgerStateDelta gets the LedgerStateDelta on a node w/ EnableFollowMode
+func (c *Client) GetLedgerStateDelta(round uint64) (rep model.LedgerStateDeltaResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.GetLedgerStateDelta(round)
 	}
 	return
 }

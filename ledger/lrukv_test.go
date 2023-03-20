@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -78,6 +78,41 @@ func TestLRUBasicKV(t *testing.T) {
 			require.Equal(t, store.PersistedKVData{}, kv)
 		}
 	}
+}
+
+func TestLRUKVDisable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var baseKV lruKV
+	baseKV.init(logging.TestingLog(t), 0, 1)
+
+	kvNum := 5
+
+	for i := 1; i <= kvNum; i++ {
+		go func(i int) {
+			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
+			kvValue := fmt.Sprintf("kv %d value", i)
+			kv := store.PersistedKVData{
+				Value: []byte(kvValue),
+				Round: basics.Round(i),
+			}
+			baseKV.writePending(kv, fmt.Sprintf("key%d", i))
+		}(i)
+	}
+	require.Empty(t, baseKV.pendingKVs)
+	baseKV.flushPendingWrites()
+	require.Empty(t, baseKV.kvs)
+
+	for i := 0; i < kvNum; i++ {
+		kvValue := fmt.Sprintf("kv %d value", i)
+		kv := store.PersistedKVData{
+			Value: []byte(kvValue),
+			Round: basics.Round(i),
+		}
+		baseKV.write(kv, fmt.Sprintf("key%d", i))
+	}
+
+	require.Empty(t, baseKV.kvs)
 }
 
 func TestLRUKVPendingWrites(t *testing.T) {

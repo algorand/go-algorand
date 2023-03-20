@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,9 +36,7 @@ type SourceMap struct {
 	SourceRoot string   `json:"sourceRoot,omitempty"`
 	Sources    []string `json:"sources"`
 	Names      []string `json:"names"`
-	// Mapping field is deprecated. Use `Mappings` field instead.
-	Mapping  string `json:"mapping"`
-	Mappings string `json:"mappings"`
+	Mappings   string   `json:"mappings"`
 }
 
 // GetSourceMap returns a struct containing details about
@@ -64,11 +62,9 @@ func GetSourceMap(sourceNames []string, offsetToLine map[int]int) SourceMap {
 	}
 
 	return SourceMap{
-		Version: sourceMapVersion,
-		Sources: sourceNames,
-		Names:   []string{}, // TEAL code does not generate any names.
-		// Mapping is deprecated, and only for backwards compatibility.
-		Mapping:  strings.Join(pcToLine, ";"),
+		Version:  sourceMapVersion,
+		Sources:  sourceNames,
+		Names:    []string{}, // TEAL code does not generate any names.
 		Mappings: strings.Join(pcToLine, ";"),
 	}
 }

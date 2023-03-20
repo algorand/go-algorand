@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -206,16 +206,16 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 }
 
 // getCodecHandle converts a format string into the encoder + content type
-func getCodecHandle(formatPtr *model.Format) (codec.Handle, string, error) {
-	format := model.Json
+func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
+	format := "json"
 	if formatPtr != nil {
-		format = model.PendingTransactionInformationParamsFormat(strings.ToLower(string(*formatPtr)))
+		format = strings.ToLower(*formatPtr)
 	}
 
 	switch format {
-	case model.Json:
+	case "json":
 		return protocol.JSONStrictHandle, "application/json", nil
-	case model.Msgpack:
+	case "msgpack":
 		fallthrough
 	case "msgp":
 		return protocol.CodecHandle, "application/msgpack", nil
@@ -310,8 +310,8 @@ func convertLogs(txn node.TxnWithStatus) *[][]byte {
 
 func convertInners(txn *node.TxnWithStatus) *[]PreEncodedTxInfo {
 	inner := make([]PreEncodedTxInfo, len(txn.ApplyData.EvalDelta.InnerTxns))
-	for i, itxn := range txn.ApplyData.EvalDelta.InnerTxns {
-		inner[i] = convertInnerTxn(&itxn)
+	for i := range txn.ApplyData.EvalDelta.InnerTxns {
+		inner[i] = convertInnerTxn(&txn.ApplyData.EvalDelta.InnerTxns[i])
 	}
 	return &inner
 }

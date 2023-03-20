@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/logging"
 )
 
 // Notification is sent to the client over their websocket connection
@@ -528,7 +529,7 @@ func (d *Debugger) SaveProgram(
 }
 
 // Register setups new session and notifies frontends if any
-func (d *Debugger) Register(state *logic.DebugState) error {
+func (d *Debugger) Register(state *logic.DebugState) {
 	sid := state.ExecID
 	pcOffset := make(map[int]int, len(state.PCOffset))
 	for _, pco := range state.PCOffset {
@@ -556,12 +557,17 @@ func (d *Debugger) Register(state *logic.DebugState) error {
 
 	// Wait for acknowledgement
 	<-s.acknowledged
-
-	return nil
 }
 
 // Update process state update notifications: pauses or continues as needed
-func (d *Debugger) Update(state *logic.DebugState) error {
+func (d *Debugger) Update(state *logic.DebugState) {
+	err := d.update(state)
+	if err != nil {
+		logging.Base().Errorf("error in Update hook: %s", err.Error())
+	}
+}
+
+func (d *Debugger) update(state *logic.DebugState) error {
 	sid := state.ExecID
 	s, err := d.getSession(sid)
 	if err != nil {
@@ -596,7 +602,14 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 }
 
 // Complete terminates session and notifies frontends if any
-func (d *Debugger) Complete(state *logic.DebugState) error {
+func (d *Debugger) Complete(state *logic.DebugState) {
+	err := d.complete(state)
+	if err != nil {
+		logging.Base().Errorf("error in Complete hook: %s", err.Error())
+	}
+}
+
+func (d *Debugger) complete(state *logic.DebugState) error {
 	sid := state.ExecID
 	s, err := d.getSession(sid)
 	if err != nil {

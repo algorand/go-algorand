@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -87,6 +87,48 @@ func TestLRUBasicResources(t *testing.T) {
 			require.Equal(t, store.PersistedResourcesData{}, res)
 		}
 	}
+}
+
+func TestLRUResourcesDisable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var baseRes lruResources
+	baseRes.init(logging.TestingLog(t), 0, 1)
+
+	resourceNum := 5
+
+	for i := 1; i <= resourceNum; i++ {
+		go func(i int) {
+			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
+			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
+			res := store.PersistedResourcesData{
+				Addrid: int64(i),
+				Aidx:   basics.CreatableIndex(i),
+				Round:  basics.Round(i),
+				Data:   store.ResourcesData{Total: uint64(i)},
+			}
+			baseRes.writePending(res, addr)
+			baseRes.writeNotFoundPending(addr, basics.CreatableIndex(i))
+		}(i)
+	}
+	require.Empty(t, baseRes.pendingResources)
+	require.Empty(t, baseRes.pendingNotFound)
+	baseRes.flushPendingWrites()
+	require.Empty(t, baseRes.resources)
+	require.Empty(t, baseRes.notFound)
+
+	for i := 0; i < resourceNum; i++ {
+		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
+		res := store.PersistedResourcesData{
+			Addrid: int64(i),
+			Aidx:   basics.CreatableIndex(i),
+			Round:  basics.Round(i),
+			Data:   store.ResourcesData{Total: uint64(i)},
+		}
+		baseRes.write(res, addr)
+	}
+
+	require.Empty(t, baseRes.resources)
 }
 
 func TestLRUResourcesPendingWrites(t *testing.T) {

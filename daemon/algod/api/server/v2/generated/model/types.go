@@ -23,9 +23,9 @@ const (
 
 // Defines values for AddressRole.
 const (
-	FreezeTarget AddressRole = "freeze-target"
-	Receiver     AddressRole = "receiver"
-	Sender       AddressRole = "sender"
+	AddressRoleFreezeTarget AddressRole = "freeze-target"
+	AddressRoleReceiver     AddressRole = "receiver"
+	AddressRoleSender       AddressRole = "sender"
 )
 
 // Defines values for Format.
@@ -43,13 +43,13 @@ const (
 
 // Defines values for TxType.
 const (
-	Acfg   TxType = "acfg"
-	Afrz   TxType = "afrz"
-	Appl   TxType = "appl"
-	Axfer  TxType = "axfer"
-	Keyreg TxType = "keyreg"
-	Pay    TxType = "pay"
-	Stpf   TxType = "stpf"
+	TxTypeAcfg   TxType = "acfg"
+	TxTypeAfrz   TxType = "afrz"
+	TxTypeAppl   TxType = "appl"
+	TxTypeAxfer  TxType = "axfer"
+	TxTypeKeyreg TxType = "keyreg"
+	TxTypePay    TxType = "pay"
+	TxTypeStpf   TxType = "stpf"
 )
 
 // Defines values for TransactionProofResponseHashtype.
@@ -66,8 +66,8 @@ const (
 
 // Defines values for AccountInformationParamsExclude.
 const (
-	All  AccountInformationParamsExclude = "all"
-	None AccountInformationParamsExclude = "none"
+	AccountInformationParamsExcludeAll  AccountInformationParamsExclude = "all"
+	AccountInformationParamsExcludeNone AccountInformationParamsExclude = "none"
 )
 
 // Defines values for AccountApplicationInformationParamsFormat.
@@ -106,6 +106,12 @@ const (
 	GetTransactionProofParamsFormatMsgpack GetTransactionProofParamsFormat = "msgpack"
 )
 
+// Defines values for GetLedgerStateDeltaParamsFormat.
+const (
+	GetLedgerStateDeltaParamsFormatJson    GetLedgerStateDeltaParamsFormat = "json"
+	GetLedgerStateDeltaParamsFormatMsgpack GetLedgerStateDeltaParamsFormat = "msgpack"
+)
+
 // Defines values for GetPendingTransactionsParamsFormat.
 const (
 	GetPendingTransactionsParamsFormatJson    GetPendingTransactionsParamsFormat = "json"
@@ -114,8 +120,8 @@ const (
 
 // Defines values for PendingTransactionInformationParamsFormat.
 const (
-	Json    PendingTransactionInformationParamsFormat = "json"
-	Msgpack PendingTransactionInformationParamsFormat = "msgpack"
+	PendingTransactionInformationParamsFormatJson    PendingTransactionInformationParamsFormat = "json"
+	PendingTransactionInformationParamsFormatMsgpack PendingTransactionInformationParamsFormat = "msgpack"
 )
 
 // Account Account information at a given round.
@@ -460,9 +466,6 @@ type DryrunTxnResult struct {
 	// BudgetConsumed Budget consumed during execution of app call transaction.
 	BudgetConsumed *uint64 `json:"budget-consumed,omitempty"`
 
-	// Cost Net cost of app execution. Field is DEPRECATED and is subject for removal. Instead, use `budget-added` and `budget-consumed.
-	Cost *uint64 `json:"cost,omitempty"`
-
 	// Disassembly Disassembled program line by line.
 	Disassembly []string `json:"disassembly"`
 
@@ -502,6 +505,18 @@ type EvalDeltaKeyValue struct {
 	// Value Represents a TEAL value delta.
 	Value EvalDelta `json:"value"`
 }
+
+// KvDelta A single Delta containing the key, the previous value and the current value for a single round.
+type KvDelta struct {
+	// Key The key, base64 encoded.
+	Key *[]byte `json:"key,omitempty"`
+
+	// Value The new value of the KV store entry, base64 encoded.
+	Value *[]byte `json:"value,omitempty"`
+}
+
+// LedgerStateDelta Ledger StateDelta object
+type LedgerStateDelta = map[string]interface{}
 
 // LightBlockHeaderProof Proof of membership and position of a light block header.
 type LightBlockHeaderProof struct {
@@ -820,6 +835,15 @@ type DryrunResponse struct {
 	Txns            []DryrunTxnResult `json:"txns"`
 }
 
+// GetSyncRoundResponse defines model for GetSyncRoundResponse.
+type GetSyncRoundResponse struct {
+	// Round The minimum sync round for the ledger.
+	Round uint64 `json:"round"`
+}
+
+// LedgerStateDeltaResponse Ledger StateDelta object
+type LedgerStateDeltaResponse = LedgerStateDelta
+
 // LightBlockHeaderProofResponse Proof of membership and position of a light block header.
 type LightBlockHeaderProofResponse = LightBlockHeaderProof
 
@@ -878,6 +902,30 @@ type NodeStatusResponse struct {
 
 	// TimeSinceLastRound TimeSinceLastRound in nanoseconds
 	TimeSinceLastRound uint64 `json:"time-since-last-round"`
+
+	// UpgradeDelay Upgrade delay
+	UpgradeDelay *uint64 `json:"upgrade-delay,omitempty"`
+
+	// UpgradeNextProtocolVoteBefore Next protocol round
+	UpgradeNextProtocolVoteBefore *uint64 `json:"upgrade-next-protocol-vote-before,omitempty"`
+
+	// UpgradeNoVotes No votes cast for consensus upgrade
+	UpgradeNoVotes *uint64 `json:"upgrade-no-votes,omitempty"`
+
+	// UpgradeNodeVote This node's upgrade vote
+	UpgradeNodeVote *bool `json:"upgrade-node-vote,omitempty"`
+
+	// UpgradeVoteRounds Total voting ounds for current upgrade
+	UpgradeVoteRounds *uint64 `json:"upgrade-vote-rounds,omitempty"`
+
+	// UpgradeVotes Total votes cast for consensus upgrade
+	UpgradeVotes *uint64 `json:"upgrade-votes,omitempty"`
+
+	// UpgradeVotesRequired Yes votes required for consensus upgrade
+	UpgradeVotesRequired *uint64 `json:"upgrade-votes-required,omitempty"`
+
+	// UpgradeYesVotes Yes votes cast for consensus upgrade
+	UpgradeYesVotes *uint64 `json:"upgrade-yes-votes,omitempty"`
 }
 
 // ParticipationKeyResponse Represents a participation key used by the node.
@@ -905,6 +953,15 @@ type PostParticipationResponse struct {
 type PostTransactionsResponse struct {
 	// TxId encoding of the transaction hash.
 	TxId string `json:"txId"`
+}
+
+// SimulationResponse defines model for SimulationResponse.
+type SimulationResponse struct {
+	// FailureMessage \[fm\] Failure message, if the transaction would have failed during a live broadcast.
+	FailureMessage string `json:"failure-message"`
+
+	// MissingSignatures \[ms\] Whether any transactions would have failed during a live broadcast because they were missing signatures.
+	MissingSignatures bool `json:"missing-signatures"`
 }
 
 // StateProofResponse Represents a state proof and its corresponding message
@@ -1059,6 +1116,15 @@ type GetTransactionProofParamsHashtype string
 
 // GetTransactionProofParamsFormat defines parameters for GetTransactionProof.
 type GetTransactionProofParamsFormat string
+
+// GetLedgerStateDeltaParams defines parameters for GetLedgerStateDelta.
+type GetLedgerStateDeltaParams struct {
+	// Format Configures whether the response object is JSON or MessagePack encoded.
+	Format *GetLedgerStateDeltaParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+}
+
+// GetLedgerStateDeltaParamsFormat defines parameters for GetLedgerStateDelta.
+type GetLedgerStateDeltaParamsFormat string
 
 // ShutdownNodeParams defines parameters for ShutdownNode.
 type ShutdownNodeParams struct {

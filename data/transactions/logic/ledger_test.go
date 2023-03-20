@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -826,9 +826,11 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 	}
 	pass, cx, err := EvalContract(params.ApprovalProgram, gi, aid, ep)
 	if err != nil {
+		ad.EvalDelta = transactions.EvalDelta{}
 		return err
 	}
 	if !pass {
+		ad.EvalDelta = transactions.EvalDelta{}
 		return errors.New("Approval program failed")
 	}
 	ad.EvalDelta = cx.txn.EvalDelta

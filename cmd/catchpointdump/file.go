@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,13 +32,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/avm-abi/apps"
 	cmdutil "github.com/algorand/go-algorand/cmd/util"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -318,6 +319,8 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 			totals.RewardsLevel)
 	}
 	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		arw := store.NewAccountsSQLReaderWriter(tx)
+
 		fmt.Printf("\n")
 		printDumpingCatchpointProgressLine(0, 50, 0)
 
@@ -417,7 +420,7 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 				progress++
 				acctCount++
 			}
-			_, err = ledger.LoadAllFullAccounts(context.Background(), tx, balancesTable, resourcesTable, acctCb)
+			_, err = arw.LoadAllFullAccounts(context.Background(), balancesTable, resourcesTable, acctCb)
 			if err != nil {
 				return
 			}
@@ -433,7 +436,7 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 
 func printKeyValue(writer *bufio.Writer, key, value []byte) {
 	var pretty string
-	ai, rest, err := logic.SplitBoxKey(string(key))
+	ai, rest, err := apps.SplitBoxKey(string(key))
 	if err == nil {
 		pretty = fmt.Sprintf("box(%d, %s)", ai, base64.StdEncoding.EncodeToString([]byte(rest)))
 	} else {

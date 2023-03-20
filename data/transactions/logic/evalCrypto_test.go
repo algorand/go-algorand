@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -147,18 +147,27 @@ func BenchmarkVerify(b *testing.B) {
 	benches := [][]string{
 		{"pop", "", "int 1234576; int 6712; pop; pop", "int 1"},
 		{"add", "", "int 1234576; int 6712; +; pop", "int 1"},
-		/*
-					{"ed25519verify_bare", "", `byte 0x
-			byte 0x
-			addr
-			ed25519verify_bare
-			assert`, "int 1"},*/
-		{"ecdsa_verify", "", `byte 0x71a5910445820f57989c027bdf9391c80097874d249e0f38bf90834fdec2877f
+		{"ed25519verify_bare", "", `
+byte 0x62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd
+byte 0xaab40a8b4f1f386504af2473804abbc03bbd94506e8e0c8db881fc2b2c3aee65b867b25caa47fa25ae2105bf1731398df336213707f2d25f9b1d31b3dc133307;
+addr C7ZCK6N2AJQMVEP4FRTK2UW45UFR6DKPRJHJVWB5O4VQOZMFPK2KCMR7M4
+ed25519verify_bare; assert
+`, "int 1"},
+		{"ecdsa_verify k1", "", `
+byte 0x71a5910445820f57989c027bdf9391c80097874d249e0f38bf90834fdec2877f
 byte 0x5eb27782eb1a5df8de9a5d51613ad5ca730840ddf4af919c6feb15cde14f9978
 byte 0x0cb3c0d636ed991ee030d09c295de3121eb166cb9e1552cf0ef0fb2358f35f0f
 byte 0x79de0699673571df1de8486718d06a3e7838f6831ec4ef3fb963788fbfb773b7
 byte 0xd76446a3393af3e2eefada16df80cc6a881a56f4cf41fa2ab4769c5708ce878d
 ecdsa_verify Secp256k1
+assert`, "int 1"},
+		{"ecdsa_verify r1", "", `
+byte 0x71a5910445820f57989c027bdf9391c80097874d249e0f38bf90834fdec2877f
+byte 0xc010fc83ea196d6f5ce8a44637060bdcfb5bf1199cfc5bb893684d450c4f160c
+byte 0x8e391a7b9cd75a99e8ebfe703036caebd9e91ae8339bd7e2abfb0f273eb8e972
+byte 0x13e49a19378bbfa8d55ac81a35b87d7bae456c79fcf04a78803d8eb45b253fab
+byte 0xa2d237cd897ca70787abf04d2155c6dc2fbe26fd642e0472cd75c13dc919ef1a
+ecdsa_verify Secp256r1
 assert`, "int 1"},
 		{"vrf_verify", "", `byte 0x72
 byte 0xae5b66bdf04b4c010bfe32b2fc126ead2107b697634f6f7337b9bff8785ee111200095ece87dde4dbe87343f6df3b107d91798c8a7eb1245d3bb9c5aafb093358c13e6ae1111a55717e895fd15f99f07
@@ -337,7 +346,9 @@ byte 0x%s
 		{pkTampered2, false},
 	}
 	for i, test := range decompressTests {
+		i, test, source := i, test, source
 		t.Run(fmt.Sprintf("decompress/pass=%v", test.pass), func(t *testing.T) {
+			t.Parallel()
 			t.Log("decompressTests i", i)
 			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
@@ -381,7 +392,9 @@ ecdsa_verify Secp256k1
 		{"testdata1", r, false},
 	}
 	for _, test := range verifyTests {
+		test, source := test, source
 		t.Run(fmt.Sprintf("verify/pass=%v", test.pass), func(t *testing.T) {
+			t.Parallel()
 			src := fmt.Sprintf(source, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, 5)
@@ -428,7 +441,9 @@ load 1
 	pkExpanded := secp256k1.S256().Marshal(key.PublicKey.X, key.PublicKey.Y)
 
 	for i, test := range recoverTests {
+		i, test, source := i, test, source
 		t.Run(fmt.Sprintf("recover/%d", i), func(t *testing.T) {
+			t.Parallel()
 			src := fmt.Sprintf(source, hex.EncodeToString(msg[:]), test.v, hex.EncodeToString(r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y), hex.EncodeToString(pkExpanded))
 			test.checker(t, src, 5)
 		})
@@ -487,7 +502,9 @@ byte 0x%s
 		{pkTampered2, false},
 	}
 	for i, test := range decompressTests {
+		i, test, source := i, test, source
 		t.Run(fmt.Sprintf("decompress/pass=%v", test.pass), func(t *testing.T) {
+			t.Parallel()
 			t.Log("decompressTests i", i)
 			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
@@ -530,7 +547,9 @@ ecdsa_verify Secp256r1
 		{"testdata1", r, false},
 	}
 	for _, test := range verifyTests {
+		test, source := test, source
 		t.Run(fmt.Sprintf("verify/pass=%v", test.pass), func(t *testing.T) {
+			t.Parallel()
 			src := fmt.Sprintf(source, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, fidoVersion)

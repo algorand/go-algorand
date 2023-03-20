@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/store"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -106,11 +107,11 @@ func checkDatabase(databaseName string, outFile *os.File) error {
 
 	var stats merkletrie.Stats
 	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		committer, err := ledger.MakeMerkleCommitter(tx, ledgerTrackerStaging)
+		committer, err := store.MakeMerkleCommitter(tx, ledgerTrackerStaging)
 		if err != nil {
 			return err
 		}
-		trie, err := merkletrie.MakeTrie(committer, ledger.TrieMemoryConfig)
+		trie, err := merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
 		if err != nil {
 			return err
 		}

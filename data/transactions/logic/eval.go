@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -282,8 +282,8 @@ type EvalParams struct {
 	SigLedger LedgerForSignature
 	Ledger    LedgerForLogic
 
-	// optional debugger
-	Debugger DebuggerHook
+	// optional tracer
+	Tracer EvalTracer
 
 	// MinAvmVersion is the minimum allowed AVM version of this program.
 	// The program must reject if its version is less than this version. If
@@ -455,7 +455,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		logger:                  caller.logger,
 		SigLedger:               caller.SigLedger,
 		Ledger:                  caller.Ledger,
-		Debugger:                nil, // See #4438, where this becomes caller.Debugger
+		Tracer:                  caller.Tracer,
 		MinAvmVersion:           &minAvmVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
@@ -474,28 +474,31 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 type evalFunc func(cx *EvalContext) error
 type checkFunc func(cx *EvalContext) error
 
-type runMode uint64
+// RunMode is a bitset of logic evaluation modes.
+// There are currently two such modes: Signature and Application.
+type RunMode uint64
 
 const (
-	// modeSig is LogicSig execution
-	modeSig runMode = 1 << iota
+	// ModeSig is LogicSig execution
+	ModeSig RunMode = 1 << iota
 
-	// modeApp is application/contract execution
-	modeApp
+	// ModeApp is application/contract execution
+	ModeApp
 
 	// local constant, run in any mode
-	modeAny = modeSig | modeApp
+	modeAny = ModeSig | ModeApp
 )
 
-func (r runMode) Any() bool {
+// Any checks if this mode bitset represents any evaluation mode
+func (r RunMode) Any() bool {
 	return r == modeAny
 }
 
-func (r runMode) String() string {
+func (r RunMode) String() string {
 	switch r {
-	case modeSig:
+	case ModeSig:
 		return "Signature"
-	case modeApp:
+	case ModeApp:
 		return "Application"
 	case modeAny:
 		return "Any"
@@ -547,7 +550,7 @@ type EvalContext struct {
 	*EvalParams
 
 	// determines eval mode: runModeSignature or runModeApplication
-	runModeFlags runMode
+	runModeFlags RunMode
 
 	// the index of the transaction being evaluated
 	groupIndex int
@@ -583,17 +586,19 @@ type EvalContext struct {
 	// Set of PC values that branches we've seen so far might
 	// go. So, if checkStep() skips one, that branch is trying to
 	// jump into the middle of a multibyte instruction
-	branchTargets map[int]bool
+	branchTargets []bool
 
 	// Set of PC values that we have begun a checkStep() with. So
 	// if a back jump is going to a value that isn't here, it's
 	// jumping into the middle of multibyte instruction.
-	instructionStarts map[int]bool
+	instructionStarts []bool
 
 	programHashCached crypto.Digest
+}
 
-	// Stores state & disassembly for the optional debugger
-	debugState *DebugState
+// RunMode returns the evaluation context's mode (signature or application)
+func (cx *EvalContext) RunMode() RunMode {
+	return cx.runModeFlags
 }
 
 // StackType describes the type of a value on the operand stack
@@ -700,7 +705,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	}
 	cx := EvalContext{
 		EvalParams:   params,
-		runModeFlags: modeApp,
+		runModeFlags: ModeApp,
 		groupIndex:   gi,
 		txn:          &params.TxnGroup[gi],
 		appID:        aid,
@@ -778,19 +783,28 @@ func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (b
 	return pass, err
 }
 
-// EvalSignature evaluates the logicsig of the ith transaction in params.
+// EvalSignatureFull evaluates the logicsig of the ith transaction in params.
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
-func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
+// It returns EvalContext suitable for obtaining additional info about the execution.
+func EvalSignatureFull(gi int, params *EvalParams) (pass bool, pcx *EvalContext, err error) {
 	if params.SigLedger == nil {
-		return false, errors.New("no sig ledger in signature eval")
+		return false, nil, errors.New("no sig ledger in signature eval")
 	}
 	cx := EvalContext{
 		EvalParams:   params,
-		runModeFlags: modeSig,
+		runModeFlags: ModeSig,
 		groupIndex:   gi,
 		txn:          &params.TxnGroup[gi],
 	}
-	return eval(cx.txn.Lsig.Logic, &cx)
+	pass, err = eval(cx.txn.Lsig.Logic, &cx)
+	return pass, &cx, err
+}
+
+// EvalSignature evaluates the logicsig of the ith transaction in params.
+// A program passes successfully if it finishes with one int element on the stack that is non-zero.
+func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
+	pass, _, err = EvalSignatureFull(gi, params)
+	return pass, err
 }
 
 // eval implementation
@@ -825,16 +839,24 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	cx.txn.EvalDelta.GlobalDelta = basics.StateDelta{}
 	cx.txn.EvalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
 
-	if cx.Debugger != nil {
-		cx.debugState = makeDebugState(cx)
-		if derr := cx.Debugger.Register(cx.refreshDebugState(err)); derr != nil {
-			return false, derr
-		}
+	if cx.Tracer != nil {
+		cx.Tracer.BeforeProgram(cx)
+
 		defer func() {
-			// Ensure we update the debugger before exiting
-			errDbg := cx.Debugger.Complete(cx.refreshDebugState(err))
-			if err == nil {
-				err = errDbg
+			x := recover()
+			tracerErr := err
+			if x != nil {
+				// A panic error occurred during the eval loop. Report it now.
+				tracerErr = fmt.Errorf("panic in TEAL Eval: %v", x)
+				cx.Tracer.AfterOpcode(cx, tracerErr)
+			}
+
+			// Ensure we update the tracer before exiting
+			cx.Tracer.AfterProgram(cx, tracerErr)
+
+			if x != nil {
+				// Panic again to trigger higher-level recovery and error reporting
+				panic(x)
 			}
 		}()
 	}
@@ -850,13 +872,15 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	}
 
 	for (err == nil) && (cx.pc < len(cx.program)) {
-		if cx.Debugger != nil {
-			if derr := cx.Debugger.Update(cx.refreshDebugState(err)); derr != nil {
-				return false, derr
-			}
+		if cx.Tracer != nil {
+			cx.Tracer.BeforeOpcode(cx)
 		}
 
 		err = cx.step()
+
+		if cx.Tracer != nil {
+			cx.Tracer.AfterOpcode(cx, err)
+		}
 	}
 	if err != nil {
 		if cx.Trace != nil {
@@ -886,17 +910,17 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 // these static checks include a cost estimate that must be low enough
 // (controlled by params.Proto).
 func CheckContract(program []byte, params *EvalParams) error {
-	return check(program, params, modeApp)
+	return check(program, params, ModeApp)
 }
 
 // CheckSignature should be faster than EvalSignature.  It can perform static
 // checks and reject programs that are invalid. Prior to v4, these static checks
 // include a cost estimate that must be low enough (controlled by params.Proto).
 func CheckSignature(gi int, params *EvalParams) error {
-	return check(params.TxnGroup[gi].Lsig.Logic, params, modeSig)
+	return check(params.TxnGroup[gi].Lsig.Logic, params, ModeSig)
 }
 
-func check(program []byte, params *EvalParams, mode runMode) (err error) {
+func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			buf := make([]byte, 16*1024)
@@ -924,8 +948,8 @@ func check(program []byte, params *EvalParams, mode runMode) (err error) {
 	cx.EvalParams = params
 	cx.runModeFlags = mode
 	cx.program = program
-	cx.branchTargets = make(map[int]bool)
-	cx.instructionStarts = make(map[int]bool)
+	cx.branchTargets = make([]bool, len(program)+1) // teal v2 allowed jumping to the end of the prog
+	cx.instructionStarts = make([]bool, len(program)+1)
 
 	maxCost := cx.remainingBudget()
 	staticCost := 0
@@ -997,8 +1021,13 @@ func boolToSV(x bool) stackValue {
 	return stackValue{Uint: boolToUint(x)}
 }
 
+// Cost return cost incurred so far
+func (cx *EvalContext) Cost() int {
+	return cx.cost
+}
+
 func (cx *EvalContext) remainingBudget() int {
-	if cx.runModeFlags == modeSig {
+	if cx.runModeFlags == ModeSig {
 		return int(cx.Proto.LogicSigMaxCost) - cx.cost
 	}
 
@@ -1215,7 +1244,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 		fmt.Fprintf(cx.Trace, "%3d %s\n", prevpc, spec.Name)
 	}
 	for pc := prevpc + 1; pc < cx.pc; pc++ {
-		if _, ok := cx.branchTargets[pc]; ok {
+		if pc < len(cx.branchTargets) && cx.branchTargets[pc] {
 			return 0, fmt.Errorf("branch target %d is not an aligned instruction", pc)
 		}
 	}
@@ -1808,6 +1837,15 @@ func opBytesSqrt(cx *EvalContext) error {
 	return nil
 }
 
+func nonzero(b []byte) []byte {
+	for i := range b {
+		if b[i] != 0 {
+			return b[i:]
+		}
+	}
+	return nil
+}
+
 func opBytesLt(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
@@ -1816,9 +1854,18 @@ func opBytesLt(cx *EvalContext) error {
 		return errors.New("math attempted on large byte-array")
 	}
 
-	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
-	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
-	cx.stack[prev] = boolToSV(lhs.Cmp(rhs) < 0)
+	rhs := nonzero(cx.stack[last].Bytes)
+	lhs := nonzero(cx.stack[prev].Bytes)
+
+	switch {
+	case len(lhs) < len(rhs):
+		cx.stack[prev] = boolToSV(true)
+	case len(lhs) > len(rhs):
+		cx.stack[prev] = boolToSV(false)
+	default:
+		cx.stack[prev] = boolToSV(bytes.Compare(lhs, rhs) < 0)
+	}
+
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -1852,9 +1899,10 @@ func opBytesEq(cx *EvalContext) error {
 		return errors.New("math attempted on large byte-array")
 	}
 
-	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
-	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
-	cx.stack[prev] = boolToSV(lhs.Cmp(rhs) == 0)
+	rhs := nonzero(cx.stack[last].Bytes)
+	lhs := nonzero(cx.stack[prev].Bytes)
+
+	cx.stack[prev] = boolToSV(bytes.Equal(lhs, rhs))
 	cx.stack = cx.stack[:last]
 	return nil
 }
@@ -2169,7 +2217,7 @@ func checkBranch(cx *EvalContext) error {
 	}
 	if target < cx.pc+3 {
 		// If a branch goes backwards, we should have already noted that an instruction began at that location.
-		if _, ok := cx.instructionStarts[target]; !ok {
+		if ok := cx.instructionStarts[target]; !ok {
 			return fmt.Errorf("back branch target %d is not an aligned instruction", target)
 		}
 	}
@@ -2190,7 +2238,7 @@ func checkSwitch(cx *EvalContext) error {
 
 		if target < eoi {
 			// If a branch goes backwards, we should have already noted that an instruction began at that location.
-			if _, ok := cx.instructionStarts[target]; !ok {
+			if ok := cx.instructionStarts[target]; !ok {
 				return fmt.Errorf("back branch target %d is not an aligned instruction", target)
 			}
 		}
@@ -2588,7 +2636,7 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, in
 
 func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *txnFieldSpec, arrayFieldIdx uint64, groupIndex int, inner bool) (sv stackValue, err error) {
 	if fs.effects {
-		if cx.runModeFlags == modeSig {
+		if cx.runModeFlags == ModeSig {
 			return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
 		}
 		if cx.version < txnEffectsVersion && !inner {
@@ -2856,7 +2904,7 @@ func (cx *EvalContext) opTxnImpl(gi uint64, src txnSource, field TxnField, ai ui
 	case srcGroup:
 		if fs.effects && gi >= uint64(cx.groupIndex) {
 			// Test mode so that error is clearer
-			if cx.runModeFlags == modeSig {
+			if cx.runModeFlags == ModeSig {
 				return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
 			}
 			return sv, fmt.Errorf("txn effects can only be read from past txns %d %d", gi, cx.groupIndex)
@@ -4995,7 +5043,7 @@ func opItxnField(cx *EvalContext) error {
 	return err
 }
 
-func opItxnSubmit(cx *EvalContext) error {
+func opItxnSubmit(cx *EvalContext) (err error) {
 	// Should rarely trigger, since itxn_next checks these too. (but that check
 	// must be imperfect, see its comment) In contrast to that check, subtxns is
 	// already populated here.
@@ -5140,11 +5188,30 @@ func opItxnSubmit(cx *EvalContext) error {
 	}
 
 	ep := NewInnerEvalParams(cx.subtxns, cx)
+
+	if ep.Tracer != nil {
+		ep.Tracer.BeforeTxnGroup(ep)
+		// Ensure we update the tracer before exiting
+		defer func() {
+			ep.Tracer.AfterTxnGroup(ep, err)
+		}()
+	}
+
 	for i := range ep.TxnGroup {
+		if ep.Tracer != nil {
+			ep.Tracer.BeforeTxn(ep, i)
+		}
+
 		err := cx.Ledger.Perform(i, ep)
+
+		if ep.Tracer != nil {
+			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData, err)
+		}
+
 		if err != nil {
 			return err
 		}
+
 		// This is mostly a no-op, because Perform does its work "in-place", but
 		// RecordAD has some further responsibilities.
 		ep.RecordAD(i, ep.TxnGroup[i].ApplyData)
@@ -5153,6 +5220,7 @@ func opItxnSubmit(cx *EvalContext) error {
 	cx.subtxns = nil
 	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group
 	cx.innerTxidCache = nil
+
 	return nil
 }
 

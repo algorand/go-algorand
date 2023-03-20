@@ -1088,7 +1088,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Gets the node status after waiting for the given round.",
+        "summary": "Gets the node status after waiting for a round after the given round.",
         "operationId": "WaitForBlock",
         "parameters": [
           {
@@ -1157,7 +1157,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Broadcasts a raw transaction to the network.",
+        "summary": "Broadcasts a raw transaction or transaction group to the network.",
         "operationId": "RawTransaction",
         "parameters": [
           {
@@ -1177,6 +1177,69 @@
           },
           "400": {
             "description": "Bad Request - Malformed Algorand transaction ",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/transactions/simulate": {
+      "post": {
+        "tags": [
+          "public",
+          "experimental"
+        ],
+        "consumes": [
+          "application/x-binary"
+        ],
+        "produces": [
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. WARNING: This endpoint is experimental and under active development. There are no guarantees in terms of functionality or future support.",
+        "operationId": "SimulateTransaction",
+        "parameters": [
+          {
+            "description": "The byte encoded transaction to simulate",
+            "name": "rawtxn",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/SimulationResponse"
+          },
+          "400": {
+            "description": "Bad Request - Malformed Algorand transaction",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -1366,6 +1429,75 @@
           "required": true
         }
       ]
+    },
+    "/v2/deltas/{round}": {
+      "get": {
+        "description": "Get ledger deltas for a round.",
+        "tags": [
+            "public",
+            "data"
+        ],
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get a LedgerStateDelta object for a given round",
+        "operationId": "GetLedgerStateDelta",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The round for which the deltas are desired.",
+            "name": "round",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/LedgerStateDeltaResponse"
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Could not find a delta for round",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "408": {
+            "description": "timed out on request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
     },
     "/v2/stateproofs/{round}": {
       "get": {
@@ -1792,6 +1924,152 @@
         }
       ]
     },
+    "/v2/ledger/sync": {
+      "delete": {
+        "description": "Unset the ledger sync round.",
+        "tags": [
+          "public",
+          "data"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Removes minimum sync round restriction from the ledger.",
+        "operationId": "UnsetSyncRound",
+        "responses": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "description": "Sync round not set.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "get": {
+        "description": "Gets the minimum sync round for the ledger.",
+        "tags": [
+          "public",
+          "data"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Returns the minimum sync round the ledger is keeping in cache.",
+        "operationId": "GetSyncRound",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/GetSyncRoundResponse"
+          },
+          "400": {
+            "description": "Sync round not set.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/ledger/sync/{round}": {
+      "post": {
+        "description": "Sets the minimum sync round on the ledger.",
+        "tags": [
+          "public",
+          "data"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Given a round, tells the ledger to keep that round in its cache.",
+        "operationId": "SetSyncRound",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The round for which the deltas are desired.",
+            "name": "round",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "description": "Can not set sync round to an earlier round than the current round.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/teal/compile": {
       "post": {
         "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style). This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
@@ -2092,6 +2370,11 @@
     }
   },
   "definitions": {
+    "LedgerStateDelta": {
+      "description": "Ledger StateDelta object",
+      "type": "object",
+      "x-algorand-format": "StateDelta"
+    },
     "Account": {
       "description": "Account information at a given round.\n\nDefinition:\ndata/basics/userBalance.go : AccountData\n",
       "type": "object",
@@ -2744,10 +3027,6 @@
         "budget-consumed": {
           "description": "Budget consumed during execution of app call transaction.",
           "type": "integer"
-        },
-        "cost": {
-          "description": "Net cost of app execution. Field is DEPRECATED and is subject for removal. Instead, use `budget-added` and `budget-consumed.",
-          "type": "integer"
         }
       }
     },
@@ -2877,6 +3156,22 @@
       "properties": {
         "name": {
           "description": "Base64 encoded box name",
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "KvDelta": {
+      "description": "A single Delta containing the key, the previous value and the current value for a single round.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "The key, base64 encoded.",
+          "type": "string",
+          "format": "byte"
+        },
+        "value": {
+          "description": "The new value of the KV store entry, base64 encoded.",
           "type": "string",
           "format": "byte"
         }
@@ -3279,6 +3574,27 @@
     }
   },
   "responses": {
+    "GetSyncRoundResponse": {
+      "description": "Response containing the ledger's minimum sync round",
+      "schema": {
+        "type": "object",
+        "required": [
+          "round"
+        ],
+        "properties": {
+          "round": {
+            "description": "The minimum sync round for the ledger.",
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "LedgerStateDeltaResponse": {
+      "description": "Contains ledger deltas",
+      "schema": {
+        "$ref": "#/definitions/LedgerStateDelta"
+      }
+    },
     "LightBlockHeaderProofResponse": {
       "description": "Proof of a light block header.",
       "schema": {
@@ -3542,6 +3858,38 @@
           "catchpoint-acquired-blocks": {
             "description": "The number of blocks that have already been obtained by the node as part of the catchup",
             "type": "integer"
+          },
+          "upgrade-delay": {
+            "description": "Upgrade delay",
+            "type": "integer"
+          },
+          "upgrade-node-vote": {
+            "description": "This node's upgrade vote",
+            "type": "boolean"
+          },
+          "upgrade-votes-required": {
+            "description": "Yes votes required for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-votes": {
+            "description": "Total votes cast for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-yes-votes": {
+            "description": "Yes votes cast for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-no-votes": {
+            "description": "No votes cast for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-next-protocol-vote-before": {
+            "description": "Next protocol round",
+            "type": "integer"
+          },
+          "upgrade-vote-rounds": {
+            "description": "Total voting ounds for current upgrade",
+            "type": "integer"
           }
         }
       }
@@ -3616,6 +3964,29 @@
         }
       }
     },
+    "SimulationResponse": {
+      "description": "Result of a transaction group simulation.",
+      "tags": [
+        "experimental"
+      ],
+      "schema": {
+        "type": "object",
+        "required": [
+          "failure-message",
+          "missing-signatures"
+        ],
+        "properties": {
+          "failure-message": {
+            "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
+            "type": "string"
+          },
+          "missing-signatures": {
+            "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+            "type": "boolean"
+          }
+        }
+      }
+    },
     "SupplyResponse": {
       "description": "Supply represents the current supply of MicroAlgos in the system.",
       "schema": {
@@ -3681,8 +4052,7 @@
             "description": "The minimum transaction fee (not per byte) required for the\ntxn to validate for the current network protocol.",
             "type": "integer"
           }
-        },
-        "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+        }
       }
     },
     "ApplicationResponse": {

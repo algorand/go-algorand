@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"testing"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -29,10 +30,12 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/stretchr/testify/require"
 )
 
 type accountsV2Reader struct {
-	q db.Queryable
+	q                  db.Queryable
+	preparedStatements map[string]*sql.Stmt
 }
 
 type accountsV2Writer struct {
@@ -44,12 +47,28 @@ type accountsV2ReaderWriter struct {
 	accountsV2Writer
 }
 
-// NewAccountsSQLReaderWriter creates a Catchpoint SQL reader+writer
+// NewAccountsSQLReaderWriter creates an SQL reader+writer
 func NewAccountsSQLReaderWriter(e db.Executable) *accountsV2ReaderWriter {
 	return &accountsV2ReaderWriter{
-		accountsV2Reader{q: e},
+		accountsV2Reader{q: e, preparedStatements: make(map[string]*sql.Stmt)},
 		accountsV2Writer{e: e},
 	}
+}
+
+func (r *accountsV2Reader) getOrPrepare(queryString string) (stmt *sql.Stmt, err error) {
+	// fetch statement (use the query as the key)
+	if stmt, ok := r.preparedStatements[queryString]; ok {
+		return stmt, nil
+	}
+	// we do not have it, prepare it
+	stmt, err = r.q.Prepare(queryString)
+	if err != nil {
+		return
+	}
+	// cache the statement
+	r.preparedStatements[queryString] = stmt
+
+	return stmt, nil
 }
 
 // AccountsTotals returns account totals
@@ -65,6 +84,81 @@ func (r *accountsV2Reader) AccountsTotals(ctx context.Context, catchpointStaging
 		&totals.RewardsLevel)
 
 	return
+}
+
+// AccountsAllTest iterates the account table and returns a map of the data
+// It is meant only for testing purposes - it is heavy and has no production use case.
+func (r *accountsV2Reader) AccountsAllTest() (bals map[basics.Address]basics.AccountData, err error) {
+	rows, err := r.q.Query("SELECT rowid, address, data FROM accountbase")
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	bals = make(map[basics.Address]basics.AccountData)
+	for rows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		var rowid sql.NullInt64
+		err = rows.Scan(&rowid, &addrbuf, &buf)
+		if err != nil {
+			return
+		}
+
+		var data BaseAccountData
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return
+		}
+
+		var addr basics.Address
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return
+		}
+		copy(addr[:], addrbuf)
+
+		var ad basics.AccountData
+		ad, err = r.LoadFullAccount(context.Background(), "resources", addr, rowid.Int64, data)
+		if err != nil {
+			return
+		}
+
+		bals[addr] = ad
+	}
+
+	err = rows.Err()
+	return
+}
+
+func (r *accountsV2Reader) CheckCreatablesTest(t *testing.T,
+	iteration int,
+	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
+	stmt, err := r.q.Prepare("SELECT asset, creator, ctype FROM assetcreators")
+	require.NoError(t, err)
+
+	defer stmt.Close()
+	rows, err := stmt.Query()
+	if err != sql.ErrNoRows {
+		require.NoError(t, err)
+	}
+	defer rows.Close()
+	counter := 0
+	for rows.Next() {
+		counter++
+		mc := ledgercore.ModifiedCreatable{}
+		var buf []byte
+		var asset basics.CreatableIndex
+		err := rows.Scan(&asset, &buf, &mc.Ctype)
+		require.NoError(t, err)
+		copy(mc.Creator[:], buf)
+
+		require.NotNil(t, expectedDbImage[asset])
+		require.Equal(t, expectedDbImage[asset].Creator, mc.Creator)
+		require.Equal(t, expectedDbImage[asset].Ctype, mc.Ctype)
+		require.True(t, expectedDbImage[asset].Created)
+	}
+	require.Equal(t, len(expectedDbImage), counter)
 }
 
 // AccountsRound returns the tracker balances round number
@@ -193,6 +287,17 @@ func (r *accountsV2Reader) OnlineAccountsAll(maxAccounts uint64) ([]PersistedOnl
 	return result, nil
 }
 
+// TotalResources returns the total number of resources
+func (r *accountsV2Reader) TotalResources(ctx context.Context) (total uint64, err error) {
+	err = r.q.QueryRowContext(ctx, "SELECT count(1) FROM resources").Scan(&total)
+	if err == sql.ErrNoRows {
+		total = 0
+		err = nil
+		return
+	}
+	return
+}
+
 // TotalAccounts returns the total number of accounts
 func (r *accountsV2Reader) TotalAccounts(ctx context.Context) (total uint64, err error) {
 	err = r.q.QueryRowContext(ctx, "SELECT count(1) FROM accountbase").Scan(&total)
@@ -249,6 +354,246 @@ func (r *accountsV2Reader) LoadTxTail(ctx context.Context, dbRound basics.Round)
 		roundHash[i], roundHash[len(roundHash)-i-1] = roundHash[len(roundHash)-i-1], roundHash[i]
 	}
 	return roundData, roundHash, expectedRound + 1, nil
+}
+
+// LookupAccountAddressFromAddressID looks up an account based on a rowid
+func (r *accountsV2Reader) LookupAccountAddressFromAddressID(ctx context.Context, addrid int64) (address basics.Address, err error) {
+	var addrbuf []byte
+	err = r.q.QueryRowContext(ctx, "SELECT address FROM accountbase WHERE rowid = ?", addrid).Scan(&addrbuf)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			err = fmt.Errorf("no matching address could be found for rowid %d: %w", addrid, err)
+		}
+		return
+	}
+	if len(addrbuf) != len(address) {
+		err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(address))
+		return
+	}
+	copy(address[:], addrbuf)
+	return
+}
+
+func (r *accountsV2Reader) LookupAccountDataByAddress(addr basics.Address) (rowid int64, data []byte, err error) {
+	// optimize this query for repeated usage
+	selectStmt, err := r.getOrPrepare("SELECT rowid, data FROM accountbase WHERE address=?")
+	if err != nil {
+		return
+	}
+
+	err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &data)
+	if err != nil {
+		return
+	}
+	return rowid, data, err
+}
+
+// LookupOnlineAccountDataByAddress looks up online account data by address.
+func (r *accountsV2Reader) LookupOnlineAccountDataByAddress(addr basics.Address) (rowid int64, data []byte, err error) {
+	// optimize this query for repeated usage
+	selectStmt, err := r.getOrPrepare("SELECT rowid, data FROM onlineaccounts WHERE address=? ORDER BY updround DESC LIMIT 1")
+	if err != nil {
+		return
+	}
+
+	err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &data)
+	if err != nil {
+		return
+	}
+	return rowid, data, err
+}
+
+// LookupAccountRowID looks up the rowid of an account based on its address.
+func (r *accountsV2Reader) LookupAccountRowID(addr basics.Address) (rowid int64, err error) {
+	// optimize this query for repeated usage
+	addrRowidStmt, err := r.getOrPrepare("SELECT rowid FROM accountbase WHERE address=?")
+	if err != nil {
+		return
+	}
+
+	err = addrRowidStmt.QueryRow(addr[:]).Scan(&rowid)
+	if err != nil {
+		return
+	}
+	return rowid, err
+}
+
+// LookupResourceDataByAddrID looks up the resource data by account rowid + resource aidx.
+func (r *accountsV2Reader) LookupResourceDataByAddrID(addrid int64, aidx basics.CreatableIndex) (data []byte, err error) {
+	// optimize this query for repeated usage
+	selectStmt, err := r.getOrPrepare("SELECT data FROM resources WHERE addrid = ? AND aidx = ?")
+	if err != nil {
+		return
+	}
+
+	err = selectStmt.QueryRow(addrid, aidx).Scan(&data)
+	if err != nil {
+		return
+	}
+	return data, err
+}
+
+// LoadAllFullAccounts loads all accounts from balancesTable and resourcesTable.
+// On every account full load it invokes acctCb callback to report progress and data.
+func (r *accountsV2Reader) LoadAllFullAccounts(
+	ctx context.Context,
+	balancesTable string, resourcesTable string,
+	acctCb func(basics.Address, basics.AccountData),
+) (count int, err error) {
+	baseRows, err := r.q.QueryContext(ctx, fmt.Sprintf("SELECT rowid, address, data FROM %s ORDER BY address", balancesTable))
+	if err != nil {
+		return
+	}
+	defer baseRows.Close()
+
+	for baseRows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		var rowid sql.NullInt64
+		err = baseRows.Scan(&rowid, &addrbuf, &buf)
+		if err != nil {
+			return
+		}
+		if !rowid.Valid {
+			err = fmt.Errorf("invalid rowid in %s", balancesTable)
+			return
+		}
+
+		var data BaseAccountData
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return
+		}
+
+		var addr basics.Address
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return
+		}
+		copy(addr[:], addrbuf)
+
+		var ad basics.AccountData
+		ad, err = r.LoadFullAccount(ctx, resourcesTable, addr, rowid.Int64, data)
+		if err != nil {
+			return
+		}
+
+		acctCb(addr, ad)
+
+		count++
+	}
+	return
+}
+
+// LoadFullAccount converts BaseAccountData into basics.AccountData and loads all resources as needed
+func (r *accountsV2Reader) LoadFullAccount(ctx context.Context, resourcesTable string, addr basics.Address, addrid int64, data BaseAccountData) (ad basics.AccountData, err error) {
+	ad = data.GetAccountData()
+
+	hasResources := false
+	if data.TotalAppParams > 0 {
+		ad.AppParams = make(map[basics.AppIndex]basics.AppParams, data.TotalAppParams)
+		hasResources = true
+	}
+	if data.TotalAppLocalStates > 0 {
+		ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, data.TotalAppLocalStates)
+		hasResources = true
+	}
+	if data.TotalAssetParams > 0 {
+		ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, data.TotalAssetParams)
+		hasResources = true
+	}
+	if data.TotalAssets > 0 {
+		ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding, data.TotalAssets)
+		hasResources = true
+	}
+
+	if !hasResources {
+		return
+	}
+
+	var resRows *sql.Rows
+	query := fmt.Sprintf("SELECT aidx, data FROM %s where addrid = ?", resourcesTable)
+	resRows, err = r.q.QueryContext(ctx, query, addrid)
+	if err != nil {
+		return
+	}
+	defer resRows.Close()
+
+	for resRows.Next() {
+		var buf []byte
+		var aidx int64
+		err = resRows.Scan(&aidx, &buf)
+		if err != nil {
+			return
+		}
+		var resData ResourcesData
+		err = protocol.Decode(buf, &resData)
+		if err != nil {
+			return
+		}
+		if resData.ResourceFlags == ResourceFlagsNotHolding {
+			err = fmt.Errorf("addr %s (%d) aidx = %d resourceFlagsNotHolding should not be persisted", addr.String(), addrid, aidx)
+			return
+		}
+		if resData.IsApp() {
+			if resData.IsOwning() {
+				ad.AppParams[basics.AppIndex(aidx)] = resData.GetAppParams()
+			}
+			if resData.IsHolding() {
+				ad.AppLocalStates[basics.AppIndex(aidx)] = resData.GetAppLocalState()
+			}
+		} else if resData.IsAsset() {
+			if resData.IsOwning() {
+				ad.AssetParams[basics.AssetIndex(aidx)] = resData.GetAssetParams()
+			}
+			if resData.IsHolding() {
+				ad.Assets[basics.AssetIndex(aidx)] = resData.GetAssetHolding()
+			}
+		} else {
+			err = fmt.Errorf("unknown resource data: %v", resData)
+			return
+		}
+	}
+
+	if uint64(len(ad.AssetParams)) != data.TotalAssetParams {
+		err = fmt.Errorf("%s assets params mismatch: %d != %d", addr.String(), len(ad.AssetParams), data.TotalAssetParams)
+	}
+	if err == nil && uint64(len(ad.Assets)) != data.TotalAssets {
+		err = fmt.Errorf("%s assets mismatch: %d != %d", addr.String(), len(ad.Assets), data.TotalAssets)
+	}
+	if err == nil && uint64(len(ad.AppParams)) != data.TotalAppParams {
+		err = fmt.Errorf("%s app params mismatch: %d != %d", addr.String(), len(ad.AppParams), data.TotalAppParams)
+	}
+	if err == nil && uint64(len(ad.AppLocalStates)) != data.TotalAppLocalStates {
+		err = fmt.Errorf("%s app local states mismatch: %d != %d", addr.String(), len(ad.AppLocalStates), data.TotalAppLocalStates)
+	}
+
+	return ad, err
+}
+
+func (r *accountsV2Reader) AccountsOnlineRoundParams() (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error) {
+	rows, err := r.q.Query("SELECT rnd, data FROM onlineroundparamstail ORDER BY rnd ASC")
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var buf []byte
+		err = rows.Scan(&endRound, &buf)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		var data ledgercore.OnlineRoundParamsData
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		onlineRoundParamsData = append(onlineRoundParamsData, data)
+	}
+	return
 }
 
 // AccountsPutTotals updates account totals
@@ -420,4 +765,62 @@ func (w *accountsV2Writer) UpdateAccountsRound(rnd basics.Round) (err error) {
 		}
 	}
 	return
+}
+
+// UpdateAccountsHashRound updates the round number associated with the hash of current account data.
+func (w *accountsV2Writer) UpdateAccountsHashRound(ctx context.Context, hashRound basics.Round) (err error) {
+	res, err := w.e.ExecContext(ctx, "INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('hashbase',?)", hashRound)
+	if err != nil {
+		return
+	}
+
+	aff, err := res.RowsAffected()
+	if err != nil {
+		return
+	}
+
+	if aff != 1 {
+		err = fmt.Errorf("updateAccountsHashRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
+		return
+	}
+	return
+}
+
+// ResetAccountHashes resets the account hashes generated by the merkle commiter.
+func (w *accountsV2Writer) ResetAccountHashes(ctx context.Context) (err error) {
+	_, err = w.e.ExecContext(ctx, `DELETE FROM accounthashes`)
+	return
+}
+
+func (w *accountsV2Writer) AccountsPutOnlineRoundParams(onlineRoundParamsData []ledgercore.OnlineRoundParamsData, startRound basics.Round) error {
+	insertStmt, err := w.e.Prepare("INSERT INTO onlineroundparamstail (rnd, data) VALUES (?, ?)")
+	if err != nil {
+		return err
+	}
+
+	for i := range onlineRoundParamsData {
+		_, err = insertStmt.Exec(startRound+basics.Round(i), protocol.Encode(&onlineRoundParamsData[i]))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *accountsV2Writer) AccountsPruneOnlineRoundParams(deleteBeforeRound basics.Round) error {
+	_, err := w.e.Exec("DELETE FROM onlineroundparamstail WHERE rnd<?",
+		deleteBeforeRound,
+	)
+	return err
+}
+
+func (w *accountsV2Writer) AccountsReset(ctx context.Context) error {
+	for _, stmt := range accountsResetExprs {
+		_, err := w.e.ExecContext(ctx, stmt)
+		if err != nil {
+			return err
+		}
+	}
+	_, err := db.SetUserVersion(ctx, w.e, 0)
+	return err
 }

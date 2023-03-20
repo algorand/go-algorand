@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,22 +23,25 @@ import (
 )
 
 // lruAccounts provides a storage class for the most recently used accounts data.
-// It doesn't have any synchronization primitive on it's own and require to be
-// syncronized by the caller.
+// It doesn't have any synchronization primitive on its own and require to be
+// synchronized by the caller.
 type lruAccounts struct {
 	// accountsList contain the list of persistedAccountData, where the front ones are the most "fresh"
 	// and the ones on the back are the oldest.
 	accountsList *persistedAccountDataList
 	// accounts provides fast access to the various elements in the list by using the account address
+	// if lruAccounts is set with pendingWrites 0, then accounts is nil
 	accounts map[basics.Address]*persistedAccountDataListNode
 	// pendingAccounts are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the accounts/accountsList
+	// if lruAccounts is set with pendingWrites 0, then pendingAccounts is nil
 	pendingAccounts chan store.PersistedAccountData
 	// log interface; used for logging the threshold event.
 	log logging.Logger
 	// pendingWritesWarnThreshold is the threshold beyond we would write a warning for exceeding the number of pendingAccounts entries
 	pendingWritesWarnThreshold int
 
+	// if lruAccounts is set with pendingWrites 0, then pendingNotFound and notFound is nil
 	pendingNotFound chan basics.Address
 	notFound        map[basics.Address]struct{}
 }
@@ -46,11 +49,13 @@ type lruAccounts struct {
 // init initializes the lruAccounts for use.
 // thread locking semantics : write lock
 func (m *lruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
-	m.accountsList = newPersistedAccountList().allocateFreeNodes(pendingWrites)
-	m.accounts = make(map[basics.Address]*persistedAccountDataListNode, pendingWrites)
-	m.pendingAccounts = make(chan store.PersistedAccountData, pendingWrites)
-	m.notFound = make(map[basics.Address]struct{}, pendingWrites)
-	m.pendingNotFound = make(chan basics.Address, pendingWrites)
+	if pendingWrites > 0 {
+		m.accountsList = newPersistedAccountList().allocateFreeNodes(pendingWrites)
+		m.accounts = make(map[basics.Address]*persistedAccountDataListNode, pendingWrites)
+		m.pendingAccounts = make(chan store.PersistedAccountData, pendingWrites)
+		m.notFound = make(map[basics.Address]struct{}, pendingWrites)
+		m.pendingNotFound = make(chan basics.Address, pendingWrites)
+	}
 	m.log = log
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
 }
@@ -127,6 +132,9 @@ func (m *lruAccounts) writeNotFoundPending(addr basics.Address) {
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
 func (m *lruAccounts) write(acctData store.PersistedAccountData) {
+	if m.accounts == nil {
+		return
+	}
 	if el := m.accounts[acctData.Addr]; el != nil {
 		// already exists; is it a newer ?
 		if el.Value.Before(&acctData) {
@@ -144,6 +152,9 @@ func (m *lruAccounts) write(acctData store.PersistedAccountData) {
 // recently used entries.
 // thread locking semantics : write lock
 func (m *lruAccounts) prune(newSize int) (removed int) {
+	if m.accounts == nil {
+		return
+	}
 	for {
 		if len(m.accounts) <= newSize {
 			break
