@@ -26,10 +26,22 @@ ${gcmd} clerk send -a 10000 -f ${ACCOUNT} -t ${ACCOUNT} -o pay2.tx
 cat pay1.tx pay2.tx | ${gcmd} clerk group -i - -o grouped.tx
 
 # We first test transaction group simulation WITHOUT signatures
-RES=$(${gcmd} clerk simulate -t grouped.tx | jq '."would-succeed"')
+RES=$(${gcmd} clerk simulate -t grouped.tx)
 
-if [[ $RES != $CONST_FALSE ]]; then
+if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_FALSE ]]; then
     date '+app-simulate-test FAIL the simulation transaction group without signatures should not succeed %Y%m%d_%H%M%S'
+    false
+fi
+
+# check the simulation failing reason, first transaction has no signature
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."missing-signature"') != $CONST_TRUE ]]; then
+    date '+app-simulate-test FAIL the simulation transaction group first transaction has NO signature %Y%m%d_%H%M%S'
+    false
+fi
+
+# check the simulation failing reason, second transaction has no signature
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[1]."missing-signature"') != $CONST_TRUE ]]; then
+    date '+app-simulate-test FAIL the simulation transaction group second transaction has NO signature %Y%m%d_%H%M%S'
     false
 fi
 
