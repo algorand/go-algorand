@@ -172,6 +172,9 @@ type TestScenario struct {
 	FailedAt             []uint64
 	ExpectedEvents       []Event
 	ExpectedSimulationAD transactions.ApplyData
+	BudgetAdded          int
+	BudgetConsumed       int
+	BudgetUsed           []int
 }
 
 // TestScenarioGenerator is a function which instantiates a TestScenario
@@ -240,6 +243,9 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				},
 			}),
 			ExpectedSimulationAD: expectedAD,
+			BudgetAdded:          2100,
+			BudgetConsumed:       35,
+			BudgetUsed:           []int{3, 32},
 		}
 	}
 
@@ -292,6 +298,9 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					},
 				}),
 				ExpectedSimulationAD: expectedAD,
+				BudgetAdded:          700,
+				BudgetConsumed:       4,
+				BudgetUsed:           []int{0, 4},
 			}
 		}
 		scenarios[beforeInnersName] = beforeInners
@@ -341,6 +350,9 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					},
 				}),
 				ExpectedSimulationAD: expectedAD,
+				BudgetAdded:          1400,
+				BudgetConsumed:       15,
+				BudgetUsed:           []int{3, 12},
 			}
 		}
 		scenarios[firstInnerName] = firstInner
@@ -391,6 +403,9 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					},
 				}),
 				ExpectedSimulationAD: expectedAD,
+				BudgetAdded:          1400,
+				BudgetConsumed:       19,
+				BudgetUsed:           []int{3, 16},
 			}
 		}
 		scenarios[betweenInnersName] = betweenInners
@@ -449,6 +464,9 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 						},
 					}),
 					ExpectedSimulationAD: expectedAD,
+					BudgetAdded:          2100,
+					BudgetConsumed:       32,
+					BudgetUsed:           []int{3, 29},
 				}
 			}
 			scenarios[secondInnerName] = secondInner
@@ -510,6 +528,9 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 						},
 					}),
 					ExpectedSimulationAD: expectedAD,
+					BudgetAdded:          2100,
+					BudgetConsumed:       32,
+					BudgetUsed:           []int{3, 29},
 				}
 			}
 			scenarios[thirdInnerName] = thirdInner
@@ -567,6 +588,9 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					},
 				}),
 				ExpectedSimulationAD: expectedAD,
+				BudgetAdded:          2100,
+				BudgetConsumed:       35,
+				BudgetUsed:           []int{3, 32},
 			}
 		}
 		scenarios[afterInnersName] = afterInners

@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -595,6 +596,7 @@ int 1`,
 				expectedSuccess := len(testCase.expectedError) == 0
 				var expectedAppCallAD transactions.ApplyData
 				expectedFailedAt := simulation.TxnPath{1}
+				var budgetConsumed, budgetAdded int
 				if expectedSuccess {
 					expectedAppCallAD = transactions.ApplyData{
 						ApplicationID: 2,
@@ -603,6 +605,8 @@ int 1`,
 						},
 					}
 					expectedFailedAt = nil
+					budgetConsumed = 3
+					budgetAdded = 700
 				}
 
 				return simulationTestCase{
@@ -619,9 +623,12 @@ int 1`,
 										Txn: transactions.SignedTxnWithAD{
 											ApplyData: expectedAppCallAD,
 										},
+										BudgetUsed: budgetConsumed,
 									},
 								},
-								FailedAt: expectedFailedAt,
+								FailedAt:       expectedFailedAt,
+								BudgetAdded:    budgetAdded,
+								BudgetConsumed: budgetConsumed,
 							},
 						},
 						WouldSucceed: expectedSuccess,
@@ -699,6 +706,7 @@ int 0
 											},
 										},
 										MissingSignature: !signed,
+										BudgetUsed:       5,
 									},
 									{
 										Txn: transactions.SignedTxnWithAD{
@@ -709,8 +717,11 @@ int 0
 											},
 										},
 										MissingSignature: !signed,
+										BudgetUsed:       6,
 									},
 								},
+								BudgetAdded:    1400,
+								BudgetConsumed: 11,
 							},
 						},
 						WouldSucceed: signed,
@@ -772,9 +783,12 @@ int 0
 											},
 										},
 										MissingSignature: !signed,
+										BudgetUsed:       3,
 									},
 								},
-								FailedAt: simulation.TxnPath{0},
+								FailedAt:       simulation.TxnPath{0},
+								BudgetAdded:    700,
+								BudgetConsumed: 3,
 							},
 						},
 						WouldSucceed: false,
@@ -836,12 +850,191 @@ int 0
 											},
 										},
 										MissingSignature: !signed,
+										BudgetUsed:       3,
 									},
 								},
-								FailedAt: simulation.TxnPath{0},
+								FailedAt:       simulation.TxnPath{0},
+								BudgetAdded:    700,
+								BudgetConsumed: 3,
 							},
 						},
 						WouldSucceed: false,
+					},
+				}
+			})
+		})
+	}
+}
+
+func TestAppCallOverBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Transaction group has a cost of 4 + 1398
+	expensiveAppSource := `#pragma version 6
+	txn ApplicationID      // [appId]
+	bz end                 // []
+` + strings.Repeat(`int 1
+	pop
+`, 697) + `end:
+	int 1`
+
+	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+		sender := accounts[0]
+		receiver := accounts[1]
+
+		futureAppID := basics.AppIndex(1)
+		// App create with cost 4
+		createTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   0,
+			ApprovalProgram: expensiveAppSource,
+			ClearStateProgram: `#pragma version 6
+int 0
+`,
+		})
+		// App call with cost 1398 - will cause a budget exceeded error,
+		// but will only report a cost up to 1396.
+		expensiveTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+			Accounts:      []basics.Address{receiver.Addr},
+		})
+
+		txntest.Group(&createTxn, &expensiveTxn)
+
+		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input:         []transactions.SignedTxn{signedCreateTxn, signedExpensiveTxn},
+			expectedError: "dynamic cost budget exceeded",
+			expected: simulation.Result{
+				Version:   1,
+				LastRound: txnInfo.LatestRound(),
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								BudgetUsed: 4,
+							},
+							{
+								BudgetUsed: 1396,
+							},
+						},
+						FailedAt:       simulation.TxnPath{1},
+						BudgetAdded:    1400,
+						BudgetConsumed: 1400,
+					},
+				},
+				WouldSucceed: false,
+			},
+		}
+	})
+}
+
+func TestLogicSigBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	op, err := logic.AssembleString(`#pragma version 6
+` + strings.Repeat(`byte "a"
+keccak256
+pop
+`, 100) + `end:
+	int 1`)
+	require.NoError(t, err)
+	program := logic.Program(op.Program)
+	lsigAddr := basics.Address(crypto.HashObj(&program))
+
+	testCases := []struct {
+		name          string
+		arguments     [][]byte
+		expectedError string
+	}{
+		{
+			name:          "approval",
+			arguments:     [][]byte{{1}},
+			expectedError: "", // no error
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+				sender := accounts[0]
+
+				payTxn := txnInfo.NewTxn(txntest.Txn{
+					Type:     protocol.PaymentTx,
+					Sender:   sender.Addr,
+					Receiver: lsigAddr,
+					Amount:   1_000_000,
+				})
+				appCallTxn := txnInfo.NewTxn(txntest.Txn{
+					Type:   protocol.ApplicationCallTx,
+					Sender: lsigAddr,
+					ApprovalProgram: `#pragma version 8
+byte "hello"
+log
+int 1`,
+					ClearStateProgram: `#pragma version 8
+int 1`,
+				})
+
+				txntest.Group(&payTxn, &appCallTxn)
+
+				signedPayTxn := payTxn.Txn().Sign(sender.Sk)
+				signedAppCallTxn := appCallTxn.SignedTxn()
+				signedAppCallTxn.Lsig = transactions.LogicSig{
+					Logic: program,
+					Args:  testCase.arguments,
+				}
+
+				expectedSuccess := len(testCase.expectedError) == 0
+				var expectedAppCallAD transactions.ApplyData
+				expectedFailedAt := simulation.TxnPath{1}
+				if expectedSuccess {
+					expectedAppCallAD = transactions.ApplyData{
+						ApplicationID: 2,
+						EvalDelta: transactions.EvalDelta{
+							Logs: []string{"hello"},
+						},
+					}
+					expectedFailedAt = nil
+				}
+
+				return simulationTestCase{
+					input:         []transactions.SignedTxn{signedPayTxn, signedAppCallTxn},
+					expectedError: testCase.expectedError,
+					expected: simulation.Result{
+						Version:   1,
+						LastRound: txnInfo.LatestRound(),
+						TxnGroups: []simulation.TxnGroupResult{
+							{
+								Txns: []simulation.TxnResult{
+									{},
+									{
+										Txn: transactions.SignedTxnWithAD{
+											ApplyData: expectedAppCallAD,
+										},
+										BudgetUsed: 3,
+									},
+								},
+								FailedAt:       expectedFailedAt,
+								BudgetAdded:    700,
+								BudgetConsumed: 3,
+							},
+						},
+						WouldSucceed: expectedSuccess,
 					},
 				}
 			})
@@ -1014,17 +1207,22 @@ int 1`,
 											},
 										},
 										MissingSignature: !signed,
+										BudgetUsed:       4,
+									},
+									{
+										MissingSignature: !signed,
+										BudgetUsed:       10,
 									},
 									{
 										MissingSignature: !signed,
 									},
 									{
 										MissingSignature: !signed,
-									},
-									{
-										MissingSignature: !signed,
+										BudgetUsed:       10,
 									},
 								},
+								BudgetAdded:    2100,
+								BudgetConsumed: 24,
 							},
 						},
 						WouldSucceed: signed,
@@ -1243,6 +1441,7 @@ int 1`,
 					{
 						Txns: []simulation.TxnResult{
 							{
+								BudgetUsed:       15,
 								MissingSignature: true,
 							}, {
 								MissingSignature: true,
@@ -1275,10 +1474,13 @@ int 1`,
 										},
 									},
 								},
+								BudgetUsed:       12,
 								MissingSignature: true,
 							},
 						},
-						FailedAt: simulation.TxnPath{2, 0, 0},
+						BudgetAdded:    2100,
+						BudgetConsumed: 27,
+						FailedAt:       simulation.TxnPath{2, 0, 0},
 					},
 				},
 				WouldSucceed: false,
@@ -1338,6 +1540,7 @@ int 1`,
 					{
 						Txns: []simulation.TxnResult{
 							{
+								BudgetUsed:       3,
 								MissingSignature: true,
 							}, {
 								Txn: transactions.SignedTxnWithAD{
@@ -1363,10 +1566,13 @@ int 1`,
 										},
 									},
 								},
+								BudgetUsed:       20,
 								MissingSignature: true,
 							},
 						},
-						FailedAt: simulation.TxnPath{1, 1},
+						BudgetAdded:    2100,
+						BudgetConsumed: 23,
+						FailedAt:       simulation.TxnPath{1, 1},
 					},
 				},
 				WouldSucceed: false,
@@ -1446,10 +1652,13 @@ int 1`,
 										},
 									},
 								},
+								BudgetUsed:       17,
 								MissingSignature: true,
 							},
 						},
-						FailedAt: simulation.TxnPath{1, 1},
+						BudgetAdded:    2100,
+						BudgetConsumed: 17,
+						FailedAt:       simulation.TxnPath{1, 1},
 					},
 				},
 				WouldSucceed: false,
@@ -1506,13 +1715,18 @@ func TestMockTracerScenarios(t *testing.T) {
 					LastRound: txnInfo.LatestRound(),
 					TxnGroups: []simulation.TxnGroupResult{
 						{
-							FailedAt: expectedFailedAt,
+							BudgetAdded:    scenario.BudgetAdded,
+							BudgetConsumed: scenario.BudgetConsumed,
+							FailedAt:       expectedFailedAt,
 							Txns: []simulation.TxnResult{
-								{},
+								{
+									BudgetUsed: scenario.BudgetUsed[0],
+								},
 								{
 									Txn: transactions.SignedTxnWithAD{
 										ApplyData: scenario.ExpectedSimulationAD,
 									},
+									BudgetUsed: scenario.BudgetUsed[1],
 								},
 							},
 						},
