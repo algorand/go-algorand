@@ -630,8 +630,8 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	return
 }
 
-// RawTransactionSimulate gets the raw transaction or raw transaction group, and returns relevant simulation results.
-func (client RestClient) RawTransactionSimulate(data []byte) (response model.SimulateResponse, err error) {
+// SimulateRawTransaction gets the raw transaction or raw transaction group, and returns relevant simulation results.
+func (client RestClient) SimulateRawTransaction(data []byte) (response model.SimulateResponse, err error) {
 	err = client.submitForm(&response, "/v2/transactions/simulate", data, "POST", false /* encodeJSON */, true /* decodeJSON */, false)
 	return
 }

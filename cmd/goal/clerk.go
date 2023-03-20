@@ -1259,8 +1259,8 @@ var dryrunRemoteCmd = &cobra.Command{
 
 var simulateCmd = &cobra.Command{
 	Use:   "simulate",
-	Short: "Simulate a transaction or transaction group offline",
-	Long:  `Simulate a transaction or transaction group offline under various conditions and verbosity.`,
+	Short: "Simulate a transaction or transaction group with algod's simulate REST endpoint",
+	Long:  `Simulate a transaction or transaction group with algod's simulate REST endpoint under various configurations.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		data, err := readFile(txFilename)
 		if err != nil {

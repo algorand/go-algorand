@@ -1275,7 +1275,7 @@ func (c *Client) TransactionSimulation(data []byte) (resp model.SimulateResponse
 	if err != nil {
 		return
 	}
-	resp, err = algod.RawTransactionSimulate(data)
+	resp, err = algod.SimulateRawTransaction(data)
 	return
 }
 
