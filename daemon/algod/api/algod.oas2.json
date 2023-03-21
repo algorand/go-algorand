@@ -1284,9 +1284,6 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
-          "404": {
-            "description": "Transaction simulator not enabled"
-          },
           "500": {
             "description": "Internal Error",
             "schema": {

@@ -45,10 +45,11 @@ const (
 
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
-	"/v2/transactions":  true,
-	"/v2/teal/dryrun":   true,
-	"/v2/teal/compile":  true,
-	"/v2/participation": true,
+	"/v2/transactions":          true,
+	"/v2/teal/dryrun":           true,
+	"/v2/teal/compile":          true,
+	"/v2/participation":         true,
+	"/v2/transactions/simulate": true,
 }
 
 // unauthorizedRequestError is generated when we receive 401 error from the server. This error includes the inner error
@@ -632,6 +633,12 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	var blob Blob
 	err = client.submitForm(&blob, "/v2/teal/dryrun", data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
 	response = blob
+	return
+}
+
+// SimulateRawTransaction gets the raw transaction or raw transaction group, and returns relevant simulation results.
+func (client RestClient) SimulateRawTransaction(data []byte) (response model.SimulateResponse, err error) {
+	err = client.submitForm(&response, "/v2/transactions/simulate", data, "POST", false /* encodeJSON */, true /* decodeJSON */, false)
 	return
 }
 

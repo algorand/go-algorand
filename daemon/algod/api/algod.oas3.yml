@@ -5831,10 +5831,6 @@
             },
             "description": "Invalid API Token"
           },
-          "404": {
-            "content": {},
-            "description": "Transaction simulator not enabled"
-          },
           "500": {
             "content": {
               "application/json": {
