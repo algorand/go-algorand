@@ -1441,7 +1441,6 @@ int 1`,
 					{
 						Txns: []simulation.TxnResult{
 							{
-								BudgetUsed:       15,
 								MissingSignature: true,
 							}, {
 								MissingSignature: true,
@@ -1474,7 +1473,7 @@ int 1`,
 										},
 									},
 								},
-								BudgetUsed:       12,
+								BudgetUsed:       27,
 								MissingSignature: true,
 							},
 						},
@@ -1540,7 +1539,6 @@ int 1`,
 					{
 						Txns: []simulation.TxnResult{
 							{
-								BudgetUsed:       3,
 								MissingSignature: true,
 							}, {
 								Txn: transactions.SignedTxnWithAD{
@@ -1566,7 +1564,7 @@ int 1`,
 										},
 									},
 								},
-								BudgetUsed:       20,
+								BudgetUsed:       23,
 								MissingSignature: true,
 							},
 						},

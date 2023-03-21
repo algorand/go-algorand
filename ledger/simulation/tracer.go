@@ -195,9 +195,9 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
 		// do nothing for LogicSig programs
 		return
 	}
+
 	// Report cost of this program
-	groupIndex := tracer.relativeGroupIndex()
-	tracer.result.TxnGroups[0].Txns[groupIndex].BudgetUsed += cx.Cost()
+	tracer.result.TxnGroups[0].Txns[tracer.relativeCursor[0]].BudgetUsed += cx.Cost()
 
 	tracer.handleError(evalError)
 }

@@ -245,7 +245,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 			ExpectedSimulationAD: expectedAD,
 			BudgetAdded:          2100,
 			BudgetConsumed:       35,
-			BudgetUsed:           []int{3, 32},
+			BudgetUsed:           []int{0, 35},
 		}
 	}
 
@@ -352,7 +352,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				ExpectedSimulationAD: expectedAD,
 				BudgetAdded:          1400,
 				BudgetConsumed:       15,
-				BudgetUsed:           []int{3, 12},
+				BudgetUsed:           []int{0, 15},
 			}
 		}
 		scenarios[firstInnerName] = firstInner
@@ -405,7 +405,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				ExpectedSimulationAD: expectedAD,
 				BudgetAdded:          1400,
 				BudgetConsumed:       19,
-				BudgetUsed:           []int{3, 16},
+				BudgetUsed:           []int{0, 19},
 			}
 		}
 		scenarios[betweenInnersName] = betweenInners
@@ -466,7 +466,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					ExpectedSimulationAD: expectedAD,
 					BudgetAdded:          2100,
 					BudgetConsumed:       32,
-					BudgetUsed:           []int{3, 29},
+					BudgetUsed:           []int{0, 32},
 				}
 			}
 			scenarios[secondInnerName] = secondInner
@@ -530,7 +530,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					ExpectedSimulationAD: expectedAD,
 					BudgetAdded:          2100,
 					BudgetConsumed:       32,
-					BudgetUsed:           []int{3, 29},
+					BudgetUsed:           []int{0, 32},
 				}
 			}
 			scenarios[thirdInnerName] = thirdInner
@@ -590,7 +590,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				ExpectedSimulationAD: expectedAD,
 				BudgetAdded:          2100,
 				BudgetConsumed:       35,
-				BudgetUsed:           []int{3, 32},
+				BudgetUsed:           []int{0, 35},
 			}
 		}
 		scenarios[afterInnersName] = afterInners
