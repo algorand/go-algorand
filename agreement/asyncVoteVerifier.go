@@ -21,6 +21,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -57,6 +58,8 @@ type AsyncVoteVerifier struct {
 	execpoolOut     chan interface{}
 	ctx             context.Context
 	ctxCancel       context.CancelFunc
+	batchVerifier   *execpool.StreamToBatch
+	batchInputChan  chan execpool.InputJob
 }
 
 // MakeAsyncVoteVerifier creates an AsyncVoteVerifier with workers as the number of CPUs
@@ -79,6 +82,13 @@ func MakeAsyncVoteVerifier(verificationPool execpool.BacklogPool) *AsyncVoteVeri
 	verifier.ctx, verifier.ctxCancel = context.WithCancel(context.Background())
 
 	verifier.workerWaitCh = make(chan struct{})
+
+	verifier.batchInputChan = make(chan execpool.InputJob)
+
+	verifier.batchVerifier = execpool.MakeStreamToBatch(
+		verifier.batchInputChan,
+		verificationPool,
+		&voteBatchProcessor{})
 	go verifier.worker()
 	return verifier
 }
@@ -94,7 +104,7 @@ func (avv *AsyncVoteVerifier) worker() {
 	}
 }
 
-func (avv *AsyncVoteVerifier) executeVoteVerification(task interface{}) interface{} {
+func executeVoteVerification(task interface{}) interface{} {
 	req := task.(asyncVerifyVoteRequest)
 
 	select {
@@ -103,7 +113,7 @@ func (avv *AsyncVoteVerifier) executeVoteVerification(task interface{}) interfac
 		return &asyncVerifyVoteResponse{err: req.ctx.Err(), cancelled: true, req: &req, index: req.index}
 	default:
 		// request was not cancelled, so we verify it here and return the result on the channel
-		v, err := req.uv.verify(req.l)
+		_, v, err := req.uv.getVerificationTask(req.l)
 		req.message.Vote = v
 
 		var e *LedgerDroppedRoundError
@@ -113,7 +123,7 @@ func (avv *AsyncVoteVerifier) executeVoteVerification(task interface{}) interfac
 	}
 }
 
-func (avv *AsyncVoteVerifier) executeEqVoteVerification(task interface{}) interface{} {
+func executeEqVoteVerification(task interface{}) interface{} {
 	req := task.(asyncVerifyVoteRequest)
 
 	select {
@@ -122,7 +132,7 @@ func (avv *AsyncVoteVerifier) executeEqVoteVerification(task interface{}) interf
 		return &asyncVerifyVoteResponse{err: req.ctx.Err(), cancelled: true, req: &req, index: req.index}
 	default:
 		// request was not cancelled, so we verify it here and return the result on the channel
-		ev, err := req.uev.verify(req.l)
+		_, ev, err := req.uev.getVerificationTask(req.l)
 
 		var e *LedgerDroppedRoundError
 		cancelled := errors.As(err, &e)
@@ -140,7 +150,7 @@ func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader,
 		// if we're done while waiting for room in the requests channel, don't queue the request
 		req := asyncVerifyVoteRequest{ctx: verctx, l: l, uv: &uv, index: index, message: message, out: out}
 		avv.wg.Add(1)
-		if err := avv.backlogExecPool.EnqueueBacklog(avv.ctx, avv.executeVoteVerification, req, avv.execpoolOut); err != nil {
+		if err := avv.backlogExecPool.EnqueueBacklog(avv.ctx, executeVoteVerification, req, avv.execpoolOut); err != nil {
 			// we want to call "wg.Done()" here to "fix" the accounting of the number of pending tasks.
 			// if we got a non-nil, it means that our context has expired, which means that we won't see this task
 			// getting to the verification function.
@@ -160,7 +170,7 @@ func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerReade
 		// if we're done while waiting for room in the requests channel, don't queue the request
 		req := asyncVerifyVoteRequest{ctx: verctx, l: l, uev: &uev, index: index, message: message, out: out}
 		avv.wg.Add(1)
-		if err := avv.backlogExecPool.EnqueueBacklog(avv.ctx, avv.executeEqVoteVerification, req, avv.execpoolOut); err != nil {
+		if err := avv.backlogExecPool.EnqueueBacklog(avv.ctx, executeEqVoteVerification, req, avv.execpoolOut); err != nil {
 			// we want to call "wg.Done()" here to "fix" the accounting of the number of pending tasks.
 			// if we got a non-nil, it means that our context has expired, which means that we won't see this task
 			// getting to the verification function.
@@ -191,4 +201,105 @@ func (avv *AsyncVoteVerifier) Quit() {
 // Parallelism gives the maximum parallelism of the vote verifier.
 func (avv *AsyncVoteVerifier) Parallelism() int {
 	return avv.backlogExecPool.GetParallelism()
+}
+
+/*
+type UnverifiedVote struct {
+}
+*/
+func (uv *asyncVerifyVoteRequest) GetNumberOfBatchableItems() (count uint64, err error) {
+	if uv.uev != nil {
+		return uint64(2), nil
+	}
+	return uint64(1), nil
+}
+
+type voteBatchProcessor struct {
+}
+
+func (vbp *voteBatchProcessor) ProcessBatch(jobs []execpool.InputJob) {
+	toVerify := make([]crypto.SigVerificationTask, 0, len(jobs))
+	for i := range jobs {
+		req := jobs[i].(*asyncVerifyVoteRequest)
+		select {
+		case <-req.ctx.Done():
+			// request cancelled, return an error response on the channel
+			vbp.Cleanup(jobs, req.ctx.Err())
+		default:
+			// if this is an eq vote
+			if req.uev != nil {
+				vts, ev, err := req.uev.getVerificationTask(req.l)
+				if err != nil {
+					var e *LedgerDroppedRoundError
+					cancelled := errors.As(err, &e)
+					req.out <- asyncVerifyVoteResponse{ev: ev, index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
+				}
+				toVerify = append(toVerify, vts...)
+			}
+			// if this is a vote
+			if req.uv != nil {
+				vt, v, err := req.uv.getVerificationTask(req.l)
+				if err != nil {
+					var e *LedgerDroppedRoundError
+					cancelled := errors.As(err, &e)
+					req.out <- asyncVerifyVoteResponse{v: v, index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
+				}
+				toVerify = append(toVerify, vt)
+			}
+		}
+	}
+	failed := crypto.BatchVerifyOneTimeSignatures(toVerify)
+	f := 0
+	for i := range jobs {
+		req := jobs[i].(*asyncVerifyVoteRequest)
+		// if this is an eq vote
+		if req.uev != nil {
+			vts, ev, err := req.uev.getVerificationTask(req.l)
+			if err != nil {
+				var e *LedgerDroppedRoundError
+				cancelled := errors.As(err, &e)
+				req.out <- asyncVerifyVoteResponse{ev: ev, index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
+			}
+			toVerify = append(toVerify, vts...)
+		}
+		// if this is a vote
+		if req.uv != nil {
+			vt, v, err := req.uv.getVerificationTask(req.l)
+			if err != nil {
+				var e *LedgerDroppedRoundError
+				cancelled := errors.As(err, &e)
+				req.out <- asyncVerifyVoteResponse{v: v, index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
+			}
+			toVerify = append(toVerify, vt)
+		}
+	}
+}
+
+func (vbp *voteBatchProcessor) GetErredUnprocessed(ue execpool.InputJob, err error) {
+	vbp.Cleanup([]execpool.InputJob{ue}, err)
+}
+func (vbp *voteBatchProcessor) Cleanup(ue []execpool.InputJob, err error) {
+	for i := range ue {
+		req := ue[i].(*asyncVerifyVoteRequest)
+		req.out <- asyncVerifyVoteResponse{index: req.index, err: err, cancelled: true, req: req}
+	}
+}
+func sendVoteResult(
+	v vote,
+	ev equivocationVote,
+	index uint64,
+	message message,
+	err error,
+	cancelled bool,
+	req *asyncVerifyVoteRequest) {
+
+	req.out <- asyncVerifyVoteResponse{
+		v:         v,
+		ev:        ev,
+		index:     index,
+		message:   message,
+		err:       err,
+		cancelled: cancelled,
+		req:       req,
+	}
 }

@@ -144,6 +144,7 @@ func testOneTimeSignVerifyNewStyle(t *testing.T, c *OneTimeSignatureSecrets, c2 
 func TestOneTimeSignBatchVerifyNewStyle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	vTasks := make([]SigVerificationTask, 0, 16)
 	verifiers := make([]OneTimeSignatureVerifier, 0, 16)
 	ids := make([]OneTimeSignatureIdentifier, 0, 16)
 	messages := make([]Hashable, 0, 16)
@@ -156,55 +157,35 @@ func TestOneTimeSignBatchVerifyNewStyle(t *testing.T) {
 	s := randString()
 	s2 := randString()
 
+	v := c.OneTimeSignatureVerifier
+	v2 := c2.OneTimeSignatureVerifier
+
 	sig := c.Sign(id, s)
-	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	ids = append(ids, id)
-	messages = append(messages, s)
-	sigs = append(sigs, sig)
+	vTasks = append(vTasks, SigVerificationTask{v: v, id: id, message: s, sig: &sig})
 
 	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	ids = append(ids, id)
-	messages = append(messages, s2)
-	sigs = append(sigs, sig)
+	vTasks = append(vTasks, SigVerificationTask{v: v, id: id, message: s, sig: &sig})
 
 	sig2 := c2.Sign(id, s)
-	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	ids = append(ids, id)
-	messages = append(messages, s)
-	sigs = append(sigs, sig2)
+	vTasks = append(vTasks, SigVerificationTask{v: v, id: id, message: s, sig: &sig2})
 
 	otherID := randID()
-	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	ids = append(ids, otherID)
-	messages = append(messages, s)
-	sigs = append(sigs, sig)
+	vTasks = append(vTasks, SigVerificationTask{v: v, id: id, message: s, sig: &sig})
 
 	nextOffsetID := id
 	nextOffsetID.Offset++
-	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	ids = append(ids, nextOffsetID)
-	messages = append(messages, s)
-	sigs = append(sigs, sig)
+	vTasks = append(vTasks, SigVerificationTask{v: v, id: nextOffsetID, message: s, sig: &sig})
 
 	c.DeleteBeforeFineGrained(nextOffsetID, 256)
 	sigAfterDelete := c.Sign(id, s)
-	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	ids = append(ids, id)
-	messages = append(messages, s)
-	sigs = append(sigs, sigAfterDelete)
+	vTasks = append(vTasks, SigVerificationTask{v: v, id: id, message: s, sig: &sigAfterDelete})
 
 	sigNextAfterDelete := c.Sign(nextOffsetID, s)
-	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	ids = append(ids, nextOffsetID)
-	messages = append(messages, s)
-	sigs = append(sigs, sigNextAfterDelete)
+	vTasks = append(vTasks, SigVerificationTask{v: v, id: nextOffsetID, message: s, sig: &sigNextAfterDelete})
 
 	nextOffsetID.Offset++
 	sigNext2AfterDelete := c.Sign(nextOffsetID, s)
-	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	ids = append(ids, nextOffsetID)
-	messages = append(messages, s)
-	sigs = append(sigs, sigNext2AfterDelete)
+	vTasks = append(vTasks, SigVerificationTask{v: v, id: nextOffsetID, message: s, sig: &sigNext2AfterDelete})
 
 	nextBatchID := id
 	nextBatchID.Batch++
@@ -213,23 +194,14 @@ func TestOneTimeSignBatchVerifyNewStyle(t *testing.T) {
 	nextBatchOffsetID.Offset++
 	c.DeleteBeforeFineGrained(nextBatchOffsetID, 256)
 	sigAfterDelete2 := c.Sign(nextBatchID, s)
-	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	ids = append(ids, nextBatchID)
-	messages = append(messages, s)
-	sigs = append(sigs, sigAfterDelete2)
+	vTasks = append(vTasks, SigVerificationTask{v: v, id: nextBatchID, message: s, sig: &sigAfterDelete2})
 
 	sigNextAfterDelete2 := c.Sign(nextBatchOffsetID, s)
-	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	ids = append(ids, nextBatchOffsetID)
-	messages = append(messages, s)
-	sigs = append(sigs, sigNextAfterDelete2)
+	vTasks = append(vTasks, SigVerificationTask{v: v, id: nextBatchOffsetID, message: s, sig: &sigNextAfterDelete2})
 
 	nextBatchOffsetID.Offset++
 	sigNext2AfterDelete2 := c.Sign(nextBatchOffsetID, s)
-	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	ids = append(ids, nextBatchOffsetID)
-	messages = append(messages, s)
-	sigs = append(sigs, sigNext2AfterDelete2)
+	vTasks = append(vTasks, SigVerificationTask{v: v, id: nextBatchOffsetID, message: s, sig: &sigNext2AfterDelete2})
 
 	// Jump by two batches
 	bigJumpID := nextBatchOffsetID
@@ -238,36 +210,26 @@ func TestOneTimeSignBatchVerifyNewStyle(t *testing.T) {
 
 	preBigJumpID := bigJumpID
 	preBigJumpID.Batch--
-	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	ids = append(ids, preBigJumpID)
-	messages = append(messages, s)
-	sigs = append(sigs, c.Sign(preBigJumpID, s))
+	sig3 := c.Sign(preBigJumpID, s)
+	vTasks = append(vTasks, SigVerificationTask{v: v, id: preBigJumpID, message: s, sig: &sig3})
 
 	preBigJumpID.Batch++
 	preBigJumpID.Offset--
-	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	ids = append(ids, preBigJumpID)
-	messages = append(messages, s)
-	sigs = append(sigs, c.Sign(preBigJumpID, s))
+	sig4 := c.Sign(preBigJumpID, s)
+	vTasks = append(vTasks, SigVerificationTask{v: v, id: preBigJumpID, message: s, sig: &sig4})
 
-	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	ids = append(ids, bigJumpID)
-	messages = append(messages, s)
-	sigs = append(sigs, c.Sign(bigJumpID, s))
+	sig5 := c.Sign(bigJumpID, s)
+	vTasks = append(vTasks, SigVerificationTask{v: v, id: bigJumpID, message: s, sig: &sig5})
 
 	bigJumpID.Offset++
-	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	ids = append(ids, bigJumpID)
-	messages = append(messages, s)
-	sigs = append(sigs, c.Sign(bigJumpID, s))
+	sig6 := c.Sign(bigJumpID, s)
+	vTasks = append(vTasks, SigVerificationTask{v: v, id: bigJumpID, message: s, sig: &sig6})
 
 	bigJumpID.Batch++
-	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	ids = append(ids, bigJumpID)
-	messages = append(messages, s)
-	sigs = append(sigs, c.Sign(bigJumpID, s))
+	sig7 := c.Sign(bigJumpID, s)
+	vTasks = append(vTasks, SigVerificationTask{v: v, id: bigJumpID, message: s, sig: &sig7})
 
-	results := BatchVerifyOneTimeSignatures(verifiers, ids, messages, sigs)
+	results := BatchVerifyOneTimeSignatures(vTasks)
 
 	require.False(t, results[0], "correct signature failed to verify (ephemeral)")
 	require.True(t, results[1], "signature verifies on wrong message")

@@ -304,6 +304,14 @@ func (s *OneTimeSignatureSecrets) Sign(id OneTimeSignatureIdentifier, message Ha
 	return OneTimeSignature{}
 }
 
+// SigVerificationTask is a single self-containing struct for the signiture verification
+type SigVerificationTask struct {
+	V       OneTimeSignatureVerifier
+	Id      OneTimeSignatureIdentifier
+	Message Hashable
+	Sig     *OneTimeSignature
+}
+
 // Verify verifies that some Hashable signature was signed under some
 // OneTimeSignatureVerifier and some OneTimeSignatureIdentifier.
 //
@@ -328,37 +336,36 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 }
 
 // BatchVerifyOneTimeSignatures has the same function as Verify, but it operates on a batch of signatures.
-func BatchVerifyOneTimeSignatures(vs []OneTimeSignatureVerifier, ids []OneTimeSignatureIdentifier,
-	messages []Hashable, sigs []OneTimeSignature) (failed []bool) {
+func BatchVerifyOneTimeSignatures(vTasks []SigVerificationTask) (failed []bool) {
+	numTasks := len(vTasks)
+	messageBytes := make([][]byte, numTasks*3, numTasks*3)
+	publicKeys := make([]PublicKey, numTasks*3, numTasks*3)
+	signatures := make([]Signature, numTasks*3, numTasks*3)
 
-	messageBytes := make([][]byte, len(ids)*3, len(ids)*3)
-	publicKeys := make([]PublicKey, len(ids)*3, len(ids)*3)
-	signatures := make([]Signature, len(ids)*3, len(ids)*3)
-
-	for i := range ids {
+	for i := range vTasks {
 		offsetID := OneTimeSignatureSubkeyOffsetID{
-			SubKeyPK: sigs[i].PK,
-			Batch:    ids[i].Batch,
-			Offset:   ids[i].Offset,
+			SubKeyPK: vTasks[i].sig.PK,
+			Batch:    vTasks[i].id.Batch,
+			Offset:   vTasks[i].id.Offset,
 		}
 		batchID := OneTimeSignatureSubkeyBatchID{
-			SubKeyPK: sigs[i].PK2,
-			Batch:    ids[i].Batch,
+			SubKeyPK: vTasks[i].sig.PK2,
+			Batch:    vTasks[i].id.Batch,
 		}
 		messageBytes[i*3] = HashRep(batchID)
 		messageBytes[i*3+1] = HashRep(offsetID)
-		messageBytes[i*3+2] = HashRep(messages[i])
+		messageBytes[i*3+2] = HashRep(vTasks[i].message)
 
-		publicKeys[i*3] = PublicKey(vs[i])
+		publicKeys[i*3] = PublicKey(vTasks[i].v)
 		publicKeys[i*3+1] = PublicKey(batchID.SubKeyPK)
 		publicKeys[i*3+2] = PublicKey(offsetID.SubKeyPK)
 
-		signatures[i*3] = Signature(sigs[i].PK2Sig)
-		signatures[i*3+1] = Signature(sigs[i].PK1Sig)
-		signatures[i*3+2] = Signature(sigs[i].Sig)
+		signatures[i*3] = Signature(vTasks[i].sig.PK2Sig)
+		signatures[i*3+1] = Signature(vTasks[i].sig.PK1Sig)
+		signatures[i*3+2] = Signature(vTasks[i].sig.Sig)
 	}
 	allPass, results := batchVerificationImpl(messageBytes, publicKeys, signatures)
-	sigResults := make([]bool, len(ids), len(ids))
+	sigResults := make([]bool, numTasks, numTasks)
 	if allPass {
 		return sigResults
 	}
