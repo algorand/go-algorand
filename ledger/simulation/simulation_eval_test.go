@@ -596,7 +596,7 @@ int 1`,
 				expectedSuccess := len(testCase.expectedError) == 0
 				var expectedAppCallAD transactions.ApplyData
 				expectedFailedAt := simulation.TxnPath{1}
-				var budgetConsumed, budgetAdded int
+				var budgetConsumed, budgetAdded uint64
 				if expectedSuccess {
 					expectedAppCallAD = transactions.ApplyData{
 						ApplicationID: 2,

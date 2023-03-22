@@ -3380,6 +3380,14 @@
           "items": {
             "type": "integer"
           }
+        },
+        "budget-added": {
+          "description": "Total budget added during execution of app calls in the transaction group.",
+          "type": "integer"
+        },
+        "budget-consumed": {
+          "description": "Total budget consumed during execution of app calls in the transaction group.",
+          "type": "integer"
         }
       }
     },
@@ -3396,6 +3404,10 @@
         "missing-signature": {
           "description": "A boolean indicating whether this transaction is missing signatures",
           "type": "boolean"
+        },
+        "budget-used": {
+          "description": "Budget used during execution of an app call transaction.",
+          "type": "integer"
         }
       }
     },

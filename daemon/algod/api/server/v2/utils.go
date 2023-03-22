@@ -357,6 +357,7 @@ func convertTxnResult(txnResult simulation.TxnResult) preEncodedSimulateTxnResul
 	return preEncodedSimulateTxnResult{
 		Txn:              ConvertInnerTxn(&txnResult.Txn),
 		MissingSignature: trueOrNil(txnResult.MissingSignature),
+		BudgetUsed:       numOrNil(uint64(txnResult.BudgetUsed)),
 	}
 }
 
@@ -369,6 +370,8 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) preEncodedS
 	encoded := preEncodedSimulateTxnGroupResult{
 		Txns:           txnResults,
 		FailureMessage: strOrNil(txnGroupResult.FailureMessage),
+		BudgetAdded:    numOrNil(uint64(txnGroupResult.BudgetAdded)),
+		BudgetConsumed: numOrNil(uint64(txnGroupResult.BudgetConsumed)),
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {
