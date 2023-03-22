@@ -128,6 +128,30 @@ func (w *stagingWriterImpl) writeKVs(ctx context.Context, kvrs []encoded.KVRecor
 		hashes := make([][]byte, len(kvrs))
 		for i := 0; i < len(kvrs); i++ {
 			keys[i] = kvrs[i].Key
+
+			// Since `encoded.KVRecordV6` is `omitempty` and `omitemptyarray`,
+			// when we have an instance of `encoded.KVRecordV6` with nil value,
+			// an empty box is unmarshalled to have `nil` value,
+			// while this might be mistaken to be a box deletion.
+			//
+			// We don't want to mistake this to be a deleted box:
+			// We are (and should be) during Fast Catchup (FC)
+			// writing to DB with empty byte string, rather than writing nil.
+			//
+			// This does not really matter in sqlite3,
+			// for sqlite3 treats them both as empty BLOB,
+			// but when we have a Key-Value-based database backend,
+			// nil and []byte{} might be treated differently.
+			// For the sake of consistency, we convert nil to []byte{}.
+			//
+			// Also, from a round by round catchup perspective,
+			// when we delete a box, in accountsNewRoundImpl method,
+			// the kv pair with value = nil will be deleted from kvstore table.
+			// Thus, it seems more consistent and appropriate to write as []byte{}.
+
+			if kvrs[i].Value == nil {
+				kvrs[i].Value = []byte{}
+			}
 			values[i] = kvrs[i].Value
 			hashes[i] = trackerdb.KvHashBuilderV6(string(keys[i]), values[i])
 		}
