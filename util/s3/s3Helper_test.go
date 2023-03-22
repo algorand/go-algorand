@@ -183,12 +183,12 @@ func TestGetVersionFromName(t *testing.T) {
 		expected uint64
 	}
 	tests := []args{
-		{name: "test 1 (major)", version: "_1.0.0", expected: 1 * 1 << 48},
-		{name: "test 2 (major)", version: "_2.0.0", expected: 2 * 1 << 48},
-		{name: "test 3 (minor)", version: "_1.1.0", expected: 1*1<<48 + 1*1<<24},
-		{name: "test 4 (minor)", version: "_1.2.0", expected: 1*1<<48 + 2*1<<24},
-		{name: "test 5 (patch)", version: "_1.0.1", expected: 1*1<<48 + 1},
-		{name: "test 6 (patch)", version: "_1.0.2", expected: 1*1<<48 + 2},
+		{name: "test 1 (major)", version: "_1.0.0", expected: 1 * 1 << 40},
+		{name: "test 2 (major)", version: "_2.0.0", expected: 2 * 1 << 40},
+		{name: "test 3 (minor)", version: "_1.1.0", expected: 1*1<<40 + 1*1<<24},
+		{name: "test 4 (minor)", version: "_1.2.0", expected: 1*1<<40 + 2*1<<24},
+		{name: "test 5 (patch)", version: "_1.0.1", expected: 1*1<<40 + 1},
+		{name: "test 6 (patch)", version: "_1.0.2", expected: 1*1<<40 + 2},
 	}
 
 	for _, test := range tests {
@@ -225,12 +225,12 @@ func TestGetPartsFromVersion(t *testing.T) {
 		expPatch uint64
 	}
 	tests := []args{
-		{name: "test 1 (major)", version: 1 * 1 << 48, expMajor: 1, expMinor: 0, expPatch: 0},
-		{name: "test 2 (major)", version: 2 * 1 << 48, expMajor: 2, expMinor: 0, expPatch: 0},
-		{name: "test 3 (minor)", version: 1*1<<48 + 1*1<<24, expMajor: 1, expMinor: 1, expPatch: 0},
-		{name: "test 4 (minor)", version: 1*1<<48 + 2*1<<24, expMajor: 1, expMinor: 2, expPatch: 0},
-		{name: "test 5 (patch)", version: 1*1<<48 + 1, expMajor: 1, expMinor: 0, expPatch: 1},
-		{name: "test 6 (patch)", version: 1*1<<48 + 2, expMajor: 1, expMinor: 0, expPatch: 2},
+		{name: "test 1 (major)", version: 1 * 1 << 40, expMajor: 1, expMinor: 0, expPatch: 0},
+		{name: "test 2 (major)", version: 2 * 1 << 40, expMajor: 2, expMinor: 0, expPatch: 0},
+		{name: "test 3 (minor)", version: 1*1<<40 + 1*1<<24, expMajor: 1, expMinor: 1, expPatch: 0},
+		{name: "test 4 (minor)", version: 1*1<<40 + 2*1<<24, expMajor: 1, expMinor: 2, expPatch: 0},
+		{name: "test 5 (patch)", version: 1*1<<40 + 1, expMajor: 1, expMinor: 0, expPatch: 1},
+		{name: "test 6 (patch)", version: 1*1<<40 + 2, expMajor: 1, expMinor: 0, expPatch: 2},
 	}
 
 	for _, test := range tests {
@@ -241,7 +241,7 @@ func TestGetPartsFromVersion(t *testing.T) {
 		require.Equal(t, test.expPatch, actualPatch, test.name)
 	}
 
-	_, _, _, err := GetVersionPartsFromVersion(1<<48 - 1)
+	_, _, _, err := GetVersionPartsFromVersion(1<<40 - 1)
 	require.Error(t, err, "Versions less than 1.0.0 should not be parsed.")
 }
 
