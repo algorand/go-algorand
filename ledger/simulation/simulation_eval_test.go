@@ -940,7 +940,7 @@ int 0
 	})
 }
 
-func TestLogicSigBudget(t *testing.T) {
+func TestLogicSigOverBudget(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -948,98 +948,68 @@ func TestLogicSigBudget(t *testing.T) {
 ` + strings.Repeat(`byte "a"
 keccak256
 pop
-`, 100) + `end:
-	int 1`)
+`, 200) + `int 1`)
 	require.NoError(t, err)
 	program := logic.Program(op.Program)
 	lsigAddr := basics.Address(crypto.HashObj(&program))
 
-	testCases := []struct {
-		name          string
-		arguments     [][]byte
-		expectedError string
-	}{
-		{
-			name:          "approval",
-			arguments:     [][]byte{{1}},
-			expectedError: "", // no error
-		},
-	}
+	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+		sender := accounts[0]
 
-	for _, testCase := range testCases {
-		testCase := testCase
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-				sender := accounts[0]
-
-				payTxn := txnInfo.NewTxn(txntest.Txn{
-					Type:     protocol.PaymentTx,
-					Sender:   sender.Addr,
-					Receiver: lsigAddr,
-					Amount:   1_000_000,
-				})
-				appCallTxn := txnInfo.NewTxn(txntest.Txn{
-					Type:   protocol.ApplicationCallTx,
-					Sender: lsigAddr,
-					ApprovalProgram: `#pragma version 8
+		payTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: lsigAddr,
+			Amount:   1_000_000,
+		})
+		appCallTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:   protocol.ApplicationCallTx,
+			Sender: lsigAddr,
+			ApprovalProgram: `#pragma version 8
 byte "hello"
 log
 int 1`,
-					ClearStateProgram: `#pragma version 8
+			ClearStateProgram: `#pragma version 8
 int 1`,
-				})
+		})
 
-				txntest.Group(&payTxn, &appCallTxn)
+		txntest.Group(&payTxn, &appCallTxn)
 
-				signedPayTxn := payTxn.Txn().Sign(sender.Sk)
-				signedAppCallTxn := appCallTxn.SignedTxn()
-				signedAppCallTxn.Lsig = transactions.LogicSig{
-					Logic: program,
-					Args:  testCase.arguments,
-				}
+		signedPayTxn := payTxn.Txn().Sign(sender.Sk)
+		signedAppCallTxn := appCallTxn.SignedTxn()
+		signedAppCallTxn.Lsig = transactions.LogicSig{
+			Logic: program,
+		}
 
-				expectedSuccess := len(testCase.expectedError) == 0
-				var expectedAppCallAD transactions.ApplyData
-				expectedFailedAt := simulation.TxnPath{1}
-				if expectedSuccess {
-					expectedAppCallAD = transactions.ApplyData{
-						ApplicationID: 2,
-						EvalDelta: transactions.EvalDelta{
-							Logs: []string{"hello"},
-						},
-					}
-					expectedFailedAt = nil
-				}
+		var expectedAppCallAD transactions.ApplyData
+		expectedFailedAt := simulation.TxnPath{1}
 
-				return simulationTestCase{
-					input:         []transactions.SignedTxn{signedPayTxn, signedAppCallTxn},
-					expectedError: testCase.expectedError,
-					expected: simulation.Result{
-						Version:   1,
-						LastRound: txnInfo.LatestRound(),
-						TxnGroups: []simulation.TxnGroupResult{
+		return simulationTestCase{
+			input:         []transactions.SignedTxn{signedPayTxn, signedAppCallTxn},
+			expectedError: "dynamic cost budget exceeded",
+			expected: simulation.Result{
+				Version:   1,
+				LastRound: txnInfo.LatestRound(),
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{},
 							{
-								Txns: []simulation.TxnResult{
-									{},
-									{
-										Txn: transactions.SignedTxnWithAD{
-											ApplyData: expectedAppCallAD,
-										},
-										BudgetUsed: 3,
-									},
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: expectedAppCallAD,
 								},
-								FailedAt:       expectedFailedAt,
-								BudgetAdded:    700,
-								BudgetConsumed: 3,
+								BudgetUsed: 0,
 							},
 						},
-						WouldSucceed: expectedSuccess,
+						FailedAt:       expectedFailedAt,
+						BudgetAdded:    0,
+						BudgetConsumed: 0,
 					},
-				}
-			})
-		})
-	}
+				},
+				WouldSucceed: false,
+			},
+		}
+	})
 }
 
 func TestSignatureCheck(t *testing.T) {
