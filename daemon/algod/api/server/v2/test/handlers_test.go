@@ -85,9 +85,8 @@ func setupTestForMethodGet(t *testing.T, consensusUpgrade bool) (v2.Handlers, ec
 func numOrNil(n uint64) *uint64 {
 	if n == 0 {
 		return nil
-	} else {
-		return &n
 	}
+	return &n
 }
 
 func TestSimpleMockBuilding(t *testing.T) {
