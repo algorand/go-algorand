@@ -1063,7 +1063,7 @@ var infoAppCmd = &cobra.Command{
 }
 
 // populateMethodCallTxnArgs parses and loads transactions from the files indicated by the values
-// slice. An error will occur if the transaction does not matched the expected type, it has a nonzero
+// slice. An error will occur if the transaction does not match the expected type, it has a nonzero
 // group ID, or if it is signed by a normal signature or Msig signature (but not Lsig signature)
 func populateMethodCallTxnArgs(types []string, values []string) ([]transactions.SignedTxn, error) {
 	loadedTxns := make([]transactions.SignedTxn, len(values))
