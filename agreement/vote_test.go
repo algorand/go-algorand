@@ -69,7 +69,7 @@ func verifyEqSigVote(uev unauthenticatedEquivocationVote, l LedgerReader) (equiv
 		return av, err
 	}
 	failed := crypto.BatchVerifyOneTimeSignatures(vts)
-	if failed[0] {
+	if failed[0] || failed[1] {
 		err = fmt.Errorf("Test: equivocation vote signature verification failed")
 	}
 	return av, err
