@@ -144,11 +144,7 @@ func testOneTimeSignVerifyNewStyle(t *testing.T, c *OneTimeSignatureSecrets, c2 
 func TestOneTimeSignBatchVerifyNewStyle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	vTasks := make([]SigVerificationTask, 0, 16)
-	verifiers := make([]OneTimeSignatureVerifier, 0, 16)
-	ids := make([]OneTimeSignatureIdentifier, 0, 16)
-	messages := make([]Hashable, 0, 16)
-	sigs := make([]OneTimeSignature, 0, 16)
+	vTasks := make([]*SigVerificationTask, 0, 16)
 
 	c := GenerateOneTimeSignatureSecrets(0, 1000)
 	c2 := GenerateOneTimeSignatureSecrets(0, 1000)
@@ -158,34 +154,32 @@ func TestOneTimeSignBatchVerifyNewStyle(t *testing.T) {
 	s2 := randString()
 
 	v := c.OneTimeSignatureVerifier
-	v2 := c2.OneTimeSignatureVerifier
 
 	sig := c.Sign(id, s)
-	vTasks = append(vTasks, SigVerificationTask{v: v, id: id, message: s, sig: &sig})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: id, Message: s, Sig: &sig})
 
-	verifiers = append(verifiers, c.OneTimeSignatureVerifier)
-	vTasks = append(vTasks, SigVerificationTask{v: v, id: id, message: s, sig: &sig})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: id, Message: s2, Sig: &sig})
 
 	sig2 := c2.Sign(id, s)
-	vTasks = append(vTasks, SigVerificationTask{v: v, id: id, message: s, sig: &sig2})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: id, Message: s, Sig: &sig2})
 
 	otherID := randID()
-	vTasks = append(vTasks, SigVerificationTask{v: v, id: id, message: s, sig: &sig})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: otherID, Message: s, Sig: &sig})
 
 	nextOffsetID := id
 	nextOffsetID.Offset++
-	vTasks = append(vTasks, SigVerificationTask{v: v, id: nextOffsetID, message: s, sig: &sig})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: nextOffsetID, Message: s, Sig: &sig})
 
 	c.DeleteBeforeFineGrained(nextOffsetID, 256)
 	sigAfterDelete := c.Sign(id, s)
-	vTasks = append(vTasks, SigVerificationTask{v: v, id: id, message: s, sig: &sigAfterDelete})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: id, Message: s, Sig: &sigAfterDelete})
 
 	sigNextAfterDelete := c.Sign(nextOffsetID, s)
-	vTasks = append(vTasks, SigVerificationTask{v: v, id: nextOffsetID, message: s, sig: &sigNextAfterDelete})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: nextOffsetID, Message: s, Sig: &sigNextAfterDelete})
 
 	nextOffsetID.Offset++
 	sigNext2AfterDelete := c.Sign(nextOffsetID, s)
-	vTasks = append(vTasks, SigVerificationTask{v: v, id: nextOffsetID, message: s, sig: &sigNext2AfterDelete})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: nextOffsetID, Message: s, Sig: &sigNext2AfterDelete})
 
 	nextBatchID := id
 	nextBatchID.Batch++
@@ -194,14 +188,14 @@ func TestOneTimeSignBatchVerifyNewStyle(t *testing.T) {
 	nextBatchOffsetID.Offset++
 	c.DeleteBeforeFineGrained(nextBatchOffsetID, 256)
 	sigAfterDelete2 := c.Sign(nextBatchID, s)
-	vTasks = append(vTasks, SigVerificationTask{v: v, id: nextBatchID, message: s, sig: &sigAfterDelete2})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: nextBatchID, Message: s, Sig: &sigAfterDelete2})
 
 	sigNextAfterDelete2 := c.Sign(nextBatchOffsetID, s)
-	vTasks = append(vTasks, SigVerificationTask{v: v, id: nextBatchOffsetID, message: s, sig: &sigNextAfterDelete2})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: nextBatchOffsetID, Message: s, Sig: &sigNextAfterDelete2})
 
 	nextBatchOffsetID.Offset++
 	sigNext2AfterDelete2 := c.Sign(nextBatchOffsetID, s)
-	vTasks = append(vTasks, SigVerificationTask{v: v, id: nextBatchOffsetID, message: s, sig: &sigNext2AfterDelete2})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: nextBatchOffsetID, Message: s, Sig: &sigNext2AfterDelete2})
 
 	// Jump by two batches
 	bigJumpID := nextBatchOffsetID
@@ -211,23 +205,23 @@ func TestOneTimeSignBatchVerifyNewStyle(t *testing.T) {
 	preBigJumpID := bigJumpID
 	preBigJumpID.Batch--
 	sig3 := c.Sign(preBigJumpID, s)
-	vTasks = append(vTasks, SigVerificationTask{v: v, id: preBigJumpID, message: s, sig: &sig3})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: preBigJumpID, Message: s, Sig: &sig3})
 
 	preBigJumpID.Batch++
 	preBigJumpID.Offset--
 	sig4 := c.Sign(preBigJumpID, s)
-	vTasks = append(vTasks, SigVerificationTask{v: v, id: preBigJumpID, message: s, sig: &sig4})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: preBigJumpID, Message: s, Sig: &sig4})
 
 	sig5 := c.Sign(bigJumpID, s)
-	vTasks = append(vTasks, SigVerificationTask{v: v, id: bigJumpID, message: s, sig: &sig5})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: bigJumpID, Message: s, Sig: &sig5})
 
 	bigJumpID.Offset++
 	sig6 := c.Sign(bigJumpID, s)
-	vTasks = append(vTasks, SigVerificationTask{v: v, id: bigJumpID, message: s, sig: &sig6})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: bigJumpID, Message: s, Sig: &sig6})
 
 	bigJumpID.Batch++
 	sig7 := c.Sign(bigJumpID, s)
-	vTasks = append(vTasks, SigVerificationTask{v: v, id: bigJumpID, message: s, sig: &sig7})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: bigJumpID, Message: s, Sig: &sig7})
 
 	results := BatchVerifyOneTimeSignatures(vTasks)
 
@@ -279,21 +273,23 @@ func BenchmarkBatchedOneTimeSigBatchVerification(b *testing.B) {
 		b.Run(fmt.Sprintf("batch=%v", enabled), func(b *testing.B) {
 			// generate a bunch of signatures
 			c := GenerateOneTimeSignatureSecrets(0, 1000)
-			vs := make([]OneTimeSignatureVerifier, b.N)
-			sigs := make([]OneTimeSignature, b.N)
-			ids := make([]OneTimeSignatureIdentifier, b.N)
-			msgs := make([]Hashable, b.N)
 			msg := randString()
-
+			vTasks := make([]*SigVerificationTask, b.N)
 			for i := 0; i < b.N; i++ {
-				vs[i] = c.OneTimeSignatureVerifier
-				ids[i] = randID()
-				msgs[i] = msg
-				sigs[i] = c.Sign(ids[i], msg)
+				vs := c.OneTimeSignatureVerifier
+				id := randID()
+				msg := msg
+				sig := c.Sign(id, msg)
+				vTasks[i] = &SigVerificationTask{
+					V:       vs,
+					Id:      id,
+					Message: msg,
+					Sig:     &sig,
+				}
 			}
 			// verify them
 			b.ResetTimer()
-			BatchVerifyOneTimeSignatures(vs, ids, msgs, sigs)
+			BatchVerifyOneTimeSignatures(vTasks)
 		})
 	}
 }
