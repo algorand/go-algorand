@@ -123,7 +123,7 @@ func (s *Service) Start() {
 	s.quit = make(chan struct{})
 	s.done = make(chan struct{})
 
-	s.voteVerifier = MakeAsyncVoteVerifier(s.BacklogPool)
+	s.voteVerifier = MakeStartAsyncVoteVerifier(s.BacklogPool)
 	s.demux = makeDemux(demuxParams{
 		net:               s.Network,
 		ledger:            s.Ledger,

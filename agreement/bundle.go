@@ -203,7 +203,7 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 		rv := rawVote{Sender: auth.Sender, Round: b.Round, Period: b.Period, Step: b.Step, Proposal: b.Proposal}
 		uv := unauthenticatedVote{R: rv, Cred: auth.Cred, Sig: auth.Sig}
 
-		avv.verifyVote(ctx, l, uv, uint64(i), message{}, results) //nolint:errcheck // verifyVote will call EnqueueBacklog, which blocks until the verify task is queued, or returns an error when ctx.Done(), which we are already checking
+		avv.verifyVote(ctx, l, uv, uint64(i), message{}, results)
 	}
 
 	// create verification requests for equivocation votes
@@ -223,7 +223,7 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 			Proposals: auth.Proposals,
 			Sigs:      auth.Sigs,
 		}
-		avv.verifyEqVote(ctx, l, uev, uint64(i), message{}, results) //nolint:errcheck // verifyVote will call EnqueueBacklog, which blocks until the verify task is queued, or returns an error when ctx.Done(), which we are already checking
+		avv.verifyEqVote(ctx, l, uev, uint64(i), message{}, results)
 
 	}
 

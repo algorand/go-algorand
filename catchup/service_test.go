@@ -905,7 +905,7 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 			Cert: agreement.Certificate{
 				Round: basics.Round(roundNumber),
 			},
-			VoteVerifier: agreement.MakeAsyncVoteVerifier(nil),
+			VoteVerifier: agreement.MakeStartAsyncVoteVerifier(nil),
 		}
 		block, _ := remote.Block(basics.Round(roundNumber))
 		pc.Cert.Proposal.BlockDigest = block.Digest()

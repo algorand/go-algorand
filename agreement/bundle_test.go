@@ -43,7 +43,7 @@ func TestBundleCreation(t *testing.T) {
 	var proposal proposalValue
 	proposal.BlockDigest = randomBlockHash()
 
-	avv := MakeAsyncVoteVerifier(nil)
+	avv := MakeStartAsyncVoteVerifier(nil)
 	defer avv.Quit()
 	for s := 1; s <= 4; s++ {
 		var votes []vote
@@ -54,7 +54,7 @@ func TestBundleCreation(t *testing.T) {
 			uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 
-			vote, err := uv.verify(ledger)
+			vote, err := verifySigVote(uv, ledger)
 			if err != nil {
 				continue
 			}
@@ -80,7 +80,7 @@ func TestBundleCreationWithZeroVotes(t *testing.T) {
 	proposal.BlockDigest = randomBlockHash()
 
 	var bundles []bundle
-	avv := MakeAsyncVoteVerifier(nil)
+	avv := MakeStartAsyncVoteVerifier(nil)
 	defer avv.Quit()
 	for s := 1; s <= 5; s++ {
 		var votes []vote
@@ -108,7 +108,7 @@ func makeBundlePanicWrapper(t *testing.T, message string, proposal proposalValue
 	return uab
 }
 
-//Test Bundle Creation with Validation for duplicate votes from same sender
+// Test Bundle Creation with Validation for duplicate votes from same sender
 func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -132,7 +132,8 @@ func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 			rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
 			uv0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
-			vote0, err := uv0.verify(ledger)
+
+			vote0, err := verifySigVote(uv0, ledger)
 			if err != nil {
 				continue
 			}
@@ -140,7 +141,7 @@ func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 			rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal2}
 			uv1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
-			vote1, err := uv1.verify(ledger)
+			vote1, err := verifySigVote(uv1, ledger)
 			if err != nil {
 				continue
 			}
@@ -160,8 +161,11 @@ func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 					Sigs:      [2]crypto.OneTimeSignature{vote0.Sig, vote1.Sig},
 				}
 
-				ev, err := unauthenticatedEquivocationVote.verify(ledger)
+				vts, ev, err := unauthenticatedEquivocationVote.getEquivocVerificationTasks(ledger)
+				failed := crypto.BatchVerifyOneTimeSignatures(vts)
 				require.NoError(t, err)
+				require.False(t, failed[0])
+				require.False(t, failed[1])
 
 				equivocationVotes = append(equivocationVotes, ev)
 			}
@@ -173,7 +177,7 @@ func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 
 }
 
-//Test Bundle Creation with Validation
+// Test Bundle Creation with Validation
 func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -198,7 +202,7 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 			rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
 			uv0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
-			vote0, err := uv0.verify(ledger)
+			vote0, err := verifySigVote(uv0, ledger)
 			if err != nil {
 				continue
 			}
@@ -206,7 +210,7 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 			rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal2}
 			uv1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
-			vote1, err := uv1.verify(ledger)
+			vote1, err := verifySigVote(uv1, ledger)
 			if err != nil {
 				continue
 			}
@@ -226,8 +230,11 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 					Sigs:      [2]crypto.OneTimeSignature{vote0.Sig, vote1.Sig},
 				}
 
-				ev, err := unauthenticatedEquivocationVote.verify(ledger)
+				vts, ev, err := unauthenticatedEquivocationVote.getEquivocVerificationTasks(ledger)
+				failed := crypto.BatchVerifyOneTimeSignatures(vts)
 				require.NoError(t, err)
+				require.False(t, failed[0])
+				require.False(t, failed[1])
 
 				equivocationVotes = append(equivocationVotes, ev)
 			}
@@ -237,7 +244,7 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 		unauthenticatedBundles = append(unauthenticatedBundles, ub)
 
 	}
-	avv := MakeAsyncVoteVerifier(nil)
+	avv := MakeStartAsyncVoteVerifier(nil)
 	defer avv.Quit()
 
 	for i := range unauthenticatedBundles {
@@ -283,7 +290,7 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 
 }
 
-//Test Bundle Creation with Validation
+// Test Bundle Creation with Validation
 func TestBundleCertificationWithEquivocationVotes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -307,7 +314,7 @@ func TestBundleCertificationWithEquivocationVotes(t *testing.T) {
 			rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
 			uv0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
-			vote0, err := uv0.verify(ledger)
+			vote0, err := verifySigVote(uv0, ledger)
 			if err != nil {
 				continue
 			}
@@ -315,7 +322,7 @@ func TestBundleCertificationWithEquivocationVotes(t *testing.T) {
 			rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal2}
 			uv1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
-			vote1, err := uv1.verify(ledger)
+			vote1, err := verifySigVote(uv1, ledger)
 			if err != nil {
 				continue
 			}
@@ -335,8 +342,11 @@ func TestBundleCertificationWithEquivocationVotes(t *testing.T) {
 					Sigs:      [2]crypto.OneTimeSignature{vote0.Sig, vote1.Sig},
 				}
 
-				ev, err := unauthenticatedEquivocationVote.verify(ledger)
+				vts, ev, err := unauthenticatedEquivocationVote.getEquivocVerificationTasks(ledger)
+				failed := crypto.BatchVerifyOneTimeSignatures(vts)
 				require.NoError(t, err)
+				require.False(t, failed[0])
+				require.False(t, failed[1])
 
 				equivocationVotes = append(equivocationVotes, ev)
 			}
@@ -381,7 +391,7 @@ func TestBundleCreationWithEquivocationVotesUnderQuorum(t *testing.T) {
 			rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
 			uv0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
-			vote0, err := uv0.verify(ledger)
+			vote0, err := verifySigVote(uv0, ledger)
 			if err != nil {
 				continue
 			}
@@ -389,7 +399,7 @@ func TestBundleCreationWithEquivocationVotesUnderQuorum(t *testing.T) {
 			rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal2}
 			uv1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
-			vote1, err := uv1.verify(ledger)
+			vote1, err := verifySigVote(uv1, ledger)
 			if err != nil {
 				continue
 			}
@@ -407,7 +417,7 @@ func TestBundleCreationWithEquivocationVotesUnderQuorum(t *testing.T) {
 				Sigs:      [2]crypto.OneTimeSignature{vote0.Sig, vote1.Sig},
 			}
 
-			_, err = unauthenticatedEquivocationVote.verify(ledger)
+			_, err = verifyEqSigVote(unauthenticatedEquivocationVote, ledger)
 			require.NoError(t, err)
 		}
 

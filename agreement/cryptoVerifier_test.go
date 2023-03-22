@@ -147,7 +147,7 @@ func TestCryptoVerifierBuffers(t *testing.T) {
 	ledger, addresses, selections, votings := readOnlyFixture100()
 	ctx := context.Background()
 
-	verifier := makeCryptoVerifier(ledger, testBlockValidator{}, MakeAsyncVoteVerifier(nil), logging.Base())
+	verifier := makeCryptoVerifier(ledger, testBlockValidator{}, MakeStartAsyncVoteVerifier(nil), logging.Base())
 
 	msgTypes := []protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag, protocol.VoteBundleTag}
 
@@ -284,7 +284,7 @@ func BenchmarkCryptoVerifierVoteVertification(b *testing.B) {
 	ledger, addresses, selections, votings := readOnlyFixture100()
 	ctx := context.Background()
 
-	verifier := makeCryptoVerifier(ledger, testBlockValidator{}, MakeAsyncVoteVerifier(nil), logging.Base())
+	verifier := makeCryptoVerifier(ledger, testBlockValidator{}, MakeStartAsyncVoteVerifier(nil), logging.Base())
 	c := verifier.Verified(protocol.AgreementVoteTag)
 
 	senderIdx := findSender(ledger, basics.Round(300), 0, 0, addresses, selections)
@@ -329,7 +329,7 @@ func BenchmarkCryptoVerifierProposalVertification(b *testing.B) {
 
 	ctx := context.Background()
 
-	verifier := makeCryptoVerifier(ledger, testBlockValidator{}, MakeAsyncVoteVerifier(nil), logging.Base())
+	verifier := makeCryptoVerifier(ledger, testBlockValidator{}, MakeStartAsyncVoteVerifier(nil), logging.Base())
 	c := verifier.Verified(protocol.ProposalPayloadTag)
 	request := cryptoProposalRequest{
 		message: message{
@@ -354,7 +354,7 @@ func BenchmarkCryptoVerifierProposalVertification(b *testing.B) {
 func BenchmarkCryptoVerifierBundleVertification(b *testing.B) {
 	ledger, addresses, selections, votings := readOnlyFixture7000()
 	ctx := context.Background()
-	verifier := makeCryptoVerifier(ledger, testBlockValidator{}, MakeAsyncVoteVerifier(nil), logging.Base())
+	verifier := makeCryptoVerifier(ledger, testBlockValidator{}, MakeStartAsyncVoteVerifier(nil), logging.Base())
 	c := verifier.Verified(protocol.VoteBundleTag)
 
 	Step := step(5)
@@ -363,7 +363,7 @@ func BenchmarkCryptoVerifierBundleVertification(b *testing.B) {
 	request := cryptoBundleRequest{message: makeMessage(0, protocol.VoteBundleTag, addresses[senders[0]], ledger, selections[senders[0]], votings[senders[0]], ledger.NextRound(), 0, Step), Round: ledger.NextRound()}
 	for _, senderIdx := range senders {
 		uv := makeUnauthenticatedVote(ledger, addresses[senderIdx], selections[senderIdx], votings[senderIdx], request.message.UnauthenticatedBundle.Round, request.message.UnauthenticatedBundle.Period, Step, request.message.UnauthenticatedBundle.Proposal)
-		v, err := uv.verify(ledger)
+		v, err := verifySigVote(uv, ledger)
 		if err != nil {
 			b.Errorf("unable to verify created vote : %+v", err)
 			return
@@ -396,7 +396,7 @@ func TestCryptoVerifierVerificationFailures(t *testing.T) {
 	mainPool := execpool.MakePool(t)
 	defer mainPool.Shutdown()
 
-	voteVerifier := MakeAsyncVoteVerifier(&expiredExecPool{mainPool})
+	voteVerifier := MakeStartAsyncVoteVerifier(&expiredExecPool{mainPool})
 	defer voteVerifier.Quit()
 
 	cryptoVerifier := makeCryptoVerifier(nil, nil, voteVerifier, logging.TestingLog(t))
@@ -406,7 +406,7 @@ func TestCryptoVerifierVerificationFailures(t *testing.T) {
 	// read the failed response from VerifiedVotes:
 	votesout := cryptoVerifier.VerifiedVotes()
 	voteResponse := <-votesout
-	require.Equal(t, context.Canceled, voteResponse.err)
+	require.Equal(t, execpool.ErrShuttingDownError, voteResponse.err)
 	require.True(t, voteResponse.cancelled)
 	require.Equal(t, uint64(14), voteResponse.index)
 }

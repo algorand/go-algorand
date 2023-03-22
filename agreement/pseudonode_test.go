@@ -154,7 +154,7 @@ func TestPseudonode(t *testing.T) {
 		validator:    testBlockValidator{},
 		keys:         keyManager,
 		ledger:       ledger,
-		voteVerifier: MakeAsyncVoteVerifier(nil),
+		voteVerifier: MakeStartAsyncVoteVerifier(nil),
 		log:          sLogger,
 		monitor:      nil,
 	})
@@ -288,7 +288,7 @@ func makeSerializedPseudonode(factory BlockFactory, validator BlockValidator, ke
 }
 
 func (n serializedPseudonode) MakeProposals(ctx context.Context, r round, p period) (outChan <-chan externalEvent, err error) {
-	verifier := makeCryptoVerifier(n.ledger, n.validator, MakeAsyncVoteVerifier(nil), n.log)
+	verifier := makeCryptoVerifier(n.ledger, n.validator, MakeStartAsyncVoteVerifier(nil), n.log)
 	defer verifier.Quit()
 
 	n.loadRoundParticipationKeys(n.ledger.NextRound())
@@ -345,7 +345,7 @@ func (n serializedPseudonode) MakeProposals(ctx context.Context, r round, p peri
 }
 
 func (n serializedPseudonode) MakeVotes(ctx context.Context, r round, p period, s step, prop proposalValue, persistStateDone chan error) (outChan chan externalEvent, err error) {
-	verifier := makeCryptoVerifier(n.ledger, n.validator, MakeAsyncVoteVerifier(nil), n.log)
+	verifier := makeCryptoVerifier(n.ledger, n.validator, MakeStartAsyncVoteVerifier(nil), n.log)
 	defer verifier.Quit()
 
 	n.loadRoundParticipationKeys(r)
@@ -417,7 +417,7 @@ func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 		validator:    testBlockValidator{},
 		keys:         keyManager,
 		ledger:       ledger,
-		voteVerifier: MakeAsyncVoteVerifier(nil),
+		voteVerifier: MakeStartAsyncVoteVerifier(nil),
 		log:          sLogger,
 		monitor:      nil,
 	}).(asyncPseudonode)
@@ -498,7 +498,7 @@ func TestPseudonodeFailedEnqueuedTasks(t *testing.T) {
 	mainPool := execpool.MakePool(t)
 	defer mainPool.Shutdown()
 
-	voteVerifier := MakeAsyncVoteVerifier(&expiredExecPool{mainPool})
+	voteVerifier := MakeStartAsyncVoteVerifier(&expiredExecPool{mainPool})
 	defer voteVerifier.Quit()
 
 	pb := makePseudonode(pseudonodeParams{

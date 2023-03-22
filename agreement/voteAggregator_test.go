@@ -62,7 +62,7 @@ func TestVoteAggregatorVotes(t *testing.T) {
 			uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
 			assert.NoError(t, err)
 
-			vote, err := uv.verify(ledger)
+			vote, err := verifySigVote(uv, ledger)
 			if err != nil {
 				continue
 			}
@@ -105,7 +105,7 @@ func TestVoteAggregatorBundles(t *testing.T) {
 	var proposal proposalValue
 	proposal.BlockDigest = randomBlockHash()
 
-	avv := MakeAsyncVoteVerifier(nil)
+	avv := MakeStartAsyncVoteVerifier(nil)
 	defer avv.Quit()
 
 	var bundles []bundle
@@ -118,7 +118,7 @@ func TestVoteAggregatorBundles(t *testing.T) {
 			uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
 			assert.NoError(t, err)
 
-			vote, err := uv.verify(ledger)
+			vote, err := verifySigVote(uv, ledger)
 			if err != nil {
 				continue
 			}
@@ -894,7 +894,7 @@ func TestVoteAggregatorOldVote(t *testing.T) {
 		ledger.EnsureBlock(makeRandomBlock(ledger.NextRound()), Certificate{})
 	}
 
-	avv := MakeAsyncVoteVerifier(nil)
+	avv := MakeStartAsyncVoteVerifier(nil)
 	defer avv.Quit()
 
 	results := make(chan asyncVerifyVoteResponse, len(uvs))

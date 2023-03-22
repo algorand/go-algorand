@@ -336,7 +336,7 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 }
 
 // BatchVerifyOneTimeSignatures has the same function as Verify, but it operates on a batch of signatures.
-func BatchVerifyOneTimeSignatures(vTasks []SigVerificationTask) (failed []bool) {
+func BatchVerifyOneTimeSignatures(vTasks []*SigVerificationTask) (failed []bool) {
 	numTasks := len(vTasks)
 	messageBytes := make([][]byte, numTasks*3, numTasks*3)
 	publicKeys := make([]PublicKey, numTasks*3, numTasks*3)
@@ -344,25 +344,25 @@ func BatchVerifyOneTimeSignatures(vTasks []SigVerificationTask) (failed []bool) 
 
 	for i := range vTasks {
 		offsetID := OneTimeSignatureSubkeyOffsetID{
-			SubKeyPK: vTasks[i].sig.PK,
-			Batch:    vTasks[i].id.Batch,
-			Offset:   vTasks[i].id.Offset,
+			SubKeyPK: vTasks[i].Sig.PK,
+			Batch:    vTasks[i].Id.Batch,
+			Offset:   vTasks[i].Id.Offset,
 		}
 		batchID := OneTimeSignatureSubkeyBatchID{
-			SubKeyPK: vTasks[i].sig.PK2,
-			Batch:    vTasks[i].id.Batch,
+			SubKeyPK: vTasks[i].Sig.PK2,
+			Batch:    vTasks[i].Id.Batch,
 		}
 		messageBytes[i*3] = HashRep(batchID)
 		messageBytes[i*3+1] = HashRep(offsetID)
-		messageBytes[i*3+2] = HashRep(vTasks[i].message)
+		messageBytes[i*3+2] = HashRep(vTasks[i].Message)
 
-		publicKeys[i*3] = PublicKey(vTasks[i].v)
+		publicKeys[i*3] = PublicKey(vTasks[i].V)
 		publicKeys[i*3+1] = PublicKey(batchID.SubKeyPK)
 		publicKeys[i*3+2] = PublicKey(offsetID.SubKeyPK)
 
-		signatures[i*3] = Signature(vTasks[i].sig.PK2Sig)
-		signatures[i*3+1] = Signature(vTasks[i].sig.PK1Sig)
-		signatures[i*3+2] = Signature(vTasks[i].sig.Sig)
+		signatures[i*3] = Signature(vTasks[i].Sig.PK2Sig)
+		signatures[i*3+1] = Signature(vTasks[i].Sig.PK1Sig)
+		signatures[i*3+2] = Signature(vTasks[i].Sig.Sig)
 	}
 	allPass, results := batchVerificationImpl(messageBytes, publicKeys, signatures)
 	sigResults := make([]bool, numTasks, numTasks)

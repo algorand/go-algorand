@@ -444,7 +444,7 @@ func makeProposalsTesting(accs testAccountData, round basics.Round, period perio
 			logging.Base().Errorf("AccountManager.makeVotes: Could not create vote: %v", err)
 			return
 		}
-		vote, err := uv.verify(ledger)
+		vote, err := verifySigVote(uv, ledger)
 		if err != nil {
 			continue
 		}
@@ -469,7 +469,7 @@ func makeVotesTesting(accs testAccountData, round basics.Round, period period, s
 			return
 		}
 
-		vote, err := uv.verify(ledger)
+		vote, err := verifySigVote(uv, ledger)
 		if err == nil {
 			votes = append(votes, vote)
 		}

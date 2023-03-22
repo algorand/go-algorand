@@ -38,7 +38,7 @@ func sortedVoteGen(t *testing.T) (votes []vote) {
 		rv := rawVote{Round: ledger.NextRound(), Sender: addr, Proposal: pv}
 		uv, err := makeVote(rv, ots[i], vrfs[i], ledger)
 		require.NoError(t, err)
-		v, err := uv.verify(ledger)
+		v, err := verifySigVote(uv, ledger)
 		if err == nil {
 			votes = append(votes, v)
 		}
@@ -313,7 +313,7 @@ func setupProposalTrackerTests(t *testing.T) (votes []vote) {
 		uv, err := makeVote(rv, ots[i], vrfs[i], ledger)
 		require.NoError(t, err)
 
-		v, err := uv.verify(ledger)
+		v, err := verifySigVote(uv, ledger)
 		if err == nil {
 			votes = append(votes, v)
 		}
