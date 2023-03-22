@@ -804,8 +804,9 @@ int 1
 		appl.ApplicationArgs = [][]byte{{88}, otherAcct[:], {asa1}}
 		logic.TestApps(t, []string{"", innerCall}, txntest.Group(&appl0, &appl), 9, ledger,
 			logic.NewExpect(1, "invalid Account reference "+otherAcct.String()))
-		// unless the caller passes in the account, but it can't because that
-		// would give the called app access to the passed account's locate state
+		// unless the caller passes in the account, but it can't pass the
+		// account because that also would give the called app access to the
+		// passed account's local state (which isn't available to the caller)
 		innerCallWithAccount := fmt.Sprintf(innerCallTemplate, "addr "+otherAcct.String()+"; itxn_field Accounts")
 		logic.TestApps(t, []string{"", innerCallWithAccount}, txntest.Group(&appl0, &appl), 9, ledger,
 			logic.NewExpect(1, "appl ApplicationID: invalid Local State access "+otherAcct.String()))
@@ -821,8 +822,8 @@ int 1
 		appl0.ForeignApps = []basics.AppIndex{88}
 		logic.TestApps(t, []string{"", innerCallWithAccount}, txntest.Group(&appl0, &appl), 9, ledger)
 
-		// here we confirm that even if we try calling another, simple app, we
-		// can't pass in other and 88, because that would give the app accesss
+		// here we confirm that even if we try calling another app, we still
+		// can't pass in `other` and 88, because that would give the app access
 		// to that local state. (this is confirming we check the cross product
 		// of the foreign arrays, not just the accounts against called app id)
 		appl.ApplicationArgs = [][]byte{{11}, otherAcct[:], {asa1}}

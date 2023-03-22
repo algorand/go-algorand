@@ -4025,8 +4025,13 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 		return addr, idx, nil
 	}
 
+	// IndexByAddress's `err` tells us we can't return the idx into
+	// txn.Accounts, but the account might still be available (because it was
+	// created in earlier in the group, or because of group sharing)
 	ok := cx.availableAccount(addr)
 	if !ok {
+		// nope, it's not available at all. So return the `err` we have from
+		// above, indicating that it was not found.
 		return addr, 0, err
 	}
 	return addr, uint64(len(cx.txn.Txn.Accounts) + 1), nil
