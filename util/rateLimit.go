@@ -171,6 +171,7 @@ func (erl *ElasticRateLimiter) DisableCongestionControl() {
 // - there is not sufficient free capacity to assign a reserved capacity block
 // - there is no reserved or shared capacity available for the client
 func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, error) {
+	var cg ErlCapacityGuard
 	var q capacityQueue
 	var err error
 	var exists bool
@@ -182,7 +183,8 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, 
 	erl.clientLock.RUnlock()
 
 	// Step 0: Check for, and create a capacity reservation if needed
-	if !exists {
+	// Don't interact with reservations if the capacity-per-reservation is zero
+	if !exists && erl.CapacityPerReservation > 0 {
 		q, err = erl.openReservation(c)
 		if err != nil {
 			return nil, err
@@ -195,14 +197,17 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, 
 		return &ErlCapacityGuard{cq: q, cm: erl.cm}, nil
 	}
 
-	// Step 1: Attempt consumption from the reserved queue
-	cg, err := q.consume(erl.cm)
-	if err == nil {
-		if erl.cm != nil {
-			erl.cm.Consumed(c, time.Now()) // notify the congestion manager that this client consumed from this queue
+	// Step 1: Attempt consumption from the reserved queue if one exists
+	if q != nil {
+		cg, err = q.consume(erl.cm)
+		if err == nil {
+			if erl.cm != nil {
+				erl.cm.Consumed(c, time.Now()) // notify the congestion manager that this client consumed from this queue
+			}
+			return &cg, nil
 		}
-		return &cg, nil
 	}
+
 	// Step 2: Potentially gate shared queue access if the congestion manager disallows it
 	if erl.cm != nil &&
 		enableCM &&
@@ -212,6 +217,7 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, 
 		}
 		return nil, errConManDropped
 	}
+
 	// Step 3: Attempt consumption from the shared queue
 	cg, err = erl.sharedCapacity.consume(erl.cm)
 	if err != nil {

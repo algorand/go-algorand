@@ -56,6 +56,11 @@ func NewAccountsSQLReaderWriter(e db.Executable) *accountsV2ReaderWriter {
 	}
 }
 
+// Testing returns this reader, exposed as an interface with test functions
+func (r *accountsV2Reader) Testing() trackerdb.TestAccountsReaderExt {
+	return r
+}
+
 func (r *accountsV2Reader) getOrPrepare(queryString string) (stmt *sql.Stmt, err error) {
 	// fetch statement (use the query as the key)
 	if stmt, ok := r.preparedStatements[queryString]; ok {
@@ -89,6 +94,7 @@ func (r *accountsV2Reader) AccountsTotals(ctx context.Context, catchpointStaging
 
 // AccountsAllTest iterates the account table and returns a map of the data
 // It is meant only for testing purposes - it is heavy and has no production use case.
+// implements Testing interface
 func (r *accountsV2Reader) AccountsAllTest() (bals map[basics.Address]basics.AccountData, err error) {
 	rows, err := r.q.Query("SELECT rowid, address, data FROM accountbase")
 	if err != nil {
@@ -132,6 +138,7 @@ func (r *accountsV2Reader) AccountsAllTest() (bals map[basics.Address]basics.Acc
 	return
 }
 
+// implements Testing interface
 func (r *accountsV2Reader) CheckCreatablesTest(t *testing.T,
 	iteration int,
 	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
@@ -260,11 +267,13 @@ func (r *accountsV2Reader) OnlineAccountsAll(maxAccounts uint64) ([]trackerdb.Pe
 	for rows.Next() {
 		var addrbuf []byte
 		var buf []byte
+		var rowid int64
 		data := trackerdb.PersistedOnlineAccountData{}
-		err := rows.Scan(&data.Rowid, &addrbuf, &data.UpdRound, &buf)
+		err := rows.Scan(&rowid, &addrbuf, &data.UpdRound, &buf)
 		if err != nil {
 			return nil, err
 		}
+		data.Ref = sqlRowRef{rowid}
 		if len(addrbuf) != len(data.Addr) {
 			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(data.Addr))
 			return nil, err
@@ -358,7 +367,12 @@ func (r *accountsV2Reader) LoadTxTail(ctx context.Context, dbRound basics.Round)
 }
 
 // LookupAccountAddressFromAddressID looks up an account based on a rowid
-func (r *accountsV2Reader) LookupAccountAddressFromAddressID(ctx context.Context, addrid int64) (address basics.Address, err error) {
+func (r *accountsV2Reader) LookupAccountAddressFromAddressID(ctx context.Context, accountRef trackerdb.AccountRef) (address basics.Address, err error) {
+	if accountRef == nil {
+		err = sql.ErrNoRows
+		return address, fmt.Errorf("no matching address could be found for rowid = nil: %w", err)
+	}
+	addrid := accountRef.(sqlRowRef).rowid
 	var addrbuf []byte
 	err = r.q.QueryRowContext(ctx, "SELECT address FROM accountbase WHERE rowid = ?", addrid).Scan(&addrbuf)
 	if err != nil {
@@ -375,52 +389,59 @@ func (r *accountsV2Reader) LookupAccountAddressFromAddressID(ctx context.Context
 	return
 }
 
-func (r *accountsV2Reader) LookupAccountDataByAddress(addr basics.Address) (rowid int64, data []byte, err error) {
+func (r *accountsV2Reader) LookupAccountDataByAddress(addr basics.Address) (ref trackerdb.AccountRef, data []byte, err error) {
 	// optimize this query for repeated usage
 	selectStmt, err := r.getOrPrepare("SELECT rowid, data FROM accountbase WHERE address=?")
 	if err != nil {
 		return
 	}
 
+	var rowid int64
 	err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &data)
 	if err != nil {
 		return
 	}
-	return rowid, data, err
+	return sqlRowRef{rowid}, data, err
 }
 
 // LookupOnlineAccountDataByAddress looks up online account data by address.
-func (r *accountsV2Reader) LookupOnlineAccountDataByAddress(addr basics.Address) (rowid int64, data []byte, err error) {
+func (r *accountsV2Reader) LookupOnlineAccountDataByAddress(addr basics.Address) (ref trackerdb.OnlineAccountRef, data []byte, err error) {
 	// optimize this query for repeated usage
 	selectStmt, err := r.getOrPrepare("SELECT rowid, data FROM onlineaccounts WHERE address=? ORDER BY updround DESC LIMIT 1")
 	if err != nil {
 		return
 	}
 
+	var rowid int64
 	err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &data)
 	if err != nil {
 		return
 	}
-	return rowid, data, err
+	return sqlRowRef{rowid}, data, err
 }
 
 // LookupAccountRowID looks up the rowid of an account based on its address.
-func (r *accountsV2Reader) LookupAccountRowID(addr basics.Address) (rowid int64, err error) {
+func (r *accountsV2Reader) LookupAccountRowID(addr basics.Address) (ref trackerdb.AccountRef, err error) {
 	// optimize this query for repeated usage
 	addrRowidStmt, err := r.getOrPrepare("SELECT rowid FROM accountbase WHERE address=?")
 	if err != nil {
 		return
 	}
 
+	var rowid int64
 	err = addrRowidStmt.QueryRow(addr[:]).Scan(&rowid)
 	if err != nil {
 		return
 	}
-	return rowid, err
+	return sqlRowRef{rowid}, err
 }
 
 // LookupResourceDataByAddrID looks up the resource data by account rowid + resource aidx.
-func (r *accountsV2Reader) LookupResourceDataByAddrID(addrid int64, aidx basics.CreatableIndex) (data []byte, err error) {
+func (r *accountsV2Reader) LookupResourceDataByAddrID(accountRef trackerdb.AccountRef, aidx basics.CreatableIndex) (data []byte, err error) {
+	if accountRef == nil {
+		return data, sql.ErrNoRows
+	}
+	addrid := accountRef.(sqlRowRef).rowid
 	// optimize this query for repeated usage
 	selectStmt, err := r.getOrPrepare("SELECT data FROM resources WHERE addrid = ? AND aidx = ?")
 	if err != nil {
@@ -630,7 +651,12 @@ func (w *accountsV2Writer) TxtailNewRound(ctx context.Context, baseRound basics.
 	return err
 }
 
-// OnlineAccountsDelete deleted entries with updRound <= expRound
+// OnlineAccountsDelete cleans up the Online Accounts table to prune expired entires.
+// it will delete entries with an updRound <= expRound
+// EXCEPT, it will not delete the *latest* entry for an account, no matter how old.
+// this is so that accounts whos last update is before expRound still maintain an Online Account Balance
+// After this cleanup runs, accounts in this table will have either one entry (if all entries besides the latest are expired),
+// or will have more than one entry (if multiple entries are not yet expired).
 func (w *accountsV2Writer) OnlineAccountsDelete(forgetBefore basics.Round) (err error) {
 	rows, err := w.e.Query("SELECT rowid, address, updRound, data FROM onlineaccounts WHERE updRound < ? ORDER BY address, updRound DESC", forgetBefore)
 	if err != nil {

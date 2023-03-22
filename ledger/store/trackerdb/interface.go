@@ -18,7 +18,6 @@ package trackerdb
 
 import (
 	"context"
-	"testing"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -27,21 +26,41 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
+// AccountRef is an opaque ref to an account in the db.
+type AccountRef interface {
+	AccountRefMarker()
+}
+
+// OnlineAccountRef is an opaque ref to an "online" account in the db.
+type OnlineAccountRef interface {
+	OnlineAccountRefMarker()
+}
+
+// ResourceRef is an opaque ref to a resource in the db.
+type ResourceRef interface {
+	ResourceRefMarker()
+}
+
+// CreatableRef is an opaque ref to a creatable in the db.
+type CreatableRef interface {
+	CreatableRefMarker()
+}
+
 // AccountsWriter is the write interface for:
 // - accounts, resources, app kvs, creatables
 type AccountsWriter interface {
-	InsertAccount(addr basics.Address, normBalance uint64, data BaseAccountData) (rowid int64, err error)
-	DeleteAccount(rowid int64) (rowsAffected int64, err error)
-	UpdateAccount(rowid int64, normBalance uint64, data BaseAccountData) (rowsAffected int64, err error)
+	InsertAccount(addr basics.Address, normBalance uint64, data BaseAccountData) (ref AccountRef, err error)
+	DeleteAccount(ref AccountRef) (rowsAffected int64, err error)
+	UpdateAccount(ref AccountRef, normBalance uint64, data BaseAccountData) (rowsAffected int64, err error)
 
-	InsertResource(addrid int64, aidx basics.CreatableIndex, data ResourcesData) (rowid int64, err error)
-	DeleteResource(addrid int64, aidx basics.CreatableIndex) (rowsAffected int64, err error)
-	UpdateResource(addrid int64, aidx basics.CreatableIndex, data ResourcesData) (rowsAffected int64, err error)
+	InsertResource(accountRef AccountRef, aidx basics.CreatableIndex, data ResourcesData) (ref ResourceRef, err error)
+	DeleteResource(accountRef AccountRef, aidx basics.CreatableIndex) (rowsAffected int64, err error)
+	UpdateResource(accountRef AccountRef, aidx basics.CreatableIndex, data ResourcesData) (rowsAffected int64, err error)
 
 	UpsertKvPair(key string, value []byte) error
 	DeleteKvPair(key string) error
 
-	InsertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (rowid int64, err error)
+	InsertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (ref CreatableRef, err error)
 	DeleteCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType) (rowsAffected int64, err error)
 
 	Close()
@@ -83,22 +102,21 @@ type AccountsReader interface {
 type AccountsReaderExt interface {
 	AccountsTotals(ctx context.Context, catchpointStaging bool) (totals ledgercore.AccountTotals, err error)
 	AccountsHashRound(ctx context.Context) (hashrnd basics.Round, err error)
-	LookupAccountAddressFromAddressID(ctx context.Context, addrid int64) (address basics.Address, err error)
-	LookupAccountDataByAddress(basics.Address) (rowid int64, data []byte, err error)
-	LookupAccountRowID(basics.Address) (addrid int64, err error)
-	LookupResourceDataByAddrID(addrid int64, aidx basics.CreatableIndex) (data []byte, err error)
+	LookupAccountAddressFromAddressID(ctx context.Context, ref AccountRef) (address basics.Address, err error)
+	LookupAccountDataByAddress(basics.Address) (ref AccountRef, data []byte, err error)
+	LookupAccountRowID(basics.Address) (ref AccountRef, err error)
+	LookupResourceDataByAddrID(accountRef AccountRef, aidx basics.CreatableIndex) (data []byte, err error)
 	TotalResources(ctx context.Context) (total uint64, err error)
 	TotalAccounts(ctx context.Context) (total uint64, err error)
 	TotalKVs(ctx context.Context) (total uint64, err error)
 	AccountsRound() (rnd basics.Round, err error)
-	AccountsAllTest() (bals map[basics.Address]basics.AccountData, err error)
-	CheckCreatablesTest(t *testing.T, iteration int, expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-	LookupOnlineAccountDataByAddress(addr basics.Address) (rowid int64, data []byte, err error)
+	LookupOnlineAccountDataByAddress(addr basics.Address) (ref OnlineAccountRef, data []byte, err error)
 	AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error)
 	AccountsOnlineRoundParams() (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error)
 	OnlineAccountsAll(maxAccounts uint64) ([]PersistedOnlineAccountData, error)
 	LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error)
 	LoadAllFullAccounts(ctx context.Context, balancesTable string, resourcesTable string, acctCb func(basics.Address, basics.AccountData)) (count int, err error)
+	Testing() TestAccountsReaderExt
 }
 
 // AccountsReaderWriter is AccountsReader+AccountsWriter
@@ -112,7 +130,7 @@ type AccountsReaderWriter interface {
 // OnlineAccountsWriter is the write interface for:
 // - online accounts
 type OnlineAccountsWriter interface {
-	InsertOnlineAccount(addr basics.Address, normBalance uint64, data BaseOnlineAccountData, updRound uint64, voteLastValid uint64) (rowid int64, err error)
+	InsertOnlineAccount(addr basics.Address, normBalance uint64, data BaseOnlineAccountData, updRound uint64, voteLastValid uint64) (ref OnlineAccountRef, err error)
 
 	Close()
 }
@@ -187,8 +205,8 @@ type OrderedAccountsIter interface {
 
 // AccountAddressHash is used by Next to return a single account address and the associated hash.
 type AccountAddressHash struct {
-	Addrid int64
-	Digest []byte
+	AccountRef AccountRef
+	Digest     []byte
 }
 
 // KVsIter is an iterator for an application Key/Values.
