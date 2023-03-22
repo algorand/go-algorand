@@ -285,7 +285,7 @@ func (vbp *voteBatchProcessor) ProcessBatch(jobs []execpool.InputJob) {
 		v, ev, err := verificationTasks.getItemResult(req, i)
 		var e *LedgerDroppedRoundError
 		cancelled := errors.As(err, &e)
-
+		req.message.Vote = *v
 		if v != nil {
 			vbp.outChan <- &asyncVerifyVoteResponse{v: *v, index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
 		}
