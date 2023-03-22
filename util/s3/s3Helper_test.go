@@ -174,6 +174,7 @@ func TestMakeS3SessionForDownloadWithBucket(t *testing.T) {
 
 func TestGetVersionFromName(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	type args struct {
 		name     string
@@ -181,12 +182,12 @@ func TestGetVersionFromName(t *testing.T) {
 		expected uint64
 	}
 	tests := []args{
-		{name: "test 1 (major)", version: "_1.0.0", expected: 1 * 1 << 32},
-		{name: "test 2 (major)", version: "_2.0.0", expected: 2 * 1 << 32},
-		{name: "test 3 (minor)", version: "_1.1.0", expected: 1*1<<32 + 1*1<<16},
-		{name: "test 4 (minor)", version: "_1.2.0", expected: 1*1<<32 + 2*1<<16},
-		{name: "test 5 (patch)", version: "_1.0.1", expected: 1*1<<32 + 1},
-		{name: "test 6 (patch)", version: "_1.0.2", expected: 1*1<<32 + 2},
+		{name: "test 1 (major)", version: "_1.0.0", expected: 1 * 1 << 48},
+		{name: "test 2 (major)", version: "_2.0.0", expected: 2 * 1 << 48},
+		{name: "test 3 (minor)", version: "_1.1.0", expected: 1*1<<48 + 1*1<<24},
+		{name: "test 4 (minor)", version: "_1.2.0", expected: 1*1<<48 + 2*1<<24},
+		{name: "test 5 (patch)", version: "_1.0.1", expected: 1*1<<48 + 1},
+		{name: "test 6 (patch)", version: "_1.0.2", expected: 1*1<<48 + 2},
 	}
 
 	for _, test := range tests {
@@ -194,6 +195,21 @@ func TestGetVersionFromName(t *testing.T) {
 		require.NoError(t, err, test.name)
 		require.Equal(t, test.expected, actual, test.name)
 	}
+}
+
+func TestGetVersionFromNameCompare(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	name1 := "config_3.13.170018.tar.gz"
+	name2 := "config_3.15.157.tar.gz"
+
+	ver1, err := GetVersionFromName(name1)
+	require.NoError(t, err)
+	ver2, err := GetVersionFromName(name2)
+	require.NoError(t, err)
+
+	require.Less(t, ver1, ver2)
 }
 
 func TestGetPartsFromVersion(t *testing.T) {

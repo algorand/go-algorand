@@ -247,7 +247,7 @@ func GetVersionFromName(name string) (version uint64, err error) {
 	var val uint64
 	for index, match := range submatchAll[0] {
 		if index > 0 {
-			version <<= 16
+			version <<= 24
 			val, err = strconv.ParseUint(match, 10, 0)
 			if err != nil {
 				return
