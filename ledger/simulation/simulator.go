@@ -222,8 +222,8 @@ func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
 	totalCost := uint64(0)
 	for _, txn := range simulatorTracer.result.TxnGroups[0].Txns {
 		totalCost += txn.BudgetUsed
-		simulatorTracer.result.TxnGroups[0].BudgetConsumed = totalCost
 	}
+	simulatorTracer.result.TxnGroups[0].BudgetConsumed = totalCost
 
 	return *simulatorTracer.result, nil
 }
