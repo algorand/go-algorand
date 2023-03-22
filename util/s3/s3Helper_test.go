@@ -17,6 +17,7 @@
 package s3
 
 import (
+	"fmt"
 	"os"
 	"reflect"
 	"testing"
@@ -214,6 +215,7 @@ func TestGetVersionFromNameCompare(t *testing.T) {
 
 func TestGetPartsFromVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	type args struct {
 		name     string
@@ -223,12 +225,12 @@ func TestGetPartsFromVersion(t *testing.T) {
 		expPatch uint64
 	}
 	tests := []args{
-		{name: "test 1 (major)", version: 1 * 1 << 32, expMajor: 1, expMinor: 0, expPatch: 0},
-		{name: "test 2 (major)", version: 2 * 1 << 32, expMajor: 2, expMinor: 0, expPatch: 0},
-		{name: "test 3 (minor)", version: 1*1<<32 + 1*1<<16, expMajor: 1, expMinor: 1, expPatch: 0},
-		{name: "test 4 (minor)", version: 1*1<<32 + 2*1<<16, expMajor: 1, expMinor: 2, expPatch: 0},
-		{name: "test 5 (patch)", version: 1*1<<32 + 1, expMajor: 1, expMinor: 0, expPatch: 1},
-		{name: "test 6 (patch)", version: 1*1<<32 + 2, expMajor: 1, expMinor: 0, expPatch: 2},
+		{name: "test 1 (major)", version: 1 * 1 << 48, expMajor: 1, expMinor: 0, expPatch: 0},
+		{name: "test 2 (major)", version: 2 * 1 << 48, expMajor: 2, expMinor: 0, expPatch: 0},
+		{name: "test 3 (minor)", version: 1*1<<48 + 1*1<<24, expMajor: 1, expMinor: 1, expPatch: 0},
+		{name: "test 4 (minor)", version: 1*1<<48 + 2*1<<24, expMajor: 1, expMinor: 2, expPatch: 0},
+		{name: "test 5 (patch)", version: 1*1<<48 + 1, expMajor: 1, expMinor: 0, expPatch: 1},
+		{name: "test 6 (patch)", version: 1*1<<48 + 2, expMajor: 1, expMinor: 0, expPatch: 2},
 	}
 
 	for _, test := range tests {
@@ -239,6 +241,35 @@ func TestGetPartsFromVersion(t *testing.T) {
 		require.Equal(t, test.expPatch, actualPatch, test.name)
 	}
 
-	_, _, _, err := GetVersionPartsFromVersion(1<<32 - 1)
+	_, _, _, err := GetVersionPartsFromVersion(1<<48 - 1)
 	require.Error(t, err, "Versions less than 1.0.0 should not be parsed.")
+}
+
+func TestGetPartsFromVersionEndToEnd(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	type args struct {
+		major uint64
+		minor uint64
+		patch uint64
+	}
+	tests := []args{
+		{major: 1, minor: 0, patch: 0},
+		{major: 3, minor: 13, patch: 170018},
+		{major: 3, minor: 15, patch: 157},
+	}
+
+	for _, test := range tests {
+		name := fmt.Sprintf("config_%d.%d.%d.tar.gz", test.major, test.minor, test.patch)
+		t.Run(name, func(t *testing.T) {
+			ver, err := GetVersionFromName(name)
+			require.NoError(t, err)
+			actualMajor, actualMinor, actualPatch, err := GetVersionPartsFromVersion(ver)
+			require.NoError(t, err)
+			require.Equal(t, test.major, actualMajor)
+			require.Equal(t, test.minor, actualMinor)
+			require.Equal(t, test.patch, actualPatch)
+		})
+	}
 }
