@@ -811,8 +811,8 @@ int 1
 		logic.TestApps(t, []string{"", innerCallWithAccount}, txntest.Group(&appl0, &appl), 9, ledger,
 			logic.NewExpect(1, "appl ApplicationID: invalid Local State access "+otherAcct.String()))
 		// the caller can't fix by passing 88 as a foreign app, because doing so
-		// gives the v8 app access to that local state that the caller does not
-		// have access to.
+		// is not much different than the current situation: 88 is being called,
+		// it's already available.
 		innerCallWithBoth := fmt.Sprintf(innerCallTemplate,
 			"addr "+otherAcct.String()+"; itxn_field Accounts; int 88; itxn_field Applications")
 		logic.TestApps(t, []string{"", innerCallWithBoth}, txntest.Group(&appl0, &appl), 9, ledger,
@@ -878,11 +878,6 @@ func TestAccessMyLocals(t *testing.T) {
 		logic.TestApp(t, source, ep)
 
 		// They can also see that they are opted in, though it's a weird question to ask.
-		source = `
-  int 0
-  int 0
-  app_opted_in
-`
-		logic.TestApp(t, source, ep)
+		logic.TestApp(t, "int 0; int 0; app_opted_in", ep)
 	})
 }

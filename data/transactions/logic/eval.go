@@ -4049,7 +4049,7 @@ func (cx *EvalContext) availableAccount(addr basics.Address) bool {
 	}
 
 	// or some other txn mentioned it
-	if cx.version >= resourceSharingVersion {
+	if cx.version >= sharedResourcesVersion {
 		if _, ok := cx.available.sharedAccounts[addr]; ok {
 			return true
 		}
@@ -4080,14 +4080,14 @@ func (cx *EvalContext) mutableAccountReference(account stackValue) (basics.Addre
 	if accountIdx > uint64(len(cx.txn.Txn.Accounts)) {
 		// There was no error, but accountReference has signaled that accountIdx
 		// is not for mutable ops (because it can't encode it in EvalDelta)
-		if cx.version < resourceSharingVersion {
+		if cx.version < sharedResourcesVersion {
 			return basics.Address{}, 0, fmt.Errorf("invalid Account reference for mutation %s", addr)
 		}
 		// fall through, which means that starting in v9, the accountIdx
 		// returned can be > len(tx.Accounts). It will end up getting passed to
-		// GetLocal, which seems bad, since GetLocal can record that index. But
-		// that record is only done in very old consenus versions. At that point
-		// v9 did not exist.
+		// GetLocal, which can record that index in order to produce old-style
+		// EDS. But those EDs are only made in old consenus versions - at that
+		// point v9 did not exist, so no backward incompatible change occurs.
 	}
 	return addr, accountIdx, err
 }
@@ -4471,7 +4471,7 @@ func (cx *EvalContext) appReference(ref uint64, foreign bool) (basics.AppIndex, 
 // (or is the Sender, which yields 0). But it only needs to do this funny side
 // job in certainly old versions that need the slot index while doing a lookup.
 func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.Address, basics.AppIndex, uint64, error) {
-	if cx.version >= resourceSharingVersion {
+	if cx.version >= sharedResourcesVersion {
 		unused := uint64(0) // see function comment
 		var addr basics.Address
 		var err error
@@ -4561,7 +4561,7 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (basics.AssetInd
 }
 
 func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.Address, basics.AssetIndex, error) {
-	if cx.version >= resourceSharingVersion {
+	if cx.version >= sharedResourcesVersion {
 		var addr basics.Address
 		var err error
 		if account.Bytes != nil {
@@ -4876,9 +4876,9 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 }
 
 // availableAsset determines whether an asset is "available". Before
-// resourceSharingVersion, an asset had to be available for asset param
+// sharedResourcesVersion, an asset had to be available for asset param
 // lookups, asset holding lookups, and asset id assignments to inner
-// transactions. After resourceSharingVersion, the distinction must be more fine
+// transactions. After sharedResourcesVersion, the distinction must be more fine
 // grained. It must be available for asset param lookups, or use in an asset
 // transaction (axfer,acfg,afrz), but not for holding lookups or assignments to
 // an inner static array.
@@ -4899,7 +4899,7 @@ func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
 	}
 
 	// or some other txn mentioned it
-	if cx.version >= resourceSharingVersion {
+	if cx.version >= sharedResourcesVersion {
 		if _, ok := cx.available.sharedAsas[aid]; ok {
 			return true
 		}
@@ -4945,7 +4945,7 @@ func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
 	}
 
 	// or some other txn mentioned it
-	if cx.version >= resourceSharingVersion {
+	if cx.version >= sharedResourcesVersion {
 		if _, ok := cx.available.sharedApps[aid]; ok {
 			return true
 		}

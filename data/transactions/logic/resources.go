@@ -319,7 +319,7 @@ func (cx *EvalContext) allowsApplicationCall(hdr *transactions.Header, tx *trans
 	// If an old (pre resource sharing) app is being called from an app that has
 	// resource sharing enabled, we need to confirm that no new "cross-product"
 	// resources have become available.
-	if callerVer < resourceSharingVersion || calleeVer >= resourceSharingVersion {
+	if callerVer < sharedResourcesVersion || calleeVer >= sharedResourcesVersion {
 		return nil
 	}
 

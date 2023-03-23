@@ -2881,7 +2881,9 @@ int 77
 	testApp(t, source, ep)
 }
 
-func TestSelfMutateCurrent(t *testing.T) {
+// TestSelfMutateV9AndUp tests that apps can mutate their own app's local state
+// starting with v9. Includes tests to the EvalDelta created.
+func TestSelfMutateV9AndUp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -2894,16 +2896,29 @@ func TestSelfMutateCurrent(t *testing.T) {
 		ledger.NewLocal(basics.AppIndex(888).Address(), 888, "hey",
 			basics.TealValue{Type: basics.TealUintType, Uint: 77})
 
+		// and we'll modify the passed account's locals, to better check the ED
+		ledger.NewLocals(tx.Accounts[0], 888)
+
 		source := `
 global CurrentApplicationAddress
 byte "hey"
 int 42
+app_local_put
+txn Accounts 1
+byte "acct"
+int 43
 app_local_put
 int 1
 `
 		ed := testApp(t, source, ep)
 		require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
 		require.Equal(t, map[uint64]basics.StateDelta{
+			1: {
+				"acct": {
+					Action: basics.SetUintAction,
+					Uint:   43,
+				},
+			},
 			2: {
 				"hey": {
 					Action: basics.SetUintAction,
@@ -2926,12 +2941,26 @@ int 42
 		source = `
 global CurrentApplicationAddress
 byte "hey"
+int 10
+app_local_put					// this will get wiped out by del
+global CurrentApplicationAddress
+byte "hey"
 app_local_del
+txn Accounts 1
+byte "acct"
+int 7
+app_local_put
 int 1
 `
 		ed = testApp(t, source, ep)
 		require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
 		require.Equal(t, map[uint64]basics.StateDelta{
+			1: {
+				"acct": {
+					Action: basics.SetUintAction,
+					Uint:   7,
+				},
+			},
 			2: {
 				"hey": {
 					Action: basics.DeleteAction,
@@ -2940,12 +2969,22 @@ int 1
 		}, ed.LocalDeltas)
 		require.Equal(t, []basics.Address{tx.ApplicationID.Address()}, ed.SharedAccts)
 
-		// Now, repeat the "put" test with multiple keys, to ensure only one address is added to SharedAccts
+		// Now, repeat the "put" test with multiple keys, to ensure only one
+		// address is added to SharedAccts and we'll modify the Sender too, to
+		// better check the ED
+		ledger.NewLocals(tx.Sender, 888)
+
 		source = `
+txn Sender
+byte "hey"
+int 40
+app_local_put
+
 global CurrentApplicationAddress
 byte "hey"
 int 42
 app_local_put
+
 global CurrentApplicationAddress
 byte "joe"
 int 21
@@ -2955,6 +2994,12 @@ int 1
 		ed = testApp(t, source, ep)
 		require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
 		require.Equal(t, map[uint64]basics.StateDelta{
+			0: {
+				"hey": {
+					Action: basics.SetUintAction,
+					Uint:   40,
+				},
+			},
 			2: {
 				"hey": {
 					Action: basics.SetUintAction,
