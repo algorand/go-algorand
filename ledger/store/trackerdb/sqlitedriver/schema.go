@@ -354,7 +354,7 @@ func performkvstoreNullBlobConversion(ctx context.Context, tx *sql.Tx, convertTo
 	defer func() { err = updateWithEmptyByteSlice.Close() }()
 
 	var rows *sql.Rows
-	rows, err = tx.QueryContext(ctx, "SELECT key FROM kvstore ON value is NULL;")
+	rows, err = tx.QueryContext(ctx, "SELECT key FROM kvstore WHERE value is NULL;")
 	if err != nil {
 		return
 	}

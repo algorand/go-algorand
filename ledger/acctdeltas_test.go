@@ -1068,13 +1068,106 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 }
 
 func TestKVStoreNilBlobConversion(t *testing.T) {
-	dbs, fn := sqlitedriver.DbOpenTrackerTest(t, false)
-	dbs.SetLogger(logging.TestingLog(t))
-	defer dbs.CleanupTest(fn, false)
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
+	inMem := false
+
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+
+	cfg := config.GetDefaultLocal()
+
+	dbs, fn := sqlitedriver.DbOpenTrackerTest(t, inMem)
+	dbs.SetLogger(logging.TestingLog(t))
+	defer dbs.CleanupTest(fn, inMem)
+
+	previousAccountDBVersion := trackerdb.AccountDBVersion
+	trackerdb.AccountDBVersion = 9
+	defer func() { trackerdb.AccountDBVersion = previousAccountDBVersion }()
+
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-kvstore-nil-blob-conv")
+	proto := config.Consensus[protocol.ConsensusV31]
+	config.Consensus[testProtocolVersion] = proto
+	defer func() { delete(config.Consensus, testProtocolVersion) }()
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, testProtocolVersion, 10_000_000_000)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	trackerDB, blockDB, err := openLedgerDB(dbName, false)
+	require.NoError(t, err)
+	defer func() { trackerDB.Close(); blockDB.Close() }()
+
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer func() {
+		l.Close()
+		os.Remove(dbName + ".block.sqlite")
+		// os.Remove(dbName + ".tracker.sqlite")
+		os.Remove(dbName + ".block.sqlite-shm")
+		// os.Remove(dbName + ".tracker.sqlite-shm")
+		os.Remove(dbName + ".block.sqlite-wal")
+		// os.Remove(dbName + ".tracker.sqlite-wal")
+	}()
 	// TODO: create a account DB of version 9
+
+	kvPairDBPrepareSet := []struct{ key []byte }{
+		{key: []byte{0xFF, 0x12, 0x34, 0x56, 0x78}},
+		{key: []byte{0xFF, 0xFF, 0x34, 0x56, 0x78}},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0x56, 0x78}},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x78}},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF}},
+		{key: []byte{0xFF, 0xFE, 0xFF}},
+		{key: []byte{0xFF, 0xFF, 0x00, 0xFF, 0xFF}},
+		{key: []byte{0xFF, 0xFF}},
+		{key: []byte{0xBA, 0xDD, 0xAD, 0xFF, 0xFF}},
+		{key: []byte{0xBA, 0xDD, 0xAE, 0x00}},
+		{key: []byte{0xBA, 0xDD, 0xAE}},
+		{key: []byte("TACOCAT")},
+		{key: []byte("TACOBELL")},
+		{key: []byte("DingHo-SmallPack")},
+		{key: []byte("DingHo-StandardPack")},
+		{key: []byte("BostonKitchen-CheeseSlice")},
+		{key: []byte(`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`)},
+	}
+	err = trackerDB.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+		// writer is only for kvstore
+		writer, err0 := tx.MakeAccountsOptimizedWriter(true, true, true, true)
+		if err0 != nil {
+			return err0
+		}
+		for i := 0; i < len(kvPairDBPrepareSet); i++ {
+			err0 = writer.UpsertKvPair(string(kvPairDBPrepareSet[i].key), nil)
+			require.NoError(t, err0)
+		}
+		writer.Close()
+		return nil
+	})
+	require.NoError(t, err)
 	// TODO: jam a bunch of kv with value nil in the DB
+
+	// TODO: confirm that values are all null
+
+	trackerdb.AccountDBVersion = 10
+	err = trackerDB.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+		tp := trackerdb.Params{
+			InitAccounts:      l.GenesisAccounts(),
+			InitProto:         l.GenesisProtoVersion(),
+			GenesisHash:       l.GenesisHash(),
+			FromCatchpoint:    true,
+			CatchpointEnabled: l.catchpoint.catchpointEnabled(),
+			DbPathPrefix:      l.catchpoint.dbDirectory,
+			BlockDb:           l.blockDBs,
+		}
+		_, err0 := tx.Testing().RunMigrations(ctx, tp, log, trackerdb.AccountDBVersion)
+		if err0 != nil {
+			return err0
+		}
+		return nil
+	})
+	require.NoError(t, err)
 	// TODO: run migration (or run the function itself) to see that the nils are replaced
+
+	// TODO: confirm that values are not null
 }
 
 // upsert updates existing or inserts a new entry
