@@ -370,8 +370,8 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) preEncodedS
 	encoded := preEncodedSimulateTxnGroupResult{
 		Txns:           txnResults,
 		FailureMessage: strOrNil(txnGroupResult.FailureMessage),
-		BudgetAdded:    numOrNil(uint64(txnGroupResult.BudgetAdded)),
-		BudgetConsumed: numOrNil(uint64(txnGroupResult.BudgetConsumed)),
+		BudgetAdded:    numOrNil(txnGroupResult.BudgetAdded),
+		BudgetConsumed: numOrNil(txnGroupResult.BudgetConsumed),
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {
