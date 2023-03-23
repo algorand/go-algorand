@@ -1071,29 +1071,18 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	inMem := false
+	const inMem = false
+	const retargetDBVersion = 9
 
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
 
 	cfg := config.GetDefaultLocal()
 
-	dbs, fn := sqlitedriver.DbOpenTrackerTest(t, inMem)
-	dbs.SetLogger(logging.TestingLog(t))
-	defer dbs.CleanupTest(fn, inMem)
-
-	previousAccountDBVersion := trackerdb.AccountDBVersion
-	trackerdb.AccountDBVersion = 9
-	defer func() { trackerdb.AccountDBVersion = previousAccountDBVersion }()
-
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-kvstore-nil-blob-conv")
-	proto := config.Consensus[protocol.ConsensusV31]
-	config.Consensus[testProtocolVersion] = proto
-	defer func() { delete(config.Consensus, testProtocolVersion) }()
-	genesisInitState, _ := ledgertesting.GenerateInitState(t, testProtocolVersion, 10_000_000_000)
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10_000_000_000)
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	trackerDB, blockDB, err := openLedgerDB(dbName, false)
+	trackerDB, blockDB, err := openLedgerDB(dbName, inMem)
 	require.NoError(t, err)
 	defer func() { trackerDB.Close(); blockDB.Close() }()
 
@@ -1108,6 +1097,35 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 		os.Remove(dbName + ".block.sqlite-wal")
 		// os.Remove(dbName + ".tracker.sqlite-wal")
 	}()
+
+	tp := trackerdb.Params{
+		InitAccounts:      l.GenesisAccounts(),
+		InitProto:         l.GenesisProtoVersion(),
+		GenesisHash:       l.GenesisHash(),
+		FromCatchpoint:    true,
+		CatchpointEnabled: l.catchpoint.catchpointEnabled(),
+		DbPathPrefix:      l.catchpoint.dbDirectory,
+		BlockDb:           l.blockDBs,
+	}
+
+	err = l.trackerDBs.Batch(func(ctx context.Context, tx trackerdb.BatchScope) error {
+		arw, err0 := tx.MakeAccountsWriter()
+		if err0 != nil {
+			return err0
+		}
+
+		err0 = arw.AccountsReset(ctx)
+		if err0 != nil {
+			return err0
+		}
+		_, err0 = tx.Testing().RunMigrations(ctx, tp, l.log, retargetDBVersion)
+		if err0 != nil {
+			return err0
+		}
+
+		return tx.Testing().AccountsUpdateSchemaTest(ctx)
+	})
+	require.NoError(t, err)
 	// TODO: create a account DB of version 9
 
 	kvPairDBPrepareSet := []struct{ key []byte }{
@@ -1137,7 +1155,9 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 		}
 		for i := 0; i < len(kvPairDBPrepareSet); i++ {
 			err0 = writer.UpsertKvPair(string(kvPairDBPrepareSet[i].key), nil)
-			require.NoError(t, err0)
+			if err0 != nil {
+				return err0
+			}
 		}
 		writer.Close()
 		return nil
@@ -1147,17 +1167,7 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 
 	// TODO: confirm that values are all null
 
-	trackerdb.AccountDBVersion = 10
 	err = trackerDB.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
-		tp := trackerdb.Params{
-			InitAccounts:      l.GenesisAccounts(),
-			InitProto:         l.GenesisProtoVersion(),
-			GenesisHash:       l.GenesisHash(),
-			FromCatchpoint:    true,
-			CatchpointEnabled: l.catchpoint.catchpointEnabled(),
-			DbPathPrefix:      l.catchpoint.dbDirectory,
-			BlockDb:           l.blockDBs,
-		}
 		_, err0 := tx.Testing().RunMigrations(ctx, tp, log, trackerdb.AccountDBVersion)
 		if err0 != nil {
 			return err0
