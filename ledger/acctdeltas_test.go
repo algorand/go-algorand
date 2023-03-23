@@ -1067,6 +1067,16 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 	}
 }
 
+func TestKVStoreNilBlobConversion(t *testing.T) {
+	dbs, fn := sqlitedriver.DbOpenTrackerTest(t, false)
+	dbs.SetLogger(logging.TestingLog(t))
+	defer dbs.CleanupTest(fn, false)
+
+	// TODO: create a account DB of version 9
+	// TODO: jam a bunch of kv with value nil in the DB
+	// TODO: run migration (or run the function itself) to see that the nils are replaced
+}
+
 // upsert updates existing or inserts a new entry
 func (a *compactResourcesDeltas) upsert(delta resourceDelta) {
 	if idx, exist := a.cache[accountCreatable{address: delta.address, index: delta.oldResource.Aidx}]; exist {
