@@ -136,11 +136,11 @@ type catchpointTracker struct {
 	// roundDigest stores the digest of the block for every round starting with dbRound+1 and every round after it.
 	roundDigest []crypto.Digest
 
-	// reenableCatchpointsRound is a round where the EnableOnlineAccountCatchpoints feature was enabled via the consensus.
+	// reenableCatchpointsRound is a round where the EnableCatchpointsWithSPContexts feature was enabled via the consensus.
 	// we avoid generating catchpoints before that round in order to ensure the network remain consistent in the catchpoint
 	// label being produced. This variable could be "wrong" in two cases -
-	// 1. It's zero, meaning that the EnableOnlineAccountCatchpoints has yet to be seen.
-	// 2. It's non-zero meaning that it the given round is after the EnableOnlineAccountCatchpoints was enabled ( it might be exact round
+	// 1. It's zero, meaning that the EnableCatchpointsWithSPContexts has yet to be seen.
+	// 2. It's non-zero meaning that it the given round is after the EnableCatchpointsWithSPContexts was enabled ( it might be exact round
 	//    but that's only if newBlock was called with that round ), plus the lookback.
 	reenableCatchpointsRound basics.Round
 

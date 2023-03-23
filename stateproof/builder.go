@@ -533,7 +533,11 @@ func (spw *Worker) deleteBuildData(proto *config.ConsensusParams, stateProofNext
 		return
 	}
 
-	// Delete from memory (already stored on disk)
+	// Delete from memory (already stored on disk). Practically, There are two scenarios where builders gets removed from memory
+	// 1. When a state proof is committed, the earliest will get removed and later on will be removed from disk.
+	//	(when calling deleteStaleBuilders)
+	// 2. If state proofs are stalled, and consensus is moving forward, a new latest builder will be created and
+	// the older builder will be swapped out from memory. (i.e will be removed from memory but stays on disk).
 	spw.trimBuildersCache(proto, stateProofNextRound)
 
 	if spw.lastCleanupRound == stateProofNextRound {
