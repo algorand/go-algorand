@@ -344,6 +344,37 @@ func accountsCreateBoxTable(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
+func performNilConversionToEmptyByteSlice(ctx context.Context, tx *sql.Tx) (err error) {
+	var updateWithEmptyByteSlice *sql.Stmt
+	updateWithEmptyByteSlice, err = tx.PrepareContext(ctx, "UPDATE kvstore SET value = ? WHERE key = ?")
+	if err != nil {
+		return
+	}
+	defer func() { err = updateWithEmptyByteSlice.Close() }()
+
+	var rows *sql.Rows
+	rows, err = tx.QueryContext(ctx, "SELECT key FROM kvstore ON value is NULL;")
+	if err != nil {
+		return
+	}
+	defer func() { err = rows.Close() }()
+
+	var boxKey string
+
+	for rows.Next() {
+		err = rows.Scan(&boxKey)
+		if err != nil {
+			return
+		}
+		_, err = updateWithEmptyByteSlice.ExecContext(ctx, []byte{}, []byte(boxKey))
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
 func accountsCreateTxTailTable(ctx context.Context, tx *sql.Tx) (err error) {
 	for _, stmt := range createTxTailTable {
 		_, err = tx.ExecContext(ctx, stmt)
