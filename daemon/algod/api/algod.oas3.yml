@@ -1838,11 +1838,11 @@
       "SimulateTransactionGroupResult": {
         "description": "Simulation result for an atomic transaction group",
         "properties": {
-          "budget-added": {
+          "app-budget-added": {
             "description": "Total budget added during execution of app calls in the transaction group.",
             "type": "integer"
           },
-          "budget-consumed": {
+          "app-budget-consumed": {
             "description": "Total budget consumed during execution of app calls in the transaction group.",
             "type": "integer"
           },
@@ -1873,8 +1873,8 @@
       "SimulateTransactionResult": {
         "description": "Simulation result for an individual transaction",
         "properties": {
-          "budget-used": {
-            "description": "Budget used during execution of an app call transaction.",
+          "app-budget-used": {
+            "description": "Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.",
             "type": "integer"
           },
           "missing-signature": {

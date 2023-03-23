@@ -1012,6 +1012,89 @@ int 1`,
 	})
 }
 
+func TestAppAtBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Transaction has a cost of 700 and invokes an inner transaction
+	exactly700AndCallInner := fmt.Sprintf(`#pragma version 6
+pushint 1
+cover 0 // This is a noop, just to fix an odd number of ops
+%s
+itxn_begin
+int appl
+itxn_field TypeEnum
+byte 0x068101
+dup
+itxn_field ClearStateProgram
+itxn_field ApprovalProgram
+itxn_submit
+`, strings.Repeat(`pushint 1
+pop
+`, 345))
+
+	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+		sender := accounts[0]
+
+		futureAppID := basics.AppIndex(2)
+		// fund outer app
+		fund := txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: futureAppID.Address(),
+			Amount:   401_000,
+		})
+		// create app
+		appCall := txnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApprovalProgram: exactly700AndCallInner,
+			ClearStateProgram: `#pragma version 6
+int 1`,
+		})
+
+		txntest.Group(&fund, &appCall)
+
+		signedFundTxn := fund.Txn().Sign(sender.Sk)
+		signedAppCall := appCall.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: []transactions.SignedTxn{signedFundTxn, signedAppCall},
+			expected: simulation.Result{
+				Version:   1,
+				LastRound: txnInfo.LatestRound(),
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+										EvalDelta: transactions.EvalDelta{
+											InnerTxns: []transactions.SignedTxnWithAD{
+												{
+													ApplyData: transactions.ApplyData{
+														ApplicationID: futureAppID + 1,
+													},
+												},
+											},
+										},
+									},
+								},
+								BudgetUsed: 701,
+							},
+						},
+						BudgetAdded:    1400,
+						BudgetConsumed: 701,
+					},
+				},
+				WouldSucceed: true,
+			},
+		}
+	})
+}
+
 func TestSignatureCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

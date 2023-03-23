@@ -3378,11 +3378,11 @@
             "type": "integer"
           }
         },
-        "budget-added": {
+        "app-budget-added": {
           "description": "Total budget added during execution of app calls in the transaction group.",
           "type": "integer"
         },
-        "budget-consumed": {
+        "app-budget-consumed": {
           "description": "Total budget consumed during execution of app calls in the transaction group.",
           "type": "integer"
         }
@@ -3402,8 +3402,8 @@
           "description": "A boolean indicating whether this transaction is missing signatures",
           "type": "boolean"
         },
-        "budget-used": {
-          "description": "Budget used during execution of an app call transaction.",
+        "app-budget-used": {
+          "description": "Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.",
           "type": "integer"
         }
       }

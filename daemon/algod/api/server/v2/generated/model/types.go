@@ -610,11 +610,11 @@ type PendingTransactionResponse struct {
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
 type SimulateTransactionGroupResult struct {
-	// BudgetAdded Total budget added during execution of app calls in the transaction group.
-	BudgetAdded *uint64 `json:"budget-added,omitempty"`
+	// AppBudgetAdded Total budget added during execution of app calls in the transaction group.
+	AppBudgetAdded *uint64 `json:"app-budget-added,omitempty"`
 
-	// BudgetConsumed Total budget consumed during execution of app calls in the transaction group.
-	BudgetConsumed *uint64 `json:"budget-consumed,omitempty"`
+	// AppBudgetConsumed Total budget consumed during execution of app calls in the transaction group.
+	AppBudgetConsumed *uint64 `json:"app-budget-consumed,omitempty"`
 
 	// FailedAt If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.
 	FailedAt *[]uint64 `json:"failed-at,omitempty"`
@@ -628,8 +628,8 @@ type SimulateTransactionGroupResult struct {
 
 // SimulateTransactionResult Simulation result for an individual transaction
 type SimulateTransactionResult struct {
-	// BudgetUsed Budget used during execution of an app call transaction.
-	BudgetUsed *uint64 `json:"budget-used,omitempty"`
+	// AppBudgetUsed Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.
+	AppBudgetUsed *uint64 `json:"app-budget-used,omitempty"`
 
 	// MissingSignature A boolean indicating whether this transaction is missing signatures
 	MissingSignature *bool `json:"missing-signature,omitempty"`
