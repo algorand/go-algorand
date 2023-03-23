@@ -357,7 +357,8 @@ func convertTxnResult(txnResult simulation.TxnResult) preEncodedSimulateTxnResul
 	return preEncodedSimulateTxnResult{
 		Txn:              ConvertInnerTxn(&txnResult.Txn),
 		MissingSignature: trueOrNil(txnResult.MissingSignature),
-		BudgetUsed:       numOrNil(uint64(txnResult.BudgetUsed)),
+		BudgetUsed:       numOrNil(txnResult.BudgetUsed),
+		LogicSigCost:     numOrNil(txnResult.LogicSigCost),
 	}
 }
 

@@ -631,6 +631,9 @@ type SimulateTransactionResult struct {
 	// AppBudgetUsed Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.
 	AppBudgetUsed *uint64 `json:"app-budget-used,omitempty"`
 
+	// LogicSigBudgetUsed Budget used during execution of a logic sig transaction.
+	LogicSigBudgetUsed *uint64 `json:"logic-sig-budget-used,omitempty"`
+
 	// MissingSignature A boolean indicating whether this transaction is missing signatures
 	MissingSignature *bool `json:"missing-signature,omitempty"`
 

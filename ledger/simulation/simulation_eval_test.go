@@ -542,21 +542,25 @@ btoi`)
 		name          string
 		arguments     [][]byte
 		expectedError string
+		cost          uint64
 	}{
 		{
 			name:          "approval",
 			arguments:     [][]byte{{1}},
 			expectedError: "", // no error
+			cost:          2,
 		},
 		{
 			name:          "rejection",
 			arguments:     [][]byte{{0}},
 			expectedError: "rejected by logic",
+			cost:          2,
 		},
 		{
 			name:          "error",
 			arguments:     [][]byte{},
 			expectedError: "rejected by logic err=cannot load arg[0] of 0",
+			cost:          1,
 		},
 	}
 
@@ -623,7 +627,8 @@ int 1`,
 										Txn: transactions.SignedTxnWithAD{
 											ApplyData: expectedAppCallAD,
 										},
-										BudgetUsed: budgetConsumed,
+										BudgetUsed:   budgetConsumed,
+										LogicSigCost: testCase.cost,
 									},
 								},
 								FailedAt:       expectedFailedAt,
@@ -984,6 +989,7 @@ int 1`,
 		var expectedAppCallAD transactions.ApplyData
 		expectedFailedAt := simulation.TxnPath{1}
 
+		// Opcode cost exceeded, but report current cost of LogicSig before it went over the limit.
 		return simulationTestCase{
 			input:         []transactions.SignedTxn{signedPayTxn, signedAppCallTxn},
 			expectedError: "dynamic cost budget exceeded",
@@ -998,7 +1004,8 @@ int 1`,
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: expectedAppCallAD,
 								},
-								BudgetUsed: 0,
+								BudgetUsed:   0,
+								LogicSigCost: 19934,
 							},
 						},
 						FailedAt:       expectedFailedAt,

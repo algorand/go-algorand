@@ -978,23 +978,23 @@ int 1`,
 						Version: 1,
 						TxnGroups: []model.SimulateTransactionGroupResult{
 							{
-								BudgetAdded:    budgetAdded,
-								BudgetConsumed: budgetConsumed,
-								FailedAt:       expectedFailedAt,
+								AppBudgetAdded:    budgetAdded,
+								AppBudgetConsumed: budgetConsumed,
+								FailedAt:          expectedFailedAt,
 								TxnResults: []model.SimulateTransactionResult{
 									{
 										TxnResult: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
 											SignedTxn: stxns[0],
 											// expect no ApplyData info
 										}, responseFormat.handle),
-										BudgetUsed: budgetUsed[0],
+										AppBudgetUsed: budgetUsed[0],
 									},
 									{
 										TxnResult: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
 											SignedTxn: stxns[1],
 											ApplyData: scenario.ExpectedSimulationAD,
 										}, responseFormat.handle),
-										BudgetUsed: budgetUsed[1],
+										AppBudgetUsed: budgetUsed[1],
 									},
 								},
 							},

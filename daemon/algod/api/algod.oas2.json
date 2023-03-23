@@ -3405,6 +3405,10 @@
         "app-budget-used": {
           "description": "Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.",
           "type": "integer"
+        },
+        "logic-sig-budget-used": {
+          "description": "Budget used during execution of a logic sig transaction.",
+          "type": "integer"
         }
       }
     },

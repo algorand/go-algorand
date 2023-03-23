@@ -33,6 +33,7 @@ type TxnResult struct {
 	Txn              transactions.SignedTxnWithAD
 	MissingSignature bool
 	BudgetUsed       uint64
+	LogicSigCost     uint64
 }
 
 // TxnGroupResult contains the simulation result for a single transaction group

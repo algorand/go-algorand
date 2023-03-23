@@ -193,6 +193,7 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
 	if cx.RunMode() != logic.ModeApp {
 		// do nothing for LogicSig programs
+		tracer.result.TxnGroups[0].Txns[cx.GroupIndex()].LogicSigCost = uint64(cx.Cost())
 		return
 	}
 
