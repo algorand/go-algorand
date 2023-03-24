@@ -349,7 +349,6 @@ func TestErrors(t *testing.T) {
 	// error adding to the pool when <= batchSizeBlockLimit
 	/***************************************************/
 	// Case where the timer ticks
-	sv.Start(ctx)
 	mj.numberOfItems = batchSizeBlockLimit
 	inputChan <- &mj
 	// let the enqueue pool process and return an error
@@ -362,7 +361,6 @@ func TestErrors(t *testing.T) {
 	// error adding to the pool when > batchSizeBlockLimit
 	/***************************************************/
 	// Case where the timer ticks
-	sv.Start(ctx)
 	mj.numberOfItems = batchSizeBlockLimit + 1
 	inputChan <- &mj
 	// let the enqueue pool process and return an error
