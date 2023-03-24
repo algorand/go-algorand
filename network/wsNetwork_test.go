@@ -3983,9 +3983,8 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		for pi, peer := range relayPeers {
 			relayAddrs[pi] = peer.(HTTPPeer).GetAddress()
 		}
-		sort.Strings(relayAddrs)
-		sort.Strings(dedupedRelayDomains)
-		assert.Equal(t, dedupedRelayDomains, relayAddrs)
+
+		assert.ElementsMatch(t, dedupedRelayDomains, relayAddrs)
 
 		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
 		assert.Equal(t, len(dedupedArchiveDomains), len(archivePeers))
@@ -3994,9 +3993,8 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		for pi, peer := range archivePeers {
 			archiveAddrs[pi] = peer.(HTTPPeer).GetAddress()
 		}
-		sort.Strings(archiveAddrs)
-		sort.Strings(dedupedArchiveDomains)
-		assert.Equal(t, dedupedArchiveDomains, archiveAddrs)
+
+		assert.ElementsMatch(t, dedupedArchiveDomains, archiveAddrs)
 
 		// Generate fresh set of addresses with a duplicate from original batch if warranted,
 		// assert phonebook reflects fresh list / prior peers other than selected duplicate
@@ -4022,9 +4020,8 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		for pi, peer := range relayPeers {
 			relayAddrs[pi] = peer.(HTTPPeer).GetAddress()
 		}
-		sort.Strings(relayAddrs)
-		sort.Strings(dedupedRelayDomains)
-		assert.Equal(t, dedupedRelayDomains, relayAddrs)
+
+		assert.ElementsMatch(t, dedupedRelayDomains, relayAddrs)
 
 		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
 		assert.Equal(t, len(dedupedArchiveDomains), len(archivePeers))
@@ -4033,9 +4030,8 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		for pi, peer := range archivePeers {
 			archiveAddrs[pi] = peer.(HTTPPeer).GetAddress()
 		}
-		sort.Strings(archiveAddrs)
-		sort.Strings(dedupedArchiveDomains)
-		assert.Equal(t, dedupedArchiveDomains, archiveAddrs)
+
+		assert.ElementsMatch(t, dedupedArchiveDomains, archiveAddrs)
 	})
 }
 
@@ -4092,10 +4088,7 @@ func TestMergePrimarySecondaryRelayAddressListsMinOverlap(t *testing.T) {
 
 		expectedRelayAddresses := removeDuplicateStr(append(primaryRelayAddresses, secondaryRelayAddresses...), true)
 
-		sort.Strings(expectedRelayAddresses)
-		sort.Strings(mergedRelayAddresses)
-
-		assert.Equal(t, expectedRelayAddresses, mergedRelayAddresses)
+		assert.ElementsMatch(t, expectedRelayAddresses, mergedRelayAddresses)
 	})
 }
 
@@ -4130,9 +4123,6 @@ func TestMergePrimarySecondaryRelayAddressListsPartialOverlap(t *testing.T) {
 		// secondary addresses should be present in the merged slice
 		expectedRelayAddresses := removeDuplicateStr(append(primaryRelayAddresses, generatedSecondaryRelayAddresses...), true)
 
-		sort.Strings(expectedRelayAddresses)
-		sort.Strings(mergedRelayAddresses)
-
-		assert.Equal(t, expectedRelayAddresses, mergedRelayAddresses)
+		assert.ElementsMatch(t, expectedRelayAddresses, mergedRelayAddresses)
 	})
 }
