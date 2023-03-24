@@ -406,7 +406,7 @@ func TestCryptoVerifierVerificationFailures(t *testing.T) {
 	// read the failed response from VerifiedVotes:
 	votesout := cryptoVerifier.VerifiedVotes()
 	voteResponse := <-votesout
-	require.Equal(t, execpool.ErrShuttingDownError, voteResponse.err)
+	require.Equal(t, context.Canceled, voteResponse.err)
 	require.True(t, voteResponse.cancelled)
 	require.Equal(t, uint64(14), voteResponse.index)
 }
