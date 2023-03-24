@@ -1072,49 +1072,29 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 	t.Parallel()
 
 	const inMem = false
-	const retargetDBVersion = 9
 
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
 
-	cfg := config.GetDefaultLocal()
+	dbs, dbName := storetesting.DbOpenTest(t, inMem)
+	storetesting.SetDbLogging(t, dbs)
 
-	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10_000_000_000)
-
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		sqlitedriver.AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		return nil
+	})
 	require.NoError(t, err)
+
 	defer func() {
-		l.Close()
-		require.NoError(t, os.Remove(dbName+".block.sqlite"))
-		require.NoError(t, os.Remove(dbName+".tracker.sqlite"))
+		dbs.Close()
+		require.NoError(t, os.Remove(dbName))
 	}()
 
-	tp := trackerdb.Params{
-		InitAccounts:      l.GenesisAccounts(),
-		InitProto:         l.GenesisProtoVersion(),
-		GenesisHash:       l.GenesisHash(),
-		FromCatchpoint:    true,
-		CatchpointEnabled: l.catchpoint.catchpointEnabled(),
-		DbPathPrefix:      l.catchpoint.dbDirectory,
-		BlockDb:           l.blockDBs,
-	}
+	targetVersion := int32(10)
 
-	err = l.trackerDBs.Batch(func(ctx context.Context, tx trackerdb.BatchScope) error {
-		arw, err0 := tx.MakeAccountsWriter()
-		if err0 != nil {
-			return err0
-		}
-		err0 = arw.AccountsReset(ctx)
-		if err0 != nil {
-			return err0
-		}
-		_, err0 = tx.Testing().RunMigrations(ctx, tp, l.log, retargetDBVersion)
-		if err0 != nil {
-			return err0
-		}
-
-		return tx.Testing().AccountsUpdateSchemaTest(ctx)
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err0 error) {
+		_, err0 = tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", targetVersion-1))
+		return
 	})
 	require.NoError(t, err)
 
@@ -1141,9 +1121,10 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 		{key: []byte("BostonKitchen-CheeseSlice")},
 		{key: []byte(`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`)},
 	}
-	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err0 error) {
-		// writer is only for kvstore
-		writer, err0 := tx.MakeAccountsOptimizedWriter(false, false, true, false)
+
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err0 error) {
+		writer, err0 := sqlitedriver.MakeAccountsSQLWriter(tx, false, false, true, false)
+		defer writer.Close()
 		if err0 != nil {
 			return
 		}
@@ -1153,7 +1134,6 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 				return
 			}
 		}
-		writer.Close()
 		return
 	})
 	require.NoError(t, err)
@@ -1162,38 +1142,43 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 	// | Above jams a bunch of key value with value nil into the DB |
 	// +------------------------------------------------------------+
 
-	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err0 error) {
-		var kvIter trackerdb.KVsIter
-		kvIter, err0 = tx.MakeKVsIter(ctx)
-		if err0 != nil {
-			return
-		}
-		defer kvIter.Close()
-		for kvIter.Next() {
-			var v []byte
-			_, v, err0 = kvIter.KeyValue()
+	nilRowCounter := func() (nilRowCount int, err error) {
+		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err0 error) {
+			stmt, err0 := tx.PrepareContext(ctx, "SELECT key FROM kvstore WHERE value IS NULL;")
 			if err0 != nil {
 				return
 			}
-			if v != nil {
-				err0 = fmt.Errorf("expecting getting nil from DB, get something else: %#v", v)
+			rows, err0 := stmt.QueryContext(ctx)
+			if err0 != nil {
 				return
 			}
-		}
+			for rows.Next() {
+				var key sql.NullString
+				if err0 = rows.Scan(&key); err0 != nil {
+					return
+				}
+				if !key.Valid {
+					err0 = fmt.Errorf("scan from db get invalid key: %#v", key)
+					return
+				}
+				nilRowCount++
+			}
+			return
+		})
 		return
-	})
+	}
+
+	nilRowCount, err := nilRowCounter()
 	require.NoError(t, err)
+	require.Equal(t, len(kvPairDBPrepareSet), nilRowCount)
 
 	// +----------------------------------------------------------------+
 	// | Confirm that tracker DB has value being nil, not anything else |
 	// +----------------------------------------------------------------+
 
-	prevConversionBytes := sqlitedriver.ConversionBytes
-	sqlitedriver.ConversionBytes = []byte("ayyyy")
-	defer func() { sqlitedriver.ConversionBytes = prevConversionBytes }()
-
-	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err0 error) {
-		_, err0 = tx.Testing().RunMigrations(ctx, tp, log, trackerdb.AccountDBVersion)
+	trackerDBWrapper := sqlitedriver.CreateTrackerSQLStore(dbs)
+	err = trackerDBWrapper.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err0 error) {
+		_, err0 = tx.RunMigrations(ctx, trackerdb.Params{}, log, targetVersion)
 		return
 	})
 	require.NoError(t, err)
@@ -1202,29 +1187,9 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 	// | Run migration to see replace nils with empty byte slices |
 	// +----------------------------------------------------------+
 
-	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err0 error) {
-		var kvIter trackerdb.KVsIter
-		kvIter, err0 = tx.MakeKVsIter(ctx)
-		if err0 != nil {
-			return
-		}
-		defer kvIter.Close()
-		for kvIter.Next() {
-			var v []byte
-			_, v, err0 = kvIter.KeyValue()
-			if err0 != nil {
-				return
-			}
-			if string(v) != string(sqlitedriver.ConversionBytes) {
-				err0 = fmt.Errorf("expecting DB migration does the job as %#v, get something else: %#v",
-					string(sqlitedriver.ConversionBytes), v)
-				return
-			}
-			fmt.Printf("%d\n", len(v))
-		}
-		return
-	})
+	nilRowCount, err = nilRowCounter()
 	require.NoError(t, err)
+	require.Equal(t, 0, nilRowCount)
 
 	// +------------------------------------------------------------------------------------------------+
 	// | After that, we can confirm the DB migration found all nil strings and executed the conversions |

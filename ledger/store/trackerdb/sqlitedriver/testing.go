@@ -103,7 +103,7 @@ func AccountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address
 	err = accountsCreateBoxTable(context.Background(), tx)
 	require.NoError(tb, err)
 
-	err = performkvstoreNullBlobConversion(context.Background(), tx, ConversionBytes)
+	err = performkvstoreNullBlobConversion(context.Background(), tx, []byte{})
 	require.NoError(tb, err)
 
 	return newDB
