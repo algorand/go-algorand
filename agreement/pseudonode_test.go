@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
@@ -456,21 +457,6 @@ func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 	}
 }
 
-type substrServiceLogger struct {
-	logging.Logger
-	looupStrings   []string
-	instancesFound []int
-}
-
-func (ssl *substrServiceLogger) Infof(s string, args ...interface{}) {
-	for i, str := range ssl.looupStrings {
-		if strings.Contains(s, str) {
-			ssl.instancesFound[i]++
-			return
-		}
-	}
-}
-
 // TestPseudonodeFailedEnqueuedTasks test to see that in the case where we cannot enqueue the verification task to the backlog, we won't be waiting forever - instead,
 // we would generate a warning message and keep going.
 func TestPseudonodeFailedEnqueuedTasks(t *testing.T) {
@@ -483,15 +469,10 @@ func TestPseudonodeFailedEnqueuedTasks(t *testing.T) {
 	accounts, balances := createTestAccountsAndBalances(t, 10, rootSeed[:])
 	ledger := makeTestLedger(balances)
 
-	subStrLogger := &substrServiceLogger{
-		Logger:         logging.TestingLog(t),
-		looupStrings:   []string{"pseudonode.makeVotes: failed to enqueue vote verification for", "pseudonode.makeProposals: failed to enqueue vote verification"},
-		instancesFound: []int{0, 0},
-	}
-	sLogger := serviceLogger{
-		Logger: subStrLogger,
-	}
-	sLogger.SetLevel(logging.Warn)
+	// used to capture StreamToBatch logs
+	var logBuffer bytes.Buffer
+	log := logging.Base()
+	log.SetOutput(&logBuffer)
 
 	keyManager := makeRecordingKeyManager(accounts)
 
@@ -507,7 +488,7 @@ func TestPseudonodeFailedEnqueuedTasks(t *testing.T) {
 		keys:         keyManager,
 		ledger:       ledger,
 		voteVerifier: voteVerifier,
-		log:          sLogger,
+		log:          serviceLogger{logging.Base()},
 		monitor:      nil,
 	})
 	defer pb.Quit()
@@ -545,6 +526,19 @@ func TestPseudonodeFailedEnqueuedTasks(t *testing.T) {
 	for _, ch := range channels {
 		drainChannel(ch)
 	}
-	require.Equal(t, enqueuedVotes*len(accounts), subStrLogger.instancesFound[0])
-	require.Equal(t, enqueuedProposals*len(accounts), subStrLogger.instancesFound[1])
+
+	errCounter := 0
+	for {
+		line, err := logBuffer.ReadString('\n')
+		if err != nil {
+			break
+		}
+		sigCount := 0
+		if strings.Contains(line, "addBatchToThePoolNow: EnqueueBacklog returned an error") {
+			_, line, _ = strings.Cut(line, "an error on the")
+			fmt.Sscanf(line, "%d", &sigCount)
+			errCounter = errCounter + sigCount
+		}
+	}
+	require.Equal(t, enqueuedVotes*len(accounts)+enqueuedProposals*len(accounts), errCounter)
 }

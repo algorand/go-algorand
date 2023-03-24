@@ -209,7 +209,7 @@ func (sv *StreamToBatch) addBatchToThePoolNow(unprocessed []InputJob) {
 	// the jobs without reporting an error could be a problem, and since the agreement service has tests expecting an error against a
 	// cancled exec pool, the behavior here is now changed.
 	if err != nil {
-		logging.Base().Errorf("addBatchToThePoolNow: EnqueueBacklog returned an error and StreamToBatch will stop: %v", err)
+		logging.Base().Errorf("addBatchToThePoolNow: EnqueueBacklog returned an error on the %d sig verifications: %v", len(unprocessed), err)
 		sv.batchProcessor.Cleanup(unprocessed, err)
 	}
 }
