@@ -205,7 +205,7 @@ func (sv *StreamToBatch) addBatchToThePoolNow(unprocessed []InputJob) {
 
 	// Historic background: initially, the error was fatal, meaning the main loop would return and shut down. The reasoning behind this
 	// was because the pool cannot recover once cancled, and all subsequent jobs would fail.  However, when the service stops, any
-	// subsequent jobs sent to the input channel will block indefinitly, because the consumer end of the channel has stopped. Blocking
+	// subsequent jobs sent to the input channel will block indefinitely, because the consumer end of the channel has stopped. Blocking
 	// the jobs without reporting an error could be a problem, and since the agreement service has tests expecting an error against a
 	// cancled exec pool, the behavior here is now changed.
 	if err != nil {

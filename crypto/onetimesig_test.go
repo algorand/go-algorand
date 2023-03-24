@@ -156,30 +156,30 @@ func TestOneTimeSignBatchVerifyNewStyle(t *testing.T) {
 	v := c.OneTimeSignatureVerifier
 
 	sig := c.Sign(id, s)
-	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: id, Message: s, Sig: &sig})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: id, Message: s, Sig: &sig})
 
-	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: id, Message: s2, Sig: &sig})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: id, Message: s2, Sig: &sig})
 
 	sig2 := c2.Sign(id, s)
-	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: id, Message: s, Sig: &sig2})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: id, Message: s, Sig: &sig2})
 
 	otherID := randID()
-	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: otherID, Message: s, Sig: &sig})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: otherID, Message: s, Sig: &sig})
 
 	nextOffsetID := id
 	nextOffsetID.Offset++
-	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: nextOffsetID, Message: s, Sig: &sig})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: nextOffsetID, Message: s, Sig: &sig})
 
 	c.DeleteBeforeFineGrained(nextOffsetID, 256)
 	sigAfterDelete := c.Sign(id, s)
-	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: id, Message: s, Sig: &sigAfterDelete})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: id, Message: s, Sig: &sigAfterDelete})
 
 	sigNextAfterDelete := c.Sign(nextOffsetID, s)
-	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: nextOffsetID, Message: s, Sig: &sigNextAfterDelete})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: nextOffsetID, Message: s, Sig: &sigNextAfterDelete})
 
 	nextOffsetID.Offset++
 	sigNext2AfterDelete := c.Sign(nextOffsetID, s)
-	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: nextOffsetID, Message: s, Sig: &sigNext2AfterDelete})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: nextOffsetID, Message: s, Sig: &sigNext2AfterDelete})
 
 	nextBatchID := id
 	nextBatchID.Batch++
@@ -188,14 +188,14 @@ func TestOneTimeSignBatchVerifyNewStyle(t *testing.T) {
 	nextBatchOffsetID.Offset++
 	c.DeleteBeforeFineGrained(nextBatchOffsetID, 256)
 	sigAfterDelete2 := c.Sign(nextBatchID, s)
-	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: nextBatchID, Message: s, Sig: &sigAfterDelete2})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: nextBatchID, Message: s, Sig: &sigAfterDelete2})
 
 	sigNextAfterDelete2 := c.Sign(nextBatchOffsetID, s)
-	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: nextBatchOffsetID, Message: s, Sig: &sigNextAfterDelete2})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: nextBatchOffsetID, Message: s, Sig: &sigNextAfterDelete2})
 
 	nextBatchOffsetID.Offset++
 	sigNext2AfterDelete2 := c.Sign(nextBatchOffsetID, s)
-	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: nextBatchOffsetID, Message: s, Sig: &sigNext2AfterDelete2})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: nextBatchOffsetID, Message: s, Sig: &sigNext2AfterDelete2})
 
 	// Jump by two batches
 	bigJumpID := nextBatchOffsetID
@@ -205,23 +205,23 @@ func TestOneTimeSignBatchVerifyNewStyle(t *testing.T) {
 	preBigJumpID := bigJumpID
 	preBigJumpID.Batch--
 	sig3 := c.Sign(preBigJumpID, s)
-	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: preBigJumpID, Message: s, Sig: &sig3})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: preBigJumpID, Message: s, Sig: &sig3})
 
 	preBigJumpID.Batch++
 	preBigJumpID.Offset--
 	sig4 := c.Sign(preBigJumpID, s)
-	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: preBigJumpID, Message: s, Sig: &sig4})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: preBigJumpID, Message: s, Sig: &sig4})
 
 	sig5 := c.Sign(bigJumpID, s)
-	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: bigJumpID, Message: s, Sig: &sig5})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: bigJumpID, Message: s, Sig: &sig5})
 
 	bigJumpID.Offset++
 	sig6 := c.Sign(bigJumpID, s)
-	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: bigJumpID, Message: s, Sig: &sig6})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: bigJumpID, Message: s, Sig: &sig6})
 
 	bigJumpID.Batch++
 	sig7 := c.Sign(bigJumpID, s)
-	vTasks = append(vTasks, &SigVerificationTask{V: v, Id: bigJumpID, Message: s, Sig: &sig7})
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: bigJumpID, Message: s, Sig: &sig7})
 
 	results := BatchVerifyOneTimeSignatures(vTasks)
 
@@ -282,7 +282,7 @@ func BenchmarkBatchedOneTimeSigBatchVerification(b *testing.B) {
 				sig := c.Sign(id, msg)
 				vTasks[i] = &SigVerificationTask{
 					V:       vs,
-					Id:      id,
+					ID:      id,
 					Message: msg,
 					Sig:     &sig,
 				}

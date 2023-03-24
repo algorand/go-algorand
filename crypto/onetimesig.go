@@ -307,7 +307,7 @@ func (s *OneTimeSignatureSecrets) Sign(id OneTimeSignatureIdentifier, message Ha
 // SigVerificationTask is a single self-containing struct for the signiture verification
 type SigVerificationTask struct {
 	V       OneTimeSignatureVerifier
-	Id      OneTimeSignatureIdentifier
+	ID      OneTimeSignatureIdentifier
 	Message Hashable
 	Sig     *OneTimeSignature
 }
@@ -338,19 +338,19 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 // BatchVerifyOneTimeSignatures has the same function as Verify, but it operates on a batch of signatures.
 func BatchVerifyOneTimeSignatures(vTasks []*SigVerificationTask) (failed []bool) {
 	numTasks := len(vTasks)
-	messageBytes := make([][]byte, numTasks*3, numTasks*3)
-	publicKeys := make([]PublicKey, numTasks*3, numTasks*3)
-	signatures := make([]Signature, numTasks*3, numTasks*3)
+	messageBytes := make([][]byte, numTasks*3)
+	publicKeys := make([]PublicKey, numTasks*3)
+	signatures := make([]Signature, numTasks*3)
 
 	for i := range vTasks {
 		offsetID := OneTimeSignatureSubkeyOffsetID{
 			SubKeyPK: vTasks[i].Sig.PK,
-			Batch:    vTasks[i].Id.Batch,
-			Offset:   vTasks[i].Id.Offset,
+			Batch:    vTasks[i].ID.Batch,
+			Offset:   vTasks[i].ID.Offset,
 		}
 		batchID := OneTimeSignatureSubkeyBatchID{
 			SubKeyPK: vTasks[i].Sig.PK2,
-			Batch:    vTasks[i].Id.Batch,
+			Batch:    vTasks[i].ID.Batch,
 		}
 		messageBytes[i*3] = HashRep(batchID)
 		messageBytes[i*3+1] = HashRep(offsetID)
@@ -365,7 +365,7 @@ func BatchVerifyOneTimeSignatures(vTasks []*SigVerificationTask) (failed []bool)
 		signatures[i*3+2] = Signature(vTasks[i].Sig.Sig)
 	}
 	allPass, results := batchVerificationImpl(messageBytes, publicKeys, signatures)
-	sigResults := make([]bool, numTasks, numTasks)
+	sigResults := make([]bool, numTasks)
 	if allPass {
 		return sigResults
 	}

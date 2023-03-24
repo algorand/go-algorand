@@ -139,7 +139,7 @@ func (uv unauthenticatedVote) getVerificationTask(l LedgerReader) (*crypto.SigVe
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, uv)
 	}*/
 
-	return &crypto.SigVerificationTask{V: voteID, Id: ephID, Message: rv, Sig: &uv.Sig}, vote{R: rv, Cred: cred, Sig: uv.Sig}, nil
+	return &crypto.SigVerificationTask{V: voteID, ID: ephID, Message: rv, Sig: &uv.Sig}, vote{R: rv, Cred: cred, Sig: uv.Sig}, nil
 }
 
 // makeVote creates a new unauthenticated vote from its constituent components.
