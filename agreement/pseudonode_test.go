@@ -535,8 +535,8 @@ func TestPseudonodeFailedEnqueuedTasks(t *testing.T) {
 		}
 		sigCount := 0
 		if strings.Contains(line, "addBatchToThePoolNow: EnqueueBacklog returned an error") {
-			_, line, _ = strings.Cut(line, "an error on the")
-			fmt.Sscanf(line, "%d", &sigCount)
+			parts := strings.Split(line, "an error on the")
+			fmt.Sscanf(parts[1], "%d", &sigCount)
 			errCounter = errCounter + sigCount
 		}
 	}
