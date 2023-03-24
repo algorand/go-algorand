@@ -45,20 +45,16 @@ func TestVerificationAgainstFullExecutionPool(t *testing.T) {
 	defer mainPool.Shutdown()
 
 	voteVerifier := MakeStartAsyncVoteVerifier(&expiredExecPool{mainPool})
+	defer voteVerifier.Quit()
 
 	outChan := make(chan asyncVerifyVoteResponse, 1)
 	voteVerifier.verifyVote(context.Background(), nil, unauthenticatedVote{}, 0, message{}, outChan)
 	response := <-outChan
-	require.Equal(t, execpool.ErrShuttingDownError, response.err)
+	require.Equal(t, context.Canceled, response.err)
 	require.True(t, response.cancelled)
-	voteVerifier.Quit()
 
-	// Once the exec pool cancelation is detected, sending more jobs to the verifier will block
-	// start again to test for eqVotes
-	voteVerifier = MakeStartAsyncVoteVerifier(&expiredExecPool{mainPool})
-	defer voteVerifier.Quit()
 	voteVerifier.verifyEqVote(context.Background(), nil, unauthenticatedEquivocationVote{}, 0, message{}, outChan)
 	response = <-outChan
-	require.Equal(t, execpool.ErrShuttingDownError, response.err)
+	require.Equal(t, context.Canceled, response.err)
 	require.True(t, response.cancelled)
 }
