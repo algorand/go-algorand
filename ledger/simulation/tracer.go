@@ -192,12 +192,13 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 
 func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
 	if cx.RunMode() != logic.ModeApp {
-		// do nothing for LogicSig programs
+		// Report cost for LogicSig program and exit
 		tracer.result.TxnGroups[0].Txns[cx.GroupIndex()].LogicSigBudgetUsed = uint64(cx.Cost())
 		return
 	}
 
-	// Report cost of this program
+	// Report cost of this program.
+	// If it is an inner app call, roll up its cost to the top level transaction.
 	tracer.result.TxnGroups[0].Txns[tracer.relativeCursor[0]].AppBudgetUsed += uint64(cx.Cost())
 
 	tracer.handleError(evalError)
