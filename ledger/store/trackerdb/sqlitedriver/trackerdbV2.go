@@ -488,7 +488,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema8(ctx context.Context
 // upgradeDatabaseSchema9 upgrades the database schema from version 9 to version 10,
 // scrubbing out all nil values from kvstore table and replace with empty byte slice.
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema9(ctx context.Context, tx *sql.Tx) (err error) {
-	err = performkvstoreNullBlobConversion(ctx, tx, []byte{})
+	err = performkvstoreNullBlobConversion(ctx, tx)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema9 unable to replace kvstore nil entries with empty byte slices : %v", err)
 	}
