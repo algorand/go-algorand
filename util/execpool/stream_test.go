@@ -309,10 +309,9 @@ func TestErrors(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	inputChan := make(chan InputJob)
-	mbp := mockBatchProcessor{}
+	mbp := mockBatchProcessor{notify: make(chan struct{}, 1)}
 	sv := MakeStreamToBatch(inputChan, &mp, &mbp)
 
 	/***************************************************/
@@ -327,22 +326,24 @@ func TestErrors(t *testing.T) {
 	mp.hold <- struct{}{}
 	// if errored, should not process the callback on the job
 	// This is based on the mockPool EnqueueBacklog behavior
+	// notify to advance the mock cleanup, and make sure the job fields are updated
+	<-mbp.notify
 	require.False(t, mj.processed)
-	// the service should end
-	sv.WaitForStop()
+	require.Error(t, mj.returnError)
+
+	// the service should not end and continue processing the subsequent cases
 
 	/***************************************************/
 	// error adding to the pool when < txnPerWorksetThreshold
 	/***************************************************/
 	// Case where the timer ticks
-	sv.Start(ctx)
 	mj.numberOfItems = txnPerWorksetThreshold - 1
 	inputChan <- &mj
 	// let the enqueue pool process and return an error
 	mp.hold <- struct{}{}
+	<-mbp.notify
 	require.False(t, mj.processed)
-	// the service should end
-	sv.WaitForStop()
+	require.Error(t, mj.returnError)
 
 	/***************************************************/
 	// error adding to the pool when <= batchSizeBlockLimit
@@ -353,9 +354,9 @@ func TestErrors(t *testing.T) {
 	inputChan <- &mj
 	// let the enqueue pool process and return an error
 	mp.hold <- struct{}{}
+	<-mbp.notify
 	require.False(t, mj.processed)
-	// the service should end
-	sv.WaitForStop()
+	require.Error(t, mj.returnError)
 
 	/***************************************************/
 	// error adding to the pool when > batchSizeBlockLimit
@@ -366,8 +367,12 @@ func TestErrors(t *testing.T) {
 	inputChan <- &mj
 	// let the enqueue pool process and return an error
 	mp.hold <- struct{}{}
+	<-mbp.notify
 	require.False(t, mj.processed)
-	// the service should end
+	require.Error(t, mj.returnError)
+
+	// the service should end when the ctx is canceled
+	cancel()
 	sv.WaitForStop()
 }
 

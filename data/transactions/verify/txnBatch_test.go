@@ -430,7 +430,6 @@ func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not 
 	go func() {
 		defer wg.Done()
 		sv.WaitForStop()
-		cancel()
 	}()
 
 	wg.Add(1)
@@ -446,9 +445,11 @@ func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not 
 		}
 	}()
 	for err := range errChan {
-		require.ErrorIs(t, err, execpool.ErrShuttingDownError)
+		require.ErrorIs(t, err, context.Canceled)
 	}
 	require.Contains(t, logBuffer.String(), "addBatchToThePoolNow: EnqueueBacklog returned an error and StreamToBatch will stop: context canceled")
+	// cancel the context to stop the stream
+	cancel()
 	wg.Wait()
 
 	verifyResults(txnGroups, badTxnGroups, cache, badSigResultCounter, goodSigResultCounter, t)
@@ -628,8 +629,9 @@ func TestStreamToBatchCtxCancel(t *testing.T) {
 // ctx is cancled, this test first saturates the exec pool buffer, then
 // sends a txn and cancels the ctx after multiple waitForNextTxnDuration
 // so that the batch is sent to the pool. Since the pool is saturated,
-// the task will be stuck waiting to be queued when the context is canceled
-// everything should be gracefully terminated
+// the task will be stuck waiting to be queued when the context is canceled.
+// The service should gracefully terminate: first with context.Canceled error,
+// and possibly with ErrShuttingDownError (in case a job is left not yet sent to the exec pool)
 func TestStreamToBatchCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest // Not parallel because it depends on the default logger
 	partitiontest.PartitionTest(t)
 
@@ -659,10 +661,10 @@ func TestStreamToBatchCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest /
 		for {
 			result = <-resultChan
 			// at least one ErrShuttingDownError is expected
-			if result.Err != execpool.ErrShuttingDownError {
-				continue
+			if result.Err == execpool.ErrShuttingDownError || result.Err == context.Canceled {
+				// we received what we wanted. break
+				break
 			}
-			break
 		}
 	}()
 
@@ -690,7 +692,7 @@ func TestStreamToBatchCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest /
 	// cancel the ctx as the sig is not yet sent to the exec pool
 	// the test might sporadically fail if between sending the txn above
 	// and the cancelation, 2 x waitForNextTxnDuration elapses (10ms)
-	time.Sleep(12)
+	time.Sleep(12 * time.Millisecond)
 	go func() {
 		// wait a bit before releasing the tasks, so that the verificationPool ctx first gets canceled
 		time.Sleep(20 * time.Millisecond)
@@ -698,12 +700,11 @@ func TestStreamToBatchCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest /
 	}()
 	verificationPool.Shutdown()
 
-	// the main loop should stop before calling cancel() when the exec pool shuts down and returns an error
-	sv.WaitForStop()
+	// the main loop should stop after calling cancel() when the exec pool shuts down and returns an error
 	cancel()
+	sv.WaitForStop()
 
 	wg.Wait()
-	require.ErrorIs(t, result.Err, execpool.ErrShuttingDownError)
 	require.Contains(t, logBuffer.String(), "addBatchToThePoolNow: EnqueueBacklog returned an error and StreamToBatch will stop: context canceled")
 }
 

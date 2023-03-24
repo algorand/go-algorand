@@ -96,7 +96,7 @@ func (sv *StreamToBatch) batchingLoop() {
 	defer sv.activeLoopWg.Done()
 	timer := time.NewTicker(waitForNextJobDuration)
 	defer timer.Stop()
-	var added bool
+	var processed bool
 	var numberOfJobsInCurrent uint64
 	var numberOfBatchAttempts uint64
 	uJobs := make([]InputJob, 0, 8)
@@ -112,10 +112,7 @@ func (sv *StreamToBatch) batchingLoop() {
 
 			// if no batchable items here, send this as a task of its own
 			if numberOfBatchable == 0 {
-				err := sv.addBatchToThePoolNow([]InputJob{job})
-				if err != nil {
-					return
-				}
+				sv.addBatchToThePoolNow([]InputJob{job})
 				continue // job is handled, continue
 			}
 
@@ -129,18 +126,12 @@ func (sv *StreamToBatch) batchingLoop() {
 					// do not consider adding more jobs to this batch.
 					// bypass the exec pool situation and queue anyway
 					// this is to prevent creation of very large batches
-					err := sv.addBatchToThePoolNow(uJobs)
-					if err != nil {
-						return
-					}
-					added = true
+					sv.addBatchToThePoolNow(uJobs)
+					processed = true
 				} else {
-					added, err = sv.tryAddBatchToThePool(uJobs)
-					if err != nil {
-						return
-					}
+					processed = sv.tryAddBatchToThePool(uJobs)
 				}
-				if added {
+				if processed {
 					numberOfJobsInCurrent = 0
 					uJobs = make([]InputJob, 0, 8)
 					numberOfBatchAttempts = 0
@@ -155,20 +146,16 @@ func (sv *StreamToBatch) batchingLoop() {
 				// nothing batched yet... wait some more
 				continue
 			}
-			var err error
 			if numberOfBatchAttempts > 1 {
 				// bypass the exec pool situation and queue anyway
 				// this is to prevent long delays in the propagation (sigs txn/vote)
 				// at least one job has waited 3 x waitForNextJobDuration
-				err = sv.addBatchToThePoolNow(uJobs)
-				added = true
+				sv.addBatchToThePoolNow(uJobs)
+				processed = true
 			} else {
-				added, err = sv.tryAddBatchToThePool(uJobs)
+				processed = sv.tryAddBatchToThePool(uJobs)
 			}
-			if err != nil {
-				return
-			}
-			if added {
+			if processed {
 				numberOfJobsInCurrent = 0
 				uJobs = make([]InputJob, 0, 8)
 				numberOfBatchAttempts = 0
@@ -182,24 +169,20 @@ func (sv *StreamToBatch) batchingLoop() {
 	}
 }
 
-func (sv *StreamToBatch) tryAddBatchToThePool(uJobs []InputJob) (added bool, err error) {
+func (sv *StreamToBatch) tryAddBatchToThePool(uJobs []InputJob) (processed bool) {
 	// if the exec pool buffer is full, can go back and collect
 	// more jobs instead of waiting in the exec pool buffer
 	// e.g. more signatures to the batch do not harm performance but introduce latency when delayed (see crypto.BenchmarkBatchVerifierBig)
 
 	// if the buffer is full
 	if l, c := sv.executionPool.BufferSize(); l == c {
-		return false, nil
+		return false
 	}
-	err = sv.addBatchToThePoolNow(uJobs)
-	if err != nil {
-		// An error is returned when the context of the pool expires
-		return false, err
-	}
-	return true, nil
+	sv.addBatchToThePoolNow(uJobs)
+	return true
 }
 
-func (sv *StreamToBatch) addBatchToThePoolNow(unprocessed []InputJob) error {
+func (sv *StreamToBatch) addBatchToThePoolNow(unprocessed []InputJob) {
 	// if the context is canceled when the task is in the queue, it should be canceled
 	// copy the ctx here so that when the StreamToBatch is started again, and a new context
 	// is created, this task still gets canceled due to the ctx at the time of this task
@@ -218,8 +201,15 @@ func (sv *StreamToBatch) addBatchToThePoolNow(unprocessed []InputJob) error {
 
 	// EnqueueBacklog returns an error when the context is canceled
 	err := sv.executionPool.EnqueueBacklog(sv.ctx, function, unprocessed, nil)
+	// In case of an error (when the execpool is cancled/shut down), return the unprocessed jobs with the returned error.
+
+	// Historic background: initially, the error was fatal, meaning the main loop would return and shut down. The reasoning behind this
+	// was because the pool cannot recover once cancled, and all subsequent jobs would fail.  However, when the service stops, any
+	// subsequent jobs sent to the input channel will block indefinitly, because the consumer end of the channel has stopped. Blocking
+	// the jobs without reporting an error could be a problem, and since the agreement service has tests expecting an error against a
+	// cancled exec pool, the behavior here is now changed.
 	if err != nil {
-		logging.Base().Infof("addBatchToThePoolNow: EnqueueBacklog returned an error and StreamToBatch will stop: %v", err)
+		logging.Base().Errorf("addBatchToThePoolNow: EnqueueBacklog returned an error and StreamToBatch will stop: %v", err)
+		sv.batchProcessor.Cleanup(unprocessed, err)
 	}
-	return err
 }
