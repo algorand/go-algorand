@@ -130,13 +130,13 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	if ep.GetCaller() != nil {
 		// If this is an inner txn group, save the txns
 		tracer.populateInnerTransactions(ep.TxnGroup)
-		tracer.result.TxnGroups[0].BudgetAdded += uint64(ep.Proto.MaxAppProgramCost)
+		tracer.result.TxnGroups[0].AppBudgetAdded += uint64(ep.Proto.MaxAppProgramCost)
 	}
 	tracer.cursorEvalTracer.BeforeTxnGroup(ep)
 
 	// Currently only supports one (first) txn group
-	if ep.PooledApplicationBudget != nil && tracer.result.TxnGroups[0].BudgetAdded == 0 {
-		tracer.result.TxnGroups[0].BudgetAdded = uint64(*ep.PooledApplicationBudget)
+	if ep.PooledApplicationBudget != nil && tracer.result.TxnGroups[0].AppBudgetAdded == 0 {
+		tracer.result.TxnGroups[0].AppBudgetAdded = uint64(*ep.PooledApplicationBudget)
 	}
 }
 
@@ -193,12 +193,12 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
 	if cx.RunMode() != logic.ModeApp {
 		// do nothing for LogicSig programs
-		tracer.result.TxnGroups[0].Txns[cx.GroupIndex()].LogicSigCost = uint64(cx.Cost())
+		tracer.result.TxnGroups[0].Txns[cx.GroupIndex()].LogicSigBudgetUsed = uint64(cx.Cost())
 		return
 	}
 
 	// Report cost of this program
-	tracer.result.TxnGroups[0].Txns[tracer.relativeCursor[0]].BudgetUsed += uint64(cx.Cost())
+	tracer.result.TxnGroups[0].Txns[tracer.relativeCursor[0]].AppBudgetUsed += uint64(cx.Cost())
 
 	tracer.handleError(evalError)
 }

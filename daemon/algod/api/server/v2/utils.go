@@ -355,10 +355,10 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 
 func convertTxnResult(txnResult simulation.TxnResult) preEncodedSimulateTxnResult {
 	return preEncodedSimulateTxnResult{
-		Txn:              ConvertInnerTxn(&txnResult.Txn),
-		MissingSignature: trueOrNil(txnResult.MissingSignature),
-		BudgetUsed:       numOrNil(txnResult.BudgetUsed),
-		LogicSigCost:     numOrNil(txnResult.LogicSigCost),
+		Txn:                ConvertInnerTxn(&txnResult.Txn),
+		MissingSignature:   trueOrNil(txnResult.MissingSignature),
+		AppBudgetUsed:      numOrNil(txnResult.AppBudgetUsed),
+		LogicSigBudgetUsed: numOrNil(txnResult.LogicSigBudgetUsed),
 	}
 }
 
@@ -369,10 +369,10 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) preEncodedS
 	}
 
 	encoded := preEncodedSimulateTxnGroupResult{
-		Txns:           txnResults,
-		FailureMessage: strOrNil(txnGroupResult.FailureMessage),
-		BudgetAdded:    numOrNil(txnGroupResult.BudgetAdded),
-		BudgetConsumed: numOrNil(txnGroupResult.BudgetConsumed),
+		Txns:              txnResults,
+		FailureMessage:    strOrNil(txnGroupResult.FailureMessage),
+		AppBudgetAdded:    numOrNil(txnGroupResult.AppBudgetAdded),
+		AppBudgetConsumed: numOrNil(txnGroupResult.AppBudgetConsumed),
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {

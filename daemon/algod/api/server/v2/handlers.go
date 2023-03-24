@@ -920,19 +920,19 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 
 // preEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
 type preEncodedSimulateTxnResult struct {
-	Txn              PreEncodedTxInfo `codec:"txn-result"`
-	MissingSignature *bool            `codec:"missing-signature,omitempty"`
-	BudgetUsed       *uint64          `codec:"app-budget-used,omitempty"`
-	LogicSigCost     *uint64          `codec:"logic-sig-budget-used,omitempty"`
+	Txn                PreEncodedTxInfo `codec:"txn-result"`
+	MissingSignature   *bool            `codec:"missing-signature,omitempty"`
+	AppBudgetUsed      *uint64          `codec:"app-budget-used,omitempty"`
+	LogicSigBudgetUsed *uint64          `codec:"logic-sig-budget-used,omitempty"`
 }
 
 // preEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
 type preEncodedSimulateTxnGroupResult struct {
-	Txns           []preEncodedSimulateTxnResult `codec:"txn-results"`
-	FailureMessage *string                       `codec:"failure-message,omitempty"`
-	FailedAt       *[]uint64                     `codec:"failed-at,omitempty"`
-	BudgetAdded    *uint64                       `codec:"app-budget-added,omitempty"`
-	BudgetConsumed *uint64                       `codec:"app-budget-consumed,omitempty"`
+	Txns              []preEncodedSimulateTxnResult `codec:"txn-results"`
+	FailureMessage    *string                       `codec:"failure-message,omitempty"`
+	FailedAt          *[]uint64                     `codec:"failed-at,omitempty"`
+	AppBudgetAdded    *uint64                       `codec:"app-budget-added,omitempty"`
+	AppBudgetConsumed *uint64                       `codec:"app-budget-consumed,omitempty"`
 }
 
 // preEncodedSimulateResponse mirrors model.SimulateResponse

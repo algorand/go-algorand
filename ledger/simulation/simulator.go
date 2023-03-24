@@ -221,9 +221,9 @@ func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
 	// Update total cost by aggregating individual txn costs
 	totalCost := uint64(0)
 	for _, txn := range simulatorTracer.result.TxnGroups[0].Txns {
-		totalCost += txn.BudgetUsed
+		totalCost += txn.AppBudgetUsed
 	}
-	simulatorTracer.result.TxnGroups[0].BudgetConsumed = totalCost
+	simulatorTracer.result.TxnGroups[0].AppBudgetConsumed = totalCost
 
 	return *simulatorTracer.result, nil
 }

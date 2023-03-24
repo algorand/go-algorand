@@ -968,18 +968,18 @@ int 1`,
 						expectedFailedAt = &clone
 					}
 
-					var budgetUsed []*uint64
-					budgetAdded := numOrNil(scenario.BudgetAdded)
-					budgetConsumed := numOrNil(scenario.BudgetConsumed)
-					for i := range scenario.BudgetUsed {
-						budgetUsed = append(budgetUsed, numOrNil(scenario.BudgetUsed[i]))
+					var appBudgetUsed []*uint64
+					appBudgetAdded := numOrNil(scenario.AppBudgetAdded)
+					AppBudgetConsumed := numOrNil(scenario.AppBudgetConsumed)
+					for i := range scenario.AppBudgetUsed {
+						appBudgetUsed = append(appBudgetUsed, numOrNil(scenario.AppBudgetUsed[i]))
 					}
 					expectedBody := model.SimulateResponse{
 						Version: 1,
 						TxnGroups: []model.SimulateTransactionGroupResult{
 							{
-								AppBudgetAdded:    budgetAdded,
-								AppBudgetConsumed: budgetConsumed,
+								AppBudgetAdded:    appBudgetAdded,
+								AppBudgetConsumed: AppBudgetConsumed,
 								FailedAt:          expectedFailedAt,
 								TxnResults: []model.SimulateTransactionResult{
 									{
@@ -987,14 +987,14 @@ int 1`,
 											SignedTxn: stxns[0],
 											// expect no ApplyData info
 										}, responseFormat.handle),
-										AppBudgetUsed: budgetUsed[0],
+										AppBudgetUsed: appBudgetUsed[0],
 									},
 									{
 										TxnResult: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
 											SignedTxn: stxns[1],
 											ApplyData: scenario.ExpectedSimulationAD,
 										}, responseFormat.handle),
-										AppBudgetUsed: budgetUsed[1],
+										AppBudgetUsed: appBudgetUsed[1],
 									},
 								},
 							},
