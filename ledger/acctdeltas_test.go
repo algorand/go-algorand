@@ -1087,7 +1087,7 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 	defer func() {
 		l.Close()
 		require.NoError(t, os.Remove(dbName+".block.sqlite"))
-		// require.NoError(t, os.Remove(dbName + ".tracker.sqlite"))
+		require.NoError(t, os.Remove(dbName+".tracker.sqlite"))
 	}()
 
 	tp := trackerdb.Params{
@@ -1162,9 +1162,35 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 	// | Above jams a bunch of key value with value nil into the DB |
 	// +------------------------------------------------------------+
 
-	//l.trackerDBs.() the abstraction get me nowhere...
-	// QUESTION: how to do tx.prepare query from trackerDB transaction?
-	// TODO: confirm that values are all null
+	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err0 error) {
+		var kvIter trackerdb.KVsIter
+		kvIter, err0 = tx.MakeKVsIter(ctx)
+		if err0 != nil {
+			return
+		}
+		defer kvIter.Close()
+		for kvIter.Next() {
+			var v []byte
+			_, v, err0 = kvIter.KeyValue()
+			if err0 != nil {
+				return
+			}
+			if v != nil {
+				err0 = fmt.Errorf("expecting getting nil from DB, get something else: %#v", v)
+				return
+			}
+		}
+		return
+	})
+	require.NoError(t, err)
+
+	// +----------------------------------------------------------------+
+	// | Confirm that tracker DB has value being nil, not anything else |
+	// +----------------------------------------------------------------+
+
+	prevConversionBytes := sqlitedriver.ConversionBytes
+	sqlitedriver.ConversionBytes = []byte("ayyyy")
+	defer func() { sqlitedriver.ConversionBytes = prevConversionBytes }()
 
 	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err0 error) {
 		_, err0 = tx.Testing().RunMigrations(ctx, tp, log, trackerdb.AccountDBVersion)
@@ -1176,7 +1202,33 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 	// | Run migration to see replace nils with empty byte slices |
 	// +----------------------------------------------------------+
 
-	// TODO: confirm that values are not null
+	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err0 error) {
+		var kvIter trackerdb.KVsIter
+		kvIter, err0 = tx.MakeKVsIter(ctx)
+		if err0 != nil {
+			return
+		}
+		defer kvIter.Close()
+		for kvIter.Next() {
+			var v []byte
+			_, v, err0 = kvIter.KeyValue()
+			if err0 != nil {
+				return
+			}
+			if string(v) != string(sqlitedriver.ConversionBytes) {
+				err0 = fmt.Errorf("expecting DB migration does the job as %#v, get something else: %#v",
+					string(sqlitedriver.ConversionBytes), v)
+				return
+			}
+			fmt.Printf("%d\n", len(v))
+		}
+		return
+	})
+	require.NoError(t, err)
+
+	// +------------------------------------------------------------------------------------------------+
+	// | After that, we can confirm the DB migration found all nil strings and executed the conversions |
+	// +------------------------------------------------------------------------------------------------+
 }
 
 // upsert updates existing or inserts a new entry
