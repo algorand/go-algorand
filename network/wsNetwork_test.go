@@ -128,7 +128,7 @@ func init() {
 
 func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local, opts ...testWebsocketOption) *WebsocketNetwork {
 	log := logging.TestingLog(t)
-	log.SetLevel(logging.Level(conf.BaseLoggerDebugLevel))
+	log.SetLevel(logging.Warn)
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    conf,
@@ -3973,8 +3973,8 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		netA.updatePhonebookAddresses(relayDomains, archiveDomains)
 
 		// Check that entries are in fact in phonebook less any duplicates
-		dedupedRelayDomains := removeDuplicateStr(relayDomains)
-		dedupedArchiveDomains := removeDuplicateStr(archiveDomains)
+		dedupedRelayDomains := removeDuplicateStr(relayDomains, false)
+		dedupedArchiveDomains := removeDuplicateStr(archiveDomains, false)
 
 		relayPeers = netA.GetPeers(PeersPhonebookRelays)
 		assert.Equal(t, len(dedupedRelayDomains), len(relayPeers))
@@ -4013,7 +4013,7 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		netA.updatePhonebookAddresses(relayDomains, nil)
 
 		// Check that entries are in fact in phonebook less any duplicates
-		dedupedRelayDomains = removeDuplicateStr(relayDomains)
+		dedupedRelayDomains = removeDuplicateStr(relayDomains, false)
 
 		relayPeers = netA.GetPeers(PeersPhonebookRelays)
 		assert.Equal(t, len(dedupedRelayDomains), len(relayPeers))
@@ -4039,14 +4039,100 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 	})
 }
 
-func removeDuplicateStr(strSlice []string) []string {
+func removeDuplicateStr(strSlice []string, lowerCase bool) []string {
 	allKeys := make(map[string]bool)
-	dedupStrSlice := []string{}
+	var dedupStrSlice = make([]string, 0)
 	for _, item := range strSlice {
-		if _, value := allKeys[item]; !value {
+		if lowerCase {
+			item = strings.ToLower(item)
+		}
+		if _, exists := allKeys[item]; !exists {
 			allKeys[item] = true
 			dedupStrSlice = append(dedupStrSlice, item)
 		}
 	}
 	return dedupStrSlice
+}
+
+func replaceAllIn(strSlice []string, strToReplace string, newStr string) []string {
+	var subbedStrSlice = make([]string, 0)
+	for _, item := range strSlice {
+		item = strings.ReplaceAll(item, strToReplace, newStr)
+		subbedStrSlice = append(subbedStrSlice, item)
+	}
+
+	return subbedStrSlice
+}
+
+func supportedNetworkGen() *rapid.Generator {
+	return rapid.OneOf(rapid.StringMatching(string(config.Testnet)), rapid.StringMatching(string(config.Mainnet)))
+	//	rapid.StringMatching(string(config.Devnet)), rapid.StringMatching(string(config.Betanet)),
+	//	rapid.StringMatching(string(config.Alphanet)), rapid.StringMatching(string(config.Devtestnet))
+}
+
+func TestMergePrimarySecondaryRelayAddressListsMinOverlap(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var netA *WebsocketNetwork
+
+	rapid.Check(t, func(t1 *rapid.T) {
+		netA = makeTestWebsocketNode(t)
+
+		network := supportedNetworkGen().Draw(t1, "network").(string)
+		domainGen := rapidgen.Domain()
+
+		// Generate between 0 and N examples - if no dups, should end up in phonebook
+		domainsGen := rapid.SliceOfN(domainGen, 0, 200)
+
+		primaryRelayAddresses := domainsGen.Draw(t1, "primaryRelayAddresses").([]string)
+		secondaryRelayAddresses := domainsGen.Draw(t1, "secondaryRelayAddresses").([]string)
+
+		// Intentionally add duplicates to secondary relay addresses
+		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(protocol.NetworkID(network),
+			primaryRelayAddresses, secondaryRelayAddresses)
+
+		expectedRelayAddresses := removeDuplicateStr(append(primaryRelayAddresses, secondaryRelayAddresses...), true)
+
+		sort.Strings(expectedRelayAddresses)
+		sort.Strings(mergedRelayAddresses)
+
+		assert.Equal(t, expectedRelayAddresses, mergedRelayAddresses)
+	})
+}
+
+func TestMergePrimarySecondaryRelayAddressListsPartialOverlap(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var netA *WebsocketNetwork
+
+	rapid.Check(t, func(t1 *rapid.T) {
+		netA = makeTestWebsocketNode(t)
+
+		// NOTE: Current implementation only merges for supported networks
+		network := protocol.NetworkID(supportedNetworkGen().Draw(t1, "network").(string))
+		// Generate hosts for the primary network domain
+		primaryNetworkDomainGen := rapidgen.DomainWithSuffix(primaryNetwork(network), nil)
+		primaryDomainsGen := rapid.SliceOfN(primaryNetworkDomainGen, 0, 200)
+
+		primaryRelayAddresses := primaryDomainsGen.Draw(t1, "primaryRelayAddresses").([]string)
+		// Generate these addresses from primary ones, find/replace domain suffix appropriately
+		secondaryRelayAddresses := replaceAllIn(primaryRelayAddresses, primaryNetwork(network), secondaryNetwork(network))
+		// Add some generated addresses to secondary list - to simplify verification further down
+		// (substituting suffixes, etc), we dont want the generated addresses to duplicate any of
+		// the replaced secondary ones
+		secondaryNetworkDomainGen := rapidgen.DomainWithSuffix(secondaryNetwork(network), secondaryRelayAddresses)
+		secondaryDomainsGen := rapid.SliceOfN(secondaryNetworkDomainGen, 0, 200)
+		generatedSecondaryRelayAddresses := secondaryDomainsGen.Draw(t1, "secondaryRelayAddresses").([]string)
+		secondaryRelayAddresses = append(secondaryRelayAddresses, generatedSecondaryRelayAddresses...)
+
+		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(network,
+			primaryRelayAddresses, secondaryRelayAddresses)
+
+		// We expect the primary addresses to take precedence over a "matching" secondary address, randomly generated
+		// secondary addresses should be present in the merged slice
+		expectedRelayAddresses := removeDuplicateStr(append(primaryRelayAddresses, generatedSecondaryRelayAddresses...), true)
+
+		sort.Strings(expectedRelayAddresses)
+		sort.Strings(mergedRelayAddresses)
+
+		assert.Equal(t, expectedRelayAddresses, mergedRelayAddresses)
+	})
 }

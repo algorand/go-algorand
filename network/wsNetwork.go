@@ -1748,7 +1748,7 @@ func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
 	if len(dnsBootstrapArray) >= 2 {
 		primaryRelayAddrs, primaryArchiveAddrs := wn.getDNSAddrs(dnsBootstrapArray[0])
 		secondaryRelayAddrs, secondaryArchiveAddrs := wn.getDNSAddrs(dnsBootstrapArray[1])
-		dedupedRelayAddresses := wn.mergePrimarySecondaryRelayAddressLists(wn.NetworkID, primaryRelayAddrs, secondaryRelayAddrs)
+		dedupedRelayAddresses := wn.mergePrimarySecondaryRelayAddressSlices(wn.NetworkID, primaryRelayAddrs, secondaryRelayAddrs)
 
 		wn.updatePhonebookAddresses(dedupedRelayAddresses, append(primaryArchiveAddrs, secondaryArchiveAddrs...))
 		//TODO: Sanity check these work in unit tests
@@ -1988,11 +1988,11 @@ func (wn *WebsocketNetwork) prioWeightRefresh() {
 }
 
 func primaryNetwork(network protocol.NetworkID) string {
-	return fmt.Sprintf("algorand-%s.network", network)
+	return fmt.Sprintf(`algorand-%s.network`, network)
 }
 
 func secondaryNetwork(network protocol.NetworkID) string {
-	return fmt.Sprintf("algorand-%s.net", network)
+	return fmt.Sprintf(`algorand-%s.net`, network)
 }
 
 var networkIDToPrimarySRVBaseURIRegex = map[protocol.NetworkID]*regexp.Regexp{
@@ -2005,18 +2005,23 @@ var networkIDToSecondarySRVBaseURIRegex = map[protocol.NetworkID]*regexp.Regexp{
 	config.Testnet: regexp.MustCompile(secondaryNetwork(config.Testnet)),
 }
 
-func (wn *WebsocketNetwork) mergePrimarySecondaryRelayAddressLists(network protocol.NetworkID,
+// This logic assumes that the primary and secondary relay addresses suffixes
+// correspond to the primary/secondary network conventions. If this proves to be false, i.e. one network's
+// suffix is a substring of another network's suffix, then duplicates can end up in the merged slice.
+func (wn *WebsocketNetwork) mergePrimarySecondaryRelayAddressSlices(network protocol.NetworkID,
 	primaryRelayAddresses []string, secondaryRelayAddresses []string) (dedupedRelayAddresses []string) {
 	// Initialize w/ worst case capacity
-	//dedupedRelayAddresses = make([]string, 0, len(primaryRelayAddresses)+len(secondaryRelayAddresses))
-	//copy(dedupedRelayAddresses, primaryRelayAddresses)
 
 	var relayAddressPrefixToValue = make(map[string]string, 2*len(primaryRelayAddresses))
 	var prgx = networkIDToPrimarySRVBaseURIRegex[network]
 
 	for _, pra := range primaryRelayAddresses {
 		var normalizedPra = strings.ToLower(pra)
-		relayAddressPrefixToValue[prgx.ReplaceAllString(normalizedPra, "")] = normalizedPra
+		var pfxKey = prgx.ReplaceAllString(normalizedPra, "")
+
+		if _, exists := relayAddressPrefixToValue[pfxKey]; !exists {
+			relayAddressPrefixToValue[pfxKey] = normalizedPra
+		}
 	}
 
 	var srgx = networkIDToSecondarySRVBaseURIRegex[network]
@@ -2024,8 +2029,8 @@ func (wn *WebsocketNetwork) mergePrimarySecondaryRelayAddressLists(network proto
 	for _, sra := range secondaryRelayAddresses {
 		var normalizedSra = strings.ToLower(sra)
 		var pfxKey = srgx.ReplaceAllString(normalizedSra, "")
-		// Add to our address map if prefix does not exist, otherwise take no action (already covered by primary)
-		if relayAddressPrefixToValue[pfxKey] == "" {
+
+		if _, exists := relayAddressPrefixToValue[pfxKey]; !exists {
 			relayAddressPrefixToValue[pfxKey] = normalizedSra
 		}
 	}
