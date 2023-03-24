@@ -447,7 +447,7 @@ func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not 
 	for err := range errChan {
 		require.ErrorIs(t, err, context.Canceled)
 	}
-	require.Contains(t, logBuffer.String(), "addBatchToThePoolNow: EnqueueBacklog returned an error and StreamToBatch will stop: context canceled")
+	require.Contains(t, logBuffer.String(), "addBatchToThePoolNow: EnqueueBacklog returned an error on the")
 	// cancel the context to stop the stream
 	cancel()
 	wg.Wait()
@@ -705,7 +705,7 @@ func TestStreamToBatchCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest /
 	sv.WaitForStop()
 
 	wg.Wait()
-	require.Contains(t, logBuffer.String(), "addBatchToThePoolNow: EnqueueBacklog returned an error and StreamToBatch will stop: context canceled")
+	require.Contains(t, logBuffer.String(), "addBatchToThePoolNow: EnqueueBacklog returned an error on the")
 }
 
 // TestStreamToBatchPostVBlocked tests the behavior when the return channel (result chan) of verified
