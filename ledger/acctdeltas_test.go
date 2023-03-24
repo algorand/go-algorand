@@ -1082,20 +1082,12 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10_000_000_000)
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	trackerDB, blockDB, err := openLedgerDB(dbName, inMem)
-	require.NoError(t, err)
-	defer func() { trackerDB.Close(); blockDB.Close() }()
-
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer func() {
 		l.Close()
-		os.Remove(dbName + ".block.sqlite")
-		// os.Remove(dbName + ".tracker.sqlite")
-		os.Remove(dbName + ".block.sqlite-shm")
-		// os.Remove(dbName + ".tracker.sqlite-shm")
-		os.Remove(dbName + ".block.sqlite-wal")
-		// os.Remove(dbName + ".tracker.sqlite-wal")
+		require.NoError(t, os.Remove(dbName+".block.sqlite"))
+		// require.NoError(t, os.Remove(dbName + ".tracker.sqlite"))
 	}()
 
 	tp := trackerdb.Params{
@@ -1113,7 +1105,6 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 		if err0 != nil {
 			return err0
 		}
-
 		err0 = arw.AccountsReset(ctx)
 		if err0 != nil {
 			return err0
@@ -1126,7 +1117,10 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 		return tx.Testing().AccountsUpdateSchemaTest(ctx)
 	})
 	require.NoError(t, err)
-	// TODO: create a account DB of version 9
+
+	// +---------------------------------------------------------+
+	// | Above is creating a ledger with tracker DB of version 9 |
+	// +---------------------------------------------------------+
 
 	kvPairDBPrepareSet := []struct{ key []byte }{
 		{key: []byte{0xFF, 0x12, 0x34, 0x56, 0x78}},
@@ -1147,35 +1141,40 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 		{key: []byte("BostonKitchen-CheeseSlice")},
 		{key: []byte(`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`)},
 	}
-	err = trackerDB.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err0 error) {
 		// writer is only for kvstore
-		writer, err0 := tx.MakeAccountsOptimizedWriter(true, true, true, true)
+		writer, err0 := tx.MakeAccountsOptimizedWriter(false, false, true, false)
 		if err0 != nil {
-			return err0
+			return
 		}
 		for i := 0; i < len(kvPairDBPrepareSet); i++ {
 			err0 = writer.UpsertKvPair(string(kvPairDBPrepareSet[i].key), nil)
 			if err0 != nil {
-				return err0
+				return
 			}
 		}
 		writer.Close()
-		return nil
+		return
 	})
 	require.NoError(t, err)
-	// TODO: jam a bunch of kv with value nil in the DB
 
+	// +------------------------------------------------------------+
+	// | Above jams a bunch of key value with value nil into the DB |
+	// +------------------------------------------------------------+
+
+	//l.trackerDBs.() the abstraction get me nowhere...
+	// QUESTION: how to do tx.prepare query from trackerDB transaction?
 	// TODO: confirm that values are all null
 
-	err = trackerDB.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
-		_, err0 := tx.Testing().RunMigrations(ctx, tp, log, trackerdb.AccountDBVersion)
-		if err0 != nil {
-			return err0
-		}
-		return nil
+	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err0 error) {
+		_, err0 = tx.Testing().RunMigrations(ctx, tp, log, trackerdb.AccountDBVersion)
+		return
 	})
 	require.NoError(t, err)
-	// TODO: run migration (or run the function itself) to see that the nils are replaced
+
+	// +----------------------------------------------------------+
+	// | Run migration to see replace nils with empty byte slices |
+	// +----------------------------------------------------------+
 
 	// TODO: confirm that values are not null
 }
