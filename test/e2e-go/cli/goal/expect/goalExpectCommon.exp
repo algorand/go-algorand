@@ -53,10 +53,10 @@ proc ::AlgorandGoal::Abort { ERROR } {
         puts "GLOBAL_NETWORK_NAME $::GLOBAL_NETWORK_NAME"
 
         # dump system and processes information to check memory consumption and if algod procs are still alive
-        if { $tcl_platform(os) == "Darwin" } {
-            exec top -l 1
-        } elseif { $tcl_platform(os) == "Linux" } {
-            exec top -n 1
+        if { $::tcl_platform(os) == "Darwin" } {
+            exec >@stdout 2>@stderr top -l 1
+        } elseif { $::tcl_platform(os) == "Linux" } {
+            exec >@stdout 2>@stderr top -n 1
         } else {
             # no logging for other platforms
         }

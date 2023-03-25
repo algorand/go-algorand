@@ -20,7 +20,7 @@ import (
 	"container/list"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
 // Worst case memory usage = 2500 * 320 * 150B = 120MB
@@ -35,7 +35,7 @@ type onlineAccountsCache struct {
 
 // init initializes the onlineAccountsCache for use.
 // thread locking semantics : write lock
-func (o *onlineAccountsCache) init(accts []store.PersistedOnlineAccountData, maxCacheSize int) {
+func (o *onlineAccountsCache) init(accts []trackerdb.PersistedOnlineAccountData, maxCacheSize int) {
 	o.accounts = make(map[basics.Address]*list.List)
 	o.maxCacheSize = maxCacheSize
 

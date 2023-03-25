@@ -19,6 +19,7 @@ package ledger
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -55,9 +56,9 @@ func (dl DoubleLedger) Close() {
 }
 
 // NewDoubleLedger creates a new DoubleLedger with the supplied balances and consensus version.
-func NewDoubleLedger(t *testing.T, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion) DoubleLedger {
-	g := newSimpleLedgerWithConsensusVersion(t, balances, cv)
-	v := newSimpleLedgerFull(t, balances, cv, g.GenesisHash())
+func NewDoubleLedger(t *testing.T, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, cfg config.Local) DoubleLedger {
+	g := newSimpleLedgerWithConsensusVersion(t, balances, cv, cfg)
+	v := newSimpleLedgerFull(t, balances, cv, g.GenesisHash(), cfg)
 	return DoubleLedger{t, g, v, nil}
 }
 

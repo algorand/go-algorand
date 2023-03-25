@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -88,6 +89,13 @@ func byteOrNil(data []byte) *[]byte {
 		return nil
 	}
 	return &data
+}
+
+func trueOrNil(b bool) *bool {
+	if !b {
+		return nil
+	}
+	return &b
 }
 
 func nilToZero(numPtr *uint64) uint64 {
@@ -311,12 +319,13 @@ func convertLogs(txn node.TxnWithStatus) *[][]byte {
 func convertInners(txn *node.TxnWithStatus) *[]PreEncodedTxInfo {
 	inner := make([]PreEncodedTxInfo, len(txn.ApplyData.EvalDelta.InnerTxns))
 	for i := range txn.ApplyData.EvalDelta.InnerTxns {
-		inner[i] = convertInnerTxn(&txn.ApplyData.EvalDelta.InnerTxns[i])
+		inner[i] = ConvertInnerTxn(&txn.ApplyData.EvalDelta.InnerTxns[i])
 	}
 	return &inner
 }
 
-func convertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
+// ConvertInnerTxn converts an inner SignedTxnWithAD to PreEncodedTxInfo for the REST API
+func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	// This copies from handlers.PendingTransactionInformation, with
 	// simplifications because we have a SignedTxnWithAD rather than
 	// TxnWithStatus, and we know this txn has committed.
@@ -342,6 +351,48 @@ func convertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	response.Logs = convertLogs(withStatus)
 	response.Inners = convertInners(&withStatus)
 	return response
+}
+
+func convertTxnResult(txnResult simulation.TxnResult) preEncodedSimulateTxnResult {
+	return preEncodedSimulateTxnResult{
+		Txn:              ConvertInnerTxn(&txnResult.Txn),
+		MissingSignature: trueOrNil(txnResult.MissingSignature),
+	}
+}
+
+func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) preEncodedSimulateTxnGroupResult {
+	txnResults := make([]preEncodedSimulateTxnResult, len(txnGroupResult.Txns))
+	for i, txnResult := range txnGroupResult.Txns {
+		txnResults[i] = convertTxnResult(txnResult)
+	}
+
+	encoded := preEncodedSimulateTxnGroupResult{
+		Txns:           txnResults,
+		FailureMessage: strOrNil(txnGroupResult.FailureMessage),
+	}
+
+	if len(txnGroupResult.FailedAt) > 0 {
+		failedAt := make([]uint64, len(txnGroupResult.FailedAt))
+		copy(failedAt, txnGroupResult.FailedAt)
+		encoded.FailedAt = &failedAt
+	}
+
+	return encoded
+}
+
+func convertSimulationResult(result simulation.Result) preEncodedSimulateResponse {
+	encodedSimulationResult := preEncodedSimulateResponse{
+		Version:      result.Version,
+		LastRound:    uint64(result.LastRound),
+		WouldSucceed: result.WouldSucceed,
+		TxnGroups:    make([]preEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
+	}
+
+	for i, txnGroup := range result.TxnGroups {
+		encodedSimulationResult.TxnGroups[i] = convertTxnGroupResult(txnGroup)
+	}
+
+	return encodedSimulationResult
 }
 
 // printableUTF8OrEmpty checks to see if the entire string is a UTF8 printable string.

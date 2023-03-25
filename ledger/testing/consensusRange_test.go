@@ -55,4 +55,7 @@ func TestReleasedVersion(t *testing.T) {
 		require.NotZero(t, params) // just making sure an empty one didn't get put in
 	}
 
+	require.Equal(t, versionStringFromIndex(len(consensusByNumber)-1), "vFuture")
+	require.Equal(t, versionStringFromIndex(36), "v36")
+
 }

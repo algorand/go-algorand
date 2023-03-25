@@ -318,7 +318,8 @@ func TestRekeying(t *testing.T) {
 
 func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalProgram string, consensusVersion protocol.ConsensusVersion) error {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newSimpleLedgerWithConsensusVersion(t, genBalances, consensusVersion)
+	cfg := config.GetDefaultLocal()
+	l := newSimpleLedgerWithConsensusVersion(t, genBalances, consensusVersion, cfg)
 	defer l.Close()
 
 	eval := nextBlock(t, l)
@@ -403,7 +404,8 @@ func TestMinBalanceChanges(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newSimpleLedgerWithConsensusVersion(t, genBalances, protocol.ConsensusCurrentVersion)
+	cfg := config.GetDefaultLocal()
+	l := newSimpleLedgerWithConsensusVersion(t, genBalances, protocol.ConsensusCurrentVersion, cfg)
 	defer l.Close()
 
 	createTxn := txntest.Txn{
@@ -481,7 +483,8 @@ func TestAppInsMinBalance(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newSimpleLedgerWithConsensusVersion(t, genBalances, protocol.ConsensusV30)
+	cfg := config.GetDefaultLocal()
+	l := newSimpleLedgerWithConsensusVersion(t, genBalances, protocol.ConsensusV30, cfg)
 	defer l.Close()
 
 	const appid basics.AppIndex = 1

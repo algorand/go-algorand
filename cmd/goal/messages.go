@@ -69,6 +69,8 @@ const (
 	infoNodeCatchpointCatchupAccounts       = "Catchpoint total accounts: %d\nCatchpoint accounts processed: %d\nCatchpoint accounts verified: %d\nCatchpoint total KVs: %d\nCatchpoint KVs processed: %d\nCatchpoint KVs verified: %d"
 	infoNodeCatchpointCatchupBlocks         = "Catchpoint total blocks: %d\nCatchpoint downloaded blocks: %d"
 	nodeLastCatchpoint                      = "Last Catchpoint: %s"
+	nodeConfirmImplicitCatchpoint           = "Fast catchup to %s is about to start.\nUsing external catchpoints is not a secure practice and should not be done for consensus participating nodes.\nType 'yes' to accept the risk and continue: "
+	errorAbortedPerUserRequest              = "Aborted"
 	errorNodeCreationIPFailure              = "Parsing passed IP %v failed: need a valid IPv4 or IPv6 address with a specified port number"
 	errorNodeNotDetected                    = "Algorand node does not appear to be running: %s"
 	errorNodeStatus                         = "Cannot contact Algorand node: %s"
@@ -87,7 +89,7 @@ const (
 	errLoadingConfig                        = "Error loading Config file from '%s': %v"
 	errorNodeFailedToShutdown               = "Unable to shut down node: %v"
 	errorCatchpointLabelParsingFailed       = "The provided catchpoint is not a valid one"
-	errorCatchpointLabelMissing             = "A catchpoint argument is needed: %s"
+	errorCatchpointLabelMissing             = "A catchpoint argument is needed: %s: %s"
 	errorUnableToLookupCatchpointLabel      = "Unable to fetch catchpoint label"
 	errorTooManyCatchpointLabels            = "The catchup command expect a single catchpoint"
 
