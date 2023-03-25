@@ -1071,6 +1071,10 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	// +-------------------------------------------------------------+
+	// | Section 1: Create a ledger with tracer DB of user_version 9 |
+	// +-------------------------------------------------------------+
+
 	const inMem = false
 
 	log := logging.TestingLog(t)
@@ -1098,9 +1102,11 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// +---------------------------------------------------------+
-	// | Above is creating a ledger with tracker DB of version 9 |
-	// +---------------------------------------------------------+
+	// +-----------------------------------------------------------------+
+	// | ^ Section 1 finishes above                                      |
+	// |                                                                 |
+	// | Section 2: jams a bunch of key value with value nil into the DB |
+	// +-----------------------------------------------------------------+
 
 	kvPairDBPrepareSet := []struct{ key []byte }{
 		{key: []byte{0xFF, 0x12, 0x34, 0x56, 0x78}},
@@ -1138,9 +1144,11 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// +------------------------------------------------------------+
-	// | Above jams a bunch of key value with value nil into the DB |
-	// +------------------------------------------------------------+
+	// +---------------------------------------------------------------------------+
+	// | ^ Section 2 finishes above                                                |
+	// |                                                                           |
+	// | Section 3: Confirm that tracker DB has value being nil, not anything else |
+	// +---------------------------------------------------------------------------+
 
 	nilRowCounter := func() (nilRowCount int, err error) {
 		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err0 error) {
@@ -1172,9 +1180,11 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(kvPairDBPrepareSet), nilRowCount)
 
-	// +----------------------------------------------------------------+
-	// | Confirm that tracker DB has value being nil, not anything else |
-	// +----------------------------------------------------------------+
+	// +---------------------------------------------------------------------+
+	// | ^ Section 3 finishes above                                          |
+	// |                                                                     |
+	// | Section 4: Run migration to see replace nils with empty byte slices |
+	// +---------------------------------------------------------------------+
 
 	trackerDBWrapper := sqlitedriver.CreateTrackerSQLStore(dbs)
 	err = trackerDBWrapper.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err0 error) {
@@ -1183,17 +1193,15 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// +----------------------------------------------------------+
-	// | Run migration to see replace nils with empty byte slices |
-	// +----------------------------------------------------------+
+	// +------------------------------------------------------------------------------------------------+
+	// | ^ Section 4 finishes above                                                                     |
+	// |                                                                                                |
+	// | After that, we can confirm the DB migration found all nil strings and executed the conversions |
+	// +------------------------------------------------------------------------------------------------+
 
 	nilRowCount, err = nilRowCounter()
 	require.NoError(t, err)
 	require.Equal(t, 0, nilRowCount)
-
-	// +------------------------------------------------------------------------------------------------+
-	// | After that, we can confirm the DB migration found all nil strings and executed the conversions |
-	// +------------------------------------------------------------------------------------------------+
 }
 
 // upsert updates existing or inserts a new entry
