@@ -546,6 +546,9 @@ func TestReadyEndpoint(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
+	if testing.Short() {
+		t.Skip()
+	}
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensus := make(config.ConsensusProtocols)
