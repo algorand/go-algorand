@@ -19,6 +19,8 @@ package node
 import (
 	"testing"
 
+	"github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -32,10 +34,8 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func setupFollowNode(t *testing.T) *AlgorandFollowerNode {
-	cfg := config.GetDefaultLocal()
-	cfg.EnableFollowMode = true
-	genesis := bookkeeping.Genesis{
+func followNodeDefaultGenesis() bookkeeping.Genesis {
+	return bookkeeping.Genesis{
 		SchemaID:    "go-test-follower-node-genesis",
 		Proto:       protocol.ConsensusCurrentVersion,
 		Network:     config.Devtestnet,
@@ -50,6 +50,12 @@ func setupFollowNode(t *testing.T) *AlgorandFollowerNode {
 			},
 		},
 	}
+}
+
+func setupFollowNode(t *testing.T) *AlgorandFollowerNode {
+	cfg := config.GetDefaultLocal()
+	cfg.EnableFollowMode = true
+	genesis := followNodeDefaultGenesis()
 	node, err := MakeFollower(logging.Base(), t.TempDir(), cfg, []string{}, genesis)
 	require.NoError(t, err)
 	return node
@@ -86,7 +92,7 @@ func TestErrors(t *testing.T) {
 	node := setupFollowNode(t)
 	require.Error(t, node.BroadcastSignedTxGroup([]transactions.SignedTxn{}))
 	require.Error(t, node.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{}))
-	_, _, err := node.Simulate([]transactions.SignedTxn{})
+	_, err := node.Simulate([]transactions.SignedTxn{})
 	require.Error(t, err)
 	_, err = node.GetParticipationKey(account.ParticipationID{})
 	require.Error(t, err)
@@ -94,4 +100,30 @@ func TestErrors(t *testing.T) {
 	require.Error(t, node.AppendParticipationKeys(account.ParticipationID{}, account.StateProofKeys{}))
 	_, err = node.InstallParticipationKey([]byte{})
 	require.Error(t, err)
+}
+
+func TestDevModeWarning(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableFollowMode = true
+	genesis := followNodeDefaultGenesis()
+	genesis.DevMode = true
+
+	logger, hook := test.NewNullLogger()
+	tlogger := logging.NewWrappedLogger(logger)
+	_, err := MakeFollower(tlogger, t.TempDir(), cfg, []string{}, genesis)
+	require.NoError(t, err)
+
+	// check for the warning
+	var foundEntry *logrus.Entry
+	entries := hook.AllEntries()
+	for i := range entries {
+		if entries[i].Level == logrus.WarnLevel {
+			foundEntry = entries[i]
+		}
+	}
+	require.NotNil(t, foundEntry)
+	require.Contains(t, foundEntry.Message, "Follower running on a devMode network. Must submit txns to a different node.")
 }

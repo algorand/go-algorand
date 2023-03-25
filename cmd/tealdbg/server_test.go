@@ -124,13 +124,15 @@ func serverTestImpl(t *testing.T, run func(t *testing.T, ds *DebugServer) bool, 
 	require.NotNil(t, ds.server)
 }
 
-func TestServerRemote(t *testing.T) {
+func TestServerRemote(t *testing.T) { // nolint:paralleltest // Modifies global config (`port`).
 	partitiontest.PartitionTest(t)
+
 	serverTestImpl(t, tryStartingServerRemote, &DebugParams{})
 }
 
-func TestServerLocal(t *testing.T) {
+func TestServerLocal(t *testing.T) { // nolint:paralleltest // Modifies global config (`port`).
 	partitiontest.PartitionTest(t)
+
 	txnBlob := []byte("[" + strings.Join([]string{txnSample, txnSample}, ",") + "]")
 	dp := DebugParams{
 		ProgramNames: []string{"test"},

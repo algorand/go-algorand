@@ -52,6 +52,8 @@ func makeTestBlock(round uint64) rpcs.EncodedBlockCert {
 
 func TestConsecutiveBlocks(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sender := MockEventSender{}
 	bs := blockstats{log: &sender}
 
@@ -68,6 +70,8 @@ func TestConsecutiveBlocks(t *testing.T) {
 
 func TestEventWithDetails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sender := MockEventSender{}
 	bs := blockstats{log: &sender}
 
@@ -108,6 +112,8 @@ func TestEventWithDetails(t *testing.T) {
 
 func TestAgreementTime(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sleepTime := 50 * time.Millisecond
 	testAttempts := 0
 	const maxTestAttempts = 10

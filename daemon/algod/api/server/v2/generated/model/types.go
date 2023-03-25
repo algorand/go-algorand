@@ -106,6 +106,12 @@ const (
 	GetTransactionProofParamsFormatMsgpack GetTransactionProofParamsFormat = "msgpack"
 )
 
+// Defines values for GetLedgerStateDeltaParamsFormat.
+const (
+	GetLedgerStateDeltaParamsFormatJson    GetLedgerStateDeltaParamsFormat = "json"
+	GetLedgerStateDeltaParamsFormatMsgpack GetLedgerStateDeltaParamsFormat = "msgpack"
+)
+
 // Defines values for GetPendingTransactionsParamsFormat.
 const (
 	GetPendingTransactionsParamsFormatJson    GetPendingTransactionsParamsFormat = "json"
@@ -116,6 +122,12 @@ const (
 const (
 	PendingTransactionInformationParamsFormatJson    PendingTransactionInformationParamsFormat = "json"
 	PendingTransactionInformationParamsFormatMsgpack PendingTransactionInformationParamsFormat = "msgpack"
+)
+
+// Defines values for SimulateTransactionParamsFormat.
+const (
+	SimulateTransactionParamsFormatJson    SimulateTransactionParamsFormat = "json"
+	SimulateTransactionParamsFormatMsgpack SimulateTransactionParamsFormat = "msgpack"
 )
 
 // Account Account information at a given round.
@@ -218,30 +230,6 @@ type Account struct {
 // * lsig
 type AccountSigType string
 
-// AccountBalanceRecord Account and its address
-type AccountBalanceRecord struct {
-	// AccountData Account information at a given round.
-	//
-	// Definition:
-	// data/basics/userBalance.go : AccountData
-	AccountData Account `json:"account-data"`
-
-	// Address Address of the updated account.
-	Address string `json:"address"`
-}
-
-// AccountDeltas Exposes deltas for account based resources in a single round
-type AccountDeltas struct {
-	// Accounts Array of Account updates for the round
-	Accounts *[]AccountBalanceRecord `json:"accounts,omitempty"`
-
-	// Apps Array of App updates for the round.
-	Apps *[]AppResourceRecord `json:"apps,omitempty"`
-
-	// Assets Array of Asset updates for the round.
-	Assets *[]AssetResourceRecord `json:"assets,omitempty"`
-}
-
 // AccountParticipation AccountParticipation describes the parameters used by this account in consensus protocol.
 type AccountParticipation struct {
 	// SelectionParticipationKey \[sel\] Selection public key (if any) currently registered for this round.
@@ -269,42 +257,6 @@ type AccountStateDelta struct {
 
 	// Delta Application state delta.
 	Delta StateDelta `json:"delta"`
-}
-
-// AccountTotals Total Algos in the system grouped by account status
-type AccountTotals struct {
-	// NotParticipating Amount of stake in non-participating accounts
-	NotParticipating uint64 `json:"not-participating"`
-
-	// Offline Amount of stake in offline accounts
-	Offline uint64 `json:"offline"`
-
-	// Online Amount of stake in online accounts
-	Online uint64 `json:"online"`
-
-	// RewardsLevel Total number of algos received per reward unit since genesis
-	RewardsLevel uint64 `json:"rewards-level"`
-}
-
-// AppResourceRecord Represents AppParams and AppLocalStateDelta in deltas
-type AppResourceRecord struct {
-	// Address App account address
-	Address string `json:"address"`
-
-	// AppDeleted Whether the app was deleted
-	AppDeleted bool `json:"app-deleted"`
-
-	// AppIndex App index
-	AppIndex uint64 `json:"app-index"`
-
-	// AppLocalState Stores local state associated with an application.
-	AppLocalState *ApplicationLocalState `json:"app-local-state,omitempty"`
-
-	// AppLocalStateDeleted Whether the app local state was deleted
-	AppLocalStateDeleted bool `json:"app-local-state-deleted"`
-
-	// AppParams Stores the global information associated with an application.
-	AppParams *ApplicationParams `json:"app-params,omitempty"`
 }
 
 // Application Application index and its parameters
@@ -443,35 +395,6 @@ type AssetParams struct {
 	UrlB64 *[]byte `json:"url-b64,omitempty"`
 }
 
-// AssetResourceRecord Represents AssetParams and AssetHolding in deltas
-type AssetResourceRecord struct {
-	// Address Account address of the asset
-	Address string `json:"address"`
-
-	// AssetDeleted Whether the asset was deleted
-	AssetDeleted bool `json:"asset-deleted"`
-
-	// AssetHolding Describes an asset held by an account.
-	//
-	// Definition:
-	// data/basics/userBalance.go : AssetHolding
-	AssetHolding *AssetHolding `json:"asset-holding,omitempty"`
-
-	// AssetHoldingDeleted Whether the asset holding was deleted
-	AssetHoldingDeleted bool `json:"asset-holding-deleted"`
-
-	// AssetIndex Index of the asset
-	AssetIndex uint64 `json:"asset-index"`
-
-	// AssetParams AssetParams specifies the parameters for an asset.
-	//
-	// \[apar\] when part of an AssetConfig transaction.
-	//
-	// Definition:
-	// data/transactions/asset.go : AssetParams
-	AssetParams *AssetParams `json:"asset-params,omitempty"`
-}
-
 // Box Box name and its content.
 type Box struct {
 	// Name \[name\] box name, base64 encoded
@@ -598,32 +521,8 @@ type KvDelta struct {
 	Value *[]byte `json:"value,omitempty"`
 }
 
-// LedgerStateDelta Contains ledger updates.
-type LedgerStateDelta struct {
-	// Accts Exposes deltas for account based resources in a single round
-	Accts *AccountDeltas `json:"accts,omitempty"`
-
-	// KvMods Array of KV Deltas
-	KvMods *[]KvDelta `json:"kv-mods,omitempty"`
-
-	// ModifiedApps List of modified Apps
-	ModifiedApps *[]ModifiedApp `json:"modified-apps,omitempty"`
-
-	// ModifiedAssets List of modified Assets
-	ModifiedAssets *[]ModifiedAsset `json:"modified-assets,omitempty"`
-
-	// PrevTimestamp Previous block timestamp
-	PrevTimestamp *uint64 `json:"prev-timestamp,omitempty"`
-
-	// StateProofNext Next round for which we expect a state proof
-	StateProofNext *uint64 `json:"state-proof-next,omitempty"`
-
-	// Totals Total Algos in the system grouped by account status
-	Totals *AccountTotals `json:"totals,omitempty"`
-
-	// TxLeases List of transaction leases
-	TxLeases *[]TxLease `json:"tx-leases,omitempty"`
-}
+// LedgerStateDelta Ledger StateDelta object
+type LedgerStateDelta = map[string]interface{}
 
 // LightBlockHeaderProof Proof of membership and position of a light block header.
 type LightBlockHeaderProof struct {
@@ -635,30 +534,6 @@ type LightBlockHeaderProof struct {
 
 	// Treedepth Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
 	Treedepth uint64 `json:"treedepth"`
-}
-
-// ModifiedApp App which was created or deleted.
-type ModifiedApp struct {
-	// Created Created if true, deleted if false
-	Created bool `json:"created"`
-
-	// Creator Address of the creator.
-	Creator string `json:"creator"`
-
-	// Id App Id
-	Id uint64 `json:"id"`
-}
-
-// ModifiedAsset Asset which was created or deleted.
-type ModifiedAsset struct {
-	// Created Created if true, deleted if false
-	Created bool `json:"created"`
-
-	// Creator Address of the creator.
-	Creator string `json:"creator"`
-
-	// Id Asset Id
-	Id uint64 `json:"id"`
 }
 
 // ParticipationKey Represents a participation key used by the node.
@@ -733,6 +608,27 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
+// SimulateTransactionGroupResult Simulation result for an atomic transaction group
+type SimulateTransactionGroupResult struct {
+	// FailedAt If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.
+	FailedAt *[]uint64 `json:"failed-at,omitempty"`
+
+	// FailureMessage If present, indicates that the transaction group failed and specifies why that happened
+	FailureMessage *string `json:"failure-message,omitempty"`
+
+	// TxnResults Simulation result for individual transactions
+	TxnResults []SimulateTransactionResult `json:"txn-results"`
+}
+
+// SimulateTransactionResult Simulation result for an individual transaction
+type SimulateTransactionResult struct {
+	// MissingSignature A boolean indicating whether this transaction is missing signatures
+	MissingSignature *bool `json:"missing-signature,omitempty"`
+
+	// TxnResult Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.
+	TxnResult PendingTransactionResponse `json:"txn-result"`
+}
+
 // StateDelta Application state delta.
 type StateDelta = []EvalDeltaKeyValue
 
@@ -784,18 +680,6 @@ type TealValue struct {
 
 	// Uint \[ui\] uint value.
 	Uint uint64 `json:"uint"`
-}
-
-// TxLease defines model for TxLease.
-type TxLease struct {
-	// Expiration Round that the lease expires
-	Expiration uint64 `json:"expiration"`
-
-	// Lease Lease data
-	Lease []byte `json:"lease"`
-
-	// Sender Address of the lease sender
-	Sender string `json:"sender"`
 }
 
 // Version algod version information.
@@ -984,7 +868,7 @@ type GetSyncRoundResponse struct {
 	Round uint64 `json:"round"`
 }
 
-// LedgerStateDeltaResponse Contains ledger updates.
+// LedgerStateDeltaResponse Ledger StateDelta object
 type LedgerStateDeltaResponse = LedgerStateDelta
 
 // LightBlockHeaderProofResponse Proof of membership and position of a light block header.
@@ -1098,13 +982,19 @@ type PostTransactionsResponse struct {
 	TxId string `json:"txId"`
 }
 
-// SimulationResponse defines model for SimulationResponse.
-type SimulationResponse struct {
-	// FailureMessage \[fm\] Failure message, if the transaction would have failed during a live broadcast.
-	FailureMessage string `json:"failure-message"`
+// SimulateResponse defines model for SimulateResponse.
+type SimulateResponse struct {
+	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
+	LastRound uint64 `json:"last-round"`
 
-	// MissingSignatures \[ms\] Whether any transactions would have failed during a live broadcast because they were missing signatures.
-	MissingSignatures bool `json:"missing-signatures"`
+	// TxnGroups A result object for each transaction group that was simulated.
+	TxnGroups []SimulateTransactionGroupResult `json:"txn-groups"`
+
+	// Version The version of this response object.
+	Version uint64 `json:"version"`
+
+	// WouldSucceed Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.
+	WouldSucceed bool `json:"would-succeed"`
 }
 
 // StateProofResponse Represents a state proof and its corresponding message
@@ -1179,7 +1069,7 @@ type VersionsResponse = Version
 
 // AccountInformationParams defines parameters for AccountInformation.
 type AccountInformationParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *AccountInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 
 	// Exclude When set to `all` will exclude asset holdings, application local state, created asset parameters, any created application parameters. Defaults to `none`.
@@ -1194,7 +1084,7 @@ type AccountInformationParamsExclude string
 
 // AccountApplicationInformationParams defines parameters for AccountApplicationInformation.
 type AccountApplicationInformationParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *AccountApplicationInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1203,7 +1093,7 @@ type AccountApplicationInformationParamsFormat string
 
 // AccountAssetInformationParams defines parameters for AccountAssetInformation.
 type AccountAssetInformationParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *AccountAssetInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1215,7 +1105,7 @@ type GetPendingTransactionsByAddressParams struct {
 	// Max Truncated number of transactions to display. If max=0, returns all pending txns.
 	Max *uint64 `form:"max,omitempty" json:"max,omitempty"`
 
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetPendingTransactionsByAddressParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1236,7 +1126,7 @@ type GetApplicationBoxesParams struct {
 
 // GetBlockParams defines parameters for GetBlock.
 type GetBlockParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetBlockParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1250,7 +1140,7 @@ type GetTransactionProofParams struct {
 	// * sha256
 	Hashtype *GetTransactionProofParamsHashtype `form:"hashtype,omitempty" json:"hashtype,omitempty"`
 
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetTransactionProofParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1259,6 +1149,15 @@ type GetTransactionProofParamsHashtype string
 
 // GetTransactionProofParamsFormat defines parameters for GetTransactionProof.
 type GetTransactionProofParamsFormat string
+
+// GetLedgerStateDeltaParams defines parameters for GetLedgerStateDelta.
+type GetLedgerStateDeltaParams struct {
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
+	Format *GetLedgerStateDeltaParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+}
+
+// GetLedgerStateDeltaParamsFormat defines parameters for GetLedgerStateDelta.
+type GetLedgerStateDeltaParamsFormat string
 
 // ShutdownNodeParams defines parameters for ShutdownNode.
 type ShutdownNodeParams struct {
@@ -1279,7 +1178,7 @@ type GetPendingTransactionsParams struct {
 	// Max Truncated number of transactions to display. If max=0, returns all pending txns.
 	Max *uint64 `form:"max,omitempty" json:"max,omitempty"`
 
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetPendingTransactionsParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
@@ -1288,12 +1187,21 @@ type GetPendingTransactionsParamsFormat string
 
 // PendingTransactionInformationParams defines parameters for PendingTransactionInformation.
 type PendingTransactionInformationParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded.
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *PendingTransactionInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
 
 // PendingTransactionInformationParamsFormat defines parameters for PendingTransactionInformation.
 type PendingTransactionInformationParamsFormat string
+
+// SimulateTransactionParams defines parameters for SimulateTransaction.
+type SimulateTransactionParams struct {
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
+	Format *SimulateTransactionParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+}
+
+// SimulateTransactionParamsFormat defines parameters for SimulateTransaction.
+type SimulateTransactionParamsFormat string
 
 // TealCompileTextRequestBody defines body for TealCompile for text/plain ContentType.
 type TealCompileTextRequestBody = TealCompileTextBody

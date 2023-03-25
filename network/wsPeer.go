@@ -105,17 +105,18 @@ var unknownProtocolTagMessagesTotal = metrics.MakeCounter(metrics.UnknownProtoco
 // defaultSendMessageTags is the default list of messages which a peer would
 // allow to be sent without receiving any explicit request.
 var defaultSendMessageTags = map[protocol.Tag]bool{
-	protocol.AgreementVoteTag:   true,
-	protocol.MsgDigestSkipTag:   true,
-	protocol.NetPrioResponseTag: true,
-	protocol.PingTag:            true,
-	protocol.PingReplyTag:       true,
-	protocol.ProposalPayloadTag: true,
-	protocol.TopicMsgRespTag:    true,
-	protocol.MsgOfInterestTag:   true,
-	protocol.TxnTag:             true,
-	protocol.UniEnsBlockReqTag:  true,
-	protocol.VoteBundleTag:      true,
+	protocol.AgreementVoteTag:     true,
+	protocol.MsgDigestSkipTag:     true,
+	protocol.NetPrioResponseTag:   true,
+	protocol.NetIDVerificationTag: true,
+	protocol.PingTag:              true,
+	protocol.PingReplyTag:         true,
+	protocol.ProposalPayloadTag:   true,
+	protocol.TopicMsgRespTag:      true,
+	protocol.MsgOfInterestTag:     true,
+	protocol.TxnTag:               true,
+	protocol.UniEnsBlockReqTag:    true,
+	protocol.VoteBundleTag:        true,
 }
 
 // interface allows substituting debug implementation for *websocket.Conn
@@ -165,6 +166,8 @@ const disconnectLeastPerformingPeer disconnectReason = "LeastPerformingPeer"
 const disconnectCliqueResolve disconnectReason = "CliqueResolving"
 const disconnectRequestReceived disconnectReason = "DisconnectRequest"
 const disconnectStaleWrite disconnectReason = "DisconnectStaleWrite"
+const disconnectDuplicateConnection disconnectReason = "DuplicateConnection"
+const disconnectBadIdentityData disconnectReason = "BadIdentityData"
 
 // Response is the structure holding the response from the server
 type Response struct {
@@ -232,6 +235,12 @@ type wsPeer struct {
 	// Hint about position in wn.peers.  Definitely valid if the peer
 	// is present in wn.peers.
 	peerIndex int
+
+	// the peer's identity key which it uses for identityChallenge exchanges
+	identity         crypto.PublicKey
+	identityVerified uint32
+	// the identityChallenge is recorded to the peer so it may verify its identity at a later time
+	identityChallenge identityChallengeValue
 
 	// Challenge sent to the peer on an incoming connection
 	prioChallenge string
@@ -336,8 +345,7 @@ func (wp *wsPeer) Version() string {
 	return wp.version
 }
 
-//	Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
-//
+// Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
 // (Implements UnicastPeer)
 func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
 	var err error
@@ -571,7 +579,7 @@ func (wp *wsPeer) readLoop() {
 			atomic.AddUint64(&wp.ppMessageCount, 1)
 		// the remaining valid tags: no special handling here
 		case protocol.NetPrioResponseTag, protocol.PingTag, protocol.PingReplyTag,
-			protocol.StateProofSigTag, protocol.UniEnsBlockReqTag, protocol.VoteBundleTag:
+			protocol.StateProofSigTag, protocol.UniEnsBlockReqTag, protocol.VoteBundleTag, protocol.NetIDVerificationTag:
 		default: // unrecognized tag
 			unknownProtocolTagMessagesTotal.Inc(nil)
 			atomic.AddUint64(&wp.unkMessageCount, 1)
@@ -1013,6 +1021,7 @@ func (wp *wsPeer) OnClose(f func()) {
 	wp.closers = append(wp.closers, f)
 }
 
+//msgp:ignore peerFeatureFlag
 type peerFeatureFlag int
 
 const pfCompressedProposal peerFeatureFlag = 1

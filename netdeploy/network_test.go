@@ -29,6 +29,7 @@ import (
 
 func TestSaveNetworkCfg(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -48,6 +49,7 @@ func TestSaveNetworkCfg(t *testing.T) {
 
 func TestSaveConsensus(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 

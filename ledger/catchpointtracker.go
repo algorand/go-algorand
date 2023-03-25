@@ -41,11 +41,10 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/db"
 )
 
 const (
@@ -92,14 +91,14 @@ type catchpointTracker struct {
 	enableGeneratingCatchpointFiles bool
 
 	// Prepared SQL statements for fast accounts DB lookups.
-	accountsq store.AccountsReader
+	accountsq trackerdb.AccountsReader
 
 	// log copied from ledger
 	log logging.Logger
 
 	// Connection to the database.
-	dbs             store.TrackerStore
-	catchpointStore store.CatchpointReaderWriter
+	dbs             trackerdb.TrackerStore
+	catchpointStore trackerdb.CatchpointReaderWriter
 
 	// The last catchpoint label that was written to the database. Should always align with what's in the database.
 	// note that this is the last catchpoint *label* and not the catchpoint file.
@@ -211,15 +210,19 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		}
 	}
 
-	return ct.dbs.Batch(func(ctx context.Context, tx *sql.Tx) error {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
-		err := ct.recordFirstStageInfo(ctx, tx, dbRound, totalKVs, totalAccounts, totalChunks, biggestChunkLen)
+	return ct.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+		crw, err := tx.MakeCatchpointReaderWriter()
+		if err != nil {
+			return err
+		}
+
+		err = ct.recordFirstStageInfo(ctx, tx, dbRound, totalKVs, totalAccounts, totalChunks, biggestChunkLen)
 		if err != nil {
 			return err
 		}
 
 		// Clear the db record.
-		return crw.WriteCatchpointStateUint64(ctx, store.CatchpointStateWritingFirstStageInfo, 0)
+		return crw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateWritingFirstStageInfo, 0)
 	})
 }
 
@@ -227,7 +230,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 // a crash.
 func (ct *catchpointTracker) finishFirstStageAfterCrash(dbRound basics.Round) error {
 	v, err := ct.catchpointStore.ReadCatchpointStateUint64(
-		context.Background(), store.CatchpointStateWritingFirstStageInfo)
+		context.Background(), trackerdb.CatchpointStateWritingFirstStageInfo)
 	if err != nil {
 		return err
 	}
@@ -237,9 +240,9 @@ func (ct *catchpointTracker) finishFirstStageAfterCrash(dbRound basics.Round) er
 
 	// First, delete the unfinished data file.
 	relCatchpointDataFilePath := filepath.Join(
-		store.CatchpointDirName,
+		trackerdb.CatchpointDirName,
 		makeCatchpointDataFilePath(dbRound))
-	err = store.RemoveSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointDataFilePath)
+	err = trackerdb.RemoveSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointDataFilePath)
 	if err != nil {
 		return err
 	}
@@ -256,9 +259,9 @@ func (ct *catchpointTracker) finishCatchpointsAfterCrash(catchpointLookback uint
 	for _, record := range records {
 		// First, delete the unfinished catchpoint file.
 		relCatchpointFilePath := filepath.Join(
-			store.CatchpointDirName,
-			store.MakeCatchpointFilePath(basics.Round(record.Round)))
-		err = store.RemoveSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointFilePath)
+			trackerdb.CatchpointDirName,
+			trackerdb.MakeCatchpointFilePath(basics.Round(record.Round)))
+		err = trackerdb.RemoveSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointFilePath)
 		if err != nil {
 			return err
 		}
@@ -282,7 +285,7 @@ func (ct *catchpointTracker) recoverFromCrash(dbRound basics.Round) error {
 	ctx := context.Background()
 
 	catchpointLookback, err := ct.catchpointStore.ReadCatchpointStateUint64(
-		ctx, store.CatchpointStateCatchpointLookback)
+		ctx, trackerdb.CatchpointStateCatchpointLookback)
 	if err != nil {
 		return err
 	}
@@ -313,7 +316,7 @@ func (ct *catchpointTracker) recoverFromCrash(dbRound basics.Round) error {
 func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Round) (err error) {
 	ct.log = l.trackerLog()
 	ct.dbs = l.trackerDB()
-	ct.catchpointStore, err = l.trackerDB().CreateCatchpointReaderWriter()
+	ct.catchpointStore, err = l.trackerDB().MakeCatchpointReaderWriter()
 	if err != nil {
 		return err
 	}
@@ -324,20 +327,20 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Rou
 	ct.catchpointDataSlowWriting = make(chan struct{}, 1)
 	close(ct.catchpointDataSlowWriting)
 
-	err = ct.dbs.Batch(func(ctx context.Context, tx *sql.Tx) error {
+	err = ct.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 		return ct.initializeHashes(ctx, tx, dbRound)
 	})
 	if err != nil {
 		return err
 	}
 
-	ct.accountsq, err = ct.dbs.CreateAccountsReader()
+	ct.accountsq, err = ct.dbs.MakeAccountsOptimizedReader()
 	if err != nil {
 		return
 	}
 
 	ct.lastCatchpointLabel, err = ct.catchpointStore.ReadCatchpointStateString(
-		context.Background(), store.CatchpointStateLastCatchpoint)
+		context.Background(), trackerdb.CatchpointStateLastCatchpoint)
 	if err != nil {
 		return
 	}
@@ -479,7 +482,7 @@ func (ct *catchpointTracker) prepareCommit(dcc *deferredCommitContext) error {
 	return nil
 }
 
-func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
+func (ct *catchpointTracker) commitRound(ctx context.Context, tx trackerdb.TransactionScope, dcc *deferredCommitContext) (err error) {
 	treeTargetRound := basics.Round(0)
 	offset := dcc.offset
 	dbRound := dcc.oldBase
@@ -490,19 +493,25 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 		}
 	}()
 
-	crw := store.NewCatchpointSQLReaderWriter(tx)
-	arw := store.NewAccountsSQLReaderWriter(tx)
+	crw, err := tx.MakeCatchpointReaderWriter()
+	if err != nil {
+		return err
+	}
+	arw, err := tx.MakeAccountsReaderWriter()
+	if err != nil {
+		return err
+	}
 
 	if ct.catchpointEnabled() {
-		var mc store.MerkleCommitter
-		mc, err = store.MakeMerkleCommitter(tx, false)
+		var mc trackerdb.MerkleCommitter
+		mc, err = tx.MakeMerkleCommitter(false)
 		if err != nil {
 			return
 		}
 
 		var trie *merkletrie.Trie
 		if ct.balancesTrie == nil {
-			trie, err = merkletrie.MakeTrie(mc, store.TrieMemoryConfig)
+			trie, err = merkletrie.MakeTrie(mc, trackerdb.TrieMemoryConfig)
 			if err != nil {
 				ct.log.Warnf("unable to create merkle trie during committedUpTo: %v", err)
 				return err
@@ -534,13 +543,13 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx *sql.Tx, dcc *d
 	}
 
 	if dcc.catchpointFirstStage {
-		err = crw.WriteCatchpointStateUint64(ctx, store.CatchpointStateWritingFirstStageInfo, 1)
+		err = crw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateWritingFirstStageInfo, 1)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = crw.WriteCatchpointStateUint64(ctx, store.CatchpointStateCatchpointLookback, dcc.catchpointLookback)
+	err = crw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchpointLookback, dcc.catchpointLookback)
 	if err != nil {
 		return err
 	}
@@ -700,7 +709,7 @@ func repackCatchpoint(ctx context.Context, header CatchpointFileHeader, biggestC
 
 // Create a catchpoint (a label and possibly a file with db record) and remove
 // the unfinished catchpoint record.
-func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound basics.Round, round basics.Round, dataInfo store.CatchpointFirstStageInfo, blockHash crypto.Digest) error {
+func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound basics.Round, round basics.Round, dataInfo trackerdb.CatchpointFirstStageInfo, blockHash crypto.Digest) error {
 	startTime := time.Now()
 	label := ledgercore.MakeCatchpointLabel(
 		round, blockHash, dataInfo.TrieBalancesHash, dataInfo.Totals).String()
@@ -710,7 +719,7 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 		round, accountsRound, label)
 
 	err := ct.catchpointStore.WriteCatchpointStateString(
-		ctx, store.CatchpointStateLastCatchpoint, label)
+		ctx, trackerdb.CatchpointStateLastCatchpoint, label)
 	if err != nil {
 		return err
 	}
@@ -723,7 +732,7 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 		return nil
 	}
 
-	catchpointDataFilePath := filepath.Join(ct.dbDirectory, store.CatchpointDirName)
+	catchpointDataFilePath := filepath.Join(ct.dbDirectory, trackerdb.CatchpointDirName)
 	catchpointDataFilePath =
 		filepath.Join(catchpointDataFilePath, makeCatchpointDataFilePath(accountsRound))
 
@@ -750,7 +759,7 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 	}
 
 	relCatchpointFilePath :=
-		filepath.Join(store.CatchpointDirName, store.MakeCatchpointFilePath(round))
+		filepath.Join(trackerdb.CatchpointDirName, trackerdb.MakeCatchpointFilePath(round))
 	absCatchpointFilePath := filepath.Join(ct.dbDirectory, relCatchpointFilePath)
 
 	err = os.MkdirAll(filepath.Dir(absCatchpointFilePath), 0700)
@@ -768,8 +777,12 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 		return err
 	}
 
-	err = ct.dbs.Batch(func(ctx context.Context, tx *sql.Tx) (err error) {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
+	err = ct.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		crw, err := tx.MakeCatchpointReaderWriter()
+		if err != nil {
+			return err
+		}
+
 		err = ct.recordCatchpointFile(ctx, crw, round, relCatchpointFilePath, fileInfo.Size())
 		if err != nil {
 			return err
@@ -855,8 +868,8 @@ func (ct *catchpointTracker) pruneFirstStageRecordsData(ctx context.Context, max
 
 	for _, round := range rounds {
 		relCatchpointDataFilePath :=
-			filepath.Join(store.CatchpointDirName, makeCatchpointDataFilePath(round))
-		err = store.RemoveSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointDataFilePath)
+			filepath.Join(trackerdb.CatchpointDirName, makeCatchpointDataFilePath(round))
+		err = trackerdb.RemoveSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointDataFilePath)
 		if err != nil {
 			return err
 		}
@@ -928,7 +941,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 	for i := 0; i < accountsDeltas.len(); i++ {
 		delta := accountsDeltas.getByIdx(i)
 		if !delta.oldAcct.AccountData.IsEmpty() {
-			deleteHash := store.AccountHashBuilderV6(delta.address, &delta.oldAcct.AccountData, protocol.Encode(&delta.oldAcct.AccountData))
+			deleteHash := trackerdb.AccountHashBuilderV6(delta.address, &delta.oldAcct.AccountData, protocol.Encode(&delta.oldAcct.AccountData))
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), delta.address, err)
@@ -941,7 +954,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		}
 
 		if !delta.newAcct.IsEmpty() {
-			addHash := store.AccountHashBuilderV6(delta.address, &delta.newAcct, protocol.Encode(&delta.newAcct))
+			addHash := trackerdb.AccountHashBuilderV6(delta.address, &delta.newAcct, protocol.Encode(&delta.newAcct))
 			added, err = ct.balancesTrie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), delta.address, err)
@@ -958,7 +971,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		resDelta := resourcesDeltas.getByIdx(i)
 		addr := resDelta.address
 		if !resDelta.oldResource.Data.IsEmpty() {
-			deleteHash, err := store.ResourcesHashBuilderV6(&resDelta.oldResource.Data, addr, resDelta.oldResource.Aidx, resDelta.oldResource.Data.UpdateRound, protocol.Encode(&resDelta.oldResource.Data))
+			deleteHash, err := trackerdb.ResourcesHashBuilderV6(&resDelta.oldResource.Data, addr, resDelta.oldResource.Aidx, resDelta.oldResource.Data.UpdateRound, protocol.Encode(&resDelta.oldResource.Data))
 			if err != nil {
 				return err
 			}
@@ -974,7 +987,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		}
 
 		if !resDelta.newResource.IsEmpty() {
-			addHash, err := store.ResourcesHashBuilderV6(&resDelta.newResource, addr, resDelta.oldResource.Aidx, resDelta.newResource.UpdateRound, protocol.Encode(&resDelta.newResource))
+			addHash, err := trackerdb.ResourcesHashBuilderV6(&resDelta.newResource, addr, resDelta.oldResource.Aidx, resDelta.newResource.UpdateRound, protocol.Encode(&resDelta.newResource))
 			if err != nil {
 				return err
 			}
@@ -999,7 +1012,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 			if mv.data != nil && bytes.Equal(mv.oldData, mv.data) {
 				continue // changed back within the delta span
 			}
-			deleteHash := store.KvHashBuilderV6(key, mv.oldData)
+			deleteHash := trackerdb.KvHashBuilderV6(key, mv.oldData)
 			deleted, err = ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete kv hash '%s' from merkle trie for key %v: %w", hex.EncodeToString(deleteHash), key, err)
@@ -1012,7 +1025,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		}
 
 		if mv.data != nil {
-			addHash := store.KvHashBuilderV6(key, mv.data)
+			addHash := trackerdb.KvHashBuilderV6(key, mv.data)
 			added, err = ct.balancesTrie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("attempted to add duplicate kv hash '%s' from merkle trie for key %v: %w", hex.EncodeToString(addHash), key, err)
@@ -1070,7 +1083,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 		BalancesWriteTime: uint64(updatingBalancesDuration.Nanoseconds()),
 	}
 
-	catchpointDataFilePath := filepath.Join(ct.dbDirectory, store.CatchpointDirName)
+	catchpointDataFilePath := filepath.Join(ct.dbDirectory, trackerdb.CatchpointDirName)
 	catchpointDataFilePath =
 		filepath.Join(catchpointDataFilePath, makeCatchpointDataFilePath(accountsRound))
 
@@ -1088,7 +1101,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	var catchpointWriter *catchpointWriter
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
-	err = ct.dbs.BatchContext(ctx, func(dbCtx context.Context, tx *sql.Tx) (err error) {
+	err = ct.dbs.TransactionContext(ctx, func(dbCtx context.Context, tx trackerdb.TransactionScope) (err error) {
 		catchpointWriter, err = makeCatchpointWriter(dbCtx, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk)
 		if err != nil {
 			return
@@ -1104,7 +1117,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 				// we just wrote some data, but there is more to be written.
 				// go to sleep for while.
 				// before going to sleep, extend the transaction timeout so that we won't get warnings:
-				_, err0 := db.ResetTransactionWarnDeadline(dbCtx, tx, time.Now().Add(1*time.Second))
+				_, err0 := tx.ResetTransactionWarnDeadline(dbCtx, time.Now().Add(1*time.Second))
 				if err0 != nil {
 					ct.log.Warnf("catchpointTracker: generateCatchpoint: failed to reset transaction warn deadline : %v", err0)
 				}
@@ -1164,20 +1177,24 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	return catchpointWriter.totalKVs, catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, nil
 }
 
-func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.Tx, accountsRound basics.Round, totalKVs uint64, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64) error {
-	arw := store.NewAccountsSQLReaderWriter(tx)
+func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx trackerdb.TransactionScope, accountsRound basics.Round, totalKVs uint64, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64) error {
+	arw, err := tx.MakeAccountsReaderWriter()
+	if err != nil {
+		return err
+	}
+
 	accountTotals, err := arw.AccountsTotals(ctx, false)
 	if err != nil {
 		return err
 	}
 
 	{
-		mc, err := store.MakeMerkleCommitter(tx, false)
+		mc, err := tx.MakeMerkleCommitter(false)
 		if err != nil {
 			return err
 		}
 		if ct.balancesTrie == nil {
-			trie, err := merkletrie.MakeTrie(mc, store.TrieMemoryConfig)
+			trie, err := merkletrie.MakeTrie(mc, trackerdb.TrieMemoryConfig)
 			if err != nil {
 				return err
 			}
@@ -1191,8 +1208,12 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx *sql.T
 		return err
 	}
 
-	crw := store.NewCatchpointSQLReaderWriter(tx)
-	info := store.CatchpointFirstStageInfo{
+	crw, err := tx.MakeCatchpointReaderWriter()
+	if err != nil {
+		return err
+	}
+
+	info := trackerdb.CatchpointFirstStageInfo{
 		Totals:           accountTotals,
 		TotalAccounts:    totalAccounts,
 		TotalKVs:         totalKVs,
@@ -1211,7 +1232,7 @@ func makeCatchpointDataFilePath(accountsRound basics.Round) string {
 // after a successful insert operation to the database, it would delete up to 2 old entries, as needed.
 // deleting 2 entries while inserting single entry allow us to adjust the size of the backing storage and have the
 // database and storage realign.
-func (ct *catchpointTracker) recordCatchpointFile(ctx context.Context, crw store.CatchpointReaderWriter, round basics.Round, relCatchpointFilePath string, fileSize int64) (err error) {
+func (ct *catchpointTracker) recordCatchpointFile(ctx context.Context, crw trackerdb.CatchpointReaderWriter, round basics.Round, relCatchpointFilePath string, fileSize int64) (err error) {
 	if ct.catchpointFileHistoryLength != 0 {
 		err = crw.StoreCatchpoint(ctx, round, relCatchpointFilePath, "", fileSize)
 		if err != nil {
@@ -1219,7 +1240,7 @@ func (ct *catchpointTracker) recordCatchpointFile(ctx context.Context, crw store
 			return
 		}
 	} else {
-		err = store.RemoveSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointFilePath)
+		err = trackerdb.RemoveSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointFilePath)
 		if err != nil {
 			ct.log.Warnf("catchpointTracker.recordCatchpointFile() unable to remove file (%s): %v", relCatchpointFilePath, err)
 			return
@@ -1234,7 +1255,7 @@ func (ct *catchpointTracker) recordCatchpointFile(ctx context.Context, crw store
 		return fmt.Errorf("unable to delete catchpoint file, getOldestCatchpointFiles failed : %v", err)
 	}
 	for round, fileToDelete := range filesToDelete {
-		err = store.RemoveSingleCatchpointFileFromDisk(ct.dbDirectory, fileToDelete)
+		err = trackerdb.RemoveSingleCatchpointFileFromDisk(ct.dbDirectory, fileToDelete)
 		if err != nil {
 			return err
 		}
@@ -1254,9 +1275,13 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 	ledgerGetcatchpointCount.Inc(nil)
 	// TODO: we need to generalize this, check @cce PoC PR, he has something
 	//       somewhat broken for some KVs..
-	err := ct.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
-		dbFileName, _, fileSize, err = crw.GetCatchpoint(ctx, round)
+	err := ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
+		cr, err := tx.MakeCatchpointReader()
+		if err != nil {
+			return err
+		}
+
+		dbFileName, _, fileSize, err = cr.GetCatchpoint(ctx, round)
 		return
 	})
 	ledgerGetcatchpointMicros.AddMicrosecondsSince(start, nil)
@@ -1274,7 +1299,7 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 		if os.IsNotExist(err) {
 			// the database told us that we have this file.. but we couldn't find it.
 			// delete it from the database.
-			crw, err := ct.dbs.CreateCatchpointReaderWriter()
+			crw, err := ct.dbs.MakeCatchpointReaderWriter()
 			if err != nil {
 				return nil, err
 			}
@@ -1292,7 +1317,7 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 
 	// if the database doesn't know about that round, see if we have that file anyway:
 	relCatchpointFilePath :=
-		filepath.Join(store.CatchpointDirName, store.MakeCatchpointFilePath(round))
+		filepath.Join(trackerdb.CatchpointDirName, trackerdb.MakeCatchpointFilePath(round))
 	absCatchpointFilePath := filepath.Join(ct.dbDirectory, relCatchpointFilePath)
 	file, err := os.OpenFile(absCatchpointFilePath, os.O_RDONLY, 0666)
 	if err == nil && file != nil {
@@ -1302,7 +1327,7 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 			// we couldn't get the stat, so just return with the file.
 			return &readCloseSizer{ReadCloser: file, size: -1}, nil
 		}
-		crw, err := ct.dbs.CreateCatchpointReaderWriter()
+		crw, err := ct.dbs.MakeCatchpointReaderWriter()
 		if err != nil {
 			return nil, err
 		}
@@ -1321,8 +1346,11 @@ func (ct *catchpointTracker) catchpointEnabled() bool {
 
 // initializeHashes initializes account/resource/kv hashes.
 // as part of the initialization, it tests if a hash table matches to account base and updates the former.
-func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, rnd basics.Round) error {
-	arw := store.NewAccountsSQLReaderWriter(tx)
+func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx trackerdb.TransactionScope, rnd basics.Round) error {
+	arw, err := tx.MakeAccountsReaderWriter()
+	if err != nil {
+		return err
+	}
 	hashRound, err := arw.AccountsHashRound(ctx)
 	if err != nil {
 		return err
@@ -1342,12 +1370,12 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 	}
 
 	// create the merkle trie for the balances
-	committer, err := store.MakeMerkleCommitter(tx, false)
+	committer, err := tx.MakeMerkleCommitter(false)
 	if err != nil {
 		return fmt.Errorf("initializeHashes was unable to makeMerkleCommitter: %v", err)
 	}
 
-	trie, err := merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
+	trie, err := merkletrie.MakeTrie(committer, trackerdb.TrieMemoryConfig)
 	if err != nil {
 		return fmt.Errorf("initializeHashes was unable to MakeTrie: %v", err)
 	}
@@ -1361,7 +1389,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 
 	if rootHash.IsZero() {
 		ct.log.Infof("initializeHashes rebuilding merkle trie for round %d", rnd)
-		accountBuilderIt := store.MakeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
+		accountBuilderIt := tx.MakeOrderedAccountsIter(trieRebuildAccountChunkSize)
 		defer accountBuilderIt.Close(ctx)
 		startTrieBuildTime := time.Now()
 		trieHashCount := 0
@@ -1388,9 +1416,9 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 					if !added {
 						// we need to translate the "addrid" into actual account address so that
 						// we can report the failure.
-						addr, err := arw.LookupAccountAddressFromAddressID(ctx, acct.Addrid)
+						addr, err := arw.LookupAccountAddressFromAddressID(ctx, acct.AccountRef)
 						if err != nil {
-							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account id %d : %v", hex.EncodeToString(acct.Digest), acct.Addrid, err)
+							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account id %d : %v", hex.EncodeToString(acct.Digest), acct.AccountRef, err)
 						} else {
 							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account %v", hex.EncodeToString(acct.Digest), addr)
 						}
@@ -1432,7 +1460,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 
 		// Now add the kvstore hashes
 		pendingTrieHashes = 0
-		kvs, err := store.MakeKVsIter(ctx, tx)
+		kvs, err := tx.MakeKVsIter(ctx)
 		if err != nil {
 			return err
 		}
@@ -1442,7 +1470,7 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx *sql.Tx, r
 			if err != nil {
 				return err
 			}
-			hash := store.KvHashBuilderV6(string(k), v)
+			hash := trackerdb.KvHashBuilderV6(string(k), v)
 			trieHashCount++
 			pendingTrieHashes++
 			added, err := trie.Add(hash)

@@ -19,6 +19,7 @@ package network
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -119,7 +120,7 @@ func init() {
 	defaultConfig.MaxConnectionsPerIP = 30
 }
 
-func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local) *WebsocketNetwork {
+func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local, opts ...testWebsocketOption) *WebsocketNetwork {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(conf.BaseLoggerDebugLevel))
 	wn := &WebsocketNetwork{
@@ -129,13 +130,32 @@ func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local) *Websocket
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
+	// apply options to newly-created WebsocketNetwork, if provided
+	for _, opt := range opts {
+		opt.applyOpt(wn)
+	}
+
 	wn.setup()
 	wn.eventualReadyDelay = time.Second
 	return wn
 }
 
-func makeTestWebsocketNode(t testing.TB) *WebsocketNetwork {
-	return makeTestWebsocketNodeWithConfig(t, defaultConfig)
+// interface for providing extra options to makeTestWebsocketNode
+type testWebsocketOption interface {
+	applyOpt(wn *WebsocketNetwork)
+}
+
+// option to add KV to wn base logger
+type testWebsocketLogNameOption struct{ logName string }
+
+func (o testWebsocketLogNameOption) applyOpt(wn *WebsocketNetwork) {
+	if o.logName != "" {
+		wn.log = wn.log.With("name", o.logName)
+	}
+}
+
+func makeTestWebsocketNode(t testing.TB, opts ...testWebsocketOption) *WebsocketNetwork {
+	return makeTestWebsocketNodeWithConfig(t, defaultConfig, opts...)
 }
 
 type messageCounterHandler struct {
@@ -1109,6 +1129,924 @@ func TestGetPeers(t *testing.T) {
 	expectAddrs := []string{addrA, "a", "b", "c"}
 	sort.Strings(expectAddrs)
 	assert.Equal(t, expectAddrs, peerAddrs)
+}
+
+// confirms that if the config PublicAddress is set to "testing",
+// PublicAddress is loaded when possible with the value of Address()
+func TestTestingPublicAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	netA := makeTestWebsocketNode(t)
+	netA.config.PublicAddress = "testing"
+	netA.config.GossipFanout = 1
+
+	netA.Start()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// check that "testing" has been overloaded
+	addr, ok := netA.Address()
+	addr = hostAndPort(addr)
+	require.True(t, ok)
+	require.NotEqual(t, "testing", netA.PublicAddress())
+	require.Equal(t, addr, netA.PublicAddress())
+}
+
+// mock an identityTracker
+type mockIdentityTracker struct {
+	isOccupied  bool
+	setCount    int
+	insertCount int
+	removeCount int
+	lock        deadlock.Mutex
+	realTracker identityTracker
+}
+
+func newMockIdentityTracker(realTracker identityTracker) *mockIdentityTracker {
+	return &mockIdentityTracker{
+		isOccupied:  false,
+		setCount:    0,
+		insertCount: 0,
+		removeCount: 0,
+		realTracker: realTracker,
+	}
+}
+
+func (d *mockIdentityTracker) setIsOccupied(b bool) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	d.isOccupied = b
+}
+func (d *mockIdentityTracker) removeIdentity(p *wsPeer) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	d.removeCount++
+	d.realTracker.removeIdentity(p)
+}
+func (d *mockIdentityTracker) getInsertCount() int {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	return d.insertCount
+}
+func (d *mockIdentityTracker) getRemoveCount() int {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	return d.removeCount
+}
+func (d *mockIdentityTracker) getSetCount() int {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	return d.setCount
+}
+func (d *mockIdentityTracker) setIdentity(p *wsPeer) bool {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	d.setCount++
+	// isOccupied is true, meaning we're overloading the "ok" return to false
+	if d.isOccupied {
+		return false
+	}
+	ret := d.realTracker.setIdentity(p)
+	if ret {
+		d.insertCount++
+	}
+	return ret
+}
+
+func hostAndPort(u string) string {
+	url, err := url.Parse(u)
+	if err == nil {
+		return fmt.Sprintf("%s:%s", url.Hostname(), url.Port())
+	}
+	return ""
+}
+
+// TestPeeringWithIdentityChallenge tests the happy path of connecting with identity challenge:
+// - both peers have correctly set PublicAddress
+// - both should exchange identities and verify
+// - both peers should be able to deduplicate connections
+func TestPeeringWithIdentityChallenge(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
+	netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
+	netA.config.PublicAddress = "testing"
+	netA.config.GossipFanout = 1
+
+	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
+	netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
+	netB.config.PublicAddress = "testing"
+	netB.config.GossipFanout = 1
+
+	netA.Start()
+	defer netA.Stop()
+	netB.Start()
+	defer netB.Stop()
+
+	addrA, ok := netA.Address()
+	require.True(t, ok)
+	gossipA, err := netA.addrToGossipAddr(addrA)
+	require.NoError(t, err)
+
+	addrB, ok := netB.Address()
+	require.True(t, ok)
+	gossipB, err := netB.addrToGossipAddr(addrB)
+	require.NoError(t, err)
+
+	// set addresses to just host:port to match phonebook/dns format
+	addrA = hostAndPort(addrA)
+	addrB = hostAndPort(addrB)
+
+	// first connection should work just fine
+	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
+		netA.wg.Add(1)
+		netA.tryConnect(addrB, gossipB)
+		// let the tryConnect go forward
+		time.Sleep(250 * time.Millisecond)
+	}
+	// just one A->B connection
+	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
+
+	// confirm identity map was added to for both hosts
+	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getInsertCount())
+
+	// netB has to wait for a final verification message over WS Handler, so pause a moment
+	time.Sleep(250 * time.Millisecond)
+	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getInsertCount())
+
+	// bi-directional connection from B should not proceed
+	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
+		netB.wg.Add(1)
+		netB.tryConnect(addrA, gossipA)
+		// let the tryConnect go forward
+		time.Sleep(250 * time.Millisecond)
+	}
+
+	// still just one A->B connection
+	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
+	// netA never attempts to set identity as it never sees a verified identity
+	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getSetCount())
+	// netB would attempt to add the identity to the tracker
+	// but it would not end up being added
+	assert.Equal(t, 2, netB.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getInsertCount())
+
+	// Check deduplication again, this time from A
+	// the "ok" from tryConnectReserveAddr is overloaded here because isConnectedTo
+	// will prevent this connection from attempting in the first place
+	// in the real world, that isConnectedTo doesn't always trigger, if the hosts are behind
+	// a load balancer or other NAT
+	if _, ok := netA.tryConnectReserveAddr(addrB); ok || true {
+		netA.wg.Add(1)
+		netA.tryConnect(addrB, gossipB)
+		// let the tryConnect go forward
+		time.Sleep(250 * time.Millisecond)
+	}
+
+	// netB never tries to add a new identity, since the connection gets abandoned before it is verified
+	assert.Equal(t, 2, netB.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getInsertCount())
+	// still just one A->B connection
+	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 2, netA.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getInsertCount())
+	// it is possible for NetB to be in the process of doing addPeer while
+	// the underlying connection is being closed. In this case, the read loop
+	// on the peer will detect and close the peer. Since this is asynchronous,
+	// we wait and check regularly to allow the connection to settle
+	assert.Eventually(
+		t,
+		func() bool { return len(netB.GetPeers(PeersConnectedIn)) == 1 },
+		5*time.Second,
+		100*time.Millisecond)
+
+	// Now have A connect to node C, which has the same PublicAddress as B (e.g., because it shares the
+	// same public load balancer endpoint). C will have a different identity keypair and so will not be
+	// considered a duplicate.
+	netC := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netC"})
+	netC.identityTracker = newMockIdentityTracker(netC.identityTracker)
+	netC.config.PublicAddress = addrB
+	netC.config.GossipFanout = 1
+
+	netC.Start()
+	defer netC.Stop()
+
+	addrC, ok := netC.Address()
+	require.True(t, ok)
+	gossipC, err := netC.addrToGossipAddr(addrC)
+	require.NoError(t, err)
+	addrC = hostAndPort(addrC)
+
+	// A connects to C (but uses addrB here to simulate case where B & C have the same PublicAddress)
+	netA.wg.Add(1)
+	netA.tryConnect(addrB, gossipC)
+	// let the tryConnect go forward
+	time.Sleep(250 * time.Millisecond)
+
+	// A->B and A->C both open
+	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 2, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netC.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
+
+	// confirm identity map was added to for both hosts
+	assert.Equal(t, 3, netA.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 2, netA.identityTracker.(*mockIdentityTracker).getInsertCount())
+
+	// netC has to wait for a final verification message over WS Handler, so pause a moment
+	time.Sleep(250 * time.Millisecond)
+	assert.Equal(t, 1, netC.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netC.identityTracker.(*mockIdentityTracker).getInsertCount())
+
+}
+
+// TestPeeringSenderIdentityChallengeOnly will confirm that if only the Sender
+// Uses Identity, no identity exchange happens in the connection
+func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
+	netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
+	netA.config.PublicAddress = "testing"
+	netA.config.GossipFanout = 1
+
+	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
+	netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
+	//netB.config.PublicAddress = "testing"
+	netB.config.GossipFanout = 1
+
+	netA.Start()
+	defer netA.Stop()
+	netB.Start()
+	defer netB.Stop()
+
+	addrA, ok := netA.Address()
+	require.True(t, ok)
+	gossipA, err := netA.addrToGossipAddr(addrA)
+	require.NoError(t, err)
+
+	addrB, ok := netB.Address()
+	require.True(t, ok)
+	gossipB, err := netB.addrToGossipAddr(addrB)
+	require.NoError(t, err)
+
+	// set addresses to just host:port to match phonebook/dns format
+	addrA = hostAndPort(addrA)
+	addrB = hostAndPort(addrB)
+
+	// first connection should work just fine
+	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
+		netA.wg.Add(1)
+		netA.tryConnect(addrB, gossipB)
+		// let the tryConnect go forward
+		time.Sleep(250 * time.Millisecond)
+	}
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+
+	// confirm identity map was not added to for either host
+	assert.Equal(t, 0, netA.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 0, netB.identityTracker.(*mockIdentityTracker).getSetCount())
+
+	// bi-directional connection should also work
+	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
+		netB.wg.Add(1)
+		netB.tryConnect(addrA, gossipA)
+		// let the tryConnect go forward
+		time.Sleep(250 * time.Millisecond)
+	}
+	// the nodes are connected redundantly
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedOut)))
+	// confirm identity map was not added to for either host
+	assert.Equal(t, 0, netA.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 0, netB.identityTracker.(*mockIdentityTracker).getSetCount())
+}
+
+// TestPeeringReceiverIdentityChallengeOnly will confirm that if only the Receiver
+// Uses Identity, no identity exchange happens in the connection
+func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
+	netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
+	//netA.config.PublicAddress = "testing"
+	netA.config.GossipFanout = 1
+
+	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
+	netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
+	netB.config.PublicAddress = "testing"
+	netB.config.GossipFanout = 1
+
+	netA.Start()
+	defer netA.Stop()
+	netB.Start()
+	defer netB.Stop()
+
+	addrA, ok := netA.Address()
+	require.True(t, ok)
+	gossipA, err := netA.addrToGossipAddr(addrA)
+	require.NoError(t, err)
+
+	addrB, ok := netB.Address()
+	require.True(t, ok)
+	gossipB, err := netB.addrToGossipAddr(addrB)
+	require.NoError(t, err)
+
+	// set addresses to just host:port to match phonebook/dns format
+	addrA = hostAndPort(addrA)
+	addrB = hostAndPort(addrB)
+
+	// first connection should work just fine
+	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
+		netA.wg.Add(1)
+		netA.tryConnect(addrB, gossipB)
+		// let the tryConnect go forward
+		time.Sleep(250 * time.Millisecond)
+	}
+	// single A->B connection
+	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
+
+	// confirm identity map was not added to for either host
+	assert.Equal(t, 0, netA.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 0, netB.identityTracker.(*mockIdentityTracker).getSetCount())
+
+	// bi-directional connection should also work
+	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
+		netB.wg.Add(1)
+		netB.tryConnect(addrA, gossipA)
+		// let the tryConnect go forward
+		time.Sleep(250 * time.Millisecond)
+	}
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedOut)))
+	// confirm identity map was not added to for either host
+	assert.Equal(t, 0, netA.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 0, netB.identityTracker.(*mockIdentityTracker).getSetCount())
+}
+
+// TestPeeringIncorrectDeduplicationName  confirm that if the reciever can't match
+// the Address in the challenge to its PublicAddress, identities aren't exchanged, but peering continues
+func TestPeeringIncorrectDeduplicationName(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
+	netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
+	netA.config.PublicAddress = "testing"
+	netA.config.GossipFanout = 1
+
+	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
+	netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
+	netB.config.PublicAddress = "no:3333"
+	netB.config.GossipFanout = 1
+
+	netA.Start()
+	defer netA.Stop()
+	netB.Start()
+	defer netB.Stop()
+
+	addrA, ok := netA.Address()
+	require.True(t, ok)
+	gossipA, err := netA.addrToGossipAddr(addrA)
+	require.NoError(t, err)
+
+	addrB, ok := netB.Address()
+	require.True(t, ok)
+	gossipB, err := netB.addrToGossipAddr(addrB)
+	require.NoError(t, err)
+
+	// set addresses to just host:port to match phonebook/dns format
+	addrA = hostAndPort(addrA)
+	addrB = hostAndPort(addrB)
+
+	// first connection should work just fine
+	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
+		netA.wg.Add(1)
+		netA.tryConnect(addrB, gossipB)
+		// let the tryConnect go forward
+		time.Sleep(250 * time.Millisecond)
+	}
+	// single A->B connection
+	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
+
+	// confirm identity map was not added to for either host
+	// nor was "set" called at all
+	assert.Equal(t, 0, netA.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 0, netB.identityTracker.(*mockIdentityTracker).getSetCount())
+
+	// bi-directional connection should also work
+	// this second connection should set identities, because the reciever address matches now
+	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
+		netB.wg.Add(1)
+		netB.tryConnect(addrA, gossipA)
+		// let the tryConnect go forward
+		time.Sleep(250 * time.Millisecond)
+	}
+	// confirm that at this point the identityTracker was called once per network
+	//	and inserted once per network
+	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getInsertCount())
+	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getInsertCount())
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
+	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedOut)))
+}
+
+// make a mockIdentityScheme which can accept overloaded behavior
+// use this over the next few tests to check that when one peer misbehaves, peering continues/halts as expected
+type mockIdentityScheme struct {
+	t                       *testing.T
+	realScheme              *identityChallengePublicKeyScheme
+	attachChallenge         func(attach http.Header, addr string) identityChallengeValue
+	verifyAndAttachResponse func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error)
+	verifyResponse          func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error)
+}
+
+func newMockIdentityScheme(t *testing.T) *mockIdentityScheme {
+	return &mockIdentityScheme{t: t, realScheme: NewIdentityChallengeScheme("any")}
+}
+func (i mockIdentityScheme) AttachChallenge(attach http.Header, addr string) identityChallengeValue {
+	if i.attachChallenge != nil {
+		return i.attachChallenge(attach, addr)
+	}
+	return i.realScheme.AttachChallenge(attach, addr)
+}
+func (i mockIdentityScheme) VerifyRequestAndAttachResponse(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
+	if i.verifyAndAttachResponse != nil {
+		return i.verifyAndAttachResponse(attach, h)
+	}
+	return i.realScheme.VerifyRequestAndAttachResponse(attach, h)
+}
+func (i mockIdentityScheme) VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
+	if i.verifyResponse != nil {
+		return i.verifyResponse(i.t, h, c)
+	}
+	return i.realScheme.VerifyResponse(h, c)
+}
+
+// when the identity challenge is misconstructed in various ways, peering should behave as expected
+func TestPeeringWithBadIdentityChallenge(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type testCase struct {
+		name            string
+		attachChallenge func(attach http.Header, addr string) identityChallengeValue
+		totalInA        int
+		totalOutA       int
+		totalInB        int
+		totalOutB       int
+	}
+
+	testCases := []testCase{
+		// when identityChallenge is not included, peering continues as normal
+		{
+			name:            "not included",
+			attachChallenge: func(attach http.Header, addr string) identityChallengeValue { return identityChallengeValue{} },
+			totalInA:        0,
+			totalOutA:       1,
+			totalInB:        1,
+			totalOutB:       0,
+		},
+		// when the identityChallenge is malformed B64, peering halts
+		{
+			name: "malformed b64",
+			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
+				attach.Add(IdentityChallengeHeader, "this does not decode!")
+				return newIdentityChallengeValue()
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
+		// when the identityChallenge can't be unmarshalled, peering halts
+		{
+			name: "not msgp decodable",
+			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
+				attach.Add(IdentityChallengeHeader, base64.StdEncoding.EncodeToString([]byte("Bad!Data!")))
+				return newIdentityChallengeValue()
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
+		// when the incorrect address is used, peering continues
+		{
+			name: "incorrect address",
+			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
+				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
+				c := identityChallenge{
+					Key:           s.identityKeys.SignatureVerifier,
+					Challenge:     newIdentityChallengeValue(),
+					PublicAddress: []byte("incorrect address!"),
+				}
+				attach.Add(IdentityChallengeHeader, c.signAndEncodeB64(s.identityKeys))
+				return c.Challenge
+			},
+			totalInA:  0,
+			totalOutA: 1,
+			totalInB:  1,
+			totalOutB: 0,
+		},
+		// when the challenge is incorrectly signed, peering halts
+		{
+			name: "bad signature",
+			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
+				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
+				c := identityChallenge{
+					Key:           s.identityKeys.SignatureVerifier,
+					Challenge:     newIdentityChallengeValue(),
+					PublicAddress: []byte("incorrect address!"),
+				}.Sign(s.identityKeys)
+				c.Msg.Challenge = newIdentityChallengeValue() // change the challenge after signing the message, so the signature check fails
+				enc := protocol.Encode(&c)
+				b64enc := base64.StdEncoding.EncodeToString(enc)
+				attach.Add(IdentityChallengeHeader, b64enc)
+				return c.Msg.Challenge
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Logf("Running Peering with Identity Challenge Test: %s", tc.name)
+		netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
+		netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
+		netA.config.PublicAddress = "testing"
+		netA.config.GossipFanout = 1
+
+		scheme := newMockIdentityScheme(t)
+		scheme.attachChallenge = tc.attachChallenge
+		netA.identityScheme = scheme
+
+		netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
+		netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
+		netB.config.PublicAddress = "testing"
+		netB.config.GossipFanout = 1
+
+		netA.Start()
+		defer netA.Stop()
+		netB.Start()
+		defer netB.Stop()
+
+		addrB, ok := netB.Address()
+		require.True(t, ok)
+		gossipB, err := netB.addrToGossipAddr(addrB)
+		require.NoError(t, err)
+
+		// set addresses to just host:port to match phonebook/dns format
+		addrB = hostAndPort(addrB)
+
+		if _, ok := netA.tryConnectReserveAddr(addrB); ok {
+			netA.wg.Add(1)
+			netA.tryConnect(addrB, gossipB)
+			// let the tryConnect go forward
+			time.Sleep(250 * time.Millisecond)
+		}
+		assert.Equal(t, tc.totalInA, len(netA.GetPeers(PeersConnectedIn)))
+		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
+		assert.Equal(t, tc.totalInB, len(netB.GetPeers(PeersConnectedIn)))
+		assert.Equal(t, tc.totalOutB, len(netB.GetPeers(PeersConnectedOut)))
+	}
+
+}
+
+// when the identity challenge response is misconstructed in various way, confirm peering behaves as expected
+func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type testCase struct {
+		name                    string
+		verifyAndAttachResponse func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error)
+		totalInA                int
+		totalOutA               int
+		totalInB                int
+		totalOutB               int
+	}
+
+	testCases := []testCase{
+		// when there is no response to the identity challenge, peering should continue without ID
+		{
+			name: "not included",
+			verifyAndAttachResponse: func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
+				return identityChallengeValue{}, crypto.PublicKey{}, nil
+			},
+			totalInA:  0,
+			totalOutA: 1,
+			totalInB:  1,
+			totalOutB: 0,
+		},
+		// when the response is malformed, do not peer
+		{
+			name: "malformed b64",
+			verifyAndAttachResponse: func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
+				attach.Add(IdentityChallengeHeader, "this does not decode!")
+				return identityChallengeValue{}, crypto.PublicKey{}, nil
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
+		// when the response is malformed, do not peer
+		{
+			name: "not msgp decodable",
+			verifyAndAttachResponse: func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
+				attach.Add(IdentityChallengeHeader, base64.StdEncoding.EncodeToString([]byte("Bad!Data!")))
+				return identityChallengeValue{}, crypto.PublicKey{}, nil
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
+		// when the original challenge isn't included, do not peer
+		{
+			name: "incorrect original challenge",
+			verifyAndAttachResponse: func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
+				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
+				// decode the header to an identityChallenge
+				msg, _ := base64.StdEncoding.DecodeString(h.Get(IdentityChallengeHeader))
+				idChal := identityChallenge{}
+				protocol.Decode(msg, &idChal)
+				// make the response object, with an incorrect challenge encode it and attach it to the header
+				r := identityChallengeResponse{
+					Key:               s.identityKeys.SignatureVerifier,
+					Challenge:         newIdentityChallengeValue(),
+					ResponseChallenge: newIdentityChallengeValue(),
+				}
+				attach.Add(IdentityChallengeHeader, r.signAndEncodeB64(s.identityKeys))
+				return r.ResponseChallenge, idChal.Key, nil
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
+		// when the message is incorrectly signed, do not peer
+		{
+			name: "bad signature",
+			verifyAndAttachResponse: func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
+				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
+				// decode the header to an identityChallenge
+				msg, _ := base64.StdEncoding.DecodeString(h.Get(IdentityChallengeHeader))
+				idChal := identityChallenge{}
+				protocol.Decode(msg, &idChal)
+				// make the response object, then change the signature and encode and attach
+				r := identityChallengeResponse{
+					Key:               s.identityKeys.SignatureVerifier,
+					Challenge:         newIdentityChallengeValue(),
+					ResponseChallenge: newIdentityChallengeValue(),
+				}.Sign(s.identityKeys)
+				r.Msg.ResponseChallenge = newIdentityChallengeValue() // change the challenge after signing the message
+				enc := protocol.Encode(&r)
+				b64enc := base64.StdEncoding.EncodeToString(enc)
+				attach.Add(IdentityChallengeHeader, b64enc)
+				return r.Msg.ResponseChallenge, idChal.Key, nil
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Logf("Running Peering with Identity Challenge Response Test: %s", tc.name)
+		netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
+		netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
+		netA.config.PublicAddress = "testing"
+		netA.config.GossipFanout = 1
+
+		netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
+		netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
+		netB.config.PublicAddress = "testing"
+		netB.config.GossipFanout = 1
+
+		scheme := newMockIdentityScheme(t)
+		scheme.verifyAndAttachResponse = tc.verifyAndAttachResponse
+		netB.identityScheme = scheme
+
+		netA.Start()
+		defer netA.Stop()
+		netB.Start()
+		defer netB.Stop()
+
+		addrB, ok := netB.Address()
+		require.True(t, ok)
+		gossipB, err := netB.addrToGossipAddr(addrB)
+		require.NoError(t, err)
+
+		// set addresses to just host:port to match phonebook/dns format
+		addrB = hostAndPort(addrB)
+
+		if _, ok := netA.tryConnectReserveAddr(addrB); ok {
+			netA.wg.Add(1)
+			netA.tryConnect(addrB, gossipB)
+			// let the tryConnect go forward
+			time.Sleep(250 * time.Millisecond)
+		}
+		assert.Equal(t, tc.totalInA, len(netA.GetPeers(PeersConnectedIn)))
+		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
+		assert.Equal(t, tc.totalOutB, len(netB.GetPeers(PeersConnectedOut)))
+		// it is possible for NetB to be in the process of doing addPeer while
+		// the underlying connection is being closed. In this case, the read loop
+		// on the peer will detect and close the peer. Since this is asynchronous,
+		// we wait and check regularly to allow the connection to settle
+		assert.Eventually(
+			t,
+			func() bool { return len(netB.GetPeers(PeersConnectedIn)) == tc.totalInB },
+			5*time.Second,
+			100*time.Millisecond)
+	}
+
+}
+
+// when the identity challenge verification is misconstructed in various ways, peering should behave as expected
+func TestPeeringWithBadIdentityVerification(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type testCase struct {
+		name            string
+		verifyResponse  func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error)
+		totalInA        int
+		totalOutA       int
+		totalInB        int
+		totalOutB       int
+		additionalSleep time.Duration
+		occupied        bool
+	}
+
+	testCases := []testCase{
+		// in a totally unmodified scenario, the two peers stay connected even after the verification timeout
+		{
+			name:      "happy path",
+			totalInA:  0,
+			totalOutA: 1,
+			totalInB:  1,
+			totalOutB: 0,
+		},
+		// if the peer does not send a final message, the peers stay connected
+		{
+			name: "not included",
+			verifyResponse: func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
+				return crypto.PublicKey{}, []byte{}, nil
+			},
+			totalInA:  0,
+			totalOutA: 1,
+			totalInB:  1,
+			totalOutB: 0,
+		},
+		// when the identityVerification can't be unmarshalled, peer is disconnected
+		{
+			name: "not msgp decodable",
+			verifyResponse: func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
+				message := append([]byte(protocol.NetIDVerificationTag), []byte("Bad!Data!")[:]...)
+				return crypto.PublicKey{}, message, nil
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
+		{
+			// when the verification signature doesn't match the peer's expectation (the previously exchanged identity), peer is disconnected
+			name: "bad signature",
+			verifyResponse: func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
+				headerString := h.Get(IdentityChallengeHeader)
+				require.NotEmpty(t, headerString)
+				msg, err := base64.StdEncoding.DecodeString(headerString)
+				require.NoError(t, err)
+				resp := identityChallengeResponseSigned{}
+				err = protocol.Decode(msg, &resp)
+				require.NoError(t, err)
+				s := NewIdentityChallengeScheme("does not matter") // make a throwaway key
+				ver := identityVerificationMessageSigned{
+					// fill in correct ResponseChallenge field
+					Msg:       identityVerificationMessage{ResponseChallenge: resp.Msg.ResponseChallenge},
+					Signature: s.identityKeys.SignBytes([]byte("bad bytes for signing")),
+				}
+				message := append([]byte(protocol.NetIDVerificationTag), protocol.Encode(&ver)[:]...)
+				return crypto.PublicKey{}, message, nil
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
+		{
+			// when the verification signature doesn't match the peer's expectation (the previously exchanged identity), peer is disconnected
+			name: "bad signature",
+			verifyResponse: func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
+				s := NewIdentityChallengeScheme("does not matter") // make a throwaway key
+				ver := identityVerificationMessageSigned{
+					// fill in wrong ResponseChallenge field
+					Msg:       identityVerificationMessage{ResponseChallenge: newIdentityChallengeValue()},
+					Signature: s.identityKeys.SignBytes([]byte("bad bytes for signing")),
+				}
+				message := append([]byte(protocol.NetIDVerificationTag), protocol.Encode(&ver)[:]...)
+				return crypto.PublicKey{}, message, nil
+			},
+			totalInA:  0,
+			totalOutA: 0,
+			totalInB:  0,
+			totalOutB: 0,
+		},
+		{
+			// when the identity is already in use, peer is disconnected
+			name:           "identity occupied",
+			verifyResponse: nil,
+			totalInA:       0,
+			totalOutA:      0,
+			totalInB:       0,
+			totalOutB:      0,
+			occupied:       true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Logf("Running Peering with Identity Verification Test: %s", tc.name)
+		netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
+		netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
+		netA.config.PublicAddress = "testing"
+		netA.config.GossipFanout = 1
+
+		scheme := newMockIdentityScheme(t)
+		scheme.verifyResponse = tc.verifyResponse
+		netA.identityScheme = scheme
+
+		netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
+		netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
+		netB.config.PublicAddress = "testing"
+		netB.config.GossipFanout = 1
+		// if the key is occupied, make the tracker fail to insert the peer
+		if tc.occupied {
+			netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
+			netB.identityTracker.(*mockIdentityTracker).setIsOccupied(true)
+		}
+
+		netA.Start()
+		defer netA.Stop()
+		netB.Start()
+		defer netB.Stop()
+
+		addrB, ok := netB.Address()
+		require.True(t, ok)
+		gossipB, err := netB.addrToGossipAddr(addrB)
+		require.NoError(t, err)
+
+		// set addresses to just host:port to match phonebook/dns format
+		addrB = hostAndPort(addrB)
+
+		if _, ok := netA.tryConnectReserveAddr(addrB); ok {
+			netA.wg.Add(1)
+			netA.tryConnect(addrB, gossipB)
+			// let the tryConnect go forward
+			time.Sleep(250 * time.Millisecond)
+		}
+
+		assert.Equal(t, tc.totalInA, len(netA.GetPeers(PeersConnectedIn)))
+		assert.Equal(t, tc.totalOutA, len(netA.GetPeers(PeersConnectedOut)))
+		assert.Equal(t, tc.totalOutB, len(netB.GetPeers(PeersConnectedOut)))
+		// it is possible for NetB to be in the process of doing addPeer while
+		// the underlying connection is being closed. In this case, the read loop
+		// on the peer will detect and close the peer. Since this is asynchronous,
+		// we wait and check regularly to allow the connection to settle
+		assert.Eventually(
+			t,
+			func() bool { return len(netB.GetPeers(PeersConnectedIn)) == tc.totalInB },
+			5*time.Second,
+			100*time.Millisecond)
+	}
 }
 
 type benchmarkHandler struct {
@@ -2341,21 +3279,43 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 // Plan:
 // Network A will be sending messages to network B.
 // Network B will respond with another message for the first 4 messages. When it receive the 5th message, it would close the connection.
-// We want to get an event with disconnectRequestReceived
 func TestWebsocketDisconnection(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	// We want to get an event with disconnectRequestReceived from netA
+	testWebsocketDisconnection(t, func(wn *WebsocketNetwork, _ *OutgoingMessage) {
+		wn.DisconnectPeers()
+	}, nil)
+
+	// We want to get an event with the default reason from netB
+	defaultReason := disconnectBadData
+	testWebsocketDisconnection(t, func(_ *WebsocketNetwork, out *OutgoingMessage) {
+		out.Action = Disconnect
+	}, &defaultReason)
+
+	// We want to get an event with the provided reason from netB
+	customReason := disconnectReason("MyCustomDisconnectReason")
+	testWebsocketDisconnection(t, func(_ *WebsocketNetwork, out *OutgoingMessage) {
+		out.Action = Disconnect
+		out.reason = customReason
+	}, &customReason)
+}
+
+func testWebsocketDisconnection(t *testing.T, disconnectFunc func(wn *WebsocketNetwork, out *OutgoingMessage), expectedNetBReason *disconnectReason) {
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
 	netA.config.EnablePingHandler = false
-	dl := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
-	netA.log = dl
+	dlNetA := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
+	netA.log = dlNetA
 
 	netA.Start()
 	defer netStop(t, netA, "A")
 	netB := makeTestWebsocketNode(t)
 	netB.config.GossipFanout = 1
 	netB.config.EnablePingHandler = false
+	dlNetB := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
+	netB.log = dlNetB
+
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
@@ -2375,7 +3335,7 @@ func TestWebsocketDisconnection(t *testing.T) {
 	msgHandlerB := func(msg IncomingMessage) (out OutgoingMessage) {
 		if atomic.AddUint32(&msgCounterNetB, 1) == 5 {
 			// disconnect
-			netB.DisconnectPeers()
+			disconnectFunc(netB, &out)
 		} else {
 			// if we received a message, send a message back.
 			netB.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{msg.Data[0] + 1}, true, nil)
@@ -2417,16 +3377,31 @@ func TestWebsocketDisconnection(t *testing.T) {
 	}
 
 	select {
-	case eventDetails := <-dl.eventReceived:
+	case eventDetails := <-dlNetA.eventReceived:
 		switch disconnectPeerEventDetails := eventDetails.(type) {
 		case telemetryspec.DisconnectPeerEventDetails:
-			require.Equal(t, disconnectPeerEventDetails.Reason, string(disconnectRequestReceived))
+			require.Equal(t, string(disconnectRequestReceived), disconnectPeerEventDetails.Reason)
 		default:
 			require.FailNow(t, "Unexpected event was send : %v", eventDetails)
 		}
 
 	default:
-		require.FailNow(t, "The DisconnectPeerEvent was missing")
+		require.FailNow(t, "The NetA DisconnectPeerEvent was missing")
+	}
+
+	if expectedNetBReason != nil {
+		select {
+		case eventDetails := <-dlNetB.eventReceived:
+			switch disconnectPeerEventDetails := eventDetails.(type) {
+			case telemetryspec.DisconnectPeerEventDetails:
+				require.Equal(t, string(*expectedNetBReason), disconnectPeerEventDetails.Reason)
+			default:
+				require.FailNow(t, "Unexpected event was send : %v", eventDetails)
+			}
+
+		default:
+			require.FailNow(t, "The NetB DisconnectPeerEvent was missing")
+		}
 	}
 }
 

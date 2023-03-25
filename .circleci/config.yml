@@ -18,7 +18,7 @@ parameters:
     default: "/opt/cibuild"
   result_path:
     type: string
-    default: "/tmp/build_test_results"
+    default: "/tmp/build_test_results_<< pipeline.id >>"
   valid_nightly_branch:
     type: string
     default: /hotfix\/.*/
@@ -251,7 +251,7 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
     steps:
@@ -705,9 +705,6 @@ commands:
                 TestAlgohWithExpect \
                 TestGoalWithExpect \
                 TestTealdbgWithExpect
-      - store_artifacts:
-          path: << parameters.result_path >>/<< parameters.result_subdir >>
-          destination: << parameters.result_subdir >>/combined-test-results
 
   upload_binaries_command:
     description: save build artifacts for potential deployments

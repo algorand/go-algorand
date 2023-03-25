@@ -331,6 +331,12 @@ type EvalParams struct {
 	caller *EvalContext
 }
 
+// GetCaller returns the calling EvalContext if this is an inner transaction evaluation. Otherwise,
+// this returns nil.
+func (ep *EvalParams) GetCaller() *EvalContext {
+	return ep.caller
+}
+
 func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.SignedTxnWithAD {
 	copy := make([]transactions.SignedTxnWithAD, len(txgroup))
 	for i := range txgroup {
@@ -594,6 +600,11 @@ type EvalContext struct {
 	instructionStarts []bool
 
 	programHashCached crypto.Digest
+}
+
+// GroupIndex returns the group index of the transaction being evaluated
+func (cx *EvalContext) GroupIndex() int {
+	return cx.groupIndex
 }
 
 // RunMode returns the evaluation context's mode (signature or application)
@@ -887,7 +898,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		return false, nil, errors.New("no ledger in contract eval")
 	}
 	if params.SigLedger == nil {
-		params.SigLedger = params.Ledger
+		return false, nil, errors.New("no sig ledger in contract eval")
 	}
 	if aid == 0 {
 		return false, nil, errors.New("0 appId in contract eval")
@@ -1030,9 +1041,23 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 
 	if cx.Tracer != nil {
 		cx.Tracer.BeforeProgram(cx)
+
 		defer func() {
+			x := recover()
+			tracerErr := err
+			if x != nil {
+				// A panic error occurred during the eval loop. Report it now.
+				tracerErr = fmt.Errorf("panic in TEAL Eval: %v", x)
+				cx.Tracer.AfterOpcode(cx, tracerErr)
+			}
+
 			// Ensure we update the tracer before exiting
-			cx.Tracer.AfterProgram(cx, err)
+			cx.Tracer.AfterProgram(cx, tracerErr)
+
+			if x != nil {
+				// Panic again to trigger higher-level recovery and error reporting
+				panic(x)
+			}
 		}()
 	}
 
@@ -1199,6 +1224,11 @@ func boolToSV(x bool) stackValue {
 // Cost return cost incurred so far
 func (cx *EvalContext) Cost() int {
 	return cx.cost
+}
+
+// AppID returns the ID of the currently executing app. For LogicSigs it returns 0.
+func (cx *EvalContext) AppID() basics.AppIndex {
+	return cx.appID
 }
 
 func (cx *EvalContext) remainingBudget() int {
@@ -3591,6 +3621,8 @@ var ecdsaVerifyCosts = []int{
 	Secp256r1: 2500,
 }
 
+var secp256r1 = elliptic.P256()
+
 func opEcdsaVerify(cx *EvalContext) error {
 	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
 	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
@@ -3630,15 +3662,16 @@ func opEcdsaVerify(cx *EvalContext) error {
 		pubkey := secp256k1.S256().Marshal(x, y)
 		result = secp256k1.VerifySignature(pubkey, msg, signature)
 	} else if fs.field == Secp256r1 {
-		r := new(big.Int).SetBytes(sigR)
-		s := new(big.Int).SetBytes(sigS)
-
-		pubkey := ecdsa.PublicKey{
-			Curve: elliptic.P256(),
-			X:     x,
-			Y:     y,
+		if !cx.Proto.EnablePrecheckECDSACurve || secp256r1.IsOnCurve(x, y) {
+			pubkey := ecdsa.PublicKey{
+				Curve: secp256r1,
+				X:     x,
+				Y:     y,
+			}
+			r := new(big.Int).SetBytes(sigR)
+			s := new(big.Int).SetBytes(sigS)
+			result = ecdsa.Verify(&pubkey, msg, r, s)
 		}
-		result = ecdsa.Verify(&pubkey, msg, r, s)
 	}
 
 	cx.stack[fifth] = boolToSV(result)
@@ -5218,7 +5251,7 @@ func opItxnField(cx *EvalContext) error {
 	return err
 }
 
-func opItxnSubmit(cx *EvalContext) error {
+func opItxnSubmit(cx *EvalContext) (err error) {
 	// Should rarely trigger, since itxn_next checks these too. (but that check
 	// must be imperfect, see its comment) In contrast to that check, subtxns is
 	// already populated here.
@@ -5366,6 +5399,10 @@ func opItxnSubmit(cx *EvalContext) error {
 
 	if ep.Tracer != nil {
 		ep.Tracer.BeforeTxnGroup(ep)
+		// Ensure we update the tracer before exiting
+		defer func() {
+			ep.Tracer.AfterTxnGroup(ep, err)
+		}()
 	}
 
 	for i := range ep.TxnGroup {
@@ -5374,25 +5411,23 @@ func opItxnSubmit(cx *EvalContext) error {
 		}
 
 		err := cx.Ledger.Perform(i, ep)
+
+		if ep.Tracer != nil {
+			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData, err)
+		}
+
 		if err != nil {
 			return err
 		}
+
 		// This is mostly a no-op, because Perform does its work "in-place", but
 		// RecordAD has some further responsibilities.
 		ep.RecordAD(i, ep.TxnGroup[i].ApplyData)
-
-		if ep.Tracer != nil {
-			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData)
-		}
 	}
 	cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
 	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group
 	cx.innerTxidCache = nil
-
-	if ep.Tracer != nil {
-		ep.Tracer.AfterTxnGroup(ep)
-	}
 
 	return nil
 }

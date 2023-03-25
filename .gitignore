@@ -48,6 +48,7 @@ crypto/libs
 *~
 *.swp
 *.swo
+*.swn
 
 # Mac
 .DS_Store
