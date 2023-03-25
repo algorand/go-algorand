@@ -138,8 +138,8 @@ func TestBoxCreate(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		// increment for a size 24 box with 4 letter name
@@ -210,8 +210,8 @@ func TestBoxRecreate(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		// increment for a size 4 box with 4 letter name
@@ -261,14 +261,14 @@ func TestBoxCreateAvailability(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		accessInCreate := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: 0, // This is a create
+			ApplicationID: 0, // This is an app-creation
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("hello")}},
 			ApprovalProgram: `
               byte "hello"
@@ -366,9 +366,9 @@ func TestBoxRW(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
 		t.Parallel()
-		dl := NewDoubleLedger(t, genBalances, cv)
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		var bufNewLogger bytes.Buffer
@@ -441,8 +441,8 @@ func TestBoxAccountData(t *testing.T) {
 	}
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		proto := config.Consensus[cv]
@@ -529,8 +529,8 @@ func TestBoxIOBudgets(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		appIndex := dl.fundedApp(addrs[0], 0, boxAppSource)
@@ -593,8 +593,8 @@ func TestBoxInners(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		// Advance the creatable counter, so we don't have very low app ids that

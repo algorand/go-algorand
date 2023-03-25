@@ -2634,6 +2634,7 @@ itxn_submit
 	txg := []transactions.SignedTxnWithAD{tx}
 	ep := NewEvalParams(txg, MakeTestProto(), &transactions.SpecialAddresses{})
 	ep.Ledger = ledger
+	ep.SigLedger = ledger
 	TestApp(t, callpay3+"int 1", ep, "insufficient balance") // inner contract needs money
 
 	ledger.NewAccount(appAddr(222), 1_000_000)

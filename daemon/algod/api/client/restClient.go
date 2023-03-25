@@ -45,10 +45,11 @@ const (
 
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
-	"/v2/transactions":  true,
-	"/v2/teal/dryrun":   true,
-	"/v2/teal/compile":  true,
-	"/v2/participation": true,
+	"/v2/transactions":          true,
+	"/v2/teal/dryrun":           true,
+	"/v2/teal/compile":          true,
+	"/v2/participation":         true,
+	"/v2/transactions/simulate": true,
 }
 
 // unauthorizedRequestError is generated when we receive 401 error from the server. This error includes the inner error
@@ -284,7 +285,7 @@ func (client RestClient) WaitForBlock(round basics.Round) (response model.NodeSt
 	return
 }
 
-// HealthCheck does a health check on the the potentially running node,
+// HealthCheck does a health check on the potentially running node,
 // returning an error if the API is down
 func (client RestClient) HealthCheck() error {
 	return client.get(nil, "/health", nil)
@@ -629,6 +630,12 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	return
 }
 
+// SimulateRawTransaction gets the raw transaction or raw transaction group, and returns relevant simulation results.
+func (client RestClient) SimulateRawTransaction(data []byte) (response model.SimulateResponse, err error) {
+	err = client.submitForm(&response, "/v2/transactions/simulate", data, "POST", false /* encodeJSON */, true /* decodeJSON */, false)
+	return
+}
+
 // StateProofs gets a state proof that covers a given round
 func (client RestClient) StateProofs(round uint64) (response model.StateProofResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/stateproofs/%d", round), nil)
@@ -670,7 +677,6 @@ func (client RestClient) GetParticipationKeyByID(participationID string) (respon
 func (client RestClient) RemoveParticipationKeyByID(participationID string) (err error) {
 	err = client.delete(nil, fmt.Sprintf("/v2/participation/%s", participationID), nil, true)
 	return
-
 }
 
 /* Endpoint registered for follower nodes */

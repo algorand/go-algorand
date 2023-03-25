@@ -33,6 +33,8 @@ import (
 
 func TestCdtSessionProto11Common(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -97,6 +99,8 @@ func TestCdtSessionProto11Common(t *testing.T) {
 
 func TestCdtSessionProto11Breakpoints(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -182,6 +186,8 @@ func TestCdtSessionProto11Breakpoints(t *testing.T) {
 
 func TestCdtSessionProto11Events(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -216,6 +222,8 @@ func TestCdtSessionProto11Events(t *testing.T) {
 
 func TestCdtSessionProto11Controls(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -260,6 +268,8 @@ func TestCdtSessionProto11Controls(t *testing.T) {
 
 func TestCdtSessionProto11Evaluate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -299,6 +309,8 @@ func TestCdtSessionProto11Evaluate(t *testing.T) {
 
 func TestCdtSessionProto11CallOnFunc(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -388,6 +400,8 @@ func TestCdtSessionProto11CallOnFunc(t *testing.T) {
 
 func TestCdtSessionProto11GetProps(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -422,6 +436,8 @@ func TestCdtSessionProto11GetProps(t *testing.T) {
 
 func TestCdtSessionStateToEvent(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -461,6 +477,7 @@ func TestCdtSessionStateToEvent(t *testing.T) {
 
 func TestCdtSessionGetObjects(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)

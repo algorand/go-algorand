@@ -42,8 +42,8 @@ func TestPayAction(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// Inner txns start in v30
-	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		ai := dl.fundedApp(addrs[0], 200000, // account min balance, plus fees
@@ -159,7 +159,8 @@ func TestAxferAction(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newSimpleLedgerWithConsensusVersion(t, genBalances, protocol.ConsensusFuture)
+	cfg := config.GetDefaultLocal()
+	l := newSimpleLedgerWithConsensusVersion(t, genBalances, protocol.ConsensusFuture, cfg)
 	defer l.Close()
 
 	asa := txntest.Txn{
@@ -1354,8 +1355,8 @@ func TestCreateAndUse(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// At 30 the asset reference is illegal, then from v31 it works.
-	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		createapp := txntest.Txn{
@@ -1424,8 +1425,8 @@ func TestGtxnEffects(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// At 30 `gtxn CreatedAssetId is illegal, then from v31 it works.
-	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		createapp := txntest.Txn{
@@ -1486,8 +1487,8 @@ func TestBasicReentry(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		app0 := txntest.Txn{
@@ -1680,8 +1681,8 @@ func TestMaxInnerTxForSingleAppCall(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// v31 = inner appl
-	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		program := `
@@ -1840,8 +1841,8 @@ func TestInnerAppVersionCalling(t *testing.T) {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
 	// 31 allowed inner appls. v34 lowered proto.MinInnerApplVersion
-	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		three, err := logic.AssembleStringWithVersion("int 1", 3)
@@ -2034,8 +2035,8 @@ func TestAppDowngrade(t *testing.T) {
 
 	// Confirm that in old protocol version, downgrade is legal
 	// Start at 28 because we want to v4 app to downgrade to v3
-	ledgertesting.TestConsensusRange(t, 28, 30, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 28, 30, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		create := txntest.Txn{
@@ -2065,8 +2066,8 @@ func TestAppDowngrade(t *testing.T) {
 		dl.fullBlock(&update)
 	})
 
-	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		create := txntest.Txn{
@@ -2310,7 +2311,8 @@ func executeMegaContract(b *testing.B) {
 	var cv protocol.ConsensusVersion = "temp test"
 	config.Consensus[cv] = vTest
 
-	l := newSimpleLedgerWithConsensusVersion(b, genBalances, cv)
+	cfg := config.GetDefaultLocal()
+	l := newSimpleLedgerWithConsensusVersion(b, genBalances, cv, cfg)
 	defer l.Close()
 	defer delete(config.Consensus, cv)
 
@@ -2736,7 +2738,8 @@ func TestClearStateInnerPay(t *testing.T) {
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
 
 			genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-			l := newSimpleLedgerWithConsensusVersion(t, genBalances, test.consensus)
+			cfg := config.GetDefaultLocal()
+			l := newSimpleLedgerWithConsensusVersion(t, genBalances, test.consensus, cfg)
 			defer l.Close()
 
 			app0 := txntest.Txn{
@@ -3056,8 +3059,8 @@ func TestForeignAppAccountsAccessible(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	ledgertesting.TestConsensusRange(t, 32, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 32, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		appA := txntest.Txn{
@@ -3122,8 +3125,8 @@ func TestForeignAppAccountsImmutable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	ledgertesting.TestConsensusRange(t, 32, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 32, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		appA := txntest.Txn{
@@ -3176,8 +3179,8 @@ func TestForeignAppAccountsMutable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	ledgertesting.TestConsensusRange(t, 32, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 32, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		appA := txntest.Txn{
@@ -3257,8 +3260,8 @@ func TestReloadWithTxns(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	ledgertesting.TestConsensusRange(t, 34, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 34, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		dl.fullBlock() // So that the `block` opcode has a block to inspect
@@ -3286,8 +3289,8 @@ func TestEvalAppState(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// v24 = apps
-	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		appcall1 := txntest.Txn{
@@ -3338,8 +3341,8 @@ func TestGarbageClearState(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// v24 = apps
-	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		createTxn := txntest.Txn{
@@ -3362,8 +3365,8 @@ func TestRewardsInAD(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// v15 put rewards into ApplyData
-	ledgertesting.TestConsensusRange(t, 11, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 11, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		payTxn := txntest.Txn{Type: protocol.PaymentTx, Sender: addrs[0], Receiver: addrs[1]}
@@ -3411,8 +3414,8 @@ func TestDeleteNonExistantKeys(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// AVM v2 (apps)
-	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		const appID basics.AppIndex = 1
@@ -3452,8 +3455,8 @@ func TestDuplicates(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	ledgertesting.TestConsensusRange(t, 11, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 11, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		pay := txntest.Txn{
@@ -3488,8 +3491,8 @@ func TestHeaderAccess(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// Added in v34
-	ledgertesting.TestConsensusRange(t, 34, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 34, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		fvt := txntest.Txn{
@@ -3538,8 +3541,8 @@ func TestLogsInBlock(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	// Run tests from v30 onward
-	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		createTxn := txntest.Txn{
@@ -3598,8 +3601,8 @@ func TestUnfundedSenders(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
-	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		asaIndex := basics.AssetIndex(1)
@@ -3711,8 +3714,8 @@ func TestAppCallAppDuringInit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion) {
-		dl := NewDoubleLedger(t, genBalances, cv)
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
 		approve := txntest.Txn{

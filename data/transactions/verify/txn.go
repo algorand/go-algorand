@@ -44,8 +44,6 @@ var msigLsigLessOrEqual4 = metrics.MakeCounter(metrics.MetricName{Name: "algod_v
 var msigLsigLessOrEqual10 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_lsig_5_10", Description: "Total transaction scripts with 5-10 msigs"})
 var msigLsigMore10 = metrics.MakeCounter(metrics.MetricName{Name: "algod_verify_msig_lsig_10", Description: "Total transaction scripts with 11+ msigs"})
 
-var errShuttingDownError = errors.New("not verified, verifier is shutting down")
-
 // The PaysetGroups is taking large set of transaction groups and attempt to verify their validity using multiple go-routines.
 // When doing so, it attempts to break these into smaller "worksets" where each workset takes about 2ms of execution time in order
 // to avoid context switching overhead while providing good validation cancellation responsiveness. Each one of these worksets is
@@ -418,6 +416,20 @@ func logicSigSanityCheckBatchPrep(txn *transactions.SignedTxn, groupIndex int, g
 	return nil
 }
 
+// LogicSigError represents a LogicSig evaluation which rejected or errored
+type LogicSigError struct {
+	GroupIndex int
+	err        error
+}
+
+func (e LogicSigError) Error() string {
+	return e.err.Error()
+}
+
+func (e LogicSigError) Unwrap() error {
+	return e.err
+}
+
 // logicSigVerify checks that the signature is valid, executing the program.
 func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext, evalTracer logic.EvalTracer) error {
 	err := LogicSigSanityCheck(txn, groupIndex, groupCtx)
@@ -438,11 +450,11 @@ func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *Group
 	pass, cx, err := logic.EvalSignatureFull(groupIndex, &ep)
 	if err != nil {
 		logicErrTotal.Inc(nil)
-		return fmt.Errorf("transaction %v: rejected by logic err=%v", txn.ID(), err)
+		return LogicSigError{groupIndex, fmt.Errorf("transaction %v: rejected by logic err=%w", txn.ID(), err)}
 	}
 	if !pass {
 		logicRejTotal.Inc(nil)
-		return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
+		return LogicSigError{groupIndex, fmt.Errorf("transaction %v: rejected by logic", txn.ID())}
 	}
 	logicGoodTotal.Inc(nil)
 	logicCostTotal.AddUint64(uint64(cx.Cost()), nil)

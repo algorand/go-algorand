@@ -26,7 +26,8 @@ import (
 
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/ledger"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -107,11 +108,11 @@ func checkDatabase(databaseName string, outFile *os.File) error {
 
 	var stats merkletrie.Stats
 	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		committer, err := store.MakeMerkleCommitter(tx, ledgerTrackerStaging)
+		committer, err := sqlitedriver.MakeMerkleCommitter(tx, ledgerTrackerStaging)
 		if err != nil {
 			return err
 		}
-		trie, err := merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
+		trie, err := merkletrie.MakeTrie(committer, trackerdb.TrieMemoryConfig)
 		if err != nil {
 			return err
 		}

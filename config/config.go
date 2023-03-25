@@ -72,7 +72,7 @@ const StateProofFileName = "stateproof.sqlite"
 // It is used for tracking participation key metadata.
 const ParticipationRegistryFilename = "partregistry.sqlite"
 
-// ConfigurableConsensusProtocolsFilename defines a set of consensus prototocols that
+// ConfigurableConsensusProtocolsFilename defines a set of consensus protocols that
 // are to be loaded from the data directory ( if present ), to override the
 // built-in supported consensus protocols.
 const ConfigurableConsensusProtocolsFilename = "consensus.json"

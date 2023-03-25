@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -36,11 +35,10 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -154,10 +152,10 @@ type modifiedKvValue struct {
 
 type accountUpdates struct {
 	// Connection to the database.
-	dbs store.TrackerStore
+	dbs trackerdb.TrackerStore
 
 	// Optimized reader for fast accounts DB lookups.
-	accountsq store.AccountsReader
+	accountsq trackerdb.AccountsReader
 
 	// cachedDBRound is always exactly tracker DB round (and therefore, accountsRound()),
 	// cached to use in lookup functions
@@ -227,6 +225,9 @@ type accountUpdates struct {
 
 	// maxAcctLookback sets the minimim deltas size to keep in memory
 	acctLookback uint64
+
+	// disableCache (de)activates the LRU cache use in accountUpdates
+	disableCache bool
 }
 
 // RoundOffsetError is an error for when requested round is behind earliest stored db entry
@@ -296,6 +297,8 @@ func (au *accountUpdates) initialize(cfg config.Local) {
 	// log metrics
 	au.logAccountUpdatesMetrics = cfg.EnableAccountUpdatesStats
 	au.logAccountUpdatesInterval = cfg.AccountUpdatesStatsInterval
+
+	au.disableCache = cfg.DisableLedgerLRUCache
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
@@ -928,9 +931,13 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
-	err = au.dbs.Snapshot(func(ctx context.Context, tx *sql.Tx) error {
-		arw := store.NewAccountsSQLReaderWriter(tx)
-		totals, err0 := arw.AccountsTotals(ctx, false)
+	err = au.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
+		ar, err := tx.MakeAccountsReader()
+		if err != nil {
+			return err
+		}
+
+		totals, err0 := ar.AccountsTotals(ctx, false)
 		if err0 != nil {
 			return err0
 		}
@@ -944,7 +951,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return
 	}
 
-	au.accountsq, err = au.dbs.CreateAccountsReader()
+	au.accountsq, err = au.dbs.MakeAccountsOptimizedReader()
 	if err != nil {
 		return
 	}
@@ -962,9 +969,15 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	au.deltasAccum = []int{0}
 
-	au.baseAccounts.init(au.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
-	au.baseResources.init(au.log, baseResourcesPendingAccountsBufferSize, baseResourcesPendingAccountsWarnThreshold)
-	au.baseKVs.init(au.log, baseKVPendingBufferSize, baseKVPendingWarnThreshold)
+	if !au.disableCache {
+		au.baseAccounts.init(au.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
+		au.baseResources.init(au.log, baseResourcesPendingAccountsBufferSize, baseResourcesPendingAccountsWarnThreshold)
+		au.baseKVs.init(au.log, baseKVPendingBufferSize, baseKVPendingWarnThreshold)
+	} else {
+		au.baseAccounts.init(au.log, 0, 1)
+		au.baseResources.init(au.log, 0, 1)
+		au.baseKVs.init(au.log, 0, 1)
+	}
 	return
 }
 
@@ -1062,8 +1075,8 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 	var offset uint64
 	var rewardsProto config.ConsensusParams
 	var rewardsLevel uint64
-	var persistedData store.PersistedAccountData
-	var persistedResources []store.PersistedResourcesData
+	var persistedData trackerdb.PersistedAccountData
+	var persistedResources []trackerdb.PersistedResourcesData
 	var resourceDbRound basics.Round
 	withRewards := true
 
@@ -1197,7 +1210,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				// we don't technically need this, since it's already in the baseResources, however, writing this over
 				// would ensure that we promote this field.
 				au.baseResources.writePending(prd, addr)
-				if prd.Addrid != 0 {
+				if prd.AcctRef != nil {
 					if err := addResource(prd.Aidx, rnd, prd.AccountResource()); err != nil {
 						return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 					}
@@ -1222,7 +1235,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
 			}
 			if persistedData.Round == currentDbRound {
-				if persistedData.Rowid != 0 {
+				if persistedData.Ref != nil {
 					// if we read actual data return it
 					au.baseAccounts.writePending(persistedData)
 					ad = persistedData.AccountData.GetLedgerCoreAccountData()
@@ -1287,7 +1300,7 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 		}
 	}()
 	var offset uint64
-	var persistedData store.PersistedResourcesData
+	var persistedData trackerdb.PersistedResourcesData
 	for {
 		currentDbRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
@@ -1352,7 +1365,7 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 			return ledgercore.AccountResource{}, basics.Round(0), err
 		}
 		if persistedData.Round == currentDbRound {
-			if persistedData.Addrid != 0 {
+			if persistedData.AcctRef != nil {
 				// if we read actual data return it
 				au.baseResources.writePending(persistedData, addr)
 				return persistedData.AccountResource(), rnd, nil
@@ -1409,7 +1422,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		}
 	}()
 	var offset uint64
-	var persistedData store.PersistedAccountData
+	var persistedData trackerdb.PersistedAccountData
 	for {
 		currentDbRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
@@ -1477,7 +1490,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			return ledgercore.AccountData{}, basics.Round(0), "", 0, err
 		}
 		if persistedData.Round == currentDbRound {
-			if persistedData.Rowid != 0 {
+			if persistedData.Ref != nil {
 				// if we read actual data return it
 				au.baseAccounts.writePending(persistedData)
 				return persistedData.AccountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
@@ -1656,7 +1669,7 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 
 // commitRound is called within the same transaction for all trackers it
 // receives current offset and dbRound
-func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) (err error) {
+func (au *accountUpdates) commitRound(ctx context.Context, tx trackerdb.TransactionScope, dcc *deferredCommitContext) (err error) {
 	offset := dcc.offset
 	dbRound := dcc.oldBase
 
@@ -1668,7 +1681,7 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		}
 	}()
 
-	_, err = db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
+	_, err = tx.ResetTransactionWarnDeadline(ctx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 	if err != nil {
 		return err
 	}
@@ -1676,15 +1689,14 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 	if dcc.updateStats {
 		dcc.stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano())
 	}
-
 	err = dcc.compactAccountDeltas.accountsLoadOld(tx)
 	if err != nil {
 		return err
 	}
 
-	knownAddresses := make(map[basics.Address]int64, len(dcc.compactAccountDeltas.deltas))
+	knownAddresses := make(map[basics.Address]trackerdb.AccountRef, len(dcc.compactAccountDeltas.deltas))
 	for _, delta := range dcc.compactAccountDeltas.deltas {
-		knownAddresses[delta.oldAcct.Addr] = delta.oldAcct.Rowid
+		knownAddresses[delta.oldAcct.Addr] = delta.oldAcct.Ref
 	}
 
 	err = dcc.compactResourcesDeltas.resourcesLoadOld(tx, knownAddresses)
@@ -1696,7 +1708,10 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx *sql.Tx, dcc *defe
 		dcc.stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano()) - dcc.stats.OldAccountPreloadDuration
 	}
 
-	arw := store.NewAccountsSQLReaderWriter(tx)
+	arw, err := tx.MakeAccountsReaderWriter()
+	if err != nil {
+		return err
+	}
 
 	err = arw.AccountsPutTotals(dcc.roundTotals, false)
 	if err != nil {

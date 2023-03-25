@@ -456,9 +456,15 @@ func MakeDebugBalances(l LedgerForCowBase, round basics.Round, proto protocol.Co
 func (cb *roundCowState) StatefulEval(gi int, params *logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta transactions.EvalDelta, err error) {
 	// Make a child cow to eval our program in
 	calf := cb.child(1)
-	defer calf.recycle()
+	defer func() {
+		// get rid of references to the object that is about to be recycled
+		params.Ledger = nil
+		params.SigLedger = nil
+		calf.recycle()
+	}()
 
 	params.Ledger = calf
+	params.SigLedger = calf
 
 	// Eval the program
 	pass, cx, err := logic.EvalContract(program, gi, aidx, params)

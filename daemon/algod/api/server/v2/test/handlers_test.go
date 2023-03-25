@@ -50,6 +50,9 @@ import (
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
+	"github.com/algorand/go-algorand/data/txntest"
+	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -130,30 +133,42 @@ func TestGetBlock(t *testing.T) {
 	getBlockTest(t, 0, "bad format", 400)
 }
 
-func TestGetLedgerStateDelta(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	a := require.New(t)
-
+func testGetLedgerStateDelta(t *testing.T, round uint64, format string, expectedCode int) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
 	defer releasefunc()
-	insertRounds(a, handler, 3)
-
-	err := handler.GetLedgerStateDelta(c, 2)
+	insertRounds(require.New(t), handler, 3)
+	err := handler.GetLedgerStateDelta(c, round, model.GetLedgerStateDeltaParams{Format: (*model.GetLedgerStateDeltaParamsFormat)(&format)})
 	require.NoError(t, err)
-	require.Equal(t, 200, rec.Code)
+	require.Equal(t, expectedCode, rec.Code)
+}
 
-	actualResponse := model.LedgerStateDelta{}
-	expectedResponse := poolDeltaResponseGolden
-	(*expectedResponse.Accts.Accounts)[0].AccountData.Round = 2
-	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResponse)
-	require.NoError(t, err)
-	require.Equal(t, poolDeltaResponseGolden.Accts, actualResponse.Accts)
-	require.Equal(t, poolDeltaResponseGolden.KvMods, actualResponse.KvMods)
-	require.Equal(t, poolDeltaResponseGolden.ModifiedAssets, actualResponse.ModifiedAssets)
-	require.Equal(t, poolDeltaResponseGolden.ModifiedApps, actualResponse.ModifiedApps)
-	require.Equal(t, poolDeltaResponseGolden.TxLeases, actualResponse.TxLeases)
-	require.Equal(t, poolDeltaResponseGolden.Totals, actualResponse.Totals)
+func TestGetLedgerStateDelta(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Run("json-200", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 1, "json", 200)
+	})
+	t.Run("msgpack-200", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 2, "msgpack", 200)
+	})
+	t.Run("msgp-200", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 3, "msgp", 200)
+	})
+	t.Run("json-404", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 0, "json", 404)
+	})
+	t.Run("msgpack-404", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 9999, "msgpack", 404)
+	})
+	t.Run("format-400", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 1, "bad format", 400)
+	})
+
 }
 
 func TestSyncRound(t *testing.T) {
@@ -638,14 +653,13 @@ func TestPendingTransactionsByAddress(t *testing.T) {
 	pendingTransactionsByAddressTest(t, -1, "json", 400)
 }
 
-func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTransactionSimulator bool) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
+func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
 	numAccounts := 5
 	numTransactions := 5
 	offlineAccounts := true
 	mockLedger, _, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
-	mockNode.config.EnableExperimentalAPI = enableTransactionSimulator
 	handler = v2.Handlers{
 
 		Node:     mockNode,
@@ -666,7 +680,7 @@ func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTran
 }
 
 func postTransactionTest(t *testing.T, txnToUse, expectedCode int) {
-	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode, false)
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode)
 	defer releasefunc()
 	err := handler.RawTransaction(c)
 	require.NoError(t, err)
@@ -681,21 +695,349 @@ func TestPostTransaction(t *testing.T) {
 	postTransactionTest(t, 0, 200)
 }
 
-func simulateTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTransactionSimulator bool) {
-	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode, enableTransactionSimulator)
+func simulateTransactionTest(t *testing.T, txnToUse int, format string, expectedCode int) {
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode)
 	defer releasefunc()
-	err := handler.SimulateTransaction(c)
+	err := handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: (*model.SimulateTransactionParamsFormat)(&format)})
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
+}
+
+func TestPostSimulateTransaction(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testCases := []struct {
+		txnIndex       int
+		format         string
+		expectedStatus int
+	}{
+		{
+			txnIndex:       -1,
+			format:         "json",
+			expectedStatus: 400,
+		},
+		{
+			txnIndex:       0,
+			format:         "json",
+			expectedStatus: 200,
+		},
+		{
+			txnIndex:       0,
+			format:         "msgpack",
+			expectedStatus: 200,
+		},
+		{
+			txnIndex:       0,
+			format:         "bad format",
+			expectedStatus: 400,
+		},
+	}
+
+	for i, testCase := range testCases {
+		testCase := testCase
+		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			t.Parallel()
+			simulateTransactionTest(t, testCase.txnIndex, testCase.format, testCase.expectedStatus)
+		})
+	}
+}
+
+func copyInnerTxnGroupIDs(t *testing.T, dst, src *model.PendingTransactionResponse) {
+	t.Helper()
+
+	// msgpack decodes to map[interface{}]interface{} while JSON decodes to map[string]interface{}
+	txn := dst.Txn["txn"]
+	switch dstTxnMap := txn.(type) {
+	case map[string]interface{}:
+		srcTxnMap := src.Txn["txn"].(map[string]interface{})
+		groupID, hasGroupID := srcTxnMap["grp"]
+		if hasGroupID {
+			dstTxnMap["grp"] = groupID
+		}
+	case map[interface{}]interface{}:
+		srcTxnMap := src.Txn["txn"].(map[interface{}]interface{})
+		groupID, hasGroupID := srcTxnMap["grp"]
+		if hasGroupID {
+			dstTxnMap["grp"] = groupID
+		}
+	}
+
+	if dst.InnerTxns == nil || src.InnerTxns == nil {
+		return
+	}
+
+	assert.Equal(t, len(*dst.InnerTxns), len(*src.InnerTxns))
+
+	for innerIndex := range *dst.InnerTxns {
+		if innerIndex == len(*src.InnerTxns) {
+			break
+		}
+		dstInner := &(*dst.InnerTxns)[innerIndex]
+		srcInner := &(*src.InnerTxns)[innerIndex]
+		copyInnerTxnGroupIDs(t, dstInner, srcInner)
+	}
+}
+
+func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, actual model.SimulateResponse) {
+	t.Helper()
+
+	if len(expectedError) != 0 {
+		require.NotNil(t, actual.TxnGroups[0].FailureMessage)
+		require.Contains(t, *actual.TxnGroups[0].FailureMessage, expectedError)
+		require.False(t, expected.WouldSucceed, "Test case WouldSucceed value is not consistent with expected failure")
+		// if it matched the expected error, copy the actual one so it will pass the equality check below
+		expected.TxnGroups[0].FailureMessage = actual.TxnGroups[0].FailureMessage
+	}
+
+	// Copy inner txn groups IDs, since the mocktracer scenarios don't populate them
+	assert.Equal(t, len(expected.TxnGroups), len(actual.TxnGroups))
+	for groupIndex := range expected.TxnGroups {
+		if groupIndex == len(actual.TxnGroups) {
+			break
+		}
+		expectedGroup := &expected.TxnGroups[groupIndex]
+		actualGroup := &actual.TxnGroups[groupIndex]
+		assert.Equal(t, len(expectedGroup.TxnResults), len(actualGroup.TxnResults))
+		for txnIndex := range expectedGroup.TxnResults {
+			if txnIndex == len(actualGroup.TxnResults) {
+				break
+			}
+			expectedTxn := &expectedGroup.TxnResults[txnIndex]
+			actualTxn := &actualGroup.TxnResults[txnIndex]
+			if expectedTxn.TxnResult.InnerTxns == nil || actualTxn.TxnResult.InnerTxns == nil {
+				continue
+			}
+			assert.Equal(t, len(*expectedTxn.TxnResult.InnerTxns), len(*actualTxn.TxnResult.InnerTxns))
+			for innerIndex := range *expectedTxn.TxnResult.InnerTxns {
+				if innerIndex == len(*actualTxn.TxnResult.InnerTxns) {
+					break
+				}
+				expectedInner := &(*expectedTxn.TxnResult.InnerTxns)[innerIndex]
+				actualInner := &(*actualTxn.TxnResult.InnerTxns)[innerIndex]
+				copyInnerTxnGroupIDs(t, expectedInner, actualInner)
+			}
+		}
+	}
+
+	require.Equal(t, expected, actual)
+}
+
+func makePendingTxnResponse(t *testing.T, txn transactions.SignedTxnWithAD, handle codec.Handle) model.PendingTransactionResponse {
+	t.Helper()
+	preEncoded := v2.ConvertInnerTxn(&txn)
+
+	// encode to bytes
+	var encodedBytes []byte
+	encoder := codec.NewEncoderBytes(&encodedBytes, handle)
+	err := encoder.Encode(&preEncoded)
+	require.NoError(t, err)
+
+	// decode to model.PendingTransactionResponse
+	var response model.PendingTransactionResponse
+	decoder := codec.NewDecoderBytes(encodedBytes, handle)
+	err = decoder.Decode(&response)
+	require.NoError(t, err)
+
+	return response
 }
 
 func TestSimulateTransaction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	simulateTransactionTest(t, -1, 400, true)
-	simulateTransactionTest(t, 0, 404, false)
-	simulateTransactionTest(t, 0, 200, true)
+	// prepare node and handler
+	numAccounts := 5
+	offlineAccounts := true
+	mockLedger, roots, _, _, releasefunc := testingenvWithBalances(t, 999_998, 999_999, numAccounts, 1, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+
+	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
+	require.NoError(t, err)
+	txnInfo := simulationtesting.TxnInfo{LatestHeader: hdr}
+
+	scenarios := mocktracer.GetTestScenarios()
+
+	for name, scenarioFn := range scenarios {
+		t.Run(name, func(t *testing.T) { //nolint:paralleltest // Uses shared testing env
+			sender := roots[0]
+			futureAppID := basics.AppIndex(2)
+
+			payTxn := txnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Address(),
+				Receiver: futureAppID.Address(),
+				Amount:   700_000,
+			})
+			appCallTxn := txnInfo.NewTxn(txntest.Txn{
+				Type:   protocol.ApplicationCallTx,
+				Sender: sender.Address(),
+				ClearStateProgram: `#pragma version 6
+int 1`,
+			})
+			scenario := scenarioFn(mocktracer.TestScenarioInfo{
+				CallingTxn:   appCallTxn.Txn(),
+				MinFee:       basics.MicroAlgos{Raw: txnInfo.CurrentProtocolParams().MinTxnFee},
+				CreatedAppID: futureAppID,
+			})
+			appCallTxn.ApprovalProgram = scenario.Program
+
+			txntest.Group(&payTxn, &appCallTxn)
+
+			stxns := []transactions.SignedTxn{
+				payTxn.Txn().Sign(sender.Secrets()),
+				appCallTxn.Txn().Sign(sender.Secrets()),
+			}
+
+			// build request body
+			var body io.Reader
+			var bodyBytes []byte
+			for _, stxn := range stxns {
+				bodyBytes = append(bodyBytes, protocol.Encode(&stxn)...)
+			}
+
+			msgpackFormat := model.SimulateTransactionParamsFormatMsgpack
+			jsonFormat := model.SimulateTransactionParamsFormatJson
+			responseFormats := []struct {
+				name   string
+				params model.SimulateTransactionParams
+				handle codec.Handle
+			}{
+				{
+					name: "msgpack",
+					params: model.SimulateTransactionParams{
+						Format: &msgpackFormat,
+					},
+					handle: protocol.CodecHandle,
+				},
+				{
+					name: "json",
+					params: model.SimulateTransactionParams{
+						Format: &jsonFormat,
+					},
+					handle: protocol.JSONStrictHandle,
+				},
+				{
+					name: "default",
+					params: model.SimulateTransactionParams{
+						Format: nil, // should default to JSON
+					},
+					handle: protocol.JSONStrictHandle,
+				},
+			}
+
+			for _, responseFormat := range responseFormats {
+				t.Run(string(responseFormat.name), func(t *testing.T) { //nolint:paralleltest // Uses shared testing env
+					body = bytes.NewReader(bodyBytes)
+					req := httptest.NewRequest(http.MethodPost, "/", body)
+					rec := httptest.NewRecorder()
+
+					e := echo.New()
+					c := e.NewContext(req, rec)
+
+					// simulate transaction
+					err := handler.SimulateTransaction(c, responseFormat.params)
+					require.NoError(t, err)
+					require.Equal(t, 200, rec.Code, rec.Body.String())
+
+					// decode actual response
+					var actualBody model.SimulateResponse
+					decoder := codec.NewDecoderBytes(rec.Body.Bytes(), responseFormat.handle)
+					err = decoder.Decode(&actualBody)
+					require.NoError(t, err)
+
+					var expectedFailedAt *[]uint64
+					if len(scenario.FailedAt) != 0 {
+						clone := make([]uint64, len(scenario.FailedAt))
+						copy(clone, scenario.FailedAt)
+						clone[0]++
+						expectedFailedAt = &clone
+					}
+					expectedBody := model.SimulateResponse{
+						Version: 1,
+						TxnGroups: []model.SimulateTransactionGroupResult{
+							{
+								FailedAt: expectedFailedAt,
+								TxnResults: []model.SimulateTransactionResult{
+									{
+										TxnResult: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
+											SignedTxn: stxns[0],
+											// expect no ApplyData info
+										}, responseFormat.handle),
+									},
+									{
+										TxnResult: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
+											SignedTxn: stxns[1],
+											ApplyData: scenario.ExpectedSimulationAD,
+										}, responseFormat.handle),
+									},
+								},
+							},
+						},
+						WouldSucceed: scenario.Outcome == mocktracer.ApprovalOutcome,
+					}
+					assertSimulationResultsEqual(t, scenario.ExpectedError, expectedBody, actualBody)
+				})
+			}
+		})
+	}
+}
+
+func TestSimulateTransactionVerificationFailure(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// prepare node and handler
+	numAccounts := 5
+	offlineAccounts := true
+	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 1, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+
+	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
+	require.NoError(t, err)
+	txnInfo := simulationtesting.TxnInfo{LatestHeader: hdr}
+
+	sender := roots[0]
+	receiver := roots[1]
+
+	txn := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Address(),
+		Receiver: receiver.Address(),
+		Amount:   0,
+	})
+
+	stxn := txn.Txn().Sign(sender.Secrets())
+	// make signature invalid
+	stxn.Sig[0] += byte(1) // will wrap if > 255
+
+	// build request body
+	bodyBytes := protocol.Encode(&stxn)
+	body := bytes.NewReader(bodyBytes)
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	rec := httptest.NewRecorder()
+
+	e := echo.New()
+	c := e.NewContext(req, rec)
+
+	// simulate transaction
+	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{})
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code, rec.Body.String())
 }
 
 func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expectedCode int) {
@@ -1475,4 +1817,20 @@ func TestStateproofTransactionForRoundShutsDown(t *testing.T) {
 	defer cncl()
 	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, stoppedChan)
 	a.ErrorIs(err, v2.ErrShutdown)
+}
+
+func TestExperimentalCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	defer releasefunc()
+
+	// Since we are invoking the method directly, it doesn't matter if EnableExperimentalAPI is true.
+	// When this is false, the router never even registers this endpoint.
+	err := handler.ExperimentalCheck(c)
+	require.NoError(t, err)
+
+	require.Equal(t, 200, rec.Code)
+	require.Equal(t, "true\n", string(rec.Body.Bytes()))
 }

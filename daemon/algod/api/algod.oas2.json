@@ -1209,18 +1209,19 @@
       "post": {
         "tags": [
           "public",
-          "experimental"
+          "nonparticipating"
         ],
         "consumes": [
           "application/x-binary"
         ],
         "produces": [
+          "application/json",
           "application/msgpack"
         ],
         "schemes": [
           "http"
         ],
-        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. WARNING: This endpoint is experimental and under active development. There are no guarantees in terms of functionality or future support.",
+        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. The simulation will use blockchain state from the latest committed round.",
         "operationId": "SimulateTransaction",
         "parameters": [
           {
@@ -1232,11 +1233,14 @@
               "type": "string",
               "format": "binary"
             }
+          },
+          {
+            "$ref": "#/parameters/format"
           }
         ],
         "responses": {
           "200": {
-            "$ref": "#/responses/SimulationResponse"
+            "$ref": "#/responses/SimulateResponse"
           },
           "400": {
             "description": "Bad Request - Malformed Algorand transaction",
@@ -1435,10 +1439,12 @@
         "description": "Get ledger deltas for a round.",
         "tags": [
             "public",
-            "data"
+            "data",
+            "experimental"
         ],
         "produces": [
-          "application/json"
+          "application/json",
+          "application/msgpack"
         ],
         "schemes": [
           "http"
@@ -1453,6 +1459,9 @@
             "in": "path",
             "required": true,
             "minimum": 0
+          },
+          {
+            "$ref": "#/parameters/format"
           }
         ],
         "responses": {
@@ -2363,9 +2372,41 @@
           }
         }
       }
+    },
+    "/v2/experimental": {
+      "get": {
+        "tags": [
+          "public",
+          "experimental"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Returns OK if experimental API is enabled.",
+        "operationId": "ExperimentalCheck",
+        "responses": {
+          "200": {
+            "description": "Experimental API enabled"
+          },
+          "404": {
+            "description": "Experimental API not enabled"
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
     }
   },
   "definitions": {
+    "LedgerStateDelta": {
+      "description": "Ledger StateDelta object",
+      "type": "object",
+      "x-algorand-format": "StateDelta"
+    },
     "Account": {
       "description": "Account information at a given round.\n\nDefinition:\ndata/basics/userBalance.go : AccountData\n",
       "type": "object",
@@ -2496,274 +2537,6 @@
           "description": "\\[spend\\] the address against which signing should be checked. If empty, the address of the current account is used. This field can be updated in any transaction by setting the RekeyTo field.",
           "type": "string",
           "x-algorand-format": "Address"
-        }
-      }
-    },
-    "LedgerStateDelta": {
-      "description": "Contains ledger updates.",
-      "type": "object",
-      "required": [
-      ],
-      "properties": {
-        "accts": {
-          "description": "AccountDeltas object",
-          "$ref": "#/definitions/AccountDeltas"
-        },
-        "kv-mods": {
-          "description": "Array of KV Deltas",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/KvDelta"
-          }
-        },
-        "tx-leases": {
-          "description": "List of transaction leases",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/TxLease"
-          }
-        },
-        "modified-apps": {
-          "description": "List of modified Apps",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/ModifiedApp"
-          }
-        },
-        "modified-assets": {
-          "description": "List of modified Assets",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/ModifiedAsset"
-          }
-        },
-        "state-proof-next": {
-          "description": "Next round for which we expect a state proof",
-          "type": "integer"
-        },
-        "prev-timestamp": {
-          "description": "Previous block timestamp",
-          "type": "integer"
-        },
-        "totals": {
-          "description": "Account Totals",
-          "$ref": "#/definitions/AccountTotals"
-        }
-      }
-    },
-    "AccountTotals": {
-      "description": "Total Algos in the system grouped by account status",
-      "type": "object",
-      "required": [
-        "online",
-        "offline",
-        "not-participating",
-        "rewards-level"
-      ],
-      "properties": {
-        "online": {
-          "description": "Amount of stake in online accounts",
-          "type": "integer"
-        },
-        "offline": {
-          "description": "Amount of stake in offline accounts",
-          "type": "integer"
-        },
-        "not-participating": {
-          "description": "Amount of stake in non-participating accounts",
-          "type": "integer"
-        },
-        "rewards-level": {
-          "description": "Total number of algos received per reward unit since genesis",
-          "type": "integer"
-        }
-      }
-    },
-    "AccountDeltas": {
-      "description": "Exposes deltas for account based resources in a single round",
-      "type": "object",
-      "properties": {
-        "accounts": {
-          "description": "Array of Account updates for the round",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/AccountBalanceRecord"
-          }
-        },
-        "apps": {
-          "description": "Array of App updates for the round.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/AppResourceRecord"
-          }
-        },
-        "assets": {
-          "description": "Array of Asset updates for the round.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/AssetResourceRecord"
-          }
-        }
-      }
-    },
-    "TxLease": {
-      "description": "",
-      "type": "object",
-      "required": [
-        "sender",
-        "lease",
-        "expiration"
-      ],
-      "properties": {
-        "sender": {
-          "description": "Address of the lease sender",
-          "type": "string"
-        },
-        "lease": {
-          "description": "Lease data",
-          "type": "string",
-          "format": "byte"
-        },
-        "expiration": {
-          "description": "Round that the lease expires",
-          "type": "integer"
-        }
-      }
-    },
-    "ModifiedAsset": {
-      "description": "Asset which was created or deleted.",
-      "type": "object",
-      "required": [
-        "id",
-        "created",
-        "creator"
-      ],
-      "properties": {
-        "id": {
-          "description": "Asset Id",
-          "type": "integer"
-        },
-        "created": {
-          "description": "Created if true, deleted if false",
-          "type": "boolean"
-        },
-        "creator": {
-          "description": "Address of the creator.",
-          "type": "string"
-        }
-      }
-    },
-    "ModifiedApp": {
-      "description": "App which was created or deleted.",
-      "type": "object",
-      "required": [
-        "id",
-        "created",
-        "creator"
-      ],
-      "properties": {
-        "id": {
-          "description": "App Id",
-          "type": "integer"
-        },
-        "created": {
-          "description": "Created if true, deleted if false",
-          "type": "boolean"
-        },
-        "creator": {
-          "description": "Address of the creator.",
-          "type": "string"
-        }
-      }
-    },
-    "AccountBalanceRecord": {
-      "description": "Account and its address",
-      "type": "object",
-      "required": [
-        "address",
-        "account-data"
-      ],
-      "properties": {
-        "address": {
-          "description": "Address of the updated account.",
-          "type": "string"
-        },
-        "account-data": {
-          "description": "Updated account data.",
-          "$ref": "#/definitions/Account"
-        }
-      }
-    },
-    "AppResourceRecord": {
-      "description": "Represents AppParams and AppLocalStateDelta in deltas",
-      "type": "object",
-      "required": [
-        "app-index",
-        "address",
-        "app-deleted",
-        "app-local-state-deleted"
-      ],
-      "properties": {
-        "app-index": {
-          "description": "App index",
-          "type": "integer",
-          "x-algorand-format": "uint64"
-        },
-        "address": {
-          "description": "App account address",
-          "type": "string"
-        },
-        "app-deleted": {
-          "description": "Whether the app was deleted",
-          "type": "boolean"
-        },
-        "app-local-state-deleted": {
-          "description": "Whether the app local state was deleted",
-          "type": "boolean"
-        },
-        "app-params": {
-          "description": "App params",
-          "$ref": "#/definitions/ApplicationParams"
-        },
-        "app-local-state": {
-          "description": "App local state",
-          "$ref": "#/definitions/ApplicationLocalState"
-        }
-      }
-    },
-    "AssetResourceRecord": {
-      "description": "Represents AssetParams and AssetHolding in deltas",
-      "required": [
-        "asset-index",
-        "address",
-        "asset-deleted",
-        "asset-holding-deleted"
-      ],
-      "properties": {
-        "asset-index": {
-          "description": "Index of the asset",
-          "type": "integer",
-          "x-algorand-format": "uint64"
-        },
-        "address": {
-          "description": "Account address of the asset",
-          "type": "string"
-        },
-        "asset-deleted": {
-          "description": "Whether the asset was deleted",
-          "type": "boolean"
-        },
-        "asset-params": {
-          "description": "Asset params",
-          "$ref": "#/definitions/AssetParams"
-        },
-        "asset-holding-deleted": {
-          "description": "Whether the asset holding was deleted",
-          "type": "boolean"
-        },
-        "asset-holding": {
-          "description": "The asset holding",
-          "$ref": "#/definitions/AssetHolding"
         }
       }
     },
@@ -3580,6 +3353,49 @@
         }
       }
     },
+    "SimulateTransactionGroupResult": {
+      "description": "Simulation result for an atomic transaction group",
+      "type": "object",
+      "required": [
+        "txn-results"
+      ],
+      "properties": {
+        "txn-results": {
+          "description": "Simulation result for individual transactions",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateTransactionResult"
+          }
+        },
+        "failure-message": {
+          "description": "If present, indicates that the transaction group failed and specifies why that happened",
+          "type": "string"
+        },
+        "failed-at": {
+          "description": "If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "SimulateTransactionResult": {
+      "description": "Simulation result for an individual transaction",
+      "type": "object",
+      "required": [
+        "txn-result"
+      ],
+      "properties": {
+        "txn-result": {
+          "$ref": "#/definitions/PendingTransactionResponse"
+        },
+        "missing-signature": {
+          "description": "A boolean indicating whether this transaction is missing signatures",
+          "type": "boolean"
+        }
+      }
+    },
     "StateProof": {
       "description": "Represents a state proof and its corresponding message",
       "type": "object",
@@ -3744,7 +3560,7 @@
         "msgpack"
       ],
       "type": "string",
-      "description": "Configures whether the response object is JSON or MessagePack encoded.",
+      "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
       "name": "format",
       "in": "query"
     },
@@ -4223,24 +4039,34 @@
         }
       }
     },
-    "SimulationResponse": {
+    "SimulateResponse": {
       "description": "Result of a transaction group simulation.",
-      "tags": [
-        "experimental"
-      ],
       "schema": {
         "type": "object",
         "required": [
-          "failure-message",
-          "missing-signatures"
+          "version",
+          "last-round",
+          "txn-groups",
+          "would-succeed"
         ],
         "properties": {
-          "failure-message": {
-            "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
-            "type": "string"
+          "version": {
+            "description": "The version of this response object.",
+            "type": "integer"
           },
-          "missing-signatures": {
-            "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
+          "last-round": {
+            "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+            "type": "integer"
+          },
+          "txn-groups": {
+            "description": "A result object for each transaction group that was simulated.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/SimulateTransactionGroupResult"
+            }
+          },
+          "would-succeed": {
+            "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",
             "type": "boolean"
           }
         }

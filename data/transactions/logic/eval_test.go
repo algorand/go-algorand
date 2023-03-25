@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"testing"
@@ -34,7 +35,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -3134,62 +3134,108 @@ func checkPanic(cx *EvalContext) error {
 	panic(panicString)
 }
 
-func TestPanic(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
+// withPanicOpcode temporarily modifies the opsByOpcode array to include an additional panic opcode.
+// This opcode will be named "panic".
+//
+// WARNING: do not call this in a parallel test, since it's not safe for concurrent use.
+func withPanicOpcode(t *testing.T, version uint64, panicDuringCheck bool, f func(opcode byte)) {
+	t.Helper()
+	const name = "panic"
 
-	log := logging.TestingLog(t)
+	var foundEmptySpace bool
+	var hackedOpcode byte
+	var oldSpec OpSpec
+	// Find an unused opcode to temporarily convert to a panicing opcode,
+	// and append it to program.
+	for opcode, spec := range opsByOpcode[version] {
+		if spec.op == nil {
+			foundEmptySpace = true
+			require.LessOrEqual(t, opcode, math.MaxUint8)
+			hackedOpcode = byte(opcode)
+			oldSpec = spec
+
+			details := detDefault()
+			if panicDuringCheck {
+				details.check = checkPanic
+			}
+			panicSpec := OpSpec{
+				Opcode:    hackedOpcode,
+				Name:      name,
+				op:        opPanic,
+				OpDetails: details,
+			}
+
+			opsByOpcode[version][opcode] = panicSpec
+			OpsByName[version][name] = panicSpec
+			break
+		}
+	}
+	require.True(t, foundEmptySpace, "could not find an empty space for the panic opcode")
+	defer func() {
+		opsByOpcode[version][hackedOpcode] = oldSpec
+		delete(OpsByName[version], name)
+	}()
+	f(hackedOpcode)
+}
+
+func TestPanic(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
+	partitiontest.PartitionTest(t)
+
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		v := v
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			t.Parallel()
-			ops := testProg(t, `int 1`, v)
-			var hackedOpcode int
-			var oldSpec OpSpec
-			// Find an unused opcode to temporarily convert to a panicing opcde,
-			// and append it to program.
-			for opcode, spec := range opsByOpcode[v] {
-				if spec.op == nil {
-					hackedOpcode = opcode
-					oldSpec = spec
-					opsByOpcode[v][opcode].op = opPanic
-					opsByOpcode[v][opcode].Modes = modeAny
-					opsByOpcode[v][opcode].OpDetails.FullCost.baseCost = 1
-					opsByOpcode[v][opcode].OpDetails.check = checkPanic
-					ops.Program = append(ops.Program, byte(opcode))
-					break
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
+			withPanicOpcode(t, v, true, func(opcode byte) {
+				ops := testProg(t, `int 1`, v)
+				ops.Program = append(ops.Program, opcode)
+
+				params := defaultEvalParams()
+				params.TxnGroup[0].Lsig.Logic = ops.Program
+				err := CheckSignature(0, params)
+				require.Error(t, err)
+				if pe, ok := err.(PanicError); ok {
+					require.Equal(t, panicString, pe.PanicValue)
+					pes := pe.Error()
+					require.True(t, strings.Contains(pes, "panic"))
+				} else {
+					t.Errorf("expected PanicError object but got %T %#v", err, err)
 				}
-			}
-			params := defaultEvalParams()
-			params.logger = log
-			params.TxnGroup[0].Lsig.Logic = ops.Program
-			err := CheckSignature(0, params)
-			require.Error(t, err)
-			if pe, ok := err.(PanicError); ok {
-				require.Equal(t, panicString, pe.PanicValue)
-				pes := pe.Error()
-				require.True(t, strings.Contains(pes, "panic"))
-			} else {
-				t.Errorf("expected PanicError object but got %T %#v", err, err)
-			}
-			var txn transactions.SignedTxn
-			txn.Lsig.Logic = ops.Program
-			params = defaultEvalParams(txn)
-			params.logger = log
-			pass, err := EvalSignature(0, params)
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(params.Trace.String())
-			}
-			require.False(t, pass)
-			if pe, ok := err.(PanicError); ok {
-				require.Equal(t, panicString, pe.PanicValue)
-				pes := pe.Error()
-				require.True(t, strings.Contains(pes, "panic"))
-			} else {
-				t.Errorf("expected PanicError object but got %T %#v", err, err)
-			}
-			opsByOpcode[v][hackedOpcode] = oldSpec
+
+				var txn transactions.SignedTxn
+				txn.Lsig.Logic = ops.Program
+				params = defaultEvalParams(txn)
+				pass, err := EvalSignature(0, params)
+				if pass {
+					t.Log(hex.EncodeToString(ops.Program))
+					t.Log(params.Trace.String())
+				}
+				require.False(t, pass)
+				if pe, ok := err.(PanicError); ok {
+					require.Equal(t, panicString, pe.PanicValue)
+					pes := pe.Error()
+					require.True(t, strings.Contains(pes, "panic"))
+				} else {
+					t.Errorf("expected PanicError object but got %T %#v", err, err)
+				}
+
+				if v >= appsEnabledVersion {
+					txn = transactions.SignedTxn{
+						Txn: transactions.Transaction{
+							Type: protocol.ApplicationCallTx,
+						},
+					}
+					params = defaultEvalParams(txn)
+					params.Ledger = NewLedger(nil)
+					pass, err = EvalApp(ops.Program, 0, 1, params)
+					require.False(t, pass)
+					if pe, ok := err.(PanicError); ok {
+						require.Equal(t, panicString, pe.PanicValue)
+						pes := pe.Error()
+						require.True(t, strings.Contains(pes, "panic"))
+					} else {
+						t.Errorf("expected PanicError object but got %T %#v", err, err)
+					}
+				}
+			})
 		})
 	}
 }
@@ -5360,6 +5406,7 @@ func TestOpJSONRef(t *testing.T) {
 	ledger.NewApp(txn.Txn.Receiver, 0, basics.AppParams{})
 	ep := defaultEvalParams(txn)
 	ep.Ledger = ledger
+	ep.SigLedger = ledger
 	testCases := []struct {
 		source             string
 		previousVersErrors []Expect

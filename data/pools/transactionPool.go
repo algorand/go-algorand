@@ -888,7 +888,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	// if the transaction pool is more than two rounds behind, we don't want to wait.
 	if pool.assemblyResults.roundStartedEvaluating <= round.SubSaturate(2) {
 		pool.log.Infof("AssembleBlock: requested round is more than a single round ahead of the transaction pool %d <= %d-2", pool.assemblyResults.roundStartedEvaluating, round)
-		stats.StopReason = telemetryspec.AssembleBlockEmpty
+		stats.StopReason = telemetryspec.AssembleBlockPoolBehind
 		pool.assemblyMu.Unlock()
 		return pool.assembleEmptyBlock(round)
 	}
@@ -935,7 +935,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		if !pool.assemblyResults.ok {
 			// it didn't. Lucky us - we already prepared an empty block, so we can return this right now.
 			pool.log.Warnf("AssembleBlock: ran out of time for round %d", round)
-			stats.StopReason = telemetryspec.AssembleBlockTimeout
+			stats.StopReason = telemetryspec.AssembleBlockTimeoutEmpty
 			if emptyBlockErr != nil {
 				emptyBlockErr = fmt.Errorf("AssembleBlock: failed to construct empty block : %w", emptyBlockErr)
 			}
@@ -955,7 +955,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		return nil, ErrStaleBlockAssemblyRequest
 	} else if pool.assemblyResults.roundStartedEvaluating == round.SubSaturate(1) {
 		pool.log.Warnf("AssembleBlock: assembled block round did not catch up to requested round: %d != %d", pool.assemblyResults.roundStartedEvaluating, round)
-		stats.StopReason = telemetryspec.AssembleBlockTimeout
+		stats.StopReason = telemetryspec.AssembleBlockEvalOld
 		return pool.assembleEmptyBlock(round)
 	} else if pool.assemblyResults.roundStartedEvaluating < round {
 		return nil, fmt.Errorf("AssembleBlock: assembled block round much behind requested round: %d != %d",

@@ -41,7 +41,7 @@ import (
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -128,7 +128,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	au.close()
 	fileName := filepath.Join(temporaryDirectory, "15.data")
 
-	err = ml.trackerDB().Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		writer, err := makeCatchpointWriter(context.Background(), fileName, tx, ResourcesPerCatchpointFileChunk)
 		if err != nil {
 			return err
@@ -183,7 +183,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	require.Equal(t, io.EOF, err)
 }
 
-func testWriteCatchpoint(t *testing.T, rdb store.TrackerStore, datapath string, filepath string, maxResourcesPerChunk int) CatchpointFileHeader {
+func testWriteCatchpoint(t *testing.T, rdb trackerdb.TrackerStore, datapath string, filepath string, maxResourcesPerChunk int) CatchpointFileHeader {
 	var totalAccounts uint64
 	var totalChunks uint64
 	var biggestChunkLen uint64
@@ -193,13 +193,17 @@ func testWriteCatchpoint(t *testing.T, rdb store.TrackerStore, datapath string, 
 		maxResourcesPerChunk = ResourcesPerCatchpointFileChunk
 	}
 
-	err := rdb.Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := rdb.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		writer, err := makeCatchpointWriter(context.Background(), datapath, tx, maxResourcesPerChunk)
-		arw := store.NewAccountsSQLReaderWriter(tx)
-
 		if err != nil {
 			return err
 		}
+
+		arw, err := tx.MakeAccountsReaderWriter()
+		if err != nil {
+			return err
+		}
+
 		for {
 			more, err := writer.WriteStep(context.Background())
 			require.NoError(t, err)
@@ -284,21 +288,28 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 	au.close()
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
 
-	err = ml.trackerDB().Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		expectedTotalAccounts := uint64(1)
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
 		totalChunks := 0
-		var expectedTotalResources int
 		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
-		err = cw.tx.QueryRowContext(cw.ctx, "SELECT count(1) FROM resources").Scan(&expectedTotalResources)
+		require.NoError(t, err)
+
+		arw, err := tx.MakeAccountsReaderWriter()
 		if err != nil {
 			return err
 		}
+
+		expectedTotalResources, err := arw.TotalResources(ctx)
+		if err != nil {
+			return err
+		}
+
 		// repeat this until read all accts
 		for totalAccountsWritten < expectedTotalAccounts {
 			cw.chunk.Balances = nil
-			err := cw.readDatabaseStep(cw.ctx, cw.tx)
+			err := cw.readDatabaseStep(cw.ctx)
 			if err != nil {
 				return err
 			}
@@ -318,7 +329,7 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 			return fmt.Errorf("expected more than one chunk due to overflow")
 		}
 
-		if expectedTotalResources != totalResources {
+		if expectedTotalResources != uint64(totalResources) {
 			return fmt.Errorf("total resources did not match: expected %d, actual %d", expectedTotalResources, totalResources)
 		}
 
@@ -370,25 +381,31 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 	au.close()
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
 
-	err = ml.trackerDB().Snapshot(func(ctx context.Context, tx *sql.Tx) (err error) {
-		arw := store.NewAccountsSQLReaderWriter(tx)
+	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		arw, err := tx.MakeAccountsReaderWriter()
+		if err != nil {
+			return err
+		}
+
 		expectedTotalAccounts, err := arw.TotalAccounts(ctx)
 		if err != nil {
 			return err
 		}
-		totalAccountsWritten := uint64(0)
-		totalResources := 0
-		var expectedTotalResources int
-		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
-		require.NoError(t, err)
-		err = cw.tx.QueryRowContext(cw.ctx, "SELECT count(1) FROM resources").Scan(&expectedTotalResources)
+
+		expectedTotalResources, err := arw.TotalResources(ctx)
 		if err != nil {
 			return err
 		}
+
+		totalAccountsWritten := uint64(0)
+		totalResources := 0
+		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
+		require.NoError(t, err)
+
 		// repeat this until read all accts
 		for totalAccountsWritten < expectedTotalAccounts {
 			cw.chunk.Balances = nil
-			err := cw.readDatabaseStep(cw.ctx, cw.tx)
+			err := cw.readDatabaseStep(cw.ctx)
 			if err != nil {
 				return err
 			}
@@ -403,7 +420,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 			totalResources += numResources
 		}
 
-		if expectedTotalResources != totalResources {
+		if expectedTotalResources != uint64(totalResources) {
 			return fmt.Errorf("total resources did not match: expected %d, actual %d", expectedTotalResources, totalResources)
 		}
 
@@ -460,16 +477,16 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	// no errors on read, hashes match
 	ctx := context.Background()
 
-	err = l.trackerDBs.TransactionContext(ctx, func(ctx context.Context, tx store.TransactionScope) (err error) {
-		arw, err := tx.CreateAccountsReaderWriter()
+	err = l.trackerDBs.TransactionContext(ctx, func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		arw, err := tx.MakeAccountsReaderWriter()
 		if err != nil {
 			return nil
 		}
 
 		// save the existing hash
-		committer, err := tx.CreateMerkleCommitter(false)
+		committer, err := tx.MakeMerkleCommitter(false)
 		require.NoError(t, err)
-		trie, err := merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
+		trie, err := merkletrie.MakeTrie(committer, trackerdb.TrieMemoryConfig)
 		require.NoError(t, err)
 
 		h1, err := trie.RootHash()
@@ -481,16 +498,16 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 		require.NoError(t, err)
 
 		// rebuild the MT
-		committer, err = tx.CreateMerkleCommitter(false)
+		committer, err = tx.MakeMerkleCommitter(false)
 		require.NoError(t, err)
-		trie, err = merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
+		trie, err = merkletrie.MakeTrie(committer, trackerdb.TrieMemoryConfig)
 		require.NoError(t, err)
 
 		h, err := trie.RootHash()
 		require.NoError(t, err)
 		require.Zero(t, h)
 
-		iter := tx.CreateOrderedAccountsIter(trieRebuildAccountChunkSize)
+		iter := tx.MakeOrderedAccountsIter(trieRebuildAccountChunkSize)
 		defer iter.Close(ctx)
 		for {
 			accts, _, err := iter.Next(ctx)
@@ -523,7 +540,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess store.TrackerStore, filepath string) *Ledger {
+func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess trackerdb.TrackerStore, filepath string) *Ledger {
 	// create a ledger.
 	var initState ledgercore.InitState
 	initState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
@@ -575,21 +592,24 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess store.
 	err = accessor.BuildMerkleTrie(context.Background(), nil)
 	require.NoError(t, err)
 
-	err = l.trackerDBs.Batch(func(ctx context.Context, tx *sql.Tx) error {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
-		err := crw.ApplyCatchpointStagingBalances(ctx, 0, 0)
-		return err
+	err = l.trackerDBs.Batch(func(ctx context.Context, tx trackerdb.BatchScope) error {
+		cw, err := tx.MakeCatchpointWriter()
+		if err != nil {
+			return err
+		}
+
+		return cw.ApplyCatchpointStagingBalances(ctx, 0, 0)
 	})
 	require.NoError(t, err)
 
-	balanceTrieStats := func(db store.TrackerStore) merkletrie.Stats {
+	balanceTrieStats := func(db trackerdb.TrackerStore) merkletrie.Stats {
 		var stats merkletrie.Stats
-		err = db.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
-			committer, err := tx.CreateMerkleCommitter(false)
+		err = db.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+			committer, err := tx.MakeMerkleCommitter(false)
 			if err != nil {
 				return err
 			}
-			trie, err := merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
+			trie, err := merkletrie.MakeTrie(committer, trackerdb.TrieMemoryConfig)
 			if err != nil {
 				return err
 			}
@@ -660,7 +680,8 @@ func TestExactAccountChunk(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture)
+	cfg := config.GetDefaultLocal()
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
 	defer dl.Close()
 
 	pay := txntest.Txn{
@@ -704,7 +725,8 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture)
+	cfg := config.GetDefaultLocal()
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
 	defer dl.Close()
 
 	boxApp := dl.fundedApp(addrs[1], 1_000_000, boxAppSource)
@@ -807,7 +829,8 @@ func TestCatchpointAfterBoxTxns(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture)
+	cfg := config.GetDefaultLocal()
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
 	defer dl.Close()
 
 	boxApp := dl.fundedApp(addrs[1], 1_000_000, boxAppSource)

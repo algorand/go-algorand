@@ -26,6 +26,7 @@ import (
 
 func TestLoadBootstrappedData(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	badSpecPath := filepath.Join("./../../test", "testdata/deployednettemplates/networks/bootstrapped/badSpec.json")
 	_, err := LoadBootstrappedData(badSpecPath)
