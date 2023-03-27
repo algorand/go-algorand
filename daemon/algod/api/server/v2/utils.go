@@ -355,10 +355,10 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 
 func convertTxnResult(txnResult simulation.TxnResult) preEncodedSimulateTxnResult {
 	return preEncodedSimulateTxnResult{
-		Txn:                ConvertInnerTxn(&txnResult.Txn),
-		MissingSignature:   trueOrNil(txnResult.MissingSignature),
-		AppBudgetUsed:      numOrNil(txnResult.AppBudgetUsed),
-		LogicSigBudgetUsed: numOrNil(txnResult.LogicSigBudgetUsed),
+		Txn:                    ConvertInnerTxn(&txnResult.Txn),
+		MissingSignature:       trueOrNil(txnResult.MissingSignature),
+		AppBudgetConsumed:      numOrNil(txnResult.AppBudgetConsumed),
+		LogicSigBudgetConsumed: numOrNil(txnResult.LogicSigBudgetConsumed),
 	}
 }
 

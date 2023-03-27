@@ -138,6 +138,9 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	if ep.PooledApplicationBudget != nil && tracer.result.TxnGroups[0].AppBudgetAdded == 0 {
 		tracer.result.TxnGroups[0].AppBudgetAdded = uint64(*ep.PooledApplicationBudget)
 	}
+	if ep.FeeCredit != nil {
+		tracer.result.TxnGroups[0].FeeCredit = *ep.FeeCredit
+	}
 }
 
 func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, evalError error) {
@@ -193,13 +196,13 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
 	if cx.RunMode() != logic.ModeApp {
 		// Report cost for LogicSig program and exit
-		tracer.result.TxnGroups[0].Txns[cx.GroupIndex()].LogicSigBudgetUsed = uint64(cx.Cost())
+		tracer.result.TxnGroups[0].Txns[cx.GroupIndex()].LogicSigBudgetConsumed = uint64(cx.Cost())
 		return
 	}
 
 	// Report cost of this program.
 	// If it is an inner app call, roll up its cost to the top level transaction.
-	tracer.result.TxnGroups[0].Txns[tracer.relativeCursor[0]].AppBudgetUsed += uint64(cx.Cost())
+	tracer.result.TxnGroups[0].Txns[tracer.relativeCursor[0]].AppBudgetConsumed += uint64(cx.Cost())
 
 	tracer.handleError(evalError)
 }

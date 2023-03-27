@@ -920,10 +920,10 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 
 // preEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
 type preEncodedSimulateTxnResult struct {
-	Txn                PreEncodedTxInfo `codec:"txn-result"`
-	MissingSignature   *bool            `codec:"missing-signature,omitempty"`
-	AppBudgetUsed      *uint64          `codec:"app-budget-used,omitempty"`
-	LogicSigBudgetUsed *uint64          `codec:"logic-sig-budget-used,omitempty"`
+	Txn                    PreEncodedTxInfo `codec:"txn-result"`
+	MissingSignature       *bool            `codec:"missing-signature,omitempty"`
+	AppBudgetConsumed      *uint64          `codec:"app-budget-consumed,omitempty"`
+	LogicSigBudgetConsumed *uint64          `codec:"logic-sig-budget-consumed,omitempty"`
 }
 
 // preEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult

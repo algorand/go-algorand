@@ -1873,11 +1873,11 @@
       "SimulateTransactionResult": {
         "description": "Simulation result for an individual transaction",
         "properties": {
-          "app-budget-used": {
+          "app-budget-consumed": {
             "description": "Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.",
             "type": "integer"
           },
-          "logic-sig-budget-used": {
+          "logic-sig-budget-consumed": {
             "description": "Budget used during execution of a logic sig transaction.",
             "type": "integer"
           },
