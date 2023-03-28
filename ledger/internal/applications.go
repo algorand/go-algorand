@@ -297,7 +297,10 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) (*ledgercore.Stat
 
 	if ep.GranularEval {
 		cowForTxn = cs.child(1)
-		defer cowForTxn.recycle()
+		defer func() {
+			cowForTxn.commitToParent()
+			cowForTxn.recycle()
+		}()
 	}
 
 	txn := &ep.TxnGroup[gi]
@@ -361,7 +364,6 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) (*ledgercore.Stat
 
 	if ep.GranularEval {
 		update := cowForTxn.Updates()
-		cowForTxn.commitToParent()
 		return &update, nil
 	}
 
