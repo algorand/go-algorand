@@ -20,7 +20,7 @@ By default the following config.json overrides are applied:
 
 The following environment variables can be supplied. Except when noted, it is possible to reconfigure deployments even after the data directory has been initialized.
 
-| Variable | Description |                                                                                                                                        
+| Variable | Description |
 | -------- | ----------- |
 | NETWORK        | Leave blank for a private network, otherwise specify one of mainnet, betanet, testnet, or devnet. Only used during a data directory initialization. |
 | FAST_CATCHUP   | If set to 1 on a public network, attempt to start fast-catchup during initial config.                                                               |
