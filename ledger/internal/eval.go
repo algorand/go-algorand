@@ -954,7 +954,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		eval.Tracer.BeforeTxnGroup(evalParams)
 		// Ensure we update the tracer before exiting
 		defer func() {
-			eval.Tracer.AfterTxnGroup(evalParams, err)
+			eval.Tracer.AfterTxnGroup(evalParams, cow, err)
 		}()
 	}
 

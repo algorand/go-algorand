@@ -47,7 +47,7 @@ func (tracer *cursorEvalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, a
 	tracer.previousInnerTxns = tracer.previousInnerTxns[:len(tracer.previousInnerTxns)-1]
 }
 
-func (tracer *cursorEvalTracer) AfterTxnGroup(ep *logic.EvalParams, evalError error) {
+func (tracer *cursorEvalTracer) AfterTxnGroup(ep *logic.EvalParams, updateProvider logic.UpdateProvider, evalError error) {
 	top := len(tracer.relativeCursor) - 1
 	if len(tracer.previousInnerTxns) != 0 {
 		tracer.previousInnerTxns[len(tracer.previousInnerTxns)-1] += tracer.relativeCursor[top] + 1
@@ -143,9 +143,9 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	}
 }
 
-func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, evalError error) {
+func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, updateProvider logic.UpdateProvider, evalError error) {
 	tracer.handleError(evalError)
-	tracer.cursorEvalTracer.AfterTxnGroup(ep, evalError)
+	tracer.cursorEvalTracer.AfterTxnGroup(ep, updateProvider, evalError)
 }
 
 func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {

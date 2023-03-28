@@ -137,7 +137,7 @@ func (d *Tracer) BeforeTxnGroup(ep *logic.EvalParams) {
 }
 
 // AfterTxnGroup mocks the logic.EvalTracer.AfterTxnGroup method
-func (d *Tracer) AfterTxnGroup(ep *logic.EvalParams, evalError error) {
+func (d *Tracer) AfterTxnGroup(ep *logic.EvalParams, updateProvider logic.UpdateProvider, evalError error) {
 	d.Events = append(d.Events, AfterTxnGroup(len(ep.TxnGroup), evalError != nil))
 }
 

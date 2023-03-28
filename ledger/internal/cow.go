@@ -123,7 +123,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto conf
 	return &cb
 }
 
-func (cb *roundCowState) deltas() ledgercore.StateDelta {
+func (cb *roundCowState) Updates() ledgercore.StateDelta {
 	// Apply storage deltas to account deltas
 	for addr, smap := range cb.sdeltas {
 		for aapp, storeDelta := range smap {
@@ -132,6 +132,11 @@ func (cb *roundCowState) deltas() ledgercore.StateDelta {
 			}
 		}
 	}
+	return cb.mods
+}
+
+func (cb *roundCowState) deltas() ledgercore.StateDelta {
+	cb.Updates()
 
 	// Populate old values by looking through parent
 	for key, value := range cb.mods.KvMods {

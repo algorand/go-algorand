@@ -73,7 +73,7 @@ func (a *debuggerEvalTracerAdaptor) BeforeTxnGroup(ep *EvalParams) {
 }
 
 // AfterTxnGroup updates inner txn depth
-func (a *debuggerEvalTracerAdaptor) AfterTxnGroup(ep *EvalParams, evalError error) {
+func (a *debuggerEvalTracerAdaptor) AfterTxnGroup(ep *EvalParams, updateProvider UpdateProvider, evalError error) {
 	a.txnDepth--
 }
 
