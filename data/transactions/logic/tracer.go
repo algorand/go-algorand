@@ -21,7 +21,8 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-type UpdateProvider interface {
+// LedgerUpdateProvider provides access to a ledgercore.StateDelta for a given transaction group.
+type LedgerUpdateProvider interface {
 	Updates() ledgercore.StateDelta
 }
 
@@ -116,7 +117,7 @@ type EvalTracer interface {
 	// For top-level transaction groups, the updateProvider argument is an interface which can
 	// return the ledgercore.StateDelta updates that occurred because of this transaction group. For
 	// inner transaction groups, this argument is nil.
-	AfterTxnGroup(ep *EvalParams, updateProvider UpdateProvider, evalError error)
+	AfterTxnGroup(ep *EvalParams, updateProvider LedgerUpdateProvider, evalError error)
 
 	// BeforeTxn is called before a transaction is executed.
 	//
@@ -150,7 +151,7 @@ type NullEvalTracer struct{}
 func (n NullEvalTracer) BeforeTxnGroup(ep *EvalParams) {}
 
 // AfterTxnGroup does nothing
-func (n NullEvalTracer) AfterTxnGroup(ep *EvalParams, updateProvider UpdateProvider, evalError error) {
+func (n NullEvalTracer) AfterTxnGroup(ep *EvalParams, updateProvider LedgerUpdateProvider, evalError error) {
 }
 
 // BeforeTxn does nothing
