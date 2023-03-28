@@ -282,10 +282,17 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	}
 
 	// download balances file.
-	peerSelector := makePeerSelector(cs.net, []peerClass{
-		{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
-		{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers},
-	})
+	var peerSelector *peerSelector
+	if cs.config.EnableCatchupFromArchiveServers {
+		peerSelector = makePeerSelector(cs.net, []peerClass{
+			{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+		})
+	} else {
+		peerSelector = makePeerSelector(cs.net, []peerClass{
+			{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
+		})
+	}
 	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
 	attemptsCount := 0
 
