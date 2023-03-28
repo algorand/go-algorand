@@ -119,7 +119,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	require.NoError(b, err)
 
 	newBlk := bookkeeping.MakeBlock(blk.BlockHeader)
-	eval, err := l0.StartEvaluator(newBlk.BlockHeader, 5000, 0)
+	blockEvaluator, err := l0.StartEvaluator(newBlk.BlockHeader, 5000, 0)
 	require.NoError(b, err)
 
 	bc = &benchConfig{
@@ -132,7 +132,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 		acctToApp: acctToApp,
 		l0:        l0,
 		l1:        l1,
-		eval:      eval,
+		eval:      blockEvaluator,
 	}
 
 	// start the ledger with a pool of accounts
