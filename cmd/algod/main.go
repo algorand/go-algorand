@@ -288,6 +288,7 @@ func run() int {
 			for _, phonebookDir := range phonebookDirs {
 				phonebookAddresses, err = config.LoadPhonebook(phonebookDir)
 				if err == nil {
+					log.Debugf("Static phonebook loaded from %s", phonebookDir)
 					break
 				} else {
 					log.Debugf("Cannot load static phonebook from %s dir: %v", phonebookDir, err)
