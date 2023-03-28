@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -180,7 +180,7 @@ func (bt *producePrepareBlockingTracker) prepareCommit(*deferredCommitContext) e
 }
 
 // commitRound is not used by the blockingTracker
-func (bt *producePrepareBlockingTracker) commitRound(context.Context, store.TransactionScope, *deferredCommitContext) error {
+func (bt *producePrepareBlockingTracker) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
 	return nil
 }
 

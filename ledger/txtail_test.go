@@ -30,8 +30,9 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
 	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -150,10 +151,10 @@ func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.Conse
 	// create a corresponding blockdb.
 	inMemory := true
 	t.blockDBs, _ = storetesting.DbOpenTest(ts, inMemory)
-	t.trackerDBs, _ = store.DbOpenTrackerTest(ts, inMemory)
+	t.trackerDBs, _ = sqlitedriver.DbOpenTrackerTest(ts, inMemory)
 	t.protoVersion = protoVersion
 
-	err := t.trackerDBs.Batch(func(transactionCtx context.Context, tx store.BatchScope) (err error) {
+	err := t.trackerDBs.Batch(func(transactionCtx context.Context, tx trackerdb.BatchScope) (err error) {
 		arw, err := tx.MakeAccountsWriter()
 		if err != nil {
 			return err
@@ -161,7 +162,7 @@ func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.Conse
 
 		accts := ledgertesting.RandomAccounts(20, true)
 		proto := config.Consensus[protoVersion]
-		newDB := tx.AccountsInitTest(ts, accts, protoVersion)
+		newDB := tx.Testing().AccountsInitTest(ts, accts, protoVersion)
 		require.True(ts, newDB)
 
 		roundData := make([][]byte, 0, proto.MaxTxnLife)
@@ -169,7 +170,7 @@ func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.Conse
 		for i := startRound; i <= t.Latest(); i++ {
 			blk, err := t.Block(i)
 			require.NoError(ts, err)
-			tail, err := store.TxTailRoundFromBlock(blk)
+			tail, err := trackerdb.TxTailRoundFromBlock(blk)
 			require.NoError(ts, err)
 			encoded, _ := tail.Encode()
 			roundData = append(roundData, encoded)
@@ -300,7 +301,7 @@ func TestTxTailDeltaTracking(t *testing.T) {
 				err = txtail.prepareCommit(dcc)
 				require.NoError(t, err)
 
-				err := ledger.trackerDBs.Transaction(func(ctx context.Context, tx store.TransactionScope) (err error) {
+				err := ledger.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 					err = txtail.commitRound(context.Background(), tx, dcc)
 					require.NoError(t, err)
 					return nil

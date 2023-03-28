@@ -920,15 +920,19 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 
 // preEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
 type preEncodedSimulateTxnResult struct {
-	Txn              PreEncodedTxInfo `codec:"txn-result"`
-	MissingSignature *bool            `codec:"missing-signature,omitempty"`
+	Txn                    PreEncodedTxInfo `codec:"txn-result"`
+	MissingSignature       *bool            `codec:"missing-signature,omitempty"`
+	AppBudgetConsumed      *uint64          `codec:"app-budget-consumed,omitempty"`
+	LogicSigBudgetConsumed *uint64          `codec:"logic-sig-budget-consumed,omitempty"`
 }
 
 // preEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
 type preEncodedSimulateTxnGroupResult struct {
-	Txns           []preEncodedSimulateTxnResult `codec:"txn-results"`
-	FailureMessage *string                       `codec:"failure-message,omitempty"`
-	FailedAt       *[]uint64                     `codec:"failed-at,omitempty"`
+	Txns              []preEncodedSimulateTxnResult `codec:"txn-results"`
+	FailureMessage    *string                       `codec:"failure-message,omitempty"`
+	FailedAt          *[]uint64                     `codec:"failed-at,omitempty"`
+	AppBudgetAdded    *uint64                       `codec:"app-budget-added,omitempty"`
+	AppBudgetConsumed *uint64                       `codec:"app-budget-consumed,omitempty"`
 }
 
 // preEncodedSimulateResponse mirrors model.SimulateResponse
@@ -942,12 +946,6 @@ type preEncodedSimulateResponse struct {
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
 // (POST /v2/transactions/simulate)
 func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateTransactionParams) error {
-	if !v2.Node.Config().EnableExperimentalAPI {
-		// Right now this is a redundant/useless check at runtime, since experimental APIs are not registered when EnableExperimentalAPI=false.
-		// However, this endpoint won't always be experimental, so I've left this here as a reminder to have some other flag guarding its usage.
-		return ctx.String(http.StatusNotFound, fmt.Sprintf("%s was not enabled in the configuration file by setting EnableExperimentalAPI to true", ctx.Request().URL.Path))
-	}
-
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
@@ -1661,4 +1659,9 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 		Result: program,
 	}
 	return ctx.JSON(http.StatusOK, response)
+}
+
+// ExperimentalCheck is only available when EnabledExperimentalAPI is true
+func (v2 *Handlers) ExperimentalCheck(ctx echo.Context) error {
+	return ctx.JSON(http.StatusOK, true)
 }

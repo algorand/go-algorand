@@ -101,8 +101,9 @@ const slowWritingPeerMonitorInterval = 5 * time.Second
 // to the log file. Note that the log file itself would also json-encode these before placing them in the log file.
 const unprintableCharacterGlyph = "▯"
 
-// match config.PublicAddress to this string to automatically set PublicAddress from Address()
-const autoconfigPublicAddress = "auto"
+// testingPublicAddress is used in identity exchange tests for a predictable
+// PublicAddress (which will match HTTP Listener's Address) in tests only.
+const testingPublicAddress = "testing"
 
 var networkIncomingConnections = metrics.MakeGauge(metrics.NetworkIncomingConnections)
 var networkOutgoingConnections = metrics.MakeGauge(metrics.NetworkOutgoingConnections)
@@ -118,6 +119,7 @@ var networkPeerBroadcastDropped = metrics.MakeCounter(metrics.MetricName{Name: "
 
 var networkPeerIdentityDisconnect = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_identity_duplicate", Description: "number of times identity challenge cause us to disconnect a peer"})
 var networkPeerIdentityError = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_identity_error", Description: "number of times an error occurs (besides expected) when processing identity challenges"})
+var networkPeerAlreadyClosed = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_peer_already_closed", Description: "number of times a peer would be added but the peer connection is already closed"})
 
 var networkSlowPeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_slow_drops_total", Description: "number of peers dropped for being slow to send to"})
 var networkIdlePeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_idle_drops_total", Description: "number of peers dropped due to idle connection"})
@@ -665,6 +667,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			wn.peersLock.RLock()
 			for _, peer := range wn.peers {
 				if peer.outgoing {
+					// Wrap a connected wsPeer inside a Peer{} interface that also implements network.UnicastPeer.
 					outPeers = append(outPeers, Peer(peer))
 				}
 			}
@@ -674,6 +677,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			var addrs []string
 			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryRelayRole)
 			for _, addr := range addrs {
+				// Makes a wsPeerCore containing an address and unconnected HTTP client that also implements network.HTTPPeer.
 				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin address*/)
 				outPeers = append(outPeers, &peerCore)
 			}
@@ -682,6 +686,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			var addrs []string
 			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryArchiverRole)
 			for _, addr := range addrs {
+				// Makes a wsPeerCore containing an address and unconnected HTTP client that also implements network.HTTPPeer.
 				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin address*/)
 				outPeers = append(outPeers, &peerCore)
 			}
@@ -689,6 +694,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			wn.peersLock.RLock()
 			for _, peer := range wn.peers {
 				if !peer.outgoing {
+					// Wrap a connected wsPeer inside a Peer{} interface that also implements network.UnicastPeer.
 					outPeers = append(outPeers, Peer(peer))
 				}
 			}
@@ -841,8 +847,8 @@ func (wn *WebsocketNetwork) Start() {
 		wn.scheme = "http"
 	}
 
-	// if PublicAddress set to automatic, pull the name from Address()
-	if wn.config.PublicAddress == autoconfigPublicAddress {
+	// if PublicAddress set to testing, pull the name from Address()
+	if wn.config.PublicAddress == testingPublicAddress {
 		addr, ok := wn.Address()
 		if ok {
 			url, err := url.Parse(addr)
@@ -2462,6 +2468,12 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 	wn.peersLock.Lock()
 	defer wn.peersLock.Unlock()
+	// guard against peers which are closed or closing
+	if atomic.LoadInt32(&peer.didSignalClose) == 1 {
+		networkPeerAlreadyClosed.Inc(nil)
+		wn.log.Debugf("peer closing %s", peer.conn.RemoteAddr().String())
+		return
+	}
 	// simple duplicate *pointer* check. should never trigger given the callers to addPeer
 	// TODO: remove this after making sure it is safe to do so
 	for _, p := range wn.peers {

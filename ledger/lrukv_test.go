@@ -25,7 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -40,7 +40,7 @@ func TestLRUBasicKV(t *testing.T) {
 	// write 50 KVs
 	for i := 0; i < kvNum; i++ {
 		kvValue := fmt.Sprintf("kv %d value", i)
-		kv := store.PersistedKVData{
+		kv := trackerdb.PersistedKVData{
 			Value: []byte(kvValue),
 			Round: basics.Round(i),
 		}
@@ -59,7 +59,7 @@ func TestLRUBasicKV(t *testing.T) {
 	for i := kvNum; i < kvNum*2; i++ {
 		kv, has := baseKV.read(fmt.Sprintf("key%d", i))
 		require.False(t, has)
-		require.Equal(t, store.PersistedKVData{}, kv)
+		require.Equal(t, trackerdb.PersistedKVData{}, kv)
 	}
 
 	baseKV.prune(kvNum / 2)
@@ -75,7 +75,7 @@ func TestLRUBasicKV(t *testing.T) {
 			require.Equal(t, fmt.Sprintf("kv %d value", i), string(kv.Value))
 		} else {
 			require.False(t, has)
-			require.Equal(t, store.PersistedKVData{}, kv)
+			require.Equal(t, trackerdb.PersistedKVData{}, kv)
 		}
 	}
 }
@@ -92,7 +92,7 @@ func TestLRUKVDisable(t *testing.T) {
 		go func(i int) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
 			kvValue := fmt.Sprintf("kv %d value", i)
-			kv := store.PersistedKVData{
+			kv := trackerdb.PersistedKVData{
 				Value: []byte(kvValue),
 				Round: basics.Round(i),
 			}
@@ -105,7 +105,7 @@ func TestLRUKVDisable(t *testing.T) {
 
 	for i := 0; i < kvNum; i++ {
 		kvValue := fmt.Sprintf("kv %d value", i)
-		kv := store.PersistedKVData{
+		kv := trackerdb.PersistedKVData{
 			Value: []byte(kvValue),
 			Round: basics.Round(i),
 		}
@@ -126,7 +126,7 @@ func TestLRUKVPendingWrites(t *testing.T) {
 		go func(i int) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
 			kvValue := fmt.Sprintf("kv %d value", i)
-			kv := store.PersistedKVData{
+			kv := trackerdb.PersistedKVData{
 				Value: []byte(kvValue),
 				Round: basics.Round(i),
 			}
@@ -177,7 +177,7 @@ func TestLRUKVPendingWritesWarning(t *testing.T) {
 	for j := 0; j < 50; j++ {
 		for i := 0; i < j; i++ {
 			kvValue := fmt.Sprintf("kv %d value", i)
-			kv := store.PersistedKVData{
+			kv := trackerdb.PersistedKVData{
 				Value: []byte(kvValue),
 				Round: basics.Round(i),
 			}
@@ -202,7 +202,7 @@ func TestLRUKVOmittedPendingWrites(t *testing.T) {
 
 	for i := 0; i < pendingWritesBuffer*2; i++ {
 		kvValue := fmt.Sprintf("kv %d value", i)
-		kv := store.PersistedKVData{
+		kv := trackerdb.PersistedKVData{
 			Value: []byte(kvValue),
 			Round: basics.Round(i),
 		}
@@ -223,7 +223,7 @@ func TestLRUKVOmittedPendingWrites(t *testing.T) {
 	for i := pendingWritesBuffer; i < pendingWritesBuffer*2; i++ {
 		kv, has := baseKV.read(fmt.Sprintf("key%d", i))
 		require.False(t, has)
-		require.Equal(t, store.PersistedKVData{}, kv)
+		require.Equal(t, trackerdb.PersistedKVData{}, kv)
 	}
 }
 
@@ -265,7 +265,7 @@ func generatePersistedKVData(startRound, endRound int) []cachedKVData {
 		kvValue := fmt.Sprintf("kv %d value", i)
 
 		kvs[i-startRound] = cachedKVData{
-			PersistedKVData: store.PersistedKVData{
+			PersistedKVData: trackerdb.PersistedKVData{
 				Value: []byte(kvValue),
 				Round: basics.Round(i + startRound),
 			},

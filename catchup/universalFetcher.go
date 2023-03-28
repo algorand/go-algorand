@@ -58,7 +58,7 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 	var fetchedBuf []byte
 	var address string
 	blockDownloadStartTime := time.Now()
-	if wsPeer, validWSPeer := peer.(network.UnicastPeer); validWSPeer {
+	if wsPeer, validWSPeer := peer.(network.UnicastPeer); validWSPeer { // Use an existing wsPeer connection returned by GetPeers
 		fetcherClient := &wsFetcherClient{
 			target: wsPeer,
 			config: &uf.config,
@@ -68,7 +68,7 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 			return nil, nil, time.Duration(0), err
 		}
 		address = fetcherClient.address()
-	} else if httpPeer, validHTTPPeer := peer.(network.HTTPPeer); validHTTPPeer {
+	} else if httpPeer, validHTTPPeer := peer.(network.HTTPPeer); validHTTPPeer { // Use an unconnected address returned by GetPeers
 		fetcherClient := &HTTPFetcher{
 			peer:    httpPeer,
 			rootURL: httpPeer.GetAddress(),

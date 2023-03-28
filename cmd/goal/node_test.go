@@ -33,6 +33,7 @@ var isAlnum = regexp.MustCompile(`^[a-zA-Z0-9_]*$`)
 
 func TestGetMissingCatchpointLabel(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	tests := []struct {
 		name        string
 		URL         string
@@ -84,7 +85,9 @@ func TestGetMissingCatchpointLabel(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, test.expectedErr, test.statusCode)
 			}))

@@ -25,6 +25,8 @@ import (
 
 func TestUnicodePrintable(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	testUnicodePrintableStrings := []struct {
 		testString      string
 		isPrintable     bool
@@ -45,6 +47,7 @@ func TestUnicodePrintable(t *testing.T) {
 
 func TestNewAppCallBytes(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	acb := newAppCallBytes("int:3")
 	require.Equal(t, "int", acb.Encoding)
@@ -57,6 +60,8 @@ func TestNewAppCallBytes(t *testing.T) {
 
 func TestNewBoxRef(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	br := newBoxRef("str:hello")
 	require.EqualValues(t, 0, br.appID)
 	require.Equal(t, "str", br.name.Encoding)
@@ -73,6 +78,8 @@ func TestNewBoxRef(t *testing.T) {
 
 func TestStringsToBoxRefs(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	brs := stringsToBoxRefs([]string{"77,str:hello", "55,int:6", "int:88"})
 	require.EqualValues(t, 77, brs[0].appID)
 	require.EqualValues(t, 55, brs[1].appID)
@@ -108,7 +115,9 @@ func TestBytesToAppCallBytes(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.expected, func(t *testing.T) {
+			t.Parallel()
 			acb := encodeBytesAsAppCallBytes(tc.input)
 			require.Equal(t, tc.expected, acb)
 		})

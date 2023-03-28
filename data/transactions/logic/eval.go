@@ -709,7 +709,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		return false, nil, errors.New("no ledger in contract eval")
 	}
 	if params.SigLedger == nil {
-		params.SigLedger = params.Ledger
+		return false, nil, errors.New("no sig ledger in contract eval")
 	}
 	if aid == 0 {
 		return false, nil, errors.New("0 appId in contract eval")
@@ -3432,6 +3432,8 @@ var ecdsaVerifyCosts = []int{
 	Secp256r1: 2500,
 }
 
+var secp256r1 = elliptic.P256()
+
 func opEcdsaVerify(cx *EvalContext) error {
 	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
 	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
@@ -3471,15 +3473,16 @@ func opEcdsaVerify(cx *EvalContext) error {
 		pubkey := secp256k1.S256().Marshal(x, y)
 		result = secp256k1.VerifySignature(pubkey, msg, signature)
 	} else if fs.field == Secp256r1 {
-		r := new(big.Int).SetBytes(sigR)
-		s := new(big.Int).SetBytes(sigS)
-
-		pubkey := ecdsa.PublicKey{
-			Curve: elliptic.P256(),
-			X:     x,
-			Y:     y,
+		if !cx.Proto.EnablePrecheckECDSACurve || secp256r1.IsOnCurve(x, y) {
+			pubkey := ecdsa.PublicKey{
+				Curve: secp256r1,
+				X:     x,
+				Y:     y,
+			}
+			r := new(big.Int).SetBytes(sigR)
+			s := new(big.Int).SetBytes(sigS)
+			result = ecdsa.Verify(&pubkey, msg, r, s)
 		}
-		result = ecdsa.Verify(&pubkey, msg, r, s)
 	}
 
 	cx.stack[fifth] = boolToSV(result)

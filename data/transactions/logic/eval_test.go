@@ -5404,6 +5404,7 @@ func TestOpJSONRef(t *testing.T) {
 	ledger.NewApp(txn.Txn.Receiver, 0, basics.AppParams{})
 	ep := defaultEvalParams(txn)
 	ep.Ledger = ledger
+	ep.SigLedger = ledger
 	testCases := []struct {
 		source             string
 		previousVersErrors []Expect

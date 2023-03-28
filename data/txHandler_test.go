@@ -55,12 +55,18 @@ import (
 )
 
 // txHandler uses config values to determine backlog size. Tests should use a static value
-var txBacklogSize = 26000
+var txBacklogSize = config.GetDefaultLocal().TxBacklogSize
 
 // mock sender is used to implement OnClose, since TXHandlers expect to use Senders and ERL Clients
 type mockSender struct{}
 
 func (m mockSender) OnClose(func()) {}
+
+// txHandlerConfig is a subset of tx handler related options from config.Local
+type txHandlerConfig struct {
+	enableFilteringRawMsg    bool
+	enableFilteringCanonical bool
+}
 
 func makeTestGenesisAccounts(tb testing.TB, numUsers int) ([]basics.Address, []*crypto.SignatureSecrets, map[basics.Address]basics.AccountData) {
 	addresses := make([]basics.Address, numUsers)
@@ -529,12 +535,25 @@ func BenchmarkTxHandlerIncDeDup(b *testing.B) {
 			numPoolWorkers := runtime.NumCPU()
 			dupFactor := test.dupFactor
 			avgDelay := test.workerDelay / time.Duration(numPoolWorkers)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
-			handler := makeTestTxHandlerOrphaned(txBacklogSize)
+			var handler *TxHandler
 			if test.firstLevelOnly {
-				handler.cacheConfig = txHandlerConfig{enableFilteringRawMsg: true, enableFilteringCanonical: false}
+				handler = makeTestTxHandlerOrphanedWithContext(
+					ctx, txBacklogSize, txBacklogSize,
+					txHandlerConfig{enableFilteringRawMsg: true, enableFilteringCanonical: false}, 0,
+				)
 			} else if !test.dedup {
-				handler.cacheConfig = txHandlerConfig{}
+				handler = makeTestTxHandlerOrphanedWithContext(
+					ctx, txBacklogSize, 0,
+					txHandlerConfig{}, 0,
+				)
+			} else {
+				handler = makeTestTxHandlerOrphanedWithContext(
+					ctx, txBacklogSize, txBacklogSize,
+					txHandlerConfig{enableFilteringRawMsg: true, enableFilteringCanonical: true}, 0,
+				)
 			}
 
 			// prepare tx groups
@@ -783,12 +802,17 @@ func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, 
 		cacheSize = txBacklogSize
 	}
 	handler := &TxHandler{
-		backlogQueue:     make(chan *txBacklogMsg, backlogSize),
-		msgCache:         makeSaltedCache(cacheSize),
-		txCanonicalCache: makeDigestCache(cacheSize),
-		cacheConfig:      txHandlerConfig,
+		backlogQueue: make(chan *txBacklogMsg, backlogSize),
 	}
-	handler.msgCache.Start(ctx, refreshInterval)
+
+	if txHandlerConfig.enableFilteringRawMsg {
+		handler.msgCache = makeSaltedCache(cacheSize)
+		handler.msgCache.Start(ctx, refreshInterval)
+	}
+	if txHandlerConfig.enableFilteringCanonical {
+		handler.txCanonicalCache = makeDigestCache(cacheSize)
+	}
+
 	return handler
 }
 
@@ -892,6 +916,8 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 	t.Run("scheduled", func(t *testing.T) {
 		// double enqueue a single txn message, ensure it discarded
 		ctx, cancelFunc := context.WithCancel(context.Background())
+		defer cancelFunc()
+
 		handler := makeTestTxHandlerOrphanedWithContext(ctx, txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 10*time.Millisecond)
 
 		var action network.OutgoingMessage
@@ -907,12 +933,15 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 		msg = <-handler.backlogQueue
 		require.Equal(t, 1, len(msg.unverifiedTxGroup))
 		require.Equal(t, stxns1[0], msg.unverifiedTxGroup[0])
-		cancelFunc()
 	})
 
 	t.Run("manual", func(t *testing.T) {
 		// double enqueue a single txn message, ensure it discarded
-		handler := makeTestTxHandlerOrphaned(txBacklogSize)
+		ctx, cancelFunc := context.WithCancel(context.Background())
+		defer cancelFunc()
+
+		handler := makeTestTxHandlerOrphanedWithContext(ctx, txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 10*time.Millisecond)
+
 		var action network.OutgoingMessage
 		var msg *txBacklogMsg
 
@@ -1684,17 +1713,16 @@ func runHandlerBenchmarkWithBacklog(b *testing.B, txGen txGenIf, tps int, useBac
 	cfg.IncomingConnectionsLimit = 10
 	ledger := txGen.makeLedger(b, cfg, log, fmt.Sprintf("%s-%d", b.Name(), b.N))
 	defer ledger.Close()
-	handler, err := makeTestTxHandler(ledger, cfg)
-	require.NoError(b, err)
-	defer handler.txVerificationPool.Shutdown()
-	defer close(handler.streamVerifierDropped)
 
 	// The benchmark generates only 1000 txns, and reuses them. This is done for faster benchmark time and the
 	// ability to have long runs without being limited to the memory. The dedup will block the txns once the same
 	// ones are rotated again. If the purpose is to test dedup, then this can be changed by setting
 	// genTCount = b.N
-	handler.cacheConfig.enableFilteringRawMsg = false
-	handler.cacheConfig.enableFilteringCanonical = false
+	cfg.TxIncomingFilteringFlags = 0
+	handler, err := makeTestTxHandler(ledger, cfg)
+	require.NoError(b, err)
+	defer handler.txVerificationPool.Shutdown()
+	defer close(handler.streamVerifierDropped)
 
 	// since Start is not called, set the context here
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())

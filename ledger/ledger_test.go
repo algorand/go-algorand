@@ -41,7 +41,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -2285,7 +2285,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 
 	// reset tables and re-init again, similary to the catchpount apply code
 	// since the ledger has only genesis accounts, this recreates them
-	err = l.trackerDBs.Batch(func(ctx context.Context, tx store.BatchScope) error {
+	err = l.trackerDBs.Batch(func(ctx context.Context, tx trackerdb.BatchScope) error {
 		arw, err := tx.MakeAccountsWriter()
 		if err != nil {
 			return err
@@ -2295,7 +2295,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 		if err0 != nil {
 			return err0
 		}
-		tp := store.TrackerDBParams{
+		tp := trackerdb.Params{
 			InitAccounts:      l.GenesisAccounts(),
 			InitProto:         l.GenesisProtoVersion(),
 			GenesisHash:       l.GenesisHash(),
@@ -2304,12 +2304,12 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 			DbPathPrefix:      l.catchpoint.dbDirectory,
 			BlockDb:           l.blockDBs,
 		}
-		_, err0 = tx.RunMigrations(ctx, tp, l.log, preReleaseDBVersion /*target database version*/)
+		_, err0 = tx.Testing().RunMigrations(ctx, tp, l.log, preReleaseDBVersion /*target database version*/)
 		if err0 != nil {
 			return err0
 		}
 
-		if err0 := tx.AccountsUpdateSchemaTest(ctx); err != nil {
+		if err0 := tx.Testing().AccountsUpdateSchemaTest(ctx); err != nil {
 			return err0
 		}
 
@@ -2428,10 +2428,10 @@ int %d // 10001000
 func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	prevAccountDBVersion := store.AccountDBVersion
-	store.AccountDBVersion = 6
+	prevAccountDBVersion := trackerdb.AccountDBVersion
+	trackerdb.AccountDBVersion = 6
 	defer func() {
-		store.AccountDBVersion = prevAccountDBVersion
+		trackerdb.AccountDBVersion = prevAccountDBVersion
 	}()
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-migrate-shrink-deltas")
@@ -2454,8 +2454,8 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		blockDB.Close()
 	}()
 	// create tables so online accounts can still be written
-	err = trackerDB.Batch(func(ctx context.Context, tx store.BatchScope) error {
-		if err := tx.AccountsUpdateSchemaTest(ctx); err != nil {
+	err = trackerDB.Batch(func(ctx context.Context, tx trackerdb.BatchScope) error {
+		if err := tx.Testing().AccountsUpdateSchemaTest(ctx); err != nil {
 			return err
 		}
 		return nil
@@ -2629,7 +2629,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	l.Close()
 
 	cfg.MaxAcctLookback = shorterLookback
-	store.AccountDBVersion = 7
+	trackerdb.AccountDBVersion = 7
 	// delete tables since we want to check they can be made from other data
 	err = trackerDB.ResetToV6Test(context.Background())
 	require.NoError(t, err)

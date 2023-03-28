@@ -82,6 +82,13 @@ func setupTestForMethodGet(t *testing.T, consensusUpgrade bool) (v2.Handlers, ec
 	return handler, c, rec, rootkeys, stxns, releasefunc
 }
 
+func numOrNil(n uint64) *uint64 {
+	if n == 0 {
+		return nil
+	}
+	return &n
+}
+
 func TestSimpleMockBuilding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -653,14 +660,13 @@ func TestPendingTransactionsByAddress(t *testing.T) {
 	pendingTransactionsByAddressTest(t, -1, "json", 400)
 }
 
-func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTransactionSimulator bool) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
+func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
 	numAccounts := 5
 	numTransactions := 5
 	offlineAccounts := true
 	mockLedger, _, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
-	mockNode.config.EnableExperimentalAPI = enableTransactionSimulator
 	handler = v2.Handlers{
 
 		Node:     mockNode,
@@ -681,7 +687,7 @@ func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTran
 }
 
 func postTransactionTest(t *testing.T, txnToUse, expectedCode int) {
-	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode, false)
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode)
 	defer releasefunc()
 	err := handler.RawTransaction(c)
 	require.NoError(t, err)
@@ -696,8 +702,8 @@ func TestPostTransaction(t *testing.T) {
 	postTransactionTest(t, 0, 200)
 }
 
-func simulateTransactionTest(t *testing.T, txnToUse int, format string, expectedCode int, enableTransactionSimulator bool) {
-	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode, enableTransactionSimulator)
+func simulateTransactionTest(t *testing.T, txnToUse int, format string, expectedCode int) {
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode)
 	defer releasefunc()
 	err := handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: (*model.SimulateTransactionParamsFormat)(&format)})
 	require.NoError(t, err)
@@ -709,52 +715,29 @@ func TestPostSimulateTransaction(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		txnIndex                   int
-		format                     string
-		expectedStatus             int
-		enableTransactionSimulator bool
+		txnIndex       int
+		format         string
+		expectedStatus int
 	}{
 		{
-			txnIndex:                   -1,
-			format:                     "json",
-			expectedStatus:             400,
-			enableTransactionSimulator: true,
+			txnIndex:       -1,
+			format:         "json",
+			expectedStatus: 400,
 		},
 		{
-			txnIndex:                   0,
-			format:                     "json",
-			expectedStatus:             404,
-			enableTransactionSimulator: false,
+			txnIndex:       0,
+			format:         "json",
+			expectedStatus: 200,
 		},
 		{
-			txnIndex:                   0,
-			format:                     "msgpack",
-			expectedStatus:             404,
-			enableTransactionSimulator: false,
+			txnIndex:       0,
+			format:         "msgpack",
+			expectedStatus: 200,
 		},
 		{
-			txnIndex:                   0,
-			format:                     "bad format",
-			expectedStatus:             404,
-			enableTransactionSimulator: false,
-		},
-		{
-			txnIndex:                   0,
-			format:                     "json",
-			expectedStatus:             200,
-			enableTransactionSimulator: true,
-		},
-		{
-			txnIndex:                   0,
-			format:                     "msgpack",
-			expectedStatus:             200,
-			enableTransactionSimulator: true,
-		},
-		{
-			txnIndex:                   0,
-			format:                     "bad format",
-			expectedStatus:             400,
-			enableTransactionSimulator: true,
+			txnIndex:       0,
+			format:         "bad format",
+			expectedStatus: 400,
 		},
 	}
 
@@ -762,7 +745,7 @@ func TestPostSimulateTransaction(t *testing.T) {
 		testCase := testCase
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
 			t.Parallel()
-			simulateTransactionTest(t, testCase.txnIndex, testCase.format, testCase.expectedStatus, testCase.enableTransactionSimulator)
+			simulateTransactionTest(t, testCase.txnIndex, testCase.format, testCase.expectedStatus)
 		})
 	}
 }
@@ -877,7 +860,6 @@ func TestSimulateTransaction(t *testing.T) {
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
-	mockNode.config.EnableExperimentalAPI = true
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -985,23 +967,34 @@ int 1`,
 						clone[0]++
 						expectedFailedAt = &clone
 					}
+
+					var txnAppBudgetUsed []*uint64
+					appBudgetAdded := numOrNil(scenario.AppBudgetAdded)
+					appBudgetConsumed := numOrNil(scenario.AppBudgetConsumed)
+					for i := range scenario.TxnAppBudgetConsumed {
+						txnAppBudgetUsed = append(txnAppBudgetUsed, numOrNil(scenario.TxnAppBudgetConsumed[i]))
+					}
 					expectedBody := model.SimulateResponse{
 						Version: 1,
 						TxnGroups: []model.SimulateTransactionGroupResult{
 							{
-								FailedAt: expectedFailedAt,
+								AppBudgetAdded:    appBudgetAdded,
+								AppBudgetConsumed: appBudgetConsumed,
+								FailedAt:          expectedFailedAt,
 								TxnResults: []model.SimulateTransactionResult{
 									{
 										TxnResult: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
 											SignedTxn: stxns[0],
 											// expect no ApplyData info
 										}, responseFormat.handle),
+										AppBudgetConsumed: txnAppBudgetUsed[0],
 									},
 									{
 										TxnResult: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
 											SignedTxn: stxns[1],
 											ApplyData: scenario.ExpectedSimulationAD,
 										}, responseFormat.handle),
+										AppBudgetConsumed: txnAppBudgetUsed[1],
 									},
 								},
 							},
@@ -1026,7 +1019,6 @@ func TestSimulateTransactionVerificationFailure(t *testing.T) {
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
-	mockNode.config.EnableExperimentalAPI = true
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -1843,4 +1835,20 @@ func TestStateproofTransactionForRoundShutsDown(t *testing.T) {
 	defer cncl()
 	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, stoppedChan)
 	a.ErrorIs(err, v2.ErrShutdown)
+}
+
+func TestExperimentalCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	defer releasefunc()
+
+	// Since we are invoking the method directly, it doesn't matter if EnableExperimentalAPI is true.
+	// When this is false, the router never even registers this endpoint.
+	err := handler.ExperimentalCheck(c)
+	require.NoError(t, err)
+
+	require.Equal(t, 200, rec.Code)
+	require.Equal(t, "true\n", string(rec.Body.Bytes()))
 }

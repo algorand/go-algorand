@@ -22,7 +22,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -70,7 +70,7 @@ func (mt *metricsTracker) prepareCommit(dcc *deferredCommitContext) error {
 	return nil
 }
 
-func (mt *metricsTracker) commitRound(context.Context, store.TransactionScope, *deferredCommitContext) error {
+func (mt *metricsTracker) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
 	return nil
 }
 

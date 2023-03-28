@@ -1209,7 +1209,7 @@
       "post": {
         "tags": [
           "public",
-          "experimental"
+          "nonparticipating"
         ],
         "consumes": [
           "application/x-binary"
@@ -1221,7 +1221,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. WARNING: This endpoint is experimental and under active development. There are no guarantees in terms of functionality or future support.",
+        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. The simulation will use blockchain state from the latest committed round.",
         "operationId": "SimulateTransaction",
         "parameters": [
           {
@@ -1439,7 +1439,8 @@
         "description": "Get ledger deltas for a round.",
         "tags": [
             "public",
-            "data"
+            "data",
+            "experimental"
         ],
         "produces": [
           "application/json",
@@ -2365,6 +2366,33 @@
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/experimental": {
+      "get": {
+        "tags": [
+          "public",
+          "experimental"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Returns OK if experimental API is enabled.",
+        "operationId": "ExperimentalCheck",
+        "responses": {
+          "200": {
+            "description": "Experimental API enabled"
+          },
+          "404": {
+            "description": "Experimental API not enabled"
           },
           "default": {
             "description": "Unknown Error"
@@ -3349,6 +3377,14 @@
           "items": {
             "type": "integer"
           }
+        },
+        "app-budget-added": {
+          "description": "Total budget added during execution of app calls in the transaction group.",
+          "type": "integer"
+        },
+        "app-budget-consumed": {
+          "description": "Total budget consumed during execution of app calls in the transaction group.",
+          "type": "integer"
         }
       }
     },
@@ -3365,6 +3401,14 @@
         "missing-signature": {
           "description": "A boolean indicating whether this transaction is missing signatures",
           "type": "boolean"
+        },
+        "app-budget-consumed": {
+          "description": "Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.",
+          "type": "integer"
+        },
+        "logic-sig-budget-consumed": {
+          "description": "Budget used during execution of a logic sig transaction.",
+          "type": "integer"
         }
       }
     },
@@ -4013,9 +4057,6 @@
     },
     "SimulateResponse": {
       "description": "Result of a transaction group simulation.",
-      "tags": [
-        "experimental"
-      ],
       "schema": {
         "type": "object",
         "required": [
