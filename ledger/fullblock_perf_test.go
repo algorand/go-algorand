@@ -37,7 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -53,7 +53,7 @@ type benchConfig struct {
 	acctToApp map[basics.Address]map[basics.AppIndex]struct{}
 	l0        *Ledger
 	l1        *Ledger
-	eval      *internal.BlockEvaluator
+	eval      *eval.BlockEvaluator
 	numPay    uint64
 	numAst    uint64
 	numApp    uint64
@@ -144,7 +144,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	addBlock(bc)
 	vc := verify.GetMockedCache(true)
 	for _, blk := range bc.blocks {
-		_, err := internal.Eval(context.Background(), bc.l1, blk, true, vc, nil)
+		_, err := eval.Eval(context.Background(), bc.l1, blk, true, vc, nil)
 		require.NoError(b, err)
 		err = bc.l1.AddBlock(blk, cert)
 		require.NoError(b, err)
@@ -424,7 +424,7 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb flo
 	tt := time.Now()
 	b.ResetTimer()
 	for _, blk := range bc.blocks {
-		_, err := internal.Eval(context.Background(), bc.l1, blk, true, vc, nil)
+		_, err := eval.Eval(context.Background(), bc.l1, blk, true, vc, nil)
 		require.NoError(b, err)
 		err = bc.l1.AddBlock(blk, cert)
 		require.NoError(b, err)
