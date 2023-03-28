@@ -284,10 +284,14 @@ func run() int {
 		if err != nil {
 			log.Errorf("cannot locate node executable: %s", err)
 		} else {
-			phonebookDir := filepath.Dir(ex)
-			phonebookAddresses, err = config.LoadPhonebook(phonebookDir)
-			if err != nil {
-				log.Debugf("Cannot load static phonebook: %v", err)
+			phonebookDirs := []string{filepath.Dir(ex), dataDir}
+			for _, phonebookDir := range phonebookDirs {
+				phonebookAddresses, err = config.LoadPhonebook(phonebookDir)
+				if err == nil {
+					break
+				} else {
+					log.Debugf("Cannot load static phonebook from %s dir: %v", phonebookDir, err)
+				}
 			}
 		}
 	}
