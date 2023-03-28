@@ -595,6 +595,10 @@ type BlockEvaluator struct {
 
 	maxTxnBytesPerBlock int
 
+	// GranularEval controls whether the evaluator should create a child cow for each transaction.
+	// It does not make sense to enable this without also providing a Tracer.
+	GranularEval bool
+
 	Tracer logic.EvalTracer
 }
 
@@ -948,13 +952,16 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 	defer cow.recycle()
 
 	evalParams := logic.NewEvalParams(txgroup, &eval.proto, &eval.specials)
+	evalParams.GranularEval = eval.GranularEval
 	evalParams.Tracer = eval.Tracer
 
 	if eval.Tracer != nil {
 		eval.Tracer.BeforeTxnGroup(evalParams)
 		// Ensure we update the tracer before exiting
 		defer func() {
-			eval.Tracer.AfterTxnGroup(evalParams, cow, err)
+			// TODO: is it ok to call .Updates() after .commitToParent()?
+			update := cow.Updates()
+			eval.Tracer.AfterTxnGroup(evalParams, &update, err)
 		}()
 	}
 
@@ -963,14 +970,34 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
+		cowForTxn := cow
+
+		if eval.GranularEval {
+			cowForTxn = cow.child(1)
+		}
+
 		if eval.Tracer != nil {
 			eval.Tracer.BeforeTxn(evalParams, gi)
 		}
 
-		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cowForTxn, &txib)
 
 		if eval.Tracer != nil {
-			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData, err)
+			var update *ledgercore.StateDelta
+			if eval.GranularEval {
+				// Only include if we're sure the cowForTxn contains ONLY the updates from this txn
+				u := cowForTxn.Updates()
+				update = &u
+			}
+			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData, update, err)
+		}
+
+		if eval.GranularEval {
+			cowForTxn.commitToParent()
+			// It would be nice if we could reference the same cow for all txns without having
+			// to put into and take out of the sync.Pool, but cow.child MUST retrieve it from the
+			// sync pool as of right now.
+			cowForTxn.recycle()
 		}
 
 		if err != nil {

@@ -19,6 +19,7 @@ package mocktracer
 import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -137,7 +138,7 @@ func (d *Tracer) BeforeTxnGroup(ep *logic.EvalParams) {
 }
 
 // AfterTxnGroup mocks the logic.EvalTracer.AfterTxnGroup method
-func (d *Tracer) AfterTxnGroup(ep *logic.EvalParams, updateProvider logic.LedgerUpdateProvider, evalError error) {
+func (d *Tracer) AfterTxnGroup(ep *logic.EvalParams, update *ledgercore.StateDelta, evalError error) {
 	d.Events = append(d.Events, AfterTxnGroup(len(ep.TxnGroup), evalError != nil))
 }
 
@@ -147,7 +148,7 @@ func (d *Tracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 }
 
 // AfterTxn mocks the logic.EvalTracer.AfterTxn method
-func (d *Tracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
+func (d *Tracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, update *ledgercore.StateDelta, evalError error) {
 	d.Events = append(d.Events, AfterTxn(ep.TxnGroup[groupIndex].Txn.Type, ad, evalError != nil))
 }
 

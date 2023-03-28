@@ -292,18 +292,25 @@ func (cs *roundCowState) DelBox(appIdx basics.AppIndex, key string, appAddr basi
 	return true, cs.kvDel(fullKey)
 }
 
-func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) error {
+func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) (*ledgercore.StateDelta, error) {
+	cowForTxn := cs
+
+	if ep.GranularEval {
+		cowForTxn = cs.child(1)
+		defer cowForTxn.recycle()
+	}
+
 	txn := &ep.TxnGroup[gi]
 
 	// move fee to pool
-	err := cs.Move(txn.Txn.Sender, ep.Specials.FeeSink, txn.Txn.Fee, &txn.ApplyData.SenderRewards, nil)
+	err := cowForTxn.Move(txn.Txn.Sender, ep.Specials.FeeSink, txn.Txn.Fee, &txn.ApplyData.SenderRewards, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	err = apply.Rekey(cs, &txn.Txn)
+	err = apply.Rekey(cowForTxn, &txn.Txn)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// compared to eval.transaction() it may seem strange that we
@@ -319,31 +326,31 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) error {
 
 	switch txn.Txn.Type {
 	case protocol.PaymentTx:
-		err = apply.Payment(txn.Txn.PaymentTxnFields, txn.Txn.Header, cs, *ep.Specials, &txn.ApplyData)
+		err = apply.Payment(txn.Txn.PaymentTxnFields, txn.Txn.Header, cowForTxn, *ep.Specials, &txn.ApplyData)
 
 	case protocol.KeyRegistrationTx:
-		err = apply.Keyreg(txn.Txn.KeyregTxnFields, txn.Txn.Header, cs, *ep.Specials, &txn.ApplyData,
-			cs.Round())
+		err = apply.Keyreg(txn.Txn.KeyregTxnFields, txn.Txn.Header, cowForTxn, *ep.Specials, &txn.ApplyData,
+			cowForTxn.Round())
 
 	case protocol.AssetConfigTx:
-		err = apply.AssetConfig(txn.Txn.AssetConfigTxnFields, txn.Txn.Header, cs, *ep.Specials, &txn.ApplyData,
-			cs.Counter())
+		err = apply.AssetConfig(txn.Txn.AssetConfigTxnFields, txn.Txn.Header, cowForTxn, *ep.Specials, &txn.ApplyData,
+			cowForTxn.Counter())
 
 	case protocol.AssetTransferTx:
-		err = apply.AssetTransfer(txn.Txn.AssetTransferTxnFields, txn.Txn.Header, cs, *ep.Specials, &txn.ApplyData)
+		err = apply.AssetTransfer(txn.Txn.AssetTransferTxnFields, txn.Txn.Header, cowForTxn, *ep.Specials, &txn.ApplyData)
 
 	case protocol.AssetFreezeTx:
-		err = apply.AssetFreeze(txn.Txn.AssetFreezeTxnFields, txn.Txn.Header, cs, *ep.Specials, &txn.ApplyData)
+		err = apply.AssetFreeze(txn.Txn.AssetFreezeTxnFields, txn.Txn.Header, cowForTxn, *ep.Specials, &txn.ApplyData)
 
 	case protocol.ApplicationCallTx:
-		err = apply.ApplicationCall(txn.Txn.ApplicationCallTxnFields, txn.Txn.Header, cs, &txn.ApplyData,
-			gi, ep, cs.Counter())
+		err = apply.ApplicationCall(txn.Txn.ApplicationCallTxnFields, txn.Txn.Header, cowForTxn, &txn.ApplyData,
+			gi, ep, cowForTxn.Counter())
 
 	default:
 		err = fmt.Errorf("%s tx in AVM", txn.Txn.Type)
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// We don't check min balances during in app txns.
@@ -352,5 +359,11 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) error {
 	// top-level txn concludes, because cow will return all changed accounts in
 	// modifiedAccounts().
 
-	return nil
+	if ep.GranularEval {
+		update := cowForTxn.Updates()
+		cowForTxn.commitToParent()
+		return &update, nil
+	}
+
+	return nil, nil
 }

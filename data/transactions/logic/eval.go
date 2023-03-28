@@ -238,7 +238,7 @@ type LedgerForLogic interface {
 	SetBox(appIdx basics.AppIndex, key string, value []byte) error
 	DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) (bool, error)
 
-	Perform(gi int, ep *EvalParams) error
+	Perform(gi int, ep *EvalParams) (*ledgercore.StateDelta, error)
 	Counter() uint64
 }
 
@@ -284,6 +284,10 @@ type EvalParams struct {
 
 	// optional tracer
 	Tracer EvalTracer
+
+	// GranularEval controls whether we should create a child cow for each inner transaction.
+	// It does not make sense to enable this without also providing a Tracer.
+	GranularEval bool
 
 	// MinAvmVersion is the minimum allowed AVM version of this program.
 	// The program must reject if its version is less than this version. If
@@ -462,6 +466,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		SigLedger:               caller.SigLedger,
 		Ledger:                  caller.Ledger,
 		Tracer:                  caller.Tracer,
+		GranularEval:            caller.GranularEval,
 		MinAvmVersion:           &minAvmVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
@@ -5221,10 +5226,10 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 			ep.Tracer.BeforeTxn(ep, i)
 		}
 
-		err := cx.Ledger.Perform(i, ep)
+		update, err := cx.Ledger.Perform(i, ep)
 
 		if ep.Tracer != nil {
-			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData, err)
+			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData, update, err)
 		}
 
 		if err != nil {

@@ -232,7 +232,7 @@ func TestCursorEvalTracer(t *testing.T) {
 				case mocktracer.BeforeTxnEvent:
 					tracer.BeforeTxn(&ep, groupIndex)
 				case mocktracer.AfterTxnEvent:
-					tracer.AfterTxn(&ep, groupIndex, transactions.ApplyData{}, nil)
+					tracer.AfterTxn(&ep, groupIndex, transactions.ApplyData{}, nil, nil)
 				case mocktracer.BeforeTxnGroupEvent:
 					tracer.BeforeTxnGroup(&ep)
 				case mocktracer.AfterTxnGroupEvent:
