@@ -802,7 +802,7 @@ func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
 		cs.blocksDownloadPeerSelector = makePeerSelector(
 			cs.net,
 			[]peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}, // Makes HTTP requests
 			})
 	}
 }

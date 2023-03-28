@@ -667,6 +667,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			wn.peersLock.RLock()
 			for _, peer := range wn.peers {
 				if peer.outgoing {
+					// Wrap a connected wsPeer inside a Peer{} interface that also implements network.UnicastPeer.
 					outPeers = append(outPeers, Peer(peer))
 				}
 			}
@@ -676,6 +677,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			var addrs []string
 			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryRelayRole)
 			for _, addr := range addrs {
+				// Makes a wsPeerCore containing an address and unconnected HTTP client that also implements network.HTTPPeer.
 				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin address*/)
 				outPeers = append(outPeers, &peerCore)
 			}
@@ -684,6 +686,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			var addrs []string
 			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryArchiverRole)
 			for _, addr := range addrs {
+				// Makes a wsPeerCore containing an address and unconnected HTTP client that also implements network.HTTPPeer.
 				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin address*/)
 				outPeers = append(outPeers, &peerCore)
 			}
@@ -691,6 +694,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			wn.peersLock.RLock()
 			for _, peer := range wn.peers {
 				if !peer.outgoing {
+					// Wrap a connected wsPeer inside a Peer{} interface that also implements network.UnicastPeer.
 					outPeers = append(outPeers, Peer(peer))
 				}
 			}
