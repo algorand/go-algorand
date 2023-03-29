@@ -123,9 +123,9 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto conf
 	return &cb
 }
 
-// Updates returns a ledgercore.StateDelta containing all the changes made to this roundCowState.
+// updates returns a ledgercore.StateDelta containing all the changes made to this roundCowState.
 // However, it does not return old state information (i.e. cb.mods.KvMods[key].OldValue).
-func (cb *roundCowState) Updates() ledgercore.StateDelta {
+func (cb *roundCowState) updates() ledgercore.StateDelta {
 	// Apply storage deltas to account deltas
 	for addr, smap := range cb.sdeltas {
 		for aapp, storeDelta := range smap {
@@ -138,7 +138,7 @@ func (cb *roundCowState) Updates() ledgercore.StateDelta {
 }
 
 func (cb *roundCowState) deltas() ledgercore.StateDelta {
-	cb.Updates()
+	cb.updates()
 
 	// Populate old values by looking through parent
 	for key, value := range cb.mods.KvMods {

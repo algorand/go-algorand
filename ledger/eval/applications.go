@@ -363,7 +363,7 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) (*ledgercore.Stat
 	// modifiedAccounts().
 
 	if ep.GranularEval {
-		update := cowForTxn.Updates()
+		update := cowForTxn.updates()
 		return &update, nil
 	}
 

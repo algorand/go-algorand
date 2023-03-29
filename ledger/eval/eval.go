@@ -959,8 +959,8 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		eval.Tracer.BeforeTxnGroup(evalParams)
 		// Ensure we update the tracer before exiting
 		defer func() {
-			// TODO: is it ok to call .Updates() after .commitToParent()?
-			update := cow.Updates()
+			// TODO: need to check, is it ok to call .updates() after .commitToParent()?
+			update := cow.updates()
 			eval.Tracer.AfterTxnGroup(evalParams, &update, err)
 		}()
 	}
@@ -986,7 +986,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 			var update *ledgercore.StateDelta
 			if eval.GranularEval {
 				// Only include if we're sure the cowForTxn contains ONLY the updates from this txn
-				u := cowForTxn.Updates()
+				u := cowForTxn.updates()
 				update = &u
 			}
 			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData, update, err)
