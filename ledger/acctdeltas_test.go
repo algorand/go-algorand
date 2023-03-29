@@ -850,6 +850,7 @@ func TestLookupKeysByPrefix(t *testing.T) {
 		{key: []byte("DingHo-StandardPack"), value: []byte("5bucks25cents")},
 		{key: []byte("BostonKitchen-CheeseSlice"), value: []byte("3bucks50cents")},
 		{key: []byte(`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`), value: []byte("random Bluh")},
+		{key: []byte(`a-random-box-key`), value: []byte{}},
 	}
 
 	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
