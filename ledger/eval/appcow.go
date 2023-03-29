@@ -29,7 +29,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// msgp: ignore storageAction
+//msgp:ignore storageAction
 type storageAction uint64
 
 const (
