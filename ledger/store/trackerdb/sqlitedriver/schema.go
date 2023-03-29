@@ -346,12 +346,7 @@ func accountsCreateBoxTable(ctx context.Context, tx *sql.Tx) error {
 
 // performKVStoreNullBlobConversion scans keys with null blob value, and convert the value to `[]byte{}`.
 func performKVStoreNullBlobConversion(ctx context.Context, tx *sql.Tx) error {
-	updateWithEmptyByteSlice, err := tx.PrepareContext(ctx, "UPDATE kvstore SET value = ? WHERE value is NULL")
-	if err != nil {
-		return err
-	}
-
-	_, err = updateWithEmptyByteSlice.ExecContext(ctx, []byte{})
+	_, err := tx.ExecContext(ctx, "UPDATE kvstore SET value = '' WHERE value is NULL")
 	return err
 }
 
