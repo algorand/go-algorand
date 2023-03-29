@@ -138,10 +138,11 @@ func (w *stagingWriterImpl) writeKVs(ctx context.Context, kvrs []encoded.KVRecor
 			// We are (and should be) during Fast Catchup (FC)
 			// writing to DB with empty byte string, rather than writing nil.
 			//
-			// This does not really matter in sqlite3,
-			// for sqlite3 treats them both as empty BLOB,
-			// but when we have a Key-Value-based database backend,
-			// nil and []byte{} might be treated differently.
+			// This matters in sqlite3,
+			// for sqlite3 differs on writing nil byte slice to table from writing []byte{}:
+			// - writing nil byte slice is true that `value is NULL`
+			// - writing []byte{} is false on `value is NULL`.
+			//
 			// For the sake of consistency, we convert nil to []byte{}.
 			//
 			// Also, from a round by round catchup perspective,
