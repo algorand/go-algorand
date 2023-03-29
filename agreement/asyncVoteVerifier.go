@@ -258,7 +258,7 @@ func (vbp *voteBatchProcessor) ProcessBatch(jobs []execpool.InputJob) {
 				if err != nil {
 					var e *LedgerDroppedRoundError
 					cancelled := errors.As(err, &e)
-					vbp.outChan <- &asyncVerifyVoteResponse{ev: ev, index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
+					vbp.outChan <- &asyncVerifyVoteResponse{index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
 				} else {
 					checkedRequests = append(checkedRequests, req)
 					verificationTasks.addEqVoteTasks(vts, ev)
@@ -270,7 +270,7 @@ func (vbp *voteBatchProcessor) ProcessBatch(jobs []execpool.InputJob) {
 				if err != nil {
 					var e *LedgerDroppedRoundError
 					cancelled := errors.As(err, &e)
-					vbp.outChan <- &asyncVerifyVoteResponse{v: v, index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
+					vbp.outChan <- &asyncVerifyVoteResponse{index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
 				} else {
 					checkedRequests = append(checkedRequests, req)
 					verificationTasks.addVoteTask(vt, v)
