@@ -81,7 +81,7 @@ func TestReadyEndpoint(t *testing.T) {
 	readyEndpointTestHelper(t, mockNodeInstance, http.StatusOK)
 
 	mockNodeInstance.catchupStatus = CatchingUpFast
-	readyEndpointTestHelper(t, mockNodeInstance, http.StatusBadRequest)
+	readyEndpointTestHelper(t, mockNodeInstance, http.StatusServiceUnavailable)
 
 	mockNodeInstance.catchupStatus = StoppedAtUnsupported
 	readyEndpointTestHelper(t, mockNodeInstance, http.StatusInternalServerError)

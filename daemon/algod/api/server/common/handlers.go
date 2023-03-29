@@ -138,7 +138,7 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 		code = http.StatusInternalServerError
 		err = fmt.Errorf("stopped at an unsupported round")
 	} else if !isReadyFromStat(stat) {
-		code = http.StatusBadRequest
+		code = http.StatusServiceUnavailable
 		err = fmt.Errorf("ready failed as the node is catching up")
 	}
 
