@@ -125,8 +125,9 @@ type EvalTracer interface {
 	// ad is the ApplyData result of the transaction; prefer using this instead of
 	// ep.TxnGroup[groupIndex].ApplyData, since it may not be populated at this point.
 	//
-	// TODO: if granular eval is enabled, update is the ledgercore.StateDelta updates that occurred
-	// because of this transaction. Otherwise, this argument is nil.
+	// If GranularEval is enabled by the evaluator (specified either in logic.EvalParams or ledger's
+	// BlockEvaluator), update is the ledgercore.StateDelta updates that occurred because of this
+	// transaction. Otherwise, this argument is nil.
 	AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData, update *ledgercore.StateDelta, evalError error)
 
 	// BeforeProgram is called before an app or LogicSig program is evaluated.
