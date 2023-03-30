@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal
+package eval
 
 import (
 	"fmt"
@@ -105,6 +105,10 @@ func (ml *emptyLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader
 
 func (ml *emptyLedger) GetStateProofNextRound() basics.Round {
 	return basics.Round(0)
+}
+
+func (ml *emptyLedger) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("emptyLedger does not implement GetStateProofVerificationContext")
 }
 
 type modsData struct {

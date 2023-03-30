@@ -184,17 +184,17 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	// if we have the telemetry enabled, we want to use it's sessionid as part of the
 	// collected metrics decorations.
-	fmt.Fprintln(logWriter, "++++++++++++++++++++++++++++++++++++++++")
-	fmt.Fprintln(logWriter, "Logging Starting")
+	s.log.Infoln("++++++++++++++++++++++++++++++++++++++++")
+	s.log.Infoln("Logging Starting")
 	if s.log.GetTelemetryUploadingEnabled() {
 		// May or may not be logging to node.log
-		fmt.Fprintf(logWriter, "Telemetry Enabled: %s\n", s.log.GetTelemetryGUID())
-		fmt.Fprintf(logWriter, "Session: %s\n", s.log.GetTelemetrySession())
+		s.log.Infof("Telemetry Enabled: %s\n", s.log.GetTelemetryGUID())
+		s.log.Infof("Session: %s\n", s.log.GetTelemetrySession())
 	} else {
 		// May or may not be logging to node.log
-		fmt.Fprintln(logWriter, "Telemetry Disabled")
+		s.log.Infoln("Telemetry Disabled")
 	}
-	fmt.Fprintln(logWriter, "++++++++++++++++++++++++++++++++++++++++")
+	s.log.Infoln("++++++++++++++++++++++++++++++++++++++++")
 
 	metricLabels := map[string]string{}
 	if s.log.GetTelemetryEnabled() {

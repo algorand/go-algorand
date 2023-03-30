@@ -6,6 +6,7 @@ import (
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/ledger/encoded"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // The following msgp objects are implemented in this file:
@@ -40,6 +41,14 @@ import (
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
+//
+// catchpointStateProofVerificationContext
+//                    |-----> (*) MarshalMsg
+//                    |-----> (*) CanMarshalMsg
+//                    |-----> (*) UnmarshalMsg
+//                    |-----> (*) CanUnmarshalMsg
+//                    |-----> (*) Msgsize
+//                    |-----> (*) MsgIsZero
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -768,4 +777,162 @@ func (z *catchpointFileChunkV6) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *catchpointFileChunkV6) MsgIsZero() bool {
 	return (len((*z).Balances) == 0) && (len((*z).KVs) == 0)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *catchpointStateProofVerificationContext) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0002Len := uint32(1)
+	var zb0002Mask uint8 /* 2 bits */
+	if len((*z).Data) == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x2
+	}
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "spd"
+			o = append(o, 0xa3, 0x73, 0x70, 0x64)
+			if (*z).Data == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).Data)))
+			}
+			for zb0001 := range (*z).Data {
+				o = (*z).Data[zb0001].MarshalMsg(o)
+			}
+		}
+	}
+	return
+}
+
+func (_ *catchpointStateProofVerificationContext) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*catchpointStateProofVerificationContext)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *catchpointStateProofVerificationContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 0 {
+			zb0002--
+			var zb0004 int
+			var zb0005 bool
+			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Data")
+				return
+			}
+			if zb0004 > SPContextPerCatchpointFile {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(SPContextPerCatchpointFile))
+				err = msgp.WrapError(err, "struct-from-array", "Data")
+				return
+			}
+			if zb0005 {
+				(*z).Data = nil
+			} else if (*z).Data != nil && cap((*z).Data) >= zb0004 {
+				(*z).Data = ((*z).Data)[:zb0004]
+			} else {
+				(*z).Data = make([]ledgercore.StateProofVerificationContext, zb0004)
+			}
+			for zb0001 := range (*z).Data {
+				bts, err = (*z).Data[zb0001].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Data", zb0001)
+					return
+				}
+			}
+		}
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0003 {
+			(*z) = catchpointStateProofVerificationContext{}
+		}
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "spd":
+				var zb0006 int
+				var zb0007 bool
+				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Data")
+					return
+				}
+				if zb0006 > SPContextPerCatchpointFile {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(SPContextPerCatchpointFile))
+					err = msgp.WrapError(err, "Data")
+					return
+				}
+				if zb0007 {
+					(*z).Data = nil
+				} else if (*z).Data != nil && cap((*z).Data) >= zb0006 {
+					(*z).Data = ((*z).Data)[:zb0006]
+				} else {
+					(*z).Data = make([]ledgercore.StateProofVerificationContext, zb0006)
+				}
+				for zb0001 := range (*z).Data {
+					bts, err = (*z).Data[zb0001].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Data", zb0001)
+						return
+					}
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *catchpointStateProofVerificationContext) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*catchpointStateProofVerificationContext)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *catchpointStateProofVerificationContext) Msgsize() (s int) {
+	s = 1 + 4 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Data {
+		s += (*z).Data[zb0001].Msgsize()
+	}
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *catchpointStateProofVerificationContext) MsgIsZero() bool {
+	return (len((*z).Data) == 0)
 }

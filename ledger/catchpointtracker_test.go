@@ -43,6 +43,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -268,6 +269,20 @@ func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {
 	return numberOfCatchpointFiles, err
 }
 
+func calculateStateProofVerificationHash(t *testing.T, ml *mockLedgerForTracker) crypto.Digest {
+	var digest crypto.Digest
+	err := ml.dbs.Snapshot(func(dbCtx context.Context, tx trackerdb.SnapshotScope) (err error) {
+		rawData, err := tx.MakeSpVerificationCtxReader().GetAllSPContexts(dbCtx)
+		require.NoError(t, err)
+
+		wrappedData := catchpointStateProofVerificationContext{Data: rawData}
+		digest = crypto.HashObj(wrappedData)
+		return nil
+	})
+	require.NoError(t, err)
+	return digest
+}
+
 // The goal of this test is to check that we are saving at most X catchpoint files.
 // If algod needs to create a new catchpoint file it will delete the oldest.
 // In addition, when deleting old catchpoint files an empty directory should be deleted
@@ -298,13 +313,7 @@ func TestRecordCatchpointFile(t *testing.T) {
 
 	for _, round := range []basics.Round{2000000, 3000010, 3000015, 3000020} {
 		accountsRound := round - 1
-
-		_, _, _, biggestChunkLen, err := ct.generateCatchpointData(
-			context.Background(), accountsRound, time.Second)
-		require.NoError(t, err)
-
-		err = ct.createCatchpoint(context.Background(), accountsRound, round, trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
-		require.NoError(t, err)
+		createCatchpoint(t, ct, accountsRound, ml, round)
 	}
 
 	numberOfCatchpointFiles, err := getNumberOfCatchpointFilesInDir(temporaryDirectory)
@@ -316,6 +325,87 @@ func TestRecordCatchpointFile(t *testing.T) {
 	onlyCatchpointDirEmpty := len(emptyDirs) == 0 ||
 		(len(emptyDirs) == 1 && emptyDirs[0] == temporaryDirectory)
 	require.Equalf(t, onlyCatchpointDirEmpty, true, "Directories: %v", emptyDirs)
+}
+
+func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.Round, ml *mockLedgerForTracker, round basics.Round) {
+	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
+	_, _, _, biggestChunkLen, stateProofVerificationHash, err := ct.generateCatchpointData(
+		context.Background(), accountsRound, &catchpointGenerationStats)
+	require.NoError(t, err)
+
+	require.Equal(t, calculateStateProofVerificationHash(t, ml), stateProofVerificationHash)
+
+	err = ct.createCatchpoint(context.Background(), accountsRound, round, trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
+	require.NoError(t, err)
+}
+
+// TestCatchpointFileWithLargeSpVerification makes sure that CatchpointFirstStageInfo.BiggestChunkLen is calculated based on state proof verification contexts
+// as well as other chunks in the catchpoint files.
+func TestCatchpointFileWithLargeSpVerification(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	temporaryDirectory := t.TempDir()
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
+
+	ct := &catchpointTracker{}
+	conf := config.GetDefaultLocal()
+
+	conf.Archival = true
+	ct.initialize(conf, ".")
+	defer ct.close()
+	ct.dbDirectory = temporaryDirectory
+
+	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
+	require.NoError(t, err)
+
+	err = ct.loadFromDisk(ml, ml.Latest())
+	require.NoError(t, err)
+
+	//  create catpoint with no sp verification data
+	round := basics.Round(2000000)
+	createCatchpoint(t, ct, round-1, ml, round)
+
+	numberOfCatchpointFiles, err := getNumberOfCatchpointFilesInDir(temporaryDirectory)
+	require.NoError(t, err)
+	require.Equal(t, 1, numberOfCatchpointFiles)
+	//  create catpoint with 2 sp verification data
+	writeDummySpVerification(t, 0, 3, ml)
+
+	round = basics.Round(3000000)
+	createCatchpoint(t, ct, round-1, ml, round)
+
+	numberOfCatchpointFiles, err = getNumberOfCatchpointFilesInDir(temporaryDirectory)
+	require.NoError(t, err)
+	require.Equal(t, 2, numberOfCatchpointFiles)
+
+	//  create catpoint with 500 sp verification data - the sp verification chunk should be the largest
+	writeDummySpVerification(t, 4, 500, ml)
+
+	round = basics.Round(4000000)
+	createCatchpoint(t, ct, round-1, ml, round)
+
+	numberOfCatchpointFiles, err = getNumberOfCatchpointFilesInDir(temporaryDirectory)
+	require.NoError(t, err)
+	require.Equal(t, 3, numberOfCatchpointFiles)
+}
+
+func writeDummySpVerification(t *testing.T, nextIndexForContext uint64, numberOfContexts uint64, ml *mockLedgerForTracker) {
+	err := ml.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+
+		contexts := make([]*ledgercore.StateProofVerificationContext, numberOfContexts)
+		for i := uint64(0); i < numberOfContexts; i++ {
+			e := ledgercore.StateProofVerificationContext{}
+			e.LastAttestedRound = basics.Round(nextIndexForContext + i)
+			contexts[i] = &e
+		}
+		writer := tx.MakeSpVerificationCtxReaderWriter()
+
+		return writer.StoreSPContexts(ctx, contexts[:])
+	})
+	require.NoError(t, err)
 }
 
 func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
@@ -371,8 +461,9 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	})
 	require.NoError(b, err)
 
+	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
 	b.ResetTimer()
-	ct.generateCatchpointData(context.Background(), basics.Round(0), time.Second)
+	ct.generateCatchpointData(context.Background(), basics.Round(0), &catchpointGenerationStats)
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "accounts")
 }
@@ -388,7 +479,7 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
-	protoParams.EnableOnlineAccountCatchpoints = true
+	protoParams.EnableCatchpointsWithSPContexts = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -469,6 +560,7 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 
 		ml.trackers.newBlock(blk, delta)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
+		ml.trackers.committedUpTo(i)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 		roundDeltas[i] = delta
@@ -517,6 +609,9 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 			delta := roundDeltas[i]
 
 			ml2.trackers.newBlock(blk, delta)
+			err := ml2.addMockBlock(blockEntry{block: blk}, delta)
+			require.NoError(t, err)
+			ml2.trackers.committedUpTo(i)
 
 			if isDataFileRound(i) || isCatchpointRound(i) {
 				ml2.trackers.committedUpTo(i)
@@ -617,7 +712,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestCatchpointTrackerNonblockingCatchpointWriting")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.EnableOnlineAccountCatchpoints = true
+	protoParams.EnableCatchpointsWithSPContexts = true
 	protoParams.CatchpointLookback = protoParams.MaxBalLookback
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
@@ -938,7 +1033,7 @@ func TestCatchpointFirstStageInfoPruning(t *testing.T) {
 		protocol.ConsensusVersion("test-protocol-TestFirstStageInfoPruning")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
-	protoParams.EnableOnlineAccountCatchpoints = true
+	protoParams.EnableCatchpointsWithSPContexts = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -1043,7 +1138,7 @@ func TestCatchpointFirstStagePersistence(t *testing.T) {
 		protocol.ConsensusVersion("test-protocol-TestFirstStagePersistence")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
-	protoParams.EnableOnlineAccountCatchpoints = true
+	protoParams.EnableCatchpointsWithSPContexts = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -1145,7 +1240,7 @@ func TestCatchpointSecondStagePersistence(t *testing.T) {
 		protocol.ConsensusVersion("test-protocol-TestFirstStagePersistence")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
-	protoParams.EnableOnlineAccountCatchpoints = true
+	protoParams.EnableCatchpointsWithSPContexts = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -1292,7 +1387,7 @@ func TestCatchpointSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 		protocol.ConsensusVersion("test-protocol-TestFirstStagePersistence")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
-	protoParams.EnableOnlineAccountCatchpoints = true
+	protoParams.EnableCatchpointsWithSPContexts = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -1381,7 +1476,7 @@ func TestCatchpointSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *t
 		protocol.ConsensusVersion("test-protocol-TestFirstStagePersistence")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 32
-	protoParams.EnableOnlineAccountCatchpoints = true
+	protoParams.EnableCatchpointsWithSPContexts = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
@@ -1603,7 +1698,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 		t.Skip("This test is too slow on ARM and causes CI builds to time out")
 	}
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto := config.Consensus[protocol.ConsensusFuture]
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
 	addSinkAndPoolAccounts(accts)
@@ -1613,7 +1708,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 	conf.CatchpointInterval = 1
 	conf.CatchpointTracking = 1
 	initialBlocksCount := int(conf.MaxAcctLookback)
-	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
+	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusFuture, accts)
 	defer ml.Close()
 
 	ct := newCatchpointTracker(t, ml, conf, ".")
@@ -1662,7 +1757,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 			},
 		}
 		blk.RewardsLevel = rewardLevel
-		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
+		blk.CurrentProtocol = protocol.ConsensusFuture
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
@@ -1700,6 +1795,7 @@ func TestCatchpointLargeAccountCountCatchpointGeneration(t *testing.T) {
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLargeAccountCountCatchpointGeneration")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.CatchpointLookback = 16
+	protoParams.EnableCatchpointsWithSPContexts = true
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)

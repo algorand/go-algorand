@@ -49,6 +49,133 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
+type decodedCatchpointChunkData struct {
+	headerName string
+	data       []byte
+}
+
+func readCatchpointContent(t *testing.T, tarReader *tar.Reader) []decodedCatchpointChunkData {
+	result := make([]decodedCatchpointChunkData, 0)
+	for {
+		header, err := tarReader.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+			break
+		}
+		data := make([]byte, header.Size)
+		readComplete := int64(0)
+
+		for readComplete < header.Size {
+			bytesRead, err := tarReader.Read(data[readComplete:])
+			readComplete += int64(bytesRead)
+			if err != nil {
+				if err == io.EOF {
+					if readComplete == header.Size {
+						break
+					}
+					require.NoError(t, err)
+				}
+				break
+			}
+		}
+
+		result = append(result, decodedCatchpointChunkData{headerName: header.Name, data: data})
+	}
+
+	return result
+}
+
+func readCatchpointDataFile(t *testing.T, catchpointDataPath string) []decodedCatchpointChunkData {
+	fileContent, err := os.ReadFile(catchpointDataPath)
+	require.NoError(t, err)
+
+	compressorReader, err := catchpointStage1Decoder(bytes.NewBuffer(fileContent))
+	require.NoError(t, err)
+
+	tarReader := tar.NewReader(compressorReader)
+	return readCatchpointContent(t, tarReader)
+}
+
+func readCatchpointFile(t *testing.T, catchpointPath string) []decodedCatchpointChunkData {
+	fileContent, err := os.ReadFile(catchpointPath)
+	require.NoError(t, err)
+
+	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
+	require.NoError(t, err)
+	defer gzipReader.Close()
+
+	tarReader := tar.NewReader(gzipReader)
+	return readCatchpointContent(t, tarReader)
+}
+
+func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.StateProofVerificationContext) {
+	// create new protocol version, which has lower lookback
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBasicCatchpointWriter")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.CatchpointLookback = 32
+	config.Consensus[testProtocolVersion] = protoParams
+	temporaryDirectory := t.TempDir()
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+	accts := ledgertesting.RandomAccounts(300, false)
+
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, []map[basics.Address]basics.AccountData{accts})
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	conf.Archival = true
+	au, _ := newAcctUpdates(t, ml, conf)
+	err := au.loadFromDisk(ml, 0)
+	require.NoError(t, err)
+	au.close()
+	fileName := filepath.Join(temporaryDirectory, "15.data")
+
+	mockCommitData := make([]verificationCommitContext, 0)
+	for _, element := range data {
+		mockCommitData = append(mockCommitData, verificationCommitContext{verificationContext: element})
+	}
+
+	err = ml.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+		return commitSPContexts(ctx, tx, mockCommitData)
+	})
+
+	require.NoError(t, err)
+
+	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		writer, err := makeCatchpointWriter(context.Background(), fileName, tx, ResourcesPerCatchpointFileChunk)
+		if err != nil {
+			return err
+		}
+		_, err = writer.WriteStateProofVerificationContext()
+		if err != nil {
+			return err
+		}
+		for {
+			more, err := writer.WriteStep(context.Background())
+			require.NoError(t, err)
+			if !more {
+				break
+			}
+		}
+		return
+	})
+
+	catchpointData := readCatchpointDataFile(t, fileName)
+	require.Equal(t, catchpointSPVerificationFileName, catchpointData[0].headerName)
+	var wrappedData catchpointStateProofVerificationContext
+	err = protocol.Decode(catchpointData[0].data, &wrappedData)
+	require.NoError(t, err)
+
+	for index, verificationContext := range wrappedData.Data {
+		require.Equal(t, data[index], verificationContext)
+	}
+}
+
 func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -133,6 +260,10 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		if err != nil {
 			return err
 		}
+		_, err = writer.WriteStateProofVerificationContext()
+		if err != nil {
+			return err
+		}
 		for {
 			more, err := writer.WriteStep(context.Background())
 			require.NoError(t, err)
@@ -142,45 +273,15 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		}
 		return
 	})
-	require.NoError(t, err)
 
-	// load the file from disk.
-	fileContent, err := os.ReadFile(fileName)
-	require.NoError(t, err)
-	compressorReader, err := catchpointStage1Decoder(bytes.NewBuffer(fileContent))
-	require.NoError(t, err)
-	defer compressorReader.Close()
-	tarReader := tar.NewReader(compressorReader)
-
-	header, err := tarReader.Next()
-	require.NoError(t, err)
-
-	balancesBlockBytes := make([]byte, header.Size)
-	readComplete := int64(0)
-
-	for readComplete < header.Size {
-		bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
-		readComplete += int64(bytesRead)
-		if err != nil {
-			if err == io.EOF {
-				if readComplete == header.Size {
-					break
-				}
-				require.NoError(t, err)
-			}
-			break
-		}
-	}
-
-	require.Equal(t, "balances.1.msgpack", header.Name)
+	catchpointContent := readCatchpointDataFile(t, fileName)
+	balanceFileName := fmt.Sprintf(catchpointBalancesFileNameTemplate, 1)
+	require.Equal(t, balanceFileName, catchpointContent[1].headerName)
 
 	var chunk catchpointFileChunkV6
-	err = protocol.Decode(balancesBlockBytes, &chunk)
+	err = protocol.Decode(catchpointContent[1].data, &chunk)
 	require.NoError(t, err)
 	require.Equal(t, uint64(len(accts)), uint64(len(chunk.Balances)))
-
-	_, err = tarReader.Next()
-	require.Equal(t, io.EOF, err)
 }
 
 func testWriteCatchpoint(t *testing.T, rdb trackerdb.TrackerStore, datapath string, filepath string, maxResourcesPerChunk int) CatchpointFileHeader {
@@ -203,7 +304,10 @@ func testWriteCatchpoint(t *testing.T, rdb trackerdb.TrackerStore, datapath stri
 		if err != nil {
 			return err
 		}
-
+		_, err = writer.WriteStateProofVerificationContext()
+		if err != nil {
+			return err
+		}
 		for {
 			more, err := writer.WriteStep(context.Background())
 			require.NoError(t, err)
@@ -226,7 +330,7 @@ func testWriteCatchpoint(t *testing.T, rdb trackerdb.TrackerStore, datapath stri
 	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
 	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
 	catchpointFileHeader := CatchpointFileHeader{
-		Version:           CatchpointFileVersionV6,
+		Version:           CatchpointFileVersionV7,
 		BalancesRound:     accountsRnd,
 		BlocksRound:       blocksRound,
 		Totals:            totals,
@@ -244,6 +348,26 @@ func testWriteCatchpoint(t *testing.T, rdb trackerdb.TrackerStore, datapath stri
 	defer l.Close()
 
 	return catchpointFileHeader
+}
+
+func TestStateProofVerificationContextWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	//t.Parallel() verifyStateProofVerificationContextWrite changes consensus
+
+	verificationContext := ledgercore.StateProofVerificationContext{
+		LastAttestedRound: 120,
+		VotersCommitment:  nil,
+		OnlineTotalWeight: basics.MicroAlgos{Raw: 100},
+	}
+
+	verifyStateProofVerificationContextWrite(t, []ledgercore.StateProofVerificationContext{verificationContext})
+}
+
+func TestEmptyStateProofVerificationContextWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	//t.Parallel() verifyStateProofVerificationContextWrite changes consensus
+
+	verifyStateProofVerificationContextWrite(t, []ledgercore.StateProofVerificationContext{})
 }
 
 func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
@@ -552,40 +676,10 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess tracke
 	err = accessor.ResetStagingBalances(context.Background(), true)
 	require.NoError(t, err)
 
-	// load the file from disk.
-	fileContent, err := os.ReadFile(filepath)
-	require.NoError(t, err)
-	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
-	require.NoError(t, err)
-	tarReader := tar.NewReader(gzipReader)
 	var catchupProgress CatchpointCatchupAccessorProgress
-	defer gzipReader.Close()
-	for {
-		header, err := tarReader.Next()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			require.NoError(t, err)
-			break
-		}
-		balancesBlockBytes := make([]byte, header.Size)
-		readComplete := int64(0)
-
-		for readComplete < header.Size {
-			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
-			readComplete += int64(bytesRead)
-			if err != nil {
-				if err == io.EOF {
-					if readComplete == header.Size {
-						break
-					}
-					require.NoError(t, err)
-				}
-				break
-			}
-		}
-		err = accessor.ProcessStagingBalances(context.Background(), header.Name, balancesBlockBytes, &catchupProgress)
+	catchpointContent := readCatchpointFile(t, filepath)
+	for _, catchpointData := range catchpointContent {
+		err = accessor.ProcessStagingBalances(context.Background(), catchpointData.headerName, catchpointData.data, &catchupProgress)
 		require.NoError(t, err)
 	}
 

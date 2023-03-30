@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/txntest"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -71,7 +71,7 @@ func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 	}
 
 	methodExistsInEvalLedger := func(methodName string) bool {
-		evalLedgerType := reflect.TypeOf((*internal.LedgerForEvaluator)(nil)).Elem()
+		evalLedgerType := reflect.TypeOf((*eval.LedgerForEvaluator)(nil)).Elem()
 		for i := 0; i < evalLedgerType.NumMethod(); i++ {
 			if evalLedgerType.Method(i).Name == methodName {
 				return true

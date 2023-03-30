@@ -204,6 +204,10 @@ func (txs sqlTransactionScope) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAc
 	return MakeEncodedAccoutsBatchIter(txs.tx)
 }
 
+func (txs sqlTransactionScope) MakeSpVerificationCtxReaderWriter() trackerdb.SpVerificationCtxReaderWriter {
+	return makeStateProofVerificationReaderWriter(txs.tx, txs.tx)
+}
+
 func (txs sqlTransactionScope) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
 	return RunMigrations(ctx, txs.tx, params, log, targetVersion)
 }
@@ -263,6 +267,10 @@ func (bs sqlBatchScope) AccountsUpdateSchemaTest(ctx context.Context) (err error
 	return AccountsUpdateSchemaTest(ctx, bs.tx)
 }
 
+func (bs sqlBatchScope) MakeSpVerificationCtxWriter() trackerdb.SpVerificationCtxWriter {
+	return makeStateProofVerificationWriter(bs.tx)
+}
+
 func (ss sqlSnapshotScope) MakeAccountsReader() (trackerdb.AccountsReaderExt, error) {
 	return NewAccountsSQLReaderWriter(ss.tx), nil
 }
@@ -273,4 +281,8 @@ func (ss sqlSnapshotScope) MakeCatchpointReader() (trackerdb.CatchpointReader, e
 
 func (ss sqlSnapshotScope) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.CatchpointPendingHashesIter {
 	return MakeCatchpointPendingHashesIterator(hashCount, ss.tx)
+}
+
+func (ss sqlSnapshotScope) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
+	return makeStateProofVerificationReader(ss.tx)
 }
