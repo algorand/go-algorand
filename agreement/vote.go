@@ -92,6 +92,7 @@ type (
 // and returns the vote verification task to be verified
 func (uv unauthenticatedVote) getVerificationTask(l LedgerReader) (*crypto.SigVerificationTask, vote, error) {
 	rv := uv.R
+	//	fmt.Printf("A %+v %+v %+v %+v \n", rv.Sender, rv.Round, rv.Period, rv.Step)
 	m, err := membership(l, rv.Sender, rv.Round, rv.Period, rv.Step)
 	if err != nil {
 		return nil, vote{}, fmt.Errorf("unauthenticatedVote.verify: could not get membership parameters: %w", err)

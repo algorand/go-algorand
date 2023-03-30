@@ -75,24 +75,45 @@ func TestVerificationAgainstFullExecutionPool(t *testing.T) {
 // Test async vote verifier
 func TestAsyncVerification(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	errProb := float32(0.5)
+	sendReceiveVoteVerifications(false, errProb, t, nil)
+}
 
+func BenchmarkAsyncVerification(b *testing.B) {
+	errProbs := []float32{0.0, 0.2, 0.8}
+	for _, errProb := range errProbs {
+		b.Run(fmt.Sprintf("errProb_%.3f_any_err", errProb), func(b *testing.B) {
+			sendReceiveVoteVerifications(false, errProb, nil, b)
+		})
+		if errProb > float32(0.0) {
+			b.Run(fmt.Sprintf("errProb_%.3f_sig_err_only", errProb), func(b *testing.B) {
+				sendReceiveVoteVerifications(true, errProb, nil, b)
+			})
+		}
+	}
+}
+
+func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, t *testing.T, b *testing.B) {
 	voteVerifier := MakeStartAsyncVoteVerifier(nil)
 	defer voteVerifier.Quit()
 
 	outChan := make(chan asyncVerifyVoteResponse, 1)
 
-	uvChan := make(chan *unVoteTest)
-	uevChan := make(chan *unEqVoteTest)
-	count := 100
-	errProb := float32(0.9)
-	errsV := make(map[int]error)
-	errsEv := make(map[int]error)
+	count := 200
+	gcount := 200
+	if b != nil {
+		count = b.N
+	}
+
 	errChan := make(chan error)
-	ctx, cancel := context.WithCancel(context.Background())
-	ledger := generateTestVotes(uvChan, uevChan, errChan, ctx, count, errProb)
+	ledger, votes, eqVotes, errsV, errsEv := generateTestVotes(badSigOnly, errChan, gcount, errProb)
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
+	if b != nil {
+		b.ResetTimer()
+	}
+	// collect the verification results and check against the error expectation
 	go func() {
 		defer wg.Done()
 		c := 0
@@ -107,39 +128,39 @@ func TestAsyncVerification(t *testing.T) {
 			if (expectedError == nil && res.err != nil) || (expectedError != nil && res.err == nil) {
 				errChan <- fmt.Errorf("expected %v got %v", expectedError, res.err)
 			}
-			if c == count {
+			if c == 2*count {
 				break
 			}
 		}
+		//		cancel()
 		close(errChan)
 	}()
+	// stream the votes to the verifier
 	go func() {
 		defer wg.Done()
-		for c := 0; c < count; c++ {
-			select {
-			case uv := <-uvChan:
-				errsV[uv.id] = uv.err
+		vi := 0
+		evi := 0
+		for c := 0; c < 2*count; c++ {
+			if rand.Float32() > 0.5 {
+				uv := votes[vi%gcount]
+				vi++
 				voteVerifier.verifyVote(context.Background(), ledger, *uv.uv, uint64(uv.id), message{}, outChan)
-			case uev := <-uevChan:
-				errsEv[uev.id] = uev.err
+			} else {
+				uev := eqVotes[evi%gcount]
+				evi++
 				voteVerifier.verifyEqVote(context.Background(), ledger, *uev.uev, uint64(uev.id), message{}, outChan)
-			case <-ctx.Done():
-				return
 			}
 		}
-		cancel()
-		// flush any remaiing in the queue
-		for range uvChan {
-		}
-		for range uevChan {
-		}
-
 	}()
-
+	// monitor the errors returned from the various goroutines
 	for err := range errChan {
-		require.NoError(t, err)
-		cancel()
+		if t != nil {
+			require.NoError(t, err)
+		} else {
+			require.NoError(b, err)
+		}
 	}
+	wg.Wait()
 }
 
 type unVoteTest struct {
@@ -154,14 +175,20 @@ type unEqVoteTest struct {
 	id  int
 }
 
-func generateTestVotes(uvChan chan<- *unVoteTest, uEqvChan chan<- *unEqVoteTest, errChan chan<- error, ctx context.Context, count int, errProb float32) (ledger Ledger) {
+func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count int, errProb float32) (ledger Ledger,
+	votes []*unVoteTest, eqVotes []*unEqVoteTest, errsV, errsEv map[int]error) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)
-
+	votes = make([]*unVoteTest, count)
+	eqVotes = make([]*unEqVoteTest, count)
+	errsV = make(map[int]error)
+	errsEv = make(map[int]error)
+	wg := sync.WaitGroup{}
+	wg.Add(2)
 	go func() {
-		c := 0
-		for {
+		defer wg.Done()
+		for c := 0; c < count; c++ {
 			var processedVote = false
 			var proposal proposalValue
 			proposal.BlockDigest = randomBlockHash()
@@ -173,8 +200,6 @@ func generateTestVotes(uvChan chan<- *unVoteTest, uEqvChan chan<- *unEqVoteTest,
 				if err != nil {
 					errChan <- err
 				}
-				//loop to find votes selected to participate
-				//				fmt.Printf("A %s %d %d %d %+v\n", address, round, period, step(0), uv)
 				m, err := membership(ledger, address, round, period, step(0))
 				if err != nil {
 					errChan <- err
@@ -186,16 +211,20 @@ func generateTestVotes(uvChan chan<- *unVoteTest, uEqvChan chan<- *unEqVoteTest,
 				}
 				processedVote = true
 
-				errType := rand.Intn(7)
-				if rand.Float32() > errProb {
-					errType = 8
+				errType := 99
+				if rand.Float32() < errProb {
+					if onlyBadSigs {
+						errType = 0
+					} else {
+						errType = rand.Intn(7)
+					}
 				}
 				var v *unVoteTest
 				switch errType {
 				case 0:
-					noSig := uv
-					noSig.Sig = crypto.OneTimeSignature{}
-					v = &unVoteTest{uv: &noSig, err: fmt.Errorf("no sig error"), id: c}
+					badSig := uv
+					badSig.Sig.Sig[0] = badSig.Sig.Sig[0] + 1
+					v = &unVoteTest{uv: &badSig, err: fmt.Errorf("bad sig error"), id: c}
 
 				case 1:
 					noCred := uv
@@ -230,26 +259,19 @@ func generateTestVotes(uvChan chan<- *unVoteTest, uEqvChan chan<- *unEqVoteTest,
 				default:
 					v = &unVoteTest{uv: &uv, err: nil, id: c}
 				}
-				uvChan <- v
+				errsV[v.id] = v.err
+				votes[v.id] = v
 				break
 			}
-			c++
 			if !processedVote {
 				errChan <- fmt.Errorf("No votes were processed")
 			}
-			select {
-			case <-ctx.Done():
-				close(uvChan)
-				return
-			default:
-			}
-
 		}
 	}()
 
 	go func() {
-		for {
-			c := 0
+		defer wg.Done()
+		for c := 0; c < count; c++ {
 			var proposal1 proposalValue
 			proposal1.BlockDigest = randomBlockHash()
 
@@ -259,19 +281,20 @@ func generateTestVotes(uvChan chan<- *unVoteTest, uEqvChan chan<- *unEqVoteTest,
 			var processedVote = false
 			for i, address := range addresses {
 				proposal1.OriginalProposer = address
-				rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step(i), Proposal: proposal1}
+				rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step(0), Proposal: proposal1}
 				unauthenticatedVote0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
 				if err != nil {
 					errChan <- err
 				}
 
-				rv0Copy := rawVote{Sender: address, Round: round, Period: period, Step: step(i), Proposal: proposal1}
+				rv0Copy := rawVote{Sender: address, Round: round, Period: period, Step: step(0), Proposal: proposal1}
 				unauthenticatedVote0Copy, err := makeVote(rv0Copy, otSecrets[i], vrfSecrets[i], ledger)
 				if err != nil {
 					errChan <- err
 				}
 
-				rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step(i), Proposal: proposal2}
+				proposal2.OriginalProposer = address
+				rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step(0), Proposal: proposal2}
 				unauthenticatedVote1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
 				if err != nil {
 					errChan <- err
@@ -281,7 +304,7 @@ func generateTestVotes(uvChan chan<- *unVoteTest, uEqvChan chan<- *unEqVoteTest,
 					Sender:    address,
 					Round:     round,
 					Period:    period,
-					Step:      step(i),
+					Step:      step(0),
 					Cred:      unauthenticatedVote0.Cred,
 					Proposals: [2]proposalValue{unauthenticatedVote0.R.Proposal, unauthenticatedVote1.R.Proposal},
 					Sigs:      [2]crypto.OneTimeSignature{unauthenticatedVote0.Sig, unauthenticatedVote1.Sig},
@@ -291,24 +314,32 @@ func generateTestVotes(uvChan chan<- *unVoteTest, uEqvChan chan<- *unEqVoteTest,
 					Sender:    address,
 					Round:     round,
 					Period:    period,
-					Step:      step(i),
+					Step:      step(0),
 					Cred:      unauthenticatedVote0.Cred,
 					Proposals: [2]proposalValue{unauthenticatedVote0.R.Proposal, unauthenticatedVote0Copy.R.Proposal},
 					Sigs:      [2]crypto.OneTimeSignature{unauthenticatedVote0.Sig, unauthenticatedVote0Copy.Sig},
 				}
 
 				//loop to find votes selected to participate
-				selected := ev.Sender == ev.Proposals[0].OriginalProposer
+				m, err := membership(ledger, address, round, period, step(0))
+				if err != nil {
+					errChan <- err
+				}
+				_, err = ev.Cred.Verify(config.Consensus[protocol.ConsensusCurrentVersion], m)
+				selected := err == nil
 				if !selected {
 					continue
 				}
 				processedVote = true
 
-				errType := rand.Intn(9)
-				if rand.Float32() > errProb {
-					errType = 9
+				errType := 99
+				if rand.Float32() < errProb {
+					if onlyBadSigs {
+						errType = 0
+					} else {
+						errType = rand.Intn(9)
+					}
 				}
-
 				var v *unEqVoteTest
 				switch errType {
 				case 0:
@@ -316,9 +347,9 @@ func generateTestVotes(uvChan chan<- *unVoteTest, uEqvChan chan<- *unEqVoteTest,
 					v = &unEqVoteTest{uev: &evSameVote, err: fmt.Errorf("error same vote"), id: c}
 
 				case 1:
-					noSig := ev
-					noSig.Sigs = [2]crypto.OneTimeSignature{{}, {}}
-					v = &unEqVoteTest{uev: &noSig, err: fmt.Errorf("error no sig"), id: c}
+					badSig := ev
+					badSig.Sigs[0].Sig[0] = badSig.Sigs[0].Sig[0] + 1
+					v = &unEqVoteTest{uev: &badSig, err: fmt.Errorf("error bad sig"), id: c}
 
 				case 2:
 					noCred := ev
@@ -359,20 +390,15 @@ func generateTestVotes(uvChan chan<- *unVoteTest, uEqvChan chan<- *unEqVoteTest,
 					v = &unEqVoteTest{uev: &ev, err: nil, id: c}
 
 				}
-				uEqvChan <- v
+				errsEv[v.id] = v.err
+				eqVotes[v.id] = v
 				break
 			}
-			c++
 			if !processedVote {
 				errChan <- fmt.Errorf("No votes were processed")
 			}
-			select {
-			case <-ctx.Done():
-				close(uEqvChan)
-				return
-			default:
-			}
 		}
 	}()
-	return ledger
+	wg.Wait()
+	return ledger, votes, eqVotes, errsV, errsEv
 }
