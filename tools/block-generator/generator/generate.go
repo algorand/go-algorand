@@ -350,7 +350,7 @@ func (g *generator) finishRound(txnCount uint64) {
 // WriteBlock generates a block full of new transactions and writes it to the writer.
 func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if round != g.round {
-		fmt.Printf("Generator only supports sequential block access. Expected %d but received request for %d.", g.round, round)
+		fmt.Printf("Generator only supports sequential block access. Expected %d but received request for %d.\n", g.round, round)
 	}
 
 	numTxnForBlock := g.txnForRound(round)
