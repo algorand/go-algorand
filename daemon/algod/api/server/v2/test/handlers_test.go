@@ -61,7 +61,7 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-const stateProofIntervalForHandlerTests = uint64(256)
+const stateProofInterval = uint64(256)
 
 func setupTestForMethodGet(t *testing.T, consensusUpgrade bool) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
 	numAccounts := 1
@@ -1576,12 +1576,13 @@ func newEmptyBlock(a *require.Assertions, lastBlock bookkeeping.Block, genBlk bo
 
 	var blk bookkeeping.Block
 	blk.BlockHeader = bookkeeping.BlockHeader{
-		GenesisID:    genBlk.GenesisID(),
-		GenesisHash:  genBlk.GenesisHash(),
-		Round:        l.Latest() + 1,
-		Branch:       latestBlock.Hash(),
-		RewardsState: latestBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
-		UpgradeState: latestBlock.UpgradeState,
+		GenesisID:          genBlk.GenesisID(),
+		GenesisHash:        genBlk.GenesisHash(),
+		Round:              l.Latest() + 1,
+		Branch:             latestBlock.Hash(),
+		RewardsState:       latestBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
+		UpgradeState:       latestBlock.UpgradeState,
+		StateProofTracking: latestBlock.StateProofTracking,
 	}
 
 	blk.BlockHeader.TxnCounter = latestBlock.TxnCounter
@@ -1598,22 +1599,19 @@ func newEmptyBlock(a *require.Assertions, lastBlock bookkeeping.Block, genBlk bo
 	return blk
 }
 
-func addStateProofIfNeeded(blk bookkeeping.Block) bookkeeping.Block {
+func addStateProof(blk bookkeeping.Block) bookkeeping.Block {
 	round := uint64(blk.Round())
-	if round%stateProofIntervalForHandlerTests == (stateProofIntervalForHandlerTests/2+18) && round > stateProofIntervalForHandlerTests*2 {
-		return blk
-	}
-	stateProofRound := (round - round%stateProofIntervalForHandlerTests) - stateProofIntervalForHandlerTests
+	stateProofRound := (round/stateProofInterval - 1) * stateProofInterval
 	tx := transactions.SignedTxn{
 		Txn: transactions.Transaction{
 			Type:   protocol.StateProofTx,
-			Header: transactions.Header{Sender: transactions.StateProofSender},
+			Header: transactions.Header{Sender: transactions.StateProofSender, FirstValid: blk.Round()},
 			StateProofTxnFields: transactions.StateProofTxnFields{
 				StateProofType: 0,
 				Message: stateproofmsg.Message{
 					BlockHeadersCommitment: []byte{0x0, 0x1, 0x2},
 					FirstAttestedRound:     stateProofRound + 1,
-					LastAttestedRound:      stateProofRound + stateProofIntervalForHandlerTests,
+					LastAttestedRound:      stateProofRound + stateProofInterval,
 				},
 			},
 		},
@@ -1621,19 +1619,39 @@ func addStateProofIfNeeded(blk bookkeeping.Block) bookkeeping.Block {
 	txnib := transactions.SignedTxnInBlock{SignedTxnWithAD: transactions.SignedTxnWithAD{SignedTxn: tx}}
 	blk.Payset = append(blk.Payset, txnib)
 
+	updatedStateProofTracking := bookkeeping.StateProofTrackingData{
+		StateProofVotersCommitment:  blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+		StateProofOnlineTotalWeight: blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+		StateProofNextRound:         blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofNextRound + basics.Round(stateProofInterval),
+	}
+	blk.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+	blk.BlockHeader.StateProofTracking[protocol.StateProofBasic] = updatedStateProofTracking
+
 	return blk
 }
 
 func insertRounds(a *require.Assertions, h v2.Handlers, numRounds int) {
 	ledger := h.Node.LedgerForAPI()
 
+	firstStateProof := basics.Round(stateProofInterval * 2)
 	genBlk, err := ledger.Block(0)
 	a.NoError(err)
+	genBlk.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+	genBlk.BlockHeader.StateProofTracking[protocol.StateProofBasic] = bookkeeping.StateProofTrackingData{
+		StateProofVotersCommitment:  nil,
+		StateProofOnlineTotalWeight: basics.MicroAlgos{},
+		StateProofNextRound:         firstStateProof,
+	}
 
 	lastBlk := genBlk
 	for i := 0; i < numRounds; i++ {
 		blk := newEmptyBlock(a, lastBlk, genBlk, ledger)
-		blk = addStateProofIfNeeded(blk)
+		round := uint64(blk.Round())
+		// Add a StateProof transaction after half of the interval has passed (128 rounds) and add another 18 round for good measure
+		// First StateProof should be 2*Interval, since the first commitment cannot be in genesis
+		if blk.Round() > firstStateProof && (round%stateProofInterval == (stateProofInterval/2 + 18)) {
+			blk = addStateProof(blk)
+		}
 		blk.BlockHeader.CurrentProtocol = protocol.ConsensusCurrentVersion
 		a.NoError(ledger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
 		lastBlk = blk
@@ -1673,7 +1691,7 @@ func TestStateProof200(t *testing.T) {
 
 	insertRounds(a, handler, 1000)
 
-	a.NoError(handler.GetStateProof(ctx, stateProofIntervalForHandlerTests+1))
+	a.NoError(handler.GetStateProof(ctx, stateProofInterval+1))
 	a.Equal(200, responseRecorder.Code)
 
 	stprfResp := model.StateProofResponse{}
@@ -1715,13 +1733,13 @@ func TestGetBlockProof200(t *testing.T) {
 
 	insertRounds(a, handler, 1000)
 
-	a.NoError(handler.GetLightBlockHeaderProof(ctx, stateProofIntervalForHandlerTests*2+2))
+	a.NoError(handler.GetLightBlockHeaderProof(ctx, stateProofInterval*2+2))
 	a.Equal(200, responseRecorder.Code)
 
-	blkHdrArr, err := stateproof.FetchLightHeaders(handler.Node.LedgerForAPI(), stateProofIntervalForHandlerTests, basics.Round(stateProofIntervalForHandlerTests*3))
+	blkHdrArr, err := stateproof.FetchLightHeaders(handler.Node.LedgerForAPI(), stateProofInterval, basics.Round(stateProofInterval*3))
 	a.NoError(err)
 
-	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(stateProofIntervalForHandlerTests, blkHdrArr, 1)
+	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(stateProofInterval, blkHdrArr, 1)
 	a.NoError(err)
 
 	proofResp := model.LightBlockHeaderProofResponse{}
@@ -1743,27 +1761,27 @@ func TestStateproofTransactionForRound(t *testing.T) {
 				CurrentProtocol: protocol.ConsensusCurrentVersion,
 			},
 		}
-		blk = addStateProofIfNeeded(blk)
+		blk = addStateProof(blk)
 		ledger.blocks = append(ledger.blocks, blk)
 	}
 
 	ctx, cncl := context.WithTimeout(context.Background(), time.Minute*2)
 	defer cncl()
-	txn, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, nil)
+	txn, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofInterval*2+1), 1000, nil)
 	a.NoError(err)
-	a.Equal(2*stateProofIntervalForHandlerTests+1, txn.Message.FirstAttestedRound)
-	a.Equal(3*stateProofIntervalForHandlerTests, txn.Message.LastAttestedRound)
+	a.Equal(2*stateProofInterval+1, txn.Message.FirstAttestedRound)
+	a.Equal(3*stateProofInterval, txn.Message.LastAttestedRound)
 	a.Equal([]byte{0x0, 0x1, 0x2}, txn.Message.BlockHeadersCommitment)
 
-	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(2*stateProofIntervalForHandlerTests), 1000, nil)
+	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(2*stateProofInterval), 1000, nil)
 	a.NoError(err)
-	a.Equal(stateProofIntervalForHandlerTests+1, txn.Message.FirstAttestedRound)
-	a.Equal(2*stateProofIntervalForHandlerTests, txn.Message.LastAttestedRound)
+	a.Equal(stateProofInterval+1, txn.Message.FirstAttestedRound)
+	a.Equal(2*stateProofInterval, txn.Message.LastAttestedRound)
 
 	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, 999, 1000, nil)
 	a.ErrorIs(err, v2.ErrNoStateProofForRound)
 
-	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(2*stateProofIntervalForHandlerTests), basics.Round(2*stateProofIntervalForHandlerTests), nil)
+	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(2*stateProofInterval), basics.Round(2*stateProofInterval), nil)
 	a.ErrorIs(err, v2.ErrNoStateProofForRound)
 }
 
@@ -1780,12 +1798,12 @@ func TestStateproofTransactionForRoundWithoutStateproofs(t *testing.T) {
 				CurrentProtocol: protocol.ConsensusV30, // should have StateProofInterval == 0 .
 			},
 		}
-		blk = addStateProofIfNeeded(blk)
+		blk = addStateProof(blk)
 		ledger.blocks = append(ledger.blocks, blk)
 	}
 	ctx, cncl := context.WithTimeout(context.Background(), time.Minute)
 	defer cncl()
-	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, nil)
+	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofInterval*2+1), 1000, nil)
 	a.ErrorIs(err, v2.ErrNoStateProofForRound)
 }
 
@@ -1802,13 +1820,13 @@ func TestStateproofTransactionForRoundTimeouts(t *testing.T) {
 				CurrentProtocol: protocol.ConsensusCurrentVersion, // should have StateProofInterval != 0 .
 			},
 		}
-		blk = addStateProofIfNeeded(blk)
+		blk = addStateProof(blk)
 		ledger.blocks = append(ledger.blocks, blk)
 	}
 
 	ctx, cncl := context.WithTimeout(context.Background(), time.Nanosecond)
 	defer cncl()
-	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, nil)
+	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofInterval*2+1), 1000, nil)
 	a.ErrorIs(err, v2.ErrTimeout)
 }
 
@@ -1825,7 +1843,7 @@ func TestStateproofTransactionForRoundShutsDown(t *testing.T) {
 				CurrentProtocol: protocol.ConsensusCurrentVersion, // should have StateProofInterval != 0 .
 			},
 		}
-		blk = addStateProofIfNeeded(blk)
+		blk = addStateProof(blk)
 		ledger.blocks = append(ledger.blocks, blk)
 	}
 
@@ -1833,7 +1851,7 @@ func TestStateproofTransactionForRoundShutsDown(t *testing.T) {
 	close(stoppedChan)
 	ctx, cncl := context.WithTimeout(context.Background(), time.Minute)
 	defer cncl()
-	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, stoppedChan)
+	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofInterval*2+1), 1000, stoppedChan)
 	a.ErrorIs(err, v2.ErrShutdown)
 }
 

@@ -80,6 +80,8 @@ const (
 	CatchpointStateCatchupHashRound = CatchpointState("catchpointCatchupHashRound")
 	// CatchpointStateCatchpointLookback is the number of rounds we keep catchpoints for
 	CatchpointStateCatchpointLookback = CatchpointState("catchpointLookback")
+	// CatchpointStateCatchupVersion is the catchpoint version which the currently catchpoint catchup process is trying to catchup to.
+	CatchpointStateCatchupVersion = CatchpointState("catchpointCatchupVersion")
 )
 
 // UnfinishedCatchpointRecord represents a stored record of an unfinished catchpoint.
@@ -128,6 +130,9 @@ type CatchpointFirstStageInfo struct {
 	TotalChunks uint64 `codec:"chunksCount"`
 	// BiggestChunkLen is the size in the bytes of the largest chunk, used when re-packing.
 	BiggestChunkLen uint64 `codec:"biggestChunk"`
+
+	// StateProofVerificationHash is the hash of the state proof verification data contained in the catchpoint data file.
+	StateProofVerificationHash crypto.Digest `codec:"spVerificationHash"`
 }
 
 // MakeCatchpointFilePath builds the path of a catchpoint file.

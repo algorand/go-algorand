@@ -6,9 +6,28 @@ import (
 	"sort"
 
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // The following msgp objects are implemented in this file:
+// Builder
+//    |-----> (*) MarshalMsg
+//    |-----> (*) CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> (*) Msgsize
+//    |-----> (*) MsgIsZero
+//
+// BuilderPersistedFields
+//            |-----> (*) MarshalMsg
+//            |-----> (*) CanMarshalMsg
+//            |-----> (*) UnmarshalMsg
+//            |-----> (*) CanUnmarshalMsg
+//            |-----> (*) Msgsize
+//            |-----> (*) MsgIsZero
+//
 // MessageHash
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
@@ -41,6 +60,664 @@ import (
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
 //
+
+// MarshalMsg implements msgp.Marshaler
+func (z *Builder) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0004Len := uint32(7)
+	var zb0004Mask uint16 /* 11 bits */
+	if (*z).BuilderPersistedFields.Data == (MessageHash{}) {
+		zb0004Len--
+		zb0004Mask |= 0x4
+	}
+	if (*z).BuilderPersistedFields.LnProvenWeight == 0 {
+		zb0004Len--
+		zb0004Mask |= 0x8
+	}
+	if len((*z).BuilderPersistedFields.Participants) == 0 {
+		zb0004Len--
+		zb0004Mask |= 0x10
+	}
+	if (*z).BuilderPersistedFields.Parttree == nil {
+		zb0004Len--
+		zb0004Mask |= 0x20
+	}
+	if (*z).BuilderPersistedFields.ProvenWeight == 0 {
+		zb0004Len--
+		zb0004Mask |= 0x40
+	}
+	if (*z).BuilderPersistedFields.Round == 0 {
+		zb0004Len--
+		zb0004Mask |= 0x80
+	}
+	if (*z).BuilderPersistedFields.StrengthTarget == 0 {
+		zb0004Len--
+		zb0004Mask |= 0x400
+	}
+	// variable map header, size zb0004Len
+	o = append(o, 0x80|uint8(zb0004Len))
+	if zb0004Len != 0 {
+		if (zb0004Mask & 0x4) == 0 { // if not empty
+			// string "data"
+			o = append(o, 0xa4, 0x64, 0x61, 0x74, 0x61)
+			o = msgp.AppendBytes(o, ((*z).BuilderPersistedFields.Data)[:])
+		}
+		if (zb0004Mask & 0x8) == 0 { // if not empty
+			// string "lnprv"
+			o = append(o, 0xa5, 0x6c, 0x6e, 0x70, 0x72, 0x76)
+			o = msgp.AppendUint64(o, (*z).BuilderPersistedFields.LnProvenWeight)
+		}
+		if (zb0004Mask & 0x10) == 0 { // if not empty
+			// string "parts"
+			o = append(o, 0xa5, 0x70, 0x61, 0x72, 0x74, 0x73)
+			if (*z).BuilderPersistedFields.Participants == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).BuilderPersistedFields.Participants)))
+			}
+			for zb0002 := range (*z).BuilderPersistedFields.Participants {
+				o = (*z).BuilderPersistedFields.Participants[zb0002].MarshalMsg(o)
+			}
+		}
+		if (zb0004Mask & 0x20) == 0 { // if not empty
+			// string "parttree"
+			o = append(o, 0xa8, 0x70, 0x61, 0x72, 0x74, 0x74, 0x72, 0x65, 0x65)
+			if (*z).BuilderPersistedFields.Parttree == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = (*z).BuilderPersistedFields.Parttree.MarshalMsg(o)
+			}
+		}
+		if (zb0004Mask & 0x40) == 0 { // if not empty
+			// string "prv"
+			o = append(o, 0xa3, 0x70, 0x72, 0x76)
+			o = msgp.AppendUint64(o, (*z).BuilderPersistedFields.ProvenWeight)
+		}
+		if (zb0004Mask & 0x80) == 0 { // if not empty
+			// string "rnd"
+			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
+			o = msgp.AppendUint64(o, (*z).BuilderPersistedFields.Round)
+		}
+		if (zb0004Mask & 0x400) == 0 { // if not empty
+			// string "str"
+			o = append(o, 0xa3, 0x73, 0x74, 0x72)
+			o = msgp.AppendUint64(o, (*z).BuilderPersistedFields.StrengthTarget)
+		}
+	}
+	return
+}
+
+func (_ *Builder) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Builder)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Builder) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0004 int
+	var zb0005 bool
+	zb0004, zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0004 > 0 {
+			zb0004--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).BuilderPersistedFields.Data)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Data")
+				return
+			}
+		}
+		if zb0004 > 0 {
+			zb0004--
+			(*z).BuilderPersistedFields.Round, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Round")
+				return
+			}
+		}
+		if zb0004 > 0 {
+			zb0004--
+			var zb0006 int
+			var zb0007 bool
+			zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Participants")
+				return
+			}
+			if zb0006 > VotersAllocBound {
+				err = msgp.ErrOverflow(uint64(zb0006), uint64(VotersAllocBound))
+				err = msgp.WrapError(err, "struct-from-array", "Participants")
+				return
+			}
+			if zb0007 {
+				(*z).BuilderPersistedFields.Participants = nil
+			} else if (*z).BuilderPersistedFields.Participants != nil && cap((*z).BuilderPersistedFields.Participants) >= zb0006 {
+				(*z).BuilderPersistedFields.Participants = ((*z).BuilderPersistedFields.Participants)[:zb0006]
+			} else {
+				(*z).BuilderPersistedFields.Participants = make([]basics.Participant, zb0006)
+			}
+			for zb0002 := range (*z).BuilderPersistedFields.Participants {
+				bts, err = (*z).BuilderPersistedFields.Participants[zb0002].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Participants", zb0002)
+					return
+				}
+			}
+		}
+		if zb0004 > 0 {
+			zb0004--
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				(*z).BuilderPersistedFields.Parttree = nil
+			} else {
+				if (*z).BuilderPersistedFields.Parttree == nil {
+					(*z).BuilderPersistedFields.Parttree = new(merklearray.Tree)
+				}
+				bts, err = (*z).BuilderPersistedFields.Parttree.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Parttree")
+					return
+				}
+			}
+		}
+		if zb0004 > 0 {
+			zb0004--
+			(*z).BuilderPersistedFields.LnProvenWeight, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "LnProvenWeight")
+				return
+			}
+		}
+		if zb0004 > 0 {
+			zb0004--
+			(*z).BuilderPersistedFields.ProvenWeight, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "ProvenWeight")
+				return
+			}
+		}
+		if zb0004 > 0 {
+			zb0004--
+			(*z).BuilderPersistedFields.StrengthTarget, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "StrengthTarget")
+				return
+			}
+		}
+		if zb0004 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0004)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0005 {
+			(*z) = Builder{}
+		}
+		for zb0004 > 0 {
+			zb0004--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "data":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).BuilderPersistedFields.Data)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "Data")
+					return
+				}
+			case "rnd":
+				(*z).BuilderPersistedFields.Round, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Round")
+					return
+				}
+			case "parts":
+				var zb0008 int
+				var zb0009 bool
+				zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Participants")
+					return
+				}
+				if zb0008 > VotersAllocBound {
+					err = msgp.ErrOverflow(uint64(zb0008), uint64(VotersAllocBound))
+					err = msgp.WrapError(err, "Participants")
+					return
+				}
+				if zb0009 {
+					(*z).BuilderPersistedFields.Participants = nil
+				} else if (*z).BuilderPersistedFields.Participants != nil && cap((*z).BuilderPersistedFields.Participants) >= zb0008 {
+					(*z).BuilderPersistedFields.Participants = ((*z).BuilderPersistedFields.Participants)[:zb0008]
+				} else {
+					(*z).BuilderPersistedFields.Participants = make([]basics.Participant, zb0008)
+				}
+				for zb0002 := range (*z).BuilderPersistedFields.Participants {
+					bts, err = (*z).BuilderPersistedFields.Participants[zb0002].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Participants", zb0002)
+						return
+					}
+				}
+			case "parttree":
+				if msgp.IsNil(bts) {
+					bts, err = msgp.ReadNilBytes(bts)
+					if err != nil {
+						return
+					}
+					(*z).BuilderPersistedFields.Parttree = nil
+				} else {
+					if (*z).BuilderPersistedFields.Parttree == nil {
+						(*z).BuilderPersistedFields.Parttree = new(merklearray.Tree)
+					}
+					bts, err = (*z).BuilderPersistedFields.Parttree.UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Parttree")
+						return
+					}
+				}
+			case "lnprv":
+				(*z).BuilderPersistedFields.LnProvenWeight, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "LnProvenWeight")
+					return
+				}
+			case "prv":
+				(*z).BuilderPersistedFields.ProvenWeight, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "ProvenWeight")
+					return
+				}
+			case "str":
+				(*z).BuilderPersistedFields.StrengthTarget, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "StrengthTarget")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *Builder) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Builder)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *Builder) Msgsize() (s int) {
+	s = 1 + 5 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 4 + msgp.Uint64Size + 6 + msgp.ArrayHeaderSize
+	for zb0002 := range (*z).BuilderPersistedFields.Participants {
+		s += (*z).BuilderPersistedFields.Participants[zb0002].Msgsize()
+	}
+	s += 9
+	if (*z).BuilderPersistedFields.Parttree == nil {
+		s += msgp.NilSize
+	} else {
+		s += (*z).BuilderPersistedFields.Parttree.Msgsize()
+	}
+	s += 6 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *Builder) MsgIsZero() bool {
+	return ((*z).BuilderPersistedFields.Data == (MessageHash{})) && ((*z).BuilderPersistedFields.Round == 0) && (len((*z).BuilderPersistedFields.Participants) == 0) && ((*z).BuilderPersistedFields.Parttree == nil) && ((*z).BuilderPersistedFields.LnProvenWeight == 0) && ((*z).BuilderPersistedFields.ProvenWeight == 0) && ((*z).BuilderPersistedFields.StrengthTarget == 0)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *BuilderPersistedFields) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0003Len := uint32(7)
+	var zb0003Mask uint8 /* 8 bits */
+	if (*z).Data == (MessageHash{}) {
+		zb0003Len--
+		zb0003Mask |= 0x2
+	}
+	if (*z).LnProvenWeight == 0 {
+		zb0003Len--
+		zb0003Mask |= 0x4
+	}
+	if len((*z).Participants) == 0 {
+		zb0003Len--
+		zb0003Mask |= 0x8
+	}
+	if (*z).Parttree == nil {
+		zb0003Len--
+		zb0003Mask |= 0x10
+	}
+	if (*z).ProvenWeight == 0 {
+		zb0003Len--
+		zb0003Mask |= 0x20
+	}
+	if (*z).Round == 0 {
+		zb0003Len--
+		zb0003Mask |= 0x40
+	}
+	if (*z).StrengthTarget == 0 {
+		zb0003Len--
+		zb0003Mask |= 0x80
+	}
+	// variable map header, size zb0003Len
+	o = append(o, 0x80|uint8(zb0003Len))
+	if zb0003Len != 0 {
+		if (zb0003Mask & 0x2) == 0 { // if not empty
+			// string "data"
+			o = append(o, 0xa4, 0x64, 0x61, 0x74, 0x61)
+			o = msgp.AppendBytes(o, ((*z).Data)[:])
+		}
+		if (zb0003Mask & 0x4) == 0 { // if not empty
+			// string "lnprv"
+			o = append(o, 0xa5, 0x6c, 0x6e, 0x70, 0x72, 0x76)
+			o = msgp.AppendUint64(o, (*z).LnProvenWeight)
+		}
+		if (zb0003Mask & 0x8) == 0 { // if not empty
+			// string "parts"
+			o = append(o, 0xa5, 0x70, 0x61, 0x72, 0x74, 0x73)
+			if (*z).Participants == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).Participants)))
+			}
+			for zb0002 := range (*z).Participants {
+				o = (*z).Participants[zb0002].MarshalMsg(o)
+			}
+		}
+		if (zb0003Mask & 0x10) == 0 { // if not empty
+			// string "parttree"
+			o = append(o, 0xa8, 0x70, 0x61, 0x72, 0x74, 0x74, 0x72, 0x65, 0x65)
+			if (*z).Parttree == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = (*z).Parttree.MarshalMsg(o)
+			}
+		}
+		if (zb0003Mask & 0x20) == 0 { // if not empty
+			// string "prv"
+			o = append(o, 0xa3, 0x70, 0x72, 0x76)
+			o = msgp.AppendUint64(o, (*z).ProvenWeight)
+		}
+		if (zb0003Mask & 0x40) == 0 { // if not empty
+			// string "rnd"
+			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
+			o = msgp.AppendUint64(o, (*z).Round)
+		}
+		if (zb0003Mask & 0x80) == 0 { // if not empty
+			// string "str"
+			o = append(o, 0xa3, 0x73, 0x74, 0x72)
+			o = msgp.AppendUint64(o, (*z).StrengthTarget)
+		}
+	}
+	return
+}
+
+func (_ *BuilderPersistedFields) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*BuilderPersistedFields)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *BuilderPersistedFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0003 int
+	var zb0004 bool
+	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0003 > 0 {
+			zb0003--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).Data)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Data")
+				return
+			}
+		}
+		if zb0003 > 0 {
+			zb0003--
+			(*z).Round, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Round")
+				return
+			}
+		}
+		if zb0003 > 0 {
+			zb0003--
+			var zb0005 int
+			var zb0006 bool
+			zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Participants")
+				return
+			}
+			if zb0005 > VotersAllocBound {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(VotersAllocBound))
+				err = msgp.WrapError(err, "struct-from-array", "Participants")
+				return
+			}
+			if zb0006 {
+				(*z).Participants = nil
+			} else if (*z).Participants != nil && cap((*z).Participants) >= zb0005 {
+				(*z).Participants = ((*z).Participants)[:zb0005]
+			} else {
+				(*z).Participants = make([]basics.Participant, zb0005)
+			}
+			for zb0002 := range (*z).Participants {
+				bts, err = (*z).Participants[zb0002].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Participants", zb0002)
+					return
+				}
+			}
+		}
+		if zb0003 > 0 {
+			zb0003--
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				(*z).Parttree = nil
+			} else {
+				if (*z).Parttree == nil {
+					(*z).Parttree = new(merklearray.Tree)
+				}
+				bts, err = (*z).Parttree.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Parttree")
+					return
+				}
+			}
+		}
+		if zb0003 > 0 {
+			zb0003--
+			(*z).LnProvenWeight, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "LnProvenWeight")
+				return
+			}
+		}
+		if zb0003 > 0 {
+			zb0003--
+			(*z).ProvenWeight, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "ProvenWeight")
+				return
+			}
+		}
+		if zb0003 > 0 {
+			zb0003--
+			(*z).StrengthTarget, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "StrengthTarget")
+				return
+			}
+		}
+		if zb0003 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0003)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0004 {
+			(*z) = BuilderPersistedFields{}
+		}
+		for zb0003 > 0 {
+			zb0003--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "data":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).Data)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "Data")
+					return
+				}
+			case "rnd":
+				(*z).Round, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Round")
+					return
+				}
+			case "parts":
+				var zb0007 int
+				var zb0008 bool
+				zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Participants")
+					return
+				}
+				if zb0007 > VotersAllocBound {
+					err = msgp.ErrOverflow(uint64(zb0007), uint64(VotersAllocBound))
+					err = msgp.WrapError(err, "Participants")
+					return
+				}
+				if zb0008 {
+					(*z).Participants = nil
+				} else if (*z).Participants != nil && cap((*z).Participants) >= zb0007 {
+					(*z).Participants = ((*z).Participants)[:zb0007]
+				} else {
+					(*z).Participants = make([]basics.Participant, zb0007)
+				}
+				for zb0002 := range (*z).Participants {
+					bts, err = (*z).Participants[zb0002].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Participants", zb0002)
+						return
+					}
+				}
+			case "parttree":
+				if msgp.IsNil(bts) {
+					bts, err = msgp.ReadNilBytes(bts)
+					if err != nil {
+						return
+					}
+					(*z).Parttree = nil
+				} else {
+					if (*z).Parttree == nil {
+						(*z).Parttree = new(merklearray.Tree)
+					}
+					bts, err = (*z).Parttree.UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Parttree")
+						return
+					}
+				}
+			case "lnprv":
+				(*z).LnProvenWeight, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "LnProvenWeight")
+					return
+				}
+			case "prv":
+				(*z).ProvenWeight, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "ProvenWeight")
+					return
+				}
+			case "str":
+				(*z).StrengthTarget, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "StrengthTarget")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *BuilderPersistedFields) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*BuilderPersistedFields)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *BuilderPersistedFields) Msgsize() (s int) {
+	s = 1 + 5 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 4 + msgp.Uint64Size + 6 + msgp.ArrayHeaderSize
+	for zb0002 := range (*z).Participants {
+		s += (*z).Participants[zb0002].Msgsize()
+	}
+	s += 9
+	if (*z).Parttree == nil {
+		s += msgp.NilSize
+	} else {
+		s += (*z).Parttree.Msgsize()
+	}
+	s += 6 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *BuilderPersistedFields) MsgIsZero() bool {
+	return ((*z).Data == (MessageHash{})) && ((*z).Round == 0) && (len((*z).Participants) == 0) && ((*z).Parttree == nil) && ((*z).LnProvenWeight == 0) && ((*z).ProvenWeight == 0) && ((*z).StrengthTarget == 0)
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z *MessageHash) MarshalMsg(b []byte) (o []byte) {
