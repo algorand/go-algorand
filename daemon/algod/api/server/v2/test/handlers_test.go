@@ -63,12 +63,12 @@ import (
 
 const stateProofInterval = uint64(256)
 
-func setupTestForMethodGet(t *testing.T, consensusUpgrade bool) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
+func setupTestForMethodGet(t *testing.T, status node.StatusReport) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, rootkeys, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, consensusUpgrade)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, status)
 	dummyShutdownChan := make(chan struct{})
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -93,13 +93,13 @@ func TestSimpleMockBuilding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, _, _, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, _, _, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	require.Equal(t, t.Name(), handler.Node.GenesisID())
 }
 
 func accountInformationTest(t *testing.T, address string, expectedCode int) {
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	err := handler.AccountInformation(c, address, model.AccountInformationParams{})
 	require.NoError(t, err)
@@ -122,7 +122,7 @@ func TestAccountInformation(t *testing.T) {
 }
 
 func getBlockTest(t *testing.T, blockNum uint64, format string, expectedCode int) {
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	err := handler.GetBlock(c, blockNum, model.GetBlockParams{Format: (*model.GetBlockParamsFormat)(&format)})
 	require.NoError(t, err)
@@ -141,7 +141,7 @@ func TestGetBlock(t *testing.T) {
 }
 
 func testGetLedgerStateDelta(t *testing.T, round uint64, format string, expectedCode int) {
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	insertRounds(require.New(t), handler, 3)
 	err := handler.GetLedgerStateDelta(c, round, model.GetLedgerStateDeltaParams{Format: (*model.GetLedgerStateDeltaParamsFormat)(&format)})
@@ -186,7 +186,7 @@ func TestSyncRound(t *testing.T) {
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
 	dummyShutdownChan := make(chan struct{})
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -247,7 +247,7 @@ func TestSyncRound(t *testing.T) {
 }
 
 func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, transactions.SignedTxn, func()) {
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 
 	l := handler.Node.LedgerForAPI()
 
@@ -331,7 +331,7 @@ func TestGetBlockHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
 	err := handler.GetBlockHash(c, 0)
@@ -349,7 +349,7 @@ func TestGetBlockGetBlockHash(t *testing.T) {
 	t.Parallel()
 	a := require.New(t)
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	insertRounds(a, handler, 2)
 
@@ -421,7 +421,7 @@ func TestGetSupply(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, _, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, _, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	err := handler.GetSupply(c)
 	require.NoError(t, err)
@@ -431,7 +431,7 @@ func TestGetStatus(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	err := handler.GetStatus(c)
 	require.NoError(t, err)
@@ -462,17 +462,72 @@ func TestGetStatus(t *testing.T) {
 	require.Equal(t, expectedResult, actualResult)
 }
 
+func TestGetStatusConsensusUpgradeUnderflow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Setup status report with unanimous YES votes.
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	currentRound := basics.Round(1000000)
+	stat := node.StatusReport{
+		LastRound:              currentRound - 1,
+		LastVersion:            protocol.ConsensusCurrentVersion,
+		NextVersion:            protocol.ConsensusCurrentVersion,
+		UpgradePropose:         "upgradePropose",
+		NextProtocolVoteBefore: currentRound,
+		NextProtocolApprovals:  proto.UpgradeVoteRounds,
+	}
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, stat)
+	defer releasefunc()
+	err := handler.GetStatus(c)
+	require.NoError(t, err)
+	actualResult := model.NodeStatusResponse{}
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResult)
+	require.NoError(t, err)
+
+	// Make sure the votes are all yes, and 0 no.
+	require.Equal(t, uint64(0), *actualResult.UpgradeNoVotes)
+	require.Equal(t, proto.UpgradeVoteRounds, *actualResult.UpgradeYesVotes)
+	require.Equal(t, proto.UpgradeVoteRounds, *actualResult.UpgradeVotes)
+	require.Equal(t, proto.UpgradeThreshold, *actualResult.UpgradeVotesRequired)
+}
+
 func TestGetStatusConsensusUpgrade(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, true)
+	cannedStatusReportConsensusUpgradeGolden := node.StatusReport{
+		LastRound:                          basics.Round(97000),
+		LastVersion:                        protocol.ConsensusCurrentVersion,
+		NextVersion:                        protocol.ConsensusCurrentVersion,
+		NextVersionRound:                   200000,
+		NextVersionSupported:               true,
+		StoppedAtUnsupportedRound:          true,
+		Catchpoint:                         "",
+		CatchpointCatchupAcquiredBlocks:    0,
+		CatchpointCatchupProcessedAccounts: 0,
+		CatchpointCatchupVerifiedAccounts:  0,
+		CatchpointCatchupTotalAccounts:     0,
+		CatchpointCatchupTotalKVs:          0,
+		CatchpointCatchupProcessedKVs:      0,
+		CatchpointCatchupVerifiedKVs:       0,
+		CatchpointCatchupTotalBlocks:       0,
+		LastCatchpoint:                     "",
+		UpgradePropose:                     "upgradePropose",
+		UpgradeApprove:                     false,
+		UpgradeDelay:                       0,
+		NextProtocolVoteBefore:             100000,
+		NextProtocolApprovals:              5000,
+	}
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportConsensusUpgradeGolden)
 	defer releasefunc()
 	err := handler.GetStatus(c)
 	require.NoError(t, err)
 	stat := cannedStatusReportConsensusUpgradeGolden
 	consensus := config.Consensus[protocol.ConsensusCurrentVersion]
-	votesToGo := uint64(stat.NextProtocolVoteBefore) - uint64(stat.LastRound)
+	votesToGo := uint64(stat.NextProtocolVoteBefore) - uint64(stat.LastRound) - 1
 	nextProtocolVoteBefore := uint64(stat.NextProtocolVoteBefore)
 	votes := uint64(consensus.UpgradeVoteRounds) - votesToGo
 	votesNo := votes - stat.NextProtocolApprovals
@@ -515,7 +570,7 @@ func TestGetStatusAfterBlock(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	err := handler.WaitForBlock(c, 0)
 	require.NoError(t, err)
@@ -528,7 +583,7 @@ func TestGetTransactionParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	err := handler.TransactionParams(c)
 	require.NoError(t, err)
@@ -536,7 +591,7 @@ func TestGetTransactionParams(t *testing.T) {
 }
 
 func pendingTransactionInformationTest(t *testing.T, txidToUse int, format string, expectedCode int) {
-	handler, c, rec, _, stxns, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, stxns, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	txid := "bad txid"
 	if txidToUse >= 0 {
@@ -559,7 +614,7 @@ func TestPendingTransactionInformation(t *testing.T) {
 }
 
 func getPendingTransactionsTest(t *testing.T, format string, max uint64, expectedCode int) {
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	params := model.GetPendingTransactionsParams{Format: (*model.GetPendingTransactionsParamsFormat)(&format), Max: &max}
 	err := handler.GetPendingTransactions(c, params)
@@ -638,7 +693,7 @@ func TestPendingTransactions(t *testing.T) {
 }
 
 func pendingTransactionsByAddressTest(t *testing.T, rootkeyToUse int, format string, expectedCode int) {
-	handler, c, rec, rootkeys, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, rootkeys, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	address := "bad address"
 	if rootkeyToUse >= 0 {
@@ -666,7 +721,7 @@ func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int) (handler v
 	offlineAccounts := true
 	mockLedger, _, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
 	handler = v2.Handlers{
 
 		Node:     mockNode,
@@ -859,7 +914,7 @@ func TestSimulateTransaction(t *testing.T) {
 	mockLedger, roots, _, _, releasefunc := testingenvWithBalances(t, 999_998, 999_999, numAccounts, 1, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -1018,7 +1073,7 @@ func TestSimulateTransactionVerificationFailure(t *testing.T) {
 	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 1, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -1065,7 +1120,7 @@ func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expected
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nodeError, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nodeError, cannedStatusReportGolden)
 	handler := v2.Handlers{Node: mockNode, Log: logging.Base(), Shutdown: dummyShutdownChan}
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -1106,7 +1161,7 @@ func abortCatchupTest(t *testing.T, catchpoint string, expectedCode int) {
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -1141,7 +1196,7 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int,
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -1212,7 +1267,7 @@ func tealDisassembleTest(t *testing.T, program []byte, expectedCode int,
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -1275,7 +1330,7 @@ func tealDryrunTest(
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -1394,7 +1449,7 @@ func TestAppendParticipationKeys(t *testing.T) {
 
 	mockLedger, _, _, _, releasefunc := testingenv(t, 1, 1, true)
 	defer releasefunc()
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -1478,7 +1533,7 @@ func TestAppendParticipationKeys(t *testing.T) {
 	t.Run("Internal error", func(t *testing.T) {
 		// Create mock node with an error.
 		expectedErr := errors.New("expected error")
-		mockNode := makeMockNode(mockLedger, t.Name(), expectedErr, false)
+		mockNode := makeMockNode(mockLedger, t.Name(), expectedErr, cannedStatusReportGolden)
 		handler := v2.Handlers{
 			Node:     mockNode,
 			Log:      logging.Base(),
@@ -1662,7 +1717,7 @@ func TestStateProofNotFound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
 	insertRounds(a, handler, 700)
@@ -1675,7 +1730,7 @@ func TestStateProofHigherRoundThanLatest(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
-	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
 	a.NoError(handler.GetStateProof(ctx, 2))
@@ -1686,7 +1741,7 @@ func TestStateProof200(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
 	insertRounds(a, handler, 1000)
@@ -1704,7 +1759,7 @@ func TestHeaderProofRoundTooHigh(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
-	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
 	a.NoError(handler.GetLightBlockHeaderProof(ctx, 2))
@@ -1715,7 +1770,7 @@ func TestHeaderProofStateProofNotFound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
 	insertRounds(a, handler, 700)
@@ -1728,7 +1783,7 @@ func TestGetBlockProof200(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
 	insertRounds(a, handler, 1000)
@@ -1859,7 +1914,7 @@ func TestExperimentalCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
 	// Since we are invoking the method directly, it doesn't matter if EnableExperimentalAPI is true.
