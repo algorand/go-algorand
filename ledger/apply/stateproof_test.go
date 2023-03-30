@@ -205,7 +205,7 @@ func TestApplyStateProof(t *testing.T) {
 		blocks:                 blocks,
 		blockErr:               blockErr,
 		stateProofVerification: stateProofVerification,
-		version:                protocol.ConsensusFuture,
+		version:                protocol.ConsensusCurrentVersion,
 	}
 
 	spType = protocol.StateProofType(1234) // bad stateproof type
@@ -234,7 +234,7 @@ func TestApplyStateProof(t *testing.T) {
 	a.ErrorIs(err, ErrExpectedDifferentStateProofRound)
 
 	atRoundBlock := bookkeeping.BlockHeader{}
-	atRoundBlock.CurrentProtocol = protocol.ConsensusFuture
+	atRoundBlock.CurrentProtocol = protocol.ConsensusCurrentVersion
 	blocks[atRound] = atRoundBlock
 
 	validate = true
@@ -258,7 +258,7 @@ func TestApplyStateProof(t *testing.T) {
 		LastAttestedRound: basics.Round(stateProofTx.Message.LastAttestedRound),
 		VotersCommitment:  []byte{0x1}[:],
 		OnlineTotalWeight: basics.MicroAlgos{Raw: 5},
-		Version:           protocol.ConsensusFuture,
+		Version:           protocol.ConsensusCurrentVersion,
 	}
 
 	// crypto verification should fail since it is not a valid stateproof
@@ -271,5 +271,5 @@ func TestApplyStateProof(t *testing.T) {
 	err = StateProof(stateProofTx, atRound, applier, false)
 	a.NoError(err)
 	// make sure that the ModStateProofNextRound was updated correctly after applying
-	a.Equal(basics.Round(512+config.Consensus[protocol.ConsensusFuture].StateProofInterval), applier.GetStateProofNextRound())
+	a.Equal(basics.Round(512+config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval), applier.GetStateProofNextRound())
 }
