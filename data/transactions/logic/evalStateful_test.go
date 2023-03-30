@@ -1173,6 +1173,83 @@ intc_1
 	testApp(t, notrack(source), now, "cannot compare ([]byte to uint64)")
 }
 
+// TestAssetDisambiguation ensures we have a consistent interpretation of low
+// numbers when used as an argument to asset_*_get. A low number is an asset ID
+// if that asset ID is available, or a slot number in txn.Assets if not.
+func TestAssetDisambiguation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// start at 4 when the two meanings were added, stop at 8 because 9 removed the dual meaning
+	testLogicRange(t, 4, 8, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		ledger.NewAsset(tx.Sender, 1, basics.AssetParams{AssetName: "one", Total: 1})
+		ledger.NewAsset(tx.Sender, 20, basics.AssetParams{AssetName: "twenty", Total: 20})
+		ledger.NewAsset(tx.Sender, 30, basics.AssetParams{AssetName: "thirty", Total: 30})
+		tx.ForeignAssets = []basics.AssetIndex{20, 30}
+		// Since 1 is not available, 1 must mean the 1th asset slot = 30
+		testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep)
+		testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 30; ==`, ep)
+
+		tx.ForeignAssets = []basics.AssetIndex{1, 30}
+		// Since 1 IS available, 1 means the assetid=1, not the 1th slot
+		testApp(t, `int 1; asset_params_get AssetName; assert; byte "one"; ==`, ep)
+		testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 1; ==`, ep)
+	})
+}
+
+// TestAppDisambiguation ensures we have a consistent interpretation of low
+// numbers when used as an argument to app_(global,local)_get. A low number is
+// an app ID if that app ID is available, or a slot number in
+// txn.ForeignApplications if not.
+func TestAppDisambiguation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// start at 4 when the two meanings were added, stop at 8 because 9 removed the dual meaning
+	testLogicRange(t, 4, 8, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		ledger.NewApp(tx.Sender, 1, basics.AppParams{
+			GlobalState: map[string]basics.TealValue{"a": {
+				Type: basics.TealUintType,
+				Uint: 1,
+			}},
+			ExtraProgramPages: 1,
+		})
+		ledger.NewLocals(tx.Sender, 1)
+		ledger.NewLocal(tx.Sender, 1, "x", basics.TealValue{Type: basics.TealUintType, Uint: 100})
+		ledger.NewApp(tx.Sender, 20, basics.AppParams{
+			GlobalState: map[string]basics.TealValue{"a": {
+				Type: basics.TealUintType,
+				Uint: 20,
+			}},
+			ExtraProgramPages: 20,
+		})
+		ledger.NewLocals(tx.Sender, 20)
+		ledger.NewLocal(tx.Sender, 20, "x", basics.TealValue{Type: basics.TealUintType, Uint: 200})
+		ledger.NewApp(tx.Sender, 30, basics.AppParams{
+			GlobalState: map[string]basics.TealValue{"a": {
+				Type: basics.TealUintType,
+				Uint: 30,
+			}},
+			ExtraProgramPages: 30,
+		})
+		tx.ForeignApps = []basics.AppIndex{20, 30}
+		// Since 1 is not available, 1 must mean the first app slot = 20 (recall, 0 mean "this app")
+		if ep.Proto.LogicSigVersion >= 5 {
+			testApp(t, `int 1; app_params_get AppExtraProgramPages; assert; int 20; ==`, ep)
+		}
+		testApp(t, `int 1; byte "a"; app_global_get_ex; assert; int 20; ==`, ep)
+		testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 200; ==`, ep)
+
+		tx.ForeignApps = []basics.AppIndex{1, 30}
+		// Since 1 IS available, 1 means the assetid=1, not the 1th slot
+		if ep.Proto.LogicSigVersion >= 5 {
+			testApp(t, `int 1; app_params_get AppExtraProgramPages; assert; int 1; ==`, ep)
+		}
+		testApp(t, `int 1; byte "a"; app_global_get_ex; assert; int 1; ==`, ep)
+		testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 100; ==`, ep)
+	})
+}
+
 func TestAppParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
