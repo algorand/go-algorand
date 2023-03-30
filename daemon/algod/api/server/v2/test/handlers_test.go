@@ -82,6 +82,13 @@ func setupTestForMethodGet(t *testing.T, consensusUpgrade bool) (v2.Handlers, ec
 	return handler, c, rec, rootkeys, stxns, releasefunc
 }
 
+func numOrNil(n uint64) *uint64 {
+	if n == 0 {
+		return nil
+	}
+	return &n
+}
+
 func TestSimpleMockBuilding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -960,23 +967,34 @@ int 1`,
 						clone[0]++
 						expectedFailedAt = &clone
 					}
+
+					var txnAppBudgetUsed []*uint64
+					appBudgetAdded := numOrNil(scenario.AppBudgetAdded)
+					appBudgetConsumed := numOrNil(scenario.AppBudgetConsumed)
+					for i := range scenario.TxnAppBudgetConsumed {
+						txnAppBudgetUsed = append(txnAppBudgetUsed, numOrNil(scenario.TxnAppBudgetConsumed[i]))
+					}
 					expectedBody := model.SimulateResponse{
 						Version: 1,
 						TxnGroups: []model.SimulateTransactionGroupResult{
 							{
-								FailedAt: expectedFailedAt,
+								AppBudgetAdded:    appBudgetAdded,
+								AppBudgetConsumed: appBudgetConsumed,
+								FailedAt:          expectedFailedAt,
 								TxnResults: []model.SimulateTransactionResult{
 									{
 										TxnResult: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
 											SignedTxn: stxns[0],
 											// expect no ApplyData info
 										}, responseFormat.handle),
+										AppBudgetConsumed: txnAppBudgetUsed[0],
 									},
 									{
 										TxnResult: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
 											SignedTxn: stxns[1],
 											ApplyData: scenario.ExpectedSimulationAD,
 										}, responseFormat.handle),
+										AppBudgetConsumed: txnAppBudgetUsed[1],
 									},
 								},
 							},

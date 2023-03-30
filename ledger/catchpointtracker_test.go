@@ -558,6 +558,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		if (uint64(i) >= cfg.MaxAcctLookback) && (uint64(i)-cfg.MaxAcctLookback > protoParams.CatchpointLookback) && ((uint64(i)-cfg.MaxAcctLookback)%cfg.CatchpointInterval == 0) {
 			ml.trackers.waitAccountsWriting()
 			catchpointLabels[i] = ct.GetLastCatchpointLabel()
+			require.NotEmpty(t, catchpointLabels[i])
 			require.NotEqual(t, lastCatchpointLabel, catchpointLabels[i])
 			lastCatchpointLabel = catchpointLabels[i]
 			ledgerHistory[i] = ml.fork(t)

@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -41,7 +42,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -3187,7 +3187,7 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 
 	// This implementation is an easy way to feed the delta, which the state proof verification tracker relies on,
 	// to the ledger.
-	delta, err := internal.Eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
+	delta, err := eval.Eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
 	require.NoError(t, err)
 	delta.ModStateProofNextRound = stateProofReceived.StateProofNextRound
 	vb := ledgercore.MakeValidatedBlock(blk, delta)
