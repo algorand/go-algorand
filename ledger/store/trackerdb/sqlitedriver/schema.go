@@ -350,6 +350,12 @@ func accountsCreateBoxTable(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
+// performKVStoreNullBlobConversion scans keys with null blob value, and convert the value to `[]byte{}`.
+func performKVStoreNullBlobConversion(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, "UPDATE kvstore SET value = '' WHERE value is NULL")
+	return err
+}
+
 func accountsCreateTxTailTable(ctx context.Context, tx *sql.Tx) (err error) {
 	for _, stmt := range createTxTailTable {
 		_, err = tx.ExecContext(ctx, stmt)
