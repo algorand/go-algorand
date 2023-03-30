@@ -199,12 +199,12 @@ const ConsensusV36 = ConsensusVersion(
 
 // ConsensusV37 enables precheck ECDSA curve
 const ConsensusV37 = ConsensusVersion(
-	"https://github.com/algorandfoundation/specs/tree/v37",
+	"https://github.com/algorandfoundation/specs/tree/61879ef45bb8f38338ae8f84b4411e94b3aa8796",
 )
 
 // ConsensusV38 enables state proof verification using a special tracker.
 const ConsensusV38 = ConsensusVersion(
-	"https://github.com/algorandfoundation/specs/tree/v38",
+	"https://github.com/algorandfoundation/specs/tree/90caaad085379aef5f0af1fe7d207145985a12f3",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production
