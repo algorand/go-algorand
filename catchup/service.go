@@ -479,7 +479,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 		go func() {
 			defer wg.Done()
 			for t := range taskCh {
-				completed <- t() // This writes to completed comes after a read from taskCh, so the invariant is preserved.
+				completed <- t() // This write comes after a read from taskCh, so the invariant is preserved.
 			}
 		}()
 	}
