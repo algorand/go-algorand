@@ -560,7 +560,6 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 
 		ml.trackers.newBlock(blk, delta)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
-		ml.trackers.committedUpTo(i)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 		roundDeltas[i] = delta
@@ -609,9 +608,6 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 			delta := roundDeltas[i]
 
 			ml2.trackers.newBlock(blk, delta)
-			err := ml2.addMockBlock(blockEntry{block: blk}, delta)
-			require.NoError(t, err)
-			ml2.trackers.committedUpTo(i)
 
 			if isDataFileRound(i) || isCatchpointRound(i) {
 				ml2.trackers.committedUpTo(i)
@@ -908,7 +904,7 @@ func TestCatchpointTrackerWaitNotBlocking(t *testing.T) {
 		<-addBlockDone
 	}()
 
-	// tracker commits are now  blocked, add some blocks
+	// tracker commits are now blocked, add some blocks
 	timer := time.NewTimer(1 * time.Second)
 	go func() {
 		defer close(addBlockDone)
@@ -926,6 +922,9 @@ func TestCatchpointTrackerWaitNotBlocking(t *testing.T) {
 		require.FailNow(t, "timeout")
 	case <-addBlockDone:
 	}
+
+	// switch context one more time to give the blockqueue syncer to run
+	time.Sleep(1 * time.Millisecond)
 
 	// ensure Ledger.Wait() is non-blocked for all rounds except the last one (due to possible races)
 	for rnd := startRound; rnd < endRound; rnd++ {
