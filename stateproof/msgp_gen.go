@@ -38,15 +38,15 @@ func (z *builder) MarshalMsg(b []byte) (o []byte) {
 		zb0003Len--
 		zb0003Mask |= 0x2
 	}
-	if (*z).Builder == nil {
+	if (*z).VotersHdr.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x4
 	}
-	if (*z).VotersHdr.MsgIsZero() {
+	if (*z).Message.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x8
 	}
-	if (*z).Message.MsgIsZero() {
+	if (*z).Prover == nil {
 		zb0003Len--
 		zb0003Mask |= 0x10
 	}
@@ -74,23 +74,23 @@ func (z *builder) MarshalMsg(b []byte) (o []byte) {
 			}
 		}
 		if (zb0003Mask & 0x4) == 0 { // if not empty
-			// string "bldr"
-			o = append(o, 0xa4, 0x62, 0x6c, 0x64, 0x72)
-			if (*z).Builder == nil {
-				o = msgp.AppendNil(o)
-			} else {
-				o = (*z).Builder.MarshalMsg(o)
-			}
-		}
-		if (zb0003Mask & 0x8) == 0 { // if not empty
 			// string "hdr"
 			o = append(o, 0xa3, 0x68, 0x64, 0x72)
 			o = (*z).VotersHdr.MarshalMsg(o)
 		}
-		if (zb0003Mask & 0x10) == 0 { // if not empty
+		if (zb0003Mask & 0x8) == 0 { // if not empty
 			// string "msg"
 			o = append(o, 0xa3, 0x6d, 0x73, 0x67)
 			o = (*z).Message.MarshalMsg(o)
+		}
+		if (zb0003Mask & 0x10) == 0 { // if not empty
+			// string "prv"
+			o = append(o, 0xa3, 0x70, 0x72, 0x76)
+			if (*z).Prover == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = (*z).Prover.MarshalMsg(o)
+			}
 		}
 	}
 	return
@@ -121,14 +121,14 @@ func (z *builder) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if err != nil {
 					return
 				}
-				(*z).Builder = nil
+				(*z).Prover = nil
 			} else {
-				if (*z).Builder == nil {
-					(*z).Builder = new(stateproof.Builder)
+				if (*z).Prover == nil {
+					(*z).Prover = new(stateproof.Prover)
 				}
-				bts, err = (*z).Builder.UnmarshalMsg(bts)
+				bts, err = (*z).Prover.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Builder")
+					err = msgp.WrapError(err, "struct-from-array", "Prover")
 					return
 				}
 			}
@@ -208,20 +208,20 @@ func (z *builder) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "bldr":
+			case "prv":
 				if msgp.IsNil(bts) {
 					bts, err = msgp.ReadNilBytes(bts)
 					if err != nil {
 						return
 					}
-					(*z).Builder = nil
+					(*z).Prover = nil
 				} else {
-					if (*z).Builder == nil {
-						(*z).Builder = new(stateproof.Builder)
+					if (*z).Prover == nil {
+						(*z).Prover = new(stateproof.Prover)
 					}
-					bts, err = (*z).Builder.UnmarshalMsg(bts)
+					bts, err = (*z).Prover.UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "Builder")
+						err = msgp.WrapError(err, "Prover")
 						return
 					}
 				}
@@ -291,11 +291,11 @@ func (_ *builder) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *builder) Msgsize() (s int) {
-	s = 1 + 5
-	if (*z).Builder == nil {
+	s = 1 + 4
+	if (*z).Prover == nil {
 		s += msgp.NilSize
 	} else {
-		s += (*z).Builder.Msgsize()
+		s += (*z).Prover.Msgsize()
 	}
 	s += 5 + msgp.MapHeaderSize
 	if (*z).AddrToPos != nil {
@@ -311,7 +311,7 @@ func (z *builder) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *builder) MsgIsZero() bool {
-	return ((*z).Builder == nil) && (len((*z).AddrToPos) == 0) && ((*z).VotersHdr.MsgIsZero()) && ((*z).Message.MsgIsZero())
+	return ((*z).Prover == nil) && (len((*z).AddrToPos) == 0) && ((*z).VotersHdr.MsgIsZero()) && ((*z).Message.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

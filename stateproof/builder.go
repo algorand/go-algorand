@@ -27,6 +27,8 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -36,6 +38,16 @@ import (
 )
 
 var errVotersNotTracked = errors.New("voters not tracked for the given lookback round")
+
+type builder struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	*stateproof.Prover `codec:"prv"`
+
+	AddrToPos map[Address]uint64      `codec:"addr,allocbound=stateproof.VotersAllocBound"`
+	VotersHdr bookkeeping.BlockHeader `codec:"hdr"`
+	Message   stateproofmsg.Message   `codec:"msg"`
+}
 
 // OnPrepareVoterCommit is a function called by the voters tracker when it's preparing to commit rnd. It gives the builder
 // the chance to persist the data it needs.
@@ -202,7 +214,7 @@ func createBuilder(rnd basics.Round, votersFetcher ledgercore.LedgerForSPBuilder
 	res.VotersHdr = votersHdr
 	res.AddrToPos = voters.AddrToPos
 	res.Message = msg
-	res.Builder, err = stateproof.MakeBuilder(msg.Hash(),
+	res.Prover, err = stateproof.MakeProver(msg.Hash(),
 		uint64(rnd),
 		provenWeight,
 		voters.Participants,

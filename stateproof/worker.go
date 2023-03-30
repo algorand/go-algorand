@@ -26,25 +26,12 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
-
-type builder struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	*stateproof.Builder `codec:"bldr"`
-
-	AddrToPos map[Address]uint64      `codec:"addr,allocbound=stateproof.VotersAllocBound"`
-	VotersHdr bookkeeping.BlockHeader `codec:"hdr"`
-	Message   stateproofmsg.Message   `codec:"msg"`
-}
 
 // This is a soft limit on how many builders should be kept in memory, the rest shall be fetched from DB.
 // At most times only 1 should builder should be stored (both in memory and on disk), as this feature

@@ -51,7 +51,7 @@ type paramsForTest struct {
 	partCommitment       crypto.GenericDigest
 	numberOfParticipnets uint64
 	data                 MessageHash
-	builder              *Builder
+	builder              *Prover
 	sig                  merklesignature.Signature
 }
 
@@ -122,7 +122,7 @@ func generateProofForTesting(a *require.Assertions, doLargeTest bool) paramsForT
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	b, err := MakeBuilder(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
+	b, err := MakeProver(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
 	for i := uint64(0); i < uint64(npart)/2+10; i++ { // leave some signature to be added later in the test (if needed)
@@ -285,7 +285,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	b, err := MakeBuilder(data, stateProofIntervalForTests, uint64(totalWeight/(2*numPart)), parts, partcom, stateProofStrengthTargetForTests)
+	b, err := MakeProver(data, stateProofIntervalForTests, uint64(totalWeight/(2*numPart)), parts, partcom, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
 	for i := 0; i < numPart; i++ {
@@ -466,7 +466,7 @@ func TestBuilder_AddRejectsInvalidSigVersion(t *testing.T) {
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	builder, err := MakeBuilder(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
+	builder, err := MakeProver(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
 	// actual test:
@@ -490,7 +490,7 @@ func TestBuildAndReady(t *testing.T) {
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	builder, err := MakeBuilder(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
+	builder, err := MakeProver(data, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
 	a.False(builder.Ready())
@@ -513,7 +513,7 @@ func TestErrorCases(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	builder := Builder{}
+	builder := Prover{}
 	_, err := builder.Present(1)
 	a.ErrorIs(err, ErrPositionOutOfBound)
 
@@ -542,7 +542,7 @@ func TestErrorCases(t *testing.T) {
 }
 
 func checkSigsArray(n int, a *require.Assertions) {
-	b := &Builder{
+	b := &Prover{
 		sigs: make([]sigslot, n),
 	}
 	for i := 0; i < n; i++ {
@@ -578,7 +578,7 @@ func TestCoinIndexBetweenWeights(t *testing.T) {
 	a := require.New(t)
 
 	n := 1000
-	b := &Builder{
+	b := &Prover{
 		sigs: make([]sigslot, n),
 	}
 	for i := 0; i < n; i++ {
@@ -605,7 +605,7 @@ func TestBuilderWithZeroProvenWeight(t *testing.T) {
 
 	data := testMessage("hello world").IntoStateProofMessageHash()
 
-	_, err := MakeBuilder(data, stateProofIntervalForTests, 0, nil, nil, stateProofStrengthTargetForTests)
+	_, err := MakeProver(data, stateProofIntervalForTests, 0, nil, nil, stateProofStrengthTargetForTests)
 	a.ErrorIs(err, ErrIllegalInputForLnApprox)
 
 }
@@ -675,7 +675,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 
 	b.Run("AddBuild", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			builder, err := MakeBuilder(data, stateProofIntervalForTests, provenWeight, parts, partcom, stateProofStrengthTargetForTests)
+			builder, err := MakeProver(data, stateProofIntervalForTests, provenWeight, parts, partcom, stateProofStrengthTargetForTests)
 			if err != nil {
 				b.Error(err)
 			}

@@ -70,7 +70,7 @@ func TestDbSchemaUpgrade1(t *testing.T) {
 		return addPendingSig(tx, 0, psig)
 	}))
 
-	b := builder{Builder: &stateproof.Builder{}}
+	b := builder{Prover: &stateproof.Prover{}}
 	b.ProvenWeight = 5
 	a.ErrorContains(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return persistBuilder(tx, 0, &b)
@@ -89,7 +89,7 @@ func TestDbSchemaUpgrade1(t *testing.T) {
 		b2, err = getBuilder(tx, 0)
 		return err
 	}))
-	a.Equal(b.BuilderPersistedFields, b2.BuilderPersistedFields)
+	a.Equal(b.ProverPersistedFields, b2.ProverPersistedFields)
 }
 
 func TestPendingSigDB(t *testing.T) {
@@ -229,7 +229,7 @@ func TestBuildersDB(t *testing.T) {
 	builders := make([]builder, 100)
 	for i := uint64(0); i < 100; i++ {
 		var bldr builder
-		bldr.Builder = &stateproof.Builder{}
+		bldr.Prover = &stateproof.Prover{}
 		bldr.Round = i
 		builders[i] = bldr
 
@@ -285,7 +285,7 @@ func TestDbBuilderAlreadyExists(t *testing.T) {
 	var bldr builder
 	var outBldr builder
 
-	bldr.Builder = &stateproof.Builder{}
+	bldr.Prover = &stateproof.Prover{}
 	bldr.Round = 2
 	bldr.Data[3] = 5
 
@@ -299,6 +299,6 @@ func TestDbBuilderAlreadyExists(t *testing.T) {
 			return err
 		})
 		a.NoError(err)
-		a.Equal(bldr.BuilderPersistedFields, outBldr.BuilderPersistedFields)
+		a.Equal(bldr.ProverPersistedFields, outBldr.ProverPersistedFields)
 	}
 }

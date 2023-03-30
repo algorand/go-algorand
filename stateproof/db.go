@@ -202,12 +202,12 @@ func getBuilder(tx *sql.Tx, rnd basics.Round) (builder, error) {
 		return builder{}, fmt.Errorf("getBuilder: getBuilder: builder for round %d failed to decode: %w", rnd, err)
 	}
 
-	// Stored Builder is corrupted...
-	if bldr.Builder == nil {
+	// Stored Prover is corrupted...
+	if bldr.Prover == nil {
 		return builder{}, fmt.Errorf("getBuilder: builder for round %d is corrupted", rnd)
 	}
 
-	bldr.Builder.AllocSigs()
+	bldr.Prover.AllocSigs()
 
 	return bldr, nil
 }
