@@ -469,7 +469,7 @@ var compiled = map[uint64]string{
 	7:  "07" + v7Compiled,
 	8:  "08" + v8Compiled,
 	9:  "09" + v9Compiled,
-	10: "10" + v10Compiled,
+	10: "0a" + v10Compiled,
 }
 
 func pseudoOp(opcode string) bool {

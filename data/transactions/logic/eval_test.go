@@ -1153,6 +1153,10 @@ const globalV9TestProgram = globalV8TestProgram + `
 // No new globals in v9
 `
 
+const globalV10TestProgram = globalV9TestProgram + `
+// No new globals in v10
+`
+
 func TestGlobal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1163,16 +1167,17 @@ func TestGlobal(t *testing.T) {
 	}
 	// Associate the highest allowed global constant with each version's test program
 	tests := map[uint64]desc{
-		0: {GroupSize, globalV1TestProgram},
-		1: {GroupSize, globalV1TestProgram},
-		2: {CurrentApplicationID, globalV2TestProgram},
-		3: {CreatorAddress, globalV3TestProgram},
-		4: {CreatorAddress, globalV4TestProgram},
-		5: {GroupID, globalV5TestProgram},
-		6: {CallerApplicationAddress, globalV6TestProgram},
-		7: {CallerApplicationAddress, globalV7TestProgram},
-		8: {CallerApplicationAddress, globalV8TestProgram},
-		9: {CallerApplicationAddress, globalV9TestProgram},
+		0:  {GroupSize, globalV1TestProgram},
+		1:  {GroupSize, globalV1TestProgram},
+		2:  {CurrentApplicationID, globalV2TestProgram},
+		3:  {CreatorAddress, globalV3TestProgram},
+		4:  {CreatorAddress, globalV4TestProgram},
+		5:  {GroupID, globalV5TestProgram},
+		6:  {CallerApplicationAddress, globalV6TestProgram},
+		7:  {CallerApplicationAddress, globalV7TestProgram},
+		8:  {CallerApplicationAddress, globalV8TestProgram},
+		9:  {CallerApplicationAddress, globalV9TestProgram},
+		10: {CallerApplicationAddress, globalV10TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
@@ -1676,6 +1681,11 @@ assert
 int 1
 `
 
+const testTxnProgramTextV10 = testTxnProgramTextV9 + `
+assert
+int 1
+`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1779,15 +1789,16 @@ func TestTxn(t *testing.T) {
 
 	t.Parallel()
 	tests := map[uint64]string{
-		1: testTxnProgramTextV1,
-		2: testTxnProgramTextV2,
-		3: testTxnProgramTextV3,
-		4: testTxnProgramTextV4,
-		5: testTxnProgramTextV5,
-		6: testTxnProgramTextV6,
-		7: testTxnProgramTextV7,
-		8: testTxnProgramTextV8,
-		9: testTxnProgramTextV9,
+		1:  testTxnProgramTextV1,
+		2:  testTxnProgramTextV2,
+		3:  testTxnProgramTextV3,
+		4:  testTxnProgramTextV4,
+		5:  testTxnProgramTextV5,
+		6:  testTxnProgramTextV6,
+		7:  testTxnProgramTextV7,
+		8:  testTxnProgramTextV8,
+		9:  testTxnProgramTextV9,
+		10: testTxnProgramTextV10,
 	}
 
 	for i, txnField := range TxnFieldNames {
