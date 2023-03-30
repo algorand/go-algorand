@@ -39,7 +39,9 @@ import (
 
 var errVotersNotTracked = errors.New("voters not tracked for the given lookback round")
 
-type builder struct {
+// spProver captures the state proof cryptographic prover in addition to data needed for
+// signatures aggregation.
+type spProver struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	*stateproof.Prover `codec:"prv"`
@@ -64,18 +66,18 @@ func (spw *Worker) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Rou
 			continue
 		}
 
-		var builderExists bool
+		var proverExists bool
 		err = spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			builderExists, err = builderExistInDB(tx, rnd)
+			proverExists, err = proverExistInDB(tx, rnd)
 			return err
 		})
 		if err != nil {
-			spw.log.Warnf("OnPrepareVoterCommit(%d): could not check builder existence, assuming it doesn't exist: %v\n", rnd, err)
-		} else if builderExists {
+			spw.log.Warnf("OnPrepareVoterCommit(%d): could not check prover existence, assuming it doesn't exist: %v\n", rnd, err)
+		} else if proverExists {
 			continue
 		}
 
-		buildr, err := createBuilder(rnd, votersFetcher)
+		provr, err := createProver(rnd, votersFetcher)
 		if err != nil {
 			if errors.Is(err, errVotersNotTracked) {
 				// There are few reasons why we might encounter a situation where we don't
@@ -92,74 +94,74 @@ func (spw *Worker) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Rou
 				continue
 			}
 
-			spw.log.Errorf("OnPrepareVoterCommit(%d): could not create builder: %v", rnd, err)
+			spw.log.Errorf("OnPrepareVoterCommit(%d): could not create prover: %v", rnd, err)
 			continue
 		}
 
 		// At this point, there is a possibility that the signer has already created this specific builder
-		// (signer created  the builder after builderExistInDB was called and was fast enough to persist it).
+		// (signer created  the builder after proverExistInDB was called and was fast enough to persist it).
 		// In this case we will rewrite the new builder
 		err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-			return persistBuilder(tx, rnd, &buildr)
+			return persistProver(tx, rnd, &provr)
 		})
 		if err != nil {
-			spw.log.Errorf("OnPrepareVoterCommit(%d): could not persist builder: %v", rnd, err)
+			spw.log.Errorf("OnPrepareVoterCommit(%d): could not persist prover: %v", rnd, err)
 		}
 	}
 }
 
-// loadOrCreateBuilderWithSignatures either loads a builder from the DB or creates a new builder.
-// this function fills the builder with all the available signatures
-func (spw *Worker) loadOrCreateBuilderWithSignatures(rnd basics.Round) (builder, error) {
-	b, err := spw.loadOrCreateBuilder(rnd)
+// loadOrCreateProverWithSignatures either loads a state proof prover from the DB or creates a new prover.
+// this function fills the prover with all the available signatures
+func (spw *Worker) loadOrCreateProverWithSignatures(rnd basics.Round) (spProver, error) {
+	b, err := spw.loadOrCreateProver(rnd)
 	if err != nil {
-		return builder{}, err
+		return spProver{}, err
 	}
 
-	if err := spw.loadSignaturesIntoBuilder(&b); err != nil {
-		return builder{}, err
+	if err := spw.loadSignaturesIntoProver(&b); err != nil {
+		return spProver{}, err
 	}
 	return b, nil
 }
 
-func (spw *Worker) loadOrCreateBuilder(rnd basics.Round) (builder, error) {
-	var buildr builder
+func (spw *Worker) loadOrCreateProver(rnd basics.Round) (spProver, error) {
+	var prover spProver
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		buildr, err = getBuilder(tx, rnd)
+		prover, err = getProver(tx, rnd)
 		return err
 	})
 
 	if err == nil {
-		return buildr, nil
+		return prover, nil
 	}
 
 	if !errors.Is(err, sql.ErrNoRows) {
-		spw.log.Errorf("loadOrCreateBuilder: error while fetching builder from DB: %v", err)
+		spw.log.Errorf("loadOrCreateProver: error while fetching builder from DB: %v", err)
 	}
 
-	buildr, err = createBuilder(rnd, spw.ledger)
+	prover, err = createProver(rnd, spw.ledger)
 	if err != nil {
-		return builder{}, err
+		return spProver{}, err
 	}
 
 	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-		return persistBuilder(tx, rnd, &buildr)
+		return persistProver(tx, rnd, &prover)
 	})
 
 	// We ignore persisting errors because we still want to try and use our successfully generated builder,
 	// even if, for some reason, persisting it failed.
 	if err != nil {
-		spw.log.Errorf("loadOrCreateBuilder(%d): failed to insert builder into database: %v", rnd, err)
+		spw.log.Errorf("loadOrCreateProver(%d): failed to insert prover into database: %v", rnd, err)
 	}
 
-	return buildr, nil
+	return prover, nil
 }
 
-func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
+func (spw *Worker) loadSignaturesIntoProver(prover *spProver) error {
 	var sigs []pendingSig
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err2 error
-		sigs, err2 = getPendingSigsForRound(tx, basics.Round(buildr.Round))
+		sigs, err2 = getPendingSigsForRound(tx, basics.Round(prover.Round))
 		return err2
 	})
 	if err != nil {
@@ -167,7 +169,7 @@ func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
 	}
 
 	for i := range sigs {
-		err = buildr.insertSig(&sigs[i], false)
+		err = prover.insertSig(&sigs[i], false)
 		if err != nil {
 			spw.log.Warn(err)
 		}
@@ -175,13 +177,13 @@ func (spw *Worker) loadSignaturesIntoBuilder(buildr *builder) error {
 	return nil
 }
 
-func createBuilder(rnd basics.Round, votersFetcher ledgercore.LedgerForSPBuilder) (builder, error) {
+func createProver(rnd basics.Round, votersFetcher ledgercore.LedgerForSPBuilder) (spProver, error) {
 	// since this function might be invoked under tracker commit context (i.e invoked from the ledger code ),
 	// it is important that we do not use the ledger directly.
 
 	hdr, err := votersFetcher.BlockHdr(rnd)
 	if err != nil {
-		return builder{}, err
+		return spProver{}, err
 	}
 
 	hdrProto := config.Consensus[hdr.CurrentProtocol]
@@ -189,28 +191,28 @@ func createBuilder(rnd basics.Round, votersFetcher ledgercore.LedgerForSPBuilder
 	lookback := votersRnd.SubSaturate(basics.Round(hdrProto.StateProofVotersLookback))
 	voters, err := votersFetcher.VotersForStateProof(lookback)
 	if err != nil {
-		return builder{}, err
+		return spProver{}, err
 	}
 	if voters == nil {
-		return builder{}, fmt.Errorf("lookback round %d: %w", lookback, errVotersNotTracked)
+		return spProver{}, fmt.Errorf("lookback round %d: %w", lookback, errVotersNotTracked)
 	}
 
 	votersHdr, err := votersFetcher.BlockHdr(votersRnd)
 	if err != nil {
-		return builder{}, err
+		return spProver{}, err
 	}
 
 	msg, err := GenerateStateProofMessage(votersFetcher, rnd)
 	if err != nil {
-		return builder{}, err
+		return spProver{}, err
 	}
 
 	provenWeight, err := verify.GetProvenWeight(&votersHdr, &hdr)
 	if err != nil {
-		return builder{}, err
+		return spProver{}, err
 	}
 
-	var res builder
+	var res spProver
 	res.VotersHdr = votersHdr
 	res.AddrToPos = voters.AddrToPos
 	res.Message = msg
@@ -221,38 +223,38 @@ func createBuilder(rnd basics.Round, votersFetcher ledgercore.LedgerForSPBuilder
 		voters.Tree,
 		config.Consensus[votersHdr.CurrentProtocol].StateProofStrengthTarget)
 	if err != nil {
-		return builder{}, err
+		return spProver{}, err
 	}
 
 	return res, nil
 }
 
-func (spw *Worker) initBuilders() {
-	spw.builders = make(map[basics.Round]builder)
-	rnds, err := spw.getAllOnlineBuilderRounds()
+func (spw *Worker) initProvers() {
+	spw.provers = make(map[basics.Round]spProver)
+	rnds, err := spw.getAllOnlineProverRounds()
 	if err != nil {
-		spw.log.Errorf("initBuilders: failed to load rounds: %v", err)
+		spw.log.Errorf("initProvers: failed to load rounds: %v", err)
 		return
 	}
 
 	for _, rnd := range rnds {
-		if _, ok := spw.builders[rnd]; ok {
-			spw.log.Warnf("initBuilders: round %d already present", rnd)
+		if _, ok := spw.provers[rnd]; ok {
+			spw.log.Warnf("initProvers: round %d already present", rnd)
 			continue
 		}
 
-		buildr, err := spw.loadOrCreateBuilderWithSignatures(rnd)
+		prover, err := spw.loadOrCreateProverWithSignatures(rnd)
 		if err != nil {
-			spw.log.Warnf("initBuilders: failed to load builder for round %d", rnd)
+			spw.log.Warnf("initProvers: failed to load prover for round %d", rnd)
 			continue
 		}
-		spw.builders[rnd] = buildr
+		spw.provers[rnd] = prover
 	}
 }
 
-func (spw *Worker) getAllOnlineBuilderRounds() ([]basics.Round, error) {
-	// Some state proof databases might only contain a signature table. For that reason, when trying to create builders for possible state proof
-	// rounds we search the signature table and not the builder table
+func (spw *Worker) getAllOnlineProverRounds() ([]basics.Round, error) {
+	// Some state proof databases might only contain a signature table. For that reason, when trying to create provers for possible state proof
+	// rounds we search the signature table and not the prover table
 	latest := spw.ledger.Latest()
 	latestHdr, err := spw.ledger.BlockHdr(latest)
 	if err != nil {
@@ -264,7 +266,7 @@ func (spw *Worker) getAllOnlineBuilderRounds() ([]basics.Round, error) {
 	}
 
 	latestStateProofRound := latest.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))
-	threshold := onlineBuildersThreshold(&proto, latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+	threshold := onlineProversThreshold(&proto, latestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 
 	var rnds []basics.Round
 	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
@@ -281,7 +283,7 @@ var errFailedToAddSigAtPos = errors.New("could not add signature to builder")   
 var errSigAlreadyPresentAtPos = errors.New("signature already present at this position") // Signature already present at this position
 var errSignatureVerification = errors.New("error while verifying signature")             // Signature failed cryptographic verification
 
-func (b *builder) insertSig(s *pendingSig, verify bool) error {
+func (b *spProver) insertSig(s *pendingSig, verify bool) error {
 	rnd := b.Round
 	pos, ok := b.AddrToPos[s.signer]
 	if !ok {
@@ -326,7 +328,7 @@ func (spw *Worker) handleSigMessage(msg network.IncomingMessage) network.Outgoin
 // latest StateProof round.
 // This signature filtering is only relevant when the StateProof chain is stalled and many signatures may be spammed.
 func (spw *Worker) meetsBroadcastPolicy(sfa sigFromAddr, latestRound basics.Round, proto *config.ConsensusParams, stateProofNextRound basics.Round) bool {
-	if sfa.Round <= onlineBuildersThreshold(proto, stateProofNextRound) {
+	if sfa.Round <= onlineProversThreshold(proto, stateProofNextRound) {
 		return true
 	}
 
@@ -334,7 +336,7 @@ func (spw *Worker) meetsBroadcastPolicy(sfa sigFromAddr, latestRound basics.Roun
 	return sfa.Round == latestStateProofRound
 }
 
-// handleSig adds a signature to the pending in-memory state proof provers (builders). This function is
+// handleSig adds a signature to the pending in-memory state proof provers (provers). This function is
 // also responsible for making sure that the signature is valid, and not duplicated.
 // if a signature passes all verification it is written into the database.
 func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.ForwardingPolicy, error) {
@@ -342,11 +344,11 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 	defer spw.mu.Unlock()
 
 	// might happen if the state proof worker is stopping
-	if spw.builders == nil {
-		return network.Ignore, fmt.Errorf("handleSig: no builders loaded")
+	if spw.provers == nil {
+		return network.Ignore, fmt.Errorf("handleSig: no provers loaded")
 	}
 
-	builderForRound, ok := spw.builders[sfa.Round]
+	proverForRound, ok := spw.provers[sfa.Round]
 	if !ok {
 		latest := spw.ledger.Latest()
 		latestHdr, err := spw.ledger.BlockHdr(latest)
@@ -388,13 +390,13 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			return network.Ignore, nil
 		}
 
-		builderForRound, err = spw.loadOrCreateBuilderWithSignatures(sfa.Round)
+		proverForRound, err = spw.loadOrCreateProverWithSignatures(sfa.Round)
 		if err != nil {
 			// Should not disconnect this peer, since this is a fault of the relay
 			// The peer could have other signatures what the relay is interested in
 			return network.Ignore, err
 		}
-		spw.builders[sfa.Round] = builderForRound
+		spw.provers[sfa.Round] = proverForRound
 		spw.log.Infof("spw.handleSig: starts gathering signatures for round %d", sfa.Round)
 	}
 
@@ -403,7 +405,7 @@ func (spw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 		sig:          sfa.Sig,
 		fromThisNode: sender == nil,
 	}
-	err := builderForRound.insertSig(&sig, true)
+	err := proverForRound.insertSig(&sig, true)
 	if errors.Is(err, errSigAlreadyPresentAtPos) {
 		// Safe to ignore this error as it means we already have a valid signature for this address
 		return network.Ignore, nil
@@ -458,7 +460,7 @@ func (spw *Worker) builder(latest basics.Round) {
 		proto := config.Consensus[newLatestHdr.CurrentProtocol]
 		stateProofNextRound := newLatestHdr.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 
-		spw.deleteBuildData(&proto, stateProofNextRound)
+		spw.deleteProverData(&proto, stateProofNextRound)
 
 		// Broadcast signatures based on the previous block(s) that
 		// were agreed upon.  This ensures that, if we send a signature
@@ -496,7 +498,7 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, stateProofNextRound basics.R
 	defer spw.mu.Unlock()
 
 	latestStateProofRound := brnd.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))
-	threshold := onlineBuildersThreshold(&proto, stateProofNextRound)
+	threshold := onlineProversThreshold(&proto, stateProofNextRound)
 	var roundSigs map[basics.Round][]pendingSig
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		if brnd%basics.Round(proto.StateProofInterval) < basics.Round(proto.StateProofInterval/2) {
@@ -540,17 +542,17 @@ func (spw *Worker) broadcastSigs(brnd basics.Round, stateProofNextRound basics.R
 	}
 }
 
-func (spw *Worker) deleteBuildData(proto *config.ConsensusParams, stateProofNextRound basics.Round) {
+func (spw *Worker) deleteProverData(proto *config.ConsensusParams, stateProofNextRound basics.Round) {
 	if proto.StateProofInterval == 0 || stateProofNextRound == 0 {
 		return
 	}
 
-	// Delete from memory (already stored on disk). Practically, There are two scenarios where builders gets removed from memory
+	// Delete from memory (already stored on disk). Practically, There are two scenarios where provers gets removed from memory
 	// 1. When a state proof is committed, the earliest will get removed and later on will be removed from disk.
-	//	(when calling deleteStaleBuilders)
-	// 2. If state proofs are stalled, and consensus is moving forward, a new latest builder will be created and
-	// the older builder will be swapped out from memory. (i.e will be removed from memory but stays on disk).
-	spw.trimBuildersCache(proto, stateProofNextRound)
+	//	(when calling deleteStaleProver)
+	// 2. If state proofs are stalled, and consensus is moving forward, a new latest prover will be created and
+	// the older provers will be swapped out from memory. (i.e will be removed from memory but stays on disk).
+	spw.trimProversCache(proto, stateProofNextRound)
 
 	if spw.lastCleanupRound == stateProofNextRound {
 		return
@@ -559,7 +561,7 @@ func (spw *Worker) deleteBuildData(proto *config.ConsensusParams, stateProofNext
 	// Delete from disk (database)
 	spw.deleteStaleSigs(stateProofNextRound)
 	spw.deleteStaleKeys(stateProofNextRound)
-	spw.deleteStaleBuilders(stateProofNextRound)
+	spw.deleteStaleProver(stateProofNextRound)
 	spw.lastCleanupRound = stateProofNextRound
 }
 
@@ -587,50 +589,50 @@ func (spw *Worker) deleteStaleKeys(retainRound basics.Round) {
 	}
 }
 
-func (spw *Worker) deleteStaleBuilders(retainRound basics.Round) {
+func (spw *Worker) deleteStaleProver(retainRound basics.Round) {
 	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return deleteBuilders(tx, retainRound)
+		return deleteProvers(tx, retainRound)
 	})
 	if err != nil {
-		spw.log.Warnf("deleteOldBuilders: failed to delete builders from database: %v", err)
+		spw.log.Warnf("deleteStaleProver: failed to delete provers from database: %v", err)
 	}
 }
 
-// onlineBuildersThreshold returns the highest round for which the builder should be stored in memory (cache).
+// onlineProversThreshold returns the highest round for which the prover should be stored in memory (cache).
 // This is mostly relevant in case the StateProof chain is stalled.
 // The threshold is also used to limit the StateProof signatures broadcasted over the network.
-func onlineBuildersThreshold(proto *config.ConsensusParams, stateProofNextRound basics.Round) basics.Round {
+func onlineProversThreshold(proto *config.ConsensusParams, stateProofNextRound basics.Round) basics.Round {
 	/*
-		builderCacheLength - 2:
-			let buildersCacheLength <- 5, StateProofNextRound <- 1024, LatestRound <- 4096
+		proverCacheLength - 2:
+			let proversCacheLength <- 5, StateProofNextRound <- 1024, LatestRound <- 4096
 			threshold = StateProofNextRound + 3 * StateProofInterval (for a total of 4 early StateProofs)
-			the 5th builder in the cache is reserved for the LatestRound stateproof.
+			the 5th prover in the cache is reserved for the LatestRound stateproof.
 	*/
-	threshold := stateProofNextRound + basics.Round((buildersCacheLength-2)*proto.StateProofInterval)
+	threshold := stateProofNextRound + basics.Round((proversCacheLength-2)*proto.StateProofInterval)
 	return threshold
 }
 
-// trimBuildersCache reduces the number of builders stored in memory to X earliest as well as 1 latest, to an overall amount of X+1 builders
-func (spw *Worker) trimBuildersCache(proto *config.ConsensusParams, stateProofNextRound basics.Round) {
+// trimProversCache reduces the number of provers stored in memory to X earliest as well as 1 latest, to an overall amount of X+1 provers
+func (spw *Worker) trimProversCache(proto *config.ConsensusParams, stateProofNextRound basics.Round) {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
-	var maxBuilderRound basics.Round
-	for rnd := range spw.builders {
-		if rnd > maxBuilderRound {
-			maxBuilderRound = rnd
+	var maxProverRound basics.Round
+	for rnd := range spw.provers {
+		if rnd > maxProverRound {
+			maxProverRound = rnd
 		}
 	}
 
-	threshold := onlineBuildersThreshold(proto, stateProofNextRound)
+	threshold := onlineProversThreshold(proto, stateProofNextRound)
 	/*
-		For example, builders currently stored in memory are for these rounds:
-		[..., StateProofNextRound-256, StateProofNextRound, StateProofNextRound+256, ..., Threshold, ..., MaxBuilderRound]
-		[StateProofNextRound, ..., Threshold, MaxBuilderRound] <- Only builders that should be stored in memory after trim
+		For example, provers currently stored in memory are for these rounds:
+		[..., StateProofNextRound-256, StateProofNextRound, StateProofNextRound+256, ..., Threshold, ..., maxProverRound]
+		[StateProofNextRound, ..., Threshold, maxProverRound] <- Only provers that should be stored in memory after trim
 	*/
-	for rnd := range spw.builders {
-		if rnd < stateProofNextRound || (threshold < rnd && rnd < maxBuilderRound) {
-			delete(spw.builders, rnd)
+	for rnd := range spw.provers {
+		if rnd < stateProofNextRound || (threshold < rnd && rnd < maxProverRound) {
+			delete(spw.provers, rnd)
 		}
 	}
 }
@@ -639,16 +641,16 @@ func (spw *Worker) tryBroadcast() {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
-	sortedRounds := make([]basics.Round, 0, len(spw.builders))
-	for rnd := range spw.builders {
+	sortedRounds := make([]basics.Round, 0, len(spw.provers))
+	for rnd := range spw.provers {
 		sortedRounds = append(sortedRounds, rnd)
 	}
 	sort.Slice(sortedRounds, func(i, j int) bool { return sortedRounds[i] < sortedRounds[j] })
 
 	for _, rnd := range sortedRounds {
-		// Iterate over the builders in a sequential manner. If the earlist state proof is not ready/rejected
+		// Iterate over the provers in a sequential manner. If the earlist state proof is not ready/rejected
 		// it won't be possible to add a later one. For that reason, we break the loop
-		b := spw.builders[rnd]
+		b := spw.provers[rnd]
 		firstValid := spw.ledger.Latest()
 		acceptableWeight := verify.AcceptableStateProofWeight(&b.VotersHdr, firstValid, logging.Base())
 		if b.SignedWeight() < acceptableWeight {
@@ -661,7 +663,7 @@ func (spw *Worker) tryBroadcast() {
 			break
 		}
 
-		sp, err := b.Build()
+		sp, err := b.CreateProof()
 		if err != nil {
 			spw.log.Warnf("spw.tryBroadcast: building state proof for %d failed: %v", rnd, err)
 			break

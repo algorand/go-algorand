@@ -179,9 +179,9 @@ again:
 	goto again
 }
 
-// Build returns a state proof, if the prover has accumulated
+// CreateProof returns a state proof, if the prover has accumulated
 // enough signatures to construct it.
-func (b *Prover) Build() (*StateProof, error) {
+func (b *Prover) CreateProof() (*StateProof, error) {
 	if b.cachedProof != nil {
 		return b.cachedProof, nil
 	}

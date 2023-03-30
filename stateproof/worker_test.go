@@ -476,7 +476,7 @@ func newTestWorkerOnDiskDb(t testing.TB, s *testWorkerStubs) *Worker {
 		ledger:       s,
 		net:          s,
 		txnSender:    s,
-		builders:     make(map[basics.Round]builder),
+		provers:      make(map[basics.Round]spProver),
 		ctx:          ctx,
 		shutdown:     cancel,
 		signedCh:     make(chan struct{}, 1),
@@ -508,7 +508,7 @@ func newPartKeyWithVersion(t testing.TB, protoParam config.ConsensusParams, pare
 	return part
 }
 
-func countBuildersInDB(store db.Accessor) (nrows int, err error) {
+func countProversInDB(store db.Accessor) (nrows int, err error) {
 	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		row := tx.QueryRow("SELECT COUNT(*) FROM builders")
 		err := row.Scan(&nrows)
@@ -521,7 +521,7 @@ func countBuildersInDB(store db.Accessor) (nrows int, err error) {
 	return
 }
 
-func expectedNumberOfBuilders(stateproofInterval uint64, atRound basics.Round, nextStateProof basics.Round) int {
+func expectedNumberOfProvers(stateproofInterval uint64, atRound basics.Round, nextStateProof basics.Round) int {
 	if nextStateProof > atRound {
 		return 0
 	}
@@ -804,7 +804,7 @@ func TestWorkerHandleSig(t *testing.T) {
 	}
 }
 
-func TestWorkerIgnoresSignatureForNonCacheBuilders(t *testing.T) {
+func TestWorkerIgnoresSignatureForNonCacheProvers(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -823,29 +823,29 @@ func TestWorkerIgnoresSignatureForNonCacheBuilders(t *testing.T) {
 	defer w.Stop()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	targetRound := (buildersCacheLength + 1) * proto.StateProofInterval
+	targetRound := (proversCacheLength + 1) * proto.StateProofInterval
 
 	s.advanceRoundsWithoutStateProof(t, targetRound)
 
 	// clean up the cache and clean up the signatures database so the handler will accept our signatures.
 	s.mu.Lock()
-	w.builders = make(map[basics.Round]builder)
+	w.provers = make(map[basics.Round]spProver)
 	a.NoError(w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("DELETE  from sigs")
 		return err
 	}))
 	s.mu.Unlock()
 
-	// rounds [2*proto.StateProofInterval, 3*proto.StateProofInterval, ... (buildersCacheLength - 1)*proto.StateProofInterval] should be
+	// rounds [2*proto.StateProofInterval, 3*proto.StateProofInterval, ... (proversCacheLength - 1)*proto.StateProofInterval] should be
 	// accepted by handleSig
 	i := uint64(0)
-	for ; i < (buildersCacheLength - 1); i++ {
+	for ; i < (proversCacheLength - 1); i++ {
 		fwd, err := sendSigToHandler(proto, i, w, a, s)
 		a.Equal(network.Broadcast, fwd)
 		a.NoError(err)
 	}
 
-	// signature for (buildersCacheLength)*proto.StateProofInterval should be rejected - due to cache limit
+	// signature for (proversCacheLength)*proto.StateProofInterval should be rejected - due to cache limit
 	fwd, err := sendSigToHandler(proto, i, w, a, s)
 	a.Equal(network.Ignore, fwd)
 	a.NoError(err)
@@ -985,11 +985,11 @@ func TestKeysRemoveOnlyAfterStateProofAcceptedLargeIntervals(t *testing.T) {
 	require.Equal(t, len(keys), len(checkedKeys))
 }
 
-func TestWorkersBuildersCacheAndSignatures(t *testing.T) {
+func TestWorkersProversCacheAndSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	const expectedStateProofs = buildersCacheLength + 2
+	const expectedStateProofs = proversCacheLength + 2
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
@@ -1012,21 +1012,21 @@ func TestWorkersBuildersCacheAndSignatures(t *testing.T) {
 	}
 	s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2)
 
-	a.Equal(buildersCacheLength, len(w.builders))
-	verifyBuilderCache(proto, w, a, expectedStateProofs)
+	a.Equal(proversCacheLength, len(w.provers))
+	verifyProverCache(proto, w, a, expectedStateProofs)
 
-	countDB, err := countBuildersInDB(w.db)
+	countDB, err := countProversInDB(w.db)
 	a.NoError(err)
 	a.Equal(expectedStateProofs, countDB)
 
-	threshold := onlineBuildersThreshold(&proto, basics.Round(512)) // 512 since no StateProofs are confirmed yet (512 is the first, commitment at 256)
+	threshold := onlineProversThreshold(&proto, basics.Round(512)) // 512 since no StateProofs are confirmed yet (512 is the first, commitment at 256)
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		roundSigs, err = getPendingSigs(tx, threshold, basics.Round(256+proto.StateProofInterval*expectedStateProofs), false)
 		return
 	})
 	a.NoError(err)
-	a.Equal(buildersCacheLength, len(roundSigs)) // Number of broadcasted sigs should be the same as number of (online) cached builders.
+	a.Equal(proversCacheLength, len(roundSigs)) // Number of broadcasted sigs should be the same as number of (online) cached provers.
 
 	/*
 		add block that confirm a state proof for interval: expectedStateProofs
@@ -1034,12 +1034,12 @@ func TestWorkersBuildersCacheAndSignatures(t *testing.T) {
 	s.addBlock(basics.Round((expectedStateProofs) * config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
 	s.waitForSignerAndBuilder(t)
 
-	count := expectedNumberOfBuilders(proto.StateProofInterval, s.latest, basics.Round((expectedStateProofs)*config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
-	countDB, err = countBuildersInDB(w.db)
+	count := expectedNumberOfProvers(proto.StateProofInterval, s.latest, basics.Round((expectedStateProofs)*config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval))
+	countDB, err = countProversInDB(w.db)
 	a.NoError(err)
 	a.Equal(count, countDB)
 
-	threshold = onlineBuildersThreshold(&proto, s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
+	threshold = onlineProversThreshold(&proto, s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 	maxStateProofRnd := s.latest.RoundDownToMultipleOf(basics.Round(proto.StateProofInterval))
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		roundSigs, err = getPendingSigs(tx, threshold, maxStateProofRnd, false)
@@ -1049,24 +1049,24 @@ func TestWorkersBuildersCacheAndSignatures(t *testing.T) {
 	a.Equal(count, len(roundSigs))
 }
 
-func verifyBuilderCache(proto config.ConsensusParams, w *Worker, a *require.Assertions, expectedStateProofs uint64) {
-	for i := uint64(0); i < buildersCacheLength-1; i++ {
+func verifyProverCache(proto config.ConsensusParams, w *Worker, a *require.Assertions, expectedStateProofs uint64) {
+	for i := uint64(0); i < proversCacheLength-1; i++ {
 		rnd := proto.StateProofInterval*2 + proto.StateProofInterval*i
-		_, exists := w.builders[basics.Round(rnd)]
+		_, exists := w.provers[basics.Round(rnd)]
 		a.True(exists)
 	}
-	_, exists := w.builders[basics.Round(proto.StateProofInterval*(expectedStateProofs+1))]
+	_, exists := w.provers[basics.Round(proto.StateProofInterval*(expectedStateProofs+1))]
 	a.True(exists)
 }
 
 // TestSignatureBroadcastPolicy makes sure that during half of a state proof interval, every online account
-// will broadcast only buildersCacheLength amount of signatures
+// will broadcast only proversCacheLength amount of signatures
 func TestSignatureBroadcastPolicy(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
 	const numberOfParticipants = 5
-	const expectedStateProofs = buildersCacheLength + 2
+	const expectedStateProofs = proversCacheLength + 2
 	var keys []account.Participation
 	for i := 0; i < numberOfParticipants; i++ {
 		var parent basics.Address
@@ -1095,7 +1095,7 @@ func TestSignatureBroadcastPolicy(t *testing.T) {
 
 func checkSignatureBroadcastHalfInterval(t *testing.T, proto config.ConsensusParams, expectedStateProofs uint64, s *testWorkerStubs, numberOfParticipants int, a *require.Assertions) {
 	roundSigs := make(map[basics.Round]int)
-	for i := uint64(2); i < buildersCacheLength; i++ {
+	for i := uint64(2); i < proversCacheLength; i++ {
 		roundSigs[basics.Round(i*proto.StateProofInterval)] = 0
 	}
 	roundSigs[basics.Round((expectedStateProofs+1)*proto.StateProofInterval)] = 0
@@ -1104,7 +1104,7 @@ func checkSignatureBroadcastHalfInterval(t *testing.T, proto config.ConsensusPar
 	s.sigmsg = make(chan []byte, 1024*1024)
 
 	s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2)
-	for i := 0; i < numberOfParticipants*buildersCacheLength; i++ {
+	for i := 0; i < numberOfParticipants*proversCacheLength; i++ {
 		sigMessage := sigFromAddr{}
 		sigMessageBytes, err := s.waitOnSigWithTimeout(time.Second * 2)
 		a.NoError(err)
@@ -1115,13 +1115,13 @@ func checkSignatureBroadcastHalfInterval(t *testing.T, proto config.ConsensusPar
 		roundSigs[sigMessage.Round]++
 	}
 
-	a.Equal(buildersCacheLength, len(roundSigs))
+	a.Equal(proversCacheLength, len(roundSigs))
 	for _, numOfSignatures := range roundSigs {
 		a.Equal(numberOfParticipants, numOfSignatures)
 	}
 }
 
-func TestWorkerDoesNotLimitBuildersAndSignaturesOnDisk(t *testing.T) {
+func TestWorkerDoesNotLimitProversAndSignaturesOnDisk(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -1145,8 +1145,8 @@ func TestWorkerDoesNotLimitBuildersAndSignaturesOnDisk(t *testing.T) {
 	}
 
 	// should not give up on rounds
-	a.Equal(buildersCacheLength, len(w.builders))
-	countDB, err := countBuildersInDB(w.db)
+	a.Equal(proversCacheLength, len(w.provers))
+	countDB, err := countProversInDB(w.db)
 	a.NoError(err)
 	a.Equal(proto.StateProofMaxRecoveryIntervals+1, uint64(countDB))
 
@@ -1308,7 +1308,7 @@ func sendReceiveCountMessages(t *testing.T, tns *testWorkerStubs, signatureBcast
 	}
 }
 
-func TestBuilderGeneratesValidStateProofTXN(t *testing.T) {
+func TestProverGeneratesValidStateProofTXN(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -1522,7 +1522,7 @@ func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
 	require.ErrorIs(t, err, errAddressNotInVoters)
 }
 
-// Signature already part of the builderForRound, ignore
+// Signature already part of the proverForRound, ignore
 func TestWorkerHandleSigAlreadyIn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1594,8 +1594,8 @@ func TestWorkerHandleSigExceptionsDbError(t *testing.T) {
 	require.Contains(t, "no such table: sigs", err.Error())
 }
 
-// relays reject signatures when could not createAndPersistBuilder
-func TestWorkerHandleSigCantMakeBuilder(t *testing.T) {
+// relays reject signatures when could not createAndPersistProver
+func TestWorkerHandleSigCantMakeProver(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -1706,19 +1706,19 @@ func TestWorkerHandleSigCorrupt(t *testing.T) {
 	require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, reply)
 }
 
-func verifyPersistedBuilders(a *require.Assertions, w *Worker) {
+func verifyPersistedProvers(a *require.Assertions, w *Worker) {
 	w.mu.Lock()
 
 	defer w.mu.Unlock()
-	for k, v := range w.builders {
-		var builderFromDisk builder
+	for k, v := range w.provers {
+		var proverFromDisk spProver
 		a.NoError(
 			w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
 				var err error
-				builderFromDisk, err = getBuilder(tx, k)
+				proverFromDisk, err = getProver(tx, k)
 				return err
 			}))
-		a.Equal(v.ProverPersistedFields, builderFromDisk.ProverPersistedFields)
+		a.Equal(v.ProverPersistedFields, proverFromDisk.ProverPersistedFields)
 	}
 }
 
@@ -1726,7 +1726,7 @@ func TestWorkerCacheAndDiskAfterRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	const expectedStateProofs = buildersCacheLength + 1
+	const expectedStateProofs = proversCacheLength + 1
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
@@ -1749,42 +1749,42 @@ func TestWorkerCacheAndDiskAfterRestart(t *testing.T) {
 	}
 	s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2)
 
-	// at this point we expect the number of builders in memory to be equal to buildersCacheLength
-	a.Equal(buildersCacheLength, len(w.builders))
-	countDB, err := countBuildersInDB(w.db)
+	// at this point we expect the number of provers in memory to be equal to proversCacheLength
+	a.Equal(proversCacheLength, len(w.provers))
+	countDB, err := countProversInDB(w.db)
 	a.NoError(err)
 	a.Equal(expectedStateProofs, countDB)
 
-	threshold := onlineBuildersThreshold(&proto, basics.Round(512)) // 512 since no StateProofs are confirmed yet (512 is the first, commitment at 256)
+	threshold := onlineProversThreshold(&proto, basics.Round(512)) // 512 since no StateProofs are confirmed yet (512 is the first, commitment at 256)
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		roundSigs, err = getPendingSigs(tx, threshold, basics.Round(256+proto.StateProofInterval*expectedStateProofs), false)
 		return
 	})
 	a.NoError(err)
-	a.Equal(buildersCacheLength, len(roundSigs)) // Number of broadcasted sigs should be the same as number of (online) cached builders.
+	a.Equal(proversCacheLength, len(roundSigs)) // Number of broadcasted sigs should be the same as number of (online) cached provers.
 
 	// restart worker
 	w.Stop()
-	// we make sure that the worker will not be able to create a builder by disabling the mock ledger
+	// we make sure that the worker will not be able to create a prover by disabling the mock ledger
 	s.keysForVoters = []account.Participation{}
 
 	w.Start()
 	defer w.Stop()
 
-	a.Equal(buildersCacheLength, len(w.builders))
-	countDB, err = countBuildersInDB(w.db)
+	a.Equal(proversCacheLength, len(w.provers))
+	countDB, err = countProversInDB(w.db)
 	a.NoError(err)
 	a.Equal(expectedStateProofs, countDB)
 
-	verifyPersistedBuilders(a, w)
+	verifyPersistedProvers(a, w)
 }
 
 func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	const expectedStateProofs = buildersCacheLength + 1
+	const expectedStateProofs = proversCacheLength + 1
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
@@ -1807,26 +1807,26 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 	}
 	s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2)
 
-	// at this point we expect the number of builders in memory to be bound with buildersCacheLength
-	a.Equal(buildersCacheLength, len(w.builders))
-	countDB, err := countBuildersInDB(w.db)
+	// at this point we expect the number of provers in memory to be bound with proversCacheLength
+	a.Equal(proversCacheLength, len(w.provers))
+	countDB, err := countProversInDB(w.db)
 	a.NoError(err)
 	a.Equal(expectedStateProofs, countDB)
 
-	threshold := onlineBuildersThreshold(&proto, basics.Round(512)) // 512 since no StateProofs are confirmed yet (512 is the first, commitment at 256)
+	threshold := onlineProversThreshold(&proto, basics.Round(512)) // 512 since no StateProofs are confirmed yet (512 is the first, commitment at 256)
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		roundSigs, err = getPendingSigs(tx, threshold, basics.Round(256+proto.StateProofInterval*expectedStateProofs), false)
 		return
 	})
 	a.NoError(err)
-	a.Equal(buildersCacheLength, len(roundSigs)) // Number of broadcasted sigs should be the same as number of (online) cached builders.
+	a.Equal(proversCacheLength, len(roundSigs)) // Number of broadcasted sigs should be the same as number of (online) cached provers.
 
 	w.Stop()
 
 	accessor, err := db.MakeAccessor(w.spDbFileName, false, false)
 	a.NoError(err)
-	// we now remove all builders from the table. This will cause the worker to create the builders from the ledger.
+	// we now remove all provers from the table. This will cause the worker to create the provers from the ledger.
 	a.NoError(accessor.Atomic(func(_ context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("DELETE  from builders")
 		return err
@@ -1836,15 +1836,15 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 	w.Start()
 	defer w.Stop()
 
-	a.Equal(buildersCacheLength, len(w.builders))
-	countDB, err = countBuildersInDB(w.db)
+	a.Equal(proversCacheLength, len(w.provers))
+	countDB, err = countProversInDB(w.db)
 	a.NoError(err)
-	a.Equal(buildersCacheLength, countDB)
+	a.Equal(proversCacheLength, countDB)
 
-	verifyPersistedBuilders(a, w)
+	verifyPersistedProvers(a, w)
 }
 
-func TestWorkerLoadsBuilderAndSignatureUponMsgRecv(t *testing.T) {
+func TestWorkerLoadsProverAndSignatureUponMsgRecv(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -1865,29 +1865,29 @@ func TestWorkerLoadsBuilderAndSignatureUponMsgRecv(t *testing.T) {
 	require.NoError(t, err)
 
 	msgBytes := protocol.Encode(&msg)
-	// add signature so  builder will get loaded
+	// add signature so  prover will get loaded
 	reply := w.handleSigMessage(network.IncomingMessage{
 		Data: msgBytes,
 	})
 	require.Equal(t, network.OutgoingMessage{Action: network.Broadcast}, reply)
 
-	// we make sure that the worker will not be able to create a builder by disabling the mock ledger
+	// we make sure that the worker will not be able to create a prover by disabling the mock ledger
 	s.keysForVoters = []account.Participation{}
 
-	// removing the builder from memory will force the worker to load it from disk
-	w.builders = make(map[basics.Round]builder)
-	_, exists := w.builders[msg.Round]
+	// removing the prover from memory will force the worker to load it from disk
+	w.provers = make(map[basics.Round]spProver)
+	_, exists := w.provers[msg.Round]
 	require.False(t, exists)
 	fwd, err := w.handleSig(msg, msg.SignerAddress)
-	// we expect the handler to ignore the signature since the builder and the old signature were loaded
+	// we expect the handler to ignore the signature since the prover and the old signature were loaded
 	require.Equal(t, network.Ignore, fwd)
 	require.NoError(t, err)
-	_, exists = w.builders[msg.Round]
+	_, exists = w.provers[msg.Round]
 	require.True(t, exists)
 
-	// verify that builders can be loaded even if there are no signatures
-	w.builders = make(map[basics.Round]builder)
-	_, exists = w.builders[msg.Round]
+	// verify that provers can be loaded even if there are no signatures
+	w.provers = make(map[basics.Round]spProver)
+	_, exists = w.provers[msg.Round]
 	require.False(t, exists)
 	require.NoError(t, w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("DELETE  from sigs")
@@ -1896,22 +1896,22 @@ func TestWorkerLoadsBuilderAndSignatureUponMsgRecv(t *testing.T) {
 	fwd, err = w.handleSig(msg, msg.SignerAddress)
 	require.Equal(t, network.Broadcast, fwd)
 	require.NoError(t, err)
-	_, exists = w.builders[msg.Round]
+	_, exists = w.provers[msg.Round]
 	require.True(t, exists)
 
-	// remove builder from disk and memory we fail the builder creation (since the ledger also returns error)
+	// remove prover from disk and memory we fail the prover creation (since the ledger also returns error)
 	require.NoError(t, w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("DELETE  from builders")
 		return err
 	}))
-	w.builders = make(map[basics.Round]builder)
+	w.provers = make(map[basics.Round]spProver)
 	_, err = w.handleSig(msg, msg.SignerAddress)
 	require.ErrorIs(t, err, errEmptyVoters)
-	_, exists = w.builders[msg.Round]
+	_, exists = w.provers[msg.Round]
 	require.False(t, exists)
 }
 
-func TestWorkerCreatesBuildersOnCommit(t *testing.T) {
+func TestWorkerCreatesProversOnCommit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -1920,35 +1920,35 @@ func TestWorkerCreatesBuildersOnCommit(t *testing.T) {
 	_, s, w := createWorkerAndParticipants(t, protocol.ConsensusCurrentVersion, proto)
 	defer w.Stop()
 
-	// We remove the signer's keys to stop it from generating builders.
+	// We remove the signer's keys to stop it from generating provers.
 	s.keys = []account.Participation{}
 
-	firstBuilderRound := basics.Round(proto.StateProofInterval * 2)
+	ProverRound := basics.Round(proto.StateProofInterval * 2)
 
 	// We start on round 511, so the callback should be called when committing the next round.
 	s.advanceRoundsWithoutStateProof(t, 2)
 
-	var builderExists bool
+	var proverExists bool
 	err := w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		builderExists, err = builderExistInDB(tx, firstBuilderRound)
+		proverExists, err = proverExistInDB(tx, ProverRound)
 		return err
 	})
 	a.NoError(err)
-	a.False(builderExists)
+	a.False(proverExists)
 
 	// We leave one round uncommitted to be able to easily discern the stateProofNextRound.
-	s.mockCommit(firstBuilderRound)
+	s.mockCommit(ProverRound)
 
-	builderExists = false
+	proverExists = false
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		builderExists, err = builderExistInDB(tx, firstBuilderRound)
+		proverExists, err = proverExistInDB(tx, ProverRound)
 		return err
 	})
 	a.NoError(err)
-	a.True(builderExists)
+	a.True(proverExists)
 }
 
-func TestSignerUsesPersistedBuilderLatestProto(t *testing.T) {
+func TestSignerUsesPersistedProverLatestProto(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -1968,18 +1968,18 @@ func TestSignerUsesPersistedBuilderLatestProto(t *testing.T) {
 	defer os.Remove(w.spDbFileName)
 	w.Start()
 
-	// We remove the signer's keys to stop it from generating builders and signing.
+	// We remove the signer's keys to stop it from generating provers and signing.
 	prevKeys := s.keys
 	s.keys = []account.Participation{}
 
-	firstBuilderRound := basics.Round(proto.StateProofInterval * 2)
+	firstProverRound := basics.Round(proto.StateProofInterval * 2)
 
 	// We start on round 511, so the callback should be called on the next round.
 	s.advanceRoundsWithoutStateProof(t, 2)
-	s.mockCommit(firstBuilderRound)
+	s.mockCommit(firstProverRound)
 	s.waitForSignerAndBuilder(t)
 
-	a.False(s.isRoundSigned(a, w, firstBuilderRound))
+	a.False(s.isRoundSigned(a, w, firstProverRound))
 
 	// We restart the signing process.
 	s.keys = prevKeys
@@ -1992,7 +1992,7 @@ func TestSignerUsesPersistedBuilderLatestProto(t *testing.T) {
 	s.advanceRoundsWithoutStateProof(t, 1)
 	s.waitForSignerAndBuilder(t)
 
-	a.True(s.isRoundSigned(a, w, firstBuilderRound))
+	a.True(s.isRoundSigned(a, w, firstProverRound))
 }
 
 func TestRegisterCommitListener(t *testing.T) {

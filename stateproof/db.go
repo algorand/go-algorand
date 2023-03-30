@@ -47,17 +47,17 @@ const (
 
 	createSigsIdx = `CREATE INDEX IF NOT EXISTS sigs_from_this_node ON sigs (from_this_node)`
 
-	// builders table stored a serialization of each BuilderForRound data, without the sigs (stored separately)
-	createBuildersTable = `CREATE TABLE IF NOT EXISTS builders (
+	// provers table stored a serialization of each ProverForRound data, without the sigs (stored separately)
+	createProverTable = `CREATE TABLE IF NOT EXISTS builders (
     	round INTEGER PRIMARY KEY NOT NULL,
     	builder BLOB NOT NULL
     )`
 
-	insertOrReplaceBuilderForRound = `INSERT OR REPLACE INTO builders (round,builder) VALUES (?,?)`
+	insertOrReplaceProverForRound = `INSERT OR REPLACE INTO builders (round,builder) VALUES (?,?)`
 
-	selectBuilderForRound = `SELECT builder FROM builders WHERE round=?`
+	selectProverForRound = `SELECT builder FROM builders WHERE round=?`
 
-	deleteBuilderForRound = `DELETE FROM builders WHERE round<?`
+	deleteProverForRound = `DELETE FROM builders WHERE round<?`
 )
 
 // dbSchemaUpgrade0 initialize the tables.
@@ -73,7 +73,7 @@ func dbSchemaUpgrade0(_ context.Context, tx *sql.Tx, _ bool) error {
 }
 
 func dbSchemaUpgrade1(_ context.Context, tx *sql.Tx, _ bool) error {
-	_, err := tx.Exec(createBuildersTable)
+	_, err := tx.Exec(createProverTable)
 
 	return err
 }
@@ -183,28 +183,28 @@ func rowsToPendingSigs(rows *sql.Rows) (map[basics.Round][]pendingSig, error) {
 
 //#endregion
 
-//#region Builders Operations
-func persistBuilder(tx *sql.Tx, rnd basics.Round, b *builder) error {
-	_, err := tx.Exec(insertOrReplaceBuilderForRound, rnd, protocol.Encode(b))
+//#region Prover Operations
+func persistProver(tx *sql.Tx, rnd basics.Round, b *spProver) error {
+	_, err := tx.Exec(insertOrReplaceProverForRound, rnd, protocol.Encode(b))
 	return err
 }
 
-func getBuilder(tx *sql.Tx, rnd basics.Round) (builder, error) {
-	row := tx.QueryRow(selectBuilderForRound, rnd)
-	var rawBuilder []byte
-	err := row.Scan(&rawBuilder)
+func getProver(tx *sql.Tx, rnd basics.Round) (spProver, error) {
+	row := tx.QueryRow(selectProverForRound, rnd)
+	var rawProver []byte
+	err := row.Scan(&rawProver)
 	if err != nil {
-		return builder{}, fmt.Errorf("getBuilder: builder for round %d not found in the database: %w", rnd, err)
+		return spProver{}, fmt.Errorf("getProver: prover for round %d not found in the database: %w", rnd, err)
 	}
-	var bldr builder
-	err = protocol.Decode(rawBuilder, &bldr)
+	var bldr spProver
+	err = protocol.Decode(rawProver, &bldr)
 	if err != nil {
-		return builder{}, fmt.Errorf("getBuilder: getBuilder: builder for round %d failed to decode: %w", rnd, err)
+		return spProver{}, fmt.Errorf("getProver: getProver: prover for round %d failed to decode: %w", rnd, err)
 	}
 
 	// Stored Prover is corrupted...
 	if bldr.Prover == nil {
-		return builder{}, fmt.Errorf("getBuilder: builder for round %d is corrupted", rnd)
+		return spProver{}, fmt.Errorf("getProver: prover for round %d is corrupted", rnd)
 	}
 
 	bldr.Prover.AllocSigs()
@@ -212,25 +212,25 @@ func getBuilder(tx *sql.Tx, rnd basics.Round) (builder, error) {
 	return bldr, nil
 }
 
-// This function is used to fetch only the StateProof Message from within the builder stored on disk.
+// This function is used to fetch only the StateProof Message from within the prover stored on disk.
 // In the future, StateProof messages should perhaps be stored in their own table and this implementation will change.
 func getMessage(tx *sql.Tx, rnd basics.Round) (stateproofmsg.Message, error) {
-	row := tx.QueryRow(selectBuilderForRound, rnd)
-	var rawBuilder []byte
-	err := row.Scan(&rawBuilder)
+	row := tx.QueryRow(selectProverForRound, rnd)
+	var rawProver []byte
+	err := row.Scan(&rawProver)
 	if err != nil {
-		return stateproofmsg.Message{}, fmt.Errorf("getMessage: builder for round %d not found in the database: %w", rnd, err)
+		return stateproofmsg.Message{}, fmt.Errorf("getMessage: prover for round %d not found in the database: %w", rnd, err)
 	}
-	var bldr builder
-	err = protocol.Decode(rawBuilder, &bldr)
+	var bldr spProver
+	err = protocol.Decode(rawProver, &bldr)
 	if err != nil {
-		return stateproofmsg.Message{}, fmt.Errorf("getMessage: builder for round %d failed to decode: %w", rnd, err)
+		return stateproofmsg.Message{}, fmt.Errorf("getMessage: prover for round %d failed to decode: %w", rnd, err)
 	}
 
 	return bldr.Message, nil
 }
 
-func builderExistInDB(tx *sql.Tx, rnd basics.Round) (bool, error) {
+func proverExistInDB(tx *sql.Tx, rnd basics.Round) (bool, error) {
 	row := tx.QueryRow("SELECT EXISTS ( SELECT 1 FROM builders WHERE round=? )", rnd)
 
 	exists := 0
@@ -241,9 +241,9 @@ func builderExistInDB(tx *sql.Tx, rnd basics.Round) (bool, error) {
 	return exists != 0, nil
 }
 
-// deleteBuilders deletes all builders before (but not including) the given rnd
-func deleteBuilders(tx *sql.Tx, rnd basics.Round) error {
-	_, err := tx.Exec(deleteBuilderForRound, rnd)
+// deleteProvers deletes all provers before (but not including) the given rnd
+func deleteProvers(tx *sql.Tx, rnd basics.Round) error {
+	_, err := tx.Exec(deleteProverForRound, rnd)
 	return err
 }
 

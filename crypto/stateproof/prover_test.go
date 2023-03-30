@@ -136,7 +136,7 @@ func generateProofForTesting(a *require.Assertions, doLargeTest bool) paramsForT
 		a.True(isPresent)
 	}
 
-	proof, err := b.Build()
+	proof, err := b.CreateProof()
 	a.NoError(err)
 
 	p := paramsForTest{
@@ -294,7 +294,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 		b.Add(uint64(i), sigs[i])
 	}
 
-	sProof, err := b.Build()
+	sProof, err := b.CreateProof()
 	a.NoError(err)
 
 	leaf0 := calculateHashOnSigLeaf(t, sigs[0], findLInProof(a, sigs[0], sProof))
@@ -494,17 +494,17 @@ func TestBuildAndReady(t *testing.T) {
 	a.NoError(err)
 
 	a.False(builder.Ready())
-	_, err = builder.Build()
+	_, err = builder.CreateProof()
 	a.ErrorIs(err, ErrSignedWeightLessThanProvenWeight)
 
 	builder.signedWeight = builder.ProvenWeight
 	a.False(builder.Ready())
-	_, err = builder.Build()
+	_, err = builder.CreateProof()
 	a.ErrorIs(err, ErrSignedWeightLessThanProvenWeight)
 
 	builder.signedWeight = builder.ProvenWeight + 1
 	a.True(builder.Ready())
-	_, err = builder.Build()
+	_, err = builder.CreateProof()
 	a.NotErrorIs(err, ErrSignedWeightLessThanProvenWeight)
 
 }
@@ -615,17 +615,17 @@ func TestBuilder_BuildStateProofCache(t *testing.T) {
 	a := require.New(t)
 	p := generateProofForTesting(a, true)
 	sp1 := &p.sp
-	sp2, err := p.builder.Build()
+	sp2, err := p.builder.CreateProof()
 	a.NoError(err)
 	a.Equal(sp1, sp2) // already built, no signatures added
 
 	err = p.builder.Add(p.numberOfParticipnets-1, p.sig)
 	a.NoError(err)
-	sp3, err := p.builder.Build()
+	sp3, err := p.builder.CreateProof()
 	a.NoError(err)
 	a.NotEqual(sp1, sp3) // better StateProof with added signature should have been built
 
-	sp4, err := p.builder.Build()
+	sp4, err := p.builder.CreateProof()
 	a.NoError(err)
 	a.Equal(sp3, sp4)
 
@@ -686,7 +686,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 				builder.Add(uint64(i), sigs[i])
 			}
 
-			sp, err = builder.Build()
+			sp, err = builder.CreateProof()
 			if err != nil {
 				b.Error(err)
 			}
