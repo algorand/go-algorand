@@ -105,10 +105,10 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 	//     Responses:
 	//       200:
 	//         description: OK.
-	//       400:
-	//         description: Node not ready yet.
 	//       500:
 	//         description: Internal Error.
+	//       503:
+	//         description: Node not ready yet.
 	//       default: { description: Unknown Error }
 	w := context.Response().Writer
 	w.Header().Set("Content-Type", "application/json")
