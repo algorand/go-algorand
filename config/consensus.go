@@ -1257,7 +1257,6 @@ func initConsensusProtocols() {
 
 	v37 := v36
 	v37.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	v37.LogicSigVersion = 9
 	v37.EnablePrecheckECDSACurve = true
 
 	Consensus[protocol.ConsensusV37] = v37
@@ -1283,6 +1282,8 @@ func initConsensusProtocols() {
 	// but not yet released in a production protocol version.
 	vFuture := v38
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	vFuture.LogicSigVersion = 9 // When moving this to a release, put a new higher LogicSigVersion here
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

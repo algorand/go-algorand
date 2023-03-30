@@ -58,6 +58,8 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV34, // AVM v7, stateproofs
 	protocol.ConsensusV35, // minor, double upgrade withe v34
 	protocol.ConsensusV36, // box storage
+	protocol.ConsensusV37, // enables precheck ECDSA curve
+	protocol.ConsensusV38, // enables state proof recoverability
 	protocol.ConsensusFuture,
 }
 
