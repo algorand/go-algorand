@@ -26,8 +26,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// partitiontest.PartitionTest(t) (partitiontest)
 func TestInitConfigFile(t *testing.T) {
+	// partitiontest.PartitionTest(t) (partitiontest)
 	config, err := initializeConfigFile("../test_config.yml")
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), config.NumGenesisAccounts)
@@ -35,8 +35,8 @@ func TestInitConfigFile(t *testing.T) {
 	require.Equal(t, float32(0.0), config.AssetDestroyFraction)
 }
 
-// partitiontest.PartitionTest(t) (partitiontest)
 func TestInitConfigFileNotExist(t *testing.T) {
+	// partitiontest.PartitionTest(t) (partitiontest)
 	_, err := initializeConfigFile("this_is_not_a_config_file")
 
 	if _, ok := err.(*os.PathError); !ok {
@@ -44,8 +44,8 @@ func TestInitConfigFileNotExist(t *testing.T) {
 	}
 }
 
-// partitiontest.PartitionTest(t) (partitiontest)
 func TestParseRound(t *testing.T) {
+	// partitiontest.PartitionTest(t) (partitiontest)
 	var testcases = []struct {
 		name          string
 		url           string

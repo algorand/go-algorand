@@ -65,27 +65,27 @@ const (
 
 // GenerationConfig defines the tunable parameters for block generation.
 type GenerationConfig struct {
-	Name                         string `mapstructure:"name"`
-	NumGenesisAccounts           uint64 `mapstructure:"genesis_accounts"`
-	GenesisAccountInitialBalance uint64 `mapstructure:"genesis_account_balance"`
+	Name                         string `yaml:"name"`
+	NumGenesisAccounts           uint64 `yaml:"genesis_accounts"`
+	GenesisAccountInitialBalance uint64 `yaml:"genesis_account_balance"`
 
 	// Block generation
 	TxnPerBlock uint64 `mapstructure:"tx_per_block"`
 
 	// TX Distribution
-	PaymentTransactionFraction float32 `mapstructure:"tx_pay_fraction"`
-	AssetTransactionFraction   float32 `mapstructure:"tx_asset_fraction"`
+	PaymentTransactionFraction float32 `yaml:"tx_pay_fraction"`
+	AssetTransactionFraction   float32 `yaml:"tx_asset_fraction"`
 
 	// Payment configuration
-	PaymentNewAccountFraction float32 `mapstructure:"pay_acct_create_fraction"`
-	PaymentFraction           float32 `mapstructure:"pay_xfer_fraction"`
+	PaymentNewAccountFraction float32 `yaml:"pay_acct_create_fraction"`
+	PaymentFraction           float32 `yaml:"pay_xfer_fraction"`
 
 	// Asset configuration
-	AssetCreateFraction  float32 `mapstructure:"asset_create_fraction"`
-	AssetDestroyFraction float32 `mapstructure:"asset_destroy_fraction"`
-	AssetOptinFraction   float32 `mapstructure:"asset_optin_fraction"`
-	AssetCloseFraction   float32 `mapstructure:"asset_close_fraction"`
-	AssetXferFraction    float32 `mapstructure:"asset_xfer_fraction"`
+	AssetCreateFraction  float32 `yaml:"asset_create_fraction"`
+	AssetDestroyFraction float32 `yaml:"asset_destroy_fraction"`
+	AssetOptinFraction   float32 `yaml:"asset_optin_fraction"`
+	AssetCloseFraction   float32 `yaml:"asset_close_fraction"`
+	AssetXferFraction    float32 `yaml:"asset_xfer_fraction"`
 }
 
 func sumIsCloseToOne(numbers ...float32) bool {

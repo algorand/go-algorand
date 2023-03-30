@@ -24,16 +24,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// partitiontest.PartitionTest(t) (partitiontest)
 func TestWeightedSelectionInternalBadInput(t *testing.T) {
+	// partitiontest.PartitionTest(t) (partitiontest)
 	weights := []float32{0.10, 0.30}
 	options := []interface{}{"10"}
 	_, err := weightedSelectionInternal(0, weights, options, nil)
 	require.EqualError(t, err, "number of weights must equal number of options: 2 != 1")
 }
 
-// partitiontest.PartitionTest(t) (partitiontest)
 func TestWeightedSelectionInternal(t *testing.T) {
+	// partitiontest.PartitionTest(t) (partitiontest)
 	weights := []float32{0.10, 0.30, 0.60}
 	options := []interface{}{"10", "30", "60"}
 
@@ -77,8 +77,8 @@ func TestWeightedSelectionInternal(t *testing.T) {
 	}
 }
 
-// partitiontest.PartitionTest(t) (partitiontest)
 func TestWeightedSelection(t *testing.T) {
+	// partitiontest.PartitionTest(t) (partitiontest)
 	weights := []float32{0.10, 0.30, 0.60}
 	options := []interface{}{"10", "30", "60"}
 	selections := make(map[interface{}]int)
@@ -93,8 +93,8 @@ func TestWeightedSelection(t *testing.T) {
 	assert.Less(t, selections[options[1]], selections[options[2]])
 }
 
-// partitiontest.PartitionTest(t) (partitiontest)
 func TestWeightedSelectionOutOfRange(t *testing.T) {
+	// partitiontest.PartitionTest(t) (partitiontest)
 	weights := []float32{0.1}
 	options := []interface{}{"1"}
 	defaultOption := "DEFAULT!"
