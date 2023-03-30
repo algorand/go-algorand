@@ -406,8 +406,11 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	// Some tracker want to flush
 	if dcc != nil {
 		// skip this flush if none of these conditions met:
+		// - has it been at least balancesFlushInterval since the last flush?
 		flushIntervalPassed := flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval))
+		// - does this commit task also include catchpoint file creation activity for the dcc.oldBase+dcc.offset?
 		flushForCatchpoint := dcc.catchpointFirstStage || dcc.catchpointSecondStage
+		// - have more than pendingDeltasFlushThreshold accounts been modified since the last flush?
 		flushAccounts := dcc.pendingDeltas >= pendingDeltasFlushThreshold
 		if !(flushIntervalPassed || flushForCatchpoint || flushAccounts) {
 			dcc = nil
@@ -416,17 +419,21 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	tr.mu.RUnlock()
 
 	if dcc != nil {
-		// if deferredCommits cannot accept this task, skip it.
-		// the next attempt will include these rounds plus some extra rounds.
-		// the main reason for slow commits is catchpoint file creation,
-		// and blocking the producer thread does not make much sense since it has other work to do.
-
-		// increment the waitgroup first, otherwise this goroutine can be interrupted
+		// Increment the waitgroup first, otherwise this goroutine can be interrupted
 		// and commitSyncer attempts calling Done() on empty wait group.
 		tr.accountsWriting.Add(1)
 		select {
 		case tr.deferredCommits <- dcc:
 		default:
+			// Do NOT block if deferredCommits cannot accept this task, skip it.
+			// Note: the next attempt will include these rounds plus some extra rounds.
+			// The main reason for slow commits is catchpoint file creation (when commitSyncer calls
+			// commitRound, which calls postCommitUnlocked). This producer thread is called by
+			// blockQueue.syncer() upon successful block DB flush, which calls ledger.notifyCommit()
+			// and trackerRegistry.committedUpTo() after taking the trackerMu.Lock().
+			// This means a blocking write to deferredCommits will block Ledger reads (TODO use more fine-grained locks).
+			// Dropping this dcc allows the blockqueue syncer to continue persisting other blocks
+			// and ledger reads to proceed without being blocked by trackerMu lock.
 			tr.accountsWriting.Done()
 		}
 	}
