@@ -793,26 +793,29 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
 	}
 
-	nextProtocolVoteBefore := uint64(stat.NextProtocolVoteBefore)
-	var votesToGo int64 = int64(nextProtocolVoteBefore) - int64(stat.LastRound)
-	if votesToGo < 0 {
-		votesToGo = 0
-	}
-	if nextProtocolVoteBefore > 0 {
+	// Make sure a vote is happening
+	if stat.NextProtocolVoteBefore > 0 {
+		votesToGo := uint64(0)
+		// Check if the vote window is still open.
+		if stat.NextProtocolVoteBefore > stat.LastRound {
+			// subtract 1 because the variables are referring to "Last" round and "VoteBefore"
+			votesToGo = uint64(stat.NextProtocolVoteBefore - stat.LastRound - 1)
+		}
+
 		consensus := config.Consensus[protocol.ConsensusCurrentVersion]
 		upgradeVoteRounds := consensus.UpgradeVoteRounds
 		upgradeThreshold := consensus.UpgradeThreshold
-		votes := uint64(consensus.UpgradeVoteRounds) - uint64(votesToGo)
+		votes := consensus.UpgradeVoteRounds - votesToGo
 		votesYes := stat.NextProtocolApprovals
 		votesNo := votes - votesYes
-		upgradeDelay := uint64(stat.UpgradeDelay)
+		upgradeDelay := stat.UpgradeDelay
 		response.UpgradeVotesRequired = &upgradeThreshold
 		response.UpgradeNodeVote = &stat.UpgradeApprove
 		response.UpgradeDelay = &upgradeDelay
 		response.UpgradeVotes = &votes
 		response.UpgradeYesVotes = &votesYes
 		response.UpgradeNoVotes = &votesNo
-		response.UpgradeNextProtocolVoteBefore = &nextProtocolVoteBefore
+		response.UpgradeNextProtocolVoteBefore = numOrNil(uint64(stat.NextProtocolVoteBefore))
 		response.UpgradeVoteRounds = &upgradeVoteRounds
 	}
 

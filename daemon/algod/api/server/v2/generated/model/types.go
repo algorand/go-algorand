@@ -954,7 +954,7 @@ type NodeStatusResponse struct {
 	// UpgradeNodeVote This node's upgrade vote
 	UpgradeNodeVote *bool `json:"upgrade-node-vote,omitempty"`
 
-	// UpgradeVoteRounds Total voting ounds for current upgrade
+	// UpgradeVoteRounds Total voting rounds for current upgrade
 	UpgradeVoteRounds *uint64 `json:"upgrade-vote-rounds,omitempty"`
 
 	// UpgradeVotes Total votes cast for consensus upgrade
