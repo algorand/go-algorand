@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2023 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package generator
 
 import (
@@ -10,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func makePrivateGenerator(t *testing.T) *generator {
 	publicGenerator, err := MakeGenerator(GenerationConfig{
 		NumGenesisAccounts:           10,
@@ -22,18 +39,21 @@ func makePrivateGenerator(t *testing.T) *generator {
 	return publicGenerator.(*generator)
 }
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func TestPaymentAcctCreate(t *testing.T) {
 	g := makePrivateGenerator(t)
 	g.generatePaymentTxnInternal(paymentAcctCreateTx, 0, 0)
 	require.Len(t, g.balances, int(g.config.NumGenesisAccounts+1))
 }
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func TestPaymentTransfer(t *testing.T) {
 	g := makePrivateGenerator(t)
 	g.generatePaymentTxnInternal(paymentTx, 0, 0)
 	require.Len(t, g.balances, int(g.config.NumGenesisAccounts))
 }
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func TestAssetXferNoAssetsOverride(t *testing.T) {
 	g := makePrivateGenerator(t)
 
@@ -47,6 +67,7 @@ func TestAssetXferNoAssetsOverride(t *testing.T) {
 	require.Len(t, g.pendingAssets[0].holders, 1)
 }
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func TestAssetXferOneHolderOverride(t *testing.T) {
 	g := makePrivateGenerator(t)
 	g.finishRound(0)
@@ -63,6 +84,7 @@ func TestAssetXferOneHolderOverride(t *testing.T) {
 	require.Len(t, g.assets[0].holders, 2)
 }
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func TestAssetCloseCreatorOverride(t *testing.T) {
 	g := makePrivateGenerator(t)
 	g.finishRound(0)
@@ -79,6 +101,7 @@ func TestAssetCloseCreatorOverride(t *testing.T) {
 	require.Len(t, g.assets[0].holders, 2)
 }
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func TestAssetOptinEveryAccountOverride(t *testing.T) {
 	g := makePrivateGenerator(t)
 	g.finishRound(0)
@@ -111,6 +134,7 @@ func TestAssetOptinEveryAccountOverride(t *testing.T) {
 	require.Len(t, g.assets[0].holders, int(g.numAccounts-1))
 }
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func TestAssetDestroyWithHoldingsOverride(t *testing.T) {
 	g := makePrivateGenerator(t)
 	g.finishRound(0)
@@ -131,6 +155,7 @@ func TestAssetDestroyWithHoldingsOverride(t *testing.T) {
 	require.Len(t, g.assets[0].holders, 1)
 }
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func TestAssetTransfer(t *testing.T) {
 	g := makePrivateGenerator(t)
 	g.finishRound(0)
@@ -144,6 +169,7 @@ func TestAssetTransfer(t *testing.T) {
 	require.Greater(t, g.assets[0].holdings[1].balance, uint64(0))
 }
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func TestAssetDestroy(t *testing.T) {
 	g := makePrivateGenerator(t)
 	g.finishRound(0)
@@ -157,6 +183,7 @@ func TestAssetDestroy(t *testing.T) {
 	require.Len(t, g.assets, 0)
 }
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func TestWriteRoundZero(t *testing.T) {
 	g := makePrivateGenerator(t)
 	var data []byte
@@ -167,6 +194,7 @@ func TestWriteRoundZero(t *testing.T) {
 	require.Len(t, block.Block.Payset, 0)
 }
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func TestWriteRound(t *testing.T) {
 	g := makePrivateGenerator(t)
 	var data []byte
@@ -177,6 +205,7 @@ func TestWriteRound(t *testing.T) {
 	require.Len(t, block.Block.Payset, int(g.config.TxnPerBlock))
 }
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func TestIndexToAccountAndAccountToIndex(t *testing.T) {
 	for i := uint64(0); i < uint64(100000); i++ {
 		acct := indexToAccount(i)

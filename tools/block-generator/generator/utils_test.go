@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2023 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package generator
 
 import (
@@ -8,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func TestWeightedSelectionInternalBadInput(t *testing.T) {
 	weights := []float32{0.10, 0.30}
 	options := []interface{}{"10"}
@@ -15,6 +32,7 @@ func TestWeightedSelectionInternalBadInput(t *testing.T) {
 	require.EqualError(t, err, "number of weights must equal number of options: 2 != 1")
 }
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func TestWeightedSelectionInternal(t *testing.T) {
 	weights := []float32{0.10, 0.30, 0.60}
 	options := []interface{}{"10", "30", "60"}
@@ -59,6 +77,7 @@ func TestWeightedSelectionInternal(t *testing.T) {
 	}
 }
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func TestWeightedSelection(t *testing.T) {
 	weights := []float32{0.10, 0.30, 0.60}
 	options := []interface{}{"10", "30", "60"}
@@ -74,6 +93,7 @@ func TestWeightedSelection(t *testing.T) {
 	assert.Less(t, selections[options[1]], selections[options[2]])
 }
 
+// partitiontest.PartitionTest(t) (partitiontest)
 func TestWeightedSelectionOutOfRange(t *testing.T) {
 	weights := []float32{0.1}
 	options := []interface{}{"1"}
