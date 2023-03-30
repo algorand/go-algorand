@@ -36,7 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -319,7 +319,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	vc := verify.GetMockedCache(true)
 	b.ResetTimer()
 	for _, blk := range blocks {
-		_, err = internal.Eval(context.Background(), l1, blk, true, vc, nil)
+		_, err = eval.Eval(context.Background(), l1, blk, true, vc, nil)
 		require.NoError(b, err)
 		err = l1.AddBlock(blk, cert)
 		require.NoError(b, err)
