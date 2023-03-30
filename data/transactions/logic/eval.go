@@ -1256,6 +1256,10 @@ func (cx *EvalContext) ensureStackCap(targetCap int) {
 	}
 }
 
+func opDeprecated(cx *EvalContext) error {
+	return fmt.Errorf("deprecated opcode %d executed", cx.program[cx.pc])
+}
+
 func opErr(cx *EvalContext) error {
 	return errors.New("err opcode executed")
 }
@@ -4441,11 +4445,13 @@ func (cx *EvalContext) appReference(ref uint64, foreign bool) (basics.AppIndex, 
 			return aid, nil
 		}
 
-		// Allow use of indexes, but this comes last so that clear advice can be
-		// given to anyone who cares about semantics in the first few rounds of
-		// a new network - don't use indexes for references, use the App ID
-		if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
-			return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
+		if cx.version < sharedResourcesVersion {
+			// Allow use of indexes, but this comes last so that clear advice can be
+			// given to anyone who cares about semantics in the first few rounds of
+			// a new network - don't use indexes for references, use the App ID
+			if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
+				return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
+			}
 		}
 	} else {
 		// Old rules
@@ -4484,19 +4490,11 @@ func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.A
 			return basics.Address{}, 0, 0, err
 		}
 		aid := basics.AppIndex(ref)
-		if cx.allowsLocals(addr, aid) {
-			return addr, aid, unused, nil
-		}
 		if ref == 0 {
 			aid = cx.appID
-			if cx.allowsLocals(addr, aid) {
-				return addr, aid, unused, nil
-			}
-		} else if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
-			aid = cx.txn.Txn.ForeignApps[ref-1]
-			if cx.allowsLocals(addr, aid) {
-				return addr, aid, unused, nil
-			}
+		}
+		if cx.allowsLocals(addr, aid) {
+			return addr, aid, unused, nil
 		}
 
 		// Do some extra lookups to give a more concise err. Whenever a locals
@@ -4538,11 +4536,13 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (basics.AssetInd
 			return aid, nil
 		}
 
-		// Allow use of indexes, but this comes last so that clear advice can be
-		// given to anyone who cares about semantics in the first few rounds of
-		// a new network - don't use indexes for references, use the asa ID.
-		if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
-			return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
+		if cx.version < sharedResourcesVersion {
+			// Allow use of indexes, but this comes last so that clear advice can be
+			// given to anyone who cares about semantics in the first few rounds of
+			// a new network - don't use indexes for references, use the asa ID.
+			if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
+				return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
+			}
 		}
 	} else {
 		// Old rules
@@ -4575,12 +4575,6 @@ func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.
 		aid := basics.AssetIndex(ref)
 		if cx.allowsHolding(addr, aid) {
 			return addr, aid, nil
-		}
-		if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
-			aid := cx.txn.Txn.ForeignAssets[ref]
-			if cx.allowsHolding(addr, aid) {
-				return addr, aid, nil
-			}
 		}
 
 		// Do some extra lookups to give a more concise err. Whenever a holding

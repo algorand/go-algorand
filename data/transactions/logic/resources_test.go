@@ -200,12 +200,12 @@ pop; pop; int 1
 	logic.TestApp(t, getLocalEx, ep, "invalid App reference 500")
 	tx.ForeignApps = []basics.AppIndex{500}
 	logic.TestApp(t, getLocalEx, ep)
-	binary.BigEndian.PutUint64(tx.ApplicationArgs[1], 1)
+	binary.BigEndian.PutUint64(tx.ApplicationArgs[1], 500)
 	logic.TestApp(t, getLocalEx, ep)
-	binary.BigEndian.PutUint64(tx.ApplicationArgs[1], 2) // beyond the txn.ForeignApps array
-	logic.TestApp(t, getLocalEx, ep, "invalid App reference 2")
+	binary.BigEndian.PutUint64(tx.ApplicationArgs[1], 501)
+	logic.TestApp(t, getLocalEx, ep, "invalid App reference 501")
 
-	binary.BigEndian.PutUint64(tx.ApplicationArgs[1], 1)
+	binary.BigEndian.PutUint64(tx.ApplicationArgs[1], 500)
 	tx.Accounts = []basics.Address{}
 	logic.TestApp(t, getLocalEx, ep, "invalid Account reference "+joe.String())
 }
@@ -295,11 +295,9 @@ pop; pop; int 1
 	tx.ForeignAssets = []basics.AssetIndex{200}
 	logic.TestApp(t, getHoldingBalance, ep)
 	binary.BigEndian.PutUint64(tx.ApplicationArgs[1], 0)
-	logic.TestApp(t, getHoldingBalance, ep)
-	binary.BigEndian.PutUint64(tx.ApplicationArgs[1], 1) // beyond the txn.ForeignAssets array
-	logic.TestApp(t, getHoldingBalance, ep, "invalid Asset reference 1")
+	logic.TestApp(t, getHoldingBalance, ep, "invalid Asset reference 0") // slots not allowed
 
-	binary.BigEndian.PutUint64(tx.ApplicationArgs[1], 0)
+	binary.BigEndian.PutUint64(tx.ApplicationArgs[1], 200)
 	tx.Accounts = []basics.Address{}
 	logic.TestApp(t, getHoldingBalance, ep, "invalid Account reference "+joe.String())
 }

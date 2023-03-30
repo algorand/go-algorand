@@ -233,7 +233,7 @@ intc 5 // 5
 asset_holding_get AssetBalance
 pop
 &&
-intc_0
+intc 5 // 5
 asset_params_get AssetTotal
 pop
 &&
@@ -1819,11 +1819,12 @@ int 1
 
 func TestAppGlobalReadWrite(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
 
-	// check writing ints and bytes
-	source := `byte 0x414c474f  // key "ALGO"
+	testLogicRange(t, 2, 0, func(t *testing.T, ep *EvalParams, txn *transactions.Transaction, ledger *Ledger) {
+
+		// check writing ints and bytes
+		source := `byte 0x414c474f  // key "ALGO"
 int 0x77						// value
 app_global_put
 byte 0x414c474f41  // key "ALGOA"
@@ -1845,7 +1846,7 @@ byte 0x414c474f
 ==
 &&
 // check generic with exact app id
-int 1 // ForeignApps index - current app
+THISAPP
 byte 0x414c474f41  // key "ALGOA"
 app_global_get_ex
 bnz ok1
@@ -1871,7 +1872,7 @@ int 0x77
 ==
 &&
 // check generic with exact app id
-int 1 // ForeignApps index - current app
+THISAPP
 byte 0x414c474f
 app_global_get_ex
 bnz ok3
@@ -1881,33 +1882,35 @@ int 0x77
 ==
 &&
 `
-	txn := makeSampleAppl(100)
-	txn.Txn.ForeignApps = []basics.AppIndex{txn.Txn.ApplicationID}
-	ep := defaultEvalParams(txn)
-	ledger := NewLedger(
-		map[basics.Address]uint64{
-			txn.Txn.Sender: 1,
-		},
-	)
-	ep.Ledger = ledger
-	ep.SigLedger = ledger
-	ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
 
-	delta := testApp(t, source, ep)
+		txn.Type = protocol.ApplicationCallTx
+		txn.ApplicationID = 100
+		txn.ForeignApps = []basics.AppIndex{txn.ApplicationID}
+		ledger.NewAccount(txn.Sender, 1)
+		ledger.NewApp(txn.Sender, 100, basics.AppParams{})
 
-	require.Len(t, delta.GlobalDelta, 2)
-	require.Empty(t, delta.LocalDeltas)
+		if ep.Proto.LogicSigVersion < sharedResourcesVersion {
+			// 100 is in the ForeignApps array, name it by slot
+			source = strings.ReplaceAll(source, "THISAPP", "int 1")
+		} else {
+			// use the actual app number, slots no longer allowed
+			source = strings.ReplaceAll(source, "THISAPP", "int 100")
+		}
+		delta := testApp(t, source, ep)
 
-	vd := delta.GlobalDelta["ALGO"]
-	require.Equal(t, basics.SetUintAction, vd.Action)
-	require.Equal(t, uint64(0x77), vd.Uint)
+		require.Len(t, delta.GlobalDelta, 2)
+		require.Empty(t, delta.LocalDeltas)
 
-	vd = delta.GlobalDelta["ALGOA"]
-	require.Equal(t, basics.SetBytesAction, vd.Action)
-	require.Equal(t, "ALGO", vd.Bytes)
+		vd := delta.GlobalDelta["ALGO"]
+		require.Equal(t, basics.SetUintAction, vd.Action)
+		require.Equal(t, uint64(0x77), vd.Uint)
 
-	// write existing value before read
-	source = `byte 0x414c474f  // key "ALGO"
+		vd = delta.GlobalDelta["ALGOA"]
+		require.Equal(t, basics.SetBytesAction, vd.Action)
+		require.Equal(t, "ALGO", vd.Bytes)
+
+		// write existing value before read
+		source = `byte 0x414c474f  // key "ALGO"
 int 0x77						// value
 app_global_put
 byte 0x414c474f
@@ -1915,19 +1918,19 @@ app_global_get
 int 0x77
 ==
 `
-	ledger.Reset()
-	ledger.NoGlobal(100, "ALGOA")
-	ledger.NoGlobal(100, "ALGO")
+		ledger.Reset()
+		ledger.NoGlobal(100, "ALGOA")
+		ledger.NoGlobal(100, "ALGO")
 
-	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-	ledger.NewGlobal(100, "ALGO", algoValue)
+		algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
+		ledger.NewGlobal(100, "ALGO", algoValue)
 
-	delta = testApp(t, source, ep)
-	require.Empty(t, delta.GlobalDelta)
-	require.Empty(t, delta.LocalDeltas)
+		delta = testApp(t, source, ep)
+		require.Empty(t, delta.GlobalDelta)
+		require.Empty(t, delta.LocalDeltas)
 
-	// write existing value after read
-	source = `int 0
+		// write existing value after read
+		source = `int 0
 byte 0x414c474f
 app_global_get_ex
 bnz ok
@@ -1942,16 +1945,16 @@ app_global_get
 int 0x77
 ==
 `
-	ledger.Reset()
-	ledger.NoGlobal(100, "ALGOA")
-	ledger.NewGlobal(100, "ALGO", algoValue)
+		ledger.Reset()
+		ledger.NoGlobal(100, "ALGOA")
+		ledger.NewGlobal(100, "ALGO", algoValue)
 
-	delta = testApp(t, source, ep)
-	require.Empty(t, delta.GlobalDelta)
-	require.Empty(t, delta.LocalDeltas)
+		delta = testApp(t, source, ep)
+		require.Empty(t, delta.GlobalDelta)
+		require.Empty(t, delta.LocalDeltas)
 
-	// write new values after and before read
-	source = `int 0
+		// write new values after and before read
+		source = `int 0
 byte 0x414c474f
 app_global_get_ex
 bnz ok
@@ -1982,36 +1985,40 @@ byte 0x414c474f
 ==
 &&
 `
-	ledger.Reset()
-	ledger.NoGlobal(100, "ALGOA")
-	ledger.NewGlobal(100, "ALGO", algoValue)
+		ledger.Reset()
+		ledger.NoGlobal(100, "ALGOA")
+		ledger.NewGlobal(100, "ALGO", algoValue)
 
-	delta = testApp(t, source, ep)
+		delta = testApp(t, source, ep)
 
-	require.Len(t, delta.GlobalDelta, 2)
-	require.Empty(t, delta.LocalDeltas)
+		require.Len(t, delta.GlobalDelta, 2)
+		require.Empty(t, delta.LocalDeltas)
 
-	vd = delta.GlobalDelta["ALGO"]
-	require.Equal(t, basics.SetUintAction, vd.Action)
-	require.Equal(t, uint64(0x78), vd.Uint)
+		vd = delta.GlobalDelta["ALGO"]
+		require.Equal(t, basics.SetUintAction, vd.Action)
+		require.Equal(t, uint64(0x78), vd.Uint)
 
-	vd = delta.GlobalDelta["ALGOA"]
-	require.Equal(t, basics.SetBytesAction, vd.Action)
-	require.Equal(t, "ALGO", vd.Bytes)
+		vd = delta.GlobalDelta["ALGOA"]
+		require.Equal(t, basics.SetBytesAction, vd.Action)
+		require.Equal(t, "ALGO", vd.Bytes)
+	})
 }
 
 func TestAppGlobalReadOtherApp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	source := `int 2 // ForeignApps index
+	// app_global_get_ex starts in v2
+	testLogicRange(t, 2, 0, func(t *testing.T, ep *EvalParams, txn *transactions.Transaction, ledger *Ledger) {
+		source := `
+OTHERAPP
 byte "mykey1"
 app_global_get_ex
 bz ok1
 err
 ok1:
 pop
-int 2 // ForeignApps index
+OTHERAPP
 byte "mykey"
 app_global_get_ex
 bnz ok2
@@ -2021,8 +2028,14 @@ byte "myval"
 ==
 `
 
-	// app_global_get_ex starts in v2
-	testLogicRange(t, 2, 0, func(t *testing.T, ep *EvalParams, txn *transactions.Transaction, ledger *Ledger) {
+		if ep.Proto.LogicSigVersion < sharedResourcesVersion {
+			// 100 is in the ForeignApps array, name it by slot
+			source = strings.ReplaceAll(source, "OTHERAPP", "int 2")
+		} else {
+			// use the actual app number, slots no longer allowed
+			source = strings.ReplaceAll(source, "OTHERAPP", "int 101")
+		}
+
 		txn.ApplicationID = 100
 		txn.ForeignApps = []basics.AppIndex{txn.ApplicationID, 101}
 		ledger.NewAccount(txn.Sender, 1)
@@ -2079,23 +2092,24 @@ func TestAppGlobalDelete(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// check write/delete/read
-	source := `byte 0x414c474f  // key "ALGO"
+	testLogicRange(t, 2, 0, func(t *testing.T, ep *EvalParams, txn *transactions.Transaction, ledger *Ledger) {
+		// check write/delete/read
+		source := `byte "ALGO"
 int 0x77						// value
 app_global_put
-byte 0x414c474f41  // key "ALGOA"
-byte 0x414c474f
+byte "ALGOA"
+byte "ALGO"
 app_global_put
-byte 0x414c474f
+byte "ALGO"
 app_global_del
-byte 0x414c474f41
+byte "ALGOA"
 app_global_del
 int 0
-byte 0x414c474f
+byte "ALGO"
 app_global_get_ex
 bnz error
 int 0
-byte 0x414c474f41
+byte "ALGOA"
 app_global_get_ex
 bnz error
 ==
@@ -2105,116 +2119,124 @@ err
 ok:
 int 1
 `
-	ep, txn, ledger := makeSampleEnv()
-	ledger.NewAccount(txn.Sender, 1)
-	txn.ApplicationID = 100
-	ledger.NewApp(txn.Sender, 100, basics.AppParams{})
 
-	delta := testApp(t, source, ep)
-	require.Len(t, delta.GlobalDelta, 2)
-	require.Empty(t, delta.LocalDeltas)
+		ledger.NewAccount(txn.Sender, 1)
+		txn.ApplicationID = 100
+		ledger.NewApp(txn.Sender, 100, basics.AppParams{})
 
-	ledger.Reset()
-	ledger.NoGlobal(100, "ALGOA")
-	ledger.NoGlobal(100, "ALGO")
+		delta := testApp(t, source, ep)
+		require.Len(t, delta.GlobalDelta, 2)
+		require.Empty(t, delta.LocalDeltas)
 
-	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-	ledger.NewGlobal(100, "ALGO", algoValue)
+		ledger.Reset()
+		ledger.NoGlobal(100, "ALGOA")
+		ledger.NoGlobal(100, "ALGO")
 
-	// check delete existing
-	source = `byte 0x414c474f   // key "ALGO"
+		algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
+		ledger.NewGlobal(100, "ALGO", algoValue)
+
+		// check delete existing
+		source = `byte "ALGO"
 app_global_del
-int 1
-byte 0x414c474f
+THISAPP
+byte "ALGO"
 app_global_get_ex
 ==  // two zeros
 `
-	txn.ForeignApps = []basics.AppIndex{txn.ApplicationID}
-	delta = testApp(t, source, ep)
-	require.Len(t, delta.GlobalDelta, 1)
-	vd := delta.GlobalDelta["ALGO"]
-	require.Equal(t, basics.DeleteAction, vd.Action)
-	require.Equal(t, uint64(0), vd.Uint)
-	require.Equal(t, "", vd.Bytes)
-	require.Equal(t, 0, len(delta.LocalDeltas))
 
-	ledger.Reset()
-	ledger.NoGlobal(100, "ALGOA")
-	ledger.NoGlobal(100, "ALGO")
+		if ep.Proto.LogicSigVersion < sharedResourcesVersion {
+			// 100 is in the ForeignApps array, name it by slot
+			source = strings.ReplaceAll(source, "THISAPP", "int 1")
+		} else {
+			// use the actual app number, slots no longer allowed
+			source = strings.ReplaceAll(source, "THISAPP", "int 100")
+		}
+		txn.ForeignApps = []basics.AppIndex{txn.ApplicationID}
+		delta = testApp(t, source, ep)
+		require.Len(t, delta.GlobalDelta, 1)
+		vd := delta.GlobalDelta["ALGO"]
+		require.Equal(t, basics.DeleteAction, vd.Action)
+		require.Equal(t, uint64(0), vd.Uint)
+		require.Equal(t, "", vd.Bytes)
+		require.Equal(t, 0, len(delta.LocalDeltas))
 
-	ledger.NewGlobal(100, "ALGO", algoValue)
+		ledger.Reset()
+		ledger.NoGlobal(100, "ALGOA")
+		ledger.NoGlobal(100, "ALGO")
 
-	// check delete and write non-existing
-	source = `byte 0x414c474f41   // key "ALGOA"
+		ledger.NewGlobal(100, "ALGO", algoValue)
+
+		// check delete and write non-existing
+		source = `byte "ALGOA"
 app_global_del
 int 0
-byte 0x414c474f41
+byte "ALGOA"
 app_global_get_ex
 ==  // two zeros
-byte 0x414c474f41
+byte "ALGOA"
 int 0x78
 app_global_put
 `
-	delta = testApp(t, source, ep)
-	require.Len(t, delta.GlobalDelta, 1)
-	vd = delta.GlobalDelta["ALGOA"]
-	require.Equal(t, basics.SetUintAction, vd.Action)
-	require.Equal(t, uint64(0x78), vd.Uint)
-	require.Equal(t, "", vd.Bytes)
-	require.Empty(t, delta.LocalDeltas)
+		delta = testApp(t, source, ep)
+		require.Len(t, delta.GlobalDelta, 1)
+		vd = delta.GlobalDelta["ALGOA"]
+		require.Equal(t, basics.SetUintAction, vd.Action)
+		require.Equal(t, uint64(0x78), vd.Uint)
+		require.Equal(t, "", vd.Bytes)
+		require.Empty(t, delta.LocalDeltas)
 
-	ledger.Reset()
-	ledger.NoGlobal(100, "ALGOA")
-	ledger.NoGlobal(100, "ALGO")
+		ledger.Reset()
+		ledger.NoGlobal(100, "ALGOA")
+		ledger.NoGlobal(100, "ALGO")
 
-	ledger.NewGlobal(100, "ALGO", algoValue)
+		ledger.NewGlobal(100, "ALGO", algoValue)
 
-	// check delete and write existing
-	source = `byte 0x414c474f   // key "ALGO"
+		// check delete and write existing
+		source = `byte "ALGO"
 app_global_del
-byte 0x414c474f
+byte "ALGO"
 int 0x78
 app_global_put
 int 1
 `
-	delta = testApp(t, source, ep)
-	require.Len(t, delta.GlobalDelta, 1)
-	vd = delta.GlobalDelta["ALGO"]
-	require.Equal(t, basics.SetUintAction, vd.Action)
-	require.Empty(t, delta.LocalDeltas)
+		delta = testApp(t, source, ep)
+		require.Len(t, delta.GlobalDelta, 1)
+		vd = delta.GlobalDelta["ALGO"]
+		require.Equal(t, basics.SetUintAction, vd.Action)
+		require.Empty(t, delta.LocalDeltas)
 
-	ledger.Reset()
-	ledger.Reset()
-	ledger.NoGlobal(100, "ALGOA")
-	ledger.NoGlobal(100, "ALGO")
+		ledger.Reset()
+		ledger.Reset()
+		ledger.NoGlobal(100, "ALGOA")
+		ledger.NoGlobal(100, "ALGO")
 
-	ledger.NewGlobal(100, "ALGO", algoValue)
+		ledger.NewGlobal(100, "ALGO", algoValue)
 
-	// check delete,write,delete existing
-	source = `byte 0x414c474f   // key "ALGO"
+		// check delete,write,delete existing
+		source = `byte "ALGO"
 app_global_del
-byte 0x414c474f
+byte "ALGO"
 int 0x78
 app_global_put
-byte 0x414c474f
+byte "ALGO"
 app_global_del
 int 1
 `
-	delta = testApp(t, source, ep)
-	require.Len(t, delta.GlobalDelta, 1)
-	vd = delta.GlobalDelta["ALGO"]
-	require.Equal(t, basics.DeleteAction, vd.Action)
-	require.Empty(t, delta.LocalDeltas)
+		delta = testApp(t, source, ep)
+		require.Len(t, delta.GlobalDelta, 1)
+		vd = delta.GlobalDelta["ALGO"]
+		require.Equal(t, basics.DeleteAction, vd.Action)
+		require.Empty(t, delta.LocalDeltas)
 
-	ledger.Reset()
-	ledger.Reset()
-	ledger.NoGlobal(100, "ALGOA")
-	ledger.NoGlobal(100, "ALGO")
+		ledger.Reset()
+		ledger.Reset()
+		ledger.NoGlobal(100, "ALGOA")
+		ledger.NoGlobal(100, "ALGO")
 
-	ledger.NewGlobal(100, "ALGO", algoValue)
+		ledger.NewGlobal(100, "ALGO", algoValue)
 
-	// check delete, write, delete non-existing
-	source = `byte 0x414c474f41   // key "ALGOA"
+		// check delete, write, delete non-existing
+		source = `byte 0x414c474f41   // key "ALGOA"
 app_global_del
 byte 0x414c474f41
 int 0x78
@@ -2223,9 +2245,10 @@ byte 0x414c474f41
 app_global_del
 int 1
 `
-	delta = testApp(t, source, ep)
-	require.Len(t, delta.GlobalDelta, 1)
-	require.Len(t, delta.LocalDeltas, 0)
+		delta = testApp(t, source, ep)
+		require.Len(t, delta.GlobalDelta, 1)
+		require.Len(t, delta.LocalDeltas, 0)
+	})
 }
 
 func TestAppLocalDelete(t *testing.T) {
@@ -2484,7 +2507,7 @@ assert
 
 	testApp(t, source, ep, "AssetBalance expected field type is []byte but got uint64")
 
-	source = `int 0
+	source = `int 55
 asset_params_get AssetTotal
 assert
 `

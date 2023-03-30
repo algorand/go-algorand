@@ -532,6 +532,7 @@ var OpSpecs = []OpSpec{
 
 	{0x60, "balance", opBalance, proto("i:i"), 2, only(ModeApp)},
 	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(ModeApp)},
+	// {0x60, "balance", opDeprecated, proto("a:i"), sharedResourcesVersion, only(ModeApp)},
 	{0x61, "app_opted_in", opAppOptedIn, proto("ii:i"), 2, only(ModeApp)},
 	{0x61, "app_opted_in", opAppOptedIn, proto("ai:i"), directRefEnabledVersion, only(ModeApp)},
 	{0x62, "app_local_get", opAppLocalGet, proto("ib:a"), 2, only(ModeApp)},

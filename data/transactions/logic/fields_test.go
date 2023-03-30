@@ -219,7 +219,7 @@ func TestAssetParamsFieldsVersions(t *testing.T) {
 	for _, field := range fields {
 		// Need to use intc so we can "backversion" the
 		// program and not have it fail because of pushint.
-		text := fmt.Sprintf("intcblock 0 1; intc_0; asset_params_get %s; bnz ok; err; ok: ", field.field.String())
+		text := fmt.Sprintf("intcblock 55 1; intc_0; asset_params_get %s; bnz ok; err; ok: ", field.field.String())
 		switch field.ftype {
 		case StackUint64: // ensure the return type is uint64 by adding
 			text += " intc_1; +"
@@ -229,7 +229,6 @@ func TestAssetParamsFieldsVersions(t *testing.T) {
 		// check assembler fails if version before introduction
 		for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 			ep, txn, ledger := makeSampleEnv()
-			// Create app 55, since txn.ForeignApps[0] == 55
 			ledger.NewAsset(txn.Sender, 55, basics.AssetParams{})
 			ep.Proto.LogicSigVersion = v
 			if field.version > v {
