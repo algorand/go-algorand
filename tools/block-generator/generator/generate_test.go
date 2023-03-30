@@ -23,11 +23,12 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func makePrivateGenerator(t *testing.T) *generator {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	publicGenerator, err := MakeGenerator(GenerationConfig{
 		NumGenesisAccounts:           10,
 		GenesisAccountInitialBalance: 10000000000000000000,
@@ -40,21 +41,21 @@ func makePrivateGenerator(t *testing.T) *generator {
 }
 
 func TestPaymentAcctCreate(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t)
 	g.generatePaymentTxnInternal(paymentAcctCreateTx, 0, 0)
 	require.Len(t, g.balances, int(g.config.NumGenesisAccounts+1))
 }
 
 func TestPaymentTransfer(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t)
 	g.generatePaymentTxnInternal(paymentTx, 0, 0)
 	require.Len(t, g.balances, int(g.config.NumGenesisAccounts))
 }
 
 func TestAssetXferNoAssetsOverride(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t)
 
 	// First asset transaction must create.
@@ -68,7 +69,7 @@ func TestAssetXferNoAssetsOverride(t *testing.T) {
 }
 
 func TestAssetXferOneHolderOverride(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t)
 	g.finishRound(0)
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
@@ -85,7 +86,7 @@ func TestAssetXferOneHolderOverride(t *testing.T) {
 }
 
 func TestAssetCloseCreatorOverride(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t)
 	g.finishRound(0)
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
@@ -102,7 +103,7 @@ func TestAssetCloseCreatorOverride(t *testing.T) {
 }
 
 func TestAssetOptinEveryAccountOverride(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t)
 	g.finishRound(0)
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
@@ -135,7 +136,7 @@ func TestAssetOptinEveryAccountOverride(t *testing.T) {
 }
 
 func TestAssetDestroyWithHoldingsOverride(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t)
 	g.finishRound(0)
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
@@ -156,7 +157,7 @@ func TestAssetDestroyWithHoldingsOverride(t *testing.T) {
 }
 
 func TestAssetTransfer(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t)
 	g.finishRound(0)
 
@@ -170,7 +171,7 @@ func TestAssetTransfer(t *testing.T) {
 }
 
 func TestAssetDestroy(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t)
 	g.finishRound(0)
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
@@ -184,7 +185,7 @@ func TestAssetDestroy(t *testing.T) {
 }
 
 func TestWriteRoundZero(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t)
 	var data []byte
 	writer := bytes.NewBuffer(data)
@@ -195,7 +196,7 @@ func TestWriteRoundZero(t *testing.T) {
 }
 
 func TestWriteRound(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t)
 	var data []byte
 	writer := bytes.NewBuffer(data)
@@ -206,7 +207,7 @@ func TestWriteRound(t *testing.T) {
 }
 
 func TestIndexToAccountAndAccountToIndex(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	for i := uint64(0); i < uint64(100000); i++ {
 		acct := indexToAccount(i)
 		result := accountToIndex(acct)

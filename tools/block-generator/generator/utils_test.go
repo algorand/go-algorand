@@ -20,12 +20,13 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestWeightedSelectionInternalBadInput(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	weights := []float32{0.10, 0.30}
 	options := []interface{}{"10"}
 	_, err := weightedSelectionInternal(0, weights, options, nil)
@@ -33,7 +34,7 @@ func TestWeightedSelectionInternalBadInput(t *testing.T) {
 }
 
 func TestWeightedSelectionInternal(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	weights := []float32{0.10, 0.30, 0.60}
 	options := []interface{}{"10", "30", "60"}
 
@@ -78,7 +79,7 @@ func TestWeightedSelectionInternal(t *testing.T) {
 }
 
 func TestWeightedSelection(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	weights := []float32{0.10, 0.30, 0.60}
 	options := []interface{}{"10", "30", "60"}
 	selections := make(map[interface{}]int)
@@ -94,7 +95,7 @@ func TestWeightedSelection(t *testing.T) {
 }
 
 func TestWeightedSelectionOutOfRange(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	weights := []float32{0.1}
 	options := []interface{}{"1"}
 	defaultOption := "DEFAULT!"

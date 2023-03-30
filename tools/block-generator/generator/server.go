@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/algorand/go-algorand/tools/block-generator/util"
 	"gopkg.in/yaml.v3"
@@ -65,8 +66,9 @@ func MakeServerWithMiddleware(configFile string, addr string, blocksMiddleware B
 	mux.HandleFunc("/v2/status/wait-for-block-after/", getStatusWaitHandler(gen))
 
 	return &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 3 * time.Second,
 	}, gen
 }
 

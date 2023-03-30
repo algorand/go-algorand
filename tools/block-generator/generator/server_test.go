@@ -22,12 +22,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestInitConfigFile(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	config, err := initializeConfigFile("../test_config.yml")
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), config.NumGenesisAccounts)
@@ -36,7 +37,7 @@ func TestInitConfigFile(t *testing.T) {
 }
 
 func TestInitConfigFileNotExist(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	_, err := initializeConfigFile("this_is_not_a_config_file")
 
 	if _, ok := err.(*os.PathError); !ok {
@@ -45,7 +46,7 @@ func TestInitConfigFileNotExist(t *testing.T) {
 }
 
 func TestParseRound(t *testing.T) {
-	// partitiontest.PartitionTest(t) (partitiontest)
+	partitiontest.PartitionTest(t)
 	var testcases = []struct {
 		name          string
 		url           string
