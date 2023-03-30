@@ -31,8 +31,8 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/internal"
-	"github.com/algorand/go-algorand/ledger/internal/prefetcher"
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/eval/prefetcher"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -297,7 +297,7 @@ func runEval(t *testing.T, l *prefetcherAlignmentTestLedger, txn transactions.Tr
 	require.NoError(t, err)
 	block := bookkeeping.MakeBlock(genesisBlockHeader)
 
-	eval, err := internal.StartEvaluator(l, block.BlockHeader, internal.EvaluatorOptions{})
+	eval, err := eval.StartEvaluator(l, block.BlockHeader, eval.EvaluatorOptions{})
 	require.NoError(t, err)
 
 	err = eval.TransactionGroup(makeGroupFromTxn(txn))

@@ -1131,25 +1131,25 @@ func TestGetPeers(t *testing.T) {
 	assert.Equal(t, expectAddrs, peerAddrs)
 }
 
-// confirms that if the config PublicAddress is set to "auto",
+// confirms that if the config PublicAddress is set to "testing",
 // PublicAddress is loaded when possible with the value of Address()
-func TestAutoPublicAddress(t *testing.T) {
+func TestTestingPublicAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	netA := makeTestWebsocketNode(t)
-	netA.config.PublicAddress = "auto"
+	netA.config.PublicAddress = "testing"
 	netA.config.GossipFanout = 1
 
 	netA.Start()
 
 	time.Sleep(100 * time.Millisecond)
 
-	// check that "auto" has been overloaded
+	// check that "testing" has been overloaded
 	addr, ok := netA.Address()
 	addr = hostAndPort(addr)
 	require.True(t, ok)
-	require.NotEqual(t, "auto", netA.PublicAddress())
+	require.NotEqual(t, "testing", netA.PublicAddress())
 	require.Equal(t, addr, netA.PublicAddress())
 }
 
@@ -1231,12 +1231,12 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 
 	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
 	netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
-	netA.config.PublicAddress = "auto"
+	netA.config.PublicAddress = "testing"
 	netA.config.GossipFanout = 1
 
 	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
 	netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
-	netB.config.PublicAddress = "auto"
+	netB.config.PublicAddress = "testing"
 	netB.config.GossipFanout = 1
 
 	netA.Start()
@@ -1380,12 +1380,12 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 
 	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
 	netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
-	netA.config.PublicAddress = "auto"
+	netA.config.PublicAddress = "testing"
 	netA.config.GossipFanout = 1
 
 	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
 	netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
-	//netB.config.PublicAddress = "auto"
+	//netB.config.PublicAddress = "testing"
 	netB.config.GossipFanout = 1
 
 	netA.Start()
@@ -1445,12 +1445,12 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 
 	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
 	netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
-	//netA.config.PublicAddress = "auto"
+	//netA.config.PublicAddress = "testing"
 	netA.config.GossipFanout = 1
 
 	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
 	netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
-	netB.config.PublicAddress = "auto"
+	netB.config.PublicAddress = "testing"
 	netB.config.GossipFanout = 1
 
 	netA.Start()
@@ -1512,7 +1512,7 @@ func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 
 	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
 	netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
-	netA.config.PublicAddress = "auto"
+	netA.config.PublicAddress = "testing"
 	netA.config.GossipFanout = 1
 
 	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
@@ -1701,7 +1701,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 		t.Logf("Running Peering with Identity Challenge Test: %s", tc.name)
 		netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
 		netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
-		netA.config.PublicAddress = "auto"
+		netA.config.PublicAddress = "testing"
 		netA.config.GossipFanout = 1
 
 		scheme := newMockIdentityScheme(t)
@@ -1710,7 +1710,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 
 		netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
 		netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
-		netB.config.PublicAddress = "auto"
+		netB.config.PublicAddress = "testing"
 		netB.config.GossipFanout = 1
 
 		netA.Start()
@@ -1844,12 +1844,12 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 		t.Logf("Running Peering with Identity Challenge Response Test: %s", tc.name)
 		netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
 		netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
-		netA.config.PublicAddress = "auto"
+		netA.config.PublicAddress = "testing"
 		netA.config.GossipFanout = 1
 
 		netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
 		netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
-		netB.config.PublicAddress = "auto"
+		netB.config.PublicAddress = "testing"
 		netB.config.GossipFanout = 1
 
 		scheme := newMockIdentityScheme(t)
@@ -1997,7 +1997,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 		t.Logf("Running Peering with Identity Verification Test: %s", tc.name)
 		netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
 		netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
-		netA.config.PublicAddress = "auto"
+		netA.config.PublicAddress = "testing"
 		netA.config.GossipFanout = 1
 
 		scheme := newMockIdentityScheme(t)
@@ -2006,7 +2006,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 
 		netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
 		netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
-		netB.config.PublicAddress = "auto"
+		netB.config.PublicAddress = "testing"
 		netB.config.GossipFanout = 1
 		// if the key is occupied, make the tracker fail to insert the peer
 		if tc.occupied {

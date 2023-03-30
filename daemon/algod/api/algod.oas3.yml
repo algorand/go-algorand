@@ -1838,6 +1838,14 @@
       "SimulateTransactionGroupResult": {
         "description": "Simulation result for an atomic transaction group",
         "properties": {
+          "app-budget-added": {
+            "description": "Total budget added during execution of app calls in the transaction group.",
+            "type": "integer"
+          },
+          "app-budget-consumed": {
+            "description": "Total budget consumed during execution of app calls in the transaction group.",
+            "type": "integer"
+          },
           "failed-at": {
             "description": "If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.",
             "items": {
@@ -1865,6 +1873,14 @@
       "SimulateTransactionResult": {
         "description": "Simulation result for an individual transaction",
         "properties": {
+          "app-budget-consumed": {
+            "description": "Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.",
+            "type": "integer"
+          },
+          "logic-sig-budget-consumed": {
+            "description": "Budget used during execution of a logic sig transaction.",
+            "type": "integer"
+          },
           "missing-signature": {
             "description": "A boolean indicating whether this transaction is missing signatures",
             "type": "boolean"
@@ -5802,10 +5818,6 @@
               }
             },
             "description": "Invalid API Token"
-          },
-          "404": {
-            "content": {},
-            "description": "Transaction simulator not enabled"
           },
           "500": {
             "content": {

@@ -39,13 +39,13 @@ const (
 // be found in neither the in-memory cache or on the persistent storage.
 var ErrLoadedPageMissingNode = errors.New("loaded page is missing a node")
 
-// ErrPageDecodingFailuire is returned if the decoding of a page has failed.
-var ErrPageDecodingFailuire = errors.New("error encountered while decoding page")
+// ErrPageDecodingFailure is returned if the decoding of a page has failed.
+var ErrPageDecodingFailure = errors.New("error encountered while decoding page")
 
 type merkleTrieCache struct {
-	// mt is a point to the originating trie
+	// mt is a pointer to the originating trie
 	mt *Trie
-	// committer is the backing up storage for the cache. ( memory, database, etc. )
+	// committer is the backing store for the cache. ( memory, database, etc. )
 	committer Committer
 	// cachedNodeCount is the number of currently cached, in-memory, nodes stored in the pageToNIDsPtr structure.
 	cachedNodeCount int
@@ -293,7 +293,7 @@ func (mtc *merkleTrieCache) beginTransaction() {
 	mtc.txNextNodeID = mtc.mt.nextNodeID
 }
 
-// commitTransaction - used internaly by the Trie
+// commitTransaction - used internally by the Trie
 func (mtc *merkleTrieCache) commitTransaction() {
 	// the created nodes are already on the list.
 	for nodeID := range mtc.txCreatedNodeIDs {
@@ -426,7 +426,7 @@ func (mtc *merkleTrieCache) commit() (CommitStats, error) {
 
 // reallocatePendingPages is called by the commit() function, and is responsible for performing two tasks -
 // 1. calculate the hashes of all the newly created nodes
-// 2. reornigize the pending flush nodes into an optimal page list, and construct a list of pages that need to be created, deleted and updated.
+// 2. reorganize the pending flush nodes into an optimal page list, and construct a list of pages that need to be created, deleted and updated.
 func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToCreate []uint64, pagesToDelete map[uint64]bool, pagesToUpdate map[uint64]map[storedNodeIdentifier]*node, err error) {
 	// newPageThreshold is the threshold at which all the pages are newly created pages that were never committed.
 	newPageThreshold := uint64(mtc.mt.lastCommittedNodeID) / uint64(mtc.nodesPerPage)
@@ -669,26 +669,26 @@ func (mtc *merkleTrieCache) reallocateNode(nid storedNodeIdentifier) storedNodeI
 func decodePage(bytes []byte) (nodesMap map[storedNodeIdentifier]*node, err error) {
 	version, versionLength := binary.Uvarint(bytes[:])
 	if versionLength <= 0 {
-		return nil, ErrPageDecodingFailuire
+		return nil, ErrPageDecodingFailure
 	}
-	if version != NodePageVersion {
-		return nil, ErrPageDecodingFailuire
+	if version != nodePageVersion {
+		return nil, ErrPageDecodingFailure
 	}
 	nodesCount, nodesCountLength := binary.Varint(bytes[versionLength:])
 	if nodesCountLength <= 0 {
-		return nil, ErrPageDecodingFailuire
+		return nil, ErrPageDecodingFailure
 	}
 	nodesMap = make(map[storedNodeIdentifier]*node)
 	walk := nodesCountLength + versionLength
 	for i := int64(0); i < nodesCount; i++ {
 		nodeID, nodesIDLength := binary.Uvarint(bytes[walk:])
 		if nodesIDLength <= 0 {
-			return nil, ErrPageDecodingFailuire
+			return nil, ErrPageDecodingFailure
 		}
 		walk += nodesIDLength
 		pnode, nodeLength := deserializeNode(bytes[walk:])
 		if nodeLength <= 0 {
-			return nil, ErrPageDecodingFailuire
+			return nil, ErrPageDecodingFailure
 		}
 		walk += nodeLength
 		nodesMap[storedNodeIdentifier(nodeID)] = pnode
@@ -699,7 +699,7 @@ func decodePage(bytes []byte) (nodesMap map[storedNodeIdentifier]*node, err erro
 
 // decodePage encodes a page contents into a byte array
 func (mtc *merkleTrieCache) encodePage(nodeIDs map[storedNodeIdentifier]*node, serializedBuffer []byte) []byte {
-	version := binary.PutUvarint(serializedBuffer[:], NodePageVersion)
+	version := binary.PutUvarint(serializedBuffer[:], nodePageVersion)
 	length := binary.PutVarint(serializedBuffer[version:], int64(len(nodeIDs)))
 	walk := version + length
 	for nodeID, pnode := range nodeIDs {
