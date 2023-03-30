@@ -182,7 +182,7 @@ const ConsensusV33 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/830a4e673148498cc7230a0d1ba1ed0a5471acc6",
 )
 
-// ConsensusV34 enables the TEAL v7 opcodes, stateproofs, shorter lambda.
+// ConsensusV34 enables the TEAL v7 opcodes, stateproofs, shorter lambda to 1.7s
 const ConsensusV34 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/2dd5435993f6f6d65691140f592ebca5ef19ffbd",
 )
@@ -197,14 +197,16 @@ const ConsensusV36 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/44fa607d6051730f5264526bf3c108d51f0eadb6",
 )
 
-// ConsensusV37 enables precheck ECDSA curve
+// ConsensusV37 enables AVM resources sharing
+// and pre-check ECDSA curve
 const ConsensusV37 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/61879ef45bb8f38338ae8f84b4411e94b3aa8796",
 )
 
-// ConsensusV38 enables state proof verification using a special tracker.
+// ConsensusV38 enables state proof verification using a special tracker
+// and shortens the lambda to 1.5s
 const ConsensusV38 = ConsensusVersion(
-	"https://github.com/algorandfoundation/specs/tree/90caaad085379aef5f0af1fe7d207145985a12f3",
+	"https://github.com/algorandfoundation/specs/tree/d91d8ba1535d1353aeb20a4efe64baf6c228ac0e",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production

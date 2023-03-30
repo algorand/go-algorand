@@ -1257,6 +1257,9 @@ func initConsensusProtocols() {
 
 	v37 := v36
 	v37.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// TEAL resources sharing
+	v37.LogicSigVersion = 9
 	v37.EnablePrecheckECDSACurve = true
 
 	Consensus[protocol.ConsensusV37] = v37
@@ -1271,6 +1274,8 @@ func initConsensusProtocols() {
 	v38.StateProofUseTrackerVerification = true
 	v38.EnableCatchpointsWithSPContexts = true
 
+	v38.AgreementFilterTimeoutPeriod0 = 3000 * time.Millisecond
+
 	Consensus[protocol.ConsensusV38] = v38
 
 	// v37 can be upgraded to v38, with an update delay of 12h:
@@ -1283,7 +1288,7 @@ func initConsensusProtocols() {
 	vFuture := v38
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	vFuture.LogicSigVersion = 9 // When moving this to a release, put a new higher LogicSigVersion here
+	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
