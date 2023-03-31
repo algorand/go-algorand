@@ -601,7 +601,8 @@ type BlockEvaluator struct {
 	maxTxnBytesPerBlock int
 
 	// GranularEval controls whether the evaluator should create a child cow for each transaction.
-	// It does not make sense to enable this without also providing a Tracer.
+	// This is purely for debugging/tracing purposes, since this should have no effect on the actual
+	// result.
 	GranularEval bool
 
 	Tracer logic.EvalTracer
@@ -964,21 +965,27 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		eval.Tracer.BeforeTxnGroup(evalParams)
 		// Ensure we update the tracer before exiting
 		defer func() {
-			// TODO: need to check, is it ok to call .updates() after .commitToParent()?
-			update := cow.updates()
-			eval.Tracer.AfterTxnGroup(evalParams, &update, err)
+			// TODO: need to check, is it ok to call .deltas() after .commitToParent()?
+			deltas := cow.deltas()
+			eval.Tracer.AfterTxnGroup(evalParams, &deltas, err)
 		}()
 	}
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
+	cowForTxn := cow
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		cowForTxn := cow
-
 		if eval.GranularEval {
-			cowForTxn = cow.child(1)
+			if gi == 0 {
+				cowForTxn = cow.child(1)
+				defer cowForTxn.recycle()
+			} else {
+				// Reuse the same cow allocation for all transactions in this group
+				cowForTxn.reset()
+				cow.reuseChild(cowForTxn, 1)
+			}
 		}
 
 		if eval.Tracer != nil {
@@ -988,21 +995,17 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cowForTxn, &txib)
 
 		if eval.Tracer != nil {
-			var update *ledgercore.StateDelta
+			var deltas *ledgercore.StateDelta
 			if eval.GranularEval {
-				// Only include if we're sure the cowForTxn contains ONLY the updates from this txn
-				u := cowForTxn.updates()
-				update = &u
+				// Only include if we're sure the cowForTxn contains ONLY the deltas from this txn
+				d := cowForTxn.deltas()
+				deltas = &d
 			}
-			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData, update, err)
+			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData, deltas, err)
 		}
 
 		if eval.GranularEval {
 			cowForTxn.commitToParent()
-			// It would be nice if we could reference the same cow for all txns without having
-			// to put into and take out of the sync.Pool, but cow.child MUST retrieve it from the
-			// sync pool as of right now.
-			cowForTxn.recycle()
 		}
 
 		if err != nil {

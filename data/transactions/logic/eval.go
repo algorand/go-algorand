@@ -285,8 +285,9 @@ type EvalParams struct {
 	// optional tracer
 	Tracer EvalTracer
 
-	// GranularEval controls whether we should create a child cow for each inner transaction.
-	// It does not make sense to enable this without also providing a Tracer.
+	// GranularEval controls whether we should create a child cow for each inner transaction. This
+	// is purely for debugging/tracing purposes, since this should have no effect on the actual
+	// result.
 	GranularEval bool
 
 	// MinAvmVersion is the minimum allowed AVM version of this program.

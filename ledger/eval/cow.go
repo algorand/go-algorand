@@ -123,9 +123,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, proto conf
 	return &cb
 }
 
-// updates returns a ledgercore.StateDelta containing all the changes made to this roundCowState.
-// However, it does not return old state information (i.e. cb.mods.KvMods[key].OldValue).
-func (cb *roundCowState) updates() ledgercore.StateDelta {
+func (cb *roundCowState) deltas() ledgercore.StateDelta {
 	// Apply storage deltas to account deltas
 	for addr, smap := range cb.sdeltas {
 		for aapp, storeDelta := range smap {
@@ -134,11 +132,6 @@ func (cb *roundCowState) updates() ledgercore.StateDelta {
 			}
 		}
 	}
-	return cb.mods
-}
-
-func (cb *roundCowState) deltas() ledgercore.StateDelta {
-	cb.updates()
 
 	// Populate old values by looking through parent
 	for key, value := range cb.mods.KvMods {
@@ -278,6 +271,14 @@ func (cb *roundCowState) SetStateProofNextRound(rnd basics.Round) {
 
 func (cb *roundCowState) child(hint int) *roundCowState {
 	ch := childPool.Get().(*roundCowState)
+	cb.reuseChild(ch, hint)
+	return ch
+}
+
+// reuseChild creates a new child of this roundCowState, reusing the provided child object. If the
+// child object was previously used, the caller MUST ensure ch.reset() is called before invoking
+// this function.
+func (cb *roundCowState) reuseChild(ch *roundCowState, hint int) {
 	ch.lookupParent = cb
 	ch.commitParent = cb
 	ch.proto = cb.proto
@@ -293,7 +294,6 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 			ch.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
 		}
 	}
-	return ch
 }
 
 func (cb *roundCowState) commitToParent() {

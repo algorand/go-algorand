@@ -292,12 +292,17 @@ func (cs *roundCowState) DelBox(appIdx basics.AppIndex, key string, appAddr basi
 	return true, cs.kvDel(fullKey)
 }
 
-func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) (*ledgercore.StateDelta, error) {
+func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) (deltas *ledgercore.StateDelta, err error) {
 	cowForTxn := cs
 
 	if ep.GranularEval {
+		// In theory we could reuse this child cow allocation for all of the transactions in this
+		// group; that's what BlockEvaluator.TransactionGroup does. However, achieving the same
+		// thing here would require interface changes.
 		cowForTxn = cs.child(1)
 		defer func() {
+			d := cowForTxn.deltas()
+			deltas = &d
 			cowForTxn.commitToParent()
 			cowForTxn.recycle()
 		}()
@@ -306,14 +311,14 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) (*ledgercore.Stat
 	txn := &ep.TxnGroup[gi]
 
 	// move fee to pool
-	err := cowForTxn.Move(txn.Txn.Sender, ep.Specials.FeeSink, txn.Txn.Fee, &txn.ApplyData.SenderRewards, nil)
+	err = cowForTxn.Move(txn.Txn.Sender, ep.Specials.FeeSink, txn.Txn.Fee, &txn.ApplyData.SenderRewards, nil)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	err = apply.Rekey(cowForTxn, &txn.Txn)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// compared to eval.transaction() it may seem strange that we
@@ -352,9 +357,6 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) (*ledgercore.Stat
 	default:
 		err = fmt.Errorf("%s tx in AVM", txn.Txn.Type)
 	}
-	if err != nil {
-		return nil, err
-	}
 
 	// We don't check min balances during in app txns.
 
@@ -362,10 +364,5 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) (*ledgercore.Stat
 	// top-level txn concludes, because cow will return all changed accounts in
 	// modifiedAccounts().
 
-	if ep.GranularEval {
-		update := cowForTxn.updates()
-		return &update, nil
-	}
-
-	return nil, nil
+	return
 }

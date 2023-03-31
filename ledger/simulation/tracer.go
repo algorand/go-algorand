@@ -44,11 +44,11 @@ func (tracer *cursorEvalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) 
 	tracer.previousInnerTxns = append(tracer.previousInnerTxns, 0)
 }
 
-func (tracer *cursorEvalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, update *ledgercore.StateDelta, evalError error) {
+func (tracer *cursorEvalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, deltas *ledgercore.StateDelta, evalError error) {
 	tracer.previousInnerTxns = tracer.previousInnerTxns[:len(tracer.previousInnerTxns)-1]
 }
 
-func (tracer *cursorEvalTracer) AfterTxnGroup(ep *logic.EvalParams, update *ledgercore.StateDelta, evalError error) {
+func (tracer *cursorEvalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
 	top := len(tracer.relativeCursor) - 1
 	if len(tracer.previousInnerTxns) != 0 {
 		tracer.previousInnerTxns[len(tracer.previousInnerTxns)-1] += tracer.relativeCursor[top] + 1
@@ -144,9 +144,9 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	}
 }
 
-func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, update *ledgercore.StateDelta, evalError error) {
+func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
 	tracer.handleError(evalError)
-	tracer.cursorEvalTracer.AfterTxnGroup(ep, update, evalError)
+	tracer.cursorEvalTracer.AfterTxnGroup(ep, deltas, evalError)
 }
 
 func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
@@ -157,10 +157,10 @@ func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
 	applyDataOfCurrentTxn.EvalDelta = evalDelta
 }
 
-func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, update *ledgercore.StateDelta, evalError error) {
+func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, deltas *ledgercore.StateDelta, evalError error) {
 	tracer.handleError(evalError)
 	tracer.saveApplyData(ad)
-	tracer.cursorEvalTracer.AfterTxn(ep, groupIndex, ad, update, evalError)
+	tracer.cursorEvalTracer.AfterTxn(ep, groupIndex, ad, deltas, evalError)
 }
 
 func (tracer *evalTracer) saveEvalDelta(evalDelta transactions.EvalDelta, appIDToSave basics.AppIndex) {

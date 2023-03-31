@@ -109,10 +109,10 @@ type EvalTracer interface {
 	// top-level and inner transaction groups. The argument ep is the EvalParams object for the
 	// group; if the group is an inner group, this is the EvalParams object for the inner group.
 	//
-	// For top-level transaction groups, the update argument is the ledgercore.StateDelta updates
+	// For top-level transaction groups, the deltas argument is the ledgercore.StateDelta changes
 	// that occurred because of this transaction group. For inner transaction groups, this argument
 	// is nil.
-	AfterTxnGroup(ep *EvalParams, update *ledgercore.StateDelta, evalError error)
+	AfterTxnGroup(ep *EvalParams, deltas *ledgercore.StateDelta, evalError error)
 
 	// BeforeTxn is called before a transaction is executed.
 	//
@@ -126,9 +126,9 @@ type EvalTracer interface {
 	// ep.TxnGroup[groupIndex].ApplyData, since it may not be populated at this point.
 	//
 	// If GranularEval is enabled by the evaluator (specified either in logic.EvalParams or ledger's
-	// BlockEvaluator), update is the ledgercore.StateDelta updates that occurred because of this
+	// BlockEvaluator), deltas is the ledgercore.StateDelta changes that occurred because of this
 	// transaction. Otherwise, this argument is nil.
-	AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData, update *ledgercore.StateDelta, evalError error)
+	AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData, deltas *ledgercore.StateDelta, evalError error)
 
 	// BeforeProgram is called before an app or LogicSig program is evaluated.
 	BeforeProgram(cx *EvalContext)
@@ -150,14 +150,14 @@ type NullEvalTracer struct{}
 func (n NullEvalTracer) BeforeTxnGroup(ep *EvalParams) {}
 
 // AfterTxnGroup does nothing
-func (n NullEvalTracer) AfterTxnGroup(ep *EvalParams, update *ledgercore.StateDelta, evalError error) {
+func (n NullEvalTracer) AfterTxnGroup(ep *EvalParams, deltas *ledgercore.StateDelta, evalError error) {
 }
 
 // BeforeTxn does nothing
 func (n NullEvalTracer) BeforeTxn(ep *EvalParams, groupIndex int) {}
 
 // AfterTxn does nothing
-func (n NullEvalTracer) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData, update *ledgercore.StateDelta, evalError error) {
+func (n NullEvalTracer) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData, deltas *ledgercore.StateDelta, evalError error) {
 }
 
 // BeforeProgram does nothing
