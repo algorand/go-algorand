@@ -149,7 +149,6 @@ func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error, sta
 func (m *mockNode) LedgerForAPI() v2.LedgerForAPI {
 	return m.ledger
 }
-
 func (m *mockNode) Status() (node.StatusReport, error) {
 	return m.status, nil
 }
