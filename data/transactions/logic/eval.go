@@ -4637,6 +4637,10 @@ func opAcctParamsGet(cx *EvalContext) error {
 }
 
 func opLog(cx *EvalContext) error {
+	// TODO: pass through `cx *EvalContext` to know we are undersimulation
+	//       then we need the extended limit on byte length and log row number
+	// Maybe this is also related with simulation request body change and `goal clerk simulate`?
+
 	last := len(cx.stack) - 1
 
 	if len(cx.txn.EvalDelta.Logs) >= maxLogCalls {
