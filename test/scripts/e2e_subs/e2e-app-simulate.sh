@@ -1,6 +1,6 @@
 #!/bin/bash
 
-date '+app-simple-test start %Y%m%d_%H%M%S'
+date '+app-simulate-test start %Y%m%d_%H%M%S'
 
 set -e
 set -x
@@ -20,6 +20,16 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 CONST_TRUE="true"
 CONST_FALSE="false"
 
+# First, try to send an extremely large "transaction" in the request body.
+# This should fail with a 413 error.
+truncate -s 11MB toolarge.tx
+RES=$(${gcmd} clerk simulate -t toolarge.tx 2>&1 || true)
+EXPERROR="simulation error: HTTP 413 Request Entity Too Large:"
+if [[ $RES != *"${EXPERROR}"* ]]; then
+    date '+app-simulate-test FAIL the simulate API should fail for request bodies exceeding 10MB %Y%m%d_%H%M%S'
+    false
+fi
+
 ##############################################
 # WE FIRST TEST TRANSACTION GROUP SIMULATION #
 ##############################################
@@ -29,7 +39,7 @@ ${gcmd} clerk send -a 10000 -f ${ACCOUNT} -t ${ACCOUNT} -o pay2.tx
 
 cat pay1.tx pay2.tx | ${gcmd} clerk group -i - -o grouped.tx
 
-# We first test transaction group simulation WITHOUT signatures
+# We test transaction group simulation WITHOUT signatures
 RES=$(${gcmd} clerk simulate -t grouped.tx)
 
 if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_FALSE ]]; then
