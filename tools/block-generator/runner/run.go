@@ -26,12 +26,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/algorand/go-algorand/tools/block-generator/generator"
 	"github.com/algorand/go-algorand/tools/block-generator/metrics"
 	"github.com/algorand/go-algorand/tools/block-generator/util"
+	"github.com/algorand/go-deadlock"
 )
 
 // Args are all the things needed to run a performance test.
@@ -90,7 +90,7 @@ func (r *Args) run() error {
 	}
 
 	// This middleware allows us to lock the block endpoint
-	var freezeMutex sync.Mutex
+	var freezeMutex deadlock.Mutex
 	blockMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			freezeMutex.Lock()
