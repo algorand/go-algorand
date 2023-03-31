@@ -406,15 +406,11 @@ func (l *Ledger) RegisterBlockListeners(listeners []ledgercore.BlockListener) {
 // RegisterVotersCommitListener registers a listener that will be called when a
 // commit is about to cover a round.
 func (l *Ledger) RegisterVotersCommitListener(listener ledgercore.VotersCommitListener) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	l.acctsOnline.voters.registerPrepareCommitListener(listener)
 }
 
-// UnregisterVotersCommitListener unregisters the commit listener.
+// UnregisterVotersCommitListener deregisters the commit listener.
 func (l *Ledger) UnregisterVotersCommitListener() {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	l.acctsOnline.voters.unregisterPrepareCommitListener()
 }
 
@@ -437,8 +433,6 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 // GetLastCatchpointLabel returns the latest catchpoint label that was written to the
 // database.
 func (l *Ledger) GetLastCatchpointLabel() string {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.catchpoint.GetLastCatchpointLabel()
 }
 
@@ -446,23 +440,17 @@ func (l *Ledger) GetLastCatchpointLabel() string {
 // look up a creator address, setting ok to false if the query succeeded but no
 // creator was found.
 func (l *Ledger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.accts.GetCreatorForRound(rnd, cidx, ctype)
 }
 
 // GetCreator is like GetCreatorForRound, but for the latest round and race-free
 // with respect to ledger.Latest()
 func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.accts.GetCreatorForRound(l.blockQ.latest(), cidx, ctype)
 }
 
 // GetStateDeltaForRound retrieves a ledgercore.StateDelta from the accountUpdates cache for the requested rnd
 func (l *Ledger) GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.accts.lookupStateDelta(rnd)
 }
 
@@ -470,16 +458,12 @@ func (l *Ledger) GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta,
 // The result might be nil, even with err=nil, if there are no voters
 // for that round because state proofs were not enabled.
 func (l *Ledger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRound, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.acctsOnline.voters.VotersForStateProof(rnd)
 }
 
 // GetStateProofVerificationContext returns the data required to verify the state proof whose last attested round is
 // stateProofLastAttestedRound.
 func (l *Ledger) GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.spVerification.LookupVerificationContext(stateProofLastAttestedRound)
 }
 
@@ -487,8 +471,6 @@ func (l *Ledger) GetStateProofVerificationContext(stateProofLastAttestedRound ba
 // returns up to that many CreatableLocators from the database where app idx is
 // less than or equal to the maximum.
 func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.accts.ListAssets(maxAssetIdx, maxResults)
 }
 
@@ -496,8 +478,6 @@ func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (r
 // returns up to that many CreatableLocators from the database where app idx is
 // less than or equal to the maximum.
 func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.accts.ListApplications(maxAppIdx, maxResults)
 }
 
@@ -505,9 +485,6 @@ func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) 
 // resources) for a given address, for the latest round. The returned account values
 // reflect the changes of all blocks up to and including the returned round number.
 func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-
 	// Intentionally apply (pending) rewards up to rnd.
 	data, rnd, withoutRewards, err := l.accts.lookupLatest(addr)
 	if err != nil {
@@ -523,9 +500,6 @@ func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.R
 // and the additional withoutRewards return value contains the value before rewards
 // were applied.
 func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (data ledgercore.AccountData, validThrough basics.Round, withoutRewards basics.MicroAlgos, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-
 	data, rnd, rewardsVersion, rewardsLevel, err := l.accts.lookupWithoutRewards(round, addr, true /* take lock */)
 	if err != nil {
 		return ledgercore.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
@@ -551,9 +525,6 @@ func (l *Ledger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.
 
 // lookupResource loads a resource that matches the request parameters from the accounts update
 func (l *Ledger) lookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-
 	// Intentionally apply (pending) rewards up to rnd.
 	res, _, err := l.accts.LookupResource(rnd, addr, aidx, ctype)
 	if err != nil {
@@ -565,26 +536,17 @@ func (l *Ledger) lookupResource(rnd basics.Round, addr basics.Address, aidx basi
 
 // LookupKv loads a KV pair from the accounts update
 func (l *Ledger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-
 	return l.accts.LookupKv(rnd, key)
 }
 
 // LookupKeysByPrefix searches keys with specific prefix, up to `maxKeyNum`
 // if `maxKeyNum` == 0, then it loads all keys with such prefix
 func (l *Ledger) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-
 	return l.accts.LookupKeysByPrefix(round, keyPrefix, maxKeyNum)
 }
 
 // LookupAgreement returns account data used by agreement.
 func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-
 	// Intentionally apply (pending) rewards up to rnd.
 	data, err := l.acctsOnline.LookupOnlineAccountData(rnd, addr)
 	if err != nil {
@@ -597,9 +559,6 @@ func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up
 // to the requested round rnd.
 func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-
 	var result ledgercore.AccountData
 
 	result, validThrough, err := l.accts.LookupWithoutRewards(rnd, addr)
@@ -612,22 +571,16 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (le
 
 // LatestTotals returns the totals of all accounts for the most recent round, as well as the round number.
 func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.accts.LatestTotals()
 }
 
 // OnlineTotals returns the online totals of all accounts at the end of round rnd.
 func (l *Ledger) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.acctsOnline.onlineTotals(rnd)
 }
 
 // CheckDup return whether a transaction is a duplicate one.
 func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl)
 }
 
@@ -728,8 +681,6 @@ func (l *Ledger) WaitForCommit(r basics.Round) {
 // and will not lose round r after a crash.
 // This makes it easy to use in a select{} statement.
 func (l *Ledger) Wait(r basics.Round) chan struct{} {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.bulletin.Wait(r)
 }
 
@@ -765,8 +716,6 @@ func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 // the deepest lookup happens when txn.LastValid == current => txn.LastValid == Latest + 1
 // that gives Latest + 1 - (MaxTxnLife + 1) = Latest - MaxTxnLife as the first round to be accessible.
 func (l *Ledger) BlockHdrCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	hdr, ok := l.txTail.blockHeader(rnd)
 	if !ok {
 		err = fmt.Errorf("no cached header data for round %d", rnd)
@@ -785,8 +734,6 @@ func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state Catchpoin
 // if error is returned, the file stream is guaranteed to be nil, and vice versa,
 // if the file stream is not nil, the error is guaranteed to be nil.
 func (l *Ledger) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.catchpoint.GetCatchpointStream(round)
 }
 
@@ -816,8 +763,6 @@ func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger eva
 // The function is used by the catchup service to avoid memory pressure until the
 // catchpoint data file writing is complete.
 func (l *Ledger) IsWritingCatchpointDataFile() bool {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.catchpoint.IsWritingCatchpointDataFile()
 }
 

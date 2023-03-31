@@ -237,11 +237,9 @@ func TestTrackerDbRoundDataRace(t *testing.T) {
 		prepareCommitEntryLock:   make(chan struct{}, 10),
 		prepareCommitReleaseLock: make(chan struct{}),
 	}
-	ledger.trackerMu.Lock()
 	ledger.trackers.mu.Lock()
 	ledger.trackers.trackers = append([]ledgerTracker{stallingTracker}, ledger.trackers.trackers...)
 	ledger.trackers.mu.Unlock()
-	ledger.trackerMu.Unlock()
 
 	close(stallingTracker.produceReleaseLock)
 	close(stallingTracker.prepareCommitReleaseLock)

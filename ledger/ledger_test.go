@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/eval"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -29,6 +28,8 @@ import (
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/ledger/eval"
 
 	"github.com/stretchr/testify/require"
 
@@ -2696,9 +2697,9 @@ func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 
 	// additional checks: the txTail should have additional blocks:
 	// dbRound - (MaxTxnLife+1) is expected to be deleted and dbRound - (MaxTxnLife) is earliest available
-	l.trackerMu.RLock()
+	l.trackers.mu.RLock()
 	dbRound := l.trackers.dbRound
-	l.trackerMu.RUnlock()
+	l.trackers.mu.RUnlock()
 
 	start := dbRound - basics.Round(proto.MaxTxnLife)
 	end := latest - basics.Round(proto.MaxTxnLife)

@@ -191,10 +191,14 @@ func (t *txTail) close() {
 func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
 
-	if _, has := t.recent[rnd]; has {
-		// Repeat, ignore
-		return
-	}
+	func() {
+		t.tailMu.RLock()
+		defer t.tailMu.RUnlock()
+		if _, has := t.recent[rnd]; has {
+			// Repeat, ignore
+			return
+		}
+	}()
 
 	var tail trackerdb.TxTailRound
 	tail.TxnIDs = make([]transactions.Txid, len(delta.Txids))
@@ -229,6 +233,9 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 }
 
 func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
+	t.tailMu.Lock()
+	defer t.tailMu.Unlock()
+
 	proto := t.recent[rnd].proto
 	maxlife := basics.Round(proto.MaxTxnLife)
 
@@ -333,6 +340,9 @@ func (t errTxTailMissingRound) Error() string {
 // checkDup test to see if the given transaction id/lease already exists. It returns nil if neither exists, or
 // TransactionInLedgerError / LeaseInLedgerError respectively.
 func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
+	t.tailMu.RLock()
+	defer t.tailMu.RUnlock()
+
 	if lastValid < t.lowWaterMark {
 		return &errTxTailMissingRound{round: lastValid}
 	}
@@ -360,6 +370,9 @@ func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, fi
 }
 
 func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
+	t.tailMu.Lock()
+	defer t.tailMu.Unlock()
+
 	if _, ok := t.lastValid[lastValid]; !ok {
 		t.lastValid[lastValid] = make(map[transactions.Txid]struct{})
 	}
