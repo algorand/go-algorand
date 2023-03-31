@@ -631,7 +631,7 @@
                   "type": "boolean"
                 },
                 "upgrade-vote-rounds": {
-                  "description": "Total voting ounds for current upgrade",
+                  "description": "Total voting rounds for current upgrade",
                   "type": "integer"
                 },
                 "upgrade-votes": {
@@ -4727,7 +4727,7 @@
                       "type": "boolean"
                     },
                     "upgrade-vote-rounds": {
-                      "description": "Total voting ounds for current upgrade",
+                      "description": "Total voting rounds for current upgrade",
                       "type": "integer"
                     },
                     "upgrade-votes": {
@@ -4902,7 +4902,7 @@
                       "type": "boolean"
                     },
                     "upgrade-vote-rounds": {
-                      "description": "Total voting ounds for current upgrade",
+                      "description": "Total voting rounds for current upgrade",
                       "type": "integer"
                     },
                     "upgrade-votes": {
