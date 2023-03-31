@@ -65,8 +65,8 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 	// new keys must exist at least 4 rounds prior use
 	shortPartKeysProtocol.SeedLookback = 2
 	shortPartKeysProtocol.SeedRefreshInterval = 1
-	if runtime.GOARCH == "amd64" {
-		// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
+	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+		// amd64 and arm64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
 		shortPartKeysProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
 		shortPartKeysProtocol.AgreementFilterTimeout = 1 * time.Second
 	}

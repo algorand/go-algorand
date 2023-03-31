@@ -805,21 +805,13 @@ func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBl
 	}
 
 	lastSPRound := basics.Round(txib.Txn.StateProofTxnFields.Message.LastAttestedRound)
-	lastRoundHdr, err := pool.ledger.BlockHdr(lastSPRound)
+	verificationCtx, err := pool.ledger.GetStateProofVerificationContext(lastSPRound)
 	if err != nil {
 		return stateProofStats
 	}
 
-	proto := config.Consensus[lastRoundHdr.CurrentProtocol]
-	votersRound := lastSPRound.SubSaturate(basics.Round(proto.StateProofInterval))
-	votersRoundHdr, err := pool.ledger.BlockHdr(votersRound)
-	if err != nil {
-		return stateProofStats
-	}
-
-	totalWeight := votersRoundHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.Raw
-	stateProofStats.ProvenWeight, _ = basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
-
+	totalWeight := verificationCtx.OnlineTotalWeight.Raw
+	stateProofStats.ProvenWeight, _ = basics.Muldiv(totalWeight, uint64(config.Consensus[verificationCtx.Version].StateProofWeightThreshold), 1<<32)
 	return stateProofStats
 }
 

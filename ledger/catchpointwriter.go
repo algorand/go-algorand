@@ -24,7 +24,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/ledger/encoded"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -38,6 +40,11 @@ const (
 	// 100,000 resources * 20KB/resource => roughly max 2GB per chunk if all of them are max'ed out apps.
 	// In reality most entries are asset holdings, and they are very small.
 	ResourcesPerCatchpointFileChunk = 100_000
+
+	// SPContextPerCatchpointFile defines the maximum number of state proof verification data stored
+	// in the catchpoint file.
+	// (2 years * 31536000 seconds per year) / (256 rounds per state proof verification data * 3.6 seconds per round) ~= 70000
+	SPContextPerCatchpointFile = 70000
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
@@ -91,6 +98,15 @@ func (chunk catchpointFileChunkV6) empty() bool {
 	return len(chunk.Balances) == 0 && len(chunk.KVs) == 0
 }
 
+type catchpointStateProofVerificationContext struct {
+	_struct struct{}                                   `codec:",omitempty,omitemptyarray"`
+	Data    []ledgercore.StateProofVerificationContext `codec:"spd,allocbound=SPContextPerCatchpointFile"`
+}
+
+func (data catchpointStateProofVerificationContext) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.StateProofVerCtx, protocol.Encode(&data)
+}
+
 func makeCatchpointWriter(ctx context.Context, filePath string, tx trackerdb.TransactionScope, maxResourcesPerChunk int) (*catchpointWriter, error) {
 	arw, err := tx.MakeAccountsReaderWriter()
 	if err != nil {
@@ -142,6 +158,37 @@ func (cw *catchpointWriter) Abort() error {
 	cw.compressor.Close()
 	cw.file.Close()
 	return os.Remove(cw.filePath)
+}
+
+func (cw *catchpointWriter) WriteStateProofVerificationContext() (crypto.Digest, error) {
+	rawData, err := cw.tx.MakeSpVerificationCtxReaderWriter().GetAllSPContexts(cw.ctx)
+	if err != nil {
+		return crypto.Digest{}, err
+	}
+
+	wrappedData := catchpointStateProofVerificationContext{Data: rawData}
+	dataHash, encodedData := crypto.EncodeAndHash(wrappedData)
+
+	err = cw.tar.WriteHeader(&tar.Header{
+		Name: catchpointSPVerificationFileName,
+		Mode: 0600,
+		Size: int64(len(encodedData)),
+	})
+
+	if err != nil {
+		return crypto.Digest{}, err
+	}
+
+	_, err = cw.tar.Write(encodedData)
+	if err != nil {
+		return crypto.Digest{}, err
+	}
+
+	if chunkLen := uint64(len(encodedData)); cw.biggestChunkLen < chunkLen {
+		cw.biggestChunkLen = chunkLen
+	}
+
+	return dataHash, nil
 }
 
 // WriteStep works for a short period of time (determined by stepCtx) to get
@@ -247,7 +294,7 @@ func (cw *catchpointWriter) asyncWriter(chunks chan catchpointFileChunkV6, respo
 		}
 		encodedChunk := protocol.Encode(&chk)
 		err := cw.tar.WriteHeader(&tar.Header{
-			Name: fmt.Sprintf("balances.%d.msgpack", chunkNum),
+			Name: fmt.Sprintf(catchpointBalancesFileNameTemplate, chunkNum),
 			Mode: 0600,
 			Size: int64(len(encodedChunk)),
 		})

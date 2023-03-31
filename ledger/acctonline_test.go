@@ -129,6 +129,8 @@ func newBlock(t *testing.T, ml *mockLedgerForTracker, testProtocolVersion protoc
 	delta.Accts.MergeAccounts(updates)
 	delta.Totals = newTotals
 
+	err := ml.addMockBlock(blockEntry{block: blk}, delta)
+	require.NoError(t, err)
 	ml.trackers.newBlock(blk, delta)
 
 	return newTotals
