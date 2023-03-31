@@ -38,7 +38,10 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			addr := fmt.Sprintf(":%d", port)
 			srv, _ := MakeServer(configFile, addr)
-			srv.ListenAndServe()
+			err := srv.ListenAndServe()
+			if err != nil {
+				panic(err)
+			}
 		},
 	}
 

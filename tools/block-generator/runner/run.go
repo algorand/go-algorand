@@ -64,7 +64,10 @@ func Run(args Args) error {
 			return fmt.Errorf("report directory '%s' already exists", args.ReportDirectory)
 		}
 	}
-	os.Mkdir(args.ReportDirectory, os.ModeDir|os.ModePerm)
+	err := os.Mkdir(args.ReportDirectory, os.ModeDir|os.ModePerm)
+	if err != nil {
+		return err
+	}
 
 	defer fmt.Println("Done running tests!")
 	return filepath.Walk(args.Path, func(path string, info os.FileInfo, err error) error {

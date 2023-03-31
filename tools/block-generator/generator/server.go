@@ -32,7 +32,10 @@ func initializeConfigFile(configFile string) (config GenerationConfig, err error
 	if err != nil {
 		return
 	}
-	yaml.Unmarshal(data, &config)
+	err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		return
+	}
 	return
 }
 
