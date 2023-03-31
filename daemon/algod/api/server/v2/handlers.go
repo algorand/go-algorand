@@ -54,13 +54,15 @@ import (
 	"github.com/algorand/go-algorand/stateproof"
 )
 
-// max compiled teal program is currently 8k
+// MaxTealSourceBytes sets a size limit for TEAL source programs for requests
+// Max TEAL program size is currently 8k
 // but we allow for comments, spacing, and repeated consts
-// in the source teal, allow up to 200kb
+// in the source TEAL, so we allow up to 200KB
 const MaxTealSourceBytes = 200_000
 
+// MaxTealDryrunBytes sets a size limit for dryrun requests
 // With the ability to hold unlimited assets DryrunRequests can
-// become quite large, allow up to 1mb
+// become quite large, so we allow up to 1MB
 const MaxTealDryrunBytes = 1_000_000
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
