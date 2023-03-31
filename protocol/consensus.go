@@ -206,7 +206,7 @@ const ConsensusV37 = ConsensusVersion(
 // ConsensusV38 enables state proof verification using a special tracker
 // and shortens the lambda to 1.5s
 const ConsensusV38 = ConsensusVersion(
-	"https://github.com/algorandfoundation/specs/tree/d91d8ba1535d1353aeb20a4efe64baf6c228ac0e",
+	"https://github.com/algorandfoundation/specs/tree/931dfbe4598db0c908a9d3ac2621050fa8a7f0fb",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production

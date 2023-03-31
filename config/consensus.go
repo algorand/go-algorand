@@ -1258,8 +1258,6 @@ func initConsensusProtocols() {
 	v37 := v36
 	v37.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	// TEAL resources sharing
-	v37.LogicSigVersion = 9
 	v37.EnablePrecheckECDSACurve = true
 
 	Consensus[protocol.ConsensusV37] = v37
@@ -1273,6 +1271,9 @@ func initConsensusProtocols() {
 	// enables state proof recoverability
 	v38.StateProofUseTrackerVerification = true
 	v38.EnableCatchpointsWithSPContexts = true
+
+	// TEAL resources sharing
+	v38.LogicSigVersion = 9
 
 	v38.AgreementFilterTimeoutPeriod0 = 3000 * time.Millisecond
 
