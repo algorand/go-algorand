@@ -74,7 +74,7 @@ func TestDbSchemaUpgrade1(t *testing.T) {
 	p.ProvenWeight = 5
 	a.ErrorContains(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return persistProver(tx, 0, &p)
-	}), "no such table: builders")
+	}), "no such table: provers")
 
 	// migrating the DB to the next version.
 	a.NoError(makeStateProofDB(dbs.Wdb))
@@ -241,7 +241,7 @@ func TestProversDB(t *testing.T) {
 
 	var count int
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err = tx.QueryRow("SELECT count(1) FROM builders").Scan(&count)
+		err = tx.QueryRow("SELECT count(1) FROM provers").Scan(&count)
 		return err
 	})
 	a.NoError(err)
@@ -252,7 +252,7 @@ func TestProversDB(t *testing.T) {
 	})
 	a.NoError(err)
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err = tx.QueryRow("SELECT count(1) FROM builders").Scan(&count)
+		err = tx.QueryRow("SELECT count(1) FROM provers").Scan(&count)
 		return err
 	})
 	a.NoError(err)

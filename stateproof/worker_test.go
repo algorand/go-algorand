@@ -510,7 +510,7 @@ func newPartKeyWithVersion(t testing.TB, protoParam config.ConsensusParams, pare
 
 func countProversInDB(store db.Accessor) (nrows int, err error) {
 	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		row := tx.QueryRow("SELECT COUNT(*) FROM builders")
+		row := tx.QueryRow("SELECT COUNT(*) FROM provers")
 		err := row.Scan(&nrows)
 		if err != nil {
 			return err
@@ -1828,7 +1828,7 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 	a.NoError(err)
 	// we now remove all provers from the table. This will cause the worker to create the provers from the ledger.
 	a.NoError(accessor.Atomic(func(_ context.Context, tx *sql.Tx) error {
-		_, err := tx.Exec("DELETE  from builders")
+		_, err := tx.Exec("DELETE  from provers")
 		return err
 	}))
 	accessor.Close()
@@ -1901,7 +1901,7 @@ func TestWorkerLoadsProverAndSignatureUponMsgRecv(t *testing.T) {
 
 	// remove prover from disk and memory we fail the prover creation (since the ledger also returns error)
 	require.NoError(t, w.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-		_, err := tx.Exec("DELETE  from builders")
+		_, err := tx.Exec("DELETE  from provers")
 		return err
 	}))
 	w.provers = make(map[basics.Round]spProver)

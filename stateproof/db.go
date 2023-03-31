@@ -48,16 +48,16 @@ const (
 	createSigsIdx = `CREATE INDEX IF NOT EXISTS sigs_from_this_node ON sigs (from_this_node)`
 
 	// provers table stored a serialization of each ProverForRound data, without the sigs (stored separately)
-	createProverTable = `CREATE TABLE IF NOT EXISTS builders (
+	createProverTable = `CREATE TABLE IF NOT EXISTS provers (
     	round INTEGER PRIMARY KEY NOT NULL,
-    	builder BLOB NOT NULL
+    	prover BLOB NOT NULL
     )`
 
-	insertOrReplaceProverForRound = `INSERT OR REPLACE INTO builders (round,builder) VALUES (?,?)`
+	insertOrReplaceProverForRound = `INSERT OR REPLACE INTO provers (round,prover) VALUES (?,?)`
 
-	selectProverForRound = `SELECT builder FROM builders WHERE round=?`
+	selectProverForRound = `SELECT prover FROM provers WHERE round=?`
 
-	deleteProverForRound = `DELETE FROM builders WHERE round<?`
+	deleteProverForRound = `DELETE FROM provers WHERE round<?`
 )
 
 // dbSchemaUpgrade0 initialize the tables.
@@ -231,7 +231,7 @@ func getMessage(tx *sql.Tx, rnd basics.Round) (stateproofmsg.Message, error) {
 }
 
 func proverExistInDB(tx *sql.Tx, rnd basics.Round) (bool, error) {
-	row := tx.QueryRow("SELECT EXISTS ( SELECT 1 FROM builders WHERE round=? )", rnd)
+	row := tx.QueryRow("SELECT EXISTS ( SELECT 1 FROM provers WHERE round=? )", rnd)
 
 	exists := 0
 	if err := row.Scan(&exists); err != nil {
