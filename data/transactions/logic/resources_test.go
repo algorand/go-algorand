@@ -19,6 +19,7 @@ package logic_test
 import (
 	"encoding/binary"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -71,7 +72,7 @@ app_params_get AppGlobalNumByteSlice
 	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, nil)
 
 	getLocalEx := `
-int 0							// Sender
+txn Sender
 int 500
 byte "some-key"
 app_local_get_ex
@@ -104,7 +105,7 @@ pop; pop; int 1
 
 	// Checking if an account is opted in has pretty much the same rules
 	optInCheck500 := `
-int 0							// Sender
+txn Sender
 int 500
 app_opted_in
 `
@@ -127,7 +128,7 @@ app_opted_in
 
 	// Confirm sharing applies to the app id called in tx0, not just foreign app array
 	optInCheck900 := `
-int 0							// Sender
+txn Sender
 int 900
 app_opted_in
 !								// we did not opt any senders into 900
@@ -248,7 +249,7 @@ pop; pop; int 1
 	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, nil)
 
 	getBalance := `
-int 0
+txn Sender
 int 400
 asset_holding_get AssetBalance
 pop; pop; int 1
@@ -873,9 +874,16 @@ func TestAccessMyLocals(t *testing.T) {
   int 7
   ==
 `
+		if ep.Proto.LogicSigVersion >= 9 {
+			source = strings.ReplaceAll(source, "int 0\n", "txn Sender\n")
+		}
 		logic.TestApp(t, source, ep)
 
 		// They can also see that they are opted in, though it's a weird question to ask.
-		logic.TestApp(t, "int 0; int 0; app_opted_in", ep)
+		if ep.Proto.LogicSigVersion >= 9 {
+			logic.TestApp(t, "txn Sender; int 0; app_opted_in", ep)
+		} else {
+			logic.TestApp(t, "int 0; int 0; app_opted_in", ep)
+		}
 	})
 }

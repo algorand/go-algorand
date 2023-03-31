@@ -4015,9 +4015,11 @@ func (cx *EvalContext) assignAccount(sv stackValue) (basics.Address, error) {
 // not, based on version.
 
 func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uint64, error) {
-	if account.argType() == StackUint64 {
-		addr, err := cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
-		return addr, account.Uint, err
+	if cx.version < sharedResourcesVersion {
+		if account.argType() == StackUint64 {
+			addr, err := cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
+			return addr, account.Uint, err
+		}
 	}
 	addr, err := account.address()
 	if err != nil {
@@ -4479,13 +4481,7 @@ func (cx *EvalContext) appReference(ref uint64, foreign bool) (basics.AppIndex, 
 func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.Address, basics.AppIndex, uint64, error) {
 	if cx.version >= sharedResourcesVersion {
 		unused := uint64(0) // see function comment
-		var addr basics.Address
-		var err error
-		if account.Bytes != nil {
-			addr, err = account.address()
-		} else {
-			addr, err = cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
-		}
+		addr, err := account.address()
 		if err != nil {
 			return basics.Address{}, 0, 0, err
 		}
@@ -4562,13 +4558,7 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (basics.AssetInd
 
 func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.Address, basics.AssetIndex, error) {
 	if cx.version >= sharedResourcesVersion {
-		var addr basics.Address
-		var err error
-		if account.Bytes != nil {
-			addr, err = account.address()
-		} else {
-			addr, err = cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
-		}
+		addr, err := account.address()
 		if err != nil {
 			return basics.Address{}, 0, err
 		}

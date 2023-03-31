@@ -4309,7 +4309,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 		"gtxn":       true,
 	}
 
-	ep := defaultEvalParams()
+	ep := defaultEvalParamsWithVersion(2)
 
 	cnt := 0
 	for _, spec := range OpSpecs {
@@ -4317,7 +4317,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 			source, ok := tests[spec.Name]
 			require.True(t, ok, "Missed opcode in the test: %s", spec.Name)
 			require.Contains(t, source, spec.Name)
-			ops := testProg(t, source, AssemblerMaxVersion)
+			ops := testProg(t, source, 2)
 			// all opcodes allowed in stateful mode so use CheckStateful/EvalContract
 			err := CheckContract(ops.Program, ep)
 			require.NoError(t, err, source)
@@ -4362,7 +4362,7 @@ func TestAllowedOpcodesV3(t *testing.T) {
 		"pushbytes":   `pushbytes "stringsfail?"`,
 	}
 
-	ep := defaultEvalParams()
+	ep := defaultEvalParamsWithVersion(3)
 
 	cnt := 0
 	for _, spec := range OpSpecs {
@@ -4370,7 +4370,7 @@ func TestAllowedOpcodesV3(t *testing.T) {
 			source, ok := tests[spec.Name]
 			require.True(t, ok, "Missed opcode in the test: %s", spec.Name)
 			require.Contains(t, source, spec.Name)
-			ops := testProg(t, source, AssemblerMaxVersion)
+			ops := testProg(t, source, 3)
 			// all opcodes allowed in stateful mode so use CheckStateful/EvalContract
 			testAppBytes(t, ops.Program, ep, "REJECT")
 
