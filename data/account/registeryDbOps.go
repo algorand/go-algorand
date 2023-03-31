@@ -60,6 +60,58 @@ type deleteStateProofKeysOp struct {
 	round           basics.Round
 }
 
+type countStateproofKeysOpResult struct {
+	count int
+	err   error
+}
+type countStateproofKeysOp struct {
+	id                    ParticipationID
+	numStateproofKeysInDB chan countStateproofKeysOpResult
+}
+
+func newCountStateproofKeysOp(id ParticipationID) countStateproofKeysOp {
+	return countStateproofKeysOp{
+		id:                    id,
+		numStateproofKeysInDB: make(chan countStateproofKeysOpResult, 1),
+	}
+}
+
+func (c countStateproofKeysOp) apply(db *participationDB) error {
+	if c.numStateproofKeysInDB == nil {
+		return errors.New("countStateproofKeysOp.numStateproofKeysInDB is nil")
+	}
+
+	defer close(c.numStateproofKeysInDB)
+
+	var count int
+	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+
+		row := tx.QueryRow(selectPK, c.id[:])
+
+		var pk int
+		if err := row.Scan(&pk); err != nil {
+			return fmt.Errorf("unable to scan pk: %w", err)
+		}
+
+		stmt, err := tx.Prepare(countStateProofKeysQuery)
+		if err != nil {
+			return fmt.Errorf("unable to prepare state proof count: %w", err)
+		}
+
+		defer stmt.Close()
+
+		if err := stmt.QueryRow(pk).Scan(&count); err != nil {
+			return fmt.Errorf("unable to scan state proof count: %w", err)
+		}
+
+		return nil
+	})
+
+	c.numStateproofKeysInDB <- countStateproofKeysOpResult{count, err}
+
+	return nil
+}
+
 func (d deleteStateProofKeysOp) apply(db *participationDB) error {
 	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 
@@ -90,8 +142,8 @@ func (d deleteStateProofKeysOp) apply(db *participationDB) error {
 	return err
 }
 
-func makeOpRequest(operation dbOp) opRequest {
-	return opRequest{operation: operation}
+func (db *participationDB) queueOpRequest(op dbOp) {
+	db.writeQueue <- opRequest{operation: op}
 }
 
 func makeOpRequestWithError(operation dbOp, errChan chan error) opRequest {

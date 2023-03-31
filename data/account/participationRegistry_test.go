@@ -331,9 +331,6 @@ func TestParticipation_CleanupTablesAfterDeleteExpired(t *testing.T) {
 		id, err := registry.Insert(p)
 		a.NoError(err)
 		a.Equal(p.ID(), id)
-
-		err = registry.AppendKeys(id, p.StateProofSecrets.GetAllKeys())
-		a.NoError(err)
 	}
 
 	a.NoError(registry.Flush(defaultTimeout))
@@ -856,7 +853,7 @@ func TestRegisterUpdatedEvent(t *testing.T) {
 		required:            false,
 	}
 
-	registry.writeQueue <- makeOpRequest(&registerOp{updates})
+	registry.queueOpRequest(&registerOp{updates})
 
 	a.NoError(registry.Flush(defaultTimeout))
 
@@ -866,7 +863,7 @@ func TestRegisterUpdatedEvent(t *testing.T) {
 		required:            true,
 	}
 
-	registry.writeQueue <- makeOpRequest(&registerOp{updates})
+	registry.queueOpRequest(&registerOp{updates})
 
 	err = registry.Flush(defaultTimeout)
 	a.Contains(err.Error(), "unable to disable old key when registering")
@@ -1411,5 +1408,151 @@ func BenchmarkDeleteExpired(b *testing.B) {
 			b.StopTimer()
 			a.NoError(err)
 		})
+	}
+}
+
+func TestCountNumStateproofKeys(t *testing.T) {
+
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
+
+	access, err := db.MakeAccessor(t.Name()+"_stateprooftest", false, true)
+	if err != nil {
+		panic(err)
+	}
+	root, err := GenerateRoot(access)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(stateProofIntervalForTests*2), 3)
+	access.Close()
+	a.NoError(err)
+
+	// Install a key for testing
+	id, err := registry.Insert(p.Participation)
+	a.NoError(err)
+
+	a.NoError(registry.Flush(defaultTimeout))
+
+	// Append keys
+	keys := make(StateProofKeys, 5)
+	for i := 0; i < 5; i++ {
+		keys[i] = merklesignature.KeyRoundPair{Round: stateProofIntervalForTests + uint64(i), Key: p.StateProofSecrets.GetKey(stateProofIntervalForTests)}
+	}
+
+	err = registry.AppendKeys(id, keys)
+	a.NoError(err)
+
+	a.NoError(registry.Flush(defaultTimeout))
+
+	count, err := registry.countStateproofKeys(p.ID())
+	a.NoError(err)
+	a.Equal(count, 5)
+}
+
+func TestCleanupIgnoresExpiredWithStateProofKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	registry, dbfile := getRegistryImpl(t, false, true) // inMem=false, erasable=true
+	defer registryCloseTest(t, registry, dbfile)
+
+	keyDilution := 1
+	for i := 10; i < 20; i++ {
+		p := makeTestParticipation(a, i, 1, basics.Round(i), uint64(keyDilution))
+		id, err := registry.Insert(p)
+		a.NoError(err)
+		a.Equal(p.ID(), id)
+
+		err = registry.AppendKeys(id, p.StateProofSecrets.GetAllKeys())
+		a.NoError(err)
+	}
+
+	a.NoError(registry.Flush(defaultTimeout))
+
+	err := registry.DeleteExpired(basics.Round(50), config.Consensus[protocol.ConsensusCurrentVersion])
+	a.NoError(err)
+
+	a.NoError(registry.Flush(defaultTimeout))
+
+	var numOfRecords int
+
+	// count records
+	a.NoError(
+		registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			row := tx.QueryRow(`select count(*) from Keysets`)
+			err = row.Scan(&numOfRecords)
+			if err != nil {
+				return fmt.Errorf("unable to scan pk: %w", err)
+			}
+			return nil
+		}),
+	)
+
+	a.Equal(10, numOfRecords)
+}
+
+type testHashable []byte
+
+func (b testHashable) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.Message, b
+}
+
+func TestVotingKeysAreDeletedUponExpirationEvenWhenRecordIsnt(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	registry, dbfile := getRegistryImpl(t, false, true) // inMem=false, erasable=true
+	defer registryCloseTest(t, registry, dbfile)
+
+	keyDilution := 1
+	for i := 10; i < 20; i++ {
+		p := makeTestParticipation(a, i, 1, basics.Round(i), uint64(keyDilution))
+		id, err := registry.Insert(p)
+		a.NoError(err)
+		a.Equal(p.ID(), id)
+
+		err = registry.AppendKeys(id, p.StateProofSecrets.GetAllKeys())
+		a.NoError(err)
+	}
+
+	// ensure there are keys for signing.
+	for _, p := range registry.GetAll() {
+		record, err := registry.GetForRound(p.ParticipationID, basics.Round(10))
+		a.NoError(err)
+
+		ots := record.Voting.Sign(basics.OneTimeIDForRound(1, uint64(keyDilution)), testHashable{})
+		a.False(ots.MsgIsZero())
+	}
+
+	a.NoError(registry.Flush(defaultTimeout))
+
+	err := registry.DeleteExpired(basics.Round(50), config.Consensus[protocol.ConsensusCurrentVersion])
+	a.NoError(err)
+
+	a.NoError(registry.Flush(defaultTimeout))
+
+	var numOfRecords int
+
+	// count records
+	a.NoError(
+		registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			row := tx.QueryRow(`select count(*) from Keysets`)
+			err = row.Scan(&numOfRecords)
+			if err != nil {
+				return fmt.Errorf("unable to scan pk: %w", err)
+			}
+			return nil
+		}),
+	)
+
+	a.NotZero(numOfRecords)
+
+	// Verify one time sig output is NULL.
+	for _, p := range registry.GetAll() {
+		record, err := registry.GetForRound(p.ParticipationID, basics.Round(10))
+		a.NoError(err)
+
+		ots := record.Voting.Sign(basics.OneTimeIDForRound(1, uint64(keyDilution)), testHashable{})
+		a.True(ots.MsgIsZero())
 	}
 }

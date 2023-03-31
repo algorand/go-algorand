@@ -348,6 +348,7 @@ const (
 	insertRollingQuery        = `INSERT INTO Rolling (pk, voting) VALUES (?, ?)`
 	appendStateProofKeysQuery = `INSERT INTO StateProofKeys (pk, round, key) VALUES(?, ?, ?)`
 	deleteStateProofKeysQuery = `DELETE FROM StateProofKeys WHERE pk=? AND round<?`
+	countStateProofKeysQuery  = `SELECT COUNT(*) FROM StateProofKeys WHERE pk=?`
 
 	// SELECT pk FROM Keysets WHERE participationID = ?
 	selectPK      = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`
@@ -427,7 +428,7 @@ func (db *participationDB) DeleteStateProofKeys(id ParticipationID, round basics
 		return ErrParticipationIDNotFound
 	}
 
-	db.writeQueue <- makeOpRequest(&deleteStateProofKeysOp{
+	db.queueOpRequest(&deleteStateProofKeysOp{
 		ParticipationID: id,
 		round:           round,
 	})
@@ -505,7 +506,7 @@ func (db *participationDB) Insert(record Participation) (id ParticipationID, err
 		return id, ErrAlreadyInserted
 	}
 
-	db.writeQueue <- makeOpRequest(&insertOp{
+	db.queueOpRequest(&insertOp{
 		id:     id,
 		record: record,
 	})
@@ -560,7 +561,7 @@ func (db *participationDB) AppendKeys(id ParticipationID, keys StateProofKeys) e
 	}
 
 	// Update the DB asynchronously.
-	db.writeQueue <- makeOpRequest(&appendKeysOp{
+	db.queueOpRequest(&appendKeysOp{
 		id:   id,
 		keys: keys,
 	})
@@ -580,7 +581,7 @@ func (db *participationDB) Delete(id ParticipationID) error {
 	delete(db.cache, id)
 
 	// do the db part async
-	db.writeQueue <- makeOpRequest(&deleteOp{id})
+	db.queueOpRequest(&deleteOp{id})
 
 	return nil
 }
@@ -591,7 +592,13 @@ func (db *participationDB) DeleteExpired(latestRound basics.Round, agreementProt
 	var updated []ParticipationRecord
 
 	for _, v := range db.GetAll() {
-		if v.LastValid < latestRound { // this participation key is no longer valid; delete it
+		count, err := db.countStateproofKeys(v.ParticipationID)
+		if err != nil {
+			return err
+		}
+
+		// delete iff key no longer valid and no stateproof keys in DB.
+		if v.LastValid < latestRound && count == 0 {
 			// This could be optimized to delete everything with one query.
 			err := db.Delete(v.ParticipationID)
 			if err != nil {
@@ -934,7 +941,7 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 	}
 
 	if len(updated) != 0 {
-		db.writeQueue <- makeOpRequest(&registerOp{updated: updated})
+		db.queueOpRequest(&registerOp{updated: updated})
 
 		db.mutex.Lock()
 		for id, record := range updated {
@@ -1028,4 +1035,20 @@ func (db *participationDB) Close() {
 	case <-time.After(db.flushTimeout):
 		db.log.Warnf("Close(): timeout while waiting for WriteQueue to finish.")
 	}
+}
+
+func (db *participationDB) countStateproofKeys(id ParticipationID) (int, error) {
+	op := newCountStateproofKeysOp(id)
+	db.queueOpRequest(op)
+
+	result, ok := <-op.numStateproofKeysInDB
+	if !ok {
+		return 0, fmt.Errorf("countStateproofKeys: channel closed")
+	}
+
+	if result.err != nil {
+		return 0, result.err
+	}
+
+	return result.count, nil
 }
