@@ -134,17 +134,17 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 
 	if err != nil {
 		code = http.StatusInternalServerError
+		ctx.Log.Error(err)
 	} else if stat.StoppedAtUnsupportedRound {
 		code = http.StatusInternalServerError
 		err = fmt.Errorf("stopped at an unsupported round")
+		ctx.Log.Error(err)
 	} else if !isReadyFromStat(stat) {
 		code = http.StatusServiceUnavailable
 		err = fmt.Errorf("ready failed as the node is catching up")
-	}
-
-	if err != nil {
 		ctx.Log.Info(err)
 	}
+
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(nil)
 }
