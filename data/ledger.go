@@ -162,6 +162,12 @@ func (l *Ledger) LookupTxid(txid transactions.Txid, r basics.Round) (stxn transa
 	return transactions.SignedTxnWithAD{}, false, nil
 }
 
+// CommittedRound returns the latest committed round
+func (l *Ledger) CommittedRound() basics.Round {
+	latestCommitted, _ := l.LatestCommitted()
+	return latestCommitted
+}
+
 // LastRound returns the local latest round of the network i.e. the *last* written block
 func (l *Ledger) LastRound() basics.Round {
 	return l.Latest()

@@ -136,6 +136,9 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, make(chan catchup.PendingUnmatchedCertificate), node.lowPriorityCryptoVerificationPool)
 
 	// Initialize sync round to the next round so that nothing falls out of the cache on Start
+	// TODO: ZZZZZZZZ node.Ledger().trackers.dbRound ? - nope we'll want to use the following:
+	shouldBeTheSyncRound := node.ledger.CommittedRound()
+	shouldBeTheSyncRound += 0
 	err = node.SetSyncRound(uint64(node.Ledger().NextRound()))
 	if err != nil {
 		log.Errorf("unable to set sync round to Ledger.NextRound %v", err)
