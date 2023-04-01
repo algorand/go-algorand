@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -168,16 +169,17 @@ type voteBatchProcessor struct {
 	outChan chan<- interface{}
 }
 
-type voteEqVote struct {
-	v  *vote
-	ev *equivocationVote
+type unauthVMem struct {
+	uv  *unauthenticatedVote
+	uev *unauthenticatedEquivocationVote
+	m   *committee.Membership
 }
 
 type verificationTasksResults struct {
 	tasks       []*crypto.SigVerificationTask
 	taskIndexes []int
 	failed      []bool
-	vEqV        []voteEqVote
+	unauthV     []unauthVMem
 }
 
 func makeVerificationTasksResults(initialSize int) verificationTasksResults {
@@ -185,27 +187,33 @@ func makeVerificationTasksResults(initialSize int) verificationTasksResults {
 	vtr.tasks = make([]*crypto.SigVerificationTask, 0, initialSize)
 	vtr.taskIndexes = make([]int, 0, initialSize)
 	vtr.failed = make([]bool, 0, initialSize)
-	vtr.vEqV = make([]voteEqVote, 0, initialSize)
+	vtr.unauthV = make([]unauthVMem, 0, initialSize)
 	return vtr
 }
 
-func (vtr *verificationTasksResults) addEqVoteTasks(tasks []*crypto.SigVerificationTask, ev equivocationVote) {
+func (vtr *verificationTasksResults) addEqVoteTasks(tasks []*crypto.SigVerificationTask, m *committee.Membership, uv *unauthenticatedEquivocationVote) {
 	prev := len(vtr.tasks)
 	vtr.tasks = append(vtr.tasks, tasks...)
 
 	vtr.taskIndexes = append(vtr.taskIndexes, prev+len(tasks))
-	vtr.vEqV = append(vtr.vEqV, voteEqVote{ev: &ev})
+	vtr.unauthV = append(vtr.unauthV, unauthVMem{uev: uv, m: m})
 }
 
-func (vtr *verificationTasksResults) addVoteTask(task *crypto.SigVerificationTask, v vote) {
+func (vtr *verificationTasksResults) addVoteTask(task *crypto.SigVerificationTask, m *committee.Membership, uv *unauthenticatedVote) {
 	prev := len(vtr.tasks)
 	vtr.tasks = append(vtr.tasks, task)
 	vtr.taskIndexes = append(vtr.taskIndexes, prev+1)
-	vtr.vEqV = append(vtr.vEqV, voteEqVote{v: &v})
+	vtr.unauthV = append(vtr.unauthV, unauthVMem{uv: uv, m: m})
 }
 
-func (vtr *verificationTasksResults) addResults(failed []bool) {
-	vtr.failed = failed
+func authenticateCred(cred *committee.UnauthenticatedCredential, round round, l LedgerReader,
+	m *committee.Membership) (c *committee.Credential, err error) {
+	proto, err := l.ConsensusParams(ParamsRound(round))
+	if err != nil {
+		return nil, fmt.Errorf("unauthenticatedVote.verify: could not get consensus params for round %d: %v", ParamsRound(round), err)
+	}
+	cr, err := cred.Verify(proto, *m)
+	return &cr, err
 }
 
 func (vtr *verificationTasksResults) getItemResult(req *asyncVerifyVoteRequest, itemIndex int) (*vote, *equivocationVote, error) {
@@ -216,6 +224,7 @@ func (vtr *verificationTasksResults) getItemResult(req *asyncVerifyVoteRequest, 
 	i1 := vtr.taskIndexes[itemIndex]
 	isEV := i1-i0 == 2
 
+	// is eq vote
 	if isEV {
 		pairIndexes := []int{i0, i0 + 1}
 		for i := range []int{0, 1} {
@@ -224,24 +233,27 @@ func (vtr *verificationTasksResults) getItemResult(req *asyncVerifyVoteRequest, 
 			}
 			rv := vtr.tasks[pairIndexes[i]].Message.(rawVote)
 			voteID := vtr.tasks[pairIndexes[i]].V
-			uv := unauthenticatedVote{
-				R:    rv,
-				Cred: req.uev.Cred,
-				Sig:  req.uev.Sigs[i],
-			}
-			return nil, vtr.vEqV[itemIndex].ev, fmt.Errorf("unauthenticatedEquivocationVote.verify: failed to verify pair %d: %w", i,
-				fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, uv))
+			return nil, nil, fmt.Errorf("unauthenticatedEquivocationVote.verify: failed to verify pair %d: %w", i,
+				fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, vtr.unauthV[itemIndex].uev))
 		}
-		return nil, vtr.vEqV[itemIndex].ev, nil
+		// here, the signatures of both votes are verified.
+		uev := vtr.unauthV[itemIndex].uev
+		ev, err := uev.getVoteFrom(req.l, vtr.unauthV[itemIndex].m)
+		return nil, ev, err
 	}
+
+	// is Vote
 	if vtr.failed[i0] {
 		rv := vtr.tasks[i0].Message.(rawVote)
 		voteID := vtr.tasks[i0].V
-		return vtr.vEqV[itemIndex].v, nil, fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, req.uv)
+		return nil, nil, fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, req.uv)
 	}
-	return vtr.vEqV[itemIndex].v, nil, nil
-}
 
+	// Validate the cred after all other checks are passed.
+	uv := vtr.unauthV[itemIndex].uv
+	v, err := uv.getVoteFrom(req.l, vtr.unauthV[itemIndex].m)
+	return v, nil, err
+}
 func (vbp *voteBatchProcessor) ProcessBatch(jobs []execpool.InputJob) {
 	verificationTasks := makeVerificationTasksResults(len(jobs))
 	checkedRequests := make([]*asyncVerifyVoteRequest, 0, len(jobs))
@@ -252,34 +264,42 @@ func (vbp *voteBatchProcessor) ProcessBatch(jobs []execpool.InputJob) {
 			// request cancelled, return an error response on the channel
 			vbp.Cleanup(jobs, req.ctx.Err())
 		default:
-			// if this is an eq vote
-			if req.uev != nil {
-				vts, ev, err := req.uev.getEquivocVerificationTasks(req.l)
-				if err != nil {
-					var e *LedgerDroppedRoundError
-					cancelled := errors.As(err, &e)
-					vbp.outChan <- &asyncVerifyVoteResponse{index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
-				} else {
-					checkedRequests = append(checkedRequests, req)
-					verificationTasks.addEqVoteTasks(vts, ev)
-				}
+		}
+		// if this is an eq vote
+		if req.uev != nil {
+			vts, m, err := req.uev.getEquivocVerificationTasks(req.l)
+			if err != nil {
+				var e *LedgerDroppedRoundError
+				cancelled := errors.As(err, &e)
+				vbp.outChan <- &asyncVerifyVoteResponse{index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
+			} else {
+				checkedRequests = append(checkedRequests, req)
+				verificationTasks.addEqVoteTasks(vts, m, req.uev)
 			}
-			// if this is a vote
-			if req.uv != nil {
-				vt, v, err := req.uv.getVerificationTask(req.l)
-				if err != nil {
-					var e *LedgerDroppedRoundError
-					cancelled := errors.As(err, &e)
-					vbp.outChan <- &asyncVerifyVoteResponse{index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
-				} else {
-					checkedRequests = append(checkedRequests, req)
-					verificationTasks.addVoteTask(vt, v)
-				}
+		}
+		// if this is a vote
+		if req.uv != nil {
+			m, err := membership(req.l, req.uv.R.Sender, req.uv.R.Round, req.uv.R.Period, req.uv.R.Step)
+			if err != nil {
+				err2 := fmt.Errorf("voteBatchProcessor: could not get membership parameters: %w", err)
+				var e *LedgerDroppedRoundError
+				cancelled := errors.As(err, &e)
+				vbp.outChan <- &asyncVerifyVoteResponse{index: req.index, message: req.message, err: err2, cancelled: cancelled, req: req}
+				continue
+			}
+			vt, err := req.uv.getVerificationTask(req.l, &m)
+			if err != nil {
+				var e *LedgerDroppedRoundError
+				cancelled := errors.As(err, &e)
+				vbp.outChan <- &asyncVerifyVoteResponse{index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
+			} else {
+				checkedRequests = append(checkedRequests, req)
+				verificationTasks.addVoteTask(vt, &m, req.uv)
 			}
 		}
 	}
 	failed := crypto.BatchVerifyOneTimeSignatures(verificationTasks.tasks)
-	verificationTasks.addResults(failed)
+	verificationTasks.failed = failed
 	for i := range checkedRequests {
 		req := checkedRequests[i]
 		v, ev, err := verificationTasks.getItemResult(req, i)
@@ -288,9 +308,10 @@ func (vbp *voteBatchProcessor) ProcessBatch(jobs []execpool.InputJob) {
 		if v != nil {
 			req.message.Vote = *v
 			vbp.outChan <- &asyncVerifyVoteResponse{v: *v, index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
-		}
-		if ev != nil {
+		} else if ev != nil {
 			vbp.outChan <- &asyncVerifyVoteResponse{ev: *ev, index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
+		} else {
+			vbp.outChan <- &asyncVerifyVoteResponse{index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
 		}
 	}
 }

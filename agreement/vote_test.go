@@ -37,42 +37,61 @@ func makeVoteTesting(addr basics.Address, vrfSecs *crypto.VRFSecrets, otSecs cry
 	var proposal proposalValue
 	proposal.BlockDigest = digest
 	rv := rawVote{Sender: addr, Round: round, Period: period, Step: step, Proposal: proposal}
-	v, fatalerr := makeVote(rv, otSecs, vrfSecs, ledger)
+	uv, fatalerr := makeVote(rv, otSecs, vrfSecs, ledger)
 	if fatalerr != nil {
 		panic(fatalerr)
 	}
-	vt, vote, err := v.getVerificationTask(ledger)
+	m, err := membership(ledger, addr, round, period, step)
+	if err != nil {
+		return vote{}, err
+	}
+	vt, err := uv.getVerificationTask(ledger, &m)
 	if err == nil {
 		failed := crypto.BatchVerifyOneTimeSignatures([]*crypto.SigVerificationTask{vt})
 		if failed[0] {
 			err = fmt.Errorf("Test Signature verification failed")
 		}
 	}
-	return vote, err
+	cred, err := authenticateCred(&uv.Cred, round, ledger, &m)
+	v := vote{R: uv.R, Cred: *cred, Sig: uv.Sig}
+	return v, err
 }
 
 func verifySigVote(uv unauthenticatedVote, l LedgerReader) (vote, error) {
-	vt, av, err := uv.getVerificationTask(l)
+	m, err := membership(l, uv.R.Sender, uv.R.Round, uv.R.Period, uv.R.Step)
 	if err != nil {
-		return av, err
+		return vote{}, err
+	}
+	vt, err := uv.getVerificationTask(l, &m)
+	if err != nil {
+		return vote{}, err
 	}
 	failed := crypto.BatchVerifyOneTimeSignatures([]*crypto.SigVerificationTask{vt})
 	if failed[0] {
 		err = fmt.Errorf("Test: vote signature verification failed")
+		return vote{}, err
 	}
-	return av, err
+	v, err := uv.getVoteFrom(l, &m)
+	if err != nil {
+		return vote{}, err
+	}
+	return *v, err
 }
 
 func verifyEqSigVote(uev unauthenticatedEquivocationVote, l LedgerReader) (equivocationVote, error) {
-	vts, av, err := uev.getEquivocVerificationTasks(l)
+	vts, m, err := uev.getEquivocVerificationTasks(l)
 	if err != nil {
-		return av, err
+		return equivocationVote{}, err
 	}
 	failed := crypto.BatchVerifyOneTimeSignatures(vts)
 	if failed[0] || failed[1] {
 		err = fmt.Errorf("Test: equivocation vote signature verification failed")
 	}
-	return av, err
+	ev, err := uev.getVoteFrom(l, m)
+	if err != nil {
+		return equivocationVote{}, err
+	}
+	return *ev, err
 }
 
 func TestVoteValidation(t *testing.T) {

@@ -161,7 +161,18 @@ func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 					Sigs:      [2]crypto.OneTimeSignature{vote0.Sig, vote1.Sig},
 				}
 
-				vts, ev, err := unauthenticatedEquivocationVote.getEquivocVerificationTasks(ledger)
+				vts, m, err := unauthenticatedEquivocationVote.getEquivocVerificationTasks(ledger)
+				require.NoError(t, err)
+				authCred, err := authenticateCred(&uv1.Cred, unauthenticatedEquivocationVote.Round, ledger, m)
+				ev := equivocationVote{
+					Sender:    address,
+					Round:     round,
+					Period:    period,
+					Step:      step,
+					Cred:      *authCred,
+					Proposals: unauthenticatedEquivocationVote.Proposals,
+					Sigs:      unauthenticatedEquivocationVote.Sigs,
+				}
 				failed := crypto.BatchVerifyOneTimeSignatures(vts)
 				require.NoError(t, err)
 				require.False(t, failed[0])
@@ -230,12 +241,22 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 					Sigs:      [2]crypto.OneTimeSignature{vote0.Sig, vote1.Sig},
 				}
 
-				vts, ev, err := unauthenticatedEquivocationVote.getEquivocVerificationTasks(ledger)
+				vts, m, err := unauthenticatedEquivocationVote.getEquivocVerificationTasks(ledger)
 				failed := crypto.BatchVerifyOneTimeSignatures(vts)
 				require.NoError(t, err)
 				require.False(t, failed[0])
 				require.False(t, failed[1])
 
+				authCred, err := authenticateCred(&uv1.Cred, unauthenticatedEquivocationVote.Round, ledger, m)
+				ev := equivocationVote{
+					Sender:    address,
+					Round:     round,
+					Period:    period,
+					Step:      step,
+					Cred:      *authCred,
+					Proposals: unauthenticatedEquivocationVote.Proposals,
+					Sigs:      unauthenticatedEquivocationVote.Sigs,
+				}
 				equivocationVotes = append(equivocationVotes, ev)
 			}
 		}
@@ -342,12 +363,22 @@ func TestBundleCertificationWithEquivocationVotes(t *testing.T) {
 					Sigs:      [2]crypto.OneTimeSignature{vote0.Sig, vote1.Sig},
 				}
 
-				vts, ev, err := unauthenticatedEquivocationVote.getEquivocVerificationTasks(ledger)
+				vts, m, err := unauthenticatedEquivocationVote.getEquivocVerificationTasks(ledger)
 				failed := crypto.BatchVerifyOneTimeSignatures(vts)
 				require.NoError(t, err)
 				require.False(t, failed[0])
 				require.False(t, failed[1])
 
+				authCred, err := authenticateCred(&uv1.Cred, unauthenticatedEquivocationVote.Round, ledger, m)
+				ev := equivocationVote{
+					Sender:    address,
+					Round:     round,
+					Period:    period,
+					Step:      step,
+					Cred:      *authCred,
+					Proposals: unauthenticatedEquivocationVote.Proposals,
+					Sigs:      unauthenticatedEquivocationVote.Sigs,
+				}
 				equivocationVotes = append(equivocationVotes, ev)
 			}
 		}
