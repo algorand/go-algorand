@@ -61,40 +61,82 @@ func TestVerificationAgainstFullExecutionPool(t *testing.T) {
 }
 
 // Test async vote verifier
+func TestAsyncVerificationVotes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	errProb := float32(0.5)
+	sendReceiveVoteVerifications(false, errProb, 200, 0, t, nil)
+}
+
+func TestAsyncVerificationEqVotes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	errProb := float32(0.5)
+	sendReceiveVoteVerifications(false, errProb, 0, 200, t, nil)
+}
+
 func TestAsyncVerification(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	errProb := float32(0.5)
-	sendReceiveVoteVerifications(false, errProb, t, nil)
+	sendReceiveVoteVerifications(false, errProb, 200, 200, t, nil)
 }
 
 func BenchmarkAsyncVerification(b *testing.B) {
 	errProbs := []float32{0.0, 0.2, 0.8}
 	for _, errProb := range errProbs {
 		b.Run(fmt.Sprintf("errProb_%.3f_any_err", errProb), func(b *testing.B) {
-			sendReceiveVoteVerifications(false, errProb, nil, b)
+			sendReceiveVoteVerifications(false, errProb, b.N, b.N, nil, b)
 		})
 		if errProb > float32(0.0) {
 			b.Run(fmt.Sprintf("errProb_%.3f_sig_err_only", errProb), func(b *testing.B) {
-				sendReceiveVoteVerifications(true, errProb, nil, b)
+				sendReceiveVoteVerifications(true, errProb, b.N, b.N, nil, b)
 			})
 		}
 	}
 }
 
-func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, t *testing.T, b *testing.B) {
+func BenchmarkAsyncVerificationVotes(b *testing.B) {
+	errProbs := []float32{0.0, 0.2, 0.8}
+	for _, errProb := range errProbs {
+		b.Run(fmt.Sprintf("errProb_%.3f_any_err", errProb), func(b *testing.B) {
+			sendReceiveVoteVerifications(false, errProb, b.N, 0, nil, b)
+		})
+		if errProb > float32(0.0) {
+			b.Run(fmt.Sprintf("errProb_%.3f_sig_err_only", errProb), func(b *testing.B) {
+				sendReceiveVoteVerifications(true, errProb, b.N, 0, nil, b)
+			})
+		}
+	}
+}
+
+func BenchmarkAsyncVerificationEqVotes(b *testing.B) {
+	errProbs := []float32{0.0, 0.2, 0.8}
+	for _, errProb := range errProbs {
+		b.Run(fmt.Sprintf("errProb_%.3f_any_err", errProb), func(b *testing.B) {
+			sendReceiveVoteVerifications(false, errProb, 0, b.N, nil, b)
+		})
+		if errProb > float32(0.0) {
+			b.Run(fmt.Sprintf("errProb_%.3f_sig_err_only", errProb), func(b *testing.B) {
+				sendReceiveVoteVerifications(true, errProb, 0, b.N, nil, b)
+			})
+		}
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, count, eqCount int, t *testing.T, b *testing.B) {
 	voteVerifier := MakeAsyncVoteVerifier(nil)
 	defer voteVerifier.Quit()
 
 	outChan := make(chan asyncVerifyVoteResponse, 1)
-
-	count := 200
-	gcount := 200
-	if b != nil {
-		count = b.N
-	}
+	gCount := min(200, count)
+	gEqCount := min(200, eqCount)
 
 	errChan := make(chan error)
-	ledger, votes, eqVotes, errsV, errsEv := generateTestVotes(badSigOnly, errChan, gcount, errProb)
+	ledger, votes, eqVotes, errsV, errsEv := generateTestVotes(badSigOnly, errChan, gCount, gEqCount, errProb)
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -116,11 +158,10 @@ func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, t *testing.T
 			if (expectedError == nil && res.err != nil) || (expectedError != nil && res.err == nil) {
 				errChan <- fmt.Errorf("expected %v got %v", expectedError, res.err)
 			}
-			if c == 2*count {
+			if c == count+eqCount {
 				break
 			}
 		}
-		//		cancel()
 		close(errChan)
 	}()
 	// stream the votes to the verifier
@@ -128,13 +169,15 @@ func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, t *testing.T
 		defer wg.Done()
 		vi := 0
 		evi := 0
-		for c := 0; c < 2*count; c++ {
-			if rand.Float32() > 0.5 {
-				uv := votes[vi%gcount]
+		for c := 0; c < count+eqCount; c++ {
+			// pick a vote if there are vots, and if either there are no eqVotes or the relative prob
+			turnVote := len(votes) > 0 && (len(eqVotes) == 0 || rand.Float32() < (float32(count)/float32(count+eqCount)))
+			if turnVote {
+				uv := votes[vi%gCount]
 				vi++
 				voteVerifier.verifyVote(context.Background(), ledger, *uv.uv, uint64(uv.id), message{}, outChan)
 			} else {
-				uev := eqVotes[evi%gcount]
+				uev := eqVotes[evi%gEqCount]
 				evi++
 				voteVerifier.verifyEqVote(context.Background(), ledger, *uev.uev, uint64(uev.id), message{}, outChan)
 			}
@@ -163,13 +206,13 @@ type unEqVoteTest struct {
 	id  int
 }
 
-func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count int, errProb float32) (ledger Ledger,
+func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount int, errProb float32) (ledger Ledger,
 	votes []*unVoteTest, eqVotes []*unEqVoteTest, errsV, errsEv map[int]error) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)
 	votes = make([]*unVoteTest, count)
-	eqVotes = make([]*unEqVoteTest, count)
+	eqVotes = make([]*unEqVoteTest, eqCount)
 	errsV = make(map[int]error)
 	errsEv = make(map[int]error)
 	wg := sync.WaitGroup{}
@@ -259,7 +302,7 @@ func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count int, errPro
 
 	go func() {
 		defer wg.Done()
-		for c := 0; c < count; c++ {
+		for c := 0; c < eqCount; c++ {
 			var proposal1 proposalValue
 			proposal1.BlockDigest = randomBlockHash()
 
