@@ -3236,19 +3236,29 @@ func TestForeignAppAccountsImmutable(t *testing.T) {
 		appA := txntest.Txn{
 			Type:   "appl",
 			Sender: addrs[0],
+			ApprovalProgram: main(`
+itxn_begin
+int appl;               itxn_field TypeEnum
+txn Applications 1;     itxn_field ApplicationID
+int OptIn;              itxn_field OnCompletion
+itxn_submit
+`),
 		}
 
 		appB := txntest.Txn{
 			Type:   "appl",
 			Sender: addrs[0],
 			ApprovalProgram: main(`
+txn NumApplications				// allow "bare" optin
+bz end
 txn Applications 1
 app_params_get AppAddress
+assert
 byte "X"
 byte "ABC"
 app_local_put
-int 1
 `),
+			LocalStateSchema: basics.StateSchema{NumByteSlice: 1},
 		}
 
 		vb := dl.fullBlock(&appA, &appB)
@@ -3264,6 +3274,13 @@ int 1
 		fund0 := fund1
 		fund0.Receiver = index0.Address()
 
+		optin := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[2],
+			ApplicationID: index0,
+			ForeignApps:   []basics.AppIndex{index1},
+		}
+
 		callTx := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[2],
@@ -3271,9 +3288,14 @@ int 1
 			ForeignApps:   []basics.AppIndex{index0},
 		}
 
-		dl.beginBlock()
-		dl.txgroup("invalid Account reference", &fund0, &fund1, &callTx)
-		dl.endBlock()
+		var problem string
+		switch {
+		case ver < 34: // before v7, app accounts not available at all
+			problem = "invalid Account reference " + index0.Address().String()
+		case ver < 37: // as of v7, it's the mutation that's the problem
+			problem = "invalid Account reference for mutation"
+		}
+		dl.txgroup(problem, &fund0, &fund1, &optin, &callTx)
 	})
 }
 
@@ -3511,14 +3533,14 @@ func TestRewardsInAD(t *testing.T) {
 	})
 }
 
-// TestDeleteNonExistantKeys checks if the EvalDeltas from deleting missing keys are correct
-func TestDeleteNonExistantKeys(t *testing.T) {
+// TestDeleteNonExistentKeys checks if the EvalDeltas from deleting missing keys are correct
+func TestDeleteNonExistentKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// AVM v2 (apps)
-	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+	// AVM v4 start, so we can use `txn Sender`
+	ledgertesting.TestConsensusRange(t, 28, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
@@ -3530,7 +3552,7 @@ func TestDeleteNonExistantKeys(t *testing.T) {
 			ApprovalProgram: main(`
 byte "missing_global"
 app_global_del
-int 0
+txn Sender
 byte "missing_local"
 app_local_del
 `),
