@@ -137,19 +137,19 @@ func (uv *unauthenticatedVote) getVoteFrom(l LedgerReader, m *committee.Membersh
 	return &v, nil
 }
 
-func (uev *unauthenticatedEquivocationVote) getVoteFrom(l LedgerReader, m *committee.Membership) (*equivocationVote, error) {
-	cred, err := authenticateCred(&uev.Cred, uev.Round, l, m)
+func (pair *unauthenticatedEquivocationVote) authenticateCred(l LedgerReader, m *committee.Membership) (*equivocationVote, error) {
+	cred, err := authenticateCred(&pair.Cred, pair.Round, l, m)
 	if err != nil {
 		return nil, fmt.Errorf("unauthenticatedVote.verify: got a vote, but sender was not selected: %v", err)
 	}
 	ev := equivocationVote{
-		Sender:    uev.Sender,
-		Round:     uev.Round,
-		Period:    uev.Period,
-		Step:      uev.Step,
+		Sender:    pair.Sender,
+		Round:     pair.Round,
+		Period:    pair.Period,
+		Step:      pair.Step,
 		Cred:      *cred,
-		Proposals: uev.Proposals,
-		Sigs:      uev.Sigs,
+		Proposals: pair.Proposals,
+		Sigs:      pair.Sigs,
 	}
 	return &ev, nil
 }
@@ -198,7 +198,7 @@ func (v vote) u() unauthenticatedVote {
 	return unauthenticatedVote{R: v.R, Cred: v.Cred.UnauthenticatedCredential, Sig: v.Sig}
 }
 
-func (pair unauthenticatedEquivocationVote) getEquivocVerificationTasks(l LedgerReader) ([]*crypto.SigVerificationTask, *committee.Membership, error) {
+func (pair *unauthenticatedEquivocationVote) getEquivocVerificationTasks(l LedgerReader) ([]*crypto.SigVerificationTask, *committee.Membership, error) {
 	if pair.Proposals[0] == pair.Proposals[1] {
 		return nil, nil, fmt.Errorf("isEquivocationPair: not an equivocation pair: identical vote (block hash %v == %v)", pair.Proposals[0], pair.Proposals[1])
 	}

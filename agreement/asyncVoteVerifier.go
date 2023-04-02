@@ -238,7 +238,7 @@ func (vtr *verificationTasksResults) getItemResult(req *asyncVerifyVoteRequest, 
 		}
 		// here, the signatures of both votes are verified.
 		uev := vtr.unauthV[itemIndex].uev
-		ev, err := uev.getVoteFrom(req.l, vtr.unauthV[itemIndex].m)
+		ev, err := uev.authenticateCred(req.l, vtr.unauthV[itemIndex].m)
 		return nil, ev, err
 	}
 
