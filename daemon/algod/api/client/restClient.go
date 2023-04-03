@@ -683,6 +683,14 @@ func (client RestClient) SimulateRawTransaction(data []byte) (response model.Sim
 	return
 }
 
+// RawSimulateRawTransaction gets the raw transaction or raw transaction group, and returns relevant simulation results as raw bytes.
+func (client RestClient) RawSimulateRawTransaction(data []byte) (response []byte, err error) {
+	var blob Blob
+	err = client.submitForm(&blob, "/v2/transactions/simulate", rawFormat{Format: "msgpack"}, data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
+	response = blob
+	return
+}
+
 // StateProofs gets a state proof that covers a given round
 func (client RestClient) StateProofs(round uint64) (response model.StateProofResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/stateproofs/%d", round), nil)
