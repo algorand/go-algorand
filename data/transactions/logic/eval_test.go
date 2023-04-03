@@ -4174,13 +4174,13 @@ func TestArgType(t *testing.T) {
 	t.Parallel()
 
 	var sv stackValue
-	require.Equal(t, avmUint64, sv.argType())
+	require.Equal(t, avmUint64, sv.avmType())
 	sv.Bytes = []byte("")
-	require.Equal(t, avmBytes, sv.argType())
+	require.Equal(t, avmBytes, sv.avmType())
 	sv.Uint = 1
-	require.Equal(t, avmBytes, sv.argType())
+	require.Equal(t, avmBytes, sv.avmType())
 	sv.Bytes = nil
-	require.Equal(t, avmUint64, sv.argType())
+	require.Equal(t, avmUint64, sv.avmType())
 }
 
 func TestApplicationsDisallowOldTeal(t *testing.T) {

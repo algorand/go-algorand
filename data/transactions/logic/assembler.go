@@ -1336,7 +1336,11 @@ func typeSelect(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 	top := len(pgm.stack) - 1
 	if top >= 2 {
 		if pgm.stack[top-1].AVMType == pgm.stack[top-2].AVMType {
-			return nil, StackTypes{pgm.stack[top-1]}, nil
+			unioned, err := pgm.stack[top-1].union(pgm.stack[top-2])
+			if err != nil {
+				return nil, nil, err
+			}
+			return nil, StackTypes{unioned}, nil
 		}
 	}
 	return nil, nil, nil
@@ -1693,16 +1697,8 @@ func (le lineError) Unwrap() error {
 	return le.Err
 }
 
-func typecheck(expected, got avmType) bool {
-	// Some ops push 'any' and we wait for run time to see what it is.
-	// Some of those 'any' are based on fields that we _could_ know now but haven't written a more detailed system of typecheck for (yet).
-	if expected == avmAny && got == avmNone { // Any is lenient, but stack can't be empty
-		return false
-	}
-	if (expected == avmAny) || (got == avmAny) {
-		return true
-	}
-	return expected == got
+func typecheck(expected, got StackType) bool {
+	return got.AssignableTo(expected)
 }
 
 // newline not included since handled in scanner
@@ -1827,7 +1823,7 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 			} else {
 				ops.trace(", %s", argType)
 			}
-			if !typecheck(argType.AVMType, stype.AVMType) {
+			if !typecheck(argType, stype) {
 				ops.typeErrorf("%s arg %d wanted type %s got %s",
 					strings.Join(instruction, " "), i, argType, stype)
 			}

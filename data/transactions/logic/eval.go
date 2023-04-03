@@ -82,11 +82,18 @@ type stackValue struct {
 	Bytes []byte
 }
 
-func (sv stackValue) argType() avmType {
+func (sv stackValue) avmType() avmType {
 	if sv.Bytes != nil {
 		return avmBytes
 	}
 	return avmUint64
+}
+
+func (sv stackValue) stackType() StackType {
+	if sv.Bytes != nil {
+		return NewStackType(sv.avmType(), static(uint64(len(sv.Bytes))))
+	}
+	return NewStackType(sv.avmType(), static(sv.Uint))
 }
 
 func (sv stackValue) typeName() string {
@@ -154,7 +161,7 @@ func (sv stackValue) string(limit int) (string, error) {
 }
 
 func (sv stackValue) toTealValue() (tv basics.TealValue) {
-	if sv.argType() == avmBytes {
+	if sv.avmType() == avmBytes {
 		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(sv.Bytes)}
 	}
 	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
@@ -664,16 +671,18 @@ var (
 
 	// StackBoolean constrains the int to 1 or 0, representing True or False
 	StackBoolean = NewStackType(avmUint64, bound(0, 1), "bool")
-	// StackHash represents output from a hash function or a field that returns a hash
-	StackHash = NewStackType(avmBytes, static(32), "hash")
-	// StackAddress represents a public key or address for an account
+	// StackAddress represents an address
 	StackAddress = NewStackType(avmBytes, static(32), "addr")
+	// StackBytes32 represents a bytestring that should have exactly 32 bytes
+	StackBytes32 = NewStackType(avmBytes, static(32), "[32]byte")
 	// StackBigInt represents a bytestring that should be treated like an int
 	StackBigInt = NewStackType(avmBytes, bound(0, maxByteMathSize), "bigint")
 	// StackMethodSelector represents a bytestring that should be treated like a method selector
 	StackMethodSelector = NewStackType(avmBytes, static(4), "method")
 	// StackStorageKey represents a bytestring that can be used as a key to some storage (global/local/box)
 	StackStorageKey = NewStackType(avmBytes, bound(0, 64), "key")
+	// StackBoxKey represents a bytestring that can be used as a key to a box
+	StackBoxKey = NewStackType(avmBytes, bound(1, 64), "bkey")
 
 	// AllStackTypes is a list of all the stack types we recognize
 	// so that we can iterate over them in doc prep
@@ -683,11 +692,11 @@ var (
 		StackAny,
 		StackNone,
 		StackBoolean,
-		StackHash,
-		StackAddress,
+		StackBytes32,
 		StackBigInt,
 		StackMethodSelector,
 		StackStorageKey,
+		StackBoxKey,
 	}
 )
 
@@ -724,6 +733,37 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 	}
 
 	return st
+}
+
+func (st StackType) union(other ...StackType) (StackType, error) {
+	if len(other) == 0 {
+		return st, nil
+	}
+
+	for _, o := range other {
+		if !st.AssignableTo(o) {
+			return StackType{}, fmt.Errorf("cannot union %s and %s", st.Name, o.Name)
+		}
+
+		switch st.AVMType {
+		case avmUint64:
+			if o.ValueBound[0] < st.ValueBound[0] {
+				st.ValueBound[0] = o.ValueBound[0]
+			}
+			if o.ValueBound[1] > st.ValueBound[1] {
+				st.ValueBound[1] = o.ValueBound[1]
+			}
+		case avmBytes:
+			if o.LengthBound[0] < st.LengthBound[0] {
+				st.LengthBound[0] = o.LengthBound[0]
+			}
+			if o.LengthBound[1] > st.LengthBound[1] {
+				st.LengthBound[1] = o.LengthBound[1]
+			}
+		}
+	}
+
+	return st, nil
 }
 
 func (st StackType) narrowed(bounds [2]uint64) StackType {
@@ -784,10 +824,9 @@ func (st StackType) AssignableTo(other StackType) bool {
 		return !(smin == smax && omin == omax && smin != omin)
 
 	case avmUint64:
-		// No static values at compile
-		// time so hard to do any typechecks for assembler,
-		// dont use this for avm runtime
-		return true
+		smin, smax := st.ValueBound[0], st.ValueBound[1]
+		omin, omax := other.ValueBound[0], other.ValueBound[1]
+		return !(smin == smax && omin == omax && smin != omin)
 	default:
 		panic("no stack type match in AssignableTo check")
 	}
@@ -847,14 +886,12 @@ func parseStackTypes(spec string) StackTypes {
 			types[i] = StackUint64
 		case 'x':
 			types[i] = StackNone
-		case 'A':
-			types[i] = StackAddress
 		case 'N':
 			types[i] = StackBigInt
 		case 'T':
 			types[i] = StackBoolean
 		case 'H':
-			types[i] = StackHash
+			types[i] = StackBytes32
 		case 'M':
 			types[i] = StackMethodSelector
 		case 'K':
@@ -1280,7 +1317,7 @@ func (cx *EvalContext) step() error {
 	}
 	first := len(cx.stack) - len(spec.Arg.Types)
 	for i, argType := range spec.Arg.Types {
-		if !opCompat(argType.AVMType, cx.stack[first+i].argType()) {
+		if !opCompat(argType.AVMType, cx.stack[first+i].avmType()) {
 			return fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType, cx.stack[first+i].typeName())
 		}
 	}
@@ -1328,7 +1365,7 @@ func (cx *EvalContext) step() error {
 		}
 		first = postheight - len(spec.Return.Types)
 		for i, argType := range spec.Return.Types {
-			stackType := cx.stack[first+i].argType()
+			stackType := cx.stack[first+i].avmType()
 			if !opCompat(argType.AVMType, stackType) {
 				if spec.AlwaysExits() { // We test in the loop because it's the uncommon case.
 					break
@@ -1725,8 +1762,8 @@ func opOr(cx *EvalContext) error {
 func opEq(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
-	ta := cx.stack[prev].argType()
-	tb := cx.stack[last].argType()
+	ta := cx.stack[prev].avmType()
+	tb := cx.stack[last].avmType()
 	if ta != tb {
 		return fmt.Errorf("cannot compare (%s to %s)", cx.stack[prev].typeName(), cx.stack[last].typeName())
 	}
@@ -1767,7 +1804,7 @@ func opItob(cx *EvalContext) error {
 	ibytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(ibytes, cx.stack[last].Uint)
 	// cx.stack[last].Uint is not cleared out as optimization
-	// stackValue.argType() checks Bytes field first
+	// stackValue.avmType() checks Bytes field first
 	cx.stack[last].Bytes = ibytes
 	return nil
 }
@@ -1870,7 +1907,7 @@ func opSqrt(cx *EvalContext) error {
 
 func opBitLen(cx *EvalContext) error {
 	last := len(cx.stack) - 1
-	if cx.stack[last].argType() == avmUint64 {
+	if cx.stack[last].avmType() == avmUint64 {
 		cx.stack[last].Uint = uint64(bits.Len64(cx.stack[last].Uint))
 		return nil
 	}
@@ -2524,14 +2561,14 @@ func opMatch(cx *EvalContext) error {
 
 	matchedIdx := n
 	for i, stackArg := range matchList {
-		if stackArg.argType() != matchVal.argType() {
+		if stackArg.avmType() != matchVal.avmType() {
 			continue
 		}
 
-		if matchVal.argType() == avmBytes && bytes.Equal(matchVal.Bytes, stackArg.Bytes) {
+		if matchVal.avmType() == avmBytes && bytes.Equal(matchVal.Bytes, stackArg.Bytes) {
 			matchedIdx = i
 			break
-		} else if matchVal.argType() == avmUint64 && matchVal.Uint == stackArg.Uint {
+		} else if matchVal.avmType() == avmUint64 && matchVal.Uint == stackArg.Uint {
 			matchedIdx = i
 			break
 		}
@@ -2669,8 +2706,8 @@ func (cx *EvalContext) assetHoldingToValue(holding *basics.AssetHolding, fs asse
 		return sv, fmt.Errorf("invalid asset_holding_get field %d", fs.field)
 	}
 
-	if fs.ftype.AVMType != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.ftype.AVMType != sv.avmType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 	return sv, nil
 }
@@ -2705,8 +2742,8 @@ func (cx *EvalContext) assetParamsToValue(params *basics.AssetParams, creator ba
 		return sv, fmt.Errorf("invalid asset_params_get field %d", fs.field)
 	}
 
-	if fs.ftype.AVMType != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.ftype.AVMType != sv.avmType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 	return sv, nil
 }
@@ -2732,8 +2769,8 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 		return sv, fmt.Errorf("invalid app_params_get field %d", fs.field)
 	}
 
-	if fs.ftype.AVMType != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.ftype.AVMType != sv.avmType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 	return sv, nil
 }
@@ -3066,8 +3103,8 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		return sv, fmt.Errorf("invalid txn field %s", fs.field)
 	}
 
-	if fs.ftype.AVMType != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.ftype.AVMType != sv.avmType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 	return sv, nil
 }
@@ -3514,8 +3551,8 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		err = fmt.Errorf("invalid global field %d", fs.field)
 	}
 
-	if fs.ftype.AVMType != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.ftype.AVMType != sv.avmType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 
 	return sv, err
@@ -3943,7 +3980,7 @@ func opGetBit(cx *EvalContext) error {
 	target := cx.stack[prev]
 
 	var bit uint64
-	if target.argType() == avmUint64 {
+	if target.avmType() == avmUint64 {
 		if idx > 63 {
 			return errors.New("getbit index > 63 with with Uint")
 		}
@@ -3985,7 +4022,7 @@ func opSetBit(cx *EvalContext) error {
 		return errors.New("setbit value > 1")
 	}
 
-	if target.argType() == avmUint64 {
+	if target.avmType() == avmUint64 {
 		if idx > 63 {
 			return errors.New("setbit index > 63 with Uint")
 		}
@@ -4206,7 +4243,7 @@ func opExtract64Bits(cx *EvalContext) error {
 // than by index into txn.Accounts.
 
 func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uint64, error) {
-	if account.argType() == avmUint64 {
+	if account.avmType() == avmUint64 {
 		addr, err := cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
 		return addr, account.Uint, err
 	}
@@ -4919,7 +4956,7 @@ func opItxnNext(cx *EvalContext) error {
 // that don't need (or want!) to allow low numbers to represent the account at
 // that index in Accounts array.
 func (cx *EvalContext) availableAccount(sv stackValue) (basics.Address, error) {
-	if sv.argType() != avmBytes || len(sv.Bytes) != crypto.DigestSize {
+	if sv.avmType() != avmBytes || len(sv.Bytes) != crypto.DigestSize {
 		return basics.Address{}, fmt.Errorf("not an address")
 	}
 
