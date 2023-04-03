@@ -54,14 +54,16 @@ import (
 	"github.com/algorand/go-algorand/stateproof"
 )
 
-// max compiled teal program is currently 8k
+// MaxTealSourceBytes sets a size limit for TEAL source programs for requests
+// Max TEAL program size is currently 8k
 // but we allow for comments, spacing, and repeated consts
-// in the source teal, allow up to 200kb
-const maxTealSourceBytes = 200_000
+// in the source TEAL, so we allow up to 200KB
+const MaxTealSourceBytes = 200_000
 
+// MaxTealDryrunBytes sets a size limit for dryrun requests
 // With the ability to hold unlimited assets DryrunRequests can
-// become quite large, allow up to 1mb
-const maxTealDryrunBytes = 1_000_000
+// become quite large, so we allow up to 1MB
+const MaxTealDryrunBytes = 1_000_000
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
@@ -998,7 +1000,7 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 	}
 	req := ctx.Request()
 	buf := new(bytes.Buffer)
-	req.Body = http.MaxBytesReader(nil, req.Body, maxTealDryrunBytes)
+	req.Body = http.MaxBytesReader(nil, req.Body, MaxTealDryrunBytes)
 	_, err := buf.ReadFrom(ctx.Request().Body)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -1531,7 +1533,7 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params model.TealCompileParams
 	}
 
 	buf := new(bytes.Buffer)
-	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
+	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, MaxTealSourceBytes)
 	_, err = buf.ReadFrom(ctx.Request().Body)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -1648,7 +1650,7 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 		return ctx.String(http.StatusNotFound, "/teal/disassemble was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 	}
 	buf := new(bytes.Buffer)
-	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
+	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, MaxTealSourceBytes)
 	_, err := buf.ReadFrom(ctx.Request().Body)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
