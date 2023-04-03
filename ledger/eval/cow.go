@@ -63,8 +63,8 @@ type roundCowParent interface {
 	getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
 	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
 	getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
-
 	kvGet(key string) ([]byte, bool, error)
+	GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
 }
 
 // When adding new fields make sure to clear them in the roundCowState.recycle() as well to avoid dirty state
@@ -235,14 +235,18 @@ func (cb *roundCowState) Counter() uint64 {
 }
 
 func (cb *roundCowState) GetStateProofNextRound() basics.Round {
-	if cb.mods.StateProofNext != 0 {
-		return cb.mods.StateProofNext
+	if cb.mods.ModStateProofNextRound != 0 {
+		return cb.mods.ModStateProofNextRound
 	}
 	return cb.lookupParent.GetStateProofNextRound()
 }
 
 func (cb *roundCowState) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
 	return cb.lookupParent.BlockHdr(r)
+}
+
+func (cb *roundCowState) GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return cb.lookupParent.GetStateProofVerificationContext(stateProofLastAttestedRound)
 }
 
 func (cb *roundCowState) blockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {
@@ -262,7 +266,7 @@ func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.T
 }
 
 func (cb *roundCowState) SetStateProofNextRound(rnd basics.Round) {
-	cb.mods.StateProofNext = rnd
+	cb.mods.ModStateProofNextRound = rnd
 }
 
 func (cb *roundCowState) child(hint int) *roundCowState {
@@ -270,7 +274,7 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 	ch.lookupParent = cb
 	ch.commitParent = cb
 	ch.proto = cb.proto
-	ch.mods.PopulateStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.StateProofNext)
+	ch.mods.PopulateStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.ModStateProofNextRound)
 
 	if ch.sdeltas == nil {
 		ch.sdeltas = make(map[basics.Address]map[storagePtr]*storageDelta)
@@ -314,7 +318,7 @@ func (cb *roundCowState) commitToParent() {
 			}
 		}
 	}
-	cb.commitParent.mods.StateProofNext = cb.mods.StateProofNext
+	cb.commitParent.mods.ModStateProofNextRound = cb.mods.ModStateProofNextRound
 
 	for key, value := range cb.mods.KvMods {
 		cb.commitParent.mods.AddKvMod(key, value)

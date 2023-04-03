@@ -131,6 +131,12 @@ func RunMigrations(ctx context.Context, tx *sql.Tx, params trackerdb.Params, log
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 8 : %v", err)
 					return
 				}
+			case 9:
+				err = tu.upgradeDatabaseSchema9(ctx, tx)
+				if err != nil {
+					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 9 : %v", err)
+					return
+				}
 			default:
 				return trackerdb.InitParams{}, fmt.Errorf("trackerDBInitialize unable to upgrade database from schema version %d", tu.schemaVersion)
 			}
@@ -477,6 +483,24 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema8(ctx context.Context
 		}
 	}
 	return tu.setVersion(ctx, tx, 9)
+}
+
+// upgradeDatabaseSchema9 upgrades the database schema from version 9 to version 10,
+// adding a new stateproofverification table,
+// scrubbing out all nil values from kvstore table and replace with empty byte slice.
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema9(ctx context.Context, tx *sql.Tx) (err error) {
+	err = createStateProofVerificationTable(ctx, tx)
+	if err != nil {
+		return err
+	}
+
+	err = performKVStoreNullBlobConversion(ctx, tx)
+	if err != nil {
+		return fmt.Errorf("upgradeDatabaseSchema9 unable to replace kvstore nil entries with empty byte slices : %v", err)
+	}
+
+	// update version
+	return tu.setVersion(ctx, tx, 10)
 }
 
 func removeEmptyDirsOnSchemaUpgrade(dbDirectory string) (err error) {

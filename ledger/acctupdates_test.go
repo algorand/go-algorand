@@ -21,6 +21,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-deadlock"
 	"os"
 	"runtime"
 	"strings"
@@ -35,7 +37,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
@@ -59,6 +60,8 @@ type mockLedgerForTracker struct {
 	consensusParams  config.ConsensusParams
 	consensusVersion protocol.ConsensusVersion
 	accts            map[basics.Address]basics.AccountData
+
+	mu deadlock.RWMutex
 
 	// trackerRegistry manages persistence into DB so we have to have it here even for a single tracker test
 	trackers trackerRegistry
@@ -182,16 +185,24 @@ func (ml *mockLedgerForTracker) Close() {
 }
 
 func (ml *mockLedgerForTracker) Latest() basics.Round {
+	ml.mu.RLock()
+	defer ml.mu.RUnlock()
 	return basics.Round(len(ml.blocks)) - 1
 }
 
 func (ml *mockLedgerForTracker) addMockBlock(be blockEntry, delta ledgercore.StateDelta) error {
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
+
 	ml.blocks = append(ml.blocks, be)
 	ml.deltas = append(ml.deltas, delta)
 	return nil
 }
 
 func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger eval.LedgerForEvaluator) (ledgercore.StateDelta, error) {
+	ml.mu.RLock()
+	defer ml.mu.RUnlock()
+
 	// support returning the deltas if the client explicitly provided them by calling addMockBlock, otherwise,
 	// just return an empty state delta ( since the client clearly didn't care about these )
 	if len(ml.deltas) > int(blk.Round()) {
@@ -207,6 +218,9 @@ func (ml *mockLedgerForTracker) Block(rnd basics.Round) (bookkeeping.Block, erro
 		return bookkeeping.Block{}, fmt.Errorf("rnd %d out of bounds", rnd)
 	}
 
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
+
 	return ml.blocks[int(rnd)].block, nil
 }
 
@@ -214,6 +228,9 @@ func (ml *mockLedgerForTracker) BlockHdr(rnd basics.Round) (bookkeeping.BlockHea
 	if rnd > ml.Latest() {
 		return bookkeeping.BlockHeader{}, fmt.Errorf("rnd %d out of bounds", rnd)
 	}
+
+	ml.mu.RLock()
+	defer ml.mu.RUnlock()
 
 	return ml.blocks[int(rnd)].block.BlockHeader, nil
 }

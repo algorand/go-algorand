@@ -107,6 +107,10 @@ func (ml *emptyLedger) GetStateProofNextRound() basics.Round {
 	return basics.Round(0)
 }
 
+func (ml *emptyLedger) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("emptyLedger does not implement GetStateProofVerificationContext")
+}
+
 type modsData struct {
 	addr  basics.Address
 	cidx  basics.CreatableIndex

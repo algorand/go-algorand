@@ -26,8 +26,10 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/eval/prefetcher"
@@ -102,6 +104,11 @@ func (l *prefetcherAlignmentTestLedger) BlockHdrCached(round basics.Round) (book
 func (l *prefetcherAlignmentTestLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	return nil
 }
+
+func (l *prefetcherAlignmentTestLedger) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("prefetcherAlignmentTestLedger does not implement GetStateProofVerificationContext")
+}
+
 func (l *prefetcherAlignmentTestLedger) LookupWithoutRewards(_ basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	l.mu.Lock()
 	if l.requestedBalances == nil {
@@ -1367,7 +1374,17 @@ func TestEvaluatorPrefetcherAlignmentStateProof(t *testing.T) {
 			Sender:      addr,
 			GenesisHash: genesisHash(),
 		},
-		StateProofTxnFields: transactions.StateProofTxnFields{},
+		StateProofTxnFields: transactions.StateProofTxnFields{
+			StateProofType: 0,
+			StateProof:     stateproof.StateProof{},
+			Message: stateproofmsg.Message{
+				BlockHeadersCommitment: nil,
+				VotersCommitment:       nil,
+				LnProvenWeight:         0,
+				FirstAttestedRound:     257,
+				LastAttestedRound:      512,
+			},
+		},
 	}
 
 	requested, prefetched := run(t, l, txn)
