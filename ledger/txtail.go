@@ -191,14 +191,13 @@ func (t *txTail) close() {
 func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
 
-	func() {
-		t.tailMu.RLock()
-		defer t.tailMu.RUnlock()
-		if _, has := t.recent[rnd]; has {
-			// Repeat, ignore
-			return
-		}
-	}()
+	t.tailMu.RLock()
+	if _, has := t.recent[rnd]; has {
+		// Repeat, ignore
+		t.tailMu.RUnlock()
+		return
+	}
+	t.tailMu.RUnlock()
 
 	var tail trackerdb.TxTailRound
 	tail.TxnIDs = make([]transactions.Txid, len(delta.Txids))
