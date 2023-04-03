@@ -1335,13 +1335,8 @@ func typeDupTwo(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 func typeSelect(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 2 {
-		if pgm.stack[top-1].AVMType == pgm.stack[top-2].AVMType {
-			unioned, err := pgm.stack[top-1].union(pgm.stack[top-2])
-			if err != nil {
-				return nil, nil, err
-			}
-			return nil, StackTypes{unioned}, nil
-		}
+		unioned, err := unionStackTypes(pgm.stack[top-1], pgm.stack[top-2])
+		return nil, StackTypes{unioned}, err
 	}
 	return nil, nil, nil
 }

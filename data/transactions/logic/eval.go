@@ -735,35 +735,34 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 	return st
 }
 
-func (st StackType) union(other ...StackType) (StackType, error) {
-	if len(other) == 0 {
-		return st, nil
+func unionStackTypes(a, b StackType) (StackType, error) {
+	if a.AVMType != b.AVMType {
+		return StackAny, nil
 	}
 
-	for _, o := range other {
-		if !st.AssignableTo(o) {
-			return StackType{}, fmt.Errorf("cannot union %s and %s", st.Name, o.Name)
-		}
+	// Same type now, so we can just take the union of the bounds
+	var bounds [2]uint64
 
-		switch st.AVMType {
-		case avmUint64:
-			if o.ValueBound[0] < st.ValueBound[0] {
-				st.ValueBound[0] = o.ValueBound[0]
-			}
-			if o.ValueBound[1] > st.ValueBound[1] {
-				st.ValueBound[1] = o.ValueBound[1]
-			}
-		case avmBytes:
-			if o.LengthBound[0] < st.LengthBound[0] {
-				st.LengthBound[0] = o.LengthBound[0]
-			}
-			if o.LengthBound[1] > st.LengthBound[1] {
-				st.LengthBound[1] = o.LengthBound[1]
-			}
-		}
+	switch a.AVMType {
+	case avmUint64:
+		bounds = unionBounds(a.ValueBound, b.ValueBound)
+	case avmBytes:
+		bounds = unionBounds(a.LengthBound, b.LengthBound)
 	}
 
-	return st, nil
+	return NewStackType(a.AVMType, bounds), nil
+}
+
+func unionBounds(a, b [2]uint64) [2]uint64 {
+	u := [2]uint64{a[0], a[1]}
+	if b[0] < u[0] {
+		u[0] = b[0]
+	}
+
+	if b[1] > u[1] {
+		u[1] = b[1]
+	}
+	return u
 }
 
 func (st StackType) narrowed(bounds [2]uint64) StackType {
