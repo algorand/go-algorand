@@ -170,6 +170,16 @@ int 1
 	}, ed.LocalDeltas)
 	require.Len(t, ed.SharedAccts, 1)
 	require.Equal(t, ep.TxnGroup[0].Txn.Sender, ed.SharedAccts[0])
+
+	// when running all three, appl2 can't read the locals of app in tx0 and addr in tx1
+	sources = []string{"", "", "gtxn 1 Sender; gtxn 0 Applications 0; byte 0xAA; app_local_get_ex"}
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1, &appl2), 9, nil,
+		logic.NewExpect(2, "invalid Local State access")) // note that the error message is for Locals, not specialized
+	// same test of account in array of tx1 rather than Sender
+	appl1.Accounts = []basics.Address{{7, 7}}
+	sources = []string{"", "", "gtxn 1 Accounts 1; gtxn 0 Applications 0; byte 0xAA; app_local_get_ex"}
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1, &appl2), 9, nil,
+		logic.NewExpect(2, "invalid Local State access")) // note that the error message is for Locals, not specialized
 }
 
 // TestBetterLocalErrors confirms that we get specific errors about the missing
@@ -265,6 +275,16 @@ pop; pop; int 1
 	// But it's ok in appl2, because the same account is used, even though the
 	// foreign-asset is not repeated in appl2.
 	logic.TestApps(t, sources, txntest.Group(&appl0, &appl2), 9, nil)
+
+	// when running all three, appl2 can't read the holding of asset in tx0 and addr in tx1
+	sources = []string{"", "", "gtxn 1 Sender; gtxn 0 Assets 0; asset_holding_get AssetBalance"}
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1, &appl2), 9, nil,
+		logic.NewExpect(2, "invalid Holding access")) // note that the error message is for Holding, not specialized
+	// same test of account in array of tx1 rather than Sender
+	appl1.Accounts = []basics.Address{{7, 7}}
+	sources = []string{"", "", "gtxn 1 Accounts 1; gtxn 0 Assets 0; asset_holding_get AssetBalance"}
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1, &appl2), 9, nil,
+		logic.NewExpect(2, "invalid Holding access")) // note that the error message is for Holding, not specialized
 }
 
 // TestBetterHoldingErrors confirms that we get specific errors about the missing
