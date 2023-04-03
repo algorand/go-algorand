@@ -22,8 +22,8 @@ CONST_FALSE="false"
 
 # First, try to send an extremely large "transaction" in the request body.
 # This should fail with a 413 error.
-truncate -s 11MB "{$TEMPDIR}/toolarge.tx"
-RES=$(${gcmd} clerk simulate -t "{$TEMPDIR}/toolarge.tx" 2>&1 || true)
+truncate -s 11MB "${TEMPDIR}/toolarge.tx"
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/toolarge.tx" 2>&1 || true)
 EXPERROR="simulation error: HTTP 413 Request Entity Too Large:"
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-simulate-test FAIL the simulate API should fail for request bodies exceeding 10MB %Y%m%d_%H%M%S'
