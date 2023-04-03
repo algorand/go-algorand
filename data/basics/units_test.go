@@ -58,6 +58,7 @@ func TestAddSaturate32(t *testing.T) {
 
 func TestRoundUpToMultipleOf(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	r := Round(24)
 	for n := Round(1); n < Round(100); n++ {
@@ -67,6 +68,24 @@ func TestRoundUpToMultipleOf(t *testing.T) {
 		if n < r {
 			prevMul := nextMul - n
 			require.True(t, prevMul < r)
+		}
+	}
+}
+
+func TestRoundDownToMultipleOf(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	r := Round(24)
+	for n := Round(1); n < Round(100); n++ {
+		mul := r.RoundDownToMultipleOf(n)
+		a.True(mul <= r)
+		a.Equal(Round(0), mul%n)
+		if r < n {
+			a.Equal(Round(0), mul)
+		} else if r == n {
+			a.Equal(n, mul)
 		}
 	}
 }

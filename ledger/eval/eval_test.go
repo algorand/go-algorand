@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal
+package eval
 
 import (
 	"bytes"
@@ -31,17 +31,14 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
-	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/data/txntest"
-	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
@@ -201,81 +198,6 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	state := ad.AppParams[1].GlobalState
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
-}
-
-func TestCowStateProof(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	var spType protocol.StateProofType
-	var stateProof stateproof.StateProof
-	var atRound basics.Round
-	var validate bool
-	msg := stateproofmsg.Message{}
-
-	accts0 := ledgertesting.RandomAccounts(20, true)
-	blocks := make(map[basics.Round]bookkeeping.BlockHeader)
-	blockErr := make(map[basics.Round]error)
-	ml := mockLedger{balanceMap: accts0, blocks: blocks, blockErr: blockErr}
-	c0 := makeRoundCowState(
-		&ml, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion],
-		0, ledgercore.AccountTotals{}, 0)
-
-	spType = protocol.StateProofType(1234) // bad stateproof type
-	stateProofTx := transactions.StateProofTxnFields{
-		StateProofType: spType,
-		StateProof:     stateProof,
-		Message:        msg,
-	}
-	err := apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, apply.ErrStateProofTypeNotSupported)
-
-	// no spRnd block
-	stateProofTx.StateProofType = protocol.StateProofBasic
-	noBlockErr := errors.New("no block")
-	blockErr[3] = noBlockErr
-	stateProofTx.Message.LastAttestedRound = 3
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.Contains(t, err.Error(), "no block")
-
-	// stateproof txn doesn't confirm the next state proof round. expected is in the past
-	validate = true
-	stateProofTx.Message.LastAttestedRound = uint64(16)
-	c0.SetStateProofNextRound(8)
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
-
-	// stateproof txn doesn't confirm the next state proof round. expected is in the future
-	validate = true
-	stateProofTx.Message.LastAttestedRound = uint64(16)
-	c0.SetStateProofNextRound(32)
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.ErrorIs(t, err, apply.ErrExpectedDifferentStateProofRound)
-
-	// no votersRnd block
-	// this is slightly a mess of things that don't quite line up with likely usage
-	validate = true
-	var spHdr bookkeeping.BlockHeader
-	spHdr.CurrentProtocol = "TestCowStateProof"
-	spHdr.Round = 1
-	proto := config.Consensus[spHdr.CurrentProtocol]
-	proto.StateProofInterval = 2
-	config.Consensus[spHdr.CurrentProtocol] = proto
-	blocks[spHdr.Round] = spHdr
-
-	spHdr.Round = 15
-	blocks[spHdr.Round] = spHdr
-	stateProofTx.Message.LastAttestedRound = uint64(spHdr.Round)
-	c0.SetStateProofNextRound(15)
-	blockErr[13] = noBlockErr
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.Contains(t, err.Error(), "no block")
-
-	// fall through to no err
-	validate = false
-	err = apply.StateProof(stateProofTx, atRound, c0, validate)
-	require.NoError(t, err)
-
-	// 100% coverage
 }
 
 // a couple trivial tests that don't need setup
@@ -820,6 +742,10 @@ func (ledger *evalTestLedger) Latest() basics.Round {
 	return basics.Round(len(ledger.blocks)).SubSaturate(1)
 }
 
+func (ledger *evalTestLedger) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, errors.New("evalTestLedger does not implement GetStateProofVerificationContext")
+}
+
 // AddValidatedBlock adds a new block to the ledger, after the block has
 // been validated by calling Ledger.Validate().  This saves the cost of
 // having to re-compute the effect of the block on the ledger state, if
@@ -993,6 +919,10 @@ func (l *testCowBaseLedger) LookupAsset(rnd basics.Round, addr basics.Address, a
 
 func (l *testCowBaseLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	return nil, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, errors.New("testCowBaseLedger does not implement GetStateProofVerificationContext")
 }
 
 func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {

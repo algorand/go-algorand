@@ -47,6 +47,36 @@
         }
       }
     },
+    "/ready": {
+      "get": {
+        "tags": [
+          "public",
+          "common"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "scheme": [
+          "http"
+        ],
+        "summary": "Returns OK if healthy and fully caught up.",
+        "operationId": "GetReady",
+        "responses": {
+          "200": {
+            "description": "OK."
+          },
+          "500": {
+            "description": "Internal Error"
+          },
+          "503": {
+            "description": "Node not ready yet"
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/metrics": {
       "get": {
         "tags": [
@@ -3979,7 +4009,7 @@
             "type": "integer"
           },
           "upgrade-vote-rounds": {
-            "description": "Total voting ounds for current upgrade",
+            "description": "Total voting rounds for current upgrade",
             "type": "integer"
           }
         }

@@ -631,7 +631,7 @@
                   "type": "boolean"
                 },
                 "upgrade-vote-rounds": {
-                  "description": "Total voting ounds for current upgrade",
+                  "description": "Total voting rounds for current upgrade",
                   "type": "integer"
                 },
                 "upgrade-votes": {
@@ -2120,6 +2120,34 @@
           }
         },
         "summary": "Return metrics about algod functioning.",
+        "tags": [
+          "public",
+          "common"
+        ]
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "GetReady",
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "OK."
+          },
+          "500": {
+            "content": {},
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {},
+            "description": "Node not ready yet"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Returns OK if healthy and fully caught up.",
         "tags": [
           "public",
           "common"
@@ -4727,7 +4755,7 @@
                       "type": "boolean"
                     },
                     "upgrade-vote-rounds": {
-                      "description": "Total voting ounds for current upgrade",
+                      "description": "Total voting rounds for current upgrade",
                       "type": "integer"
                     },
                     "upgrade-votes": {
@@ -4902,7 +4930,7 @@
                       "type": "boolean"
                     },
                     "upgrade-vote-rounds": {
-                      "description": "Total voting ounds for current upgrade",
+                      "description": "Total voting rounds for current upgrade",
                       "type": "integer"
                     },
                     "upgrade-votes": {

@@ -291,6 +291,12 @@ func (client RestClient) HealthCheck() error {
 	return client.get(nil, "/health", nil)
 }
 
+// ReadyCheck does a readiness check on the potentially running node,
+// returning an error if the node is not ready (caught up and healthy)
+func (client RestClient) ReadyCheck() error {
+	return client.get(nil, "/ready", nil)
+}
+
 // StatusAfterBlock waits for a block to occur then returns the StatusResponse after that block
 // blocks on the node end
 // Not supported

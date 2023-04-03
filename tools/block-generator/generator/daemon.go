@@ -14,37 +14,39 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package internal
+package generator
 
 import (
-	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"fmt"
+	"math/rand"
+
+	"github.com/spf13/cobra"
 )
 
-func (cs *roundCowState) AllocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error {
-	if global {
-		cs.mods.AddCreatable(
-			basics.CreatableIndex(index),
-			ledgercore.ModifiedCreatable{
-				Ctype:   basics.AssetCreatable,
-				Creator: addr,
-				Created: true,
-			},
-		)
-	}
-	return nil
-}
+// DaemonCmd starts a block generator daemon.
+var DaemonCmd *cobra.Command
 
-func (cs *roundCowState) DeallocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error {
-	if global {
-		cs.mods.AddCreatable(
-			basics.CreatableIndex(index),
-			ledgercore.ModifiedCreatable{
-				Ctype:   basics.AssetCreatable,
-				Creator: addr,
-				Created: false,
-			},
-		)
+func init() {
+	rand.Seed(12345)
+
+	var configFile string
+	var port uint64
+
+	DaemonCmd = &cobra.Command{
+		Use:   "daemon",
+		Short: "Start the generator daemon in standalone mode.",
+		Run: func(cmd *cobra.Command, args []string) {
+			addr := fmt.Sprintf(":%d", port)
+			srv, _ := MakeServer(configFile, addr)
+			err := srv.ListenAndServe()
+			if err != nil {
+				panic(err)
+			}
+		},
 	}
-	return nil
+
+	DaemonCmd.Flags().StringVarP(&configFile, "config", "c", "", "Specify the block configuration yaml file.")
+	DaemonCmd.Flags().Uint64VarP(&port, "port", "p", 4010, "Port to start the server at.")
+
+	DaemonCmd.MarkFlagRequired("config")
 }
