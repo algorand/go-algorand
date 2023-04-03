@@ -17,7 +17,7 @@
 package generator
 
 import (
-	"encoding/binary"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,6 +26,10 @@ import (
 	"time"
 
 	cconfig "github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -133,6 +137,7 @@ func MakeGenerator(config GenerationConfig) (Generator, error) {
 	gen.genesisHash[31] = 3
 
 	gen.initializeAccounting()
+	gen.initializeLedger()
 
 	for _, val := range getTransactionOptions() {
 		switch val {
@@ -177,7 +182,9 @@ type Generator interface {
 	WriteBlock(output io.Writer, round uint64) error
 	WriteAccount(output io.Writer, accountString string) error
 	WriteStatus(output io.Writer) error
+	WriteDeltas(output io.Writer, round uint64) error
 	Accounts() <-chan basics.Address
+	Stop()
 }
 
 type generator struct {
@@ -224,6 +231,10 @@ type generator struct {
 
 	// Reporting information from transaction type to data
 	reportData Report
+
+	//	ledger
+	ledger *ledger.Ledger
+	deltas map[uint64]ledgercore.StateDelta
 }
 
 type assetData struct {
@@ -411,19 +422,35 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		return err
 	}
 
+	// generate deltas for the block
+	err = g.generateDeltas(cert.Block)
+	if err != nil {
+		panic(fmt.Sprintf("failed to generate state deltas: %v\n", err))
+	}
 	g.finishRound(numTxnForBlock)
 	return nil
 }
 
-func indexToAccount(i uint64) (addr basics.Address) {
-	// Make sure we don't generate a zero address by adding 1 to i
-	binary.LittleEndian.PutUint64(addr[:], i+1)
-	return
+func (g *generator) generateDeltas(block bookkeeping.Block) error {
+	delta, err := eval.Eval(context.Background(), g.ledger, block, false, nil, nil)
+	if err != nil {
+		return err
+	}
+	g.deltas[uint64(block.Round())] = delta
+	return nil
 }
 
-func accountToIndex(a basics.Address) (addr uint64) {
-	// Make sure we don't generate a zero address by adding 1 to i
-	return binary.LittleEndian.Uint64(a[:]) - 1
+// WriteDeltas generates returns the deltas for payset.
+func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
+	delta, ok := g.deltas[round]
+	if !ok {
+		return fmt.Errorf("state deltas for round %d not found", round)
+	}
+	err := json.NewEncoder(output).Encode(delta)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // initializeAccounting creates the genesis accounts.
@@ -684,6 +711,26 @@ func (g *generator) generateAssetTxn(round uint64, intra uint64) (transactions.S
 	}
 
 	return signTxn(txn), transactions.ApplyData{}, nil
+}
+
+func (g *generator) initializeLedger() {
+	bal := bookkeeping.MakeGenesisBalances(convertToGenesisBalances(g.balances), g.feeSink, g.rewardsPool)
+	block, _ := bookkeeping.MakeGenesisBlock(g.protocol, bal, g.genesisID, g.genesisHash)
+	l, err := ledger.OpenLedger(logging.Base(), "block-generator", true, ledgercore.InitState{
+		Block:       block,
+		Accounts:    bal.Balances,
+		GenesisHash: g.genesisHash,
+	}, cconfig.GetDefaultLocal())
+	if err != nil {
+		fmt.Printf("error initializing ledger: %v\n.", err)
+		os.Exit(1)
+	}
+	g.ledger = l
+}
+
+// Stop cleans up allocated resources.
+func (g *generator) Stop() {
+	g.ledger.Close()
 }
 
 func (g *generator) WriteAccount(output io.Writer, accountString string) error {

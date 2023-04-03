@@ -59,6 +59,7 @@ func MakeServerWithMiddleware(configFile string, addr string, blocksMiddleware B
 
 	gen, err := MakeGenerator(config)
 	util.MaybeFail(err, "Failed to make generator with config file '%s'", configFile)
+	defer gen.Stop()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", help)
@@ -67,6 +68,8 @@ func MakeServerWithMiddleware(configFile string, addr string, blocksMiddleware B
 	mux.HandleFunc("/genesis", getGenesisHandler(gen))
 	mux.HandleFunc("/report", getReportHandler(gen))
 	mux.HandleFunc("/v2/status/wait-for-block-after/", getStatusWaitHandler(gen))
+	mux.HandleFunc("/v2/ledger/sync/", func(w http.ResponseWriter, r *http.Request) {})
+	mux.HandleFunc("/v2/deltas/", getDeltasHandler(gen))
 
 	return &http.Server{
 		Addr:              addr,
@@ -127,6 +130,17 @@ func getAccountHandler(gen Generator) func(w http.ResponseWriter, r *http.Reques
 		}
 
 		maybeWriteError(w, gen.WriteAccount(w, account))
+	}
+}
+
+func getDeltasHandler(gen Generator) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		round, err := parseRound(r.URL.Path)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		maybeWriteError(w, gen.WriteDeltas(w, round))
 	}
 }
 
