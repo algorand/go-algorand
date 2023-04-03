@@ -95,6 +95,7 @@ type StatusReport struct {
 	UpgradeDelay                       uint64
 	NextProtocolVoteBefore             basics.Round
 	NextProtocolApprovals              uint64
+	SyncRound                          basics.Round // for follower nodes only: the latest round that the node's permanent store is committed. 0 for non-follower nodes.
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen

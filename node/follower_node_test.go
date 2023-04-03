@@ -34,6 +34,16 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+type configOverrides struct {
+	DisableNetworking *bool
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+var disableNetworking = configOverrides{DisableNetworking: boolPtr(true)}
+
 func followNodeDefaultGenesis() bookkeeping.Genesis {
 	return bookkeeping.Genesis{
 		SchemaID:    "go-test-follower-node-genesis",
@@ -48,6 +58,12 @@ func followNodeDefaultGenesis() bookkeeping.Genesis {
 					MicroAlgos: basics.MicroAlgos{Raw: 1000000000},
 				},
 			},
+			{
+				Address: sinkAddr.String(),
+				State: basics.AccountData{
+					MicroAlgos: basics.MicroAlgos{Raw: 1000000},
+				},
+			},
 		},
 	}
 }
@@ -59,6 +75,19 @@ func setupFollowNode(t *testing.T) *AlgorandFollowerNode {
 	node, err := MakeFollower(logging.Base(), t.TempDir(), cfg, []string{}, genesis)
 	require.NoError(t, err)
 	return node
+}
+
+func restartableFollowNode(t *testing.T, tempDir string) (*AlgorandFollowerNode, string) {
+	cfg := config.GetDefaultLocal()
+	cfg.EnableFollowMode = true
+	cfg.DisableNetworking = true
+	genesis := followNodeDefaultGenesis()
+	if tempDir == "" {
+		tempDir = t.TempDir()
+	}
+	node, err := MakeFollower(logging.Base(), tempDir, cfg, []string{}, genesis)
+	require.NoError(t, err)
+	return node, tempDir
 }
 
 func TestSyncRound(t *testing.T) {
@@ -126,4 +155,94 @@ func TestDevModeWarning(t *testing.T) {
 	}
 	require.NotNil(t, foundEntry)
 	require.Contains(t, foundEntry.Message, "Follower running on a devMode network. Must submit txns to a different node.")
+}
+
+func TestStartStop(t *testing.T) {
+	/*
+		things to take note of:
+		node.Ledger().CommittedRound() is non-deterministic
+		but should be < node.Ledger().Latest()
+
+		don't try to check node.Ledger().CommittedRound() after
+		a Stop()
+
+		It should be comparable to status.SyncRound, but again,
+		this isn't deterministic as the value might have changed
+		between the two evaluations
+	*/
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	node, tempDir := restartableFollowNode(t, "")
+	status, err := node.Status()
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(0), status.LastRound)
+	// require.Equal(t, 0, status.SyncRound)
+
+	addBlock := func(round basics.Round) {
+		b := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				GenesisHash: node.ledger.GenesisHash(),
+				Round:       round,
+				RewardsState: bookkeeping.RewardsState{
+					RewardsRate: 0,
+					RewardsPool: poolAddr,
+					FeeSink:     sinkAddr,
+				},
+			},
+		}
+		b.CurrentProtocol = protocol.ConsensusCurrentVersion
+		err := node.Ledger().AddBlock(b, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+
+	N := basics.Round(10)
+	for i := basics.Round(1); i <= N; i++ {
+		addBlock(i)
+		status, err = node.Status()
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(i), status.LastRound)
+		// require.Equal(t, 0, status.SyncRound)
+	}
+
+	node.Start()
+
+	for i := N + 1; i <= 2*N; i++ {
+		addBlock(i)
+		status, err = node.Status()
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(i), status.LastRound)
+		// require.Equal(t, 0, status.SyncRound)
+	}
+
+	node.Stop()
+	hmmm := node.Ledger().CommittedRound()
+
+	node, _ = restartableFollowNode(t, tempDir)
+
+	status, err = node.Status()
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(2*N), status.LastRound)
+	// require.Equal(t, 0, status.SyncRound)
+
+	hmmm = node.Ledger().CommittedRound()
+
+	node.Start()
+	for i := 2*N + 1; i <= 2000; i++ {
+		addBlock(i)
+		status, err = node.Status()
+		require.NoError(t, err)
+		require.Equal(t, basics.Round(i), status.LastRound)
+		// require.Equal(t, 0, status.SyncRound)
+	}
+
+	hmmm = node.Ledger().CommittedRound()
+	_ = hmmm
+	hmmm = 53
+
+	node.Stop()
+	status, err = node.Status()
+	require.NoError(t, err)
+	// require.Equal(t, basics.Round(i), status.LastRound)
+
 }
