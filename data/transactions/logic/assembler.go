@@ -1982,7 +1982,7 @@ func (ops *OpStream) assemble(text string) error {
 	if ops.Errors != nil {
 		l := len(ops.Errors)
 		if l == 1 {
-			return errors.New("1 error")
+			return fmt.Errorf("1 error: %s", ops.Errors[0].Error())
 		}
 		return fmt.Errorf("%d errors", l)
 	}

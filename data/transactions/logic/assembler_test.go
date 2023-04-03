@@ -2471,6 +2471,7 @@ func TestBranchAssemblyTypeCheck(t *testing.T) {
 
 	ops := newOpStream(AssemblerMaxVersion)
 	err := ops.assemble(text)
+	t.Logf("%+v", err)
 	require.NoError(t, err)
 	require.Empty(t, ops.Warnings)
 

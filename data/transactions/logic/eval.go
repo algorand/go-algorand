@@ -798,38 +798,24 @@ func (st StackType) AssignableTo(other StackType) bool {
 	}
 
 	// Same type now
+	// Check if our constraints will satisfy the other type
+	var (
+		smin, smax uint64
+		omin, omax uint64
+	)
 
-	// Check if our constraints will be satisfied by
-	// the other type
 	switch st.AVMType {
 	case avmBytes:
-		smin, smax := st.LengthBound[0], st.LengthBound[1]
-		omin, omax := other.LengthBound[0], other.LengthBound[1]
-
-		// yes definitely
-		// [32,32] => [0..4k]
-		// [32,32] => [32,32]
-
-		// yes, maybe determined at runtime
-		// [0..4k] => [32,32]
-
-		// no, cant fit
-		// [64,64] => [32,32]
-		// no, makes no sense
-		// [32,32] =>  [64,64]
-
-		// we only have 0-N and [N,N] (static) and only
-		// those that are both not static and have different lengths
-		// can be assigned
-		return !(smin == smax && omin == omax && smin != omin)
-
+		smin, smax = st.LengthBound[0], st.LengthBound[1]
+		omin, omax = other.LengthBound[0], other.LengthBound[1]
 	case avmUint64:
-		smin, smax := st.ValueBound[0], st.ValueBound[1]
-		omin, omax := other.ValueBound[0], other.ValueBound[1]
-		return !(smin == smax && omin == omax && smin != omin)
+		smin, smax = st.ValueBound[0], st.ValueBound[1]
+		omin, omax = other.ValueBound[0], other.ValueBound[1]
 	default:
 		panic("no stack type match in AssignableTo check")
 	}
+
+	return smin <= omax && smax >= omin
 }
 
 func (st StackType) String() string {
