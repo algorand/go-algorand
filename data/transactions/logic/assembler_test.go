@@ -3490,6 +3490,9 @@ warning 2
 
 // TestDisassembleBadBranch ensures a clean error when a branch has no target.
 func TestDisassembleBadBranch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	for _, br := range []byte{0x40, 0x41, 0x42} {
 		dis, err := Disassemble([]byte{2, br})
 		require.Error(t, err, dis)
@@ -3511,6 +3514,9 @@ func TestDisassembleBadBranch(t *testing.T) {
 
 // TestDisassembleBadSwitch ensures a clean error when a switch ends early
 func TestDisassembleBadSwitch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	source := `
     int 1
 	switch label1 label2
@@ -3533,6 +3539,9 @@ func TestDisassembleBadSwitch(t *testing.T) {
 
 // TestDisassembleBadMatch ensures a clean error when a match ends early
 func TestDisassembleBadMatch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	source := `
     int 40
     int 45
