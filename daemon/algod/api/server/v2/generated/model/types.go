@@ -1208,6 +1208,9 @@ type PendingTransactionInformationParamsFormat string
 
 // SimulateTransactionParams defines parameters for SimulateTransaction.
 type SimulateTransactionParams struct {
+	// UnlimitLog The boolean flag to remove limit on log opcode usage in simulation.
+	UnlimitLog *bool `form:"unlimit-log,omitempty" json:"unlimit-log,omitempty"`
+
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *SimulateTransactionParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }

@@ -5723,6 +5723,14 @@
         "operationId": "SimulateTransaction",
         "parameters": [
           {
+            "description": "The boolean flag to remove limit on log opcode usage in simulation.",
+            "in": "query",
+            "name": "unlimit-log",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",

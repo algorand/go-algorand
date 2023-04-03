@@ -194,6 +194,8 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 		}
 	}
 
+	// TODO question, how to prepare body with not encoded and query param
+
 	req, err = http.NewRequest(requestMethod, queryURL.String(), body)
 	if err != nil {
 		return err
@@ -637,7 +639,8 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 }
 
 // SimulateRawTransaction gets the raw transaction or raw transaction group, and returns relevant simulation results.
-func (client RestClient) SimulateRawTransaction(data []byte) (response model.SimulateResponse, err error) {
+func (client RestClient) SimulateRawTransaction(data []byte, unlimitLog bool) (response model.SimulateResponse, err error) {
+	// TODO should use unlimitLog here
 	err = client.submitForm(&response, "/v2/transactions/simulate", data, "POST", false /* encodeJSON */, true /* decodeJSON */, false)
 	return
 }

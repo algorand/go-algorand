@@ -506,6 +506,13 @@ func (w *ServerInterfaceWrapper) SimulateTransaction(ctx echo.Context) error {
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params SimulateTransactionParams
+	// ------------- Optional query parameter "unlimit-log" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "unlimit-log", ctx.QueryParams(), &params.UnlimitLog)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter unlimit-log: %s", err))
+	}
+
 	// ------------- Optional query parameter "format" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "format", ctx.QueryParams(), &params.Format)
@@ -794,14 +801,15 @@ var swaggerSpec = []string{
 	"uKwZzucYC65coC+FPA9YSKe1WAAHxVSWVr58Z79i5gi3fK/kQ4Wl/dxEfH/clBEedlYMQn7y3MBNMUlO",
 	"yZRunCB6sH80A/iK8SxJZGdLIM4nrEtb5C7mkHEEdK9tHdJLeMPNDacFQa5O9dXIoWvm6Z1Fezo6VNPa",
 	"iI41yK911BPvRrgMSTCZW9PKnyg0M6IDb77EjccaNd2939OMsrXsZeqryzQ20Mg9ElqKsPbFfepanLVA",
-	"/vNmqX97U1qz8TaNJSDPDDr+mLNqQcIefVjN2Vafkiar3GoFBaMayg2pJOSAuVzQ2aZ5cB7YqH2SLylf",
-	"4L0jRb1wBaHtOJcgISTgMm+87hDpnB9rnqGgm3AcOCZWWefJyxw9LHkYoxM7W+5sHpUetTalwphnY+I4",
-	"fGfGHHpFTieDUqJB6kXj3GWR0z4jaSxcirosMlXnOaQ8NE6SblNhqW0BDseyspsbEApS1NLWxiY01zVW",
-	"oZlhZkxhi05Rvmlf/1i9S8gogyahRLEFp7qWMLVrQ1exGRA0OB4k/Gc6l3vrmo52vkFpFxU3UWDg9hjc",
-	"HoM/3zHoXTqvHZHMO6oESxkxAf6pSkM0ueOOXZGNbna028r0f+iSCh/ykfChV/Oh3hyeGStCsW5vfJ47",
-	"WRHt8aaKMO143gwIXNCyRp7o8r67l/gBOWs4ZnD2rpVLR5ovKeMuC00IS0A4tEuZrH2OxptSS9JLveZO",
-	"K2mZH6ojDTYgryXTG3yO0Ir9eg7m/2+NPG/riNqXSi3LydFkqXV1dHiIpfeXQunDyftp/E11Pr4N4L/z",
-	"j4xKsgusxPP2/f8fAAD//3fZs+vZSwEA",
+	"3umV6kwDZF7ShS1ZsxIXYGv3EMFJKRZEVKg1qzEdNuOkebEMWSNqjgNkpVhst0f8CVNl3YQmb7ydxWzh",
+	"RkOwO8TcXgsS6ObDavO2+rk0me5WKygY1VBuSCUhB8wvgw5AEUnZTAIkX1K+wLtQinrhilTbcS5BQkgK",
+	"Zt6d3SHSeUjWPEPhO+HMcEysAtGTl2EHWIYxRid2tjeGeeh61No0D2Oesokj+p0Zc+hlO50MSq4GqReN",
+	"w5lFTvuMpLFwKeqyyFSd55DyGjlJunKFpbaFShzLypNuQChIUUtbr5vQXNdYGWeG2TqFLYRF+aYtkmBF",
+	"MSGjrJ6EEsUWnOpawtSuDd3XZkDQCHqQ8OnpCBwt0SHa+QalXVTcRNGD22Nwewz+fMegd+m8dkQy76g3",
+	"LGXEBPinKlfR5LM7doU/uhnbbqvl/6HLPHzIh8uHXs2Hegd5ZqwIxVrC8XnuZGq0x5sqwrTjeTMgcEHL",
+	"Gnmiy0XvtAMH5KzhmMEBvVYuRWq+pOYhgVdcCJVAOLRL46x93sibUpXSS73mTlNqmR+qSA02IK8l0xt8",
+	"ItGK/XoO5v9vjTxva5va11Mty8nRZKl1dXR4WIqclkuh9OHEvGKab6rz8W0A/51/ZFSSXWB1oLfv//8A",
+	"AAD//5oYCXdtTAEA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

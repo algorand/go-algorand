@@ -64,6 +64,7 @@ var (
 	rekeyToAddress  string
 	signerAddress   string
 	rawOutput       bool
+	unlimitLog      bool
 )
 
 func init() {
@@ -146,6 +147,7 @@ func init() {
 
 	simulateCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "Transaction or transaction-group to test")
 	simulateCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing simulation result")
+	simulateCmd.Flags().BoolVarP(&unlimitLog, "unlimit-log", "u", false, "Remove limit on log opcode usage in simulation")
 	panicIfErr(simulateCmd.MarkFlagRequired("txfile"))
 }
 
@@ -1269,7 +1271,8 @@ var simulateCmd = &cobra.Command{
 
 		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
-		resp, err := client.TransactionSimulation(data)
+
+		resp, err := client.TransactionSimulation(data, unlimitLog)
 		if err != nil {
 			reportErrorf("simulation error: %s", err.Error())
 		}

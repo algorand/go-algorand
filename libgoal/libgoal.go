@@ -1270,12 +1270,13 @@ func (c *Client) Dryrun(data []byte) (resp model.DryrunResponse, err error) {
 }
 
 // TransactionSimulation takes raw transaction or raw transaction group, and returns relevant simulation results.
-func (c *Client) TransactionSimulation(data []byte) (resp model.SimulateResponse, err error) {
+func (c *Client) TransactionSimulation(data []byte, unlimitLog bool) (resp model.SimulateResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
 		return
 	}
-	resp, err = algod.SimulateRawTransaction(data)
+
+	resp, err = algod.SimulateRawTransaction(data, unlimitLog)
 	return
 }
 

@@ -1265,6 +1265,12 @@
             }
           },
           {
+            "description": "The boolean flag to remove limit on log opcode usage in simulation.",
+            "name": "unlimit-log",
+            "in": "query",
+            "type": "boolean"
+          },
+          {
             "$ref": "#/parameters/format"
           }
         ],

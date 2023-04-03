@@ -964,6 +964,13 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
+	if params.UnlimitLog == nil {
+		defaultValue := false
+		params.UnlimitLog = &defaultValue
+	}
+
+	// TODO params.UnlimitLog should be used in `Node.Simulate`
+
 	// Simulate transaction
 	simulationResult, err := v2.Node.Simulate(txgroup)
 	if err != nil {
