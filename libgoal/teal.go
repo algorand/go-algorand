@@ -21,10 +21,10 @@ import (
 )
 
 // Compile compiles the given program and returned the compiled program
-func (c *Client) Compile(program []byte) (compiledProgram []byte, compiledProgramHash crypto.Digest, err error) {
+func (c *Client) Compile(program []byte, useSourceMap bool) (compiledProgram []byte, compiledProgramHash crypto.Digest, sourcemap *map[string]interface{}, err error) {
 	algod, err2 := c.ensureAlgodClient()
 	if err2 != nil {
-		return nil, crypto.Digest{}, err2
+		return nil, crypto.Digest{}, nil, err2
 	}
-	return algod.Compile(program)
+	return algod.Compile(program, useSourceMap)
 }

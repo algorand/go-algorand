@@ -586,23 +586,38 @@ func (client RestClient) GetGoRoutines(ctx context.Context) (goRoutines string, 
 	return
 }
 
+type compileParams struct {
+	SourceMap bool `url:"sourcemap,omitempty"`
+}
+
 // Compile compiles the given program and returned the compiled program
-func (client RestClient) Compile(program []byte) (compiledProgram []byte, programHash crypto.Digest, err error) {
+func (client RestClient) Compile(program []byte, useSourceMap bool) (compiledProgram []byte, programHash crypto.Digest, sourceMap *map[string]interface{}, err error) {
 	var compileResponse model.CompileResponse
-	err = client.submitForm(&compileResponse, "/v2/teal/compile", nil, program, "POST", false, true, false)
+
+	compileRequest := compileParams{SourceMap: useSourceMap}
+
+	err = client.submitForm(&compileResponse, "/v2/teal/compile", compileRequest, program, "POST", false, true, false)
 	if err != nil {
-		return nil, crypto.Digest{}, err
+		return nil, crypto.Digest{}, nil, err
 	}
 	compiledProgram, err = base64.StdEncoding.DecodeString(compileResponse.Result)
 	if err != nil {
-		return nil, crypto.Digest{}, err
+		return nil, crypto.Digest{}, nil, err
 	}
 	var progAddr basics.Address
 	progAddr, err = basics.UnmarshalChecksumAddress(compileResponse.Hash)
 	if err != nil {
-		return nil, crypto.Digest{}, err
+		return nil, crypto.Digest{}, nil, err
 	}
 	programHash = crypto.Digest(progAddr)
+
+	sourceMap = compileResponse.Sourcemap
+	existenceOfSourceMap := sourceMap != nil
+
+	if existenceOfSourceMap != useSourceMap {
+		return nil, crypto.Digest{}, nil, fmt.Errorf("useSourceMap arg %v not agreeing with existence of source-map %v", useSourceMap, existenceOfSourceMap)
+	}
+
 	return
 }
 
