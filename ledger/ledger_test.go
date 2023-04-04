@@ -2439,7 +2439,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	cfg.MaxAcctLookback = proto.MaxBalLookback
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
-	trackerDB, blockDB, err := openLedgerDB(dbName, inMem)
+	trackerDB, blockDB, err := openLedgerDB(dbName, inMem, cfg)
 	require.NoError(t, err)
 	defer func() {
 		trackerDB.Close()
