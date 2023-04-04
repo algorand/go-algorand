@@ -160,9 +160,9 @@ func (avv *AsyncVoteVerifier) Parallelism() int {
 
 func (uv *asyncVerifyVoteRequest) GetNumberOfBatchableItems() (count uint64, err error) {
 	if uv.uev != nil {
-		return uint64(2), nil
+		return uint64(6), nil
 	}
-	return uint64(1), nil
+	return uint64(3), nil
 }
 
 type voteBatchProcessor struct {
@@ -276,8 +276,8 @@ func (vbp *voteBatchProcessor) ProcessBatch(jobs []execpool.InputJob) {
 		req := jobs[i].(*asyncVerifyVoteRequest)
 		select {
 		case <-req.ctx.Done():
-			// request cancelled, return an error response on the channel
-			vbp.Cleanup(jobs, req.ctx.Err())
+			// request of the job is cancelled, return an error response on the channel
+			vbp.GetErredUnprocessed(jobs[i], req.ctx.Err())
 		default:
 		}
 		// if this is an eq vote
