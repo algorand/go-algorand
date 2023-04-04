@@ -506,6 +506,12 @@ type Local struct {
 	// and APIs related to broadcasting transactions, and enables APIs which can retrieve detailed information
 	// from ledger caches and can control the ledger round.
 	EnableFollowMode bool `version[27]:"false"`
+
+	// StorageEngine allows to control which type of storage to use for the ledger.
+	// Available options are:
+	// - sqlite (default)
+	// - pebbledb (experimental, in development)
+	StorageEngine string `version[28]:"sqlite"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
