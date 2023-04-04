@@ -131,16 +131,16 @@ func OnlineAccountsInitDbQueries(r db.Queryable) (*onlineAccountsDbQueries, erro
 }
 
 // MakeOnlineAccountsSQLWriter constructs an OnlineAccountsWriter backed by sql queries.
-func MakeOnlineAccountsSQLWriter(tx *sql.Tx, hasAccounts bool) (w *onlineAccountsSQLWriter, err error) {
+func MakeOnlineAccountsSQLWriter(e db.Executable, hasAccounts bool) (w *onlineAccountsSQLWriter, err error) {
 	w = new(onlineAccountsSQLWriter)
 
 	if hasAccounts {
-		w.insertStmt, err = tx.Prepare("INSERT INTO onlineaccounts (address, normalizedonlinebalance, data, updround, votelastvalid) VALUES (?, ?, ?, ?, ?)")
+		w.insertStmt, err = e.Prepare("INSERT INTO onlineaccounts (address, normalizedonlinebalance, data, updround, votelastvalid) VALUES (?, ?, ?, ?, ?)")
 		if err != nil {
 			return
 		}
 
-		w.updateStmt, err = tx.Prepare("UPDATE onlineaccounts SET normalizedonlinebalance = ?, data = ?, updround = ?, votelastvalid =? WHERE rowid = ?")
+		w.updateStmt, err = e.Prepare("UPDATE onlineaccounts SET normalizedonlinebalance = ?, data = ?, updround = ?, votelastvalid =? WHERE rowid = ?")
 		if err != nil {
 			return
 		}
@@ -150,62 +150,62 @@ func MakeOnlineAccountsSQLWriter(tx *sql.Tx, hasAccounts bool) (w *onlineAccount
 }
 
 // MakeAccountsSQLWriter constructs an AccountsWriter backed by sql queries.
-func MakeAccountsSQLWriter(tx *sql.Tx, hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (w *accountsSQLWriter, err error) {
+func MakeAccountsSQLWriter(e db.Executable, hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (w *accountsSQLWriter, err error) {
 	w = new(accountsSQLWriter)
 
 	if hasAccounts {
-		w.deleteByRowIDStmt, err = tx.Prepare("DELETE FROM accountbase WHERE rowid=?")
+		w.deleteByRowIDStmt, err = e.Prepare("DELETE FROM accountbase WHERE rowid=?")
 		if err != nil {
 			return
 		}
 
-		w.insertStmt, err = tx.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
+		w.insertStmt, err = e.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
 		if err != nil {
 			return
 		}
 
-		w.updateStmt, err = tx.Prepare("UPDATE accountbase SET normalizedonlinebalance = ?, data = ? WHERE rowid = ?")
+		w.updateStmt, err = e.Prepare("UPDATE accountbase SET normalizedonlinebalance = ?, data = ? WHERE rowid = ?")
 		if err != nil {
 			return
 		}
 	}
 
 	if hasResources {
-		w.deleteResourceStmt, err = tx.Prepare("DELETE FROM resources WHERE addrid = ? AND aidx = ?")
+		w.deleteResourceStmt, err = e.Prepare("DELETE FROM resources WHERE addrid = ? AND aidx = ?")
 		if err != nil {
 			return
 		}
 
-		w.insertResourceStmt, err = tx.Prepare("INSERT INTO resources(addrid, aidx, data) VALUES(?, ?, ?)")
+		w.insertResourceStmt, err = e.Prepare("INSERT INTO resources(addrid, aidx, data) VALUES(?, ?, ?)")
 		if err != nil {
 			return
 		}
 
-		w.updateResourceStmt, err = tx.Prepare("UPDATE resources SET data = ? WHERE addrid = ? AND aidx = ?")
+		w.updateResourceStmt, err = e.Prepare("UPDATE resources SET data = ? WHERE addrid = ? AND aidx = ?")
 		if err != nil {
 			return
 		}
 	}
 
 	if hasKvPairs {
-		w.upsertKvPairStmt, err = tx.Prepare("INSERT INTO kvstore (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+		w.upsertKvPairStmt, err = e.Prepare("INSERT INTO kvstore (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
 		if err != nil {
 			return
 		}
 
-		w.deleteKvPairStmt, err = tx.Prepare("DELETE FROM kvstore WHERE key=?")
+		w.deleteKvPairStmt, err = e.Prepare("DELETE FROM kvstore WHERE key=?")
 		if err != nil {
 			return
 		}
 	}
 
 	if hasCreatables {
-		w.insertCreatableIdxStmt, err = tx.Prepare("INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)")
+		w.insertCreatableIdxStmt, err = e.Prepare("INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)")
 		if err != nil {
 			return
 		}
 
-		w.deleteCreatableIdxStmt, err = tx.Prepare("DELETE FROM assetcreators WHERE asset=? AND ctype=?")
+		w.deleteCreatableIdxStmt, err = e.Prepare("DELETE FROM assetcreators WHERE asset=? AND ctype=?")
 		if err != nil {
 			return
 		}
