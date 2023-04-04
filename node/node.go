@@ -1420,11 +1420,13 @@ func (node *AlgorandFullNode) GetSyncRound() uint64 {
 func (node *AlgorandFullNode) UnsetSyncRound() {
 }
 
-func (node *AlgorandFullNode) SetBlockTimeStampOffset(offset time.Duration) {
+func (node *AlgorandFullNode) SetBlockTimeStampOffset(offset time.Duration) error {
 	if !node.devMode {
-		return
+		// TODO: return error here?
+		return nil
 	}
 	node.devModeTimeStampOffset = offset
+	return nil
 }
 
 func (node *AlgorandFullNode) GetBlockTimeStampOffset() time.Duration {

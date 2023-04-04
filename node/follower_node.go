@@ -447,3 +447,11 @@ func (node *AlgorandFollowerNode) GetSyncRound() uint64 {
 func (node *AlgorandFollowerNode) UnsetSyncRound() {
 	node.catchupService.UnsetDisableSyncRound()
 }
+
+func (node *AlgorandFollowerNode) SetBlockTimeStampOffset(offset time.Duration) error {
+	return nil
+}
+
+func (node *AlgorandFollowerNode) GetBlockTimeStampOffset() time.Duration {
+	return time.Duration(0)
+}
