@@ -117,7 +117,7 @@ func CustomTestAccountsOnlineTop(t *customT) {
 	require.NoError(t, err)
 
 	// generate some test data
-	var test_data []basics.Address
+	var testData []basics.Address
 	updRound := uint64(0)
 	for i := 0; i < 10; i++ {
 		addr := RandomAddress()
@@ -135,21 +135,21 @@ func CustomTestAccountsOnlineTop(t *customT) {
 		_, err := oaw.InsertOnlineAccount(addr, normalizedBal, data, updRound, lastValid)
 		require.NoError(t, err)
 
-		test_data = append(test_data, addr)
+		testData = append(testData, addr)
 	}
 
 	// read (all)
 	poA, err := ar.AccountsOnlineTop(basics.Round(0), 0, 10, t.proto)
 	require.NoError(t, err)
-	require.Contains(t, poA, test_data[9]) // most money
-	require.Contains(t, poA, test_data[0]) // least money
+	require.Contains(t, poA, testData[9]) // most money
+	require.Contains(t, poA, testData[0]) // least money
 
 	// read (just a few)
 	poA, err = ar.AccountsOnlineTop(basics.Round(0), 1, 2, t.proto)
 	require.NoError(t, err)
 	require.Len(t, poA, 2)
-	require.Contains(t, poA, test_data[8]) // (second most money, we skipped 1)
-	require.Contains(t, poA, test_data[7]) // (third, we only have 2 items)
+	require.Contains(t, poA, testData[8]) // (second most money, we skipped 1)
+	require.Contains(t, poA, testData[7]) // (third, we only have 2 items)
 }
 
 func CustomTestLookupOnlineAccountDataByAddress(t *customT) {
