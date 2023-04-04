@@ -50,8 +50,8 @@ func (w *onlineAccountsWriter) InsertOnlineAccount(addr basics.Address, normBala
 	}
 
 	// write to the secondary account balance key
-	// err = w.kvw.Set(onlineAccountBalanceKey(updRound, normBalance, addr), []byte{})
-	// TODO: Nacho: shortcut to get the demo working, we nede to see if we want to trade storage for efficiency on this one
+	// TODO: this is not the most efficient use of space, but its a tradeoff with a second lookup per object.
+	//       this impacts `AccountsOnlineTop`, and some experiments will be needed to determine if we do extra lookups or duplicate the values.
 	err = w.kvw.Set(onlineAccountBalanceKey(updRound, normBalance, addr), raw)
 	if err != nil {
 		return nil, err
