@@ -129,10 +129,11 @@ type AlgorandFullNode struct {
 
 	indexer *indexer.Indexer
 
-	rootDir     string
-	genesisID   string
-	genesisHash crypto.Digest
-	devMode     bool // is this node operates in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
+	rootDir                string
+	genesisID              string
+	genesisHash            crypto.Digest
+	devMode                bool // is this node operating in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
+	devModeTimeStampOffset time.Duration
 
 	log logging.Logger
 
@@ -464,7 +465,7 @@ func (node *AlgorandFullNode) Ledger() *data.Ledger {
 // writeDevmodeBlock generates a new block for a devmode, and write it to the ledger.
 func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 	var vb *ledgercore.ValidatedBlock
-	vb, err = node.transactionPool.AssembleDevModeBlock()
+	vb, err = node.transactionPool.AssembleDevModeBlock(node.devModeTimeStampOffset)
 	if err != nil || vb == nil {
 		return
 	}
@@ -1417,4 +1418,15 @@ func (node *AlgorandFullNode) GetSyncRound() uint64 {
 
 // UnsetSyncRound no-ops
 func (node *AlgorandFullNode) UnsetSyncRound() {
+}
+
+func (node *AlgorandFullNode) SetBlockTimeStampOffset(offset time.Duration) {
+	if !node.devMode {
+		return
+	}
+	node.devModeTimeStampOffset = offset
+}
+
+func (node *AlgorandFullNode) GetBlockTimeStampOffset() time.Duration {
+	return node.devModeTimeStampOffset
 }

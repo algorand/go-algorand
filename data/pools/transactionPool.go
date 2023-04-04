@@ -96,6 +96,10 @@ type TransactionPool struct {
 	// stateproofOverflowed indicates that a stateproof transaction was allowed to
 	// exceed the txPoolMaxSize. This flag is reset to false OnNewBlock
 	stateproofOverflowed bool
+
+	// devModeTimeStampOffset adds an offset to the timestamp in the
+	// blockheader in dev mode.
+	devModeTimeStampOffset time.Duration
 }
 
 // BlockEvaluator defines the block evaluator interface exposed by the ledger package.
@@ -700,6 +704,13 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	if hint < 0 || int(knownCommitted) < 0 {
 		hint = 0
 	}
+
+	// If dev mode timestamp offset is configured, add the offset to current
+	// block timestamp.
+	if pool.devModeTimeStampOffset != 0 {
+		next.BlockHeader.TimeStamp += int64(pool.devModeTimeStampOffset)
+	}
+
 	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
 	if err != nil {
 		// The pendingBlockEvaluator is an interface, and in case of an evaluator error
@@ -985,11 +996,12 @@ func (pool *TransactionPool) assembleEmptyBlock(round basics.Round) (assembled *
 }
 
 // AssembleDevModeBlock assemble a new block from the existing transaction pool. The pending evaluator is being
-func (pool *TransactionPool) AssembleDevModeBlock() (assembled *ledgercore.ValidatedBlock, err error) {
+func (pool *TransactionPool) AssembleDevModeBlock(offset time.Duration) (assembled *ledgercore.ValidatedBlock, err error) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
 	// drop the current block evaluator and start with a new one.
+	pool.devModeTimeStampOffset = offset
 	pool.recomputeBlockEvaluator(nil, 0)
 
 	// The above was already pregenerating the entire block,
