@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/pebbledbdriver"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -144,7 +145,7 @@ func OpenLedger(
 		}
 	}()
 
-	l.trackerDBs, l.blockDBs, err = openLedgerDB(dbPathPrefix, dbMem)
+	l.trackerDBs, l.blockDBs, err = openLedgerDB(dbPathPrefix, dbMem, cfg)
 	if err != nil {
 		err = fmt.Errorf("OpenLedger.openLedgerDB %v", err)
 		return nil, err
@@ -284,12 +285,9 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	return
 }
 
-func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs trackerdb.TrackerStore, blockDBs db.Pair, err error) {
+func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local) (trackerDBs trackerdb.TrackerStore, blockDBs db.Pair, err error) {
 	// Backwards compatibility: we used to store both blocks and tracker
 	// state in a single SQLite db file.
-	var trackerDBFilename string
-	var blockDBFilename string
-
 	if !dbMem {
 		commonDBFilename := dbPathPrefix + ".sqlite"
 		_, err = os.Stat(commonDBFilename)
@@ -302,18 +300,28 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs trackerdb.Tracker
 		}
 	}
 
-	trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
-	blockDBFilename = dbPathPrefix + ".block.sqlite"
-
 	outErr := make(chan error, 2)
 	go func() {
 		var lerr error
-		trackerDBs, lerr = sqlitedriver.OpenTrackerSQLStore(trackerDBFilename, dbMem)
+		switch cfg.StorageEngine {
+		case "pebbledb":
+			dir := dbPathPrefix + "/tracker"
+			trackerDBs, lerr = pebbledbdriver.OpenTrackerDB(dir, dbMem, config.Consensus[protocol.ConsensusCurrentVersion])
+		// pebbledb needs to be explicitly configured.
+		// anything else will initialize a sqlite engine.
+		case "sqlite":
+			fallthrough
+		default:
+			file := dbPathPrefix + ".tracker.sqlite"
+			trackerDBs, lerr = sqlitedriver.OpenTrackerSQLStore(file, dbMem)
+		}
+
 		outErr <- lerr
 	}()
 
 	go func() {
 		var lerr error
+		blockDBFilename := dbPathPrefix + ".block.sqlite"
 		blockDBs, lerr = db.OpenPair(blockDBFilename, dbMem)
 		outErr <- lerr
 	}()
