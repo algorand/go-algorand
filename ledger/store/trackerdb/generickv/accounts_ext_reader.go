@@ -118,7 +118,7 @@ func (r *accountsReader) TotalKVs(ctx context.Context) (total uint64, err error)
 func (r *accountsReader) LookupOnlineAccountDataByAddress(addr basics.Address) (ref trackerdb.OnlineAccountRef, data []byte, err error) {
 	low := onlineAccountOnlyPartialKey(addr)
 	high := onlineAccountOnlyPartialKey(addr)
-	high[len(high)-1] += 1
+	high[len(high)-1]++
 	iter := r.kvr.NewIter(low, high, true)
 	defer iter.Close()
 
@@ -183,7 +183,7 @@ func (r *accountsReader) AccountsOnlineTop(rnd basics.Round, offset uint64, n ui
 	// prepare iter over online accounts (by balance)
 	low := onlineAccountBalanceOnlyPartialKey(rnd)
 	high := onlineAccountBalanceOnlyPartialKey(rnd)
-	high[len(high)-1] += 1
+	high[len(high)-1]++
 	// reverse order iterator to get high-to-low
 	iter := r.kvr.NewIter(low, high, true)
 	defer iter.Close()

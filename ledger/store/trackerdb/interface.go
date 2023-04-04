@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
+// ErrNotFound is returned when a record is not found.
 var ErrNotFound = errors.New("trackerdb: not found")
 
 // AccountRef is an opaque ref to an account in the db.

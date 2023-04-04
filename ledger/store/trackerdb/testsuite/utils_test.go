@@ -74,7 +74,7 @@ func runGenericTestsWithDB(t *testing.T, dbFactory func() (db dbForTests)) {
 	}
 }
 
-func seed_db(t *testing.T, db dbForTests) {
+func seedDb(t *testing.T, db dbForTests) {
 	err := db.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 		_, err := tx.RunMigrations(ctx, trackerdb.Params{InitProto: protocol.ConsensusCurrentVersion}, logging.TestingLog(t), trackerdb.AccountDBVersion)
 		if err != nil {
@@ -122,88 +122,88 @@ func makeMockDB() *mockDB {
 	return &mockDB{data: make(map[string][]byte)}
 }
 
-func (s *mockDB) SetLogger(log logging.Logger) {
+func (db *mockDB) SetLogger(log logging.Logger) {
 	// TODO
 }
 
-func (s *mockDB) SetSynchronousMode(ctx context.Context, mode db.SynchronousMode, fullfsync bool) (err error) {
+func (db *mockDB) SetSynchronousMode(ctx context.Context, mode db.SynchronousMode, fullfsync bool) (err error) {
 	// TODO
 	return nil
 }
 
-func (s *mockDB) IsSharedCacheConnection() bool {
+func (db *mockDB) IsSharedCacheConnection() bool {
 	// TODO
 	return false
 }
 
-func (s *mockDB) Batch(fn trackerdb.BatchFn) (err error) {
-	return s.BatchContext(context.Background(), fn)
+func (db *mockDB) Batch(fn trackerdb.BatchFn) (err error) {
+	return db.BatchContext(context.Background(), fn)
 }
 
-func (s *mockDB) BatchContext(ctx context.Context, fn trackerdb.BatchFn) (err error) {
-	return fn(ctx, mockBatch{s})
+func (db *mockDB) BatchContext(ctx context.Context, fn trackerdb.BatchFn) (err error) {
+	return fn(ctx, mockBatch{db})
 }
 
-func (s *mockDB) Snapshot(fn trackerdb.SnapshotFn) (err error) {
-	return s.SnapshotContext(context.Background(), fn)
+func (db *mockDB) Snapshot(fn trackerdb.SnapshotFn) (err error) {
+	return db.SnapshotContext(context.Background(), fn)
 }
 
-func (s *mockDB) SnapshotContext(ctx context.Context, fn trackerdb.SnapshotFn) (err error) {
-	return fn(ctx, mockSnapshot{s})
+func (db *mockDB) SnapshotContext(ctx context.Context, fn trackerdb.SnapshotFn) (err error) {
+	return fn(ctx, mockSnapshot{db})
 }
 
-func (s *mockDB) Transaction(fn trackerdb.TransactionFn) (err error) {
-	return s.TransactionContext(context.Background(), fn)
+func (db *mockDB) Transaction(fn trackerdb.TransactionFn) (err error) {
+	return db.TransactionContext(context.Background(), fn)
 }
 
-func (s *mockDB) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) (err error) {
-	return fn(ctx, mockTransaction{s, s.proto})
+func (db *mockDB) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) (err error) {
+	return fn(ctx, mockTransaction{db, db.proto})
 }
 
-func (s *mockDB) MakeAccountsWriter() (trackerdb.AccountsWriterExt, error) {
-	return generickv.MakeAccountsWriter(s, s), nil
+func (db *mockDB) MakeAccountsWriter() (trackerdb.AccountsWriterExt, error) {
+	return generickv.MakeAccountsWriter(db, db), nil
 }
 
-func (s *mockDB) MakeAccountsReader() (trackerdb.AccountsReaderExt, error) {
-	return generickv.MakeAccountsReader(s, s.proto), nil
+func (db *mockDB) MakeAccountsReader() (trackerdb.AccountsReaderExt, error) {
+	return generickv.MakeAccountsReader(db, db.proto), nil
 }
 
-func (s *mockDB) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (trackerdb.AccountsWriter, error) {
-	return generickv.MakeAccountsWriter(s, s), nil
+func (db *mockDB) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (trackerdb.AccountsWriter, error) {
+	return generickv.MakeAccountsWriter(db, db), nil
 }
 
-func (s *mockDB) MakeAccountsOptimizedReader() (trackerdb.AccountsReader, error) {
-	return generickv.MakeAccountsReader(s, s.proto), nil
+func (db *mockDB) MakeAccountsOptimizedReader() (trackerdb.AccountsReader, error) {
+	return generickv.MakeAccountsReader(db, db.proto), nil
 }
 
-func (s *mockDB) MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (trackerdb.OnlineAccountsWriter, error) {
-	return generickv.MakeOnlineAccountsWriter(s), nil
+func (db *mockDB) MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (trackerdb.OnlineAccountsWriter, error) {
+	return generickv.MakeOnlineAccountsWriter(db), nil
 }
 
-func (s *mockDB) MakeOnlineAccountsOptimizedReader() (trackerdb.OnlineAccountsReader, error) {
-	return generickv.MakeAccountsReader(s, s.proto), nil
+func (db *mockDB) MakeOnlineAccountsOptimizedReader() (trackerdb.OnlineAccountsReader, error) {
+	return generickv.MakeAccountsReader(db, db.proto), nil
 }
 
-func (s *mockDB) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
+func (db *mockDB) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
 	// TODO
 	return nil, nil
 }
 
-func (s *mockDB) Vacuum(ctx context.Context) (stats db.VacuumStats, err error) {
+func (db *mockDB) Vacuum(ctx context.Context) (stats db.VacuumStats, err error) {
 	// TODO
-	return db.VacuumStats{}, nil
+	return stats, nil
 }
 
-func (s *mockDB) CleanupTest(dbName string, inMemory bool) {
+func (db *mockDB) CleanupTest(dbName string, inMemory bool) {
 	// TODO
 }
 
-func (s *mockDB) ResetToV6Test(ctx context.Context) error {
+func (db *mockDB) ResetToV6Test(ctx context.Context) error {
 	// TODO
 	return nil
 }
 
-func (s *mockDB) Close() {
+func (db *mockDB) Close() {
 	// TODO
 }
 
@@ -429,10 +429,9 @@ func (iter *mockIter) Next() bool {
 	if iter.curr < len(iter.keys)-1 {
 		iter.curr++
 		return true
-	} else {
-		iter.curr = -1
-		return false
 	}
+	iter.curr = -1
+	return false
 }
 
 func (iter *mockIter) Key() []byte {
@@ -455,5 +454,4 @@ func (iter *mockIter) Valid() bool {
 	return iter.curr != -1
 }
 
-func (i *mockIter) Close() {
-}
+func (iter *mockIter) Close() {}

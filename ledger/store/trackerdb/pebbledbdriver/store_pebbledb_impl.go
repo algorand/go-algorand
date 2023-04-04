@@ -463,15 +463,13 @@ func (i *pebbleIter) Next() bool {
 		i.firstCall = false
 		if i.reverse {
 			return i.iter.Last()
-		} else {
-			return i.iter.First()
 		}
+		return i.iter.First()
 	}
 	if i.reverse {
 		return i.iter.Prev()
-	} else {
-		return i.iter.Next()
 	}
+	return i.iter.Next()
 }
 func (i *pebbleIter) Valid() bool { return i.iter.Valid() }
 func (i *pebbleIter) Close()      { i.iter.Close() }

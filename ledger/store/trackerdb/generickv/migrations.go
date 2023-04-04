@@ -26,12 +26,9 @@ import (
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
+// RunMigrations runs the migrations on a generic db
 func RunMigrations(ctx context.Context, db trackerdb.TrackerStore, params trackerdb.Params, targetVersion int32) (mgr trackerdb.InitParams, err error) {
 	proto := config.Consensus[params.InitProto]
-
-	// if targetVersion < 9 {
-	// 	return mgr, fmt.Errorf("KV implementations start at schema version 9")
-	// }
 
 	// TODO: make this a batch scope
 	err = db.TransactionContext(ctx, func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
@@ -67,7 +64,11 @@ func RunMigrations(ctx context.Context, db trackerdb.TrackerStore, params tracke
 			var bad trackerdb.BaseAccountData
 			bad.SetAccountData(&account)
 			// insert the account
-			aow.InsertAccount(addr, account.NormalizedOnlineBalance(proto), bad)
+			_, err = aow.InsertAccount(addr, account.NormalizedOnlineBalance(proto), bad)
+			if err != nil {
+				return err
+			}
+
 			// build a ledgercore.AccountData to track the totals
 			ad := ledgercore.ToAccountData(account)
 			// track the totals
@@ -100,7 +101,7 @@ func RunMigrations(ctx context.Context, db trackerdb.TrackerStore, params tracke
 
 		// insert online params
 		params := []ledgercore.OnlineRoundParamsData{
-			ledgercore.OnlineRoundParamsData{
+			{
 				OnlineSupply:    totals.Online.Money.Raw,
 				RewardsLevel:    totals.RewardsLevel,
 				CurrentProtocol: params.InitProto,
@@ -117,8 +118,7 @@ func RunMigrations(ctx context.Context, db trackerdb.TrackerStore, params tracke
 		return mgr, err
 	}
 
-	// KV's start at version 9
-	mgr.SchemaVersion = 9
+	mgr.SchemaVersion = trackerdb.AccountDBVersion
 	mgr.VacuumOnStartup = false
 
 	return mgr, nil
