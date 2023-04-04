@@ -3500,7 +3500,7 @@ func TestDisassembleBadBranch(t *testing.T) {
 		require.Error(t, err, dis)
 
 		// It would be reasonable to error here, since it's a jump past the end.
-		dis, err = Disassemble([]byte{2, br, 0xff, 0x05})
+		dis, err = Disassemble([]byte{2, br, 0x00, 0x05})
 		require.NoError(t, err, dis)
 
 		// It would be reasonable to error here, since it's a back jump in v2.
@@ -3529,10 +3529,15 @@ func TestDisassembleBadSwitch(t *testing.T) {
 	dis, err := Disassemble(ops.Program)
 	require.NoError(t, err, dis)
 
-	// return the label count, but chop off the labels themselves
+	// chop off all the labels, but keep the label count
+	dis, err = Disassemble(ops.Program[:len(ops.Program)-4])
+	require.ErrorContains(t, err, "could not decode labels for switch", dis)
+
+	// chop off before the label count
 	dis, err = Disassemble(ops.Program[:len(ops.Program)-5])
 	require.ErrorContains(t, err, "could not decode label count for switch", dis)
 
+	// chop off half of a label
 	dis, err = Disassemble(ops.Program[:len(ops.Program)-1])
 	require.ErrorContains(t, err, "could not decode labels for switch", dis)
 }
