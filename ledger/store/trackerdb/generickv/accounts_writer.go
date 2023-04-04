@@ -22,64 +22,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// schema:
-// "account"-<addr>-latest        +1 (for all accounts)
-// "account"-<addr>-<round>       historical (only turned on for online
-
-// ..
-// "account"-<addr>-<round> <--- latest less than `rnd` param
-// ..
-
-// "account"-<addr>-horizon-320      (320 ago)
-
-// # Only  for Online Accounts
-
-// Note: think about hwo to round encode this data..
-
-// true index, for a given round, the top N balance addresses
-// "crazy thing"-<round>-<balance>-<addr>
-// "crazy thing"-horizon-<size>-<addr> // value: {rnd, balance}   // cutoff points
-//               2187-$500-chris
-//               2188-$1000-chris
-//               <------ cutoff happened here
-//               2199-$5-nacho value: nil
-//               2200-$35-chris <--
-//               2200-$20-nacho <--
-//               2202-$0-chris <-- // offline
-//               2249-$10-chris <-- // online
-//
-// new write, just get added, new balance and the round
-// we need to figure out the online/offline/online/offline thing
-
-// # Going Online
-// - Write "crazy thing"-<rnd>-<balance>-<addr>
-// - you are not really online until the "online" event falls off the horizon
-// - we need to write the horizon entry when this happens with the same balance as the online event
-
-// GetRangeReverse(["crazy-horizon-*"])
-//    .Map(|data| decode(data))
-//    .Extend(/* this stuff below */
-// GetRangeReverse(["crazy-1900-*", "crazy-2200-*"])
-//    .Map(|data| decode(data))
-//  ) // closing the extend
-//    .SortBy(|x| x.balance)
-//    .DedupBy(|x| x.addr)
-
-// Horizon cleanup (online process)
-// - Move the horizon..
-//    cost here is the # of online accounts that did not change in 319 accounts and where not already in this situation last round.
-// - This can be done with a GetRange before the deleting to find the latest of each
-// - DeleteRange("account"-<addr>-<round value of xxx - 320>)
-// this requires moving the horizon for ppl that fell off
-//    ""
-
-// # When/how do we cleanup things in the horizon?
-//  - we can delete it when the latest balance older than the horizon is $0
-
-// Option B (radicall):
-//	  "really crazy"-round    -> value: "pick a tree"  data
-//	  "really crazy"-round    -> value: "pick a tree"  data
-
+// KvWrite is a low level KV db interface for writing.
 type KvWrite interface {
 	Set(key, value []byte) error
 	Delete(key []byte) error

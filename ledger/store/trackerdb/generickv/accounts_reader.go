@@ -28,11 +28,13 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// KvRead is a low level KV db interface for reading.
 type KvRead interface {
 	Get(key []byte) ([]byte, io.Closer, error)
 	NewIter(low, high []byte, reverse bool) KvIter
 }
 
+// KvIter is a low level KV iterator.
 type KvIter interface {
 	Next() bool
 	Key() []byte
@@ -43,6 +45,7 @@ type KvIter interface {
 	Close()
 }
 
+// Slice is a low level slice used during the KV iterator.
 type Slice interface {
 	Data() []byte
 	Free()
@@ -147,7 +150,7 @@ func (r *accountsReader) LookupResources(addr basics.Address, aidx basics.Creata
 func (r *accountsReader) LookupAllResources(addr basics.Address) (data []trackerdb.PersistedResourcesData, rnd basics.Round, err error) {
 	low := resourceAddrOnlyPartialKey(addr)
 	high := resourceAddrOnlyPartialKey(addr)
-	high[len(high)-1] += 1
+	high[len(high)-1]++
 
 	iter := r.kvr.NewIter(low, high, false)
 	defer iter.Close()
@@ -267,7 +270,7 @@ func (r *accountsReader) LookupKeysByPrefix(prefix string, maxKeyNum uint64, res
 		results[key] = len(value) > 0
 
 		// inc results in range
-		resultCount += 1
+		resultCount++
 	}
 
 	return
@@ -342,7 +345,7 @@ func (r *accountsReader) ListCreatables(maxIdx basics.CreatableIndex, maxResults
 		results = append(results, cl)
 
 		// inc results in range
-		resultCount += 1
+		resultCount++
 	}
 
 	// read the current db round

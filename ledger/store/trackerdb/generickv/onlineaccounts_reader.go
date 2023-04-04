@@ -55,7 +55,7 @@ func (r *accountsReader) LookupOnlineTotalsHistory(round basics.Round) (basics.M
 func (r *accountsReader) LookupOnlineHistory(addr basics.Address) (result []trackerdb.PersistedOnlineAccountData, rnd basics.Round, err error) {
 	low := onlineAccountOnlyPartialKey(addr)
 	high := onlineAccountOnlyPartialKey(addr)
-	high[len(high)-1] += 1
+	high[len(high)-1]++
 	iter := r.kvr.NewIter(low, high, false)
 	defer iter.Close()
 

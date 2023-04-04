@@ -73,12 +73,12 @@ func CustomTestTotals(t *customT) {
 	require.NoError(t, err)
 
 	// read the totals
-	read_totals, err := ar.AccountsTotals(context.Background(), false)
+	readTotals, err := ar.AccountsTotals(context.Background(), false)
 	require.NoError(t, err)
-	require.Equal(t, totals, read_totals)
+	require.Equal(t, totals, readTotals)
 
 	// generate some staging values
-	staging_totals := ledgercore.AccountTotals{
+	stagingTotals := ledgercore.AccountTotals{
 		Online:           ledgercore.AlgoCount{Money: basics.MicroAlgos{Raw: 1}},
 		Offline:          ledgercore.AlgoCount{Money: basics.MicroAlgos{Raw: 2}},
 		NotParticipating: ledgercore.AlgoCount{Money: basics.MicroAlgos{Raw: 3}},
@@ -86,18 +86,18 @@ func CustomTestTotals(t *customT) {
 	}
 
 	// update the (staging) totals
-	err = aw.AccountsPutTotals(staging_totals, true)
+	err = aw.AccountsPutTotals(stagingTotals, true)
 	require.NoError(t, err)
 
 	// read the totals
-	read_totals, err = ar.AccountsTotals(context.Background(), true)
+	readTotals, err = ar.AccountsTotals(context.Background(), true)
 	require.NoError(t, err)
-	require.Equal(t, staging_totals, read_totals)
+	require.Equal(t, stagingTotals, readTotals)
 
 	// double check the live data is still there
-	read_totals, err = ar.AccountsTotals(context.Background(), false)
+	readTotals, err = ar.AccountsTotals(context.Background(), false)
 	require.NoError(t, err)
-	require.Equal(t, totals, read_totals)
+	require.Equal(t, totals, readTotals)
 }
 
 func CustomTestTxTail(t *customT) {
