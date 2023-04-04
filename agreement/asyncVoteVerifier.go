@@ -223,7 +223,7 @@ func authenticateCred(cred *committee.UnauthenticatedCredential, round round, l 
 	m *committee.Membership) (c *committee.Credential, err error) {
 	proto, err := l.ConsensusParams(ParamsRound(round))
 	if err != nil {
-		return nil, fmt.Errorf("unauthenticatedVote.verify: could not get consensus params for round %d: %v", ParamsRound(round), err)
+		return nil, fmt.Errorf("authenticateCred: could not get consensus params for round %d: %w", ParamsRound(round), err)
 	}
 	cr, err := cred.Verify(proto, *m)
 	return &cr, err
@@ -242,14 +242,14 @@ func (vtr *verificationTasksAndResults) getJobResult(req *asyncVerifyVoteRequest
 	if isEV {
 		// pairIndexes are the indexes in tasks for the 2 tasks corresponding to the equivocationVote job
 		pairIndexes := []int{i0, i0 + 1}
-		for _, i := range pairIndexes {
+		for p, i := range pairIndexes {
 			if !vtr.failed[i] {
 				continue
 			}
 			rv := vtr.tasks[i].Message.(rawVote)
 			voteID := vtr.tasks[i].V
-			return nil, nil, fmt.Errorf("unauthenticatedEquivocationVote.verify: failed to verify pair %d: %w", i,
-				fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, vtr.unauthV[j].uev))
+			return nil, nil, fmt.Errorf("verificationTasksAndResults.getJobResult: failed to verify pair %d: %w", p,
+				fmt.Errorf("could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, vtr.unauthV[j].uev))
 		}
 		// here, the signatures of both votes are verified. Now authenticate the cred
 		ev, err := vtr.unauthV[j].uev.authenticateCredAndGetEqVote(req.l, vtr.unauthV[j].m)
@@ -260,7 +260,7 @@ func (vtr *verificationTasksAndResults) getJobResult(req *asyncVerifyVoteRequest
 	if vtr.failed[i0] {
 		rv := vtr.tasks[i0].Message.(rawVote)
 		voteID := vtr.tasks[i0].V
-		return nil, nil, fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, req.uv)
+		return nil, nil, fmt.Errorf("verificationTasksAndResults.getJobResult: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, req.uv)
 	}
 	// Validate the cred
 	v, err := vtr.unauthV[j].uv.authenticateCredAndGetVote(req.l, vtr.unauthV[j].m)
@@ -297,7 +297,7 @@ func (vbp *voteBatchProcessor) ProcessBatch(jobs []execpool.InputJob) {
 		if req.uv != nil {
 			m, err := membership(req.l, req.uv.R.Sender, req.uv.R.Round, req.uv.R.Period, req.uv.R.Step)
 			if err != nil {
-				err2 := fmt.Errorf("voteBatchProcessor: could not get membership parameters: %w", err)
+				err2 := fmt.Errorf("voteBatchProcessor.ProcessBatch: could not get membership parameters: %w", err)
 				var e *LedgerDroppedRoundError
 				cancelled := errors.As(err, &e)
 				vbp.outChan <- &asyncVerifyVoteResponse{index: req.index, message: req.message, err: err2, cancelled: cancelled, req: req}
