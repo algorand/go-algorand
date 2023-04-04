@@ -38,44 +38,65 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 		return
 	}
 
-	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
-		arw, err := tx.MakeAccountsReaderWriter()
-		if err != nil {
-			return err
-		}
+	tp := trackerdb.Params{
+		InitAccounts:      l.GenesisAccounts(),
+		InitProto:         l.GenesisProtoVersion(),
+		GenesisHash:       l.GenesisHash(),
+		FromCatchpoint:    false,
+		CatchpointEnabled: catchpointEnabled,
+		DbPathPrefix:      dbPathPrefix,
+		BlockDb:           bdbs,
+	}
 
-		tp := trackerdb.Params{
-			InitAccounts:      l.GenesisAccounts(),
-			InitProto:         l.GenesisProtoVersion(),
-			GenesisHash:       l.GenesisHash(),
-			FromCatchpoint:    false,
-			CatchpointEnabled: catchpointEnabled,
-			DbPathPrefix:      dbPathPrefix,
-			BlockDb:           bdbs,
-		}
+	// run migrations
+	// TODO: move RunMigrations up to the db interface
+	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 		var err0 error
 		mgr, err0 = tx.RunMigrations(ctx, tp, log, trackerdb.AccountDBVersion)
 		if err0 != nil {
 			return err0
 		}
-		lastBalancesRound, err := arw.AccountsRound()
-		if err != nil {
-			return err
-		}
-		// Check for blocks DB and tracker DB un-sync
-		if lastBalancesRound > lastestBlockRound {
-			log.Warnf("trackerDBInitialize: resetting accounts DB (on round %v, but blocks DB's latest is %v)", lastBalancesRound, lastestBlockRound)
-			err0 = arw.AccountsReset(ctx)
-			if err0 != nil {
-				return err0
-			}
-			mgr, err0 = tx.RunMigrations(ctx, tp, log, trackerdb.AccountDBVersion)
-			if err0 != nil {
-				return err0
-			}
-		}
+
 		return nil
 	})
+	if err != nil {
+		return
+	}
+
+	// create reader for db
+	ar, err := dbs.MakeAccountsReader()
+	if err != nil {
+		return
+	}
+
+	// check current round
+	lastBalancesRound, err := ar.AccountsRound()
+	if err != nil {
+		return
+	}
+
+	// Check for blocks DB and tracker DB un-sync
+	if lastBalancesRound > lastestBlockRound {
+		log.Warnf("trackerDBInitialize: resetting accounts DB (on round %v, but blocks DB's latest is %v)", lastBalancesRound, lastestBlockRound)
+		err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+			arw, err := tx.MakeAccountsReaderWriter()
+			if err != nil {
+				return err
+			}
+			err = arw.AccountsReset(ctx)
+			if err != nil {
+				return err
+			}
+			mgr, err = tx.RunMigrations(ctx, tp, log, trackerdb.AccountDBVersion)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			return
+		}
+	}
 
 	return
 }
