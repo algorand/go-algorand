@@ -24,7 +24,7 @@ func TestMockDB(t *testing.T) {
 	dbFactory := func() dbForTests {
 		db := makeMockDB()
 
-		seed_db(t, db)
+		seedDb(t, db)
 
 		return db
 	}
