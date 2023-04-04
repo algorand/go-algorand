@@ -2981,7 +2981,7 @@
           "$ref": "#/definitions/ApplicationStateSchema"
         },
         "global-state": {
-          "description": "\\[gs\\] global schema",
+          "description": "\\[gs\\] global state",
           "$ref": "#/definitions/TealKeyValueStore"
         }
       }
