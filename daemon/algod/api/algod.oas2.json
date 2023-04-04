@@ -2431,6 +2431,96 @@
       }
     }
   },
+  "/v2/devmode/blocks/offset": {
+    "get": {
+      "tags": [
+        "public",
+        "nonparticipating"
+      ],
+      "produces": [
+        "application/json"
+      ],
+      "schemes": [
+        "http"
+      ],
+      "summary": "Returns the timestamp offset if devmode API is enabled.",
+      "operationId": "GetBlockTimeStampOffset",
+      "responses": {
+        "200": {
+          "description": "OK",
+          "$ref": "#/responses/GetBlockTimeStampOffsetResponse"
+        },
+        "400": {
+          "description": "TimeStamp offset not set.",
+          "schema": {
+            "$ref": "#/definitions/ErrorResponse"
+          }
+        },
+        "404": {
+          "description": "Devmode API not enabled"
+        },
+        "default": {
+          "description": "Unknown Error"
+        }
+      }
+    }
+  },
+  "/v2/devmode/blocks/offset/{offset}": {
+    "post": {
+      "description": "Sets the timestamp offset (seconds) for blocks in devmode.",
+      "tags": [
+        "public",
+        "nonparticipating"
+      ],
+      "schemes": [
+        "http"
+      ],
+      "summary": "Given a timestamp offset in seconds, adds the offset to every block header's timestamp.",
+      "operationId": "SetBlockTimeStampOffset",
+      "parameters": [
+        {
+          "type": "integer",
+          "description": "The timestamp offset for blocks in devmode.",
+          "name": "offset",
+          "in": "path",
+          "required": true,
+          "minimum": 0
+        }
+      ],
+      "responses": {
+        "200": {
+          "type": "object"
+        },
+        "400": {
+          "description": "Cannot set timestamp offset to a negative integer.",
+          "schema": {
+            "$ref": "#/definitions/ErrorResponse"
+          }
+        },
+        "401": {
+          "description": "Invalid API Token",
+          "schema": {
+            "$ref": "#/definitions/ErrorResponse"
+          }
+        },
+        "500": {
+          "description": "Internal Error",
+          "schema": {
+            "$ref": "#/definitions/ErrorResponse"
+          }
+        },
+        "503": {
+          "description": "Service Temporarily Unavailable",
+          "schema": {
+            "$ref": "#/definitions/ErrorResponse"
+          }
+        },
+        "default": {
+          "description": "Unknown Error"
+        }
+      }
+    }
+  },
   "definitions": {
     "LedgerStateDelta": {
       "description": "Ledger StateDelta object",
@@ -3695,6 +3785,21 @@
     }
   },
   "responses": {
+    "GetBlockTimeStampOffsetResponse": {
+      "description": "Response containing the timestamp offset in seconds",
+      "schema": {
+        "type": "object",
+        "required": [
+          "offset"
+        ],
+        "properties": {
+          "offset": {
+            "description": "Timestamp offset in seconds.",
+            "type": "integer"
+          }
+        }
+      }
+    },
     "GetSyncRoundResponse": {
       "description": "Response containing the ledger's minimum sync round",
       "schema": {

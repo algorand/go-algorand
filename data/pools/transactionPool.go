@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -97,6 +98,9 @@ type TransactionPool struct {
 	// exceed the txPoolMaxSize. This flag is reset to false OnNewBlock
 	stateproofOverflowed bool
 
+	// devMode indicates whether we are in dev mode and whether we should
+	// manually change certain fields in the block header such as block seed.
+	devMode bool
 	// devModeTimeStampOffset adds an offset to the timestamp in the
 	// blockheader in dev mode.
 	devModeTimeStampOffset time.Duration
@@ -707,8 +711,11 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	// If dev mode timestamp offset is configured, add the offset to current
 	// block timestamp.
-	if pool.devModeTimeStampOffset != 0 {
-		next.BlockHeader.TimeStamp += int64(pool.devModeTimeStampOffset)
+	if pool.devMode {
+		next.BlockHeader.Seed = committee.Seed(pool.PendingTxIDs()[0])
+		if pool.devModeTimeStampOffset != 0 {
+			next.BlockHeader.TimeStamp += int64(pool.devModeTimeStampOffset)
+		}
 	}
 
 	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
@@ -1001,6 +1008,7 @@ func (pool *TransactionPool) AssembleDevModeBlock(offset time.Duration) (assembl
 	defer pool.mu.Unlock()
 
 	// drop the current block evaluator and start with a new one.
+	pool.devMode = true
 	pool.devModeTimeStampOffset = offset
 	pool.recomputeBlockEvaluator(nil, 0)
 

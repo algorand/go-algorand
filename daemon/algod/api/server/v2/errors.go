@@ -28,6 +28,7 @@ var (
 	errFailedRetrievingNodeStatus              = "failed retrieving node status"
 	errFailedRetrievingLatestBlockHeaderStatus = "failed retrieving latests block header"
 	errFailedRetrievingSyncRound               = "failed retrieving sync round from ledger"
+	errFailedRetrievingTimeStampOffset         = "failed retrieving timestamp offset from node"
 	errFailedSettingSyncRound                  = "failed to set sync round on the ledger"
 	errFailedParsingFormatOption               = "failed to parse the format option"
 	errFailedToParseAddress                    = "failed to parse the address"

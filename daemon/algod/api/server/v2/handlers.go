@@ -113,6 +113,8 @@ type NodeInterface interface {
 	SetSyncRound(rnd uint64) error
 	GetSyncRound() uint64
 	UnsetSyncRound()
+	GetBlockTimeStampOffset() time.Duration
+	SetBlockTimeStampOffset(offset time.Duration) error
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {
@@ -1667,4 +1669,30 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 // ExperimentalCheck is only available when EnabledExperimentalAPI is true
 func (v2 *Handlers) ExperimentalCheck(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, true)
+}
+
+// GetTimeStampOffset gets the timestamp offset.
+// (GET /v2/devmode/blocks/offset)
+func (v2 *Handlers) GetBlockTimeStampOffset(ctx echo.Context) error {
+	offset := v2.Node.GetBlockTimeStampOffset()
+	if offset == 0 {
+		return notFound(ctx, fmt.Errorf("timestamp offset is not set"), errFailedRetrievingTimeStampOffset, v2.Log)
+	}
+	return ctx.JSON(http.StatusOK, model.GetBlockTimeStampOffsetResponse{Offset: uint64(offset.Seconds())})
+}
+
+// SetSyncRound sets the sync round on the ledger.
+// (POST /v2/devmode/blocks/offset/{offset})
+func (v2 *Handlers) SetBlockTimeStampOffset(ctx echo.Context, offset uint64) error {
+	timeOffset := time.Duration(offset) * time.Second
+	err := v2.Node.SetBlockTimeStampOffset(timeOffset)
+	if err != nil {
+		switch err {
+		case catchup.ErrSyncRoundInvalid:
+			return badRequest(ctx, err, errFailedSettingSyncRound, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedSettingSyncRound, v2.Log)
+		}
+	}
+	return ctx.NoContent(http.StatusOK)
 }

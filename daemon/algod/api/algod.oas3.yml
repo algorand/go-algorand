@@ -497,6 +497,25 @@
         },
         "description": "DryrunResponse contains per-txn debug information from a dryrun."
       },
+      "GetBlockTimeStampOffsetResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "offset": {
+                  "description": "Timestamp offset in seconds.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "offset"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Response containing the timestamp offset in seconds"
+      },
       "GetSyncRoundResponse": {
         "content": {
           "application/json": {
