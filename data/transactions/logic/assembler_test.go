@@ -3487,3 +3487,84 @@ warning 2
 	expected = "1 error: 42: super annoying error\n"
 	assertWithMsg(t, expected, b)
 }
+
+// TestDisassembleBadBranch ensures a clean error when a branch has no target.
+func TestDisassembleBadBranch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, br := range []byte{0x40, 0x41, 0x42} {
+		dis, err := Disassemble([]byte{2, br})
+		require.Error(t, err, dis)
+		dis, err = Disassemble([]byte{2, br, 0x01})
+		require.Error(t, err, dis)
+
+		// It would be reasonable to error here, since it's a jump past the end.
+		dis, err = Disassemble([]byte{2, br, 0x00, 0x05})
+		require.NoError(t, err, dis)
+
+		// It would be reasonable to error here, since it's a back jump in v2.
+		dis, err = Disassemble([]byte{2, br, 0xff, 0x02})
+		require.NoError(t, err, dis)
+
+		dis, err = Disassemble([]byte{2, br, 0x00, 0x01, 0x00})
+		require.NoError(t, err)
+	}
+}
+
+// TestDisassembleBadSwitch ensures a clean error when a switch ends early
+func TestDisassembleBadSwitch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `
+    int 1
+	switch label1 label2
+	label1:
+    label2:
+	`
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(t, err)
+
+	dis, err := Disassemble(ops.Program)
+	require.NoError(t, err, dis)
+
+	// chop off all the labels, but keep the label count
+	dis, err = Disassemble(ops.Program[:len(ops.Program)-4])
+	require.ErrorContains(t, err, "could not decode labels for switch", dis)
+
+	// chop off before the label count
+	dis, err = Disassemble(ops.Program[:len(ops.Program)-5])
+	require.ErrorContains(t, err, "could not decode label count for switch", dis)
+
+	// chop off half of a label
+	dis, err = Disassemble(ops.Program[:len(ops.Program)-1])
+	require.ErrorContains(t, err, "could not decode labels for switch", dis)
+}
+
+// TestDisassembleBadMatch ensures a clean error when a match ends early
+func TestDisassembleBadMatch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `
+    int 40
+    int 45
+    int 40
+	match label1 label2
+	label1:
+    label2:
+	`
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(t, err)
+
+	dis, err := Disassemble(ops.Program)
+	require.NoError(t, err, dis)
+
+	// return the label count, but chop off the labels themselves
+	dis, err = Disassemble(ops.Program[:len(ops.Program)-5])
+	require.ErrorContains(t, err, "could not decode label count for match", dis)
+
+	dis, err = Disassemble(ops.Program[:len(ops.Program)-1])
+	require.ErrorContains(t, err, "could not decode labels for match", dis)
+}
