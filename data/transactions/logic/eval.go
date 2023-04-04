@@ -4649,7 +4649,7 @@ func opLog(cx *EvalContext) error {
 	log := cx.stack[last]
 	cx.logSize += len(log.Bytes)
 	if cx.logSize > maxLogSize {
-		return fmt.Errorf("program logs too large. %d bytes > %d bytes limit", cx.logSize, maxLogSize)
+		return fmt.Errorf("program logs too large. %d bytes >  %d bytes limit", cx.logSize, maxLogSize)
 	}
 	cx.txn.EvalDelta.Logs = append(cx.txn.EvalDelta.Logs, string(log.Bytes))
 	cx.stack = cx.stack[:last]
