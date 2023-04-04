@@ -130,6 +130,7 @@ func MakeGenerator(config GenerationConfig) (Generator, error) {
 		rewardsRate:               0,
 		rewardsRecalculationRound: 0,
 		reportData:                make(map[TxTypeID]TxData),
+		deltas:                    make(map[uint64]ledgercore.StateDelta),
 	}
 
 	gen.feeSink[31] = 1
@@ -442,11 +443,12 @@ func (g *generator) generateDeltas(block bookkeeping.Block) error {
 
 // WriteDeltas generates returns the deltas for payset.
 func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
-	delta, ok := g.deltas[round]
+	deltas, ok := g.deltas[round]
 	if !ok {
 		return fmt.Errorf("state deltas for round %d not found", round)
 	}
-	err := json.NewEncoder(output).Encode(delta)
+	// base64 encode deltas
+	err := json.NewEncoder(output).Encode(protocol.EncodeJSON(deltas))
 	if err != nil {
 		return err
 	}
@@ -714,8 +716,17 @@ func (g *generator) generateAssetTxn(round uint64, intra uint64) (transactions.S
 }
 
 func (g *generator) initializeLedger() {
-	bal := bookkeeping.MakeGenesisBalances(convertToGenesisBalances(g.balances), g.feeSink, g.rewardsPool)
-	block, _ := bookkeeping.MakeGenesisBlock(g.protocol, bal, g.genesisID, g.genesisHash)
+	genBal := convertToGenesisBalances(g.balances)
+	// add rewards pool with min balance
+	genBal[g.rewardsPool] = basics.AccountData{
+		MicroAlgos: basics.MicroAlgos{g.params.MinBalance},
+	}
+	bal := bookkeeping.MakeGenesisBalances(genBal, g.feeSink, g.rewardsPool)
+	block, err := bookkeeping.MakeGenesisBlock(g.protocol, bal, g.genesisID, g.genesisHash)
+	if err != nil {
+		fmt.Printf("error making genesis: %v\n.", err)
+		os.Exit(1)
+	}
 	l, err := ledger.OpenLedger(logging.Base(), "block-generator", true, ledgercore.InitState{
 		Block:       block,
 		Accounts:    bal.Balances,
