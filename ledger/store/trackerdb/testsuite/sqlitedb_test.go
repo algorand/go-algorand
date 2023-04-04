@@ -44,7 +44,7 @@ func TestSqliteDB(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		// TODO: we should eventually move hte sql to use the seed_db()
+		// TODO: we should eventually move the sql to use the seedDb()
 
 		return db
 	}
