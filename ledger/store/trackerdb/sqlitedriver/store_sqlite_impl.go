@@ -107,8 +107,24 @@ func (s *trackerSQLStore) TransactionContext(ctx context.Context, fn trackerdb.T
 	})
 }
 
+func (s *trackerSQLStore) MakeAccountsWriter() (trackerdb.AccountsWriterExt, error) {
+	return NewAccountsSQLReaderWriter(s.pair.Wdb.Handle), nil
+}
+
+func (s *trackerSQLStore) MakeAccountsReader() (trackerdb.AccountsReaderExt, error) {
+	return NewAccountsSQLReaderWriter(s.pair.Rdb.Handle), nil
+}
+
+func (s *trackerSQLStore) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (trackerdb.AccountsWriter, error) {
+	return MakeAccountsSQLWriter(s.pair.Wdb.Handle, hasAccounts, hasResources, hasKvPairs, hasCreatables)
+}
+
 func (s *trackerSQLStore) MakeAccountsOptimizedReader() (trackerdb.AccountsReader, error) {
 	return AccountsInitDbQueries(s.pair.Rdb.Handle)
+}
+
+func (s *trackerSQLStore) MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (trackerdb.OnlineAccountsWriter, error) {
+	return MakeOnlineAccountsSQLWriter(s.pair.Wdb.Handle, hasAccounts)
 }
 
 func (s *trackerSQLStore) MakeOnlineAccountsOptimizedReader() (trackerdb.OnlineAccountsReader, error) {
