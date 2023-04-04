@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -591,7 +592,7 @@ type compileParams struct {
 }
 
 // Compile compiles the given program and returned the compiled program
-func (client RestClient) Compile(program []byte, useSourceMap bool) (compiledProgram []byte, programHash crypto.Digest, sourceMap *map[string]interface{}, err error) {
+func (client RestClient) Compile(program []byte, useSourceMap bool) (compiledProgram []byte, programHash crypto.Digest, sourceMap *logic.SourceMap, err error) {
 	var compileResponse model.CompileResponse
 
 	compileRequest := compileParams{SourceMap: useSourceMap}
@@ -611,12 +612,22 @@ func (client RestClient) Compile(program []byte, useSourceMap bool) (compiledPro
 	}
 	programHash = crypto.Digest(progAddr)
 
-	sourceMap = compileResponse.Sourcemap
-	existenceOfSourceMap := sourceMap != nil
+	existenceOfSourceMap := compileResponse.Sourcemap != nil
 
 	if existenceOfSourceMap != useSourceMap {
 		return nil, crypto.Digest{}, nil, fmt.Errorf("useSourceMap arg %v not agreeing with existence of source-map %v", useSourceMap, existenceOfSourceMap)
 	}
+
+	var srcMapInstance logic.SourceMap
+	var jsonBytes []byte
+
+	if jsonBytes, err = json.Marshal(*compileResponse.Sourcemap); err != nil {
+		return nil, crypto.Digest{}, nil, err
+	}
+	if err = json.Unmarshal(jsonBytes, &srcMapInstance); err != nil {
+		return nil, crypto.Digest{}, nil, err
+	}
+	sourceMap = &srcMapInstance
 
 	return
 }

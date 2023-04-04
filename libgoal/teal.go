@@ -18,10 +18,11 @@ package libgoal
 
 import (
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
 // Compile compiles the given program and returned the compiled program
-func (c *Client) Compile(program []byte, useSourceMap bool) (compiledProgram []byte, compiledProgramHash crypto.Digest, sourcemap *map[string]interface{}, err error) {
+func (c *Client) Compile(program []byte, useSourceMap bool) (compiledProgram []byte, compiledProgramHash crypto.Digest, sourcemap *logic.SourceMap, err error) {
 	algod, err2 := c.ensureAlgodClient()
 	if err2 != nil {
 		return nil, crypto.Digest{}, nil, err2

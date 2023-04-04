@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -65,7 +66,7 @@ func TestTealCompile(t *testing.T) {
 	fixture.Start()
 
 	var hash crypto.Digest
-	var srcMap *map[string]interface{}
+	var srcMap *logic.SourceMap
 	compiledProgram, hash, srcMap, err = libGoalClient.Compile([]byte("int 1"), true)
 	a.NotNil(compiledProgram)
 	a.NoError(err, "A valid v1 program should result in a compilation success")
