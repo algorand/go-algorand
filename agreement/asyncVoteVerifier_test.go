@@ -64,30 +64,36 @@ func TestVerificationAgainstFullExecutionPool(t *testing.T) {
 func TestAsyncVerificationVotes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	errProb := float32(0.5)
-	sendReceiveVoteVerifications(false, errProb, 200, 0, t, nil)
+	numVotes := 200
+	numEqVotes := 0
+	sendReceiveVoteVerifications(false, errProb, numVotes, numEqVotes, t)
 }
 
 func TestAsyncVerificationEqVotes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	errProb := float32(0.5)
-	sendReceiveVoteVerifications(false, errProb, 0, 200, t, nil)
+	numVotes := 0
+	numEqVotes := 200
+	sendReceiveVoteVerifications(false, errProb, numVotes, numEqVotes, t)
 }
 
 func TestAsyncVerification(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	errProb := float32(0.5)
-	sendReceiveVoteVerifications(false, errProb, 200, 200, t, nil)
+	numVotes := 200
+	numEqVotes := 200
+	sendReceiveVoteVerifications(false, errProb, numVotes, numEqVotes, t)
 }
 
 func BenchmarkAsyncVerification(b *testing.B) {
 	errProbs := []float32{0.0, 0.2, 0.8}
 	for _, errProb := range errProbs {
 		b.Run(fmt.Sprintf("errProb_%.3f_any_err", errProb), func(b *testing.B) {
-			sendReceiveVoteVerifications(false, errProb, b.N, b.N, nil, b)
+			sendReceiveVoteVerifications(false, errProb, b.N, b.N, b)
 		})
 		if errProb > float32(0.0) {
 			b.Run(fmt.Sprintf("errProb_%.3f_sig_err_only", errProb), func(b *testing.B) {
-				sendReceiveVoteVerifications(true, errProb, b.N, b.N, nil, b)
+				sendReceiveVoteVerifications(true, errProb, b.N, b.N, b)
 			})
 		}
 	}
@@ -97,11 +103,11 @@ func BenchmarkAsyncVerificationVotes(b *testing.B) {
 	errProbs := []float32{0.0, 0.2, 0.8}
 	for _, errProb := range errProbs {
 		b.Run(fmt.Sprintf("errProb_%.3f_any_err", errProb), func(b *testing.B) {
-			sendReceiveVoteVerifications(false, errProb, b.N, 0, nil, b)
+			sendReceiveVoteVerifications(false, errProb, b.N, 0, b)
 		})
 		if errProb > float32(0.0) {
 			b.Run(fmt.Sprintf("errProb_%.3f_sig_err_only", errProb), func(b *testing.B) {
-				sendReceiveVoteVerifications(true, errProb, b.N, 0, nil, b)
+				sendReceiveVoteVerifications(true, errProb, b.N, 0, b)
 			})
 		}
 	}
@@ -111,11 +117,11 @@ func BenchmarkAsyncVerificationEqVotes(b *testing.B) {
 	errProbs := []float32{0.0, 0.2, 0.8}
 	for _, errProb := range errProbs {
 		b.Run(fmt.Sprintf("errProb_%.3f_any_err", errProb), func(b *testing.B) {
-			sendReceiveVoteVerifications(false, errProb, 0, b.N, nil, b)
+			sendReceiveVoteVerifications(false, errProb, 0, b.N, b)
 		})
 		if errProb > float32(0.0) {
 			b.Run(fmt.Sprintf("errProb_%.3f_sig_err_only", errProb), func(b *testing.B) {
-				sendReceiveVoteVerifications(true, errProb, 0, b.N, nil, b)
+				sendReceiveVoteVerifications(true, errProb, 0, b.N, b)
 			})
 		}
 	}
@@ -127,7 +133,7 @@ func min(a, b int) int {
 	}
 	return b
 }
-func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, count, eqCount int, t *testing.T, b *testing.B) {
+func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, count, eqCount int, tb testing.TB) {
 	voteVerifier := MakeAsyncVoteVerifier(nil)
 	defer voteVerifier.Quit()
 
@@ -140,7 +146,7 @@ func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, count, eqCou
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	if b != nil {
+	if b, ok := tb.(*testing.B); ok {
 		b.ResetTimer()
 	}
 	// collect the verification results and check against the error expectation
@@ -185,11 +191,7 @@ func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, count, eqCou
 	}()
 	// monitor the errors returned from the various goroutines
 	for err := range errChan {
-		if t != nil {
-			require.NoError(t, err)
-		} else {
-			require.NoError(b, err)
-		}
+		require.NoError(tb, err)
 	}
 	wg.Wait()
 }
