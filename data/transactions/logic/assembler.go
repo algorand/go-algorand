@@ -2650,7 +2650,7 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 		out += " "
 		switch imm.kind {
 		case immByte, immInt8:
-			if pc >= len(dis.program) {
+			if pc+1 > len(dis.program) {
 				return "", fmt.Errorf("program end while reading immediate %s for %s",
 					imm.Name, spec.Name)
 			}
@@ -2680,6 +2680,10 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 
 			pc++
 		case immLabel:
+			// decodeBranchOffset assumes it has two bytes to work with
+			if pc+2 > len(dis.program) {
+				return "", fmt.Errorf("program end while reading label for %s", spec.Name)
+			}
 			offset := decodeBranchOffset(dis.program, pc)
 			target := offset + pc + 2
 			var label string
@@ -2744,9 +2748,9 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 			}
 			pc = nextpc
 		case immLabels:
-			targets, nextpc, err := parseSwitch(dis.program, pc)
+			targets, nextpc, err := parseLabels(dis.program, pc)
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("%w for %s", err, spec.Name)
 			}
 
 			var labels []string
@@ -2873,10 +2877,18 @@ func checkByteImmArgs(cx *EvalContext) error {
 	return err
 }
 
-func parseSwitch(program []byte, pos int) (targets []int, nextpc int, err error) {
+func parseLabels(program []byte, pos int) (targets []int, nextpc int, err error) {
+	if pos >= len(program) {
+		err = errors.New("could not decode label count")
+		return
+	}
 	numOffsets := int(program[pos])
 	pos++
 	end := pos + 2*numOffsets // end of op: offset is applied to this position
+	if end > len(program) {
+		err = errors.New("could not decode labels")
+		return
+	}
 	for i := 0; i < numOffsets; i++ {
 		offset := decodeBranchOffset(program, pos)
 		target := end + offset
