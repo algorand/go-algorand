@@ -510,6 +510,12 @@ type Local struct {
 	// EnableTxnEvalTracer turns on features in the BlockEvaluator which collect data on transactions, exposing them via algod APIs.
 	// It will store txn deltas created during block evaluation, potentially consuming much larger amounts of memory,
 	EnableTxnEvalTracer bool `version[27]:"false"`
+
+	// StorageEngine allows to control which type of storage to use for the ledger.
+	// Available options are:
+	// - sqlite (default)
+	// - pebbledb (experimental, in development)
+	StorageEngine string `version[28]:"sqlite"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
