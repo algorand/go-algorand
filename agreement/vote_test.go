@@ -71,7 +71,7 @@ func verifySigVote(uv unauthenticatedVote, l LedgerReader) (vote, error) {
 		err = fmt.Errorf("Test: vote signature verification failed")
 		return vote{}, err
 	}
-	v, err := uv.getVoteFrom(l, &m)
+	v, err := uv.authenticateCredAndGetVote(l, &m)
 	if err != nil {
 		return vote{}, err
 	}
@@ -87,7 +87,7 @@ func verifyEqSigVote(uev unauthenticatedEquivocationVote, l LedgerReader) (equiv
 	if failed[0] || failed[1] {
 		return equivocationVote{}, fmt.Errorf("Test: equivocation vote signature verification failed")
 	}
-	ev, err := uev.authenticateCred(l, m)
+	ev, err := uev.authenticateCredAndGetEqVote(l, m)
 	if err != nil {
 		return equivocationVote{}, err
 	}

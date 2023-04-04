@@ -175,15 +175,25 @@ type unauthVMem struct {
 	m   *committee.Membership
 }
 
-type verificationTasksResults struct {
+// verificationTasksAndResults holds information of a single batch, composed of multiple jobs
+// each job corresponds to either a vote or an equivocationVote
+// each vote job has 1 SigVerificationTask, each equivocationVote has 2 SigVerificationTask
+type verificationTasksAndResults struct {
+	// failed is the verification results of tasks, so they will have the same length
+	// each vote job has 1 entry in tasks, each equivocationVote has 2 entries
+	// taskIndexes maps the jobs to the tasks (one entry for each job)
+	//     taskIndexes[k] is the position of the job k+1 in tasks (0 is the first job)
+	//     if taskIndexes[k+1]-taskIndexes[k] == 1, job k+1 is a vote,
+	//     if taskIndexes[k+1]-taskIndexes[k] == 2, job k+1 is an equivocationVote with 2 tasks
+	// unauthV is the data associated with each job, it has the same length as taskIndexes
 	tasks       []*crypto.SigVerificationTask
-	taskIndexes []int
 	failed      []bool
+	taskIndexes []int
 	unauthV     []unauthVMem
 }
 
-func makeVerificationTasksResults(initialSize int) verificationTasksResults {
-	vtr := verificationTasksResults{}
+func makeVerificationTasksAndResults(initialSize int) verificationTasksAndResults {
+	vtr := verificationTasksAndResults{}
 	vtr.tasks = make([]*crypto.SigVerificationTask, 0, initialSize)
 	vtr.taskIndexes = make([]int, 0, initialSize)
 	vtr.failed = make([]bool, 0, initialSize)
@@ -191,21 +201,24 @@ func makeVerificationTasksResults(initialSize int) verificationTasksResults {
 	return vtr
 }
 
-func (vtr *verificationTasksResults) addEqVoteTasks(tasks []*crypto.SigVerificationTask, m *committee.Membership, uv *unauthenticatedEquivocationVote) {
+// addEqVoteJob adds 2 tasks for a single equivocation vote job
+func (vtr *verificationTasksAndResults) addEqVoteJob(tasks []*crypto.SigVerificationTask, m *committee.Membership, uv *unauthenticatedEquivocationVote) {
 	prev := len(vtr.tasks)
 	vtr.tasks = append(vtr.tasks, tasks...)
-
 	vtr.taskIndexes = append(vtr.taskIndexes, prev+len(tasks))
 	vtr.unauthV = append(vtr.unauthV, unauthVMem{uev: uv, m: m})
 }
 
-func (vtr *verificationTasksResults) addVoteTask(task *crypto.SigVerificationTask, m *committee.Membership, uv *unauthenticatedVote) {
+// addVoteJob adds 1 task for a single vote job
+func (vtr *verificationTasksAndResults) addVoteJob(task *crypto.SigVerificationTask, m *committee.Membership, uv *unauthenticatedVote) {
 	prev := len(vtr.tasks)
 	vtr.tasks = append(vtr.tasks, task)
 	vtr.taskIndexes = append(vtr.taskIndexes, prev+1)
 	vtr.unauthV = append(vtr.unauthV, unauthVMem{uv: uv, m: m})
 }
 
+// authenticateCred is called to authenticate the credential after the signatures are verified
+// this is to avoid this expensive task in the event the signature fails
 func authenticateCred(cred *committee.UnauthenticatedCredential, round round, l LedgerReader,
 	m *committee.Membership) (c *committee.Credential, err error) {
 	proto, err := l.ConsensusParams(ParamsRound(round))
@@ -216,47 +229,49 @@ func authenticateCred(cred *committee.UnauthenticatedCredential, round round, l 
 	return &cr, err
 }
 
-func (vtr *verificationTasksResults) getItemResult(req *asyncVerifyVoteRequest, itemIndex int) (*vote, *equivocationVote, error) {
-	i0 := 0
-	if itemIndex > 0 {
-		i0 = vtr.taskIndexes[itemIndex-1]
+// getJobResult returns the authenticated vote (or equivocation vote) for the j-th job (request)
+func (vtr *verificationTasksAndResults) getJobResult(req *asyncVerifyVoteRequest, j int) (*vote, *equivocationVote, error) {
+	i0 := 0 // i0 is the index of the first task in tasks for j (i0 is always 0 for j=0)
+	if j > 0 {
+		i0 = vtr.taskIndexes[j-1]
 	}
-	i1 := vtr.taskIndexes[itemIndex]
-	isEV := i1-i0 == 2
+	// if isEV (is equivocationVote, then there are 2 tasks, and i0 is the index of the first)
+	isEV := vtr.taskIndexes[j]-i0 == 2
 
-	// is eq vote
+	// is eq vote, there are 2 results in failed that need to be checked
 	if isEV {
+		// pairIndexes are the indexes in tasks for the 2 tasks corresponding to the equivocationVote job
 		pairIndexes := []int{i0, i0 + 1}
-		for i := range []int{0, 1} {
-			if !vtr.failed[pairIndexes[i]] {
+		for _, i := range pairIndexes {
+			if !vtr.failed[i] {
 				continue
 			}
-			rv := vtr.tasks[pairIndexes[i]].Message.(rawVote)
-			voteID := vtr.tasks[pairIndexes[i]].V
+			rv := vtr.tasks[i].Message.(rawVote)
+			voteID := vtr.tasks[i].V
 			return nil, nil, fmt.Errorf("unauthenticatedEquivocationVote.verify: failed to verify pair %d: %w", i,
-				fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, vtr.unauthV[itemIndex].uev))
+				fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, vtr.unauthV[j].uev))
 		}
-		// here, the signatures of both votes are verified.
-		uev := vtr.unauthV[itemIndex].uev
-		ev, err := uev.authenticateCred(req.l, vtr.unauthV[itemIndex].m)
+		// here, the signatures of both votes are verified. Now authenticate the cred
+		ev, err := vtr.unauthV[j].uev.authenticateCredAndGetEqVote(req.l, vtr.unauthV[j].m)
 		return nil, ev, err
 	}
 
-	// is Vote
+	// is Vote, there is only 1 result in failed to be checked
 	if vtr.failed[i0] {
 		rv := vtr.tasks[i0].Message.(rawVote)
 		voteID := vtr.tasks[i0].V
 		return nil, nil, fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, req.uv)
 	}
-
-	// Validate the cred after all other checks are passed.
-	uv := vtr.unauthV[itemIndex].uv
-	v, err := uv.getVoteFrom(req.l, vtr.unauthV[itemIndex].m)
+	// Validate the cred
+	v, err := vtr.unauthV[j].uv.authenticateCredAndGetVote(req.l, vtr.unauthV[j].m)
 	return v, nil, err
 }
+
+// ProcessBatch implements stream.BatchProcessor interface
 func (vbp *voteBatchProcessor) ProcessBatch(jobs []execpool.InputJob) {
-	verificationTasks := makeVerificationTasksResults(len(jobs))
-	checkedRequests := make([]*asyncVerifyVoteRequest, 0, len(jobs))
+	verificationTasks := makeVerificationTasksAndResults(len(jobs))
+	// taskedJobs are the jobs that passed the initial checks and a signiture verification task if created for them
+	taskedJobs := make([]*asyncVerifyVoteRequest, 0, len(jobs))
 	for i := range jobs {
 		req := jobs[i].(*asyncVerifyVoteRequest)
 		select {
@@ -272,10 +287,11 @@ func (vbp *voteBatchProcessor) ProcessBatch(jobs []execpool.InputJob) {
 				var e *LedgerDroppedRoundError
 				cancelled := errors.As(err, &e)
 				vbp.outChan <- &asyncVerifyVoteResponse{index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
-			} else {
-				checkedRequests = append(checkedRequests, req)
-				verificationTasks.addEqVoteTasks(vts, m, req.uev)
+				continue
 			}
+			taskedJobs = append(taskedJobs, req)
+			verificationTasks.addEqVoteJob(vts, m, req.uev)
+			continue
 		}
 		// if this is a vote
 		if req.uv != nil {
@@ -292,17 +308,19 @@ func (vbp *voteBatchProcessor) ProcessBatch(jobs []execpool.InputJob) {
 				var e *LedgerDroppedRoundError
 				cancelled := errors.As(err, &e)
 				vbp.outChan <- &asyncVerifyVoteResponse{index: req.index, message: req.message, err: err, cancelled: cancelled, req: req}
-			} else {
-				checkedRequests = append(checkedRequests, req)
-				verificationTasks.addVoteTask(vt, &m, req.uv)
+				continue
 			}
+			taskedJobs = append(taskedJobs, req)
+			verificationTasks.addVoteJob(vt, &m, req.uv)
 		}
 	}
-	failed := crypto.BatchVerifyOneTimeSignatures(verificationTasks.tasks)
-	verificationTasks.failed = failed
-	for i := range checkedRequests {
-		req := checkedRequests[i]
-		v, ev, err := verificationTasks.getItemResult(req, i)
+	// Signiture verification of the batch
+	verificationTasks.failed = crypto.BatchVerifyOneTimeSignatures(verificationTasks.tasks)
+
+	for i := range taskedJobs {
+		req := taskedJobs[i]
+		// check if the signature passed, authenticate cred and return the vote/equivocationVote
+		v, ev, err := verificationTasks.getJobResult(req, i)
 		var e *LedgerDroppedRoundError
 		cancelled := errors.As(err, &e)
 		if v != nil {

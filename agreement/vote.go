@@ -128,7 +128,7 @@ func (uv *unauthenticatedVote) getVerificationTask(l LedgerReader, m *committee.
 	return &crypto.SigVerificationTask{V: voteID, ID: ephID, Message: rv, Sig: &uv.Sig}, nil
 }
 
-func (uv *unauthenticatedVote) getVoteFrom(l LedgerReader, m *committee.Membership) (*vote, error) {
+func (uv *unauthenticatedVote) authenticateCredAndGetVote(l LedgerReader, m *committee.Membership) (*vote, error) {
 	cred, err := authenticateCred(&uv.Cred, uv.R.Round, l, m)
 	if err != nil {
 		return nil, fmt.Errorf("unauthenticatedVote.verify: got a vote, but sender was not selected: %v", err)
@@ -137,7 +137,7 @@ func (uv *unauthenticatedVote) getVoteFrom(l LedgerReader, m *committee.Membersh
 	return &v, nil
 }
 
-func (pair *unauthenticatedEquivocationVote) authenticateCred(l LedgerReader, m *committee.Membership) (*equivocationVote, error) {
+func (pair *unauthenticatedEquivocationVote) authenticateCredAndGetEqVote(l LedgerReader, m *committee.Membership) (*equivocationVote, error) {
 	cred, err := authenticateCred(&pair.Cred, pair.Round, l, m)
 	if err != nil {
 		return nil, fmt.Errorf("unauthenticatedVote.verify: got a vote, but sender was not selected: %v", err)
