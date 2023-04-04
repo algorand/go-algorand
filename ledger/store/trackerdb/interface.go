@@ -18,6 +18,7 @@ package trackerdb
 
 import (
 	"context"
+	"errors"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -25,6 +26,8 @@ import (
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
+
+var ErrNotFound = errors.New("trackerdb: not found")
 
 // AccountRef is an opaque ref to an account in the db.
 type AccountRef interface {
