@@ -29,9 +29,9 @@ type BatchScope interface {
 	MakeCatchpointWriter() (CatchpointWriter, error)
 	MakeAccountsWriter() (AccountsWriterExt, error)
 	MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
+	MakeSpVerificationCtxWriter() SpVerificationCtxWriter
 	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
 	Testing() TestBatchScope
-	MakeSpVerificationCtxWriter() SpVerificationCtxWriter
 }
 
 // SnapshotScope is the read scope to the store.
@@ -39,7 +39,6 @@ type SnapshotScope interface {
 	MakeAccountsReader() (AccountsReaderExt, error)
 	MakeCatchpointReader() (CatchpointReader, error)
 	MakeCatchpointPendingHashesIterator(hashCount int) CatchpointPendingHashesIter
-
 	MakeSpVerificationCtxReader() SpVerificationCtxReader
 }
 
@@ -54,10 +53,10 @@ type TransactionScope interface {
 	MakeOrderedAccountsIter(accountCount int) OrderedAccountsIter
 	MakeKVsIter(ctx context.Context) (KVsIter, error)
 	MakeEncodedAccoutsBatchIter() EncodedAccountsBatchIter
+	MakeSpVerificationCtxReaderWriter() SpVerificationCtxReaderWriter
 	RunMigrations(ctx context.Context, params Params, log logging.Logger, targetVersion int32) (mgr InitParams, err error)
 	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
 	Testing() TestTransactionScope
-	MakeSpVerificationCtxReaderWriter() SpVerificationCtxReaderWriter
 }
 
 // BatchFn is the callback lambda used in `Batch`.
@@ -84,7 +83,13 @@ type TrackerStore interface {
 	Transaction(fn TransactionFn) (err error)
 	TransactionContext(ctx context.Context, fn TransactionFn) (err error)
 
+	MakeAccountsWriter() (AccountsWriterExt, error)
+	MakeAccountsReader() (AccountsReaderExt, error)
+
+	MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
 	MakeAccountsOptimizedReader() (AccountsReader, error)
+
+	MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (OnlineAccountsWriter, error)
 	MakeOnlineAccountsOptimizedReader() (OnlineAccountsReader, error)
 
 	MakeCatchpointReaderWriter() (CatchpointReaderWriter, error)
