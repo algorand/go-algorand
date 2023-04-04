@@ -319,7 +319,7 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx trackerdb.TransactionScope,
 		} else if acctRef, ok = knownAddresses[addr]; !ok {
 			acctRef, err = arw.LookupAccountRowID(addr)
 			if err != nil {
-				if err != sql.ErrNoRows {
+				if err != sql.ErrNoRows && err != trackerdb.ErrNotFound {
 					err = fmt.Errorf("base account cannot be read while processing resource for addr=%s, aidx=%d: %w", addr.String(), aidx, err)
 					return err
 
@@ -344,6 +344,10 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx trackerdb.TransactionScope,
 				err = fmt.Errorf("empty resource record: addrid=%d, aidx=%d", acctRef, aidx)
 				return err
 			}
+		case trackerdb.ErrNotFound:
+			// we don't have that account, just return an empty record.
+			a.updateOld(missIdx, trackerdb.PersistedResourcesData{AcctRef: acctRef, Aidx: aidx})
+			err = nil
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
 			a.updateOld(missIdx, trackerdb.PersistedResourcesData{AcctRef: acctRef, Aidx: aidx})
@@ -614,6 +618,10 @@ func (a *compactOnlineAccountDeltas) accountsLoadOld(tx trackerdb.TransactionSco
 				// empty data means offline account
 				a.updateOld(idx, trackerdb.PersistedOnlineAccountData{Addr: addr, Ref: ref})
 			}
+		case trackerdb.ErrNotFound:
+			// we don't have that account, just return an empty record.
+			a.updateOld(idx, trackerdb.PersistedOnlineAccountData{Addr: addr})
+		// TODO: phase out sql.ErrNoRows
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
 			a.updateOld(idx, trackerdb.PersistedOnlineAccountData{Addr: addr})
