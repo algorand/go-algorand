@@ -37,7 +37,7 @@ func TestPebbleDB(t *testing.T) {
 		db, err := pebbledbdriver.OpenTrackerDB(dir, false, proto)
 		require.NoError(t, err)
 
-		seed_db(t, db)
+		seedDb(t, db)
 
 		return db
 	}
