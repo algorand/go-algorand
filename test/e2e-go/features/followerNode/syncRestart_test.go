@@ -42,7 +42,7 @@ func TestSyncRestart(t *testing.T) {
 
 	// Overview of this test:
 	// Start a two-node network--one in follower mode (follower has 0%, secondary has 100%)
-	// Repeatedly advance the primary sometimes advancing the follower, sometimes not.
+	// Repeatedly advance the primary sometimes re-syncing the follower, sometimes not.
 	// In between the advances, stop and restart the network.
 
 	var fixture fixtures.RestClientFixture
@@ -51,7 +51,7 @@ func TestSyncRestart(t *testing.T) {
 
 	primaryRound := uint64(1)
 
-	// Get controller for Primary node to see the state of the chain
+	// waits to advance the primary node by the given number of rounds
 	primaryAdvance := func(advance uint64) uint64 {
 		primaryController, err := fixture.GetNodeController("Primary")
 		a.NoError(err)
@@ -61,7 +61,7 @@ func TestSyncRestart(t *testing.T) {
 		return waitForRound
 	}
 
-	// Get the follower client
+	// gets the follower client
 	getFollowClient := func() client.RestClient {
 		followControl, err := fixture.GetNodeController("Follower")
 		a.NoError(err)
@@ -69,86 +69,62 @@ func TestSyncRestart(t *testing.T) {
 		return followClient
 	}
 
+	// get the sync round from the follower
+	getSyncRound := func() uint64 {
+		followClient := getFollowClient()
+		rResp, err := followClient.GetSyncRound()
+		a.NoError(err)
+		return rResp.Round
+	}
+
 	/** Primary >= 1 AND Follower @ 1 **/
-	expectedSyncRound := uint64(1)
-	followClient := getFollowClient()
-	rResp, err := followClient.GetSyncRound()
-	a.NoError(err)
-	a.Equal(expectedSyncRound, rResp.Round)
+	a.Equal(uint64(1), getSyncRound())
 
 	/** restart the network **/
 	fixture.ShutdownImpl(true)
 	fixture.Start()
 
 	/** STILL: Primary >= 1 AND Follower @ 1 **/
-	expectedSyncRound = uint64(1)
-
-	followClient = getFollowClient()
-	rResp, err = followClient.GetSyncRound() // before bugfix was >= 2
-	a.NoError(err)
-	a.Equal(expectedSyncRound, rResp.Round)
+	a.Equal(uint64(1), getSyncRound())
 
 	/** Primary >= 3 AND Follower @ 1 **/
-	expectedSyncRound = uint64(1)
-
 	primaryRound = primaryAdvance(2)
 	a.Equal(uint64(3), primaryRound)
-	followClient = getFollowClient()
-	rResp, err = followClient.GetSyncRound()
-	a.NoError(err)
-	a.Equal(expectedSyncRound, rResp.Round)
+
+	a.Equal(uint64(1), getSyncRound())
 
 	/** restart the network **/
 	fixture.ShutdownImpl(true)
 	fixture.Start()
 
 	/** Primary >= 3 AND Follower >= 1 because something got saved to DB **/
-	expectedSyncRound = uint64(1)
+	syncRound := getSyncRound() // >= 2
+	a.LessOrEqual(uint64(1), syncRound)
 
-	followClient = getFollowClient()
-	rResp, err = followClient.GetSyncRound() // >= 2
-	a.NoError(err)
-	a.LessOrEqual(expectedSyncRound, rResp.Round)
+	// err = followClient.SetSyncRound(expectedSyncRound)
+	// rResp, err = followClient.GetSyncRound()
+	// a.NoError(err)
+	// a.Equal(expectedSyncRound, rResp.Round)
 
 	/** Primary >= 3 AND Follower @ 1 **/
-	expectedSyncRound = uint64(1)
-	err = followClient.SetSyncRound(expectedSyncRound)
+	err := getFollowClient().SetSyncRound(1)
 	a.NoError(err)
-
-	followClient = getFollowClient()
-	rResp, err = followClient.GetSyncRound() // 1
-	a.NoError(err)
-	a.Equal(expectedSyncRound, rResp.Round)
+	a.Equal(uint64(1), getSyncRound())
 
 	/** Primary >= 5 AND Follower @ 1 **/
-	expectedSyncRound = uint64(1)
-
 	primaryRound = primaryAdvance(2)
 	a.Equal(uint64(5), primaryRound)
-	followClient = getFollowClient()
-	rResp, err = followClient.GetSyncRound() // 1
-	a.NoError(err)
-	a.Equal(expectedSyncRound, rResp.Round)
+	a.Equal(uint64(1), getSyncRound())
 
 	/** Primary >= 5 AND Follower @ 2 **/
-	expectedSyncRound = uint64(2)
-	err = followClient.SetSyncRound(expectedSyncRound)
+	err = getFollowClient().SetSyncRound(2)
 	a.NoError(err)
-
-	followClient = getFollowClient()
-	rResp, err = followClient.GetSyncRound() // 2
-	a.NoError(err)
-	a.Equal(expectedSyncRound, rResp.Round)
+	a.Equal(uint64(2), getSyncRound())
 
 	/** restart the network **/
 	fixture.ShutdownImpl(true)
 	fixture.Start()
 
 	/** Primary >= 5 AND Follower @ 5 **/
-	expectedSyncRound = uint64(5)
-
-	followClient = getFollowClient()
-	rResp, err = followClient.GetSyncRound() // > 5
-	a.NoError(err)
-	a.LessOrEqual(expectedSyncRound, rResp.Round)
+	a.Equal(uint64(5), getSyncRound())
 }
