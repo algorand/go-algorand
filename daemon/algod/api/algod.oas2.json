@@ -47,6 +47,36 @@
         }
       }
     },
+    "/ready": {
+      "get": {
+        "tags": [
+          "public",
+          "common"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "scheme": [
+          "http"
+        ],
+        "summary": "Returns OK if healthy and fully caught up.",
+        "operationId": "GetReady",
+        "responses": {
+          "200": {
+            "description": "OK."
+          },
+          "500": {
+            "description": "Internal Error"
+          },
+          "503": {
+            "description": "Node not ready yet"
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/metrics": {
       "get": {
         "tags": [
@@ -3377,6 +3407,14 @@
           "items": {
             "type": "integer"
           }
+        },
+        "app-budget-added": {
+          "description": "Total budget added during execution of app calls in the transaction group.",
+          "type": "integer"
+        },
+        "app-budget-consumed": {
+          "description": "Total budget consumed during execution of app calls in the transaction group.",
+          "type": "integer"
         }
       }
     },
@@ -3393,6 +3431,14 @@
         "missing-signature": {
           "description": "A boolean indicating whether this transaction is missing signatures",
           "type": "boolean"
+        },
+        "app-budget-consumed": {
+          "description": "Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.",
+          "type": "integer"
+        },
+        "logic-sig-budget-consumed": {
+          "description": "Budget used during execution of a logic sig transaction.",
+          "type": "integer"
         }
       }
     },
@@ -3963,7 +4009,7 @@
             "type": "integer"
           },
           "upgrade-vote-rounds": {
-            "description": "Total voting ounds for current upgrade",
+            "description": "Total voting rounds for current upgrade",
             "type": "integer"
           }
         }

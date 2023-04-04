@@ -43,7 +43,7 @@ func TestBasicSyncMode(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	// Give the second node (which starts up last) all the stake so that its proposal always has better credentials,
-	// and so that its proposal isn't dropped. Otherwise the test burns 17s to recover. We don't care about stake
+	// and so that its proposal isn't dropped. Otherwise, the test burns 17s to recover. We don't care about stake
 	// distribution so this is fine.
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodesFollower100Second.json"))
 	defer fixture.Shutdown()
@@ -53,7 +53,6 @@ func TestBasicSyncMode(t *testing.T) {
 	a.NoError(err)
 
 	// Let the network make some progress
-	a.NoError(err)
 	waitForRound := uint64(5)
 	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
 	a.NoError(err)
@@ -68,6 +67,7 @@ func TestBasicSyncMode(t *testing.T) {
 		rResp, err := followClient.GetSyncRound()
 		a.NoError(err)
 		a.Equal(round, rResp.Round)
+		// make some progress to round
 		err = fixture.ClientWaitForRoundWithTimeout(followClient, round)
 		a.NoError(err)
 		// retrieve state delta
