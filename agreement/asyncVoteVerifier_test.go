@@ -154,7 +154,7 @@ func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, count, eqCou
 	gEqCount := min(200, eqCount)
 
 	errChan := make(chan error)
-	ledger, votes, eqVotes, errsV, errsEv := generateTestVotes(badSigOnly, errChan, gCount, gEqCount, errProb)
+	ledger, votes, eqVotes, errsV, errsEqv := generateTestVotes(badSigOnly, errChan, gCount, gEqCount, errProb)
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -171,7 +171,7 @@ func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, count, eqCou
 			if res.req.uv != nil {
 				expectedError = errsV[int(res.index)]
 			} else {
-				expectedError = errsEv[int(res.index)]
+				expectedError = errsEqv[int(res.index)]
 			}
 			if (expectedError == nil && res.err != nil) || (expectedError != nil && res.err == nil) {
 				errChan <- fmt.Errorf("expected %v got %v", expectedError, res.err)
@@ -188,7 +188,7 @@ func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, count, eqCou
 		vi := 0
 		evi := 0
 		for c := 0; c < count+eqCount; c++ {
-			// pick a vote if there are vots, and if either there are no eqVotes or the relative prob
+			// pick a vote if there are votes, and if either there are no eqVotes or the relative prob
 			turnVote := len(votes) > 0 && (len(eqVotes) == 0 || rand.Float32() < (float32(count)/float32(count+eqCount)))
 			if turnVote {
 				uv := votes[vi%gCount]
@@ -221,14 +221,14 @@ type unEqVoteTest struct {
 }
 
 func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount int, errProb float32) (ledger Ledger,
-	votes []*unVoteTest, eqVotes []*unEqVoteTest, errsV, errsEv map[int]error) {
+	votes []*unVoteTest, eqVotes []*unEqVoteTest, errsV, errsEqv map[int]error) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)
 	votes = make([]*unVoteTest, count)
 	eqVotes = make([]*unEqVoteTest, eqCount)
 	errsV = make(map[int]error)
-	errsEv = make(map[int]error)
+	errsEqv = make(map[int]error)
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	go func() {
@@ -435,7 +435,7 @@ func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount in
 					v = &unEqVoteTest{uev: &ev, err: nil, id: c}
 
 				}
-				errsEv[v.id] = v.err
+				errsEqv[v.id] = v.err
 				eqVotes[v.id] = v
 				break
 			}
@@ -445,5 +445,5 @@ func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount in
 		}
 	}()
 	wg.Wait()
-	return ledger, votes, eqVotes, errsV, errsEv
+	return ledger, votes, eqVotes, errsV, errsEqv
 }
