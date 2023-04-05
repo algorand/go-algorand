@@ -711,6 +711,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	// If dev mode timestamp offset is configured, add the offset to current
 	// block timestamp.
+	pool.pendingBlockEvaluator = nil
 	if pool.devMode {
 		next.BlockHeader.Seed = committee.Seed(pool.PendingTxIDs()[0])
 		if pool.devModeTimeStampOffset != 0 {
@@ -719,9 +720,12 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			params.MaxTimestampIncrement = offset + 1
 			next.BlockHeader.TimeStamp = prev.TimeStamp + offset
 		}
+		pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluatorDev(next.BlockHeader, hint, 0)
+	} else {
+		pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
 	}
 
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
+	// pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
 	if err != nil {
 		// The pendingBlockEvaluator is an interface, and in case of an evaluator error
 		// we want to remove the interface itself rather then keeping an interface
