@@ -713,9 +713,12 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	// block timestamp.
 	if pool.devMode {
 		next.BlockHeader.Seed = committee.Seed(pool.PendingTxIDs()[0])
-		// if pool.devModeTimeStampOffset != 0 {
-		// 	next.BlockHeader.TimeStamp += int64(pool.devModeTimeStampOffset)
-		// }
+		if pool.devModeTimeStampOffset != 0 {
+			offset := int64(pool.devModeTimeStampOffset)
+			params := config.Consensus[next.BlockHeader.CurrentProtocol]
+			params.MaxTimestampIncrement = offset + 1
+			next.BlockHeader.TimeStamp = prev.TimeStamp + offset
+		}
 	}
 
 	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
