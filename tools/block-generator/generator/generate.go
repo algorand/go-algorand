@@ -17,7 +17,6 @@
 package generator
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,7 +26,6 @@ import (
 
 	cconfig "github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/ledger"
-	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -130,7 +128,6 @@ func MakeGenerator(config GenerationConfig) (Generator, error) {
 		rewardsRate:               0,
 		rewardsRecalculationRound: 0,
 		reportData:                make(map[TxTypeID]TxData),
-		deltas:                    make(map[uint64]ledgercore.StateDelta),
 	}
 
 	gen.feeSink[31] = 1
@@ -235,7 +232,6 @@ type generator struct {
 
 	//	ledger
 	ledger *ledger.Ledger
-	deltas map[uint64]ledgercore.StateDelta
 }
 
 type assetData struct {
@@ -422,33 +418,21 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if err != nil {
 		return err
 	}
-
-	// generate deltas for the block
-	err = g.generateDeltas(cert.Block)
-	if err != nil {
-		panic(fmt.Sprintf("failed to generate state deltas: %v\n", err))
-	}
+	g.ledger.AddBlock(cert.Block, agreement.Certificate{})
+	g.ledger.WaitForCommit(basics.Round(g.round))
 	g.finishRound(numTxnForBlock)
-	return nil
-}
-
-func (g *generator) generateDeltas(block bookkeeping.Block) error {
-	delta, err := eval.Eval(context.Background(), g.ledger, block, false, nil, nil)
-	if err != nil {
-		return err
-	}
-	g.deltas[uint64(block.Round())] = delta
 	return nil
 }
 
 // WriteDeltas generates returns the deltas for payset.
 func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
-	deltas, ok := g.deltas[round]
-	if !ok {
-		return fmt.Errorf("state deltas for round %d not found", round)
+	delta, err := g.ledger.GetStateDeltaForRound(basics.Round(round))
+	if err != nil {
+		return fmt.Errorf("err getting state delta for round %d, %v", round, err)
 	}
-	// base64 encode deltas
-	err := json.NewEncoder(output).Encode(protocol.EncodeJSON(deltas))
+	// msgp encode deltas
+	data, err := encode(protocol.CodecHandle, delta)
+	_, err = output.Write(data)
 	if err != nil {
 		return err
 	}

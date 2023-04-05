@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
@@ -31,7 +32,7 @@ func makePrivateGenerator(t *testing.T) *generator {
 	partitiontest.PartitionTest(t)
 	publicGenerator, err := MakeGenerator(GenerationConfig{
 		NumGenesisAccounts:           10,
-		GenesisAccountInitialBalance: 10000000000000000000,
+		GenesisAccountInitialBalance: 1000000000000,
 		PaymentTransactionFraction:   1.0,
 		PaymentNewAccountFraction:    1.0,
 		AssetCreateFraction:          1.0,
@@ -204,6 +205,9 @@ func TestWriteRound(t *testing.T) {
 	var block rpcs.EncodedBlockCert
 	protocol.Decode(data, &block)
 	require.Len(t, block.Block.Payset, int(g.config.TxnPerBlock))
+	require.Equal(t, basics.Round(1), g.ledger.Latest())
+	_, err := g.ledger.GetStateDeltaForRound(1)
+	require.NoError(t, err)
 }
 
 func TestIndexToAccountAndAccountToIndex(t *testing.T) {

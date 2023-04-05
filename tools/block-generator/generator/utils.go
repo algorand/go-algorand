@@ -22,6 +22,7 @@ import (
 	"math/rand"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-codec/codec"
 )
 
 func weightedSelection(weights []float32, options []interface{}, defaultOption interface{}) (selection interface{}, err error) {
@@ -66,4 +67,25 @@ func convertToGenesisBalances(balances []uint64) map[basics.Address]basics.Accou
 		}
 	}
 	return genesisBalances
+}
+
+func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
+	var output []byte
+	enc := codec.NewEncoderBytes(&output, handle)
+
+	err := enc.Encode(obj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode object: %v", err)
+	}
+	return output, nil
+}
+
+func decode(handle codec.Handle, data []byte, v interface{}) error {
+	enc := codec.NewDecoderBytes(data, handle)
+
+	err := enc.Decode(v)
+	if err != nil {
+		return fmt.Errorf("failed to decode object: %v", err)
+	}
+	return nil
 }

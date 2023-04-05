@@ -143,12 +143,12 @@ func getAccountHandler(gen Generator) func(w http.ResponseWriter, r *http.Reques
 func getDeltasHandler(gen Generator) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
-		param, ok := vars["round"]
+		rd, ok := vars["round"]
 		if !ok {
 			http.Error(w, "round missing", http.StatusBadRequest)
 			return
 		}
-		round, err := strconv.ParseUint(param, 10, 64)
+		round, err := strconv.ParseUint(rd, 10, 64)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
