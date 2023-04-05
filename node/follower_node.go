@@ -269,7 +269,6 @@ func (node *AlgorandFollowerNode) Status() (StatusReport, error) {
 
 	s.LastRoundTimestamp = lastRoundTimestamp
 	s.HasSyncedSinceStartup = hasSyncedSinceStartup
-	s.SyncRound = basics.Round(node.GetSyncRound())
 
 	return s, err
 }

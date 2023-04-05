@@ -216,7 +216,7 @@ func TestStartStop(t *testing.T) {
 	}
 
 	node.Stop()
-	hmmm := node.Ledger().CommittedRound()
+	hmmm := node.Ledger().DBRound()
 
 	node, _ = restartableFollowNode(t, tempDir)
 
@@ -225,7 +225,7 @@ func TestStartStop(t *testing.T) {
 	require.Equal(t, basics.Round(2*N), status.LastRound)
 	// require.Equal(t, 0, status.SyncRound)
 
-	hmmm = node.Ledger().CommittedRound()
+	hmmm = node.Ledger().DBRound()
 
 	node.Start()
 	for i := 2*N + 1; i <= 2000; i++ {
@@ -236,7 +236,7 @@ func TestStartStop(t *testing.T) {
 		// require.Equal(t, 0, status.SyncRound)
 	}
 
-	hmmm = node.Ledger().CommittedRound()
+	hmmm = node.Ledger().DBRound()
 	_ = hmmm
 	hmmm = 53
 
