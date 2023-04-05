@@ -145,9 +145,10 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 	addBlocks(t, remote, blk, 10)
 
 	// Create a network and block service
-	blockServiceConfig := config.GetDefaultLocal()
+	config := config.GetDefaultLocal()
+	config.CatchupBlockValidateMode = 0
 	net := &httpTestPeerSource{}
-	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
+	ls := rpcs.MakeBlockService(logging.Base(), config, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
 	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
@@ -157,7 +158,7 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 	net.addPeer(rootURL)
 
 	// Make Service
-	syncer := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
+	syncer := MakeService(logging.Base(), config, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
 
 	syncer.testStart()
 	syncer.sync()
