@@ -193,6 +193,9 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
 func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
+	// TODO pass config in simulatorTracer
+
+	// TODO the plan is, pass constants to EvalParam at the beginning of txngroup, or override through tracer
 	simulatorTracer := makeEvalTracer(s.ledger.start, txgroup)
 	block, missingSigIndexes, err := s.simulateWithTracer(txgroup, simulatorTracer)
 	if err != nil {
