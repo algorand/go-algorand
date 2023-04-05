@@ -103,8 +103,8 @@ func TestSyncRestart(t *testing.T) {
 	fixture.Start()
 
 	a.LessOrEqual(uint64(3), getRound("Primary"))
-	a.Equal(uint64(2), getRound("Follower"))
 	a.Equal(uint64(1), getSyncRound())
+	a.Equal(uint64(2), getRound("Follower"))
 
 	waitTill("Primary", 6)
 	followerClient := getAlgod("Follower")
