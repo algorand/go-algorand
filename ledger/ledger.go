@@ -862,6 +862,11 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 	return &vb, nil
 }
 
+// DBRound returnds the trackerRegistry's dbRound
+func (l *Ledger) DBRound() basics.Round {
+	return l.trackers.dbRound
+}
+
 // DebuggerLedger defines the minimal set of method required for creating a debug balances.
 type DebuggerLedger = eval.LedgerForCowBase
 
