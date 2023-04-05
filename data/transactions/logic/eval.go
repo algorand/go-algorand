@@ -337,6 +337,13 @@ type EvalParams struct {
 	caller *EvalContext
 }
 
+// SetRuntimeDefaults sets constraints used in runtime, which opcodes are relying on
+func (ep *EvalParams) SetRuntimeDefaults() *EvalParams {
+	ep.MaxLogSize = maxLogSize
+	ep.MaxLogCalls = maxLogCalls
+	return ep
+}
+
 // GetCaller returns the calling EvalContext if this is an inner transaction evaluation. Otherwise,
 // this returns nil.
 func (ep *EvalParams) GetCaller() *EvalContext {
@@ -417,6 +424,8 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		FeeCredit:               &credit,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
+		MaxLogSize:              uint64(maxLogSize),
+		MaxLogCalls:             uint64(maxLogCalls),
 		available:               &resources{boxes: allBoxes},
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),
 	}
@@ -477,6 +486,8 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		ioBudget:                caller.ioBudget,
 		readBudgetChecked:       true, // don't check for inners
 		appAddrCache:            caller.appAddrCache,
+		MaxLogSize:              uint64(maxLogSize),
+		MaxLogCalls:             uint64(maxLogCalls),
 		// read comment in EvalParams declaration about txid caches
 		caller: caller,
 	}
@@ -4643,18 +4654,14 @@ func opAcctParamsGet(cx *EvalContext) error {
 }
 
 func opLog(cx *EvalContext) error {
-	// TODO: pass through `cx *EvalContext` to know we are under simulation
-	//       then we need the extended limit on byte length and log row number
-	// Maybe this is also related with simulation request body change and `goal clerk simulate`?
-
 	last := len(cx.stack) - 1
 
-	if len(cx.txn.EvalDelta.Logs) >= maxLogCalls {
+	if len(cx.txn.EvalDelta.Logs) >= int(cx.MaxLogCalls) {
 		return fmt.Errorf("too many log calls in program. up to %d is allowed", maxLogCalls)
 	}
 	log := cx.stack[last]
 	cx.logSize += len(log.Bytes)
-	if cx.logSize > maxLogSize {
+	if cx.logSize > int(cx.MaxLogSize) {
 		return fmt.Errorf("program logs too large. %d bytes >  %d bytes limit", cx.logSize, maxLogSize)
 	}
 	cx.txn.EvalDelta.Logs = append(cx.txn.EvalDelta.Logs, string(log.Bytes))

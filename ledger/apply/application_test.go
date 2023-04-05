@@ -437,6 +437,7 @@ func TestAppCallCheckPrograms(t *testing.T) {
 
 	var ac transactions.ApplicationCallTxnFields
 	var ep logic.EvalParams
+	(&ep).SetRuntimeDefaults()
 	// This check is for static costs. v26 is last with static cost checking
 	proto := config.Consensus[protocol.ConsensusV26]
 	ep.Proto = &proto
@@ -524,6 +525,7 @@ func TestAppCallApplyCreate(t *testing.T) {
 		Sender: sender,
 	}
 	var ep logic.EvalParams
+	(&ep).SetRuntimeDefaults()
 	var txnCounter uint64 = 1
 	b := newTestBalances()
 
@@ -631,6 +633,7 @@ func TestAppCallApplyCreateOptIn(t *testing.T) {
 		Sender: sender,
 	}
 	var ep logic.EvalParams
+	(&ep).SetRuntimeDefaults()
 	var txnCounter uint64 = 1
 	appIdx := basics.AppIndex(txnCounter + 1)
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
@@ -788,6 +791,7 @@ func TestAppCallClearState(t *testing.T) {
 	appIdx := basics.AppIndex(txnCounter + 1)
 	b := newTestBalances()
 	var ep logic.EvalParams
+	(&ep).SetRuntimeDefaults()
 
 	ad := &transactions.ApplyData{}
 	b.appCreators = make(map[basics.AppIndex]basics.Address)
@@ -972,6 +976,7 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 		Sender: sender,
 	}
 	var ep logic.EvalParams
+	(&ep).SetRuntimeDefaults()
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
 	b := newTestBalances()
 
@@ -1071,6 +1076,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 		Sender: sender,
 	}
 	var ep logic.EvalParams
+	(&ep).SetRuntimeDefaults()
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
 	b := newTestBalances()
 
@@ -1224,6 +1230,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 		Sender: sender,
 	}
 	var ep logic.EvalParams
+	(&ep).SetRuntimeDefaults()
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
 	b := newTestBalances()
 
@@ -1339,6 +1346,7 @@ func TestAppCallApplyCreateClearState(t *testing.T) {
 		Sender: sender,
 	}
 	var ep logic.EvalParams
+	(&ep).SetRuntimeDefaults()
 	var txnCounter uint64 = 1
 	appIdx := basics.AppIndex(txnCounter + 1)
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
@@ -1389,6 +1397,7 @@ func TestAppCallApplyCreateDelete(t *testing.T) {
 		Sender: sender,
 	}
 	var ep logic.EvalParams
+	(&ep).SetRuntimeDefaults()
 	var txnCounter uint64 = 1
 	appIdx := basics.AppIndex(txnCounter + 1)
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
