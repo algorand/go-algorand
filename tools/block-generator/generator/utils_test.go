@@ -109,3 +109,12 @@ func TestWeightedSelectionOutOfRange(t *testing.T) {
 	}
 	assert.Fail(t, "Expected an out of range error by this point.")
 }
+
+func TestConvertToGenesisBalance(t *testing.T) {
+	balance := []uint64{100, 200, 300}
+	genesisBalances := convertToGenesisBalances(balance)
+	require.Equal(t, 3, len(genesisBalances))
+	for i, bal := range balance {
+		require.Equal(t, bal, genesisBalances[indexToAccount(uint64(i))].MicroAlgos.Raw)
+	}
+}

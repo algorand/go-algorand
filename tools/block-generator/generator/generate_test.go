@@ -205,6 +205,7 @@ func TestWriteRound(t *testing.T) {
 	var block rpcs.EncodedBlockCert
 	protocol.Decode(data, &block)
 	require.Len(t, block.Block.Payset, int(g.config.TxnPerBlock))
+	require.NotNil(t, g.ledger)
 	require.Equal(t, basics.Round(1), g.ledger.Latest())
 	_, err := g.ledger.GetStateDeltaForRound(1)
 	require.NoError(t, err)
