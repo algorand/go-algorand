@@ -100,7 +100,7 @@ type NodeInterface interface {
 	GenesisID() string
 	GenesisHash() crypto.Digest
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
-	Simulate(txgroup []transactions.SignedTxn) (result simulation.Result, err error)
+	Simulate(txgroup []transactions.SignedTxn, config simulation.SimulatorConfig) (result simulation.Result, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
 	SuggestedFee() basics.MicroAlgos
@@ -971,10 +971,9 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 		params.UnlimitLog = &defaultValue
 	}
 
-	// TODO params.UnlimitLog should be used in `Node.Simulate`
-
 	// Simulate transaction
-	simulationResult, err := v2.Node.Simulate(txgroup)
+	simulatorConfig := simulation.SimulatorConfig{UnLimitLog: *params.UnlimitLog}
+	simulationResult, err := v2.Node.Simulate(txgroup, simulatorConfig)
 	if err != nil {
 		var invalidTxErr simulation.InvalidTxGroupError
 		switch {

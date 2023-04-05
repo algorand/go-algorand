@@ -164,7 +164,7 @@ func (m *mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) erro
 	return m.err
 }
 
-func (m *mockNode) Simulate(txgroup []transactions.SignedTxn) (simulation.Result, error) {
+func (m *mockNode) Simulate(txgroup []transactions.SignedTxn, config simulation.SimulatorConfig) (simulation.Result, error) {
 	simulator := simulation.MakeSimulator(m.ledger.(*data.Ledger))
 	return simulator.Simulate(txgroup)
 }

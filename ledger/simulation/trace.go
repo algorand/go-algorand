@@ -64,6 +64,11 @@ func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
 	return groupResult
 }
 
+// SimulatorConfig packs simulation related configurations, that overlaps the configurations in real transactions.
+type SimulatorConfig struct {
+	UnLimitLog bool
+}
+
 // ResultLatestVersion is the latest version of the Result struct
 const ResultLatestVersion = uint64(1)
 
