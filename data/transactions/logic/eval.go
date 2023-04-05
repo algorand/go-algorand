@@ -318,6 +318,12 @@ type EvalParams struct {
 	// readBudgetChecked allows us to only check the read budget once
 	readBudgetChecked bool
 
+	// MaxLogSize is the limit of total log size from n log calls in a program
+	MaxLogSize uint64
+
+	// MaxLogCalls is the limit of total log calls during a program execution
+	MaxLogCalls uint64
+
 	// Caching these here means the hashes can be shared across the TxnGroup
 	// (and inners, because the cache is shared with the inner EvalParams)
 	appAddrCache map[basics.AppIndex]basics.Address

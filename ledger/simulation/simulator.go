@@ -36,6 +36,11 @@ type simulatorLedger struct {
 	start basics.Round
 }
 
+// SimulatorConfig packs simulation related configurations, that overlaps the configurations in real transactions.
+type SimulatorConfig struct {
+	UnLimitLog bool
+}
+
 // Latest is part of the LedgerForSimulator interface.
 // We override this to use the set latest to prevent racing with the network
 func (l simulatorLedger) Latest() basics.Round {
