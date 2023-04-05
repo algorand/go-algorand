@@ -864,7 +864,10 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 
 // DBRound returns the trackers' dbRound which "is always exactly accountsRound()"
 func (l *Ledger) DBRound() basics.Round {
-	return l.trackers.dbRound
+	l.trackers.mu.RLock()
+	dbRound := l.trackers.dbRound
+	l.trackers.mu.RUnlock()
+	return dbRound
 }
 
 // DebuggerLedger defines the minimal set of method required for creating a debug balances.
