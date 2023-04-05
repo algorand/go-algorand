@@ -609,10 +609,14 @@ func (client RestClient) Compile(program []byte, useSourceMap bool) (compiledPro
 	}
 	programHash = crypto.Digest(progAddr)
 
-	existenceOfSourceMap := compileResponse.Sourcemap != nil
+	// fast exit if we don't want sourcemap, then exit with what we have so far
+	if !useSourceMap {
+		return
+	}
 
-	if existenceOfSourceMap != useSourceMap {
-		return nil, crypto.Digest{}, nil, fmt.Errorf("useSourceMap arg %v not agreeing with existence of source-map %v", useSourceMap, existenceOfSourceMap)
+	// if we want sourcemap, then we convert the *map[string]interface{} into *logic.SourceMap
+	if compileResponse.Sourcemap == nil {
+		return nil, crypto.Digest{}, nil, fmt.Errorf("requesting for sourcemap but get nothing")
 	}
 
 	var srcMapInstance logic.SourceMap
