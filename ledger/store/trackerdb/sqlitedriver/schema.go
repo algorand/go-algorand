@@ -853,7 +853,7 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 // and optionally returns list of addresses that were eliminated
 func removeZeroBytesAccountData(tx *sql.Tx, queryAddresses bool) (num int64, addresses []basics.Address, err error) {
 	if queryAddresses {
-		rows, err := tx.Query("SELECT address FROM accountbase where length(data) = 0")
+		rows, err := tx.Query("SELECT address FROM accountbase where length(data) = 0 or data IS NULL")
 		if err != nil {
 			return 0, nil, err
 		}
@@ -880,7 +880,7 @@ func removeZeroBytesAccountData(tx *sql.Tx, queryAddresses bool) (num int64, add
 		}
 	}
 
-	result, err := tx.Exec("DELETE from accountbase where length(data) = 0")
+	result, err := tx.Exec("DELETE from accountbase where length(data) = 0 or data IS NULL")
 	if err != nil {
 		return 0, nil, err
 	}

@@ -126,6 +126,10 @@ func TestMigration10to11ZeroBytesAccounts(t *testing.T) {
 	invalidAddr := ledgertesting.RandomAddress()
 	_, err = castedDB.pair.Wdb.Handle.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)", invalidAddr[:], []byte{})
 	require.NoError(t, err)
+	// force insertion of a nil data record
+	invalidAddr2 := ledgertesting.RandomAddress()
+	_, err = castedDB.pair.Wdb.Handle.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)", invalidAddr2[:], nil)
+	require.NoError(t, err)
 
 	// check accounts are both there before migration
 	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
@@ -134,7 +138,7 @@ func TestMigration10to11ZeroBytesAccounts(t *testing.T) {
 
 		accountsCount, err := awr.TotalAccounts(ctx)
 		require.NoError(t, err)
-		require.Equal(t, uint64(2), accountsCount)
+		require.Equal(t, uint64(3), accountsCount)
 
 		return nil
 	})
@@ -170,6 +174,11 @@ func TestMigration10to11ZeroBytesAccounts(t *testing.T) {
 
 		// attempt to read the invalid record
 		pad, err = aor.LookupAccount(invalidAddr)
+		require.NoError(t, err)
+		require.Nil(t, pad.Ref)
+
+		// attempt to read the (other) invalid record
+		pad, err = aor.LookupAccount(invalidAddr2)
 		require.NoError(t, err)
 		require.Nil(t, pad.Ref)
 
