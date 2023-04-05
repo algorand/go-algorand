@@ -77,12 +77,14 @@ type EvalFailureError struct {
 // Simulator is a transaction group simulator for the block evaluator.
 type Simulator struct {
 	ledger simulatorLedger
+	config SimulatorConfig
 }
 
 // MakeSimulator creates a new simulator from a ledger.
-func MakeSimulator(ledger *data.Ledger) *Simulator {
+func MakeSimulator(ledger *data.Ledger, simConfig SimulatorConfig) *Simulator {
 	return &Simulator{
 		ledger: simulatorLedger{ledger, ledger.Latest()},
+		config: simConfig,
 	}
 }
 

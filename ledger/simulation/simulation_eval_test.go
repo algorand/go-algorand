@@ -147,7 +147,7 @@ func simulationTest(t *testing.T, f func(accounts []simulationtesting.Account, t
 	t.Helper()
 	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
 	defer l.Close()
-	s := simulation.MakeSimulator(l)
+	s := simulation.MakeSimulator(l, simulation.SimulatorConfig{})
 
 	testcase := f(accounts, txnInfo)
 
@@ -448,7 +448,7 @@ func TestStateProofTxn(t *testing.T) {
 
 	l, _, txnInfo := simulationtesting.PrepareSimulatorTest(t)
 	defer l.Close()
-	s := simulation.MakeSimulator(l)
+	s := simulation.MakeSimulator(l, simulation.SimulatorConfig{})
 
 	txgroup := []transactions.SignedTxn{
 		txnInfo.NewTxn(txntest.Txn{
@@ -467,7 +467,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 
 	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
 	defer l.Close()
-	s := simulation.MakeSimulator(l)
+	s := simulation.MakeSimulator(l, simulation.SimulatorConfig{})
 	sender1 := accounts[0].Addr
 	sender1Balance := accounts[0].AcctData.MicroAlgos
 	sender2 := accounts[1].Addr
@@ -1108,7 +1108,7 @@ func TestSignatureCheck(t *testing.T) {
 
 	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
 	defer l.Close()
-	s := simulation.MakeSimulator(l)
+	s := simulation.MakeSimulator(l, simulation.SimulatorConfig{})
 	sender := accounts[0].Addr
 
 	txgroup := []transactions.SignedTxn{
@@ -1157,7 +1157,7 @@ func TestInvalidTxGroup(t *testing.T) {
 
 	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
 	defer l.Close()
-	s := simulation.MakeSimulator(l)
+	s := simulation.MakeSimulator(l, simulation.SimulatorConfig{})
 	receiver := accounts[0].Addr
 
 	txgroup := []transactions.SignedTxn{
