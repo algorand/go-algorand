@@ -67,17 +67,18 @@ func setupFollowNode(t *testing.T) *AlgorandFollowerNode {
 	return node
 }
 
-func restartableFollowNode(t *testing.T, tempDir string) (*AlgorandFollowerNode, string) {
+func remakeableFollowNode(t *testing.T, tempDir string, maxAcctLookback uint64) (*AlgorandFollowerNode, string) {
 	cfg := config.GetDefaultLocal()
 	cfg.EnableFollowMode = true
 	cfg.DisableNetworking = true
+	cfg.MaxAcctLookback = maxAcctLookback
 	genesis := followNodeDefaultGenesis()
 	if tempDir == "" {
 		tempDir = t.TempDir()
 	}
-	node, err := MakeFollower(logging.Base(), tempDir, cfg, []string{}, genesis)
+	followNode, err := MakeFollower(logging.Base(), tempDir, cfg, []string{}, genesis)
 	require.NoError(t, err)
-	return node, tempDir
+	return followNode, tempDir
 }
 
 func TestSyncRound(t *testing.T) {
@@ -92,13 +93,13 @@ func TestSyncRound(t *testing.T) {
 	b.CurrentProtocol = protocol.ConsensusCurrentVersion
 	err := node.Ledger().AddBlock(b, agreement.Certificate{})
 	require.NoError(t, err)
-	latestRound := uint64(node.Ledger().Latest())
-	// Sync Round should be initialized to the ledger's latest round
-	require.Equal(t, latestRound, node.GetSyncRound())
+	dbRound := uint64(node.Ledger().DBRound())
+	// Sync Round should be initialized to the ledger's dbRound + 1
+	require.Equal(t, dbRound+1, node.GetSyncRound())
 	// Set a new sync round
-	require.NoError(t, node.SetSyncRound(latestRound+10))
+	require.NoError(t, node.SetSyncRound(dbRound+11))
 	// Ensure it is persisted
-	require.Equal(t, latestRound+10, node.GetSyncRound())
+	require.Equal(t, dbRound+11, node.GetSyncRound())
 	// Unset the sync round and make sure get returns 0
 	node.UnsetSyncRound()
 	require.Equal(t, uint64(0), node.GetSyncRound())
@@ -147,35 +148,18 @@ func TestDevModeWarning(t *testing.T) {
 	require.Contains(t, foundEntry.Message, "Follower running on a devMode network. Must submit txns to a different node.")
 }
 
-func TestSyncRoundStartStop(t *testing.T) {
-	// Extend TestSyncRound to the case of starting and stopping the network
-	/*
-		things to take note of:
-		node.Ledger().CommittedRound() is non-deterministic
-		but should be < node.Ledger().Latest()
-
-		don't try to check node.Ledger().CommittedRound() after
-		a Stop()
-
-		It should be comparable to status.SyncRound, but again,
-		this isn't deterministic as the value might have changed
-		between the two evaluations
-	*/
+func TestSyncRoundWithRemake(t *testing.T) {
+	// Extend TestSyncRound to simulate starting and stopping the network
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	node, tempDir := restartableFollowNode(t, "")
-	status, err := node.Status()
-	require.NoError(t, err)
+	maxAcctLookback := uint64(100)
 
-	// flakey !?
-	require.Equal(t, basics.Round(0), status.LastRound)
-	// require.Equal(t, basics.Round(1), status.SyncRound)
-
+	followNode, tempDir := remakeableFollowNode(t, "", maxAcctLookback)
 	addBlock := func(round basics.Round) {
 		b := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				GenesisHash: node.ledger.GenesisHash(),
+				GenesisHash: followNode.ledger.GenesisHash(),
 				Round:       round,
 				RewardsState: bookkeeping.RewardsState{
 					RewardsRate: 0,
@@ -185,57 +169,46 @@ func TestSyncRoundStartStop(t *testing.T) {
 			},
 		}
 		b.CurrentProtocol = protocol.ConsensusCurrentVersion
-		err := node.Ledger().AddBlock(b, agreement.Certificate{})
+		err := followNode.Ledger().AddBlock(b, agreement.Certificate{})
 		require.NoError(t, err)
+
+		status, err := followNode.Status()
+		require.NoError(t, err)
+		require.Equal(t, round, status.LastRound)
 	}
 
-	N := basics.Round(10)
-	for i := basics.Round(1); i <= N; i++ {
+	// Part I. redo TestSyncRound
+	// main differences are:
+	// * cfg.DisableNetworking = true
+	// * cfg.MaxAcctLookback = 100 (instead of 4)
+
+	addBlock(basics.Round(1))
+
+	dbRound := uint64(followNode.Ledger().DBRound())
+	// Sync Round should be initialized to the ledger's dbRound + 1
+	require.Equal(t, dbRound+1, followNode.GetSyncRound())
+	// Set a new sync round
+	require.NoError(t, followNode.SetSyncRound(dbRound+11))
+	// Ensure it is persisted
+	require.Equal(t, dbRound+11, followNode.GetSyncRound())
+	// Unset the sync round and make sure get returns 0
+	followNode.UnsetSyncRound()
+	require.Equal(t, uint64(0), followNode.GetSyncRound())
+
+	// Part II. fast forward and then remake the node
+
+	newRound := basics.Round(2 * maxAcctLookback)
+	for i := basics.Round(2); i <= newRound; i++ {
 		addBlock(i)
-		status, err = node.Status()
-		require.NoError(t, err)
-		require.Equal(t, basics.Round(i), status.LastRound)
-		// require.Equal(t, 0, status.SyncRound)
 	}
 
-	node.Start()
-
-	for i := N + 1; i <= 2*N; i++ {
-		addBlock(i)
-		status, err = node.Status()
-		require.NoError(t, err)
-		require.Equal(t, basics.Round(i), status.LastRound)
-		// require.Equal(t, 0, status.SyncRound)
-	}
-
-	node.Stop()
-	hmmm := node.Ledger().DBRound()
-
-	node, _ = restartableFollowNode(t, tempDir)
-
-	status, err = node.Status()
+	followNode, _ = remakeableFollowNode(t, tempDir, maxAcctLookback)
+	status, err := followNode.Status()
 	require.NoError(t, err)
-	require.Equal(t, basics.Round(2*N), status.LastRound)
-	// require.Equal(t, 0, status.SyncRound)
+	require.Equal(t, newRound, status.LastRound)
 
-	hmmm = node.Ledger().DBRound()
-
-	node.Start()
-	for i := 2*N + 1; i <= 2000; i++ {
-		addBlock(i)
-		status, err = node.Status()
-		require.NoError(t, err)
-		require.Equal(t, basics.Round(i), status.LastRound)
-		// require.Equal(t, 0, status.SyncRound)
-	}
-
-	hmmm = node.Ledger().DBRound()
-	_ = hmmm
-	hmmm = 53
-
-	node.Stop()
-	status, err = node.Status()
-	require.NoError(t, err)
-	// require.Equal(t, basics.Round(i), status.LastRound)
-
+	// syncRound should be at
+	// newRound - maxAcctLookback + 1 = maxAcctLookback + 1
+	syncRound := followNode.GetSyncRound()
+	require.Equal(t, uint64(maxAcctLookback+1), syncRound)
 }
