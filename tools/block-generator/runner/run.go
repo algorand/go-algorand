@@ -342,7 +342,7 @@ func startGenerator(configFile string, addr string, blockMiddleware func(http.Ha
 
 	return func() error {
 		// stop generator
-		generator.Stop()
+		defer generator.Stop()
 		// Shutdown blocks until the server has stopped.
 		if err := server.Shutdown(context.Background()); err != nil {
 			return fmt.Errorf("failed during generator graceful shutdown: %w", err)
