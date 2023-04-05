@@ -41,11 +41,12 @@ func TestSyncRestart(t *testing.T) {
 
 	// Overview of this test:
 	// Start a two-node network--one in follower mode (follower has 0%, secondary has 100%)
-	// with follower having a max account lookback of 2.
-	// Advance the primary node to particular rounds and the follower node as far as possible.
-	// Restart the follower node and verify that the sync round hasn't advanced.
+	// with the nodes having a max account lookback of 2.
+	// Advance the primary node to particular rounds, set the follower's sync round
+	// and then advance the follower node as much as possible.
+	// Restart the network and verify that the sync round hasn't advanced.
 
-	// NOTE: with a max account lookback of MAL, when the follower's sync round is SR:
+	// NOTE: with a max account lookback of MAL, and the follower's sync round at SR:
 	// 		 the follower cannot advance past round SR + MAL - 1
 
 	var fixture fixtures.RestClientFixture
@@ -92,7 +93,6 @@ func TestSyncRestart(t *testing.T) {
 	a.Equal(uint64(1), getSyncRound())
 
 	advanceTo("Primary", 3)
-
 	// with a max account lookback of 2, and the sync round at 1,
 	// the follower cannot advance past round 2 = 1 + 2 - 1
 	advanceTo("Follower", 2)
@@ -140,7 +140,7 @@ func TestPrelim2(t *testing.T) {
 
 	// Overview of this test:
 	// Start a two-node network--one in follower mode (follower has 0%, secondary has 100%)
-	// with follower having a max account lookback of 2.
+	// with nodes having a max account lookback of 2.
 	// Advance the primary node to round 3 and the follower node to round 2.
 	// Restart the network.
 	// Check that the sync round hasn't advanced.

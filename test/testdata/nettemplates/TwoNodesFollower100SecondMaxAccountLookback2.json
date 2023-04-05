@@ -14,7 +14,7 @@
     {
       "Name": "Follower",
       "Wallets": [],
-      "ConfigJSONOverride": "{\"EnableFollowMode\":true, \"MaxAccountLookback\":2}"
+      "ConfigJSONOverride": "{\"EnableFollowMode\":true, \"MaxAcctLookback\":2}"
     },
     {
       "Name": "Primary",
