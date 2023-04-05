@@ -677,10 +677,14 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	return
 }
 
+type simulateRawTransactionParams struct {
+	UnLimitLog bool `url:"unlimit-log,omitempty"`
+}
+
 // SimulateRawTransaction gets the raw transaction or raw transaction group, and returns relevant simulation results.
 func (client RestClient) SimulateRawTransaction(data []byte, unlimitLog bool) (response model.SimulateResponse, err error) {
-	// TODO should use unlimitLog here
-	err = client.submitForm(&response, "/v2/transactions/simulate", nil, data, "POST", false /* encodeJSON */, true /* decodeJSON */, false)
+	params := simulateRawTransactionParams{UnLimitLog: unlimitLog}
+	err = client.submitForm(&response, "/v2/transactions/simulate", params, data, "POST", false /* encodeJSON */, true /* decodeJSON */, false)
 	return
 }
 
