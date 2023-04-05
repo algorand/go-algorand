@@ -1595,25 +1595,33 @@ func TestSimulateTransaction(t *testing.T) {
 
 	txn, err := testClient.ConstructPayment(senderAddress, toAddress, 0, senderBalance/2, nil, closeToAddress, [32]byte{}, 0, 0)
 	a.NoError(err)
-
-	result, err := testClient.SimulateTransactionGroup([]transactions.SignedTxn{{Txn: txn}})
+	stxn, err := testClient.SignTransactionWithWallet(wh, nil, txn)
 	a.NoError(err)
 
-	missingSig := true
+	currentRoundBeforeSimulate, err := testClient.CurrentRound()
+	a.NoError(err)
+
+	result, err := testClient.SimulateTransactionGroup([]transactions.SignedTxn{stxn})
+	a.NoError(err)
+
+	currentAfterAfterSimulate, err := testClient.CurrentRound()
+	a.NoError(err)
+
+	// To reduce flakiness, only check the round from simulate is within a range.
+	a.GreaterOrEqual(result.LastRound, currentRoundBeforeSimulate)
+	a.LessOrEqual(result.LastRound, currentAfterAfterSimulate)
+
 	closingAmount := senderBalance - txn.Fee.Raw - txn.Amount.Raw
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:      1,
-		LastRound:    1,
-		WouldSucceed: false,
+		LastRound:    result.LastRound, // checked above
+		WouldSucceed: true,
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
-						MissingSignature: &missingSig,
 						Txn: v2.PreEncodedTxInfo{
-							Txn: transactions.SignedTxn{
-								Txn: txn,
-							},
+							Txn:           stxn,
 							ClosingAmount: &closingAmount,
 						},
 					},
