@@ -713,9 +713,9 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	// block timestamp.
 	if pool.devMode {
 		next.BlockHeader.Seed = committee.Seed(pool.PendingTxIDs()[0])
-		if pool.devModeTimeStampOffset != 0 {
-			next.BlockHeader.TimeStamp += int64(pool.devModeTimeStampOffset)
-		}
+		// if pool.devModeTimeStampOffset != 0 {
+		// 	next.BlockHeader.TimeStamp += int64(pool.devModeTimeStampOffset)
+		// }
 	}
 
 	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
