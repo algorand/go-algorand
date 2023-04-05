@@ -166,11 +166,8 @@ type RawResponse interface {
 
 // mergeRawQueries merges two raw queries, appending an "&" if both are non-empty
 func mergeRawQueries(q1, q2 string) string {
-	if q1 == "" {
-		return q2
-	}
-	if q2 == "" {
-		return q1
+	if q1 == "" || q2 == "" {
+		return q1 + q2
 	}
 	return q1 + "&" + q2
 }
