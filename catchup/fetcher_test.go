@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -41,21 +42,34 @@ import (
 )
 
 func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, next basics.Round, b bookkeeping.Block, err error) {
-	var user basics.Address
-	user[0] = 123
+	var seed crypto.Seed
+	crypto.RandBytes(seed[:])
+	secrets := crypto.GenerateSignatureSecrets(seed)
+	// from generateRandomTestingAccountBalances
+	votesecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1000)
+	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
+	var stateProofID merklesignature.Verifier
+	crypto.RandBytes(stateProofID.Commitment[:])
+
+	user := basics.Address(secrets.SignatureVerifier)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	genesis := make(map[basics.Address]basics.AccountData)
 	genesis[user] = basics.AccountData{
-		Status:     basics.Online,
-		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
+		Status:         basics.Online,
+		VoteID:         votesecrets.OneTimeSignatureVerifier,
+		SelectionID:    pubVrfKey,
+		StateProofID:   stateProofID.Commitment,
+		VoteFirstValid: basics.Round(0),
+		VoteLastValid:  basics.Round(1000),
+		MicroAlgos:     basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
 	}
 	genesis[sinkAddr] = basics.AccountData{
-		Status:     basics.Online,
+		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
 	}
 	genesis[poolAddr] = basics.AccountData{
-		Status:     basics.Online,
+		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
 	}
 
@@ -88,9 +102,7 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 			Amount:   basics.MicroAlgos{Raw: 2},
 		},
 	}
-	signedtx := transactions.SignedTxn{
-		Txn: tx,
-	}
+	signedtx := tx.Sign(secrets)
 
 	prev, err := ledger.Block(ledger.LastRound())
 	require.NoError(t, err)

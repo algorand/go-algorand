@@ -146,7 +146,6 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 
 	// Create a network and block service
 	config := config.GetDefaultLocal()
-	config.CatchupBlockValidateMode = 0
 	net := &httpTestPeerSource{}
 	ls := rpcs.MakeBlockService(logging.Base(), config, remote, net, "test genesisID")
 
@@ -751,11 +750,12 @@ func (m *mockedLedger) AddBlock(blk bookkeeping.Block, cert agreement.Certificat
 }
 
 func (m *mockedLedger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
-	return nil, nil
+	vb := ledgercore.MakeValidatedBlock(blk, ledgercore.StateDelta{})
+	return &vb, nil
 }
 
 func (m *mockedLedger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error {
-	return nil
+	return m.AddBlock(vb.Block(), cert)
 }
 
 func (m *mockedLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
