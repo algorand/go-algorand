@@ -17,8 +17,12 @@
 package sqlitedriver
 
 import (
+	"context"
 	"testing"
 
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -85,4 +89,91 @@ func TestRowidsToChunkedArgs(t *testing.T) {
 		require.Equal(t, interface{}(int64(i)), res[1][j])
 		j++
 	}
+}
+
+func TestMigration10to11ZeroBytesAccounts(t *testing.T) {
+	dbs, _ := DbOpenTrackerTest(t, true)
+	defer dbs.Close()
+	dbs.SetLogger(logging.TestingLog(t))
+
+	// initialize the db and run migrations up to v10 (right before the one we care testing)
+	params := trackerdb.Params{}
+	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+		_, err := tx.Testing().RunMigrations(ctx, params, logging.TestingLog(t), 10)
+		require.NoError(t, err)
+
+		return nil
+	})
+	require.NoError(t, err)
+
+	validAddr := ledgertesting.RandomAddress()
+	// insert accounts
+	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+		aow, err := tx.MakeAccountsOptimizedWriter(true, false, false, false)
+		require.NoError(t, err)
+
+		// insert valid account
+		// empty structs product 1-byte records []byte(0x80)
+		_, err = aow.InsertAccount(validAddr, 0, trackerdb.BaseAccountData{})
+		require.NoError(t, err)
+
+		return nil
+	})
+	require.NoError(t, err)
+
+	// force insertion of a 0-byte record
+	castedDB := dbs.(*trackerSQLStore)
+	invalidAddr := ledgertesting.RandomAddress()
+	_, err = castedDB.pair.Wdb.Handle.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)", invalidAddr[:], []byte{})
+	require.NoError(t, err)
+
+	// check accounts are both there before migration
+	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+		awr, err := tx.MakeAccountsReaderWriter()
+		require.NoError(t, err)
+
+		accountsCount, err := awr.TotalAccounts(ctx)
+		require.NoError(t, err)
+		require.Equal(t, uint64(2), accountsCount)
+
+		return nil
+	})
+	require.NoError(t, err)
+
+	// migrate the db to v11 (this will delete empty accounts records)
+	params = trackerdb.Params{}
+	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+		_, err := tx.Testing().RunMigrations(ctx, params, logging.TestingLog(t), 11)
+		require.NoError(t, err)
+
+		return nil
+	})
+	require.NoError(t, err)
+
+	// check empty accounts are gone
+	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+		aor, err := tx.Testing().MakeAccountsOptimizedReader()
+		require.NoError(t, err)
+
+		awr, err := tx.MakeAccountsReaderWriter()
+		require.NoError(t, err)
+
+		// check total accounts
+		accountsCount, err := awr.TotalAccounts(ctx)
+		require.NoError(t, err)
+		require.Equal(t, uint64(1), accountsCount)
+
+		// read the valid record
+		pad, err := aor.LookupAccount(validAddr)
+		require.NoError(t, err)
+		require.NotNil(t, pad.Ref)
+
+		// attempt to read the invalid record
+		pad, err = aor.LookupAccount(invalidAddr)
+		require.NoError(t, err)
+		require.Nil(t, pad.Ref)
+
+		return nil
+	})
+	require.NoError(t, err)
 }
