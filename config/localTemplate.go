@@ -507,7 +507,7 @@ type Local struct {
 	// from ledger caches and can control the ledger round.
 	EnableFollowMode bool `version[27]:"false"`
 
-	// SimulateLogBytesLimit limits the node's log opcode usage in simulating 1 txn.
+	// SimulateLogBytesLimit limits the node's log opcode usage in simulating one program run.
 	// This very configuration only has effect on simulation, which has NO effect on real transaction.
 	// Note that this configuration may vary per node.
 	SimulateLogBytesLimit uint64 `version[28]:"65536"`
