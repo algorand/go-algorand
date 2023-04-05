@@ -862,7 +862,7 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 	return &vb, nil
 }
 
-// DBRound returnds the trackerRegistry's dbRound
+// DBRound returns the trackers' dbRound which "is always exactly accountsRound()"
 func (l *Ledger) DBRound() basics.Round {
 	return l.trackers.dbRound
 }

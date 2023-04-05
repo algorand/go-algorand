@@ -34,16 +34,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-type configOverrides struct {
-	DisableNetworking *bool
-}
-
-func boolPtr(b bool) *bool {
-	return &b
-}
-
-var disableNetworking = configOverrides{DisableNetworking: boolPtr(true)}
-
 func followNodeDefaultGenesis() bookkeeping.Genesis {
 	return bookkeeping.Genesis{
 		SchemaID:    "go-test-follower-node-genesis",
@@ -157,7 +147,8 @@ func TestDevModeWarning(t *testing.T) {
 	require.Contains(t, foundEntry.Message, "Follower running on a devMode network. Must submit txns to a different node.")
 }
 
-func TestStartStop(t *testing.T) {
+func TestSyncRoundStartStop(t *testing.T) {
+	// Extend TestSyncRound to the case of starting and stopping the network
 	/*
 		things to take note of:
 		node.Ledger().CommittedRound() is non-deterministic
@@ -176,8 +167,10 @@ func TestStartStop(t *testing.T) {
 	node, tempDir := restartableFollowNode(t, "")
 	status, err := node.Status()
 	require.NoError(t, err)
+
+	// flakey !?
 	require.Equal(t, basics.Round(0), status.LastRound)
-	// require.Equal(t, 0, status.SyncRound)
+	// require.Equal(t, basics.Round(1), status.SyncRound)
 
 	addBlock := func(round basics.Round) {
 		b := bookkeeping.Block{
