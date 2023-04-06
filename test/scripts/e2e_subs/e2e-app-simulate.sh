@@ -156,7 +156,7 @@ TEAL=test/scripts/e2e_subs/tealprogs
 
 printf '#pragma version 2\nint 1' > "${TEMPDIR}/simple-v2.teal"
 
-RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEAL}/logs-a-lot.teal" --clear-prog "${TEMPDIR}/simple-v2.teal" --global-byteslices 0 --global-ints 0 --local-bytesliices 0 --local-ints 0 2>&1 || true)
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEAL}/logs-a-lot.teal" --clear-prog "${TEMPDIR}/simple-v2.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
 EXPSUCCESS='Created app with app index'
 if [[ $RES != *"${EXPSUCCESS}"* ]]; then
     date '+app-simulate-test FAIL the app creation for logs-a-lot.teal should succeed %Y%m%d_%H%M%S'

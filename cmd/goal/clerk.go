@@ -1272,7 +1272,7 @@ var simulateCmd = &cobra.Command{
 		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
-		resp, err := client.TransactionSimulation(data, unlimitLog)
+		resp, err := client.SimulateRawTransaction(data, unlimitLog)
 		if err != nil {
 			reportErrorf("simulation error: %s", err.Error())
 		}

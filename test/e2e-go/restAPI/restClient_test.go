@@ -1557,3 +1557,85 @@ end:
 
 	assertBoxCount(numberOfBoxesRemaining)
 }
+
+func TestSimulateTransaction(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	_, err := testClient.WaitForRound(1)
+	a.NoError(err)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	senderBalance, senderAddress := getMaxBalAddr(t, testClient, addresses)
+	if senderAddress == "" {
+		t.Error("no addr with funds")
+	}
+	a.NoError(err)
+
+	toAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
+	closeToAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
+
+	// Ensure these accounts don't exist
+	receiverBalance, err := testClient.GetBalance(toAddress)
+	a.NoError(err)
+	a.Zero(receiverBalance)
+	closeToBalance, err := testClient.GetBalance(closeToAddress)
+	a.NoError(err)
+	a.Zero(closeToBalance)
+
+	txn, err := testClient.ConstructPayment(senderAddress, toAddress, 0, senderBalance/2, nil, closeToAddress, [32]byte{}, 0, 0)
+	a.NoError(err)
+	stxn, err := testClient.SignTransactionWithWallet(wh, nil, txn)
+	a.NoError(err)
+
+	currentRoundBeforeSimulate, err := testClient.CurrentRound()
+	a.NoError(err)
+
+	result, err := testClient.SimulateTransactionGroup([]transactions.SignedTxn{stxn}, false)
+	a.NoError(err)
+
+	currentAfterAfterSimulate, err := testClient.CurrentRound()
+	a.NoError(err)
+
+	// To reduce flakiness, only check the round from simulate is within a range.
+	a.GreaterOrEqual(result.LastRound, currentRoundBeforeSimulate)
+	a.LessOrEqual(result.LastRound, currentAfterAfterSimulate)
+
+	closingAmount := senderBalance - txn.Fee.Raw - txn.Amount.Raw
+	expectedResult := v2.PreEncodedSimulateResponse{
+		Version:      1,
+		LastRound:    result.LastRound, // checked above
+		WouldSucceed: true,
+		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
+			{
+				Txns: []v2.PreEncodedSimulateTxnResult{
+					{
+						Txn: v2.PreEncodedTxInfo{
+							Txn:           stxn,
+							ClosingAmount: &closingAmount,
+						},
+					},
+				},
+			},
+		},
+	}
+	a.Equal(expectedResult, result)
+
+	// Ensure the transaction did not actually get applied to the ledger
+	receiverBalance, err = testClient.GetBalance(toAddress)
+	a.NoError(err)
+	a.Zero(receiverBalance)
+	closeToBalance, err = testClient.GetBalance(closeToAddress)
+	a.NoError(err)
+	a.Zero(closeToBalance)
+}

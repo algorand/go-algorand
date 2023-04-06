@@ -678,13 +678,19 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 }
 
 type simulateRawTransactionParams struct {
-	UnLimitLog bool `url:"unlimit-log,omitempty"`
+	Format     string `url:"format"`
+	UnLimitLog bool   `url:"unlimit-log,omitempty"`
 }
 
-// SimulateRawTransaction gets the raw transaction or raw transaction group, and returns relevant simulation results.
-func (client RestClient) SimulateRawTransaction(data []byte, unlimitLog bool) (response model.SimulateResponse, err error) {
-	params := simulateRawTransactionParams{UnLimitLog: unlimitLog}
-	err = client.submitForm(&response, "/v2/transactions/simulate", params, data, "POST", false /* encodeJSON */, true /* decodeJSON */, false)
+// RawSimulateRawTransaction simulates the raw transaction or raw transaction group and returns relevant simulation results as raw bytes.
+func (client RestClient) RawSimulateRawTransaction(data []byte, unlimitLog bool) (response []byte, err error) {
+	params := simulateRawTransactionParams{
+		Format:     "msgpack",
+		UnLimitLog: unlimitLog,
+	}
+	var blob Blob
+	err = client.submitForm(&blob, "/v2/transactions/simulate", params, data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
+	response = blob
 	return
 }
 
