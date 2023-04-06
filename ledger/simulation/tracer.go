@@ -19,6 +19,7 @@ package simulation
 import (
 	"fmt"
 
+	localConfig "github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -81,11 +82,12 @@ type evalTracer struct {
 
 	result   *Result
 	failedAt TxnPath
+	config   SimulatorConfig
 }
 
-func makeEvalTracer(lastRound basics.Round, txgroup []transactions.SignedTxn) *evalTracer {
+func makeEvalTracer(lastRound basics.Round, txgroup []transactions.SignedTxn, simConfig SimulatorConfig) *evalTracer {
 	result := makeSimulationResult(lastRound, [][]transactions.SignedTxn{txgroup})
-	return &evalTracer{result: &result}
+	return &evalTracer{result: &result, config: simConfig}
 }
 
 func (tracer *evalTracer) handleError(evalError error) {
@@ -140,6 +142,13 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	}
 	if ep.FeeCredit != nil {
 		tracer.result.TxnGroups[0].FeeCredit = *ep.FeeCredit
+	}
+
+	// Override runtime related constraints against ep, before entering txn group
+	if tracer.config.UnLimitLog {
+		localDefaults := localConfig.GetDefaultLocal()
+		ep.MaxLogSize = localDefaults.SimulateLogBytesLimit
+		ep.MaxLogCalls = ep.MaxLogSize
 	}
 }
 
