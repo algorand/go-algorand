@@ -93,7 +93,7 @@ func TestSyncRound(t *testing.T) {
 	b.CurrentProtocol = protocol.ConsensusCurrentVersion
 	err := node.Ledger().AddBlock(b, agreement.Certificate{})
 	require.NoError(t, err)
-	dbRound := uint64(node.Ledger().DBRound())
+	dbRound := uint64(node.Ledger().LatestTrackerCommitted())
 	// Sync Round should be initialized to the ledger's dbRound + 1
 	require.Equal(t, dbRound+1, node.GetSyncRound())
 	// Set a new sync round
@@ -184,7 +184,7 @@ func TestSyncRoundWithRemake(t *testing.T) {
 
 	addBlock(basics.Round(1))
 
-	dbRound := uint64(followNode.Ledger().DBRound())
+	dbRound := uint64(followNode.Ledger().LatestTrackerCommitted())
 	// Sync Round should be initialized to the ledger's dbRound + 1
 	require.Equal(t, dbRound+1, followNode.GetSyncRound())
 	// Set a new sync round

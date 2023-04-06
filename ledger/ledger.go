@@ -862,8 +862,8 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 	return &vb, nil
 }
 
-// DBRound returns the trackers' dbRound which "is always exactly accountsRound()"
-func (l *Ledger) DBRound() basics.Round {
+// LatestTrackerCommitted returns the trackers' dbRound which "is always exactly accountsRound()"
+func (l *Ledger) LatestTrackerCommitted() basics.Round {
 	l.trackers.mu.RLock()
 	dbRound := l.trackers.dbRound
 	l.trackers.mu.RUnlock()
