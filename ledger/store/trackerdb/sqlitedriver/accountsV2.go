@@ -389,15 +389,9 @@ func (r *accountsV2Reader) LookupAccountAddressFromAddressID(ctx context.Context
 	return
 }
 
-func (r *accountsV2Reader) LookupAccountDataByAddress(addr basics.Address) (ref trackerdb.AccountRef, data []byte, err error) {
-	// optimize this query for repeated usage
-	selectStmt, err := r.getOrPrepare("SELECT rowid, data FROM accountbase WHERE address=?")
-	if err != nil {
-		return
-	}
-
+func (qs *accountsDbQueries) lookupAccountDataByAddress(addr basics.Address) (ref trackerdb.AccountRef, data []byte, err error) {
 	var rowid int64
-	err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &data)
+	err = qs.lookupOldAccountStmt.QueryRow(addr[:]).Scan(&rowid, &data)
 	if err != nil {
 		return
 	}

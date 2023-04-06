@@ -32,6 +32,7 @@ import (
 type accountsDbQueries struct {
 	listCreatablesStmt     *sql.Stmt
 	lookupAccountStmt      *sql.Stmt
+	lookupOldAccountStmt   *sql.Stmt
 	lookupResourcesStmt    *sql.Stmt
 	lookupAllResourcesStmt *sql.Stmt
 	lookupKvPairStmt       *sql.Stmt
@@ -76,6 +77,11 @@ func AccountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 	}
 
 	qs.lookupAccountStmt, err = q.Prepare("SELECT accountbase.rowid, acctrounds.rnd, accountbase.data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.lookupOldAccountStmt, err = q.Prepare("SELECT rowid, data FROM onlineaccounts WHERE address=? ORDER BY updround DESC LIMIT 1")
 	if err != nil {
 		return nil, err
 	}
@@ -492,6 +498,31 @@ func (qs *accountsDbQueries) LookupAccount(addr basics.Address) (data trackerdb.
 	return
 }
 
+// LookupOldAccount is used by accountsLoadOld to retrieve old values for use in accountsNewRoundImpl.
+func (qs *accountsDbQueries) LookupOldAccount(addr basics.Address) (trackerdb.PersistedAccountData, error) {
+	ref, acctDataBuf, err := qs.lookupAccountDataByAddress(addr)
+	switch err {
+	case nil:
+		if len(acctDataBuf) > 0 {
+			persistedAcctData := &trackerdb.PersistedAccountData{Addr: addr, Ref: ref}
+			err = protocol.Decode(acctDataBuf, &persistedAcctData.AccountData)
+			if err != nil {
+				return trackerdb.PersistedAccountData{}, err
+			}
+			return *persistedAcctData, nil
+		}
+		// to retain backward compatibility, we will treat this condition as if we don't have the account.
+		return trackerdb.PersistedAccountData{Addr: addr, Ref: ref}, nil
+	case sql.ErrNoRows:
+		// we don't have that account, just return an empty record.
+		return trackerdb.PersistedAccountData{Addr: addr}, nil
+		// Note: the err will be ignored in this case since `err` is being shadowed.
+		// this behaviour is equivalent to `err = nil`
+	default:
+		return trackerdb.PersistedAccountData{}, err
+	}
+}
+
 // LookupOnline returns the online account data for the given address.
 func (qs *onlineAccountsDbQueries) LookupOnline(addr basics.Address, rnd basics.Round) (data trackerdb.PersistedOnlineAccountData, err error) {
 	err = db.Retry(func() error {
@@ -573,6 +604,7 @@ func (qs *accountsDbQueries) Close() {
 	preparedQueries := []**sql.Stmt{
 		&qs.listCreatablesStmt,
 		&qs.lookupAccountStmt,
+		&qs.lookupOldAccountStmt,
 		&qs.lookupResourcesStmt,
 		&qs.lookupAllResourcesStmt,
 		&qs.lookupKvPairStmt,
