@@ -235,8 +235,8 @@ func (cb *roundCowState) Counter() uint64 {
 }
 
 func (cb *roundCowState) GetStateProofNextRound() basics.Round {
-	if cb.mods.ModStateProofNextRound != 0 {
-		return cb.mods.ModStateProofNextRound
+	if cb.mods.StateProofNextRound != 0 {
+		return cb.mods.StateProofNextRound
 	}
 	return cb.lookupParent.GetStateProofNextRound()
 }
@@ -266,7 +266,7 @@ func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.T
 }
 
 func (cb *roundCowState) SetStateProofNextRound(rnd basics.Round) {
-	cb.mods.ModStateProofNextRound = rnd
+	cb.mods.StateProofNextRound = rnd
 }
 
 func (cb *roundCowState) child(hint int) *roundCowState {
@@ -274,7 +274,7 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 	ch.lookupParent = cb
 	ch.commitParent = cb
 	ch.proto = cb.proto
-	ch.mods.PopulateStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.ModStateProofNextRound)
+	ch.mods.PopulateStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.StateProofNextRound)
 
 	if ch.sdeltas == nil {
 		ch.sdeltas = make(map[basics.Address]map[storagePtr]*storageDelta)
@@ -318,7 +318,7 @@ func (cb *roundCowState) commitToParent() {
 			}
 		}
 	}
-	cb.commitParent.mods.ModStateProofNextRound = cb.mods.ModStateProofNextRound
+	cb.commitParent.mods.StateProofNextRound = cb.mods.StateProofNextRound
 
 	for key, value := range cb.mods.KvMods {
 		cb.commitParent.mods.AddKvMod(key, value)
