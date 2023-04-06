@@ -27,6 +27,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"runtime"
@@ -41,6 +42,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-deadlock"
+	"github.com/algorand/websocket"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -53,6 +55,8 @@ import (
 )
 
 const sendBufferLength = 1000
+
+const genesisID = "go-test-network-genesis"
 
 func init() {
 	// this allows test code to use out-of-protocol message tags and have them go through
@@ -127,7 +131,7 @@ func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local, opts ...te
 		log:       log,
 		config:    conf,
 		phonebook: MakePhonebook(1, 1*time.Millisecond),
-		GenesisID: "go-test-network-genesis",
+		GenesisID: genesisID,
 		NetworkID: config.Devtestnet,
 	}
 	// apply options to newly-created WebsocketNetwork, if provided
@@ -990,7 +994,7 @@ func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwor
 		log:       logging.TestingLog(t).With("node", nodename),
 		config:    dc,
 		phonebook: MakePhonebook(1, 1*time.Millisecond),
-		GenesisID: "go-test-network-genesis",
+		GenesisID: genesisID,
 		NetworkID: config.Devtestnet,
 	}
 	require.True(t, wn.config.EnableIncomingMessageFilter)
@@ -2462,7 +2466,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 		log:                            log,
 		config:                         defaultConfig,
 		phonebook:                      MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:                      "go-test-network-genesis",
+		GenesisID:                      genesisID,
 		NetworkID:                      config.Devtestnet,
 		slowWritingPeerMonitorInterval: time.Millisecond * 50,
 	}
@@ -2537,7 +2541,7 @@ func TestForceMessageRelaying(t *testing.T) {
 		log:       log,
 		config:    defaultConfig,
 		phonebook: MakePhonebook(1, 1*time.Millisecond),
-		GenesisID: "go-test-network-genesis",
+		GenesisID: genesisID,
 		NetworkID: config.Devtestnet,
 	}
 	wn.setup()
@@ -2631,7 +2635,7 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 		log:       log,
 		config:    defaultConfig,
 		phonebook: MakePhonebook(1, 1*time.Millisecond),
-		GenesisID: "go-test-network-genesis",
+		GenesisID: genesisID,
 		NetworkID: config.Devtestnet,
 	}
 	wn.setup()
@@ -3756,4 +3760,140 @@ func TestWebsocketNetworkTelemetryTCP(t *testing.T) {
 	assert.NoError(t, err)
 	t.Log("closed detailsA", string(pcdA))
 	t.Log("closed detailsB", string(pcdB))
+}
+
+type mockServer struct {
+	*httptest.Server
+	URL string
+	t   *testing.T
+
+	waitForClientClose bool
+	sendClose          bool
+	sendCloseWC        bool
+
+	gotClientClose chan struct{}
+}
+
+type mockHandler struct {
+	*testing.T
+	s *mockServer
+}
+
+var mockUpgrader = websocket.Upgrader{
+	ReadBufferSize:    1024,
+	WriteBufferSize:   1024,
+	EnableCompression: true,
+	Error: func(w http.ResponseWriter, r *http.Request, status int, reason error) {
+		http.Error(w, reason.Error(), status)
+	},
+}
+
+func (t mockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Set the required headers to successfully establish a connection
+	responseHeader := http.Header{}
+	responseHeader.Add(ProtocolVersionHeader, ProtocolVersion)
+	responseHeader.Add(GenesisHeader, genesisID)
+	responseHeader.Add(NodeRandomHeader, "randomHeader")
+	ws, err := mockUpgrader.Upgrade(w, r, responseHeader)
+	if err != nil {
+		t.Logf("Upgrade: %v", err)
+		return
+	}
+	defer ws.Close()
+
+	for true {
+		// echo a message back to the client
+		op, rd, err := ws.NextReader()
+		if err != nil {
+			if _, ok := err.(*websocket.CloseError); ok && t.s.waitForClientClose {
+				t.Log("got client close")
+				close(t.s.gotClientClose)
+				return
+			}
+			t.Logf("NextReader: %v", err)
+			return
+		}
+		wr, err := ws.NextWriter(op)
+		if err != nil {
+			t.Logf("NextWriter: %v", err)
+			return
+		}
+		if _, err = io.Copy(wr, rd); err != nil {
+			t.Logf("NextWriter: %v", err)
+			return
+		}
+		if err := wr.Close(); err != nil {
+			t.Logf("Close: %v", err)
+			return
+		}
+		t.Log("sent message")
+		if !t.s.waitForClientClose {
+			break
+		}
+	}
+	if t.s.sendClose {
+		err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		if err != nil {
+			t.Logf("WriteMessage(CloseMessage): %v", err)
+			return
+		}
+		t.Log("sent close")
+	} else if t.s.sendCloseWC {
+		err = ws.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(5*time.Second))
+		if err != nil {
+			t.Logf("WriteControl(CloseMessage): %v", err)
+			return
+		}
+		t.Log("sent close")
+	}
+}
+
+func makeWsProto(s string) string {
+	return "ws" + strings.TrimPrefix(s, "http")
+}
+
+func newServer(t *testing.T) *mockServer {
+	var s mockServer
+	s.Server = httptest.NewServer(mockHandler{t, &s})
+	s.Server.URL += ""
+	s.URL = makeWsProto(s.Server.URL)
+	return &s
+}
+
+func TestMaxHeaderSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
+	netA.config.GossipFanout = 1
+
+	s := newServer(t)
+	s.waitForClientClose = true
+	defer s.Close()
+
+	netA.Start()
+	defer netA.Stop()
+
+	// First make sure that the regular connection with default max header size works
+	netA.wsMaxHeaderBytes = wsMaxHeaderBytes
+	netA.wg.Add(1)
+	netA.tryConnect(s.URL, s.URL)
+	time.Sleep(250 * time.Millisecond)
+	assert.Equal(t, 1, len(netA.peers))
+
+	netA.removePeer(netA.peers[0], disconnectReasonNone)
+	assert.Zero(t, len(netA.peers))
+
+	// Now try to connect with a max header size that is too small
+	netA.wsMaxHeaderBytes = 64
+	netA.wg.Add(1)
+	netA.tryConnect(s.URL, s.URL)
+	time.Sleep(250 * time.Millisecond)
+	assert.Zero(t, len(netA.peers))
+
+	// Test that setting 0 disables the max header size check
+	netA.wsMaxHeaderBytes = 0
+	netA.wg.Add(1)
+	netA.tryConnect(s.URL, s.URL)
+	time.Sleep(250 * time.Millisecond)
+	assert.Equal(t, 1, len(netA.peers))
 }

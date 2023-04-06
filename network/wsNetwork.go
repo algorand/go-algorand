@@ -105,6 +105,9 @@ const unprintableCharacterGlyph = "▯"
 // PublicAddress (which will match HTTP Listener's Address) in tests only.
 const testingPublicAddress = "testing"
 
+// Maximum number of bytes to read from a header when trying to establish a websocket connection.
+const wsMaxHeaderBytes = 4096
+
 var networkIncomingConnections = metrics.MakeGauge(metrics.NetworkIncomingConnections)
 var networkOutgoingConnections = metrics.MakeGauge(metrics.NetworkOutgoingConnections)
 
@@ -395,6 +398,9 @@ type WebsocketNetwork struct {
 
 	// outgoingMessagesBufferSize is the size used for outgoing messages.
 	outgoingMessagesBufferSize int
+
+	// maxHeaderSize is the maximum accepted size of the header prior to upgrading to websocket connection.
+	wsMaxHeaderBytes int64
 
 	// slowWritingPeerMonitorInterval defines the interval between two consecutive tests for slow peer writing
 	slowWritingPeerMonitorInterval time.Duration
@@ -757,6 +763,8 @@ func (wn *WebsocketNetwork) setup() {
 				config.Consensus[protocol.ConsensusCurrentVersion].RedoCommitteeSize,
 				config.Consensus[protocol.ConsensusCurrentVersion].DownCommitteeSize),
 	)
+
+	wn.wsMaxHeaderBytes = wsMaxHeaderBytes
 
 	wn.identityTracker = NewIdentityTracker()
 
@@ -2193,6 +2201,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		EnableCompression: false,
 		NetDialContext:    wn.dialer.DialContext,
 		NetDial:           wn.dialer.Dial,
+		MaxHeaderSize:     wn.wsMaxHeaderBytes,
 	}
 
 	conn, response, err := websocketDialer.DialContext(wn.ctx, gossipAddr, requestHeader)
