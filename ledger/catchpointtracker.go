@@ -948,18 +948,17 @@ func (ct *catchpointTracker) close() {
 }
 
 // accountsUpdateBalances applies the given compactAccountDeltas to the merkle trie
-func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccountDeltas, resourcesDeltas compactResourcesDeltas, kvDeltas map[string]modifiedKvValue, oldBase basics.Round, newBase basics.Round) (err error) {
+func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccountDeltas, resourcesDeltas compactResourcesDeltas, kvDeltas map[string]modifiedKvValue, oldBase basics.Round, newBase basics.Round) error {
 	if !ct.catchpointEnabled() {
 		return nil
 	}
-	var added, deleted bool
 	accumulatedChanges := 0
 
 	for i := 0; i < accountsDeltas.len(); i++ {
 		delta := accountsDeltas.getByIdx(i)
 		if !delta.oldAcct.AccountData.IsEmpty() {
 			deleteHash := trackerdb.AccountHashBuilderV6(delta.address, &delta.oldAcct.AccountData, protocol.Encode(&delta.oldAcct.AccountData))
-			deleted, err = ct.balancesTrie.Delete(deleteHash)
+			deleted, err := ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), delta.address, err)
 			}
@@ -972,7 +971,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 
 		if !delta.newAcct.IsEmpty() {
 			addHash := trackerdb.AccountHashBuilderV6(delta.address, &delta.newAcct, protocol.Encode(&delta.newAcct))
-			added, err = ct.balancesTrie.Add(addHash)
+			added, err := ct.balancesTrie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), delta.address, err)
 			}
@@ -992,7 +991,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 			if err != nil {
 				return err
 			}
-			deleted, err = ct.balancesTrie.Delete(deleteHash)
+			deleted, err := ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete resource hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
 			}
@@ -1008,7 +1007,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 			if err != nil {
 				return err
 			}
-			added, err = ct.balancesTrie.Add(addHash)
+			added, err := ct.balancesTrie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("attempted to add duplicate resource hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
 			}
@@ -1030,7 +1029,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 				continue // changed back within the delta span
 			}
 			deleteHash := trackerdb.KvHashBuilderV6(key, mv.oldData)
-			deleted, err = ct.balancesTrie.Delete(deleteHash)
+			deleted, err := ct.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return fmt.Errorf("failed to delete kv hash '%s' from merkle trie for key %v: %w", hex.EncodeToString(deleteHash), key, err)
 			}
@@ -1043,7 +1042,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 
 		if mv.data != nil {
 			addHash := trackerdb.KvHashBuilderV6(key, mv.data)
-			added, err = ct.balancesTrie.Add(addHash)
+			added, err := ct.balancesTrie.Add(addHash)
 			if err != nil {
 				return fmt.Errorf("attempted to add duplicate kv hash '%s' from merkle trie for key %v: %w", hex.EncodeToString(addHash), key, err)
 			}
@@ -1057,15 +1056,16 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 
 	// write it all to disk.
 	var cstats merkletrie.CommitStats
+	var commitErr error
 	if accumulatedChanges > 0 {
-		cstats, err = ct.balancesTrie.Commit()
+		cstats, commitErr = ct.balancesTrie.Commit()
 	}
 
 	if ct.log.GetTelemetryEnabled() {
 		root, rootErr := ct.balancesTrie.RootHash()
 		if rootErr != nil {
 			ct.log.Errorf("accountsUpdateBalances: error retrieving balances trie root: %v", rootErr)
-			return
+			return commitErr
 		}
 		ct.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointRootUpdateEvent, telemetryspec.CatchpointRootUpdateEventDetails{
 			Root:                        root.String(),
@@ -1082,7 +1082,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 		})
 
 	}
-	return
+	return commitErr
 }
 
 // IsWritingCatchpointDataFile returns true iff a (first stage) catchpoint data file
@@ -1207,21 +1207,20 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx tracke
 		return err
 	}
 
-	{
-		mc, err := tx.MakeMerkleCommitter(false)
-		if err != nil {
-			return err
-		}
-		if ct.balancesTrie == nil {
-			trie, err := merkletrie.MakeTrie(mc, trackerdb.TrieMemoryConfig)
-			if err != nil {
-				return err
-			}
-			ct.balancesTrie = trie
-		} else {
-			ct.balancesTrie.SetCommitter(mc)
-		}
+	mc, err := tx.MakeMerkleCommitter(false)
+	if err != nil {
+		return err
 	}
+	if ct.balancesTrie == nil {
+		trie, trieErr := merkletrie.MakeTrie(mc, trackerdb.TrieMemoryConfig)
+		if trieErr != nil {
+			return trieErr
+		}
+		ct.balancesTrie = trie
+	} else {
+		ct.balancesTrie.SetCommitter(mc)
+	}
+
 	trieBalancesHash, err := ct.balancesTrie.RootHash()
 	if err != nil {
 		return err
@@ -1330,28 +1329,28 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 	}
 	if dbFileName != "" {
 		catchpointPath := filepath.Join(ct.dbDirectory, dbFileName)
-		file, err := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
-		if err == nil && file != nil {
+		file, openErr := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
+		if openErr == nil && file != nil {
 			return &readCloseSizer{ReadCloser: file, size: fileSize}, nil
 		}
 		// else, see if this is a file-not-found error
-		if os.IsNotExist(err) {
+		if os.IsNotExist(openErr) {
 			// the database told us that we have this file.. but we couldn't find it.
 			// delete it from the database.
-			crw, err := ct.dbs.MakeCatchpointReaderWriter()
-			if err != nil {
-				return nil, err
+			crw, err2 := ct.dbs.MakeCatchpointReaderWriter()
+			if err2 != nil {
+				return nil, err2
 			}
-			err = ct.recordCatchpointFile(context.Background(), crw, round, "", 0)
-			if err != nil {
-				ct.log.Warnf("catchpointTracker.GetCatchpointStream() unable to delete missing catchpoint entry: %v", err)
-				return nil, err
+			err2 = ct.recordCatchpointFile(context.Background(), crw, round, "", 0)
+			if err2 != nil {
+				ct.log.Warnf("catchpointTracker.GetCatchpointStream() unable to delete missing catchpoint entry: %v", err2)
+				return nil, err2
 			}
 
 			return nil, ledgercore.ErrNoEntry{}
 		}
 		// it's some other error.
-		return nil, fmt.Errorf("catchpointTracker.GetCatchpointStream() unable to open catchpoint file '%s' %v", catchpointPath, err)
+		return nil, fmt.Errorf("catchpointTracker.GetCatchpointStream() unable to open catchpoint file '%s' %v", catchpointPath, openErr)
 	}
 
 	// if the database doesn't know about that round, see if we have that file anyway:
@@ -1436,28 +1435,28 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx trackerdb.
 		pendingTrieHashes := 0
 		totalOrderedAccounts := 0
 		for {
-			accts, processedRows, err := accountBuilderIt.Next(ctx)
-			if err == sql.ErrNoRows {
+			accts, processedRows, itErr := accountBuilderIt.Next(ctx)
+			if itErr == sql.ErrNoRows {
 				// the account builder would return sql.ErrNoRows when no more data is available.
 				break
-			} else if err != nil {
-				return err
+			} else if itErr != nil {
+				return itErr
 			}
 
 			if len(accts) > 0 {
 				trieHashCount += len(accts)
 				pendingTrieHashes += len(accts)
 				for _, acct := range accts {
-					added, err := trie.Add(acct.Digest)
-					if err != nil {
-						return fmt.Errorf("initializeHashes was unable to add acct to trie: %v", err)
+					added, addErr := trie.Add(acct.Digest)
+					if addErr != nil {
+						return fmt.Errorf("initializeHashes was unable to add acct to trie: %v", addErr)
 					}
 					if !added {
 						// we need to translate the "addrid" into actual account address so that
 						// we can report the failure.
-						addr, err := arw.LookupAccountAddressFromAddressID(ctx, acct.AccountRef)
-						if err != nil {
-							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account id %d : %v", hex.EncodeToString(acct.Digest), acct.AccountRef, err)
+						addr, lErr := arw.LookupAccountAddressFromAddressID(ctx, acct.AccountRef)
+						if lErr != nil {
+							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account id %d : %v", hex.EncodeToString(acct.Digest), acct.AccountRef, lErr)
 						} else {
 							ct.log.Warnf("initializeHashes attempted to add duplicate acct hash '%s' to merkle trie for account %v", hex.EncodeToString(acct.Digest), addr)
 						}
@@ -1505,16 +1504,16 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx trackerdb.
 		}
 		defer kvs.Close()
 		for kvs.Next() {
-			k, v, err := kvs.KeyValue()
-			if err != nil {
-				return err
+			k, v, err2 := kvs.KeyValue()
+			if err2 != nil {
+				return err2
 			}
 			hash := trackerdb.KvHashBuilderV6(string(k), v)
 			trieHashCount++
 			pendingTrieHashes++
-			added, err := trie.Add(hash)
-			if err != nil {
-				return fmt.Errorf("initializeHashes was unable to add kv (key=%s) to trie: %v", hex.EncodeToString(k), err)
+			added, err2 := trie.Add(hash)
+			if err2 != nil {
+				return fmt.Errorf("initializeHashes was unable to add kv (key=%s) to trie: %v", hex.EncodeToString(k), err2)
 			}
 			if !added {
 				ct.log.Warnf("initializeHashes attempted to add duplicate kv hash '%s' to merkle trie for key %s", hex.EncodeToString(hash), k)
@@ -1522,9 +1521,9 @@ func (ct *catchpointTracker) initializeHashes(ctx context.Context, tx trackerdb.
 			if pendingTrieHashes >= trieRebuildCommitFrequency {
 				// this trie Evict will commit using the current transaction.
 				// if anything goes wrong, it will still get rolled back.
-				_, err = trie.Evict(true)
-				if err != nil {
-					return fmt.Errorf("initializeHashes was unable to commit changes to trie: %v", err)
+				_, err2 = trie.Evict(true)
+				if err2 != nil {
+					return fmt.Errorf("initializeHashes was unable to commit changes to trie: %v", err2)
 				}
 				pendingTrieHashes = 0
 			}

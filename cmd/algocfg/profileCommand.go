@@ -142,13 +142,13 @@ var setProfileCmd = &cobra.Command{
 				reportErrorf("%v", err)
 			}
 			file := filepath.Join(dataDir, config.ConfigFilename)
-			if _, err := os.Stat(file); !forceUpdate && err == nil {
+			if _, statErr := os.Stat(file); !forceUpdate && statErr == nil {
 				fmt.Printf("A config.json file already exists for this data directory. Would you like to overwrite it? (Y/n)")
 				reader := bufio.NewReader(os.Stdin)
-				resp, err := reader.ReadString('\n')
+				resp, readErr := reader.ReadString('\n')
 				resp = strings.TrimSpace(resp)
-				if err != nil {
-					reportErrorf("Failed to read response: %v", err)
+				if readErr != nil {
+					reportErrorf("Failed to read response: %v", readErr)
 				}
 				if strings.ToLower(resp) == "n" {
 					reportInfof("Exiting without overwriting existing config.")

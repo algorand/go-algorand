@@ -38,7 +38,12 @@ linters-settings:
     # We do this 121 times and never check the error.
     - (*github.com/spf13/cobra.Command).MarkFlagRequired
   govet:
+    check-shadowing: true
     settings:
+      shadow:
+        # explanation of strict vs non-strict:
+        # https://github.com/golang/tools/blob/v0.7.0/go/analysis/passes/shadow/shadow.go#L104-L122
+        strict: false
       printf:
         # Comma-separated list of print function names to check (in addition to default, see `go tool vet help printf`).
         # Default: []
@@ -118,6 +123,11 @@ issues:
         # - revive
         - staticcheck
         - typecheck
+    # allow shadowing in test code
+    - path: _test\.go
+      linters:
+        - govet
+      text: "shadows declaration at line"
     # Ignore missing parallel tests in existing packages
     - path: ^agreement.*_test\.go
       linters:

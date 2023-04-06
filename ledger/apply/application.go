@@ -385,7 +385,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	// If this txn is going to set new programs (either for creation or
 	// update), check that the programs are valid and not too expensive
 	if ac.ApplicationID == 0 || ac.OnCompletion == transactions.UpdateApplicationOC {
-		err := transactions.CheckContractVersions(ac.ApprovalProgram, ac.ClearStateProgram, params, evalParams.Proto)
+		err = transactions.CheckContractVersions(ac.ApprovalProgram, ac.ClearStateProgram, params, evalParams.Proto)
 		if err != nil {
 			return err
 		}
@@ -401,9 +401,9 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	// execute the ClearStateProgram, whose failures are ignored.
 	if ac.OnCompletion == transactions.ClearStateOC {
 		// Ensure that the user is already opted in
-		ok, err := balances.HasAppLocalState(header.Sender, appIdx)
-		if err != nil {
-			return err
+		ok, hasErr := balances.HasAppLocalState(header.Sender, appIdx)
+		if hasErr != nil {
+			return hasErr
 		}
 		if !ok {
 			return fmt.Errorf("cannot clear state: %v is not currently opted in to app %d", header.Sender, appIdx)
@@ -411,16 +411,16 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 
 		// If the app still exists, run the ClearStateProgram
 		if exists {
-			pass, evalDelta, err := balances.StatefulEval(gi, evalParams, appIdx, params.ClearStateProgram)
-			if err != nil {
+			pass, evalDelta, evalErr := balances.StatefulEval(gi, evalParams, appIdx, params.ClearStateProgram)
+			if evalErr != nil {
 				// Fail on non-logic eval errors and ignore LogicEvalError errors
-				if _, ok := err.(ledgercore.LogicEvalError); !ok {
-					return err
+				if _, ok := evalErr.(ledgercore.LogicEvalError); !ok {
+					return evalErr
 				}
 			}
 
 			// We will have applied any changes if and only if we passed
-			if err == nil && pass {
+			if evalErr == nil && pass {
 				// Fill in applyData, so that consumers don't have to implement a
 				// stateful TEAL interpreter to apply state changes
 				ad.EvalDelta = evalDelta

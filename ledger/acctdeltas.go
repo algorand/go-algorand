@@ -760,7 +760,8 @@ func accountsNewRoundImpl(
 			} else {
 				// create a new entry.
 				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
-				ref, err := writer.InsertAccount(data.address, normBalance, data.newAcct)
+				var ref trackerdb.AccountRef
+				ref, err = writer.InsertAccount(data.address, normBalance, data.newAcct)
 				if err == nil {
 					updatedAccounts[updatedAccountIdx].Ref = ref
 					updatedAccounts[updatedAccountIdx].AccountData = data.newAcct

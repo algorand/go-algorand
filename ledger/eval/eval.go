@@ -157,10 +157,10 @@ func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, sta
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
-	creatable := creatable{cindex: cidx, ctype: ctype}
+	c := creatable{cindex: cidx, ctype: ctype}
 
-	if foundAddress, ok := x.creators[creatable]; ok {
-		return foundAddress.address, foundAddress.exists, nil
+	if fa, ok := x.creators[c]; ok {
+		return fa.address, fa.exists, nil
 	}
 
 	address, exists, err := x.l.GetCreatorForRound(x.rnd, cidx, ctype)
@@ -169,7 +169,7 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 			"roundCowBase.getCreator() cidx: %d ctype: %v err: %w", cidx, ctype, err)
 	}
 
-	x.creators[creatable] = foundAddress{address: address, exists: exists}
+	x.creators[c] = foundAddress{address: address, exists: exists}
 	return address, exists, nil
 }
 
@@ -732,9 +732,9 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	eval.state = makeRoundCowState(base, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, prevTotals, evalOpts.PaysetHint)
 
 	if evalOpts.Validate {
-		err := eval.block.BlockHeader.PreCheck(eval.prevHeader)
-		if err != nil {
-			return nil, err
+		preCheckErr := eval.block.BlockHeader.PreCheck(eval.prevHeader)
+		if preCheckErr != nil {
+			return nil, preCheckErr
 		}
 
 		// Check that the rewards rate, level and residue match expected values
@@ -1090,16 +1090,16 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		}
 
 		// Transaction already in the ledger?
-		err := cow.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
+		err = cow.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
 		if err != nil {
 			return err
 		}
 
 		// Does the address that authorized the transaction actually match whatever address the sender has rekeyed to?
 		// i.e., the sig/lsig/msig was checked against the txn.Authorizer() address, but does this match the sender's balrecord.AuthAddr?
-		acctdata, err := cow.lookup(txn.Txn.Sender)
-		if err != nil {
-			return err
+		acctdata, lookupErr := cow.lookup(txn.Txn.Sender)
+		if lookupErr != nil {
+			return lookupErr
 		}
 		correctAuthorizer := acctdata.AuthAddr
 		if (correctAuthorizer == basics.Address{}) {
@@ -1293,9 +1293,9 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 	if eval.validate {
 		// check commitments
-		txnRoot, err := eval.block.PaysetCommit()
-		if err != nil {
-			return err
+		txnRoot, err2 := eval.block.PaysetCommit()
+		if err2 != nil {
+			return err2
 		}
 		if txnRoot != eval.block.TxnCommitments {
 			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnCommitments)
@@ -1309,9 +1309,9 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
 		}
 
-		expectedVoters, expectedVotersWeight, err := eval.stateProofVotersAndTotal()
-		if err != nil {
-			return err
+		expectedVoters, expectedVotersWeight, err2 := eval.stateProofVotersAndTotal()
+		if err2 != nil {
+			return err2
 		}
 		if !eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment.IsEqual(expectedVoters) {
 			return fmt.Errorf("StateProofVotersCommitment wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment, expectedVoters)
@@ -1666,10 +1666,10 @@ transactionGroupLoop:
 			}
 		case <-ctx.Done():
 			return ledgercore.StateDelta{}, ctx.Err()
-		case err, open := <-txvalidator.done:
+		case doneErr, open := <-txvalidator.done:
 			// if we're not validating, then `txvalidator.done` would be nil, in which case this case statement would never be executed.
-			if open && err != nil {
-				return ledgercore.StateDelta{}, err
+			if open && doneErr != nil {
+				return ledgercore.StateDelta{}, doneErr
 			}
 		}
 	}

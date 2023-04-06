@@ -484,14 +484,14 @@ var createAppCmd = &cobra.Command{
 		if outFilename == "" {
 			// Broadcast
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			reportInfof("Attempting to create app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
@@ -559,23 +559,23 @@ var updateAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lv)
+				if err2 != nil {
+					reportErrorf(err2.Error())
 				}
 			}
 		} else {
@@ -629,23 +629,23 @@ var optInAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lv)
+				if err2 != nil {
+					reportErrorf(err2.Error())
 				}
 			}
 		} else {
@@ -699,23 +699,23 @@ var closeOutAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lv)
+				if err2 != nil {
+					reportErrorf(err2.Error())
 				}
 			}
 		} else {
@@ -769,23 +769,23 @@ var clearAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lv)
+				if err2 != nil {
+					reportErrorf(err2.Error())
 				}
 			}
 		} else {
@@ -839,23 +839,23 @@ var callAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lv)
+				if err2 != nil {
+					reportErrorf(err2.Error())
 				}
 			}
 		} else {
@@ -909,23 +909,23 @@ var deleteAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lv)
+				if err2 != nil {
+					reportErrorf(err2.Error())
 				}
 			}
 		} else {
@@ -1314,9 +1314,9 @@ var methodAppCmd = &cobra.Command{
 
 		var retType *abi.Type
 		if retTypeStr != abi.VoidReturnType {
-			theRetType, err := abi.TypeOf(retTypeStr)
-			if err != nil {
-				reportErrorf("cannot cast %s to abi type: %v", retTypeStr, err)
+			theRetType, typeErr := abi.TypeOf(retTypeStr)
+			if typeErr != nil {
+				reportErrorf("cannot cast %s to abi type: %v", retTypeStr, typeErr)
 			}
 			retType = &theRetType
 		}
@@ -1405,9 +1405,9 @@ var methodAppCmd = &cobra.Command{
 		txnGroup = append(txnGroup, appCallTxn)
 		if len(txnGroup) > 1 {
 			// Only if transaction arguments are present, assign group ID
-			groupID, err := client.GroupID(txnGroup)
-			if err != nil {
-				reportErrorf("Cannot assign transaction group ID: %s", err)
+			groupID, gidErr := client.GroupID(txnGroup)
+			if gidErr != nil {
+				reportErrorf("Cannot assign transaction group ID: %s", gidErr)
 			}
 			for i := range txnGroup {
 				txnGroup[i].Group = groupID
@@ -1432,9 +1432,9 @@ var methodAppCmd = &cobra.Command{
 				continue
 			}
 
-			signedTxn, err := createSignedTransaction(client, shouldSign, dataDir, walletName, unsignedTxn, txnFromArgs.AuthAddr)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, signErr := createSignedTransaction(client, shouldSign, dataDir, walletName, unsignedTxn, txnFromArgs.AuthAddr)
+			if signErr != nil {
+				reportErrorf(errorSigningTX, signErr)
 			}
 
 			signedTxnGroup = append(signedTxnGroup, signedTxn)

@@ -1545,15 +1545,15 @@ func pseudoImmediatesError(ops *OpStream, name string, specs map[int]OpSpec) {
 func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 	pseudoSpecs, ok := ops.versionedPseudoOps[name]
 	if ok {
-		pseudo, ok := pseudoSpecs[len(args)]
-		if !ok {
+		pseudo, ok2 := pseudoSpecs[len(args)]
+		if !ok2 {
 			// Could be that pseudoOp wants to handle immediates itself so check -1 key
-			pseudo, ok = pseudoSpecs[anyImmediates]
-			if !ok {
+			pseudo, ok2 = pseudoSpecs[anyImmediates]
+			if !ok2 {
 				// Number of immediates supplied did not match any of the pseudoOps of the given name, so we try to construct a mock spec that can be used to track types
 				pseudoImmediatesError(ops, name, pseudoSpecs)
-				proto, version, ok := mergeProtos(pseudoSpecs)
-				if !ok {
+				proto, version, ok3 := mergeProtos(pseudoSpecs)
+				if !ok3 {
 					return OpSpec{}, "", false
 				}
 				pseudo = OpSpec{Name: name, Proto: proto, Version: version, OpDetails: OpDetails{asm: func(*OpStream, *OpSpec, []string) error { return nil }}}

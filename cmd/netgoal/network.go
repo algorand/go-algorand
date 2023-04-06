@@ -80,13 +80,13 @@ var networkBuildCmd = &cobra.Command{
 
 func runBuildNetwork() (err error) {
 	if cpuprofilePath != "" {
-		f, err := os.Create(cpuprofilePath)
-		if err != nil {
-			log.Fatalf("%s: could not create CPU profile, %v", cpuprofilePath, err)
+		f, osErr := os.Create(cpuprofilePath)
+		if osErr != nil {
+			log.Fatalf("%s: could not create CPU profile, %v", cpuprofilePath, osErr)
 		}
 		defer f.Close() // error handling omitted for example
-		if err := pprof.StartCPUProfile(f); err != nil {
-			log.Fatalf("%s: could not start CPU profile, %v", cpuprofilePath, err)
+		if ppErr := pprof.StartCPUProfile(f); ppErr != nil {
+			log.Fatalf("%s: could not start CPU profile, %v", cpuprofilePath, ppErr)
 		}
 		defer pprof.StopCPUProfile()
 	}

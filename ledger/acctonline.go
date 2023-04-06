@@ -154,9 +154,9 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 	ao.log = l.trackerLog()
 
 	err = ao.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
-		ar, err := tx.MakeAccountsReader()
-		if err != nil {
-			return err
+		ar, makeErr := tx.MakeAccountsReader()
+		if makeErr != nil {
+			return makeErr
 		}
 
 		var err0 error
