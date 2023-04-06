@@ -172,6 +172,16 @@ APPID=$(echo "$RES" | grep Created | awk '{ print $6 }')
 ${gcmd} app method --method "small_log()void" --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/small_log.tx"
 RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/small_log.tx")
 
+EXPECTED_SMALL_LOG='yet another ephemeral log'
+
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[0] | @base64d') != *"${EXPECTED_SMALL_LOG}"* ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal for small_log()void should succeed %Y%m%d_%H%M%S'
+    false
+fi
+
 # SIMULATION! with unlimiting log should call `unlimited_log_test()void`
 ${gcmd} app method --method "unlimited_log_test()void" --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/big_log.tx"
 RES=$(${gcmd} clerk simulate -u -t "${TEMPDIR}/big_log.tx")
+
+# echo "${RES}"
+# false
