@@ -22,7 +22,10 @@ CONST_FALSE="false"
 
 # First, try to send an extremely large "transaction" in the request body.
 # This should fail with a 413 error.
-dd if=/dev/zero of="${TEMPDIR}/toolarge.tx" bs=11M count=1
+# Some of our MacOS nightly tests fail for specifying the bs (block size)
+# value in capital letters (i.e. 11M), so just specify it as 1024 bytes and
+# allocate 11K blocks so we get a 11MB sized file. 
+dd if=/dev/zero of="${TEMPDIR}/toolarge.tx" bs=1024 count=11000
 RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/toolarge.tx" 2>&1 || true)
 EXPERROR="simulation error: HTTP 413 Request Entity Too Large:"
 if [[ $RES != *"${EXPERROR}"* ]]; then
@@ -154,9 +157,9 @@ fi
 
 TEAL=test/scripts/e2e_subs/tealprogs
 
-printf '#pragma version 2\nint 1' > "${TEMPDIR}/simple-v2.teal"
+printf '#pragma version 6\nint 1' > "${TEMPDIR}/simple-v6.teal"
 
-RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEAL}/logs-a-lot.teal" --clear-prog "${TEMPDIR}/simple-v2.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEAL}/logs-a-lot.teal" --clear-prog "${TEMPDIR}/simple-v6.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
 EXPSUCCESS='Created app with app index'
 if [[ $RES != *"${EXPSUCCESS}"* ]]; then
     date '+app-simulate-test FAIL the app creation for logs-a-lot.teal should succeed %Y%m%d_%H%M%S'
@@ -171,4 +174,4 @@ RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/small_log.tx")
 
 # SIMULATION! with unlimiting log should call `unlimited_log_test()void`
 ${gcmd} app method --method "unlimited_log_test()void" --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/big_log.tx"
-RES=$(${gcmd} clerk simulate -u -t "${TEMPDIR}/small_log.tx")
+RES=$(${gcmd} clerk simulate -u -t "${TEMPDIR}/big_log.tx")
