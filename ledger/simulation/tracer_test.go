@@ -225,7 +225,6 @@ func TestCursorEvalTracer(t *testing.T) {
 
 			// These don't matter so they can be anything
 			ep := logic.EvalParams{}
-			(&ep).SetRuntimeDefaults()
 			groupIndex := 0
 
 			for i, step := range tc.timeline {

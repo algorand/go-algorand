@@ -267,6 +267,15 @@ type boxRef struct {
 	name string
 }
 
+// OpCodeParams contains data that opcodes rely on during runtime.
+type OpCodeParams struct {
+	// MaxLogSize is the limit of total log size from n log calls in a program
+	MaxLogSize uint64
+
+	// MaxLogCalls is the limit of total log calls during a program execution
+	MaxLogCalls uint64
+}
+
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
 	Proto *config.ConsensusParams
@@ -318,11 +327,7 @@ type EvalParams struct {
 	// readBudgetChecked allows us to only check the read budget once
 	readBudgetChecked bool
 
-	// MaxLogSize is the limit of total log size from n log calls in a program
-	MaxLogSize uint64
-
-	// MaxLogCalls is the limit of total log calls during a program execution
-	MaxLogCalls uint64
+	OpCodeParams
 
 	// Caching these here means the hashes can be shared across the TxnGroup
 	// (and inners, because the cache is shared with the inner EvalParams)
@@ -335,13 +340,6 @@ type EvalParams struct {
 
 	// The calling context, if this is an inner app call
 	caller *EvalContext
-}
-
-// SetRuntimeDefaults sets constraints used in runtime, which opcodes are relying on
-func (ep *EvalParams) SetRuntimeDefaults() *EvalParams {
-	ep.MaxLogSize = maxLogSize
-	ep.MaxLogCalls = maxLogCalls
-	return ep
 }
 
 // GetCaller returns the calling EvalContext if this is an inner transaction evaluation. Otherwise,
@@ -415,6 +413,11 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		*pooledAllowedInners = proto.MaxTxGroupSize * proto.MaxInnerTransactions
 	}
 
+	defaultOpCodeParams := OpCodeParams{
+		MaxLogSize:  uint64(maxLogSize),
+		MaxLogCalls: uint64(maxLogCalls),
+	}
+
 	return &EvalParams{
 		TxnGroup:                copyWithClearAD(txgroup),
 		Proto:                   proto,
@@ -424,10 +427,9 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		FeeCredit:               &credit,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
-		MaxLogSize:              uint64(maxLogSize),
-		MaxLogCalls:             uint64(maxLogCalls),
 		available:               &resources{boxes: allBoxes},
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),
+		OpCodeParams:            defaultOpCodeParams,
 	}
 }
 
@@ -486,8 +488,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		ioBudget:                caller.ioBudget,
 		readBudgetChecked:       true, // don't check for inners
 		appAddrCache:            caller.appAddrCache,
-		MaxLogSize:              caller.MaxLogSize,
-		MaxLogCalls:             caller.MaxLogCalls,
+		OpCodeParams:            caller.OpCodeParams,
 		// read comment in EvalParams declaration about txid caches
 		caller: caller,
 	}

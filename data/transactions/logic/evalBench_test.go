@@ -39,7 +39,6 @@ func BenchmarkCheckSignature(b *testing.B) {
 		TxnGroup:  txgroup,
 		SigLedger: &logic.NoHeaderLedger{},
 	}
-	(&ep).SetRuntimeDefaults()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
