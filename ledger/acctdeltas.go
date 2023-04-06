@@ -476,7 +476,7 @@ func (a *compactAccountDeltas) accountsLoadOld(tx trackerdb.TransactionScope) (e
 	}()
 	for _, idx := range a.misses {
 		addr := a.deltas[idx].address
-		data, err := arw.LookupAccount(addr)
+		data, err := arw.LookupOldAccount(addr)
 		if err != nil {
 			// unexpected error - let the caller know that we couldn't complete the operation.
 			return err
