@@ -486,8 +486,8 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		ioBudget:                caller.ioBudget,
 		readBudgetChecked:       true, // don't check for inners
 		appAddrCache:            caller.appAddrCache,
-		MaxLogSize:              uint64(maxLogSize),
-		MaxLogCalls:             uint64(maxLogCalls),
+		MaxLogSize:              caller.MaxLogSize,
+		MaxLogCalls:             caller.MaxLogCalls,
 		// read comment in EvalParams declaration about txid caches
 		caller: caller,
 	}
