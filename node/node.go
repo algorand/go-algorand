@@ -133,7 +133,7 @@ type AlgorandFullNode struct {
 	genesisID              string
 	genesisHash            crypto.Digest
 	devMode                bool // is this node operating in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
-	devModeTimeStampOffset time.Duration
+	devModeTimeStampOffset int64
 
 	log logging.Logger
 
@@ -1420,7 +1420,9 @@ func (node *AlgorandFullNode) GetSyncRound() uint64 {
 func (node *AlgorandFullNode) UnsetSyncRound() {
 }
 
-func (node *AlgorandFullNode) SetBlockTimeStampOffset(offset time.Duration) error {
+// SetBlockTimeStampOffset sets a timestamp offset in the block header.
+// This is only available in dev mode.
+func (node *AlgorandFullNode) SetBlockTimeStampOffset(offset int64) error {
 	if !node.devMode {
 		// TODO: return error here?
 		return nil
@@ -1429,6 +1431,8 @@ func (node *AlgorandFullNode) SetBlockTimeStampOffset(offset time.Duration) erro
 	return nil
 }
 
-func (node *AlgorandFullNode) GetBlockTimeStampOffset() time.Duration {
+// GetBlockTimeStampOffset gets a timestamp offset.
+// This is only available in dev mode.
+func (node *AlgorandFullNode) GetBlockTimeStampOffset() int64 {
 	return node.devModeTimeStampOffset
 }

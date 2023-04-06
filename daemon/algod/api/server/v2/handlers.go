@@ -113,8 +113,8 @@ type NodeInterface interface {
 	SetSyncRound(rnd uint64) error
 	GetSyncRound() uint64
 	UnsetSyncRound()
-	GetBlockTimeStampOffset() time.Duration
-	SetBlockTimeStampOffset(offset time.Duration) error
+	GetBlockTimeStampOffset() int64
+	SetBlockTimeStampOffset(int64) error
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {
@@ -1678,14 +1678,14 @@ func (v2 *Handlers) GetBlockTimeStampOffset(ctx echo.Context) error {
 	if offset == 0 {
 		return notFound(ctx, fmt.Errorf("timestamp offset is not set"), errFailedRetrievingTimeStampOffset, v2.Log)
 	}
-	return ctx.JSON(http.StatusOK, model.GetBlockTimeStampOffsetResponse{Offset: uint64(offset.Seconds())})
+	return ctx.JSON(http.StatusOK, model.GetBlockTimeStampOffsetResponse{Offset: uint64(offset)})
 }
 
 // SetSyncRound sets the sync round on the ledger.
 // (POST /v2/devmode/blocks/offset/{offset})
 func (v2 *Handlers) SetBlockTimeStampOffset(ctx echo.Context, offset uint64) error {
-	timeOffset := time.Duration(offset) * time.Second
-	err := v2.Node.SetBlockTimeStampOffset(timeOffset)
+	// timeOffset := time.Duration(offset) * time.Second
+	err := v2.Node.SetBlockTimeStampOffset(int64(offset))
 	if err != nil {
 		switch err {
 		case catchup.ErrSyncRoundInvalid:

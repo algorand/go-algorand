@@ -2466,7 +2466,7 @@
     },
     "/v2/devmode/blocks/offset/{offset}": {
       "post": {
-        "description": "Sets the timestamp offset (seconds) for blocks in devmode.",
+        "description": "Sets the timestamp offset (seconds) for blocks in devmode. Setting the offset to 0 will unset this value.",
         "tags": [
           "public",
           "nonparticipating"

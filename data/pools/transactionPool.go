@@ -103,7 +103,7 @@ type TransactionPool struct {
 	devMode bool
 	// devModeTimeStampOffset adds an offset to the timestamp in the
 	// blockheader in dev mode.
-	devModeTimeStampOffset time.Duration
+	devModeTimeStampOffset int64
 }
 
 // BlockEvaluator defines the block evaluator interface exposed by the ledger package.
@@ -715,10 +715,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	if pool.devMode {
 		next.BlockHeader.Seed = committee.Seed(pool.PendingTxIDs()[0])
 		if pool.devModeTimeStampOffset != 0 {
-			offset := int64(pool.devModeTimeStampOffset)
-			params := config.Consensus[next.BlockHeader.CurrentProtocol]
-			params.MaxTimestampIncrement = offset + 1
-			next.BlockHeader.TimeStamp = prev.TimeStamp + offset
+			next.BlockHeader.TimeStamp = prev.TimeStamp + pool.devModeTimeStampOffset
 		}
 		pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluatorDev(next.BlockHeader, hint, 0)
 	} else {
@@ -1010,7 +1007,7 @@ func (pool *TransactionPool) assembleEmptyBlock(round basics.Round) (assembled *
 }
 
 // AssembleDevModeBlock assemble a new block from the existing transaction pool. The pending evaluator is being
-func (pool *TransactionPool) AssembleDevModeBlock(offset time.Duration) (assembled *ledgercore.ValidatedBlock, err error) {
+func (pool *TransactionPool) AssembleDevModeBlock(offset int64) (assembled *ledgercore.ValidatedBlock, err error) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
