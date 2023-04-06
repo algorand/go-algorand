@@ -513,7 +513,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema9(ctx context.Context
 // this does not change the schema but verifies there are no accounts with 0 bytes in the data field,
 // and removes any if found.
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema10(ctx context.Context, tx *sql.Tx) (err error) {
-	_, _, err = removeZeroBytesAccountData(tx, tu.CatchpointEnabled)
+	_, err = removeZeroBytesAccountData(tx)
 	if err != nil {
 		return err
 	}

@@ -851,46 +851,16 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 
 // removeZeroBytesAccountData removes empty AccountData with 0 bytes from the db
 // and optionally returns list of addresses that were eliminated
-func removeZeroBytesAccountData(tx *sql.Tx, queryAddresses bool) (num int64, addresses []basics.Address, err error) {
-	if queryAddresses {
-		rows, err := tx.Query("SELECT address FROM accountbase where length(data) = 0 or data IS NULL")
-		if err != nil {
-			return 0, nil, err
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var addrbuf []byte
-			err = rows.Scan(&addrbuf)
-			if err != nil {
-				return 0, nil, err
-			}
-			var addr basics.Address
-			if len(addrbuf) != len(addr) {
-				err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-				return 0, nil, err
-			}
-			copy(addr[:], addrbuf)
-			addresses = append(addresses, addr)
-		}
-
-		// if the above loop was abrupted by an error, test it now.
-		if err = rows.Err(); err != nil {
-			return 0, nil, err
-		}
-	}
-
+func removeZeroBytesAccountData(tx *sql.Tx) (num int64, err error) {
 	result, err := tx.Exec("DELETE from accountbase where length(data) = 0 or data IS NULL")
 	if err != nil {
-		return 0, nil, err
+		return 0, err
 	}
 	num, err = result.RowsAffected()
 	if err != nil {
-		// something wrong on getting rows count but data deleted, ignore the error
-		num = int64(len(addresses))
-		err = nil
+		return 0, err
 	}
-	return num, addresses, err
+	return num, err
 }
 
 // reencodeAccounts reads all the accounts in the accountbase table, decode and reencode the account data.

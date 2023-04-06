@@ -92,6 +92,8 @@ func TestRowidsToChunkedArgs(t *testing.T) {
 }
 
 func TestMigration10to11ZeroBytesAccounts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	dbs, _ := DbOpenTrackerTest(t, true)
 	defer dbs.Close()
 	dbs.SetLogger(logging.TestingLog(t))
