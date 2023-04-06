@@ -479,7 +479,7 @@ func (qs *accountsDbQueries) LookupAccount(addr basics.Address) (data trackerdb.
 				return err
 			} else if len(buf) == 0 && rowid.Valid {
 				// explicit condition: if the account row exists AND it has no data in it
-				logging.Base().Warnf("account %s exists but has no data in the database", addr)
+				logging.Base().Warnf("account %v exists but has no data in the database", addr)
 			}
 			// we don't have that account, just return the database round.
 			return nil

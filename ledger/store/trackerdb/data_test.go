@@ -1252,3 +1252,17 @@ func TestBaseVotingDataReflect(t *testing.T) {
 
 	require.Equal(t, 7, reflect.TypeOf(BaseVotingData{}).NumField(), "update all getters and setters for baseVotingData and change the field count")
 }
+
+// TestBaseAccountDataDecodeEmpty ensures no surprises when decoding nil/empty data.
+func TestBaseAccountDataDecodeEmpty(t *testing.T) {
+	var b BaseAccountData
+
+	err := protocol.Decode([]byte{}, &b)
+	require.Error(t, err)
+
+	err = protocol.Decode(nil, &b)
+	require.Error(t, err)
+
+	err = protocol.Decode([]byte{0x80}, &b)
+	require.NoError(t, err)
+}
