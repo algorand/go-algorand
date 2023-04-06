@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -476,6 +477,9 @@ func (qs *accountsDbQueries) LookupAccount(addr basics.Address) (data trackerdb.
 				data.Ref = sqlRowRef{rowid.Int64}
 				err = protocol.Decode(buf, &data.AccountData)
 				return err
+			} else if len(buf) == 0 && rowid.Valid {
+				// explicit condition: if the account row exists AND it has no data in it
+				logging.Base().Warnf("account %s exists but has no data in the database", addr)
 			}
 			// we don't have that account, just return the database round.
 			return nil
