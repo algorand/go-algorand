@@ -169,6 +169,8 @@ func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad tran
 	tracer.handleError(evalError)
 	tracer.saveApplyData(ad)
 	tracer.cursorEvalTracer.AfterTxn(ep, groupIndex, ad, evalError)
+
+	// TODO check logs size and compare with real run size, should not succeed(?) if overrun?
 }
 
 func (tracer *evalTracer) saveEvalDelta(evalDelta transactions.EvalDelta, appIDToSave basics.AppIndex) {

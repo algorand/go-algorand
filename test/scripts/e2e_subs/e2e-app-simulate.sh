@@ -147,3 +147,28 @@ if [[ $RES != $CONST_TRUE ]]; then
     date '+app-simulate-test FAIL the simulation call to empty()void should succeed %Y%m%d_%H%M%S'
     false
 fi
+
+###########################################################
+# WE WANT TO FURTHER TEST UNLIMIT LOG IN SIMULATION WORKS #
+###########################################################
+
+TEAL=test/scripts/e2e_subs/tealprogs
+
+printf '#pragma version 2\nint 1' > "${TEMPDIR}/simple-v2.teal"
+
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEAL}/logs-a-lot.teal" --clear-prog "${TEMPDIR}/simple-v2.teal" --global-byteslices 0 --global-ints 0 --local-bytesliices 0 --local-ints 0 2>&1 || true)
+EXPSUCCESS='Created app with app index'
+if [[ $RES != *"${EXPSUCCESS}"* ]]; then
+    date '+app-simulate-test FAIL the app creation for logs-a-lot.teal should succeed %Y%m%d_%H%M%S'
+    false
+fi
+
+APPID=$(echo "$RES" | grep Created | awk '{ print $6 }')
+
+# SIMULATION! without unlimiting log should call `small_log()void`
+${gcmd} app method --method "small_log()void" --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/small_log.tx"
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/small_log.tx")
+
+# SIMULATION! with unlimiting log should call `unlimited_log_test()void`
+${gcmd} app method --method "unlimited_log_test()void" --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/big_log.tx"
+RES=$(${gcmd} clerk simulate -u -t "${TEMPDIR}/small_log.tx")

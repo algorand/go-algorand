@@ -1,0 +1,129 @@
+#pragma version 6
+txn NumAppArgs
+int 0
+==
+bnz main_l6
+txna ApplicationArgs 0
+method "small_log()void"
+==
+bnz main_l5
+txna ApplicationArgs 0
+method "unlimited_log_test()void"
+==
+bnz main_l4
+err
+main_l4:
+txn OnCompletion
+int NoOp
+==
+txn ApplicationID
+int 0
+!=
+&&
+assert
+callsub unlimitedlogtest_1
+int 1
+return
+main_l5:
+txn OnCompletion
+int NoOp
+==
+txn ApplicationID
+int 0
+!=
+&&
+assert
+callsub smalllog_0
+int 1
+return
+main_l6:
+txn OnCompletion
+int NoOp
+==
+bnz main_l8
+err
+main_l8:
+txn ApplicationID
+int 0
+==
+assert
+int 1
+return
+
+// small_log
+smalllog_0:
+byte "yet another ephemeral log"
+log
+retsub
+
+// unlimited_log_test
+unlimitedlogtest_1:
+byte "Let us go then, you and I,"
+log
+byte "When the evening is spread out against the sky"
+log
+byte "Like a patient etherized upon a table;"
+log
+byte "Let us go, through certain half-deserted streets,"
+log
+byte "The muttering retreats"
+log
+byte "Of restless nights in one-night cheap hotels"
+log
+byte "And sawdust restaurants with oyster-shells:"
+log
+byte "Streets that follow like a tedious argument"
+log
+byte "Of insidious intent"
+log
+byte "To lead you to an overwhelming question ..."
+log
+byte "Oh, do not ask, What is it?"
+log
+byte "Let us go and make our visit."
+log
+byte "In the room the women come and go"
+log
+byte "Talking of Michelangelo."
+log
+byte "The yellow fog that rubs its back upon the window-panes,"
+log
+byte "The yellow smoke that rubs its muzzle on the window-panes,"
+log
+byte "Licked its tongue into the corners of the evening,"
+log
+byte "Lingered upon the pools that stand in drains,"
+log
+byte "Let fall upon its back the soot that falls from chimneys,"
+log
+byte "Slipped by the terrace, made a sudden leap,"
+log
+byte "And seeing that it was a soft October night,"
+log
+byte "Curled once about the house, and fell asleep."
+log
+byte "And indeed there will be time"
+log
+byte "For the yellow smoke that slides along the street,"
+log
+byte "Rubbing its back upon the window-panes;"
+log
+byte "There will be time, there will be time"
+log
+byte "To prepare a face to meet the faces that you meet;"
+log
+byte "There will be time to murder and create,"
+log
+byte "And time for all the works and days of hands"
+log
+byte "That lift and drop a question on your plate;"
+log
+byte "Time for you and time for me,"
+log
+byte "And time yet for a hundred indecisions,"
+log
+byte "And for a hundred visions and revisions,"
+log
+byte "Before the taking of a toast and tea."
+log
+retsub
