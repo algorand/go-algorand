@@ -1004,24 +1004,23 @@ func onlineAccountsNewRoundImpl(
 						if newAcct.IsVotingEmpty() {
 							err = fmt.Errorf("empty voting data for online account %s: %v", data.address.String(), newAcct)
 							return nil, err
-						} else {
-							// create a new entry.
-							var ref trackerdb.OnlineAccountRef
-							normBalance := newAcct.NormalizedOnlineBalance(proto)
-							ref, err = writer.InsertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
-							if err != nil {
-								return nil, err
-							}
-							updated := trackerdb.PersistedOnlineAccountData{
-								Addr:        data.address,
-								AccountData: newAcct,
-								Round:       lastUpdateRound,
-								Ref:         ref,
-								UpdRound:    basics.Round(updRound),
-							}
-							updatedAccounts = append(updatedAccounts, updated)
-							prevAcct = updated
 						}
+						// create a new entry.
+						var ref trackerdb.OnlineAccountRef
+						normBalance := newAcct.NormalizedOnlineBalance(proto)
+						ref, err = writer.InsertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
+						if err != nil {
+							return nil, err
+						}
+						updated := trackerdb.PersistedOnlineAccountData{
+							Addr:        data.address,
+							AccountData: newAcct,
+							Round:       lastUpdateRound,
+							Ref:         ref,
+							UpdRound:    basics.Round(updRound),
+						}
+						updatedAccounts = append(updatedAccounts, updated)
+						prevAcct = updated
 					} else if !newAcct.IsVotingEmpty() {
 						err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.address.String(), newAcct)
 						return nil, err
@@ -1034,23 +1033,22 @@ func onlineAccountsNewRoundImpl(
 					if newStatus == basics.Online {
 						err = fmt.Errorf("empty voting data but online account %s: %v", data.address.String(), newAcct)
 						return nil, err
-					} else {
-						var ref trackerdb.OnlineAccountRef
-						ref, err = writer.InsertOnlineAccount(data.address, 0, trackerdb.BaseOnlineAccountData{}, updRound, 0)
-						if err != nil {
-							return nil, err
-						}
-						updated := trackerdb.PersistedOnlineAccountData{
-							Addr:        data.address,
-							AccountData: trackerdb.BaseOnlineAccountData{},
-							Round:       lastUpdateRound,
-							Ref:         ref,
-							UpdRound:    basics.Round(updRound),
-						}
-
-						updatedAccounts = append(updatedAccounts, updated)
-						prevAcct = updated
 					}
+					var ref trackerdb.OnlineAccountRef
+					ref, err = writer.InsertOnlineAccount(data.address, 0, trackerdb.BaseOnlineAccountData{}, updRound, 0)
+					if err != nil {
+						return nil, err
+					}
+					updated := trackerdb.PersistedOnlineAccountData{
+						Addr:        data.address,
+						AccountData: trackerdb.BaseOnlineAccountData{},
+						Round:       lastUpdateRound,
+						Ref:         ref,
+						UpdRound:    basics.Round(updRound),
+					}
+
+					updatedAccounts = append(updatedAccounts, updated)
+					prevAcct = updated
 				} else {
 					if prevAcct.AccountData != newAcct {
 						var ref trackerdb.OnlineAccountRef
