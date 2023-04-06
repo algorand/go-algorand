@@ -22,7 +22,7 @@ CONST_FALSE="false"
 
 # First, try to send an extremely large "transaction" in the request body.
 # This should fail with a 413 error.
-dd if=/dev/zero of="${TEMPDIR}/toolarge.tx" bs=11M count=1
+dd if=/dev/zero of="${TEMPDIR}/toolarge.tx" bs=11m count=1
 RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/toolarge.tx" 2>&1 || true)
 EXPERROR="simulation error: HTTP 413 Request Entity Too Large:"
 if [[ $RES != *"${EXPERROR}"* ]]; then
