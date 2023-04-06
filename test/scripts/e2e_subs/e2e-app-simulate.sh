@@ -183,5 +183,16 @@ fi
 ${gcmd} app method --method "unlimited_log_test()void" --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/big_log.tx"
 RES=$(${gcmd} clerk simulate -u -t "${TEMPDIR}/big_log.tx")
 
-# echo "${RES}"
-# false
+EXPECTED_FIRST_LINE_BIG_LOG='Let us go then, you and I,'
+
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[0] | @base64d') != *"${EXPECTED_FIRST_LINE_BIG_LOG}"* ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should succeed %Y%m%d_%H%M%S'
+    false
+fi
+
+EXPECTED_LAST_LINE_BIG_LOG='Before the taking of a toast and tea.'
+
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[-1] | @base64d') != *"${EXPECTED_LAST_LINE_BIG_LOG}"* ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should succeed %Y%m%d_%H%M%S'
+    false
+fi
