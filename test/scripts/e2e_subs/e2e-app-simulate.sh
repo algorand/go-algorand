@@ -22,7 +22,10 @@ CONST_FALSE="false"
 
 # First, try to send an extremely large "transaction" in the request body.
 # This should fail with a 413 error.
-dd if=/dev/zero of="${TEMPDIR}/toolarge.tx" bs=11m count=1
+# Some of our MacOS nightly tests fail for specifying the bs (block size)
+# value in capital letters (i.e. 11M), so just specify it as 1024 bytes and
+# allocate 11K blocks so we get a 11MB sized file. 
+dd if=/dev/zero of="${TEMPDIR}/toolarge.tx" bs=1024 count=11000
 RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/toolarge.tx" 2>&1 || true)
 EXPERROR="simulation error: HTTP 413 Request Entity Too Large:"
 if [[ $RES != *"${EXPERROR}"* ]]; then
