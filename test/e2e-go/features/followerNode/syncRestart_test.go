@@ -28,6 +28,15 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+// Overview of this test:
+// Start a two-node network--one in follower mode (follower has 0%, secondary has 100%)
+// with the nodes having a max account lookback of 2.
+// Advance the primary node to particular rounds, set the follower's sync round
+// and then advance the follower node as much as possible.
+// Restart the network and verify that the sync round hasn't advanced.
+//
+// NOTE: with a max account lookback of MAL, and the follower's sync round at SR:
+// the follower cannot advance past round SR - 1 + MAL
 func TestSyncRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -37,16 +46,6 @@ func TestSyncRestart(t *testing.T) {
 	}
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
-
-	// Overview of this test:
-	// Start a two-node network--one in follower mode (follower has 0%, secondary has 100%)
-	// with the nodes having a max account lookback of 2.
-	// Advance the primary node to particular rounds, set the follower's sync round
-	// and then advance the follower node as much as possible.
-	// Restart the network and verify that the sync round hasn't advanced.
-
-	// NOTE: with a max account lookback of MAL, and the follower's sync round at SR:
-	// 		 the follower cannot advance past round SR - 1 + MAL
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodesFollower100SecondMaxAccountLookback2.json"))

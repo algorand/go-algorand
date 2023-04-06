@@ -148,8 +148,8 @@ func TestDevModeWarning(t *testing.T) {
 	require.Contains(t, foundEntry.Message, "Follower running on a devMode network. Must submit txns to a different node.")
 }
 
+// TestSyncRoundWithRemake extends TestSyncRound to simulate starting and stopping the network
 func TestSyncRoundWithRemake(t *testing.T) {
-	// Extend TestSyncRound to simulate starting and stopping the network
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
