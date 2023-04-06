@@ -2126,6 +2126,34 @@
         ]
       }
     },
+    "/ready": {
+      "get": {
+        "operationId": "GetReady",
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "OK."
+          },
+          "500": {
+            "content": {},
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {},
+            "description": "Node not ready yet"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Returns OK if healthy and fully caught up.",
+        "tags": [
+          "public",
+          "common"
+        ]
+      }
+    },
     "/swagger.json": {
       "get": {
         "description": "Returns the entire swagger spec in json.",

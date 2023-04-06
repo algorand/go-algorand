@@ -1586,7 +1586,7 @@ func generateProofForTesting(
 
 	// Prepare the builder
 	stateProofStrengthTargetForTests := config.Consensus[protocol.ConsensusCurrentVersion].StateProofStrengthTarget
-	b, err := cryptostateproof.MakeBuilder(data, round, provenWeight,
+	b, err := cryptostateproof.MakeProver(data, round, provenWeight,
 		partArray, partTree, stateProofStrengthTargetForTests)
 	require.NoError(t, err)
 
@@ -1607,7 +1607,7 @@ func generateProofForTesting(
 	}
 
 	// Build the SP
-	proof, err := b.Build()
+	proof, err := b.CreateProof()
 	require.NoError(t, err)
 
 	return proof

@@ -353,8 +353,8 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
-func convertTxnResult(txnResult simulation.TxnResult) preEncodedSimulateTxnResult {
-	return preEncodedSimulateTxnResult{
+func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResult {
+	return PreEncodedSimulateTxnResult{
 		Txn:                    ConvertInnerTxn(&txnResult.Txn),
 		MissingSignature:       trueOrNil(txnResult.MissingSignature),
 		AppBudgetConsumed:      numOrNil(txnResult.AppBudgetConsumed),
@@ -362,13 +362,13 @@ func convertTxnResult(txnResult simulation.TxnResult) preEncodedSimulateTxnResul
 	}
 }
 
-func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) preEncodedSimulateTxnGroupResult {
-	txnResults := make([]preEncodedSimulateTxnResult, len(txnGroupResult.Txns))
+func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedSimulateTxnGroupResult {
+	txnResults := make([]PreEncodedSimulateTxnResult, len(txnGroupResult.Txns))
 	for i, txnResult := range txnGroupResult.Txns {
 		txnResults[i] = convertTxnResult(txnResult)
 	}
 
-	encoded := preEncodedSimulateTxnGroupResult{
+	encoded := PreEncodedSimulateTxnGroupResult{
 		Txns:              txnResults,
 		FailureMessage:    strOrNil(txnGroupResult.FailureMessage),
 		AppBudgetAdded:    numOrNil(txnGroupResult.AppBudgetAdded),
@@ -384,12 +384,12 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) preEncodedS
 	return encoded
 }
 
-func convertSimulationResult(result simulation.Result) preEncodedSimulateResponse {
-	encodedSimulationResult := preEncodedSimulateResponse{
+func convertSimulationResult(result simulation.Result) PreEncodedSimulateResponse {
+	encodedSimulationResult := PreEncodedSimulateResponse{
 		Version:      result.Version,
 		LastRound:    uint64(result.LastRound),
 		WouldSucceed: result.WouldSucceed,
-		TxnGroups:    make([]preEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
+		TxnGroups:    make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
 	}
 
 	for i, txnGroup := range result.TxnGroups {
