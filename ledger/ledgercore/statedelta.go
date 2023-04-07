@@ -88,6 +88,8 @@ type KvValueDelta struct {
 // If adding a new field not explicitly allocated by PopulateStateDelta, make sure to reset
 // it in .ReuseStateDelta to avoid dirty memory errors.
 // If adding fields make sure to add them to the .Reset() method to avoid dirty state
+//
+//msgp:ignore StateDelta
 type StateDelta struct {
 	// modified new accounts
 	Accts AccountDeltas
