@@ -77,7 +77,7 @@ type Result struct {
 	Block        *ledgercore.ValidatedBlock
 }
 
-func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transactions.SignedTxn, version uint64) (Result, error) {
+func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transactions.SignedTxn, version uint64, unlimitedLog bool) (Result, error) {
 	if version != ResultLatestVersion {
 		return Result{}, fmt.Errorf("invalid SimulationResult version: %d", version)
 	}
@@ -92,12 +92,13 @@ func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transa
 		Version:      version,
 		LastRound:    lastRound,
 		TxnGroups:    groups,
+		UnlimitedLog: unlimitedLog,
 		WouldSucceed: true,
 	}, nil
 }
 
-func makeSimulationResult(lastRound basics.Round, txgroups [][]transactions.SignedTxn) Result {
-	result, err := makeSimulationResultWithVersion(lastRound, txgroups, ResultLatestVersion)
+func makeSimulationResult(lastRound basics.Round, txgroups [][]transactions.SignedTxn, simConfig SimulatorConfig) Result {
+	result, err := makeSimulationResultWithVersion(lastRound, txgroups, ResultLatestVersion, simConfig.UnLimitLog)
 	if err != nil {
 		// this should never happen, since we pass in ResultLatestVersion
 		panic(err)

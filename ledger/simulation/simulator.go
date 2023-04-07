@@ -217,7 +217,6 @@ func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
 		}
 	}
 
-	simulatorTracer.result.UnlimitedLog = simulatorTracer.config.UnLimitLog
 	simulatorTracer.result.Block = block
 
 	// mark whether signatures are missing

@@ -86,7 +86,7 @@ type evalTracer struct {
 }
 
 func makeEvalTracer(lastRound basics.Round, txgroup []transactions.SignedTxn, simConfig SimulatorConfig) *evalTracer {
-	result := makeSimulationResult(lastRound, [][]transactions.SignedTxn{txgroup})
+	result := makeSimulationResult(lastRound, [][]transactions.SignedTxn{txgroup}, simConfig)
 	return &evalTracer{result: &result, config: simConfig}
 }
 
