@@ -272,26 +272,29 @@ func stateDeltaToStateDelta(d basics.StateDelta) *model.StateDelta {
 	return &delta
 }
 
+func edIndexToAddress(index uint64, txn *transactions.Transaction, shared []basics.Address) string {
+	// index into [Sender, txn.Accounts[0], txn.Accounts[1], ..., shared[0], shared[1], ...]
+	switch {
+	case index == 0:
+		return txn.Sender.String()
+	case int(index-1) < len(txn.Accounts):
+		return txn.Accounts[index-1].String()
+	case int(index-1)-len(txn.Accounts) < len(shared):
+		return shared[int(index-1)-len(txn.Accounts)].String()
+	default:
+		return fmt.Sprintf("Invalid Account Index %d in LocalDelta", index)
+	}
+}
+
 func convertToDeltas(txn node.TxnWithStatus) (*[]model.AccountStateDelta, *model.StateDelta) {
 	var localStateDelta *[]model.AccountStateDelta
 	if len(txn.ApplyData.EvalDelta.LocalDeltas) > 0 {
 		d := make([]model.AccountStateDelta, 0)
-		accounts := txn.Txn.Txn.Accounts
+		shared := txn.ApplyData.EvalDelta.SharedAccts
 
 		for k, v := range txn.ApplyData.EvalDelta.LocalDeltas {
-			// Resolve address from index
-			var addr string
-			if k == 0 {
-				addr = txn.Txn.Txn.Sender.String()
-			} else {
-				if int(k-1) < len(accounts) {
-					addr = txn.Txn.Txn.Accounts[k-1].String()
-				} else {
-					addr = fmt.Sprintf("Invalid Address Index: %d", k-1)
-				}
-			}
 			d = append(d, model.AccountStateDelta{
-				Address: addr,
+				Address: edIndexToAddress(k, &txn.Txn.Txn, shared),
 				Delta:   *(stateDeltaToStateDelta(v)),
 			})
 		}
