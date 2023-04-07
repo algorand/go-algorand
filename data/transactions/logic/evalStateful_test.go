@@ -548,7 +548,7 @@ func TestMinBalance(t *testing.T) {
 	ledger.NewAsset(tx.Sender, 7, basics.AssetParams{Total: 1000})
 	testApp(t, "int 0; min_balance; int 2002; ==", ep)
 
-	// no test in more detail v4 and on
+	// now test in more detail v4 and on
 	testLogicRange(t, 4, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
 		ledger.NewAccount(tx.Sender, 234)
 		ledger.NewAccount(tx.Receiver, 123)
@@ -2040,7 +2040,7 @@ byte "myval"
 `
 
 		if ep.Proto.LogicSigVersion < sharedResourcesVersion {
-			// 100 is in the ForeignApps array, name it by slot
+			// 101 is in the ForeignApps array, name it by slot
 			source = strings.ReplaceAll(source, "OTHERAPP", "int 2")
 		} else {
 			// use the actual app number, slots no longer allowed

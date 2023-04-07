@@ -458,7 +458,7 @@ var nonsense = map[uint64]string{
 	7:  v7Nonsense,
 	8:  v8Nonsense,
 	9:  v9Nonsense,
-	10: v9Nonsense,
+	10: v10Nonsense,
 }
 
 var compiled = map[uint64]string{

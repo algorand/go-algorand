@@ -4044,6 +4044,11 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 }
 
 func (cx *EvalContext) availableAccount(addr basics.Address) bool {
+	_, err := cx.txn.Txn.IndexByAddress(addr, cx.txn.Txn.Sender)
+	if err == nil {
+		return true
+	}
+
 	// Allow an address for an app that was created in group
 	if cx.version >= createdResourcesVersion {
 		for _, appID := range cx.available.createdApps {
