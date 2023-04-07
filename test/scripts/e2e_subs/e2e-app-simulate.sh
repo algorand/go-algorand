@@ -173,7 +173,13 @@ APPID=$(echo "$RES" | grep Created | awk '{ print $6 }')
 
 # SIMULATION! without unlimiting log should call `small_log()void`
 ${gcmd} app method --method "small_log()void" --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/small_log.tx"
-RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/small_log.tx")
+${gcmd} clerk sign -i "${TEMPDIR}/small_log.tx" -o "${TEMPDIR}/small_log.stx"
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/small_log.stx")
+
+if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_TRUE ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal for small_log()void would-succeed should be true %Y%m%d_%H%M%S'
+    false
+fi
 
 EXPECTED_SMALL_LOG='yet another ephemeral log'
 
@@ -183,7 +189,13 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[
 fi
 
 ${gcmd} app method --method "unlimited_log_test()void" --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/big_log.tx"
-RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/big_log.tx")
+${gcmd} clerk sign -i "${TEMPDIR}/big_log.tx" -o "${TEMPDIR}/big_log.stx"
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/big_log.stx")
+
+if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_FALSE ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void would-succeed should be false without unlimiting log %Y%m%d_%H%M%S'
+    false
+fi
 
 EXPECTED_FAILURE='logic eval error: program logs too large.'
 
@@ -194,7 +206,13 @@ fi
 
 # SIMULATION! with unlimiting log should call `unlimited_log_test()void`
 ${gcmd} app method --method "unlimited_log_test()void" --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/big_log.tx"
-RES=$(${gcmd} clerk simulate -u -t "${TEMPDIR}/big_log.tx")
+${gcmd} clerk sign -i "${TEMPDIR}/big_log.tx" -o "${TEMPDIR}/big_log.stx"
+RES=$(${gcmd} clerk simulate -u -t "${TEMPDIR}/big_log.stx")
+
+if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_TRUE ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void would-succeed should be true with unlimiting log %Y%m%d_%H%M%S'
+    false
+fi
 
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."failed-at"' != null) ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should succeed with unlmited log option %Y%m%d_%H%M%S'
