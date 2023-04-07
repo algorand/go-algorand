@@ -2979,15 +2979,15 @@
           "type": "integer"
         },
         "local-state-schema": {
-          "description": "[\\lsch\\] local schema",
+          "description": "\\[lsch\\] local schema",
           "$ref": "#/definitions/ApplicationStateSchema"
         },
         "global-state-schema": {
-          "description": "[\\gsch\\] global schema",
+          "description": "\\[gsch\\] global schema",
           "$ref": "#/definitions/ApplicationStateSchema"
         },
         "global-state": {
-          "description": "[\\gs\\] global schema",
+          "description": "\\[gs\\] global state",
           "$ref": "#/definitions/TealKeyValueStore"
         }
       }
@@ -3357,18 +3357,18 @@
           "type": "integer"
         },
         "local-state-delta": {
-          "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+          "description": "Local state key/value changes for the application being executed by this transaction.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/AccountStateDelta"
           }
         },
         "global-state-delta": {
-          "description": "\\[gd\\] Global state key/value changes for the application being executed by this transaction.",
+          "description": "Global state key/value changes for the application being executed by this transaction.",
           "$ref": "#/definitions/StateDelta"
         },
         "logs": {
-          "description": "\\[lg\\] Logs for the application being executed by this transaction.",
+          "description": "Logs for the application being executed by this transaction.",
           "type": "array",
           "items": {
             "type": "string",

@@ -763,3 +763,11 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 	}
 	return
 }
+
+// getDbRound accesses dbRound with protection by the trackerRegistry's mutex.
+func (tr *trackerRegistry) getDbRound() basics.Round {
+	tr.mu.RLock()
+	dbRound := tr.dbRound
+	tr.mu.RUnlock()
+	return dbRound
+}
