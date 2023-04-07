@@ -113,7 +113,7 @@ type StateDelta struct {
 	// ModStateProofNextRound represents modification on StateProofNextRound field in the block header. If the block contains
 	// a valid state proof transaction, this field will contain the next round for state proof.
 	// otherwise it will be set to 0.
-	ModStateProofNextRound basics.Round
+	ModStateProofNextRound basics.Round `codec:"StateProofNextRound,omitempty"`
 
 	// previous block timestamp
 	PrevTimestamp int64
