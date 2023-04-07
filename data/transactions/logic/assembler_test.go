@@ -3267,6 +3267,34 @@ add:
 	require.EqualError(t, err, "0: invalid syntax: not#pragma")
 }
 
+func TestAssembleImmediateRanges(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	/* Perhaps all of these "unable to parse" errors could be improved to
+	   discuss limits rather than bailout when the immediate is, in fact, an
+	   integer. */
+
+	testProg(t, "int 1; store 0;", AssemblerMaxVersion)
+	testProg(t, "load 255;", AssemblerMaxVersion)
+
+	testProg(t, "int 1; store -1000;", AssemblerMaxVersion,
+		Expect{1, "store unable to parse..."})
+	testProg(t, "load -100;", AssemblerMaxVersion,
+		Expect{1, "load unable to parse..."})
+	testProg(t, "int 1; store 256;", AssemblerMaxVersion,
+		Expect{1, "store i beyond 255: 256"})
+
+	testProg(t, "frame_dig -1;", AssemblerMaxVersion)
+	testProg(t, "frame_dig 127;", AssemblerMaxVersion)
+	testProg(t, "int 1; frame_bury -128;", AssemblerMaxVersion)
+
+	testProg(t, "frame_dig 128;", AssemblerMaxVersion,
+		Expect{1, "frame_dig unable to parse..."})
+	testProg(t, "int 1; frame_bury -129;", AssemblerMaxVersion,
+		Expect{1, "frame_bury unable to parse..."})
+}
+
 func TestAssembleMatch(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
