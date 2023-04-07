@@ -769,6 +769,10 @@
                   },
                   "type": "array"
                 },
+                "unlimited-log": {
+                  "description": "A boolean indicating whether this transaction is simulated with log usage unlimited",
+                  "type": "boolean"
+                },
                 "version": {
                   "description": "The version of this response object.",
                   "type": "integer"
@@ -781,6 +785,7 @@
               "required": [
                 "last-round",
                 "txn-groups",
+                "unlimited-log",
                 "version",
                 "would-succeed"
               ],
@@ -5772,6 +5777,10 @@
                       },
                       "type": "array"
                     },
+                    "unlimited-log": {
+                      "description": "A boolean indicating whether this transaction is simulated with log usage unlimited",
+                      "type": "boolean"
+                    },
                     "version": {
                       "description": "The version of this response object.",
                       "type": "integer"
@@ -5784,6 +5793,7 @@
                   "required": [
                     "last-round",
                     "txn-groups",
+                    "unlimited-log",
                     "version",
                     "would-succeed"
                   ],
@@ -5804,6 +5814,10 @@
                       },
                       "type": "array"
                     },
+                    "unlimited-log": {
+                      "description": "A boolean indicating whether this transaction is simulated with log usage unlimited",
+                      "type": "boolean"
+                    },
                     "version": {
                       "description": "The version of this response object.",
                       "type": "integer"
@@ -5816,6 +5830,7 @@
                   "required": [
                     "last-round",
                     "txn-groups",
+                    "unlimited-log",
                     "version",
                     "would-succeed"
                   ],

@@ -1002,6 +1002,9 @@ type SimulateResponse struct {
 	// TxnGroups A result object for each transaction group that was simulated.
 	TxnGroups []SimulateTransactionGroupResult `json:"txn-groups"`
 
+	// UnlimitedLog A boolean indicating whether this transaction is simulated with log usage unlimited
+	UnlimitedLog bool `json:"unlimited-log"`
+
 	// Version The version of this response object.
 	Version uint64 `json:"version"`
 

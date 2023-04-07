@@ -392,6 +392,7 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 		Version:      result.Version,
 		LastRound:    uint64(result.LastRound),
 		WouldSucceed: result.WouldSucceed,
+		UnlimitedLog: result.UnlimitedLog,
 		TxnGroups:    make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
 	}
 

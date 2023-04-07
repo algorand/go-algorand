@@ -73,6 +73,7 @@ type Result struct {
 	LastRound    basics.Round
 	TxnGroups    []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
 	WouldSucceed bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
+	UnlimitedLog bool             // true iff we run simulation with `unlimit-log` option
 	Block        *ledgercore.ValidatedBlock
 }
 

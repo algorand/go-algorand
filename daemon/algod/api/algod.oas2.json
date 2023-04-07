@@ -4099,6 +4099,7 @@
           "version",
           "last-round",
           "txn-groups",
+          "unlimited-log",
           "would-succeed"
         ],
         "properties": {
@@ -4116,6 +4117,10 @@
             "items": {
               "$ref": "#/definitions/SimulateTransactionGroupResult"
             }
+          },
+          "unlimited-log": {
+            "description": "A boolean indicating whether this transaction is simulated with log usage unlimited",
+            "type": "boolean"
           },
           "would-succeed": {
             "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",

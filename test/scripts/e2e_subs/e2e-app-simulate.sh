@@ -201,6 +201,11 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."failed-at"' != null) ]]; then
     false
 fi
 
+if [[ $(echo "$RES" | jq '."unlimited-log"' != $CONST_TRUE ) ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should contain unlmited-log: true %Y%m%d_%H%M%S'
+    false
+fi
+
 EXPECTED_FIRST_LINE_BIG_LOG='Let us go then, you and I,'
 
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[0] | @base64d') != *"${EXPECTED_FIRST_LINE_BIG_LOG}"* ]]; then
