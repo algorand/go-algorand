@@ -28,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -713,10 +712,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	// block timestamp.
 	pool.pendingBlockEvaluator = nil
 	if pool.devMode {
-		next.BlockHeader.Seed = committee.Seed(pool.PendingTxIDs()[0])
-		if pool.devModeTimeStampOffset != 0 {
-			next.BlockHeader.TimeStamp = prev.TimeStamp + pool.devModeTimeStampOffset
-		}
+		next := bookkeeping.MakeDevModeBlock(prev, bookkeeping.DevModeOpts{TimeStampOffset: pool.devModeTimeStampOffset})
 		pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluatorDev(next.BlockHeader, hint, 0)
 	} else {
 		pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)

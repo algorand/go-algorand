@@ -243,6 +243,12 @@ type (
 	}
 )
 
+// DevModeOpts contains fields that we might want to replace in a blockheader
+// in dev mode.
+type DevModeOpts struct {
+	TimeStampOffset int64
+}
+
 // Hash returns the hash of a block header.
 // The hash of a block is the hash of its header.
 func (bh BlockHeader) Hash() BlockHash {
@@ -503,6 +509,55 @@ func MakeBlock(prev BlockHeader) Block {
 			TimeStamp:    timestamp,
 			GenesisID:    prev.GenesisID,
 			GenesisHash:  prev.GenesisHash,
+		},
+	}
+	blk.TxnCommitments, err = blk.PaysetCommit()
+	if err != nil {
+		logging.Base().Warnf("MakeBlock: computing empty TxnCommitments: %v", err)
+	}
+
+	// We can't know the entire RewardsState yet, but we can carry over the special addresses.
+	blk.BlockHeader.RewardsState.FeeSink = prev.RewardsState.FeeSink
+	blk.BlockHeader.RewardsState.RewardsPool = prev.RewardsState.RewardsPool
+	return blk
+}
+
+// MakeDevModeBlock constructs a new block for dev mode.
+// If a valid DevModeConfigs is passed in, we also populate block header
+// information, such as block seed and timestamp offsets.
+func MakeDevModeBlock(prev BlockHeader, configs DevModeOpts) Block {
+	upgradeVote, upgradeState, err := ProcessUpgradeParams(prev)
+	if err != nil {
+		logging.Base().Panicf("MakeBlock: error processing upgrade: %v", err)
+	}
+
+	params, ok := config.Consensus[upgradeState.CurrentProtocol]
+	if !ok {
+		logging.Base().Panicf("MakeBlock: next protocol %v not supported", upgradeState.CurrentProtocol)
+	}
+
+	timestamp := time.Now().Unix()
+	if prev.TimeStamp > 0 {
+		if timestamp < prev.TimeStamp {
+			timestamp = prev.TimeStamp
+		} else if configs.TimeStampOffset > 0 {
+			timestamp = prev.TimeStamp + configs.TimeStampOffset
+		} else if timestamp > prev.TimeStamp+params.MaxTimestampIncrement {
+			timestamp = prev.TimeStamp + params.MaxTimestampIncrement
+		}
+	}
+
+	// the merkle root of TXs will update when fillpayset is called
+	blk := Block{
+		BlockHeader: BlockHeader{
+			Round:        prev.Round + 1,
+			Branch:       prev.Hash(),
+			UpgradeVote:  upgradeVote,
+			UpgradeState: upgradeState,
+			TimeStamp:    timestamp,
+			GenesisID:    prev.GenesisID,
+			GenesisHash:  prev.GenesisHash,
+			Seed:         committee.Seed(prev.Hash()),
 		},
 	}
 	blk.TxnCommitments, err = blk.PaysetCommit()

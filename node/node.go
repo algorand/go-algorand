@@ -1434,5 +1434,9 @@ func (node *AlgorandFullNode) SetBlockTimeStampOffset(offset int64) error {
 // GetBlockTimeStampOffset gets a timestamp offset.
 // This is only available in dev mode.
 func (node *AlgorandFullNode) GetBlockTimeStampOffset() int64 {
+	if !node.devMode {
+		// TODO: return error here?
+		return 0
+	}
 	return node.devModeTimeStampOffset
 }

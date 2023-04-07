@@ -1684,7 +1684,6 @@ func (v2 *Handlers) GetBlockTimeStampOffset(ctx echo.Context) error {
 // SetSyncRound sets the sync round on the ledger.
 // (POST /v2/devmode/blocks/offset/{offset})
 func (v2 *Handlers) SetBlockTimeStampOffset(ctx echo.Context, offset uint64) error {
-	// timeOffset := time.Duration(offset) * time.Second
 	err := v2.Node.SetBlockTimeStampOffset(int64(offset))
 	if err != nil {
 		switch err {
