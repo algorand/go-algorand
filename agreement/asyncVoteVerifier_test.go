@@ -264,46 +264,7 @@ func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount in
 						errType = rand.Intn(7)
 					}
 				}
-				var v *unVoteTest
-				switch errType {
-				case 0:
-					badSig := uv
-					badSig.Sig.Sig[0] = badSig.Sig.Sig[0] + 1
-					v = &unVoteTest{uv: &badSig, err: fmt.Errorf("bad sig error"), id: c}
-
-				case 1:
-					noCred := uv
-					noCred.Cred = committee.UnauthenticatedCredential{}
-					v = &unVoteTest{uv: &noCred, err: fmt.Errorf("no cred error"), id: c}
-
-				case 2:
-					badRound := uv
-					badRound.R.Round++
-					v = &unVoteTest{uv: &badRound, err: fmt.Errorf("bad round error"), id: c}
-
-				case 3:
-					badPeriod := uv
-					badPeriod.R.Period++
-					v = &unVoteTest{uv: &badPeriod, err: fmt.Errorf("bad period error"), id: c}
-
-				case 4:
-					badStep := uv
-					badStep.R.Step++
-					v = &unVoteTest{uv: &badStep, err: fmt.Errorf("bad step error"), id: c}
-
-				case 5:
-					badBlockHash := uv
-					badBlockHash.R.Proposal.BlockDigest = randomBlockHash()
-					v = &unVoteTest{uv: &badBlockHash, err: fmt.Errorf("bad block hash error"), id: c}
-
-				case 6:
-					badProposer := uv
-					badProposer.R.Proposal.OriginalProposer = basics.Address(randomBlockHash())
-					v = &unVoteTest{uv: &badProposer, err: fmt.Errorf("bad proposer error"), id: c}
-
-				default:
-					v = &unVoteTest{uv: &uv, err: nil, id: c}
-				}
+				v := getTestVoteError(uv, c, errType)
 				errsV[v.id] = v.err
 				votes[v.id] = v
 				break
@@ -385,56 +346,7 @@ func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount in
 						errType = rand.Intn(9)
 					}
 				}
-				var v *unEqVoteTest
-				switch errType {
-				case 0:
-					// check for same vote
-					v = &unEqVoteTest{uev: &evSameVote, err: fmt.Errorf("error same vote"), id: c}
-
-				case 1:
-					badSig := ev
-					badSig.Sigs[0].Sig[0] = badSig.Sigs[0].Sig[0] + 1
-					v = &unEqVoteTest{uev: &badSig, err: fmt.Errorf("error bad sig"), id: c}
-
-				case 2:
-					noCred := ev
-					noCred.Cred = committee.UnauthenticatedCredential{}
-					v = &unEqVoteTest{uev: &noCred, err: fmt.Errorf("error no cred"), id: c}
-
-				case 3:
-					badRound := ev
-					badRound.Round++
-					v = &unEqVoteTest{uev: &badRound, err: fmt.Errorf("error bad round"), id: c}
-
-				case 4:
-					badPeriod := ev
-					badPeriod.Period++
-					v = &unEqVoteTest{uev: &badPeriod, err: fmt.Errorf("error bad period"), id: c}
-
-				case 5:
-					badStep := ev
-					badStep.Step++
-					v = &unEqVoteTest{uev: &badStep, err: fmt.Errorf("error bad step"), id: c}
-
-				case 6:
-					badBlockHash1 := ev
-					badBlockHash1.Proposals[0].BlockDigest = randomBlockHash()
-					v = &unEqVoteTest{uev: &badBlockHash1, err: fmt.Errorf("error bad block hash"), id: c}
-
-				case 7:
-					badBlockHash2 := ev
-					badBlockHash2.Proposals[1].BlockDigest = randomBlockHash()
-					v = &unEqVoteTest{uev: &badBlockHash2, err: fmt.Errorf("error bad block hash"), id: c}
-
-				case 8:
-					badSender := ev
-					badSender.Sender = basics.Address{}
-					v = &unEqVoteTest{uev: &badSender, err: fmt.Errorf("error bad sender"), id: c}
-
-				default:
-					v = &unEqVoteTest{uev: &ev, err: nil, id: c}
-
-				}
+				v := getTestEqVoteError(ev, evSameVote, c, errType)
 				errsEqv[v.id] = v.err
 				eqVotes[v.id] = v
 				break
@@ -446,4 +358,102 @@ func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount in
 	}()
 	wg.Wait()
 	return ledger, votes, eqVotes, errsV, errsEqv
+}
+
+func getTestVoteError(uv unauthenticatedVote, c, errType int) *unVoteTest {
+	var v *unVoteTest
+	switch errType {
+	case 0:
+		badSig := uv
+		badSig.Sig.Sig[0] = badSig.Sig.Sig[0] + 1
+		v = &unVoteTest{uv: &badSig, err: fmt.Errorf("bad sig error"), id: c}
+
+	case 1:
+		noCred := uv
+		noCred.Cred = committee.UnauthenticatedCredential{}
+		v = &unVoteTest{uv: &noCred, err: fmt.Errorf("no cred error"), id: c}
+
+	case 2:
+		badRound := uv
+		badRound.R.Round++
+		v = &unVoteTest{uv: &badRound, err: fmt.Errorf("bad round error"), id: c}
+
+	case 3:
+		badPeriod := uv
+		badPeriod.R.Period++
+		v = &unVoteTest{uv: &badPeriod, err: fmt.Errorf("bad period error"), id: c}
+
+	case 4:
+		badStep := uv
+		badStep.R.Step++
+		v = &unVoteTest{uv: &badStep, err: fmt.Errorf("bad step error"), id: c}
+
+	case 5:
+		badBlockHash := uv
+		badBlockHash.R.Proposal.BlockDigest = randomBlockHash()
+		v = &unVoteTest{uv: &badBlockHash, err: fmt.Errorf("bad block hash error"), id: c}
+
+	case 6:
+		badProposer := uv
+		badProposer.R.Proposal.OriginalProposer = basics.Address(randomBlockHash())
+		v = &unVoteTest{uv: &badProposer, err: fmt.Errorf("bad proposer error"), id: c}
+
+	default:
+		v = &unVoteTest{uv: &uv, err: nil, id: c}
+	}
+	return v
+}
+
+func getTestEqVoteError(ev, evSameVote unauthenticatedEquivocationVote, c, errType int) *unEqVoteTest {
+	var v *unEqVoteTest
+	switch errType {
+	case 0:
+		// check for same vote
+		v = &unEqVoteTest{uev: &evSameVote, err: fmt.Errorf("error same vote"), id: c}
+
+	case 1:
+		badSig := ev
+		badSig.Sigs[0].Sig[0] = badSig.Sigs[0].Sig[0] + 1
+		v = &unEqVoteTest{uev: &badSig, err: fmt.Errorf("error bad sig"), id: c}
+
+	case 2:
+		noCred := ev
+		noCred.Cred = committee.UnauthenticatedCredential{}
+		v = &unEqVoteTest{uev: &noCred, err: fmt.Errorf("error no cred"), id: c}
+
+	case 3:
+		badRound := ev
+		badRound.Round++
+		v = &unEqVoteTest{uev: &badRound, err: fmt.Errorf("error bad round"), id: c}
+
+	case 4:
+		badPeriod := ev
+		badPeriod.Period++
+		v = &unEqVoteTest{uev: &badPeriod, err: fmt.Errorf("error bad period"), id: c}
+
+	case 5:
+		badStep := ev
+		badStep.Step++
+		v = &unEqVoteTest{uev: &badStep, err: fmt.Errorf("error bad step"), id: c}
+
+	case 6:
+		badBlockHash1 := ev
+		badBlockHash1.Proposals[0].BlockDigest = randomBlockHash()
+		v = &unEqVoteTest{uev: &badBlockHash1, err: fmt.Errorf("error bad block hash"), id: c}
+
+	case 7:
+		badBlockHash2 := ev
+		badBlockHash2.Proposals[1].BlockDigest = randomBlockHash()
+		v = &unEqVoteTest{uev: &badBlockHash2, err: fmt.Errorf("error bad block hash"), id: c}
+
+	case 8:
+		badSender := ev
+		badSender.Sender = basics.Address{}
+		v = &unEqVoteTest{uev: &badSender, err: fmt.Errorf("error bad sender"), id: c}
+
+	default:
+		v = &unEqVoteTest{uev: &ev, err: nil, id: c}
+
+	}
+	return v
 }

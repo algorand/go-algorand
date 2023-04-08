@@ -237,7 +237,7 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 			select {
 			case res := <-results:
 				isEquivocationVote := false
-				if res.ev != (equivocationVote{}) {
+				if res.req.uev != nil {
 					isEquivocationVote = true
 				}
 

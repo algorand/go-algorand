@@ -237,3 +237,15 @@ func (pair equivocationVote) v1() vote {
 	rv := rawVote{Sender: pair.Sender, Round: pair.Round, Period: pair.Period, Step: pair.Step, Proposal: pair.Proposals[1]}
 	return vote{R: rv, Cred: pair.Cred, Sig: pair.Sigs[1]}
 }
+
+// authenticateCred is called to authenticate the credential after the signatures are verified
+// this is to avoid this expensive task in the event the signature fails
+func authenticateCred(cred *committee.UnauthenticatedCredential, round round, l LedgerReader,
+	m *committee.Membership) (c *committee.Credential, err error) {
+	proto, err := l.ConsensusParams(ParamsRound(round))
+	if err != nil {
+		return nil, fmt.Errorf("authenticateCred: could not get consensus params for round %d: %w", ParamsRound(round), err)
+	}
+	cr, err := cred.Verify(proto, *m)
+	return &cr, err
+}
