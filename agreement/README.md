@@ -40,7 +40,7 @@ parameters:
 If `Ledger` and `db.Accessor` provide crash-safe storage, `agreement`
 will also recover safely after crashes.
 
-# Specification
+## Specification
 
 The specification for the protocol implemented by this package is
 located [here](https://github.com/algorandfoundation/specs).
@@ -52,23 +52,20 @@ throughout this file.
 
 Certain terms in this implementation are used as shorthands for
 specific concepts:
- - "Threshold" and "quorum" both refer to the total weight of votes
-   needed to form a bundle for a given value.
- - A "proposal-vote" refers to a vote whose step is "propose"=0.
- - A "payload" refers to the body of a proposal which contains, among
-   other fields, a `Block`.
- - "Freshness" generally refers to the relevance of some message or
-   event.  Message relay rules which refer to a round, period, or step
-   may be referred to as freshness rules.  Freshness may also be used
-   to describe the relevance of bundles.
- - The "frozen" value in a period p refers to the proposal-value in the
-   proposal-vote which was observed by the state machine to have the lowest
-   credential (i.e., mu(S, r, p)).
- - The "staging" value in a period p refers to the proposal-value which received
-   a quorum of soft votes (i.e., sigma(S, r, p)).
- - Additional terminology is described in the [agreement service doc](../docs/agreement_service.md).
 
-# Design
+| Term | Description |
+| - | - |
+| threshold | the total weight of votes needed to form a bundle for a given value. |
+| quorum | same as **"threshold"** |
+| proposal-vote | refers to a vote whose step is "propose"=0. |
+| payload | refers to the body of a proposal which contains, among other fields, a `Block` |
+ | freshness | generally refers to the relevance of some message or event. Message relay rules which refer to a round, period, or step    may be referred to as freshness rules.  Freshness may also be used to describe the relevance of bundles. |
+ | frozen | (the frozen) value in a period p refers to the **proposal-value** in the    proposal-vote which was observed by the state machine to have the lowest |   credential (i.e., mu(S, r, p)).
+ | staging | (the staging) value in a period p refers to the proposal-value which received a quorum of soft votes (i.e., sigma(S, r, p)). |
+ 
+ Additional terminology is described in the [agreement service doc](../docs/agreement_service.md).
+
+## Design
 
 At the top level, an `agreement.Service` encapsulates the parameters
 and the goroutines which execute the protocol.
@@ -97,7 +94,7 @@ data structures, such as `vote`, `bundle`, and `proposal`. These data
 types have distinct unauthenticated versions, which allows routines to
 specify that they accept untrusted input.
 
-# Concurrent Component
+## Concurrent Component
 
 The `demux` object demultiplexes over a variety of channels which all
 represent inputs to the system. Inputs include:
@@ -121,7 +118,7 @@ machine validates these messages in the same way it validates real
 network messages and relays them back into the network as
 appropriate.
 
-## Spec Notes: Additional Events
+### Spec Notes: Additional Events
 
 Because signature verification is expected to be a computational
 bottleneck in the agreement code, it executes concurrently with
@@ -154,7 +151,7 @@ verification concurrently.  Moreover, the implementation abstracts
 over multiple keys by generating synthetic network events from the
 `pseudonode`.
 
-# Serialized State Machine
+## Serialized State Machine
 
 The logic of the agreement protocol is implemented as a state machine.
 This state machine is composed of many smaller state machines, which
