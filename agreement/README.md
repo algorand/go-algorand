@@ -1,18 +1,5 @@
 # Agreement
 
-```
-           ^_^        :o)
-            o          o
-    :-O                      ಠ_ಠ
-     o [B]->                  o
-:-)     |                        >:(
- o      V                         o
-    x_x                      uwu
-     o                        o
-           :-)        :-3
-            o          o
-```
-
 The Algorand Byzantine Agreement protocol enables all nodes to
 consistently update the state of the system.
 
