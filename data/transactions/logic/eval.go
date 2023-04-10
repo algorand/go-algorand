@@ -69,7 +69,7 @@ const maxLogCalls = 32
 // To be clear, 0 would prevent inner appls, 1 would mean inner app calls cannot
 // make inner appls. So the total app depth can be 1 higher than this number, if
 // you count the top-level app call.
-const maxAppCallDepth = 8
+var maxAppCallDepth = 8
 
 // maxStackDepth should not change unless controlled by an AVM version change
 const maxStackDepth = 1000
@@ -1256,6 +1256,10 @@ func (cx *EvalContext) ensureStackCap(targetCap int) {
 	}
 }
 
+// opDeprecated is used to provide a runtime failure if an opcode has been
+// removed, and no new opcode has been allocated to the same value. If the byte
+// appears, we'd rather have a nice error than simply: "illegal opcode". (Of
+// course, the assembler should never assemble to this byte.)
 func opDeprecated(cx *EvalContext) error {
 	return fmt.Errorf("deprecated opcode %d executed", cx.program[cx.pc])
 }

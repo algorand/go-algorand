@@ -28,7 +28,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-var docVersion = 8
+var docVersion = 9
 
 func opGroupMarkdownTable(names []string, out io.Writer) {
 	fmt.Fprint(out, `| Opcode | Description |
@@ -39,6 +39,9 @@ func opGroupMarkdownTable(names []string, out io.Writer) {
 		spec, ok := opSpecs[opname]
 		if !ok {
 			continue // Allows "future" opcodes to exist, but be omitted from spec.
+		}
+		if spec.Deprecation != "" {
+			continue
 		}
 		fmt.Fprintf(out, "| `%s%s` | %s |\n",
 			markdownTableEscape(spec.Name), immediateMarkdown(&spec),

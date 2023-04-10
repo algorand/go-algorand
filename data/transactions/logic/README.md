@@ -674,21 +674,19 @@ Account fields used in the `acct_params_get` opcode.
 
 | Opcode | Description |
 | - | -- |
-| `balance` | balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. Changes caused by inner transactions are observable immediately following `itxn_submit` |
-| `min_balance` | minimum required balance for account A, in microalgos. Required balance is affected by ASA, App, and Box usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. Changes caused by inner transactions or box usage are observable immediately following the opcode effecting the change. |
-| `app_opted_in` | 1 if account A is opted in to application B, else 0 |
-| `app_local_get` | local state of the key B in the current application in account A |
-| `app_local_get_ex` | X is the local state of application B, key C in account A. Y is 1 if key existed, else 0 |
-| `app_global_get` | global state of the key A in the current application |
-| `app_global_get_ex` | X is the global state of application A, key B. Y is 1 if key existed, else 0 |
-| `app_local_put` | write C to key B in account A's local state of the current application |
-| `app_global_put` | write B to key A in the global state of the current application |
-| `app_local_del` | delete key B from account A's local state of the current application |
-| `app_global_del` | delete key A from the global state of the current application |
-| `asset_holding_get f` | X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0 |
-| `asset_params_get f` | X is field F from asset A. Y is 1 if A exists, else 0 |
-| `app_params_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
-| `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
+| `opted_in` | 1 if account A is opted in to application B, else 0 |
+| `local_state_get` | local state of the key B in the current application in account A |
+| `local_state_get_ex` | X is the local state of application B, key C in account A. Y is 1 if key existed, else 0 |
+| `global_state_get` | global state of the key A in the current application |
+| `global_state_get_ex` | X is the global state of application A, key B. Y is 1 if key existed, else 0 |
+| `local_state_put` | write C to key B in account A's local state of the current application |
+| `global_state_put` | write B to key A in the global state of the current application |
+| `local_state_del` | delete key B from account A's local state of the current application |
+| `global_state_del` | delete key A from the global state of the current application |
+| `holding_get f` | X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0 |
+| `asset_get f` | X is field F from asset A. Y is 1 if A exists, else 0 |
+| `app_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
+| `acct_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
 | `log` | write A to log state of the current application |
 | `block f` | field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive) |
 

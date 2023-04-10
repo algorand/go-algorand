@@ -130,6 +130,8 @@ type OpDetails struct {
 	Immediates []immediate // details of each immediate arg to opcode
 
 	trusted bool // if `trusted`, don't check stack effects. they are more complicated than simply checking the opcode prototype.
+
+	Deprecation string // A message to appear explaining the deprecation, else ""
 }
 
 func (d *OpDetails) docCost(argLen int) string {
@@ -176,11 +178,11 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 }
 
 func detDefault() OpDetails {
-	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, false}
+	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, false, ""}
 }
 
 func constants(asm asmFunc, checker checkFunc, name string, kind immKind) OpDetails {
-	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, false}
+	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, false, ""}
 }
 
 func detBranch() OpDetails {
@@ -226,6 +228,12 @@ func (d OpDetails) costs(cost int) OpDetails {
 func only(m RunMode) OpDetails {
 	d := detDefault()
 	d.Modes = m
+	return d
+}
+
+func deprecated(msg string) OpDetails {
+	d := detDefault()
+	d.Deprecation = msg
 	return d
 }
 
@@ -530,38 +538,56 @@ var OpSpecs = []OpSpec{
 
 	{0x60, "balance", opBalance, proto("i:i"), 2, only(ModeApp)},
 	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(ModeApp)},
-	{0x60, "balance", opBalance, proto("b:i"), sharedResourcesVersion, only(ModeApp)},
+	{0x60, "balance", opDeprecated, proto("a:i"), sharedResourcesVersion, deprecated("Use `acct_get AcctBalance`")},
+
 	{0x61, "app_opted_in", opAppOptedIn, proto("ii:i"), 2, only(ModeApp)},
 	{0x61, "app_opted_in", opAppOptedIn, proto("ai:i"), directRefEnabledVersion, only(ModeApp)},
-	{0x61, "app_opted_in", opAppOptedIn, proto("bi:i"), sharedResourcesVersion, only(ModeApp)},
+	{0x61, "opted_in", opAppOptedIn, proto("bi:i"), sharedResourcesVersion, only(ModeApp)},
+
 	{0x62, "app_local_get", opAppLocalGet, proto("ib:a"), 2, only(ModeApp)},
 	{0x62, "app_local_get", opAppLocalGet, proto("ab:a"), directRefEnabledVersion, only(ModeApp)},
-	{0x62, "app_local_get", opAppLocalGet, proto("bb:a"), sharedResourcesVersion, only(ModeApp)},
+	{0x62, "local_state_get", opAppLocalGet, proto("bb:a"), sharedResourcesVersion, only(ModeApp)},
+
 	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("iib:ai"), 2, only(ModeApp)},
 	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aib:ai"), directRefEnabledVersion, only(ModeApp)},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("bib:ai"), sharedResourcesVersion, only(ModeApp)},
+	{0x63, "local_state_get_ex", opAppLocalGetEx, proto("bib:ai"), sharedResourcesVersion, only(ModeApp)},
+
 	{0x64, "app_global_get", opAppGlobalGet, proto("b:a"), 2, only(ModeApp)},
+	{0x64, "global_state_get", opAppGlobalGet, proto("b:a"), sharedResourcesVersion, only(ModeApp)},
+
 	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("ib:ai"), 2, only(ModeApp)},
+	{0x65, "global_state_get_ex", opAppGlobalGetEx, proto("ib:ai"), sharedResourcesVersion, only(ModeApp)},
+
 	{0x66, "app_local_put", opAppLocalPut, proto("iba:"), 2, only(ModeApp)},
 	{0x66, "app_local_put", opAppLocalPut, proto("aba:"), directRefEnabledVersion, only(ModeApp)},
-	{0x66, "app_local_put", opAppLocalPut, proto("bba:"), sharedResourcesVersion, only(ModeApp)},
+	{0x66, "local_state_put", opAppLocalPut, proto("bba:"), sharedResourcesVersion, only(ModeApp)},
+
 	{0x67, "app_global_put", opAppGlobalPut, proto("ba:"), 2, only(ModeApp)},
+	{0x67, "global_state_put", opAppGlobalPut, proto("ba:"), sharedResourcesVersion, only(ModeApp)},
+
 	{0x68, "app_local_del", opAppLocalDel, proto("ib:"), 2, only(ModeApp)},
 	{0x68, "app_local_del", opAppLocalDel, proto("ab:"), directRefEnabledVersion, only(ModeApp)},
-	{0x68, "app_local_del", opAppLocalDel, proto("bb:"), sharedResourcesVersion, only(ModeApp)},
+	{0x68, "local_state_del", opAppLocalDel, proto("bb:"), sharedResourcesVersion, only(ModeApp)},
+
 	{0x69, "app_global_del", opAppGlobalDel, proto("b:"), 2, only(ModeApp)},
+	{0x69, "global_state_del", opAppGlobalDel, proto("b:"), sharedResourcesVersion, only(ModeApp)},
 
 	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ii:ai"), 2, field("f", &AssetHoldingFields).only(ModeApp)},
 	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ai:ai"), directRefEnabledVersion, field("f", &AssetHoldingFields).only(ModeApp)},
-	{0x70, "asset_holding_get", opAssetHoldingGet, proto("bi:ai"), sharedResourcesVersion, field("f", &AssetHoldingFields).only(ModeApp)},
+	{0x70, "holding_get", opAssetHoldingGet, proto("bi:ai"), sharedResourcesVersion, field("f", &AssetHoldingFields).only(ModeApp)},
+
 	{0x71, "asset_params_get", opAssetParamsGet, proto("i:ai"), 2, field("f", &AssetParamsFields).only(ModeApp)},
+	{0x71, "asset_get", opAssetParamsGet, proto("i:ai"), sharedResourcesVersion, field("f", &AssetParamsFields).only(ModeApp)},
+
 	{0x72, "app_params_get", opAppParamsGet, proto("i:ai"), 5, field("f", &AppParamsFields).only(ModeApp)},
+	{0x72, "app_get", opAppParamsGet, proto("i:ai"), sharedResourcesVersion, field("f", &AppParamsFields).only(ModeApp)},
+
 	{0x73, "acct_params_get", opAcctParamsGet, proto("a:ai"), 6, field("f", &AcctParamsFields).only(ModeApp)},
-	{0x73, "acct_params_get", opAcctParamsGet, proto("b:ai"), sharedResourcesVersion, field("f", &AcctParamsFields).only(ModeApp)},
+	{0x73, "acct_get", opAcctParamsGet, proto("b:ai"), sharedResourcesVersion, field("f", &AcctParamsFields).only(ModeApp)},
 
 	{0x78, "min_balance", opMinBalance, proto("i:i"), 3, only(ModeApp)},
 	{0x78, "min_balance", opMinBalance, proto("a:i"), directRefEnabledVersion, only(ModeApp)},
-	{0x78, "min_balance", opMinBalance, proto("b:i"), sharedResourcesVersion, only(ModeApp)},
+	{0x78, "min_balance", opDeprecated, proto("a:i"), sharedResourcesVersion, deprecated("Use `acct_params_get AcctMinBalance`")},
 
 	// Immediate bytes and ints. Smaller code size for single use of constant.
 	{0x80, "pushbytes", opPushBytes, proto(":b"), 3, constants(asmPushBytes, opPushBytes, "bytes", immBytes)},
@@ -712,6 +738,8 @@ var OpsByName [LogicVersion + 1]map[string]OpSpec
 // Keeps track of all field names accessible in each version
 var fieldNames [LogicVersion + 1]map[string]bool
 
+var deprecations map[string]uint64 = make(map[string]uint64)
+
 // Migration from v1 to v2.
 // v1 allowed execution of program with version 0.
 // With v2 opcode versions are introduced and they are bound to every opcode.
@@ -750,6 +778,18 @@ func init() {
 		// Update tables with opcodes from the current version
 		for _, oi := range OpSpecs {
 			if oi.Version == v {
+				// if this new entry is blotting out an old, setup that name to report the deprecation
+				if old := opsByOpcode[v][oi.Opcode]; old.Name != "" {
+					if old.Name != oi.Name {
+						deprecations[old.Name] = v
+						delete(OpsByName[v], old.Name)
+					}
+				}
+				// or if it says it's a Deprecation entry
+				if oi.Deprecation != "" {
+					deprecations[oi.Name] = v
+					delete(OpsByName[v], oi.Name)
+				}
 				opsByOpcode[v][oi.Opcode] = oi
 				OpsByName[v][oi.Name] = oi
 			}

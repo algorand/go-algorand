@@ -52,6 +52,7 @@ var MakeSampleTxnGroup = makeSampleTxnGroup
 var MakeTestProto = makeTestProto
 var MakeTestProtoV = makeTestProtoV
 var NoTrack = notrack
+var RewriteFor = rewriteFor
 var TestLogic = testLogic
 var TestApp = testApp
 var TestAppBytes = testAppBytes

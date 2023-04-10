@@ -1,5 +1,5 @@
 {
-  "EvalMaxVersion": 8,
+  "EvalMaxVersion": 9,
   "LogicSigVersion": 8,
   "Ops": [
     {
@@ -1470,12 +1470,12 @@
     },
     {
       "Opcode": 97,
-      "Name": "app_opted_in",
-      "Args": ".U",
+      "Name": "opted_in",
+      "Args": "BU",
       "Returns": "U",
       "Size": 1,
       "Doc": "1 if account A is opted in to application B, else 0",
-      "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.",
+      "DocExtra": "params: An _available_ account address and an _available_ application id. Return: 1 if opted in and 0 otherwise.",
       "IntroducedVersion": 2,
       "Groups": [
         "State Access"
@@ -1483,12 +1483,12 @@
     },
     {
       "Opcode": 98,
-      "Name": "app_local_get",
-      "Args": ".B",
+      "Name": "local_state_get",
+      "Args": "BB",
       "Returns": ".",
       "Size": 1,
       "Doc": "local state of the key B in the current application in account A",
-      "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
+      "DocExtra": "params: An _available_ account address, state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
       "IntroducedVersion": 2,
       "Groups": [
         "State Access"
@@ -1496,12 +1496,12 @@
     },
     {
       "Opcode": 99,
-      "Name": "app_local_get_ex",
-      "Args": ".UB",
+      "Name": "local_state_get_ex",
+      "Args": "BUB",
       "Returns": ".U",
       "Size": 1,
       "Doc": "X is the local state of application B, key C in account A. Y is 1 if key existed, else 0",
-      "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
+      "DocExtra": "params: An _available_ account address, an _available_ application id, state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
       "IntroducedVersion": 2,
       "Groups": [
         "State Access"
@@ -1509,7 +1509,7 @@
     },
     {
       "Opcode": 100,
-      "Name": "app_global_get",
+      "Name": "global_state_get",
       "Args": "B",
       "Returns": ".",
       "Size": 1,
@@ -1522,12 +1522,12 @@
     },
     {
       "Opcode": 101,
-      "Name": "app_global_get_ex",
+      "Name": "global_state_get_ex",
       "Args": "UB",
       "Returns": ".U",
       "Size": 1,
       "Doc": "X is the global state of application A, key B. Y is 1 if key existed, else 0",
-      "DocExtra": "params: Txn.ForeignApps offset (or, since v4, an _available_ application id), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
+      "DocExtra": "params: An _available_ application id, state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
       "IntroducedVersion": 2,
       "Groups": [
         "State Access"
@@ -1535,11 +1535,11 @@
     },
     {
       "Opcode": 102,
-      "Name": "app_local_put",
-      "Args": ".B.",
+      "Name": "local_state_put",
+      "Args": "BB.",
       "Size": 1,
       "Doc": "write C to key B in account A's local state of the current application",
-      "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key, value.",
+      "DocExtra": "params: An _available_ account address, state key, value.",
       "IntroducedVersion": 2,
       "Groups": [
         "State Access"
@@ -1547,7 +1547,7 @@
     },
     {
       "Opcode": 103,
-      "Name": "app_global_put",
+      "Name": "global_state_put",
       "Args": "B.",
       "Size": 1,
       "Doc": "write B to key A in the global state of the current application",
@@ -1558,11 +1558,11 @@
     },
     {
       "Opcode": 104,
-      "Name": "app_local_del",
-      "Args": ".B",
+      "Name": "local_state_del",
+      "Args": "BB",
       "Size": 1,
       "Doc": "delete key B from account A's local state of the current application",
-      "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key.\n\nDeleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)",
+      "DocExtra": "params: An _available_ account address, state key.\n\nDeleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)",
       "IntroducedVersion": 2,
       "Groups": [
         "State Access"
@@ -1570,7 +1570,7 @@
     },
     {
       "Opcode": 105,
-      "Name": "app_global_del",
+      "Name": "global_state_del",
       "Args": "B",
       "Size": 1,
       "Doc": "delete key A from the global state of the current application",
@@ -1582,17 +1582,12 @@
     },
     {
       "Opcode": 112,
-      "Name": "asset_holding_get",
-      "Args": ".U",
+      "Name": "holding_get",
+      "Args": "BU",
       "Returns": ".U",
       "Size": 2,
-      "ArgEnum": [
-        "AssetBalance",
-        "AssetFrozen"
-      ],
-      "ArgEnumTypes": "UU",
       "Doc": "X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0",
-      "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
+      "DocExtra": "params: An _available_ address, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
       "ImmediateNote": "{uint8 asset holding field index}",
       "IntroducedVersion": 2,
       "Groups": [
@@ -1601,27 +1596,12 @@
     },
     {
       "Opcode": 113,
-      "Name": "asset_params_get",
+      "Name": "asset_get",
       "Args": "U",
       "Returns": ".U",
       "Size": 2,
-      "ArgEnum": [
-        "AssetTotal",
-        "AssetDecimals",
-        "AssetDefaultFrozen",
-        "AssetUnitName",
-        "AssetName",
-        "AssetURL",
-        "AssetMetadataHash",
-        "AssetManager",
-        "AssetReserve",
-        "AssetFreeze",
-        "AssetClawback",
-        "AssetCreator"
-      ],
-      "ArgEnumTypes": "UUUBBBBBBBBB",
       "Doc": "X is field F from asset A. Y is 1 if A exists, else 0",
-      "DocExtra": "params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
+      "DocExtra": "params: An _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
       "ImmediateNote": "{uint8 asset params field index}",
       "IntroducedVersion": 2,
       "Groups": [
@@ -1630,24 +1610,12 @@
     },
     {
       "Opcode": 114,
-      "Name": "app_params_get",
+      "Name": "app_get",
       "Args": "U",
       "Returns": ".U",
       "Size": 2,
-      "ArgEnum": [
-        "AppApprovalProgram",
-        "AppClearStateProgram",
-        "AppGlobalNumUint",
-        "AppGlobalNumByteSlice",
-        "AppLocalNumUint",
-        "AppLocalNumByteSlice",
-        "AppExtraProgramPages",
-        "AppCreator",
-        "AppAddress"
-      ],
-      "ArgEnumTypes": "BBUUUUUBB",
       "Doc": "X is field F from app A. Y is 1 if A exists, else 0",
-      "DocExtra": "params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.",
+      "DocExtra": "params: An _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.",
       "ImmediateNote": "{uint8 app params field index}",
       "IntroducedVersion": 5,
       "Groups": [
@@ -1656,25 +1624,10 @@
     },
     {
       "Opcode": 115,
-      "Name": "acct_params_get",
-      "Args": ".",
+      "Name": "acct_get",
+      "Args": "B",
       "Returns": ".U",
       "Size": 2,
-      "ArgEnum": [
-        "AcctBalance",
-        "AcctMinBalance",
-        "AcctAuthAddr",
-        "AcctTotalNumUint",
-        "AcctTotalNumByteSlice",
-        "AcctTotalExtraAppPages",
-        "AcctTotalAppsCreated",
-        "AcctTotalAppsOptedIn",
-        "AcctTotalAssetsCreated",
-        "AcctTotalAssets",
-        "AcctTotalBoxes",
-        "AcctTotalBoxBytes"
-      ],
-      "ArgEnumTypes": "UUBUUUUUUUUU",
       "Doc": "X is field F from account A. Y is 1 if A owns positive algos, else 0",
       "ImmediateNote": "{uint8 account params field index}",
       "IntroducedVersion": 6,

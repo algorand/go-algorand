@@ -72,7 +72,7 @@
         },
         {
           "name": "keyword.other.unit.teal",
-          "match": "^(box_create|box_del|box_extract|box_get|box_len|box_put|box_replace|acct_params_get|app_global_del|app_global_get|app_global_get_ex|app_global_put|app_local_del|app_local_get|app_local_get_ex|app_local_put|app_opted_in|app_params_get|asset_holding_get|asset_params_get|balance|block|log|min_balance)\\b"
+          "match": "^(box_create|box_del|box_extract|box_get|box_len|box_put|box_replace|acct_get|acct_params_get|app_get|app_global_del|app_global_get|app_global_get_ex|app_global_put|app_local_del|app_local_get|app_local_get_ex|app_local_put|app_opted_in|app_params_get|asset_get|asset_holding_get|asset_params_get|balance|block|global_state_del|global_state_get|global_state_get_ex|global_state_put|holding_get|local_state_del|local_state_get|local_state_get_ex|local_state_put|log|min_balance|opted_in)\\b"
         },
         {
           "name": "keyword.operator.teal",
