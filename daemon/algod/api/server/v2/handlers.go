@@ -512,7 +512,7 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, as
 		}
 
 		responses := []model.AccountAssetResponse{}
-		for assetID, _ := range acct.Assets {
+		for assetID, holding := range acct.Assets {
 
 			creator, ok, err := ledger.GetCreator(basics.CreatableIndex(assetID), basics.AssetCreatable)
 			if err != nil {
@@ -531,21 +531,17 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, as
 			// prepare JSON response
 			response := model.AccountAssetResponse{Round: 0}
 
-			if record.AssetParams == nil && record.AssetHolding == nil {
+			if record.AssetParams == nil {
 				return notFound(ctx, errors.New(errAccountAssetDoesNotExist), errAccountAssetDoesNotExist, v2.Log)
 			}
 
-			if record.AssetParams != nil {
-				asset := AssetParamsToAsset(addr.String(), basics.AssetIndex(assetID), record.AssetParams)
-				response.CreatedAsset = &asset.Params
-			}
+			asset := AssetParamsToAsset(addr.String(), basics.AssetIndex(assetID), record.AssetParams)
+			response.CreatedAsset = &asset.Params
 
-			if record.AssetHolding != nil {
-				response.AssetHolding = &model.AssetHolding{
-					Amount:   record.AssetHolding.Amount,
-					AssetID:  uint64(assetID),
-					IsFrozen: record.AssetHolding.Frozen,
-				}
+			response.AssetHolding = &model.AssetHolding{
+				Amount:   holding.Amount,
+				AssetID:  uint64(assetID),
+				IsFrozen: holding.Frozen,
 			}
 			responses = append(responses, response)
 		}
