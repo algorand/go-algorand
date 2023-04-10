@@ -51,21 +51,21 @@ func algorandURL(repo string) string {
 	return fmt.Sprintf("https://github.com/%s/%s", repoOwner, repo)
 }
 
-func similarityScore(s1, s2 StructInfo) float64 {
-	f1 := make([]Field, len(s1.Fields))
-	copy(f1, s1.Fields)
-	f2 := make([]Field, len(s2.Fields))
-	copy(f2, s2.Fields)
+func similarityScore(x, y StructInfo) float64 {
+	xFields := make([]Field, len(x.Fields))
+	copy(xFields, x.Fields)
+	yFields := make([]Field, len(y.Fields))
+	copy(yFields, y.Fields)
 
-	sortFieldsByName(f1)
-	sortFieldsByName(f2)
+	sortFieldsByName(xFields)
+	sortFieldsByName(yFields)
 
 	totalMetric := 0.0
-	maxLen := max(len(f1), len(f2))
+	maxLen := max(len(xFields), len(yFields))
 
 	for i := 0; i < maxLen; i++ {
-		if i < len(f1) && i < len(f2) {
-			totalMetric += compareFields(f1[i], f2[i])
+		if i < len(xFields) && i < len(yFields) {
+			totalMetric += compareFields(xFields[i], yFields[i])
 		}
 	}
 	if maxLen == 0 {
@@ -75,7 +75,7 @@ func similarityScore(s1, s2 StructInfo) float64 {
 		totalMetric += 2.5
 	}
 
-	if s1.Name == s2.Name {
+	if x.Name == y.Name {
 		totalMetric += 2.5 * float64(maxLen)
 	}
 
