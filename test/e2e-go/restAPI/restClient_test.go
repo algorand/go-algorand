@@ -1616,6 +1616,8 @@ func TestSimulateTransaction(t *testing.T) {
 		Version:      1,
 		LastRound:    result.LastRound, // checked above
 		WouldSucceed: true,
+		MaxLogSize:   1024,
+		MaxLogCalls:  32,
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
 				Txns: []v2.PreEncodedSimulateTxnResult{

@@ -220,6 +220,8 @@ func TestPayTxn(t *testing.T) {
 								},
 							},
 							WouldSucceed: signed,
+							MaxLogCalls:  32,
+							MaxLogSize:   1024,
 						},
 					}
 				})
@@ -274,6 +276,8 @@ func TestPayTxn(t *testing.T) {
 								},
 							},
 							WouldSucceed: signed,
+							MaxLogSize:   1024,
+							MaxLogCalls:  32,
 						},
 					}
 				})
@@ -320,6 +324,8 @@ func TestPayTxn(t *testing.T) {
 								},
 							},
 							WouldSucceed: false,
+							MaxLogSize:   1024,
+							MaxLogCalls:  32,
 						},
 					}
 				})
@@ -372,6 +378,8 @@ func TestWrongAuthorizerTxn(t *testing.T) {
 							},
 						},
 						WouldSucceed: false,
+						MaxLogSize:   1024,
+						MaxLogCalls:  32,
 					},
 				}
 			})
@@ -435,6 +443,8 @@ func TestRekey(t *testing.T) {
 							},
 						},
 						WouldSucceed: signed,
+						MaxLogSize:   1024,
+						MaxLogCalls:  32,
 					},
 				}
 			})
@@ -637,6 +647,8 @@ int 1`,
 							},
 						},
 						WouldSucceed: expectedSuccess,
+						MaxLogSize:   1024,
+						MaxLogCalls:  32,
 					},
 				}
 			})
@@ -730,6 +742,8 @@ int 0
 							},
 						},
 						WouldSucceed: signed,
+						MaxLogCalls:  32,
+						MaxLogSize:   1024,
 					},
 				}
 			})
@@ -797,6 +811,8 @@ int 0
 							},
 						},
 						WouldSucceed: false,
+						MaxLogSize:   1024,
+						MaxLogCalls:  32,
 					},
 				}
 			})
@@ -864,6 +880,8 @@ int 0
 							},
 						},
 						WouldSucceed: false,
+						MaxLogSize:   1024,
+						MaxLogCalls:  32,
 					},
 				}
 			})
@@ -940,6 +958,8 @@ int 0
 					},
 				},
 				WouldSucceed: false,
+				MaxLogSize:   1024,
+				MaxLogCalls:  32,
 			},
 		}
 	})
@@ -1014,6 +1034,8 @@ int 1`,
 					},
 				},
 				WouldSucceed: false,
+				MaxLogSize:   1024,
+				MaxLogCalls:  32,
 			},
 		}
 	})
@@ -1097,6 +1119,8 @@ int 1`,
 					},
 				},
 				WouldSucceed: true,
+				MaxLogSize:   1024,
+				MaxLogCalls:  32,
 			},
 		}
 	})
@@ -1286,6 +1310,8 @@ int 1`,
 							},
 						},
 						WouldSucceed: signed,
+						MaxLogSize:   1024,
+						MaxLogCalls:  32,
 					},
 				}
 			})
@@ -1353,6 +1379,8 @@ func TestPartialMissingSignatures(t *testing.T) {
 					},
 				},
 				WouldSucceed: false,
+				MaxLogSize:   1024,
+				MaxLogCalls:  32,
 			},
 		}
 	})
@@ -1406,6 +1434,8 @@ func TestPooledFeesAcrossSignedAndUnsigned(t *testing.T) {
 					},
 				},
 				WouldSucceed: false,
+				MaxLogSize:   1024,
+				MaxLogCalls:  32,
 			},
 		}
 	})
@@ -1543,6 +1573,8 @@ int 1`,
 					},
 				},
 				WouldSucceed: false,
+				MaxLogSize:   1024,
+				MaxLogCalls:  32,
 			},
 		}
 	})
@@ -1634,6 +1666,8 @@ int 1`,
 					},
 				},
 				WouldSucceed: false,
+				MaxLogSize:   1024,
+				MaxLogCalls:  32,
 			},
 		}
 	})
@@ -1720,6 +1754,8 @@ int 1`,
 					},
 				},
 				WouldSucceed: false,
+				MaxLogSize:   1024,
+				MaxLogCalls:  32,
 			},
 		}
 	})
@@ -1790,6 +1826,8 @@ func TestMockTracerScenarios(t *testing.T) {
 						},
 					},
 					WouldSucceed: scenario.Outcome == mocktracer.ApprovalOutcome,
+					MaxLogCalls:  32,
+					MaxLogSize:   1024,
 				}
 
 				return simulationTestCase{

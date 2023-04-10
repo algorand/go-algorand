@@ -1030,6 +1030,7 @@ int 1`,
 					for i := range scenario.TxnAppBudgetConsumed {
 						txnAppBudgetUsed = append(txnAppBudgetUsed, numOrNil(scenario.TxnAppBudgetConsumed[i]))
 					}
+					maxLogCalls, maxLogSize := uint64(32), uint64(1024)
 					expectedBody := model.SimulateResponse{
 						Version: 1,
 						TxnGroups: []model.SimulateTransactionGroupResult{
@@ -1056,6 +1057,8 @@ int 1`,
 							},
 						},
 						WouldSucceed: scenario.Outcome == mocktracer.ApprovalOutcome,
+						MaxLogCalls:  &maxLogCalls,
+						MaxLogSize:   &maxLogSize,
 					}
 					assertSimulationResultsEqual(t, scenario.ExpectedError, expectedBody, actualBody)
 				})

@@ -21,6 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
@@ -90,11 +91,18 @@ func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transa
 		groups[i] = makeTxnGroupResult(txgroup)
 	}
 
+	opCodeParam := logic.NewRuntimeOpParams()
+	if unlimitedLog {
+		opCodeParam = logic.NewSimulateOpParams()
+	}
+
 	return Result{
 		Version:      version,
 		LastRound:    lastRound,
 		TxnGroups:    groups,
 		UnlimitedLog: unlimitedLog,
+		MaxLogCalls:  opCodeParam.MaxLogCalls,
+		MaxLogSize:   opCodeParam.MaxLogSize,
 		WouldSucceed: true,
 	}, nil
 }
@@ -105,7 +113,5 @@ func makeSimulationResult(lastRound basics.Round, txgroups [][]transactions.Sign
 		// this should never happen, since we pass in ResultLatestVersion
 		panic(err)
 	}
-	// NOTE: on simConfig related, we set `maxLog*` related limits during simulation, rather than here
-	//       setting limits can be achieved if we decide to move runtime param on log move to some config
 	return result
 }

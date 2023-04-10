@@ -150,9 +150,6 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 		ep.MaxLogSize = localDefaults.SimulateLogBytesLimit
 		ep.MaxLogCalls = ep.MaxLogSize
 	}
-
-	tracer.result.MaxLogCalls = ep.MaxLogCalls
-	tracer.result.MaxLogSize = ep.MaxLogSize
 }
 
 func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, evalError error) {

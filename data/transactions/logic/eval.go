@@ -257,6 +257,23 @@ type OpCodeParams struct {
 	MaxLogCalls uint64
 }
 
+// NewRuntimeOpParams gives a set of const params used in normal runtime of opcodes
+func NewRuntimeOpParams() OpCodeParams {
+	return OpCodeParams{
+		MaxLogSize:  uint64(maxLogSize),
+		MaxLogCalls: uint64(maxLogCalls),
+	}
+}
+
+// NewSimulateOpParams gives a set of const params used in simulation of opcodes
+func NewSimulateOpParams() OpCodeParams {
+	localConfig := config.GetDefaultLocal()
+	return OpCodeParams{
+		MaxLogSize:  localConfig.SimulateLogBytesLimit,
+		MaxLogCalls: localConfig.SimulateLogBytesLimit,
+	}
+}
+
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
 	Proto *config.ConsensusParams
@@ -373,11 +390,6 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		*pooledAllowedInners = proto.MaxTxGroupSize * proto.MaxInnerTransactions
 	}
 
-	defaultOpCodeParams := OpCodeParams{
-		MaxLogSize:  uint64(maxLogSize),
-		MaxLogCalls: uint64(maxLogCalls),
-	}
-
 	ep := &EvalParams{
 		TxnGroup:                copyWithClearAD(txgroup),
 		Proto:                   proto,
@@ -388,7 +400,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),
-		OpCodeParams:            defaultOpCodeParams,
+		OpCodeParams:            NewRuntimeOpParams(),
 	}
 	// resources are computed after ep is constructed because app addresses are
 	// calculated there, and we'd like to use the caching mechanism built into
