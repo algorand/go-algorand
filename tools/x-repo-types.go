@@ -17,6 +17,12 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 )
 
+var repos = map[string]string{
+	"go-algorand":                "master",
+	"go-algorand-sdk":            "develop",
+	"go-stateproof-verification": "x-repo-types",
+}
+
 type Field struct {
 	Name string
 	Type string
@@ -37,10 +43,63 @@ type ScoredPair struct {
 }
 
 func similarityScore(s1, s2 StructInfo) float64 {
-	if s1.Name != s2.Name {
-		return 0.0
+	f1 := make([]Field, len(s1.Fields))
+	copy(f1, s1.Fields)
+	f2 := make([]Field, len(s2.Fields))
+	copy(f2, s2.Fields)
+
+	sortFieldsByName(f1)
+	sortFieldsByName(f2)
+
+	totalMetric := 0.0
+	maxLen := max(len(f1), len(f2))
+
+	for i := 0; i < maxLen; i++ {
+		if i < len(f1) && i < len(f2) {
+			totalMetric += compareFields(f1[i], f2[i])
+		}
 	}
-	return 1.0
+	if maxLen == 0 {
+		maxLen = 1
+		totalMetric += 1
+	}
+
+	if s1.Name == s2.Name {
+		totalMetric += 2.5 * float64(maxLen)
+	}
+
+	// Normalize the distance
+	return totalMetric / (5.0 * float64(maxLen))
+
+}
+
+func sortFieldsByName(fields []Field) {
+	sort.Slice(fields, func(i, j int) bool {
+		return fields[i].Name < fields[j].Name
+	})
+}
+
+func compareFields(field1, field2 Field) float64 {
+	var dist float64 = 0
+
+	if field1.Name == field2.Name {
+		dist += 1
+	}
+	if field1.Type == field2.Type {
+		dist += 1
+	}
+	if field1.Tag == field2.Tag {
+		dist += 0.5
+	}
+
+	return dist
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func algorandURL(repo string) string {
@@ -48,12 +107,6 @@ func algorandURL(repo string) string {
 }
 
 func main() {
-	repos := map[string]string{
-		"go-algorand":                "master",
-		"go-algorand-sdk":            "develop",
-		"go-stateproof-verification": "x-repo-types",
-	}
-
 	repoStructs := make(map[string][]StructInfo)
 	for repo, branch := range repos {
 		repoObj, err := gitClone(repo, branch)
@@ -137,6 +190,148 @@ func processGoFile(filename string, allStructs *[]StructInfo) error {
 	ast.Inspect(node, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.TypeSpec:
+			if theStructType, ok := x.Type.(*ast.StructType); ok {
+				structName := x.Name.Name
+				mirrorOf, fields := getFlatFields(theStructType)
+				*allStructs = append(
+					*allStructs,
+					StructInfo{
+						Name:     structName,
+						Fields:   fields,
+						Location: filename,
+						Mirror:   mirrorOf,
+					})
+			}
+		}
+		return true
+	})
+	return nil
+}
+
+func getFlatFields(obj *ast.StructType) (string, []Field) {
+	var fields []Field
+	// By convention, to denote the source of a Struct,
+	// annotate the first field in the form:
+	// "// @mirrorOf: REPO_PATH::STRUCT_NAME"
+	mirrorOf := ""
+
+	for _, field := range obj.Fields.List {
+		if len(field.Names) == 0 { // Anonymous field (embedded struct)
+			ident, ok := field.Type.(*ast.Ident)
+			if ok && ident.Obj != nil {
+				typeSpec, ok := ident.Obj.Decl.(*ast.TypeSpec)
+				if ok {
+					embeddedStruct, ok := typeSpec.Type.(*ast.StructType)
+					if ok {
+						mirrorOf2, embeddedFields := getFlatFields(embeddedStruct)
+						fields = append(fields, embeddedFields...)
+						if mirrorOf2 != "" {
+							mirrorOf = mirrorOf2
+						}
+					}
+				}
+			}
+		} else {
+			if field.Doc != nil {
+				// Get the annotation comment
+				for _, commentGroup := range field.Doc.List {
+					text := commentGroup.Text
+					if strings.HasPrefix(text, "// @mirrorOf:") {
+						mirrorOf = strings.TrimPrefix(text, "// @mirrorOf:")
+					}
+				}
+			}
+
+			if field.Names == nil { //|| !ast.IsExported(field.Names[0].Name) {
+				continue
+			}
+
+			// Handle pointer types correctly
+			var fieldType string
+			switch t := field.Type.(type) {
+			case *ast.Ident:
+				fieldType = t.Name
+			case *ast.StarExpr:
+				if ident, ok := t.X.(*ast.Ident); ok {
+					fieldType = "*" + ident.Name
+				}
+			case *ast.ArrayType:
+				if ident, ok := t.Elt.(*ast.Ident); ok {
+					fieldType = "[]" + ident.Name
+				}
+			case *ast.SelectorExpr:
+				if ident, ok := t.X.(*ast.Ident); ok {
+					fieldType = ident.Name + "." + t.Sel.Name
+				}
+			case *ast.MapType:
+				if keyIdent, ok := t.Key.(*ast.Ident); ok {
+					if valueIdent, ok := t.Value.(*ast.Ident); ok {
+						fieldType = fmt.Sprintf("map[%s]%s", keyIdent.Name, valueIdent.Name)
+					}
+				}
+			case *ast.ChanType:
+				if ident, ok := t.Value.(*ast.Ident); ok {
+					fieldType = "chan " + ident.Name
+				}
+			case *ast.FuncType:
+				fieldType = "func"
+				if t.Params != nil {
+					fieldType += "("
+					for _, param := range t.Params.List {
+						if ident, ok := param.Type.(*ast.Ident); ok {
+							fieldType += fmt.Sprintf(" %s", ident.Name)
+						}
+					}
+					fieldType += ")"
+				}
+				if t.Results != nil {
+					if len(t.Results.List) == 1 {
+						if ident, ok := t.Results.List[0].Type.(*ast.Ident); ok {
+							fieldType += fmt.Sprintf(" %s", ident.Name)
+						}
+					} else {
+						fieldType += " ("
+						for _, result := range t.Results.List {
+							if ident, ok := result.Type.(*ast.Ident); ok {
+								fieldType += fmt.Sprintf(" %s", ident.Name)
+							}
+						}
+						fieldType += ")"
+					}
+				}
+			case *ast.InterfaceType:
+				fieldType = "interface{}"
+			case *ast.StructType:
+				fieldType = "struct {...see source...}"
+			default:
+				continue
+			}
+
+			fieldName := field.Names[0].Name
+			fieldTag := ""
+
+			if field.Tag != nil {
+				fieldTag = field.Tag.Value
+			}
+
+			fields = append(fields, Field{Name: fieldName, Type: fieldType, Tag: fieldTag})
+		}
+	}
+
+	return mirrorOf, fields
+}
+
+/***
+func processGoFile(filename string, allStructs *[]StructInfo) error {
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return fmt.Errorf("error parsing file %s: %w", filename, err)
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.TypeSpec:
 			if _, ok := x.Type.(*ast.StructType); ok {
 				structName := x.Name.Name
 				fields := []Field{}
@@ -196,6 +391,7 @@ func processGoFile(filename string, allStructs *[]StructInfo) error {
 	})
 	return nil
 }
+***/
 
 func writeStructsToCSV(repo string, structs []StructInfo) {
 	csvFile, err := os.Create(fmt.Sprintf("%s.csv", repo))
