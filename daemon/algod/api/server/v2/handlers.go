@@ -975,16 +975,20 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	return v2.simulate(ctx, request, (*string)(params.Format))
 }
 
+// PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
 type PreEncodedSimulateRequestTransactionGroup struct {
 	model.SimulateRequestTransactionGroup
 	Txns []transactions.SignedTxn `codec:"txns"`
 }
 
+// PreEncodedSimulateRequest mirrors model.SimulateRequest
 type PreEncodedSimulateRequest struct {
 	model.SimulateRequest
 	TxnGroups []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
 }
 
+// SimulateTransactionExtended simulates broadcasting a raw transaction to the network, returning relevant simulation results.
+// (POST /v2/transactions/simulate/extended)
 func (v2 *Handlers) SimulateTransactionExtended(ctx echo.Context, params model.SimulateTransactionExtendedParams) error {
 	stat, err := v2.Node.Status()
 	if err != nil {
