@@ -843,9 +843,8 @@ func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnB
 		})
 }
 
-// StartEvaluatorDev is a dev only evaluator that does not validate blocks
-// TODO: Remove
-func (l *Ledger) StartEvaluatorDev(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*eval.BlockEvaluator, error) {
+// StartEvaluatorNoValidation is a dev only evaluator that does not validate blocks
+func (l *Ledger) StartEvaluatorNoValidation(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*eval.BlockEvaluator, error) {
 	return eval.StartEvaluator(l, hdr,
 		eval.EvaluatorOptions{
 			PaysetHint:          paysetHint,

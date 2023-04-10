@@ -1424,8 +1424,7 @@ func (node *AlgorandFullNode) UnsetSyncRound() {
 // This is only available in dev mode.
 func (node *AlgorandFullNode) SetBlockTimeStampOffset(offset int64) error {
 	if !node.devMode {
-		// TODO: return error here?
-		return nil
+		return fmt.Errorf("cannot set block timestamp offset when not in dev mode")
 	}
 	node.devModeTimeStampOffset = offset
 	return nil
@@ -1435,7 +1434,6 @@ func (node *AlgorandFullNode) SetBlockTimeStampOffset(offset int64) error {
 // This is only available in dev mode.
 func (node *AlgorandFullNode) GetBlockTimeStampOffset() int64 {
 	if !node.devMode {
-		// TODO: return error here?
 		return 0
 	}
 	return node.devModeTimeStampOffset

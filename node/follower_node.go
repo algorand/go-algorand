@@ -451,7 +451,7 @@ func (node *AlgorandFollowerNode) UnsetSyncRound() {
 // SetBlockTimeStampOffset sets a timestamp offset in the block header.
 // This is only available in dev mode.
 func (node *AlgorandFollowerNode) SetBlockTimeStampOffset(offset int64) error {
-	return nil
+	return fmt.Errorf("cannot set block timestamp offset in follower mode")
 }
 
 // GetBlockTimeStampOffset gets a timestamp offset.

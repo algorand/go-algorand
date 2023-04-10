@@ -98,6 +98,7 @@ type mockNode struct {
 	keys      account.StateProofKeys
 	usertxns  map[basics.Address][]node.TxnWithStatus
 	status    node.StatusReport
+	devmode   bool
 }
 
 func (m *mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
@@ -135,7 +136,7 @@ func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys acco
 	return m.err
 }
 
-func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error, status node.StatusReport) *mockNode {
+func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error, status node.StatusReport, devMode bool) *mockNode {
 	return &mockNode{
 		ledger:    ledger,
 		genesisID: genesisID,
@@ -143,6 +144,7 @@ func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error, sta
 		err:       nodeError,
 		usertxns:  map[basics.Address][]node.TxnWithStatus{},
 		status:    status,
+		devmode:   devMode,
 	}
 }
 
@@ -236,6 +238,20 @@ func (m *mockNode) StartCatchup(catchpoint string) error {
 
 func (m *mockNode) AbortCatchup(catchpoint string) error {
 	return m.err
+}
+
+func (m *mockNode) SetBlockTimeStampOffset(offset int64) error {
+	if !m.devmode {
+		return fmt.Errorf("cannot set block timestamp when not in dev mode")
+	}
+	return nil
+}
+
+func (m *mockNode) GetBlockTimeStampOffset() int64 {
+	if !m.devmode {
+		return 0
+	}
+	return 1
 }
 
 ////// mock ledger testing environment follows

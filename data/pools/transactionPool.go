@@ -713,7 +713,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	pool.pendingBlockEvaluator = nil
 	if pool.devMode {
 		next := bookkeeping.MakeDevModeBlock(prev, bookkeeping.DevModeOpts{TimeStampOffset: pool.devModeTimeStampOffset})
-		pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluatorDev(next.BlockHeader, hint, 0)
+		pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluatorNoValidation(next.BlockHeader, hint, 0)
 	} else {
 		pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
 	}
