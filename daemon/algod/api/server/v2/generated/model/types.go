@@ -999,6 +999,12 @@ type SimulateResponse struct {
 	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
 	LastRound uint64 `json:"last-round"`
 
+	// MaxLogCalls An integer indicating the limit of opcode log usage in simulating a transaction
+	MaxLogCalls *uint64 `json:"max-log-calls,omitempty"`
+
+	// MaxLogSize An integer indicating the limit of byte number to log in simulating a transaction
+	MaxLogSize *uint64 `json:"max-log-size,omitempty"`
+
 	// TxnGroups A result object for each transaction group that was simulated.
 	TxnGroups []SimulateTransactionGroupResult `json:"txn-groups"`
 

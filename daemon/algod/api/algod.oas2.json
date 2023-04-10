@@ -4122,6 +4122,14 @@
             "description": "A boolean indicating whether this transaction is simulated with log usage unlimited",
             "type": "boolean"
           },
+          "max-log-calls": {
+            "description": "An integer indicating the limit of opcode log usage in simulating a transaction",
+            "type": "integer"
+          },
+          "max-log-size": {
+            "description": "An integer indicating the limit of byte number to log in simulating a transaction",
+            "type": "integer"
+          },
           "would-succeed": {
             "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",
             "type": "boolean"

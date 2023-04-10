@@ -74,6 +74,8 @@ type Result struct {
 	TxnGroups    []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
 	WouldSucceed bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
 	UnlimitedLog bool             // true iff we run simulation with `unlimit-log` option
+	MaxLogCalls  uint64
+	MaxLogSize   uint64
 	Block        *ledgercore.ValidatedBlock
 }
 
@@ -103,5 +105,7 @@ func makeSimulationResult(lastRound basics.Round, txgroups [][]transactions.Sign
 		// this should never happen, since we pass in ResultLatestVersion
 		panic(err)
 	}
+	// NOTE: on simConfig related, we set `maxLog*` related limits during simulation, rather than here
+	//       setting limits can be achieved if we decide to move runtime param on log move to some config
 	return result
 }

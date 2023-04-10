@@ -188,6 +188,16 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[
     false
 fi
 
+if [[ $(echo "$RES" | jq '."max-log-size"') != "1024" ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal without unlimited log should return max log size 1024 %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$RES" | jq '."max-log-calls"') != "32" ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal without unlimited log should return max log calls 32 %Y%m%d_%H%M%S'
+    false
+fi
+
 ${gcmd} app method --method "unlimited_log_test()void" --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/big_log.tx"
 ${gcmd} clerk sign -i "${TEMPDIR}/big_log.tx" -o "${TEMPDIR}/big_log.stx"
 RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/big_log.stx")
@@ -221,6 +231,16 @@ fi
 
 if [[ $(echo "$RES" | jq '."unlimited-log"' != $CONST_TRUE ) ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should contain unlmited-log: true %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$RES" | jq '."max-log-size"') != "65536" ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal with unlimited log should return max log size 65536 %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$RES" | jq '."max-log-calls"') != "65536" ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal with unlimited log should return max log calls 65536 %Y%m%d_%H%M%S'
     false
 fi
 

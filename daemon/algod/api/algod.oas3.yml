@@ -762,6 +762,14 @@
                   "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                   "type": "integer"
                 },
+                "max-log-calls": {
+                  "description": "An integer indicating the limit of opcode log usage in simulating a transaction",
+                  "type": "integer"
+                },
+                "max-log-size": {
+                  "description": "An integer indicating the limit of byte number to log in simulating a transaction",
+                  "type": "integer"
+                },
                 "txn-groups": {
                   "description": "A result object for each transaction group that was simulated.",
                   "items": {
@@ -5770,6 +5778,14 @@
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                       "type": "integer"
                     },
+                    "max-log-calls": {
+                      "description": "An integer indicating the limit of opcode log usage in simulating a transaction",
+                      "type": "integer"
+                    },
+                    "max-log-size": {
+                      "description": "An integer indicating the limit of byte number to log in simulating a transaction",
+                      "type": "integer"
+                    },
                     "txn-groups": {
                       "description": "A result object for each transaction group that was simulated.",
                       "items": {
@@ -5805,6 +5821,14 @@
                   "properties": {
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+                      "type": "integer"
+                    },
+                    "max-log-calls": {
+                      "description": "An integer indicating the limit of opcode log usage in simulating a transaction",
+                      "type": "integer"
+                    },
+                    "max-log-size": {
+                      "description": "An integer indicating the limit of byte number to log in simulating a transaction",
                       "type": "integer"
                     },
                     "txn-groups": {

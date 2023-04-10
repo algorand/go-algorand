@@ -947,6 +947,8 @@ type PreEncodedSimulateResponse struct {
 	TxnGroups    []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
 	WouldSucceed bool                               `codec:"would-succeed"`
 	UnlimitedLog bool                               `codec:"unlimited-log"`
+	MaxLogCalls  uint64                             `codec:"max-log-calls"`
+	MaxLogSize   uint64                             `codec:"max-log-size"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
