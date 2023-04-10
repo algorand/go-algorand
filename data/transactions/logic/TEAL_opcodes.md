@@ -1214,7 +1214,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## b+
 
 - Opcode: 0xa0
-- Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
+- Stack: ..., A: bigint, B: bigint &rarr; ..., []byte
 - A plus B. A and B are interpreted as big-endian unsigned integers
 - **Cost**: 10
 - Availability: v4
@@ -1238,7 +1238,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## b*
 
 - Opcode: 0xa3
-- Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
+- Stack: ..., A: bigint, B: bigint &rarr; ..., []byte
 - A times B. A and B are interpreted as big-endian unsigned integers.
 - **Cost**: 20
 - Availability: v4

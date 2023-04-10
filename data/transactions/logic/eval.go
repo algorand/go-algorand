@@ -637,10 +637,9 @@ var (
 	StackBytes = NewStackType(avmBytes, bound(0, maxStringSize))
 	// StackAny could be Bytes or Uint64
 	StackAny = StackType{
-		Name:        avmAny.String(),
-		AVMType:     avmAny,
-		ValueBound:  StackUint64.ValueBound,
-		LengthBound: StackBytes.LengthBound,
+		Name:    avmAny.String(),
+		AVMType: avmAny,
+		Bound:   [2]uint64{0, 0},
 	}
 	// StackNone is used when there is no input or output to
 	// an opcode
@@ -690,10 +689,9 @@ func static(size uint64) [2]uint64 {
 
 // StackType describes the type of a value on the operand stack
 type StackType struct {
-	Name        string
-	AVMType     avmType
-	LengthBound [2]uint64
-	ValueBound  [2]uint64
+	Name    string
+	AVMType avmType
+	Bound   [2]uint64
 }
 
 // NewStackType Initializes a new StackType with fields passed
@@ -703,16 +701,7 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 		name = stname[0]
 	}
 
-	st := StackType{Name: name, AVMType: at}
-
-	switch at {
-	case avmBytes:
-		st.LengthBound = bounds
-	case avmUint64:
-		st.ValueBound = bounds
-	}
-
-	return st
+	return StackType{Name: name, AVMType: at, Bound: bounds}
 }
 
 func (a StackType) union(b StackType) (StackType, error) {
@@ -721,16 +710,7 @@ func (a StackType) union(b StackType) (StackType, error) {
 	}
 
 	// Same type now, so we can just take the union of the bounds
-	var bounds [2]uint64
-
-	switch a.AVMType {
-	case avmUint64:
-		bounds = unionBounds(a.ValueBound, b.ValueBound)
-	case avmBytes:
-		bounds = unionBounds(a.LengthBound, b.LengthBound)
-	}
-
-	return NewStackType(a.AVMType, bounds), nil
+	return NewStackType(a.AVMType, unionBounds(a.Bound, b.Bound)), nil
 }
 
 func unionBounds(a, b [2]uint64) [2]uint64 {
@@ -778,21 +758,8 @@ func (st StackType) AssignableTo(other StackType) bool {
 
 	// Same type now
 	// Check if our constraints will satisfy the other type
-	var (
-		smin, smax uint64
-		omin, omax uint64
-	)
-
-	switch st.AVMType {
-	case avmBytes:
-		smin, smax = st.LengthBound[0], st.LengthBound[1]
-		omin, omax = other.LengthBound[0], other.LengthBound[1]
-	case avmUint64:
-		smin, smax = st.ValueBound[0], st.ValueBound[1]
-		omin, omax = other.ValueBound[0], other.ValueBound[1]
-	default:
-		panic("no stack type match in AssignableTo check")
-	}
+	smin, smax := st.Bound[0], st.Bound[1]
+	omin, omax := other.Bound[0], other.Bound[1]
 
 	return smin <= omax && smax >= omin
 }

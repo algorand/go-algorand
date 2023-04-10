@@ -2744,7 +2744,7 @@
         "bigint"
       ],
       "Returns": [
-        "bigint"
+        "[]byte"
       ],
       "Size": 1,
       "Doc": "A plus B. A and B are interpreted as big-endian unsigned integers",
@@ -2795,7 +2795,7 @@
         "bigint"
       ],
       "Returns": [
-        "bigint"
+        "[]byte"
       ],
       "Size": 1,
       "Doc": "A times B. A and B are interpreted as big-endian unsigned integers.",
