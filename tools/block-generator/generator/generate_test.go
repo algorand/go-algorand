@@ -210,12 +210,3 @@ func TestWriteRound(t *testing.T) {
 	_, err := g.ledger.GetStateDeltaForRound(1)
 	require.NoError(t, err)
 }
-
-func TestIndexToAccountAndAccountToIndex(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	for i := uint64(0); i < uint64(100000); i++ {
-		acct := indexToAccount(i)
-		result := accountToIndex(acct)
-		require.Equal(t, i, result)
-	}
-}

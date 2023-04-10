@@ -230,7 +230,7 @@ type generator struct {
 	// Reporting information from transaction type to data
 	reportData Report
 
-	//	ledger
+	// ledger
 	ledger *ledger.Ledger
 }
 
@@ -418,7 +418,10 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if err != nil {
 		return err
 	}
-	g.ledger.AddBlock(cert.Block, agreement.Certificate{})
+	err = g.ledger.AddBlock(cert.Block, agreement.Certificate{})
+	if err != nil {
+		return err
+	}
 	g.ledger.WaitForCommit(basics.Round(g.round))
 	g.finishRound(numTxnForBlock)
 	return nil
@@ -432,6 +435,9 @@ func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
 	}
 	// msgp encode deltas
 	data, err := encode(protocol.CodecHandle, delta)
+	if err != nil {
+		return err
+	}
 	_, err = output.Write(data)
 	if err != nil {
 		return err
@@ -703,7 +709,7 @@ func (g *generator) initializeLedger() {
 	genBal := convertToGenesisBalances(g.balances)
 	// add rewards pool with min balance
 	genBal[g.rewardsPool] = basics.AccountData{
-		MicroAlgos: basics.MicroAlgos{g.params.MinBalance},
+		MicroAlgos: basics.MicroAlgos{Raw: g.params.MinBalance},
 	}
 	bal := bookkeeping.MakeGenesisBalances(genBal, g.feeSink, g.rewardsPool)
 	block, err := bookkeeping.MakeGenesisBlock(g.protocol, bal, g.genesisID, g.genesisHash)

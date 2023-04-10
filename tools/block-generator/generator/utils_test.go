@@ -111,10 +111,20 @@ func TestWeightedSelectionOutOfRange(t *testing.T) {
 }
 
 func TestConvertToGenesisBalance(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	balance := []uint64{100, 200, 300}
 	genesisBalances := convertToGenesisBalances(balance)
 	require.Equal(t, 3, len(genesisBalances))
 	for i, bal := range balance {
 		require.Equal(t, bal, genesisBalances[indexToAccount(uint64(i))].MicroAlgos.Raw)
+	}
+}
+
+func TestIndexToAccountAndAccountToIndex(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	for i := uint64(0); i < uint64(100000); i++ {
+		acct := indexToAccount(i)
+		result := accountToIndex(acct)
+		require.Equal(t, i, result)
 	}
 }
