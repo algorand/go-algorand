@@ -687,6 +687,18 @@ func static(size uint64) [2]uint64 {
 	return bound(size, size)
 }
 
+func union(a, b [2]uint64) [2]uint64 {
+	u := [2]uint64{a[0], a[1]}
+	if b[0] < u[0] {
+		u[0] = b[0]
+	}
+
+	if b[1] > u[1] {
+		u[1] = b[1]
+	}
+	return u
+}
+
 // StackType describes the type of a value on the operand stack
 type StackType struct {
 	Name    string
@@ -704,25 +716,13 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 	return StackType{Name: name, AVMType: at, Bound: bounds}
 }
 
-func (a StackType) union(b StackType) (StackType, error) {
-	if a.AVMType != b.AVMType {
+func (st StackType) union(b StackType) (StackType, error) {
+	if st.AVMType != b.AVMType {
 		return StackAny, nil
 	}
 
 	// Same type now, so we can just take the union of the bounds
-	return NewStackType(a.AVMType, unionBounds(a.Bound, b.Bound)), nil
-}
-
-func unionBounds(a, b [2]uint64) [2]uint64 {
-	u := [2]uint64{a[0], a[1]}
-	if b[0] < u[0] {
-		u[0] = b[0]
-	}
-
-	if b[1] > u[1] {
-		u[1] = b[1]
-	}
-	return u
+	return NewStackType(st.AVMType, union(st.Bound, b.Bound)), nil
 }
 
 func (st StackType) narrowed(bounds [2]uint64) StackType {

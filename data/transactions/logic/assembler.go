@@ -1423,12 +1423,13 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 	if top < 0 {
 		return nil, nil, nil
 	}
+	var err error
 	for i := range pgm.scratchSpace {
-		// We can't know what slot stacktop is being stored in,
-		// but we can at least keep the slots that are the
-		// same type as stacktop
-		if pgm.scratchSpace[i] != pgm.stack[top] {
-			pgm.scratchSpace[i].AVMType = avmAny
+		// We can't know what slot stacktop is being stored in
+		// so we union it into all scratch slots
+		pgm.scratchSpace[i], err = pgm.scratchSpace[i].union(pgm.stack[top])
+		if err != nil {
+			return nil, nil, err
 		}
 	}
 	return nil, nil, nil
