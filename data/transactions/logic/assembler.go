@@ -1335,7 +1335,7 @@ func typeDupTwo(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 func typeSelect(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 2 {
-		unioned, err := unionStackTypes(pgm.stack[top-1], pgm.stack[top-2])
+		unioned, err := pgm.stack[top-1].union(pgm.stack[top-2])
 		return nil, StackTypes{unioned}, err
 	}
 	return nil, nil, nil
@@ -1389,6 +1389,12 @@ func typeUncover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, 
 	return anyTypes(depth), returns, nil
 }
 
+func typeByteMath(resultSize uint64) refineFunc {
+	return func(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+		return nil, StackTypes{NewStackType(avmBytes, bound(0, resultSize))}, nil
+	}
+}
+
 func typeTxField(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	if len(args) != 1 {
 		return nil, nil, nil
@@ -1418,7 +1424,9 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 		return nil, nil, nil
 	}
 	for i := range pgm.scratchSpace {
-		// We can't know what slot stacktop is being stored in, but we can at least keep the slots that are the same type as stacktop
+		// We can't know what slot stacktop is being stored in,
+		// but we can at least keep the slots that are the
+		// same type as stacktop
 		if pgm.scratchSpace[i] != pgm.stack[top] {
 			pgm.scratchSpace[i].AVMType = avmAny
 		}
@@ -1977,7 +1985,7 @@ func (ops *OpStream) assemble(text string) error {
 	if ops.Errors != nil {
 		l := len(ops.Errors)
 		if l == 1 {
-			return fmt.Errorf("1 error: %s", ops.Errors[0].Error())
+			return fmt.Errorf("1 error: %w", ops.Errors[0])
 		}
 		return fmt.Errorf("%d errors", l)
 	}

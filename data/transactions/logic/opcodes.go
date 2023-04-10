@@ -600,10 +600,10 @@ var OpSpecs = []OpSpec{
 	{0x9b, "bn256_pairing", opBn256Pairing, proto("bb:i"), pairingVersion, costly(8700)},
 
 	// Byteslice math.
-	{0xa0, "b+", opBytesPlus, proto("NN:N"), 4, costly(10)},
+	{0xa0, "b+", opBytesPlus, proto("NN:b"), 4, costly(10).typed(typeByteMath(maxByteMathSize + 1))},
 	{0xa1, "b-", opBytesMinus, proto("NN:N"), 4, costly(10)},
 	{0xa2, "b/", opBytesDiv, proto("NN:N"), 4, costly(20)},
-	{0xa3, "b*", opBytesMul, proto("NN:N"), 4, costly(20)},
+	{0xa3, "b*", opBytesMul, proto("NN:b"), 4, costly(20).typed(typeByteMath(maxByteMathSize * 2))},
 	{0xa4, "b<", opBytesLt, proto("NN:T"), 4, detDefault()},
 	{0xa5, "b>", opBytesGt, proto("NN:T"), 4, detDefault()},
 	{0xa6, "b<=", opBytesLe, proto("NN:T"), 4, detDefault()},

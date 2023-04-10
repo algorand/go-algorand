@@ -715,7 +715,7 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 	return st
 }
 
-func unionStackTypes(a, b StackType) (StackType, error) {
+func (a StackType) union(b StackType) (StackType, error) {
 	if a.AVMType != b.AVMType {
 		return StackAny, nil
 	}
@@ -759,8 +759,8 @@ func (st StackType) narrowed(bounds [2]uint64) StackType {
 	return NewStackType(st.AVMType, bounds)
 }
 
-// AssignableTo returns a bool indicating whether the receiver can be
-// assigned to some other type that is expected by the next operation
+// AssignableTo indicates whether a value typed st might be
+// usable as other.
 func (st StackType) AssignableTo(other StackType) bool {
 	if st.AVMType == avmNone || other.AVMType == avmNone {
 		return false
