@@ -2205,6 +2205,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 
 	conn, response, err := websocketDialer.DialContext(wn.ctx, gossipAddr, requestHeader)
+
 	if err != nil {
 		if err == websocket.ErrBadHandshake {
 			// reading here from ioutil is safe only because it came from DialContext above, which already finished reading all the data from the network

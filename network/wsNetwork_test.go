@@ -3768,10 +3768,6 @@ type mockServer struct {
 	t   *testing.T
 
 	waitForClientClose bool
-	sendClose          bool
-	sendCloseWC        bool
-
-	gotClientClose chan struct{}
 }
 
 type mockHandler struct {
@@ -3788,63 +3784,48 @@ var mockUpgrader = websocket.Upgrader{
 	},
 }
 
+func buildWsResponseHeader() http.Header {
+	h := http.Header{}
+	h.Add(ProtocolVersionHeader, ProtocolVersion)
+	h.Add(GenesisHeader, genesisID)
+	h.Add(NodeRandomHeader, "randomHeader")
+	return h
+}
+
 func (t mockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Set the required headers to successfully establish a connection
-	responseHeader := http.Header{}
-	responseHeader.Add(ProtocolVersionHeader, ProtocolVersion)
-	responseHeader.Add(GenesisHeader, genesisID)
-	responseHeader.Add(NodeRandomHeader, "randomHeader")
-	ws, err := mockUpgrader.Upgrade(w, r, responseHeader)
+	ws, err := mockUpgrader.Upgrade(w, r, buildWsResponseHeader())
 	if err != nil {
 		t.Logf("Upgrade: %v", err)
 		return
 	}
 	defer ws.Close()
+	// Send a message of interest immediately after the connection is established
+	wr, err := ws.NextWriter(websocket.BinaryMessage)
+	if err != nil {
+		t.Logf("NextWriter: %v", err)
+		return
+	}
+
+	bytes := MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag})
+	msgBytes := append([]byte(protocol.MsgOfInterestTag), bytes...)
+	_, err = wr.Write(msgBytes)
+	if err != nil {
+		t.Logf("Error writing MessageOfInterest: %v", err)
+		return
+	}
+	wr.Close()
 
 	for true {
 		// echo a message back to the client
-		op, rd, err := ws.NextReader()
+		_, _, err := ws.NextReader()
 		if err != nil {
 			if _, ok := err.(*websocket.CloseError); ok && t.s.waitForClientClose {
 				t.Log("got client close")
-				close(t.s.gotClientClose)
 				return
 			}
-			t.Logf("NextReader: %v", err)
 			return
 		}
-		wr, err := ws.NextWriter(op)
-		if err != nil {
-			t.Logf("NextWriter: %v", err)
-			return
-		}
-		if _, err = io.Copy(wr, rd); err != nil {
-			t.Logf("NextWriter: %v", err)
-			return
-		}
-		if err := wr.Close(); err != nil {
-			t.Logf("Close: %v", err)
-			return
-		}
-		t.Log("sent message")
-		if !t.s.waitForClientClose {
-			break
-		}
-	}
-	if t.s.sendClose {
-		err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		if err != nil {
-			t.Logf("WriteMessage(CloseMessage): %v", err)
-			return
-		}
-		t.Log("sent close")
-	} else if t.s.sendCloseWC {
-		err = ws.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(5*time.Second))
-		if err != nil {
-			t.Logf("WriteControl(CloseMessage): %v", err)
-			return
-		}
-		t.Log("sent close")
 	}
 }
 
@@ -3866,17 +3847,23 @@ func TestMaxHeaderSize(t *testing.T) {
 	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
 	netA.config.GossipFanout = 1
 
-	s := newServer(t)
-	s.waitForClientClose = true
-	defer s.Close()
+	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
+	netB.config.GossipFanout = 1
 
 	netA.Start()
 	defer netA.Stop()
+	netB.Start()
+	defer netB.Stop()
+
+	addrB, ok := netB.Address()
+	require.True(t, ok)
+	gossipB, err := netB.addrToGossipAddr(addrB)
+	require.NoError(t, err)
 
 	// First make sure that the regular connection with default max header size works
 	netA.wsMaxHeaderBytes = wsMaxHeaderBytes
 	netA.wg.Add(1)
-	netA.tryConnect(s.URL, s.URL)
+	netA.tryConnect(addrB, gossipB)
 	time.Sleep(250 * time.Millisecond)
 	assert.Equal(t, 1, len(netA.peers))
 
@@ -3884,16 +3871,61 @@ func TestMaxHeaderSize(t *testing.T) {
 	assert.Zero(t, len(netA.peers))
 
 	// Now try to connect with a max header size that is too small
-	netA.wsMaxHeaderBytes = 64
+	netA.wsMaxHeaderBytes = 128
 	netA.wg.Add(1)
-	netA.tryConnect(s.URL, s.URL)
+	netA.tryConnect(addrB, gossipB)
 	time.Sleep(250 * time.Millisecond)
 	assert.Zero(t, len(netA.peers))
 
 	// Test that setting 0 disables the max header size check
 	netA.wsMaxHeaderBytes = 0
 	netA.wg.Add(1)
-	netA.tryConnect(s.URL, s.URL)
+	netA.tryConnect(addrB, gossipB)
 	time.Sleep(250 * time.Millisecond)
 	assert.Equal(t, 1, len(netA.peers))
+}
+
+func TestTryConnectEarlyWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
+	netA.config.GossipFanout = 1
+
+	s := newServer(t)
+	s.waitForClientClose = true
+	defer s.Close()
+
+	netA.Start()
+	defer netA.Stop()
+
+	dialer := websocket.Dialer{}
+	mconn, resp, _ := dialer.Dial(s.URL, nil)
+	expectedHeader := buildWsResponseHeader()
+	for k, v := range expectedHeader {
+		assert.Equal(t, v[0], resp.Header.Get(k))
+	}
+
+	headerSize := 36 // Fixed overhead of the full status line "HTTP/1.1 101 Switching Protocols" + 4
+	for k, v := range resp.Header {
+		headerSize += len(k) + len(v[0]) + 4
+	}
+	mconn.Close()
+
+	// Setting the max header size to 1 byte less than the minimum header size should fail
+	netA.wsMaxHeaderBytes = int64(headerSize) - 1
+	netA.wg.Add(1)
+	netA.tryConnect(s.URL, s.URL)
+	time.Sleep(250 * time.Millisecond)
+	assert.Len(t, netA.peers, 0)
+
+	// Now set the max header size to the minimum header size and it should succeed
+	netA.wsMaxHeaderBytes = int64(headerSize)
+	netA.wg.Add(1)
+	netA.tryConnect(s.URL, s.URL)
+	time.Sleep(250 * time.Millisecond)
+
+	// Confirm that we successfuly received a message of interest
+	assert.Len(t, netA.peers, 1)
+	fmt.Printf("MI Message Count: %v\n", netA.peers[0].miMessageCount)
+	assert.Equal(t, uint64(1), netA.peers[0].miMessageCount)
 }
