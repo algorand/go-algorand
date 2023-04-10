@@ -17,10 +17,14 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 )
 
+var goal = "go-algorand"
+var goalSDK = "go-algorand-sdk"
+var goalStateProof = "go-stateproof-verification"
+
 var repos = map[string]string{
-	"go-algorand":                "master",
-	"go-algorand-sdk":            "develop",
-	"go-stateproof-verification": "x-repo-types",
+	goal:           "master",
+	goalSDK:        "develop",
+	goalStateProof: "x-repo-types",
 }
 
 type Field struct {
@@ -133,8 +137,8 @@ func main() {
 		repoStructs[repo] = allStructs
 	}
 
-	saveSimilarStructs(repoStructs, "go-algorand", "go-stateproof-verification", 25)
-	saveSimilarStructs(repoStructs, "go-algorand", "go-algorand-sdk", 250)
+	saveSimilarStructs(repoStructs, goal, goalStateProof, 25)
+	saveSimilarStructs(repoStructs, goal, goalSDK, 250)
 
 }
 
@@ -346,10 +350,10 @@ func writeStructsToCSV(repo string, structs []StructInfo) {
 	}
 }
 
-func saveSimilarStructs(repoStructs map[string][]StructInfo, goal string, target string, top int) {
-	goalStructs, ok := repoStructs[goal]
+func saveSimilarStructs(repoStructs map[string][]StructInfo, source string, target string, top int) {
+	goalStructs, ok := repoStructs[source]
 	if !ok {
-		log.Printf("%s structs not found", goal)
+		log.Printf("%s structs not found", source)
 		os.Exit(1)
 	}
 
@@ -361,7 +365,7 @@ func saveSimilarStructs(repoStructs map[string][]StructInfo, goal string, target
 
 	scoredPairs := sortedComparisons(goalStructs, targetStructs, top)
 
-	file, err := os.Create(fmt.Sprintf("%s_V_%s.csv", goal, target))
+	file, err := os.Create(fmt.Sprintf("%s_V_%s.csv", source, target))
 	if err != nil {
 		log.Printf("Error creating CSV file: %v", err)
 		os.Exit(1)
@@ -373,9 +377,9 @@ func saveSimilarStructs(repoStructs map[string][]StructInfo, goal string, target
 
 	writer.Write([]string{
 		"score",
-		fmt.Sprintf("%s struct", goal),
+		fmt.Sprintf("%s struct", source),
 		fmt.Sprintf("%s struct", target),
-		fmt.Sprintf("%s location", goal),
+		fmt.Sprintf("%s location", source),
 		fmt.Sprintf("%s location", target),
 	})
 
