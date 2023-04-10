@@ -17,6 +17,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 )
 
+var repoOwner = "tzaffi"
 var goal = "go-algorand"
 var goalSDK = "go-algorand-sdk"
 var goalStateProof = "go-stateproof-verification"
@@ -44,6 +45,10 @@ type ScoredPair struct {
 	X     StructInfo
 	Y     StructInfo
 	Score float64
+}
+
+func algorandURL(repo string) string {
+	return fmt.Sprintf("https://github.com/%s/%s", repoOwner, repo)
 }
 
 func similarityScore(s1, s2 StructInfo) float64 {
@@ -106,10 +111,6 @@ func max(a, b int) int {
 		return a
 	}
 	return b
-}
-
-func algorandURL(repo string) string {
-	return fmt.Sprintf("https://github.com/tzaffi/%s", repo)
 }
 
 func main() {
