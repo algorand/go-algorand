@@ -293,7 +293,7 @@
             "description": "An asset identifier",
             "name": "asset-id",
             "in": "path",
-            "required": true
+            "required": false 
           },
           {
             "$ref": "#/parameters/format"

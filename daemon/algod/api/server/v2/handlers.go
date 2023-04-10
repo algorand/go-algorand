@@ -503,6 +503,57 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, as
 	ledger := v2.Node.LedgerForAPI()
 
 	lastRound := ledger.Latest()
+
+	if assetID == 0 {
+
+		acct, _, _, err := ledger.LookupLatest(addr)
+		if err != nil {
+			return internalError(ctx, err, fmt.Sprintf("could not retrieve account information for last round (%d)", lastRound), v2.Log)
+		}
+
+		responses := []model.AccountAssetResponse{}
+		for assetID, _ := range acct.Assets {
+
+			creator, ok, err := ledger.GetCreator(basics.CreatableIndex(assetID), basics.AssetCreatable)
+			if err != nil {
+				return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+			}
+			if !ok {
+				return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
+			}
+
+			lastRound := ledger.Latest()
+			record, err := ledger.LookupAsset(lastRound, creator, basics.AssetIndex(assetID))
+			if err != nil {
+				return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+			}
+
+			// prepare JSON response
+			response := model.AccountAssetResponse{Round: 0}
+
+			if record.AssetParams == nil && record.AssetHolding == nil {
+				return notFound(ctx, errors.New(errAccountAssetDoesNotExist), errAccountAssetDoesNotExist, v2.Log)
+			}
+
+			if record.AssetParams != nil {
+				asset := AssetParamsToAsset(addr.String(), basics.AssetIndex(assetID), record.AssetParams)
+				response.CreatedAsset = &asset.Params
+			}
+
+			if record.AssetHolding != nil {
+				response.AssetHolding = &model.AssetHolding{
+					Amount:   record.AssetHolding.Amount,
+					AssetID:  uint64(assetID),
+					IsFrozen: record.AssetHolding.Frozen,
+				}
+			}
+			responses = append(responses, response)
+		}
+
+		return ctx.JSON(http.StatusOK, responses)
+
+	}
+
 	record, err := ledger.LookupAsset(lastRound, addr, basics.AssetIndex(assetID))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
