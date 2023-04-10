@@ -1302,6 +1302,73 @@
         }
       }
     },
+    "/v2/transactions/simulate/extended": {
+      "post": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "consumes": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. The simulation will use blockchain state from the latest committed round.",
+        "operationId": "SimulateTransactionExtended",
+        "parameters": [
+          {
+            "description": "The transactions to simulate, along with any other inputs.",
+            "name": "request",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SimulateRequest"
+            }
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/SimulateResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/transactions/params": {
       "get": {
         "tags": [
@@ -3186,6 +3253,41 @@
         "app-index": {
           "type": "integer",
           "x-algorand-format": "uint64"
+        }
+      }
+    },
+    "SimulateRequest": {
+      "description": "Request type for simulation endpoint.",
+      "type": "object",
+      "required": [
+        "txn-groups"
+      ],
+      "properties": {
+        "txn-groups": {
+          "description": "The transaction groups to simulate.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateRequestTransactionGroup"
+          }
+        }
+      }
+    },
+    "SimulateRequestTransactionGroup": {
+      "description": "A transaction group to simulate.",
+      "type": "object",
+      "required": [
+        "txns"
+      ],
+      "properties": {
+        "txns": {
+          "description": "An atomic transaction group.",
+          "type": "array",
+          "items": {
+            "description": "SignedTxn object. Must be canonically encoded.",
+            "type": "string",
+            "format": "json",
+            "x-algorand-format": "SignedTransaction"
+          }
         }
       }
     },

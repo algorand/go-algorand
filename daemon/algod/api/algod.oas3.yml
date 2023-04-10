@@ -1835,6 +1835,41 @@
         ],
         "type": "object"
       },
+      "SimulateRequest": {
+        "description": "Request type for simulation endpoint.",
+        "properties": {
+          "txn-groups": {
+            "description": "The transaction groups to simulate.",
+            "items": {
+              "$ref": "#/components/schemas/SimulateRequestTransactionGroup"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "txn-groups"
+        ],
+        "type": "object"
+      },
+      "SimulateRequestTransactionGroup": {
+        "description": "A transaction group to simulate.",
+        "properties": {
+          "txns": {
+            "description": "An atomic transaction group.",
+            "items": {
+              "description": "SignedTxn object. Must be canonically encoded.",
+              "format": "json",
+              "type": "string",
+              "x-algorand-format": "SignedTransaction"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "txns"
+        ],
+        "type": "object"
+      },
       "SimulateTransactionGroupResult": {
         "description": "Simulation result for an atomic transaction group",
         "properties": {
@@ -5888,6 +5923,182 @@
           "nonparticipating"
         ],
         "x-codegen-request-body-name": "rawtxn"
+      }
+    },
+    "/v2/transactions/simulate/extended": {
+      "post": {
+        "operationId": "SimulateTransactionExtended",
+        "parameters": [
+          {
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "msgpack"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateRequest"
+              }
+            },
+            "application/msgpack": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateRequest"
+              }
+            }
+          },
+          "description": "The transactions to simulate, along with any other inputs.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "last-round": {
+                      "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+                      "type": "integer"
+                    },
+                    "txn-groups": {
+                      "description": "A result object for each transaction group that was simulated.",
+                      "items": {
+                        "$ref": "#/components/schemas/SimulateTransactionGroupResult"
+                      },
+                      "type": "array"
+                    },
+                    "version": {
+                      "description": "The version of this response object.",
+                      "type": "integer"
+                    },
+                    "would-succeed": {
+                      "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "last-round",
+                    "txn-groups",
+                    "version",
+                    "would-succeed"
+                  ],
+                  "type": "object"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "properties": {
+                    "last-round": {
+                      "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+                      "type": "integer"
+                    },
+                    "txn-groups": {
+                      "description": "A result object for each transaction group that was simulated.",
+                      "items": {
+                        "$ref": "#/components/schemas/SimulateTransactionGroupResult"
+                      },
+                      "type": "array"
+                    },
+                    "version": {
+                      "description": "The version of this response object.",
+                      "type": "integer"
+                    },
+                    "would-succeed": {
+                      "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "last-round",
+                    "txn-groups",
+                    "version",
+                    "would-succeed"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Result of a transaction group simulation."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. The simulation will use blockchain state from the latest committed round.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "x-codegen-request-body-name": "request"
       }
     },
     "/versions": {

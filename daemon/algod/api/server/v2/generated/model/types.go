@@ -130,6 +130,12 @@ const (
 	SimulateTransactionParamsFormatMsgpack SimulateTransactionParamsFormat = "msgpack"
 )
 
+// Defines values for SimulateTransactionExtendedParamsFormat.
+const (
+	SimulateTransactionExtendedParamsFormatJson    SimulateTransactionExtendedParamsFormat = "json"
+	SimulateTransactionExtendedParamsFormatMsgpack SimulateTransactionExtendedParamsFormat = "msgpack"
+)
+
 // Account Account information at a given round.
 //
 // Definition:
@@ -606,6 +612,18 @@ type PendingTransactionResponse struct {
 
 	// Txn The raw signed transaction.
 	Txn map[string]interface{} `json:"txn"`
+}
+
+// SimulateRequest Request type for simulation endpoint.
+type SimulateRequest struct {
+	// TxnGroups The transaction groups to simulate.
+	TxnGroups []SimulateRequestTransactionGroup `json:"txn-groups"`
+}
+
+// SimulateRequestTransactionGroup A transaction group to simulate.
+type SimulateRequestTransactionGroup struct {
+	// Txns An atomic transaction group.
+	Txns []json.RawMessage `json:"txns"`
 }
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
@@ -1215,8 +1233,20 @@ type SimulateTransactionParams struct {
 // SimulateTransactionParamsFormat defines parameters for SimulateTransaction.
 type SimulateTransactionParamsFormat string
 
+// SimulateTransactionExtendedParams defines parameters for SimulateTransactionExtended.
+type SimulateTransactionExtendedParams struct {
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
+	Format *SimulateTransactionExtendedParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+}
+
+// SimulateTransactionExtendedParamsFormat defines parameters for SimulateTransactionExtended.
+type SimulateTransactionExtendedParamsFormat string
+
 // TealCompileTextRequestBody defines body for TealCompile for text/plain ContentType.
 type TealCompileTextRequestBody = TealCompileTextBody
 
 // TealDryrunJSONRequestBody defines body for TealDryrun for application/json ContentType.
 type TealDryrunJSONRequestBody = DryrunRequest
+
+// SimulateTransactionExtendedJSONRequestBody defines body for SimulateTransactionExtended for application/json ContentType.
+type SimulateTransactionExtendedJSONRequestBody = SimulateRequest
