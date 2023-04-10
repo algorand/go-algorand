@@ -28,7 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
@@ -136,7 +136,7 @@ type ledgerForTracker interface {
 	trackerDB() trackerdb.TrackerStore
 	blockDB() db.Pair
 	trackerLog() logging.Logger
-	trackerEvalVerified(bookkeeping.Block, internal.LedgerForEvaluator) (ledgercore.StateDelta, error)
+	trackerEvalVerified(bookkeeping.Block, eval.LedgerForEvaluator) (ledgercore.StateDelta, error)
 
 	Latest() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
@@ -269,6 +269,15 @@ type deferredCommitContext struct {
 
 	stats       telemetryspec.AccountsUpdateMetrics
 	updateStats bool
+
+	spVerification struct {
+		// state proof verification deletion information
+		lastDeleteIndex           int
+		earliestLastAttestedRound basics.Round
+
+		// state proof verification commit information
+		commitContext []verificationCommitContext
+	}
 }
 
 func (dcc deferredCommitContext) newBase() basics.Round {
@@ -402,14 +411,40 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
 	//   so that all the instances of the catchpoint would contain exactly the same data )
 	flushTime := time.Now()
-	if dcc != nil && !flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval)) && !dcc.catchpointFirstStage && !dcc.catchpointSecondStage && dcc.pendingDeltas < pendingDeltasFlushThreshold {
-		dcc = nil
+
+	// Some tracker want to flush
+	if dcc != nil {
+		// skip this flush if none of these conditions met:
+		// - has it been at least balancesFlushInterval since the last flush?
+		flushIntervalPassed := flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval))
+		// - does this commit task also include catchpoint file creation activity for the dcc.oldBase+dcc.offset?
+		flushForCatchpoint := dcc.catchpointFirstStage || dcc.catchpointSecondStage
+		// - have more than pendingDeltasFlushThreshold accounts been modified since the last flush?
+		flushAccounts := dcc.pendingDeltas >= pendingDeltasFlushThreshold
+		if !(flushIntervalPassed || flushForCatchpoint || flushAccounts) {
+			dcc = nil
+		}
 	}
 	tr.mu.RUnlock()
 
 	if dcc != nil {
+		// Increment the waitgroup first, otherwise this goroutine can be interrupted
+		// and commitSyncer attempts calling Done() on empty wait group.
 		tr.accountsWriting.Add(1)
-		tr.deferredCommits <- dcc
+		select {
+		case tr.deferredCommits <- dcc:
+		default:
+			// Do NOT block if deferredCommits cannot accept this task, skip it.
+			// Note: the next attempt will include these rounds plus some extra rounds.
+			// The main reason for slow commits is catchpoint file creation (when commitSyncer calls
+			// commitRound, which calls postCommitUnlocked). This producer thread is called by
+			// blockQueue.syncer() upon successful block DB flush, which calls ledger.notifyCommit()
+			// and trackerRegistry.committedUpTo() after taking the trackerMu.Lock().
+			// This means a blocking write to deferredCommits will block Ledger reads (TODO use more fine-grained locks).
+			// Dropping this dcc allows the blockqueue syncer to continue persisting other blocks
+			// and ledger reads to proceed without being blocked by trackerMu lock.
+			tr.accountsWriting.Done()
+		}
 	}
 }
 
@@ -727,4 +762,12 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 		err = blockRetrievalError
 	}
 	return
+}
+
+// getDbRound accesses dbRound with protection by the trackerRegistry's mutex.
+func (tr *trackerRegistry) getDbRound() basics.Round {
+	tr.mu.RLock()
+	dbRound := tr.dbRound
+	tr.mu.RUnlock()
+	return dbRound
 }

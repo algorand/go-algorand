@@ -556,7 +556,7 @@ func TestBoxTotals(t *testing.T) {
 
 	ledger.NewApp(txn.Sender, 888, basics.AppParams{})
 	// The SENDER certainly has no boxes (but does exist)
-	logic.TestApp(t, `int 0; acct_params_get AcctTotalBoxes; pop; !`, ep)
+	logic.TestApp(t, `txn Sender; acct_params_get AcctTotalBoxes; pop; !`, ep)
 	// Nor does the app account, to start
 	logic.TestApp(t, `int 888; app_params_get AppAddress; assert;
 	                  acct_params_get AcctTotalBoxes; pop; !; `, ep)

@@ -30,8 +30,10 @@ type TxnPath []uint64
 
 // TxnResult contains the simulation result for a single transaction
 type TxnResult struct {
-	Txn              transactions.SignedTxnWithAD
-	MissingSignature bool
+	Txn                    transactions.SignedTxnWithAD
+	MissingSignature       bool
+	AppBudgetConsumed      uint64
+	LogicSigBudgetConsumed uint64
 }
 
 // TxnGroupResult contains the simulation result for a single transaction group
@@ -41,6 +43,15 @@ type TxnGroupResult struct {
 
 	// FailedAt is the path to the txn that failed inside of this group
 	FailedAt TxnPath
+
+	// AppBudgetAdded is the total opcode budget for this group
+	AppBudgetAdded uint64
+
+	// AppBudgetConsumed is the total opcode cost used for this group
+	AppBudgetConsumed uint64
+
+	// FeeCredit is the fees left over after covering fees for this group
+	FeeCredit uint64
 }
 
 func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {

@@ -589,10 +589,10 @@ type PendingTransactionResponse struct {
 	// InnerTxns Inner transactions produced by application execution.
 	InnerTxns *[]PendingTransactionResponse `json:"inner-txns,omitempty"`
 
-	// LocalStateDelta \[ld\] Local state key/value changes for the application being executed by this transaction.
+	// LocalStateDelta Local state key/value changes for the application being executed by this transaction.
 	LocalStateDelta *[]AccountStateDelta `json:"local-state-delta,omitempty"`
 
-	// Logs \[lg\] Logs for the application being executed by this transaction.
+	// Logs Logs for the application being executed by this transaction.
 	Logs *[][]byte `json:"logs,omitempty"`
 
 	// PoolError Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.
@@ -610,6 +610,12 @@ type PendingTransactionResponse struct {
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
 type SimulateTransactionGroupResult struct {
+	// AppBudgetAdded Total budget added during execution of app calls in the transaction group.
+	AppBudgetAdded *uint64 `json:"app-budget-added,omitempty"`
+
+	// AppBudgetConsumed Total budget consumed during execution of app calls in the transaction group.
+	AppBudgetConsumed *uint64 `json:"app-budget-consumed,omitempty"`
+
 	// FailedAt If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.
 	FailedAt *[]uint64 `json:"failed-at,omitempty"`
 
@@ -622,6 +628,12 @@ type SimulateTransactionGroupResult struct {
 
 // SimulateTransactionResult Simulation result for an individual transaction
 type SimulateTransactionResult struct {
+	// AppBudgetConsumed Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.
+	AppBudgetConsumed *uint64 `json:"app-budget-consumed,omitempty"`
+
+	// LogicSigBudgetConsumed Budget used during execution of a logic sig transaction.
+	LogicSigBudgetConsumed *uint64 `json:"logic-sig-budget-consumed,omitempty"`
+
 	// MissingSignature A boolean indicating whether this transaction is missing signatures
 	MissingSignature *bool `json:"missing-signature,omitempty"`
 
@@ -942,7 +954,7 @@ type NodeStatusResponse struct {
 	// UpgradeNodeVote This node's upgrade vote
 	UpgradeNodeVote *bool `json:"upgrade-node-vote,omitempty"`
 
-	// UpgradeVoteRounds Total voting ounds for current upgrade
+	// UpgradeVoteRounds Total voting rounds for current upgrade
 	UpgradeVoteRounds *uint64 `json:"upgrade-vote-rounds,omitempty"`
 
 	// UpgradeVotes Total votes cast for consensus upgrade
