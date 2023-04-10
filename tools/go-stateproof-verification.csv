@@ -1,0 +1,21 @@
+struct name,location,mirrorOf
+CommittablePublicKey,go-stateproof-verification/merklesignature/committablePublicKeys.go,
+FalconVerifier,go-stateproof-verification/stateproofcrypto/falconWrapper.go,
+HashFactory,go-stateproof-verification/stateproofcrypto/hashes.go,
+Participant,go-stateproof-verification/stateproof/participant.go,
+Proof,go-stateproof-verification/merklearray/proof.go,go-algorand/crypto/merklearray/proof.go::Proof
+Reveal,go-stateproof-verification/stateproof/structs.go,
+Signature,go-stateproof-verification/merklesignature/merkleSignatureScheme.go,go-algorand/crypto/merklesignature/merkleSignatureScheme.go::Signature
+SingleLeafProof,go-stateproof-verification/merklearray/proof.go,
+StateProof,go-stateproof-verification/stateproof/structs.go,
+Tree,go-stateproof-verification/merklearray/merkle.go,
+Verifier,go-stateproof-verification/stateproof/verifier.go,
+Verifier,go-stateproof-verification/merklesignature/merkleSignatureScheme.go,
+coinChoiceSeed,go-stateproof-verification/stateproof/coinGenerator.go,go-algorand/crypto/stateproof/coinGenerator.go::coinChoiceSeed
+coinGenerator,go-stateproof-verification/stateproof/coinGenerator.go,
+committableSignatureSlot,go-stateproof-verification/stateproof/committableSignatureSlot.go,
+invalidHash,go-stateproof-verification/stateproofcrypto/hashes.go,
+layerItem,go-stateproof-verification/merklearray/partial.go,
+pair,go-stateproof-verification/merklearray/layer.go,
+siblings,go-stateproof-verification/merklearray/partial.go,
+sigslotCommit,go-stateproof-verification/stateproof/structs.go,
