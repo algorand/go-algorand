@@ -5,6 +5,7 @@ score,go-algorand struct,go-stateproof-verification struct,go-algorand location,
 1.00,Verifier,Verifier,go-algorand/crypto/merklesignature/merkleSignatureScheme.go,go-stateproof-verification/merklesignature/merkleSignatureScheme.go
 1.00,coinGenerator,coinGenerator,go-algorand/crypto/stateproof/coinGenerator.go,go-stateproof-verification/stateproof/coinGenerator.go
 1.00,committableSignatureSlot,committableSignatureSlot,go-algorand/crypto/stateproof/committableSignatureSlot.go,go-stateproof-verification/stateproof/committableSignatureSlot.go
+1.00,invalidHash,invalidHash,go-algorand/crypto/hashes.go,go-stateproof-verification/stateproofcrypto/hashes.go
 1.00,siblings,siblings,go-algorand/crypto/merklearray/partial.go,go-stateproof-verification/merklearray/partial.go
 1.00,sigslotCommit,sigslotCommit,go-algorand/crypto/stateproof/structs.go,go-stateproof-verification/stateproof/structs.go
 0.97,StateProof,StateProof,go-algorand/crypto/stateproof/structs.go,go-stateproof-verification/stateproof/structs.go
@@ -18,9 +19,8 @@ score,go-algorand struct,go-stateproof-verification struct,go-algorand location,
 0.90,coinChoiceSeed,coinChoiceSeed,go-algorand/crypto/stateproof/coinGenerator.go,go-stateproof-verification/stateproof/coinGenerator.go
 0.90,layerItem,layerItem,go-algorand/crypto/merklearray/partial.go,go-stateproof-verification/merklearray/partial.go
 0.87,pair,pair,go-algorand/crypto/merklearray/layer.go,go-stateproof-verification/merklearray/layer.go
-0.70,invalidHash,invalidHash,go-algorand/crypto/hashes.go,go-stateproof-verification/stateproofcrypto/hashes.go
-0.50,StateProof,StateProof,go-algorand/daemon/algod/api/server/v2/generated/types.go,go-stateproof-verification/stateproof/structs.go
-0.50,StateProof,StateProof,go-algorand/daemon/algod/api/server/v2/generated/private/types.go,go-stateproof-verification/stateproof/structs.go
-0.50,Verifier,Verifier,go-algorand/crypto/merklesignature/merkleSignatureScheme.go,go-stateproof-verification/stateproof/verifier.go
-0.50,Verifier,Verifier,go-algorand/crypto/stateproof/verifier.go,go-stateproof-verification/merklesignature/merkleSignatureScheme.go
-0.36,Proof,SingleLeafProof,go-algorand/crypto/merklearray/proof.go,go-stateproof-verification/merklearray/proof.go
+0.50,CounterTest,invalidHash,go-algorand/util/metrics/counter_test.go,go-stateproof-verification/stateproofcrypto/hashes.go
+0.50,CryptoRandomSource,invalidHash,go-algorand/agreement/agreementtest/simulate.go,go-stateproof-verification/stateproofcrypto/hashes.go
+0.50,ErrTest,invalidHash,go-algorand/catchup/universalFetcher_test.go,go-stateproof-verification/stateproofcrypto/hashes.go
+0.50,GaugeTest,invalidHash,go-algorand/util/metrics/gauge_test.go,go-stateproof-verification/stateproofcrypto/hashes.go
+0.50,GoalFixture,invalidHash,go-algorand/test/framework/fixtures/goalFixture.go,go-stateproof-verification/stateproofcrypto/hashes.go
