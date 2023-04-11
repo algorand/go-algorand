@@ -23,14 +23,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
+	"github.com/stretchr/testify/require"
 )
 
 type expiredExecPool struct {
@@ -45,7 +41,6 @@ func (fp *expiredExecPool) BufferSize() (length, capacity int) {
 	return
 }
 
-// Test async vote verifier against a canceled execution pool.
 func TestVerificationAgainstFullExecutionPool(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -70,7 +65,6 @@ func TestVerificationAgainstFullExecutionPool(t *testing.T) {
 	require.True(t, response.cancelled)
 }
 
-// Test async vote verifier
 func TestAsyncVerificationVotes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	errProb := float32(0.5)
@@ -143,11 +137,12 @@ func min(a, b int) int {
 	}
 	return b
 }
+
 func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, count, eqCount int, tb testing.TB) {
 	voteVerifier := MakeStartAsyncVoteVerifier(nil)
 	defer voteVerifier.Quit()
 
-	outChan := make(chan asyncVerifyVoteResponse, 1)
+	outChan := make(chan asyncVerifyVoteResponse, voteVerifier.Parallelism())
 	gCount := min(200, count)
 	gEqCount := min(200, eqCount)
 
@@ -205,155 +200,49 @@ func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, count, eqCou
 	}
 	wg.Wait()
 }
-
-type unVoteTest struct {
-	uv  *unauthenticatedVote
-	err error
-	id  int
-}
-
-type unEqVoteTest struct {
-	uev *unauthenticatedEquivocationVote
-	err error
-	id  int
-}
-
 func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount int, errProb float32) (ledger Ledger,
 	votes []*unVoteTest, eqVotes []*unEqVoteTest, errsV, errsEqv map[int]error) {
-	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	round := ledger.NextRound()
-	period := period(0)
 	votes = make([]*unVoteTest, count)
 	eqVotes = make([]*unEqVoteTest, eqCount)
 	errsV = make(map[int]error)
 	errsEqv = make(map[int]error)
 	wg := sync.WaitGroup{}
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		for c := 0; c < count; c++ {
-			var processedVote = false
-			var proposal proposalValue
-			proposal.BlockDigest = randomBlockHash()
+	vg := makeTestVoteGenerator()
 
-			for i, address := range addresses {
-				proposal.OriginalProposer = address
-				rv := rawVote{Sender: address, Round: round, Period: period, Step: step(0), Proposal: proposal}
-				uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
-				if err != nil {
-					errChan <- err
-				}
-				m, err := membership(ledger, address, round, period, step(0))
-				if err != nil {
-					errChan <- err
-				}
-				_, err = uv.Cred.Verify(config.Consensus[protocol.ConsensusCurrentVersion], m)
-				selected := err == nil
-				if !selected {
-					continue
-				}
-				processedVote = true
-
-				errType := 99
-				if rand.Float32() < errProb {
-					if onlyBadSigs {
-						errType = 0
-					} else {
-						errType = rand.Intn(7)
-					}
-				}
-				v := getTestVoteError(uv, c, errType)
-				errsV[v.id] = v.err
-				votes[v.id] = v
-				break
-			}
-			if !processedVote {
-				errChan <- fmt.Errorf("No votes were processed")
+	for c := 0; c < count; c++ {
+		errType := 99
+		if rand.Float32() < errProb {
+			if onlyBadSigs {
+				errType = 0
+			} else {
+				errType = rand.Intn(7)
 			}
 		}
-	}()
+		v, err := vg.getTestVote(errType)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to generate a vote")
+		}
+		errsV[v.id] = v.err
+		votes[v.id] = v
+	}
 
-	go func() {
-		defer wg.Done()
-		for c := 0; c < eqCount; c++ {
-			var proposal1 proposalValue
-			proposal1.BlockDigest = randomBlockHash()
-
-			var proposal2 proposalValue
-			proposal2.BlockDigest = randomBlockHash()
-
-			var processedVote = false
-			for i, address := range addresses {
-				proposal1.OriginalProposer = address
-				rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step(0), Proposal: proposal1}
-				unauthenticatedVote0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
-				if err != nil {
-					errChan <- err
-				}
-
-				rv0Copy := rawVote{Sender: address, Round: round, Period: period, Step: step(0), Proposal: proposal1}
-				unauthenticatedVote0Copy, err := makeVote(rv0Copy, otSecrets[i], vrfSecrets[i], ledger)
-				if err != nil {
-					errChan <- err
-				}
-
-				proposal2.OriginalProposer = address
-				rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step(0), Proposal: proposal2}
-				unauthenticatedVote1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
-				if err != nil {
-					errChan <- err
-				}
-
-				ev := unauthenticatedEquivocationVote{
-					Sender:    address,
-					Round:     round,
-					Period:    period,
-					Step:      step(0),
-					Cred:      unauthenticatedVote0.Cred,
-					Proposals: [2]proposalValue{unauthenticatedVote0.R.Proposal, unauthenticatedVote1.R.Proposal},
-					Sigs:      [2]crypto.OneTimeSignature{unauthenticatedVote0.Sig, unauthenticatedVote1.Sig},
-				}
-
-				evSameVote := unauthenticatedEquivocationVote{
-					Sender:    address,
-					Round:     round,
-					Period:    period,
-					Step:      step(0),
-					Cred:      unauthenticatedVote0.Cred,
-					Proposals: [2]proposalValue{unauthenticatedVote0.R.Proposal, unauthenticatedVote0Copy.R.Proposal},
-					Sigs:      [2]crypto.OneTimeSignature{unauthenticatedVote0.Sig, unauthenticatedVote0Copy.Sig},
-				}
-
-				//loop to find votes selected to participate
-				m, err := membership(ledger, address, round, period, step(0))
-				if err != nil {
-					errChan <- err
-				}
-				_, err = ev.Cred.Verify(config.Consensus[protocol.ConsensusCurrentVersion], m)
-				selected := err == nil
-				if !selected {
-					continue
-				}
-				processedVote = true
-
-				errType := 99
-				if rand.Float32() < errProb {
-					if onlyBadSigs {
-						errType = 0
-					} else {
-						errType = rand.Intn(9)
-					}
-				}
-				v := getTestEqVoteError(ev, evSameVote, c, errType)
-				errsEqv[v.id] = v.err
-				eqVotes[v.id] = v
-				break
-			}
-			if !processedVote {
-				errChan <- fmt.Errorf("No votes were processed")
+	vg.counter = 0
+	for c := 0; c < eqCount; c++ {
+		errType := 99
+		if rand.Float32() < errProb {
+			if onlyBadSigs {
+				errType = 0
+			} else {
+				errType = rand.Intn(9)
 			}
 		}
-	}()
+		v, err := vg.getTestEqVote(errType)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to generate a vote")
+		}
+		errsEqv[v.id] = v.err
+		eqVotes[v.id] = v
+	}
 	wg.Wait()
-	return ledger, votes, eqVotes, errsV, errsEqv
+	return vg.ledger, votes, eqVotes, errsV, errsEqv
 }

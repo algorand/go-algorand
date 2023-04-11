@@ -127,249 +127,83 @@ func TestVerificationTasks(t *testing.T) {
 	}
 }
 
-// TestProcessBatchOneCtxCancled tests the case where one of the jobs in a batch has a cancled ctx
-func TestProcessBatchOneCtxCancled(t *testing.T) {
-
-	batchSize := 8
-	cancelCtxIndex := 3
-	outChan := make(chan interface{})
-	bp := voteBatchProcessor{outChan: outChan}
-
-	// case of a batch with a ctx cancled request/job
-	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture10()
-	round := ledger.NextRound()
-	period := period(0)
-
-	votes := getVotes(batchSize, addresses, vrfSecrets, otSecrets, round, ledger, period, t)
-	require.NotNil(t, votes)
-	jobs := make([]execpool.InputJob, 0, batchSize)
-
-	ctx := context.Background()
-	ctxC, cancel := context.WithCancel(context.Background())
-	cancel()
-	out := make(chan asyncVerifyVoteResponse)
-
-	// Create the batch job that the stream will accumulate jobs and create
-	for v := range votes {
-		req := asyncVerifyVoteRequest{
-			ctx:     ctx,
-			l:       ledger,
-			uv:      &votes[v],
-			index:   uint64(v),
-			message: message{},
-			out:     out}
-		// let one of the jobs get a cancled ctx
-		if v == cancelCtxIndex {
-			req.ctx = ctxC
-		}
-		jobs = append(jobs, &req)
-	}
-
-	// pass the batch to ProcessBatch, and expect it to process all the jobs except the one
-	// with the cancled ctx
-	go bp.ProcessBatch(jobs)
-	for range votes {
-		e := <-outChan
-		resp := e.(*asyncVerifyVoteResponse)
-		if resp.err != nil {
-			require.Equal(t, cancelCtxIndex, int(resp.req.index))
-			require.ErrorIs(t, resp.err, resp.req.ctx.Err())
-			continue
-		}
-		require.NoError(t, resp.err)
-	}
+type unVoteTest struct {
+	uv  *unauthenticatedVote
+	err error
+	id  int
 }
 
-// TestProcessBatchDifferentErrors tests the case where one of the jobs in a batch has a cancled ctx
-func TestProcessBatchDifferentErrors(t *testing.T) {
+type unEqVoteTest struct {
+	uev *unauthenticatedEquivocationVote
+	err error
+	id  int
+}
 
-	batchSize := 30
-	outChan := make(chan interface{})
-	bp := voteBatchProcessor{outChan: outChan}
+type testVoteGenerator struct {
+	addresses  []basics.Address
+	vrfSecrets []*crypto.VRFSecrets
+	otSecrets  []crypto.OneTimeSigner
+	round      basics.Round
+	ledger     Ledger
+	period     period
+	counter    uint64
+	proposal   proposalValue
+	proposal2  proposalValue
+}
 
-	// case of a batch with a ctx cancled request/job
-	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture10()
-	round := ledger.NextRound()
-	period := period(0)
-
-	votes := getVotes(batchSize/2, addresses, vrfSecrets, otSecrets, round, ledger, period, t)
-	require.NotNil(t, votes)
-	eqVotes := getEqVotes(batchSize/2, addresses, vrfSecrets, otSecrets, round, ledger, period, t)
-	require.NotNil(t, votes)
-
-	jobs := make([]execpool.InputJob, 0, batchSize)
-
-	ctx := context.Background()
-	out := make(chan asyncVerifyVoteResponse)
-
-	voteResults := make(map[int]*unVoteTest)
-	eqVoteResults := make(map[int]*unEqVoteTest)
-
-	// Create the batch job that the stream will accumulate jobs and create
-	for v := range votes {
-		vt := getTestVoteError(votes[v], v, v)
-		voteResults[vt.id] = vt
-		req := asyncVerifyVoteRequest{
-			ctx:     ctx,
-			l:       ledger,
-			uv:      vt.uv,
-			index:   uint64(v),
-			message: message{},
-			out:     out}
-		jobs = append(jobs, &req)
+func makeTestVoteGenerator() testVoteGenerator {
+	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
+	proposal := proposalValue{BlockDigest: randomBlockHash()}
+	proposal2 := proposalValue{BlockDigest: randomBlockHash()}
+	tg := testVoteGenerator{
+		addresses:  addresses,
+		vrfSecrets: vrfSecrets,
+		otSecrets:  otSecrets,
+		round:      ledger.NextRound(),
+		ledger:     ledger,
+		period:     period(0),
+		proposal:   proposal,
+		proposal2:  proposal2,
 	}
-	for v := range eqVotes {
-		vt := getTestEqVoteError(eqVotes[v][0], eqVotes[v][1], v, v)
-		eqVoteResults[vt.id] = vt
-		req := asyncVerifyVoteRequest{
-			ctx:     ctx,
-			l:       ledger,
-			uev:     vt.uev,
-			index:   uint64(v),
-			message: message{},
-			out:     out}
-		jobs = append(jobs, &req)
-	}
-	// pass the batch to ProcessBatch, and expect it to process all the jobs except the one
-	// with the cancled ctx
-	go bp.ProcessBatch(jobs)
-	errCount := 0
-	passCount := 0
-	eqErrCount := 0
-	eqPassCount := 0
-	for range jobs {
-		e := <-outChan
-		resp := e.(*asyncVerifyVoteResponse)
-		if resp.req.uv != nil {
-			if voteResults[int(resp.index)].err != nil {
-				require.Error(t, resp.err)
-				errCount++
-			} else {
-				require.NoError(t, resp.err)
-				passCount++
+	return tg
+}
+
+const notSelected = 8
+
+func (vg *testVoteGenerator) getTestVote(errType int) (v *unVoteTest, err error) {
+	addrSelected := false
+	proposal := vg.proposal
+	var uv unauthenticatedVote
+	c := int(vg.counter)
+	vg.counter++
+	for i, address := range vg.addresses {
+		proposal.OriginalProposer = address
+		rv := rawVote{Sender: address, Round: vg.round, Period: vg.period, Step: step(0), Proposal: proposal}
+		uv, err = makeVote(rv, vg.otSecrets[i], vg.vrfSecrets[i], vg.ledger)
+		if err != nil {
+			return v, err
+		}
+		m, err := membership(vg.ledger, address, vg.round, vg.period, step(0))
+		if err != nil {
+			return v, err
+		}
+		_, err = uv.Cred.Verify(config.Consensus[protocol.ConsensusCurrentVersion], m)
+		if err != nil { // address not selected
+			if errType == notSelected {
+				addrSelected = true
+				break
 			}
 		} else {
-			if eqVoteResults[int(resp.index)].err != nil {
-				require.Error(t, resp.err)
-				eqErrCount++
-			} else {
-				require.NoError(t, resp.err)
-				eqPassCount++
+			if errType != notSelected {
+				addrSelected = true
+				break
 			}
 		}
 	}
-	require.Equal(t, 7, errCount)
-	require.Equal(t, 8, passCount)
-	require.Equal(t, 9, eqErrCount)
-	require.Equal(t, 6, eqPassCount)
-}
-
-type fastSelector struct {
-	committee.Selector
-}
-
-func (fs fastSelector) CommitteeSize(proto config.ConsensusParams) uint64 {
-	return 10000
-}
-
-func getVotes(count int, addresses []basics.Address, vrfSecrets []*crypto.VRFSecrets, otSecrets []crypto.OneTimeSigner,
-	round basics.Round, ledger Ledger, period period, t *testing.T) (votes []unauthenticatedVote) {
-	var proposal proposalValue
-	proposal.BlockDigest = randomBlockHash()
-	votes = make([]unauthenticatedVote, 0, count)
-
-	var uv unauthenticatedVote
-	var err error
-
-	for v := 0; v < count; v++ {
-		addrFine := false
-		for i, address := range addresses {
-			proposal.OriginalProposer = address
-			rv := rawVote{Sender: address, Round: round, Period: period, Step: step(0), Proposal: proposal}
-			uv, err = makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
-			require.NoError(t, err)
-			m, err := membership(ledger, address, round, period, step(0))
-			m.Selector = fastSelector{m.Selector}
-			require.NoError(t, err)
-			_, err = uv.Cred.Verify(config.Consensus[protocol.ConsensusCurrentVersion], m)
-			if err != nil { // address not selected
-				continue
-			} else {
-				addrFine = true
-			}
-		}
-		if !addrFine {
-			return nil
-		}
-		votes = append(votes, uv)
+	if !addrSelected {
+		return v, fmt.Errorf("Could not select address")
 	}
-	return votes
-}
 
-func getEqVotes(count int, addresses []basics.Address, vrfSecrets []*crypto.VRFSecrets, otSecrets []crypto.OneTimeSigner,
-	round basics.Round, ledger Ledger, period period, t *testing.T) (votes [][2]unauthenticatedEquivocationVote) {
-	var proposal1 proposalValue
-	proposal1.BlockDigest = randomBlockHash()
-	var proposal2 proposalValue
-	proposal2.BlockDigest = randomBlockHash()
-	var ev unauthenticatedEquivocationVote
-	var evSameVote unauthenticatedEquivocationVote
-	votes = make([][2]unauthenticatedEquivocationVote, 0, count)
-
-	for v := 0; v < count; v++ {
-		addrFine := false
-		for i, address := range addresses {
-			proposal1.OriginalProposer = address
-			rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step(0), Proposal: proposal1}
-			unauthenticatedVote0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
-			require.NoError(t, err)
-			rv0Copy := rawVote{Sender: address, Round: round, Period: period, Step: step(0), Proposal: proposal1}
-			unauthenticatedVote0Copy, err := makeVote(rv0Copy, otSecrets[i], vrfSecrets[i], ledger)
-			require.NoError(t, err)
-			proposal2.OriginalProposer = address
-			rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step(0), Proposal: proposal2}
-			unauthenticatedVote1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
-			require.NoError(t, err)
-
-			ev = unauthenticatedEquivocationVote{
-				Sender:    address,
-				Round:     round,
-				Period:    period,
-				Step:      step(0),
-				Cred:      unauthenticatedVote0.Cred,
-				Proposals: [2]proposalValue{unauthenticatedVote0.R.Proposal, unauthenticatedVote1.R.Proposal},
-				Sigs:      [2]crypto.OneTimeSignature{unauthenticatedVote0.Sig, unauthenticatedVote1.Sig},
-			}
-			evSameVote = unauthenticatedEquivocationVote{
-				Sender:    address,
-				Round:     round,
-				Period:    period,
-				Step:      step(0),
-				Cred:      unauthenticatedVote0.Cred,
-				Proposals: [2]proposalValue{unauthenticatedVote0.R.Proposal, unauthenticatedVote0Copy.R.Proposal},
-				Sigs:      [2]crypto.OneTimeSignature{unauthenticatedVote0.Sig, unauthenticatedVote0Copy.Sig},
-			}
-
-			m, err := membership(ledger, address, round, period, step(0))
-			m.Selector = fastSelector{m.Selector}
-			require.NoError(t, err)
-			_, err = ev.Cred.Verify(config.Consensus[protocol.ConsensusCurrentVersion], m)
-			if err != nil { // address not selected
-				continue
-			} else {
-				addrFine = true
-			}
-		}
-		if !addrFine {
-			return nil
-		}
-		votes = append(votes, [2]unauthenticatedEquivocationVote{ev, evSameVote})
-	}
-	return votes
-}
-
-func getTestVoteError(uv unauthenticatedVote, c, errType int) *unVoteTest {
-	var v *unVoteTest
 	switch errType {
 	case 0:
 		badSig := uv
@@ -406,14 +240,95 @@ func getTestVoteError(uv unauthenticatedVote, c, errType int) *unVoteTest {
 		badProposer.R.Proposal.OriginalProposer = basics.Address(randomBlockHash())
 		v = &unVoteTest{uv: &badProposer, err: fmt.Errorf("bad proposer error"), id: c}
 
+	case 7:
+		badRound := uv
+		badRound.R.Round = badRound.R.Round + 1000
+		v = &unVoteTest{uv: &badRound, err: fmt.Errorf("membership error"), id: c}
+
+	case notSelected:
+		v = &unVoteTest{uv: &uv, err: fmt.Errorf("address not selected"), id: c}
+
 	default:
 		v = &unVoteTest{uv: &uv, err: nil, id: c}
 	}
-	return v
+	return v, nil
 }
 
-func getTestEqVoteError(ev, evSameVote unauthenticatedEquivocationVote, c, errType int) *unEqVoteTest {
-	var v *unEqVoteTest
+func (vg *testVoteGenerator) voteOptions() int {
+	return 9
+}
+
+func (vg *testVoteGenerator) getTestEqVote(errType int) (v *unEqVoteTest, err error) {
+	var ev unauthenticatedEquivocationVote
+	var evSameVote unauthenticatedEquivocationVote
+
+	addrSelected := false
+	proposal1 := vg.proposal
+	proposal2 := vg.proposal2
+
+	c := int(vg.counter)
+	vg.counter++
+	for i, address := range vg.addresses {
+		proposal1.OriginalProposer = address
+		rv0 := rawVote{Sender: address, Round: vg.round, Period: vg.period, Step: step(0), Proposal: proposal1}
+		unauthenticatedVote0, err := makeVote(rv0, vg.otSecrets[i], vg.vrfSecrets[i], vg.ledger)
+		if err != nil {
+			return v, err
+		}
+		rv0Copy := rawVote{Sender: address, Round: vg.round, Period: vg.period, Step: step(0), Proposal: proposal1}
+		proposal2.OriginalProposer = address
+		rv1 := rawVote{Sender: address, Round: vg.round, Period: vg.period, Step: step(0), Proposal: proposal2}
+		unauthenticatedVote1, err := makeVote(rv1, vg.otSecrets[i], vg.vrfSecrets[i], vg.ledger)
+		if err != nil {
+			return v, err
+		}
+
+		ev = unauthenticatedEquivocationVote{
+			Sender:    address,
+			Round:     vg.round,
+			Period:    vg.period,
+			Step:      step(0),
+			Cred:      unauthenticatedVote0.Cred,
+			Proposals: [2]proposalValue{unauthenticatedVote0.R.Proposal, unauthenticatedVote1.R.Proposal},
+			Sigs:      [2]crypto.OneTimeSignature{unauthenticatedVote0.Sig, unauthenticatedVote1.Sig},
+		}
+		if errType == 0 {
+			unauthenticatedVote0Copy, err := makeVote(rv0Copy, vg.otSecrets[i], vg.vrfSecrets[i], vg.ledger)
+			if err != nil {
+				return v, err
+			}
+			evSameVote = unauthenticatedEquivocationVote{
+				Sender:    address,
+				Round:     vg.round,
+				Period:    vg.period,
+				Step:      step(0),
+				Cred:      unauthenticatedVote0.Cred,
+				Proposals: [2]proposalValue{unauthenticatedVote0.R.Proposal, unauthenticatedVote0Copy.R.Proposal},
+				Sigs:      [2]crypto.OneTimeSignature{unauthenticatedVote0.Sig, unauthenticatedVote0Copy.Sig},
+			}
+		}
+		m, err := membership(vg.ledger, address, vg.round, vg.period, step(0))
+		if err != nil {
+			return v, err
+		}
+
+		_, err = ev.Cred.Verify(config.Consensus[protocol.ConsensusCurrentVersion], m)
+		if err != nil { // address not selected
+			if errType == notSelected {
+				addrSelected = true
+				break
+			}
+		} else {
+			if errType != notSelected {
+				addrSelected = true
+				break
+			}
+		}
+	}
+	if !addrSelected {
+		return v, fmt.Errorf("Could not select address")
+	}
+
 	switch errType {
 	case 0:
 		// check for same vote
@@ -454,7 +369,10 @@ func getTestEqVoteError(ev, evSameVote unauthenticatedEquivocationVote, c, errTy
 		badBlockHash2.Proposals[1].BlockDigest = randomBlockHash()
 		v = &unEqVoteTest{uev: &badBlockHash2, err: fmt.Errorf("error bad block hash"), id: c}
 
-	case 8:
+	case notSelected:
+		v = &unEqVoteTest{uev: &ev, err: fmt.Errorf("error address not selected"), id: c}
+
+	case 9:
 		badSender := ev
 		badSender.Sender = basics.Address{}
 		v = &unEqVoteTest{uev: &badSender, err: fmt.Errorf("error bad sender"), id: c}
@@ -463,5 +381,135 @@ func getTestEqVoteError(ev, evSameVote unauthenticatedEquivocationVote, c, errTy
 		v = &unEqVoteTest{uev: &ev, err: nil, id: c}
 
 	}
-	return v
+	return v, nil
+}
+
+func (vg *testVoteGenerator) voteEqOptions() int {
+	return 10
+}
+
+// TestProcessBatchOneCtxCancled tests the case where one of the jobs in a batch has a cancled ctx
+func TestProcessBatchOneCtxCancled(t *testing.T) {
+
+	batchSize := 8
+	cancelCtxIndex := 3
+	outChan := make(chan interface{})
+	bp := voteBatchProcessor{outChan: outChan}
+
+	vg := makeTestVoteGenerator()
+
+	ctx := context.Background()
+	ctxC, cancel := context.WithCancel(context.Background())
+	cancel()
+	out := make(chan asyncVerifyVoteResponse)
+	jobs := make([]execpool.InputJob, 0, batchSize)
+	// Create the batch job that the stream will accumulate jobs and create
+	for v := 0; v < batchSize; v++ {
+		tv, err := vg.getTestVote(99)
+		require.NoError(t, err)
+		req := asyncVerifyVoteRequest{
+			ctx:     ctx,
+			l:       vg.ledger,
+			uv:      tv.uv,
+			index:   uint64(tv.id),
+			message: message{},
+			out:     out}
+		// let one of the jobs get a cancled ctx
+		if v == cancelCtxIndex {
+			req.ctx = ctxC
+		}
+		jobs = append(jobs, &req)
+	}
+
+	// pass the batch to ProcessBatch, and expect it to process all the jobs except the one
+	// with the cancled ctx
+	go bp.ProcessBatch(jobs)
+	for range jobs {
+		e := <-outChan
+		resp := e.(*asyncVerifyVoteResponse)
+		if resp.err != nil {
+			require.Equal(t, cancelCtxIndex, int(resp.req.index))
+			require.ErrorIs(t, resp.err, resp.req.ctx.Err())
+			continue
+		}
+		require.NoError(t, resp.err)
+	}
+}
+
+// TestProcessBatchDifferentErrors tests the case where one of the jobs in a batch has a cancled ctx
+func TestProcessBatchDifferentErrors(t *testing.T) {
+
+	batchSize := 30
+	outChan := make(chan interface{})
+	bp := voteBatchProcessor{outChan: outChan}
+
+	vg := makeTestVoteGenerator()
+
+	jobs := make([]execpool.InputJob, 0, batchSize)
+
+	ctx := context.Background()
+	out := make(chan asyncVerifyVoteResponse)
+
+	voteResults := make(map[int]error)
+	eqVoteResults := make(map[int]error)
+
+	// Create the batch job that the stream will accumulate jobs and create
+	for v := 0; v < vg.voteOptions()*2; v++ {
+		vt, err := vg.getTestVote(v)
+		require.NoError(t, err)
+		voteResults[vt.id] = vt.err
+		req := asyncVerifyVoteRequest{
+			ctx:     ctx,
+			l:       vg.ledger,
+			uv:      vt.uv,
+			index:   uint64(vt.id),
+			message: message{},
+			out:     out}
+		jobs = append(jobs, &req)
+	}
+	for v := 0; v < vg.voteEqOptions()*2; v++ {
+		vt, err := vg.getTestEqVote(v)
+		require.NoError(t, err)
+		eqVoteResults[vt.id] = vt.err
+		req := asyncVerifyVoteRequest{
+			ctx:     ctx,
+			l:       vg.ledger,
+			uev:     vt.uev,
+			index:   uint64(vt.id),
+			message: message{},
+			out:     out}
+		jobs = append(jobs, &req)
+	}
+	// pass the batch to ProcessBatch, and expect it to process all the jobs except the one
+	// with the cancled ctx
+	go bp.ProcessBatch(jobs)
+	errCount := 0
+	passCount := 0
+	eqErrCount := 0
+	eqPassCount := 0
+	for range jobs {
+		e := <-outChan
+		resp := e.(*asyncVerifyVoteResponse)
+		if resp.req.uv != nil {
+			if voteResults[int(resp.index)] != nil {
+				require.Error(t, resp.err)
+				errCount++
+			} else {
+				require.NoError(t, resp.err)
+				passCount++
+			}
+		} else {
+			if eqVoteResults[int(resp.index)] != nil {
+				require.Error(t, resp.err)
+				eqErrCount++
+			} else {
+				require.NoError(t, resp.err)
+				eqPassCount++
+			}
+		}
+	}
+	require.Equal(t, vg.voteOptions(), errCount)
+	require.Equal(t, vg.voteOptions(), passCount)
+	require.Equal(t, vg.voteEqOptions(), eqErrCount)
+	require.Equal(t, vg.voteEqOptions(), eqPassCount)
 }
