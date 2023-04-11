@@ -60,7 +60,6 @@ func TestVerificationAgainstFullExecutionPool(t *testing.T) {
 	require.Equal(t, context.Canceled, verifyEqVoteErr)
 }
 
-// Test async vote verifier
 func TestAsyncVerificationVotes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	errProb := float32(0.5)
@@ -133,11 +132,12 @@ func min(a, b int) int {
 	}
 	return b
 }
+
 func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, count, eqCount int, tb testing.TB) {
 	voteVerifier := MakeAsyncVoteVerifier(nil)
 	defer voteVerifier.Quit()
 
-	outChan := make(chan asyncVerifyVoteResponse, 1)
+	outChan := make(chan asyncVerifyVoteResponse, voteVerifier.Parallelism())
 	gCount := min(200, count)
 	gEqCount := min(200, eqCount)
 
@@ -210,228 +210,296 @@ type unEqVoteTest struct {
 
 func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount int, errProb float32) (ledger Ledger,
 	votes []*unVoteTest, eqVotes []*unEqVoteTest, errsV, errsEqv map[int]error) {
-	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	round := ledger.NextRound()
-	period := period(0)
 	votes = make([]*unVoteTest, count)
 	eqVotes = make([]*unEqVoteTest, eqCount)
 	errsV = make(map[int]error)
 	errsEqv = make(map[int]error)
 	wg := sync.WaitGroup{}
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		for c := 0; c < count; c++ {
-			var processedVote = false
-			var proposal proposalValue
-			proposal.BlockDigest = randomBlockHash()
+	vg := makeTestVoteGenerator()
 
-			for i, address := range addresses {
-				proposal.OriginalProposer = address
-				rv := rawVote{Sender: address, Round: round, Period: period, Step: step(0), Proposal: proposal}
-				uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
-				if err != nil {
-					errChan <- err
-				}
-				m, err := membership(ledger, address, round, period, step(0))
-				if err != nil {
-					errChan <- err
-				}
-				_, err = uv.Cred.Verify(config.Consensus[protocol.ConsensusCurrentVersion], m)
-				selected := err == nil
-				if !selected {
-					continue
-				}
-				processedVote = true
-
-				errType := 99
-				if rand.Float32() < errProb {
-					if onlyBadSigs {
-						errType = 0
-					} else {
-						errType = rand.Intn(7)
-					}
-				}
-				var v *unVoteTest
-				switch errType {
-				case 0:
-					badSig := uv
-					badSig.Sig.Sig[0] = badSig.Sig.Sig[0] + 1
-					v = &unVoteTest{uv: &badSig, err: fmt.Errorf("bad sig error"), id: c}
-
-				case 1:
-					noCred := uv
-					noCred.Cred = committee.UnauthenticatedCredential{}
-					v = &unVoteTest{uv: &noCred, err: fmt.Errorf("no cred error"), id: c}
-
-				case 2:
-					badRound := uv
-					badRound.R.Round++
-					v = &unVoteTest{uv: &badRound, err: fmt.Errorf("bad round error"), id: c}
-
-				case 3:
-					badPeriod := uv
-					badPeriod.R.Period++
-					v = &unVoteTest{uv: &badPeriod, err: fmt.Errorf("bad period error"), id: c}
-
-				case 4:
-					badStep := uv
-					badStep.R.Step++
-					v = &unVoteTest{uv: &badStep, err: fmt.Errorf("bad step error"), id: c}
-
-				case 5:
-					badBlockHash := uv
-					badBlockHash.R.Proposal.BlockDigest = randomBlockHash()
-					v = &unVoteTest{uv: &badBlockHash, err: fmt.Errorf("bad block hash error"), id: c}
-
-				case 6:
-					badProposer := uv
-					badProposer.R.Proposal.OriginalProposer = basics.Address(randomBlockHash())
-					v = &unVoteTest{uv: &badProposer, err: fmt.Errorf("bad proposer error"), id: c}
-
-				default:
-					v = &unVoteTest{uv: &uv, err: nil, id: c}
-				}
-				errsV[v.id] = v.err
-				votes[v.id] = v
-				break
-			}
-			if !processedVote {
-				errChan <- fmt.Errorf("No votes were processed")
+	for c := 0; c < count; c++ {
+		errType := 99
+		if rand.Float32() < errProb {
+			if onlyBadSigs {
+				errType = 0
+			} else {
+				errType = rand.Intn(7)
 			}
 		}
-	}()
+		v, err := vg.getTestVote(errType)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to generate a vote")
+		}
+		errsV[v.id] = v.err
+		votes[v.id] = v
+	}
 
-	go func() {
-		defer wg.Done()
-		for c := 0; c < eqCount; c++ {
-			var proposal1 proposalValue
-			proposal1.BlockDigest = randomBlockHash()
-
-			var proposal2 proposalValue
-			proposal2.BlockDigest = randomBlockHash()
-
-			var processedVote = false
-			for i, address := range addresses {
-				proposal1.OriginalProposer = address
-				rv0 := rawVote{Sender: address, Round: round, Period: period, Step: step(0), Proposal: proposal1}
-				unauthenticatedVote0, err := makeVote(rv0, otSecrets[i], vrfSecrets[i], ledger)
-				if err != nil {
-					errChan <- err
-				}
-
-				rv0Copy := rawVote{Sender: address, Round: round, Period: period, Step: step(0), Proposal: proposal1}
-				unauthenticatedVote0Copy, err := makeVote(rv0Copy, otSecrets[i], vrfSecrets[i], ledger)
-				if err != nil {
-					errChan <- err
-				}
-
-				proposal2.OriginalProposer = address
-				rv1 := rawVote{Sender: address, Round: round, Period: period, Step: step(0), Proposal: proposal2}
-				unauthenticatedVote1, err := makeVote(rv1, otSecrets[i], vrfSecrets[i], ledger)
-				if err != nil {
-					errChan <- err
-				}
-
-				ev := unauthenticatedEquivocationVote{
-					Sender:    address,
-					Round:     round,
-					Period:    period,
-					Step:      step(0),
-					Cred:      unauthenticatedVote0.Cred,
-					Proposals: [2]proposalValue{unauthenticatedVote0.R.Proposal, unauthenticatedVote1.R.Proposal},
-					Sigs:      [2]crypto.OneTimeSignature{unauthenticatedVote0.Sig, unauthenticatedVote1.Sig},
-				}
-
-				evSameVote := unauthenticatedEquivocationVote{
-					Sender:    address,
-					Round:     round,
-					Period:    period,
-					Step:      step(0),
-					Cred:      unauthenticatedVote0.Cred,
-					Proposals: [2]proposalValue{unauthenticatedVote0.R.Proposal, unauthenticatedVote0Copy.R.Proposal},
-					Sigs:      [2]crypto.OneTimeSignature{unauthenticatedVote0.Sig, unauthenticatedVote0Copy.Sig},
-				}
-
-				//loop to find votes selected to participate
-				m, err := membership(ledger, address, round, period, step(0))
-				if err != nil {
-					errChan <- err
-				}
-				_, err = ev.Cred.Verify(config.Consensus[protocol.ConsensusCurrentVersion], m)
-				selected := err == nil
-				if !selected {
-					continue
-				}
-				processedVote = true
-
-				errType := 99
-				if rand.Float32() < errProb {
-					if onlyBadSigs {
-						errType = 0
-					} else {
-						errType = rand.Intn(9)
-					}
-				}
-				var v *unEqVoteTest
-				switch errType {
-				case 0:
-					// check for same vote
-					v = &unEqVoteTest{uev: &evSameVote, err: fmt.Errorf("error same vote"), id: c}
-
-				case 1:
-					badSig := ev
-					badSig.Sigs[0].Sig[0] = badSig.Sigs[0].Sig[0] + 1
-					v = &unEqVoteTest{uev: &badSig, err: fmt.Errorf("error bad sig"), id: c}
-
-				case 2:
-					noCred := ev
-					noCred.Cred = committee.UnauthenticatedCredential{}
-					v = &unEqVoteTest{uev: &noCred, err: fmt.Errorf("error no cred"), id: c}
-
-				case 3:
-					badRound := ev
-					badRound.Round++
-					v = &unEqVoteTest{uev: &badRound, err: fmt.Errorf("error bad round"), id: c}
-
-				case 4:
-					badPeriod := ev
-					badPeriod.Period++
-					v = &unEqVoteTest{uev: &badPeriod, err: fmt.Errorf("error bad period"), id: c}
-
-				case 5:
-					badStep := ev
-					badStep.Step++
-					v = &unEqVoteTest{uev: &badStep, err: fmt.Errorf("error bad step"), id: c}
-
-				case 6:
-					badBlockHash1 := ev
-					badBlockHash1.Proposals[0].BlockDigest = randomBlockHash()
-					v = &unEqVoteTest{uev: &badBlockHash1, err: fmt.Errorf("error bad block hash"), id: c}
-
-				case 7:
-					badBlockHash2 := ev
-					badBlockHash2.Proposals[1].BlockDigest = randomBlockHash()
-					v = &unEqVoteTest{uev: &badBlockHash2, err: fmt.Errorf("error bad block hash"), id: c}
-
-				case 8:
-					badSender := ev
-					badSender.Sender = basics.Address{}
-					v = &unEqVoteTest{uev: &badSender, err: fmt.Errorf("error bad sender"), id: c}
-
-				default:
-					v = &unEqVoteTest{uev: &ev, err: nil, id: c}
-
-				}
-				errsEqv[v.id] = v.err
-				eqVotes[v.id] = v
-				break
-			}
-			if !processedVote {
-				errChan <- fmt.Errorf("No votes were processed")
+	vg.counter = 0
+	for c := 0; c < eqCount; c++ {
+		errType := 99
+		if rand.Float32() < errProb {
+			if onlyBadSigs {
+				errType = 0
+			} else {
+				errType = rand.Intn(9)
 			}
 		}
-	}()
+		v, err := vg.getTestEqVote(errType)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to generate a vote")
+		}
+		errsEqv[v.id] = v.err
+		eqVotes[v.id] = v
+	}
 	wg.Wait()
-	return ledger, votes, eqVotes, errsV, errsEqv
+	return vg.ledger, votes, eqVotes, errsV, errsEqv
+}
+
+type testVoteGenerator struct {
+	addresses  []basics.Address
+	vrfSecrets []*crypto.VRFSecrets
+	otSecrets  []crypto.OneTimeSigner
+	round      basics.Round
+	ledger     Ledger
+	period     period
+	counter    uint64
+	proposal   proposalValue
+	proposal2  proposalValue
+}
+
+func makeTestVoteGenerator() testVoteGenerator {
+	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
+	proposal := proposalValue{BlockDigest: randomBlockHash()}
+	proposal2 := proposalValue{BlockDigest: randomBlockHash()}
+	tg := testVoteGenerator{
+		addresses:  addresses,
+		vrfSecrets: vrfSecrets,
+		otSecrets:  otSecrets,
+		round:      ledger.NextRound(),
+		ledger:     ledger,
+		period:     period(0),
+		proposal:   proposal,
+		proposal2:  proposal2,
+	}
+	return tg
+}
+
+const notSelected = 8
+
+func (vg *testVoteGenerator) getTestVote(errType int) (v *unVoteTest, err error) {
+	addrSelected := false
+	proposal := vg.proposal
+	var uv unauthenticatedVote
+	c := int(vg.counter)
+	vg.counter++
+	for i, address := range vg.addresses {
+		proposal.OriginalProposer = address
+		rv := rawVote{Sender: address, Round: vg.round, Period: vg.period, Step: step(0), Proposal: proposal}
+		uv, err = makeVote(rv, vg.otSecrets[i], vg.vrfSecrets[i], vg.ledger)
+		if err != nil {
+			return v, err
+		}
+		m, err := membership(vg.ledger, address, vg.round, vg.period, step(0))
+		if err != nil {
+			return v, err
+		}
+		_, err = uv.Cred.Verify(config.Consensus[protocol.ConsensusCurrentVersion], m)
+		if err != nil { // address not selected
+			if errType == notSelected {
+				addrSelected = true
+				break
+			}
+		} else {
+			if errType != notSelected {
+				addrSelected = true
+				break
+			}
+		}
+	}
+	if !addrSelected {
+		return v, fmt.Errorf("Could not select address")
+	}
+
+	switch errType {
+	case 0:
+		badSig := uv
+		badSig.Sig.Sig[0] = badSig.Sig.Sig[0] + 1
+		v = &unVoteTest{uv: &badSig, err: fmt.Errorf("bad sig error"), id: c}
+
+	case 1:
+		noCred := uv
+		noCred.Cred = committee.UnauthenticatedCredential{}
+		v = &unVoteTest{uv: &noCred, err: fmt.Errorf("no cred error"), id: c}
+
+	case 2:
+		badRound := uv
+		badRound.R.Round++
+		v = &unVoteTest{uv: &badRound, err: fmt.Errorf("bad round error"), id: c}
+
+	case 3:
+		badPeriod := uv
+		badPeriod.R.Period++
+		v = &unVoteTest{uv: &badPeriod, err: fmt.Errorf("bad period error"), id: c}
+
+	case 4:
+		badStep := uv
+		badStep.R.Step++
+		v = &unVoteTest{uv: &badStep, err: fmt.Errorf("bad step error"), id: c}
+
+	case 5:
+		badBlockHash := uv
+		badBlockHash.R.Proposal.BlockDigest = randomBlockHash()
+		v = &unVoteTest{uv: &badBlockHash, err: fmt.Errorf("bad block hash error"), id: c}
+
+	case 6:
+		badProposer := uv
+		badProposer.R.Proposal.OriginalProposer = basics.Address(randomBlockHash())
+		v = &unVoteTest{uv: &badProposer, err: fmt.Errorf("bad proposer error"), id: c}
+
+	case 7:
+		badRound := uv
+		badRound.R.Round = badRound.R.Round + 1000
+		v = &unVoteTest{uv: &badRound, err: fmt.Errorf("membership error"), id: c}
+
+	case notSelected:
+		v = &unVoteTest{uv: &uv, err: fmt.Errorf("address not selected"), id: c}
+
+	default:
+		v = &unVoteTest{uv: &uv, err: nil, id: c}
+	}
+	return v, nil
+}
+
+func (vg *testVoteGenerator) voteOptions() int {
+	return 9
+}
+
+func (vg *testVoteGenerator) getTestEqVote(errType int) (v *unEqVoteTest, err error) {
+	var ev unauthenticatedEquivocationVote
+	var evSameVote unauthenticatedEquivocationVote
+
+	addrSelected := false
+	proposal1 := vg.proposal
+	proposal2 := vg.proposal2
+
+	c := int(vg.counter)
+	vg.counter++
+	for i, address := range vg.addresses {
+		proposal1.OriginalProposer = address
+		rv0 := rawVote{Sender: address, Round: vg.round, Period: vg.period, Step: step(0), Proposal: proposal1}
+		unauthenticatedVote0, err := makeVote(rv0, vg.otSecrets[i], vg.vrfSecrets[i], vg.ledger)
+		if err != nil {
+			return v, err
+		}
+		rv0Copy := rawVote{Sender: address, Round: vg.round, Period: vg.period, Step: step(0), Proposal: proposal1}
+		proposal2.OriginalProposer = address
+		rv1 := rawVote{Sender: address, Round: vg.round, Period: vg.period, Step: step(0), Proposal: proposal2}
+		unauthenticatedVote1, err := makeVote(rv1, vg.otSecrets[i], vg.vrfSecrets[i], vg.ledger)
+		if err != nil {
+			return v, err
+		}
+
+		ev = unauthenticatedEquivocationVote{
+			Sender:    address,
+			Round:     vg.round,
+			Period:    vg.period,
+			Step:      step(0),
+			Cred:      unauthenticatedVote0.Cred,
+			Proposals: [2]proposalValue{unauthenticatedVote0.R.Proposal, unauthenticatedVote1.R.Proposal},
+			Sigs:      [2]crypto.OneTimeSignature{unauthenticatedVote0.Sig, unauthenticatedVote1.Sig},
+		}
+		if errType == 0 {
+			unauthenticatedVote0Copy, err := makeVote(rv0Copy, vg.otSecrets[i], vg.vrfSecrets[i], vg.ledger)
+			if err != nil {
+				return v, err
+			}
+			evSameVote = unauthenticatedEquivocationVote{
+				Sender:    address,
+				Round:     vg.round,
+				Period:    vg.period,
+				Step:      step(0),
+				Cred:      unauthenticatedVote0.Cred,
+				Proposals: [2]proposalValue{unauthenticatedVote0.R.Proposal, unauthenticatedVote0Copy.R.Proposal},
+				Sigs:      [2]crypto.OneTimeSignature{unauthenticatedVote0.Sig, unauthenticatedVote0Copy.Sig},
+			}
+		}
+		m, err := membership(vg.ledger, address, vg.round, vg.period, step(0))
+		if err != nil {
+			return v, err
+		}
+
+		_, err = ev.Cred.Verify(config.Consensus[protocol.ConsensusCurrentVersion], m)
+		if err != nil { // address not selected
+			if errType == notSelected {
+				addrSelected = true
+				break
+			}
+		} else {
+			if errType != notSelected {
+				addrSelected = true
+				break
+			}
+		}
+	}
+	if !addrSelected {
+		return v, fmt.Errorf("Could not select address")
+	}
+
+	switch errType {
+	case 0:
+		// check for same vote
+		v = &unEqVoteTest{uev: &evSameVote, err: fmt.Errorf("error same vote"), id: c}
+
+	case 1:
+		badSig := ev
+		badSig.Sigs[0].Sig[0] = badSig.Sigs[0].Sig[0] + 1
+		v = &unEqVoteTest{uev: &badSig, err: fmt.Errorf("error bad sig"), id: c}
+
+	case 2:
+		noCred := ev
+		noCred.Cred = committee.UnauthenticatedCredential{}
+		v = &unEqVoteTest{uev: &noCred, err: fmt.Errorf("error no cred"), id: c}
+
+	case 3:
+		badRound := ev
+		badRound.Round++
+		v = &unEqVoteTest{uev: &badRound, err: fmt.Errorf("error bad round"), id: c}
+
+	case 4:
+		badPeriod := ev
+		badPeriod.Period++
+		v = &unEqVoteTest{uev: &badPeriod, err: fmt.Errorf("error bad period"), id: c}
+
+	case 5:
+		badStep := ev
+		badStep.Step++
+		v = &unEqVoteTest{uev: &badStep, err: fmt.Errorf("error bad step"), id: c}
+
+	case 6:
+		badBlockHash1 := ev
+		badBlockHash1.Proposals[0].BlockDigest = randomBlockHash()
+		v = &unEqVoteTest{uev: &badBlockHash1, err: fmt.Errorf("error bad block hash"), id: c}
+
+	case 7:
+		badBlockHash2 := ev
+		badBlockHash2.Proposals[1].BlockDigest = randomBlockHash()
+		v = &unEqVoteTest{uev: &badBlockHash2, err: fmt.Errorf("error bad block hash"), id: c}
+
+	case notSelected:
+		v = &unEqVoteTest{uev: &ev, err: fmt.Errorf("error address not selected"), id: c}
+
+	case 9:
+		badSender := ev
+		badSender.Sender = basics.Address{}
+		v = &unEqVoteTest{uev: &badSender, err: fmt.Errorf("error bad sender"), id: c}
+
+	default:
+		v = &unEqVoteTest{uev: &ev, err: nil, id: c}
+
+	}
+	return v, nil
+}
+
+func (vg *testVoteGenerator) voteEqOptions() int {
+	return 10
 }
