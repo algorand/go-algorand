@@ -18,6 +18,8 @@ package generator
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -209,4 +211,41 @@ func TestWriteRound(t *testing.T) {
 	require.Equal(t, basics.Round(1), g.ledger.Latest())
 	_, err := g.ledger.GetStateDeltaForRound(1)
 	require.NoError(t, err)
+}
+
+func TestHandlers(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	g := makePrivateGenerator(t)
+	handler := getBlockHandler(g)
+	var testcases = []struct {
+		name string
+		url  string
+		err  string
+	}{
+		{
+			name: "no block",
+			url:  "/v2/blocks/?nothing",
+			err:  "invalid request path, /",
+		},
+		{
+			name: "blocks: round must be numeric",
+			url:  "/v2/blocks/round",
+			err:  `strconv.ParseUint: parsing "round": invalid syntax`,
+		},
+		{
+			name: "deltas: round must be numeric",
+			url:  "/v2/deltas/round",
+			err:  `strconv.ParseUint: parsing "round": invalid syntax`,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", testcase.url, nil)
+			w := httptest.NewRecorder()
+			handler(w, req)
+			require.Equal(t, http.StatusBadRequest, w.Code)
+			require.Contains(t, w.Body.String(), testcase.err)
+		})
+	}
 }
