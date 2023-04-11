@@ -710,12 +710,10 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	// If dev mode timestamp offset is configured, add the offset to current
 	// block timestamp.
-	pool.pendingBlockEvaluator = nil
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
 	if pool.devMode {
-		next := bookkeeping.MakeDevModeBlock(prev, bookkeeping.DevModeOpts{TimeStampOffset: pool.devModeTimeStampOffset})
+		next = bookkeeping.MakeDevModeBlock(prev, bookkeeping.DevModeOpts{TimeStampOffset: pool.devModeTimeStampOffset})
 		pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluatorNoValidation(next.BlockHeader, hint, 0)
-	} else {
-		pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
 	}
 
 	if err != nil {
@@ -1002,17 +1000,32 @@ func (pool *TransactionPool) assembleEmptyBlock(round basics.Round) (assembled *
 }
 
 // AssembleDevModeBlock assemble a new block from the existing transaction pool. The pending evaluator is being
-func (pool *TransactionPool) AssembleDevModeBlock(offset int64) (assembled *ledgercore.ValidatedBlock, err error) {
+func (pool *TransactionPool) AssembleDevModeBlock() (assembled *ledgercore.ValidatedBlock, err error) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
 	// drop the current block evaluator and start with a new one.
 	pool.devMode = true
-	pool.devModeTimeStampOffset = offset
 	pool.recomputeBlockEvaluator(nil, 0)
 
 	// The above was already pregenerating the entire block,
 	// so there won't be any waiting on this call.
 	assembled, err = pool.AssembleBlock(pool.pendingBlockEvaluator.Round(), time.Now().Add(pool.proposalAssemblyTime))
 	return
+}
+
+// SetBlockTimeStampOffset sets the timestamp offset.
+// Only available in dev mode
+func (pool *TransactionPool) SetBlockTimeStampOffset(offset int64) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	pool.devModeTimeStampOffset = offset
+}
+
+// GetBlockTimeStampOffset gets the timestamp offset.
+// Only available in dev mode
+func (pool *TransactionPool) GetBlockTimeStampOffset() int64 {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	return pool.devModeTimeStampOffset
 }

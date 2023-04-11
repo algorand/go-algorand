@@ -129,11 +129,10 @@ type AlgorandFullNode struct {
 
 	indexer *indexer.Indexer
 
-	rootDir                string
-	genesisID              string
-	genesisHash            crypto.Digest
-	devMode                bool // is this node operating in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
-	devModeTimeStampOffset int64
+	rootDir     string
+	genesisID   string
+	genesisHash crypto.Digest
+	devMode     bool // is this node operating in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
 
 	log logging.Logger
 
@@ -465,7 +464,7 @@ func (node *AlgorandFullNode) Ledger() *data.Ledger {
 // writeDevmodeBlock generates a new block for a devmode, and write it to the ledger.
 func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 	var vb *ledgercore.ValidatedBlock
-	vb, err = node.transactionPool.AssembleDevModeBlock(node.devModeTimeStampOffset)
+	vb, err = node.transactionPool.AssembleDevModeBlock()
 	if err != nil || vb == nil {
 		return
 	}
@@ -1423,18 +1422,18 @@ func (node *AlgorandFullNode) UnsetSyncRound() {
 // SetBlockTimeStampOffset sets a timestamp offset in the block header.
 // This is only available in dev mode.
 func (node *AlgorandFullNode) SetBlockTimeStampOffset(offset int64) error {
-	if !node.devMode {
-		return fmt.Errorf("cannot set block timestamp offset when not in dev mode")
+	if node.devMode {
+		node.transactionPool.SetBlockTimeStampOffset(offset)
+		return nil
 	}
-	node.devModeTimeStampOffset = offset
-	return nil
+	return fmt.Errorf("cannot set block timestamp offset when not in dev mode")
 }
 
 // GetBlockTimeStampOffset gets a timestamp offset.
 // This is only available in dev mode.
 func (node *AlgorandFullNode) GetBlockTimeStampOffset() int64 {
-	if !node.devMode {
-		return 0
+	if node.devMode {
+		return node.transactionPool.GetBlockTimeStampOffset()
 	}
-	return node.devModeTimeStampOffset
+	return 0
 }
