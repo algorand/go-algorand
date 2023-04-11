@@ -3872,6 +3872,7 @@
     },
     "/v2/devmode/blocks/offset": {
       "get": {
+        "description": "Gets the current timestamp offset.",
         "operationId": "GetBlockTimeStampOffset",
         "responses": {
           "200": {
@@ -3903,16 +3904,12 @@
             },
             "description": "TimeStamp offset not set."
           },
-          "404": {
-            "content": {},
-            "description": "Devmode API not enabled"
-          },
           "default": {
             "content": {},
             "description": "Unknown Error"
           }
         },
-        "summary": "Returns the timestamp offset if devmode API is enabled.",
+        "summary": "Returns the timestamp offset. Timestamp offsets can only be set in dev mode.",
         "tags": [
           "public",
           "nonparticipating"
@@ -3921,7 +3918,7 @@
     },
     "/v2/devmode/blocks/offset/{offset}": {
       "post": {
-        "description": "Sets the timestamp offset (seconds) for blocks in devmode. Setting the offset to 0 will unset this value.",
+        "description": "Sets the timestamp offset (seconds) for blocks in devmode. Setting the offset to 0 will unset this value and try to use the real clock for the timestamp.",
         "operationId": "SetBlockTimeStampOffset",
         "parameters": [
           {
@@ -3937,7 +3934,8 @@
         ],
         "responses": {
           "200": {
-            "content": {}
+            "content": {},
+            "description": "OK"
           },
           "400": {
             "content": {
@@ -3969,22 +3967,12 @@
             },
             "description": "Internal Error"
           },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Temporarily Unavailable"
-          },
           "default": {
             "content": {},
             "description": "Unknown Error"
           }
         },
-        "summary": "Given a timestamp offset in seconds, adds the offset to every block header's timestamp.",
+        "summary": "Given a timestamp offset in seconds, adds the offset to every subsequent block header's timestamp.",
         "tags": [
           "public",
           "nonparticipating"

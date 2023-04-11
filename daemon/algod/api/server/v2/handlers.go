@@ -1674,6 +1674,7 @@ func (v2 *Handlers) ExperimentalCheck(ctx echo.Context) error {
 }
 
 // GetTimeStampOffset gets the timestamp offset.
+// This is only available in dev mode.
 // (GET /v2/devmode/blocks/offset)
 func (v2 *Handlers) GetBlockTimeStampOffset(ctx echo.Context) error {
 	offset := v2.Node.GetBlockTimeStampOffset()
@@ -1683,7 +1684,8 @@ func (v2 *Handlers) GetBlockTimeStampOffset(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, model.GetBlockTimeStampOffsetResponse{Offset: uint64(offset)})
 }
 
-// SetBlockTimeStampOffset sets the sync round on the ledger.
+// SetBlockTimeStampOffset sets the timestamp offset.
+// This is only available in dev mode.
 // (POST /v2/devmode/blocks/offset/{offset})
 func (v2 *Handlers) SetBlockTimeStampOffset(ctx echo.Context, offset uint64) error {
 	err := v2.Node.SetBlockTimeStampOffset(int64(offset))

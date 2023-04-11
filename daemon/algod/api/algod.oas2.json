@@ -2432,6 +2432,7 @@
     },
     "/v2/devmode/blocks/offset": {
       "get": {
+        "description": "Gets the current timestamp offset.",
         "tags": [
           "public",
           "nonparticipating"
@@ -2442,7 +2443,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Returns the timestamp offset if devmode API is enabled.",
+        "summary": "Returns the timestamp offset. Timestamp offsets can only be set in dev mode.",
         "operationId": "GetBlockTimeStampOffset",
         "responses": {
           "200": {
@@ -2455,9 +2456,6 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
-          "404": {
-            "description": "Devmode API not enabled"
-          },
           "default": {
             "description": "Unknown Error"
           }
@@ -2466,7 +2464,7 @@
     },
     "/v2/devmode/blocks/offset/{offset}": {
       "post": {
-        "description": "Sets the timestamp offset (seconds) for blocks in devmode. Setting the offset to 0 will unset this value.",
+        "description": "Sets the timestamp offset (seconds) for blocks in devmode. Setting the offset to 0 will unset this value and try to use the real clock for the timestamp.",
         "tags": [
           "public",
           "nonparticipating"
@@ -2474,7 +2472,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Given a timestamp offset in seconds, adds the offset to every block header's timestamp.",
+        "summary": "Given a timestamp offset in seconds, adds the offset to every subsequent block header's timestamp.",
         "operationId": "SetBlockTimeStampOffset",
         "parameters": [
           {
@@ -2488,6 +2486,7 @@
         ],
         "responses": {
           "200": {
+            "description": "OK",
             "type": "object"
           },
           "400": {
@@ -2504,12 +2503,6 @@
           },
           "500": {
             "description": "Internal Error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "503": {
-            "description": "Service Temporarily Unavailable",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
