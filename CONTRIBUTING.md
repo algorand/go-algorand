@@ -6,7 +6,7 @@ The [Algorand GitHub Organization](https://github.com/algorand) has all of our o
 
 ## Contribution Model
 
-All changes to `go-algorand` are made throught he same process: a pull request targeting the `master` branch. This goes for internal and external contributions. To familiarize yourself with the process we recommend that you review the current open pull requests, and the GitHub documentation for [creating a pull request from a fork](https://help.github.com/en/articles/creating-a-pull-request-from-a-fork). Note: some of our projects are using gitflow, for these the process is the same but you will target pull requests against the `develop` branch.
+All changes to `go-algorand` are made through the same process: a pull request targeting the `master` branch. This goes for internal and external contributions. To familiarize yourself with the process we recommend that you review the current open pull requests, and the GitHub documentation for [creating a pull request from a fork](https://help.github.com/en/articles/creating-a-pull-request-from-a-fork). Note: some of our projects are using gitflow, for these the process is the same but you will target pull requests against the `develop` branch.
 
 ## Communication Channels
 
@@ -16,7 +16,7 @@ The core development team monitors the Algorand [discord community](https://disc
 
 All changes are are made via pull requests.
 
-Small changes are easier to review and merge than large ones, so the more focused a PR the better. If a feature requires refactoring, the refactoring should be a separate PR. If refactoring uncovers a bug, the bugfix should be a separate PR. These are not strict rules, but generally speaking, they make things easier to review which speeds up the PR process.
+Small changes are easier to review and merge than large ones, so the more focused a PR the better. If a feature requires refactoring, the refactoring should be a separate PR. If refactoring uncovers a bug, the fix should be a separate PR. These are not strict rules, but generally speaking, they make things easier to review which speeds up the PR process.
 
 
 ### General Guidelines
@@ -25,7 +25,7 @@ Small changes are easier to review and merge than large ones, so the more focuse
 * Code must adhere to the [Go formatting guidelines.](https://golang.org/doc/effective_go.html).
 * All tests must be passing.
 * New unit and integration tests should be added to ensure correctness and prevent regressions where appropriate.
-* Run the linter and code formatting tools, see [the README](README.md) for details.
+* Run linting and code formatting tools, see [the README](README.md) for details.
 * All CI checks should pass.
 * Use draft mode for PRs that are still in progress.
 
@@ -35,7 +35,7 @@ This is the single most important part of introducing new code to `go-algorand`.
 
 #### Concept Review
 
-Because code reviews are a considerable time committment, the first step for peer review is convincing reviewers that it is worth their time. Typically this is done by keeping changes small, writing a thorough description to clearly explain the need for a given improvement, or discussing larger changes ahead of time through one of the communication channels.
+Because code reviews are a considerable time commitment, the first step for peer review is convincing reviewers that it is worth their time. Typically this is done by keeping changes small, writing a thorough description to clearly explain the need for a given improvement, or discussing larger changes ahead of time through one of the communication channels.
 
 If reviewers are not convinced about the merits of a change, they may reject a PR instead of reviewing it. All rejections should include the rational for how that decision was reached. It is not uncommon for this to occur. Some users opt to maintain long running forks to add features which are not suitable for the upstream repo at this time.
 
