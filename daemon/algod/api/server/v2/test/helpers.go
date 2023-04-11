@@ -169,7 +169,7 @@ func (m *mockNode) Simulate(txgroup []transactions.SignedTxn) (simulation.Result
 	return simulator.Simulate(txgroup)
 }
 
-func (m *mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {
+func (m *mockNode) GetPendingTransaction(txID transactions.Txid, lookbackRounds uint64) (res node.TxnWithStatus, found bool) {
 	res = node.TxnWithStatus{}
 	found = true
 	return

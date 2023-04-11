@@ -1423,6 +1423,12 @@
           },
           {
             "$ref": "#/parameters/format"
+          },
+          {
+            "type": "integer",
+            "description": "Max number of rounds to look back in case the transaction is not in pending pool.",
+            "name": "lookback",
+            "in": "query"
           }
         ],
         "responses": {
