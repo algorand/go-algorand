@@ -122,6 +122,8 @@ func TestConvertToGenesisBalance(t *testing.T) {
 
 func TestIndexToAccountAndAccountToIndex(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	account := indexToAccount(1)
+	fmt.Printf("account: %v\n", account)
 	for i := uint64(0); i < uint64(100000); i++ {
 		acct := indexToAccount(i)
 		result := accountToIndex(acct)

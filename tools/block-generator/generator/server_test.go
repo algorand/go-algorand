@@ -41,3 +41,25 @@ func TestInitConfigFileNotExist(t *testing.T) {
 		require.Fail(t, "This should generate a path error")
 	}
 }
+
+func TestParseURL(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	_, err := parseURL("http://v2/blocks/")
+	require.NotNil(t, err)
+	_, err = parseURL("http://v2/accounts/")
+	require.NotNil(t, err)
+	_, err = parseURL("http://v2/deltas/")
+	require.NotNil(t, err)
+
+	round, err := parseURL("http://v2/blocks/123")
+	require.Nil(t, err)
+	require.Equal(t, round, "123")
+
+	addr, err := parseURL("http://v2/accounts/AIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGFFWAF4")
+	require.Nil(t, err)
+	require.Equal(t, addr, "AIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGFFWAF4")
+
+	_, err = parseURL("http://v2/deltas/123?Format=msgp")
+	require.Nil(t, err)
+	require.Equal(t, round, "123")
+}

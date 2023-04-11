@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/tools/block-generator/util"
-	"github.com/gorilla/mux"
 	"gopkg.in/yaml.v3"
 )
 
@@ -62,19 +61,19 @@ func MakeServerWithMiddleware(configFile string, addr string, blocksMiddleware B
 	gen, err := MakeGenerator(config)
 	util.MaybeFail(err, "Failed to make generator with config file '%s'", configFile)
 
-	r := mux.NewRouter()
-	r.HandleFunc("/", help)
-	r.Handle("/v2/blocks/{round}", blocksMiddleware(http.HandlerFunc(getBlockHandler(gen))))
-	r.HandleFunc("/v2/accounts/", getAccountHandler(gen))
-	r.HandleFunc("/genesis", getGenesisHandler(gen))
-	r.HandleFunc("/report", getReportHandler(gen))
-	r.HandleFunc("/v2/status/wait-for-block-after/", getStatusWaitHandler(gen))
-	r.HandleFunc("/v2/ledger/sync/", func(w http.ResponseWriter, r *http.Request) {})
-	r.HandleFunc("/v2/deltas/{round}", getDeltasHandler(gen))
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", help)
+	mux.Handle("/v2/blocks/", blocksMiddleware(http.HandlerFunc(getBlockHandler(gen))))
+	mux.HandleFunc("/v2/accounts/", getAccountHandler(gen))
+	mux.HandleFunc("/genesis", getGenesisHandler(gen))
+	mux.HandleFunc("/report", getReportHandler(gen))
+	mux.HandleFunc("/v2/status/wait-for-block-after/", getStatusWaitHandler(gen))
+	mux.HandleFunc("/v2/ledger/sync/", func(w http.ResponseWriter, r *http.Request) {})
+	mux.HandleFunc("/v2/deltas/", getDeltasHandler(gen))
 
 	return &http.Server{
 		Addr:              addr,
-		Handler:           r,
+		Handler:           mux,
 		ReadHeaderTimeout: 3 * time.Second,
 	}, gen
 }
@@ -111,18 +110,16 @@ func getGenesisHandler(gen Generator) func(w http.ResponseWriter, r *http.Reques
 func getBlockHandler(gen Generator) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// The generator doesn't actually care about the block...
-		vars := mux.Vars(r)
-		param, ok := vars["round"]
-		if !ok {
-			http.Error(w, "round missing", http.StatusBadRequest)
-			return
-		}
-		round, err := strconv.ParseUint(param, 10, 64)
+		s, err := parseURL(r.URL.Path)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
+		round, err := strconv.ParseUint(s, 0, 64)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		maybeWriteError(w, gen.WriteBlock(w, round))
 	}
 }
@@ -130,25 +127,23 @@ func getBlockHandler(gen Generator) func(w http.ResponseWriter, r *http.Request)
 func getAccountHandler(gen Generator) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// The generator doesn't actually care about the block...
-		account, err := parseAccount(r.URL.Path)
+		account, err := parseURL(r.URL.Path)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
 		maybeWriteError(w, gen.WriteAccount(w, account))
 	}
 }
 
 func getDeltasHandler(gen Generator) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		rd, ok := vars["round"]
-		if !ok {
-			http.Error(w, "round missing", http.StatusBadRequest)
+		s, err := parseURL(r.URL.Path)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		round, err := strconv.ParseUint(rd, 10, 64)
+		round, err := strconv.ParseUint(s, 0, 64)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -157,19 +152,13 @@ func getDeltasHandler(gen Generator) func(w http.ResponseWriter, r *http.Request
 	}
 }
 
-const accountsQueryPrefix = "/v2/accounts/"
-const accountsQueryAccountIdx = len(accountsQueryPrefix)
-
-func parseAccount(path string) (string, error) {
-	if !strings.HasPrefix(path, accountsQueryPrefix) {
-		return "", fmt.Errorf("not a accounts query: %s", path)
+func parseURL(path string) (string, error) {
+	i := strings.LastIndex(path, "/")
+	if i == len(path)-1 {
+		return "", fmt.Errorf("invalid request path, %s", path)
 	}
-
-	pathlen := len(path)
-
-	if pathlen == accountsQueryAccountIdx {
-		return "", fmt.Errorf("no address in path")
+	if strings.Contains(path[i+1:], "?") {
+		return strings.Split(path[i+1:], "?")[0], nil
 	}
-
-	return path[accountsQueryAccountIdx:], nil
+	return path[i+1:], nil
 }
