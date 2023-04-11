@@ -977,17 +977,18 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 
 // PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
 type PreEncodedSimulateRequestTransactionGroup struct {
-	model.SimulateRequestTransactionGroup
 	Txns []transactions.SignedTxn `codec:"txns"`
 }
 
 // PreEncodedSimulateRequest mirrors model.SimulateRequest
 type PreEncodedSimulateRequest struct {
-	model.SimulateRequest
 	TxnGroups []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
 }
 
-// SimulateTransactionExtended simulates broadcasting a raw transaction to the network, returning relevant simulation results.
+// SimulateTransactionExtended simulates a raw transaction or transaction group as it would be
+// evaluated on the network. The simulation will use blockchain state from the latest committed
+// round. Compared to '/v2/transactions/simulate', this endpoint provides additional configuration
+// options for the simulation.
 // (POST /v2/transactions/simulate/extended)
 func (v2 *Handlers) SimulateTransactionExtended(ctx echo.Context, params model.SimulateTransactionExtendedParams) error {
 	stat, err := v2.Node.Status()
@@ -1010,15 +1011,16 @@ func (v2 *Handlers) SimulateTransactionExtended(ctx echo.Context, params model.S
 	data := buf.Bytes()
 
 	var simulateRequest PreEncodedSimulateRequest
-	err = decode(protocol.JSONStrictHandle, data, &simulateRequest)
+	err = decode(protocol.CodecHandle, data, &simulateRequest)
 	if err != nil {
-		err = decode(protocol.CodecHandle, data, &simulateRequest)
+		err = decode(protocol.JSONStrictHandle, data, &simulateRequest)
 		if err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
 	}
 
 	for _, txgroup := range simulateRequest.TxnGroups {
+		// These checks provide the same guarantees as decodeTxGroup
 		if len(txgroup.Txns) == 0 {
 			err = errors.New("empty txgroup")
 			return badRequest(ctx, err, err.Error(), v2.Log)
