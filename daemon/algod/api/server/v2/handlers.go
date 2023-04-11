@@ -1673,7 +1673,7 @@ func (v2 *Handlers) ExperimentalCheck(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, true)
 }
 
-// GetTimeStampOffset gets the timestamp offset.
+// GetBlockTimeStampOffset gets the timestamp offset.
 // This is only available in dev mode.
 // (GET /v2/devmode/blocks/offset)
 func (v2 *Handlers) GetBlockTimeStampOffset(ctx echo.Context) error {
