@@ -504,14 +504,19 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, as
 
 	lastRound := ledger.Latest()
 
+	// highjack the endpoint when 0 is passed to get all assets
+	// TODO: this is a hack, we should have a separate endpoint for this
 	if assetID == 0 {
-
+		// First lookup the account
 		acct, _, _, err := ledger.LookupLatest(addr)
 		if err != nil {
 			return internalError(ctx, err, fmt.Sprintf("could not retrieve account information for last round (%d)", lastRound), v2.Log)
 		}
 
+		// Just stealing the current response struct for this
 		responses := []model.AccountAssetResponse{}
+
+		// For each asset, lookup the asset creator then asset params
 		for assetID, holding := range acct.Assets {
 
 			creator, ok, err := ledger.GetCreator(basics.CreatableIndex(assetID), basics.AssetCreatable)
@@ -522,28 +527,23 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, as
 				return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
 			}
 
-			lastRound := ledger.Latest()
 			record, err := ledger.LookupAsset(lastRound, creator, basics.AssetIndex(assetID))
 			if err != nil {
 				return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 			}
-
-			// prepare JSON response
-			response := model.AccountAssetResponse{Round: 0}
-
 			if record.AssetParams == nil {
 				return notFound(ctx, errors.New(errAccountAssetDoesNotExist), errAccountAssetDoesNotExist, v2.Log)
 			}
-
-			asset := AssetParamsToAsset(addr.String(), basics.AssetIndex(assetID), record.AssetParams)
-			response.CreatedAsset = &asset.Params
-
-			response.AssetHolding = &model.AssetHolding{
-				Amount:   holding.Amount,
-				AssetID:  uint64(assetID),
-				IsFrozen: holding.Frozen,
+			asset := AssetParamsToAsset(creator.String(), basics.AssetIndex(assetID), record.AssetParams)
+			recordResponse := model.AccountAssetResponse{
+				CreatedAsset: &asset.Params,
+				AssetHolding: &model.AssetHolding{
+					Amount:   holding.Amount,
+					AssetID:  uint64(assetID),
+					IsFrozen: holding.Frozen,
+				},
 			}
-			responses = append(responses, response)
+			responses = append(responses, recordResponse)
 		}
 
 		return ctx.JSON(http.StatusOK, responses)
