@@ -135,10 +135,10 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeStartAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, make(chan catchup.PendingUnmatchedCertificate), node.lowPriorityCryptoVerificationPool)
 
-	// Initialize sync round to the next round so that nothing falls out of the cache on Start
-	err = node.SetSyncRound(uint64(node.Ledger().NextRound()))
+	// Initialize sync round to the latest db round + 1 so that nothing falls out of the cache on Start
+	err = node.SetSyncRound(uint64(node.Ledger().LatestTrackerCommitted() + 1))
 	if err != nil {
-		log.Errorf("unable to set sync round to Ledger.NextRound %v", err)
+		log.Errorf("unable to set sync round to Ledger.DBRound %v", err)
 		return nil, err
 	}
 
@@ -389,7 +389,7 @@ func (node *AlgorandFollowerNode) SetCatchpointCatchupMode(catchpointCatchupMode
 	outCtxCh = ctxCh
 	go func() {
 		node.mu.Lock()
-		// check that the node wasn't canceled. If it have been canceled, it means that the node.Stop() was called, in which case
+		// check that the node wasn't canceled. If it has been canceled, it means that the node.Stop() was called, in which case
 		// we should close the channel.
 		if node.ctx.Err() == context.Canceled {
 			close(ctxCh)

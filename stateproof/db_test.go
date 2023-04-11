@@ -70,26 +70,26 @@ func TestDbSchemaUpgrade1(t *testing.T) {
 		return addPendingSig(tx, 0, psig)
 	}))
 
-	b := builder{Builder: &stateproof.Builder{}}
-	b.ProvenWeight = 5
+	p := spProver{Prover: &stateproof.Prover{}}
+	p.ProvenWeight = 5
 	a.ErrorContains(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return persistBuilder(tx, 0, &b)
-	}), "no such table: builders")
+		return persistProver(tx, 0, &p)
+	}), "no such table: provers")
 
 	// migrating the DB to the next version.
 	a.NoError(makeStateProofDB(dbs.Wdb))
 
 	a.NoError(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return persistBuilder(tx, 0, &b)
+		return persistProver(tx, 0, &p)
 	}))
 
-	var b2 builder
+	var p2 spProver
 	a.NoError(dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err error
-		b2, err = getBuilder(tx, 0)
+		p2, err = getProver(tx, 0)
 		return err
 	}))
-	a.Equal(b.BuilderPersistedFields, b2.BuilderPersistedFields)
+	a.Equal(p.ProverPersistedFields, p2.ProverPersistedFields)
 }
 
 func TestPendingSigDB(t *testing.T) {
@@ -217,7 +217,7 @@ func TestSigExistQuery(t *testing.T) {
 	}
 }
 
-func TestBuildersDB(t *testing.T) {
+func TestProversDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -226,54 +226,54 @@ func TestBuildersDB(t *testing.T) {
 	err := makeStateProofDB(dbs.Wdb)
 	a.NoError(err)
 
-	builders := make([]builder, 100)
+	provers := make([]spProver, 100)
 	for i := uint64(0); i < 100; i++ {
-		var bldr builder
-		bldr.Builder = &stateproof.Builder{}
-		bldr.Round = i
-		builders[i] = bldr
+		var prover spProver
+		prover.Prover = &stateproof.Prover{}
+		prover.Round = i
+		provers[i] = prover
 
 		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			return persistBuilder(tx, basics.Round(i), &builders[i])
+			return persistProver(tx, basics.Round(i), &provers[i])
 		})
 		a.NoError(err)
 	}
 
 	var count int
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err = tx.QueryRow("SELECT count(1) FROM builders").Scan(&count)
+		err = tx.QueryRow("SELECT count(1) FROM provers").Scan(&count)
 		return err
 	})
 	a.NoError(err)
 	a.Equal(100, count)
 
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return deleteBuilders(tx, basics.Round(35))
+		return deleteProvers(tx, basics.Round(35))
 	})
 	a.NoError(err)
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err = tx.QueryRow("SELECT count(1) FROM builders").Scan(&count)
+		err = tx.QueryRow("SELECT count(1) FROM provers").Scan(&count)
 		return err
 	})
 	a.NoError(err)
 	a.Equal(100-35, count)
 
-	var bldr builder
+	var prover spProver
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		bldr, err = getBuilder(tx, basics.Round(34))
+		prover, err = getProver(tx, basics.Round(34))
 		return err
 	})
 	a.ErrorIs(err, sql.ErrNoRows)
 
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		bldr, err = getBuilder(tx, basics.Round(35))
+		prover, err = getProver(tx, basics.Round(35))
 		return err
 	})
 	a.NoError(err)
-	a.Equal(uint64(35), bldr.Round)
+	a.Equal(uint64(35), prover.Round)
 }
 
-func TestDbBuilderAlreadyExists(t *testing.T) {
+func TestDbProverAlreadyExists(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -282,23 +282,23 @@ func TestDbBuilderAlreadyExists(t *testing.T) {
 	err := makeStateProofDB(dbs.Wdb)
 	a.NoError(err)
 
-	var bldr builder
-	var outBldr builder
+	var prover spProver
+	var outProv spProver
 
-	bldr.Builder = &stateproof.Builder{}
-	bldr.Round = 2
-	bldr.Data[3] = 5
+	prover.Prover = &stateproof.Prover{}
+	prover.Round = 2
+	prover.Data[3] = 5
 
 	for i := 0; i < 2; i++ {
 		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			return persistBuilder(tx, basics.Round(2), &bldr)
+			return persistProver(tx, basics.Round(2), &prover)
 		})
 		a.NoError(err)
 		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			outBldr, err = getBuilder(tx, basics.Round(2))
+			outProv, err = getProver(tx, basics.Round(2))
 			return err
 		})
 		a.NoError(err)
-		a.Equal(bldr.BuilderPersistedFields, outBldr.BuilderPersistedFields)
+		a.Equal(prover.ProverPersistedFields, outProv.ProverPersistedFields)
 	}
 }
