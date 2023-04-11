@@ -1679,7 +1679,8 @@ func (v2 *Handlers) ExperimentalCheck(ctx echo.Context) error {
 func (v2 *Handlers) GetBlockTimeStampOffset(ctx echo.Context) error {
 	offset := v2.Node.GetBlockTimeStampOffset()
 	if offset == 0 {
-		return badRequest(ctx, fmt.Errorf("timestamp offset is not set or set to 0"), errFailedRetrievingTimeStampOffset, v2.Log)
+		err := fmt.Errorf("timestamp offset is not set or set to 0")
+		return badRequest(ctx, err, fmt.Sprintf(errFailedRetrievingTimeStampOffset, err), v2.Log)
 	}
 	return ctx.JSON(http.StatusOK, model.GetBlockTimeStampOffsetResponse{Offset: uint64(offset)})
 }
@@ -1690,7 +1691,7 @@ func (v2 *Handlers) GetBlockTimeStampOffset(ctx echo.Context) error {
 func (v2 *Handlers) SetBlockTimeStampOffset(ctx echo.Context, offset uint64) error {
 	err := v2.Node.SetBlockTimeStampOffset(int64(offset))
 	if err != nil {
-		return badRequest(ctx, err, errFailedSettingTimeStampOffset, v2.Log)
+		return badRequest(ctx, err, fmt.Sprintf(errFailedSettingTimeStampOffset, err), v2.Log)
 	}
 	return ctx.NoContent(http.StatusOK)
 }

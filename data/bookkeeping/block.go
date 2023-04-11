@@ -537,7 +537,7 @@ func MakeDevModeBlock(prev BlockHeader, configs DevModeOpts) Block {
 	}
 
 	// If a timestamp offset is not set, then set this block's timestamp as
-	// min(time.Now, MaxTimestamIncrement).
+	// min(time.Now, MaxTimestampIncrement).
 	// If a timestamp offset is set, then set it to prev ts + offset.
 	timestamp := time.Now().Unix()
 	if prev.TimeStamp > 0 {
@@ -551,6 +551,7 @@ func MakeDevModeBlock(prev BlockHeader, configs DevModeOpts) Block {
 	}
 
 	// the merkle root of TXs will update when fillpayset is called
+	// In dev mode, set the block seed to the previous block's hash
 	blk := Block{
 		BlockHeader: BlockHeader{
 			Round:        prev.Round + 1,
