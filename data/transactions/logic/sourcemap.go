@@ -27,7 +27,7 @@ const sourceMapVersion = 3
 const b64table string = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
 // SourceMap contains details from the source to assembly process.
-// Currently contains the map between TEAL source line to
+// Currently, contains the map between TEAL source line to
 // the assembled bytecode position and details about
 // the template variables contained in the source file.
 type SourceMap struct {

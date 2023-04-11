@@ -1,6 +1,6 @@
 #!/bin/bash
 
-date '+app-simple-test start %Y%m%d_%H%M%S'
+date '+app-simulate-test start %Y%m%d_%H%M%S'
 
 set -e
 set -x
@@ -20,17 +20,30 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 CONST_TRUE="true"
 CONST_FALSE="false"
 
+# First, try to send an extremely large "transaction" in the request body.
+# This should fail with a 413 error.
+# Some of our MacOS nightly tests fail for specifying the bs (block size)
+# value in capital letters (i.e. 11M), so just specify it as 1024 bytes and
+# allocate 11K blocks so we get a 11MB sized file. 
+dd if=/dev/zero of="${TEMPDIR}/toolarge.tx" bs=1024 count=11000
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/toolarge.tx" 2>&1 || true)
+EXPERROR="simulation error: HTTP 413 Request Entity Too Large:"
+if [[ $RES != *"${EXPERROR}"* ]]; then
+    date '+app-simulate-test FAIL the simulate API should fail for request bodies exceeding 10MB %Y%m%d_%H%M%S'
+    false
+fi
+
 ##############################################
 # WE FIRST TEST TRANSACTION GROUP SIMULATION #
 ##############################################
 
-${gcmd} clerk send -a 10000 -f ${ACCOUNT} -t ${ACCOUNT} -o pay1.tx
-${gcmd} clerk send -a 10000 -f ${ACCOUNT} -t ${ACCOUNT} -o pay2.tx
+${gcmd} clerk send -a 10000 -f ${ACCOUNT} -t ${ACCOUNT} -o "${TEMPDIR}/pay1.tx"
+${gcmd} clerk send -a 10000 -f ${ACCOUNT} -t ${ACCOUNT} -o "${TEMPDIR}/pay2.tx"
 
-cat pay1.tx pay2.tx | ${gcmd} clerk group -i - -o grouped.tx
+cat "${TEMPDIR}/pay1.tx" "${TEMPDIR}/pay2.tx" | ${gcmd} clerk group -i - -o "${TEMPDIR}/grouped.tx"
 
-# We first test transaction group simulation WITHOUT signatures
-RES=$(${gcmd} clerk simulate -t grouped.tx)
+# We test transaction group simulation WITHOUT signatures
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/grouped.tx")
 
 if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_FALSE ]]; then
     date '+app-simulate-test FAIL the simulation transaction group without signatures should not succeed %Y%m%d_%H%M%S'
@@ -50,14 +63,14 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[1]."missing-signature"'
 fi
 
 # We then test transaction group simulation WITH signatures
-${gcmd} clerk split -i grouped.tx -o grouped.tx
+${gcmd} clerk split -i "${TEMPDIR}/grouped.tx" -o "${TEMPDIR}/grouped.tx"
 
-${gcmd} clerk sign -i grouped-0.tx -o grouped-0.stx
-${gcmd} clerk sign -i grouped-1.tx -o grouped-1.stx
+${gcmd} clerk sign -i "${TEMPDIR}/grouped-0.tx" -o "${TEMPDIR}/grouped-0.stx"
+${gcmd} clerk sign -i "${TEMPDIR}/grouped-1.tx" -o "${TEMPDIR}/grouped-1.stx"
 
-cat grouped-0.stx grouped-1.stx > grouped.stx
+cat "${TEMPDIR}/grouped-0.stx" "${TEMPDIR}/grouped-1.stx" > "${TEMPDIR}/grouped.stx"
 
-RES=$(${gcmd} clerk simulate -t grouped.stx | jq '."would-succeed"')
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/grouped.stx" | jq '."would-succeed"')
 
 if [[ $RES != $CONST_TRUE ]]; then
     date '+app-simulate-test FAIL should pass to simulate self pay transaction group %Y%m%d_%H%M%S'
@@ -68,19 +81,19 @@ fi
 # WE ALSO TEST OVERSPEND IN TRANSACTION GROUP #
 ###############################################
 
-${gcmd} clerk send -a 1000000000000 -f ${ACCOUNT} -t ${ACCOUNT} -o pay1.tx
-${gcmd} clerk send -a 10000 -f ${ACCOUNT} -t ${ACCOUNT} -o pay2.tx
+${gcmd} clerk send -a 1000000000000 -f ${ACCOUNT} -t ${ACCOUNT} -o "${TEMPDIR}/pay1.tx"
+${gcmd} clerk send -a 10000 -f ${ACCOUNT} -t ${ACCOUNT} -o "${TEMPDIR}/pay2.tx"
 
-cat pay1.tx pay2.tx | ${gcmd} clerk group -i - -o grouped.tx
+cat "${TEMPDIR}/pay1.tx" "${TEMPDIR}/pay2.tx" | ${gcmd} clerk group -i - -o "${TEMPDIR}/grouped.tx"
 
-${gcmd} clerk split -i grouped.tx -o grouped.tx
+${gcmd} clerk split -i "${TEMPDIR}/grouped.tx" -o "${TEMPDIR}/grouped.tx"
 
-${gcmd} clerk sign -i grouped-0.tx -o grouped-0.stx
-${gcmd} clerk sign -i grouped-1.tx -o grouped-1.stx
+${gcmd} clerk sign -i "${TEMPDIR}/grouped-0.tx" -o "${TEMPDIR}/grouped-0.stx"
+${gcmd} clerk sign -i "${TEMPDIR}/grouped-1.tx" -o "${TEMPDIR}/grouped-1.stx"
 
-cat grouped-0.stx grouped-1.stx > grouped.stx
+cat "${TEMPDIR}/grouped-0.stx" "${TEMPDIR}/grouped-1.stx" > "${TEMPDIR}/grouped.stx"
 
-RES=$(${gcmd} clerk simulate -t grouped.stx)
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/grouped.stx")
 
 if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_FALSE ]]; then
     data '+app-simulate-test FAIL should FAIL for overspending in simulate self pay transaction group %Y%m%d_%H%M%S'
@@ -111,10 +124,10 @@ fi
 APPID=$(echo "$RES" | grep Created | awk '{ print $6 }')
 
 # SIMULATION! empty()void
-${gcmd} app method --method "empty()void" --app-id $APPID --from $ACCOUNT 2>&1 -o empty.tx
+${gcmd} app method --method "empty()void" --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/empty.tx"
 
 # SIMULATE without a signature first
-RES=$(${gcmd} clerk simulate -t empty.tx)
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/empty.tx")
 
 # confirm that without signature, the simulation should fail
 if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_FALSE ]]; then
@@ -129,8 +142,8 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."missing-signature"'
 fi
 
 # SIMULATE with a signature
-${gcmd} clerk sign -i empty.tx -o empty.stx
-RES=$(${gcmd} clerk simulate -t empty.stx | jq '."would-succeed"')
+${gcmd} clerk sign -i "${TEMPDIR}/empty.tx" -o "${TEMPDIR}/empty.stx"
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/empty.stx" | jq '."would-succeed"')
 
 # with signature, simulation app-call should succeed
 if [[ $RES != $CONST_TRUE ]]; then

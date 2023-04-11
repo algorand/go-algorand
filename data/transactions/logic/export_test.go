@@ -56,6 +56,7 @@ var TestLogic = testLogic
 var TestApp = testApp
 var TestAppBytes = testAppBytes
 var TestApps = testApps
+var TestLogicRange = testLogicRange
 var TestProg = testProg
 var WithPanicOpcode = withPanicOpcode
 
