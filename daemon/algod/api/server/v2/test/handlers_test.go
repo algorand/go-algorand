@@ -338,6 +338,7 @@ func TestGetBlockHash(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
 
+	c, rec = newReq(t)
 	err = handler.GetBlockHash(c, 1)
 	require.NoError(t, err)
 	require.Equal(t, 404, rec.Code)
@@ -368,6 +369,7 @@ func TestGetBlockGetBlockHash(t *testing.T) {
 	a.NoError(err)
 
 	// Get block 2
+	c, rec = newReq(t)
 	err = handler.GetBlock(c, 2, model.GetBlockParams{Format: (*model.GetBlockParamsFormat)(&format)})
 	a.NoError(err)
 	a.Equal(200, rec.Code)
@@ -375,6 +377,7 @@ func TestGetBlockGetBlockHash(t *testing.T) {
 	a.NoError(err)
 
 	// Get block 1 hash
+	c, rec = newReq(t)
 	err = handler.GetBlockHash(c, 1)
 	a.NoError(err)
 	a.Equal(200, rec.Code)
