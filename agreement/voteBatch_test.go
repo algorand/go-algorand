@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/stretchr/testify/require"
 )
@@ -47,8 +48,9 @@ func dummyTaskMemEqVote() ([]*crypto.SigVerificationTask, *committee.Membership,
 
 // TestVerificationTasks tests the verificationTasksAndResults bookkeeping and that getJobResult returns the expected records
 func TestVerificationTasks(t *testing.T) {
-	numTasks := 5
+	partitiontest.PartitionTest(t)
 
+	numTasks := 5
 	ledger, _, _, _ := readOnlyFixture100()
 
 	// case of all Votes
@@ -390,6 +392,7 @@ func (vg *testVoteGenerator) voteEqOptions() int {
 
 // TestProcessBatchOneCtxCancled tests the case where one of the jobs in a batch has a cancled ctx
 func TestProcessBatchOneCtxCancled(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	batchSize := 8
 	cancelCtxIndex := 3
@@ -438,6 +441,7 @@ func TestProcessBatchOneCtxCancled(t *testing.T) {
 
 // TestProcessBatchDifferentErrors tests the case where one of the jobs in a batch has a cancled ctx
 func TestProcessBatchDifferentErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	batchSize := 30
 	outChan := make(chan interface{})
