@@ -1833,6 +1833,110 @@ assert
 	endBlock(t, l, eval)
 }
 
+// TestSelfCheckHoldingNewApp checks whether a newly created app can check its
+// own holdings.  There can't really be any value in it from before this group,
+// since it could not have opted in. But it should be legal to look.
+func TestSelfCheckHoldingNewApp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+
+	// 31 allowed inner appls.
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		asset := txntest.Txn{
+			Type:        "acfg",
+			Sender:      addrs[0],
+			ConfigAsset: 0,
+			AssetParams: basics.AssetParams{
+				Total:     10,
+				Decimals:  1,
+				UnitName:  "X",
+				AssetName: "TEN",
+			},
+		}
+		vb := dl.fullBlock(&asset)
+		assetID := vb.Block().Payset[0].ApplyData.ConfigAsset
+
+		selfcheck := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: `
+ global CurrentApplicationAddress
+ txn Assets 0
+ asset_holding_get AssetBalance
+ !; assert				// is not opted in, so exists=0
+ !						// value is also 0
+`,
+			ForeignAssets: []basics.AssetIndex{assetID},
+		}
+		vb = dl.fullBlock(&selfcheck)
+		selfcheck.ApplicationID = vb.Block().Payset[0].ApplicationID
+
+		dl.txn(&selfcheck)
+
+	})
+}
+
+// TestCheckHoldingNewApp checks whether a newly created app (account) can have
+// its holding value checked in a later txn.  There can't really be any value in
+// it from before this group, since it could not have opted in. But it should be
+// legal to look.
+func TestCheckHoldingNewApp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+
+	// 31 allowed inner appls.
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		asset := txntest.Txn{
+			Type:        "acfg",
+			Sender:      addrs[0],
+			ConfigAsset: 0,
+			AssetParams: basics.AssetParams{
+				Total:     10,
+				Decimals:  1,
+				UnitName:  "X",
+				AssetName: "TEN",
+			},
+		}
+		vb := dl.fullBlock(&asset)
+		assetID := vb.Block().Payset[0].ApplyData.ConfigAsset
+
+		check := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
+ gaid 0
+ app_params_get AppAddress
+ assert
+ txn Assets 0
+ asset_holding_get AssetBalance
+ !; assert						// is not opted in, so exists=0
+ !; assert						// value is also 0
+`),
+			ForeignAssets: []basics.AssetIndex{assetID},
+		}
+		vb = dl.fullBlock(&check)
+		check.ApplicationID = vb.Block().Payset[0].ApplicationID
+
+		create := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[1],
+			ApplicationID: 0,
+		}
+		dl.txgroup("", &create, &check)
+
+	})
+}
+
 // TestInnerAppVersionCalling ensure that inner app calls must be the >=v6 apps
 func TestInnerAppVersionCalling(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -3132,19 +3236,29 @@ func TestForeignAppAccountsImmutable(t *testing.T) {
 		appA := txntest.Txn{
 			Type:   "appl",
 			Sender: addrs[0],
+			ApprovalProgram: main(`
+itxn_begin
+int appl;               itxn_field TypeEnum
+txn Applications 1;     itxn_field ApplicationID
+int OptIn;              itxn_field OnCompletion
+itxn_submit
+`),
 		}
 
 		appB := txntest.Txn{
 			Type:   "appl",
 			Sender: addrs[0],
 			ApprovalProgram: main(`
+txn NumApplications				// allow "bare" optin
+bz end
 txn Applications 1
 app_params_get AppAddress
+assert
 byte "X"
 byte "ABC"
 app_local_put
-int 1
 `),
+			LocalStateSchema: basics.StateSchema{NumByteSlice: 1},
 		}
 
 		vb := dl.fullBlock(&appA, &appB)
@@ -3160,6 +3274,13 @@ int 1
 		fund0 := fund1
 		fund0.Receiver = index0.Address()
 
+		optin := txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[2],
+			ApplicationID: index0,
+			ForeignApps:   []basics.AppIndex{index1},
+		}
+
 		callTx := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[2],
@@ -3167,9 +3288,14 @@ int 1
 			ForeignApps:   []basics.AppIndex{index0},
 		}
 
-		dl.beginBlock()
-		dl.txgroup("invalid Account reference", &fund0, &fund1, &callTx)
-		dl.endBlock()
+		var problem string
+		switch {
+		case ver < 34: // before v7, app accounts not available at all
+			problem = "invalid Account reference " + index0.Address().String()
+		case ver < 37: // as of v7, it's the mutation that's the problem
+			problem = "invalid Account reference for mutation"
+		}
+		dl.txgroup(problem, &fund0, &fund1, &optin, &callTx)
 	})
 }
 
@@ -3407,14 +3533,14 @@ func TestRewardsInAD(t *testing.T) {
 	})
 }
 
-// TestDeleteNonExistantKeys checks if the EvalDeltas from deleting missing keys are correct
-func TestDeleteNonExistantKeys(t *testing.T) {
+// TestDeleteNonExistentKeys checks if the EvalDeltas from deleting missing keys are correct
+func TestDeleteNonExistentKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// AVM v2 (apps)
-	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+	// AVM v4 start, so we can use `txn Sender`
+	ledgertesting.TestConsensusRange(t, 28, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
@@ -3426,7 +3552,7 @@ func TestDeleteNonExistantKeys(t *testing.T) {
 			ApprovalProgram: main(`
 byte "missing_global"
 app_global_del
-int 0
+txn Sender
 byte "missing_local"
 app_local_del
 `),

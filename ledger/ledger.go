@@ -873,6 +873,11 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 	return &vb, nil
 }
 
+// LatestTrackerCommitted returns the trackers' dbRound which "is always exactly accountsRound()"
+func (l *Ledger) LatestTrackerCommitted() basics.Round {
+	return l.trackers.getDbRound()
+}
+
 // DebuggerLedger defines the minimal set of method required for creating a debug balances.
 type DebuggerLedger = eval.LedgerForCowBase
 

@@ -137,7 +137,7 @@ func (spw *Worker) getStateProofMessage(round basics.Round) (stateproofmsg.Messa
 		return msg, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
-		spw.log.Errorf("getStateProofMessage(%d): error while fetching builder from DB: %v", round, err)
+		spw.log.Errorf("getStateProofMessage(%d): error while fetching prover from DB: %v", round, err)
 	}
 
 	return GenerateStateProofMessage(spw.ledger, round)

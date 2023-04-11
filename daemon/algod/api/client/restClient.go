@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -163,38 +164,49 @@ type RawResponse interface {
 	SetBytes([]byte)
 }
 
+// mergeRawQueries merges two raw queries, appending an "&" if both are non-empty
+func mergeRawQueries(q1, q2 string) string {
+	if q1 == "" || q2 == "" {
+		return q1 + q2
+	}
+	return q1 + "&" + q2
+}
+
 // submitForm is a helper used for submitting (ex.) GETs and POSTs to the server
 // if expectNoContent is true, then it is expected that the response received will have a content length of zero
-func (client RestClient) submitForm(response interface{}, path string, request interface{}, requestMethod string, encodeJSON bool, decodeJSON bool, expectNoContent bool) error {
+func (client RestClient) submitForm(
+	response interface{}, path string, params interface{}, body interface{},
+	requestMethod string, encodeJSON bool, decodeJSON bool, expectNoContent bool) error {
+
 	var err error
 	queryURL := client.serverURL
 	queryURL.Path = path
 
 	var req *http.Request
-	var body io.Reader
+	var bodyReader io.Reader
+	var v url.Values
 
-	if request != nil {
-		if rawRequestPaths[path] {
-			reqBytes, ok := request.([]byte)
-			if !ok {
-				return fmt.Errorf("couldn't decode raw request as bytes")
-			}
-			body = bytes.NewBuffer(reqBytes)
-		} else {
-			v, err := query.Values(request)
-			if err != nil {
-				return err
-			}
-
-			queryURL.RawQuery = v.Encode()
-			if encodeJSON {
-				jsonValue, _ := json.Marshal(request)
-				body = bytes.NewBuffer(jsonValue)
-			}
+	if params != nil {
+		v, err = query.Values(params)
+		if err != nil {
+			return err
 		}
 	}
 
-	req, err = http.NewRequest(requestMethod, queryURL.String(), body)
+	if requestMethod == "POST" && rawRequestPaths[path] {
+		reqBytes, ok := body.([]byte)
+		if !ok {
+			return fmt.Errorf("couldn't decode raw request as bytes")
+		}
+		bodyReader = bytes.NewBuffer(reqBytes)
+	} else if encodeJSON {
+		jsonValue, _ := json.Marshal(params)
+		bodyReader = bytes.NewBuffer(jsonValue)
+	}
+
+	queryURL.RawQuery = mergeRawQueries(queryURL.RawQuery, v.Encode())
+
+	req, err = http.NewRequest(requestMethod, queryURL.String(), bodyReader)
 	if err != nil {
 		return err
 	}
@@ -249,26 +261,26 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 
 // get performs a GET request to the specific path against the server
 func (client RestClient) get(response interface{}, path string, request interface{}) error {
-	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, true /* decodeJSON */, false)
+	return client.submitForm(response, path, request, nil, "GET", false /* encodeJSON */, true /* decodeJSON */, false)
 }
 
 // delete performs a DELETE request to the specific path against the server
 // when expectNoContent is true, then no content is expected to be returned from the endpoint
 func (client RestClient) delete(response interface{}, path string, request interface{}, expectNoContent bool) error {
-	return client.submitForm(response, path, request, "DELETE", false /* encodeJSON */, true /* decodeJSON */, expectNoContent)
+	return client.submitForm(response, path, request, nil, "DELETE", false /* encodeJSON */, true /* decodeJSON */, expectNoContent)
 }
 
 // getRaw behaves identically to get but doesn't json decode the response, and
 // the response must implement the RawResponse interface
 func (client RestClient) getRaw(response RawResponse, path string, request interface{}) error {
-	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, false /* decodeJSON */, false)
+	return client.submitForm(response, path, request, nil, "GET", false /* encodeJSON */, false /* decodeJSON */, false)
 }
 
 // post sends a POST request to the given path with the given request object.
 // No query parameters will be sent if request is nil.
 // response must be a pointer to an object as post writes the response there.
-func (client RestClient) post(response interface{}, path string, request interface{}, expectNoContent bool) error {
-	return client.submitForm(response, path, request, "POST", true /* encodeJSON */, true /* decodeJSON */, expectNoContent)
+func (client RestClient) post(response interface{}, path string, params interface{}, body interface{}, expectNoContent bool) error {
+	return client.submitForm(response, path, params, body, "POST", true /* encodeJSON */, true /* decodeJSON */, expectNoContent)
 }
 
 // Status retrieves the StatusResponse from the running node
@@ -511,7 +523,7 @@ func (client RestClient) SuggestedParams() (response model.TransactionParameters
 
 // SendRawTransaction gets a SignedTxn and broadcasts it to the network
 func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response model.PostTransactionsResponse, err error) {
-	err = client.post(&response, "/v2/transactions", protocol.Encode(&txn), false)
+	err = client.post(&response, "/v2/transactions", nil, protocol.Encode(&txn), false)
 	return
 }
 
@@ -525,7 +537,7 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 	}
 
 	var response model.PostTransactionsResponse
-	return client.post(&response, "/v2/transactions", enc, false)
+	return client.post(&response, "/v2/transactions", nil, enc, false)
 }
 
 // Block gets the block info for the given round
@@ -545,19 +557,19 @@ func (client RestClient) RawBlock(round uint64) (response []byte, err error) {
 // Shutdown requests the node to shut itself down
 func (client RestClient) Shutdown() (err error) {
 	response := 1
-	err = client.post(&response, "/v2/shutdown", nil, false)
+	err = client.post(&response, "/v2/shutdown", nil, nil, false)
 	return
 }
 
 // AbortCatchup aborts the currently running catchup
 func (client RestClient) AbortCatchup(catchpointLabel string) (response model.CatchpointAbortResponse, err error) {
-	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "DELETE", false, true, false)
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, nil, "DELETE", false, true, false)
 	return
 }
 
 // Catchup start catching up to the give catchpoint label
 func (client RestClient) Catchup(catchpointLabel string) (response model.CatchpointStartResponse, err error) {
-	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "POST", false, true, false)
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, nil, "POST", false, true, false)
 	return
 }
 
@@ -572,23 +584,52 @@ func (client RestClient) GetGoRoutines(ctx context.Context) (goRoutines string, 
 	return
 }
 
+type compileParams struct {
+	SourceMap bool `url:"sourcemap,omitempty"`
+}
+
 // Compile compiles the given program and returned the compiled program
-func (client RestClient) Compile(program []byte) (compiledProgram []byte, programHash crypto.Digest, err error) {
+func (client RestClient) Compile(program []byte, useSourceMap bool) (compiledProgram []byte, programHash crypto.Digest, sourceMap *logic.SourceMap, err error) {
 	var compileResponse model.CompileResponse
-	err = client.submitForm(&compileResponse, "/v2/teal/compile", program, "POST", false, true, false)
+
+	compileRequest := compileParams{SourceMap: useSourceMap}
+
+	err = client.submitForm(&compileResponse, "/v2/teal/compile", compileRequest, program, "POST", false, true, false)
 	if err != nil {
-		return nil, crypto.Digest{}, err
+		return nil, crypto.Digest{}, nil, err
 	}
 	compiledProgram, err = base64.StdEncoding.DecodeString(compileResponse.Result)
 	if err != nil {
-		return nil, crypto.Digest{}, err
+		return nil, crypto.Digest{}, nil, err
 	}
 	var progAddr basics.Address
 	progAddr, err = basics.UnmarshalChecksumAddress(compileResponse.Hash)
 	if err != nil {
-		return nil, crypto.Digest{}, err
+		return nil, crypto.Digest{}, nil, err
 	}
 	programHash = crypto.Digest(progAddr)
+
+	// fast exit if we don't want sourcemap, then exit with what we have so far
+	if !useSourceMap {
+		return
+	}
+
+	// if we want sourcemap, then we convert the *map[string]interface{} into *logic.SourceMap
+	if compileResponse.Sourcemap == nil {
+		return nil, crypto.Digest{}, nil, fmt.Errorf("requesting for sourcemap but get nothing")
+	}
+
+	var srcMapInstance logic.SourceMap
+	var jsonBytes []byte
+
+	if jsonBytes, err = json.Marshal(*compileResponse.Sourcemap); err != nil {
+		return nil, crypto.Digest{}, nil, err
+	}
+	if err = json.Unmarshal(jsonBytes, &srcMapInstance); err != nil {
+		return nil, crypto.Digest{}, nil, err
+	}
+	sourceMap = &srcMapInstance
+
 	return
 }
 
@@ -631,14 +672,16 @@ func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryA
 // RawDryrun gets the raw DryrunResponse associated with the passed address
 func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	var blob Blob
-	err = client.submitForm(&blob, "/v2/teal/dryrun", data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
+	err = client.submitForm(&blob, "/v2/teal/dryrun", nil, data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
 	response = blob
 	return
 }
 
-// SimulateRawTransaction gets the raw transaction or raw transaction group, and returns relevant simulation results.
-func (client RestClient) SimulateRawTransaction(data []byte) (response model.SimulateResponse, err error) {
-	err = client.submitForm(&response, "/v2/transactions/simulate", data, "POST", false /* encodeJSON */, true /* decodeJSON */, false)
+// RawSimulateRawTransaction simulates the raw transaction or raw transaction group and returns relevant simulation results as raw bytes.
+func (client RestClient) RawSimulateRawTransaction(data []byte) (response []byte, err error) {
+	var blob Blob
+	err = client.submitForm(&blob, "/v2/transactions/simulate", rawFormat{Format: "msgpack"}, data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
+	response = blob
 	return
 }
 
@@ -663,7 +706,7 @@ func (client RestClient) TransactionProof(txid string, round uint64, hashType cr
 
 // PostParticipationKey sends a key file to the node.
 func (client RestClient) PostParticipationKey(file []byte) (response model.PostParticipationResponse, err error) {
-	err = client.post(&response, "/v2/participation", file, false)
+	err = client.post(&response, "/v2/participation", nil, file, false)
 	return
 }
 
@@ -689,7 +732,7 @@ func (client RestClient) RemoveParticipationKeyByID(participationID string) (err
 
 // SetSyncRound sets the sync round for the catchup service
 func (client RestClient) SetSyncRound(round uint64) (err error) {
-	err = client.post(nil, fmt.Sprintf("/v2/ledger/sync/%d", round), nil, true)
+	err = client.post(nil, fmt.Sprintf("/v2/ledger/sync/%d", round), nil, nil, true)
 	return
 }
 

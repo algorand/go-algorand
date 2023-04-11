@@ -107,7 +107,7 @@ func calculateAcceptableStateProofWeight(total basics.MicroAlgos, proto *config.
 	return w
 }
 
-// GetProvenWeight computes the parameters for building or verifying
+// GetProvenWeight computes the parameters for proving or verifying
 // a state proof for the interval (votersHdr, latestRoundInProofHdr], using voters from block votersHdr.
 func GetProvenWeight(votersHdr *bookkeeping.BlockHeader, latestRoundInProofHdr *bookkeeping.BlockHeader) (uint64, error) {
 	proto := config.Consensus[votersHdr.CurrentProtocol]

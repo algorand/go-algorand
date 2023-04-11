@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-// Errors for the StateProof builder
+// Errors for the StateProof prover
 var (
 	ErrPositionOutOfBound     = errors.New("requested position is out of bounds")
 	ErrPositionAlreadyPresent = errors.New("requested position is already present")
@@ -37,8 +37,8 @@ var (
 // VotersAllocBound should be equal to config.Consensus[protocol.ConsensusCurrentVersion].StateProofTopVoters
 const VotersAllocBound = 1024
 
-// BuilderPersistedFields is the set of fields of a Builder that are persisted to disk.
-type BuilderPersistedFields struct {
+// ProverPersistedFields is the set of fields from the crypto state proof prover that are persisted to disk.
+type ProverPersistedFields struct {
 	_struct        struct{}             `codec:",omitempty,omitemptyarray"`
 	Data           MessageHash          `codec:"data"`
 	Round          uint64               `codec:"rnd"`
@@ -49,25 +49,25 @@ type BuilderPersistedFields struct {
 	StrengthTarget uint64               `codec:"str"`
 }
 
-// Builder keeps track of signatures on a message and eventually produces
+// Prover keeps track of signatures on a message and eventually produces
 // a state proof for that message.
-type Builder struct {
-	BuilderPersistedFields
+type Prover struct {
+	ProverPersistedFields
 	sigs         []sigslot // Indexed by pos in Participants
 	signedWeight uint64    // Total weight of signatures so far
 	cachedProof  *StateProof
 }
 
-// MakeBuilder constructs an empty builder. After adding enough signatures and signed weight, this builder is used to create a stateproof.
-func MakeBuilder(data MessageHash, round uint64, provenWeight uint64, part []basics.Participant, parttree *merklearray.Tree, strengthTarget uint64) (*Builder, error) {
+// MakeProver constructs an empty sp-prover. After adding enough signatures and signed weight, this sp-prover is used to create a stateproof.
+func MakeProver(data MessageHash, round uint64, provenWeight uint64, part []basics.Participant, parttree *merklearray.Tree, strengthTarget uint64) (*Prover, error) {
 	npart := len(part)
 	lnProvenWt, err := LnIntApproximation(provenWeight)
 	if err != nil {
 		return nil, err
 	}
 
-	b := &Builder{
-		BuilderPersistedFields: BuilderPersistedFields{
+	b := &Prover{
+		ProverPersistedFields: ProverPersistedFields{
 			Data:           data,
 			Round:          round,
 			Participants:   part,
@@ -85,9 +85,9 @@ func MakeBuilder(data MessageHash, round uint64, provenWeight uint64, part []bas
 	return b, nil
 }
 
-// Present checks if the builder already contains a signature at a particular
+// Present checks if the prover already contains a signature at a particular
 // offset.
-func (b *Builder) Present(pos uint64) (bool, error) {
+func (b *Prover) Present(pos uint64) (bool, error) {
 	if pos >= uint64(len(b.sigs)) {
 		return false, fmt.Errorf("%w pos %d >= len(b.sigs) %d", ErrPositionOutOfBound, pos, len(b.sigs))
 	}
@@ -95,9 +95,9 @@ func (b *Builder) Present(pos uint64) (bool, error) {
 	return b.sigs[pos].Weight != 0, nil
 }
 
-// IsValid verifies that the participant along with the signature can be inserted to the builder.
+// IsValid verifies that the participant along with the signature can be inserted to the prover.
 // verifySig can be set to false when the signature is already verified (e.g. loaded from the DB)
-func (b *Builder) IsValid(pos uint64, sig *merklesignature.Signature, verifySig bool) error {
+func (b *Prover) IsValid(pos uint64, sig *merklesignature.Signature, verifySig bool) error {
 	if pos >= uint64(len(b.Participants)) {
 		return fmt.Errorf("%w pos %d >= len(participants) %d", ErrPositionOutOfBound, pos, len(b.Participants))
 	}
@@ -105,7 +105,7 @@ func (b *Builder) IsValid(pos uint64, sig *merklesignature.Signature, verifySig 
 	p := b.Participants[pos]
 
 	if p.Weight == 0 {
-		return fmt.Errorf("builder.IsValid: %w: position = %d", ErrPositionWithZeroWeight, pos)
+		return fmt.Errorf("prover.IsValid: %w: position = %d", ErrPositionWithZeroWeight, pos)
 	}
 
 	// Check signature
@@ -121,7 +121,7 @@ func (b *Builder) IsValid(pos uint64, sig *merklesignature.Signature, verifySig 
 }
 
 // Add a signature to the set of signatures available for building a proof.
-func (b *Builder) Add(pos uint64, sig merklesignature.Signature) error {
+func (b *Prover) Add(pos uint64, sig merklesignature.Signature) error {
 	isPresent, err := b.Present(pos)
 	if err != nil {
 		return err
@@ -141,12 +141,12 @@ func (b *Builder) Add(pos uint64, sig merklesignature.Signature) error {
 }
 
 // Ready returns whether the state proof is ready to be built.
-func (b *Builder) Ready() bool {
+func (b *Prover) Ready() bool {
 	return b.cachedProof != nil || b.signedWeight > b.ProvenWeight
 }
 
 // SignedWeight returns the total weight of signatures added so far.
-func (b *Builder) SignedWeight() uint64 {
+func (b *Prover) SignedWeight() uint64 {
 	return b.signedWeight
 }
 
@@ -156,7 +156,7 @@ func (b *Builder) SignedWeight() uint64 {
 // coinWeight.
 //
 // coinIndex works by doing a binary search on the sigs array.
-func (b *Builder) coinIndex(coinWeight uint64) (uint64, error) {
+func (b *Prover) coinIndex(coinWeight uint64) (uint64, error) {
 	lo := uint64(0)
 	hi := uint64(len(b.sigs))
 
@@ -179,9 +179,9 @@ again:
 	goto again
 }
 
-// Build returns a state proof, if the builder has accumulated
+// CreateProof returns a state proof, if the prover has accumulated
 // enough signatures to construct it.
-func (b *Builder) Build() (*StateProof, error) {
+func (b *Prover) CreateProof() (*StateProof, error) {
 	if b.cachedProof != nil {
 		return b.cachedProof, nil
 	}
@@ -271,7 +271,7 @@ func (b *Builder) Build() (*StateProof, error) {
 	return s, nil
 }
 
-// AllocSigs should only be used after decoding msgpacked Builder, as the sigs field is not exported and encoded
-func (b *Builder) AllocSigs() {
+// AllocSigs should only be used after decoding msgpacked Prover, as the sigs field is not exported and encoded
+func (b *Prover) AllocSigs() {
 	b.sigs = make([]sigslot, len(b.Participants))
 }

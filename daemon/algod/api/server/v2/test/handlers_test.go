@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -1309,6 +1310,11 @@ func TestTealDisassemble(t *testing.T) {
 	// Test bad program.
 	badProgram := []byte{1, 99}
 	tealDisassembleTest(t, badProgram, 400, "invalid opcode", true)
+
+	// Create a program with MaxTealSourceBytes+1 bytes
+	// This should fail inside the handler when reading the bytes from the request body.
+	largeProgram := []byte(strings.Repeat("a", v2.MaxTealSourceBytes+1))
+	tealDisassembleTest(t, largeProgram, 400, "http: request body too large", true)
 }
 
 func tealDryrunTest(
@@ -1355,6 +1361,12 @@ func tealDryrunTest(
 		messages := *response.Txns[0].AppCallMessages
 		require.GreaterOrEqual(t, len(messages), 1)
 		require.Equal(t, expResult, messages[len(messages)-1])
+	} else if rec.Code == 400 {
+		var response model.ErrorResponse
+		data := rec.Body.Bytes()
+		err = protocol.DecodeJSON(data, &response)
+		require.NoError(t, err, string(data))
+		require.Contains(t, response.Message, expResult)
 	}
 	return
 }
@@ -1420,7 +1432,7 @@ func TestTealDryrun(t *testing.T) {
 	tealDryrunTest(t, &gdr, "msgp", 404, "", false)
 
 	gdr.ProtocolVersion = "unk"
-	tealDryrunTest(t, &gdr, "json", 400, "", true)
+	tealDryrunTest(t, &gdr, "json", 400, "unsupported protocol version", true)
 	gdr.ProtocolVersion = ""
 
 	ddr := tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
@@ -1433,6 +1445,10 @@ func TestTealDryrun(t *testing.T) {
 	tealDryrunTest(t, &gdr, "json", 200, "REJECT", true)
 	tealDryrunTest(t, &gdr, "msgp", 200, "REJECT", true)
 	tealDryrunTest(t, &gdr, "json", 404, "", false)
+
+	// This should fail inside the handler when reading the bytes from the request body.
+	gdr.ProtocolVersion = strings.Repeat("a", v2.MaxTealDryrunBytes+1)
+	tealDryrunTest(t, &gdr, "json", 400, "http: request body too large", true)
 }
 
 func TestAppendParticipationKeys(t *testing.T) {
