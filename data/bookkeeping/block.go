@@ -536,15 +536,15 @@ func MakeDevModeBlock(prev BlockHeader, configs DevModeOpts) Block {
 		logging.Base().Panicf("MakeBlock: next protocol %v not supported", upgradeState.CurrentProtocol)
 	}
 
-	// If a timestamp offset is not set, then set this block's timestamp as
-	// min(time.Now, MaxTimestampIncrement).
 	// If a timestamp offset is set, then set it to prev ts + offset.
+	// If a timestamp offset is not set, then try to set this block's timestamp
+	// as min(time.Now, MaxTimestampIncrement).
 	timestamp := time.Now().Unix()
 	if prev.TimeStamp > 0 {
-		if timestamp < prev.TimeStamp {
-			timestamp = prev.TimeStamp
-		} else if configs.TimeStampOffset > 0 {
+		if configs.TimeStampOffset > 0 {
 			timestamp = prev.TimeStamp + configs.TimeStampOffset
+		} else if timestamp < prev.TimeStamp {
+			timestamp = prev.TimeStamp
 		} else if timestamp > prev.TimeStamp+params.MaxTimestampIncrement {
 			timestamp = prev.TimeStamp + params.MaxTimestampIncrement
 		}
