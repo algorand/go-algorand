@@ -24,7 +24,7 @@ var (
 	errBoxDoesNotExist                         = "box not found"
 	errFailedLookingUpLedger                   = "failed to retrieve information from the ledger"
 	errFailedLookingUpTransactionPool          = "failed to retrieve information from the transaction pool"
-	errFailedRetrievingStateDelta              = "failed retrieving State Delta"
+	errFailedRetrievingStateDelta              = "failed retrieving State Delta: %v"
 	errFailedRetrievingNodeStatus              = "failed retrieving node status"
 	errFailedRetrievingLatestBlockHeaderStatus = "failed retrieving latests block header"
 	errFailedRetrievingTimeStampOffset         = "failed retrieving timestamp offset from node: %v"
