@@ -4,9 +4,18 @@ If you are interested in contributing to the project, we welcome and thank you. 
 
 The [Algorand GitHub Organization](https://github.com/algorand) has all of our open source projects, and dependencies which we fork and use in those projects. While technical details in this document is specific to `go-algorand`, the general ideas are applicable to all of our projects.
 
+## Non-code Contributions
+
+While contributions come in many forms, this document is focused on code. For other types of involvement, see the following:
+* [Reporting issues and features requests.](go-algorand-issues)
+* [Security vulnerability disclosures.](security-disclosure)
+* [Documentation improvements.](algorand-docs)
+
 ## Contribution Model
 
-All changes to `go-algorand` are made through the same process: a pull request targeting the `master` branch. This goes for internal and external contributions. To familiarize yourself with the process we recommend that you review the current open pull requests, and the GitHub documentation for [creating a pull request from a fork](https://help.github.com/en/articles/creating-a-pull-request-from-a-fork). Note: some of our projects are using gitflow, for these the process is the same but you will target pull requests against the `develop` branch.
+All changes to `go-algorand` are made through the same process: a pull request targeting the `master` branch. This goes for internal and external contributions. To familiarize yourself with the process we recommend that you review the current open pull requests, and the GitHub documentation for [creating a pull request from a fork](gh-pr-process).
+
+Note: some of our projects are using gitflow, for these the process is the same but you will target pull requests against the `develop` branch.
 
 ## Communication Channels
 
@@ -17,7 +26,6 @@ The core development team monitors the Algorand [discord community](https://disc
 All changes are are made via pull requests.
 
 Small changes are easier to review and merge than large ones, so the more focused a PR the better. If a feature requires refactoring, the refactoring should be a separate PR. If refactoring uncovers a bug, the fix should be a separate PR. These are not strict rules, but generally speaking, they make things easier to review which speeds up the PR process.
-
 
 ### General Guidelines
 
@@ -48,3 +56,8 @@ The project maintainers are responsible for the code in `go-algorand`, so ultima
 #### Merge
 
 All changes are subject to a minimum of two reviews from subject matter experts prior. Once this approval is reached a small number of committers are responsible for merging the changes. The list of committers is limited for practical and security reasons.
+
+[gh-pr-process]: https://help.github.com/en/articles/creating-a-pull-request-from-a-fork
+[go-algorand-issues]: https://github.com/algorand/go-algorand/issues/new/choose
+[security-disclosure]: https://github.com/algorand/go-algorand/security/policy
+[algorand-docs]: https://github.com/algorand/docs/blob/staging/CONTRIBUTING.md
