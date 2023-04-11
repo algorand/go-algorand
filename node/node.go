@@ -632,22 +632,18 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid, look
 	}
 
 	latest := node.ledger.Latest()
-
-	minRound, maxRound := latest, latest
-
+	// Backwards compat with in case old clients don't specify
 	if lookbackRounds == 0 {
-		var maxLife basics.Round
 		proto, err := node.ledger.ConsensusParams(latest)
 		if err == nil {
-			maxLife = basics.Round(proto.MaxTxnLife)
+			lookbackRounds = proto.MaxTxnLife
 		} else {
 			node.log.Errorf("node.GetPendingTransaction: cannot get consensus params for latest round %v", latest)
 		}
-		// Search from newest to oldest round up to the max life of a transaction.
-		minRound = maxRound.SubSaturate(maxLife)
-	} else {
-		minRound = maxRound - basics.Round(lookbackRounds)
 	}
+	// Search from newest to oldest round up to the max life of a transaction.
+	maxRound := latest
+	minRound := maxRound.SubSaturate(basics.Round(lookbackRounds))
 
 	// Since we're using uint64, if the minRound is 0, we need to check for an underflow.
 	if minRound == 0 {
