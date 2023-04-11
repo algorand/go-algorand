@@ -3280,14 +3280,9 @@
       ],
       "properties": {
         "txns": {
-          "description": "An atomic transaction group.",
-          "type": "array",
-          "items": {
-            "description": "SignedTxn object. Must be canonically encoded.",
-            "type": "string",
-            "format": "json",
-            "x-algorand-format": "SignedTransaction"
-          }
+          "description": "A canonically encoded atomic transaction group. This is the exact same format that the '/v2/transactions' endpoint accepts as a POST body.",
+          "type": "string",
+          "format": "byte"
         }
       }
     },

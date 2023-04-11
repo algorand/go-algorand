@@ -951,38 +951,23 @@ type PreEncodedSimulateResponse struct {
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
 // (POST /v2/transactions/simulate)
 func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateTransactionParams) error {
-	stat, err := v2.Node.Status()
-	if err != nil {
-		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
-	}
-	if stat.Catchpoint != "" {
-		// node is currently catching up to the requested catchpoint.
-		return serviceUnavailable(ctx, fmt.Errorf("SimulateTransaction failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
-	}
-	proto := config.Consensus[stat.LastVersion]
-
-	txgroup, err := decodeTxGroup(ctx.Request().Body, proto.MaxTxGroupSize)
+	req := ctx.Request()
+	buf := new(bytes.Buffer)
+	req.Body = http.MaxBytesReader(nil, req.Body, MaxTealDryrunBytes)
+	_, err := buf.ReadFrom(ctx.Request().Body)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	request := PreEncodedSimulateRequest{
-		TxnGroups: []PreEncodedSimulateRequestTransactionGroup{
+	data := buf.Bytes()
+
+	request := model.SimulateRequest{
+		TxnGroups: []model.SimulateRequestTransactionGroup{
 			{
-				Txns: txgroup,
+				Txns: data,
 			},
 		},
 	}
 	return v2.simulate(ctx, request, (*string)(params.Format))
-}
-
-// PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
-type PreEncodedSimulateRequestTransactionGroup struct {
-	Txns []transactions.SignedTxn `codec:"txns"`
-}
-
-// PreEncodedSimulateRequest mirrors model.SimulateRequest
-type PreEncodedSimulateRequest struct {
-	TxnGroups []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
 }
 
 // SimulateTransactionExtended simulates a raw transaction or transaction group as it would be
@@ -991,6 +976,28 @@ type PreEncodedSimulateRequest struct {
 // options for the simulation.
 // (POST /v2/transactions/simulate/extended)
 func (v2 *Handlers) SimulateTransactionExtended(ctx echo.Context, params model.SimulateTransactionExtendedParams) error {
+	req := ctx.Request()
+	buf := new(bytes.Buffer)
+	req.Body = http.MaxBytesReader(nil, req.Body, MaxTealDryrunBytes)
+	_, err := buf.ReadFrom(ctx.Request().Body)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	data := buf.Bytes()
+
+	var simulateRequest model.SimulateRequest
+	err = decode(protocol.CodecHandle, data, &simulateRequest)
+	if err != nil {
+		err = decode(protocol.JSONStrictHandle, data, &simulateRequest)
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+	}
+
+	return v2.simulate(ctx, simulateRequest, (*string)(params.Format))
+}
+
+func (v2 *Handlers) simulate(ctx echo.Context, request model.SimulateRequest, format *string) error {
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
@@ -1001,45 +1008,16 @@ func (v2 *Handlers) SimulateTransactionExtended(ctx echo.Context, params model.S
 	}
 	proto := config.Consensus[stat.LastVersion]
 
-	req := ctx.Request()
-	buf := new(bytes.Buffer)
-	req.Body = http.MaxBytesReader(nil, req.Body, MaxTealDryrunBytes)
-	_, err = buf.ReadFrom(ctx.Request().Body)
-	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
-	}
-	data := buf.Bytes()
-
-	var simulateRequest PreEncodedSimulateRequest
-	err = decode(protocol.CodecHandle, data, &simulateRequest)
-	if err != nil {
-		err = decode(protocol.JSONStrictHandle, data, &simulateRequest)
-		if err != nil {
-			return badRequest(ctx, err, err.Error(), v2.Log)
-		}
-	}
-
-	for _, txgroup := range simulateRequest.TxnGroups {
-		// These checks provide the same guarantees as decodeTxGroup
-		if len(txgroup.Txns) == 0 {
-			err = errors.New("empty txgroup")
-			return badRequest(ctx, err, err.Error(), v2.Log)
-		}
-		if len(txgroup.Txns) > proto.MaxTxGroupSize {
-			err = fmt.Errorf("transaction group size %d exceeds protocol max %d", len(txgroup.Txns), proto.MaxTxGroupSize)
-			return badRequest(ctx, err, err.Error(), v2.Log)
-		}
-	}
-
-	return v2.simulate(ctx, simulateRequest, (*string)(params.Format))
-}
-
-func (v2 *Handlers) simulate(ctx echo.Context, request PreEncodedSimulateRequest, format *string) error {
 	if len(request.TxnGroups) != 1 {
 		err := fmt.Errorf("expected 1 transaction group, got %d", len(request.TxnGroups))
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	txgroup := request.TxnGroups[0].Txns
+
+	firstTxnGroup := request.TxnGroups[0].Txns
+	txgroup, err := decodeTxGroup(bytes.NewReader(firstTxnGroup), proto.MaxTxGroupSize)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
 
 	// Simulate transaction
 	simulationResult, err := v2.Node.Simulate(txgroup)
