@@ -64,6 +64,7 @@ var defaultLocal = Local{
 	EnableExperimentalAPI:                      false,
 	EnableFollowMode:                           false,
 	EnableGossipBlockService:                   true,
+	EnableGranularEval:                         false,
 	EnableIncomingMessageFilter:                false,
 	EnableLedgerService:                        false,
 	EnableMetricReporting:                      false,
