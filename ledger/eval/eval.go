@@ -624,6 +624,8 @@ type EvaluatorOptions struct {
 	Validate            bool
 	Generate            bool
 	MaxTxnBytesPerBlock int
+	Tracer              logic.EvalTracer
+	GranularEval        bool
 	ProtoParams         *config.ConsensusParams
 }
 
@@ -683,6 +685,8 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		genesisHash:         l.GenesisHash(),
 		l:                   l,
 		maxTxnBytesPerBlock: evalOpts.MaxTxnBytesPerBlock,
+		GranularEval:        evalOpts.GranularEval,
+		Tracer:              evalOpts.Tracer,
 	}
 
 	// Preallocate space for the payset so that we don't have to
@@ -1574,15 +1578,23 @@ func (validator *evalTxValidator) run() {
 // Validate: Eval(ctx, l, blk, true, txcache, executionPool)
 // AddBlock: Eval(context.Background(), l, blk, false, txcache, nil)
 // tracker:  Eval(context.Background(), l, blk, false, txcache, nil)
-func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
+func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool, cfg config.Local) (ledgercore.StateDelta, error) {
 	// flush the pending writes in the cache to make everything read so far available during eval
 	l.FlushCaches()
+	var granularEval = false
+	var txnDeltaTracer logic.EvalTracer
+	if cfg.EnableGranularEval {
+		granularEval = true
+		txnDeltaTracer = TxnGroupDeltaTracerForConfig(cfg)
+	}
 
 	eval, err := StartEvaluator(l, blk.BlockHeader,
 		EvaluatorOptions{
-			PaysetHint: len(blk.Payset),
-			Validate:   validate,
-			Generate:   false,
+			PaysetHint:   len(blk.Payset),
+			Validate:     validate,
+			Generate:     false,
+			GranularEval: granularEval,
+			Tracer:       txnDeltaTracer,
 		})
 	if err != nil {
 		return ledgercore.StateDelta{}, err
