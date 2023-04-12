@@ -33,6 +33,7 @@ const (
 	kvPrefixOnlineAccountBalance = "online_account_balance"
 	kvPrefixOnlineBalanceTotal   = "online_balance_total"
 	kvRoundKey                   = "global_round"
+	kvSchemaVersionKey           = "global_schema_version"
 	kvTotalsKey                  = "global_total"
 	kvTxTail                     = "txtail"
 	kvOnlineAccountRoundParams   = "online_account_round_params"
@@ -42,6 +43,13 @@ const (
 func bigEndianUint64(v uint64) []byte {
 	ret := make([]byte, 8)
 	binary.BigEndian.PutUint64(ret, v)
+	return ret
+}
+
+// return the big-endian binary encoding of a uint32
+func bigEndianUint32(v uint32) []byte {
+	ret := make([]byte, 4)
+	binary.BigEndian.PutUint32(ret, v)
 	return ret
 }
 
@@ -144,6 +152,11 @@ func onlineAccountBalanceOnlyPartialKey(round basics.Round) []byte {
 
 func roundKey() []byte {
 	ret := []byte(kvRoundKey)
+	return ret
+}
+
+func schemaVersionKey() []byte {
+	ret := []byte(kvSchemaVersionKey)
 	return ret
 }
 
