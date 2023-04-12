@@ -71,9 +71,29 @@ ${gcmd} clerk sign -i "${TEMPDIR}/grouped-1.tx" -o "${TEMPDIR}/grouped-1.stx"
 cat "${TEMPDIR}/grouped-0.stx" "${TEMPDIR}/grouped-1.stx" > "${TEMPDIR}/grouped.stx"
 
 RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/grouped.stx" | jq '."would-succeed"')
-
 if [[ $RES != $CONST_TRUE ]]; then
     date '+app-simulate-test FAIL should pass to simulate self pay transaction group %Y%m%d_%H%M%S'
+    false
+fi
+
+# Test creating and using a simulate request object
+${gcmd} clerk simulate -t "${TEMPDIR}/grouped.stx" --request-out "${TEMPDIR}/simulateRequest.json"
+
+NUM_GROUPS=$(jq '."txn-groups" | length' < "${TEMPDIR}/simulateRequest.json")
+if [ $NUM_GROUPS -ne 1 ]; then
+    date '+app-simulate-test FAIL should have 1 transaction group in simulate request %Y%m%d_%H%M%S'
+    false
+fi
+
+NUM_TXNS=$(jq '."txn-groups"[0]."txns" | length' < "${TEMPDIR}/simulateRequest.json")
+if [ $NUM_TXNS -ne 2 ]; then
+    date '+app-simulate-test FAIL should have 2 transactions in simulate request %Y%m%d_%H%M%S'
+    false
+fi
+
+RES=$(${gcmd} clerk simulate --request "${TEMPDIR}/simulateRequest.json" | jq '."would-succeed"')
+if [[ $RES != $CONST_TRUE ]]; then
+    date '+app-simulate-test FAIL should pass with raw simulate request %Y%m%d_%H%M%S'
     false
 fi
 
