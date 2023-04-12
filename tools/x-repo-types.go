@@ -28,6 +28,63 @@ var repos = map[string]string{
 	goalStateProof: "x-repo-types",
 }
 
+func algorandURL(repo string) string {
+	return fmt.Sprintf("https://github.com/%s/%s", repoOwner, repo)
+}
+
+func gitClone(repo, branch string) (*git.Repository, error) {
+	// Clone the repository
+
+	err := os.RemoveAll(repo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to remove local repository directory: %w", err)
+	}
+
+	repoObj, err := git.PlainClone(repo, false, &git.CloneOptions{
+		URL:           algorandURL(repo),
+		ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)),
+		SingleBranch:  true,
+		Depth:         1,
+		Tags:          git.NoTags,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return repoObj, nil
+}
+
+// func main() {
+// 	repoStructs := make(map[string][]StructInfo)
+// 	for repo, branch := range repos {
+// 		repoObj, err := gitClone(repo, branch)
+// 		if err != nil {
+// 			log.Printf("Error cloning repository %s: %v", repo, err)
+// 			os.Exit(1)
+// 		}
+// 		_ = repoObj
+// 		allStructs, err := extractStructs(repo)
+// 		if err != nil {
+// 			log.Printf("Error extracting structs from repository %s: %v", repo, err)
+// 			os.Exit(1)
+// 		}
+
+// 		// Sort all structs by their names
+// 		sort.Slice(allStructs, func(i, j int) bool {
+// 			return allStructs[i].Name < allStructs[j].Name
+// 		})
+// 		// Write all structs to a single CSV file
+// 		writeStructsToCSV(repo, allStructs)
+
+// 		repoStructs[repo] = allStructs
+// 	}
+
+// 	saveSimilarStructs(repoStructs, goal, goalStateProof, 25)
+// 	saveSimilarStructs(repoStructs, goal, goalSDK, 250)
+
+// }
+
 type Field struct {
 	Name string
 	Type string
@@ -45,10 +102,6 @@ type ScoredPair struct {
 	X     StructInfo
 	Y     StructInfo
 	Score float64
-}
-
-func algorandURL(repo string) string {
-	return fmt.Sprintf("https://github.com/%s/%s", repoOwner, repo)
 }
 
 func similarityScore(x, y StructInfo) float64 {
@@ -111,59 +164,6 @@ func max(a, b int) int {
 		return a
 	}
 	return b
-}
-
-func main() {
-	repoStructs := make(map[string][]StructInfo)
-	for repo, branch := range repos {
-		repoObj, err := gitClone(repo, branch)
-		if err != nil {
-			log.Printf("Error cloning repository %s: %v", repo, err)
-			os.Exit(1)
-		}
-		_ = repoObj
-		allStructs, err := extractStructs(repo)
-		if err != nil {
-			log.Printf("Error extracting structs from repository %s: %v", repo, err)
-			os.Exit(1)
-		}
-
-		// Sort all structs by their names
-		sort.Slice(allStructs, func(i, j int) bool {
-			return allStructs[i].Name < allStructs[j].Name
-		})
-		// Write all structs to a single CSV file
-		writeStructsToCSV(repo, allStructs)
-
-		repoStructs[repo] = allStructs
-	}
-
-	saveSimilarStructs(repoStructs, goal, goalStateProof, 25)
-	saveSimilarStructs(repoStructs, goal, goalSDK, 250)
-
-}
-
-func gitClone(repo, branch string) (*git.Repository, error) {
-	// Clone the repository
-
-	err := os.RemoveAll(repo)
-	if err != nil {
-		return nil, fmt.Errorf("failed to remove local repository directory: %w", err)
-	}
-
-	repoObj, err := git.PlainClone(repo, false, &git.CloneOptions{
-		URL:           algorandURL(repo),
-		ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)),
-		SingleBranch:  true,
-		Depth:         1,
-		Tags:          git.NoTags,
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return repoObj, nil
 }
 
 func extractStructs(repoPath string) (allStructs []StructInfo, err error) {
