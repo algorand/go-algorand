@@ -78,7 +78,6 @@ func (vbp *voteBatchProcessor) ProcessBatch(jobs []execpool.InputJob) {
 	}
 	// Signiture verification of the batch
 	verificationTasks.failed = crypto.BatchVerifyOneTimeSignatures(verificationTasks.tasks)
-
 	for i := range taskedJobs {
 		req := taskedJobs[i]
 		// check if the signature passed, authenticate cred and return the vote/equivocationVote

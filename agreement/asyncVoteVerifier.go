@@ -81,7 +81,8 @@ func MakeStartAsyncVoteVerifier(verificationPool execpool.BacklogPool) *AsyncVot
 
 	verifier.workerWaitCh = make(chan struct{})
 
-	verifier.batchInputChan = make(chan execpool.InputJob)
+	// batchInputChan should match the execpool buffer size so that the sender's blocking behavior does not change
+	verifier.batchInputChan = make(chan execpool.InputJob, 2*verificationPool.GetParallelism())
 
 	verifier.batchVerifier = execpool.MakeStreamToBatch(
 		verifier.batchInputChan,
