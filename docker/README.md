@@ -80,7 +80,7 @@ The data directory located at `/algod/data`. Mounting a volume at that location 
 
 ### Volume Permissions
 
-The container executes in the context of the `algorand` user with UID=999 and GID=999 which is handled differently depending on your operating system. During startup the container is temporarily run as `root`, after modifying the permissions of `/algod/data` it drops to the `algorand` user. This can sometimes cause problems.
+The container executes in the context of the `algorand` user with UID=999 and GID=999 which is handled differently depending on your operating system or deployment platform. During startup the container temporarily runs as `root` in order to modify the permissions of `/algod/data`. It then changes to the `algorand` user. This can sometimes cause problems, for example if your deployment platform doesn't allow containers to run as the root user.
 
 #### Named Volume
 
@@ -91,6 +91,9 @@ docker volume create algod-data
 docker run -it --rm -d -v algod-data:/algod/data algorand/algod
 ```
 
+#### Use specific UID and GID
+
+On the host system, ensure the directory being mounted uses UID=999 and GID=999. If the directory already has these permissions you may override the default user with `-u 999:999`.
 
 ### Private Network
 
