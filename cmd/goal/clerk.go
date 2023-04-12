@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -1267,9 +1268,31 @@ var simulateCmd = &cobra.Command{
 			reportErrorf(fileReadError, txFilename, err)
 		}
 
+		var txgroup []transactions.SignedTxn
+		dec := protocol.NewMsgpDecoderBytes(data)
+		for {
+			var txn transactions.SignedTxn
+			err = dec.Decode(&txn)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				reportErrorf(txDecodeError, txFilename, err)
+			}
+			txgroup = append(txgroup, txn)
+		}
+
+		simulateRequest := v2.PreEncodedSimulateRequest{
+			TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+				{
+					Txns: txgroup,
+				},
+			},
+		}
+
 		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
-		resp, err := client.SimulateRawTransaction(data)
+		resp, err := client.SimulateTransactions(simulateRequest)
 		if err != nil {
 			reportErrorf("simulation error: %s", err.Error())
 		}

@@ -948,33 +948,6 @@ type PreEncodedSimulateResponse struct {
 	WouldSucceed bool                               `codec:"would-succeed"`
 }
 
-// SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
-// (POST /v2/transactions/simulate)
-func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateTransactionParams) error {
-	stat, err := v2.Node.Status()
-	if err != nil {
-		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
-	}
-	if stat.Catchpoint != "" {
-		// node is currently catching up to the requested catchpoint.
-		return serviceUnavailable(ctx, fmt.Errorf("SimulateTransaction failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
-	}
-	proto := config.Consensus[stat.LastVersion]
-
-	txgroup, err := decodeTxGroup(ctx.Request().Body, proto.MaxTxGroupSize)
-	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
-	}
-	request := PreEncodedSimulateRequest{
-		TxnGroups: []PreEncodedSimulateRequestTransactionGroup{
-			{
-				Txns: txgroup,
-			},
-		},
-	}
-	return v2.simulate(ctx, request, (*string)(params.Format))
-}
-
 // PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
 type PreEncodedSimulateRequestTransactionGroup struct {
 	Txns []transactions.SignedTxn `codec:"txns"`
@@ -985,12 +958,9 @@ type PreEncodedSimulateRequest struct {
 	TxnGroups []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
 }
 
-// SimulateTransactionExtended simulates a raw transaction or transaction group as it would be
-// evaluated on the network. The simulation will use blockchain state from the latest committed
-// round. Compared to '/v2/transactions/simulate', this endpoint provides additional configuration
-// options for the simulation.
-// (POST /v2/transactions/simulate/extended)
-func (v2 *Handlers) SimulateTransactionExtended(ctx echo.Context, params model.SimulateTransactionExtendedParams) error {
+// SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
+// (POST /v2/transactions/simulate)
+func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateTransactionParams) error {
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
@@ -1001,19 +971,18 @@ func (v2 *Handlers) SimulateTransactionExtended(ctx echo.Context, params model.S
 	}
 	proto := config.Consensus[stat.LastVersion]
 
-	req := ctx.Request()
-	buf := new(bytes.Buffer)
-	req.Body = http.MaxBytesReader(nil, req.Body, MaxTealDryrunBytes)
-	_, err = buf.ReadFrom(ctx.Request().Body)
+	requestBuffer := new(bytes.Buffer)
+	requestBodyReader := http.MaxBytesReader(nil, ctx.Request().Body, MaxTealDryrunBytes)
+	_, err = requestBuffer.ReadFrom(requestBodyReader)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	data := buf.Bytes()
+	requestData := requestBuffer.Bytes()
 
 	var simulateRequest PreEncodedSimulateRequest
-	err = decode(protocol.CodecHandle, data, &simulateRequest)
+	err = decode(protocol.CodecHandle, requestData, &simulateRequest)
 	if err != nil {
-		err = decode(protocol.JSONStrictHandle, data, &simulateRequest)
+		err = decode(protocol.JSONStrictHandle, requestData, &simulateRequest)
 		if err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
@@ -1031,15 +1000,11 @@ func (v2 *Handlers) SimulateTransactionExtended(ctx echo.Context, params model.S
 		}
 	}
 
-	return v2.simulate(ctx, simulateRequest, (*string)(params.Format))
-}
-
-func (v2 *Handlers) simulate(ctx echo.Context, request PreEncodedSimulateRequest, format *string) error {
-	if len(request.TxnGroups) != 1 {
-		err := fmt.Errorf("expected 1 transaction group, got %d", len(request.TxnGroups))
+	if len(simulateRequest.TxnGroups) != 1 {
+		err := fmt.Errorf("expected 1 transaction group, got %d", len(simulateRequest.TxnGroups))
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	txgroup := request.TxnGroups[0].Txns
+	txgroup := simulateRequest.TxnGroups[0].Txns
 
 	// Simulate transaction
 	simulationResult, err := v2.Node.Simulate(txgroup)
@@ -1055,16 +1020,16 @@ func (v2 *Handlers) simulate(ctx echo.Context, request PreEncodedSimulateRequest
 
 	response := convertSimulationResult(simulationResult)
 
-	handle, contentType, err := getCodecHandle(format)
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
-	data, err := encode(handle, &response)
+	responseData, err := encode(handle, &response)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
 
-	return ctx.Blob(http.StatusOK, contentType, data)
+	return ctx.Blob(http.StatusOK, contentType, responseData)
 }
 
 // TealDryrun takes transactions and additional simulated ledger state and returns debugging information.

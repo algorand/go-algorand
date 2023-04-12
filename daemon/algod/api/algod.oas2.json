@@ -1242,7 +1242,8 @@
           "nonparticipating"
         ],
         "consumes": [
-          "application/x-binary"
+          "application/json",
+          "application/msgpack"
         ],
         "produces": [
           "application/json",
@@ -1253,74 +1254,6 @@
         ],
         "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. The simulation will use blockchain state from the latest committed round.",
         "operationId": "SimulateTransaction",
-        "parameters": [
-          {
-            "description": "The byte encoded transaction to simulate",
-            "name": "rawtxn",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "binary"
-            }
-          },
-          {
-            "$ref": "#/parameters/format"
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/responses/SimulateResponse"
-          },
-          "400": {
-            "description": "Bad Request - Malformed Algorand transaction",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "401": {
-            "description": "Invalid API Token",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal Error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "503": {
-            "description": "Service Temporarily Unavailable",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "default": {
-            "description": "Unknown Error"
-          }
-        }
-      }
-    },
-    "/v2/transactions/simulate/extended": {
-      "post": {
-        "tags": [
-          "public",
-          "nonparticipating"
-        ],
-        "consumes": [
-          "application/json",
-          "application/msgpack"
-        ],
-        "produces": [
-          "application/json",
-          "application/msgpack"
-        ],
-        "schemes": [
-          "http"
-        ],
-        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. The simulation will use blockchain state from the latest committed round. Compared to '/v2/transactions/simulate', this endpoint provides additional configuration options for the simulation.",
-        "operationId": "SimulateTransactionExtended",
         "parameters": [
           {
             "description": "The transactions to simulate, along with any other inputs.",

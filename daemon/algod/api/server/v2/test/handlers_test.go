@@ -762,35 +762,21 @@ func TestPostTransaction(t *testing.T) {
 }
 
 func simulateTransactionTest(t *testing.T, txnToUse int, format string, expectedCode int) {
-	t.Run("SimulateTransaction", func(t *testing.T) {
-		t.Parallel()
-		txnPrep := func(stxn transactions.SignedTxn) []byte {
-			return protocol.Encode(&stxn)
-		}
-		handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep)
-		defer releasefunc()
-		err := handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: (*model.SimulateTransactionParamsFormat)(&format)})
-		require.NoError(t, err)
-		require.Equal(t, expectedCode, rec.Code)
-	})
-	t.Run("SimulateExtendedTransaction", func(t *testing.T) {
-		t.Parallel()
-		txnPrep := func(stxn transactions.SignedTxn) []byte {
-			request := v2.PreEncodedSimulateRequest{
-				TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
-					{
-						Txns: []transactions.SignedTxn{stxn},
-					},
+	txnPrep := func(stxn transactions.SignedTxn) []byte {
+		request := v2.PreEncodedSimulateRequest{
+			TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+				{
+					Txns: []transactions.SignedTxn{stxn},
 				},
-			}
-			return protocol.EncodeReflect(&request)
+			},
 		}
-		handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep)
-		defer releasefunc()
-		err := handler.SimulateTransactionExtended(c, model.SimulateTransactionExtendedParams{Format: (*model.SimulateTransactionExtendedParamsFormat)(&format)})
-		require.NoError(t, err)
-		require.Equal(t, expectedCode, rec.Code)
-	})
+		return protocol.EncodeReflect(&request)
+	}
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep)
+	defer releasefunc()
+	err := handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: (*model.SimulateTransactionParamsFormat)(&format)})
+	require.NoError(t, err)
+	require.Equal(t, expectedCode, rec.Code)
 }
 
 func TestPostSimulateTransaction(t *testing.T) {
@@ -904,20 +890,16 @@ func makePendingTxnResponse(t *testing.T, txn transactions.SignedTxnWithAD) v2.P
 	t.Helper()
 	preEncoded := v2.ConvertInnerTxn(&txn)
 
-	// In theory we could return preEncoded directly, but there appear to be some subtle differences
+	// In theory we could return preEncoded directly, but there appears to be some subtle differences
 	// once you encode and decode the object, such as *uint64 fields turning from 0 to nil. So to be
 	// safe, let's encode and decode the object.
 
 	// Encode to bytes
-	var encodedBytes []byte
-	encoder := codec.NewEncoderBytes(&encodedBytes, protocol.CodecHandle)
-	err := encoder.Encode(&preEncoded)
-	require.NoError(t, err)
+	encodedBytes := protocol.EncodeReflect(&preEncoded)
 
 	// Decode to v2.PreEncodedTxInfo
 	var response v2.PreEncodedTxInfo
-	decoder := codec.NewDecoderBytes(encodedBytes, protocol.CodecHandle)
-	err = decoder.Decode(&response)
+	err := protocol.DecodeReflect(encodedBytes, &response)
 	require.NoError(t, err)
 
 	return response
@@ -988,30 +970,30 @@ int 1`,
 			}
 			bodyBytes := protocol.EncodeReflect(&request)
 
-			msgpackFormat := model.SimulateTransactionExtendedParamsFormatMsgpack
-			jsonFormat := model.SimulateTransactionExtendedParamsFormatJson
+			msgpackFormat := model.SimulateTransactionParamsFormatMsgpack
+			jsonFormat := model.SimulateTransactionParamsFormatJson
 			responseFormats := []struct {
 				name   string
-				params model.SimulateTransactionExtendedParams
+				params model.SimulateTransactionParams
 				handle codec.Handle
 			}{
 				{
 					name: "msgpack",
-					params: model.SimulateTransactionExtendedParams{
+					params: model.SimulateTransactionParams{
 						Format: &msgpackFormat,
 					},
 					handle: protocol.CodecHandle,
 				},
 				{
 					name: "json",
-					params: model.SimulateTransactionExtendedParams{
+					params: model.SimulateTransactionParams{
 						Format: &jsonFormat,
 					},
 					handle: protocol.JSONStrictHandle,
 				},
 				{
 					name: "default",
-					params: model.SimulateTransactionExtendedParams{
+					params: model.SimulateTransactionParams{
 						Format: nil, // should default to JSON
 					},
 					handle: protocol.JSONStrictHandle,
@@ -1028,7 +1010,7 @@ int 1`,
 					c := e.NewContext(req, rec)
 
 					// simulate transaction
-					err := handler.SimulateTransactionExtended(c, responseFormat.params)
+					err := handler.SimulateTransaction(c, responseFormat.params)
 					require.NoError(t, err)
 					require.Equal(t, 200, rec.Code, rec.Body.String())
 
@@ -1084,79 +1066,6 @@ int 1`,
 			}
 		})
 	}
-}
-
-// TestSimulateTransactionStandard tests SimulateTransaction, not SimulateTransactionExtended
-func TestSimulateTransactionStandard(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	// prepare node and handler
-	numAccounts := 5
-	offlineAccounts := true
-	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 1, offlineAccounts)
-	defer releasefunc()
-	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
-	handler := v2.Handlers{
-		Node:     mockNode,
-		Log:      logging.Base(),
-		Shutdown: dummyShutdownChan,
-	}
-
-	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
-	require.NoError(t, err)
-	txnInfo := simulationtesting.TxnInfo{LatestHeader: hdr}
-
-	sender := roots[0]
-	receiver := roots[1]
-
-	txn := txnInfo.NewTxn(txntest.Txn{
-		Type:     protocol.PaymentTx,
-		Sender:   sender.Address(),
-		Receiver: receiver.Address(),
-		Amount:   0,
-	})
-
-	stxn := txn.Txn().Sign(sender.Secrets())
-
-	// build request body
-	bodyBytes := protocol.Encode(&stxn)
-	body := bytes.NewReader(bodyBytes)
-	req := httptest.NewRequest(http.MethodPost, "/", body)
-	rec := httptest.NewRecorder()
-
-	e := echo.New()
-	c := e.NewContext(req, rec)
-
-	// simulate transaction
-	format := model.SimulateTransactionParamsFormatMsgpack
-	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: &format})
-	require.NoError(t, err)
-	require.Equal(t, 200, rec.Code, rec.Body.String())
-
-	// decode actual response
-	var actualBody v2.PreEncodedSimulateResponse
-	decoder := codec.NewDecoderBytes(rec.Body.Bytes(), protocol.CodecHandle)
-	err = decoder.Decode(&actualBody)
-	require.NoError(t, err)
-
-	expectedBody := v2.PreEncodedSimulateResponse{
-		Version:      1,
-		WouldSucceed: true,
-		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
-			{
-				Txns: []v2.PreEncodedSimulateTxnResult{
-					{
-						Txn: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
-							SignedTxn: stxn,
-						}),
-					},
-				},
-			},
-		},
-	}
-	assertSimulationResultsEqual(t, "", expectedBody, actualBody)
 }
 
 func TestSimulateTransactionVerificationFailure(t *testing.T) {
@@ -1269,7 +1178,7 @@ func TestSimulateTransactionMultipleGroups(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	// simulate transaction
-	err = handler.SimulateTransactionExtended(c, model.SimulateTransactionExtendedParams{})
+	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{})
 	require.NoError(t, err)
 	bodyString := rec.Body.String()
 	require.Equal(t, 400, rec.Code, bodyString)

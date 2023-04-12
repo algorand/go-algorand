@@ -1601,7 +1601,14 @@ func TestSimulateTransaction(t *testing.T) {
 	currentRoundBeforeSimulate, err := testClient.CurrentRound()
 	a.NoError(err)
 
-	result, err := testClient.SimulateTransactionGroup([]transactions.SignedTxn{stxn})
+	simulateRequest := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{stxn},
+			},
+		},
+	}
+	result, err := testClient.SimulateTransactions(simulateRequest)
 	a.NoError(err)
 
 	currentAfterAfterSimulate, err := testClient.CurrentRound()

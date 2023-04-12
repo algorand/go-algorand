@@ -130,12 +130,6 @@ const (
 	SimulateTransactionParamsFormatMsgpack SimulateTransactionParamsFormat = "msgpack"
 )
 
-// Defines values for SimulateTransactionExtendedParamsFormat.
-const (
-	SimulateTransactionExtendedParamsFormatJson    SimulateTransactionExtendedParamsFormat = "json"
-	SimulateTransactionExtendedParamsFormatMsgpack SimulateTransactionExtendedParamsFormat = "msgpack"
-)
-
 // Account Account information at a given round.
 //
 // Definition:
@@ -1233,20 +1227,11 @@ type SimulateTransactionParams struct {
 // SimulateTransactionParamsFormat defines parameters for SimulateTransaction.
 type SimulateTransactionParamsFormat string
 
-// SimulateTransactionExtendedParams defines parameters for SimulateTransactionExtended.
-type SimulateTransactionExtendedParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
-	Format *SimulateTransactionExtendedParamsFormat `form:"format,omitempty" json:"format,omitempty"`
-}
-
-// SimulateTransactionExtendedParamsFormat defines parameters for SimulateTransactionExtended.
-type SimulateTransactionExtendedParamsFormat string
-
 // TealCompileTextRequestBody defines body for TealCompile for text/plain ContentType.
 type TealCompileTextRequestBody = TealCompileTextBody
 
 // TealDryrunJSONRequestBody defines body for TealDryrun for application/json ContentType.
 type TealDryrunJSONRequestBody = DryrunRequest
 
-// SimulateTransactionExtendedJSONRequestBody defines body for SimulateTransactionExtended for application/json ContentType.
-type SimulateTransactionExtendedJSONRequestBody = SimulateRequest
+// SimulateTransactionJSONRequestBody defines body for SimulateTransaction for application/json ContentType.
+type SimulateTransactionJSONRequestBody = SimulateRequest
