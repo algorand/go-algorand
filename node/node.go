@@ -1431,9 +1431,10 @@ func (node *AlgorandFullNode) SetBlockTimeStampOffset(offset int64) error {
 
 // GetBlockTimeStampOffset gets a timestamp offset.
 // This is only available in dev mode.
-func (node *AlgorandFullNode) GetBlockTimeStampOffset() int64 {
+func (node *AlgorandFullNode) GetBlockTimeStampOffset() *int64 {
 	if node.devMode {
-		return node.transactionPool.GetBlockTimeStampOffset()
+		offset := node.transactionPool.GetBlockTimeStampOffset()
+		return &offset
 	}
-	return 0
+	return nil
 }

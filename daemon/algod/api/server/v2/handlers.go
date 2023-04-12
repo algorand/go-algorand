@@ -115,7 +115,7 @@ type NodeInterface interface {
 	SetSyncRound(rnd uint64) error
 	GetSyncRound() uint64
 	UnsetSyncRound()
-	GetBlockTimeStampOffset() int64
+	GetBlockTimeStampOffset() *int64
 	SetBlockTimeStampOffset(int64) error
 }
 
@@ -1678,11 +1678,11 @@ func (v2 *Handlers) ExperimentalCheck(ctx echo.Context) error {
 // (GET /v2/devmode/blocks/offset)
 func (v2 *Handlers) GetBlockTimeStampOffset(ctx echo.Context) error {
 	offset := v2.Node.GetBlockTimeStampOffset()
-	if offset == 0 {
-		err := fmt.Errorf("timestamp offset is not set or set to 0")
+	if offset == nil {
+		err := fmt.Errorf("cannot get timestamp offset because we are not in dev mode")
 		return badRequest(ctx, err, fmt.Sprintf(errFailedRetrievingTimeStampOffset, err), v2.Log)
 	}
-	return ctx.JSON(http.StatusOK, model.GetBlockTimeStampOffsetResponse{Offset: uint64(offset)})
+	return ctx.JSON(http.StatusOK, model.GetBlockTimeStampOffsetResponse{Offset: uint64(*offset)})
 }
 
 // SetBlockTimeStampOffset sets the timestamp offset.

@@ -3918,11 +3918,11 @@
     },
     "/v2/devmode/blocks/offset/{offset}": {
       "post": {
-        "description": "Sets the timestamp offset (seconds) for blocks in devmode. Setting the offset to 0 will unset this value and try to use the real clock for the timestamp.",
+        "description": "Sets the timestamp offset (seconds) for blocks in dev mode. Providing an offset of 0 will unset this value and try to use the real clock for the timestamp.",
         "operationId": "SetBlockTimeStampOffset",
         "parameters": [
           {
-            "description": "The timestamp offset for blocks in devmode.",
+            "description": "The timestamp offset for blocks in dev mode.",
             "in": "path",
             "name": "offset",
             "required": true,

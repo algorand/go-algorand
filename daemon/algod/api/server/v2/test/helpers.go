@@ -247,11 +247,12 @@ func (m *mockNode) SetBlockTimeStampOffset(offset int64) error {
 	return nil
 }
 
-func (m *mockNode) GetBlockTimeStampOffset() int64 {
+func (m *mockNode) GetBlockTimeStampOffset() *int64 {
 	if !m.devmode {
-		return 0
+		return nil
 	}
-	return 1
+	offset := int64(1)
+	return &offset
 }
 
 ////// mock ledger testing environment follows
