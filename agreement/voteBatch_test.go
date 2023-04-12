@@ -333,13 +333,13 @@ func (vg *testVoteGenerator) getTestEqVote(errType int) (v *unEqVoteTest, err er
 
 	switch errType {
 	case 0:
-		// check for same vote
-		v = &unEqVoteTest{uev: &evSameVote, err: fmt.Errorf("error same vote"), id: c}
-
-	case 1:
 		badSig := ev
 		badSig.Sigs[0].Sig[0] = badSig.Sigs[0].Sig[0] + 1
 		v = &unEqVoteTest{uev: &badSig, err: fmt.Errorf("error bad sig"), id: c}
+
+	case 1:
+		// check for same vote
+		v = &unEqVoteTest{uev: &evSameVote, err: fmt.Errorf("error same vote"), id: c}
 
 	case 2:
 		noCred := ev

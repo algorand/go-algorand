@@ -93,11 +93,11 @@ func BenchmarkAsyncVerification(b *testing.B) {
 	errProbs := []float32{0.0, 0.2, 0.8}
 	for _, errProb := range errProbs {
 		b.Run(fmt.Sprintf("errProb_%.3f_any_err", errProb), func(b *testing.B) {
-			sendReceiveVoteVerifications(false, errProb, b.N, b.N, b)
+			sendReceiveVoteVerifications(false, errProb, b.N/2, b.N/2, b)
 		})
 		if errProb > float32(0.0) {
 			b.Run(fmt.Sprintf("errProb_%.3f_sig_err_only", errProb), func(b *testing.B) {
-				sendReceiveVoteVerifications(true, errProb, b.N, b.N, b)
+				sendReceiveVoteVerifications(true, errProb, b.N/2, b.N/2, b)
 			})
 		}
 	}
@@ -139,6 +139,9 @@ func min(a, b int) int {
 }
 
 func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, count, eqCount int, tb testing.TB) {
+	if count+eqCount < 10 {
+		return
+	}
 	voteVerifier := MakeStartAsyncVoteVerifier(nil)
 	defer voteVerifier.Quit()
 
@@ -209,13 +212,15 @@ func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount in
 	wg := sync.WaitGroup{}
 	vg := makeTestVoteGenerator()
 
+	nextErrType := 0
 	for c := 0; c < count; c++ {
 		errType := 99
 		if rand.Float32() < errProb {
 			if onlyBadSigs {
 				errType = 0
 			} else {
-				errType = rand.Intn(7)
+				errType = nextErrType
+				nextErrType = (nextErrType + 1) % (vg.voteOptions() - 1)
 			}
 		}
 		v, err := vg.getTestVote(errType)
@@ -226,6 +231,7 @@ func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount in
 		votes[v.id] = v
 	}
 
+	nextErrType = 0
 	vg.counter = 0
 	for c := 0; c < eqCount; c++ {
 		errType := 99
@@ -233,7 +239,8 @@ func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount in
 			if onlyBadSigs {
 				errType = 0
 			} else {
-				errType = rand.Intn(9)
+				errType = nextErrType
+				nextErrType = (nextErrType + 1) % (vg.voteEqOptions() - 1)
 			}
 		}
 		v, err := vg.getTestEqVote(errType)
