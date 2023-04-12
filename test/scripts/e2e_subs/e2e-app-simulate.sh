@@ -25,7 +25,10 @@ CONST_FALSE="false"
 # Some of our MacOS nightly tests fail for specifying the bs (block size)
 # value in capital letters (i.e. 11M), so just specify it as 1024 bytes and
 # allocate 11K blocks so we get a 11MB sized file. 
-dd if=/dev/zero of="${TEMPDIR}/toolarge.tx" bs=1024 count=11000
+dd if=/dev/zero of="${TEMPDIR}/toolarge.teal.tok" bs=1024 count=11000
+# We created a large TEAL file, now attach it to a transaction as the clear
+# state program.
+${gcmd} app method --method "create(uint64)uint64" --arg "1234" --create --approval-prog ${DIR}/tealprogs/app-abi-method-example.teal --clear-prog-raw ${TEMPDIR}/toolarge.teal.tok --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 --extra-pages 0 --from $ACCOUNT -o ${TEMPDIR}/toolarge.tx
 RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/toolarge.tx" 2>&1 || true)
 EXPERROR="simulation error: HTTP 413 Request Entity Too Large:"
 if [[ $RES != *"${EXPERROR}"* ]]; then
