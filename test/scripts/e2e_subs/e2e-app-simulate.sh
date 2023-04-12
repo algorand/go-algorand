@@ -217,7 +217,7 @@ fi
 # SIMULATION! with unlimiting log should call `unlimited_log_test()void`
 ${gcmd} app method --method "unlimited_log_test()void" --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/big_log.tx"
 ${gcmd} clerk sign -i "${TEMPDIR}/big_log.tx" -o "${TEMPDIR}/big_log.stx"
-RES=$(${gcmd} clerk simulate -u -t "${TEMPDIR}/big_log.stx")
+RES=$(${gcmd} clerk simulate --unlimit-log -t "${TEMPDIR}/big_log.stx")
 
 if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_TRUE ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void would-succeed should be true with unlimiting log %Y%m%d_%H%M%S'

@@ -147,7 +147,7 @@ func init() {
 
 	simulateCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "Transaction or transaction-group to test")
 	simulateCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing simulation result")
-	simulateCmd.Flags().BoolVarP(&unlimitLog, "unlimit-log", "u", false, "Remove limit on log opcode usage in simulation")
+	simulateCmd.Flags().BoolVar(&unlimitLog, "unlimit-log", false, "Remove limit on log opcode usage in simulation")
 	panicIfErr(simulateCmd.MarkFlagRequired("txfile"))
 }
 
