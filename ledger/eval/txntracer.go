@@ -1,4 +1,4 @@
-package simulation
+package eval
 
 import (
 	"bytes"
@@ -27,25 +27,42 @@ type TxnGroupDeltaTracer struct {
 	txnGroupDeltas map[basics.Round]map[crypto.Digest]*ledgercore.StateDelta
 }
 
+// MakeTxnGroupDeltaTracer creates a TxnGroupDeltaTracer
+func MakeTxnGroupDeltaTracer(lookback uint64) TxnGroupDeltaTracer {
+	return TxnGroupDeltaTracer{
+		Lookback:       lookback,
+		txnGroupDeltas: make(map[basics.Round]map[crypto.Digest]*ledgercore.StateDelta),
+	}
+}
+
 // AfterTxnGroup implements the EvalTracer interface for txn group boundaries
 func (tracer *TxnGroupDeltaTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
-	round := ep.Ledger.Round()
+	var round basics.Round
+	if ep.Ledger != nil {
+		round = ep.Ledger.Round()
+	} else if ep.GetCaller() != nil {
+		round = ep.GetCaller().Ledger.Round()
+	} else {
+		return
+	}
 	// Remove old data if it exists
 	delete(tracer.txnGroupDeltas, round-basics.Round(tracer.Lookback))
+	var txnDeltaMap = make(map[crypto.Digest]*ledgercore.StateDelta)
 	for _, txn := range ep.TxnGroup {
 		// Add Group ID
 		if !txn.Txn.Group.IsZero() {
-			tracer.txnGroupDeltas[round][txn.Txn.Group] = deltas
+			txnDeltaMap[txn.Txn.Group] = deltas
 		}
 		// Add Txn ID
-		tracer.txnGroupDeltas[round][crypto.Digest(txn.ID())] = deltas
+		txnDeltaMap[crypto.Digest(txn.ID())] = deltas
 		for innerIndex, innerTxn := range txn.ApplyData.EvalDelta.InnerTxns {
 			// TODO which one of these is correct?
 			// Add Inner Txn IDs
-			tracer.txnGroupDeltas[round][crypto.Digest(innerTxn.Txn.InnerID(txn.ID(), innerIndex))] = deltas
-			tracer.txnGroupDeltas[round][crypto.Digest(innerTxn.ID())] = deltas
+			txnDeltaMap[crypto.Digest(innerTxn.Txn.InnerID(txn.ID(), innerIndex))] = deltas
+			txnDeltaMap[crypto.Digest(innerTxn.ID())] = deltas
 		}
 	}
+	tracer.txnGroupDeltas[round] = txnDeltaMap
 }
 
 // GetDeltasForRound supplies all StateDelta objects for txn groups in a given rnd
