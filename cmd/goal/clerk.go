@@ -65,6 +65,7 @@ var (
 	rekeyToAddress  string
 	signerAddress   string
 	rawOutput       bool
+	requestFilename string
 )
 
 func init() {
@@ -145,9 +146,9 @@ func init() {
 	dryrunRemoteCmd.Flags().BoolVarP(&rawOutput, "raw", "r", false, "Output raw response from algod")
 	dryrunRemoteCmd.MarkFlagRequired("dryrun-state")
 
-	simulateCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "Transaction or transaction-group to test")
+	simulateCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "Transaction or transaction-group to test. Mutually exclusive with --request")
+	simulateCmd.Flags().StringVar(&requestFilename, "request", "", "Simulate request object to run. Mutually exclusive with --txfile")
 	simulateCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing simulation result")
-	panicIfErr(simulateCmd.MarkFlagRequired("txfile"))
 }
 
 var clerkCmd = &cobra.Command{
@@ -1263,47 +1264,65 @@ var simulateCmd = &cobra.Command{
 	Short: "Simulate a transaction or transaction group with algod's simulate REST endpoint",
 	Long:  `Simulate a transaction or transaction group with algod's simulate REST endpoint under various configurations.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		data, err := readFile(txFilename)
-		if err != nil {
-			reportErrorf(fileReadError, txFilename, err)
+		txProvided := cmd.Flags().Changed("txfile")
+		requestProvided := cmd.Flags().Changed("request")
+		if txProvided && requestProvided {
+			reportErrorf("arguments --txfile and --request are mutually exclusive")
 		}
-
-		var txgroup []transactions.SignedTxn
-		dec := protocol.NewMsgpDecoderBytes(data)
-		for {
-			var txn transactions.SignedTxn
-			err = dec.Decode(&txn)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				reportErrorf(txDecodeError, txFilename, err)
-			}
-			txgroup = append(txgroup, txn)
-		}
-
-		simulateRequest := v2.PreEncodedSimulateRequest{
-			TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
-				{
-					Txns: txgroup,
-				},
-			},
+		if !txProvided && !requestProvided {
+			reportErrorf("one of --txfile or --request must be provided")
 		}
 
 		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
-		resp, err := client.SimulateTransactions(simulateRequest)
-		if err != nil {
-			reportErrorf("simulation error: %s", err.Error())
+		var simulateResponse v2.PreEncodedSimulateResponse
+		var responseError error
+		if txProvided {
+			data, err := readFile(txFilename)
+			if err != nil {
+				reportErrorf(fileReadError, txFilename, err)
+			}
+			var txgroup []transactions.SignedTxn
+			dec := protocol.NewMsgpDecoderBytes(data)
+			for {
+				var txn transactions.SignedTxn
+				err = dec.Decode(&txn)
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					reportErrorf(txDecodeError, txFilename, err)
+				}
+				txgroup = append(txgroup, txn)
+			}
+			simulateRequest := v2.PreEncodedSimulateRequest{
+				TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+					{
+						Txns: txgroup,
+					},
+				},
+			}
+			simulateResponse, responseError = client.SimulateTransactions(simulateRequest)
+		} else {
+			data, err := readFile(requestFilename)
+			if err != nil {
+				reportErrorf(fileReadError, requestFilename, err)
+			}
+			simulateResponse, responseError = client.SimulateTransactionsRaw(data)
 		}
 
+		if responseError != nil {
+			reportErrorf("simulation error: %s", responseError.Error())
+		}
+
+		encodedResponse := protocol.EncodeJSON(&simulateResponse)
 		if outFilename != "" {
-			err = writeFile(outFilename, protocol.EncodeJSON(&resp), 0600)
+			err := writeFile(outFilename, encodedResponse, 0600)
 			if err != nil {
 				reportErrorf("write file error: %s", err.Error())
 			}
 		} else {
-			fmt.Println(string(protocol.EncodeJSON(&resp)))
+			fmt.Println(string(encodedResponse))
 		}
 	},
 }

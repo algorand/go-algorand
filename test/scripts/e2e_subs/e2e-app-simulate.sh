@@ -20,16 +20,13 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 CONST_TRUE="true"
 CONST_FALSE="false"
 
-# First, try to send an extremely large "transaction" in the request body.
+# First, try to send an extremely large "request" in the request body.
 # This should fail with a 413 error.
 # Some of our MacOS nightly tests fail for specifying the bs (block size)
 # value in capital letters (i.e. 11M), so just specify it as 1024 bytes and
 # allocate 11K blocks so we get a 11MB sized file. 
-dd if=/dev/zero of="${TEMPDIR}/toolarge.teal.tok" bs=1024 count=11000
-# We created a large TEAL file, now attach it to a transaction as the clear
-# state program.
-${gcmd} app method --method "create(uint64)uint64" --arg "1234" --create --approval-prog ${DIR}/tealprogs/app-abi-method-example.teal --clear-prog-raw ${TEMPDIR}/toolarge.teal.tok --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 --extra-pages 0 --from $ACCOUNT -o ${TEMPDIR}/toolarge.tx
-RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/toolarge.tx" 2>&1 || true)
+dd if=/dev/zero of="${TEMPDIR}/toolargerequest" bs=1024 count=11000
+RES=$(${gcmd} clerk simulate --request "${TEMPDIR}/toolargerequest" 2>&1 || true)
 EXPERROR="simulation error: HTTP 413 Request Entity Too Large:"
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-simulate-test FAIL the simulate API should fail for request bodies exceeding 10MB %Y%m%d_%H%M%S'
