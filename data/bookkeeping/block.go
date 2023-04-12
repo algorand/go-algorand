@@ -526,15 +526,8 @@ func MakeBlock(prev BlockHeader) Block {
 // If a valid DevModeOpts is passed in, we also populate block header
 // information, such as block seed and timestamp offsets.
 func MakeDevModeBlock(prev BlockHeader, configs DevModeOpts) Block {
-	upgradeVote, upgradeState, err := ProcessUpgradeParams(prev)
-	if err != nil {
-		logging.Base().Panicf("MakeBlock: error processing upgrade: %v", err)
-	}
-
-	params, ok := config.Consensus[upgradeState.CurrentProtocol]
-	if !ok {
-		logging.Base().Panicf("MakeBlock: next protocol %v not supported", upgradeState.CurrentProtocol)
-	}
+	// Use previous block's consensus params in dev mode
+	params := config.Consensus[prev.CurrentProtocol]
 
 	// If a timestamp offset is set, then set it to prev ts + offset.
 	// If a timestamp offset is not set, then try to set this block's timestamp
@@ -550,28 +543,11 @@ func MakeDevModeBlock(prev BlockHeader, configs DevModeOpts) Block {
 		}
 	}
 
-	// the merkle root of TXs will update when fillpayset is called
-	// In dev mode, set the block seed to the previous block's hash
-	blk := Block{
-		BlockHeader: BlockHeader{
-			Round:        prev.Round + 1,
-			Branch:       prev.Hash(),
-			UpgradeVote:  upgradeVote,
-			UpgradeState: upgradeState,
-			TimeStamp:    timestamp,
-			GenesisID:    prev.GenesisID,
-			GenesisHash:  prev.GenesisHash,
-			Seed:         committee.Seed(prev.Hash()),
-		},
-	}
-	blk.TxnCommitments, err = blk.PaysetCommit()
-	if err != nil {
-		logging.Base().Warnf("MakeBlock: computing empty TxnCommitments: %v", err)
-	}
+	// Change block header values
+	blk := MakeBlock(prev)
+	blk.BlockHeader.Seed = committee.Seed(prev.Hash())
+	blk.BlockHeader.TimeStamp = timestamp
 
-	// We can't know the entire RewardsState yet, but we can carry over the special addresses.
-	blk.BlockHeader.RewardsState.FeeSink = prev.RewardsState.FeeSink
-	blk.BlockHeader.RewardsState.RewardsPool = prev.RewardsState.RewardsPool
 	return blk
 }
 
