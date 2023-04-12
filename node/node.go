@@ -644,15 +644,21 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 	maxRound := latest
 	minRound := maxRound.SubSaturate(maxLife)
 
-	// If we did find the transaction, we know there is no point
-	// checking rounds earlier than its first valid round
-	if found && tx.Txn.FirstValid > minRound {
-		minRound = tx.Txn.FirstValid
-	}
-
 	// Since we're using uint64, if the minRound is 0, we need to check for an underflow.
 	if minRound == 0 {
 		minRound++
+	}
+
+	// If we did find the transaction, we know there is no point
+	// checking rounds earlier or later than validity rounds
+	if found {
+		if tx.Txn.FirstValid > minRound {
+			minRound = tx.Txn.FirstValid
+		}
+
+		if tx.Txn.LastValid < maxRound {
+			maxRound = tx.Txn.LastValid
+		}
 	}
 
 	for r := maxRound; r >= minRound; r-- {
