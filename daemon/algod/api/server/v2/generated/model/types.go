@@ -622,8 +622,8 @@ type SimulateRequest struct {
 
 // SimulateRequestTransactionGroup A transaction group to simulate.
 type SimulateRequestTransactionGroup struct {
-	// Txns A canonically encoded atomic transaction group. This is the exact same format that the '/v2/transactions' endpoint accepts as a POST body.
-	Txns []byte `json:"txns"`
+	// Txns An atomic transaction group.
+	Txns []json.RawMessage `json:"txns"`
 }
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group

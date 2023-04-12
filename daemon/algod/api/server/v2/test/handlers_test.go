@@ -776,10 +776,10 @@ func simulateTransactionTest(t *testing.T, txnToUse int, format string, expected
 	t.Run("SimulateExtendedTransaction", func(t *testing.T) {
 		t.Parallel()
 		txnPrep := func(stxn transactions.SignedTxn) []byte {
-			request := model.SimulateRequest{
-				TxnGroups: []model.SimulateRequestTransactionGroup{
+			request := v2.PreEncodedSimulateRequest{
+				TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
 					{
-						Txns: protocol.Encode(&stxn),
+						Txns: []transactions.SignedTxn{stxn},
 					},
 				},
 			}
@@ -976,17 +976,13 @@ int 1`,
 				payTxn.Txn().Sign(sender.Secrets()),
 				appCallTxn.Txn().Sign(sender.Secrets()),
 			}
-			var txgroup []byte
-			for i := range stxns {
-				txgroup = append(txgroup, protocol.Encode(&stxns[i])...)
-			}
 
 			// build request body
 			var body io.Reader
-			request := model.SimulateRequest{
-				TxnGroups: []model.SimulateRequestTransactionGroup{
+			request := v2.PreEncodedSimulateRequest{
+				TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
 					{
-						Txns: txgroup,
+						Txns: stxns,
 					},
 				},
 			}
@@ -1254,13 +1250,13 @@ func TestSimulateTransactionMultipleGroups(t *testing.T) {
 	stxn2 := txn2.Txn().Sign(sender.Secrets())
 
 	// build request body
-	request := model.SimulateRequest{
-		TxnGroups: []model.SimulateRequestTransactionGroup{
+	request := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
 			{
-				Txns: protocol.Encode(&stxn1),
+				Txns: []transactions.SignedTxn{stxn1},
 			},
 			{
-				Txns: protocol.Encode(&stxn2),
+				Txns: []transactions.SignedTxn{stxn2},
 			},
 		},
 	}
