@@ -523,7 +523,7 @@ func MakeBlock(prev BlockHeader) Block {
 }
 
 // MakeDevModeBlock constructs a new block for dev mode.
-// If a valid DevModeConfigs is passed in, we also populate block header
+// If a valid DevModeOpts is passed in, we also populate block header
 // information, such as block seed and timestamp offsets.
 func MakeDevModeBlock(prev BlockHeader, configs DevModeOpts) Block {
 	upgradeVote, upgradeState, err := ProcessUpgradeParams(prev)
