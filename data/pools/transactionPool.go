@@ -701,19 +701,20 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	}
 	pool.assemblyMu.Unlock()
 
-	next := bookkeeping.MakeBlock(prev)
 	pool.numPendingWholeBlocks = 0
 	hint := pendingCount - int(knownCommitted)
 	if hint < 0 || int(knownCommitted) < 0 {
 		hint = 0
 	}
 
-	// If dev mode timestamp offset is configured, add the offset to current
-	// block timestamp.
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
 	if pool.devMode {
-		next = bookkeeping.MakeDevModeBlock(prev, bookkeeping.DevModeOpts{TimeStampOffset: pool.devModeTimeStampOffset})
+		// If dev mode timestamp offset is configured, add the offset to current
+		// block timestamp.
+		next := bookkeeping.MakeDevModeBlock(prev, bookkeeping.DevModeOpts{TimeStampOffset: pool.devModeTimeStampOffset})
 		pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluatorNoValidation(next.BlockHeader, hint, 0)
+	} else {
+		next := bookkeeping.MakeBlock(prev)
+		pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
 	}
 
 	if err != nil {
