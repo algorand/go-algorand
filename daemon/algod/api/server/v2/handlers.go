@@ -101,7 +101,7 @@ type NodeInterface interface {
 	GenesisHash() crypto.Digest
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 	Simulate(txgroup []transactions.SignedTxn) (result simulation.Result, err error)
-	GetPendingTransaction(txID transactions.Txid, lookbackRounds uint64) (res node.TxnWithStatus, found bool)
+	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
 	SuggestedFee() basics.MicroAlgos
 	StartCatchup(catchpoint string) error
@@ -1177,12 +1177,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		return badRequest(ctx, err, errNoValidTxnSpecified, v2.Log)
 	}
 
-	lookbackRounds := uint64(0)
-	if params.Lookback != nil {
-		lookbackRounds = *params.Lookback
-	}
-
-	txn, ok := v2.Node.GetPendingTransaction(txID, lookbackRounds)
+	txn, ok := v2.Node.GetPendingTransaction(txID)
 
 	// We didn't find it, return a failure
 	if !ok {

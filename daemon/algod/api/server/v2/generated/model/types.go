@@ -1201,9 +1201,6 @@ type GetPendingTransactionsParamsFormat string
 type PendingTransactionInformationParams struct {
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *PendingTransactionInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
-
-	// Lookback Max number of rounds to look back in case the transaction is not in pending pool.
-	Lookback *uint64 `form:"lookback,omitempty" json:"lookback,omitempty"`
 }
 
 // PendingTransactionInformationParamsFormat defines parameters for PendingTransactionInformation.

@@ -246,7 +246,7 @@ func (node *AlgorandFollowerNode) Simulate(_ []transactions.SignedTxn) (result s
 }
 
 // GetPendingTransaction no-ops in follower mode
-func (node *AlgorandFollowerNode) GetPendingTransaction(_ transactions.Txid, _ uint64) (res TxnWithStatus, found bool) {
+func (node *AlgorandFollowerNode) GetPendingTransaction(_ transactions.Txid) (res TxnWithStatus, found bool) {
 	return
 }
 

@@ -606,7 +606,7 @@ func (node *AlgorandFullNode) GetTransaction(addr basics.Address, txID transacti
 // blocks, in the txpool, and in the txpool's status cache.  It returns
 // the SignedTxn (with status information), and a bool to indicate if the
 // transaction was found.
-func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid, lookbackRounds uint64) (res TxnWithStatus, found bool) {
+func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res TxnWithStatus, found bool) {
 	// We need to check both the pool and the ledger's blocks.
 	// If the transaction is found in a committed block, that
 	// takes precedence.  But we check the pool first, because
@@ -631,19 +631,24 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid, look
 		// Keep looking in the ledger.
 	}
 
+	var maxLife basics.Round
 	latest := node.ledger.Latest()
-	// Backwards compat with in case old clients don't specify
-	if lookbackRounds == 0 {
-		proto, err := node.ledger.ConsensusParams(latest)
-		if err == nil {
-			lookbackRounds = proto.MaxTxnLife
-		} else {
-			node.log.Errorf("node.GetPendingTransaction: cannot get consensus params for latest round %v", latest)
-		}
+	proto, err := node.ledger.ConsensusParams(latest)
+	if err == nil {
+		maxLife = basics.Round(proto.MaxTxnLife)
+	} else {
+		node.log.Errorf("node.GetPendingTransaction: cannot get consensus params for latest round %v", latest)
 	}
+
 	// Search from newest to oldest round up to the max life of a transaction.
 	maxRound := latest
-	minRound := maxRound.SubSaturate(basics.Round(lookbackRounds))
+	minRound := maxRound.SubSaturate(maxLife)
+
+	// If we did find the transaction, we know there is no point
+	// checking rounds earlier than its first valid round
+	if found && tx.Txn.FirstValid > minRound {
+		minRound = tx.Txn.FirstValid
+	}
 
 	// Since we're using uint64, if the minRound is 0, we need to check for an underflow.
 	if minRound == 0 {
