@@ -18,6 +18,7 @@ package generickv
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -26,12 +27,110 @@ import (
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
-// RunMigrations runs the migrations on a generic db
-func RunMigrations(ctx context.Context, db trackerdb.TrackerStore, params trackerdb.Params, targetVersion int32) (mgr trackerdb.InitParams, err error) {
-	proto := config.Consensus[params.InitProto]
+func getSchemaVersion(ctx context.Context, kvr KvRead) (int32, error) {
+	// read version entry
+	value, closer, err := kvr.Get(schemaVersionKey())
+	if err != nil {
+		return 0, nil
+	}
+	defer closer.Close()
+
+	// parse the bytes into a i32
+	version := int32(binary.BigEndian.Uint32(value))
+
+	return version, nil
+}
+
+func setSchemaVersion(ctx context.Context, kvw KvWrite, version int32) error {
+	// write version entry
+	raw := bigEndianUint32(uint32(version))
+	err := kvw.Set(schemaVersionKey(), raw)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type dbForMigrations interface {
+	trackerdb.TrackerStore
+	KvRead
+	KvWrite
+}
+
+// RunMigrations runs the migrations on the store up to the target version.
+func RunMigrations(ctx context.Context, db dbForMigrations, params trackerdb.Params, targetVersion int32) (mgr trackerdb.InitParams, err error) {
+
+	dbVersion, err := getSchemaVersion(ctx, db)
+	if err != nil {
+		return
+	}
+
+	mgr.SchemaVersion = dbVersion
+	mgr.VacuumOnStartup = false
+
+	migrator := &migrator{
+		currentVersion: dbVersion,
+		targetVersion:  targetVersion,
+		params:         params,
+		db:             db,
+	}
+
+	err = migrator.Migrate(ctx)
+	if err != nil {
+		return
+	}
+
+	mgr.SchemaVersion = migrator.currentVersion
+
+	return mgr, nil
+}
+
+type migrator struct {
+	currentVersion int32
+	targetVersion  int32
+	params         trackerdb.Params
+	db             dbForMigrations
+}
+
+func (m *migrator) Migrate(ctx context.Context) error {
+	// we cannot rollback
+	if m.currentVersion > m.targetVersion {
+		return nil
+	}
+	// upgrade the db one version at at time
+	for m.currentVersion < m.targetVersion {
+		// run next version upgrade
+		switch m.currentVersion {
+		case 0: // initial version
+			err := m.initialVersion(ctx)
+			if err != nil {
+				return err
+			}
+		default:
+			// any other version we do nothing
+			return nil
+		}
+	}
+	return nil
+}
+
+func (m *migrator) setVersion(ctx context.Context, version int32) error {
+	// update crrent version in the db
+	err := setSchemaVersion(ctx, m.db, version)
+	if err != nil {
+		return err
+	}
+	// update current version in the migrator
+	m.currentVersion = version
+	return nil
+}
+
+func (m *migrator) initialVersion(ctx context.Context) error {
+	proto := config.Consensus[m.params.InitProto]
 
 	// TODO: make this a batch scope
-	err = db.TransactionContext(ctx, func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+	err := m.db.TransactionContext(ctx, func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		aow, err := tx.MakeAccountsOptimizedWriter(true, false, false, false)
 		if err != nil {
 			return err
@@ -59,7 +158,7 @@ func RunMigrations(ctx context.Context, db trackerdb.TrackerStore, params tracke
 		var totals ledgercore.AccountTotals
 
 		// insert initial accounts
-		for addr, account := range params.InitAccounts {
+		for addr, account := range m.params.InitAccounts {
 			// build a trackerdb.BaseAccountData to pass to the DB
 			var bad trackerdb.BaseAccountData
 			bad.SetAccountData(&account)
@@ -104,7 +203,7 @@ func RunMigrations(ctx context.Context, db trackerdb.TrackerStore, params tracke
 			{
 				OnlineSupply:    totals.Online.Money.Raw,
 				RewardsLevel:    totals.RewardsLevel,
-				CurrentProtocol: params.InitProto,
+				CurrentProtocol: m.params.InitProto,
 			},
 		}
 		err = arw.AccountsPutOnlineRoundParams(params, basics.Round(0))
@@ -115,11 +214,9 @@ func RunMigrations(ctx context.Context, db trackerdb.TrackerStore, params tracke
 		return nil
 	})
 	if err != nil {
-		return mgr, err
+		return err
 	}
 
-	mgr.SchemaVersion = trackerdb.AccountDBVersion
-	mgr.VacuumOnStartup = false
-
-	return mgr, nil
+	// KV store starts at version 10
+	return m.setVersion(ctx, 10)
 }
