@@ -989,7 +989,6 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	}
 
 	for _, txgroup := range simulateRequest.TxnGroups {
-		// These checks provide the same guarantees as decodeTxGroup
 		if len(txgroup.Txns) == 0 {
 			err = errors.New("empty txgroup")
 			return badRequest(ctx, err, err.Error(), v2.Log)

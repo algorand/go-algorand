@@ -1266,7 +1266,7 @@ var simulateCmd = &cobra.Command{
 		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		var simulateResponse v2.PreEncodedSimulateResponse
-		var err error
+		var responseErr error
 		if txProvided {
 			txgroup := decodeTxnsFromFile(txFilename)
 			simulateRequest := v2.PreEncodedSimulateRequest{
@@ -1276,17 +1276,17 @@ var simulateCmd = &cobra.Command{
 					},
 				},
 			}
-			simulateResponse, err = client.SimulateTransactions(simulateRequest)
+			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {
 			data, err := readFile(requestFilename)
 			if err != nil {
 				reportErrorf(fileReadError, requestFilename, err)
 			}
-			simulateResponse, err = client.SimulateTransactionsRaw(data)
+			simulateResponse, responseErr = client.SimulateTransactionsRaw(data)
 		}
 
-		if err != nil {
-			reportErrorf("simulation error: %s", err.Error())
+		if responseErr != nil {
+			reportErrorf("simulation error: %s", responseErr.Error())
 		}
 
 		encodedResponse := protocol.EncodeJSON(&simulateResponse)
