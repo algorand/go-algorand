@@ -1266,11 +1266,8 @@ var simulateCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		txProvided := cmd.Flags().Changed("txfile")
 		requestProvided := cmd.Flags().Changed("request")
-		if txProvided && requestProvided {
-			reportErrorf("arguments --txfile and --request are mutually exclusive")
-		}
-		if !txProvided && !requestProvided {
-			reportErrorf("one of --txfile or --request must be provided")
+		if txProvided == requestProvided {
+			reportErrorf("exactly one of --txfile or --request must be provided")
 		}
 
 		dataDir := datadir.EnsureSingleDataDir()
