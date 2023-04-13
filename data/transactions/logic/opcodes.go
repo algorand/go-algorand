@@ -629,13 +629,13 @@ var OpSpecs = []OpSpec{
 	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// Unlimited Global Storage - Boxes
-	{0xb9, "box_create", opBoxCreate, proto("Ki:T"), boxVersion, only(ModeApp)},
-	{0xba, "box_extract", opBoxExtract, proto("Kii:b"), boxVersion, only(ModeApp)},
-	{0xbb, "box_replace", opBoxReplace, proto("Kib:"), boxVersion, only(ModeApp)},
-	{0xbc, "box_del", opBoxDel, proto("K:T"), boxVersion, only(ModeApp)},
-	{0xbd, "box_len", opBoxLen, proto("K:iT"), boxVersion, only(ModeApp)},
-	{0xbe, "box_get", opBoxGet, proto("K:bT"), boxVersion, only(ModeApp)},
-	{0xbf, "box_put", opBoxPut, proto("Kb:"), boxVersion, only(ModeApp)},
+	{0xb9, "box_create", opBoxCreate, proto("Bi:T"), boxVersion, only(ModeApp)},
+	{0xba, "box_extract", opBoxExtract, proto("Bii:b"), boxVersion, only(ModeApp)},
+	{0xbb, "box_replace", opBoxReplace, proto("Bib:"), boxVersion, only(ModeApp)},
+	{0xbc, "box_del", opBoxDel, proto("B:T"), boxVersion, only(ModeApp)},
+	{0xbd, "box_len", opBoxLen, proto("B:iT"), boxVersion, only(ModeApp)},
+	{0xbe, "box_get", opBoxGet, proto("B:bT"), boxVersion, only(ModeApp)},
+	{0xbf, "box_put", opBoxPut, proto("Bb:"), boxVersion, only(ModeApp)},
 
 	// Dynamic indexing
 	{0xc0, "txnas", opTxnas, proto("i:a"), 5, field("f", &TxnArrayFields)},

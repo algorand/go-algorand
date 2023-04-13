@@ -838,6 +838,8 @@ func parseStackTypes(spec string) StackTypes {
 			types[i] = StackMethodSelector
 		case 'K':
 			types[i] = StackStorageKey
+		case 'B':
+			types[i] = StackBoxKey
 		default:
 			panic(spec)
 		}
