@@ -46,17 +46,18 @@ type TxnGroupDeltaTracer struct {
 	txnGroupDeltas []map[crypto.Digest]*ledgercore.StateDelta
 }
 
-// MakeTxnGroupDeltaTracer creates a TxnGroupDeltaTracer
-func MakeTxnGroupDeltaTracer(lookback uint64) *TxnGroupDeltaTracer {
+// makeTxnGroupDeltaTracer creates a TxnGroupDeltaTracer
+func makeTxnGroupDeltaTracer(lookback uint64) *TxnGroupDeltaTracer {
 	return &TxnGroupDeltaTracer{
 		Lookback:       lookback,
 		txnGroupDeltas: []map[crypto.Digest]*ledgercore.StateDelta{},
 	}
 }
 
+// TxnGroupDeltaTracerForConfig retrieves the TxnGroupDeltaTracer or creates it if it does not already exist
 func TxnGroupDeltaTracerForConfig(cfg config.Local) *TxnGroupDeltaTracer {
 	if txnGroupDeltaTracer == nil {
-		txnGroupDeltaTracer = MakeTxnGroupDeltaTracer(cfg.MaxAcctLookback)
+		txnGroupDeltaTracer = makeTxnGroupDeltaTracer(cfg.MaxAcctLookback)
 	}
 	return txnGroupDeltaTracer
 }
