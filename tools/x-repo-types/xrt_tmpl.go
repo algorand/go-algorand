@@ -11,15 +11,17 @@ import (
 
 	// xpkg "{{.XModulePath}}/{{.XPackagePath}}"  					/* TEMPLATE ONLY  */
 	// ypkg "{{.YModulePath}}/{{.YPackagePath}}"  					/* TEMPLATE ONLY  */
-	ypkg "github.com/algorand/go-algorand-sdk/v2/types"      // 	/* GENERATOR ONLY */
+	// ypkg "github.com/algorand/go-algorand-sdk/v2/types"      // 	/* GENERATOR ONLY */
 	xpkg "github.com/algorand/go-algorand/ledger/ledgercore" // 	/* GENERATOR ONLY */
+	ypkg "github.com/algorand/go-algorand/ledger/ledgercore" // 	/* GENERATOR ONLY */  <--- this one is just for getting the build to pass
 )
 
 func Main() { // replaced by main() in `make template4xrt`
 	// x := reflect.TypeOf(xpkg.{{.XTypeInstance}}{}) 		 //  	/* TEMPLATE ONLY  */
 	// y := reflect.TypeOf(ypkg.{{.YTypeInstance}}{}) 		 //  	/* TEMPLATE ONLY  */
-	x := reflect.TypeOf(xpkg.StateDelta{})       //					/* GENERATOR ONLY */
-	y := reflect.TypeOf(ypkg.LedgerStateDelta{}) //					/* GENERATOR ONLY */
+	x := reflect.TypeOf(xpkg.StateDelta{}) //					    /* GENERATOR ONLY */
+	// y := reflect.TypeOf(ypkg.LedgerStateDelta{}) //				/* GENERATOR ONLY */
+	y := reflect.TypeOf(ypkg.StateDelta{}) //						/* GENERATOR ONLY */ <--- this one is just for getting the build to pass
 
 	// ---- BUILD ---- //
 
