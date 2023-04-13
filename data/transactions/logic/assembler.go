@@ -1433,14 +1433,14 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 	if top < 0 {
 		return nil, nil, nil
 	}
-	var err error
 	for i := range pgm.scratchSpace {
 		// We can't know what slot stacktop is being stored in
 		// so we union it into all scratch slots
-		pgm.scratchSpace[i], err = pgm.scratchSpace[i].union(pgm.stack[top])
+		unioned, err := pgm.scratchSpace[i].union(pgm.stack[top])
 		if err != nil {
 			return nil, nil, err
 		}
+		pgm.scratchSpace[i] = unioned
 	}
 	return nil, nil, nil
 }
