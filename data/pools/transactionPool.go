@@ -707,15 +707,15 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 		hint = 0
 	}
 
-	if pool.devMode {
-		// If dev mode timestamp offset is configured, add the offset to current
-		// block timestamp.
-		next := bookkeeping.MakeDevModeBlock(prev, bookkeeping.DevModeOpts{TimeStampOffset: pool.devModeTimeStampOffset})
-		pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluatorNoValidation(next.BlockHeader, hint, 0)
-	} else {
-		next := bookkeeping.MakeBlock(prev)
-		pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
-	}
+	// if pool.devMode {
+	// 	// If dev mode timestamp offset is configured, add the offset to current
+	// 	// block timestamp.
+	// 	next := bookkeeping.MakeDevModeBlock(prev, bookkeeping.DevModeOpts{TimeStampOffset: pool.devModeTimeStampOffset})
+	// 	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluatorNoValidation(next.BlockHeader, hint, 0)
+	// } else {
+	next := bookkeeping.MakeBlock(prev)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
+	// }
 
 	if err != nil {
 		// The pendingBlockEvaluator is an interface, and in case of an evaluator error
