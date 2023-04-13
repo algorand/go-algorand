@@ -144,7 +144,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	addBlock(bc)
 	vc := verify.GetMockedCache(true)
 	for _, blk := range bc.blocks {
-		_, err := eval.Eval(context.Background(), bc.l1, blk, true, vc, nil)
+		_, err := eval.Eval(context.Background(), bc.l1, blk, true, vc, nil, cfg)
 		require.NoError(b, err)
 		err = bc.l1.AddBlock(blk, cert)
 		require.NoError(b, err)
@@ -424,7 +424,7 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb flo
 	tt := time.Now()
 	b.ResetTimer()
 	for _, blk := range bc.blocks {
-		_, err := eval.Eval(context.Background(), bc.l1, blk, true, vc, nil)
+		_, err := eval.Eval(context.Background(), bc.l1, blk, true, vc, nil, bc.l1.cfg)
 		require.NoError(b, err)
 		err = bc.l1.AddBlock(blk, cert)
 		require.NoError(b, err)

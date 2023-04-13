@@ -491,7 +491,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 		if withCrypto {
 			_, err = l2.Validate(context.Background(), validatedBlock.Block(), backlogPool)
 		} else {
-			_, err = eval.Eval(context.Background(), l2, validatedBlock.Block(), false, nil, nil)
+			_, err = eval.Eval(context.Background(), l2, validatedBlock.Block(), false, nil, nil, l.cfg)
 		}
 		require.NoError(b, err)
 	}
