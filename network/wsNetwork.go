@@ -399,7 +399,7 @@ type WebsocketNetwork struct {
 	// outgoingMessagesBufferSize is the size used for outgoing messages.
 	outgoingMessagesBufferSize int
 
-	// maxHeaderSize is the maximum accepted size of the header prior to upgrading to websocket connection.
+	// wsMaxHeaderBytes is the maximum accepted size of the header prior to upgrading to websocket connection.
 	wsMaxHeaderBytes int64
 
 	// slowWritingPeerMonitorInterval defines the interval between two consecutive tests for slow peer writing
