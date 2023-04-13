@@ -7,13 +7,13 @@ The [Algorand GitHub Organization](https://github.com/algorand) has all of our o
 ## Non-code Contributions
 
 While contributions come in many forms, this document is focused on code. For other types of involvement, see the following:
-* [Reporting issues and features requests.](go-algorand-issues)
-* [Security vulnerability disclosures.](security-disclosure)
-* [Documentation improvements.](algorand-docs)
+* [Reporting issues and features requests.][go-algorand-issues]
+* [Security vulnerability disclosures.][security-disclosure]
+* [Documentation improvements.][algorand-docs]
 
 ## Contribution Model
 
-All changes to `go-algorand` are made through the same process: a pull request targeting the `master` branch. This goes for internal and external contributions. To familiarize yourself with the process we recommend that you review the current open pull requests, and the GitHub documentation for [creating a pull request from a fork](gh-pr-process).
+All changes to `go-algorand` are made through the same process: a pull request targeting the `master` branch. This goes for internal and external contributions. To familiarize yourself with the process we recommend that you review the current open pull requests, and the GitHub documentation for [creating a pull request from a fork][gh-pr-process].
 
 Note: some of our other projects are using gitflow, for these the process is the same but you will target pull requests against the `develop` branch.
 
