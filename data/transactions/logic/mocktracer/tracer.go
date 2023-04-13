@@ -17,6 +17,7 @@
 package mocktracer
 
 import (
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -69,12 +70,12 @@ type Event struct {
 	HasError bool
 
 	// only for BeforeBlock, AfterBlock
-	BlockHash bookkeeping.BlockHash
+	Round basics.Round
 }
 
 // BeforeBlock creates a new Event with the type BeforeBlockEvent
-func BeforeBlock(blockHash bookkeeping.BlockHash) Event {
-	return Event{Type: BeforeBlockEvent, BlockHash: blockHash}
+func BeforeBlock(round basics.Round) Event {
+	return Event{Type: BeforeBlockEvent, Round: round}
 }
 
 // BeforeTxnGroup creates a new Event with the type BeforeTxnGroupEvent
@@ -118,8 +119,8 @@ func AfterOpcode(hasError bool) Event {
 }
 
 // AfterBlock creates a new Event with the type AfterBlockEvent
-func AfterBlock(blockHash bookkeeping.BlockHash) Event {
-	return Event{Type: AfterBlockEvent, BlockHash: blockHash}
+func AfterBlock(round basics.Round) Event {
+	return Event{Type: AfterBlockEvent, Round: round}
 }
 
 // OpcodeEvents returns a slice of events that represent calling `count` opcodes
@@ -151,7 +152,7 @@ type Tracer struct {
 
 // BeforeBlock mocks the logic.EvalTracer.BeforeBlock method
 func (d *Tracer) BeforeBlock(hdr *bookkeeping.BlockHeader) {
-	d.Events = append(d.Events, BeforeBlock(hdr.Hash()))
+	d.Events = append(d.Events, BeforeBlock(hdr.Round))
 }
 
 // BeforeTxnGroup mocks the logic.EvalTracer.BeforeTxnGroup method
@@ -196,5 +197,5 @@ func (d *Tracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 
 // AfterBlock mocks the logic.EvalTracer.BeforeBlock method
 func (d *Tracer) AfterBlock(hdr *bookkeeping.BlockHeader) {
-	d.Events = append(d.Events, AfterBlock(hdr.Hash()))
+	d.Events = append(d.Events, AfterBlock(hdr.Round))
 }

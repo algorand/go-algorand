@@ -149,7 +149,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.SignedTxn, tracer logic.EvalTracer) (*ledgercore.ValidatedBlock, error) {
 	// s.ledger has 'StartEvaluator' because *data.Ledger is embedded in the simulatorLedger
 	// and data.Ledger embeds *ledger.Ledger
-	eval, err := s.ledger.StartEvaluator(hdr, len(stxns), 0)
+	eval, err := s.ledger.StartEvaluator(hdr, len(stxns), 0, tracer)
 	if err != nil {
 		return nil, err
 	}

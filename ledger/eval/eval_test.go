@@ -402,7 +402,7 @@ int 1`,
 					},
 				}
 
-			var expectedEvents = []mocktracer.Event{mocktracer.BeforeBlock(eval.block.Hash())}
+			var expectedEvents = []mocktracer.Event{mocktracer.BeforeBlock(eval.block.Round())}
 			if testCase.firstTxnBehavior == "approve" {
 				err = eval.endOfBlock()
 				require.NoError(t, err)
@@ -424,7 +424,7 @@ int 1`,
 						mocktracer.AfterTxnGroup(3, scenario.Outcome != mocktracer.ApprovalOutcome),
 					},
 					{
-						mocktracer.AfterBlock(eval.block.Hash()),
+						mocktracer.AfterBlock(eval.block.Round()),
 					},
 				})...)
 			} else {
