@@ -1158,8 +1158,9 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-// getImm interprets the arg at index argIndex as an immediate
-func getImm(args []string, argIndex int) (int, bool) {
+// getImm interprets the arg at index argIndex as an immediate that must be
+// between -128 and 127 (if signed=true) or between 0 and 255 (if signed=false)
+func getImm(args []string, argIndex int, signed bool) (int, bool) {
 	if len(args) <= argIndex {
 		return 0, false
 	}
@@ -1168,6 +1169,15 @@ func getImm(args []string, argIndex int) (int, bool) {
 	n, err := strconv.ParseInt(args[argIndex], 0, 9)
 	if err != nil {
 		return 0, false
+	}
+	if signed {
+		if n < -128 || n > 127 {
+			return 0, false
+		}
+	} else {
+		if n < 0 || n > 255 {
+			return 0, false
+		}
 	}
 	return int(n), true
 }
@@ -1193,7 +1203,7 @@ func typeSwap(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 }
 
 func typeDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1210,7 +1220,7 @@ func typeDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, erro
 }
 
 func typeBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1242,7 +1252,7 @@ func typeBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 }
 
 func typeFrameDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, true)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1263,7 +1273,7 @@ func typeFrameDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes,
 }
 
 func typeFrameBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, true)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1335,9 +1345,8 @@ func typeDupTwo(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 func typeSelect(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 2 {
-		if pgm.stack[top-1].AVMType == pgm.stack[top-2].AVMType {
-			return nil, StackTypes{pgm.stack[top-1]}, nil
-		}
+		unioned, err := pgm.stack[top-1].union(pgm.stack[top-2])
+		return nil, StackTypes{unioned}, err
 	}
 	return nil, nil, nil
 }
@@ -1351,7 +1360,7 @@ func typeSetBit(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 }
 
 func typeCover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1373,7 +1382,7 @@ func typeCover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, er
 }
 
 func typeUncover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1390,6 +1399,12 @@ func typeUncover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, 
 	return anyTypes(depth), returns, nil
 }
 
+func typeByteMath(resultSize uint64) refineFunc {
+	return func(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+		return nil, StackTypes{NewStackType(avmBytes, bound(0, resultSize))}, nil
+	}
+}
+
 func typeTxField(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	if len(args) != 1 {
 		return nil, nil, nil
@@ -1402,7 +1417,7 @@ func typeTxField(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, 
 }
 
 func typeStore(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	scratchIndex, ok := getImm(args, 0)
+	scratchIndex, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1418,17 +1433,20 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 	if top < 0 {
 		return nil, nil, nil
 	}
+	var err error
 	for i := range pgm.scratchSpace {
-		// We can't know what slot stacktop is being stored in, but we can at least keep the slots that are the same type as stacktop
-		if pgm.scratchSpace[i] != pgm.stack[top] {
-			pgm.scratchSpace[i].AVMType = avmAny
+		// We can't know what slot stacktop is being stored in
+		// so we union it into all scratch slots
+		pgm.scratchSpace[i], err = pgm.scratchSpace[i].union(pgm.stack[top])
+		if err != nil {
+			return nil, nil, err
 		}
 	}
 	return nil, nil, nil
 }
 
 func typeLoad(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	scratchIndex, ok := getImm(args, 0)
+	scratchIndex, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1436,8 +1454,8 @@ func typeLoad(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 }
 
 func typeProto(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	a, aok := getImm(args, 0)
-	_, rok := getImm(args, 1)
+	a, aok := getImm(args, 0, false)
+	_, rok := getImm(args, 1, false)
 	if !aok || !rok {
 		return nil, nil, nil
 	}
@@ -1462,7 +1480,7 @@ func typeLoads(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, er
 }
 
 func typePopN(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1470,7 +1488,7 @@ func typePopN(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 }
 
 func typeDupN(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1693,16 +1711,8 @@ func (le lineError) Unwrap() error {
 	return le.Err
 }
 
-func typecheck(expected, got avmType) bool {
-	// Some ops push 'any' and we wait for run time to see what it is.
-	// Some of those 'any' are based on fields that we _could_ know now but haven't written a more detailed system of typecheck for (yet).
-	if expected == avmAny && got == avmNone { // Any is lenient, but stack can't be empty
-		return false
-	}
-	if (expected == avmAny) || (got == avmAny) {
-		return true
-	}
-	return expected == got
+func typecheck(expected, got StackType) bool {
+	return got.AssignableTo(expected)
 }
 
 // newline not included since handled in scanner
@@ -1827,7 +1837,7 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 			} else {
 				ops.trace(", %s", argType)
 			}
-			if !typecheck(argType.AVMType, stype.AVMType) {
+			if !typecheck(argType, stype) {
 				ops.typeErrorf("%s arg %d wanted type %s got %s",
 					strings.Join(instruction, " "), i, argType, stype)
 			}
@@ -1986,7 +1996,7 @@ func (ops *OpStream) assemble(text string) error {
 	if ops.Errors != nil {
 		l := len(ops.Errors)
 		if l == 1 {
-			return errors.New("1 error")
+			return fmt.Errorf("1 error: %w", ops.Errors[0])
 		}
 		return fmt.Errorf("%d errors", l)
 	}
@@ -2650,7 +2660,7 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 		out += " "
 		switch imm.kind {
 		case immByte, immInt8:
-			if pc >= len(dis.program) {
+			if pc+1 > len(dis.program) {
 				return "", fmt.Errorf("program end while reading immediate %s for %s",
 					imm.Name, spec.Name)
 			}
@@ -2680,6 +2690,10 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 
 			pc++
 		case immLabel:
+			// decodeBranchOffset assumes it has two bytes to work with
+			if pc+2 > len(dis.program) {
+				return "", fmt.Errorf("program end while reading label for %s", spec.Name)
+			}
 			offset := decodeBranchOffset(dis.program, pc)
 			target := offset + pc + 2
 			var label string
@@ -2744,9 +2758,9 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 			}
 			pc = nextpc
 		case immLabels:
-			targets, nextpc, err := parseSwitch(dis.program, pc)
+			targets, nextpc, err := parseLabels(dis.program, pc)
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("%w for %s", err, spec.Name)
 			}
 
 			var labels []string
@@ -2873,10 +2887,18 @@ func checkByteImmArgs(cx *EvalContext) error {
 	return err
 }
 
-func parseSwitch(program []byte, pos int) (targets []int, nextpc int, err error) {
+func parseLabels(program []byte, pos int) (targets []int, nextpc int, err error) {
+	if pos >= len(program) {
+		err = errors.New("could not decode label count")
+		return
+	}
 	numOffsets := int(program[pos])
 	pos++
 	end := pos + 2*numOffsets // end of op: offset is applied to this position
+	if end > len(program) {
+		err = errors.New("could not decode labels")
+		return
+	}
 	for i := 0; i < numOffsets; i++ {
 		offset := decodeBranchOffset(program, pos)
 		target := end + offset

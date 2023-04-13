@@ -300,11 +300,12 @@ type LanguageSpec struct {
 }
 
 func typeStrings(types []logic.StackType) []string {
-	out := make([]string, len(types))
-	for i, t := range types {
-		out[i] = t.String()
+	out := []string{}
+	for _, t := range types {
+		if t.String() != "none" {
+			out = append(out, t.String())
+		}
 	}
-
 	return out
 }
 

@@ -178,7 +178,7 @@ func TestPendingTransactionResponseStruct(t *testing.T) {
 	generatedResponseGraph.AssertEquals(t, customResponseGraph)
 }
 
-// TestSimulateResponseStruct ensures that the hand-written preEncodedSimulateResponse has the same
+// TestSimulateResponseStruct ensures that the hand-written PreEncodedSimulateResponse has the same
 // encoding structure as the generated model.SimulateResponse
 func TestSimulateResponseStruct(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -187,7 +187,7 @@ func TestSimulateResponseStruct(t *testing.T) {
 	generatedResponseType := reflect.TypeOf(model.SimulateResponse{})
 	generatedResponseGraph := makeTagGraph(generatedResponseType, make(map[reflect.Type]*tagNode))
 
-	customResponseType := reflect.TypeOf(preEncodedSimulateResponse{})
+	customResponseType := reflect.TypeOf(PreEncodedSimulateResponse{})
 	customResponseGraph := makeTagGraph(customResponseType, make(map[reflect.Type]*tagNode))
 
 	expectedGeneratedTxnGraph := map[string]*tagNode{

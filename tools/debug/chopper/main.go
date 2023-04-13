@@ -28,6 +28,8 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -131,7 +133,7 @@ type reportData struct {
 
 // report prints out stats about matched and mismatched roots or labels
 func report(rd reportData) {
-	fmt.Printf("%s in first: %d, second: %d\n", strings.Title(rd.what), rd.size1, rd.size2)
+	fmt.Printf("%s in first: %d, second: %d\n", cases.Title(language.English).String(rd.what), rd.size1, rd.size2)
 
 	const matchedStr = "Matched %s: %d"
 	c := yellow

@@ -307,6 +307,8 @@ const CatchpointGenerationEvent Event = "CatchpointGeneration"
 // CatchpointGenerationEventDetails is generated once a catchpoint file is being created, and provide
 // some statistics about that event.
 type CatchpointGenerationEventDetails struct {
+	// AccountsRound the round in which the account snapshot is taken
+	AccountsRound uint64
 	// WritingDuration is the total elapsed time it took to write the catchpoint file.
 	WritingDuration uint64
 	// CPUTime is the single-core time spent waiting to the catchpoint file to be written.
@@ -322,8 +324,10 @@ type CatchpointGenerationEventDetails struct {
 	KVsCount uint64
 	// FileSize is the size of the catchpoint file, in bytes.
 	FileSize uint64
-	// CatchpointLabel is the catchpoint label for which the catchpoint file was generated.
-	CatchpointLabel string
+	// MerkleTrieRootHash is the merkle trie root hash represents all accounts and kvs
+	MerkleTrieRootHash string
+	// SPVerificationCtxsHash is the hash of all the state proof verification contexts in the catchpoint
+	SPVerificationCtxsHash string
 }
 
 // CatchpointRootUpdateEvent event

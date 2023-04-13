@@ -47,9 +47,9 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV23,
 	protocol.ConsensusV24, // AVM v2 (apps)
 	protocol.ConsensusV25,
-	protocol.ConsensusV26,
+	protocol.ConsensusV26, // AVM v3
 	protocol.ConsensusV27,
-	protocol.ConsensusV28,
+	protocol.ConsensusV28, // AVM v4 (direct refs)
 	protocol.ConsensusV29,
 	protocol.ConsensusV30, // AVM v5 (inner txs)
 	protocol.ConsensusV31, // AVM v6 (inner txs with appls)

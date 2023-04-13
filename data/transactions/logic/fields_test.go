@@ -219,7 +219,7 @@ func TestAssetParamsFieldsVersions(t *testing.T) {
 	for _, field := range fields {
 		// Need to use intc so we can "backversion" the
 		// program and not have it fail because of pushint.
-		text := fmt.Sprintf("intcblock 0 1; intc_0; asset_params_get %s; bnz ok; err; ok: ", field.field.String())
+		text := fmt.Sprintf("intcblock 55 1; intc_0; asset_params_get %s; bnz ok; err; ok: ", field.field.String())
 		switch field.ftype.AVMType {
 		case avmUint64: // ensure the return type is uint64 by adding
 			text += " intc_1; +"
@@ -229,7 +229,6 @@ func TestAssetParamsFieldsVersions(t *testing.T) {
 		// check assembler fails if version before introduction
 		for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 			ep, txn, ledger := makeSampleEnv()
-			// Create app 55, since txn.ForeignApps[0] == 55
 			ledger.NewAsset(txn.Sender, 55, basics.AssetParams{})
 			ep.Proto.LogicSigVersion = v
 			if field.version > v {
@@ -270,19 +269,13 @@ func TestAcctParamsFieldsVersions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	var fields []acctParamsFieldSpec
-	for _, fs := range acctParamsFieldSpecs {
-		if fs.version > 6 {
-			fields = append(fields, fs)
+	for _, field := range acctParamsFieldSpecs {
+		text := fmt.Sprintf("txn Sender; acct_params_get %s; assert;", field.field.String())
+		if field.ftype.AVMType == avmBytes {
+			text += "global ZeroAddress; concat; len" // use concat to prove we have bytes
+		} else {
+			text += "global ZeroAddress; len; +" // use + to prove we have an int
 		}
-	}
-	require.Greater(t, len(fields), 0)
-
-	for _, field := range fields {
-		// Need to use intc so we can "backversion" the program and not have it
-		// fail because of pushint.
-		// Use of '+' confirms the type, which is uint64 for all fields
-		text := fmt.Sprintf("intcblock 0 1; intc_0; acct_params_get %s; assert; intc_1; +", field.field.String())
 		// check assembler fails if version before introduction
 		for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 			ep, txn, ledger := makeSampleEnv()

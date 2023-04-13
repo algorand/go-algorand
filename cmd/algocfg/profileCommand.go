@@ -143,7 +143,7 @@ var setProfileCmd = &cobra.Command{
 			}
 			file := filepath.Join(dataDir, config.ConfigFilename)
 			if _, err := os.Stat(file); !forceUpdate && err == nil {
-				fmt.Printf("A config.json file already exists for this data directory. Would you like to overwrite it? (Y/n)")
+				fmt.Printf("A config.json file already exists at %s\nWould you like to overwrite it? (Y/n)", file)
 				reader := bufio.NewReader(os.Stdin)
 				resp, err := reader.ReadString('\n')
 				resp = strings.TrimSpace(resp)

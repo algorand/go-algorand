@@ -1499,7 +1499,7 @@ func TestStateProofLogging(t *testing.T) {
 	require.NotNil(t, voters)
 
 	// Get the message
-	msg, err := stateproof.GenerateStateProofMessage(mockLedger, uint64(votersRound), spRoundHdr)
+	msg, err := stateproof.GenerateStateProofMessage(mockLedger, round)
 
 	// Get the SP
 	proof := generateProofForTesting(uint64(round), msg, provenWeight, voters.Participants, voters.Tree, allKeys, t)
@@ -1586,7 +1586,7 @@ func generateProofForTesting(
 
 	// Prepare the builder
 	stateProofStrengthTargetForTests := config.Consensus[protocol.ConsensusCurrentVersion].StateProofStrengthTarget
-	b, err := cryptostateproof.MakeBuilder(data, round, provenWeight,
+	b, err := cryptostateproof.MakeProver(data, round, provenWeight,
 		partArray, partTree, stateProofStrengthTargetForTests)
 	require.NoError(t, err)
 
@@ -1607,7 +1607,7 @@ func generateProofForTesting(
 	}
 
 	// Build the SP
-	proof, err := b.Build()
+	proof, err := b.CreateProof()
 	require.NoError(t, err)
 
 	return proof

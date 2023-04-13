@@ -5,9 +5,6 @@
     {
       "Opcode": 0,
       "Name": "err",
-      "Returns": [
-        "none"
-      ],
       "Size": 1,
       "Doc": "Fail immediately.",
       "IntroducedVersion": 1,
@@ -22,7 +19,7 @@
         "[]byte"
       ],
       "Returns": [
-        "hash"
+        "[32]byte"
       ],
       "Size": 1,
       "Doc": "SHA256 hash of value A, yields [32]byte",
@@ -38,7 +35,7 @@
         "[]byte"
       ],
       "Returns": [
-        "hash"
+        "[32]byte"
       ],
       "Size": 1,
       "Doc": "Keccak256 hash of value A, yields [32]byte",
@@ -54,7 +51,7 @@
         "[]byte"
       ],
       "Returns": [
-        "hash"
+        "[32]byte"
       ],
       "Size": 1,
       "Doc": "SHA512_256 hash of value A, yields [32]byte",
@@ -100,10 +97,6 @@
         "Secp256k1",
         "Secp256r1"
       ],
-      "ArgEnumTypes": [
-        "none",
-        "none"
-      ],
       "Doc": "for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey =\u003e {0 or 1}",
       "DocExtra": "The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.",
       "ImmediateNote": [
@@ -133,10 +126,6 @@
       "ArgEnum": [
         "Secp256k1",
         "Secp256r1"
-      ],
-      "ArgEnumTypes": [
-        "none",
-        "none"
       ],
       "Doc": "decompress pubkey A into components X, Y",
       "DocExtra": "The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.",
@@ -170,10 +159,6 @@
       "ArgEnum": [
         "Secp256k1",
         "Secp256r1"
-      ],
-      "ArgEnumTypes": [
-        "none",
-        "none"
       ],
       "Doc": "for (data A, recovery id B, signature C, D) recover a public key",
       "DocExtra": "S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key. All values are big-endian encoded. The signed data must be 32 bytes long.",
@@ -941,12 +926,12 @@
         "uint64",
         "uint64",
         "[]byte",
-        "hash",
+        "[32]byte",
         "addr",
         "uint64",
         "addr",
-        "addr",
-        "addr",
+        "[32]byte",
+        "[32]byte",
         "uint64",
         "uint64",
         "uint64",
@@ -958,7 +943,7 @@
         "addr",
         "addr",
         "uint64",
-        "hash",
+        "[32]byte",
         "uint64",
         "uint64",
         "[]byte",
@@ -975,7 +960,7 @@
         "[]byte",
         "[]byte",
         "[]byte",
-        "hash",
+        "[32]byte",
         "addr",
         "addr",
         "addr",
@@ -1054,7 +1039,7 @@
         "uint64",
         "addr",
         "addr",
-        "hash",
+        "[32]byte",
         "uint64",
         "uint64",
         "addr"
@@ -1157,12 +1142,12 @@
         "uint64",
         "uint64",
         "[]byte",
-        "hash",
+        "[32]byte",
         "addr",
         "uint64",
         "addr",
-        "addr",
-        "addr",
+        "[32]byte",
+        "[32]byte",
         "uint64",
         "uint64",
         "uint64",
@@ -1174,7 +1159,7 @@
         "addr",
         "addr",
         "uint64",
-        "hash",
+        "[32]byte",
         "uint64",
         "uint64",
         "[]byte",
@@ -1191,7 +1176,7 @@
         "[]byte",
         "[]byte",
         "[]byte",
-        "hash",
+        "[32]byte",
         "addr",
         "addr",
         "addr",
@@ -1460,12 +1445,12 @@
         "uint64",
         "uint64",
         "[]byte",
-        "hash",
+        "[32]byte",
         "addr",
         "uint64",
         "addr",
-        "addr",
-        "addr",
+        "[32]byte",
+        "[32]byte",
         "uint64",
         "uint64",
         "uint64",
@@ -1477,7 +1462,7 @@
         "addr",
         "addr",
         "uint64",
-        "hash",
+        "[32]byte",
         "uint64",
         "uint64",
         "[]byte",
@@ -1494,7 +1479,7 @@
         "[]byte",
         "[]byte",
         "[]byte",
-        "hash",
+        "[32]byte",
         "addr",
         "addr",
         "addr",
@@ -1768,9 +1753,6 @@
       "Name": "return",
       "Args": [
         "uint64"
-      ],
-      "Returns": [
-        "none"
       ],
       "Size": 1,
       "Doc": "use A as success value; end",
@@ -2360,7 +2342,7 @@
       ],
       "Size": 1,
       "Doc": "balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. Changes caused by inner transactions are observable immediately following `itxn_submit`",
-      "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
+      "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.",
       "IntroducedVersion": 2,
       "Groups": [
         "State Access"
@@ -2584,7 +2566,7 @@
         "[]byte",
         "[]byte",
         "[]byte",
-        "hash",
+        "[32]byte",
         "addr",
         "addr",
         "addr",
@@ -2718,7 +2700,7 @@
       ],
       "Size": 1,
       "Doc": "minimum required balance for account A, in microalgos. Required balance is affected by ASA, App, and Box usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. Changes caused by inner transactions or box usage are observable immediately following the opcode effecting the change.",
-      "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
+      "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.",
       "IntroducedVersion": 3,
       "Groups": [
         "State Access"
@@ -3111,7 +3093,7 @@
         "bigint"
       ],
       "Returns": [
-        "bigint"
+        "[]byte"
       ],
       "Size": 1,
       "Doc": "A plus B. A and B are interpreted as big-endian unsigned integers",
@@ -3162,7 +3144,7 @@
         "bigint"
       ],
       "Returns": [
-        "bigint"
+        "[]byte"
       ],
       "Size": 1,
       "Doc": "A times B. A and B are interpreted as big-endian unsigned integers.",
@@ -3465,8 +3447,8 @@
         "addr",
         "uint64",
         "addr",
-        "addr",
-        "addr",
+        "[32]byte",
+        "[32]byte",
         "uint64",
         "uint64",
         "uint64",
@@ -3491,7 +3473,7 @@
         "[]byte",
         "[]byte",
         "[]byte",
-        "hash",
+        "[32]byte",
         "addr",
         "addr",
         "addr",
@@ -3621,12 +3603,12 @@
         "uint64",
         "uint64",
         "[]byte",
-        "hash",
+        "[32]byte",
         "addr",
         "uint64",
         "addr",
-        "addr",
-        "addr",
+        "[32]byte",
+        "[32]byte",
         "uint64",
         "uint64",
         "uint64",
@@ -3638,7 +3620,7 @@
         "addr",
         "addr",
         "uint64",
-        "hash",
+        "[32]byte",
         "uint64",
         "uint64",
         "[]byte",
@@ -3655,7 +3637,7 @@
         "[]byte",
         "[]byte",
         "[]byte",
-        "hash",
+        "[32]byte",
         "addr",
         "addr",
         "addr",
@@ -3837,12 +3819,12 @@
         "uint64",
         "uint64",
         "[]byte",
-        "hash",
+        "[32]byte",
         "addr",
         "uint64",
         "addr",
-        "addr",
-        "addr",
+        "[32]byte",
+        "[32]byte",
         "uint64",
         "uint64",
         "uint64",
@@ -3854,7 +3836,7 @@
         "addr",
         "addr",
         "uint64",
-        "hash",
+        "[32]byte",
         "uint64",
         "uint64",
         "[]byte",
@@ -3871,7 +3853,7 @@
         "[]byte",
         "[]byte",
         "[]byte",
-        "hash",
+        "[32]byte",
         "addr",
         "addr",
         "addr",
@@ -4318,9 +4300,6 @@
       "Size": 2,
       "ArgEnum": [
         "VrfAlgorand"
-      ],
-      "ArgEnumTypes": [
-        "none"
       ],
       "Doc": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
       "DocExtra": "`VrfAlgorand` is the VRF used in Algorand. It is ECVRF-ED25519-SHA512-Elligator2, specified in the IETF internet draft [draft-irtf-cfrg-vrf-03](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/03/).",

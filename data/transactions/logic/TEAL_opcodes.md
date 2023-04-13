@@ -12,7 +12,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 ## sha256
 
 - Bytecode: 0x01
-- Stack: ..., A: []byte &rarr; ..., hash
+- Stack: ..., A: []byte &rarr; ..., [32]byte
 - SHA256 hash of value A, yields [32]byte
 - **Cost**:
     - 7 (v1)
@@ -21,7 +21,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 ## keccak256
 
 - Bytecode: 0x02
-- Stack: ..., A: []byte &rarr; ..., hash
+- Stack: ..., A: []byte &rarr; ..., [32]byte
 - Keccak256 hash of value A, yields [32]byte
 - **Cost**:
     - 26 (v1)
@@ -30,7 +30,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 ## sha512_256
 
 - Bytecode: 0x03
-- Stack: ..., A: []byte &rarr; ..., hash
+- Stack: ..., A: []byte &rarr; ..., [32]byte
 - SHA512_256 hash of value A, yields [32]byte
 - **Cost**:
     - 9 (v1)
@@ -380,12 +380,12 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 | 3 | FirstValidTime | uint64 | v7  | UNIX timestamp of block before txn.FirstValid. Fails if negative |
 | 4 | LastValid | uint64 |      | round number |
 | 5 | Note | []byte |      | Any data up to 1024 bytes |
-| 6 | Lease | hash |      | 32 byte lease value |
+| 6 | Lease | [32]byte |      | 32 byte lease value |
 | 7 | Receiver | addr |      | 32 byte address |
 | 8 | Amount | uint64 |      | microalgos |
 | 9 | CloseRemainderTo | addr |      | 32 byte address |
-| 10 | VotePK | addr |      | 32 byte address |
-| 11 | SelectionPK | addr |      | 32 byte address |
+| 10 | VotePK | [32]byte |      | 32 byte address |
+| 11 | SelectionPK | [32]byte |      | 32 byte address |
 | 12 | VoteFirst | uint64 |      | The first round that the participation key is valid. |
 | 13 | VoteLast | uint64 |      | The last round that the participation key is valid. |
 | 14 | VoteKeyDilution | uint64 |      | Dilution for the 2-level participation key |
@@ -397,7 +397,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 | 20 | AssetReceiver | addr |      | 32 byte address |
 | 21 | AssetCloseTo | addr |      | 32 byte address |
 | 22 | GroupIndex | uint64 |      | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1 |
-| 23 | TxID | hash |      | The computed ID for this transaction. 32 bytes. |
+| 23 | TxID | [32]byte |      | The computed ID for this transaction. 32 bytes. |
 | 24 | ApplicationID | uint64 | v2  | ApplicationID from ApplicationCall transaction |
 | 25 | OnCompletion | uint64 | v2  | ApplicationCall transaction on completion action |
 | 27 | NumAppArgs | uint64 | v2  | Number of ApplicationArgs |
@@ -412,7 +412,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 | 37 | ConfigAssetUnitName | []byte | v2  | Unit name of the asset |
 | 38 | ConfigAssetName | []byte | v2  | The asset name |
 | 39 | ConfigAssetURL | []byte | v2  | URL |
-| 40 | ConfigAssetMetadataHash | hash | v2  | 32 byte commitment to unspecified asset metadata |
+| 40 | ConfigAssetMetadataHash | [32]byte | v2  | 32 byte commitment to unspecified asset metadata |
 | 41 | ConfigAssetManager | addr | v2  | 32 byte address |
 | 42 | ConfigAssetReserve | addr | v2  | 32 byte address |
 | 43 | ConfigAssetFreeze | addr | v2  | 32 byte address |
@@ -461,7 +461,7 @@ Fields
 | 8 | CurrentApplicationID | uint64 | v2  | ID of current application executing. Application mode only. |
 | 9 | CreatorAddress | addr | v3  | Address of the creator of the current application. Application mode only. |
 | 10 | CurrentApplicationAddress | addr | v5  | Address that the current application controls. Application mode only. |
-| 11 | GroupID | hash | v5  | ID of the transaction group. 32 zero bytes if the transaction is not part of a group. |
+| 11 | GroupID | [32]byte | v5  | ID of the transaction group. 32 zero bytes if the transaction is not part of a group. |
 | 12 | OpcodeBudget | uint64 | v6  | The remaining cost that can be spent by opcodes in this program. |
 | 13 | CallerApplicationID | uint64 | v6  | The application ID of the application that called this application. 0 if this application is at the top-level. Application mode only. |
 | 14 | CallerApplicationAddress | addr | v6  | The application address of the application that called this application. ZeroAddress if this application is at the top-level. Application mode only. |
@@ -884,7 +884,7 @@ Almost all smart contracts should use simpler and smaller methods (such as the [
 - Availability: v2
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.
+params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
 
 ## app_opted_in
 
@@ -1020,7 +1020,7 @@ Fields
 | 3 | AssetUnitName | []byte |      | Asset unit name |
 | 4 | AssetName | []byte |      | Asset name |
 | 5 | AssetURL | []byte |      | URL with additional info about the asset |
-| 6 | AssetMetadataHash | hash |      | Arbitrary commitment |
+| 6 | AssetMetadataHash | [32]byte |      | Arbitrary commitment |
 | 7 | AssetManager | addr |      | Manager address |
 | 8 | AssetReserve | addr |      | Reserve address |
 | 9 | AssetFreeze | addr |      | Freeze address |
@@ -1095,7 +1095,7 @@ Fields
 - Availability: v3
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.
+params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
 
 ## pushbytes
 
@@ -1282,7 +1282,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## b+
 
 - Bytecode: 0xa0
-- Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
+- Stack: ..., A: bigint, B: bigint &rarr; ..., []byte
 - A plus B. A and B are interpreted as big-endian unsigned integers
 - **Cost**: 10
 - Availability: v4
@@ -1306,7 +1306,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## b*
 
 - Bytecode: 0xa3
-- Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
+- Stack: ..., A: bigint, B: bigint &rarr; ..., []byte
 - A times B. A and B are interpreted as big-endian unsigned integers.
 - **Cost**: 20
 - Availability: v4
