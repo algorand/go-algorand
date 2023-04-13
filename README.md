@@ -89,7 +89,7 @@ ${GOPATH}/bin/goal node start -d ~/testnet_data
 Genesis files for mainnet, testnet, and betanet can be found in
 `installer/genesis/`.
 
-## Contributing (Code, Documentation, Bugs, Etc) ##
+## Contributing
 
 Please refer to our [CONTRIBUTING](CONTRIBUTING.md) document.
 

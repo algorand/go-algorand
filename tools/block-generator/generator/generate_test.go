@@ -18,8 +18,11 @@ package generator
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
@@ -31,7 +34,7 @@ func makePrivateGenerator(t *testing.T) *generator {
 	partitiontest.PartitionTest(t)
 	publicGenerator, err := MakeGenerator(GenerationConfig{
 		NumGenesisAccounts:           10,
-		GenesisAccountInitialBalance: 10000000000000000000,
+		GenesisAccountInitialBalance: 1000000000000,
 		PaymentTransactionFraction:   1.0,
 		PaymentNewAccountFraction:    1.0,
 		AssetCreateFraction:          1.0,
@@ -204,13 +207,45 @@ func TestWriteRound(t *testing.T) {
 	var block rpcs.EncodedBlockCert
 	protocol.Decode(data, &block)
 	require.Len(t, block.Block.Payset, int(g.config.TxnPerBlock))
+	require.NotNil(t, g.ledger)
+	require.Equal(t, basics.Round(1), g.ledger.Latest())
+	_, err := g.ledger.GetStateDeltaForRound(1)
+	require.NoError(t, err)
 }
 
-func TestIndexToAccountAndAccountToIndex(t *testing.T) {
+func TestHandlers(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	for i := uint64(0); i < uint64(100000); i++ {
-		acct := indexToAccount(i)
-		result := accountToIndex(acct)
-		require.Equal(t, i, result)
+	g := makePrivateGenerator(t)
+	handler := getBlockHandler(g)
+	var testcases = []struct {
+		name string
+		url  string
+		err  string
+	}{
+		{
+			name: "no block",
+			url:  "/v2/blocks/?nothing",
+			err:  "invalid request path, /",
+		},
+		{
+			name: "blocks: round must be numeric",
+			url:  "/v2/blocks/round",
+			err:  `strconv.ParseUint: parsing "round": invalid syntax`,
+		},
+		{
+			name: "deltas: round must be numeric",
+			url:  "/v2/deltas/round",
+			err:  `strconv.ParseUint: parsing "round": invalid syntax`,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", testcase.url, nil)
+			w := httptest.NewRecorder()
+			handler(w, req)
+			require.Equal(t, http.StatusBadRequest, w.Code)
+			require.Contains(t, w.Body.String(), testcase.err)
+		})
 	}
 }
