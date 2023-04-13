@@ -1316,8 +1316,10 @@ func typeFrameBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes
 func typeEquals(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 0 {
-		//Require arg0 and arg1 to have same type
-		return StackTypes{pgm.stack[top], pgm.stack[top]}, nil, nil
+		// Require arg0 and arg1 to have same avm type
+		// but the bounds shouldn't matter
+		widened := pgm.stack[top].widened()
+		return StackTypes{widened, widened}, nil, nil
 	}
 	return nil, nil, nil
 }

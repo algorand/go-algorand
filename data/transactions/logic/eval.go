@@ -749,6 +749,20 @@ func (st StackType) narrowed(bounds [2]uint64) StackType {
 	return NewStackType(st.AVMType, bounds)
 }
 
+func (st StackType) widened() StackType {
+	// Take only the avm type
+	switch st.AVMType {
+	case avmBytes:
+		return StackBytes
+	case avmUint64:
+		return StackUint64
+	case avmAny:
+		return StackAny
+	default:
+		panic(fmt.Sprintf("What are you tyring to widen?: %+v", st))
+	}
+}
+
 // AssignableTo indicates whether a value typed st might be
 // usable as other.
 func (st StackType) AssignableTo(other StackType) bool {
