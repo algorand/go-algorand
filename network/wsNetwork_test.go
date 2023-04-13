@@ -3922,7 +3922,15 @@ func TestTryConnectEarlyWrite(t *testing.T) {
 	netA.wsMaxHeaderBytes = int64(headerSize)
 	netA.wg.Add(1)
 	netA.tryConnect(s.URL, s.URL)
-	time.Sleep(250 * time.Millisecond)
+	p := netA.peers[0]
+	var messageCount uint64
+	for x := 0; x < 1000; x++ {
+		messageCount = atomic.LoadUint64(&p.miMessageCount)
+		if messageCount == 1 {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
 
 	// Confirm that we successfuly received a message of interest
 	assert.Len(t, netA.peers, 1)
