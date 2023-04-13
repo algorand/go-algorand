@@ -1679,7 +1679,7 @@ func (v2 *Handlers) ExperimentalCheck(ctx echo.Context) error {
 func (v2 *Handlers) GetBlockTimeStampOffset(ctx echo.Context) error {
 	offset := v2.Node.GetBlockTimeStampOffset()
 	if offset == nil {
-		err := fmt.Errorf("cannot get timestamp offset because we are not in dev mode")
+		err := fmt.Errorf("cannot get block timestamp offset because we are not in dev mode")
 		return badRequest(ctx, err, fmt.Sprintf(errFailedRetrievingTimeStampOffset, err), v2.Log)
 	}
 	return ctx.JSON(http.StatusOK, model.GetBlockTimeStampOffsetResponse{Offset: uint64(*offset)})

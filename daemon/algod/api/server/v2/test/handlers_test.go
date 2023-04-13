@@ -64,12 +64,12 @@ import (
 
 const stateProofInterval = uint64(256)
 
-func setupTestForMethodGet(t *testing.T, status node.StatusReport) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
+func setupMockNodeForMethodGet(t *testing.T, status node.StatusReport, devmode bool) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, rootkeys, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, status, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, status, devmode)
 	dummyShutdownChan := make(chan struct{})
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -81,6 +81,10 @@ func setupTestForMethodGet(t *testing.T, status node.StatusReport) (v2.Handlers,
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	return handler, c, rec, rootkeys, stxns, releasefunc
+}
+
+func setupTestForMethodGet(t *testing.T, status node.StatusReport) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
+	return setupMockNodeForMethodGet(t, status, false)
 }
 
 func numOrNil(n uint64) *uint64 {
@@ -1941,30 +1945,11 @@ func TestExperimentalCheck(t *testing.T) {
 	require.Equal(t, "true\n", string(rec.Body.Bytes()))
 }
 
-func setupTestDevMode(devmode bool, t *testing.T) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
-	numAccounts := 1
-	numTransactions := 1
-	offlineAccounts := true
-	mockLedger, rootkeys, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, devmode)
-	dummyShutdownChan := make(chan struct{})
-	handler := v2.Handlers{
-		Node:     mockNode,
-		Log:      logging.Base(),
-		Shutdown: dummyShutdownChan,
-	}
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	return handler, c, rec, rootkeys, stxns, releasefunc
-}
-
 func TestTimestampOffsetNotInDevMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, rec, _, _, releasefunc := setupTestDevMode(false, t)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
 	// TestGetBlockTimeStampOffset 400 - offset is not set and mock node is
@@ -1972,18 +1957,22 @@ func TestTimestampOffsetNotInDevMode(t *testing.T) {
 	err := handler.GetBlockTimeStampOffset(c)
 	require.NoError(t, err)
 	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"failed retrieving timestamp offset from node: cannot get block timestamp offset because we are not in dev mode\"}\n", rec.Body.String())
+	c, rec = newReq(t)
+
 	// TestSetBlockTimeStampOffset 400 - cannot set timestamp offset when not
 	// in dev mode
 	err = handler.SetBlockTimeStampOffset(c, 1)
 	require.NoError(t, err)
 	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"failed to set timestamp offset on the node: cannot set block timestamp when not in dev mode\"}\n", rec.Body.String())
 }
 
 func TestTimestampOffsetInDevMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, rec, _, _, releasefunc := setupTestDevMode(true, t)
+	handler, c, rec, _, _, releasefunc := setupMockNodeForMethodGet(t, cannedStatusReportGolden, true)
 	defer releasefunc()
 
 	// TestSetBlockTimeStampOffset 200
