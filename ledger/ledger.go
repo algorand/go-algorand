@@ -843,17 +843,6 @@ func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnB
 		})
 }
 
-// StartEvaluatorNoValidation is a dev only evaluator that does not validate blocks
-func (l *Ledger) StartEvaluatorNoValidation(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*eval.BlockEvaluator, error) {
-	return eval.StartEvaluator(l, hdr,
-		eval.EvaluatorOptions{
-			PaysetHint:          paysetHint,
-			Generate:            true,
-			Validate:            false,
-			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
-		})
-}
-
 // FlushCaches flushes any pending data in caches so that it is fully available during future lookups.
 func (l *Ledger) FlushCaches() {
 	l.accts.flushCaches()

@@ -522,35 +522,6 @@ func MakeBlock(prev BlockHeader) Block {
 	return blk
 }
 
-// MakeDevModeBlock constructs a new block for dev mode.
-// If a valid DevModeOpts is passed in, we also populate block header
-// information, such as block seed and timestamp offsets.
-func MakeDevModeBlock(prev BlockHeader, configs DevModeOpts) Block {
-	// Use previous block's consensus params in dev mode
-	params := config.Consensus[prev.CurrentProtocol]
-
-	// If a timestamp offset is set, then set it to prev ts + offset.
-	// If a timestamp offset is not set, then try to set this block's timestamp
-	// as min(time.Now, MaxTimestampIncrement).
-	timestamp := time.Now().Unix()
-	if prev.TimeStamp > 0 {
-		if configs.TimeStampOffset > 0 {
-			timestamp = prev.TimeStamp + configs.TimeStampOffset
-		} else if timestamp < prev.TimeStamp {
-			timestamp = prev.TimeStamp
-		} else if timestamp > prev.TimeStamp+params.MaxTimestampIncrement {
-			timestamp = prev.TimeStamp + params.MaxTimestampIncrement
-		}
-	}
-
-	// Change block header values
-	blk := MakeBlock(prev)
-	blk.BlockHeader.Seed = committee.Seed(prev.Hash())
-	blk.BlockHeader.TimeStamp = timestamp
-
-	return blk
-}
-
 // PaysetCommit computes the commitment to the payset, using the appropriate
 // commitment plan based on the block's protocol.
 func (block Block) PaysetCommit() (TxnCommitments, error) {

@@ -1440,7 +1440,6 @@ func (node *AlgorandFullNode) UnsetSyncRound() {
 func (node *AlgorandFullNode) SetBlockTimeStampOffset(offset int64) error {
 	if node.devMode {
 		node.timestampOffset = &offset
-		node.transactionPool.SetBlockTimeStampOffset(offset)
 		return nil
 	}
 	return fmt.Errorf("cannot set block timestamp offset when not in dev mode")
@@ -1450,8 +1449,7 @@ func (node *AlgorandFullNode) SetBlockTimeStampOffset(offset int64) error {
 // This is only available in dev mode.
 func (node *AlgorandFullNode) GetBlockTimeStampOffset() *int64 {
 	if node.devMode {
-		offset := node.transactionPool.GetBlockTimeStampOffset()
-		return &offset
+		return node.timestampOffset
 	}
 	return nil
 }

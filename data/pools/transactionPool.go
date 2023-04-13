@@ -96,13 +96,6 @@ type TransactionPool struct {
 	// stateproofOverflowed indicates that a stateproof transaction was allowed to
 	// exceed the txPoolMaxSize. This flag is reset to false OnNewBlock
 	stateproofOverflowed bool
-
-	// devMode indicates whether we are in dev mode and whether we should
-	// manually change certain fields in the block header such as block seed.
-	devMode bool
-	// devModeTimeStampOffset adds an offset to the timestamp in the
-	// blockheader in dev mode.
-	devModeTimeStampOffset int64
 }
 
 // BlockEvaluator defines the block evaluator interface exposed by the ledger package.
@@ -701,22 +694,13 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	}
 	pool.assemblyMu.Unlock()
 
+	next := bookkeeping.MakeBlock(prev)
 	pool.numPendingWholeBlocks = 0
 	hint := pendingCount - int(knownCommitted)
 	if hint < 0 || int(knownCommitted) < 0 {
 		hint = 0
 	}
-
-	// if pool.devMode {
-	// 	// If dev mode timestamp offset is configured, add the offset to current
-	// 	// block timestamp.
-	// 	next := bookkeeping.MakeDevModeBlock(prev, bookkeeping.DevModeOpts{TimeStampOffset: pool.devModeTimeStampOffset})
-	// 	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluatorNoValidation(next.BlockHeader, hint, 0)
-	// } else {
-	next := bookkeeping.MakeBlock(prev)
 	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
-	// }
-
 	if err != nil {
 		// The pendingBlockEvaluator is an interface, and in case of an evaluator error
 		// we want to remove the interface itself rather then keeping an interface
@@ -1006,27 +990,11 @@ func (pool *TransactionPool) AssembleDevModeBlock() (assembled *ledgercore.Valid
 	defer pool.mu.Unlock()
 
 	// drop the current block evaluator and start with a new one.
-	pool.devMode = true
 	pool.recomputeBlockEvaluator(nil, 0)
 
 	// The above was already pregenerating the entire block,
 	// so there won't be any waiting on this call.
 	assembled, err = pool.AssembleBlock(pool.pendingBlockEvaluator.Round(), time.Now().Add(pool.proposalAssemblyTime))
 	return
-}
 
-// SetBlockTimeStampOffset sets the timestamp offset.
-// Only available in dev mode
-func (pool *TransactionPool) SetBlockTimeStampOffset(offset int64) {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-	pool.devModeTimeStampOffset = offset
-}
-
-// GetBlockTimeStampOffset gets the timestamp offset.
-// Only available in dev mode
-func (pool *TransactionPool) GetBlockTimeStampOffset() int64 {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-	return pool.devModeTimeStampOffset
 }
