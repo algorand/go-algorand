@@ -1968,7 +1968,7 @@ func TestTimestampOffsetNotInDevMode(t *testing.T) {
 	defer releasefunc()
 
 	// TestGetBlockTimeStampOffset 400 - offset is not set and mock node is
-	// not on dev mode
+	// not in dev mode
 	err := handler.GetBlockTimeStampOffset(c)
 	require.NoError(t, err)
 	require.Equal(t, 400, rec.Code)
