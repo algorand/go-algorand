@@ -850,6 +850,7 @@ func TestLookupKeysByPrefix(t *testing.T) {
 		{key: []byte("DingHo-StandardPack"), value: []byte("5bucks25cents")},
 		{key: []byte("BostonKitchen-CheeseSlice"), value: []byte("3bucks50cents")},
 		{key: []byte(`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`), value: []byte("random Bluh")},
+		{key: []byte(`a-random-box-key`), value: []byte{}},
 	}
 
 	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
@@ -1065,6 +1066,143 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 			}
 		})
 	}
+}
+
+func TestKVStoreNilBlobConversion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// +-------------------------------------------------------------+
+	// | Section 1: Create a ledger with tracer DB of user_version 9 |
+	// +-------------------------------------------------------------+
+
+	const inMem = false
+
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+
+	dbs, dbName := storetesting.DbOpenTest(t, inMem)
+	storetesting.SetDbLogging(t, dbs)
+
+	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		sqlitedriver.AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		return nil
+	})
+	require.NoError(t, err)
+
+	defer func() {
+		dbs.Close()
+		require.NoError(t, os.Remove(dbName))
+	}()
+
+	targetVersion := int32(10)
+
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err0 error) {
+		_, err0 = tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", targetVersion-1))
+		return
+	})
+	require.NoError(t, err)
+
+	// +-----------------------------------------------------------------+
+	// | ^ Section 1 finishes above                                      |
+	// |                                                                 |
+	// | Section 2: jams a bunch of key value with value nil into the DB |
+	// +-----------------------------------------------------------------+
+
+	kvPairDBPrepareSet := []struct{ key []byte }{
+		{key: []byte{0xFF, 0x12, 0x34, 0x56, 0x78}},
+		{key: []byte{0xFF, 0xFF, 0x34, 0x56, 0x78}},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0x56, 0x78}},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x78}},
+		{key: []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF}},
+		{key: []byte{0xFF, 0xFE, 0xFF}},
+		{key: []byte{0xFF, 0xFF, 0x00, 0xFF, 0xFF}},
+		{key: []byte{0xFF, 0xFF}},
+		{key: []byte{0xBA, 0xDD, 0xAD, 0xFF, 0xFF}},
+		{key: []byte{0xBA, 0xDD, 0xAE, 0x00}},
+		{key: []byte{0xBA, 0xDD, 0xAE}},
+		{key: []byte("TACOCAT")},
+		{key: []byte("TACOBELL")},
+		{key: []byte("DingHo-SmallPack")},
+		{key: []byte("DingHo-StandardPack")},
+		{key: []byte("BostonKitchen-CheeseSlice")},
+		{key: []byte(`™£´´∂ƒ∂ƒßƒ©∑®ƒß∂†¬∆`)},
+	}
+
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err0 error) {
+		writer, err0 := sqlitedriver.MakeAccountsSQLWriter(tx, false, false, true, false)
+		defer writer.Close()
+		if err0 != nil {
+			return
+		}
+		for i := 0; i < len(kvPairDBPrepareSet); i++ {
+			err0 = writer.UpsertKvPair(string(kvPairDBPrepareSet[i].key), nil)
+			if err0 != nil {
+				return
+			}
+		}
+		return
+	})
+	require.NoError(t, err)
+
+	// +---------------------------------------------------------------------------+
+	// | ^ Section 2 finishes above                                                |
+	// |                                                                           |
+	// | Section 3: Confirm that tracker DB has value being nil, not anything else |
+	// +---------------------------------------------------------------------------+
+
+	nilRowCounter := func() (nilRowCount int, err error) {
+		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err0 error) {
+			stmt, err0 := tx.PrepareContext(ctx, "SELECT key FROM kvstore WHERE value IS NULL;")
+			if err0 != nil {
+				return
+			}
+			rows, err0 := stmt.QueryContext(ctx)
+			if err0 != nil {
+				return
+			}
+			for rows.Next() {
+				var key sql.NullString
+				if err0 = rows.Scan(&key); err0 != nil {
+					return
+				}
+				if !key.Valid {
+					err0 = fmt.Errorf("scan from db get invalid key: %#v", key)
+					return
+				}
+				nilRowCount++
+			}
+			return
+		})
+		return
+	}
+
+	nilRowCount, err := nilRowCounter()
+	require.NoError(t, err)
+	require.Equal(t, len(kvPairDBPrepareSet), nilRowCount)
+
+	// +---------------------------------------------------------------------+
+	// | ^ Section 3 finishes above                                          |
+	// |                                                                     |
+	// | Section 4: Run migration to see replace nils with empty byte slices |
+	// +---------------------------------------------------------------------+
+
+	trackerDBWrapper := sqlitedriver.CreateTrackerSQLStore(dbs)
+	err = trackerDBWrapper.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err0 error) {
+		_, err0 = tx.RunMigrations(ctx, trackerdb.Params{}, log, targetVersion)
+		return
+	})
+	require.NoError(t, err)
+
+	// +------------------------------------------------------------------------------------------------+
+	// | ^ Section 4 finishes above                                                                     |
+	// |                                                                                                |
+	// | After that, we can confirm the DB migration found all nil strings and executed the conversions |
+	// +------------------------------------------------------------------------------------------------+
+
+	nilRowCount, err = nilRowCounter()
+	require.NoError(t, err)
+	require.Equal(t, 0, nilRowCount)
 }
 
 // upsert updates existing or inserts a new entry

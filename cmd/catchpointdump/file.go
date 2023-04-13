@@ -47,7 +47,7 @@ import (
 
 var catchpointFile string
 var outFileName string
-var excludedFields *cmdutil.CobraStringSliceValue = cmdutil.MakeCobraStringSliceValue(nil, []string{"version", "catchpoint"})
+var excludedFields = cmdutil.MakeCobraStringSliceValue(nil, []string{"version", "catchpoint"})
 
 func init() {
 	fileCmd.Flags().StringVarP(&catchpointFile, "tar", "t", "", "Specify the catchpoint file (either .tar or .tar.gz) to process")
@@ -127,7 +127,6 @@ var fileCmd = &cobra.Command{
 				}
 				defer outFile.Close()
 			}
-
 			err = printAccountsDatabase("./ledger.tracker.sqlite", true, fileHeader, outFile, excludedFields.GetSlice())
 			if err != nil {
 				reportErrorf("Unable to print account database : %v", err)
@@ -135,6 +134,10 @@ var fileCmd = &cobra.Command{
 			err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
 			if err != nil {
 				reportErrorf("Unable to print key value store : %v", err)
+			}
+			err = printStateProofVerificationContext("./ledger.tracker.sqlite", true, outFile)
+			if err != nil {
+				reportErrorf("Unable to print state proof verification database : %v", err)
 			}
 		}
 	},
@@ -228,7 +231,7 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 		if err != nil {
 			return fileHeader, err
 		}
-		if header.Name == "content.msgpack" {
+		if header.Name == ledger.CatchpointContentFileName {
 			// we already know it's valid, since we validated that above.
 			protocol.Decode(balancesBlockBytes, &fileHeader)
 		}
@@ -441,6 +444,42 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 		_, _ = db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(5*time.Second))
 		return err
 	})
+}
+
+func printStateProofVerificationContext(databaseName string, stagingTables bool, outFile *os.File) error {
+	fileWriter := bufio.NewWriterSize(outFile, 1024*1024)
+	defer fileWriter.Flush()
+
+	dbAccessor, err := db.MakeAccessor(databaseName, true, false)
+	if err != nil || dbAccessor.Handle == nil {
+		return err
+	}
+	defer dbAccessor.Close()
+
+	var stateProofVerificationContext []ledgercore.StateProofVerificationContext
+	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		if stagingTables {
+			stateProofVerificationContext, err = sqlitedriver.MakeStateProofVerificationReader(tx).GetAllSPContextsFromCatchpointTbl(ctx)
+		} else {
+			stateProofVerificationContext, err = sqlitedriver.MakeStateProofVerificationReader(tx).GetAllSPContexts(ctx)
+		}
+		return err
+	})
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(fileWriter, "State Proof Verification Data:\n")
+	for _, ctx := range stateProofVerificationContext {
+		jsonData, err := json.Marshal(ctx)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(fileWriter, "%d : %s\n", ctx.LastAttestedRound, string(jsonData))
+	}
+
+	return nil
 }
 
 func printKeyValue(writer *bufio.Writer, key, value []byte) {

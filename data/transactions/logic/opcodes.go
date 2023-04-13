@@ -66,10 +66,12 @@ const fidoVersion = 7       // base64, json, secp256r1
 const randomnessVersion = 7 // vrf_verify, block
 const fpVersion = 8         // changes for frame pointers and simpler function discipline
 
+const sharedResourcesVersion = 9 // apps can access resources from other transactions.
+
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
-const pairingVersion = 9 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
+const pairingVersion = 10 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
 
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
@@ -528,29 +530,38 @@ var OpSpecs = []OpSpec{
 
 	{0x60, "balance", opBalance, proto("i:i"), 2, only(ModeApp)},
 	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(ModeApp)},
+	{0x60, "balance", opBalance, proto("b:i"), sharedResourcesVersion, only(ModeApp)},
 	{0x61, "app_opted_in", opAppOptedIn, proto("ii:T"), 2, only(ModeApp)},
 	{0x61, "app_opted_in", opAppOptedIn, proto("ai:T"), directRefEnabledVersion, only(ModeApp)},
+	{0x61, "app_opted_in", opAppOptedIn, proto("bi:T"), sharedResourcesVersion, only(ModeApp)},
 	{0x62, "app_local_get", opAppLocalGet, proto("iK:a"), 2, only(ModeApp)},
 	{0x62, "app_local_get", opAppLocalGet, proto("aK:a"), directRefEnabledVersion, only(ModeApp)},
+	{0x62, "app_local_get", opAppLocalGet, proto("bK:a"), sharedResourcesVersion, only(ModeApp)},
 	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("iiK:aT"), 2, only(ModeApp)},
 	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aiK:aT"), directRefEnabledVersion, only(ModeApp)},
+	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("biK:aT"), sharedResourcesVersion, only(ModeApp)},
 	{0x64, "app_global_get", opAppGlobalGet, proto("K:a"), 2, only(ModeApp)},
 	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("iK:aT"), 2, only(ModeApp)},
 	{0x66, "app_local_put", opAppLocalPut, proto("iKa:"), 2, only(ModeApp)},
 	{0x66, "app_local_put", opAppLocalPut, proto("aKa:"), directRefEnabledVersion, only(ModeApp)},
+	{0x66, "app_local_put", opAppLocalPut, proto("bKa:"), sharedResourcesVersion, only(ModeApp)},
 	{0x67, "app_global_put", opAppGlobalPut, proto("Ka:"), 2, only(ModeApp)},
 	{0x68, "app_local_del", opAppLocalDel, proto("iK:"), 2, only(ModeApp)},
 	{0x68, "app_local_del", opAppLocalDel, proto("aK:"), directRefEnabledVersion, only(ModeApp)},
+	{0x68, "app_local_del", opAppLocalDel, proto("bK:"), sharedResourcesVersion, only(ModeApp)},
 	{0x69, "app_global_del", opAppGlobalDel, proto("K:"), 2, only(ModeApp)},
 
 	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ii:aT"), 2, field("f", &AssetHoldingFields).only(ModeApp)},
 	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ai:aT"), directRefEnabledVersion, field("f", &AssetHoldingFields).only(ModeApp)},
+	{0x70, "asset_holding_get", opAssetHoldingGet, proto("bi:aT"), sharedResourcesVersion, field("f", &AssetHoldingFields).only(ModeApp)},
 	{0x71, "asset_params_get", opAssetParamsGet, proto("i:aT"), 2, field("f", &AssetParamsFields).only(ModeApp)},
 	{0x72, "app_params_get", opAppParamsGet, proto("i:aT"), 5, field("f", &AppParamsFields).only(ModeApp)},
 	{0x73, "acct_params_get", opAcctParamsGet, proto("a:aT"), 6, field("f", &AcctParamsFields).only(ModeApp)},
+	{0x73, "acct_params_get", opAcctParamsGet, proto("b:aT"), sharedResourcesVersion, field("f", &AcctParamsFields).only(ModeApp)},
 
 	{0x78, "min_balance", opMinBalance, proto("i:i"), 3, only(ModeApp)},
 	{0x78, "min_balance", opMinBalance, proto("a:i"), directRefEnabledVersion, only(ModeApp)},
+	{0x78, "min_balance", opMinBalance, proto("b:i"), sharedResourcesVersion, only(ModeApp)},
 
 	// Immediate bytes and ints. Smaller code size for single use of constant.
 	{0x80, "pushbytes", opPushBytes, proto(":b"), 3, constants(asmPushBytes, opPushBytes, "bytes", immBytes)},
@@ -589,10 +600,10 @@ var OpSpecs = []OpSpec{
 	{0x9b, "bn256_pairing", opBn256Pairing, proto("bb:i"), pairingVersion, costly(8700)},
 
 	// Byteslice math.
-	{0xa0, "b+", opBytesPlus, proto("NN:N"), 4, costly(10)},
+	{0xa0, "b+", opBytesPlus, proto("NN:b"), 4, costly(10).typed(typeByteMath(maxByteMathSize + 1))},
 	{0xa1, "b-", opBytesMinus, proto("NN:N"), 4, costly(10)},
 	{0xa2, "b/", opBytesDiv, proto("NN:N"), 4, costly(20)},
-	{0xa3, "b*", opBytesMul, proto("NN:N"), 4, costly(20)},
+	{0xa3, "b*", opBytesMul, proto("NN:b"), 4, costly(20).typed(typeByteMath(maxByteMathSize * 2))},
 	{0xa4, "b<", opBytesLt, proto("NN:T"), 4, detDefault()},
 	{0xa5, "b>", opBytesGt, proto("NN:T"), 4, detDefault()},
 	{0xa6, "b<=", opBytesLe, proto("NN:T"), 4, detDefault()},

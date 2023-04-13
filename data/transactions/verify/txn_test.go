@@ -266,14 +266,11 @@ func TestTxnValidationEmptySig(t *testing.T) {
 	}
 }
 
-const spProto = protocol.ConsensusVersion("test-state-proof-enabled")
-
-func TestTxnValidationStateProof(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies config.Consensus
+func TestTxnValidationStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	proto.StateProofInterval = 256
-	config.Consensus[spProto] = proto
 
 	stxn := transactions.SignedTxn{
 		Txn: transactions.Transaction{
@@ -292,7 +289,7 @@ func TestTxnValidationStateProof(t *testing.T) { //nolint:paralleltest // Not pa
 			RewardsPool: poolAddr,
 		},
 		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: spProto,
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
 		},
 	}
 

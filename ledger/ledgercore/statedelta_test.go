@@ -150,7 +150,7 @@ func TestStateDeltaReset(t *testing.T) {
 
 	// StateDeltas simple fields
 	require.Zero(t, sd.Hdr)
-	require.Zero(t, sd.StateProofNext)
+	require.Zero(t, sd.ModStateProofNextRound)
 	require.Zero(t, sd.PrevTimestamp)
 	require.Zero(t, sd.Totals)
 
@@ -184,16 +184,16 @@ func TestStateDeltaReflect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	stateDeltaFieldNames := map[string]struct{}{
-		"Accts":          {},
-		"KvMods":         {},
-		"Txids":          {},
-		"Txleases":       {},
-		"Creatables":     {},
-		"Hdr":            {},
-		"StateProofNext": {},
-		"PrevTimestamp":  {},
-		"initialHint":    {},
-		"Totals":         {},
+		"Accts":                  {},
+		"KvMods":                 {},
+		"Txids":                  {},
+		"Txleases":               {},
+		"Creatables":             {},
+		"Hdr":                    {},
+		"ModStateProofNextRound": {},
+		"PrevTimestamp":          {},
+		"initialHint":            {},
+		"Totals":                 {},
 	}
 
 	sd := StateDelta{}

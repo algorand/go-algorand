@@ -103,6 +103,9 @@ func AccountsInitTest(tb testing.TB, tx *sql.Tx, initAccounts map[basics.Address
 	err = accountsCreateBoxTable(context.Background(), tx)
 	require.NoError(tb, err)
 
+	err = performKVStoreNullBlobConversion(context.Background(), tx)
+	require.NoError(tb, err)
+
 	return newDB
 }
 
@@ -123,6 +126,9 @@ func AccountsUpdateSchemaTest(ctx context.Context, tx *sql.Tx) (err error) {
 	// this line creates kvstore table, even if it is not required in accountDBVersion 6 -> 7
 	// or in later version where we need kvstore table, some tests will fail
 	if err := accountsCreateBoxTable(ctx, tx); err != nil {
+		return err
+	}
+	if err := createStateProofVerificationTable(ctx, tx); err != nil {
 		return err
 	}
 	return nil

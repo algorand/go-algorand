@@ -277,7 +277,8 @@ func TestBoxCreateAvailability(t *testing.T) {
 `,
 		}
 
-		// We know box_create worked because we finished and checked MBR
+		// We know box_create worked because this failure (checking the MBR)
+		// happens at the end of the group evaluation.
 		dl.txn(&accessInCreate, "balance 0 below min")
 
 		// But let's fund it and be sure. This is "psychic". We're going to fund
