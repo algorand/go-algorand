@@ -716,13 +716,13 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 	return StackType{Name: name, AVMType: at, Bound: bounds}
 }
 
-func (st StackType) union(b StackType) (StackType, error) {
+func (st StackType) union(b StackType) StackType {
 	if st.AVMType != b.AVMType {
-		return StackAny, nil
+		return StackAny
 	}
 
 	// Same type now, so we can just take the union of the bounds
-	return NewStackType(st.AVMType, union(st.Bound, b.Bound)), nil
+	return NewStackType(st.AVMType, union(st.Bound, b.Bound))
 }
 
 func (st StackType) narrowed(bounds [2]uint64) StackType {
