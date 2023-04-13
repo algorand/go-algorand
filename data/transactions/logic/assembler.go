@@ -1524,6 +1524,15 @@ func typePushInts(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes,
 	return nil, types, nil
 }
 
+func typePushInt(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	types := make(StackTypes, len(args))
+	for i := range types {
+		val, _ := strconv.ParseUint(args[i], 10, 64)
+		types[i] = NewStackType(avmUint64, bound(val, val))
+	}
+	return nil, types, nil
+}
+
 func joinIntsOnOr(singularTerminator string, list ...int) string {
 	if len(list) == 1 {
 		switch list[0] {
@@ -1604,7 +1613,7 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 const anyImmediates = -1
 
 var pseudoOps = map[string]map[int]OpSpec{
-	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i"), OpDetails: assembler(asmInt)}},
+	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i"), OpDetails: assembler(asmInt).typed(typePushInt)}},
 	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b"), OpDetails: assembler(asmByte)}},
 	// parse basics.Address, actually just another []byte constant
 	"addr": {anyImmediates: OpSpec{Name: "addr", Proto: proto(":b"), OpDetails: assembler(asmAddr)}},
