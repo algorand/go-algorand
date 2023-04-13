@@ -88,8 +88,6 @@ type KvValueDelta struct {
 // If adding a new field not explicitly allocated by PopulateStateDelta, make sure to reset
 // it in .ReuseStateDelta to avoid dirty memory errors.
 // If adding fields make sure to add them to the .Reset() method to avoid dirty state
-//
-//msgp:ignore StateDelta
 type StateDelta struct {
 	// modified new accounts
 	Accts AccountDeltas
@@ -112,10 +110,10 @@ type StateDelta struct {
 	// new block header; read-only
 	Hdr *bookkeeping.BlockHeader
 
-	// ModStateProofNextRound represents modification on StateProofNextRound field in the block header. If the block contains
+	// StateProofNext represents modification on StateProofNextRound field in the block header. If the block contains
 	// a valid state proof transaction, this field will contain the next round for state proof.
 	// otherwise it will be set to 0.
-	ModStateProofNextRound basics.Round `codec:"StateProofNext,omitempty"`
+	StateProofNext basics.Round
 
 	// previous block timestamp
 	PrevTimestamp int64
