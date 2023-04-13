@@ -274,7 +274,7 @@ func newOpStream(version uint64) OpStream {
 	}
 
 	for i := range o.known.scratchSpace {
-		o.known.scratchSpace[i] = StackUint64
+		o.known.scratchSpace[i] = StackZeroUint64
 	}
 
 	return o

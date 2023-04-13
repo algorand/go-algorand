@@ -663,6 +663,11 @@ var (
 	// StackBoxKey represents a bytestring that can be used as a key to a box
 	StackBoxKey = NewStackType(avmBytes, bound(1, 64), "bkey")
 
+	// StackZeroUint64 is a StackUint64 with a minimum value of 0 and a maximum value of 0
+	StackZeroUint64 = NewStackType(avmUint64, bound(0, 0), "0")
+	// StackZeroBytes is a StackBytes with a minimum length of 0 and a maximum length of 0
+	StackZeroBytes = NewStackType(avmUint64, bound(0, 0), "''")
+
 	// AllStackTypes is a list of all the stack types we recognize
 	// so that we can iterate over them in doc prep
 	AllStackTypes = []StackType{
@@ -676,6 +681,8 @@ var (
 		StackMethodSelector,
 		StackStorageKey,
 		StackBoxKey,
+		StackZeroUint64,
+		StackZeroBytes,
 	}
 )
 
@@ -717,13 +724,8 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 }
 
 func (st StackType) union(b StackType) StackType {
-	if st.AVMType == avmNone {
-		return b
-	}
-
-	if b.AVMType == avmNone {
-		return st
-	}
+	// TODO: Can we ever receive one or the other
+	// as None? should that be a panic?
 
 	if st.AVMType != b.AVMType {
 		return StackAny
