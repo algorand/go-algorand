@@ -717,6 +717,14 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 }
 
 func (st StackType) union(b StackType) StackType {
+	if st.AVMType == avmNone {
+		return b
+	}
+
+	if b.AVMType == avmNone {
+		return st
+	}
+
 	if st.AVMType != b.AVMType {
 		return StackAny
 	}
