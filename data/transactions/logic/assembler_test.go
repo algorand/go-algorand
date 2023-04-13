@@ -2621,6 +2621,29 @@ func TestScratchTypeCheck(t *testing.T) {
 	testProg(t, "callsub A; load 0; btoi; return; A: byte 0x01; store 0; retsub", AssemblerMaxVersion)
 	// But the scratchspace should still be tracked after the callsub
 	testProg(t, "callsub A; int 1; store 0; load 0; btoi; return; A: retsub", AssemblerMaxVersion, Expect{1, "btoi arg 0..."})
+
+}
+
+func TestScratchBounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	os := testProg(t, "int 5; store 1; load 1; return;", AssemblerMaxVersion)
+	sv := os.known.scratchSpace[1]
+	require.Equal(t, sv.AVMType, avmUint64)
+	require.ElementsMatch(t, sv.Bound, static(5))
+
+	os = testProg(t, "int 5; store 1; load 1; int 1; int 1; stores; return;", AssemblerMaxVersion)
+	sv = os.known.scratchSpace[1]
+	require.Equal(t, sv.AVMType, avmUint64)
+	require.ElementsMatch(t, sv.Bound, bound(1, 5))
+
+	os = testProg(t, "int 5; store 1; load 1; int 1; byte 0xff; stores; return;", AssemblerMaxVersion)
+	sv = os.known.scratchSpace[1]
+	require.Equal(t, sv.AVMType, avmAny)
+	require.ElementsMatch(t, os.known.scratchSpace[1].Bound, static(0))
+
+	testProg(t, "byte 0xff; store 1; load 1; return", AssemblerMaxVersion, Expect{1, "return arg 0 wanted type uint64 ..."})
 }
 
 // TestProtoAsm confirms that the assembler will yell at you if you are
