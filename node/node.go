@@ -470,20 +470,20 @@ func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 		return
 	}
 
-	if node.timestampOffset != nil {
-		prevRound := vb.Block().Round() - 1
-		prev, err := node.ledger.BlockHdr(prevRound)
-		if err != nil {
-			return err
-		}
-
-		// Make a new validated block.
-		blk := vb.Block()
-		blk.TimeStamp = prev.TimeStamp + *node.timestampOffset
-		blk.BlockHeader.Seed = committee.Seed(prev.Hash())
-		vb2 := ledgercore.MakeValidatedBlock(blk, vb.Delta())
-		vb = &vb2
+	// Make a new validated block.
+	prevRound := vb.Block().Round() - 1
+	prev, err := node.ledger.BlockHdr(prevRound)
+	if err != nil {
+		return err
 	}
+
+	blk := vb.Block()
+	if node.timestampOffset != nil {
+		blk.TimeStamp = prev.TimeStamp + *node.timestampOffset
+	}
+	blk.BlockHeader.Seed = committee.Seed(prev.Hash())
+	vb2 := ledgercore.MakeValidatedBlock(blk, vb.Delta())
+	vb = &vb2
 
 	// add the newly generated block to the ledger
 	err = node.ledger.AddValidatedBlock(*vb, agreement.Certificate{Round: vb.Block().Round()})
