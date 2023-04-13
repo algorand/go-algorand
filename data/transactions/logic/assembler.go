@@ -1345,8 +1345,7 @@ func typeDupTwo(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 func typeSelect(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 2 {
-		unioned, err := pgm.stack[top-1].union(pgm.stack[top-2])
-		return nil, StackTypes{unioned}, err
+		return nil, StackTypes{pgm.stack[top-1].union(pgm.stack[top-2])}, nil
 	}
 	return nil, nil, nil
 }
@@ -1436,11 +1435,7 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 	for i := range pgm.scratchSpace {
 		// We can't know what slot stacktop is being stored in
 		// so we union it into all scratch slots
-		unioned, err := pgm.scratchSpace[i].union(pgm.stack[top])
-		if err != nil {
-			return nil, nil, err
-		}
-		pgm.scratchSpace[i] = unioned
+		pgm.scratchSpace[i] = pgm.scratchSpace[i].union(pgm.stack[top])
 	}
 	return nil, nil, nil
 }
