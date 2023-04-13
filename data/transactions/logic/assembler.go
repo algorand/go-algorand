@@ -1158,8 +1158,9 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-// getImm interprets the arg at index argIndex as an immediate
-func getImm(args []string, argIndex int) (int, bool) {
+// getImm interprets the arg at index argIndex as an immediate that must be
+// between -128 and 127 (if signed=true) or between 0 and 255 (if signed=false)
+func getImm(args []string, argIndex int, signed bool) (int, bool) {
 	if len(args) <= argIndex {
 		return 0, false
 	}
@@ -1168,6 +1169,15 @@ func getImm(args []string, argIndex int) (int, bool) {
 	n, err := strconv.ParseInt(args[argIndex], 0, 9)
 	if err != nil {
 		return 0, false
+	}
+	if signed {
+		if n < -128 || n > 127 {
+			return 0, false
+		}
+	} else {
+		if n < 0 || n > 255 {
+			return 0, false
+		}
 	}
 	return int(n), true
 }
@@ -1193,7 +1203,7 @@ func typeSwap(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 }
 
 func typeDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1210,7 +1220,7 @@ func typeDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, erro
 }
 
 func typeBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1242,7 +1252,7 @@ func typeBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 }
 
 func typeFrameDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, true)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1263,7 +1273,7 @@ func typeFrameDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes,
 }
 
 func typeFrameBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, true)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1350,7 +1360,7 @@ func typeSetBit(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 }
 
 func typeCover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1372,7 +1382,7 @@ func typeCover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, er
 }
 
 func typeUncover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1407,7 +1417,7 @@ func typeTxField(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, 
 }
 
 func typeStore(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	scratchIndex, ok := getImm(args, 0)
+	scratchIndex, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1436,7 +1446,7 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 }
 
 func typeLoad(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	scratchIndex, ok := getImm(args, 0)
+	scratchIndex, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1444,8 +1454,8 @@ func typeLoad(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 }
 
 func typeProto(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	a, aok := getImm(args, 0)
-	_, rok := getImm(args, 1)
+	a, aok := getImm(args, 0, false)
+	_, rok := getImm(args, 1, false)
 	if !aok || !rok {
 		return nil, nil, nil
 	}
@@ -1470,7 +1480,7 @@ func typeLoads(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, er
 }
 
 func typePopN(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1478,7 +1488,7 @@ func typePopN(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 }
 
 func typeDupN(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
