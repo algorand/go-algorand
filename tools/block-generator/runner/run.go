@@ -125,8 +125,8 @@ func (r *Args) run() error {
 			fmt.Printf("Failed to shutdown generator: %s\n", err)
 		}
 	}()
-	time.Sleep(1 * time.Second)
-	// write conduit config file
+
+	// get conduit config template
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("current working directory: %w", err)
@@ -136,6 +136,7 @@ func (r *Args) run() error {
 		return fmt.Errorf("unable to open config template file: %w", err)
 	}
 
+	// create config file in the right data directory
 	f, err := os.Create(path.Join(dataDir, "conduit.yml"))
 	if err != nil {
 		return fmt.Errorf("creating conduit.yml: ", err)
@@ -152,6 +153,7 @@ func (r *Args) run() error {
 		return fmt.Errorf("execute template file: ", err)
 	}
 
+	// Start indexer
 	indexerShutdownFunc, err := startIndexer(dataDir, r.ConduitBinary)
 	if err != nil {
 		return fmt.Errorf("failed to start indexer: %w", err)
