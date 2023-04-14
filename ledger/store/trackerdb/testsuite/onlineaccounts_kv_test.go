@@ -29,7 +29,7 @@ func init() {
 	registerTest("online-accounts-all", CustomTestOnlineAccountsAll)
 	registerTest("online-accounts-top", CustomTestAccountsOnlineTop)
 	registerTest("online-accounts-get-by-addr", CustomTestLookupOnlineAccountDataByAddress)
-
+	registerTest("online-accounts-history", CustomTestOnlineAccountHistory)
 }
 
 func CustomTestOnlineAccountsCrud(t *customT) {
@@ -90,6 +90,83 @@ func CustomTestOnlineAccountsCrud(t *customT) {
 	require.NoError(t, err)
 	require.Equal(t, basics.MicroAlgos{Raw: uint64(100)}, poA.AccountData.MicroAlgos) // check the data is from the new version
 	require.Equal(t, basics.Round(400), poA.UpdRound)                                 // check the "update round"
+}
+
+func CustomTestOnlineAccountHistory(t *customT) {
+	oaw, err := t.db.MakeOnlineAccountsOptimizedWriter(true)
+	require.NoError(t, err)
+
+	oar, err := t.db.MakeOnlineAccountsOptimizedReader()
+	require.NoError(t, err)
+
+	aw, err := t.db.MakeAccountsWriter()
+	require.NoError(t, err)
+
+	// set round to 3
+	// Note: this will be used to check that we read the round
+	expectedRound := basics.Round(3)
+	err = aw.UpdateAccountsRound(expectedRound)
+	require.NoError(t, err)
+
+	// generate some test data
+	addrA := RandomAddress()
+	dataA1 := trackerdb.BaseOnlineAccountData{
+		BaseVotingData: trackerdb.BaseVotingData{},
+		MicroAlgos:     basics.MicroAlgos{Raw: uint64(20)},
+		RewardsBase:    uint64(200),
+	}
+	normalizedBalA1 := dataA1.NormalizedOnlineBalance(t.proto)
+
+	refA1, err := oaw.InsertOnlineAccount(addrA, normalizedBalA1, dataA1, uint64(2), uint64(2))
+	require.NoError(t, err)
+
+	// generate some test data
+	dataA2 := trackerdb.BaseOnlineAccountData{
+		BaseVotingData: trackerdb.BaseVotingData{},
+		MicroAlgos:     basics.MicroAlgos{Raw: uint64(100)},
+		RewardsBase:    uint64(200),
+	}
+	normalizedBalA2 := dataA2.NormalizedOnlineBalance(t.proto)
+
+	refA2, err := oaw.InsertOnlineAccount(addrA, normalizedBalA2, dataA2, uint64(3), uint64(3))
+	require.NoError(t, err)
+
+	// generate some test data
+	addrB := RandomAddress()
+	dataB1 := trackerdb.BaseOnlineAccountData{
+		BaseVotingData: trackerdb.BaseVotingData{},
+		MicroAlgos:     basics.MicroAlgos{Raw: uint64(75)},
+		RewardsBase:    uint64(200),
+	}
+	normalizedBalB1 := dataB1.NormalizedOnlineBalance(t.proto)
+
+	refB1, err := oaw.InsertOnlineAccount(addrB, normalizedBalB1, dataB1, uint64(3), uint64(3))
+	require.NoError(t, err)
+
+	//
+	// the test
+	//
+
+	resultsA, rnd, err := oar.LookupOnlineHistory(addrA)
+	require.NoError(t, err)
+	require.Equal(t, expectedRound, rnd) // check the db round
+	require.Len(t, resultsA, 2)
+	require.Equal(t, basics.Round(2), resultsA[0].UpdRound) // check ordering
+	require.Equal(t, basics.Round(3), resultsA[1].UpdRound) // check ordering
+	// check item fields
+	require.Empty(t, resultsA[0].Round)               // check the db round is not set
+	require.Equal(t, addrA, resultsA[0].Addr)         // check addr
+	require.Equal(t, refA1, resultsA[0].Ref)          // check ref
+	require.Equal(t, dataA1, resultsA[0].AccountData) // check data
+	// check ref is valid on all
+	require.Equal(t, refA2, resultsA[1].Ref) // check ref
+
+	// check for B
+	resultsB, _, err := oar.LookupOnlineHistory(addrB)
+	require.NoError(t, err)
+	require.Len(t, resultsB, 1)
+	require.Equal(t, addrB, resultsB[0].Addr) // check addr
+	require.Equal(t, refB1, resultsB[0].Ref)  // check ref
 }
 
 func CustomTestOnlineAccountsAll(t *customT) {
