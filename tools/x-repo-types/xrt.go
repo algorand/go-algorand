@@ -18,26 +18,26 @@ import (
 )
 
 //go:embed xrt_tmpl.go.tmpl
-var walkerTmpl string
+var differTmpl string
 
 func main() {
-	var sBranch, xPkg, xType, yBranch, yPkg, yType string
+	var xPkg, xBranch, xType, yPkg, yBranch, yType string
 
 	rootCmd := &cobra.Command{
 		Use:   "xrt",
 		Short: "Compare types across repos",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := runApp(sBranch, xPkg, xType, yBranch, yPkg, yType); err != nil {
+			if err := runApp(xPkg, xBranch, xType, yPkg, yBranch, yType); err != nil {
 				log.Fatal(err)
 			}
 		},
 	}
 
-	rootCmd.Flags().StringVar(&sBranch, "x-branch", "", "repository brahnch for type x")
 	rootCmd.Flags().StringVar(&xPkg, "x-package", "", "Go repo and package for type x")
+	rootCmd.Flags().StringVar(&xBranch, "x-branch", "", "repository brahnch for type x")
 	rootCmd.Flags().StringVar(&xType, "x-type", "", "Exported type in the package for type x")
-	rootCmd.Flags().StringVar(&yBranch, "y-branch", "", "repository branch for type y")
 	rootCmd.Flags().StringVar(&yPkg, "y-package", "", "Go repo and package for type for type y")
+	rootCmd.Flags().StringVar(&yBranch, "y-branch", "", "repository branch for type y")
 	rootCmd.Flags().StringVar(&yType, "y-type", "", "Exported type in the package for type y")
 
 	if err := rootCmd.Execute(); err != nil {
@@ -45,7 +45,7 @@ func main() {
 	}
 }
 
-func runApp(xBranch, xPkg, xType, yBranch, yPkg, yType string) error {
+func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) error {
 	if xPkg == "" || xType == "" {
 		return fmt.Errorf("package:%s, and type:%s flags are required", xPkg, xType)
 	}
@@ -71,7 +71,6 @@ func runApp(xBranch, xPkg, xType, yBranch, yPkg, yType string) error {
 		return err
 	}
 
-	// Build the package
 	err = goBuild(xPkg)
 	if err != nil {
 		return err
@@ -114,7 +113,6 @@ func runApp(xBranch, xPkg, xType, yBranch, yPkg, yType string) error {
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -182,7 +180,7 @@ func main() {
 }
 `, repo, pkgPath, pkgOnly, typeName)
 
-	tmpDir, err := os.MkdirTemp(".", "walk-*")
+	tmpDir, err := os.MkdirTemp(".", "instantiate-*")
 	if err != nil {
 		return err
 	}
@@ -203,7 +201,7 @@ func main() {
 func serializationDiff(xRepo, xPkgPath, xType, yRepo, yPkgPath, yType string) error {
 	fmt.Printf("Diffing %s from package %s VS %s from package %s...\n", xType, xPkgPath, yType, yPkgPath)
 
-	tmpl, err := template.New("code").Parse(walkerTmpl)
+	tmpl, err := template.New("code").Parse(differTmpl)
 	if err != nil {
 		fmt.Println("Error parsing template:", err)
 		os.Exit(1)
@@ -223,7 +221,7 @@ func serializationDiff(xRepo, xPkgPath, xType, yRepo, yPkgPath, yType string) er
 		os.Exit(1)
 	}
 
-	tmpDir, err := os.MkdirTemp("", "walk-*")
+	tmpDir, err := os.MkdirTemp("", "serializeDiff-*")
 	if err != nil {
 		return err
 	}
