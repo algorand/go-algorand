@@ -215,7 +215,7 @@ func (sd *StateDelta) PopulateStateDelta(hdr *bookkeeping.BlockHeader, prevTimes
 		sd.initialHint = hint
 	}
 	sd.Hdr = hdr
-	sd.ModStateProofNextRound = stateProofNext
+	sd.StateProofNext = stateProofNext
 	sd.PrevTimestamp = prevTimestamp
 }
 
@@ -248,7 +248,7 @@ func (sd *StateDelta) Reset() {
 	// these fields are going to be populated on next use but resetting them anyway for safety.
 	// we are not resetting sd.initialHint since it should only be reset if reallocating AccountDeltas
 	sd.Hdr = nil
-	sd.ModStateProofNextRound = basics.Round(0)
+	sd.StateProofNext = basics.Round(0)
 	sd.PrevTimestamp = 0
 }
 
