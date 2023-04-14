@@ -1477,6 +1477,16 @@ func typeProto(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, er
 }
 
 func typeLoads(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+
+	top := len(pgm.stack) - 1
+	if top < 0 {
+		return nil, nil, nil
+	}
+
+	if val, isConst := pgm.stack[top].constant(); isConst {
+		return nil, StackTypes{pgm.scratchSpace[val]}, nil
+	}
+
 	scratchType := pgm.scratchSpace[0]
 	for _, item := range pgm.scratchSpace {
 		// If all the scratch slots are one type, then we can say we are loading that type

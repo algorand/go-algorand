@@ -90,10 +90,10 @@ func TestBoxNewBad(t *testing.T) {
 
 	long := strings.Repeat("x", 65)
 	txn.Boxes = []transactions.BoxRef{{Name: []byte(long)}}
-	logic.TestApp(t, fmt.Sprintf(`byte "%s"; int 1000; box_create`, long), ep, "name too long")
+	logic.TestApp(t, logic.NoTrack(fmt.Sprintf(`byte "%s"; int 1000; box_create`, long)), ep, "name too long")
 
 	txn.Boxes = []transactions.BoxRef{{Name: []byte("")}} // irrelevant, zero check comes first anyway
-	logic.TestApp(t, `byte ""; int 1000; box_create`, ep, "zero length")
+	logic.TestApp(t, logic.NoTrack(`byte ""; int 1000; box_create`), ep, "zero length")
 }
 
 func TestBoxReadWrite(t *testing.T) {
@@ -531,7 +531,7 @@ func TestEarlyPanics(t *testing.T) {
 			t.Parallel()
 			ep, _, l := logic.MakeSampleEnv()
 			l.NewApp(basics.Address{}, 888, basics.AppParams{})
-			logic.TestApp(t, fmt.Sprintf(program, ""), ep, "zero length")
+			logic.TestApp(t, logic.NoTrack(fmt.Sprintf(program, "")), ep, "zero length")
 		})
 	}
 
@@ -542,7 +542,7 @@ func TestEarlyPanics(t *testing.T) {
 			t.Parallel()
 			ep, _, l := logic.MakeSampleEnv()
 			l.NewApp(basics.Address{}, 888, basics.AppParams{})
-			logic.TestApp(t, fmt.Sprintf(program, big), ep, "name too long")
+			logic.TestApp(t, logic.NoTrack(fmt.Sprintf(program, big)), ep, "name too long")
 		})
 	}
 
