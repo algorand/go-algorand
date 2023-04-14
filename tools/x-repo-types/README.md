@@ -36,7 +36,7 @@ make build-xrt
 `func SerializationDiff(x, y Target, exclusions map[string]bool) (*Diff, error)` in `xrt_tmpl.go` implements the following recursive notion of _identical_ types:
 
 * if **X** and **Y** are native types (`int`, `uint64`, `string`, ...), they are _identical_ IFF they are the same type
-* if both **X** and **Y** are compound types (`struct`, slice, `map`, ...) each of their child types is _identical_, then they are _identical_
+* if both **X** and **Y** are compound types (`struct`, slice, `map`, ...) with each of their child types being _identical_, then they are _identical_
 * else: they are **not** _identical_
 
 ### Exceptional cases
