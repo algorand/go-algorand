@@ -535,6 +535,161 @@ outer:
 	a.NoError(err)
 }
 
+// TestReadyEndpoint starts a two-node network (derived mainly from TestNodeTxHandlerRestart)
+// Lets the primary node have the majority of the stake
+// Waits until a catchpoint is created
+// Let primary node catch up against the catchpoint, confirm ready endpoint is 503
+// Wait the primary node catch up to target round, and confirm ready endpoint is 200
+func TestReadyEndpoint(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	if testing.Short() {
+		t.Skip()
+	}
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	consensus := make(config.ConsensusProtocols)
+	protoVersion := protocol.ConsensusCurrentVersion
+	catchpointCatchupProtocol := config.Consensus[protoVersion]
+	applyCatchpointConsensusChanges(&catchpointCatchupProtocol)
+	catchpointCatchupProtocol.StateProofInterval = 0
+	consensus[protoVersion] = catchpointCatchupProtocol
+
+	var fixture fixtures.RestClientFixture
+	fixture.SetConsensus(consensus)
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes50EachWithRelay.json"))
+
+	// Get primary node
+	primaryNode, err := fixture.GetNodeController("Node1")
+	a.NoError(err)
+	// Get secondary node
+	secondNode, err := fixture.GetNodeController("Node2")
+	a.NoError(err)
+	// Get the relay
+	relayNode, err := fixture.GetNodeController("Relay")
+	a.NoError(err)
+
+	// prepare its configuration file to set it to generate a catchpoint every 16 rounds.
+	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
+	a.NoError(err)
+	const catchpointInterval = 16
+	cfg.CatchpointInterval = catchpointInterval
+	cfg.CatchpointTracking = 2
+	cfg.MaxAcctLookback = 2
+	cfg.Archival = false
+	cfg.TxSyncIntervalSeconds = 200000 // disable txSync
+
+	err = cfg.SaveToDisk(primaryNode.GetDataDir())
+	a.NoError(err)
+	err = cfg.SaveToDisk(secondNode.GetDataDir())
+	a.NoError(err)
+
+	cfg, err = config.LoadConfigFromDisk(relayNode.GetDataDir())
+	a.NoError(err)
+	cfg.TxSyncIntervalSeconds = 200000 // disable txSync
+	cfg.SaveToDisk(relayNode.GetDataDir())
+
+	fixture.Start()
+	defer fixture.LibGoalFixture.Shutdown()
+
+	client1 := fixture.GetLibGoalClientFromNodeController(primaryNode)
+	client2 := fixture.GetLibGoalClientFromNodeController(secondNode)
+	wallet1, err := client1.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	wallet2, err := client2.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addrs1, err := client1.ListAddresses(wallet1)
+	a.NoError(err)
+	addrs2, err := client2.ListAddresses(wallet2)
+	a.NoError(err)
+
+	// let the second node have insufficient stake for proposing a block
+	tx, err := client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 4999999999000000, nil)
+	a.NoError(err)
+	status, err := client1.Status()
+	a.NoError(err)
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, addrs1[0], tx.ID().String())
+	a.NoError(err)
+	targetCatchpointRound := status.LastRound
+
+	// ensure the catchpoint is created for targetCatchpointRound
+	timer := time.NewTimer(100 * time.Second)
+outer:
+	for {
+		status, err = client1.Status()
+		a.NoError(err)
+
+		var round basics.Round
+		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
+			round, _, err = ledgercore.ParseCatchpointLabel(*status.LastCatchpoint)
+			a.NoError(err)
+			if uint64(round) >= targetCatchpointRound {
+				break
+			}
+		}
+		select {
+		case <-timer.C:
+			a.Failf("timeout waiting a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
+			break outer
+		default:
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+
+	//////////
+	// NOTE //
+	//////////
+	// THE *REAL* TEST STARTS HERE:
+	// We first ensure when a primary node is catching up, it is not ready
+	// Then when the primary node is at target round, it should satisfy ready 200 condition
+
+	// let the primary node catchup
+	err = client1.Catchup(*status.LastCatchpoint)
+	a.NoError(err)
+
+	// The primary node is catching up with its previous catchpoint
+	// Its status contain a catchpoint it is catching-up against,
+	// so it should not be ready, and ready-ness endpoint should 503 err.
+	a.Error(fixture.GetAlgodClientForController(primaryNode).ReadyCheck())
+
+	status1, err := client1.Status()
+	a.NoError(err)
+	targetRound := status1.LastRound + 5
+
+	// Wait for the network to start making progress again
+	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
+	err = fixture.ClientWaitForRound(primaryNodeRestClient, targetRound,
+		10*catchpointCatchupProtocol.AgreementFilterTimeout)
+	a.NoError(err)
+
+	// The primary node has reached the target round,
+	// - the sync-time (aka catchup time should be 0.0)
+	// - the catchpoint should be empty (len == 0)
+	timer = time.NewTimer(100 * time.Second)
+
+	for {
+		err = primaryNodeRestClient.ReadyCheck()
+
+		if err != nil {
+			select {
+			case <-timer.C:
+				a.Fail("timeout")
+				break
+			default:
+				time.Sleep(250 * time.Millisecond)
+				continue
+			}
+		}
+
+		status1, err = client1.Status()
+		a.NoError(err)
+		a.Equal(status1.CatchupTime, uint64(0))
+		a.Empty(status1.Catchpoint)
+		break
+	}
+}
+
 // TestNodeTxSyncRestart starts a two-node and one relay network
 // Waits until a catchpoint is created
 // Lets the primary node have the majority of the stake

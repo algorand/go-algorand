@@ -19,7 +19,6 @@ package ledger
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -259,7 +258,6 @@ func TestTxTailDeltaTracking(t *testing.T) {
 
 			err := txtail.loadFromDisk(&ledger, ledger.Latest())
 			require.NoError(t, err)
-			fmt.Printf("%d, %s\n", len(txtail.recent), protoVersion)
 			require.Equal(t, int(config.Consensus[protoVersion].MaxTxnLife), len(txtail.recent))
 			require.Equal(t, testTxTailValidityRange, len(txtail.lastValid))
 			require.Equal(t, ledger.Latest(), txtail.lowWaterMark)

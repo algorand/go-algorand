@@ -84,10 +84,10 @@ type roundCowState struct {
 	// must be incorporated into mods.accts before passing deltas forward
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
 
-	// either or not maintain compatibility with original app refactoring behavior
+	// whether or not to maintain compatibility with original app refactoring behavior
 	// this is needed for generating old eval delta in new code
 	compatibilityMode bool
-	// cache mainaining accountIdx used in getKey for local keys access
+	// cache maintaining accountIdx used in getKey for local keys access
 	compatibilityGetKeyCache map[basics.Address]map[storagePtr]uint64
 
 	// prevTotals contains the accounts totals for the previous round. It's being used to calculate the totals for the new round

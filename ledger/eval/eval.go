@@ -627,6 +627,7 @@ type EvaluatorOptions struct {
 	Tracer              logic.EvalTracer
 	GranularEval        bool
 	ProtoParams         *config.ConsensusParams
+	Tracer              logic.EvalTracer
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
@@ -793,6 +794,10 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	if ot.Overflowed {
 		// TODO this should never happen; should we panic here?
 		return nil, fmt.Errorf("overflowed subtracting rewards for block %v", hdr.Round)
+	}
+
+	if eval.Tracer != nil {
+		eval.Tracer.BeforeBlock(&eval.block.BlockHeader)
 	}
 
 	return eval, nil
@@ -1366,6 +1371,10 @@ func (eval *BlockEvaluator) endOfBlock() error {
 	err = eval.state.CalculateTotals()
 	if err != nil {
 		return err
+	}
+
+	if eval.Tracer != nil {
+		eval.Tracer.AfterBlock(&eval.block.BlockHeader)
 	}
 
 	return nil

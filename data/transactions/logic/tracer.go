@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
@@ -97,6 +98,9 @@ import (
 //   │ > AfterTxnGroup                                      │
 //   └──────────────────────────────────────────────────────┘
 type EvalTracer interface {
+	// BeforeBlock is called once at the beginning of block evaluation. It is passed the block header.
+	BeforeBlock(hdr *bookkeeping.BlockHeader)
+
 	// BeforeTxnGroup is called before a transaction group is executed. This includes both top-level
 	// and inner transaction groups. The argument ep is the EvalParams object for the group; if the
 	// group is an inner group, this is the EvalParams object for the inner group.
@@ -141,10 +145,17 @@ type EvalTracer interface {
 
 	// AfterOpcode is called after the op has been evaluated
 	AfterOpcode(cx *EvalContext, evalError error)
+
+	// AfterBlock is called after the block has finished evaluation. It will not be called in the event that an evalError
+	// stops evaluation of the block.
+	AfterBlock(hdr *bookkeeping.BlockHeader)
 }
 
 // NullEvalTracer implements EvalTracer, but all of its hook methods do nothing
 type NullEvalTracer struct{}
+
+// BeforeBlock does nothing
+func (n NullEvalTracer) BeforeBlock(hdr *bookkeeping.BlockHeader) {}
 
 // BeforeTxnGroup does nothing
 func (n NullEvalTracer) BeforeTxnGroup(ep *EvalParams) {}
@@ -171,3 +182,6 @@ func (n NullEvalTracer) BeforeOpcode(cx *EvalContext) {}
 
 // AfterOpcode does nothing
 func (n NullEvalTracer) AfterOpcode(cx *EvalContext, evalError error) {}
+
+// AfterBlock does nothing
+func (n NullEvalTracer) AfterBlock(hdr *bookkeeping.BlockHeader) {}
