@@ -108,8 +108,8 @@ func TestFieldTypes(t *testing.T) {
 	// Use NoTrack to skip assembly errors
 	TestApp(t, NoTrack("itxn_begin; byte \"pay\"; itxn_field Sender;"), ep, "not an address")
 	TestApp(t, NoTrack("itxn_begin; int 7; itxn_field Receiver;"), ep, "not an address")
-	TestApp(t, "itxn_begin; byte \"\"; itxn_field CloseRemainderTo;", ep, "not an address")
-	TestApp(t, "itxn_begin; byte \"\"; itxn_field AssetSender;", ep, "not an address")
+	TestApp(t, NoTrack("itxn_begin; byte \"\"; itxn_field CloseRemainderTo;"), ep, "not an address")
+	TestApp(t, NoTrack("itxn_begin; byte \"\"; itxn_field AssetSender;"), ep, "not an address")
 	// can't really tell if it's an addres, so 32 bytes gets further
 	TestApp(t, "itxn_begin; byte \"01234567890123456789012345678901\"; itxn_field AssetReceiver; int 1",
 		ep, "invalid Account reference")

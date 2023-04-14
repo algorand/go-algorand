@@ -4918,7 +4918,7 @@ func TestBytesMath(t *testing.T) {
 	// 64 byte long inputs are accepted, even if they produce longer outputs
 	testAccepts(t, fmt.Sprintf("byte 0x%s; byte 0x10; b+; len; int 65; ==", effs), 4)
 	// 65 byte inputs are not ok.
-	testPanics(t, fmt.Sprintf("byte 0x%s00; byte 0x10; b-; len; int 65; ==", effs), 4)
+	testPanics(t, NoTrack(fmt.Sprintf("byte 0x%s00; byte 0x10; b-; len; int 65; ==", effs)), 4)
 
 	testAccepts(t, `byte 0x01; byte 0x01; b-; byte ""; ==`, 4)
 	testAccepts(t, "byte 0x0200; byte 0x01; b-; byte 0x01FF; ==", 4)
@@ -5022,7 +5022,7 @@ func TestBytesBits(t *testing.T) {
 	testAccepts(t, "int 33; bzero; byte 0x000000000000000000000000000000000000000000000000000000000000000000; ==", 4)
 
 	testAccepts(t, "int 4096; bzero; len; int 4096; ==", 4)
-	testPanics(t, "int 4097; bzero; len; int 4097; ==", 4)
+	testPanics(t, NoTrack("int 4097; bzero; len; int 4097; =="), 4)
 }
 
 func TestBytesConversions(t *testing.T) {
