@@ -733,6 +733,18 @@ type StackType struct {
 // NewStackType Initializes a new StackType with fields passed
 func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 	name := at.String()
+
+	// It's static, set the name to show
+	// the static value
+	if bounds[0] == bounds[1] {
+		switch at {
+		case avmBytes:
+			name = fmt.Sprintf("[%d]byte", bounds[0])
+		case avmUint64:
+			name = fmt.Sprintf("%d", bounds[0])
+		}
+	}
+
 	if len(stname) > 0 {
 		name = stname[0]
 	}
@@ -743,7 +755,6 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 func (st StackType) union(b StackType) StackType {
 	// TODO: Can we ever receive one or the other
 	// as None? should that be a panic?
-
 	if st.AVMType != b.AVMType {
 		return StackAny
 	}
@@ -753,16 +764,6 @@ func (st StackType) union(b StackType) StackType {
 }
 
 func (st StackType) narrowed(bounds [2]uint64) StackType {
-	// It's static, set the name to show
-	// the static value
-	if bounds[0] == bounds[1] {
-		switch st.AVMType {
-		case avmBytes:
-			return NewStackType(st.AVMType, bounds, fmt.Sprintf("[%d]byte", bounds[0]))
-		case avmUint64:
-			return NewStackType(st.AVMType, bounds, fmt.Sprintf("%d", bounds[0]))
-		}
-	}
 	return NewStackType(st.AVMType, bounds)
 }
 
@@ -829,7 +830,7 @@ func (st StackType) Typed() bool {
 // StackTypes is an alias for a list of StackType with syntactic sugar
 type StackTypes []StackType
 
-// Reverse returns the StackTypes in reverse order
+// Reversed returns the StackTypes in reverse order
 // useful for displaying the stack as an op sees it
 func (st StackTypes) Reversed() StackTypes {
 	nst := make(StackTypes, len(st))

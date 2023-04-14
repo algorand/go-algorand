@@ -2713,7 +2713,7 @@ func TestTxTypes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testProg(t, "itxn_begin; itxn_field Sender", 5, Expect{1, "itxn_field Sender expects 1 stack argument..."})
-	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{1, "...wanted type addr got uint64"})
+	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{1, "...wanted type addr got 1"})
 	testProg(t, "itxn_begin; byte 0x56127823; itxn_field Sender", 5, Expect{1, "...wanted type addr got [4]byte"})
 	testProg(t, "itxn_begin; global ZeroAddress; itxn_field Sender", 5)
 
@@ -2891,7 +2891,7 @@ func TestReplacePseudo(t *testing.T) {
 		testProg(t, "byte 0x0000; byte 0x1234; replace 0", v)
 		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace", v)
 		testProg(t, "byte 0x0000; byte 0x1234; replace", v, Expect{1, "replace without immediates expects 3 stack arguments but stack height is 2"})
-		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace 0", v, Expect{1, "replace 0 arg 0 wanted type []byte got uint64"})
+		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace 0", v, Expect{1, "replace 0 arg 0 wanted type []byte got 0"})
 	}
 }
 

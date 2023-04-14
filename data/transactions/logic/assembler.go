@@ -1545,8 +1545,12 @@ func typePushInts(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes,
 func typePushInt(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	types := make(StackTypes, len(args))
 	for i := range types {
-		val, _ := strconv.ParseUint(args[i], 10, 64)
-		types[i] = NewStackType(avmUint64, bound(val, val))
+		val, err := strconv.ParseUint(args[i], 10, 64)
+		if err != nil {
+			types[i] = StackUint64
+		} else {
+			types[i] = NewStackType(avmUint64, bound(val, val))
+		}
 	}
 	return nil, types, nil
 }
