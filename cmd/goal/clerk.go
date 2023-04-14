@@ -925,9 +925,9 @@ var splitCmd = &cobra.Command{
 		txns := decodeTxnsFromFile(txFilename)
 		outExt := filepath.Ext(outFilename)
 		outBase := outFilename[:len(outFilename)-len(outExt)]
-		for idx, txn := range txns {
+		for idx := range txns {
 			fn := fmt.Sprintf("%s-%d%s", outBase, idx, outExt)
-			err := writeFile(fn, protocol.Encode(&txn), 0600)
+			err := writeFile(fn, protocol.Encode(&txns[idx]), 0600)
 			if err != nil {
 				reportErrorf(fileWriteError, outFilename, err)
 			}
