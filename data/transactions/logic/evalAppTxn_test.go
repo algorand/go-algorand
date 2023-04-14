@@ -837,7 +837,7 @@ func TestFieldSetting(t *testing.T) {
 
 	TestApp(t, "itxn_begin; int 0; itxn_field Nonparticipation; int 1", ep)
 	TestApp(t, "itxn_begin; int 1; itxn_field Nonparticipation; int 1", ep)
-	TestApp(t, "itxn_begin; int 2; itxn_field Nonparticipation; int 1", ep,
+	TestApp(t, NoTrack("itxn_begin; int 2; itxn_field Nonparticipation; int 1"), ep,
 		"boolean is neither 1 nor 0")
 
 	TestApp(t, "itxn_begin; int 32; bzero; itxn_field RekeyTo; int 1", ep)

@@ -3550,7 +3550,7 @@
       "Opcode": 185,
       "Name": "box_create",
       "Args": [
-        "key",
+        "bkey",
         "uint64"
       ],
       "Returns": [
@@ -3568,7 +3568,7 @@
       "Opcode": 186,
       "Name": "box_extract",
       "Args": [
-        "key",
+        "bkey",
         "uint64",
         "uint64"
       ],
@@ -3586,7 +3586,7 @@
       "Opcode": 187,
       "Name": "box_replace",
       "Args": [
-        "key",
+        "bkey",
         "uint64",
         "[]byte"
       ],
@@ -3601,7 +3601,7 @@
       "Opcode": 188,
       "Name": "box_del",
       "Args": [
-        "key"
+        "bkey"
       ],
       "Returns": [
         "bool"
@@ -3617,7 +3617,7 @@
       "Opcode": 189,
       "Name": "box_len",
       "Args": [
-        "key"
+        "bkey"
       ],
       "Returns": [
         "uint64",
@@ -3634,7 +3634,7 @@
       "Opcode": 190,
       "Name": "box_get",
       "Args": [
-        "key"
+        "bkey"
       ],
       "Returns": [
         "[]byte",
@@ -3652,7 +3652,7 @@
       "Opcode": 191,
       "Name": "box_put",
       "Args": [
-        "key",
+        "bkey",
         "[]byte"
       ],
       "Size": 1,
