@@ -150,15 +150,20 @@ func (e *Edge) SerializationInfo() string {
 	return e.Tag
 }
 
+// TargetPair represents a pair of Targets.
+type TargetPair struct {
+	X, Y Target
+}
+
 // Diff represents a difference (if any) between two Types.
-// CommonPath is the path in the tree from the root that arrives
-// at the difference.
+// CommonPath is the path in the trees of the types from their roots
+// that arrives at the difference.
 // Xdiff and Ydiff are the differences at the end of the common path
 // between children. Set theoretically:
 // * Xdiff = X - Y
 // * Ydiff = Y - X.
 type Diff struct {
-	CommonPath   []Target
+	CommonPath   []TargetPair
 	Xdiff, Ydiff []Target
 }
 
@@ -330,7 +335,7 @@ func SerializationDiff(x, y Target, exclusions map[string]bool) (*Diff, error) {
 			return nil, err
 		}
 		if diff != nil {
-			diff.CommonPath = append([]Target{xChild}, diff.CommonPath...)
+			diff.CommonPath = append([]TargetPair{{xChild, yChild}}, diff.CommonPath...)
 			return diff, nil
 		}
 	}
@@ -369,8 +374,9 @@ VS
 --------------------------------------------------------
 `)
 			fmt.Printf("Common path of length %d:\n", len(d.CommonPath))
-			for depth, tgt := range d.CommonPath {
-				fmt.Printf("%s%s. SOURCE: %s\n", strings.Repeat(" ", depth), &tgt.Edge, &tgt.Type)
+			for depth, tgts := range d.CommonPath {
+				fmt.Printf("%s%s. X-SOURCE: %s\n", strings.Repeat(" ", depth), &tgts.X.Edge, &tgts.X.Type)
+				fmt.Printf("%s%s. Y-SOURCE: %s\n", strings.Repeat(" ", depth), &tgts.Y.Edge, &tgts.Y.Type)
 			}
 			fmt.Printf(`
 X-DIFF
