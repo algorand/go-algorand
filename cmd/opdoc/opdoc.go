@@ -52,7 +52,7 @@ func markdownTableEscape(x string) string {
 }
 
 func namedStackTypesMarkdown(out io.Writer) {
-	fmt.Fprintf(out, "## StackTypes\n\n")
+	fmt.Fprintf(out, "#### StackType Definitions\n\n")
 	fmt.Fprintf(out, "| Name | Bound | AVM Type |\n")
 	fmt.Fprintf(out, "| ---- | ---- | -------- |\n")
 
